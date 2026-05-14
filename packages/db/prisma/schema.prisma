@@ -92,6 +92,8 @@ model Seller {
   displayCurrency   Currency     @default(INR) @map("display_currency")
   displayLanguage   String       @default("en") @map("display_language")
   countryCode       String       @default("BD") @map("country_code") @db.Char(2)
+  emailVerifiedAt   DateTime?    @map("email_verified_at") @db.Timestamptz
+  lastLoginAt       DateTime?    @map("last_login_at") @db.Timestamptz
   createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz
   updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt         DateTime?    @map("deleted_at") @db.Timestamptz
