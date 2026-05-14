@@ -365,6 +365,33 @@ const notificationTemplates: TemplateSeed[] = [
     bodyTemplate:
       'Hi {{ contact_name }}, please verify your Skydrop seller email by clicking: {{ verify_url }}. This link expires in {{ expires_hours }} hours. If you did not request this, please ignore.',
   },
+  {
+    code: 'seller.account_suspended.email',
+    name: 'Seller account suspended — email',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Your Skydrop account has been suspended',
+    bodyTemplate:
+      'Hi {{ company_name }}, your Skydrop seller account has been suspended. Reason: {{ reason }}. While suspended you can still log in to view your account in read-only mode, but you cannot place new orders or modify your profile. Reach out to {{ support_email }} to resolve.',
+  },
+  {
+    code: 'seller.account_reapproved.email',
+    name: 'Seller account reapproved — email',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Your Skydrop account has been reactivated',
+    bodyTemplate:
+      'Good news, {{ company_name }} — your Skydrop seller account has been reactivated. You can log in and resume operations at {{ app_url }}. If you need anything, reach out to {{ support_email }}.',
+  },
+  {
+    code: 'seller.onboarding_complete.email',
+    name: 'Seller onboarding complete — email',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'You are all set on Skydrop, {{ company_name }}',
+    bodyTemplate:
+      'Hi {{ company_name }}, your Skydrop onboarding is complete. You can now ship inventory to our warehouse and start placing orders from {{ app_url }}. Questions? {{ support_email }}.',
+  },
 ];
 
 async function seedNotificationTemplates() {
