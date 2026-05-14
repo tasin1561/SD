@@ -290,6 +290,129 @@ model AuditLog {
 }
 
 // ============================================================
+// Layer 2 — Addresses & Locations (5 tables)
+// ============================================================
+
+// Polymorphic — owner is one of seller / warehouse / order / return_hub.
+// Service layer enforces the (ownerType, ownerId) pairing; no FK in DB.
+model Address {
+  id            String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  ownerType     AddressOwnerType @map("owner_type")
+  ownerId       String           @map("owner_id") @db.Uuid
+  label         String?
+  contactName   String?          @map("contact_name")
+  contactPhone  String?          @map("contact_phone")
+  contactEmail  String?          @map("contact_email")
+  line1         String
+  line2         String?
+  landmark      String?
+  city          String
+  stateProvince String           @map("state_province")
+  postalCode    String           @map("postal_code")
+  countryCode   String           @map("country_code") @db.Char(2)
+  latitude      Decimal?         @db.Decimal(10, 7)
+  longitude     Decimal?         @db.Decimal(10, 7)
+  type          AddressType
+  isDefault     Boolean          @default(false) @map("is_default")
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt     DateTime?        @map("deleted_at") @db.Timestamptz
+
+  @@index([ownerType, ownerId])
+  @@index([countryCode, postalCode])
+  @@index([deletedAt])
+  @@map("addresses")
+}
+
+model Warehouse {
+  id          String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  code        String          @unique
+  name        String
+  status      WarehouseStatus @default(ACTIVE)
+  countryCode String          @default("IN") @map("country_code") @db.Char(2)
+  timezone    String          @default("Asia/Kolkata")
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime?       @map("deleted_at") @db.Timestamptz
+
+  zones WarehouseZone[]
+  bins  WarehouseBin[]
+
+  @@index([status])
+  @@map("warehouses")
+}
+
+model WarehouseZone {
+  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  warehouseId String    @map("warehouse_id") @db.Uuid
+  code        String
+  name        String
+  pickOrder   Int       @default(100) @map("pick_order")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  warehouse Warehouse      @relation(fields: [warehouseId], references: [id])
+  bins      WarehouseBin[]
+
+  @@unique([warehouseId, code])
+  @@index([warehouseId])
+  @@index([deletedAt])
+  @@map("warehouse_zones")
+}
+
+model WarehouseBin {
+  id           String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  warehouseId  String    @map("warehouse_id") @db.Uuid
+  zoneId       String    @map("zone_id") @db.Uuid
+  code         String
+  aisle        String?
+  shelf        String?
+  type         BinType
+  maxWeightKg  Decimal?  @map("max_weight_kg") @db.Decimal(10, 2)
+  maxVolumeCm3 Decimal?  @map("max_volume_cm3") @db.Decimal(12, 2)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+
+  warehouse Warehouse     @relation(fields: [warehouseId], references: [id])
+  zone      WarehouseZone @relation(fields: [zoneId], references: [id])
+
+  @@unique([warehouseId, code])
+  @@index([warehouseId])
+  @@index([zoneId])
+  @@index([aisle])
+  @@index([type])
+  @@index([deletedAt])
+  @@map("warehouse_bins")
+}
+
+// Natural PK on the pincode itself (reference data, hard overwrite, no soft delete).
+model PinCode {
+  pinCode        String        @id @map("pin_code") @db.VarChar(10)
+  countryCode    String        @default("IN") @map("country_code") @db.Char(2)
+  city           String?
+  district       String?
+  stateProvince  String?       @map("state_province")
+  region         String?
+  zone           String?
+  serviceArea    ServiceArea?  @map("service_area")
+  serviceability Json?
+  source         PinCodeSource @default(USER_ENTERED)
+  lastVerifiedAt DateTime?     @map("last_verified_at") @db.Timestamptz
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([countryCode])
+  @@index([city])
+  @@index([stateProvince])
+  @@index([zone])
+  @@index([lastVerifiedAt])
+  @@map("pin_codes")
+}
+
+// ============================================================
 // Enums
 // ============================================================
 
@@ -338,4 +461,62 @@ enum ActorType {
   API    @map("api")
 
   @@map("actor_type")
+}
+
+enum AddressOwnerType {
+  SELLER     @map("seller")
+  WAREHOUSE  @map("warehouse")
+  ORDER      @map("order")
+  RETURN_HUB @map("return_hub")
+
+  @@map("address_owner_type")
+}
+
+enum AddressType {
+  BD_ORIGIN    @map("bd_origin")
+  BD_OFFICE    @map("bd_office")
+  IN_RETURN    @map("in_return")
+  IN_WAREHOUSE @map("in_warehouse")
+  RECIPIENT    @map("recipient")
+
+  @@map("address_type")
+}
+
+enum WarehouseStatus {
+  ACTIVE      @map("active")
+  INACTIVE    @map("inactive")
+  MAINTENANCE @map("maintenance")
+
+  @@map("warehouse_status")
+}
+
+enum BinType {
+  STORAGE    @map("storage")
+  PICKING    @map("picking")
+  RECEIVING  @map("receiving")
+  PACKING    @map("packing")
+  RTO_HOLD   @map("rto_hold")
+  DAMAGED    @map("damaged")
+  QUARANTINE @map("quarantine")
+
+  @@map("bin_type")
+}
+
+enum ServiceArea {
+  METRO      @map("metro")
+  TIER1      @map("tier1")
+  TIER2      @map("tier2")
+  REST       @map("rest")
+  SPECIAL_NE @map("special_ne")
+  SPECIAL_JK @map("special_jk")
+
+  @@map("service_area")
+}
+
+enum PinCodeSource {
+  API_CACHE     @map("api_cache")
+  MANUAL_IMPORT @map("manual_import")
+  USER_ENTERED  @map("user_entered")
+
+  @@map("pin_code_source")
 }
