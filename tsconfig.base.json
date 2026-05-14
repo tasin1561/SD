@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "exactOptionalPropertyTypes": true,
+
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "incremental": true,
+
+    "baseUrl": ".",
+    "paths": {
+      "@skydrop/db": ["packages/db/src/index.ts"],
+      "@skydrop/db/*": ["packages/db/src/*"],
+      "@skydrop/ui": ["packages/ui/src/index.ts"],
+      "@skydrop/ui/*": ["packages/ui/src/*"],
+      "@skydrop/types": ["packages/types/src/index.ts"],
+      "@skydrop/types/*": ["packages/types/src/*"],
+      "@skydrop/config": ["packages/config/src/index.ts"],
+      "@skydrop/config/*": ["packages/config/src/*"],
+      "@skydrop/i18n": ["packages/i18n/src/index.ts"],
+      "@skydrop/i18n/*": ["packages/i18n/src/*"],
+      "@skydrop/utils": ["packages/utils/src/index.ts"],
+      "@skydrop/utils/*": ["packages/utils/src/*"]
+    }
+  },
+  "exclude": ["node_modules", "dist", "build", ".next", ".turbo"]
+}
