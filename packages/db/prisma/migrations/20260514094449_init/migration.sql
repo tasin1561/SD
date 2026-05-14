@@ -2177,6 +2177,13 @@ CREATE INDEX "tracking_events_source_idx" ON "tracking_events"("source");
 CREATE INDEX "tracking_events_webhook_id_idx" ON "tracking_events"("webhook_id");
 
 -- CreateIndex
+-- Declared explicitly so Prisma's migration history owns it (matches the
+-- pattern used for stock_movements_created_at_idx). Without this, TimescaleDB's
+-- create_hypertable() below auto-creates an identically-named index outside
+-- Prisma's tracking, which trips drift detection on every subsequent migration.
+CREATE INDEX "tracking_events_created_at_idx" ON "tracking_events"("created_at");
+
+-- CreateIndex
 CREATE INDEX "courier_webhooks_courier_code_idx" ON "courier_webhooks"("courier_code");
 
 -- CreateIndex

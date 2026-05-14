@@ -177,7 +177,7 @@ Cross-entity audit trail for sensitive actions.
 - `staffUserId` (typed FK for common case)
 - `sellerId` (typed FK)
 - `action` (string like "seller.approved", "order.cancelled")
-- `entityType`, `entityId` (the thing acted upon)
+- `entityType`, `entityId?` (the thing acted upon — null for actions not tied to a specific entity, e.g., login failures with unknown emails)
 - `changes` (JSON before/after diff)
 - `metadata` (JSON — IP, UA, request ID)
 

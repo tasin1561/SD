@@ -307,7 +307,7 @@ model AuditLog {
   sellerId    String?   @map("seller_id") @db.Uuid
   action      String
   entityType  String    @map("entity_type")
-  entityId    String    @map("entity_id") @db.Uuid
+  entityId    String?   @map("entity_id") @db.Uuid
   changes     Json?
   metadata    Json?
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
@@ -1456,6 +1456,10 @@ model TrackingEvent {
   @@index([eventType])
   @@index([source])
   @@index([webhookId])
+  // Declared so Prisma owns the partition-column index that TimescaleDB
+  // auto-creates via create_hypertable(). Without this, prisma migrate diff
+  // sees the DB index as drift and tries to drop it.
+  @@index([createdAt])
   @@map("tracking_events")
 }
 
