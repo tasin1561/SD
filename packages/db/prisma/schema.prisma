@@ -22,3 +22,320 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// ============================================================
+// Layer 1 — Identity & Access (12 tables)
+// ============================================================
+
+model StaffUser {
+  id              String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  email           String    @unique
+  emailDisplay    String    @map("email_display")
+  passwordHash    String    @map("password_hash")
+  role            StaffRole
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
+  lastLoginAt     DateTime? @map("last_login_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz
+
+  sellersApproved         Seller[]                      @relation("SellerApprovedBy")
+  invitesAuthored         SellerInvitation[]            @relation("SellerInvitedBy")
+  refreshTokens           StaffRefreshToken[]
+  passwordResetTokens     StaffPasswordResetToken[]
+  emailVerificationTokens StaffEmailVerificationToken[]
+  sellerNotesAuthored     SellerNote[]                  @relation("SellerNoteAuthor")
+  auditLogsAsStaff        AuditLog[]                    @relation("AuditLogStaff")
+
+  @@index([role])
+  @@index([deletedAt])
+  @@map("staff_users")
+}
+
+model Seller {
+  id                String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  email             String       @unique
+  emailDisplay      String       @map("email_display")
+  passwordHash      String       @map("password_hash")
+  companyName       String       @map("company_name")
+  contactPersonName String       @map("contact_person_name")
+  phone             String
+  whatsapp          String?
+  status            SellerStatus @default(PENDING)
+  approvedAt        DateTime?    @map("approved_at") @db.Timestamptz
+  approvedById      String?      @map("approved_by_id") @db.Uuid
+  bankName          String?      @map("bank_name")
+  bankAccountName   String?      @map("bank_account_name")
+  bankAccountNumber String?      @map("bank_account_number")
+  bankRoutingNumber String?      @map("bank_routing_number")
+  bankSwiftCode     String?      @map("bank_swift_code")
+  displayCurrency   Currency     @default(INR) @map("display_currency")
+  displayLanguage   String       @default("en") @map("display_language")
+  countryCode       String       @default("BD") @map("country_code") @db.Char(2)
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt         DateTime?    @map("deleted_at") @db.Timestamptz
+
+  approvedBy              StaffUser?                     @relation("SellerApprovedBy", fields: [approvedById], references: [id])
+  invitations             SellerInvitation[]
+  refreshTokens           SellerRefreshToken[]
+  apiKeys                 SellerApiKey[]
+  passwordResetTokens     SellerPasswordResetToken[]
+  emailVerificationTokens SellerEmailVerificationToken[]
+  notes                   SellerNote[]
+  auditLogsAsSeller       AuditLog[]                     @relation("AuditLogSeller")
+
+  @@index([status])
+  @@index([deletedAt])
+  @@index([approvedById])
+  @@map("sellers")
+}
+
+model SellerInvitation {
+  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  email       String
+  token       String    @unique
+  invitedById String    @map("invited_by_id") @db.Uuid
+  sellerId    String?   @map("seller_id") @db.Uuid
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz
+  usedAt      DateTime? @map("used_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  invitedBy StaffUser @relation("SellerInvitedBy", fields: [invitedById], references: [id])
+  seller    Seller?   @relation(fields: [sellerId], references: [id])
+
+  @@index([email])
+  @@index([expiresAt])
+  @@index([invitedById])
+  @@index([sellerId])
+  @@map("seller_invitations")
+}
+
+model StaffRefreshToken {
+  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  staffUserId String    @map("staff_user_id") @db.Uuid
+  tokenHash   String    @map("token_hash")
+  userAgent   String?   @map("user_agent")
+  ipAddress   String?   @map("ip_address") @db.Inet
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  staffUser StaffUser @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+
+  @@index([staffUserId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("staff_refresh_tokens")
+}
+
+model SellerRefreshToken {
+  id        String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId  String    @map("seller_id") @db.Uuid
+  tokenHash String    @map("token_hash")
+  userAgent String?   @map("user_agent")
+  ipAddress String?   @map("ip_address") @db.Inet
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@index([sellerId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("seller_refresh_tokens")
+}
+
+model SellerApiKey {
+  id         String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId   String    @map("seller_id") @db.Uuid
+  name       String
+  keyPrefix  String    @map("key_prefix")
+  keyHash    String    @unique @map("key_hash")
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz
+  expiresAt  DateTime? @map("expires_at") @db.Timestamptz
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt  DateTime? @map("deleted_at") @db.Timestamptz
+
+  seller Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@index([sellerId])
+  @@index([revokedAt])
+  @@map("seller_api_keys")
+}
+
+model StaffPasswordResetToken {
+  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  staffUserId String    @map("staff_user_id") @db.Uuid
+  tokenHash   String    @map("token_hash")
+  ipAddress   String?   @map("ip_address") @db.Inet
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz
+  usedAt      DateTime? @map("used_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  staffUser StaffUser @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+
+  @@index([staffUserId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("staff_password_reset_tokens")
+}
+
+model SellerPasswordResetToken {
+  id        String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId  String    @map("seller_id") @db.Uuid
+  tokenHash String    @map("token_hash")
+  ipAddress String?   @map("ip_address") @db.Inet
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  usedAt    DateTime? @map("used_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@index([sellerId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("seller_password_reset_tokens")
+}
+
+model StaffEmailVerificationToken {
+  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  staffUserId String    @map("staff_user_id") @db.Uuid
+  tokenHash   String    @map("token_hash")
+  email       String
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz
+  usedAt      DateTime? @map("used_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  staffUser StaffUser @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+
+  @@index([staffUserId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("staff_email_verification_tokens")
+}
+
+model SellerEmailVerificationToken {
+  id        String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId  String    @map("seller_id") @db.Uuid
+  tokenHash String    @map("token_hash")
+  email     String
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  usedAt    DateTime? @map("used_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@index([sellerId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("seller_email_verification_tokens")
+}
+
+model SellerNote {
+  id        String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId  String             @map("seller_id") @db.Uuid
+  authorId  String             @map("author_id") @db.Uuid
+  content   String             @db.Text
+  category  SellerNoteCategory @default(GENERAL)
+  isPinned  Boolean            @default(false) @map("is_pinned")
+  createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime?          @map("deleted_at") @db.Timestamptz
+
+  seller Seller    @relation(fields: [sellerId], references: [id])
+  author StaffUser @relation("SellerNoteAuthor", fields: [authorId], references: [id])
+
+  @@index([sellerId])
+  @@index([authorId])
+  @@index([category])
+  @@index([deletedAt])
+  @@map("seller_notes")
+}
+
+model AuditLog {
+  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  actorType   ActorType @map("actor_type")
+  actorId     String?   @map("actor_id") @db.Uuid
+  staffUserId String?   @map("staff_user_id") @db.Uuid
+  sellerId    String?   @map("seller_id") @db.Uuid
+  action      String
+  entityType  String    @map("entity_type")
+  entityId    String    @map("entity_id") @db.Uuid
+  changes     Json?
+  metadata    Json?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  staffUser StaffUser? @relation("AuditLogStaff", fields: [staffUserId], references: [id])
+  seller    Seller?    @relation("AuditLogSeller", fields: [sellerId], references: [id])
+
+  @@index([actorType, actorId])
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([staffUserId])
+  @@index([sellerId])
+  @@map("audit_logs")
+}
+
+// ============================================================
+// Enums
+// ============================================================
+
+enum StaffRole {
+  SUPER_ADMIN            @map("super_admin")
+  SELLER_APPROVAL_ADMIN  @map("seller_approval_admin")
+  CALL_AGENT             @map("call_agent")
+  WAREHOUSE_STAFF        @map("warehouse_staff")
+  MANUAL_PLACEMENT_ADMIN @map("manual_placement_admin")
+  FINANCE                @map("finance")
+
+  @@map("staff_role")
+}
+
+enum SellerStatus {
+  PENDING   @map("pending")
+  APPROVED  @map("approved")
+  REJECTED  @map("rejected")
+  SUSPENDED @map("suspended")
+
+  @@map("seller_status")
+}
+
+enum Currency {
+  INR @map("inr")
+  BDT @map("bdt")
+
+  @@map("currency")
+}
+
+enum SellerNoteCategory {
+  GENERAL          @map("general")
+  REJECTION_REASON @map("rejection_reason")
+  ONBOARDING       @map("onboarding")
+  COMPLIANCE       @map("compliance")
+  COMPLAINT        @map("complaint")
+  PAYMENT          @map("payment")
+
+  @@map("seller_note_category")
+}
+
+enum ActorType {
+  STAFF  @map("staff")
+  SELLER @map("seller")
+  SYSTEM @map("system")
+  API    @map("api")
+
+  @@map("actor_type")
+}
