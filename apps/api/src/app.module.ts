@@ -8,6 +8,9 @@ import { HealthModule } from './modules/health/health.module';
 import { AuthCommonModule } from './modules/auth-common/auth-common.module';
 import { EmailModule } from './modules/email/email.module';
 import { StaffAuthModule } from './modules/staff-auth/staff-auth.module';
+import { SellerAuthModule } from './modules/seller-auth/seller-auth.module';
+import { SellerInvitationModule } from './modules/seller-invitation/seller-invitation.module';
+import { SellerApiKeyModule } from './modules/seller-api-key/seller-api-key.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { pinoConfig } from './common/pino/logger-config';
 import { envSchema } from './config/env.schema';
@@ -38,6 +41,9 @@ import { envSchema } from './config/env.schema';
     AuthCommonModule,
     EmailModule,
     StaffAuthModule,
+    SellerAuthModule,
+    SellerInvitationModule,
+    SellerApiKeyModule,
     HealthModule,
   ],
 })
