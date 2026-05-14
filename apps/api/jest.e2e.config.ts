@@ -11,7 +11,7 @@ const config: Config = {
   },
   // globalSetup / setupFilesAfterEach are added when e2e tests land.
   transform: {
-    '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json', isolatedModules: true }],
+    '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json' }],
   },
   testTimeout: 30000,
 };

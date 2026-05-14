@@ -46,5 +46,25 @@ export default [
       'no-unused-vars': 'off',
     },
   },
+  {
+    files: ['test/**/*.ts', '**/*.spec.ts', '**/*.e2e-spec.ts'],
+    languageOptions: {
+      globals: {
+        describe: 'readonly',
+        it: 'readonly',
+        test: 'readonly',
+        expect: 'readonly',
+        beforeAll: 'readonly',
+        beforeEach: 'readonly',
+        afterAll: 'readonly',
+        afterEach: 'readonly',
+        jest: 'readonly',
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-non-null-assertion': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
   prettier,
 ];

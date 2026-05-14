@@ -10,7 +10,7 @@ const config: Config = {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   transform: {
-    '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json', isolatedModules: true }],
+    '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json' }],
   },
   collectCoverageFrom: ['src/**/*.ts', '!src/main.ts', '!**/*.module.ts', '!**/dto/**', '!**/*.d.ts'],
   coverageDirectory: 'coverage',

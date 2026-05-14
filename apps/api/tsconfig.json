@@ -9,6 +9,7 @@
     "baseUrl": ".",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
+    "isolatedModules": true,
     "noEmit": false,
     "types": ["node", "jest"],
     "paths": {
