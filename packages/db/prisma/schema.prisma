@@ -56,6 +56,9 @@ model StaffUser {
   ordersConfirmed         Order[]                       @relation("OrderConfirmedBy")
   ordersCancelled         Order[]                       @relation("OrderCancelledBy")
   bulkUploadsByStaff      BulkOrderUpload[]             @relation("BulkUploadUploadedByStaff")
+  callQueueAssigned       CallQueueEntry[]              @relation("CallQueueAssignedAgent")
+  callAttempts            CallAttempt[]
+  callSettings            AgentCallSettings?
 
   @@index([role])
   @@index([deletedAt])
@@ -1018,6 +1021,8 @@ model Order {
   events         OrderEvent[]
   reservations   StockReservation[]
   stockMovements StockMovement[]
+  callQueueEntry CallQueueEntry?
+  callAttempts   CallAttempt[]
 
   @@unique([sellerId, sellerOrderRef])
   @@index([sellerId, status])
@@ -1150,6 +1155,96 @@ model OrderRecipientAddressCache {
   @@unique([customerId, addressHash])
   @@index([customerId])
   @@map("order_recipient_address_cache")
+}
+
+// ============================================================
+// Layer 6 — Call Center (3 tables)
+// ============================================================
+
+model CallQueueEntry {
+  id                String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  orderId           String              @unique @map("order_id") @db.Uuid
+  assignedAgentId   String?             @map("assigned_agent_id") @db.Uuid
+  assignedAt        DateTime?           @map("assigned_at") @db.Timestamptz
+  assignmentMethod  AssignmentMethod    @default(AUTO_ROUND_ROBIN) @map("assignment_method")
+  previousAgentIds  String[]            @default([]) @map("previous_agent_ids") @db.Uuid
+  priority          Int                 @default(100)
+  status            CallQueueStatus     @default(WAITING)
+  availableAt       DateTime            @default(now()) @map("available_at") @db.Timestamptz
+  scheduledAttempts Int                 @default(0) @map("scheduled_attempts")
+  maxAttempts       Int                 @default(3) @map("max_attempts")
+  closedAt          DateTime?           @map("closed_at") @db.Timestamptz
+  closureReason     QueueClosureReason? @map("closure_reason")
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+
+  order         Order         @relation(fields: [orderId], references: [id])
+  assignedAgent StaffUser?    @relation("CallQueueAssignedAgent", fields: [assignedAgentId], references: [id])
+  attempts      CallAttempt[]
+
+  @@index([assignedAgentId, status])
+  @@index([status, availableAt, priority])
+  @@index([orderId])
+  @@index([closureReason])
+  @@map("call_queue_entries")
+}
+
+// Immutable — only createdAt (no updatedAt, no deletedAt).
+model CallAttempt {
+  id                    String      @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  queueEntryId          String      @map("queue_entry_id") @db.Uuid
+  orderId               String      @map("order_id") @db.Uuid
+  agentId               String      @map("agent_id") @db.Uuid
+  startedAt             DateTime    @map("started_at") @db.Timestamptz
+  endedAt               DateTime?   @map("ended_at") @db.Timestamptz
+  durationSeconds       Int?        @map("duration_seconds")
+  phoneE164             String      @map("phone_e164")
+  outcome               CallOutcome
+  outcomeNotes          String?     @map("outcome_notes") @db.Text
+  customerSaidName      String?     @map("customer_said_name")
+  customerSaidAddress   String?     @map("customer_said_address") @db.Text
+  customerVerifiedItems Boolean?    @map("customer_verified_items")
+  rescheduledFor        DateTime?   @map("rescheduled_for") @db.Timestamptz
+  rescheduledReason     String?     @map("rescheduled_reason")
+  flaggedAsSuspicious   Boolean     @default(false) @map("flagged_as_suspicious")
+  suspicionReason       String?     @map("suspicion_reason") @db.Text
+  createdAt             DateTime    @default(now()) @map("created_at") @db.Timestamptz
+
+  queueEntry CallQueueEntry @relation(fields: [queueEntryId], references: [id], onDelete: Cascade)
+  order      Order          @relation(fields: [orderId], references: [id])
+  agent      StaffUser      @relation(fields: [agentId], references: [id])
+
+  @@index([queueEntryId])
+  @@index([orderId])
+  @@index([agentId, startedAt])
+  @@index([outcome])
+  @@index([startedAt])
+  @@index([flaggedAsSuspicious])
+  @@map("call_attempts")
+}
+
+model AgentCallSettings {
+  id                  String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  agentId             String   @unique @map("agent_id") @db.Uuid
+  maxActiveCalls      Int      @default(20) @map("max_active_calls")
+  isAvailable         Boolean  @default(true) @map("is_available")
+  workingHoursStart   String   @default("09:00") @map("working_hours_start")
+  workingHoursEnd     String   @default("18:00") @map("working_hours_end")
+  workingDays         Int[]    @default([1, 2, 3, 4, 5, 6]) @map("working_days")
+  timezone            String   @default("Asia/Kolkata")
+  languages           String[] @default(["en", "hi"])
+  canHandleHighRisk   Boolean  @default(false) @map("can_handle_high_risk")
+  canHandleHighValue  Boolean  @default(false) @map("can_handle_high_value")
+  totalCallsToday     Int      @default(0) @map("total_calls_today")
+  confirmedTodayCount Int      @default(0) @map("confirmed_today_count")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  agent StaffUser @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([isAvailable])
+  @@index([agentId])
+  @@map("agent_call_settings")
 }
 
 // ============================================================
@@ -1502,4 +1597,54 @@ enum BulkUploadStatus {
   CANCELLED             @map("cancelled")
 
   @@map("bulk_upload_status")
+}
+
+enum CallQueueStatus {
+  WAITING     @map("waiting")
+  ASSIGNED    @map("assigned")
+  IN_PROGRESS @map("in_progress")
+  SCHEDULED   @map("scheduled")
+  CLOSED      @map("closed")
+
+  @@map("call_queue_status")
+}
+
+enum AssignmentMethod {
+  AUTO_ROUND_ROBIN @map("auto_round_robin")
+  MANUAL           @map("manual")
+  REASSIGNED       @map("reassigned")
+  AGENT_PICKED     @map("agent_picked")
+
+  @@map("assignment_method")
+}
+
+enum QueueClosureReason {
+  ORDER_CONFIRMED       @map("order_confirmed")
+  ORDER_CANCELLED       @map("order_cancelled")
+  ORDER_REJECTED        @map("order_rejected")
+  MAX_ATTEMPTS_EXCEEDED @map("max_attempts_exceeded")
+  ORDER_DELETED         @map("order_deleted")
+  ADMIN_CLOSED          @map("admin_closed")
+
+  @@map("queue_closure_reason")
+}
+
+enum CallOutcome {
+  CONFIRMED             @map("confirmed")
+  CANCELLED_BY_CUSTOMER @map("cancelled_by_customer")
+  RESCHEDULED           @map("rescheduled")
+  ADDRESS_CORRECTION    @map("address_correction")
+  ITEM_CORRECTION       @map("item_correction")
+  NO_ANSWER             @map("no_answer")
+  BUSY                  @map("busy")
+  CALL_REJECTED         @map("call_rejected")
+  VOICEMAIL             @map("voicemail")
+  WRONG_NUMBER          @map("wrong_number")
+  PHONE_DISCONNECTED    @map("phone_disconnected")
+  LANGUAGE_BARRIER      @map("language_barrier")
+  TECHNICAL_ISSUE       @map("technical_issue")
+  FAKE_ORDER            @map("fake_order")
+  OTHER                 @map("other")
+
+  @@map("call_outcome")
 }
