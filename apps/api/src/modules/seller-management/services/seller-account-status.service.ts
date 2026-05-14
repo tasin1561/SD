@@ -15,7 +15,6 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { EmailQueue } from '../../email/queue/email.queue';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
-const SUPPORT_EMAIL = 'support@skydrop.online';
 const DEFAULT_REAPPROVAL_NOTE = 'Account reapproved';
 
 export interface SuspendInput {
@@ -140,7 +139,7 @@ export class SellerAccountStatusService {
         variables: {
           company_name: seller.companyName,
           reason: trimmedReason,
-          support_email: SUPPORT_EMAIL,
+          support_email: this.env.supportEmail,
           app_url: this.env.sellerAppUrl,
         },
         triggerEvent: 'seller.suspended',
@@ -220,7 +219,7 @@ export class SellerAccountStatusService {
         },
         variables: {
           company_name: seller.companyName,
-          support_email: SUPPORT_EMAIL,
+          support_email: this.env.supportEmail,
           app_url: this.env.sellerAppUrl,
         },
         triggerEvent: 'seller.reapproved',

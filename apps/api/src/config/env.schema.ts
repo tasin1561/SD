@@ -17,6 +17,8 @@ export const envSchema = z.object({
   SELLER_APP_URL: z.string().url(),
   ADMIN_APP_URL: z.string().url(),
 
+  SUPPORT_EMAIL: z.string().email().default('support@skydrop.online'),
+
   COOKIE_DOMAIN: z.string().optional(),
 });
 

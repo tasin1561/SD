@@ -34,6 +34,7 @@ import { envSchema } from './config/env.schema';
             RESEND_API_KEY: env.resendApiKey,
             SELLER_APP_URL: env.sellerAppUrl,
             ADMIN_APP_URL: env.adminAppUrl,
+            SUPPORT_EMAIL: env.supportEmail,
             COOKIE_DOMAIN: env.cookieDomain,
           }),
         ),

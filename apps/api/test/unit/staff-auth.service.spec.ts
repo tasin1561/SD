@@ -241,6 +241,7 @@ function makeEnv(): EnvService {
     RESEND_API_KEY: '',
     SELLER_APP_URL: 'http://localhost:3001',
     ADMIN_APP_URL: 'http://localhost:3002',
+    SUPPORT_EMAIL: 'support@skydrop.online',
   });
 }
 

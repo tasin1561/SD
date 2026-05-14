@@ -53,6 +53,10 @@ export class EnvService {
     return this.env.ADMIN_APP_URL;
   }
 
+  get supportEmail(): string {
+    return this.env.SUPPORT_EMAIL;
+  }
+
   get cookieDomain(): string | undefined {
     return this.env.COOKIE_DOMAIN;
   }
