@@ -11,6 +11,7 @@ import { StaffAuthModule } from './modules/staff-auth/staff-auth.module';
 import { SellerAuthModule } from './modules/seller-auth/seller-auth.module';
 import { SellerInvitationModule } from './modules/seller-invitation/seller-invitation.module';
 import { SellerApiKeyModule } from './modules/seller-api-key/seller-api-key.module';
+import { SellerManagementModule } from './modules/seller-management/seller-management.module';
 import { ThrottlerModule } from './common/throttler/throttler.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { pinoConfig } from './common/pino/logger-config';
@@ -46,6 +47,7 @@ import { envSchema } from './config/env.schema';
     SellerAuthModule,
     SellerInvitationModule,
     SellerApiKeyModule,
+    SellerManagementModule,
     HealthModule,
   ],
 })
