@@ -39,27 +39,31 @@ model StaffUser {
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt       DateTime? @map("deleted_at") @db.Timestamptz
 
-  sellersApproved         Seller[]                      @relation("SellerApprovedBy")
-  invitesAuthored         SellerInvitation[]            @relation("SellerInvitedBy")
-  refreshTokens           StaffRefreshToken[]
-  passwordResetTokens     StaffPasswordResetToken[]
-  emailVerificationTokens StaffEmailVerificationToken[]
-  sellerNotesAuthored     SellerNote[]                  @relation("SellerNoteAuthor")
-  auditLogsAsStaff        AuditLog[]                    @relation("AuditLogStaff")
-  productImagesUploaded   ProductImage[]                @relation("ProductImageUploadedByStaff")
-  stockBatchesReceived    StockBatch[]                  @relation("StockBatchReceivedBy")
-  stockAdjustmentsInit    StockAdjustment[]             @relation("StockAdjustmentInitiatedBy")
-  stockAdjustmentsApprove StockAdjustment[]             @relation("StockAdjustmentApprovedBy")
-  cycleCountsInitiated    CycleCount[]                  @relation("CycleCountInitiatedBy")
-  cycleCountItemsCounted  CycleCountItem[]              @relation("CycleCountItemCountedBy")
-  goodsReceiptsReceived   GoodsReceipt[]                @relation("GoodsReceiptReceivedBy")
-  ordersConfirmed         Order[]                       @relation("OrderConfirmedBy")
-  ordersCancelled         Order[]                       @relation("OrderCancelledBy")
-  bulkUploadsByStaff      BulkOrderUpload[]             @relation("BulkUploadUploadedByStaff")
-  callQueueAssigned       CallQueueEntry[]              @relation("CallQueueAssignedAgent")
-  callAttempts            CallAttempt[]
-  callSettings            AgentCallSettings?
-  awbLabelsGenerated      AwbLabel[]                    @relation("AwbLabelGeneratedBy")
+  sellersApproved           Seller[]                      @relation("SellerApprovedBy")
+  invitesAuthored           SellerInvitation[]            @relation("SellerInvitedBy")
+  refreshTokens             StaffRefreshToken[]
+  passwordResetTokens       StaffPasswordResetToken[]
+  emailVerificationTokens   StaffEmailVerificationToken[]
+  sellerNotesAuthored       SellerNote[]                  @relation("SellerNoteAuthor")
+  auditLogsAsStaff          AuditLog[]                    @relation("AuditLogStaff")
+  productImagesUploaded     ProductImage[]                @relation("ProductImageUploadedByStaff")
+  stockBatchesReceived      StockBatch[]                  @relation("StockBatchReceivedBy")
+  stockAdjustmentsInit      StockAdjustment[]             @relation("StockAdjustmentInitiatedBy")
+  stockAdjustmentsApprove   StockAdjustment[]             @relation("StockAdjustmentApprovedBy")
+  cycleCountsInitiated      CycleCount[]                  @relation("CycleCountInitiatedBy")
+  cycleCountItemsCounted    CycleCountItem[]              @relation("CycleCountItemCountedBy")
+  goodsReceiptsReceived     GoodsReceipt[]                @relation("GoodsReceiptReceivedBy")
+  ordersConfirmed           Order[]                       @relation("OrderConfirmedBy")
+  ordersCancelled           Order[]                       @relation("OrderCancelledBy")
+  bulkUploadsByStaff        BulkOrderUpload[]             @relation("BulkUploadUploadedByStaff")
+  callQueueAssigned         CallQueueEntry[]              @relation("CallQueueAssignedAgent")
+  callAttempts              CallAttempt[]
+  callSettings              AgentCallSettings?
+  awbLabelsGenerated        AwbLabel[]                    @relation("AwbLabelGeneratedBy")
+  courierCredentialsCreated CourierCredential[]           @relation("CourierCredentialCreatedBy")
+  rateCardsCreated          RateCard[]                    @relation("RateCardCreatedBy")
+  sellerPricingApproved     SellerPricing[]               @relation("SellerPricingApprovedBy")
+  fxRatesOverridden         FxRate[]                      @relation("FxRateOverrideBy")
 
   @@index([role])
   @@index([deletedAt])
@@ -110,6 +114,7 @@ model Seller {
   orders                  Order[]
   bulkOrderUploads        BulkOrderUpload[]              @relation("BulkUploadSeller")
   bulkUploadsTriggered    BulkOrderUpload[]              @relation("BulkUploadUploadedBySeller")
+  pricing                 SellerPricing[]
 
   @@index([status])
   @@index([deletedAt])
@@ -1029,6 +1034,7 @@ model Order {
   callQueueEntry CallQueueEntry?
   callAttempts   CallAttempt[]
   orderShipments OrderShipment[]
+  charges        OrderCharge[]
 
   @@unique([sellerId, sellerOrderRef])
   @@index([sellerId, status])
@@ -1308,6 +1314,7 @@ model Shipment {
   updatedAt              DateTime       @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt              DateTime?      @map("deleted_at") @db.Timestamptz
 
+  courier          Courier           @relation(fields: [courierCode], references: [code])
   originWarehouse  Warehouse         @relation(fields: [originWarehouseId], references: [id])
   supersedes       Shipment?         @relation("ShipmentSupersedes", fields: [supersedesShipmentId], references: [id])
   supersededBy     Shipment[]        @relation("ShipmentSupersedes")
@@ -1318,6 +1325,7 @@ model Shipment {
   webhooks         CourierWebhook[]
   deliveryAttempts DeliveryAttempt[]
   stockMovements   StockMovement[]
+  charges          OrderCharge[]
 
   @@index([courierCode, status])
   @@index([status, createdAt])
@@ -1471,6 +1479,7 @@ model CourierWebhook {
   createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz
 
+  courier          Courier           @relation(fields: [courierCode], references: [code])
   shipment         Shipment?         @relation(fields: [shipmentId], references: [id])
   trackingEvents   TrackingEvent[]
   deliveryAttempts DeliveryAttempt[]
@@ -1514,6 +1523,266 @@ model DeliveryAttempt {
   @@index([attemptedAt])
   @@index([webhookId])
   @@map("delivery_attempts")
+}
+
+// ============================================================
+// Layer 8 — Couriers & Pricing (9 tables)
+// ============================================================
+
+model Courier {
+  id                    String                 @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  code                  String                 @unique
+  name                  String
+  displayName           String                 @map("display_name")
+  logoSpacesKey         String?                @map("logo_spaces_key")
+  integrationType       CourierIntegrationType @map("integration_type")
+  apiBaseUrl            String?                @map("api_base_url")
+  webhookSecret         String?                @map("webhook_secret")
+  supportsCod           Boolean                @default(false) @map("supports_cod")
+  supportsPrepaid       Boolean                @default(true) @map("supports_prepaid")
+  supportsRto           Boolean                @default(false) @map("supports_rto")
+  supportsWeightDispute Boolean                @default(false) @map("supports_weight_dispute")
+  maxWeightGrams        Int?                   @map("max_weight_grams")
+  maxDeclaredValueInr   Decimal?               @map("max_declared_value_inr") @db.Decimal(12, 2)
+  maxCodAmountInr       Decimal?               @map("max_cod_amount_inr") @db.Decimal(12, 2)
+  defaultServiceTypes   String[]               @default([]) @map("default_service_types")
+  volumetricDivisor     Int                    @default(5000) @map("volumetric_divisor")
+  isActive              Boolean                @default(true) @map("is_active")
+  priorityForRouting    Int                    @default(100) @map("priority_for_routing")
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt             DateTime?              @map("deleted_at") @db.Timestamptz
+
+  credentials       CourierCredential[]
+  rateCardItems     RateCardItem[]
+  sellerPricing     SellerPricing[]
+  zoneMatrixEntries ZoneMatrixEntry[]
+  shipments         Shipment[]
+  webhooks          CourierWebhook[]
+
+  @@index([isActive])
+  @@index([priorityForRouting])
+  @@index([deletedAt])
+  @@map("couriers")
+}
+
+model CourierCredential {
+  id                   String                @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courierId            String                @map("courier_id") @db.Uuid
+  environment          CredentialEnvironment
+  encryptedPayload     String                @map("encrypted_payload") @db.Text
+  encryptionKeyVersion Int                   @map("encryption_key_version")
+  fieldNames           String[]              @default([]) @map("field_names")
+  isActive             Boolean               @default(true) @map("is_active")
+  expiresAt            DateTime?             @map("expires_at") @db.Timestamptz
+  lastUsedAt           DateTime?             @map("last_used_at") @db.Timestamptz
+  lastTestedAt         DateTime?             @map("last_tested_at") @db.Timestamptz
+  lastTestResult       String?               @map("last_test_result") @db.Text
+  createdByStaffId     String?               @map("created_by_staff_id") @db.Uuid
+  notes                String?               @db.Text
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt            DateTime?             @map("deleted_at") @db.Timestamptz
+
+  courier        Courier    @relation(fields: [courierId], references: [id])
+  createdByStaff StaffUser? @relation("CourierCredentialCreatedBy", fields: [createdByStaffId], references: [id])
+
+  @@unique([courierId, environment, isActive])
+  @@index([courierId])
+  @@index([environment])
+  @@index([isActive])
+  @@index([deletedAt])
+  @@index([createdByStaffId])
+  @@map("courier_credentials")
+}
+
+model RateCard {
+  id               String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  code             String    @unique
+  name             String
+  description      String?   @db.Text
+  isDefault        Boolean   @default(false) @map("is_default")
+  isActive         Boolean   @default(true) @map("is_active")
+  effectiveFrom    DateTime  @map("effective_from") @db.Timestamptz
+  effectiveTo      DateTime? @map("effective_to") @db.Timestamptz
+  currency         Currency  @default(INR)
+  createdByStaffId String?   @map("created_by_staff_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz
+
+  createdByStaff StaffUser?      @relation("RateCardCreatedBy", fields: [createdByStaffId], references: [id])
+  items          RateCardItem[]
+  sellerPricing  SellerPricing[]
+  surcharges     SurchargeRule[]
+  orderCharges   OrderCharge[]
+
+  @@index([isDefault])
+  @@index([isActive])
+  @@index([effectiveFrom, effectiveTo])
+  @@index([deletedAt])
+  @@index([createdByStaffId])
+  @@map("rate_cards")
+}
+
+model RateCardItem {
+  id                  String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  rateCardId          String   @map("rate_card_id") @db.Uuid
+  courierId           String   @map("courier_id") @db.Uuid
+  serviceType         String   @map("service_type")
+  zone                String
+  weightSlabFromGrams Int      @map("weight_slab_from_grams")
+  weightSlabToGrams   Int      @map("weight_slab_to_grams")
+  baseChargeInr       Decimal  @map("base_charge_inr") @db.Decimal(12, 2)
+  perKgChargeInr      Decimal? @map("per_kg_charge_inr") @db.Decimal(10, 2)
+  costToSkydropInr    Decimal? @map("cost_to_skydrop_inr") @db.Decimal(12, 2)
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  rateCard RateCard @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
+  courier  Courier  @relation(fields: [courierId], references: [id])
+
+  @@unique([rateCardId, courierId, serviceType, zone, weightSlabFromGrams])
+  @@index([rateCardId, courierId])
+  @@index([zone])
+  @@index([weightSlabFromGrams, weightSlabToGrams])
+  @@index([isActive])
+  @@map("rate_card_items")
+}
+
+model SellerPricing {
+  id                String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId          String    @map("seller_id") @db.Uuid
+  rateCardId        String    @map("rate_card_id") @db.Uuid
+  courierId         String?   @map("courier_id") @db.Uuid
+  discountPercent   Decimal?  @map("discount_percent") @db.Decimal(5, 2)
+  codFeePercent     Decimal?  @map("cod_fee_percent") @db.Decimal(5, 2)
+  effectiveFrom     DateTime  @map("effective_from") @db.Timestamptz
+  effectiveTo       DateTime? @map("effective_to") @db.Timestamptz
+  isActive          Boolean   @default(true) @map("is_active")
+  notes             String?   @db.Text
+  approvedByStaffId String?   @map("approved_by_staff_id") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt         DateTime? @map("deleted_at") @db.Timestamptz
+
+  seller          Seller     @relation(fields: [sellerId], references: [id])
+  rateCard        RateCard   @relation(fields: [rateCardId], references: [id])
+  courier         Courier?   @relation(fields: [courierId], references: [id])
+  approvedByStaff StaffUser? @relation("SellerPricingApprovedBy", fields: [approvedByStaffId], references: [id])
+
+  @@index([sellerId, isActive])
+  @@index([rateCardId])
+  @@index([effectiveFrom, effectiveTo])
+  @@index([deletedAt])
+  @@index([courierId])
+  @@index([approvedByStaffId])
+  @@map("seller_pricing")
+}
+
+model ZoneMatrixEntry {
+  id         String      @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courierId  String      @map("courier_id") @db.Uuid
+  originArea ServiceArea @map("origin_area")
+  destArea   ServiceArea @map("dest_area")
+  zone       String
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime    @updatedAt @map("updated_at") @db.Timestamptz
+
+  courier Courier @relation(fields: [courierId], references: [id])
+
+  @@unique([courierId, originArea, destArea])
+  @@index([courierId])
+  @@index([zone])
+  @@map("zone_matrix_entries")
+}
+
+model SurchargeRule {
+  id                         String                     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  rateCardId                 String                     @map("rate_card_id") @db.Uuid
+  type                       SurchargeType
+  name                       String
+  computationMethod          SurchargeComputationMethod @map("computation_method")
+  flatAmountInr              Decimal?                   @map("flat_amount_inr") @db.Decimal(12, 2)
+  percentage                 Decimal?                   @db.Decimal(5, 2)
+  minAmountInr               Decimal?                   @map("min_amount_inr") @db.Decimal(12, 2)
+  maxAmountInr               Decimal?                   @map("max_amount_inr") @db.Decimal(12, 2)
+  baseField                  SurchargeBaseField?        @map("base_field")
+  appliesOnlyIfPaymentMode   PaymentMode?               @map("applies_only_if_payment_mode")
+  appliesOnlyForServiceAreas ServiceArea[]              @default([]) @map("applies_only_for_service_areas")
+  isVisibleToSeller          Boolean                    @default(true) @map("is_visible_to_seller")
+  displayOrder               Int                        @default(0) @map("display_order")
+  isActive                   Boolean                    @default(true) @map("is_active")
+  createdAt                  DateTime                   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                  DateTime                   @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt                  DateTime?                  @map("deleted_at") @db.Timestamptz
+
+  rateCard     RateCard      @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
+  orderCharges OrderCharge[]
+
+  @@index([rateCardId])
+  @@index([type])
+  @@index([isActive])
+  @@index([deletedAt])
+  @@map("surcharge_rules")
+}
+
+model FxRate {
+  id                String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  fromCurrency      Currency     @map("from_currency")
+  toCurrency        Currency     @map("to_currency")
+  rate              Decimal      @db.Decimal(12, 6)
+  source            FxRateSource
+  sourceUrl         String?      @map("source_url")
+  fetchedAt         DateTime     @default(now()) @map("fetched_at") @db.Timestamptz
+  isManualOverride  Boolean      @default(false) @map("is_manual_override")
+  overrideByStaffId String?      @map("override_by_staff_id") @db.Uuid
+  overrideReason    String?      @map("override_reason") @db.Text
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  overrideBy StaffUser? @relation("FxRateOverrideBy", fields: [overrideByStaffId], references: [id])
+
+  @@unique([fromCurrency, toCurrency])
+  @@index([overrideByStaffId])
+  @@map("fx_rates")
+}
+
+model OrderCharge {
+  id                 String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  orderId            String            @map("order_id") @db.Uuid
+  shipmentId         String?           @map("shipment_id") @db.Uuid
+  type               ChargeType
+  amountInr          Decimal           @map("amount_inr") @db.Decimal(12, 2)
+  isTaxable          Boolean           @default(false) @map("is_taxable")
+  taxRate            Decimal?          @map("tax_rate") @db.Decimal(5, 2)
+  taxAmountInr       Decimal?          @map("tax_amount_inr") @db.Decimal(12, 2)
+  totalAmountInr     Decimal           @map("total_amount_inr") @db.Decimal(12, 2)
+  description        String?           @db.Text
+  displayOrder       Int               @default(0) @map("display_order")
+  isVisibleToSeller  Boolean           @default(true) @map("is_visible_to_seller")
+  rateCardId         String?           @map("rate_card_id") @db.Uuid
+  surchargeRuleId    String?           @map("surcharge_rule_id") @db.Uuid
+  computationContext Json?             @map("computation_context")
+  status             OrderChargeStatus @default(ESTIMATED)
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt          DateTime?         @map("deleted_at") @db.Timestamptz
+
+  order         Order          @relation(fields: [orderId], references: [id])
+  shipment      Shipment?      @relation(fields: [shipmentId], references: [id])
+  rateCard      RateCard?      @relation(fields: [rateCardId], references: [id])
+  surchargeRule SurchargeRule? @relation(fields: [surchargeRuleId], references: [id])
+
+  @@index([orderId])
+  @@index([shipmentId])
+  @@index([type])
+  @@index([status])
+  @@index([rateCardId])
+  @@index([surchargeRuleId])
+  @@index([deletedAt])
+  @@map("order_charges")
 }
 
 // ============================================================
@@ -2027,4 +2296,84 @@ enum DeliveryFailureReason {
   OTHER                          @map("other")
 
   @@map("delivery_failure_reason")
+}
+
+enum CourierIntegrationType {
+  API_FULL          @map("api_full")
+  API_TRACKING_ONLY @map("api_tracking_only")
+  MANUAL            @map("manual")
+
+  @@map("courier_integration_type")
+}
+
+enum CredentialEnvironment {
+  SANDBOX    @map("sandbox")
+  PRODUCTION @map("production")
+
+  @@map("credential_environment")
+}
+
+enum SurchargeType {
+  COD_FEE                @map("cod_fee")
+  FUEL_SURCHARGE         @map("fuel_surcharge")
+  REMOTE_AREA_FEE        @map("remote_area_fee")
+  RTO_FEE                @map("rto_fee")
+  WEIGHT_DISPUTE_FEE     @map("weight_dispute_fee")
+  RESHIPMENT_FEE         @map("reshipment_fee")
+  ADDRESS_CORRECTION_FEE @map("address_correction_fee")
+  OTHER                  @map("other")
+
+  @@map("surcharge_type")
+}
+
+enum SurchargeComputationMethod {
+  FLAT       @map("flat")
+  PERCENTAGE @map("percentage")
+  TIERED     @map("tiered")
+
+  @@map("surcharge_computation_method")
+}
+
+enum SurchargeBaseField {
+  SHIPPING_CHARGE   @map("shipping_charge")
+  COD_AMOUNT        @map("cod_amount")
+  DECLARED_VALUE    @map("declared_value")
+  CHARGEABLE_WEIGHT @map("chargeable_weight")
+
+  @@map("surcharge_base_field")
+}
+
+enum FxRateSource {
+  EXCHANGERATE_HOST   @map("exchangerate_host")
+  OPEN_EXCHANGE_RATES @map("open_exchange_rates")
+  MANUAL              @map("manual")
+  FALLBACK            @map("fallback")
+
+  @@map("fx_rate_source")
+}
+
+enum ChargeType {
+  BASE_SHIPPING      @map("base_shipping")
+  COD_FEE            @map("cod_fee")
+  FUEL_SURCHARGE     @map("fuel_surcharge")
+  REMOTE_AREA_FEE    @map("remote_area_fee")
+  RTO_FEE            @map("rto_fee")
+  WEIGHT_DISPUTE_FEE @map("weight_dispute_fee")
+  RESHIPMENT_FEE     @map("reshipment_fee")
+  GST                @map("gst")
+  ADJUSTMENT         @map("adjustment")
+  REFUND             @map("refund")
+  OTHER              @map("other")
+
+  @@map("charge_type")
+}
+
+enum OrderChargeStatus {
+  ESTIMATED @map("estimated")
+  CONFIRMED @map("confirmed")
+  FINAL     @map("final")
+  DISPUTED  @map("disputed")
+  ADJUSTED  @map("adjusted")
+
+  @@map("order_charge_status")
 }
