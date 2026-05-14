@@ -1,267 +1,328 @@
-# Skydrop — Master Spec for Claude Code
+# Skydrop — Claude Code Context
 
-> **READ THIS FILE FIRST in every session.** It is the single source of truth for the Skydrop project. If anything here conflicts with what's in the codebase, the codebase is wrong — ask the user before changing this spec.
-
----
-
-## 1. What Skydrop Is
-
-Skydrop is a **cross-border courier aggregator + light WMS** built for Bangladeshi e-commerce sellers shipping to Indian customers.
-
-**Business flow:**
-
-1. Bangladeshi seller signs up (invite-only) → admin approves
-2. Seller ships stock from BD to Skydrop's warehouse in India (cross-border, handled offline)
-3. Warehouse staff receives stock against seller's SKU catalog → inventory tracked per seller per SKU per bin
-4. Seller submits parcel order (single or bulk CSV) → linked to SKUs in catalog
-5. Call center calls Indian customer to confirm COD order
-6. Confirmed order → auto-push to Delhivery API → AWB returned, label printed
-7. If Delhivery rejects → goes to manual placement panel → admin uses another Indian courier
-8. Warehouse picks → packs → hands to courier rider
-9. Delivery tracked via Delhivery webhook (Delhivery orders) or manually (other couriers)
-10. Customer sees branded tracking at `track.skydrop.online/[id]` (English + Hindi)
-
-**Phase 1A scope** (current): everything except automated wallet/invoicing/collection/remittance — those are deferred to Phase 1B. Phase 1A handles money flows manually offline.
-
-**Phase 1B scope** (later): seller wallet + ledger, GST-compliant invoicing, payment gateway top-up, COD reconciliation, cross-border remittance to BD.
+This file is loaded at the start of every Claude Code session. Read it carefully — the rules and conventions here are not optional.
 
 ---
 
-## 2. Stack — IMMUTABLE
+## What is Skydrop
 
-Do NOT swap technologies without explicit user approval. These are locked.
+Skydrop is a **cross-border courier aggregator + light WMS** for Bangladeshi e-commerce sellers shipping to Indian customers.
 
-- **Language:** TypeScript everywhere (strict mode)
-- **Frontend:** Next.js 15 (App Router) + Tailwind CSS + shadcn/ui
-- **Backend:** NestJS + Prisma ORM + REST API + OpenAPI/Swagger
-- **Database:** PostgreSQL 18 (DigitalOcean Managed) with PostGIS + TimescaleDB extensions
-- **Cache / Queue:** Redis + BullMQ
-- **Storage:** DigitalOcean Spaces (S3-compatible)
-- **Auth:** Custom — Passport.js + JWT + refresh tokens, bcrypt, RBAC. No Clerk, no Auth0, no Supabase Auth.
-- **Email:** Resend or Postmark (TBD — `EMAIL_PROVIDER` env var)
-- **SMS:** Twilio
-- **Live chat:** ChatWoot (self-hosted, separate small droplet)
-- **Monorepo:** Turborepo + pnpm workspaces
-- **Hosting:** DigitalOcean Droplet (Bangalore BLR1) + Managed Postgres (BLR1) + Spaces (SGP1) + Cloudflare edge
+**Flow:** BD seller ships stock → Skydrop's Indian warehouse receives + holds inventory → end customer in India places order → Skydrop's call center confirms the order by phone (COD culture in India means call confirmation is essential) → warehouse picks/packs → dispatched via Delhivery (primary courier, API-integrated) or manually placed with backup couriers when Delhivery rejects → tracking + RTO handling → delivery.
+
+**Positioning:** We are the operational backbone (warehouse + customer call + courier dispatch + tracking) so BD sellers can sell into India without having Indian operations themselves.
 
 ---
 
-## 3. Repo Structure
+## Phase 1A — Scope
+
+Phase 1A covers **everything except billing/wallet/remittance**. Specifically:
+
+**IN SCOPE (Phase 1A):**
+- Seller onboarding (invite-only)
+- Product/SKU catalog with categories, variants, images
+- Inventory & WMS (multi-bin, batches, reservations, append-only ledger, FIFO/FEFO picking)
+- Order management (single + bulk CSV upload)
+- Call center workflow (round-robin queue, attempt logging, outcome capture)
+- Warehouse operations (receive, pick, pack, dispatch, RTO handling)
+- Courier integration: Delhivery (full API) + manual placement for non-integrated couriers
+- Shipment tracking with TimescaleDB-backed event log
+- Public tracking page (English + Hindi)
+- Notifications (transactional email + SMS + in-app)
+- Admin dashboard
+- Reports (operational, not financial)
+- System settings (admin-editable runtime config)
+- Pricing engine (calculate charges, no billing yet)
+- Multi-currency (INR canonical, BDT display) + FX
+- Order charges breakdown (line items with computation context)
+- Live chat (ChatWoot self-hosted, separate droplet — deferred install)
+- Outbound webhooks for seller B2B integration
+
+**OUT OF SCOPE (deferred to Phase 1B):**
+- Seller wallet + ledger
+- GST-compliant invoicing
+- Payment gateway top-up
+- COD reconciliation
+- Cross-border remittance
+- Historical FX rate tracking
+
+**OUT OF SCOPE (deferred to Phase 2+):**
+- Click-to-call integration (manual logging in 1A)
+- Call recording storage
+- Live driver GPS tracking
+- Customer authentication (public tracking only in 1A)
+- Notification template versioning
+- Multi-warehouse routing logic
+
+**Do not implement Phase 1B/2 features in Phase 1A modules unless explicitly asked. Schema is forward-compatible — don't add deferred features just because the columns exist.**
+
+---
+
+## Stack (LOCKED — do not propose alternatives)
+
+| Layer | Choice |
+|---|---|
+| Frontend | Next.js 15 App Router + TypeScript + Tailwind + shadcn/ui |
+| Backend | NestJS + Prisma + REST/OpenAPI |
+| Database | PostgreSQL 18 (DO Managed in prod, Docker local) + TimescaleDB extension |
+| ORM | Prisma 6.x (pinned at 6.19.3 — do not upgrade to 7.x without approval) |
+| Queue | BullMQ on Redis |
+| Cache | Redis (also droplet-local in prod) |
+| Storage | DigitalOcean Spaces (S3-compatible, SGP1 region) |
+| Auth | Custom: Passport.js + JWT (no Clerk/Auth0/Supabase) |
+| Email | TBD between Resend / Postmark (deciding at auth module design) |
+| SMS | Twilio (TBD on click-to-call integration timing) |
+| Live chat | ChatWoot self-hosted (separate droplet, deferred) |
+| Monorepo | Turborepo + pnpm workspaces |
+| Node | 22.x (engines enforced in package.json) |
+| Package manager | pnpm 11.x |
+
+---
+
+## Repo Structure
 
 ```
 SD/
 ├── apps/
-│   ├── marketing/      # Next.js — skydrop.online (public marketing)
-│   ├── seller/         # Next.js — app.skydrop.online (seller portal)
-│   ├── admin/          # Next.js — admin.skydrop.online (staff portal)
-│   ├── track/          # Next.js — track.skydrop.online (branded tracking page)
-│   ├── api/            # NestJS — api.skydrop.online (backend)
-│   └── workers/        # Node — BullMQ workers (emails, webhooks, status sync)
-│
+│   ├── marketing/         # skydrop.online — public marketing site
+│   ├── seller/            # app.skydrop.online — seller dashboard
+│   ├── admin/             # admin.skydrop.online — internal staff
+│   ├── track/             # track.skydrop.online — public tracking page (EN+HI)
+│   ├── api/               # api.skydrop.online — NestJS REST API
+│   └── workers/           # BullMQ background workers
 ├── packages/
-│   ├── db/             # Prisma schema + generated client + migrations
-│   ├── ui/             # Shared shadcn/ui components
-│   ├── types/          # Shared TypeScript types (DTOs, enums, etc.)
-│   ├── config/         # Shared ESLint, TS, Tailwind config
-│   ├── i18n/           # Translations (English + Hindi for tracking page)
-│   └── utils/          # Pure utility functions
-│
-├── docker/             # docker-compose files for local dev (Postgres + Redis + ChatWoot)
-├── infra/              # Server provisioning scripts, nginx configs, deployment helpers
-├── docs/               # Architecture decisions, runbooks, API docs
-├── .github/            # CI workflows (later)
-│
-├── CLAUDE.md           # ← this file
-├── README.md
-├── .gitignore
-├── package.json        # Workspace root
-├── pnpm-workspace.yaml
-├── turbo.json
-└── tsconfig.base.json
+│   ├── db/                # ✅ Prisma + types (@skydrop/db) — BUILT
+│   ├── ui/                # shared React components
+│   ├── types/             # shared TS types (DTOs, enums beyond DB)
+│   ├── config/            # shared eslint/tsconfig/tailwind presets
+│   ├── i18n/              # translations (en/hi for track, en/bn for seller)
+│   └── utils/             # shared utilities (date, money, phone, etc.)
+├── docker/                # docker-compose.yml for local Postgres + Redis
+├── docs/
+│   ├── infrastructure.md  # provisioning + ops reference
+│   └── db-schema.md       # canonical schema spec (the source of truth)
+└── CLAUDE.md              # this file
 ```
 
+Apps and packages are placeholder folders (README only) until their respective modules are scaffolded. Only `packages/db` is currently a real package.
+
 ---
 
-## 4. Conventions
+## Database
+
+**Status: IMPLEMENTED.** Schema lives in `packages/db/`.
+
+**Canonical reference:** `docs/db-schema.md` — 62 Prisma models across 9 layers (identity, addresses, catalog, inventory/WMS, orders, call center, shipments, pricing, notifications). When the schema and this doc diverge, the doc wins; update Prisma to match.
+
+**TimescaleDB hypertables:** `tracking_events` and `stock_movements` (composite PK, monthly chunks, 7d/30d compression).
+
+**Consumption pattern:**
+
+```ts
+import { prisma, OrderStatus, ShipmentStatus } from '@skydrop/db';
+
+const order = await prisma.order.findUnique({
+  where: { id },
+  include: { items: true, events: true },
+});
+```
+
+The package exports a singleton `prisma` client (configured logging, graceful shutdown) and re-exports every enum.
+
+### Service-Layer Rules (MUST enforce in code — schema cannot)
+
+The schema gives you the shape; these rules give you correctness. Violating them creates data corruption that's expensive to detect and harder to fix.
+
+**Inventory rules:**
+1. Stock changes are transactional. Movements + level updates + reservations all in one `prisma.$transaction`.
+2. Optimistic concurrency on `stock_levels.version`. On conflict, refetch and retry.
+3. `stock_movements` is append-only. NEVER UPDATE or DELETE rows.
+4. Reservation cleanup is async (hourly BullMQ job releases past `expiresAt`).
+5. FIFO/FEFO at pick time: `ORDER BY batches.expiresAt ASC NULLS LAST, batches.receivedAt ASC`.
+
+**Order rules:**
+1. Status transitions enforced by a state machine in code (22 statuses; not every transition is valid).
+2. Order numbers via Postgres SEQUENCE per year (`SD-YYYY-NN-XXXXXX`).
+3. Recipient address is immutable on order — snapshot at create, never re-link.
+
+**Shipment rules:**
+1. Webhook idempotency: dedup key is `(courierCode, awbNumber, eventType, externalEventId)`. Duplicate webhooks stored (audit) but produce no duplicate tracking events.
+2. Status transitions enforced by state machine (16 statuses).
+3. AWB lifecycle: when superseded (e.g., Delhivery rejected → Bluedart), new shipment gets new AWB. Never reassign.
+4. Webhook receipt acknowledged ASAP: write raw row, return HTTP 200 within 500ms, process async via BullMQ.
+
+**Credential rules:**
+1. Decryption key NEVER in DB. Always env var (`COURIER_CREDENTIALS_KEY_<version>`).
+2. Every decrypt writes an `audit_logs` row before returning plaintext.
+3. Plaintext credentials are NEVER logged, NEVER serialized to API responses, NEVER cached longer than 5 min.
+
+**Pricing rules:**
+1. Calculate charges at order creation, not display time. Persist to `order_charges` with full `computationContext` JSON.
+2. GST (18%) applies after all surcharges: `gst = (baseShipping + sum(surcharges)) * 0.18`.
+3. Historical accuracy: past orders show charges as persisted. Don't recompute from current rate cards.
+
+**Notification rules:**
+1. Send via BullMQ workers only. API endpoints enqueue; workers send.
+2. Throttle per (recipient, template). Check `notification_logs` before send; mark THROTTLED if limit exceeded.
+3. Respect seller's quiet hours for non-urgent categories.
+
+**Outbound webhook rules:**
+1. Sign every payload with HMAC-SHA256 using endpoint's `secretKey`.
+2. Retry policy (BullMQ): 5 attempts, exponential backoff (30s, 5m, 30m, 6h).
+3. Auto-disable endpoint after N consecutive failures (default 50, configurable via `system_settings`).
+4. Idempotency: unique constraint on `(endpointId, eventType, eventId, attemptNumber)` prevents double-send.
+
+**General:**
+1. All money stored as `Decimal`, INR canonical. BDT for display only via FX.
+2. All phone numbers E.164 (+91xxx, +880xxx). Validate at app boundary.
+3. All timestamps UTC. Display timezone is a per-user preference.
+4. Soft delete via `deletedAt` for user-facing data. Hard delete for tokens, sessions, transient/immutable rows.
+5. Audit log every sensitive action via `audit_logs` (auth, admin actions, sensitive data access).
+
+---
+
+## Conventions
 
 ### Naming
-- **Folders / files:** `kebab-case` (`order-service.ts`, `shipment-list/`)
-- **TypeScript types / interfaces / classes:** `PascalCase` (`Shipment`, `CreateOrderDto`)
-- **Variables / functions:** `camelCase` (`createOrder`, `pendingShipments`)
-- **Constants / env vars:** `UPPER_SNAKE_CASE` (`MAX_RETRIES`, `DATABASE_URL`)
-- **DB tables:** `snake_case`, plural (`shipments`, `tracking_events`, `call_logs`)
-- **DB columns:** `snake_case` (`created_at`, `seller_id`)
-- **Prisma models in code:** `PascalCase` singular (`Shipment`, `TrackingEvent`)
 
-### Git
-- Branch from `main`. Feature branches: `feat/<short-name>`, `fix/<short-name>`, `chore/<short-name>`
-- Commit messages: **Conventional Commits** — `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`
-- Examples:
-  - `feat(orders): add bulk CSV upload endpoint`
-  - `fix(auth): handle expired refresh tokens correctly`
-  - `chore(deps): bump prisma to 6.1.0`
-- One logical change per commit. Don't pile 20 unrelated fixes into one commit.
+- Folders & files: `kebab-case` (`order-confirmation.service.ts`)
+- TypeScript classes, interfaces, types: `PascalCase`
+- TypeScript variables, functions: `camelCase`
+- Constants & env vars: `UPPER_SNAKE_CASE`
+- Database tables: `snake_case` plural (`shipment_items`)
+- Database columns: `snake_case`
+- Prisma models: `PascalCase` singular, with `@@map` to snake_case table
+- Enums in Prisma: `PascalCase`; values `UPPER_SNAKE_CASE` with `@map` to snake_case
 
 ### TypeScript
-- `"strict": true` in every tsconfig. No exceptions.
-- No `any`. Use `unknown` and narrow. If absolutely necessary, comment why.
-- Shared DTOs/types live in `packages/types`, not duplicated across apps.
-- All Prisma queries are wrapped in service methods, never raw in controllers.
 
-### NestJS API
-- Each domain = its own module (`OrdersModule`, `ShipmentsModule`, `SellersModule`, etc.)
-- Controller → Service → Repository (Prisma client) layering
-- DTO validation via `class-validator` + `class-transformer`
-- Auth guards: `@JwtAuthGuard`, `@RolesGuard(['admin', 'call_agent'])`, `@SellerScopeGuard`
-- All async functions return typed Promises. No `void` unless truly fire-and-forget.
+- `strict: true` always. `noUncheckedIndexedAccess: true`. `noImplicitOverride: true`.
+- No `any` unless commented why (`// any: external lib has no types`).
+- Prefer `type` for unions/aliases, `interface` for object shapes that may be extended.
+- All exported functions get explicit return types.
+- No barrel re-exports across module boundaries (no `import { x } from '@/modules'`). Import directly from the file.
 
-### Next.js apps
-- App Router only. No Pages Router code.
-- Server Components by default. `'use client'` only when needed (forms, interactivity).
-- Tailwind for styling. shadcn/ui for components. No CSS-in-JS, no Sass.
-- Data fetching: server actions or RSC `fetch` for reads; server actions or API calls for writes.
-- Subdomain-based deployment: each app builds independently, deployed under its own Nginx server block.
+### NestJS (when we get there)
 
-### Database
-- ALL money stored as `Decimal` in Postgres (`@db.Decimal(12, 2)`), canonical currency **INR**.
-- ALL timestamps in UTC (`DateTime` in Prisma → `timestamp with time zone` in Postgres).
-- ALL phone numbers stored as `String` in **E.164** format (`+91...` / `+880...`).
-- Soft delete preferred for sellers, customers, orders (status flag, not DELETE).
-- Always add indexes on FK columns + commonly queried fields (status, created_at).
-- `tracking_events` table → TimescaleDB hypertable partitioned by `created_at`.
+- One module per business domain (`auth`, `sellers`, `orders`, `shipments`, ...).
+- Module structure: `controllers/`, `services/`, `dto/`, `guards/`, `decorators/`.
+- DTOs use `class-validator`. No raw request body access.
+- Controllers thin (validation + dispatch). Services do the work.
+- Services injectable, single-responsibility. Cross-module work via events (EventEmitter or BullMQ).
+- Database access only via Prisma client, never raw SQL except in migrations.
 
-### Error handling
-- API errors: structured JSON `{ code, message, details? }` with proper HTTP status
-- Never expose internal errors to clients (stack traces, DB errors, etc.)
-- Log everything via Pino with structured fields (`{ userId, orderId, ... }`)
-- Background jobs: catch errors, log, retry per BullMQ policy, dead-letter after N retries
+### Next.js (when we get there)
+
+- App Router. Server Components by default; Client Components when needed (interactivity).
+- Data fetching: Server Components call services directly or via fetch to internal API.
+- No `getServerSideProps`/`getStaticProps` — we're on App Router.
+- shadcn/ui components copied into `packages/ui` and re-exported.
 
 ---
 
-## 5. Phase 1A Modules (18 total)
+## Git Workflow
 
-Build order (rough — confirm with user before starting each):
-
-1. **Auth & Access** — seller auth + admin auth with RBAC, JWT, invite system
-2. **Seller Onboarding & Management** — admin-side approval flow
-3. **Seller Profile** — BD company info, bank details (Phase 1B usage), API keys
-4. **Product / SKU Catalog** — seller-managed SKUs with bulk CSV upload
-5. **Inventory / WMS** — full stock per seller per SKU per bin, receiving, movements, adjustments
-6. **Order Management** — single + bulk CSV order creation, list, filter, search
-7. **Call Center Workflow** — call queue, agent UI, call logs, outcomes, retry logic
-8. **Warehouse Operations** — pick queue, pack confirmation, AWB label printing, dispatch
-9. **Courier Integration** — Delhivery API + webhook receiver + manual fallback panel
-10. **Public Tracking Page** — branded `track.skydrop.online/[id]`, EN + HI, mobile-first
-11. **Notifications** — SMS, email, in-app (BullMQ-driven)
-12. **Admin Dashboard** — KPIs, breakdowns by seller/courier/branch
-13. **Reports** — exportable CSV/Excel reports
-14. **System Settings** — roles, audit logs, API keys, retry policies
-15. **Pricing Engine** — rate cards, surcharges, GST 18%, per-seller contract pricing — **calculation + display only, no billing**
-16. **Multi-Currency & FX** — INR canonical, BDT display, historical FX preservation
-17. **Order Charges / Cost Breakdown** — line-item charges per order, foundation for Phase 1B billing
-18. **Live Chat** — ChatWoot self-hosted, embedded in seller portal
-
-**Explicitly OUT of Phase 1A** (do not build, do not plan around):
-- ❌ Seller wallet, prepaid balance, ledger
-- ❌ Invoicing (GST-compliant or otherwise)
-- ❌ Payment gateway top-up / collection
-- ❌ COD reconciliation, automated remittance to BD sellers
-- ❌ Live GPS tracking (drivers)
-- ❌ Driver mobile app
-- ❌ Multi-warehouse (single warehouse only in Phase 1A)
-- ❌ Outbound webhooks for sellers (only inbound API key for now)
+- Solo dev for now. `main` branch, no feature branches required for trivial work.
+- For larger features (anything spanning multiple commits in a logical unit), use a short-lived branch `feat/auth-module` etc. and merge to main via fast-forward.
+- Commit messages: conventional commits — `feat(scope):`, `fix(scope):`, `chore(scope):`, `docs(scope):`, `refactor(scope):`, `test(scope):`.
+- Multi-line commit messages with rationale for non-trivial changes.
+- Push at end of each Claude Code session. Auto-push permitted per `.claude/settings.local.json`.
+- NEVER force push to main. NEVER reset main. NEVER rewrite published history.
 
 ---
 
-## 6. Subdomain Map
+## MUST / MUST NOT
 
-| Subdomain | App | Audience |
+### MUST
+
+1. Read `docs/db-schema.md` before any code touching the database.
+2. Read this `CLAUDE.md` at session start (you're doing it now).
+3. Run `pnpm prisma format && pnpm prisma validate` after schema edits.
+4. Run `pnpm tsc --noEmit` before committing.
+5. Write tests for service-layer rules (state machines, transactions, idempotency).
+6. Use the `prisma` singleton from `@skydrop/db`, never `new PrismaClient()`.
+7. Wrap multi-write operations in `prisma.$transaction`.
+8. Use BullMQ for async work (notifications, webhook delivery, cleanup jobs). No background work in HTTP request handlers.
+9. Snapshot data when immutability matters (order recipient address, order item SKU info, shipment dest address).
+
+### MUST NOT
+
+1. **NEVER** store API credentials in plaintext in the DB. Use `courier_credentials` with AES-256-GCM, key in env.
+2. **NEVER** log passwords, API keys, credential plaintext, or full webhook signatures.
+3. **NEVER** modify `stock_movements`, `tracking_events`, `call_attempts`, or `audit_logs` after insert.
+4. **NEVER** use `db:reset` or `prisma migrate reset` in production-like environments without explicit approval.
+5. **NEVER** install dependencies the user didn't approve. Ask first.
+6. **NEVER** commit `.env` files (`.env.example` only).
+7. **NEVER** push to a non-`main` remote branch without confirming the user wants it.
+8. **NEVER** delete files without verifying nothing depends on them.
+9. **NEVER** implement Phase 1B/2 features unless explicitly asked.
+
+---
+
+## Module Roadmap (18 modules)
+
+Module order — each builds on prior modules:
+
+| # | Module | Status |
 |---|---|---|
-| `skydrop.online` | `apps/marketing` | Public, prospects |
-| `app.skydrop.online` | `apps/seller` | BD sellers (authenticated) |
-| `admin.skydrop.online` | `apps/admin` | Staff (super admin, call agents, warehouse, etc.) |
-| `track.skydrop.online` | `apps/track` | Indian end customers (public, no auth) |
-| `api.skydrop.online` | `apps/api` | All apps + B2B API clients |
+| 0 | Database & Prisma package | ✅ DONE |
+| 1 | Auth & Access Control (staff + seller, refresh, password reset, email verify, API keys) | NEXT |
+| 2 | Seller Onboarding (invite, registration, approval workflow) | pending |
+| 3 | Seller Profile (settings, addresses, notification preferences) | pending |
+| 4 | Product/SKU Catalog (categories, products, variants, images, CSV upload) | pending |
+| 5 | Inventory & WMS (warehouses, bins, batches, levels, movements, reservations, receiving, cycle counts) | pending |
+| 6 | Order Management (manual entry, CSV upload, lifecycle, events) | pending |
+| 7 | Call Center Workflow (queue, distributor, attempt logging) | pending |
+| 8 | Warehouse Operations (pick, pack, dispatch, RTO) | pending |
+| 9 | Courier Integration (Delhivery API + manual placement workflow) | pending |
+| 10 | Public Tracking Page (EN + HI) | pending |
+| 11 | Notifications (templates, dispatcher, throttle, BullMQ workers) | pending |
+| 12 | Admin Dashboard (seller approval, order ops, warehouse ops, queue management) | pending |
+| 13 | Reports (operational, not financial) | pending |
+| 14 | System Settings UI | pending |
+| 15 | Pricing Engine (calculate only, no billing) | pending |
+| 16 | Multi-Currency & FX | pending |
+| 17 | Order Charges & Cost Breakdown UI | pending |
+| 18 | Live Chat (ChatWoot integration) | pending (deferred droplet install) |
 
-All proxied through Cloudflare → Nginx on droplet → respective Node app on internal port.
-
----
-
-## 7. Roles & Permissions (RBAC)
-
-- **`super_admin`** — full access, manages everything
-- **`seller_approval_admin`** — can approve/reject seller signups, view seller profiles
-- **`call_agent`** — sees only assigned call queue, can log call outcomes, cannot edit orders directly
-- **`warehouse_staff`** — sees pick queue, can mark packed/dispatched, manage stock receiving
-- **`manual_placement_admin`** — handles Delhivery-rejected orders, assigns to alt couriers, enters AWB
-- **`finance`** — placeholder for Phase 1B (read-only access to charges/reports)
-- **`seller`** — sees only their own data (sellers are scoped at the data level, not just role)
-
-Data scoping is enforced by guards: a `call_agent` querying orders sees only ones assigned to them; a seller sees only their orders.
-
----
-
-## 8. Infrastructure (already provisioned — see `docs/infrastructure.md`)
-
-- **Droplet:** Ubuntu 24.04, Bangalore BLR1, 4GB/2vCPU/120GB NVMe, hardened (UFW, fail2ban, no root SSH, no password auth)
-- **Postgres:** Managed, Bangalore BLR1, PG 18, 1GB/1vCPU/10GB + autoscale storage
-- **Spaces:** Singapore SGP1 (BLR unavailable), `skydrop-storage` bucket with CDN, restricted listing
-- **Redis:** to be installed on droplet (Phase 1A)
-- **Cloudflare:** DNS proxied for all subdomains, SSL Full (strict)
-
-Local dev uses Docker Compose for Postgres + Redis. Never connect to prod DB from local.
+Phase 1B modules (not in this roadmap):
+- Seller wallet
+- GST invoicing
+- Payment gateway
+- COD reconciliation
+- Cross-border remittance
+- Historical FX
 
 ---
 
-## 9. Workflow with Claude Code
+## Current State (2026-05-14)
 
-This is a **solo developer** project. The user is `tasin1561` / Talha / Syed. The workflow:
+**Implemented:**
+- Infrastructure (DO droplet, managed Postgres, Spaces, Cloudflare)
+- Local dev (WSL2, Docker Postgres + Redis with TimescaleDB)
+- Monorepo skeleton (Turborepo + pnpm)
+- `@skydrop/db` package: 62 Prisma models, initial migration with TimescaleDB hypertables, idempotent seed (system settings, couriers, FX, warehouse, rate card, notification templates)
 
-1. User comes to Claude Code with a task (a module to build, a bug to fix, a feature to add)
-2. Claude Code reads relevant files + this `CLAUDE.md` + any module-specific `CLAUDE.md`
-3. Claude Code **plans first** for non-trivial work — describes intent before editing files
-4. Claude Code executes — writes code, runs migrations, runs tests, commits
-5. User reviews diffs in `git diff`, asks for changes, or merges
+**Not yet implemented:**
+- `apps/api` (the NestJS API)
+- All other apps and packages (placeholders only)
+- Any feature module (auth, sellers, orders, etc.)
 
-**Claude Code MUST:**
-- Read this file fully at the start of every session
-- Read module-specific `CLAUDE.md` if it exists in the relevant `apps/*` or `packages/*` directory
-- Use `pnpm`, never `npm install` for dependencies (the workspace uses pnpm)
-- Run `pnpm typecheck` and `pnpm lint` after meaningful changes (when scripts exist)
-- Use Conventional Commits
-- Never commit secrets — verify `.env` files are gitignored before adding files
-- Ask before touching: production DB connection strings, infra/, deployment scripts, this CLAUDE.md
-- Ask before deleting any file or table
-
-**Claude Code MUST NOT:**
-- Swap technologies without explicit approval
-- Add a new top-level dependency without discussing it
-- Introduce a new app or package without confirming structure
-- Bypass conventions in this file
-- Run `prisma migrate reset` or `prisma db push` without confirmation
-- Modify migrations that are already applied to a real database
+**Next:** Module 1 — Auth & Access Control. Design happens in chat with the user; implementation by Claude Code in a focused session per module.
 
 ---
 
-## 10. Open Decisions (TBD — flag if encountered)
+## Session Hygiene
 
-- Email provider final pick (Resend vs Postmark) — decide before notifications module
-- SMS provider for India (Twilio confirmed for now; may reconsider for cost)
-- FX rate source (`exchangerate.host` vs Open Exchange Rates) — pick before pricing module
-- ChatWoot version + hosting droplet sizing — decide before live chat module
-- E-invoicing portal integration — Phase 1B, deferred
+- Each module is a fresh Claude Code session. Don't carry context across modules — context loads from this file + the schema doc + the relevant code.
+- Session sequence:
+  1. User and assistant design module in chat (decisions, scope, file structure).
+  2. User pastes a focused prompt into a fresh Claude Code session.
+  3. Claude Code reads `CLAUDE.md`, `docs/db-schema.md`, and the prompt; proposes a plan.
+  4. User reviews plan, approves or refines.
+  5. Claude Code executes, verifies, commits, pushes.
+  6. User reports back to chat assistant with summary.
+  7. Repeat for next module.
 
----
-
-## 11. Reference Documents
-
-- `docs/infrastructure.md` — full infra spec (this is the canonical source for hosting details)
-- `docs/phase-1a-modules.md` — detailed module breakdown (when created)
-- `docs/api-conventions.md` — API design conventions (when created)
-- `docs/db-schema.md` — DB schema notes and rationale (when created)
-
-If any of these don't exist yet, that's because we haven't gotten to them. Don't fabricate references.
-
----
-
-**Last updated:** Setup phase (pre-monorepo). Update this file when major architectural decisions change.
+- Long sessions (30+ min, many tool calls) get expensive in context. End sessions when a logical unit completes.
+- After every session, the assistant updates this `CLAUDE.md` if anything material changed.
