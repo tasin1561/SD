@@ -10,11 +10,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentStaff } from '../../common/decorators/current-staff.decorator';
 import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/client-info.decorator';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
+import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../common/types/request';
 import {
   STAFF_REFRESH_COOKIE,
@@ -37,12 +39,15 @@ interface AccessTokenResponse {
 
 @ApiTags('auth-staff')
 @Controller('auth/staff')
+@ThrottleKey('auth-user')
 export class StaffAuthController {
   constructor(private readonly svc: StaffAuthService) {}
 
   // ---------- LOGIN ----------
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
+  @ThrottleKey('email-ip')
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Staff login with email + password' })
@@ -119,6 +124,8 @@ export class StaffAuthController {
   // ---------- PASSWORD RESET ----------
 
   @Public()
+  @Throttle({ default: { limit: 3, ttl: 60 * 60 * 1000 } })
+  @ThrottleKey('email')
   @Post('password-reset/request')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send a password reset email (generic 200 regardless of email existence)' })
@@ -150,6 +157,8 @@ export class StaffAuthController {
 
   @UseGuards(StaffJwtGuard)
   @ApiBearerAuth('staff-jwt')
+  @Throttle({ default: { limit: 3, ttl: 60 * 60 * 1000 } })
+  @ThrottleKey('auth-user')
   @Post('email-verification/request')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request an email verification link for the authenticated staff' })

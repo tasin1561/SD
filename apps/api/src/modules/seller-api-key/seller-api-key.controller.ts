@@ -13,6 +13,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { CurrentSeller } from '../../common/decorators/current-seller.decorator';
 import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/client-info.decorator';
+import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../common/types/request';
 import {
   ApiKeyListItemDto,
@@ -24,6 +25,7 @@ import { SellerApiKeyService } from './seller-api-key.service';
 @ApiTags('seller-api-keys')
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
+@ThrottleKey('auth-user')
 @Controller('seller/api-keys')
 export class SellerApiKeyController {
   constructor(private readonly svc: SellerApiKeyService) {}

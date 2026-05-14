@@ -10,11 +10,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentSeller } from '../../common/decorators/current-seller.decorator';
 import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/client-info.decorator';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
+import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../common/types/request';
 import {
   SELLER_REFRESH_COOKIE,
@@ -38,12 +40,15 @@ interface AccessTokenResponse {
 
 @ApiTags('auth-seller')
 @Controller('auth/seller')
+@ThrottleKey('auth-user')
 export class SellerAuthController {
   constructor(private readonly svc: SellerAuthService) {}
 
   // ---------- REGISTER VIA INVITATION ----------
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60 * 60 * 1000 } })
+  @ThrottleKey('ip')
   @Post('register/invite')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
@@ -68,6 +73,8 @@ export class SellerAuthController {
   // ---------- LOGIN ----------
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
+  @ThrottleKey('email-ip')
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Seller login with email + password (APPROVED status required)' })
@@ -138,6 +145,8 @@ export class SellerAuthController {
   // ---------- PASSWORD RESET ----------
 
   @Public()
+  @Throttle({ default: { limit: 3, ttl: 60 * 60 * 1000 } })
+  @ThrottleKey('email')
   @Post('password-reset/request')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send a password reset email (generic 200 regardless of email existence)' })
@@ -166,6 +175,8 @@ export class SellerAuthController {
 
   @UseGuards(SellerJwtGuard)
   @ApiBearerAuth('seller-jwt')
+  @Throttle({ default: { limit: 3, ttl: 60 * 60 * 1000 } })
+  @ThrottleKey('auth-user')
   @Post('email-verification/request')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request an email verification link for the authenticated seller' })

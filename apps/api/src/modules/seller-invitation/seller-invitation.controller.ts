@@ -15,6 +15,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentStaff } from '../../common/decorators/current-staff.decorator';
 import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/client-info.decorator';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
+import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../common/types/request';
 import { CreateSellerInvitationDto } from './dto/create.dto';
 import {
@@ -34,6 +35,7 @@ import { SellerInvitationService } from './seller-invitation.service';
 @ApiTags('admin-seller-invitations')
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
+@ThrottleKey('auth-user')
 @Controller('admin/seller-invitations')
 export class SellerInvitationAdminController {
   constructor(private readonly svc: SellerInvitationService) {}
