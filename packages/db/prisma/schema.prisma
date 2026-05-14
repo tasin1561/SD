@@ -121,6 +121,7 @@ model Seller {
   pricing                 SellerPricing[]
   webhookEndpoints        SellerWebhookEndpoint[]
   notificationPreferences SellerNotificationPreference[]
+  onboardingProgress      SellerOnboardingProgress[]
 
   @@index([status])
   @@index([deletedAt])
@@ -2017,6 +2018,26 @@ model SellerNotificationPreference {
   @@map("seller_notification_preferences")
 }
 
+model SellerOnboardingProgress {
+  id          String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId    String               @map("seller_id") @db.Uuid
+  stepCode    SellerOnboardingStep @map("step_code")
+  isRequired  Boolean              @default(true) @map("is_required")
+  completedAt DateTime?            @map("completed_at") @db.Timestamptz
+  completedBy OnboardingStepActor? @map("completed_by")
+  metadata    Json?
+  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime             @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@unique([sellerId, stepCode])
+  @@index([sellerId])
+  @@index([stepCode])
+  @@index([completedAt])
+  @@map("seller_onboarding_progress")
+}
+
 // ============================================================
 // Enums
 // ============================================================
@@ -2684,4 +2705,25 @@ enum NotificationFrequency {
   DISABLED      @map("disabled")
 
   @@map("notification_frequency")
+}
+
+enum SellerOnboardingStep {
+  REGISTRATION_COMPLETED      @map("registration_completed")
+  EMAIL_VERIFIED              @map("email_verified")
+  COMPANY_INFO_FILLED         @map("company_info_filled")
+  BD_ORIGIN_ADDRESS_ADDED     @map("bd_origin_address_added")
+  IN_RETURN_ADDRESS_ADDED     @map("in_return_address_added")
+  BD_OFFICE_ADDRESS_ADDED     @map("bd_office_address_added")
+  BANK_DETAILS_ADDED          @map("bank_details_added")
+  NOTIFICATION_PREFS_REVIEWED @map("notification_prefs_reviewed")
+
+  @@map("seller_onboarding_step")
+}
+
+enum OnboardingStepActor {
+  SYSTEM @map("system")
+  SELLER @map("seller")
+  ADMIN  @map("admin")
+
+  @@map("onboarding_step_actor")
 }
