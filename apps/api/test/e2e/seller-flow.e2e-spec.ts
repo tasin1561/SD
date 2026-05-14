@@ -107,7 +107,7 @@ describe('Seller flow (e2e): invitation → register → login → api keys → 
       .expect(400);
   });
 
-  it('seller login: only APPROVED can log in; PENDING/SUSPENDED return 403', async () => {
+  it('seller login: APPROVED+SUSPENDED succeed; PENDING/REJECTED return 403; /me still gates by APPROVED', async () => {
     // Quick path: create the seller directly so we can flip statuses.
     const created = await request(h.baseUrl)
       .post('/admin/seller-invitations')
@@ -132,7 +132,8 @@ describe('Seller flow (e2e): invitation → register → login → api keys → 
       .send({ email: inviteEmail, password: 'SellerPass-1234' })
       .expect(200);
 
-    // Suspend → next /me 403 (status recheck on every guarded request).
+    // Suspend → next /me 403 (default seller guard still rejects SUSPENDED;
+    // read-only allow-suspended endpoints opt in via decorator).
     await h.prisma.seller.update({
       where: { id: reg.body.seller.id },
       data: { status: SellerStatus.SUSPENDED },
@@ -144,13 +145,33 @@ describe('Seller flow (e2e): invitation → register → login → api keys → 
       .expect(403)
       .expect((res) => expect(res.body.code).toBe('ACCOUNT_NOT_ACTIVE'));
 
-    // Login while suspended → 403 ACCOUNT_NOT_ACTIVE (different from 401).
+    // Login while SUSPENDED now succeeds (read-only access). Cookie is set.
+    await request(h.baseUrl)
+      .post('/auth/seller/login')
+      .send({ email: inviteEmail, password: 'SellerPass-1234' })
+      .expect(200);
+
+    // Flip to PENDING — login must return 403.
+    await h.prisma.seller.update({
+      where: { id: reg.body.seller.id },
+      data: { status: SellerStatus.PENDING },
+    });
     await request(h.baseUrl)
       .post('/auth/seller/login')
       .send({ email: inviteEmail, password: 'SellerPass-1234' })
       .expect(403);
 
-    // Audit captured the access denial.
+    // Flip to REJECTED — login must return 403.
+    await h.prisma.seller.update({
+      where: { id: reg.body.seller.id },
+      data: { status: SellerStatus.REJECTED },
+    });
+    await request(h.baseUrl)
+      .post('/auth/seller/login')
+      .send({ email: inviteEmail, password: 'SellerPass-1234' })
+      .expect(403);
+
+    // Audit captured the SUSPENDED /me access denial earlier.
     const audit = await h.prisma.auditLog.findFirst({
       where: { action: 'seller.access_denied_status' },
     });

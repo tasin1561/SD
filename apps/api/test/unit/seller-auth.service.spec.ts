@@ -384,7 +384,7 @@ describe('SellerAuthService — login', () => {
     expect(data.metadata.reason).toBe('wrong_password');
   });
 
-  it.each([SellerStatus.PENDING, SellerStatus.REJECTED, SellerStatus.SUSPENDED])(
+  it.each([SellerStatus.PENDING, SellerStatus.REJECTED])(
     'status=%s → 403 ACCOUNT_NOT_ACTIVE + audit reason=status_not_active',
     async (status) => {
       const sut = makeSut();
@@ -410,6 +410,19 @@ describe('SellerAuthService — login', () => {
     const audit = sut.client.auditLog.create.mock.calls.at(-1)?.[0].data;
     expect(audit.action).toBe('seller.login.success');
     expect(audit.actorType).toBe(ActorType.SELLER);
+  });
+
+  it('SUSPENDED + correct password → tokens issued (read-only access) + audit success', async () => {
+    const sut = makeSut();
+    const seller = await seedSeller(sut, { status: SellerStatus.SUSPENDED });
+    const result = await sut.svc.login(
+      { email: seller.email, password: 'Seller-Secret-123' },
+      ctx,
+    );
+    expect(result.seller.status).toBe(SellerStatus.SUSPENDED);
+    expect(result.accessToken.token).toContain('.');
+    const audit = sut.client.auditLog.create.mock.calls.at(-1)?.[0].data;
+    expect(audit.action).toBe('seller.login.success');
   });
 });
 
@@ -553,24 +566,41 @@ describe('SellerAuthService — password reset', () => {
 });
 
 describe('SellerAuthService — refresh', () => {
-  it('refresh by a non-APPROVED seller → 403 ACCOUNT_NOT_ACTIVE + freshly-minted token revoked', async () => {
+  it.each([SellerStatus.PENDING, SellerStatus.REJECTED])(
+    'refresh by status=%s seller → 403 ACCOUNT_NOT_ACTIVE + freshly-minted token revoked',
+    async (status) => {
+      const sut = makeSut();
+      const seller = await seedSeller(sut);
+      const login = await sut.svc.login(
+        { email: seller.email, password: 'Seller-Secret-123' },
+        ctx,
+      );
+      // Flip mid-session, after the cookie was issued.
+      seller.status = status;
+
+      await expect(
+        sut.svc.rotateRefresh({ plaintext: login.refresh.token }, ctx),
+      ).rejects.toMatchObject({ response: { code: 'ACCOUNT_NOT_ACTIVE' } });
+
+      // The new refresh row that rotate created must have been revoked
+      // so the cookie just set is dead.
+      const newest = sut.client.tables.rts.at(-1)!;
+      expect(newest.revokedAt).toBeInstanceOf(Date);
+    },
+  );
+
+  it('refresh by a SUSPENDED seller succeeds (read-only access kept alive)', async () => {
     const sut = makeSut();
     const seller = await seedSeller(sut);
     const login = await sut.svc.login(
       { email: seller.email, password: 'Seller-Secret-123' },
       ctx,
     );
-    // Suspend mid-session, after the cookie was issued.
     seller.status = SellerStatus.SUSPENDED;
 
-    await expect(
-      sut.svc.rotateRefresh({ plaintext: login.refresh.token }, ctx),
-    ).rejects.toMatchObject({ response: { code: 'ACCOUNT_NOT_ACTIVE' } });
-
-    // The new refresh row that rotate created must have been revoked
-    // so the cookie just set is dead.
-    const newest = sut.client.tables.rts.at(-1)!;
-    expect(newest.revokedAt).toBeInstanceOf(Date);
+    const result = await sut.svc.rotateRefresh({ plaintext: login.refresh.token }, ctx);
+    expect(result.accessToken.token).toContain('.');
+    expect(result.refresh.token).toBeDefined();
   });
 });
 

@@ -278,10 +278,14 @@ export class SellerAuthService {
       throw this.invalidCredentials();
     }
 
-    // Status check: only APPROVED sellers can log in. PENDING/REJECTED/
-    // SUSPENDED all share a generic 403 (we DO disclose the "not active"
+    // Status check: APPROVED and SUSPENDED sellers can log in (SUSPENDED
+    // is read-only — write endpoints gate further on the seller-jwt guard).
+    // PENDING/REJECTED return a generic 403 (we DO disclose the "not active"
     // state — it's the desired UX, distinct from "invalid credentials").
-    if (seller.status !== SellerStatus.APPROVED) {
+    if (
+      seller.status !== SellerStatus.APPROVED &&
+      seller.status !== SellerStatus.SUSPENDED
+    ) {
       await this.audit.log({
         actorType: ActorType.SELLER,
         sellerId: seller.id,
@@ -352,9 +356,14 @@ export class SellerAuthService {
       where: { id: userId, deletedAt: null },
       select: { id: true, status: true },
     });
-    if (!seller || seller.status !== SellerStatus.APPROVED) {
-      // Refresh issued, but the underlying seller is gone or no longer
-      // active. Revoke the new token immediately so the cookie is dead.
+    if (
+      !seller ||
+      (seller.status !== SellerStatus.APPROVED &&
+        seller.status !== SellerStatus.SUSPENDED)
+    ) {
+      // Refresh issued, but the underlying seller is gone or in a status
+      // that blocks even read-only access (PENDING/REJECTED). Revoke the
+      // new token immediately so the cookie is dead.
       await this.refresh.revokeByPlaintext('seller', issued.token);
       throw new ForbiddenException({
         code: 'ACCOUNT_NOT_ACTIVE',
