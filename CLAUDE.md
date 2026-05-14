@@ -116,6 +116,8 @@ Apps and packages are placeholder folders (README only) until their respective m
 
 **TimescaleDB hypertables:** `tracking_events` and `stock_movements` (composite PK, monthly chunks, 7d/30d compression).
 
+**Hypertable convention — partition-column index:** Any new hypertable MUST declare `@@index([createdAt])` (or whatever the partition column is) in the Prisma model AND the migration MUST explicitly `CREATE INDEX "<table>_<col>_idx"` *before* calling `create_hypertable()`. Otherwise TimescaleDB auto-creates an identically-named index outside Prisma's tracking, and every subsequent `prisma migrate dev` trips drift detection. Prisma's default index name (`<table>_<col>_idx`) already matches TimescaleDB's, so no `map:` override is needed — but the explicit `CREATE INDEX` in the migration is required.
+
 **Consumption pattern:**
 
 ```ts
