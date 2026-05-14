@@ -28,6 +28,10 @@ export default [
         clearTimeout: 'readonly',
         clearInterval: 'readonly',
         setImmediate: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        URL: 'readonly',
+        URLSearchParams: 'readonly',
       },
     },
     plugins: {
