@@ -46,6 +46,7 @@ model StaffUser {
   emailVerificationTokens StaffEmailVerificationToken[]
   sellerNotesAuthored     SellerNote[]                  @relation("SellerNoteAuthor")
   auditLogsAsStaff        AuditLog[]                    @relation("AuditLogStaff")
+  productImagesUploaded   ProductImage[]                @relation("ProductImageUploadedByStaff")
 
   @@index([role])
   @@index([deletedAt])
@@ -84,6 +85,9 @@ model Seller {
   emailVerificationTokens SellerEmailVerificationToken[]
   notes                   SellerNote[]
   auditLogsAsSeller       AuditLog[]                     @relation("AuditLogSeller")
+  products                Product[]
+  productVariants         ProductVariant[]
+  productImagesUploaded   ProductImage[]                 @relation("ProductImageUploadedBySeller")
 
   @@index([status])
   @@index([deletedAt])
@@ -413,6 +417,155 @@ model PinCode {
 }
 
 // ============================================================
+// Layer 3 — Catalog (5 tables)
+// ============================================================
+
+model Category {
+  id                 String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  parentId           String?      @map("parent_id") @db.Uuid
+  slug               String       @unique
+  name               String
+  fullPath           String       @map("full_path")
+  depth              Int          @default(0)
+  sortOrder          Int          @default(0) @map("sort_order")
+  defaultPackageType PackageType? @map("default_package_type")
+  requiresFragile    Boolean      @default(false) @map("requires_fragile")
+  requiresColdChain  Boolean      @default(false) @map("requires_cold_chain")
+  defaultHsCode      String?      @map("default_hs_code")
+  defaultGstRate     Decimal?     @map("default_gst_rate") @db.Decimal(5, 2)
+  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt          DateTime?    @map("deleted_at") @db.Timestamptz
+
+  parent       Category?             @relation("CategoryParent", fields: [parentId], references: [id])
+  children     Category[]            @relation("CategoryParent")
+  products     Product[]
+  courierRules CategoryCourierRule[]
+
+  @@index([parentId])
+  @@index([depth])
+  @@index([deletedAt])
+  @@map("categories")
+}
+
+model Product {
+  id                      String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId                String        @map("seller_id") @db.Uuid
+  categoryId              String?       @map("category_id") @db.Uuid
+  name                    String
+  description             String?       @db.Text
+  brand                   String?
+  externalRef             String?       @map("external_ref")
+  externalSku             String?       @map("external_sku")
+  defaultWeightGrams      Int?          @map("default_weight_grams")
+  defaultLengthCm         Decimal?      @map("default_length_cm") @db.Decimal(6, 2)
+  defaultWidthCm          Decimal?      @map("default_width_cm") @db.Decimal(6, 2)
+  defaultHeightCm         Decimal?      @map("default_height_cm") @db.Decimal(6, 2)
+  defaultDeclaredValueInr Decimal?      @map("default_declared_value_inr") @db.Decimal(12, 2)
+  defaultHsCode           String?       @map("default_hs_code")
+  status                  ProductStatus @default(ACTIVE)
+  createdAt               DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt               DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt               DateTime?     @map("deleted_at") @db.Timestamptz
+
+  seller   Seller           @relation(fields: [sellerId], references: [id])
+  category Category?        @relation(fields: [categoryId], references: [id])
+  variants ProductVariant[]
+
+  @@unique([sellerId, externalRef])
+  @@index([sellerId])
+  @@index([categoryId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("products")
+}
+
+model ProductVariant {
+  id               String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  productId        String        @map("product_id") @db.Uuid
+  sellerId         String        @map("seller_id") @db.Uuid
+  skuCode          String        @map("sku_code")
+  attributes       Json?
+  variantLabel     String?       @map("variant_label")
+  weightGrams      Int?          @map("weight_grams")
+  lengthCm         Decimal?      @map("length_cm") @db.Decimal(6, 2)
+  widthCm          Decimal?      @map("width_cm") @db.Decimal(6, 2)
+  heightCm         Decimal?      @map("height_cm") @db.Decimal(6, 2)
+  declaredValueInr Decimal?      @map("declared_value_inr") @db.Decimal(12, 2)
+  hsCode           String?       @map("hs_code")
+  gstRate          Decimal?      @map("gst_rate") @db.Decimal(5, 2)
+  barcode          String?
+  externalSku      String?       @map("external_sku")
+  status           VariantStatus @default(ACTIVE)
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt        DateTime?     @map("deleted_at") @db.Timestamptz
+
+  product Product        @relation(fields: [productId], references: [id])
+  seller  Seller         @relation(fields: [sellerId], references: [id])
+  images  ProductImage[]
+
+  @@unique([sellerId, skuCode])
+  @@index([productId])
+  @@index([sellerId])
+  @@index([barcode])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("product_variants")
+}
+
+model ProductImage {
+  id                 String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  variantId          String    @map("variant_id") @db.Uuid
+  spacesKey          String    @map("spaces_key")
+  spacesBucket       String    @default("skydrop-storage") @map("spaces_bucket")
+  url                String
+  thumbnailUrl       String?   @map("thumbnail_url")
+  mimeType           String?   @map("mime_type")
+  sizeBytes          Int?      @map("size_bytes")
+  widthPx            Int?      @map("width_px")
+  heightPx           Int?      @map("height_px")
+  altText            String?   @map("alt_text")
+  isPrimary          Boolean   @default(false) @map("is_primary")
+  displayOrder       Int       @default(0) @map("display_order")
+  uploadedBySellerId String?   @map("uploaded_by_seller_id") @db.Uuid
+  uploadedByStaffId  String?   @map("uploaded_by_staff_id") @db.Uuid
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt          DateTime? @map("deleted_at") @db.Timestamptz
+
+  variant          ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  uploadedBySeller Seller?        @relation("ProductImageUploadedBySeller", fields: [uploadedBySellerId], references: [id])
+  uploadedByStaff  StaffUser?     @relation("ProductImageUploadedByStaff", fields: [uploadedByStaffId], references: [id])
+
+  @@index([variantId])
+  @@index([isPrimary])
+  @@index([displayOrder])
+  @@index([deletedAt])
+  @@map("product_images")
+}
+
+// courierCode is a denormalized string reference to couriers.code (Layer 8).
+// Not modeled as a Prisma relation per spec.
+model CategoryCourierRule {
+  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  categoryId  String    @map("category_id") @db.Uuid
+  courierCode String    @map("courier_code")
+  isAllowed   Boolean   @default(true) @map("is_allowed")
+  notes       String?
+  metadata    Json?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@unique([categoryId, courierCode])
+  @@index([courierCode])
+  @@map("category_courier_rules")
+}
+
+// ============================================================
 // Enums
 // ============================================================
 
@@ -519,4 +672,30 @@ enum PinCodeSource {
   USER_ENTERED  @map("user_entered")
 
   @@map("pin_code_source")
+}
+
+enum PackageType {
+  BOX      @map("box")
+  POLYBAG  @map("polybag")
+  ENVELOPE @map("envelope")
+  TUBE     @map("tube")
+  CUSTOM   @map("custom")
+
+  @@map("package_type")
+}
+
+enum ProductStatus {
+  ACTIVE   @map("active")
+  ARCHIVED @map("archived")
+  DRAFT    @map("draft")
+
+  @@map("product_status")
+}
+
+enum VariantStatus {
+  ACTIVE       @map("active")
+  ARCHIVED     @map("archived")
+  OUT_OF_STOCK @map("out_of_stock")
+
+  @@map("variant_status")
 }
