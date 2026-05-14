@@ -10,6 +10,7 @@ import { EnvService } from '../../src/config/env.service';
 import type { EmailQueue } from '../../src/modules/email/queue/email.queue';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { SellerOnboardingService } from '../../src/modules/seller-onboarding/services/seller-onboarding.service';
+import type { SellerNotificationPreferenceService } from '../../src/modules/seller-notification-preference/services/seller-notification-preference.service';
 
 // ---------------------------------------------------------------------------
 // In-memory rows + factory-built fake client.
@@ -330,6 +331,9 @@ function makeSut(): Sut {
       .fn()
       .mockResolvedValue({ marked: true, onboardingCompleted: false }),
   } as unknown as SellerOnboardingService;
+  const notificationPreferences = {
+    seedDefaults: jest.fn().mockResolvedValue(undefined),
+  } as unknown as SellerNotificationPreferenceService;
   const svc = new SellerAuthService(
     prisma,
     env,
@@ -340,6 +344,7 @@ function makeSut(): Sut {
     audit,
     email,
     onboarding,
+    notificationPreferences,
   );
   return { svc, client, enqueueMock, password, hashes };
 }

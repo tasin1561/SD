@@ -22,6 +22,7 @@ import { RefreshTokenService, type IssuedRefresh } from '../auth-common/services
 import { AuditLogService } from '../auth-common/services/audit-log.service';
 import { EmailQueue } from '../email/queue/email.queue';
 import { SellerOnboardingService } from '../seller-onboarding/services/seller-onboarding.service';
+import { SellerNotificationPreferenceService } from '../seller-notification-preference/services/seller-notification-preference.service';
 import type { SellerRegisterViaInvitationDto } from './dto/register-via-invitation.dto';
 
 const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
@@ -83,6 +84,7 @@ export class SellerAuthService {
     private readonly audit: AuditLogService,
     private readonly email: EmailQueue,
     private readonly onboarding: SellerOnboardingService,
+    private readonly notificationPreferences: SellerNotificationPreferenceService,
   ) {}
 
   // ---------- REGISTER VIA INVITATION ----------
@@ -217,6 +219,9 @@ export class SellerAuthService {
       // are auto-marked complete). Must run inside the registration tx
       // so a rollback doesn't orphan onboarding rows.
       await this.onboarding.initializeProgress(createdSeller.id, tx);
+
+      // Pre-seed the 7 notification-preference rows with Phase 1A defaults.
+      await this.notificationPreferences.seedDefaults(createdSeller.id, tx);
 
       return { seller: createdSeller, refresh: issued, accessToken: access };
     });

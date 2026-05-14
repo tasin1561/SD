@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
-import { SellerAuthModule } from '../seller-auth/seller-auth.module';
+import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { SellerOnboardingModule } from '../seller-onboarding/seller-onboarding.module';
 import { SellerProfileController } from './seller-profile.controller';
 import { SellerProfileService } from './services/seller-profile.service';
 
 @Module({
-  imports: [SellerAuthModule, SellerOnboardingModule],
+  imports: [SellerOnboardingModule],
   controllers: [SellerProfileController],
-  providers: [SellerProfileService],
+  providers: [SellerProfileService, SellerJwtGuard],
   exports: [SellerProfileService],
 })
 export class SellerProfileModule {}

@@ -15,6 +15,7 @@ import { SellerManagementModule } from './modules/seller-management/seller-manag
 import { SellerOnboardingModule } from './modules/seller-onboarding/seller-onboarding.module';
 import { SellerProfileModule } from './modules/seller-profile/seller-profile.module';
 import { SellerAddressModule } from './modules/seller-address/seller-address.module';
+import { SellerNotificationPreferenceModule } from './modules/seller-notification-preference/seller-notification-preference.module';
 import { ThrottlerModule } from './common/throttler/throttler.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { pinoConfig } from './common/pino/logger-config';
@@ -55,6 +56,7 @@ import { envSchema } from './config/env.schema';
     SellerOnboardingModule,
     SellerProfileModule,
     SellerAddressModule,
+    SellerNotificationPreferenceModule,
     HealthModule,
   ],
 })
