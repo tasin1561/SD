@@ -12,6 +12,7 @@ import { JwtService } from '../../modules/auth-common/services/jwt.service';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../modules/auth-common/services/audit-log.service';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { SELLER_AUTH_ALLOW_SUSPENDED_KEY } from '../decorators/seller-auth-allow-suspended.decorator';
 
 /**
  * Bearer-token auth for seller routes. Crucially, this guard re-checks
@@ -19,6 +20,10 @@ import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
  * the next request after suspension fails with 403 + audit
  * "seller.access_denied_status". One DB lookup per guarded request is the
  * Phase-1A cost; cache in Redis later if it becomes noticeable.
+ *
+ * Routes decorated with @SellerAuthAllowSuspended() additionally accept
+ * SUSPENDED sellers (read-only endpoints — profile view, addresses list,
+ * notification preferences view). PENDING/REJECTED are always rejected.
  */
 @Injectable()
 export class SellerJwtGuard implements CanActivate {
@@ -52,8 +57,21 @@ export class SellerJwtGuard implements CanActivate {
       throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Seller session no longer valid' });
     }
 
-    // Status recheck — only APPROVED sellers can access guarded endpoints.
-    if (seller.status !== SellerStatus.APPROVED) {
+    const allowSuspended =
+      this.reflector.getAllAndOverride<boolean>(SELLER_AUTH_ALLOW_SUSPENDED_KEY, [
+        ctx.getHandler(),
+        ctx.getClass(),
+      ]) === true;
+
+    // Status recheck. APPROVED always passes. SUSPENDED passes only when
+    // the route opts in via @SellerAuthAllowSuspended(). PENDING/REJECTED
+    // never pass — those statuses are unused in Phase 1A but the enum
+    // exists, so this is a defensive guardrail.
+    const statusOk =
+      seller.status === SellerStatus.APPROVED ||
+      (allowSuspended && seller.status === SellerStatus.SUSPENDED);
+
+    if (!statusOk) {
       // Audit first so the event survives even if response delivery fails.
       await this.audit.log({
         actorType: ActorType.SELLER,

@@ -13,14 +13,17 @@ import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { TokenHashService } from '../../modules/auth-common/services/token-hash.service';
 import { AuditLogService } from '../../modules/auth-common/services/audit-log.service';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { SELLER_AUTH_ALLOW_SUSPENDED_KEY } from '../decorators/seller-auth-allow-suspended.decorator';
 
 /**
  * Programmatic seller authentication via `Authorization: Bearer skd_*`.
  *
  *   - Validates the key hash against seller_api_keys.
  *   - Rejects expired / revoked keys.
- *   - Rejects keys belonging to non-APPROVED sellers (suspended sellers
- *     can't keep operating via API).
+ *   - Default behavior: rejects keys belonging to non-APPROVED sellers.
+ *     Read-only B2B endpoints can opt in via @SellerAuthAllowSuspended()
+ *     to let SUSPENDED sellers continue reading their data via API key.
+ *     PENDING/REJECTED are always rejected.
  *   - Audit-logs invalid attempts so a brute-force scan is visible.
  *   - Updates seller_api_keys.lastUsedAt asynchronously — the HTTP path
  *     never waits on this write.
@@ -80,7 +83,17 @@ export class ApiKeyGuard implements CanActivate {
       await this.auditInvalid('seller_deleted', row.keyPrefix, req, row.sellerId);
       throw new UnauthorizedException({ code: 'INVALID_API_KEY', message: 'Invalid API key' });
     }
-    if (row.seller.status !== SellerStatus.APPROVED) {
+
+    const allowSuspended =
+      this.reflector.getAllAndOverride<boolean>(SELLER_AUTH_ALLOW_SUSPENDED_KEY, [
+        ctx.getHandler(),
+        ctx.getClass(),
+      ]) === true;
+    const statusOk =
+      row.seller.status === SellerStatus.APPROVED ||
+      (allowSuspended && row.seller.status === SellerStatus.SUSPENDED);
+
+    if (!statusOk) {
       await this.audit.log({
         actorType: ActorType.API,
         actorId: row.id,
