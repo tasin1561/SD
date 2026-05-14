@@ -59,6 +59,7 @@ model StaffUser {
   callQueueAssigned       CallQueueEntry[]              @relation("CallQueueAssignedAgent")
   callAttempts            CallAttempt[]
   callSettings            AgentCallSettings?
+  awbLabelsGenerated      AwbLabel[]                    @relation("AwbLabelGeneratedBy")
 
   @@index([role])
   @@index([deletedAt])
@@ -369,6 +370,7 @@ model Warehouse {
   stockAdjustments  StockAdjustment[]
   cycleCounts       CycleCount[]
   goodsReceipts     GoodsReceipt[]
+  shipmentsAsOrigin Shipment[]
 
   @@index([status])
   @@map("warehouses")
@@ -419,6 +421,7 @@ model WarehouseBin {
   cycleCountItems    CycleCountItem[]
   goodsReceiptLines  GoodsReceiptLine[]
   orderItems         OrderItem[]
+  shipmentItems      ShipmentItem[]
 
   @@unique([warehouseId, code])
   @@index([warehouseId])
@@ -645,6 +648,7 @@ model StockBatch {
   cycleCountItems   CycleCountItem[]
   goodsReceiptLines GoodsReceiptLine[]
   orderItems        OrderItem[]
+  shipmentItems     ShipmentItem[]
 
   @@unique([sellerId, batchCode])
   @@index([sellerId, variantId])
@@ -728,6 +732,7 @@ model StockMovement {
   adjustment StockAdjustment? @relation(fields: [adjustmentId], references: [id])
   order      Order?           @relation(fields: [orderId], references: [id])
   orderItem  OrderItem?       @relation(fields: [orderItemId], references: [id])
+  shipment   Shipment?        @relation(fields: [shipmentId], references: [id])
 
   @@id([id, createdAt])
   @@index([sellerId, variantId, createdAt])
@@ -1023,6 +1028,7 @@ model Order {
   stockMovements StockMovement[]
   callQueueEntry CallQueueEntry?
   callAttempts   CallAttempt[]
+  orderShipments OrderShipment[]
 
   @@unique([sellerId, sellerOrderRef])
   @@index([sellerId, status])
@@ -1069,6 +1075,7 @@ model OrderItem {
   pickedBin      WarehouseBin?      @relation(fields: [pickedBinId], references: [id])
   reservations   StockReservation[]
   stockMovements StockMovement[]
+  shipmentItems  ShipmentItem[]
 
   @@index([orderId])
   @@index([variantId])
@@ -1245,6 +1252,268 @@ model AgentCallSettings {
   @@index([isAvailable])
   @@index([agentId])
   @@map("agent_call_settings")
+}
+
+// ============================================================
+// Layer 7 — Shipments & Tracking (7 tables)
+// ============================================================
+
+// courierCode is a string ref to couriers.code (Layer 8); promoted to
+// @relation in the Layer 8 commit.
+model Shipment {
+  id                     String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  shipmentNumber         String         @unique @map("shipment_number")
+  courierCode            String         @map("courier_code")
+  awbNumber              String?        @unique @map("awb_number")
+  courierShipmentId      String?        @map("courier_shipment_id")
+  serviceType            String?        @map("service_type")
+  originWarehouseId      String         @map("origin_warehouse_id") @db.Uuid
+  destRecipientName      String         @map("dest_recipient_name")
+  destRecipientPhoneE164 String         @map("dest_recipient_phone_e164")
+  destAddressLine1       String         @map("dest_address_line1")
+  destAddressLine2       String?        @map("dest_address_line2")
+  destLandmark           String?        @map("dest_landmark")
+  destCity               String         @map("dest_city")
+  destStateProvince      String         @map("dest_state_province")
+  destPostalCode         String         @map("dest_postal_code")
+  destCountryCode        String         @default("IN") @map("dest_country_code") @db.Char(2)
+  totalWeightGrams       Int            @map("total_weight_grams")
+  declaredWeightGrams    Int?           @map("declared_weight_grams")
+  actualWeightGrams      Int?           @map("actual_weight_grams")
+  lengthCm               Decimal?       @map("length_cm") @db.Decimal(6, 2)
+  widthCm                Decimal?       @map("width_cm") @db.Decimal(6, 2)
+  heightCm               Decimal?       @map("height_cm") @db.Decimal(6, 2)
+  volumetricWeightGrams  Int?           @map("volumetric_weight_grams")
+  chargeableWeightGrams  Int?           @map("chargeable_weight_grams")
+  packageType            PackageType?   @map("package_type")
+  declaredValueInr       Decimal        @map("declared_value_inr") @db.Decimal(12, 2)
+  codAmountInr           Decimal?       @map("cod_amount_inr") @db.Decimal(12, 2)
+  status                 ShipmentStatus @default(CREATED)
+  awbGeneratedAt         DateTime?      @map("awb_generated_at") @db.Timestamptz
+  pickedUpByCourierAt    DateTime?      @map("picked_up_by_courier_at") @db.Timestamptz
+  firstScanAt            DateTime?      @map("first_scan_at") @db.Timestamptz
+  outForDeliveryAt       DateTime?      @map("out_for_delivery_at") @db.Timestamptz
+  deliveredAt            DateTime?      @map("delivered_at") @db.Timestamptz
+  rtoInitiatedAt         DateTime?      @map("rto_initiated_at") @db.Timestamptz
+  rtoReceivedAt          DateTime?      @map("rto_received_at") @db.Timestamptz
+  expectedDeliveryAt     DateTime?      @map("expected_delivery_at") @db.Timestamptz
+  isManualCourier        Boolean        @default(false) @map("is_manual_courier")
+  supersedesShipmentId   String?        @map("supersedes_shipment_id") @db.Uuid
+  podPhotoSpacesKeys     String[]       @default([]) @map("pod_photo_spaces_keys")
+  podSignatureSpacesKey  String?        @map("pod_signature_spaces_key")
+  podRecipientName       String?        @map("pod_recipient_name")
+  hasIssue               Boolean        @default(false) @map("has_issue")
+  estimatedCostInr       Decimal?       @map("estimated_cost_inr") @db.Decimal(12, 2)
+  createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt              DateTime?      @map("deleted_at") @db.Timestamptz
+
+  originWarehouse  Warehouse         @relation(fields: [originWarehouseId], references: [id])
+  supersedes       Shipment?         @relation("ShipmentSupersedes", fields: [supersedesShipmentId], references: [id])
+  supersededBy     Shipment[]        @relation("ShipmentSupersedes")
+  orderShipments   OrderShipment[]
+  items            ShipmentItem[]
+  awbLabels        AwbLabel[]
+  trackingEvents   TrackingEvent[]
+  webhooks         CourierWebhook[]
+  deliveryAttempts DeliveryAttempt[]
+  stockMovements   StockMovement[]
+
+  @@index([courierCode, status])
+  @@index([status, createdAt])
+  @@index([destPostalCode])
+  @@index([destRecipientPhoneE164])
+  @@index([deliveredAt])
+  @@index([rtoInitiatedAt])
+  @@index([supersedesShipmentId])
+  @@index([originWarehouseId])
+  @@index([deletedAt])
+  @@map("shipments")
+}
+
+model OrderShipment {
+  id               String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  orderId          String   @map("order_id") @db.Uuid
+  shipmentId       String   @map("shipment_id") @db.Uuid
+  isFullOrder      Boolean  @default(true) @map("is_full_order")
+  shipmentSequence Int      @default(1) @map("shipment_sequence")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  order    Order    @relation(fields: [orderId], references: [id])
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, shipmentId])
+  @@index([orderId])
+  @@index([shipmentId])
+  @@map("order_shipments")
+}
+
+model ShipmentItem {
+  id                   String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  shipmentId           String   @map("shipment_id") @db.Uuid
+  orderItemId          String   @map("order_item_id") @db.Uuid
+  quantity             Int
+  skuCode              String   @map("sku_code")
+  productName          String   @map("product_name")
+  variantLabel         String?  @map("variant_label")
+  unitWeightGrams      Int?     @map("unit_weight_grams")
+  unitDeclaredValueInr Decimal? @map("unit_declared_value_inr") @db.Decimal(12, 2)
+  hsCode               String?  @map("hs_code")
+  unitPriceInr         Decimal? @map("unit_price_inr") @db.Decimal(12, 2)
+  pickedBatchId        String?  @map("picked_batch_id") @db.Uuid
+  pickedBinId          String?  @map("picked_bin_id") @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  shipment    Shipment      @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  orderItem   OrderItem     @relation(fields: [orderItemId], references: [id])
+  pickedBatch StockBatch?   @relation(fields: [pickedBatchId], references: [id])
+  pickedBin   WarehouseBin? @relation(fields: [pickedBinId], references: [id])
+
+  @@index([shipmentId])
+  @@index([orderItemId])
+  @@index([pickedBatchId])
+  @@index([pickedBinId])
+  @@map("shipment_items")
+}
+
+model AwbLabel {
+  id                 String                @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  shipmentId         String                @map("shipment_id") @db.Uuid
+  version            Int                   @default(1)
+  isCurrent          Boolean               @default(true) @map("is_current")
+  spacesKey          String                @map("spaces_key")
+  spacesBucket       String                @default("skydrop-storage") @map("spaces_bucket")
+  url                String?
+  fileSizeBytes      Int?                  @map("file_size_bytes")
+  mimeType           String                @default("application/pdf") @map("mime_type")
+  paperSize          LabelPaperSize        @default(A4) @map("paper_size")
+  format             String?
+  generatedAt        DateTime              @default(now()) @map("generated_at") @db.Timestamptz
+  generatedByStaffId String?               @map("generated_by_staff_id") @db.Uuid
+  generatedReason    LabelGenerationReason @default(INITIAL) @map("generated_reason")
+  printedCount       Int                   @default(0) @map("printed_count")
+  lastPrintedAt      DateTime?             @map("last_printed_at") @db.Timestamptz
+  createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime              @updatedAt @map("updated_at") @db.Timestamptz
+
+  shipment         Shipment   @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  generatedByStaff StaffUser? @relation("AwbLabelGeneratedBy", fields: [generatedByStaffId], references: [id])
+
+  @@unique([shipmentId, version])
+  @@index([shipmentId, isCurrent])
+  @@index([generatedAt])
+  @@index([generatedByStaffId])
+  @@map("awb_labels")
+}
+
+// HYPERTABLE — composite @@id([id, createdAt]); immutable (no updatedAt,
+// no deletedAt). webhookId is a real relation to courier_webhooks (single PK);
+// inbound FKs to tracking_events are intentionally not modeled because the
+// composite PK can't be the target of a single-column FK.
+model TrackingEvent {
+  id                  String              @default(dbgenerated("uuidv7()")) @db.Uuid
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  shipmentId          String              @map("shipment_id") @db.Uuid
+  eventType           TrackingEventType   @map("event_type")
+  status              ShipmentStatus
+  description         String?             @db.Text
+  locationName        String?             @map("location_name")
+  locationCity        String?             @map("location_city")
+  locationPincode     String?             @map("location_pincode")
+  latitude            Decimal?            @db.Decimal(10, 7)
+  longitude           Decimal?            @db.Decimal(10, 7)
+  source              TrackingEventSource
+  courierCode         String?             @map("courier_code")
+  rawCourierStatus    String?             @map("raw_courier_status")
+  webhookId           String?             @map("webhook_id") @db.Uuid
+  actorType           ActorType?          @map("actor_type")
+  actorId             String?             @map("actor_id") @db.Uuid
+  metadata            Json?
+  isVisibleToCustomer Boolean             @default(true) @map("is_visible_to_customer")
+
+  shipment Shipment        @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  webhook  CourierWebhook? @relation(fields: [webhookId], references: [id])
+
+  @@id([id, createdAt])
+  @@index([shipmentId, createdAt(sort: Desc)])
+  @@index([eventType])
+  @@index([source])
+  @@index([webhookId])
+  @@map("tracking_events")
+}
+
+// trackingEventId is intentionally a soft scalar — tracking_events has a
+// composite PK and can't be FK'd by a single column.
+model CourierWebhook {
+  id              String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courierCode     String        @map("courier_code")
+  shipmentId      String?       @map("shipment_id") @db.Uuid
+  awbNumber       String?       @map("awb_number")
+  receivedAt      DateTime      @default(now()) @map("received_at") @db.Timestamptz
+  remoteIp        String?       @map("remote_ip") @db.Inet
+  userAgent       String?       @map("user_agent")
+  signature       String?
+  signatureValid  Boolean?      @map("signature_valid")
+  httpMethod      String        @map("http_method")
+  endpoint        String
+  headers         Json
+  rawBody         String        @map("raw_body") @db.Text
+  parsedBody      Json?         @map("parsed_body")
+  status          WebhookStatus @default(RECEIVED)
+  processedAt     DateTime?     @map("processed_at") @db.Timestamptz
+  trackingEventId String?       @map("tracking_event_id") @db.Uuid
+  errorMessage    String?       @map("error_message") @db.Text
+  errorStack      String?       @map("error_stack") @db.Text
+  retryCount      Int           @default(0) @map("retry_count")
+  nextRetryAt     DateTime?     @map("next_retry_at") @db.Timestamptz
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+
+  shipment         Shipment?         @relation(fields: [shipmentId], references: [id])
+  trackingEvents   TrackingEvent[]
+  deliveryAttempts DeliveryAttempt[]
+
+  @@index([courierCode])
+  @@index([shipmentId])
+  @@index([awbNumber])
+  @@index([receivedAt])
+  @@index([status])
+  @@index([nextRetryAt, status])
+  @@map("courier_webhooks")
+}
+
+model DeliveryAttempt {
+  id                     String                 @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  shipmentId             String                 @map("shipment_id") @db.Uuid
+  attemptNumber          Int                    @map("attempt_number")
+  attemptedAt            DateTime               @map("attempted_at") @db.Timestamptz
+  outcome                DeliveryAttemptOutcome
+  failureReason          DeliveryFailureReason? @map("failure_reason")
+  failureNotes           String?                @map("failure_notes") @db.Text
+  contactedCustomer      Boolean                @default(false) @map("contacted_customer")
+  customerResponse       String?                @map("customer_response") @db.Text
+  nextAttemptScheduledAt DateTime?              @map("next_attempt_scheduled_at") @db.Timestamptz
+  attemptLatitude        Decimal?               @map("attempt_latitude") @db.Decimal(10, 7)
+  attemptLongitude       Decimal?               @map("attempt_longitude") @db.Decimal(10, 7)
+  agentName              String?                @map("agent_name")
+  agentPhone             String?                @map("agent_phone")
+  source                 TrackingEventSource
+  webhookId              String?                @map("webhook_id") @db.Uuid
+  createdAt              DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime               @updatedAt @map("updated_at") @db.Timestamptz
+
+  shipment Shipment        @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  webhook  CourierWebhook? @relation(fields: [webhookId], references: [id])
+
+  @@unique([shipmentId, attemptNumber])
+  @@index([shipmentId])
+  @@index([outcome])
+  @@index([failureReason])
+  @@index([attemptedAt])
+  @@index([webhookId])
+  @@map("delivery_attempts")
 }
 
 // ============================================================
@@ -1647,4 +1916,115 @@ enum CallOutcome {
   OTHER                 @map("other")
 
   @@map("call_outcome")
+}
+
+enum ShipmentStatus {
+  CREATED            @map("created")
+  AWB_PENDING        @map("awb_pending")
+  AWB_GENERATED      @map("awb_generated")
+  FAILED_AT_CREATION @map("failed_at_creation")
+  HANDED_TO_COURIER  @map("handed_to_courier")
+  IN_TRANSIT         @map("in_transit")
+  AT_HUB             @map("at_hub")
+  OUT_FOR_DELIVERY   @map("out_for_delivery")
+  DELIVERY_ATTEMPTED @map("delivery_attempted")
+  DELIVERED          @map("delivered")
+  RTO_INITIATED      @map("rto_initiated")
+  RTO_IN_TRANSIT     @map("rto_in_transit")
+  RTO_DELIVERED      @map("rto_delivered")
+  LOST               @map("lost")
+  DAMAGED            @map("damaged")
+  CANCELLED          @map("cancelled")
+
+  @@map("shipment_status")
+}
+
+enum LabelPaperSize {
+  A4          @map("a4")
+  A6          @map("a6")
+  THERMAL_4X6 @map("thermal_4x6")
+
+  @@map("label_paper_size")
+}
+
+enum LabelGenerationReason {
+  INITIAL         @map("initial")
+  REPRINT_DAMAGED @map("reprint_damaged")
+  AWB_REISSUED    @map("awb_reissued")
+  FORMAT_CHANGED  @map("format_changed")
+  MANUAL_REQUEST  @map("manual_request")
+
+  @@map("label_generation_reason")
+}
+
+enum TrackingEventType {
+  AWB_GENERATED                 @map("awb_generated")
+  COURIER_PICKUP_SCHEDULED      @map("courier_pickup_scheduled")
+  COURIER_PICKUP_DONE           @map("courier_pickup_done")
+  ARRIVED_AT_HUB                @map("arrived_at_hub")
+  DEPARTED_HUB                  @map("departed_hub")
+  IN_TRANSIT_UPDATE             @map("in_transit_update")
+  ARRIVED_AT_DESTINATION_HUB    @map("arrived_at_destination_hub")
+  OUT_FOR_DELIVERY              @map("out_for_delivery")
+  DELIVERY_ATTEMPTED            @map("delivery_attempted")
+  DELIVERED                     @map("delivered")
+  DELIVERY_FAILED               @map("delivery_failed")
+  ADDRESS_ISSUE                 @map("address_issue")
+  CUSTOMER_REQUESTED_RESCHEDULE @map("customer_requested_reschedule")
+  CUSTOMER_REFUSED              @map("customer_refused")
+  RTO_INITIATED                 @map("rto_initiated")
+  RTO_IN_TRANSIT                @map("rto_in_transit")
+  RTO_DELIVERED                 @map("rto_delivered")
+  LOST                          @map("lost")
+  DAMAGED                       @map("damaged")
+  STATUS_SYNC                   @map("status_sync")
+  MANUAL_UPDATE                 @map("manual_update")
+
+  @@map("tracking_event_type")
+}
+
+enum TrackingEventSource {
+  COURIER_WEBHOOK @map("courier_webhook")
+  COURIER_POLL    @map("courier_poll")
+  MANUAL_ENTRY    @map("manual_entry")
+  SYSTEM          @map("system")
+  CUSTOMER_REPORT @map("customer_report")
+
+  @@map("tracking_event_source")
+}
+
+enum WebhookStatus {
+  RECEIVED  @map("received")
+  PROCESSED @map("processed")
+  IGNORED   @map("ignored")
+  FAILED    @map("failed")
+  ABANDONED @map("abandoned")
+
+  @@map("webhook_status")
+}
+
+enum DeliveryAttemptOutcome {
+  SUCCESS     @map("success")
+  FAILED      @map("failed")
+  RESCHEDULED @map("rescheduled")
+  REFUSED     @map("refused")
+  CANCELLED   @map("cancelled")
+
+  @@map("delivery_attempt_outcome")
+}
+
+enum DeliveryFailureReason {
+  CUSTOMER_UNAVAILABLE           @map("customer_unavailable")
+  CUSTOMER_PHONE_UNREACHABLE     @map("customer_phone_unreachable")
+  ADDRESS_NOT_FOUND              @map("address_not_found")
+  ADDRESS_INCOMPLETE             @map("address_incomplete")
+  ADDRESS_OUT_OF_DELIVERY_AREA   @map("address_out_of_delivery_area")
+  CUSTOMER_REFUSED               @map("customer_refused")
+  PAYMENT_REFUSED                @map("payment_refused")
+  BAD_WEATHER                    @map("bad_weather")
+  CUSTOMER_NOT_AVAILABLE_AT_TIME @map("customer_not_available_at_time")
+  DAMAGED_PACKAGE                @map("damaged_package")
+  OTHER                          @map("other")
+
+  @@map("delivery_failure_reason")
 }
