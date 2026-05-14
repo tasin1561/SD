@@ -7,6 +7,7 @@ import { RedisModule } from './infrastructure/redis/redis.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuthCommonModule } from './modules/auth-common/auth-common.module';
 import { EmailModule } from './modules/email/email.module';
+import { StaffAuthModule } from './modules/staff-auth/staff-auth.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { pinoConfig } from './common/pino/logger-config';
 import { envSchema } from './config/env.schema';
@@ -36,6 +37,7 @@ import { envSchema } from './config/env.schema';
     RedisModule,
     AuthCommonModule,
     EmailModule,
+    StaffAuthModule,
     HealthModule,
   ],
 })

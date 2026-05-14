@@ -347,6 +347,24 @@ const notificationTemplates: TemplateSeed[] = [
     bodyTemplate:
       'A password reset was requested for your Skydrop seller account. Reset here: {{ reset_url }}. This link expires in 30 minutes. If you did not request this, please ignore.',
   },
+  {
+    code: 'staff.email_verification.email',
+    name: 'Staff email verification — email',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STAFF,
+    subject: 'Verify your Skydrop staff email',
+    bodyTemplate:
+      'Hi {{ contact_name }}, please verify your Skydrop staff email by clicking: {{ verify_url }}. This link expires in {{ expires_hours }} hours. If you did not request this, please ignore.',
+  },
+  {
+    code: 'seller.email_verification.email',
+    name: 'Seller email verification — email',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Verify your Skydrop email',
+    bodyTemplate:
+      'Hi {{ contact_name }}, please verify your Skydrop seller email by clicking: {{ verify_url }}. This link expires in {{ expires_hours }} hours. If you did not request this, please ignore.',
+  },
 ];
 
 async function seedNotificationTemplates() {

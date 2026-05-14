@@ -105,12 +105,35 @@ interface FakeClient {
   $transaction: <T>(cb: (tx: FakeClient) => Promise<T>) => Promise<T>;
 }
 
+/**
+ * Snapshots table state at $transaction entry and restores it if the callback
+ * throws. This is a deliberately minimal simulation of the rollback semantics
+ * that matter for refresh-token tests: a throw from inside the tx must
+ * NOT leave any of the writes the callback performed. The reuse-detection
+ * test relies on this so we can prove the burn-down commits separately.
+ */
 function buildFakeClient(): FakeClient {
   const client: FakeClient = {
     staffRefreshToken: new FakeTable('staffUserId'),
     sellerRefreshToken: new FakeTable('sellerId'),
     auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-row' }) },
-    $transaction: async (cb) => cb(client),
+    $transaction: async (cb) => {
+      const snapshot = {
+        staff: client.staffRefreshToken.rows.map((r) => ({ ...r })),
+        seller: client.sellerRefreshToken.rows.map((r) => ({ ...r })),
+        auditCallCount: client.auditLog.create.mock.calls.length,
+      };
+      try {
+        return await cb(client);
+      } catch (err) {
+        client.staffRefreshToken.rows = snapshot.staff;
+        client.sellerRefreshToken.rows = snapshot.seller;
+        // Trim audit calls back to the snapshot.
+        const drop = client.auditLog.create.mock.calls.length - snapshot.auditCallCount;
+        for (let i = 0; i < drop; i++) client.auditLog.create.mock.calls.pop();
+        throw err;
+      }
+    },
   };
   return client;
 }

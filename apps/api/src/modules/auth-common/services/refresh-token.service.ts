@@ -1,8 +1,12 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { ActorType, type Prisma } from '@skydrop/db';
+import { ActorType, type Prisma, type PrismaClient } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { TokenHashService } from './token-hash.service';
 import { AuditLogService } from './audit-log.service';
+
+/** Either the long-lived client or a per-transaction client — both expose
+ *  the model methods we need. */
+type DbClient = PrismaClient | Prisma.TransactionClient;
 
 const REFRESH_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days, per spec
 
@@ -94,30 +98,36 @@ export class RefreshTokenService {
   async rotate(input: RotateInput): Promise<RotateOutput> {
     const presentedHash = this.hashes.sha256Hex(input.presentedToken);
 
-    return this.prisma.client.$transaction(async (tx) => {
-      // 1. Look up the presented refresh-token row.
-      const existing = await this.findByHash(tx, input.subject, presentedHash);
+    // Lookup is read-only, so do it outside any transaction. This matters
+    // because the reuse-detection path must throw, and we don't want the
+    // happy-path transaction to swallow the family-revoke + audit it does.
+    const existing = await this.findByHash(this.prisma.client, input.subject, presentedHash);
 
-      if (!existing) {
-        throw this.unauthorized();
-      }
+    if (!existing) {
+      throw this.unauthorized();
+    }
 
-      // 2. Expired? Treat as a normal failure (no reuse signal).
-      if (existing.expiresAt.getTime() <= Date.now()) {
-        throw this.unauthorized();
-      }
+    // Expired? Treat as a normal failure (no reuse signal).
+    if (existing.expiresAt.getTime() <= Date.now()) {
+      throw this.unauthorized();
+    }
 
-      // 3. Already revoked? That's a REUSE event. Burn down the family.
-      if (existing.revokedAt !== null) {
+    // Already revoked? That's a REUSE event. Burn down the family in a
+    // dedicated transaction that COMMITS before we throw — otherwise the
+    // throw would roll back the family-revoke + audit row.
+    if (existing.revokedAt !== null) {
+      await this.prisma.client.$transaction(async (tx) => {
         await this.handleReuseDetected(tx, input.subject, existing.userId, {
           presentedRecordId: existing.id,
           userAgent: input.userAgent ?? null,
           ipAddress: input.ipAddress ?? null,
         });
-        throw this.unauthorized();
-      }
+      });
+      throw this.unauthorized();
+    }
 
-      // 4. Happy path — revoke this row, mint a new one.
+    // Happy path — revoke this row, mint a new one, audit. All in one tx.
+    return this.prisma.client.$transaction(async (tx) => {
       await this.revokeById(tx, input.subject, existing.id);
 
       const issued = await this.issue({
@@ -187,7 +197,7 @@ export class RefreshTokenService {
   // --- internals ---
 
   private async findByHash(
-    tx: Prisma.TransactionClient,
+    tx: DbClient,
     subject: SubjectKind,
     tokenHash: string,
   ): Promise<
