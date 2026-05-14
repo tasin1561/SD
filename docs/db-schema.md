@@ -111,9 +111,10 @@ BD merchants. Identity + profile combined.
 - Bank details (Phase 1B remittance): `bankName`, `bankAccountName`, `bankAccountNumber`, `bankRoutingNumber`, `bankSwiftCode`
 - Display: `displayCurrency: Currency` (INR/BDT), `displayLanguage` ("en"/"bn")
 - `countryCode @default("BD")`
+- `emailVerifiedAt`, `lastLoginAt` (both nullable — mirrors `staff_users`)
 - Addresses moved to polymorphic `addresses` table (Layer 2) — not embedded here
 
-**Indexes:** `email`, `status`, `deletedAt`
+**Indexes:** `email`, `status`, `deletedAt`, `approvedById`
 
 ## seller_invitations
 Token-based invite-only signup.
