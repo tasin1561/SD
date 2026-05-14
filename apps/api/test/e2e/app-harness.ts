@@ -77,6 +77,13 @@ export async function resetAuthState(prisma: PrismaClient): Promise<void> {
     prisma.sellerPasswordResetToken.deleteMany({}),
     prisma.sellerRefreshToken.deleteMany({}),
     prisma.sellerInvitation.deleteMany({}),
+    // Module 2 — seller-side tables that FK-restrict seller deletion.
+    prisma.sellerNote.deleteMany({}),
+    prisma.sellerOnboardingProgress.deleteMany({}),
+    prisma.sellerNotificationPreference.deleteMany({}),
+    // Addresses are polymorphic (no FK at DB layer) — still wipe to keep
+    // tests independent.
+    prisma.address.deleteMany({}),
     prisma.staffEmailVerificationToken.deleteMany({}),
     prisma.staffPasswordResetToken.deleteMany({}),
     prisma.staffRefreshToken.deleteMany({}),
