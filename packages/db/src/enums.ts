@@ -9,6 +9,8 @@ export {
   Currency,
   SellerNoteCategory,
   ActorType,
+  SellerOnboardingStep,
+  OnboardingStepActor,
   // Layer 2 — Addresses & Locations
   AddressOwnerType,
   AddressType,

@@ -12,6 +12,7 @@ import { SellerAuthModule } from './modules/seller-auth/seller-auth.module';
 import { SellerInvitationModule } from './modules/seller-invitation/seller-invitation.module';
 import { SellerApiKeyModule } from './modules/seller-api-key/seller-api-key.module';
 import { SellerManagementModule } from './modules/seller-management/seller-management.module';
+import { SellerOnboardingModule } from './modules/seller-onboarding/seller-onboarding.module';
 import { ThrottlerModule } from './common/throttler/throttler.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { pinoConfig } from './common/pino/logger-config';
@@ -49,6 +50,7 @@ import { envSchema } from './config/env.schema';
     SellerInvitationModule,
     SellerApiKeyModule,
     SellerManagementModule,
+    SellerOnboardingModule,
     HealthModule,
   ],
 })

@@ -5,7 +5,14 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ActorType, Currency, NotificationRecipientType, SellerStatus } from '@skydrop/db';
+import {
+  ActorType,
+  Currency,
+  NotificationRecipientType,
+  OnboardingStepActor,
+  SellerOnboardingStep,
+  SellerStatus,
+} from '@skydrop/db';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { EnvService } from '../../config/env.service';
 import { PasswordService } from '../auth-common/services/password.service';
@@ -14,6 +21,7 @@ import { TokenHashService } from '../auth-common/services/token-hash.service';
 import { RefreshTokenService, type IssuedRefresh } from '../auth-common/services/refresh-token.service';
 import { AuditLogService } from '../auth-common/services/audit-log.service';
 import { EmailQueue } from '../email/queue/email.queue';
+import { SellerOnboardingService } from '../seller-onboarding/services/seller-onboarding.service';
 import type { SellerRegisterViaInvitationDto } from './dto/register-via-invitation.dto';
 
 const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
@@ -74,6 +82,7 @@ export class SellerAuthService {
     private readonly refresh: RefreshTokenService,
     private readonly audit: AuditLogService,
     private readonly email: EmailQueue,
+    private readonly onboarding: SellerOnboardingService,
   ) {}
 
   // ---------- REGISTER VIA INVITATION ----------
@@ -203,6 +212,11 @@ export class SellerAuthService {
         },
         tx,
       );
+
+      // Initialize onboarding rows (8 steps; registration + company-info
+      // are auto-marked complete). Must run inside the registration tx
+      // so a rollback doesn't orphan onboarding rows.
+      await this.onboarding.initializeProgress(createdSeller.id, tx);
 
       return { seller: createdSeller, refresh: issued, accessToken: access };
     });
@@ -640,6 +654,13 @@ export class SellerAuthService {
           entityId: row.sellerId,
           metadata: { ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, email: row.email },
         },
+        tx,
+      );
+      await this.onboarding.markStepComplete(
+        row.sellerId,
+        SellerOnboardingStep.EMAIL_VERIFIED,
+        OnboardingStepActor.SYSTEM,
+        { email: row.email },
         tx,
       );
     });

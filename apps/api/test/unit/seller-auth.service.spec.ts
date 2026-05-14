@@ -9,6 +9,7 @@ import { RefreshTokenService } from '../../src/modules/auth-common/services/refr
 import { EnvService } from '../../src/config/env.service';
 import type { EmailQueue } from '../../src/modules/email/queue/email.queue';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
+import type { SellerOnboardingService } from '../../src/modules/seller-onboarding/services/seller-onboarding.service';
 
 // ---------------------------------------------------------------------------
 // In-memory rows + factory-built fake client.
@@ -323,7 +324,23 @@ function makeSut(): Sut {
   const refresh = new RefreshTokenService(prisma, hashes, audit);
   const enqueueMock = jest.fn().mockResolvedValue('job-1');
   const email = { enqueue: enqueueMock } as unknown as EmailQueue;
-  const svc = new SellerAuthService(prisma, env, password, jwt, hashes, refresh, audit, email);
+  const onboarding = {
+    initializeProgress: jest.fn().mockResolvedValue(undefined),
+    markStepComplete: jest
+      .fn()
+      .mockResolvedValue({ marked: true, onboardingCompleted: false }),
+  } as unknown as SellerOnboardingService;
+  const svc = new SellerAuthService(
+    prisma,
+    env,
+    password,
+    jwt,
+    hashes,
+    refresh,
+    audit,
+    email,
+    onboarding,
+  );
   return { svc, client, enqueueMock, password, hashes };
 }
 
