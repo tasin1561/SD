@@ -1,0 +1,24 @@
+// Skydrop — Prisma schema
+//
+// Canonical spec: docs/db-schema.md (root of this monorepo).
+// If this schema disagrees with the spec, the SPEC wins — fix the schema.
+//
+// Conventions baked into every model:
+//   id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+//   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+//   updatedAt   DateTime @updatedAt      @map("updated_at") @db.Timestamptz
+//   deletedAt   DateTime?                @map("deleted_at") @db.Timestamptz
+//
+// Hypertables (tracking_events, stock_movements) use composite PK
+// @@id([id, createdAt]) because Postgres requires the partition column in the PK.
+// Immutable tables (stock_movements, tracking_events, call_attempts) omit
+// updatedAt and deletedAt — only createdAt.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}

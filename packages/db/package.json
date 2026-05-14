@@ -1,0 +1,37 @@
+{
+  "name": "@skydrop/db",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Skydrop database — Prisma schema, generated client, migrations, seed",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./enums": "./src/enums.ts"
+  },
+  "scripts": {
+    "generate": "prisma generate",
+    "migrate:dev": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "migrate:reset": "prisma migrate reset",
+    "migrate:status": "prisma migrate status",
+    "studio": "prisma studio",
+    "seed": "tsx prisma/seed.ts",
+    "db:push": "prisma db push",
+    "format": "prisma format",
+    "validate": "prisma validate",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3"
+  },
+  "devDependencies": {
+    "prisma": "6.19.3",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}
