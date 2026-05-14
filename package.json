@@ -15,7 +15,11 @@
     "typecheck": "turbo run typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,yaml,yml,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,yaml,yml,md}\"",
-    "clean": "turbo run clean && rm -rf node_modules .turbo"
+    "clean": "turbo run clean && rm -rf node_modules .turbo",
+    "db:up": "docker compose -f docker/docker-compose.yml up -d",
+    "db:down": "docker compose -f docker/docker-compose.yml down",
+    "db:reset": "docker compose -f docker/docker-compose.yml down -v && docker compose -f docker/docker-compose.yml up -d",
+    "db:logs": "docker compose -f docker/docker-compose.yml logs -f"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
