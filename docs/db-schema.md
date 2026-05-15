@@ -3,7 +3,7 @@
 > **Canonical reference.** This document is the single source of truth for Skydrop's database schema. The Prisma schema in `packages/db/prisma/schema.prisma` implements what's documented here. If they diverge, this document wins — update Prisma to match, not the other way around.
 
 **Status:** Design locked, awaiting implementation.
-**Total tables:** 60 across 9 layers.
+**Total tables:** 61 across 9 layers.
 **Database:** PostgreSQL 18 with TimescaleDB extension.
 **ORM:** Prisma.
 
@@ -66,7 +66,7 @@ These rules apply to **every** table unless explicitly noted otherwise.
 
 | Layer | Tables | Purpose |
 |---|---|---|
-| 1 — Identity & Access | 12 | Auth, tokens, RBAC, audit |
+| 1 — Identity & Access | 13 | Auth, tokens, RBAC, audit, onboarding progress |
 | 2 — Addresses & Locations | 5 | Polymorphic addresses, warehouse hierarchy |
 | 3 — Catalog | 5 | Products, variants, categories, images |
 | 4 — Inventory & WMS | 7 | Stock levels, movements, reservations, batches |
@@ -75,11 +75,11 @@ These rules apply to **every** table unless explicitly noted otherwise.
 | 7 — Shipments & Tracking | 7 | Shipments, labels, tracking events |
 | 8 — Couriers & Pricing | 9 | Couriers, credentials, rates, FX, charges |
 | 9 — Notifications & Webhooks | 6 | Templates, logs, webhooks, settings |
-| **Total** | **60** | |
+| **Total** | **61** | |
 
 ---
 
-# Layer 1 — Identity & Access (12 tables)
+# Layer 1 — Identity & Access (13 tables)
 
 ## staff_users
 Admin, agents, warehouse staff. Has password auth, role.
@@ -186,6 +186,35 @@ Cross-entity audit trail for sensitive actions.
 
 **ActorType enum:** `STAFF`, `SELLER`, `SYSTEM`, `API`
 
+## seller_onboarding_progress
+Per-seller tracker of the 8 Phase 1A onboarding steps. Initialized at
+registration with all 8 rows; REGISTRATION_COMPLETED and
+COMPANY_INFO_FILLED are auto-marked complete in the same transaction.
+The remaining steps are marked by their respective flows (email
+verification confirm, address creation, bank-details update, etc.).
+
+**Key fields:**
+- `sellerId` (FK, onDelete: Cascade — rows are meaningless without the seller)
+- `stepCode: SellerOnboardingStep`
+- `isRequired` (4 required, 4 optional in Phase 1A — see enum below)
+- `completedAt?` (null = step not yet completed)
+- `completedBy?: OnboardingStepActor` (who marked it — SYSTEM, SELLER, ADMIN)
+- `metadata?` (JSON — e.g. `{ addressId }` for address-step completions)
+
+**Constraints:** `@@unique([sellerId, stepCode])`
+**Indexes:** `sellerId`, `stepCode`, `completedAt`
+
+**Service-layer invariants (enforced in code, not the schema):**
+1. `markStepComplete` is idempotent — re-marking a completed step is a
+   no-op so that delete-and-recreate of an address doesn't reset the
+   step timestamp.
+2. The onboarding-complete email fires once: when the last required step
+   transitions to complete, and only if no prior
+   `seller.onboarding_complete.email` row exists in `notification_logs`
+   for that seller.
+3. Admin overrides use `completedBy = ADMIN` and the metadata captures
+   the override reason + staff actor id.
+
 ## Shared enums (Layer 1)
 
 - `StaffRole` — see staff_users above
@@ -193,6 +222,12 @@ Cross-entity audit trail for sensitive actions.
 - `Currency` — `INR`, `BDT`
 - `SellerNoteCategory` — see seller_notes above
 - `ActorType` — see audit_logs above
+- `SellerOnboardingStep` — `REGISTRATION_COMPLETED` (req),
+  `EMAIL_VERIFIED` (req), `COMPANY_INFO_FILLED` (req),
+  `BD_ORIGIN_ADDRESS_ADDED` (req), `IN_RETURN_ADDRESS_ADDED` (opt),
+  `BD_OFFICE_ADDRESS_ADDED` (opt), `BANK_DETAILS_ADDED` (opt — Phase 1B),
+  `NOTIFICATION_PREFS_REVIEWED` (opt)
+- `OnboardingStepActor` — `SYSTEM`, `SELLER`, `ADMIN`
 
 ---
 

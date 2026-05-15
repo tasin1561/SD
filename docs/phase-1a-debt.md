@@ -48,6 +48,45 @@ pick it up.
 
 ---
 
+## Seller onboarding & admin (Module 2)
+
+- **Welcome-email enqueue is outside the registration transaction.**
+  `SellerAuthService.registerViaInvitation()` enqueues
+  `seller.welcome.email` after the registration `prisma.$transaction`
+  commits (with a try/catch swallowing failures). Module 2 introduced
+  the inside-tx pattern for suspension, reapproval, and onboarding-
+  complete emails so enqueue failure rolls back the DB. The welcome
+  enqueue should be harmonized with that pattern for consistency.
+  **Pick up:** at the next touch of seller-auth, or whenever the auth
+  module is otherwise refactored.
+
+- **RBAC enforcement on `/admin/sellers/*`.** Currently any
+  authenticated staff member can list sellers, suspend/reapprove,
+  manage notes, and override onboarding steps. Per the original Module
+  2 spec, status changes and note edits should be scoped (likely
+  `SUPER_ADMIN` + `SELLER_APPROVAL_ADMIN`; CSR roles read-only). Same
+  underlying gap as the seller-invitations RBAC debt above.
+  **Pick up:** Module 12 (Admin Dashboard) with the wider RBAC roll-out.
+
+- **Note authorship not enforced on edit/delete.** `PATCH` and `DELETE`
+  on `/admin/sellers/:id/notes/:noteId` accept any staff member, not
+  just the original author. The Module 2 spec explicitly called this
+  out as covered by the broader RBAC tightening.
+  **Pick up:** alongside the RBAC roll-out above.
+
+- **Onboarding-complete fire-once relies on `notification_logs`.** The
+  fire-once check looks for a `notification_log` row with
+  `templateCode = "seller.onboarding_complete.email"` and `recipientId
+  = sellerId`. If the email worker fails to write the log row (e.g.,
+  DB unavailable) but the email actually went out, a future re-trigger
+  could double-send. Practical risk is low — the worker writes the log
+  row in the same operation as the send — but a notification-level
+  dedup key would make this airtight.
+  **Pick up:** Module 11 (Notifications), when worker idempotency keys
+  land.
+
+---
+
 ## Catalog & Inventory (Modules 4–5)
 
 - _No entries yet._ Update as work lands.

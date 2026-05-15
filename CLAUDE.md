@@ -268,10 +268,10 @@ Module order — each builds on prior modules:
 | # | Module | Status |
 |---|---|---|
 | 0 | Database & Prisma package | ✅ DONE |
-| 1 | Auth & Access Control (staff + seller, refresh, password reset, email verify, API keys) | NEXT |
-| 2 | Seller Onboarding (invite, registration, approval workflow) | pending |
-| 3 | Seller Profile (settings, addresses, notification preferences) | pending |
-| 4 | Product/SKU Catalog (categories, products, variants, images, CSV upload) | pending |
+| 1 | Auth & Access Control (staff + seller, refresh, password reset, email verify, API keys) | ✅ DONE |
+| 2 | Seller Onboarding (invite, registration, approval workflow) | ✅ DONE |
+| 3 | Seller Profile (settings, addresses, notification preferences) | ✅ DONE (merged into Module 2) |
+| 4 | Product/SKU Catalog (categories, products, variants, images, CSV upload) | NEXT |
 | 5 | Inventory & WMS (warehouses, bins, batches, levels, movements, reservations, receiving, cycle counts) | pending |
 | 6 | Order Management (manual entry, CSV upload, lifecycle, events) | pending |
 | 7 | Call Center Workflow (queue, distributor, attempt logging) | pending |
@@ -297,20 +297,21 @@ Phase 1B modules (not in this roadmap):
 
 ---
 
-## Current State (2026-05-14)
+## Current State (2026-05-15)
 
 **Implemented:**
 - Infrastructure (DO droplet, managed Postgres, Spaces, Cloudflare)
 - Local dev (WSL2, Docker Postgres + Redis with TimescaleDB)
 - Monorepo skeleton (Turborepo + pnpm)
-- `@skydrop/db` package: 62 Prisma models, initial migration with TimescaleDB hypertables, idempotent seed (system settings, couriers, FX, warehouse, rate card, notification templates)
+- `@skydrop/db` package: 63 Prisma models (62 + `seller_onboarding_progress`), TimescaleDB hypertables, idempotent seed (system settings, couriers, FX, warehouse, rate card, 17 notification templates)
+- `apps/api` Module 1 (Auth): staff + seller auth, refresh, password reset, email verify, seller invitations, seller API keys, rate limiting
+- `apps/api` Module 2 (Seller Onboarding + Profile): SUSPENDED-aware login + `@SellerAuthAllowSuspended` decorator, `SellerAccountStatusService` (suspend/reapprove), `SellerOnboardingService` (8 steps + fire-once email), seller profile + bank-details endpoints, seller address CRUD with default logic, notification preference endpoints + registration pre-seed, full admin surface at `/admin/sellers/*`
 
 **Not yet implemented:**
-- `apps/api` (the NestJS API)
-- All other apps and packages (placeholders only)
-- Any feature module (auth, sellers, orders, etc.)
+- All apps other than `apps/api` (placeholders only)
+- Module 4 onwards (catalog, inventory, orders, etc.)
 
-**Next:** Module 1 — Auth & Access Control. Design happens in chat with the user; implementation by Claude Code in a focused session per module.
+**Next:** Module 4 — Product/SKU Catalog. Design happens in chat with the user; implementation by Claude Code in a focused session per module.
 
 ---
 

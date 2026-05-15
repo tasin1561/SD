@@ -100,6 +100,7 @@ refuses to boot if any required value is missing or malformed.
 | `JWT_SIGNING_KEY`  | **yes**  | —                                         | min 32 chars; `openssl rand -base64 64` |
 | `SELLER_APP_URL`   | **yes**  | —                                         | used in email links + CORS |
 | `ADMIN_APP_URL`    | **yes**  | —                                         | used in email links + CORS |
+| `SUPPORT_EMAIL`    | no       | `support@skydrop.online`                  | surfaces in transactional email bodies |
 | `RESEND_API_KEY`   | no       | (empty)                                   | empty → dev-mode log emails to stdout |
 | `COOKIE_DOMAIN`    | no       | (unset)                                   | leave unset for `__Host-` cookies |
 
@@ -131,7 +132,13 @@ src/
     ├── staff-auth/               # /auth/staff/*
     ├── seller-auth/              # /auth/seller/*
     ├── seller-invitation/        # /admin/seller-invitations
-    └── seller-api-key/           # /seller/api-keys + ApiKeyGuard
+    ├── seller-api-key/           # /seller/api-keys + ApiKeyGuard
+    ├── seller-onboarding/        # progress tracker (no controller; consumed by other modules)
+    ├── seller-management/        # SellerAccountStatusService (suspend/reapprove)
+    ├── seller-profile/           # /seller/profile, /seller/profile/bank-details
+    ├── seller-address/           # /seller/addresses CRUD
+    ├── seller-notification-preference/  # /seller/notification-preferences
+    └── admin-seller/             # /admin/sellers — list, detail, status, notes, onboarding
 
 test/
 ├── unit/                         # jest specs against in-memory fakes
@@ -177,5 +184,40 @@ POST /seller/api-keys                           (seller auth)
 GET  /seller/api-keys                           (seller auth)
 POST /seller/api-keys/:id/revoke                (seller auth)
 ```
+
+## Module 2 (Seller Onboarding) — endpoint map
+
+```
+GET    /seller/profile                          (seller auth, allow-suspended)
+PATCH  /seller/profile                          (seller auth, APPROVED)
+PATCH  /seller/profile/bank-details             (seller auth, APPROVED)
+
+GET    /seller/addresses                        (seller auth, allow-suspended)
+POST   /seller/addresses                        (seller auth, APPROVED)
+PATCH  /seller/addresses/:id                    (seller auth, APPROVED)
+DELETE /seller/addresses/:id                    (seller auth, APPROVED)
+POST   /seller/addresses/:id/set-default        (seller auth, APPROVED)
+
+GET    /seller/notification-preferences         (seller auth, allow-suspended)
+PATCH  /seller/notification-preferences/:cat    (seller auth, APPROVED)
+
+GET    /admin/sellers                           (staff auth)
+GET    /admin/sellers/:id                       (staff auth)
+PATCH  /admin/sellers/:id/status                (staff auth)
+GET    /admin/sellers/:id/notes                 (staff auth)
+POST   /admin/sellers/:id/notes                 (staff auth)
+PATCH  /admin/sellers/:id/notes/:noteId         (staff auth)
+DELETE /admin/sellers/:id/notes/:noteId         (staff auth)
+GET    /admin/sellers/:id/onboarding            (staff auth)
+POST   /admin/sellers/:id/onboarding/:step/override  (staff auth)
+```
+
+Notes:
+- Endpoints tagged "allow-suspended" use the `@SellerAuthAllowSuspended()`
+  decorator so SUSPENDED sellers retain read-only access. APPROVED is
+  always sufficient; PENDING/REJECTED never pass either guard.
+- Auth changes from Module 2: login + refresh now accept SUSPENDED in
+  addition to APPROVED (status check). The write-side guard default
+  remains APPROVED-only.
 
 See `docs/phase-1a-debt.md` for tracked deferrals.
