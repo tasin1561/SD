@@ -70,7 +70,7 @@ Phase 1A covers **everything except billing/wallet/remittance**. Specifically:
 | Cache | Redis (also droplet-local in prod) |
 | Storage | DigitalOcean Spaces (S3-compatible, SGP1 region) |
 | Auth | Custom: Passport.js + JWT (no Clerk/Auth0/Supabase) |
-| Email | TBD between Resend / Postmark (deciding at auth module design) |
+| Email | Resend (via `resend` npm package; templates in DB rendered with Nunjucks) |
 | SMS | Twilio (TBD on click-to-call integration timing) |
 | Live chat | ChatWoot self-hosted (separate droplet, deferred) |
 | Monorepo | Turborepo + pnpm workspaces |
@@ -84,27 +84,26 @@ Phase 1A covers **everything except billing/wallet/remittance**. Specifically:
 ```
 SD/
 ├── apps/
-│   ├── marketing/         # skydrop.online — public marketing site
-│   ├── seller/            # app.skydrop.online — seller dashboard
-│   ├── admin/             # admin.skydrop.online — internal staff
-│   ├── track/             # track.skydrop.online — public tracking page (EN+HI)
-│   ├── api/               # api.skydrop.online — NestJS REST API
-│   └── workers/           # BullMQ background workers
+│   ├── marketing/         # skydrop.online — public marketing site (placeholder)
+│   ├── seller/            # app.skydrop.online — seller dashboard (placeholder)
+│   ├── admin/             # admin.skydrop.online — internal staff (placeholder)
+│   ├── track/             # track.skydrop.online — public tracking page (EN+HI) (placeholder)
+│   ├── api/               # ✅ api.skydrop.online — NestJS REST API
+│   └── workers/           # BullMQ background workers (placeholder; Phase 1A worker is in-process in apps/api)
 ├── packages/
-│   ├── db/                # ✅ Prisma + types (@skydrop/db) — BUILT
-│   ├── ui/                # shared React components
-│   ├── types/             # shared TS types (DTOs, enums beyond DB)
-│   ├── config/            # shared eslint/tsconfig/tailwind presets
-│   ├── i18n/              # translations (en/hi for track, en/bn for seller)
-│   └── utils/             # shared utilities (date, money, phone, etc.)
+│   ├── db/                # ✅ Prisma + types (@skydrop/db)
+│   ├── ui/                # shared React components (placeholder)
+│   ├── types/             # shared TS types (placeholder)
+│   ├── config/            # shared eslint/tsconfig/tailwind presets (placeholder)
+│   ├── i18n/              # translations (placeholder)
+│   └── utils/             # shared utilities (placeholder)
 ├── docker/                # docker-compose.yml for local Postgres + Redis
 ├── docs/
 │   ├── infrastructure.md  # provisioning + ops reference
-│   └── db-schema.md       # canonical schema spec (the source of truth)
+│   ├── db-schema.md       # canonical schema spec (the source of truth)
+│   └── phase-1a-debt.md   # explicit Phase 1A deferrals tracked here
 └── CLAUDE.md              # this file
 ```
-
-Apps and packages are placeholder folders (README only) until their respective modules are scaffolded. Only `packages/db` is currently a real package.
 
 ---
 
@@ -112,11 +111,11 @@ Apps and packages are placeholder folders (README only) until their respective m
 
 **Status: IMPLEMENTED.** Schema lives in `packages/db/`.
 
-**Canonical reference:** `docs/db-schema.md` — 62 Prisma models across 9 layers (identity, addresses, catalog, inventory/WMS, orders, call center, shipments, pricing, notifications). When the schema and this doc diverge, the doc wins; update Prisma to match.
+**Canonical reference:** `docs/db-schema.md` — 63 Prisma models across 9 layers (identity, addresses, catalog, inventory/WMS, orders, call center, shipments, pricing, notifications), plus Module 2's `seller_onboarding_progress` table. When the schema and this doc diverge, the doc wins; update Prisma to match.
+
+**Migrations applied:** 4 as of Module 2 (init, audit_logs entityId nullable, sellers email_verified_at/last_login_at, seller_onboarding_progress).
 
 **TimescaleDB hypertables:** `tracking_events` and `stock_movements` (composite PK, monthly chunks, 7d/30d compression).
-
-**Hypertable convention — partition-column index:** Any new hypertable MUST declare `@@index([createdAt])` (or whatever the partition column is) in the Prisma model AND the migration MUST explicitly `CREATE INDEX "<table>_<col>_idx"` *before* calling `create_hypertable()`. Otherwise TimescaleDB auto-creates an identically-named index outside Prisma's tracking, and every subsequent `prisma migrate dev` trips drift detection. Prisma's default index name (`<table>_<col>_idx`) already matches TimescaleDB's, so no `map:` override is needed — but the explicit `CREATE INDEX` in the migration is required.
 
 **Consumption pattern:**
 
@@ -130,6 +129,10 @@ const order = await prisma.order.findUnique({
 ```
 
 The package exports a singleton `prisma` client (configured logging, graceful shutdown) and re-exports every enum.
+
+**Hypertable schema convention:** Any future hypertable needs explicit `@@index([createdAt], map: "<table>_created_at_idx")` declared in Prisma so the index name matches what TimescaleDB's `create_hypertable()` would auto-create. The migration's explicit `CREATE INDEX` must run BEFORE `create_hypertable()`. This prevents Prisma drift detection from breaking on hypertable conversions.
+
+**Workspace pattern:** `@skydrop/db` builds to `dist/` and consumers import compiled output. `turbo.json` wires `^build` as a dep of `dev`, `typecheck`, `lint`, `test`, `test:e2e` so apps/api always sees a built db package. When adding a new enum to schema.prisma, also add it to `packages/db/src/enums.ts` (hand-maintained re-export list).
 
 ### Service-Layer Rules (MUST enforce in code — schema cannot)
 
@@ -167,12 +170,18 @@ The schema gives you the shape; these rules give you correctness. Violating them
 1. Send via BullMQ workers only. API endpoints enqueue; workers send.
 2. Throttle per (recipient, template). Check `notification_logs` before send; mark THROTTLED if limit exceeded.
 3. Respect seller's quiet hours for non-urgent categories.
+4. Fire-once dedup queries `notification_logs` by `(templateCode, recipientType, recipientId)` — NotificationLog is polymorphic, no direct `sellerId` field.
 
 **Outbound webhook rules:**
 1. Sign every payload with HMAC-SHA256 using endpoint's `secretKey`.
 2. Retry policy (BullMQ): 5 attempts, exponential backoff (30s, 5m, 30m, 6h).
 3. Auto-disable endpoint after N consecutive failures (default 50, configurable via `system_settings`).
 4. Idempotency: unique constraint on `(endpointId, eventType, eventId, attemptNumber)` prevents double-send.
+
+**Status-change rules (general):**
+1. Any status-change service wraps update + side-effects (token revoke, note, audit, email enqueue) in one `prisma.$transaction`.
+2. Email enqueue happens INSIDE the transaction. Phantom-job edge case (commit fails after enqueue) handled by consumer-side idempotency.
+3. Strict transition guards: each direction has exactly one valid source state. No "any → any" transitions.
 
 **General:**
 1. All money stored as `Decimal`, INR canonical. BDT for display only via FX.
@@ -204,14 +213,15 @@ The schema gives you the shape; these rules give you correctness. Violating them
 - All exported functions get explicit return types.
 - No barrel re-exports across module boundaries (no `import { x } from '@/modules'`). Import directly from the file.
 
-### NestJS (when we get there)
+### NestJS
 
 - One module per business domain (`auth`, `sellers`, `orders`, `shipments`, ...).
 - Module structure: `controllers/`, `services/`, `dto/`, `guards/`, `decorators/`.
 - DTOs use `class-validator`. No raw request body access.
 - Controllers thin (validation + dispatch). Services do the work.
-- Services injectable, single-responsibility. Cross-module work via events (EventEmitter or BullMQ).
+- Services injectable, single-responsibility. Cross-module work via direct service injection in Phase 1A; consider events (EventEmitter or BullMQ) if circular dep emerges.
 - Database access only via Prisma client, never raw SQL except in migrations.
+- Sub-feature modules (profile, address, notification-preference under seller) provide guards locally rather than importing the auth module — keeps dep direction one-way.
 
 ### Next.js (when we get there)
 
@@ -230,6 +240,7 @@ The schema gives you the shape; these rules give you correctness. Violating them
 - Multi-line commit messages with rationale for non-trivial changes.
 - Push at end of each Claude Code session. Auto-push permitted per `.claude/settings.local.json`.
 - NEVER force push to main. NEVER reset main. NEVER rewrite published history.
+- Existing tests must stay green at every commit boundary. Update assertions in the same commit that flips behavior.
 
 ---
 
@@ -239,13 +250,16 @@ The schema gives you the shape; these rules give you correctness. Violating them
 
 1. Read `docs/db-schema.md` before any code touching the database.
 2. Read this `CLAUDE.md` at session start (you're doing it now).
-3. Run `pnpm prisma format && pnpm prisma validate` after schema edits.
-4. Run `pnpm tsc --noEmit` before committing.
-5. Write tests for service-layer rules (state machines, transactions, idempotency).
-6. Use the `prisma` singleton from `@skydrop/db`, never `new PrismaClient()`.
-7. Wrap multi-write operations in `prisma.$transaction`.
-8. Use BullMQ for async work (notifications, webhook delivery, cleanup jobs). No background work in HTTP request handlers.
-9. Snapshot data when immutability matters (order recipient address, order item SKU info, shipment dest address).
+3. Read `docs/phase-1a-debt.md` to know what's intentionally deferred.
+4. Run `pnpm prisma format && pnpm prisma validate` after schema edits.
+5. Run `pnpm tsc --noEmit` before committing.
+6. Write tests for service-layer rules (state machines, transactions, idempotency).
+7. Use the `prisma` singleton from `@skydrop/db`, never `new PrismaClient()`.
+8. Wrap multi-write operations in `prisma.$transaction`.
+9. Use BullMQ for async work (notifications, webhook delivery, cleanup jobs). No background work in HTTP request handlers.
+10. Snapshot data when immutability matters (order recipient address, order item SKU info, shipment dest address).
+11. Add new enums to `packages/db/src/enums.ts` after adding them to `schema.prisma`.
+12. Update `apps/api/test/e2e/helpers/reset-state.ts` (or equivalent) when adding tables with FKs to existing entities, before running e2e.
 
 ### MUST NOT
 
@@ -270,7 +284,7 @@ Module order — each builds on prior modules:
 | 0 | Database & Prisma package | ✅ DONE |
 | 1 | Auth & Access Control (staff + seller, refresh, password reset, email verify, API keys) | ✅ DONE |
 | 2 | Seller Onboarding (invite, registration, approval workflow) | ✅ DONE |
-| 3 | Seller Profile (settings, addresses, notification preferences) | ✅ DONE (merged into Module 2) |
+| 3 | Seller Profile (merged into Module 2) | ✅ DONE |
 | 4 | Product/SKU Catalog (categories, products, variants, images, CSV upload) | NEXT |
 | 5 | Inventory & WMS (warehouses, bins, batches, levels, movements, reservations, receiving, cycle counts) | pending |
 | 6 | Order Management (manual entry, CSV upload, lifecycle, events) | pending |
@@ -279,7 +293,7 @@ Module order — each builds on prior modules:
 | 9 | Courier Integration (Delhivery API + manual placement workflow) | pending |
 | 10 | Public Tracking Page (EN + HI) | pending |
 | 11 | Notifications (templates, dispatcher, throttle, BullMQ workers) | pending |
-| 12 | Admin Dashboard (seller approval, order ops, warehouse ops, queue management) | pending |
+| 12 | Admin Dashboard (seller approval, order ops, warehouse ops, queue management, RBAC enforcement) | pending |
 | 13 | Reports (operational, not financial) | pending |
 | 14 | System Settings UI | pending |
 | 15 | Pricing Engine (calculate only, no billing) | pending |
@@ -303,13 +317,15 @@ Phase 1B modules (not in this roadmap):
 - Infrastructure (DO droplet, managed Postgres, Spaces, Cloudflare)
 - Local dev (WSL2, Docker Postgres + Redis with TimescaleDB)
 - Monorepo skeleton (Turborepo + pnpm)
-- `@skydrop/db` package: 63 Prisma models (62 + `seller_onboarding_progress`), TimescaleDB hypertables, idempotent seed (system settings, couriers, FX, warehouse, rate card, 17 notification templates)
-- `apps/api` Module 1 (Auth): staff + seller auth, refresh, password reset, email verify, seller invitations, seller API keys, rate limiting
-- `apps/api` Module 2 (Seller Onboarding + Profile): SUSPENDED-aware login + `@SellerAuthAllowSuspended` decorator, `SellerAccountStatusService` (suspend/reapprove), `SellerOnboardingService` (8 steps + fire-once email), seller profile + bank-details endpoints, seller address CRUD with default logic, notification preference endpoints + registration pre-seed, full admin surface at `/admin/sellers/*`
+- `@skydrop/db` package: 63 Prisma models, 4 migrations applied, idempotent seed (system settings, couriers, FX, warehouse, rate card, 17 notification templates)
+- `apps/api` (NestJS): config (Zod-validated), Prisma module, Redis module, health endpoints, Swagger at /api/docs, Pino logging with redaction, global exception filter, request-id middleware, rate limiting (@nest-lab/throttler-storage-redis), BullMQ worker in-process
+- **Module 1** — Auth & Access Control: staff + seller auth, refresh rotation with replay detection, invitations, API keys (`skd_` prefix, SHA-256 hashed), email module with Resend + Nunjucks template rendering, audit logging via `AuditLogService`
+- **Module 2** — Seller Onboarding (also covers Module 3 scope): seller status transitions (suspend/reapprove with full side-effects), `SellerOnboardingService` with step tracking, profile + bank details endpoints, address CRUD with default logic + auto onboarding-step completion, notification preferences with registration pre-seed (7 categories), admin seller management endpoints
+- Test totals: 137 unit tests, 15 e2e tests, all green; fresh-clone simulation verified
 
 **Not yet implemented:**
-- All apps other than `apps/api` (placeholders only)
-- Module 4 onwards (catalog, inventory, orders, etc.)
+- All other apps (frontends in `apps/marketing`, `apps/seller`, `apps/admin`, `apps/track` are placeholders)
+- Modules 4-18
 
 **Next:** Module 4 — Product/SKU Catalog. Design happens in chat with the user; implementation by Claude Code in a focused session per module.
 
@@ -317,11 +333,11 @@ Phase 1B modules (not in this roadmap):
 
 ## Session Hygiene
 
-- Each module is a fresh Claude Code session. Don't carry context across modules — context loads from this file + the schema doc + the relevant code.
+- Each module is a fresh Claude Code session. Don't carry context across modules — context loads from this file + the schema doc + the phase-1a-debt doc + the relevant code.
 - Session sequence:
   1. User and assistant design module in chat (decisions, scope, file structure).
   2. User pastes a focused prompt into a fresh Claude Code session.
-  3. Claude Code reads `CLAUDE.md`, `docs/db-schema.md`, and the prompt; proposes a plan.
+  3. Claude Code reads `CLAUDE.md`, `docs/db-schema.md`, `docs/phase-1a-debt.md`, and the prompt; proposes a plan.
   4. User reviews plan, approves or refines.
   5. Claude Code executes, verifies, commits, pushes.
   6. User reports back to chat assistant with summary.
@@ -329,3 +345,4 @@ Phase 1B modules (not in this roadmap):
 
 - Long sessions (30+ min, many tool calls) get expensive in context. End sessions when a logical unit completes.
 - After every session, the assistant updates this `CLAUDE.md` if anything material changed.
+- Mid-module checkpoints when security-critical or architecturally novel work lands (auth-common, status-transition services, etc.). Mechanical CRUD can run end-to-end without interruption.
