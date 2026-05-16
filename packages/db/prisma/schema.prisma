@@ -73,30 +73,35 @@ model StaffUser {
 }
 
 model Seller {
-  id                String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  email             String       @unique
-  emailDisplay      String       @map("email_display")
-  passwordHash      String       @map("password_hash")
-  companyName       String       @map("company_name")
-  contactPersonName String       @map("contact_person_name")
-  phone             String
-  whatsapp          String?
-  status            SellerStatus @default(PENDING)
-  approvedAt        DateTime?    @map("approved_at") @db.Timestamptz
-  approvedById      String?      @map("approved_by_id") @db.Uuid
-  bankName          String?      @map("bank_name")
-  bankAccountName   String?      @map("bank_account_name")
-  bankAccountNumber String?      @map("bank_account_number")
-  bankRoutingNumber String?      @map("bank_routing_number")
-  bankSwiftCode     String?      @map("bank_swift_code")
-  displayCurrency   Currency     @default(INR) @map("display_currency")
-  displayLanguage   String       @default("en") @map("display_language")
-  countryCode       String       @default("BD") @map("country_code") @db.Char(2)
-  emailVerifiedAt   DateTime?    @map("email_verified_at") @db.Timestamptz
-  lastLoginAt       DateTime?    @map("last_login_at") @db.Timestamptz
-  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt         DateTime?    @map("deleted_at") @db.Timestamptz
+  id                          String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  email                       String       @unique
+  emailDisplay                String       @map("email_display")
+  passwordHash                String       @map("password_hash")
+  companyName                 String       @map("company_name")
+  contactPersonName           String       @map("contact_person_name")
+  phone                       String
+  whatsapp                    String?
+  status                      SellerStatus @default(PENDING)
+  approvedAt                  DateTime?    @map("approved_at") @db.Timestamptz
+  approvedById                String?      @map("approved_by_id") @db.Uuid
+  bankName                    String?      @map("bank_name")
+  bankAccountName             String?      @map("bank_account_name")
+  bankAccountNumber           String?      @map("bank_account_number")
+  bankRoutingNumber           String?      @map("bank_routing_number")
+  bankSwiftCode               String?      @map("bank_swift_code")
+  displayCurrency             Currency     @default(INR) @map("display_currency")
+  displayLanguage             String       @default("en") @map("display_language")
+  countryCode                 String       @default("BD") @map("country_code") @db.Char(2)
+  emailVerifiedAt             DateTime?    @map("email_verified_at") @db.Timestamptz
+  lastLoginAt                 DateTime?    @map("last_login_at") @db.Timestamptz
+  // Module 5 — inventory: per-seller low-stock threshold default (variant
+  // override wins) and a per-seller reservation-TTL override (falls back to
+  // ops.stock_reservation_ttl_hours).
+  defaultLowStockThreshold    Int?         @map("default_low_stock_threshold")
+  reservationTtlHoursOverride Int?         @map("reservation_ttl_hours_override")
+  createdAt                   DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                   DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt                   DateTime?    @map("deleted_at") @db.Timestamptz
 
   approvedBy              StaffUser?                     @relation("SellerApprovedBy", fields: [approvedById], references: [id])
   invitations             SellerInvitation[]
@@ -125,6 +130,7 @@ model Seller {
   categoryProposals       CategoryProposal[]
   sellerCsvMappings       SellerCsvMapping[]
   bulkProductUploads      BulkProductUpload[]
+  stockAlertStates        StockAlertState[]
 
   @@index([status])
   @@index([deletedAt])
@@ -386,6 +392,7 @@ model Warehouse {
   cycleCounts       CycleCount[]
   goodsReceipts     GoodsReceipt[]
   shipmentsAsOrigin Shipment[]
+  stockAlertStates  StockAlertState[]
 
   @@index([status])
   @@map("warehouses")
@@ -538,25 +545,28 @@ model Product {
 }
 
 model ProductVariant {
-  id               String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  productId        String        @map("product_id") @db.Uuid
-  sellerId         String        @map("seller_id") @db.Uuid
-  skuCode          String        @map("sku_code")
-  attributes       Json?
-  variantLabel     String?       @map("variant_label")
-  weightGrams      Int?          @map("weight_grams")
-  lengthCm         Decimal?      @map("length_cm") @db.Decimal(6, 2)
-  widthCm          Decimal?      @map("width_cm") @db.Decimal(6, 2)
-  heightCm         Decimal?      @map("height_cm") @db.Decimal(6, 2)
-  declaredValueInr Decimal?      @map("declared_value_inr") @db.Decimal(12, 2)
-  hsCode           String?       @map("hs_code")
-  gstRate          Decimal?      @map("gst_rate") @db.Decimal(5, 2)
-  barcode          String?
-  externalSku      String?       @map("external_sku")
-  status           VariantStatus @default(ACTIVE)
-  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt        DateTime?     @map("deleted_at") @db.Timestamptz
+  id                String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  productId         String        @map("product_id") @db.Uuid
+  sellerId          String        @map("seller_id") @db.Uuid
+  skuCode           String        @map("sku_code")
+  attributes        Json?
+  variantLabel      String?       @map("variant_label")
+  weightGrams       Int?          @map("weight_grams")
+  lengthCm          Decimal?      @map("length_cm") @db.Decimal(6, 2)
+  widthCm           Decimal?      @map("width_cm") @db.Decimal(6, 2)
+  heightCm          Decimal?      @map("height_cm") @db.Decimal(6, 2)
+  declaredValueInr  Decimal?      @map("declared_value_inr") @db.Decimal(12, 2)
+  hsCode            String?       @map("hs_code")
+  gstRate           Decimal?      @map("gst_rate") @db.Decimal(5, 2)
+  barcode           String?
+  externalSku       String?       @map("external_sku")
+  status            VariantStatus @default(ACTIVE)
+  // Module 5 — inventory: per-variant low-stock threshold. Wins over
+  // sellers.defaultLowStockThreshold; null = fall back to seller default.
+  lowStockThreshold Int?          @map("low_stock_threshold")
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt         DateTime?     @map("deleted_at") @db.Timestamptz
 
   product           Product            @relation(fields: [productId], references: [id])
   seller            Seller             @relation(fields: [sellerId], references: [id])
@@ -568,6 +578,7 @@ model ProductVariant {
   cycleCountItems   CycleCountItem[]
   goodsReceiptLines GoodsReceiptLine[]
   orderItems        OrderItem[]
+  stockAlertStates  StockAlertState[]
 
   @@unique([sellerId, skuCode])
   @@index([productId])
@@ -734,8 +745,10 @@ model BulkProductUpload {
 }
 
 // ============================================================
-// Layer 4 — Inventory & WMS (9 tables: spec lists 7 but counts paired
-// header/lines tables as one — we materialize all 9)
+// Layer 4 — Inventory & WMS (10 tables: spec lists 7 but counts paired
+// header/lines tables as one — we materialize 9, plus stock_alert_state
+// added in Module 5 — alert state has a (seller,variant,warehouse) grain
+// that does not fit stock_levels' per-bin/batch rows; see phase-1a-debt)
 // ============================================================
 
 model StockBatch {
@@ -1061,6 +1074,32 @@ model GoodsReceiptLine {
   @@index([batchId])
   @@index([putawayBinId])
   @@map("goods_receipt_lines")
+}
+
+// Module 5 — low-stock alert state, one row per
+// (seller × variant × warehouse). NOT on stock_levels: availability and the
+// threshold are evaluated at the (seller,variant,warehouse) grain, while
+// stock_levels has one row per bin×batch and those rows are pruned at qty 0
+// (state would be lost / ambiguous). Owns the INV-9 alert state machine.
+model StockAlertState {
+  id                  String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId            String    @map("seller_id") @db.Uuid
+  variantId           String    @map("variant_id") @db.Uuid
+  warehouseId         String    @map("warehouse_id") @db.Uuid
+  wasAlertActive      Boolean   @default(false) @map("was_alert_active")
+  lowStockAlertSentAt DateTime? @map("low_stock_alert_sent_at") @db.Timestamptz
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller    Seller         @relation(fields: [sellerId], references: [id])
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+  warehouse Warehouse      @relation(fields: [warehouseId], references: [id])
+
+  @@unique([sellerId, variantId, warehouseId])
+  @@index([sellerId, variantId])
+  @@index([variantId])
+  @@index([warehouseId])
+  @@map("stock_alert_state")
 }
 
 // ============================================================
