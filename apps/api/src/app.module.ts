@@ -21,6 +21,7 @@ import { CatalogCategoryModule } from './modules/catalog-category/catalog-catego
 import { CatalogAttributeModule } from './modules/catalog-attribute/catalog-attribute.module';
 import { CatalogCategoryProposalModule } from './modules/catalog-category-proposal/catalog-category-proposal.module';
 import { CatalogProductModule } from './modules/catalog-product/catalog-product.module';
+import { CatalogVariantModule } from './modules/catalog-variant/catalog-variant.module';
 import { ThrottlerModule } from './common/throttler/throttler.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { pinoConfig } from './common/pino/logger-config';
@@ -67,6 +68,7 @@ import { envSchema } from './config/env.schema';
     CatalogAttributeModule,
     CatalogCategoryProposalModule,
     CatalogProductModule,
+    CatalogVariantModule,
     HealthModule,
   ],
 })
