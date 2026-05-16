@@ -68,7 +68,7 @@ Phase 1A covers **everything except billing/wallet/remittance**. Specifically:
 | ORM | Prisma 6.x (pinned at 6.19.3 — do not upgrade to 7.x without approval) |
 | Queue | BullMQ on Redis |
 | Cache | Redis (also droplet-local in prod) |
-| Storage | DigitalOcean Spaces (S3-compatible, SGP1 region) |
+| Storage | DigitalOcean Spaces (S3-compatible, SGP1 region) via @aws-sdk/client-s3 |
 | Auth | Custom: Passport.js + JWT (no Clerk/Auth0/Supabase) |
 | Email | Resend (via `resend` npm package; templates in DB rendered with Nunjucks) |
 | SMS | Twilio (TBD on click-to-call integration timing) |
@@ -76,6 +76,9 @@ Phase 1A covers **everything except billing/wallet/remittance**. Specifically:
 | Monorepo | Turborepo + pnpm workspaces |
 | Node | 22.x (engines enforced in package.json) |
 | Package manager | pnpm 11.x |
+| CSV parsing | papaparse |
+| Image processing | sharp (thumbnail generation) |
+| Rate limiting | @nestjs/throttler + @nest-lab/throttler-storage-redis |
 
 ---
 
@@ -89,7 +92,7 @@ SD/
 │   ├── admin/             # admin.skydrop.online — internal staff (placeholder)
 │   ├── track/             # track.skydrop.online — public tracking page (EN+HI) (placeholder)
 │   ├── api/               # ✅ api.skydrop.online — NestJS REST API
-│   └── workers/           # BullMQ background workers (placeholder; Phase 1A worker is in-process in apps/api)
+│   └── workers/           # BullMQ background workers (placeholder; Phase 1A workers are in-process in apps/api)
 ├── packages/
 │   ├── db/                # ✅ Prisma + types (@skydrop/db)
 │   ├── ui/                # shared React components (placeholder)
@@ -111,9 +114,9 @@ SD/
 
 **Status: IMPLEMENTED.** Schema lives in `packages/db/`.
 
-**Canonical reference:** `docs/db-schema.md` — 63 Prisma models across 9 layers (identity, addresses, catalog, inventory/WMS, orders, call center, shipments, pricing, notifications), plus Module 2's `seller_onboarding_progress` table. When the schema and this doc diverge, the doc wins; update Prisma to match.
+**Canonical reference:** `docs/db-schema.md`. Currently **67 Prisma models** across 9 layers plus Module 2's `seller_onboarding_progress` and Module 4's `category_proposals`, `category_attribute_definitions`, `seller_csv_mappings`, `bulk_product_uploads`. When the schema and this doc diverge, the doc wins; update Prisma to match.
 
-**Migrations applied:** 4 as of Module 2 (init, audit_logs entityId nullable, sellers email_verified_at/last_login_at, seller_onboarding_progress).
+**Migrations applied:** 5 as of Module 4 (init, audit_logs entityId nullable, sellers email_verified_at/last_login_at, seller_onboarding_progress, catalog proposals/attributes/csv_mappings/bulk_product_uploads).
 
 **TimescaleDB hypertables:** `tracking_events` and `stock_movements` (composite PK, monthly chunks, 7d/30d compression).
 
@@ -132,7 +135,9 @@ The package exports a singleton `prisma` client (configured logging, graceful sh
 
 **Hypertable schema convention:** Any future hypertable needs explicit `@@index([createdAt], map: "<table>_created_at_idx")` declared in Prisma so the index name matches what TimescaleDB's `create_hypertable()` would auto-create. The migration's explicit `CREATE INDEX` must run BEFORE `create_hypertable()`. This prevents Prisma drift detection from breaking on hypertable conversions.
 
-**Workspace pattern:** `@skydrop/db` builds to `dist/` and consumers import compiled output. `turbo.json` wires `^build` as a dep of `dev`, `typecheck`, `lint`, `test`, `test:e2e` so apps/api always sees a built db package. When adding a new enum to schema.prisma, also add it to `packages/db/src/enums.ts` (hand-maintained re-export list).
+**Workspace pattern:** `@skydrop/db` builds to `dist/` and consumers import compiled output. `turbo.json` wires `^build` as a dep of `dev`, `typecheck`, `lint`, `test`, `test:e2e` so apps/api always sees a built db package.
+
+**Critical: build script auto-runs `prisma generate` first.** `pnpm --filter @skydrop/db build` is `prisma generate && tsc`. Turbo's `^build` does NOT imply `generate`, so the build script chains them explicitly. Fresh clones and CI runs depend on this. When adding a new enum to schema.prisma, also add it to `packages/db/src/enums.ts` (hand-maintained re-export list).
 
 ### Service-Layer Rules (MUST enforce in code — schema cannot)
 
@@ -183,6 +188,20 @@ The schema gives you the shape; these rules give you correctness. Violating them
 2. Email enqueue happens INSIDE the transaction. Phantom-job edge case (commit fails after enqueue) handled by consumer-side idempotency.
 3. Strict transition guards: each direction has exactly one valid source state. No "any → any" transitions.
 
+**Catalog rules (Module 4):**
+1. **CatalogReadService is the only sanctioned path for cross-module variant lookups.** Downstream modules (Inventory, Orders, Shipments, Couriers) MUST import `CatalogReadService` via NestJS DI. Never query `ProductVariant` directly from outside the catalog modules. Property resolution (effective weight, dims, value, HS, GST) is centralized there.
+2. **Property inheritance order:** variant.field → product.defaultField → category.defaultField → system_settings (GST only). Other properties have no system fallback — null all the way down = validation error.
+3. **Attribute inheritance:** walks `parent_id` chain; child overrides parent for same `attribute_key`. Cached in Redis 5-min TTL; invalidation on write walks descendants.
+4. **Variant attribute validation:** required attributes present, valueType matches, ENUM in allowedValues, no extra keys, no nested objects/arrays in values.
+5. **Image lifecycle:**
+   - Registered: row alive, Spaces object alive
+   - Soft-deleted: `row.deletedAt` set, object preserved (recoverable)
+   - Hard-deleted (Phase 2 cron): row gone, object deleted together
+   - Never registered (orphan): no row → object > 24h → cleaned by orphan cron (skips `thumbnails/` prefix)
+6. **Presigned URL security:** key path must match `sellers/{sellerId}/variants/{variantId}/{token}.{ext}`; service validates seller segment matches authenticated seller; HEAD verifies object exists and size matches before registering.
+7. **CSV re-upload PATCH semantics:** CSV-provided cells overwrite; omitted/blank cells do not null out existing values. Dedup by `(sellerId, externalRef)` for products, `(sellerId, skuCode)` for variants.
+8. **Archive vs delete:** ARCHIVED status blocks new uses (orders, stock receiving) — enforce in service layer; `deletedAt` makes the row invisible in read paths. Both preserve historical references.
+
 **General:**
 1. All money stored as `Decimal`, INR canonical. BDT for display only via FX.
 2. All phone numbers E.164 (+91xxx, +880xxx). Validate at app boundary.
@@ -222,6 +241,16 @@ The schema gives you the shape; these rules give you correctness. Violating them
 - Services injectable, single-responsibility. Cross-module work via direct service injection in Phase 1A; consider events (EventEmitter or BullMQ) if circular dep emerges.
 - Database access only via Prisma client, never raw SQL except in migrations.
 - Sub-feature modules (profile, address, notification-preference under seller) provide guards locally rather than importing the auth module — keeps dep direction one-way.
+- **Cross-module variant lookups** go via `CatalogReadService`. Cross-module catalog reads do NOT query the catalog tables directly.
+
+### Testing
+
+- Unit tests use mocked Prisma (or in-memory fakes for transaction-sensitive logic).
+- E2E tests run against the `skydrop_test` database (separate from dev) on logical Redis DB 1.
+- E2E global setup creates DB, runs migrate deploy + seed; teardown drops DB.
+- **Cascading reset helpers:** when adding a feature module with tables that FK to `sellers` (or any other reset-critical entity), add a `reset<Module>State()` helper and chain it BEFORE the parent reset (e.g., `resetAuthState`). Order-dependent test contamination is a real footgun without this — Module 4's catalog tables broke seller deletion until the catalog reset was folded in. Each new module must do this proactively.
+- Use `makeTestEnv()` from the shared test helpers when constructing `EnvService` in tests; don't inline literal env objects (forces drift maintenance).
+- For test fakes that need `prisma.$transaction(fn)`, attach `$transaction` AFTER the client literal to avoid TS7024 implicit-any from self-reference.
 
 ### Next.js (when we get there)
 
@@ -259,7 +288,9 @@ The schema gives you the shape; these rules give you correctness. Violating them
 9. Use BullMQ for async work (notifications, webhook delivery, cleanup jobs). No background work in HTTP request handlers.
 10. Snapshot data when immutability matters (order recipient address, order item SKU info, shipment dest address).
 11. Add new enums to `packages/db/src/enums.ts` after adding them to `schema.prisma`.
-12. Update `apps/api/test/e2e/helpers/reset-state.ts` (or equivalent) when adding tables with FKs to existing entities, before running e2e.
+12. When adding tables with FKs to existing entities, add a `reset<Module>State()` helper and chain it into the central e2e reset before the parent reset.
+13. Use `CatalogReadService` for any cross-module variant lookup; never query `product_variants` directly from outside the catalog modules.
+14. Use `makeTestEnv()` in test fixtures instead of inline literal env objects.
 
 ### MUST NOT
 
@@ -318,17 +349,17 @@ Phase 1B modules (not in this roadmap):
 - Local dev (WSL2, Docker Postgres + Redis with TimescaleDB)
 - Monorepo skeleton (Turborepo + pnpm)
 - `@skydrop/db` package: 67 Prisma models, 5 migrations applied, idempotent seed (system settings, couriers, FX, warehouse, rate card, 20 notification templates)
-- `apps/api` (NestJS): config (Zod-validated), Prisma module, Redis module, Spaces module (S3 + mock mode), health endpoints, Swagger at /api/docs, Pino logging with redaction, global exception filter, request-id middleware, rate limiting (@nest-lab/throttler-storage-redis), BullMQ workers in-process
+- `apps/api` (NestJS): config (Zod-validated), Prisma module, Redis module, health endpoints, Swagger at /api/docs, Pino logging with redaction, global exception filter, request-id middleware, rate limiting (@nest-lab/throttler-storage-redis), multiple BullMQ workers in-process (email, image-thumbnail, image-orphan-cleanup, csv-import-processor)
 - **Module 1** — Auth & Access Control: staff + seller auth, refresh rotation with replay detection, invitations, API keys (`skd_` prefix, SHA-256 hashed), email module with Resend + Nunjucks template rendering, audit logging via `AuditLogService`
 - **Module 2** — Seller Onboarding (also covers Module 3 scope): seller status transitions (suspend/reapprove with full side-effects), `SellerOnboardingService` with step tracking, profile + bank details endpoints, address CRUD with default logic + auto onboarding-step completion, notification preferences with registration pre-seed (7 categories), admin seller management endpoints
-- **Module 4** — Product/SKU Catalog: admin category tree (depth/fullPath, move, cycle-safe) + attribute defs with Redis-cached effective-set inheritance; seller category-proposal → admin approve/reject (one tx + email); product & variant CRUD with strict attribute validation; variant image presign/register against Spaces (+ thumbnail & daily orphan-sweep crons); CSV import (template/preview/process worker, idempotent PATCH-by-diff re-upload, error report) + saved column mappings; `CatalogReadService` as the sole cross-module variant read path
-- Test totals: 25 unit suites / 202 unit tests, 4 e2e suites / 16 e2e tests, all green; fresh-clone simulation verified
+- **Module 4** — Product/SKU Catalog: admin category tree with full-path maintenance + cycle prevention, attribute definition CRUD with inheritance resolution (5-min Redis cache, descendant invalidation on write), category proposals (seller propose → admin approve creates Category + attr defs + email), product/variant CRUD with attribute validation, presigned URL image uploads to Spaces with thumbnail generation worker + orphan cleanup cron, CSV import with template + auto-detect + preview + idempotent re-upload, saved column mappings, `CatalogReadService` as the sanctioned cross-module variant read boundary
+- Test totals: 202 unit tests, 16 e2e tests, all green; fresh-clone simulation verified
 
 **Not yet implemented:**
 - All other apps (frontends in `apps/marketing`, `apps/seller`, `apps/admin`, `apps/track` are placeholders)
 - Modules 5-18
 
-**Next:** Module 5 — Inventory & WMS. Design happens in chat with the user; implementation by Claude Code in a focused session per module.
+**Next:** Module 5 — Inventory & WMS. This is the most service-layer-heavy module: stock levels with optimistic concurrency, multi-bin storage, batches with FIFO/FEFO picking, append-only movement ledger (TimescaleDB hypertable), stock reservations with auto-release, cycle counts, goods receipts. Will exercise the `CatalogReadService` cross-module boundary built in Module 4. Design happens in chat with the user before implementation.
 
 ---
 
@@ -345,5 +376,6 @@ Phase 1B modules (not in this roadmap):
   7. Repeat for next module.
 
 - Long sessions (30+ min, many tool calls) get expensive in context. End sessions when a logical unit completes.
+- Multi-checkpoint pacing for big modules (Module 4 had 3 checkpoints across 21 commits). Use them when the module spans 15+ commits.
 - After every session, the assistant updates this `CLAUDE.md` if anything material changed.
-- Mid-module checkpoints when security-critical or architecturally novel work lands (auth-common, status-transition services, etc.). Mechanical CRUD can run end-to-end without interruption.
+- Mid-module checkpoints when security-critical or architecturally novel work lands (auth-common, status-transition services, presigned upload security, attribute inheritance, CSV worker correctness). Mechanical CRUD can run end-to-end without interruption.
