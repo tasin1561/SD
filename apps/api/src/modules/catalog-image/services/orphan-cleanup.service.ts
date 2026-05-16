@@ -21,6 +21,21 @@ export interface OrphanSweepResult {
  * register. Thumbnails are skipped (derivative — they are deleted
  * alongside their original via the per-image delete job). Every deletion
  * is audited as `catalog.image.orphan_deleted` (SYSTEM actor).
+ *
+ * Image lifecycle (do NOT invert the soft-delete behavior — objects are
+ * preserved while a row exists, even a soft-deleted one):
+ *
+ *   1. Registered          row alive,           object alive
+ *   2. Soft-deleted        row.deletedAt set,   object preserved (recoverable)
+ *   3. Hard-deleted        row gone,            object deleted together
+ *      (Phase 2 cron — not implemented in 1A; see phase-1a-debt)
+ *   4. Never registered    no row,              object > 24h → THIS cron
+ *      (orphan)                                  deletes it
+ *
+ * Critical: state 2 keeps the object on purpose (recoverable). This cron
+ * must only ever act on state 4 (zero rows). That is why the row lookup
+ * below intentionally has NO `deletedAt` filter — ANY row, including a
+ * soft-deleted one, means "known, hands off".
  */
 @Injectable()
 export class OrphanCleanupService {
