@@ -283,6 +283,42 @@ export class CsvImportService {
   }
 
   /**
+   * Stream the generated error-report CSV for a seller's import. Streamed
+   * through the API (not a presigned URL) so it works identically in
+   * mock and real Spaces. 404 if the import has no error report.
+   */
+  async getErrorReport(
+    sellerId: string,
+    id: string,
+  ): Promise<{ buffer: Buffer; fileName: string }> {
+    const upload = await this.prisma.client.bulkProductUpload.findFirst({
+      where: { id, sellerId },
+      select: { id: true, fileName: true, errorReportKey: true },
+    });
+    if (!upload) {
+      throw new NotFoundException({
+        code: 'UPLOAD_NOT_FOUND',
+        message: 'CSV import not found',
+      });
+    }
+    if (!upload.errorReportKey) {
+      throw new NotFoundException({
+        code: 'NO_ERROR_REPORT',
+        message: 'This import has no error report (no failed rows)',
+      });
+    }
+    const buffer = await this.spaces.getObject(upload.errorReportKey);
+    if (!buffer) {
+      throw new NotFoundException({
+        code: 'ERROR_REPORT_UNREADABLE',
+        message: 'Error report could not be read from storage',
+      });
+    }
+    const base = upload.fileName.replace(/\.csv$/i, '');
+    return { buffer, fileName: `${base}-errors.csv` };
+  }
+
+  /**
    * HEAD-checks + downloads a CSV the seller owns. Strict key ownership:
    * the key's seller segment must equal the authenticated seller.
    */

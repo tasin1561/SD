@@ -105,4 +105,20 @@ export class SellerCsvImportController {
   ): Promise<BulkUploadView> {
     return this.svc.getUpload(seller.id, id);
   }
+
+  @Get(':id/error-report')
+  @SellerAuthAllowSuspended()
+  @ApiOperation({
+    summary: 'Download the error-report CSV for a partially-failed import',
+  })
+  async errorReport(
+    @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
+    @CurrentSeller() seller: AuthenticatedSeller,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { buffer, fileName } = await this.svc.getErrorReport(seller.id, id);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(buffer);
+  }
 }
