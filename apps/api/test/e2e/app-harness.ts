@@ -66,9 +66,13 @@ export async function bootTestApp(): Promise<AppHarness> {
 /**
  * Wipes the auth-related tables so each test starts from a clean slate
  * (seed reference data — notification_templates, system_settings, etc.
- * — is preserved).
+ * — is preserved). Catalog tables go first: products/variants/proposals
+ * FK-restrict seller deletion, so a suite that created catalog rows
+ * would otherwise block the next suite's seller.deleteMany regardless of
+ * run order.
  */
 export async function resetAuthState(prisma: PrismaClient): Promise<void> {
+  await resetCatalogState(prisma);
   await prisma.$transaction([
     prisma.notificationLog.deleteMany({}),
     prisma.auditLog.deleteMany({}),
@@ -90,6 +94,30 @@ export async function resetAuthState(prisma: PrismaClient): Promise<void> {
     prisma.seller.deleteMany({}),
     prisma.staffUser.deleteMany({}),
   ]);
+}
+
+/**
+ * Wipes Module-4 catalog tables. Call BEFORE resetAuthState in catalog
+ * suites: products/variants/proposals FK-restrict seller deletion, so
+ * they must go first. TRUNCATE … CASCADE sidesteps the category
+ * self-FK ordering problem (and only cascades into already-empty
+ * downstream tables in Phase 1A).
+ */
+export async function resetCatalogState(prisma: PrismaClient): Promise<void> {
+  await prisma.$executeRawUnsafe(
+    'TRUNCATE TABLE ' +
+      [
+        'category_proposals',
+        'category_attribute_definitions',
+        'product_images',
+        'product_variants',
+        'products',
+        'bulk_product_uploads',
+        'seller_csv_mappings',
+        'categories',
+      ].join(', ') +
+      ' RESTART IDENTITY CASCADE',
+  );
 }
 
 export async function createTestStaff(
