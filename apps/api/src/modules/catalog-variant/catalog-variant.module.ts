@@ -9,6 +9,6 @@ import { VariantAttributeValidatorService } from './services/variant-attribute-v
   imports: [CatalogAttributeModule],
   controllers: [SellerVariantController],
   providers: [CatalogVariantService, VariantAttributeValidatorService, SellerJwtGuard],
-  exports: [CatalogVariantService],
+  exports: [CatalogVariantService, VariantAttributeValidatorService],
 })
 export class CatalogVariantModule {}

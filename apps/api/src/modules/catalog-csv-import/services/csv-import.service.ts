@@ -2,16 +2,25 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
+import { ActorType, BulkUploadStatus, type Prisma } from '@skydrop/db';
 import { EnvService } from '../../../config/env.service';
+import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
+import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CsvParserService } from './csv-parser.service';
 import {
   CSV_REQUIRED_FIELDS,
   type CsvTargetField,
 } from '../csv-fields';
 import { buildCsvKey, parseCsvKey } from '../csv-import-key';
-import type { PresignCsvDto, PreviewCsvDto } from '../dto/csv-import.dto';
+import { CsvImportQueue } from '../queue/csv-import.queue';
+import type {
+  PresignCsvDto,
+  PreviewCsvDto,
+  ProcessCsvDto,
+} from '../dto/csv-import.dto';
 
 const CSV_PRESIGN_CONTENT_TYPE = 'text/csv';
 
@@ -48,12 +57,49 @@ export interface CsvPreviewResult {
   rowLimit: number;
 }
 
+export interface BulkUploadView {
+  id: string;
+  fileName: string;
+  status: BulkUploadStatus;
+  rowCount: number | null;
+  productsCreated: number;
+  productsUpdated: number;
+  variantsCreated: number;
+  variantsUpdated: number;
+  rowsFailed: number;
+  rowsSkipped: number;
+  errorReportKey: string | null;
+  startedAt: Date | null;
+  completedAt: Date | null;
+  createdAt: Date;
+}
+
+const UPLOAD_VIEW_SELECT = {
+  id: true,
+  fileName: true,
+  status: true,
+  rowCount: true,
+  productsCreated: true,
+  productsUpdated: true,
+  variantsCreated: true,
+  variantsUpdated: true,
+  rowsFailed: true,
+  rowsSkipped: true,
+  errorReportKey: true,
+  startedAt: true,
+  completedAt: true,
+  createdAt: true,
+} as const;
+
 @Injectable()
 export class CsvImportService {
   constructor(
     private readonly env: EnvService,
+    private readonly prisma: PrismaService,
     private readonly spaces: SpacesService,
     private readonly parser: CsvParserService,
+    private readonly audit: AuditLogService,
+    private readonly queue: CsvImportQueue,
   ) {}
 
   /** A ready-to-fill CSV with canonical headers + one example row. */
@@ -107,6 +153,132 @@ export class CsvImportService {
       unmatchedHeaders: detected.unmatchedHeaders,
       exceedsRowLimit: parsed.rowCount > this.env.csvMaxRows,
       rowLimit: this.env.csvMaxRows,
+    };
+  }
+
+  /**
+   * Create the BulkProductUpload row and enqueue the process job. The
+   * resolved (auto-detect + override) mapping is computed here and
+   * carried in the job payload. Rejects up front if required fields
+   * (productName, variantSkuCode) are unmapped or the row count exceeds
+   * the limit — no point queuing a doomed job.
+   */
+  async createAndEnqueue(
+    sellerId: string,
+    input: ProcessCsvDto,
+  ): Promise<BulkUploadView> {
+    const buffer = await this.loadOwnedCsv(sellerId, input.spacesKey);
+    const head = await this.spaces.headObject(input.spacesKey);
+    const parsed = this.parser.parse(buffer);
+    const detected = this.parser.detectMapping(parsed.headers);
+
+    const mapping = { ...detected.mapping };
+    if (input.mappingOverride) {
+      for (const [field, header] of Object.entries(input.mappingOverride)) {
+        if (parsed.headers.includes(header)) {
+          mapping[field as CsvTargetField] = header;
+        }
+      }
+    }
+    const missingRequired = CSV_REQUIRED_FIELDS.filter(
+      (f) => mapping[f] === undefined,
+    );
+    if (missingRequired.length > 0) {
+      throw new BadRequestException({
+        code: 'MISSING_REQUIRED_MAPPING',
+        message: `Cannot process: unmapped required field(s): ${missingRequired.join(', ')}`,
+      });
+    }
+    if (parsed.rowCount > this.env.csvMaxRows) {
+      throw new BadRequestException({
+        code: 'TOO_MANY_ROWS',
+        message: `CSV has ${parsed.rowCount} rows; the limit is ${this.env.csvMaxRows}`,
+      });
+    }
+
+    const created = await this.prisma.client.bulkProductUpload.create({
+      data: {
+        sellerId,
+        fileName: input.fileName,
+        spacesKey: input.spacesKey,
+        fileSizeBytes: head?.size ?? buffer.byteLength,
+        rowCount: parsed.rowCount,
+        status: BulkUploadStatus.PENDING,
+        uploadedBySellerId: sellerId,
+      },
+      select: { ...UPLOAD_VIEW_SELECT, sellerId: true },
+    });
+
+    const jobId = await this.queue.enqueueProcess({
+      uploadId: created.id,
+      mapping,
+    });
+    await this.prisma.client.bulkProductUpload.update({
+      where: { id: created.id },
+      data: { jobId },
+    });
+
+    await this.audit.log({
+      actorType: ActorType.SELLER,
+      sellerId,
+      action: 'catalog.csv_import.enqueued',
+      entityType: 'bulk_product_upload',
+      entityId: created.id,
+      metadata: { fileName: input.fileName, rowCount: parsed.rowCount, jobId },
+    });
+
+    return this.toView(created);
+  }
+
+  async listUploads(
+    sellerId: string,
+    page = 1,
+    pageSize = 20,
+  ): Promise<{ items: BulkUploadView[]; total: number; page: number; pageSize: number }> {
+    const where: Prisma.BulkProductUploadWhereInput = { sellerId };
+    const [rows, total] = await Promise.all([
+      this.prisma.client.bulkProductUpload.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: pageSize,
+        skip: (page - 1) * pageSize,
+        select: UPLOAD_VIEW_SELECT,
+      }),
+      this.prisma.client.bulkProductUpload.count({ where }),
+    ]);
+    return { items: rows.map((r) => this.toView(r)), total, page, pageSize };
+  }
+
+  async getUpload(sellerId: string, id: string): Promise<BulkUploadView> {
+    const row = await this.prisma.client.bulkProductUpload.findFirst({
+      where: { id, sellerId },
+      select: UPLOAD_VIEW_SELECT,
+    });
+    if (!row) {
+      throw new NotFoundException({
+        code: 'UPLOAD_NOT_FOUND',
+        message: 'CSV import not found',
+      });
+    }
+    return this.toView(row);
+  }
+
+  private toView(r: BulkUploadView): BulkUploadView {
+    return {
+      id: r.id,
+      fileName: r.fileName,
+      status: r.status,
+      rowCount: r.rowCount,
+      productsCreated: r.productsCreated,
+      productsUpdated: r.productsUpdated,
+      variantsCreated: r.variantsCreated,
+      variantsUpdated: r.variantsUpdated,
+      rowsFailed: r.rowsFailed,
+      rowsSkipped: r.rowsSkipped,
+      errorReportKey: r.errorReportKey,
+      startedAt: r.startedAt,
+      completedAt: r.completedAt,
+      createdAt: r.createdAt,
     };
   }
 

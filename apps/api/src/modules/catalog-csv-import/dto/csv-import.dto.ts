@@ -32,3 +32,24 @@ export class PreviewCsvDto {
   @IsObject()
   mappingOverride?: Record<string, string>;
 }
+
+export class ProcessCsvDto {
+  @ApiProperty({ description: 'spacesKey returned by the presign call' })
+  @IsString()
+  @MaxLength(512)
+  spacesKey!: string;
+
+  @ApiProperty({ example: 'my-catalog.csv' })
+  @IsString()
+  @MaxLength(255)
+  fileName!: string;
+
+  @ApiProperty({
+    required: false,
+    additionalProperties: true,
+    description: 'Optional manual mapping override (catalog field → CSV header)',
+  })
+  @IsOptional()
+  @IsObject()
+  mappingOverride?: Record<string, string>;
+}

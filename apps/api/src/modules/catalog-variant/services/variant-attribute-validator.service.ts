@@ -26,10 +26,26 @@ function describeType(v: unknown): string {
  */
 @Injectable()
 export class VariantAttributeValidatorService {
+  /** Throwing form for the HTTP path. */
   validate(
     effective: EffectiveAttribute[],
     attributes: Record<string, unknown>,
   ): void {
+    const errors = this.collect(effective, attributes);
+    if (errors.length > 0) {
+      throw new BadRequestException({
+        code: 'ATTRIBUTE_VALIDATION_FAILED',
+        message: 'Variant attributes do not satisfy the category attribute schema',
+        errors,
+      });
+    }
+  }
+
+  /** Non-throwing form for batch paths (CSV import) — returns all errors. */
+  collect(
+    effective: EffectiveAttribute[],
+    attributes: Record<string, unknown>,
+  ): string[] {
     const errors: string[] = [];
     const defByKey = new Map(effective.map((d) => [d.attributeKey, d]));
     const allowedKeys = [...defByKey.keys()].sort();
@@ -104,12 +120,6 @@ export class VariantAttributeValidatorService {
       }
     }
 
-    if (errors.length > 0) {
-      throw new BadRequestException({
-        code: 'ATTRIBUTE_VALIDATION_FAILED',
-        message: 'Variant attributes do not satisfy the category attribute schema',
-        errors,
-      });
-    }
+    return errors;
   }
 }

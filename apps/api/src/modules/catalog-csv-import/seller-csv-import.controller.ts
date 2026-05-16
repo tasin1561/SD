@@ -5,7 +5,10 @@ import {
   Header,
   HttpCode,
   HttpStatus,
+  Param,
+  ParseUUIDPipe,
   Post,
+  Query,
   Res,
   UseGuards,
 } from '@nestjs/common';
@@ -16,9 +19,10 @@ import { SellerAuthAllowSuspended } from '../../common/decorators/seller-auth-al
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../common/types/request';
-import { PresignCsvDto, PreviewCsvDto } from './dto/csv-import.dto';
+import { PresignCsvDto, PreviewCsvDto, ProcessCsvDto } from './dto/csv-import.dto';
 import {
   CsvImportService,
+  type BulkUploadView,
   type CsvPresignResult,
   type CsvPreviewResult,
 } from './services/csv-import.service';
@@ -61,5 +65,44 @@ export class SellerCsvImportController {
     @CurrentSeller() seller: AuthenticatedSeller,
   ): Promise<CsvPreviewResult> {
     return this.svc.preview(seller.id, body);
+  }
+
+  @Post('process')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({
+    summary: 'Create the import job + enqueue the worker (APPROVED only)',
+  })
+  process(
+    @Body() body: ProcessCsvDto,
+    @CurrentSeller() seller: AuthenticatedSeller,
+  ): Promise<BulkUploadView> {
+    return this.svc.createAndEnqueue(seller.id, body);
+  }
+
+  @Get()
+  @SellerAuthAllowSuspended()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "List the seller's CSV import jobs" })
+  list(
+    @CurrentSeller() seller: AuthenticatedSeller,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ): Promise<{ items: BulkUploadView[]; total: number; page: number; pageSize: number }> {
+    return this.svc.listUploads(
+      seller.id,
+      page ? Number(page) : 1,
+      pageSize ? Number(pageSize) : 20,
+    );
+  }
+
+  @Get(':id')
+  @SellerAuthAllowSuspended()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get a CSV import job status + metrics' })
+  getById(
+    @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
+    @CurrentSeller() seller: AuthenticatedSeller,
+  ): Promise<BulkUploadView> {
+    return this.svc.getUpload(seller.id, id);
   }
 }
