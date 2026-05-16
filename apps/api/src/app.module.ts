@@ -20,6 +20,7 @@ import { AdminSellerModule } from './modules/admin-seller/admin-seller.module';
 import { CatalogCategoryModule } from './modules/catalog-category/catalog-category.module';
 import { CatalogAttributeModule } from './modules/catalog-attribute/catalog-attribute.module';
 import { CatalogCategoryProposalModule } from './modules/catalog-category-proposal/catalog-category-proposal.module';
+import { CatalogProductModule } from './modules/catalog-product/catalog-product.module';
 import { ThrottlerModule } from './common/throttler/throttler.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { pinoConfig } from './common/pino/logger-config';
@@ -65,6 +66,7 @@ import { envSchema } from './config/env.schema';
     CatalogCategoryModule,
     CatalogAttributeModule,
     CatalogCategoryProposalModule,
+    CatalogProductModule,
     HealthModule,
   ],
 })
