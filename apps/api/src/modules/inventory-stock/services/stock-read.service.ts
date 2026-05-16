@@ -112,6 +112,23 @@ export class StockReadService {
     };
   }
 
+  /**
+   * Full filtered+sorted display rows for ONE (seller, warehouse) — no
+   * pagination. The cross-warehouse aggregator (SellerStockService) merges
+   * these; listStockForDisplay paginates them for the single-warehouse case.
+   */
+  async getDisplayVariants(
+    sellerId: string,
+    warehouseId: string,
+    opts: { categoryId?: string | undefined; status?: VariantStatus | undefined } = {},
+  ): Promise<CachedVariantStock[]> {
+    const detail = await this.getOrBuildDetail(sellerId, warehouseId);
+    let rows = detail.variants;
+    if (opts.categoryId) rows = rows.filter((v) => v.categoryId === opts.categoryId);
+    if (opts.status) rows = rows.filter((v) => v.status === opts.status);
+    return [...rows].sort((a, b) => a.skuCode.localeCompare(b.skuCode));
+  }
+
   async listStockForDisplay(
     sellerId: string,
     warehouseId: string,
@@ -124,11 +141,10 @@ export class StockReadService {
   ): Promise<StockListResult> {
     const page = opts.page ?? 1;
     const pageSize = opts.pageSize ?? 20;
-    const detail = await this.getOrBuildDetail(sellerId, warehouseId);
-    let rows = detail.variants;
-    if (opts.categoryId) rows = rows.filter((v) => v.categoryId === opts.categoryId);
-    if (opts.status) rows = rows.filter((v) => v.status === opts.status);
-    rows = [...rows].sort((a, b) => a.skuCode.localeCompare(b.skuCode));
+    const rows = await this.getDisplayVariants(sellerId, warehouseId, {
+      categoryId: opts.categoryId,
+      status: opts.status,
+    });
     const total = rows.length;
     const items = rows.slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize);
     return { items, total, page, pageSize };

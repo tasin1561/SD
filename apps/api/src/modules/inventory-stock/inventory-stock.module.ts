@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
+import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { CatalogReadModule } from '../catalog-read/catalog-read.module';
 import { InventorySharedModule } from '../inventory-shared/inventory-shared.module';
+import { SellerStockController } from './seller-stock.controller';
 import { StockCacheService } from './services/stock-cache.service';
 import { StockReadService } from './services/stock-read.service';
+import { SellerStockService } from './services/seller-stock.service';
 
 /**
  * Stock queries, reservations, alerts and the cross-module read boundary.
@@ -12,6 +15,12 @@ import { StockReadService } from './services/stock-read.service';
  */
 @Module({
   imports: [InventorySharedModule, CatalogReadModule],
-  providers: [StockCacheService, StockReadService],
+  controllers: [SellerStockController],
+  providers: [
+    StockCacheService,
+    StockReadService,
+    SellerStockService,
+    SellerJwtGuard,
+  ],
 })
 export class InventoryStockModule {}
