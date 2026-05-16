@@ -303,6 +303,16 @@ function makeEnv(): EnvService {
     SELLER_APP_URL: 'http://localhost:3001',
     ADMIN_APP_URL: 'http://localhost:3002',
     SUPPORT_EMAIL: 'support@skydrop.online',
+    DEV_MOCK_SPACES: true,
+    SPACES_ENDPOINT: 'https://sgp1.digitaloceanspaces.com',
+    SPACES_REGION: 'sgp1',
+    SPACES_BUCKET: 'skydrop-storage',
+    SPACES_ACCESS_KEY_ID: '',
+    SPACES_SECRET_ACCESS_KEY: '',
+    SPACES_CDN_URL: '',
+    IMAGE_MAX_SIZE_BYTES: 10485760,
+    CSV_MAX_ROWS: 1000,
+    CSV_PRESIGN_TTL_SECONDS: 900,
   });
 }
 

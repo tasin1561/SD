@@ -4,6 +4,7 @@ import { ConfigModule } from './config/config.module';
 import { EnvService } from './config/env.service';
 import { PrismaModule } from './infrastructure/prisma/prisma.module';
 import { RedisModule } from './infrastructure/redis/redis.module';
+import { SpacesModule } from './infrastructure/spaces/spaces.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuthCommonModule } from './modules/auth-common/auth-common.module';
 import { EmailModule } from './modules/email/email.module';
@@ -22,6 +23,7 @@ import { CatalogAttributeModule } from './modules/catalog-attribute/catalog-attr
 import { CatalogCategoryProposalModule } from './modules/catalog-category-proposal/catalog-category-proposal.module';
 import { CatalogProductModule } from './modules/catalog-product/catalog-product.module';
 import { CatalogVariantModule } from './modules/catalog-variant/catalog-variant.module';
+import { CatalogImageModule } from './modules/catalog-image/catalog-image.module';
 import { ThrottlerModule } from './common/throttler/throttler.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { pinoConfig } from './common/pino/logger-config';
@@ -51,6 +53,7 @@ import { envSchema } from './config/env.schema';
     }),
     PrismaModule,
     RedisModule,
+    SpacesModule,
     ThrottlerModule,
     AuthCommonModule,
     EmailModule,
@@ -69,6 +72,7 @@ import { envSchema } from './config/env.schema';
     CatalogCategoryProposalModule,
     CatalogProductModule,
     CatalogVariantModule,
+    CatalogImageModule,
     HealthModule,
   ],
 })

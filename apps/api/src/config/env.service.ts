@@ -61,6 +61,46 @@ export class EnvService {
     return this.env.COOKIE_DOMAIN;
   }
 
+  get devMockSpaces(): boolean {
+    return this.env.DEV_MOCK_SPACES;
+  }
+
+  get spacesEndpoint(): string {
+    return this.env.SPACES_ENDPOINT;
+  }
+
+  get spacesRegion(): string {
+    return this.env.SPACES_REGION;
+  }
+
+  get spacesBucket(): string {
+    return this.env.SPACES_BUCKET;
+  }
+
+  get spacesAccessKeyId(): string {
+    return this.env.SPACES_ACCESS_KEY_ID;
+  }
+
+  get spacesSecretAccessKey(): string {
+    return this.env.SPACES_SECRET_ACCESS_KEY;
+  }
+
+  get spacesCdnUrl(): string {
+    return this.env.SPACES_CDN_URL;
+  }
+
+  get imageMaxSizeBytes(): number {
+    return this.env.IMAGE_MAX_SIZE_BYTES;
+  }
+
+  get csvMaxRows(): number {
+    return this.env.CSV_MAX_ROWS;
+  }
+
+  get csvPresignTtlSeconds(): number {
+    return this.env.CSV_PRESIGN_TTL_SECONDS;
+  }
+
   get corsOrigins(): string[] {
     return [this.env.SELLER_APP_URL, this.env.ADMIN_APP_URL];
   }
