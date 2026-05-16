@@ -11,6 +11,7 @@ import { SellerStockService } from './services/seller-stock.service';
 import { StockAlertService } from './services/stock-alert.service';
 import { SellerThresholdService } from './services/seller-threshold.service';
 import { StockReservationService } from './services/stock-reservation.service';
+import { StockPickAllocationService } from './services/stock-pick-allocation.service';
 
 /**
  * Stock queries, reservations, alerts and the cross-module read boundary.
@@ -28,6 +29,7 @@ import { StockReservationService } from './services/stock-reservation.service';
     StockAlertService,
     SellerThresholdService,
     StockReservationService,
+    StockPickAllocationService,
     SellerJwtGuard,
   ],
 })
