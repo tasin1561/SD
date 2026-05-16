@@ -97,6 +97,36 @@ const RESERVATION_SELECT = {
  * StockMutationService's version path, which can never allocate more than
  * physically on hand. This is inherent to the LATE-allocation model — see
  * phase-1a-debt (added at module end).
+ *
+ * ── SANCTIONED CROSS-MODULE API (Module 6 / Module 8) ──────────────────
+ *
+ * reserve(input): ReservationView
+ *   Module 6 calls this at order-confirm. Creates a PHASE-1 ACTIVE
+ *   reservation (binId/batchId NULL) — a SOFT qty claim. The availability
+ *   check is best-effort (READ COMMITTED, no lock); transient over-claim
+ *   under concurrency is possible and intentional — the HARD physical
+ *   guard is phase-2 (StockPickAllocationService.allocateAndPopulate,
+ *   version-CAS on stock_levels). Throws InsufficientStockError when
+ *   qty > live available. Caller supplies orderId/orderItemId (NOT NULL
+ *   FK columns). expiresAt = now + (seller.reservationTtlHoursOverride ??
+ *   ops.stock_reservation_ttl_hours ?? 48).
+ *
+ * release(id, reason, actor?, now?): ReleaseResult
+ *   ACTIVE → RELEASED (status transition, NOT a physical delete). NO-OP-
+ *   SAFE / idempotent: a non-ACTIVE reservation returns
+ *   { qtyReleased: 0, alreadyInactive: true } without side effects. A
+ *   phase-2 reservation additionally gives back stock_levels.qtyReserved
+ *   via an atomic clamped SQL decrement. INV-3 stops counting it toward
+ *   availability immediately. Module 6 calls this on order cancel.
+ *
+ * fulfill(id, actor?, now?): ReleaseResult
+ *   ACTIVE → FULFILLED. Same no-op-safe idempotency as release(). Module 8
+ *   calls this at pick completion; the physical qtyOnHand decrement is a
+ *   SEPARATE StockMutationService PICK movement — fulfill() only clears
+ *   the reservation hold (+ phase-2 qtyReserved give-back).
+ *
+ * resolveTtlHours(sellerId): number  — effective reservation TTL.
+ * ───────────────────────────────────────────────────────────────────────
  */
 @Injectable()
 export class StockReservationService {

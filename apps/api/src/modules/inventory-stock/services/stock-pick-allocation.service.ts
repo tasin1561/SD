@@ -109,6 +109,33 @@ interface BatchGroup {
  *  B1(exp6/1,5) B2(exp7/1,3) B3(exp8/1,50)
  *   - need 7 → window {B1,B2} (cum 8≥7; B3 never considered); no single
  *     covers → SPLIT 5·B1 + 2·B2
+ *
+ * ── SANCTIONED CROSS-MODULE API (Module 8) ─────────────────────────────
+ *
+ * allocateForOrderLine({sellerId,variantId,warehouseId,qtyRequired}):
+ *     AllocationPlan
+ *   PURE, READ-ONLY planner/preview — no writes, no reservation needed.
+ *   Returns the FEFO/single-batch/split plan (or PARTIAL/NONE if short).
+ *
+ * allocateAndPopulate(reservationId, actor?): AppliedAllocation
+ *   The phase-1 → phase-2 transition Module 8 calls at pick-task
+ *   generation for an existing ACTIVE phase-1 reservation.
+ *
+ *   FULL-CONSUME ONLY: it ALWAYS plans for the FULL reservation qty
+ *   (reservation.qtyReserved). There is NO partial-qty parameter and
+ *   partial picks (qty < reservation.qty) are NOT supported in Phase 1A.
+ *   When the physically allocatable qty is short, it allocates what it
+ *   can (phase-2 rows) and the UN-allocated remainder stays as a RESIDUAL
+ *   PHASE-1 row (binId/batchId NULL) so the total reserved qty is
+ *   CONSERVED (= the original phase-1 qty). The conservation invariant is
+ *   therefore non-trivial: original phase-1 row → first pick; extra picks
+ *   → new ACTIVE phase-2 rows; shortfall → residual phase-1 row;
+ *   Σ(new rows) = allocatedQty + shortfall = original qty. Idempotent
+ *   (already-phase-2 returns untouched). HARD physical guard:
+ *   version-CAS on stock_levels (≤3 attempts → 409
+ *   PICK_ALLOCATION_CONFLICT). Module 8 owns operational escalation of a
+ *   persistent shortfall.
+ * ───────────────────────────────────────────────────────────────────────
  */
 @Injectable()
 export class StockPickAllocationService {

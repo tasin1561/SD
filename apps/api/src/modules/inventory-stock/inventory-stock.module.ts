@@ -38,10 +38,26 @@ import { ReservationWorker } from './queue/reservation.worker';
     ReservationWorker,
     SellerJwtGuard,
   ],
-  // Intra-Module-5 sharing: receipt/adjustment/cycle-count call these in
-  // their post-commit hooks. The Module 6/8 cross-module surface
-  // (StockReadService/StockReservationService/StockPickAllocationService)
-  // is added at commit 22; StockAlertService stays internal to Module 5.
-  exports: [StockAlertService, StockCacheService],
+  // ── EXPORT BOUNDARY ──────────────────────────────────────────────────
+  // SANCTIONED cross-module surface (Module 6 Orders / Module 8 Warehouse
+  // Ops) — these three ONLY. See each class's JSDoc for the method-level
+  // API contract:
+  //   • StockReadService            — getVariantStockLive (mutation paths)
+  //   • StockReservationService     — reserve/release/fulfill (Module 6/8)
+  //   • StockPickAllocationService  — allocateForOrderLine / -AndPopulate
+  //
+  // StockAlertService + StockCacheService are also exported, but ONLY so
+  // sibling Module-5 modules (inventory-receipt / -adjustment) can run
+  // their post-commit hooks (INV-5). They are NOT part of the Module 6/8
+  // contract and must not be consumed from Module 6+. StockMutationService
+  // is intentionally NOT here (it lives in inventory-shared and is the
+  // internal sole writer — INV-1).
+  exports: [
+    StockReadService,
+    StockReservationService,
+    StockPickAllocationService,
+    StockAlertService,
+    StockCacheService,
+  ],
 })
 export class InventoryStockModule {}

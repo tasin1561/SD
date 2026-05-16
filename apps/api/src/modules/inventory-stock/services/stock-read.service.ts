@@ -43,6 +43,23 @@ export interface StockListResult {
  * threshold come exclusively via CatalogReadService — inventory never
  * queries product_variants directly (CLAUDE MUST #13). The seller-default
  * threshold fallback is inventory's own logic (reads `sellers`, allowed).
+ *
+ * ── SANCTIONED CROSS-MODULE API (Module 6 / Module 8) ──────────────────
+ *
+ * getVariantStockLive(sellerId, variantId, warehouseId): LiveVariantStock
+ *   INV-2 LIVE PATH — bypasses the cache, pure DB aggregate. This is the
+ *   ONLY read a mutation/decision path may use (Module 6 stock checks at
+ *   order confirm, reservation, allocation). qtyAvailable is COMPUTED
+ *   (INV-3): SUM(stock_levels.qtyOnHand) − SUM(ACTIVE reservations,
+ *   phase-1 + phase-2). Never returns a stale number.
+ *
+ * getVariantStockForDisplay / listStockForDisplay / getSummaryForDisplay
+ *   INV-2 DISPLAY PATH — StockCacheService-backed (5-min TTL). Seller-
+ *   facing reads ONLY. A stale display number is harmless; a stale
+ *   *decision* is not — callers on a mutation path MUST use the *Live
+ *   method. The naming split (*ForDisplay/*Summary vs *Live) IS the
+ *   enforced contract.
+ * ───────────────────────────────────────────────────────────────────────
  */
 @Injectable()
 export class StockReadService {
