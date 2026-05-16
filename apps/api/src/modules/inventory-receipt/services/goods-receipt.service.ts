@@ -4,7 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, GoodsReceiptStatus, Prisma, VariantStatus } from '@skydrop/db';
+import {
+  ActorType,
+  BinType,
+  GoodsReceiptStatus,
+  Prisma,
+  VariantStatus,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
@@ -205,6 +211,156 @@ export class GoodsReceiptService {
     });
   }
 
+  // ---------------- admin recording ----------------
+
+  async listForAdmin(query: {
+    sellerId?: string;
+    warehouseId?: string;
+    status?: GoodsReceiptStatus;
+    page?: number;
+    pageSize?: number;
+  }): Promise<{ items: GoodsReceiptView[]; total: number; page: number; pageSize: number }> {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+    const where: Prisma.GoodsReceiptWhereInput = { deletedAt: null };
+    if (query.sellerId) where.sellerId = query.sellerId;
+    if (query.warehouseId) where.warehouseId = query.warehouseId;
+    if (query.status) where.status = query.status;
+    const [items, total] = await Promise.all([
+      this.prisma.client.goodsReceipt.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: pageSize,
+        skip: (page - 1) * pageSize,
+        include: RECEIPT_VIEW_INCLUDE,
+      }),
+      this.prisma.client.goodsReceipt.count({ where }),
+    ]);
+    return { items, total, page, pageSize };
+  }
+
+  async getForAdmin(id: string): Promise<GoodsReceiptView> {
+    const row = await this.prisma.client.goodsReceipt.findFirst({
+      where: { id, deletedAt: null },
+      include: RECEIPT_VIEW_INCLUDE,
+    });
+    if (!row) {
+      throw new NotFoundException({
+        code: 'GOODS_RECEIPT_NOT_FOUND',
+        message: 'Goods receipt not found',
+      });
+    }
+    return row;
+  }
+
+  /** PENDING -> ARRIVING; records who is receiving. */
+  async startReceiving(
+    staffId: string,
+    id: string,
+    ctx: ClientContext,
+  ): Promise<GoodsReceiptView> {
+    const existing = await this.getForAdmin(id);
+    this.assertStatus(existing.status, [GoodsReceiptStatus.PENDING], 'start receiving');
+    return this.prisma.client.$transaction(async (tx) => {
+      const row = await tx.goodsReceipt.update({
+        where: { id },
+        data: { status: GoodsReceiptStatus.ARRIVING, receivedById: staffId },
+        include: RECEIPT_VIEW_INCLUDE,
+      });
+      await this.audit.log(
+        {
+          actorType: ActorType.STAFF,
+          staffUserId: staffId,
+          action: 'inventory.goods_receipt.receiving_started',
+          entityType: 'goods_receipt',
+          entityId: id,
+          metadata: this.ctxMeta(ctx),
+        },
+        tx,
+      );
+      return row;
+    });
+  }
+
+  /**
+   * Records ACTUAL counts on lines while ARRIVING. Iterative (call
+   * repeatedly). No stock is written here — completion (commit 18) turns
+   * recorded actuals into batches + movements + levels atomically.
+   */
+  async recordLines(
+    staffId: string,
+    id: string,
+    lines: Array<{
+      lineId: string;
+      receivedQty: number;
+      damagedQty?: number;
+      putawayBinId?: string;
+      manufacturedAt?: string;
+      expiresAt?: string;
+      unitCostInr?: number;
+    }>,
+    ctx: ClientContext,
+  ): Promise<GoodsReceiptView> {
+    const receipt = await this.getForAdmin(id);
+    this.assertStatus(receipt.status, [GoodsReceiptStatus.ARRIVING], 'record lines for');
+
+    const lineIds = new Set(receipt.lines.map((l) => l.id));
+    for (const l of lines) {
+      if (!lineIds.has(l.lineId)) {
+        throw new BadRequestException({
+          code: 'RECEIPT_LINE_NOT_FOUND',
+          message: `Line ${l.lineId} is not part of this receipt`,
+        });
+      }
+      if (l.receivedQty > 0 && !l.putawayBinId) {
+        throw new BadRequestException({
+          code: 'PUTAWAY_BIN_REQUIRED',
+          message: `Line ${l.lineId} received ${l.receivedQty} units but has no putaway bin`,
+        });
+      }
+      if (l.putawayBinId) {
+        await this.assertPutawayBin(receipt.warehouseId, l.putawayBinId);
+      }
+    }
+
+    return this.prisma.client.$transaction(async (tx) => {
+      for (const l of lines) {
+        await tx.goodsReceiptLine.update({
+          where: { id: l.lineId },
+          data: {
+            receivedQty: l.receivedQty,
+            damagedQty: l.damagedQty ?? 0,
+            putawayBinId: l.putawayBinId ?? null,
+            ...(l.manufacturedAt !== undefined
+              ? { manufacturedAt: l.manufacturedAt ? new Date(l.manufacturedAt) : null }
+              : {}),
+            ...(l.expiresAt !== undefined
+              ? { expiresAt: l.expiresAt ? new Date(l.expiresAt) : null }
+              : {}),
+            ...(l.unitCostInr !== undefined
+              ? { unitCostInr: l.unitCostInr != null ? new Prisma.Decimal(l.unitCostInr) : null }
+              : {}),
+          },
+        });
+      }
+      await this.audit.log(
+        {
+          actorType: ActorType.STAFF,
+          staffUserId: staffId,
+          action: 'inventory.goods_receipt.lines_recorded',
+          entityType: 'goods_receipt',
+          entityId: id,
+          metadata: { recordedLineCount: lines.length, ...this.ctxMeta(ctx) },
+        },
+        tx,
+      );
+      return tx.goodsReceipt.findUniqueOrThrow({
+        where: { id },
+        include: RECEIPT_VIEW_INCLUDE,
+      });
+    });
+  }
+
   // ---------------- shared internals (used by commits 17/18 too) ----------------
 
   assertStatus(
@@ -285,6 +441,26 @@ export class GoodsReceiptService {
       code: 'RECEIPT_NUMBER_CONFLICT',
       message: 'Could not allocate a unique receipt number; retry',
     });
+  }
+
+  /** Putaway must target a real, live bin in the receipt's warehouse that
+   *  is not a hold/damaged/quarantine bin (good stock only). */
+  private async assertPutawayBin(warehouseId: string, binId: string): Promise<void> {
+    const bin = await this.prisma.client.warehouseBin.findFirst({
+      where: {
+        id: binId,
+        warehouseId,
+        deletedAt: null,
+        type: { notIn: [BinType.RTO_HOLD, BinType.DAMAGED, BinType.QUARANTINE] },
+      },
+      select: { id: true },
+    });
+    if (!bin) {
+      throw new BadRequestException({
+        code: 'INVALID_PUTAWAY_BIN',
+        message: 'Putaway bin must be a non-hold bin in the receipt warehouse',
+      });
+    }
   }
 
   private ctxMeta(ctx: ClientContext): Record<string, unknown> {
