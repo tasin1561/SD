@@ -392,6 +392,33 @@ const notificationTemplates: TemplateSeed[] = [
     bodyTemplate:
       'Hi {{ company_name }}, your Skydrop onboarding is complete. You can now ship inventory to our warehouse and start placing orders from {{ app_url }}. Questions? {{ support_email }}.',
   },
+  {
+    code: 'seller.category_proposal_received.email',
+    name: 'Category proposal received — email',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'We received your category proposal: {{ proposed_name }}',
+    bodyTemplate:
+      'Hi {{ company_name }}, we received your proposal to add the category "{{ proposed_name }}". Our team will review it and get back to you. You can track its status from {{ app_url }}.',
+  },
+  {
+    code: 'seller.category_proposal_approved.email',
+    name: 'Category proposal approved — email',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Your category "{{ proposed_name }}" was approved',
+    bodyTemplate:
+      'Good news, {{ company_name }} — your proposed category "{{ proposed_name }}" has been approved and is now available. You can assign products to it from {{ app_url }}.{{ decision_note }}',
+  },
+  {
+    code: 'seller.category_proposal_rejected.email',
+    name: 'Category proposal rejected — email',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Update on your category proposal "{{ proposed_name }}"',
+    bodyTemplate:
+      'Hi {{ company_name }}, after reviewing your proposal to add "{{ proposed_name }}" we are not able to add it at this time. Reason: {{ decision_note }}. Reach out to {{ support_email }} if you would like to discuss.',
+  },
 ];
 
 async function seedNotificationTemplates() {
