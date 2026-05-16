@@ -197,7 +197,7 @@ export class AttributeDefinitionService {
     attributeId: string,
     staffActorId: string,
     ctx: ClientContext,
-  ): Promise<void> {
+  ): Promise<{ deleted: true; warning?: string }> {
     const existing = await this.prisma.client.categoryAttributeDefinition.findFirst({
       where: { id: attributeId, categoryId, deletedAt: null },
       select: { id: true, attributeKey: true },
@@ -211,7 +211,13 @@ export class AttributeDefinitionService {
     // Phase 1A: we do NOT block deletion when variants already carry this
     // attribute key (tracked in phase-1a-debt). Historical variant
     // attribute JSON is preserved as-is; future variant writes simply stop
-    // requiring/validating the removed key.
+    // requiring/validating the removed key. We surface a soft warning if
+    // the category has products (a cheap proxy for "variants may carry
+    // this key") — no deep scan of variant.attributes JSON.
+    const productCount = await this.prisma.client.product.count({
+      where: { categoryId, deletedAt: null },
+    });
+
     await this.prisma.client.$transaction(async (tx) => {
       await tx.categoryAttributeDefinition.update({
         where: { id: attributeId },
@@ -227,6 +233,7 @@ export class AttributeDefinitionService {
           metadata: {
             categoryId,
             attributeKey: existing.attributeKey,
+            productCount,
             ipAddress: ctx.ipAddress,
             userAgent: ctx.userAgent,
             requestId: ctx.requestId,
@@ -236,6 +243,17 @@ export class AttributeDefinitionService {
       );
     });
     await this.resolution.invalidate(categoryId);
+
+    if (productCount > 0) {
+      return {
+        deleted: true,
+        warning:
+          `This attribute was on a category with ${productCount} product(s). ` +
+          `Existing variants may still reference '${existing.attributeKey}' in ` +
+          `their attributes JSON. Historical data is preserved.`,
+      };
+    }
+    return { deleted: true };
   }
 
   // ---------- internal ----------

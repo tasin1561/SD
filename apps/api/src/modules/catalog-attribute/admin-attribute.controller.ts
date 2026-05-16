@@ -88,14 +88,20 @@ export class AdminAttributeController {
   }
 
   @Delete(':attributeId')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Soft-delete an attribute definition' })
-  async remove(
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Soft-delete an attribute definition',
+    description:
+      'Returns { deleted: true }. If the category has products, also returns a ' +
+      '`warning` string (existing variants may still reference the key in their ' +
+      'attributes JSON — historical data is preserved, not blocked).',
+  })
+  remove(
     @Param('categoryId', new ParseUUIDPipe({ version: '7' })) categoryId: string,
     @Param('attributeId', new ParseUUIDPipe({ version: '7' })) attributeId: string,
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
-  ): Promise<void> {
-    await this.svc.softDelete(categoryId, attributeId, staff.id, ctx);
+  ): Promise<{ deleted: true; warning?: string }> {
+    return this.svc.softDelete(categoryId, attributeId, staff.id, ctx);
   }
 }
