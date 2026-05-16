@@ -16,6 +16,7 @@ import {
 } from '../csv-fields';
 import { buildCsvKey, parseCsvKey } from '../csv-import-key';
 import { CsvImportQueue } from '../queue/csv-import.queue';
+import { CsvMappingService } from './csv-mapping.service';
 import type {
   PresignCsvDto,
   PreviewCsvDto,
@@ -100,7 +101,37 @@ export class CsvImportService {
     private readonly parser: CsvParserService,
     private readonly audit: AuditLogService,
     private readonly queue: CsvImportQueue,
+    private readonly mappings: CsvMappingService,
   ) {}
+
+  /**
+   * Effective mapping precedence (lowest → highest):
+   * auto-detection < saved mapping (mappingId) < explicit mappingOverride.
+   * A layer only sets a field if the target header actually exists in the
+   * uploaded CSV, so a stale saved mapping can't point at a missing column.
+   * Throws 404 if mappingId is given but doesn't belong to the seller.
+   */
+  private async resolveMapping(
+    sellerId: string,
+    headers: string[],
+    detected: Partial<Record<CsvTargetField, string>>,
+    mappingId: string | undefined,
+    override: Record<string, string> | undefined,
+  ): Promise<Partial<Record<CsvTargetField, string>>> {
+    const mapping = { ...detected };
+    const apply = (pairs: Record<string, string>): void => {
+      for (const [field, header] of Object.entries(pairs)) {
+        if (headers.includes(header)) {
+          mapping[field as CsvTargetField] = header;
+        }
+      }
+    };
+    if (mappingId) {
+      apply(await this.mappings.resolveColumnMap(sellerId, mappingId));
+    }
+    if (override) apply(override);
+    return mapping;
+  }
 
   /** A ready-to-fill CSV with canonical headers + one example row. */
   buildTemplate(): string {
@@ -130,16 +161,13 @@ export class CsvImportService {
     const parsed = this.parser.parse(buffer);
     const detected = this.parser.detectMapping(parsed.headers);
 
-    // Merge a seller override (catalog field -> header) on top of
-    // auto-detection. Only accept overrides that point at a real header.
-    const mapping = { ...detected.mapping };
-    if (input.mappingOverride) {
-      for (const [field, header] of Object.entries(input.mappingOverride)) {
-        if (parsed.headers.includes(header)) {
-          mapping[field as CsvTargetField] = header;
-        }
-      }
-    }
+    const mapping = await this.resolveMapping(
+      sellerId,
+      parsed.headers,
+      detected.mapping,
+      input.mappingId,
+      input.mappingOverride,
+    );
     const missingRequired = CSV_REQUIRED_FIELDS.filter(
       (f) => mapping[f] === undefined,
     );
@@ -172,14 +200,13 @@ export class CsvImportService {
     const parsed = this.parser.parse(buffer);
     const detected = this.parser.detectMapping(parsed.headers);
 
-    const mapping = { ...detected.mapping };
-    if (input.mappingOverride) {
-      for (const [field, header] of Object.entries(input.mappingOverride)) {
-        if (parsed.headers.includes(header)) {
-          mapping[field as CsvTargetField] = header;
-        }
-      }
-    }
+    const mapping = await this.resolveMapping(
+      sellerId,
+      parsed.headers,
+      detected.mapping,
+      input.mappingId,
+      input.mappingOverride,
+    );
     const missingRequired = CSV_REQUIRED_FIELDS.filter(
       (f) => mapping[f] === undefined,
     );
@@ -199,6 +226,7 @@ export class CsvImportService {
     const created = await this.prisma.client.bulkProductUpload.create({
       data: {
         sellerId,
+        mappingId: input.mappingId ?? null,
         fileName: input.fileName,
         spacesKey: input.spacesKey,
         fileSizeBytes: head?.size ?? buffer.byteLength,
@@ -208,6 +236,9 @@ export class CsvImportService {
       },
       select: { ...UPLOAD_VIEW_SELECT, sellerId: true },
     });
+    if (input.mappingId) {
+      await this.mappings.markUsed(sellerId, input.mappingId);
+    }
 
     const jobId = await this.queue.enqueueProcess({
       uploadId: created.id,

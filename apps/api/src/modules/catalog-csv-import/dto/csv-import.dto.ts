@@ -3,6 +3,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   MaxLength,
 } from 'class-validator';
@@ -20,6 +21,16 @@ export class PreviewCsvDto {
   @IsString()
   @MaxLength(512)
   spacesKey!: string;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Optional saved-mapping id. Its columnMap is layered over ' +
+      'auto-detection (and under any mappingOverride).',
+  })
+  @IsOptional()
+  @IsUUID('7')
+  mappingId?: string;
 
   @ApiProperty({
     required: false,
@@ -43,6 +54,17 @@ export class ProcessCsvDto {
   @IsString()
   @MaxLength(255)
   fileName!: string;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Optional saved-mapping id. Its columnMap is layered over ' +
+      'auto-detection (and under any mappingOverride); the import is ' +
+      'tagged with this mapping and its lastUsedAt is bumped.',
+  })
+  @IsOptional()
+  @IsUUID('7')
+  mappingId?: string;
 
   @ApiProperty({
     required: false,

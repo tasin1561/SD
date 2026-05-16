@@ -40,6 +40,15 @@ export const CSV_ALIAS_MAP: Record<CsvTargetField, string[]> = {
 /** Required mapped fields for a row to be importable. */
 export const CSV_REQUIRED_FIELDS: CsvTargetField[] = ['productName', 'variantSkuCode'];
 
+/** Every known catalog target field (derived from the alias map). */
+export const CSV_TARGET_FIELDS = Object.keys(CSV_ALIAS_MAP) as CsvTargetField[];
+
+const CSV_TARGET_FIELD_SET = new Set<string>(CSV_TARGET_FIELDS);
+
+export function isCsvTargetField(value: string): value is CsvTargetField {
+  return CSV_TARGET_FIELD_SET.has(value);
+}
+
 /** Normalize a header or alias for comparison. */
 export function normalizeHeader(raw: string): string {
   return raw
