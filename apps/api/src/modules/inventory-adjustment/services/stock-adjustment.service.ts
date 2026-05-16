@@ -226,10 +226,15 @@ export class StockAdjustmentService {
             binId: line.binId,
             batchId: line.batchId,
             qtyChange: line.qtyChange,
+            // Cycle-count reconciliations post the dedicated movement type
+            // (still reasonCode-required, INV-7); manual ones use the
+            // generic adjustment increase/decrease.
             type:
-              line.qtyChange > 0
-                ? StockMovementType.ADJUSTMENT_INCREASE
-                : StockMovementType.ADJUSTMENT_DECREASE,
+              adj.type === AdjustmentType.CYCLE_COUNT
+                ? StockMovementType.CYCLE_COUNT_ADJUST
+                : line.qtyChange > 0
+                  ? StockMovementType.ADJUSTMENT_INCREASE
+                  : StockMovementType.ADJUSTMENT_DECREASE,
             actorType: actor.type,
             actorId: actor.id ?? null,
             reason: adj.description ?? `Adjustment ${adj.id}`,

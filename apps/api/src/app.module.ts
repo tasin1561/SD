@@ -32,6 +32,7 @@ import { InventoryStockModule } from './modules/inventory-stock/inventory-stock.
 import { InventoryMovementModule } from './modules/inventory-movement/inventory-movement.module';
 import { InventoryReceiptModule } from './modules/inventory-receipt/inventory-receipt.module';
 import { InventoryAdjustmentModule } from './modules/inventory-adjustment/inventory-adjustment.module';
+import { InventoryCycleCountModule } from './modules/inventory-cycle-count/inventory-cycle-count.module';
 import { ThrottlerModule } from './common/throttler/throttler.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { pinoConfig } from './common/pino/logger-config';
@@ -89,6 +90,7 @@ import { envSchema } from './config/env.schema';
     InventoryMovementModule,
     InventoryReceiptModule,
     InventoryAdjustmentModule,
+    InventoryCycleCountModule,
     HealthModule,
   ],
 })
