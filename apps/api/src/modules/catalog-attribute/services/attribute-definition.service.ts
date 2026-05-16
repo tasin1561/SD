@@ -8,6 +8,7 @@ import { ActorType, AttributeValueType, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
+import { AttributeResolutionService } from './attribute-resolution.service';
 import type { CreateAttributeDefinitionDto } from '../dto/create-attribute.dto';
 import type { UpdateAttributeDefinitionDto } from '../dto/update-attribute.dto';
 
@@ -42,6 +43,7 @@ export class AttributeDefinitionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
+    private readonly resolution: AttributeResolutionService,
   ) {}
 
   /** Definitions declared directly on this category (NOT inherited — the
@@ -75,7 +77,7 @@ export class AttributeDefinitionService {
       });
     }
 
-    return this.prisma.client.$transaction(async (tx) => {
+    const created = await this.prisma.client.$transaction(async (tx) => {
       const row = await tx.categoryAttributeDefinition.create({
         data: {
           categoryId,
@@ -108,6 +110,8 @@ export class AttributeDefinitionService {
       );
       return row;
     });
+    await this.resolution.invalidate(categoryId);
+    return created;
   }
 
   async update(
@@ -159,7 +163,7 @@ export class AttributeDefinitionService {
       return this.requireAttribute(categoryId, attributeId);
     }
 
-    return this.prisma.client.$transaction(async (tx) => {
+    const updated = await this.prisma.client.$transaction(async (tx) => {
       const row = await tx.categoryAttributeDefinition.update({
         where: { id: attributeId },
         data,
@@ -184,6 +188,8 @@ export class AttributeDefinitionService {
       );
       return row;
     });
+    await this.resolution.invalidate(categoryId);
+    return updated;
   }
 
   async softDelete(
@@ -229,6 +235,7 @@ export class AttributeDefinitionService {
         tx,
       );
     });
+    await this.resolution.invalidate(categoryId);
   }
 
   // ---------- internal ----------

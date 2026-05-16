@@ -23,6 +23,10 @@ import {
   AttributeDefinitionService,
   type AttributeDefinitionView,
 } from './services/attribute-definition.service';
+import {
+  AttributeResolutionService,
+  type EffectiveAttribute,
+} from './services/attribute-resolution.service';
 
 /**
  * Admin attribute-definition management, scoped under a category. Returns
@@ -35,7 +39,10 @@ import {
 @ThrottleKey('auth-user')
 @Controller('admin/categories/:categoryId/attributes')
 export class AdminAttributeController {
-  constructor(private readonly svc: AttributeDefinitionService) {}
+  constructor(
+    private readonly svc: AttributeDefinitionService,
+    private readonly resolution: AttributeResolutionService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: "List a category's own attribute definitions" })
@@ -43,6 +50,16 @@ export class AdminAttributeController {
     @Param('categoryId', new ParseUUIDPipe({ version: '7' })) categoryId: string,
   ): Promise<AttributeDefinitionView[]> {
     return this.svc.listForCategory(categoryId);
+  }
+
+  @Get('effective')
+  @ApiOperation({
+    summary: "Effective (inherited + own) attribute set for the category",
+  })
+  effective(
+    @Param('categoryId', new ParseUUIDPipe({ version: '7' })) categoryId: string,
+  ): Promise<EffectiveAttribute[]> {
+    return this.resolution.resolveEffectiveAttributes(categoryId);
   }
 
   @Post()

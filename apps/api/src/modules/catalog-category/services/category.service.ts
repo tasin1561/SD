@@ -432,6 +432,38 @@ export class CategoryService {
     }
   }
 
+  /**
+   * Ordered ancestor chain, root-first, INCLUDING the category itself:
+   * [rootId, ..., parentId, categoryId]. Used by attribute inheritance
+   * resolution (apply root defs first so deeper categories override).
+   * Throws if the category does not exist (or is deleted).
+   */
+  async getAncestorChainIds(categoryId: string): Promise<string[]> {
+    const all = await this.prisma.client.category.findMany({
+      where: { deletedAt: null },
+      select: { id: true, parentId: true },
+    });
+    const byId = new Map(all.map((c) => [c.id, c]));
+    if (!byId.has(categoryId)) {
+      throw new NotFoundException({ code: 'CATEGORY_NOT_FOUND', message: 'Category not found' });
+    }
+    const chain: string[] = [];
+    let cursor: string | null = categoryId;
+    const guard = new Set<string>();
+    while (cursor) {
+      if (guard.has(cursor)) break; // defensive: never loop on corrupt data
+      guard.add(cursor);
+      chain.push(cursor);
+      cursor = byId.get(cursor)?.parentId ?? null;
+    }
+    return chain.reverse();
+  }
+
+  /** Public wrapper — descendant ids (excludes the category itself). */
+  async getDescendantIds(categoryId: string): Promise<string[]> {
+    return [...(await this.collectDescendantIds(categoryId))];
+  }
+
   private async collectDescendantIds(rootId: string): Promise<Set<string>> {
     const all = await this.prisma.client.category.findMany({
       where: { deletedAt: null },
