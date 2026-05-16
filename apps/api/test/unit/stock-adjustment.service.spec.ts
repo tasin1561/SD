@@ -9,10 +9,15 @@ import type { StockMutationService } from '../../src/modules/inventory-shared/st
 import type { StockAlertService } from '../../src/modules/inventory-stock/services/stock-alert.service';
 import type { StockCacheService } from '../../src/modules/inventory-stock/services/stock-cache.service';
 import type { EmailQueue } from '../../src/modules/email/queue/email.queue';
+import type { AdjustmentQueue } from '../../src/modules/inventory-adjustment/queue/adjustment.queue';
 
 const clone = <T>(o: T): T => JSON.parse(JSON.stringify(o)) as T;
 
-function makeSut(opts: { thresholdInt?: number; batchUnitCost?: string | null }) {
+function makeSut(opts: {
+  thresholdInt?: number;
+  batchUnitCost?: string | null;
+  updateManyCount?: number;
+}) {
   const adjustmentStore: { row: Record<string, unknown> | null } = { row: null };
   const applyCalls: Array<Record<string, unknown>> = [];
   const emails: Array<{ templateCode: string }> = [];
@@ -31,9 +36,17 @@ function makeSut(opts: { thresholdInt?: number; batchUnitCost?: string | null })
         return clone(adjustmentStore.row);
       }),
       findUniqueOrThrow: jest.fn(async () => clone(adjustmentStore.row)),
+      findFirst: jest.fn(async () =>
+        adjustmentStore.row ? clone(adjustmentStore.row) : null,
+      ),
       update: jest.fn(async (args: { data: Record<string, unknown> }) => {
         Object.assign(adjustmentStore.row!, args.data);
         return clone(adjustmentStore.row);
+      }),
+      updateMany: jest.fn(async (args: { data: Record<string, unknown> }) => {
+        const count = opts.updateManyCount ?? 1;
+        if (count === 1 && adjustmentStore.row) Object.assign(adjustmentStore.row, args.data);
+        return { count };
       }),
     },
     stockBatch: {
@@ -79,6 +92,14 @@ function makeSut(opts: { thresholdInt?: number; batchUnitCost?: string | null })
     }),
   } as unknown as EmailQueue;
 
+  const enqueued: string[] = [];
+  const queue = {
+    enqueueExecute: jest.fn(async (id: string) => {
+      enqueued.push(id);
+      return 'job1';
+    }),
+  } as unknown as AdjustmentQueue;
+
   const svc = new StockAdjustmentService(
     prisma,
     env,
@@ -89,8 +110,9 @@ function makeSut(opts: { thresholdInt?: number; batchUnitCost?: string | null })
     alerts,
     cache,
     email,
+    queue,
   );
-  return { svc, adjustmentStore, applyCalls, emails, cache, alerts };
+  return { svc, adjustmentStore, applyCalls, emails, cache, alerts, enqueued };
 }
 
 const CTX = { ipAddress: null, userAgent: null, requestId: null };
@@ -171,5 +193,48 @@ describe('StockAdjustmentService.initiate', () => {
         CTX,
       ),
     ).rejects.toMatchObject({ response: { code: 'ADJUSTMENT_LINE_INVALID_QTY' } });
+  });
+});
+
+describe('StockAdjustmentService.approve / reject', () => {
+  it('approve: PENDING -> APPROVED and enqueues the executor', async () => {
+    const sut = makeSut({ thresholdInt: 1 }); // above -> PENDING
+    await sut.svc.initiate('staff1', baseInput(), CTX);
+    const res = await sut.svc.approve('approver1', 'adj1', CTX);
+    expect(res.status).toBe(AdjustmentStatus.APPROVED);
+    expect(res.approvedById).toBe('approver1');
+    expect(sut.enqueued).toEqual(['adj1']);
+  });
+
+  it('double-approve race -> 409 ADJUSTMENT_NOT_PENDING (no enqueue)', async () => {
+    const sut = makeSut({ thresholdInt: 1, updateManyCount: 0 });
+    await sut.svc.initiate('staff1', baseInput(), CTX);
+    await expect(sut.svc.approve('approver1', 'adj1', CTX)).rejects.toMatchObject({
+      response: { code: 'ADJUSTMENT_NOT_PENDING' },
+    });
+    expect(sut.enqueued).toHaveLength(0);
+  });
+
+  it('reject: requires a reason; PENDING -> REJECTED with rejectedReason', async () => {
+    const sut = makeSut({ thresholdInt: 1 });
+    await sut.svc.initiate('staff1', baseInput(), CTX);
+    await expect(sut.svc.reject('approver1', 'adj1', '   ', CTX)).rejects.toMatchObject({
+      response: { code: 'REJECT_REASON_REQUIRED' },
+    });
+    const res = await sut.svc.reject('approver1', 'adj1', 'not justified', CTX);
+    expect(res.status).toBe(AdjustmentStatus.REJECTED);
+    expect(res.rejectedReason).toBe('not justified');
+  });
+});
+
+describe('StockAdjustmentService.executeAdjustment idempotency', () => {
+  it('an already-EXECUTED adjustment is a no-op (no second movement set)', async () => {
+    const sut = makeSut({ thresholdInt: 50_000 }); // below -> auto-EXECUTED
+    await sut.svc.initiate('staff1', baseInput(), CTX);
+    expect(sut.applyCalls).toHaveLength(1);
+    // Re-deliver the executor job for the now-EXECUTED adjustment.
+    const res = await sut.svc.executeAdjustment('adj1', { type: 'SYSTEM' as never });
+    expect(res.status).toBe(AdjustmentStatus.EXECUTED);
+    expect(sut.applyCalls).toHaveLength(1); // unchanged — no double-apply
   });
 });

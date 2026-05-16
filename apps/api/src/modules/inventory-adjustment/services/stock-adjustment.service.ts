@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -21,6 +22,7 @@ import { StockMutationService } from '../../inventory-shared/stock-mutation.serv
 import { StockAlertService } from '../../inventory-stock/services/stock-alert.service';
 import { StockCacheService } from '../../inventory-stock/services/stock-cache.service';
 import { EmailQueue } from '../../email/queue/email.queue';
+import { AdjustmentQueue } from '../queue/adjustment.queue';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import type {
   AdjustmentLineDto,
@@ -85,6 +87,7 @@ export class StockAdjustmentService {
     private readonly alerts: StockAlertService,
     private readonly cache: StockCacheService,
     private readonly email: EmailQueue,
+    private readonly queue: AdjustmentQueue,
   ) {}
 
   async initiate(
@@ -182,12 +185,23 @@ export class StockAdjustmentService {
     adjustmentId: string,
     actor: { type: ActorType; id?: string | null },
   ): Promise<StockAdjustmentView> {
-    const { view, sellerId, warehouseId, variantIds } =
+    const { view, sellerId, warehouseId, variantIds, idempotent } =
       await this.mutation.runWithRetry(async (tx) => {
         const adj = await tx.stockAdjustment.findUniqueOrThrow({
           where: { id: adjustmentId },
           include: ADJUSTMENT_INCLUDE,
         });
+        if (adj.status === AdjustmentStatus.EXECUTED) {
+          // Idempotent — a re-delivered executor job for an already-done
+          // adjustment is a no-op (no second movement set).
+          return {
+            view: adj,
+            sellerId: adj.sellerId,
+            warehouseId: adj.warehouseId,
+            variantIds: [] as string[],
+            idempotent: true,
+          };
+        }
         if (
           adj.status !== AdjustmentStatus.PENDING &&
           adj.status !== AdjustmentStatus.APPROVED
@@ -256,14 +270,96 @@ export class StockAdjustmentService {
           sellerId: adj.sellerId,
           warehouseId: adj.warehouseId,
           variantIds: [...new Set(variants)],
+          idempotent: false,
         };
       });
 
+    if (idempotent) return view;
     await this.cache.invalidate(sellerId, warehouseId);
     for (const variantId of variantIds) {
       await this.alerts.evaluate(sellerId, variantId, warehouseId);
     }
     return view;
+  }
+
+  /**
+   * PENDING -> APPROVED, then enqueue the executor. The conditional
+   * updateMany WHERE status=PENDING is the race guard: a concurrent
+   * second approve/reject affects 0 rows -> 409, so an adjustment is
+   * never double-approved or approved-after-reject. The executor runs
+   * asynchronously in its own tx (commit-20 worker).
+   */
+  async approve(
+    staffId: string,
+    id: string,
+    ctx: ClientContext,
+  ): Promise<StockAdjustmentView> {
+    const existing = await this.get(id);
+    const { count } = await this.prisma.client.stockAdjustment.updateMany({
+      where: { id, status: AdjustmentStatus.PENDING },
+      data: {
+        status: AdjustmentStatus.APPROVED,
+        approvedById: staffId,
+        approvedAt: new Date(),
+      },
+    });
+    if (count !== 1) {
+      throw new ConflictException({
+        code: 'ADJUSTMENT_NOT_PENDING',
+        message: `Adjustment is ${existing.status}; only PENDING can be approved`,
+      });
+    }
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      staffUserId: staffId,
+      action: 'inventory.stock_adjustment.approved',
+      entityType: 'stock_adjustment',
+      entityId: id,
+      metadata: this.ctxMeta(ctx),
+    });
+    await this.queue.enqueueExecute(id);
+    return this.get(id);
+  }
+
+  /** PENDING -> REJECTED (race-guarded, same as approve). */
+  async reject(
+    staffId: string,
+    id: string,
+    reason: string,
+    ctx: ClientContext,
+  ): Promise<StockAdjustmentView> {
+    const trimmed = reason.trim();
+    if (trimmed.length === 0) {
+      throw new BadRequestException({
+        code: 'REJECT_REASON_REQUIRED',
+        message: 'A rejection reason is required',
+      });
+    }
+    const existing = await this.get(id);
+    const { count } = await this.prisma.client.stockAdjustment.updateMany({
+      where: { id, status: AdjustmentStatus.PENDING },
+      data: {
+        status: AdjustmentStatus.REJECTED,
+        approvedById: staffId,
+        approvedAt: new Date(),
+        rejectedReason: trimmed,
+      },
+    });
+    if (count !== 1) {
+      throw new ConflictException({
+        code: 'ADJUSTMENT_NOT_PENDING',
+        message: `Adjustment is ${existing.status}; only PENDING can be rejected`,
+      });
+    }
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      staffUserId: staffId,
+      action: 'inventory.stock_adjustment.rejected',
+      entityType: 'stock_adjustment',
+      entityId: id,
+      metadata: { reason: trimmed, ...this.ctxMeta(ctx) },
+    });
+    return this.get(id);
   }
 
   async list(

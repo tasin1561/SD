@@ -6,6 +6,8 @@ import { InventorySharedModule } from '../inventory-shared/inventory-shared.modu
 import { InventoryStockModule } from '../inventory-stock/inventory-stock.module';
 import { AdminStockAdjustmentController } from './admin-stock-adjustment.controller';
 import { StockAdjustmentService } from './services/stock-adjustment.service';
+import { AdjustmentQueue } from './queue/adjustment.queue';
+import { AdjustmentWorker } from './queue/adjustment.worker';
 
 /**
  * Manual stock adjustments (threshold-gated approval workflow). Initiate
@@ -15,7 +17,7 @@ import { StockAdjustmentService } from './services/stock-adjustment.service';
 @Module({
   imports: [InventorySharedModule, CatalogReadModule, EmailModule, InventoryStockModule],
   controllers: [AdminStockAdjustmentController],
-  providers: [StockAdjustmentService, StaffJwtGuard],
+  providers: [StockAdjustmentService, AdjustmentQueue, AdjustmentWorker, StaffJwtGuard],
   exports: [StockAdjustmentService],
 })
 export class InventoryAdjustmentModule {}

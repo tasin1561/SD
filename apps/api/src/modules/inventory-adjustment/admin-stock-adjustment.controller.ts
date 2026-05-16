@@ -19,6 +19,7 @@ import type { AuthenticatedStaff } from '../../common/types/request';
 import {
   CreateStockAdjustmentDto,
   ListStockAdjustmentsQueryDto,
+  RejectAdjustmentDto,
 } from './dto/stock-adjustment.dto';
 import {
   StockAdjustmentService,
@@ -63,5 +64,28 @@ export class AdminStockAdjustmentController {
   @ApiOperation({ summary: 'Get one stock adjustment' })
   get(@Param('id', uuid()) id: string): Promise<StockAdjustmentView> {
     return this.svc.get(id);
+  }
+
+  @Post(':id/approve')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Approve a PENDING adjustment (enqueues the executor)' })
+  approve(
+    @Param('id', uuid()) id: string,
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<StockAdjustmentView> {
+    return this.svc.approve(staff.id, id, ctx);
+  }
+
+  @Post(':id/reject')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reject a PENDING adjustment' })
+  reject(
+    @Param('id', uuid()) id: string,
+    @Body() body: RejectAdjustmentDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<StockAdjustmentView> {
+    return this.svc.reject(staff.id, id, body.reason, ctx);
   }
 }
