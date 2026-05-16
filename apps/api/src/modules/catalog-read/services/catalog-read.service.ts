@@ -33,6 +33,15 @@ export interface ResolvedVariant {
   /** Always resolves: variant → category → system default (whole percent
    *  in Phase 1A — see phase-1a-debt). */
   readonly gstRate: Prisma.Decimal;
+  /**
+   * Inventory-owned passthrough (Module 5). The RAW per-variant
+   * `product_variants.low_stock_threshold` (NOT inheritance-resolved here —
+   * the seller-default fallback is inventory's own logic). Surfaced on this
+   * boundary purely so inventory can honor CLAUDE MUST #13 ("never query
+   * product_variants directly outside the catalog modules"); catalog does
+   * not interpret it.
+   */
+  readonly lowStockThreshold: number | null;
 }
 
 const VARIANT_SELECT = {
@@ -50,6 +59,7 @@ const VARIANT_SELECT = {
   declaredValueInr: true,
   hsCode: true,
   gstRate: true,
+  lowStockThreshold: true,
   product: {
     select: {
       categoryId: true,
@@ -176,6 +186,7 @@ export class CatalogReadService {
       hsCode:
         row.hsCode ?? product.defaultHsCode ?? category?.defaultHsCode ?? null,
       gstRate: row.gstRate ?? category?.defaultGstRate ?? gstDefault,
+      lowStockThreshold: row.lowStockThreshold ?? null,
     });
   }
 
