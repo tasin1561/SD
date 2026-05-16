@@ -937,12 +937,13 @@ model StockAdjustment {
   updatedAt            DateTime                @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt            DateTime?               @map("deleted_at") @db.Timestamptz
 
-  seller          Seller           @relation(fields: [sellerId], references: [id])
-  warehouse       Warehouse        @relation(fields: [warehouseId], references: [id])
-  initiatedBy     StaffUser        @relation("StockAdjustmentInitiatedBy", fields: [initiatedById], references: [id])
-  approvedBy      StaffUser?       @relation("StockAdjustmentApprovedBy", fields: [approvedById], references: [id])
+  seller          Seller                @relation(fields: [sellerId], references: [id])
+  warehouse       Warehouse             @relation(fields: [warehouseId], references: [id])
+  initiatedBy     StaffUser             @relation("StockAdjustmentInitiatedBy", fields: [initiatedById], references: [id])
+  approvedBy      StaffUser?            @relation("StockAdjustmentApprovedBy", fields: [approvedById], references: [id])
   movements       StockMovement[]
   cycleCountItems CycleCountItem[]
+  lines           StockAdjustmentLine[]
 
   @@index([sellerId])
   @@index([warehouseId])
@@ -952,6 +953,39 @@ model StockAdjustment {
   @@index([initiatedById])
   @@index([approvedById])
   @@map("stock_adjustments")
+}
+
+// Module 5 (commit 19). Persists a PENDING adjustment's INTENDED stock
+// change so the executor can replay it on approval — StockAdjustment
+// itself has no target columns. variant/bin/batch are bare scalar UUIDs
+// (no @relation), matching the loosely-coupled-ref precedent
+// (category_proposals.proposedParentId, bulk_product_uploads ids): these
+// are operational targets, not graph edges. The parent link IS a relation
+// (cascade with the adjustment, like goods_receipt_lines).
+//
+// qtyChange is signed and MUST agree with the parent type (INCREASE => >0,
+// DECREASE => <0). unitCostInr is the RESOLVED cost snapshot
+// (line input → batch.unitCostInr) used for totalValueImpactInr and
+// historical accuracy. batchId nullable for schema flexibility; the
+// executor requires it (stock_levels is always at a concrete bin+batch).
+model StockAdjustmentLine {
+  id           String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  adjustmentId String   @map("adjustment_id") @db.Uuid
+  variantId    String   @map("variant_id") @db.Uuid
+  binId        String   @map("bin_id") @db.Uuid
+  batchId      String?  @map("batch_id") @db.Uuid
+  qtyChange    Int      @map("qty_change")
+  unitCostInr  Decimal? @map("unit_cost_inr") @db.Decimal(12, 2)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  adjustment StockAdjustment @relation(fields: [adjustmentId], references: [id], onDelete: Cascade)
+
+  @@index([adjustmentId])
+  @@index([variantId])
+  @@index([binId])
+  @@index([batchId])
+  @@map("stock_adjustment_lines")
 }
 
 model CycleCount {
