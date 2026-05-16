@@ -27,6 +27,7 @@ import { CatalogImageModule } from './modules/catalog-image/catalog-image.module
 import { CatalogCsvImportModule } from './modules/catalog-csv-import/catalog-csv-import.module';
 import { CatalogReadModule } from './modules/catalog-read/catalog-read.module';
 import { InventorySharedModule } from './modules/inventory-shared/inventory-shared.module';
+import { InventoryWarehouseModule } from './modules/inventory-warehouse/inventory-warehouse.module';
 import { ThrottlerModule } from './common/throttler/throttler.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { pinoConfig } from './common/pino/logger-config';
@@ -79,6 +80,7 @@ import { envSchema } from './config/env.schema';
     CatalogCsvImportModule,
     CatalogReadModule,
     InventorySharedModule,
+    InventoryWarehouseModule,
     HealthModule,
   ],
 })
