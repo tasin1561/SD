@@ -11,10 +11,16 @@ import {
   Prisma,
   VariantStatus,
 } from '@skydrop/db';
+import { NotificationRecipientType, StockMovementType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 import { WarehouseResolverService } from '../../inventory-shared/warehouse-resolver.service';
+import { StockMutationService } from '../../inventory-shared/stock-mutation.service';
+import { StockAlertService } from '../../inventory-stock/services/stock-alert.service';
+import { StockCacheService } from '../../inventory-stock/services/stock-cache.service';
+import { EmailQueue } from '../../email/queue/email.queue';
+import { EnvService } from '../../../config/env.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import type {
   DeclareGoodsReceiptDto,
@@ -22,6 +28,10 @@ import type {
   ListGoodsReceiptsQueryDto,
   UpdateGoodsReceiptDto,
 } from '../dto/goods-receipt.dto';
+import type { DiscrepancyResolutionMode } from '../dto/resolve-discrepancy.dto';
+
+const EMAIL_COMPLETED = 'seller.goods_receipt_completed.email';
+const EMAIL_DISCREPANCY = 'seller.goods_receipt_discrepancy.email';
 
 const RECEIPT_VIEW_INCLUDE = {
   lines: {
@@ -60,6 +70,11 @@ export class GoodsReceiptService {
     private readonly audit: AuditLogService,
     private readonly catalog: CatalogReadService,
     private readonly warehouses: WarehouseResolverService,
+    private readonly mutation: StockMutationService,
+    private readonly alerts: StockAlertService,
+    private readonly cache: StockCacheService,
+    private readonly email: EmailQueue,
+    private readonly env: EnvService,
   ) {}
 
   // ---------------- seller declaration ----------------
@@ -358,6 +373,351 @@ export class GoodsReceiptService {
         where: { id },
         include: RECEIPT_VIEW_INCLUDE,
       });
+    });
+  }
+
+  // ---------------- completion + discrepancy resolution ----------------
+
+  /**
+   * ARRIVING -> COMPLETED or DISCREPANCY.
+   *  - any line with receivedQty != expectedQty OR damagedQty > 0 ->
+   *    DISCREPANCY, NO stock written (blocks stock from becoming
+   *    available until resolved — locked decision #10).
+   *  - otherwise the stock-writing completion runs.
+   */
+  async complete(
+    staffId: string,
+    id: string,
+    ctx: ClientContext,
+  ): Promise<GoodsReceiptView> {
+    const receipt = await this.getForAdmin(id);
+    this.assertStatus(receipt.status, [GoodsReceiptStatus.ARRIVING], 'complete');
+
+    const discrepancies = this.detectDiscrepancies(receipt);
+    if (discrepancies.length > 0) {
+      const notes = this.formatDiscrepancyNotes(discrepancies);
+      const updated = await this.prisma.client.$transaction(async (tx) => {
+        const row = await tx.goodsReceipt.update({
+          where: { id },
+          data: {
+            status: GoodsReceiptStatus.DISCREPANCY,
+            hasDiscrepancies: true,
+            discrepancyNotes: notes,
+          },
+          include: RECEIPT_VIEW_INCLUDE,
+        });
+        await this.audit.log(
+          {
+            actorType: ActorType.STAFF,
+            staffUserId: staffId,
+            action: 'inventory.goods_receipt.discrepancy',
+            entityType: 'goods_receipt',
+            entityId: id,
+            metadata: { discrepancies, ...this.ctxMeta(ctx) },
+          },
+          tx,
+        );
+        await this.enqueueReceiptEmail(tx, EMAIL_DISCREPANCY, receipt.sellerId, {
+          receipt_number: receipt.receiptNumber,
+          warehouse_name: await this.warehouseName(tx, receipt.warehouseId),
+          discrepancy_notes: notes,
+          support_email: this.env.supportEmail,
+        });
+        return row;
+      });
+      return updated;
+    }
+
+    return this.writeStockAndComplete(staffId, id, null, ctx);
+  }
+
+  /** DISCREPANCY -> COMPLETED. CORRECT applies corrected actuals first;
+   *  FORCE_COMPLETE accepts the recorded counts and stamps a permanent
+   *  note. Both then write stock for the (now-authoritative) received
+   *  quantities. */
+  async resolveDiscrepancy(
+    staffId: string,
+    id: string,
+    input: {
+      mode: DiscrepancyResolutionMode;
+      note?: string;
+      lines?: Array<{
+        lineId: string;
+        receivedQty: number;
+        damagedQty?: number;
+        putawayBinId?: string;
+        manufacturedAt?: string;
+        expiresAt?: string;
+        unitCostInr?: number;
+      }>;
+    },
+    ctx: ClientContext,
+  ): Promise<GoodsReceiptView> {
+    const receipt = await this.getForAdmin(id);
+    this.assertStatus(receipt.status, [GoodsReceiptStatus.DISCREPANCY], 'resolve');
+
+    if (input.mode === 'FORCE_COMPLETE') {
+      if (!input.note || input.note.trim().length === 0) {
+        throw new BadRequestException({
+          code: 'FORCE_COMPLETE_NOTE_REQUIRED',
+          message: 'A note recording the accepted shortage is required to force-complete',
+        });
+      }
+      const permanentNote = `[FORCE-COMPLETED by staff ${staffId}] ${input.note.trim()} | accepted: ${this.formatDiscrepancyNotes(
+        this.detectDiscrepancies(receipt),
+      )}`;
+      return this.writeStockAndComplete(staffId, id, permanentNote, ctx);
+    }
+
+    // CORRECT: apply corrected actuals, then complete on the corrected qtys.
+    const correctionLines = input.lines ?? [];
+    if (correctionLines.length === 0) {
+      throw new BadRequestException({
+        code: 'CORRECTION_LINES_REQUIRED',
+        message: 'CORRECT mode requires the corrected line actuals',
+      });
+    }
+    const lineIds = new Set(receipt.lines.map((l) => l.id));
+    for (const l of correctionLines) {
+      if (!lineIds.has(l.lineId)) {
+        throw new BadRequestException({
+          code: 'RECEIPT_LINE_NOT_FOUND',
+          message: `Line ${l.lineId} is not part of this receipt`,
+        });
+      }
+      if (l.receivedQty > 0 && !l.putawayBinId) {
+        throw new BadRequestException({
+          code: 'PUTAWAY_BIN_REQUIRED',
+          message: `Line ${l.lineId} received ${l.receivedQty} units but has no putaway bin`,
+        });
+      }
+      if (l.putawayBinId) await this.assertPutawayBin(receipt.warehouseId, l.putawayBinId);
+    }
+    await this.prisma.client.$transaction(async (tx) => {
+      for (const l of correctionLines) {
+        await tx.goodsReceiptLine.update({
+          where: { id: l.lineId },
+          data: {
+            receivedQty: l.receivedQty,
+            damagedQty: l.damagedQty ?? 0,
+            putawayBinId: l.putawayBinId ?? null,
+            ...(l.manufacturedAt !== undefined
+              ? { manufacturedAt: l.manufacturedAt ? new Date(l.manufacturedAt) : null }
+              : {}),
+            ...(l.expiresAt !== undefined
+              ? { expiresAt: l.expiresAt ? new Date(l.expiresAt) : null }
+              : {}),
+            ...(l.unitCostInr !== undefined
+              ? { unitCostInr: l.unitCostInr != null ? new Prisma.Decimal(l.unitCostInr) : null }
+              : {}),
+          },
+        });
+      }
+      await this.audit.log(
+        {
+          actorType: ActorType.STAFF,
+          staffUserId: staffId,
+          action: 'inventory.goods_receipt.discrepancy_corrected',
+          entityType: 'goods_receipt',
+          entityId: id,
+          metadata: { correctedLineCount: correctionLines.length, ...this.ctxMeta(ctx) },
+        },
+        tx,
+      );
+    });
+    const note = input.note?.trim()
+      ? `[CORRECTED by staff ${staffId}] ${input.note.trim()}`
+      : `[CORRECTED by staff ${staffId}]`;
+    return this.writeStockAndComplete(staffId, id, note, ctx);
+  }
+
+  /**
+   * THE inventory data-integrity flow. For every received line: create a
+   * StockBatch and post a +qty RECEIVING movement through the sole writer
+   * (StockMutationService) — batches + movements + stock_levels + receipt
+   * status + audit + the completion email ALL in one transaction, retried
+   * as a whole on a stock_levels.version clash (INV-1/5/6). Cache
+   * invalidation + alert evaluation happen AFTER commit (INV-5).
+   *
+   * damagedQty is recorded but NOT stocked in Phase 1A (write-off / return
+   * handling is Module 8 / Phase 2 — see phase-1a-debt).
+   */
+  private async writeStockAndComplete(
+    staffId: string,
+    id: string,
+    completionNote: string | null,
+    ctx: ClientContext,
+  ): Promise<GoodsReceiptView> {
+    const now = new Date();
+    const { view, affectedVariantIds, sellerId, warehouseId } =
+      await this.mutation.runWithRetry(async (tx) => {
+        const receipt = await tx.goodsReceipt.findUniqueOrThrow({
+          where: { id },
+          include: RECEIPT_VIEW_INCLUDE,
+        });
+        const variantIds: string[] = [];
+        let totalReceived = 0;
+
+        for (const [i, line] of receipt.lines.entries()) {
+          if (line.receivedQty <= 0) continue;
+          if (!line.putawayBinId) {
+            throw new BadRequestException({
+              code: 'PUTAWAY_BIN_REQUIRED',
+              message: `Line ${line.id} has ${line.receivedQty} units but no putaway bin`,
+            });
+          }
+          const batch = await tx.stockBatch.create({
+            data: {
+              sellerId: receipt.sellerId,
+              variantId: line.variantId,
+              warehouseId: receipt.warehouseId,
+              batchCode: `${receipt.receiptNumber}-L${i + 1}`,
+              manufacturedAt: line.manufacturedAt,
+              expiresAt: line.expiresAt,
+              unitCostInr: line.unitCostInr,
+              initialQty: line.receivedQty,
+              receivedAt: now,
+              receivedById: staffId,
+              receivingNoteId: receipt.id,
+            },
+            select: { id: true },
+          });
+          await this.mutation.apply(tx, {
+            sellerId: receipt.sellerId,
+            variantId: line.variantId,
+            warehouseId: receipt.warehouseId,
+            binId: line.putawayBinId,
+            batchId: batch.id,
+            qtyChange: line.receivedQty,
+            type: StockMovementType.RECEIVING,
+            actorType: ActorType.STAFF,
+            actorId: staffId,
+            reason: `Goods receipt ${receipt.receiptNumber}`,
+          });
+          await tx.goodsReceiptLine.update({
+            where: { id: line.id },
+            data: { batchId: batch.id },
+          });
+          variantIds.push(line.variantId);
+          totalReceived += line.receivedQty;
+        }
+
+        const row = await tx.goodsReceipt.update({
+          where: { id },
+          data: {
+            status: GoodsReceiptStatus.COMPLETED,
+            hasDiscrepancies: false,
+            receivedAt: now,
+            receivedById: staffId,
+            ...(completionNote
+              ? {
+                  discrepancyNotes: receipt.discrepancyNotes
+                    ? `${receipt.discrepancyNotes}\n${completionNote}`
+                    : completionNote,
+                }
+              : {}),
+          },
+          include: RECEIPT_VIEW_INCLUDE,
+        });
+        await this.audit.log(
+          {
+            actorType: ActorType.STAFF,
+            staffUserId: staffId,
+            action: 'inventory.goods_receipt.completed',
+            entityType: 'goods_receipt',
+            entityId: id,
+            metadata: {
+              totalReceived,
+              lineCount: receipt.lines.length,
+              note: completionNote,
+              ...this.ctxMeta(ctx),
+            },
+          },
+          tx,
+        );
+        await this.enqueueReceiptEmail(tx, EMAIL_COMPLETED, receipt.sellerId, {
+          receipt_number: receipt.receiptNumber,
+          warehouse_name: await this.warehouseName(tx, receipt.warehouseId),
+          total_received: totalReceived,
+          line_count: receipt.lines.length,
+          app_url: this.env.sellerAppUrl,
+        });
+        return {
+          view: row,
+          affectedVariantIds: [...new Set(variantIds)],
+          sellerId: receipt.sellerId,
+          warehouseId: receipt.warehouseId,
+        };
+      });
+
+    // INV-5: cache invalidation + alert evaluation AFTER commit.
+    await this.cache.invalidate(sellerId, warehouseId);
+    for (const variantId of affectedVariantIds) {
+      await this.alerts.evaluate(sellerId, variantId, warehouseId);
+    }
+    return view;
+  }
+
+  private detectDiscrepancies(receipt: GoodsReceiptView): Array<{
+    lineId: string;
+    variantId: string;
+    expectedQty: number;
+    receivedQty: number;
+    damagedQty: number;
+  }> {
+    return receipt.lines
+      .filter((l) => l.receivedQty !== l.expectedQty || l.damagedQty > 0)
+      .map((l) => ({
+        lineId: l.id,
+        variantId: l.variantId,
+        expectedQty: l.expectedQty,
+        receivedQty: l.receivedQty,
+        damagedQty: l.damagedQty,
+      }));
+  }
+
+  private formatDiscrepancyNotes(
+    d: Array<{ variantId: string; expectedQty: number; receivedQty: number; damagedQty: number }>,
+  ): string {
+    return d
+      .map(
+        (x) =>
+          `variant ${x.variantId}: expected ${x.expectedQty}, received ${x.receivedQty}, damaged ${x.damagedQty}`,
+      )
+      .join('; ');
+  }
+
+  private async warehouseName(
+    tx: Prisma.TransactionClient,
+    warehouseId: string,
+  ): Promise<string> {
+    const wh = await tx.warehouse.findUnique({
+      where: { id: warehouseId },
+      select: { name: true },
+    });
+    return wh?.name ?? warehouseId;
+  }
+
+  private async enqueueReceiptEmail(
+    tx: Prisma.TransactionClient,
+    templateCode: string,
+    sellerId: string,
+    variables: Record<string, string | number>,
+  ): Promise<void> {
+    const seller = await tx.seller.findUnique({
+      where: { id: sellerId },
+      select: { id: true, email: true, companyName: true },
+    });
+    if (!seller) return;
+    await this.email.enqueue({
+      templateCode,
+      recipient: {
+        type: NotificationRecipientType.SELLER,
+        id: seller.id,
+        email: seller.email,
+      },
+      variables: { company_name: seller.companyName, ...variables },
+      triggerEvent: 'inventory.goods_receipt',
     });
   }
 

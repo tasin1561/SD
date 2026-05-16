@@ -38,5 +38,10 @@ import { ReservationWorker } from './queue/reservation.worker';
     ReservationWorker,
     SellerJwtGuard,
   ],
+  // Intra-Module-5 sharing: receipt/adjustment/cycle-count call these in
+  // their post-commit hooks. The Module 6/8 cross-module surface
+  // (StockReadService/StockReservationService/StockPickAllocationService)
+  // is added at commit 22; StockAlertService stays internal to Module 5.
+  exports: [StockAlertService, StockCacheService],
 })
 export class InventoryStockModule {}
