@@ -4,10 +4,12 @@ import { CatalogReadModule } from '../catalog-read/catalog-read.module';
 import { EmailModule } from '../email/email.module';
 import { InventorySharedModule } from '../inventory-shared/inventory-shared.module';
 import { SellerStockController } from './seller-stock.controller';
+import { SellerThresholdController } from './seller-threshold.controller';
 import { StockCacheService } from './services/stock-cache.service';
 import { StockReadService } from './services/stock-read.service';
 import { SellerStockService } from './services/seller-stock.service';
 import { StockAlertService } from './services/stock-alert.service';
+import { SellerThresholdService } from './services/seller-threshold.service';
 
 /**
  * Stock queries, reservations, alerts and the cross-module read boundary.
@@ -17,12 +19,13 @@ import { StockAlertService } from './services/stock-alert.service';
  */
 @Module({
   imports: [InventorySharedModule, CatalogReadModule, EmailModule],
-  controllers: [SellerStockController],
+  controllers: [SellerStockController, SellerThresholdController],
   providers: [
     StockCacheService,
     StockReadService,
     SellerStockService,
     StockAlertService,
+    SellerThresholdService,
     SellerJwtGuard,
   ],
 })
