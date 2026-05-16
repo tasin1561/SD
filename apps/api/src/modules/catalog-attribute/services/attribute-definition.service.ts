@@ -46,6 +46,51 @@ export class AttributeDefinitionService {
     private readonly resolution: AttributeResolutionService,
   ) {}
 
+  /**
+   * Bulk-create attribute definitions for a freshly created category
+   * inside an existing transaction (used by category-proposal approval).
+   * Validates ENUM-requires-values and rejects duplicate keys within the
+   * input. No audit, no cache invalidation — the category is brand new so
+   * nothing is cached, and the caller owns the surrounding audit.
+   */
+  async createManyInTx(
+    tx: Prisma.TransactionClient,
+    categoryId: string,
+    defs: Array<{
+      attributeKey: string;
+      displayLabel: string;
+      valueType: AttributeValueType;
+      allowedValues?: string[];
+      isRequired?: boolean;
+      displayOrder?: number;
+    }>,
+  ): Promise<number> {
+    if (defs.length === 0) return 0;
+    const seen = new Set<string>();
+    for (const d of defs) {
+      if (seen.has(d.attributeKey)) {
+        throw new ConflictException({
+          code: 'DUPLICATE_ATTRIBUTE_KEY',
+          message: `Duplicate attributeKey "${d.attributeKey}" in the attribute set`,
+        });
+      }
+      seen.add(d.attributeKey);
+      this.assertEnumHasValues(d.valueType, d.allowedValues);
+    }
+    await tx.categoryAttributeDefinition.createMany({
+      data: defs.map((d) => ({
+        categoryId,
+        attributeKey: d.attributeKey,
+        displayLabel: d.displayLabel,
+        valueType: d.valueType,
+        allowedValues: d.allowedValues ?? [],
+        isRequired: d.isRequired ?? false,
+        displayOrder: d.displayOrder ?? 100,
+      })),
+    });
+    return defs.length;
+  }
+
   /** Definitions declared directly on this category (NOT inherited — the
    *  inherited/effective set is resolved by the resolver in commit 6). */
   async listForCategory(categoryId: string): Promise<AttributeDefinitionView[]> {

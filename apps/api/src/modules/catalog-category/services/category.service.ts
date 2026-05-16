@@ -101,6 +101,78 @@ export class CategoryService {
     return row;
   }
 
+  // ---------- tx-aware creation (used by proposal approval) ----------
+
+  /**
+   * Create a category inside an existing transaction. Computes depth +
+   * fullPath from the parent, enforces slug uniqueness, and returns the
+   * created row. Does NOT audit — the caller owns the audit/email for the
+   * surrounding operation (e.g. proposal approval). Throws ConflictException
+   * on slug clash, BadRequestException if parent is missing.
+   */
+  async createInTx(
+    tx: TxClient,
+    input: {
+      name: string;
+      slug: string;
+      parentId?: string | null | undefined;
+      sortOrder?: number | undefined;
+      defaultPackageType?: PackageType | null | undefined;
+      requiresFragile?: boolean | undefined;
+      requiresColdChain?: boolean | undefined;
+      defaultHsCode?: string | null | undefined;
+      defaultGstRate?: number | null | undefined;
+    },
+  ): Promise<CategoryView> {
+    const slugTaken = await tx.category.findUnique({
+      where: { slug: input.slug },
+      select: { id: true },
+    });
+    if (slugTaken) {
+      throw new ConflictException({
+        code: 'SLUG_TAKEN',
+        message: `Category slug "${input.slug}" is already in use`,
+      });
+    }
+
+    let depth = 0;
+    let fullPath = input.name;
+    if (input.parentId) {
+      const parent = await tx.category.findFirst({
+        where: { id: input.parentId, deletedAt: null },
+        select: { depth: true, fullPath: true },
+      });
+      if (!parent) {
+        throw new BadRequestException({
+          code: 'PARENT_NOT_FOUND',
+          message: 'Parent category not found',
+        });
+      }
+      depth = parent.depth + 1;
+      fullPath = `${parent.fullPath}${FULL_PATH_SEPARATOR}${input.name}`;
+    }
+
+    return tx.category.create({
+      data: {
+        parentId: input.parentId ?? null,
+        slug: input.slug,
+        name: input.name,
+        fullPath,
+        depth,
+        sortOrder: input.sortOrder ?? 0,
+        defaultPackageType: input.defaultPackageType ?? null,
+        requiresFragile: input.requiresFragile ?? false,
+        requiresColdChain: input.requiresColdChain ?? false,
+        defaultHsCode: input.defaultHsCode ?? null,
+        defaultGstRate:
+          input.defaultGstRate === undefined || input.defaultGstRate === null
+            ? null
+            : new Prisma.Decimal(input.defaultGstRate),
+      },
+      select: VIEW_SELECT,
+    });
+  }
+
   // ---------- admin mutations ----------
 
   async create(
