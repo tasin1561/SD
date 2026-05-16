@@ -3,7 +3,7 @@
 > **Canonical reference.** This document is the single source of truth for Skydrop's database schema. The Prisma schema in `packages/db/prisma/schema.prisma` implements what's documented here. If they diverge, this document wins — update Prisma to match, not the other way around.
 
 **Status:** Design locked, awaiting implementation.
-**Total tables:** 61 across 9 layers.
+**Total tables:** 65 across 9 layers.
 **Database:** PostgreSQL 18 with TimescaleDB extension.
 **ORM:** Prisma.
 
@@ -68,14 +68,14 @@ These rules apply to **every** table unless explicitly noted otherwise.
 |---|---|---|
 | 1 — Identity & Access | 13 | Auth, tokens, RBAC, audit, onboarding progress |
 | 2 — Addresses & Locations | 5 | Polymorphic addresses, warehouse hierarchy |
-| 3 — Catalog | 5 | Products, variants, categories, images |
+| 3 — Catalog | 9 | Products, variants, categories, images, proposals, attribute defs, CSV |
 | 4 — Inventory & WMS | 7 | Stock levels, movements, reservations, batches |
 | 5 — Orders & Customers | 6 | Orders, items, customers, events |
 | 6 — Call Center | 3 | Queue, attempts, agent config |
 | 7 — Shipments & Tracking | 7 | Shipments, labels, tracking events |
 | 8 — Couriers & Pricing | 9 | Couriers, credentials, rates, FX, charges |
 | 9 — Notifications & Webhooks | 6 | Templates, logs, webhooks, settings |
-| **Total** | **61** | |
+| **Total** | **65** | |
 
 ---
 
@@ -306,7 +306,7 @@ IN pincode cache (hybrid — grows organically + service area classification).
 
 ---
 
-# Layer 3 — Catalog (5 tables)
+# Layer 3 — Catalog (9 tables)
 
 ## categories
 Global category tree with handling hints.
@@ -380,6 +380,72 @@ Per-category courier handling rules.
 
 **Constraints:** `@@unique([categoryId, courierCode])`
 **Indexes:** `courierCode`
+
+## category_proposals
+Seller-submitted requests to add a new category (Module 4). Sellers can't
+create categories directly; they propose, an admin reviews. On approval a
+real `categories` row is created and linked back via `resultingCategoryId`.
+
+**Key fields:**
+- `sellerId` (FK seller), `proposedName`, `proposedSlug`, `rationale`
+- `proposedParentId?` — bare UUID, NOT a Prisma relation (a proposal is a
+  loosely-coupled request; the parent may be restructured before review).
+  Mirrors the `category_courier_rules.courierCode` denormalized precedent.
+- `reviewedByStaffId?` — bare UUID (same rationale, not a relation)
+- `status: CategoryProposalStatus` (PENDING, APPROVED, REJECTED, WITHDRAWN)
+- `reviewedAt?`, `decisionNote?`
+- `resultingCategoryId?` — relation to `categories` (set on approval)
+
+**Indexes:** `(sellerId, status)`, `status`, `proposedParentId`, `deletedAt`
+
+**CategoryProposalStatus enum:** `PENDING`, `APPROVED`, `REJECTED`, `WITHDRAWN`
+
+## category_attribute_definitions
+Per-category attribute schema (Module 4). Variants under a category must
+satisfy the effective attribute set (this category's defs + all inherited
+from ancestors, child overrides parent on same `attributeKey`).
+
+**Key fields:**
+- `categoryId` (FK category), `attributeKey`, `displayLabel`
+- `valueType: AttributeValueType` (STRING, NUMBER, BOOLEAN, ENUM)
+- `allowedValues String[]` (used when valueType=ENUM)
+- `isRequired`, `displayOrder`
+
+**Constraints:** `@@unique([categoryId, attributeKey])`
+**Indexes:** `categoryId`, `deletedAt`
+
+**AttributeValueType enum:** `STRING`, `NUMBER`, `BOOLEAN`, `ENUM`
+
+## seller_csv_mappings
+Saved column-mapping presets for a seller's CSV imports (Module 4). Lets a
+seller re-use the header→field mapping for their spreadsheet format.
+
+**Key fields:**
+- `sellerId` (FK seller), `name`, `importType: CsvImportType`
+- `columnMap: Json` (header-string → catalog-field map)
+- `isDefault`, `lastUsedAt`
+
+**Indexes:** `(sellerId, importType)`, `(sellerId, isDefault)`, `deletedAt`
+
+**CsvImportType enum:** `PRODUCT_VARIANT` (forward-compatible; only value in 1A)
+
+## bulk_product_uploads
+One row per CSV product/variant import job (Module 4). Tracks the uploaded
+file in Spaces, async processing status, and per-outcome counts. Reuses the
+shared `BulkUploadStatus` enum (Layer 5).
+
+**Key fields:**
+- `sellerId` (FK seller), `mappingId?` (bare UUID), `fileName`, `spacesKey`,
+  `fileSizeBytes`, `rowCount?`
+- `status: BulkUploadStatus` (PENDING…COMPLETED_WITH_ERRORS…)
+- `errorReportKey?` (Spaces key of generated error CSV)
+- counts: `productsCreated/Updated`, `variantsCreated/Updated`,
+  `rowsFailed`, `rowsSkipped`
+- `jobId?` (BullMQ), `startedAt?`, `completedAt?`
+- `uploadedBySellerId?`, `uploadedByStaffId?` (bare UUIDs)
+- **No soft delete** — upload jobs are transient operational records
+
+**Indexes:** `sellerId`, `status`, `createdAt`
 
 ---
 

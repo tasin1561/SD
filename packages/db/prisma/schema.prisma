@@ -122,6 +122,9 @@ model Seller {
   webhookEndpoints        SellerWebhookEndpoint[]
   notificationPreferences SellerNotificationPreference[]
   onboardingProgress      SellerOnboardingProgress[]
+  categoryProposals       CategoryProposal[]
+  sellerCsvMappings       SellerCsvMapping[]
+  bulkProductUploads      BulkProductUpload[]
 
   @@index([status])
   @@index([deletedAt])
@@ -489,10 +492,12 @@ model Category {
   updatedAt          DateTime     @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt          DateTime?    @map("deleted_at") @db.Timestamptz
 
-  parent       Category?             @relation("CategoryParent", fields: [parentId], references: [id])
-  children     Category[]            @relation("CategoryParent")
-  products     Product[]
-  courierRules CategoryCourierRule[]
+  parent               Category?                     @relation("CategoryParent", fields: [parentId], references: [id])
+  children             Category[]                    @relation("CategoryParent")
+  products             Product[]
+  courierRules         CategoryCourierRule[]
+  attributeDefinitions CategoryAttributeDefinition[]
+  resultingProposal    CategoryProposal[]            @relation("ResultingCategory")
 
   @@index([parentId])
   @@index([depth])
@@ -622,6 +627,110 @@ model CategoryCourierRule {
   @@unique([categoryId, courierCode])
   @@index([courierCode])
   @@map("category_courier_rules")
+}
+
+// Seller-submitted request to add a new category. proposedParentId and
+// reviewedByStaffId are bare UUID columns (not Prisma relations) — a
+// proposal is a loosely-coupled request, mirroring the denormalized
+// reference precedent of CategoryCourierRule.courierCode. Only
+// resultingCategoryId is a relation (set on approval).
+model CategoryProposal {
+  id                  String                 @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId            String                 @map("seller_id") @db.Uuid
+  proposedName        String                 @map("proposed_name")
+  proposedParentId    String?                @map("proposed_parent_id") @db.Uuid
+  proposedSlug        String                 @map("proposed_slug")
+  rationale           String                 @db.Text
+  status              CategoryProposalStatus @default(PENDING)
+  reviewedByStaffId   String?                @map("reviewed_by_staff_id") @db.Uuid
+  reviewedAt          DateTime?              @map("reviewed_at") @db.Timestamptz
+  decisionNote        String?                @map("decision_note") @db.Text
+  resultingCategoryId String?                @map("resulting_category_id") @db.Uuid
+  createdAt           DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime               @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt           DateTime?              @map("deleted_at") @db.Timestamptz
+
+  seller            Seller    @relation(fields: [sellerId], references: [id])
+  resultingCategory Category? @relation("ResultingCategory", fields: [resultingCategoryId], references: [id])
+
+  @@index([sellerId, status])
+  @@index([status])
+  @@index([proposedParentId])
+  @@index([deletedAt])
+  @@map("category_proposals")
+}
+
+model CategoryAttributeDefinition {
+  id            String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  categoryId    String             @map("category_id") @db.Uuid
+  attributeKey  String             @map("attribute_key")
+  displayLabel  String             @map("display_label")
+  valueType     AttributeValueType @map("value_type")
+  allowedValues String[]           @default([]) @map("allowed_values")
+  isRequired    Boolean            @default(false) @map("is_required")
+  displayOrder  Int                @default(100) @map("display_order")
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt     DateTime?          @map("deleted_at") @db.Timestamptz
+
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@unique([categoryId, attributeKey])
+  @@index([categoryId])
+  @@index([deletedAt])
+  @@map("category_attribute_definitions")
+}
+
+model SellerCsvMapping {
+  id         String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId   String        @map("seller_id") @db.Uuid
+  name       String
+  importType CsvImportType @map("import_type")
+  columnMap  Json          @map("column_map")
+  isDefault  Boolean       @default(false) @map("is_default")
+  lastUsedAt DateTime?     @map("last_used_at") @db.Timestamptz
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt  DateTime?     @map("deleted_at") @db.Timestamptz
+
+  seller Seller @relation(fields: [sellerId], references: [id])
+
+  @@index([sellerId, importType])
+  @@index([sellerId, isDefault])
+  @@index([deletedAt])
+  @@map("seller_csv_mappings")
+}
+
+model BulkProductUpload {
+  id                 String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId           String           @map("seller_id") @db.Uuid
+  mappingId          String?          @map("mapping_id") @db.Uuid
+  fileName           String           @map("file_name")
+  spacesKey          String           @map("spaces_key")
+  fileSizeBytes      Int              @map("file_size_bytes")
+  rowCount           Int?             @map("row_count")
+  status             BulkUploadStatus @default(PENDING)
+  errorReportKey     String?          @map("error_report_key")
+  productsCreated    Int              @default(0) @map("products_created")
+  productsUpdated    Int              @default(0) @map("products_updated")
+  variantsCreated    Int              @default(0) @map("variants_created")
+  variantsUpdated    Int              @default(0) @map("variants_updated")
+  rowsFailed         Int              @default(0) @map("rows_failed")
+  rowsSkipped        Int              @default(0) @map("rows_skipped")
+  jobId              String?          @map("job_id")
+  startedAt          DateTime?        @map("started_at") @db.Timestamptz
+  completedAt        DateTime?        @map("completed_at") @db.Timestamptz
+  uploadedBySellerId String?          @map("uploaded_by_seller_id") @db.Uuid
+  uploadedByStaffId  String?          @map("uploaded_by_staff_id") @db.Uuid
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller Seller @relation(fields: [sellerId], references: [id])
+
+  @@index([sellerId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("bulk_product_uploads")
 }
 
 // ============================================================
@@ -2171,6 +2280,30 @@ enum VariantStatus {
   OUT_OF_STOCK @map("out_of_stock")
 
   @@map("variant_status")
+}
+
+enum CategoryProposalStatus {
+  PENDING   @map("pending")
+  APPROVED  @map("approved")
+  REJECTED  @map("rejected")
+  WITHDRAWN @map("withdrawn")
+
+  @@map("category_proposal_status")
+}
+
+enum AttributeValueType {
+  STRING  @map("string")
+  NUMBER  @map("number")
+  BOOLEAN @map("boolean")
+  ENUM    @map("enum")
+
+  @@map("attribute_value_type")
+}
+
+enum CsvImportType {
+  PRODUCT_VARIANT @map("product_variant")
+
+  @@map("csv_import_type")
 }
 
 enum BatchStatus {
