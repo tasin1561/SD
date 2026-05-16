@@ -310,4 +310,70 @@ Notes:
 - GST is whole-percent in Phase 1A; CSV imports are idempotent
   (PATCH-by-diff, re-upload-safe). See `docs/phase-1a-debt.md`.
 
+## Module 5 (Inventory & WMS) — endpoint map
+
+```
+# Admin warehouse topology.
+GET/POST  /admin/warehouses                         (staff)
+GET/PATCH /admin/warehouses/:id                     (staff)
+GET/POST  /admin/warehouses/:id/zones               (staff)
+PATCH/DELETE /admin/warehouses/:id/zones/:zoneId    (staff; soft-delete)
+GET/POST  /admin/warehouses/:id/bins                (staff)
+PATCH/DELETE /admin/warehouses/:id/bins/:binId      (staff; soft-delete)
+
+# Seller stock visibility (aggregated across warehouses; display cache).
+GET /seller/stock                                   (seller, allow-suspended)
+GET /seller/stock/summary                           (seller, allow-suspended)
+GET /seller/stock/by-variant/:variantId             (seller, allow-suspended)
+GET /seller/stock/movements                         (seller, allow-suspended; no cache)
+GET /admin/stock-movements                          (staff; no cache)
+
+# Seller low-stock thresholds.
+GET   /seller/stock/alert-config                    (seller, allow-suspended)
+PATCH /seller/stock/alert-config/default            (seller, APPROVED)
+PATCH /seller/products/:productId/variants/:variantId/threshold  (seller, APPROVED)
+
+# Goods receipts — seller declares, warehouse records actuals.
+POST  /seller/goods-receipts                        (seller, APPROVED)
+GET   /seller/goods-receipts[/:id]                  (seller, allow-suspended)
+PATCH /seller/goods-receipts/:id                    (seller, APPROVED; PENDING-only)
+POST  /seller/goods-receipts/:id/cancel             (seller, APPROVED; PENDING-only)
+GET   /admin/goods-receipts[/:id]                   (staff)
+POST  /admin/goods-receipts/:id/start-receiving     (staff; PENDING→ARRIVING)
+POST  /admin/goods-receipts/:id/lines               (staff; ARRIVING)
+POST  /admin/goods-receipts/:id/complete            (staff; →COMPLETED|DISCREPANCY)
+POST  /admin/goods-receipts/:id/resolve-discrepancy (staff; CORRECT|FORCE_COMPLETE)
+
+# Manual stock adjustments (threshold-gated approval).
+GET/POST /admin/stock-adjustments                   (staff)
+GET   /admin/stock-adjustments/:id                  (staff)
+POST  /admin/stock-adjustments/:id/approve          (staff; →executor worker)
+POST  /admin/stock-adjustments/:id/reject           (staff)
+
+# Cycle counts (admin-only).
+GET/POST /admin/cycle-counts                        (staff)
+GET   /admin/cycle-counts/:id                       (staff)
+POST  /admin/cycle-counts/:id/start                 (staff; SCHEDULED→IN_PROGRESS)
+POST  /admin/cycle-counts/:id/items                 (staff; IN_PROGRESS)
+POST  /admin/cycle-counts/:id/complete              (staff; →draft adjustments)
+```
+
+Notes (the non-negotiable invariants — see CLAUDE.md "Inventory rules"):
+- **INV-1** `StockMutationService` is the ONLY writer of `stock_movements`
+  / `stock_levels.qtyOnHand`. **INV-2** cache is reads-only for displays;
+  mutation paths use `StockReadService.getVariantStockLive` (no cache).
+  **INV-3** `qtyAvailable` is computed, never stored. **INV-4**
+  `stock_levels.qtyReserved` counts phase-2 only. **INV-5** cache
+  invalidation + alert eval run AFTER `tx.commit()`. **INV-6** optimistic
+  retry ≤3 → 409. **INV-7** adjustment/discrepancy movements require a
+  `reasonCode`. **INV-8** adjustments tx-wrapped. **INV-9** alert state
+  machine with cooldown lives in `stock_alert_state`.
+- Reservation allocation is LATE: phase-1 soft qty claim at order confirm
+  (NULL bin/batch), phase-2 (bin+batch + `qtyReserved`) at pick generation
+  with a version-CAS hard guard. `allocateAndPopulate` is full-consume.
+- Background jobs (in-process BullMQ): reservation auto-release (hourly),
+  adjustment executor (on approval). Cross-module surface (Module 6/8):
+  `StockReadService`, `StockReservationService`,
+  `StockPickAllocationService`.
+
 See `docs/phase-1a-debt.md` for tracked deferrals.

@@ -450,7 +450,21 @@ shared `BulkUploadStatus` enum (Layer 5).
 
 ---
 
-# Layer 4 — Inventory & WMS (7 tables)
+# Layer 4 — Inventory & WMS (9 tables)
+
+> **Module 5 schema deltas (applied):**
+> - **New table `stock_alert_state`** — low-stock alert state at the
+>   `(seller, variant, warehouse)` grain. Deliberately NOT on
+>   `stock_levels`: availability/threshold are evaluated per
+>   `(seller,variant,warehouse)` while `stock_levels` is per bin×batch and
+>   those rows are pruned at qty 0 (state would be lost/ambiguous).
+> - **New table `stock_adjustment_lines`** — persists a PENDING
+>   adjustment's intended change so the executor can replay it on approval
+>   (`stock_adjustments` itself has no target columns).
+> - **New columns:** `sellers.default_low_stock_threshold`,
+>   `sellers.reservation_ttl_hours_override`,
+>   `product_variants.low_stock_threshold`. (`stock_levels` did NOT gain
+>   alert columns — see `stock_alert_state`.)
 
 ## stock_batches
 Receivable batches with optional expiry.
@@ -540,6 +554,48 @@ Manual corrections with approval workflow.
 **AdjustmentType enum:** `INCREASE`, `DECREASE`, `TRANSFER`, `CYCLE_COUNT`
 
 **AdjustmentStatus enum:** `PENDING`, `APPROVED`, `REJECTED`, `EXECUTED`
+
+## stock_adjustment_lines  *(Module 5)*
+The intended per-target change(s) of an adjustment. Persisting these lets
+an above-threshold PENDING adjustment be replayed by the executor on
+approval (and a below-threshold one auto-execute in one tx). One line per
+`(variant, bin, batch)` target; cycle-count reconciliation creates a
+single-line adjustment per discrepancy, manual adjustments may be
+multi-line.
+
+**Key fields:**
+- `adjustmentId` (FK `stock_adjustments`, **cascade delete**)
+- `variantId`, `binId` (bare scalar UUIDs — loosely-coupled-ref precedent,
+  like `category_proposals.proposedParentId`), `batchId?`
+- `qtyChange` (signed; sign agrees with the parent type — INCREASE>0,
+  DECREASE<0)
+- `unitCostInr?` — RESOLVED cost snapshot (line input → `batch.unitCostInr`)
+  used for `totalValueImpactInr` and historical accuracy
+
+**Indexes:** `adjustmentId`, `variantId`, `binId`, `batchId`
+
+## stock_alert_state  *(Module 5)*
+Low-stock alert state machine (INV-9) at the `(seller, variant,
+warehouse)` grain. One row per grain; survives `stock_levels` pruning;
+single source of truth for fired/cleared/cooldown.
+
+**Key fields:**
+- `sellerId`, `variantId`, `warehouseId`
+- `wasAlertActive` (Boolean, default false)
+- `lowStockAlertSentAt?` — last fire time; drives the cooldown gate
+  (`ops.stock_alert_cooldown_hours`), kept across CLEAR
+
+**Constraints:** `@@unique([sellerId, variantId, warehouseId])`
+**Indexes:** `(sellerId, variantId)`, `variantId`, `warehouseId`
+
+## Module 5 columns on existing tables
+- `sellers.default_low_stock_threshold (Int?)` — per-seller default
+  low-stock threshold (variant override wins).
+- `sellers.reservation_ttl_hours_override (Int?)` — per-seller reservation
+  TTL override (else `ops.stock_reservation_ttl_hours`, else 48).
+- `product_variants.low_stock_threshold (Int?)` — per-variant threshold;
+  inventory-owned scalar surfaced cross-module via `CatalogReadService`
+  (raw passthrough, not inheritance-resolved) so MUST #13 holds.
 
 ## cycle_counts + cycle_count_items
 Periodic physical verification.

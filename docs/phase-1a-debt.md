@@ -168,6 +168,76 @@ pick it up.
 
 ---
 
+## Inventory & WMS (Module 5)
+
+- **Phase-1 reservation over-claim window.** `reserve()`'s availability
+  check is best-effort under READ COMMITTED with no lock (inherent to the
+  locked LATE-allocation design). Two racing reservers can transiently
+  over-claim. The HARD physical guard is phase-2 allocation
+  (`allocateAndPopulate`, version-CAS on `stock_levels`), which can never
+  allocate beyond on-hand. Module 8 owns operational escalation of a
+  persistent shortfall (residual phase-1 rows).
+  **Pick up:** Module 8 (warehouse ops) for the escalation UX; revisit
+  the soft-claim race only if it bites at scale.
+
+- **Movement ledger uses offset pagination + COUNT.** Fine at Phase 1A
+  volume; on a large hypertable a `COUNT(*)` over a filtered window and
+  deep `OFFSET` degrade.
+  **Pick up:** cursor (keyset) pagination when ledger volume warrants.
+
+- **Alert cooldown is a single global value.** `ops.stock_alert_cooldown
+  _hours` applies to all sellers/SKUs uniformly.
+  **Pick up:** per-seller (or per-category) cooldown config later.
+
+- **Cycle-count reconciliation = one adjustment per discrepancy.** Each
+  discrepant item generates its own single-line PENDING `CYCLE_COUNT`
+  adjustment; no batched/bulk reconciliation review.
+  **Pick up:** a batch-reconciliation UI when count volume justifies it.
+
+- **Discrepancy resolution is correct-or-force-complete.** A DISCREPANCY
+  receipt is resolved either by correcting the actuals or force-completing
+  with a permanent note; there is no partial-acceptance-with-split
+  (accept some lines, re-receive others).
+  **Pick up:** partial acceptance + split when ops asks for it.
+
+- **Reservation auto-release worker uses a simple global cron.** Hourly
+  `'0 * * * *'` sweep for all sellers; per-seller scheduling/cadence is
+  not configurable (the per-seller TTL *is* honored via `expiresAt`).
+  **Pick up:** per-seller scheduling if needed.
+
+- **Cache invalidation is centralized but not transactional with DB
+  writes.** Invalidation + alert evaluation run AFTER `tx.commit()`
+  (INV-5); a crash between commit and invalidation serves a stale display
+  cache until the 5-min TTL. Never corrupts stock (mutation paths read
+  live, INV-2).
+  **Pick up:** outbox/event-sourced invalidation if multi-instance API or
+  scale demands airtight cache coherence.
+
+- **`StockAdjustment` shipped without intent persistence.** The base
+  schema had no per-target columns; `stock_adjustment_lines` was added in
+  Module 5 commit 19 to support the above-threshold approval workflow.
+  Single-line (cycle-count) and multi-line (manual) adjustments share the
+  model.
+  **Pick up:** done — recorded for provenance.
+
+- **Inventory-owned column on a catalog table.** `product_variants.low
+  _stock_threshold` is inventory-domain data physically on the variant
+  row (storage convenience). Reads go via `CatalogReadService` (raw
+  passthrough — MUST #13 intact); the write is a narrow inventory-owned
+  update with an explicit code comment. If more inventory-owned per-
+  variant columns emerge, extract them to a dedicated
+  `variant_inventory_config` table.
+  **Pick up:** when a 2nd such column appears.
+
+- **`CatalogReadService` expansion-by-need.** Module 5 added a
+  `lowStockThreshold` passthrough to `ResolvedVariant` purely so the
+  cross-module read boundary stays the only path to variant data. Expect
+  this expand-the-boundary-when-a-consumer-needs-a-field pattern to recur
+  in later modules (pricing, shipments).
+  **Pick up:** ongoing convention; revisit if the DTO grows unwieldy.
+
+---
+
 ## Pricing & Multi-Currency (Modules 15–17)
 
 - **Historical FX rate tracking**. Phase 1A keeps a single current rate
