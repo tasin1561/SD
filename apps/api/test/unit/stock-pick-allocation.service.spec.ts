@@ -1,5 +1,6 @@
 import { BatchStatus, BinType } from '@skydrop/db';
 import { StockPickAllocationService } from '../../src/modules/inventory-stock/services/stock-pick-allocation.service';
+import { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 
 interface FakeLevel {
@@ -39,7 +40,8 @@ function makeSut(levels: FakeLevel[]) {
         })),
   );
   const prisma = { client: { stockLevel: { findMany } } } as unknown as PrismaService;
-  const svc = new StockPickAllocationService(prisma);
+  const audit = new AuditLogService(prisma);
+  const svc = new StockPickAllocationService(prisma, audit);
   return { svc };
 }
 

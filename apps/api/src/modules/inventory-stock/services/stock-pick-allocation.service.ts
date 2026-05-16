@@ -1,6 +1,28 @@
-import { Injectable } from '@nestjs/common';
-import { BatchStatus, BinType } from '@skydrop/db';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  ActorType,
+  BatchStatus,
+  BinType,
+  ReservationStatus,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { AuditLogService } from '../../auth-common/services/audit-log.service';
+
+/** Phase-2 populate lost the qtyReserved CAS race — retry the whole
+ *  plan+apply with freshly-read state. */
+class RetryablePickConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RetryablePickConflictError';
+  }
+}
+
+const MAX_POPULATE_ATTEMPTS = 3;
 
 /** Bins whose stock is NOT pickable for customer orders. */
 const NON_PICKABLE_BIN_TYPES: BinType[] = [
@@ -27,6 +49,19 @@ export interface AllocationPlan {
   shortfall: number;
   fullyAllocated: boolean;
   strategy: AllocationStrategy;
+}
+
+export interface AppliedAllocation {
+  reservationId: string;
+  strategy: AllocationStrategy;
+  allocatedQty: number;
+  shortfall: number;
+  /** Reservation ids now carrying phase-2 (bin+batch) holds. */
+  phase2ReservationIds: string[];
+  /** Residual phase-1 reservation id holding the unallocated shortfall,
+   *  if any (so total reserved qty is conserved). */
+  residualReservationId: string | null;
+  alreadyAllocated: boolean;
 }
 
 interface LevelRow {
@@ -77,7 +112,12 @@ interface BatchGroup {
  */
 @Injectable()
 export class StockPickAllocationService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(StockPickAllocationService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditLogService,
+  ) {}
 
   async allocateForOrderLine(input: {
     sellerId: string;
@@ -143,6 +183,227 @@ export class StockPickAllocationService {
       fullyAllocated,
       strategy: fullyAllocated ? 'SPLIT' : 'PARTIAL',
     };
+  }
+
+  /**
+   * Phase-1 → phase-2. Module 8 calls this at pick-task generation for an
+   * existing ACTIVE phase-1 reservation (NULL bin/batch). It plans the
+   * allocation, then in ONE transaction:
+   *
+   *  - version-guarded increment of stock_levels.qtyReserved for every
+   *    pick (capacity-checked: qtyOnHand − qtyReserved ≥ pick.qty). The
+   *    shared stock_levels.version is the CAS token (locked decision #9) —
+   *    this is the HARD physical guard that phase-1's soft check defers to.
+   *    A lost race re-plans with fresh state (≤3 attempts → 409).
+   *  - the original phase-1 row becomes the first pick (bin+batch set);
+   *    extra picks become new ACTIVE phase-2 rows; any shortfall stays as
+   *    a residual phase-1 row. Total reserved qty is CONSERVED (= the
+   *    original phase-1 qty), so INV-3 availability is unchanged by the
+   *    conversion while INV-4's stock_levels.qtyReserved rises by exactly
+   *    the allocated qty.
+   *
+   * Idempotent: a reservation already carrying bin+batch returns untouched.
+   */
+  async allocateAndPopulate(
+    reservationId: string,
+    actor: { type: ActorType; id?: string | null } = { type: ActorType.SYSTEM },
+  ): Promise<AppliedAllocation> {
+    const resv = await this.prisma.client.stockReservation.findUnique({
+      where: { id: reservationId },
+      select: {
+        id: true,
+        sellerId: true,
+        variantId: true,
+        warehouseId: true,
+        binId: true,
+        batchId: true,
+        qtyReserved: true,
+        orderId: true,
+        orderItemId: true,
+        status: true,
+        expiresAt: true,
+      },
+    });
+    if (!resv) {
+      throw new NotFoundException({
+        code: 'RESERVATION_NOT_FOUND',
+        message: 'Reservation not found',
+      });
+    }
+    if (resv.status !== ReservationStatus.ACTIVE) {
+      throw new ConflictException({
+        code: 'RESERVATION_NOT_ACTIVE',
+        message: `Reservation is ${resv.status}, cannot allocate`,
+      });
+    }
+    if (resv.binId !== null && resv.batchId !== null) {
+      // Already phase-2 — idempotent.
+      return {
+        reservationId,
+        strategy: 'SINGLE_BATCH',
+        allocatedQty: resv.qtyReserved,
+        shortfall: 0,
+        phase2ReservationIds: [resv.id],
+        residualReservationId: null,
+        alreadyAllocated: true,
+      };
+    }
+
+    const need = resv.qtyReserved;
+    let lastErr: unknown;
+    for (let attempt = 1; attempt <= MAX_POPULATE_ATTEMPTS; attempt += 1) {
+      const plan = await this.allocateForOrderLine({
+        sellerId: resv.sellerId,
+        variantId: resv.variantId,
+        warehouseId: resv.warehouseId,
+        qtyRequired: need,
+      });
+      if (plan.allocatedQty === 0) {
+        // Nothing pickable right now — leave the phase-1 claim intact for
+        // a later retry (stock may arrive). Not an error.
+        return {
+          reservationId,
+          strategy: 'NONE',
+          allocatedQty: 0,
+          shortfall: need,
+          phase2ReservationIds: [],
+          residualReservationId: resv.id,
+          alreadyAllocated: false,
+        };
+      }
+
+      try {
+        return await this.prisma.client.$transaction(async (tx) => {
+          // 1. Hard physical guard: version-guarded qtyReserved increments.
+          for (const pick of plan.picks) {
+            const lvl = await tx.stockLevel.findUnique({
+              where: {
+                sellerId_variantId_warehouseId_binId_batchId: {
+                  sellerId: resv.sellerId,
+                  variantId: resv.variantId,
+                  warehouseId: resv.warehouseId,
+                  binId: pick.binId,
+                  batchId: pick.batchId,
+                },
+              },
+              select: { id: true, qtyOnHand: true, qtyReserved: true, version: true },
+            });
+            if (!lvl || lvl.qtyOnHand - lvl.qtyReserved < pick.qty) {
+              throw new RetryablePickConflictError(
+                `level capacity changed for bin ${pick.binId} batch ${pick.batchId}`,
+              );
+            }
+            const upd = await tx.stockLevel.updateMany({
+              where: { id: lvl.id, version: lvl.version },
+              data: {
+                qtyReserved: { increment: pick.qty },
+                version: { increment: 1 },
+              },
+            });
+            if (upd.count !== 1) {
+              throw new RetryablePickConflictError(
+                `stock_level ${lvl.id} version moved`,
+              );
+            }
+          }
+
+          // 2. Convert reservation rows (conserve total reserved qty).
+          const phase2Ids: string[] = [];
+          const [first, ...rest] = plan.picks;
+          if (first) {
+            await tx.stockReservation.update({
+              where: { id: resv.id },
+              data: { binId: first.binId, batchId: first.batchId, qtyReserved: first.qty },
+            });
+            phase2Ids.push(resv.id);
+          }
+          for (const pick of rest) {
+            const created = await tx.stockReservation.create({
+              data: {
+                sellerId: resv.sellerId,
+                variantId: resv.variantId,
+                warehouseId: resv.warehouseId,
+                binId: pick.binId,
+                batchId: pick.batchId,
+                qtyReserved: pick.qty,
+                orderId: resv.orderId,
+                orderItemId: resv.orderItemId,
+                status: ReservationStatus.ACTIVE,
+                expiresAt: resv.expiresAt,
+              },
+              select: { id: true },
+            });
+            phase2Ids.push(created.id);
+          }
+
+          let residualReservationId: string | null = null;
+          if (plan.shortfall > 0) {
+            const residual = await tx.stockReservation.create({
+              data: {
+                sellerId: resv.sellerId,
+                variantId: resv.variantId,
+                warehouseId: resv.warehouseId,
+                binId: null,
+                batchId: null,
+                qtyReserved: plan.shortfall,
+                orderId: resv.orderId,
+                orderItemId: resv.orderItemId,
+                status: ReservationStatus.ACTIVE,
+                expiresAt: resv.expiresAt,
+              },
+              select: { id: true },
+            });
+            residualReservationId = residual.id;
+          }
+
+          await this.audit.log(
+            {
+              actorType: actor.type,
+              actorId: actor.id ?? null,
+              action: 'inventory.reservation.allocated',
+              entityType: 'stock_reservation',
+              entityId: resv.id,
+              metadata: {
+                sellerId: resv.sellerId,
+                variantId: resv.variantId,
+                warehouseId: resv.warehouseId,
+                strategy: plan.strategy,
+                allocatedQty: plan.allocatedQty,
+                shortfall: plan.shortfall,
+                picks: plan.picks,
+              },
+            },
+            tx,
+          );
+
+          return {
+            reservationId,
+            strategy: plan.strategy,
+            allocatedQty: plan.allocatedQty,
+            shortfall: plan.shortfall,
+            phase2ReservationIds: phase2Ids,
+            residualReservationId,
+            alreadyAllocated: false,
+          };
+        });
+      } catch (err) {
+        if (err instanceof RetryablePickConflictError) {
+          lastErr = err;
+          this.logger.warn(
+            { attempt, reservationId, reason: err.message },
+            'Phase-2 populate conflict; re-planning',
+          );
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    throw new ConflictException({
+      code: 'PICK_ALLOCATION_CONFLICT',
+      message: `Could not allocate after ${MAX_POPULATE_ATTEMPTS} attempts (concurrent contention)`,
+      cause: lastErr instanceof Error ? lastErr.message : String(lastErr),
+    });
   }
 
   // ---------- internal ----------
