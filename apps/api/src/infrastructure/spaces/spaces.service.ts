@@ -202,6 +202,57 @@ export class SpacesService implements OnModuleInit {
     return keys;
   }
 
+  /**
+   * List objects under a prefix with their last-modified time (used by
+   * orphan cleanup, which needs object age).
+   */
+  async listObjects(prefix: string): Promise<Array<{ key: string; lastModified: Date }>> {
+    if (this.mock) {
+      const root = path.join(MOCK_ROOT, this.bucket);
+      const out: Array<{ key: string; lastModified: Date }> = [];
+      const walk = async (dir: string): Promise<void> => {
+        let entries: Dirent[];
+        try {
+          entries = await fs.readdir(dir, { withFileTypes: true });
+        } catch {
+          return;
+        }
+        for (const e of entries) {
+          const full = path.join(dir, e.name);
+          if (e.isDirectory()) {
+            await walk(full);
+          } else {
+            const st = await fs.stat(full);
+            out.push({
+              key: path.relative(root, full).split(path.sep).join('/'),
+              lastModified: st.mtime,
+            });
+          }
+        }
+      };
+      await walk(path.dirname(this.mockPath(prefix)));
+      return out.filter((o) => o.key.startsWith(prefix));
+    }
+    const out: Array<{ key: string; lastModified: Date }> = [];
+    let token: string | undefined;
+    do {
+      const res = await this.requireClient().send(
+        new ListObjectsV2Command({
+          Bucket: this.bucket,
+          Prefix: prefix,
+          ContinuationToken: token,
+        }),
+      );
+      for (const o of res.Contents ?? []) {
+        if (o.Key) {
+          out.push({ key: o.Key, lastModified: o.LastModified ?? new Date(0) });
+        }
+      }
+      token = res.IsTruncated ? res.NextContinuationToken : undefined;
+    } while (token);
+    return out;
+  }
+
   /** Public (CDN) URL for a stored object. */
   publicUrl(key: string): string {
     const cdn = this.env.spacesCdnUrl;

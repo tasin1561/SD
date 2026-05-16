@@ -5,6 +5,9 @@ import { RedisService } from '../../../infrastructure/redis/redis.service';
 export const IMAGE_QUEUE_NAME = 'catalog-image';
 export const JOB_GENERATE_THUMBNAIL = 'generate-thumbnail';
 export const JOB_DELETE_OBJECTS = 'delete-objects';
+export const JOB_ORPHAN_SWEEP = 'orphan-sweep';
+/** Daily at 03:15 UTC. */
+export const ORPHAN_SWEEP_CRON = '15 3 * * *';
 
 export interface GenerateThumbnailJob {
   imageId: string;
@@ -30,12 +33,28 @@ export class ImageQueue implements OnModuleInit, OnModuleDestroy {
 
   constructor(private readonly redis: RedisService) {}
 
-  onModuleInit(): void {
+  async onModuleInit(): Promise<void> {
     this.queue = new Queue(IMAGE_QUEUE_NAME, {
       connection: this.redis.createConnection(),
       defaultJobOptions: DEFAULT_JOB_OPTIONS,
     });
-    this.logger.log(`Image queue ready (name=${IMAGE_QUEUE_NAME})`);
+    // Register the daily orphan-sweep as a repeatable job. Stable jobId
+    // means re-registering on every boot is idempotent (BullMQ dedupes
+    // the repeat schedule by key).
+    await this.queue.add(
+      JOB_ORPHAN_SWEEP,
+      {},
+      {
+        repeat: { pattern: ORPHAN_SWEEP_CRON },
+        jobId: 'orphan-sweep',
+        attempts: 1,
+        removeOnComplete: true,
+        removeOnFail: { age: 7 * 24 * 60 * 60 },
+      },
+    );
+    this.logger.log(
+      `Image queue ready (name=${IMAGE_QUEUE_NAME}); orphan-sweep cron=${ORPHAN_SWEEP_CRON}`,
+    );
   }
 
   async onModuleDestroy(): Promise<void> {

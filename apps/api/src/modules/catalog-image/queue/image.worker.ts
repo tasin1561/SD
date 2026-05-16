@@ -10,10 +10,12 @@ import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { deriveThumbnailKey } from '../image-key';
+import { OrphanCleanupService } from '../services/orphan-cleanup.service';
 import {
   IMAGE_QUEUE_NAME,
   JOB_DELETE_OBJECTS,
   JOB_GENERATE_THUMBNAIL,
+  JOB_ORPHAN_SWEEP,
   type DeleteObjectsJob,
   type GenerateThumbnailJob,
 } from './image.queue';
@@ -37,6 +39,7 @@ export class ImageWorker implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly prisma: PrismaService,
     private readonly spaces: SpacesService,
+    private readonly orphanCleanup: OrphanCleanupService,
   ) {}
 
   onModuleInit(): void {
@@ -49,6 +52,11 @@ export class ImageWorker implements OnModuleInit, OnModuleDestroy {
         }
         if (job.name === JOB_DELETE_OBJECTS) {
           await this.deleteObjects(job.data as DeleteObjectsJob);
+          return;
+        }
+        if (job.name === JOB_ORPHAN_SWEEP) {
+          const result = await this.orphanCleanup.sweep();
+          this.logger.log(result, 'Orphan sweep complete');
           return;
         }
         this.logger.warn({ name: job.name }, 'Unknown image job name; ignoring');
