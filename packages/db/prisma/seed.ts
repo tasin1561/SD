@@ -72,9 +72,27 @@ const systemSettings: SystemSettingSeed[] = [
     key: 'ops.stock_reservation_ttl_hours',
     category: 'ops',
     valueType: SettingValueType.INT,
-    valueInt: 24,
+    valueInt: 48,
     displayName: 'Stock Reservation TTL (hours)',
     description: 'Auto-release reservations after N hours',
+  },
+  {
+    key: 'ops.stock_adjustment_approval_threshold_inr',
+    category: 'ops',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '50000',
+    displayName: 'Stock Adjustment Approval Threshold (INR)',
+    description:
+      'Adjustments whose absolute INR value impact meets or exceeds this require admin approval; below auto-executes',
+  },
+  {
+    key: 'ops.stock_alert_cooldown_hours',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 24,
+    displayName: 'Low-Stock Alert Cooldown (hours)',
+    description:
+      'After a low-stock alert fires, suppress re-alerting for the same SKU until recovery and this many hours have elapsed',
   },
   {
     key: 'notifications.sms_throttle_per_recipient_per_hour',
@@ -125,7 +143,42 @@ async function seedSystemSettings() {
       },
     });
   }
-  console.log(`  system_settings: ${systemSettings.length} upserted`);
+
+  // ops.default_warehouse_id resolves to BLR-01's uuid at seed time rather
+  // than a hard-coded literal, so it stays correct across environments
+  // (ids are uuidv7, not deterministic). Requires seedWarehouses() to have
+  // run first — main() orders it that way. Value is create-only like every
+  // other setting: an admin re-pointing the default is preserved on re-seed.
+  const blr01 = await prisma.warehouse.findUnique({
+    where: { code: 'BLR-01' },
+    select: { id: true },
+  });
+  if (!blr01) {
+    throw new Error(
+      'seed: BLR-01 warehouse must exist before system settings — check seed order in main()',
+    );
+  }
+  const defaultWarehouseDesc =
+    'Warehouse used when a request does not specify one (Phase 1A is single-warehouse)';
+  await prisma.systemSetting.upsert({
+    where: { key: 'ops.default_warehouse_id' },
+    create: {
+      key: 'ops.default_warehouse_id',
+      category: 'ops',
+      valueType: SettingValueType.STRING,
+      valueString: blr01.id,
+      displayName: 'Default Warehouse',
+      description: defaultWarehouseDesc,
+    },
+    update: {
+      category: 'ops',
+      valueType: SettingValueType.STRING,
+      displayName: 'Default Warehouse',
+      description: defaultWarehouseDesc,
+    },
+  });
+
+  console.log(`  system_settings: ${systemSettings.length + 1} upserted`);
 }
 
 async function seedCouriers() {
@@ -419,6 +472,43 @@ const notificationTemplates: TemplateSeed[] = [
     bodyTemplate:
       'Hi {{ company_name }}, after reviewing your proposal to add "{{ proposed_name }}" we are not able to add it at this time. Reason: {{ decision_note }}. Reach out to {{ support_email }} if you would like to discuss.',
   },
+  // ---- Module 5 — Inventory & WMS (sender resolves to hello@) ----------
+  {
+    code: 'seller.stock_low_alert.email',
+    name: 'Low-stock alert — email to seller',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Low stock: {{ sku_code }} is down to {{ qty_available }}',
+    bodyTemplate:
+      'Hi {{ company_name }}, your SKU {{ sku_code }}{{ variant_label }} at {{ warehouse_name }} has {{ qty_available }} units available, at or below your alert threshold of {{ threshold }}. Restock soon to avoid stockouts. Manage thresholds at {{ app_url }}.',
+  },
+  {
+    code: 'seller.goods_receipt_completed.email',
+    name: 'Goods receipt completed — email to seller',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Goods receipt {{ receipt_number }} completed',
+    bodyTemplate:
+      'Hi {{ company_name }}, we have finished receiving goods receipt {{ receipt_number }} at {{ warehouse_name }}. {{ total_received }} units across {{ line_count }} SKUs are now in stock. View details at {{ app_url }}.',
+  },
+  {
+    code: 'seller.goods_receipt_discrepancy.email',
+    name: 'Goods receipt discrepancy — email to seller',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Discrepancy on goods receipt {{ receipt_number }}',
+    bodyTemplate:
+      'Hi {{ company_name }}, goods receipt {{ receipt_number }} at {{ warehouse_name }} has discrepancies between expected and received quantities and is on hold pending review. Notes: {{ discrepancy_notes }}. Our team is resolving it; questions to {{ support_email }}.',
+  },
+  {
+    code: 'seller.stock_adjustment_executed.email',
+    name: 'Stock adjustment executed — email to seller',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Stock adjustment applied at {{ warehouse_name }}',
+    bodyTemplate:
+      'Hi {{ company_name }}, a {{ adjustment_type }} stock adjustment was applied to your inventory at {{ warehouse_name }}. Reason: {{ reason_code }}. Net value impact: INR {{ value_impact_inr }}. Reference: {{ adjustment_id }}. Questions to {{ support_email }}.',
+  },
 ];
 
 async function seedNotificationTemplates() {
@@ -450,10 +540,11 @@ async function seedNotificationTemplates() {
 
 async function main() {
   console.log('Seeding reference data…');
+  // Warehouses first: ops.default_warehouse_id resolves BLR-01's id.
+  await seedWarehouses();
   await seedSystemSettings();
   await seedCouriers();
   await seedFxRates();
-  await seedWarehouses();
   await seedRateCards();
   await seedNotificationTemplates();
   console.log('Done.');
