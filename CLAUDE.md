@@ -285,8 +285,8 @@ Module order — each builds on prior modules:
 | 1 | Auth & Access Control (staff + seller, refresh, password reset, email verify, API keys) | ✅ DONE |
 | 2 | Seller Onboarding (invite, registration, approval workflow) | ✅ DONE |
 | 3 | Seller Profile (merged into Module 2) | ✅ DONE |
-| 4 | Product/SKU Catalog (categories, products, variants, images, CSV upload) | NEXT |
-| 5 | Inventory & WMS (warehouses, bins, batches, levels, movements, reservations, receiving, cycle counts) | pending |
+| 4 | Product/SKU Catalog (categories, products, variants, images, CSV upload) | ✅ DONE |
+| 5 | Inventory & WMS (warehouses, bins, batches, levels, movements, reservations, receiving, cycle counts) | NEXT |
 | 6 | Order Management (manual entry, CSV upload, lifecycle, events) | pending |
 | 7 | Call Center Workflow (queue, distributor, attempt logging) | pending |
 | 8 | Warehouse Operations (pick, pack, dispatch, RTO) | pending |
@@ -311,23 +311,24 @@ Phase 1B modules (not in this roadmap):
 
 ---
 
-## Current State (2026-05-15)
+## Current State (2026-05-16)
 
 **Implemented:**
 - Infrastructure (DO droplet, managed Postgres, Spaces, Cloudflare)
 - Local dev (WSL2, Docker Postgres + Redis with TimescaleDB)
 - Monorepo skeleton (Turborepo + pnpm)
-- `@skydrop/db` package: 63 Prisma models, 4 migrations applied, idempotent seed (system settings, couriers, FX, warehouse, rate card, 17 notification templates)
-- `apps/api` (NestJS): config (Zod-validated), Prisma module, Redis module, health endpoints, Swagger at /api/docs, Pino logging with redaction, global exception filter, request-id middleware, rate limiting (@nest-lab/throttler-storage-redis), BullMQ worker in-process
+- `@skydrop/db` package: 67 Prisma models, 5 migrations applied, idempotent seed (system settings, couriers, FX, warehouse, rate card, 20 notification templates)
+- `apps/api` (NestJS): config (Zod-validated), Prisma module, Redis module, Spaces module (S3 + mock mode), health endpoints, Swagger at /api/docs, Pino logging with redaction, global exception filter, request-id middleware, rate limiting (@nest-lab/throttler-storage-redis), BullMQ workers in-process
 - **Module 1** — Auth & Access Control: staff + seller auth, refresh rotation with replay detection, invitations, API keys (`skd_` prefix, SHA-256 hashed), email module with Resend + Nunjucks template rendering, audit logging via `AuditLogService`
 - **Module 2** — Seller Onboarding (also covers Module 3 scope): seller status transitions (suspend/reapprove with full side-effects), `SellerOnboardingService` with step tracking, profile + bank details endpoints, address CRUD with default logic + auto onboarding-step completion, notification preferences with registration pre-seed (7 categories), admin seller management endpoints
-- Test totals: 137 unit tests, 15 e2e tests, all green; fresh-clone simulation verified
+- **Module 4** — Product/SKU Catalog: admin category tree (depth/fullPath, move, cycle-safe) + attribute defs with Redis-cached effective-set inheritance; seller category-proposal → admin approve/reject (one tx + email); product & variant CRUD with strict attribute validation; variant image presign/register against Spaces (+ thumbnail & daily orphan-sweep crons); CSV import (template/preview/process worker, idempotent PATCH-by-diff re-upload, error report) + saved column mappings; `CatalogReadService` as the sole cross-module variant read path
+- Test totals: 25 unit suites / 202 unit tests, 4 e2e suites / 16 e2e tests, all green; fresh-clone simulation verified
 
 **Not yet implemented:**
 - All other apps (frontends in `apps/marketing`, `apps/seller`, `apps/admin`, `apps/track` are placeholders)
-- Modules 4-18
+- Modules 5-18
 
-**Next:** Module 4 — Product/SKU Catalog. Design happens in chat with the user; implementation by Claude Code in a focused session per module.
+**Next:** Module 5 — Inventory & WMS. Design happens in chat with the user; implementation by Claude Code in a focused session per module.
 
 ---
 

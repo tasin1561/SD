@@ -422,7 +422,8 @@ seller re-use the header→field mapping for their spreadsheet format.
 
 **Key fields:**
 - `sellerId` (FK seller), `name`, `importType: CsvImportType`
-- `columnMap: Json` (header-string → catalog-field map)
+- `columnMap: Json` (catalog-field → CSV-header map; layered over
+  auto-detection and under any explicit per-request override)
 - `isDefault`, `lastUsedAt`
 
 **Indexes:** `(sellerId, importType)`, `(sellerId, isDefault)`, `deletedAt`

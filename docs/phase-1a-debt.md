@@ -87,9 +87,84 @@ pick it up.
 
 ---
 
-## Catalog & Inventory (Modules 4–5)
+## Catalog (Module 4)
 
-- _No entries yet._ Update as work lands.
+- **Attribute-cache invalidation is best-effort, not event-driven.**
+  `AttributeResolutionService` caches a category's effective attribute
+  set in Redis (5-min TTL) and, on any attribute-def write, `DEL`s that
+  category plus every descendant. The `DEL` is fire-and-forget — if Redis
+  is briefly unavailable the stale set serves until TTL. An event-bus
+  (or write-through) invalidation would make it airtight and also let
+  other API instances invalidate. Deferred to keep Module 4 in-process.
+  **Pick up:** Module 11/with the worker split, or when multi-instance
+  API deployment lands.
+
+- **Image MIME is trusted, not sniffed.** Presign/register validate the
+  client-declared `mimeType` against an allowlist and HEAD-verify object
+  size, but the bytes are never content-sniffed. A seller could upload
+  non-image bytes under an `image/png` key. Low risk (private bucket,
+  per-seller key prefix, thumbnailer would fail), but real validation
+  needs magic-byte sniffing.
+  **Pick up:** when image rendering is exposed publicly, or alongside the
+  thumbnail worker hardening.
+
+- **No hard-delete cron for soft-deleted products/images.** Soft-deleted
+  `products`/`product_images` rows (and their Spaces originals) are never
+  reclaimed. The orphan-sweep cron only removes Spaces objects with no
+  DB row at all; a soft-deleted-row's object is "known" and kept.
+  **Pick up:** Phase 2 (a retention/GC cron once volume justifies it).
+
+- **CSV worker has no crash-resume.** `CsvImportProcessorService` is
+  terminal-state idempotent (a re-delivered job for a COMPLETED upload
+  no-ops) and per-row transactional, but a worker crash mid-run leaves
+  the upload `PROCESSING`; BullMQ retry re-runs from row 1 (already-
+  imported rows are skipped via the PATCH-diff dedup, so it's correct
+  but not resumable). A checkpoint cursor would make large imports
+  resume in place.
+  **Pick up:** Module 11/worker split, or when CSV sizes outgrow the
+  1000-row Phase 1A cap.
+
+- **Attribute-def delete warns but does not enforce.** Deleting a
+  category attribute definition returns a soft `warning` with the count
+  of products in that category, but does not block deletion or rewrite
+  existing variant `attributes` JSON. A deleted-then-unknown key only
+  surfaces on the variant's next validation.
+  **Pick up:** Module 12 (admin tooling) if a hard guard is wanted.
+
+- **No product-level attribute proposal flow.** Sellers propose
+  *categories* (with attribute defs) for admin approval, but cannot
+  propose adding an attribute to an *existing* category. They must file
+  a new proposal or ask an admin directly.
+  **Pick up:** Module 12 or a later catalog iteration if seller demand
+  appears.
+
+- **Image keys use uuidv4, not uuidv7.** All DB ids are `uuidv7()`
+  (time-sortable). The Spaces object key's random segment uses uuidv4
+  (`buildOriginalKey`) — it only needs uniqueness, not ordering, and the
+  DB row id remains uuidv7. Cosmetic inconsistency only.
+  **Pick up:** never required; revisit only if keys ever need ordering.
+
+- **GST is whole-percent only.** `defaultGstRate`/`gstRate` inputs and
+  the `pricing.gst_rate` system default are validated/treated as
+  integers (India GST is integral: 5/12/18/28). The columns are
+  `Decimal(5,2)` so fractional rates are storable, but not accepted via
+  the API and documented in OpenAPI as "whole percent". `CatalogRead
+  Service` surfaces whatever is stored without truncating.
+  **Pick up:** Module 15 (Pricing Engine) if a fractional rate is ever
+  required.
+
+- **CSV attribute cells are string-or-JSON only.** `coerceRow` parses
+  the attributes column as either `key=value;key=value` (all string
+  values) or a JSON object (typed values). There is no per-column
+  typed-attribute mapping; numeric/boolean attributes need JSON form.
+  **Pick up:** later catalog iteration if sellers ask for typed columns.
+
+- **`CatalogReadService` is the only sanctioned cross-module read.**
+  Other domains (orders, pricing, shipments, WMS) MUST read variants via
+  `CatalogReadService` so property-inheritance precedence lives in one
+  place. This is a *convention*, not a compile-time boundary — nothing
+  stops a future module from querying `product_variant` directly.
+  **Pick up:** enforce via lint/architecture test if drift appears.
 
 ---
 

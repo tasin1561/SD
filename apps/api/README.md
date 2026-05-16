@@ -138,7 +138,15 @@ src/
     ├── seller-profile/           # /seller/profile, /seller/profile/bank-details
     ├── seller-address/           # /seller/addresses CRUD
     ├── seller-notification-preference/  # /seller/notification-preferences
-    └── admin-seller/             # /admin/sellers — list, detail, status, notes, onboarding
+    ├── admin-seller/             # /admin/sellers — list, detail, status, notes, onboarding
+    ├── catalog-category/         # /admin/categories tree + /seller/categories reads
+    ├── catalog-attribute/        # category attribute defs + effective-set resolver (Redis)
+    ├── catalog-category-proposal/ # seller propose / admin approve|reject
+    ├── catalog-product/          # /seller/products CRUD + archive
+    ├── catalog-variant/          # /seller/products/:id/variants + attribute validation
+    ├── catalog-image/            # presign/register + thumbnail & orphan-sweep crons
+    ├── catalog-csv-import/       # CSV template/preview/process + saved mappings
+    └── catalog-read/             # CatalogReadService — sole cross-module variant read
 
 test/
 ├── unit/                         # jest specs against in-memory fakes
@@ -219,5 +227,87 @@ Notes:
 - Auth changes from Module 2: login + refresh now accept SUSPENDED in
   addition to APPROVED (status check). The write-side guard default
   remains APPROVED-only.
+
+## Module 4 (Product/SKU Catalog) — endpoint map
+
+```
+# Categories — admin manages the tree; sellers read it.
+GET    /admin/categories                         (staff auth)
+GET    /admin/categories/tree                    (staff auth)
+GET    /admin/categories/:id                     (staff auth)
+POST   /admin/categories                         (staff auth)
+PATCH  /admin/categories/:id                     (staff auth)
+POST   /admin/categories/:id/move                (staff auth)
+DELETE /admin/categories/:id                     (staff auth)
+GET    /seller/categories                        (seller auth, allow-suspended)
+GET    /seller/categories/tree                   (seller auth, allow-suspended)
+GET    /seller/categories/:id                    (seller auth, allow-suspended)
+
+# Category attribute definitions (own set + inherited "effective" set).
+GET    /admin/categories/:categoryId/attributes            (staff auth)
+GET    /admin/categories/:categoryId/attributes/effective  (staff auth)
+POST   /admin/categories/:categoryId/attributes            (staff auth)
+PATCH  /admin/categories/:categoryId/attributes/:id        (staff auth)
+DELETE /admin/categories/:categoryId/attributes/:id        (staff auth; soft warning by product count)
+GET    /seller/categories/:categoryId/attributes           (seller auth, allow-suspended)
+
+# Category proposals — sellers can't create categories directly.
+POST   /seller/category-proposals                (seller auth, APPROVED)
+GET    /seller/category-proposals                (seller auth, allow-suspended)
+GET    /seller/category-proposals/:id            (seller auth, allow-suspended)
+POST   /seller/category-proposals/:id/withdraw   (seller auth, APPROVED)
+GET    /admin/category-proposals                 (staff auth)
+GET    /admin/category-proposals/:id             (staff auth)
+POST   /admin/category-proposals/:id/approve     (staff auth; category+attrs in one tx, email)
+POST   /admin/category-proposals/:id/reject      (staff auth; email)
+
+# Products + variants.
+POST   /seller/products                          (seller auth, APPROVED)
+GET    /seller/products                          (seller auth, allow-suspended)
+GET    /seller/products/:id                      (seller auth, allow-suspended)
+PATCH  /seller/products/:id                      (seller auth, APPROVED)
+POST   /seller/products/:id/archive              (seller auth, APPROVED; cascades to variants)
+POST   /seller/products/:id/unarchive            (seller auth, APPROVED)
+DELETE /seller/products/:id                      (seller auth, APPROVED; soft, cascades)
+POST   /seller/products/:productId/variants               (seller auth, APPROVED; attribute-validated)
+GET    /seller/products/:productId/variants               (seller auth, allow-suspended)
+GET    /seller/products/:productId/variants/:variantId    (seller auth, allow-suspended)
+PATCH  /seller/products/:productId/variants/:variantId    (seller auth, APPROVED; attribute-validated)
+POST   /seller/products/:productId/variants/:variantId/archive    (seller auth, APPROVED)
+POST   /seller/products/:productId/variants/:variantId/unarchive  (seller auth, APPROVED)
+DELETE /seller/products/:productId/variants/:variantId    (seller auth, APPROVED; soft)
+
+# Variant images — presigned upload to Spaces, HEAD-verified register.
+POST   /seller/variants/:variantId/images/presign (seller auth, APPROVED; 15-min TTL)
+POST   /seller/variants/:variantId/images         (seller auth, APPROVED; queues thumbnail)
+GET    /seller/variants/:variantId/images         (seller auth, allow-suspended)
+DELETE /seller/variants/:variantId/images/:imageId (seller auth, APPROVED; queues original+thumb delete)
+
+# CSV product/variant import + saved column mappings.
+GET    /seller/csv-imports/template              (seller auth, allow-suspended)
+POST   /seller/csv-imports/presign               (seller auth, APPROVED)
+POST   /seller/csv-imports/preview               (seller auth, APPROVED)
+POST   /seller/csv-imports/process               (seller auth, APPROVED; async worker)
+GET    /seller/csv-imports                       (seller auth, allow-suspended)
+GET    /seller/csv-imports/:id                   (seller auth, allow-suspended)
+GET    /seller/csv-imports/:id/error-report      (seller auth, allow-suspended)
+POST   /seller/csv-mappings                      (seller auth, APPROVED)
+GET    /seller/csv-mappings                      (seller auth, allow-suspended)
+GET    /seller/csv-mappings/:id                  (seller auth, allow-suspended)
+PATCH  /seller/csv-mappings/:id                  (seller auth, APPROVED)
+DELETE /seller/csv-mappings/:id                  (seller auth, APPROVED; soft)
+```
+
+Notes:
+- Property inheritance (weight/dims/declared-value/HS/GST) resolves
+  variant → product → category → `system_settings` (GST only). All
+  cross-module variant reads MUST go through `CatalogReadService`.
+- Attribute inheritance: a category's effective attribute set = its own
+  defs + every ancestor's, child overrides parent on the same key;
+  cached in Redis 5 min, descendant-invalidated on write.
+- Background jobs (in-process BullMQ): thumbnail generation, image
+  orphan-sweep (daily 03:15 UTC), CSV import processing.
+- GST is whole-percent in Phase 1A; CSV imports are idempotent
+  (PATCH-by-diff, re-upload-safe). See `docs/phase-1a-debt.md`.
 
 See `docs/phase-1a-debt.md` for tracked deferrals.
