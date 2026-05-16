@@ -1,14 +1,15 @@
 import { Module } from '@nestjs/common';
 import { WarehouseResolverService } from './warehouse-resolver.service';
+import { StockMutationService } from './stock-mutation.service';
 
 /**
  * Shared inventory primitives consumed by every inventory-* module.
  * No controllers — pure provider/export surface (the catalog-read
- * pattern). StockMutationService (the single stock writer) is added here
- * in commit 6.
+ * pattern). StockMutationService is the single sanctioned stock writer
+ * (INV-1); every inventory-* module mutates stock only through it.
  */
 @Module({
-  providers: [WarehouseResolverService],
-  exports: [WarehouseResolverService],
+  providers: [WarehouseResolverService, StockMutationService],
+  exports: [WarehouseResolverService, StockMutationService],
 })
 export class InventorySharedModule {}
