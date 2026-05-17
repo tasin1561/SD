@@ -4,6 +4,7 @@ import { OrderStateMachineService } from './services/order-state-machine.service
 import { OrderEventWriterService } from './services/order-event-writer.service';
 import { CustomerService } from './services/customer.service';
 import { RecipientAddressCacheService } from './services/recipient-address-cache.service';
+import { AddressValidationService } from './services/address-validation.service';
 
 /**
  * Module 6 — Order Management.
@@ -20,6 +21,7 @@ import { RecipientAddressCacheService } from './services/recipient-address-cache
     OrderEventWriterService,
     CustomerService,
     RecipientAddressCacheService,
+    AddressValidationService,
   ],
   exports: [
     OrderNumberingService,
@@ -27,6 +29,7 @@ import { RecipientAddressCacheService } from './services/recipient-address-cache
     OrderEventWriterService,
     CustomerService,
     RecipientAddressCacheService,
+    AddressValidationService,
   ],
 })
 export class OrderModule {}
