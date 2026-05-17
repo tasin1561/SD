@@ -114,9 +114,9 @@ SD/
 
 **Status: IMPLEMENTED.** Schema lives in `packages/db/`.
 
-**Canonical reference:** `docs/db-schema.md`. Currently **67 Prisma models** across 9 layers plus Module 2's `seller_onboarding_progress` and Module 4's `category_proposals`, `category_attribute_definitions`, `seller_csv_mappings`, `bulk_product_uploads`. When the schema and this doc diverge, the doc wins; update Prisma to match.
+**Canonical reference:** `docs/db-schema.md`. Currently **69 Prisma models** across 9 layers plus per-module additions (seller_onboarding_progress in M2; category_proposals, category_attribute_definitions, seller_csv_mappings, bulk_product_uploads in M4; stock_alert_state, stock_adjustment_lines in M5). When the schema and this doc diverge, the doc wins; update Prisma to match.
 
-**Migrations applied:** 5 as of Module 4 (init, audit_logs entityId nullable, sellers email_verified_at/last_login_at, seller_onboarding_progress, catalog proposals/attributes/csv_mappings/bulk_product_uploads).
+**Migrations applied:** 7 as of Module 5 (init, audit_logs entityId nullable, sellers email_verified_at/last_login_at, seller_onboarding_progress, catalog proposals/attributes/csv_mappings/bulk_product_uploads, stock_thresholds_and_alert_state_table, bump_stock_reservation_ttl_default, stock_adjustment_lines).
 
 **TimescaleDB hypertables:** `tracking_events` and `stock_movements` (composite PK, monthly chunks, 7d/30d compression).
 
@@ -142,13 +142,6 @@ The package exports a singleton `prisma` client (configured logging, graceful sh
 ### Service-Layer Rules (MUST enforce in code — schema cannot)
 
 The schema gives you the shape; these rules give you correctness. Violating them creates data corruption that's expensive to detect and harder to fix.
-
-**Inventory rules:**
-1. Stock changes are transactional. Movements + level updates + reservations all in one `prisma.$transaction`.
-2. Optimistic concurrency on `stock_levels.version`. On conflict, refetch and retry.
-3. `stock_movements` is append-only. NEVER UPDATE or DELETE rows.
-4. Reservation cleanup is async (hourly BullMQ job releases past `expiresAt`).
-5. FIFO/FEFO at pick time: `ORDER BY batches.expiresAt ASC NULLS LAST, batches.receivedAt ASC`.
 
 **Order rules:**
 1. Status transitions enforced by a state machine in code (22 statuses; not every transition is valid).
@@ -189,7 +182,7 @@ The schema gives you the shape; these rules give you correctness. Violating them
 3. Strict transition guards: each direction has exactly one valid source state. No "any → any" transitions.
 
 **Catalog rules (Module 4):**
-1. **CatalogReadService is the only sanctioned path for cross-module variant lookups.** Downstream modules (Inventory, Orders, Shipments, Couriers) MUST import `CatalogReadService` via NestJS DI. Never query `ProductVariant` directly from outside the catalog modules. Property resolution (effective weight, dims, value, HS, GST) is centralized there.
+1. **CatalogReadService is the only sanctioned path for cross-module variant reads.** Downstream modules (Inventory, Orders, Shipments, Couriers) MUST import `CatalogReadService` via NestJS DI. Never query `ProductVariant` directly from outside the catalog modules. Property resolution (effective weight, dims, value, HS, GST) is centralized there.
 2. **Property inheritance order:** variant.field → product.defaultField → category.defaultField → system_settings (GST only). Other properties have no system fallback — null all the way down = validation error.
 3. **Attribute inheritance:** walks `parent_id` chain; child overrides parent for same `attribute_key`. Cached in Redis 5-min TTL; invalidation on write walks descendants.
 4. **Variant attribute validation:** required attributes present, valueType matches, ENUM in allowedValues, no extra keys, no nested objects/arrays in values.
@@ -201,6 +194,37 @@ The schema gives you the shape; these rules give you correctness. Violating them
 6. **Presigned URL security:** key path must match `sellers/{sellerId}/variants/{variantId}/{token}.{ext}`; service validates seller segment matches authenticated seller; HEAD verifies object exists and size matches before registering.
 7. **CSV re-upload PATCH semantics:** CSV-provided cells overwrite; omitted/blank cells do not null out existing values. Dedup by `(sellerId, externalRef)` for products, `(sellerId, skuCode)` for variants.
 8. **Archive vs delete:** ARCHIVED status blocks new uses (orders, stock receiving) — enforce in service layer; `deletedAt` makes the row invisible in read paths. Both preserve historical references.
+
+**Inventory rules (Module 5) — INV-1 through INV-9 are NON-NEGOTIABLE:**
+
+1. **INV-1: StockMutationService is the only writer** of `stock_movements` and `stock_levels.qtyOnHand`. Every stock change goes through `apply(tx, input)`. `runWithRetry` wraps the whole tx, ≤3 attempts on a `stock_levels.version` clash → 409 `STOCK_CONCURRENCY_CONFLICT`.
+
+2. **INV-2: Cache is reads-only for displays.** Mutation/decision paths call `StockReadService.getVariantStockLive()` (no cache) or directly use `StockAvailabilityService.compute()`. Cache-backed methods are named `*ForDisplay`/`*Summary`. **The method-name split IS the contract.** Cache invalidation runs AFTER `tx.commit()`, never inside.
+
+3. **INV-3: `qtyAvailable` is computed, never stored.** Canonical formula:
+   ```
+   qtyAvailable = SUM(stock_levels.qtyOnHand)
+                  − SUM(stock_reservations.qtyReserved WHERE status=ACTIVE)
+   ```
+   (phase-1 + phase-2 reservations counted uniformly). The canonical implementation lives in `StockAvailabilityService.compute()` (inventory-shared). All decision paths needing the scalar availability call this primitive directly.
+
+4. **INV-4: `stock_levels.qtyReserved` counts phase-2 only.** Phase-1 reservations float in `stock_reservations` with NULL bin/batch. Pick allocation populates bin+batch AND increments `stock_levels.qtyReserved` (decrement on release/fulfill via clamped atomic UPDATE, no version needed for monotonic give-backs).
+
+5. **INV-5: Cache invalidation + alert evaluation happen AFTER `tx.commit()`**, never inside the stock tx. Rollback must not leave stale cache or false alerts.
+
+6. **INV-6: Optimistic concurrency retry ≤3**, then surface 409. `stock_levels.version` is the row's CAS token — protects both `qtyOnHand` mutations (StockMutationService) and `qtyReserved` increments (phase-2 populate). Clamped decrements bypass version.
+
+7. **INV-7: `reasonCode` required** on `ADJUSTMENT_*` / `CYCLE_COUNT_ADJUST` / `EXPIRY_WRITE_OFF` movements.
+
+8. **INV-8: Adjustments tx-wrapped.** Below-threshold initiate+execute in one tx; approval enqueues executor which runs in its own tx. Executor is idempotent on already-EXECUTED (no double-apply on BullMQ retry). Partial-failure rolls back entire tx; adjustment stays APPROVED for retry.
+
+9. **INV-9: Alert state machine** (inactive/below → FIRE unless within cooldown → SUPPRESS+active; active/below → noop; active/ok → CLEAR; inactive/ok → noop) persisted in `stock_alert_state` per (seller, variant, warehouse).
+
+**Reservation allocation is LATE (locked decision):** phase-1 soft qty claim at order confirm; phase-2 (bin+batch + version-CAS) at pick generation. `StockPickAllocationService.allocateAndPopulate()` is FULL-CONSUME (no partial-qty parameter; physical shortfall → residual phase-1 row; reserved-qty conserved). **Phase-1 over-claim window is inherent** — transient race condition under READ COMMITTED with no lock. Phase-2's version-CAS is the hard guard; conflicting allocation surfaces as `PICK_ALLOCATION_CONFLICT` to Module 8's escalation.
+
+**Inventory module structure:**
+- **inventory-shared** (internal infrastructure): `WarehouseResolverService`, `StockMutationService`, `StockAvailabilityService` (INV-3 primitive), `StockCacheService`, `StockAlertService`. Consumed by every inventory submodule.
+- **inventory-stock** (cross-module surface): `StockReadService`, `StockReservationService`, `StockPickAllocationService`. **External consumers (Modules 6, 8) import this module and see only these three.** No other inventory services are exported externally.
 
 **General:**
 1. All money stored as `Decimal`, INR canonical. BDT for display only via FX.
@@ -242,13 +266,14 @@ The schema gives you the shape; these rules give you correctness. Violating them
 - Database access only via Prisma client, never raw SQL except in migrations.
 - Sub-feature modules (profile, address, notification-preference under seller) provide guards locally rather than importing the auth module — keeps dep direction one-way.
 - **Cross-module variant lookups** go via `CatalogReadService`. Cross-module catalog reads do NOT query the catalog tables directly.
+- **Cross-module stock reads** go via the three exported services in `inventory-stock`: `StockReadService`, `StockReservationService`, `StockPickAllocationService`. Other inventory services (cache, alert, mutation, availability primitive) are internal to inventory and NOT exposed externally.
 
 ### Testing
 
 - Unit tests use mocked Prisma (or in-memory fakes for transaction-sensitive logic).
 - E2E tests run against the `skydrop_test` database (separate from dev) on logical Redis DB 1.
 - E2E global setup creates DB, runs migrate deploy + seed; teardown drops DB.
-- **Cascading reset helpers:** when adding a feature module with tables that FK to `sellers` (or any other reset-critical entity), add a `reset<Module>State()` helper and chain it BEFORE the parent reset (e.g., `resetAuthState`). Order-dependent test contamination is a real footgun without this — Module 4's catalog tables broke seller deletion until the catalog reset was folded in. Each new module must do this proactively.
+- **Cascading reset helpers:** when adding a feature module with tables that FK to `sellers` (or any other reset-critical entity), add a `reset<Module>State()` helper and chain it BEFORE the parent reset (e.g., `resetAuthState`). Order-dependent test contamination is a real footgun without this. Each new module must do this proactively. Note: `resetInventoryState()` currently includes Order/OrderItem/Customer cleanup as interim coupling until Module 6 takes ownership.
 - Use `makeTestEnv()` from the shared test helpers when constructing `EnvService` in tests; don't inline literal env objects (forces drift maintenance).
 - For test fakes that need `prisma.$transaction(fn)`, attach `$transaction` AFTER the client literal to avoid TS7024 implicit-any from self-reference.
 
@@ -289,8 +314,9 @@ The schema gives you the shape; these rules give you correctness. Violating them
 10. Snapshot data when immutability matters (order recipient address, order item SKU info, shipment dest address).
 11. Add new enums to `packages/db/src/enums.ts` after adding them to `schema.prisma`.
 12. When adding tables with FKs to existing entities, add a `reset<Module>State()` helper and chain it into the central e2e reset before the parent reset.
-13. Use `CatalogReadService` for any cross-module variant lookup; never query `product_variants` directly from outside the catalog modules.
+13. Use `CatalogReadService` for cross-module variant **reads**; never query `product_variants` directly from outside the catalog modules. *Clarification (Module 5): this governs cross-module READS so inheritance precedence stays centralized. A column owned by another domain that lives on a catalog table for storage convenience — e.g., inventory's `product_variants.low_stock_threshold` — may be written by the owning domain directly, with an explicit code comment; its reads still go via `CatalogReadService` as a raw passthrough.*
 14. Use `makeTestEnv()` in test fixtures instead of inline literal env objects.
+15. All stock writes go through `StockMutationService` (INV-1); never write `stock_movements` or `stock_levels.qtyOnHand` elsewhere. Honor INV-2 (cache reads-only via method-name split), INV-3 (use `StockAvailabilityService.compute()` for the canonical scalar), INV-4 (`qtyReserved` = phase-2 only). For cross-module stock needs, import only the three services exported by `inventory-stock`.
 
 ### MUST NOT
 
@@ -317,8 +343,8 @@ Module order — each builds on prior modules:
 | 2 | Seller Onboarding (invite, registration, approval workflow) | ✅ DONE |
 | 3 | Seller Profile (merged into Module 2) | ✅ DONE |
 | 4 | Product/SKU Catalog (categories, products, variants, images, CSV upload) | ✅ DONE |
-| 5 | Inventory & WMS (warehouses, bins, batches, levels, movements, reservations, receiving, cycle counts) | NEXT |
-| 6 | Order Management (manual entry, CSV upload, lifecycle, events) | pending |
+| 5 | Inventory & WMS (warehouses, bins, batches, levels, movements, reservations, receiving, cycle counts) | ✅ DONE |
+| 6 | Order Management (manual entry, CSV upload, lifecycle, events) | NEXT |
 | 7 | Call Center Workflow (queue, distributor, attempt logging) | pending |
 | 8 | Warehouse Operations (pick, pack, dispatch, RTO) | pending |
 | 9 | Courier Integration (Delhivery API + manual placement workflow) | pending |
@@ -348,18 +374,19 @@ Phase 1B modules (not in this roadmap):
 - Infrastructure (DO droplet, managed Postgres, Spaces, Cloudflare)
 - Local dev (WSL2, Docker Postgres + Redis with TimescaleDB)
 - Monorepo skeleton (Turborepo + pnpm)
-- `@skydrop/db` package: 67 Prisma models, 5 migrations applied, idempotent seed (system settings, couriers, FX, warehouse, rate card, 20 notification templates)
-- `apps/api` (NestJS): config (Zod-validated), Prisma module, Redis module, health endpoints, Swagger at /api/docs, Pino logging with redaction, global exception filter, request-id middleware, rate limiting (@nest-lab/throttler-storage-redis), multiple BullMQ workers in-process (email, image-thumbnail, image-orphan-cleanup, csv-import-processor)
-- **Module 1** — Auth & Access Control: staff + seller auth, refresh rotation with replay detection, invitations, API keys (`skd_` prefix, SHA-256 hashed), email module with Resend + Nunjucks template rendering, audit logging via `AuditLogService`
-- **Module 2** — Seller Onboarding (also covers Module 3 scope): seller status transitions (suspend/reapprove with full side-effects), `SellerOnboardingService` with step tracking, profile + bank details endpoints, address CRUD with default logic + auto onboarding-step completion, notification preferences with registration pre-seed (7 categories), admin seller management endpoints
-- **Module 4** — Product/SKU Catalog: admin category tree with full-path maintenance + cycle prevention, attribute definition CRUD with inheritance resolution (5-min Redis cache, descendant invalidation on write), category proposals (seller propose → admin approve creates Category + attr defs + email), product/variant CRUD with attribute validation, presigned URL image uploads to Spaces with thumbnail generation worker + orphan cleanup cron, CSV import with template + auto-detect + preview + idempotent re-upload, saved column mappings, `CatalogReadService` as the sanctioned cross-module variant read boundary
-- Test totals: 202 unit tests, 16 e2e tests, all green; fresh-clone simulation verified
+- `@skydrop/db` package: 69 Prisma models, 7 migrations applied, idempotent seed (system settings, couriers, FX, warehouse, rate card, 24 notification templates)
+- `apps/api` (NestJS): config (Zod-validated), Prisma module, Redis module, health endpoints, Swagger at /api/docs, Pino logging with redaction, global exception filter, request-id middleware, rate limiting, multiple BullMQ workers in-process (email, image-thumbnail, image-orphan-cleanup, csv-import-processor, reservation-cleanup, adjustment-executor)
+- **Module 1** — Auth & Access Control: staff + seller auth, refresh rotation with replay detection, invitations, API keys, email module with Resend + Nunjucks, audit logging via `AuditLogService`
+- **Module 2** — Seller Onboarding (also covers Module 3 scope): seller status transitions, `SellerOnboardingService` with step tracking, profile + bank details endpoints, address CRUD, notification preferences with registration pre-seed, admin seller management endpoints
+- **Module 4** — Product/SKU Catalog: admin category tree with full-path maintenance + cycle prevention, attribute definition CRUD with inheritance resolution (5-min Redis cache, descendant invalidation), category proposals (seller propose → admin approve), product/variant CRUD with attribute validation, presigned URL image uploads to Spaces with thumbnail generation + orphan cleanup, CSV import with template + auto-detect + preview + idempotent re-upload, saved column mappings, `CatalogReadService` as sanctioned cross-module variant read boundary
+- **Module 5** — Inventory & WMS: warehouse/zone/bin CRUD; `StockMutationService` (sole writer, version-CAS retry); `StockAvailabilityService` (INV-3 canonical scalar); two-path `StockReadService` (live vs cached, INV-2); LATE reservations (phase-1 reserve/release/fulfill → phase-2 FEFO+single-batch allocate with conservation invariants); hourly auto-release worker; goods receipts (declare → receive → complete / DISCREPANCY → resolve); threshold-gated adjustments (auto-execute below / approve→executor worker above); cycle counts (→ draft CYCLE_COUNT adjustments); `StockAlertService` state machine + cooldown (`stock_alert_state` table). Cross-module surface (Modules 6, 8): `StockReadService`, `StockReservationService`, `StockPickAllocationService`. Module 5 captured INV-1 through INV-9 as non-negotiable service-layer invariants codified above.
+- Test totals: 305 unit + 21 e2e tests, all green; fresh-clone simulation verified
 
 **Not yet implemented:**
 - All other apps (frontends in `apps/marketing`, `apps/seller`, `apps/admin`, `apps/track` are placeholders)
-- Modules 5-18
+- Modules 6-18
 
-**Next:** Module 5 — Inventory & WMS. This is the most service-layer-heavy module: stock levels with optimistic concurrency, multi-bin storage, batches with FIFO/FEFO picking, append-only movement ledger (TimescaleDB hypertable), stock reservations with auto-release, cycle counts, goods receipts. Will exercise the `CatalogReadService` cross-module boundary built in Module 4. Design happens in chat with the user before implementation.
+**Next:** Module 6 — Order Management. Will consume Module 5's exported services (`StockReadService`, `StockReservationService`) at order confirmation. Will own the 22-status order state machine, manual order entry, bulk CSV upload, recipient address snapshotting, order events ledger. Design happens in chat with the user before implementation.
 
 ---
 
@@ -376,6 +403,7 @@ Phase 1B modules (not in this roadmap):
   7. Repeat for next module.
 
 - Long sessions (30+ min, many tool calls) get expensive in context. End sessions when a logical unit completes.
-- Multi-checkpoint pacing for big modules (Module 4 had 3 checkpoints across 21 commits). Use them when the module spans 15+ commits.
+- Multi-checkpoint pacing for big modules. Use checkpoints when the module spans 15+ commits.
 - After every session, the assistant updates this `CLAUDE.md` if anything material changed.
-- Mid-module checkpoints when security-critical or architecturally novel work lands (auth-common, status-transition services, presigned upload security, attribute inheritance, CSV worker correctness). Mechanical CRUD can run end-to-end without interruption.
+- Mid-module checkpoints when security-critical or data-integrity-critical work lands. Mechanical CRUD can run end-to-end without interruption.
+- **Pre-flight reviews catch real problems.** Module 5 surfaced 4 findings pre-implementation (FK constraint, alert grain mismatch, adjustment intent gap, refactor circular dep) — each would have caused painful rework if discovered post-code. When Claude Code proposes a plan, scrutinize it before approval.
