@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { OrderNumberingService } from './services/order-numbering.service';
 import { OrderStateMachineService } from './services/order-state-machine.service';
 import { OrderEventWriterService } from './services/order-event-writer.service';
+import { CustomerService } from './services/customer.service';
 
 /**
  * Module 6 — Order Management.
@@ -16,11 +17,13 @@ import { OrderEventWriterService } from './services/order-event-writer.service';
     OrderNumberingService,
     OrderStateMachineService,
     OrderEventWriterService,
+    CustomerService,
   ],
   exports: [
     OrderNumberingService,
     OrderStateMachineService,
     OrderEventWriterService,
+    CustomerService,
   ],
 })
 export class OrderModule {}
