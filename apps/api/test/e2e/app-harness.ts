@@ -72,10 +72,12 @@ export async function bootTestApp(): Promise<AppHarness> {
  * run order.
  */
 export async function resetAuthState(prisma: PrismaClient): Promise<void> {
-  // Order-critical chain: inventory rows FK-restrict variants/sellers, and
-  // catalog rows FK-restrict sellers — so inventory FIRST, then catalog,
-  // then the auth/seller wipe. (CLAUDE MUST #12.)
+  // Order-critical chain (CLAUDE MUST #12): stock rows FK orders/variants/
+  // sellers → inventory FIRST; then Module-6 order/customer rows (FK
+  // variants/sellers) → resetOrderState; then catalog (FK sellers); then
+  // the auth/seller wipe.
   await resetInventoryState(prisma);
+  await resetOrderState(prisma);
   await resetCatalogState(prisma);
   await prisma.$transaction([
     prisma.notificationLog.deleteMany({}),
@@ -148,13 +150,33 @@ export async function resetInventoryState(prisma: PrismaClient): Promise<void> {
         'cycle_counts',
         'goods_receipt_lines',
         'goods_receipts',
-        // Interim coupling (Finding A): a reservation FKs orders/order_items.
-        'order_items',
-        'orders',
-        'customers',
         // Test-created topology (seeded warehouses are preserved).
         'warehouse_bins',
         'warehouse_zones',
+      ].join(', ') +
+      ' RESTART IDENTITY CASCADE',
+  );
+}
+
+/**
+ * Wipes Module-6 order/customer tables. Module 6 now OWNS this cleanup
+ * (the interim Order/OrderItem/Customer coupling has been removed from
+ * resetInventoryState — CLAUDE MUST #12). Must run AFTER
+ * resetInventoryState (stock_reservations/stock_movements FK orders) and
+ * BEFORE resetCatalogState (order_items FK product_variants) + the seller
+ * wipe (orders/customers FK sellers). TRUNCATE … CASCADE handles the
+ * order_items/order_events/address-cache child ordering.
+ */
+export async function resetOrderState(prisma: PrismaClient): Promise<void> {
+  await prisma.$executeRawUnsafe(
+    'TRUNCATE TABLE ' +
+      [
+        'order_events',
+        'order_recipient_address_cache',
+        'order_items',
+        'bulk_order_uploads',
+        'orders',
+        'customers',
       ].join(', ') +
       ' RESTART IDENTITY CASCADE',
   );

@@ -48,6 +48,49 @@ const ORDER_VIEW_INCLUDE = {
 
 export type OrderView = Prisma.OrderGetPayload<{ include: typeof ORDER_VIEW_INCLUDE }>;
 
+const ORDER_LIST_SELECT = {
+  id: true,
+  orderNumber: true,
+  sellerOrderRef: true,
+  status: true,
+  source: true,
+  recipientName: true,
+  recipientPhoneE164: true,
+  recipientCity: true,
+  recipientStateProvince: true,
+  paymentMode: true,
+  codAmountInr: true,
+  declaredValueInr: true,
+  totalWeightGrams: true,
+  isUrgent: true,
+  customerId: true,
+  placedAt: true,
+  createdAt: true,
+} satisfies Prisma.OrderSelect;
+
+export type OrderListItem = Prisma.OrderGetPayload<{ select: typeof ORDER_LIST_SELECT }>;
+
+const ORDER_EVENT_SELECT = {
+  id: true,
+  type: true,
+  fromStatus: true,
+  toStatus: true,
+  description: true,
+  data: true,
+  actorType: true,
+  createdAt: true,
+} satisfies Prisma.OrderEventSelect;
+
+export type OrderEventView = Prisma.OrderEventGetPayload<{ select: typeof ORDER_EVENT_SELECT }>;
+
+export interface ListOrdersQuery {
+  page?: number;
+  pageSize?: number;
+  status?: OrderStatus;
+  source?: OrderSource;
+  search?: string;
+}
+
 /** Per-line snapshot resolved from the catalog before the write tx. */
 interface ResolvedLine {
   variantId: string;
@@ -731,6 +774,84 @@ export class OrderService {
       throw new NotFoundException(`Order ${id} not found`);
     }
     return order;
+  }
+
+  async list(
+    sellerId: string,
+    query: ListOrdersQuery,
+  ): Promise<{ items: OrderListItem[]; total: number; page: number; pageSize: number }> {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+    const where: Prisma.OrderWhereInput = { sellerId, deletedAt: null };
+    if (query.status) where.status = query.status;
+    if (query.source) where.source = query.source;
+    if (query.search) {
+      where.OR = [
+        { orderNumber: { contains: query.search, mode: 'insensitive' } },
+        { sellerOrderRef: { contains: query.search, mode: 'insensitive' } },
+        { recipientName: { contains: query.search, mode: 'insensitive' } },
+        { recipientPhoneE164: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+    const [items, total] = await Promise.all([
+      this.prisma.client.order.findMany({
+        where,
+        orderBy: { placedAt: 'desc' },
+        take: pageSize,
+        skip: (page - 1) * pageSize,
+        select: ORDER_LIST_SELECT,
+      }),
+      this.prisma.client.order.count({ where }),
+    ]);
+    return { items, total, page, pageSize };
+  }
+
+  /** Seller-visible timeline. Internal-only events are filtered out. */
+  async listEvents(sellerId: string, orderId: string): Promise<OrderEventView[]> {
+    await this.loadOwned(sellerId, orderId); // ownership + 404 guard
+    return this.prisma.client.orderEvent.findMany({
+      where: { orderId, isVisibleToSeller: true },
+      orderBy: { createdAt: 'asc' },
+      select: ORDER_EVENT_SELECT,
+    });
+  }
+
+  /**
+   * Soft-delete (discard) a DRAFT order. Only DRAFT is discardable — a
+   * submitted/active order must be cancelled, not deleted, so its history
+   * is preserved (CLAUDE soft-delete rule; deletedAt hides it from read
+   * paths). Idempotent-safe: loadOwned already filters deletedAt.
+   */
+  async discardDraft(
+    sellerId: string,
+    id: string,
+    actor: EventActor,
+    ctx: ClientContext,
+  ): Promise<void> {
+    const order = await this.loadOwned(sellerId, id);
+    if (order.status !== OrderStatus.DRAFT) {
+      throw new ConflictException({
+        code: 'NOT_DISCARDABLE',
+        message: `Only DRAFT orders can be discarded (order is ${order.status}); cancel it instead`,
+      });
+    }
+    const now = new Date();
+    await this.prisma.client.$transaction(async (tx) => {
+      await tx.order.update({ where: { id }, data: { deletedAt: now } });
+      await this.events.note(tx, id, 'Draft order discarded', actor, true);
+      await this.audit.log(
+        {
+          actorType: actor.type,
+          actorId: actor.id ?? null,
+          sellerId,
+          action: 'order.discarded',
+          entityType: 'order',
+          entityId: id,
+          metadata: { orderNumber: order.orderNumber, ...this.ctxMeta(ctx) },
+        },
+        tx,
+      );
+    });
   }
 
   private ctxMeta(ctx: ClientContext): Record<string, unknown> {

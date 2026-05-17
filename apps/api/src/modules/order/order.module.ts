@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
 import { CatalogReadModule } from '../catalog-read/catalog-read.module';
+import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
+import { SellerOrderController } from './controllers/seller-order.controller';
+import { SellerCustomerController } from './controllers/seller-customer.controller';
+import { SellerRecipientAddressController } from './controllers/seller-recipient-address.controller';
 import { OrderNumberingService } from './services/order-numbering.service';
 import { OrderStateMachineService } from './services/order-state-machine.service';
 import { OrderEventWriterService } from './services/order-event-writer.service';
@@ -20,6 +24,11 @@ import { OrderService } from './services/order.service';
  */
 @Module({
   imports: [CatalogReadModule],
+  controllers: [
+    SellerOrderController,
+    SellerCustomerController,
+    SellerRecipientAddressController,
+  ],
   providers: [
     OrderNumberingService,
     OrderStateMachineService,
@@ -28,6 +37,7 @@ import { OrderService } from './services/order.service';
     RecipientAddressCacheService,
     AddressValidationService,
     OrderService,
+    SellerJwtGuard,
   ],
   exports: [
     OrderNumberingService,
