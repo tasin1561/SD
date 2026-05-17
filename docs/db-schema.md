@@ -742,6 +742,11 @@ CSV upload tracking.
 - `status: BulkUploadStatus`
 - `errorReportKey` (CSV of failed rows in Spaces)
 - Metrics: `ordersCreated`, `rowsFailed`, `rowsSkipped`
+  > **Module 6 counter mapping (ORD-9):** new externalRef →
+  > `ordersCreated`; externalRef matching an existing DRAFT/
+  > PENDING_CONFIRMATION order (PATCHed or unchanged) → `rowsSkipped`;
+  > coercion/SKU/CONFIRMED-conflict error → `rowsFailed`. The schema has
+  > no "ordersUpdated" column; patched rows count as skipped by design.
 - `jobId` (BullMQ), `startedAt`, `completedAt`
 - `uploadedBySellerId`, `uploadedByStaffId`
 

@@ -267,14 +267,54 @@ pick it up.
   but nothing enqueues it on transition yet.
   **Pick up:** Module 11.
 
-- **`StockReservationService.listActiveForOrder` — sanctioned boundary
-  expansion.** Added in commit 12 so `OrderWriteService` can target a
-  prior transition's reservations for release/fulfill without querying
-  `stock_reservations` directly (CLAUDE MUST #15). Same expand-by-need
-  precedent as `CatalogReadService` (`productName`/`imageUrl` added for
-  the order-item snapshot in commit 9). Read-only, ACTIVE-filtered.
-  **Pick up:** ongoing convention; revisit if the M5 cross-module
+- **Sanctioned boundary expansions (expand-by-need).** Three additive
+  cross-module reads were added so Module 6 never queries another
+  domain's tables directly (CLAUDE MUST #13/#15), same precedent as the
+  Module-5 `CatalogReadService` note: `CatalogReadService` +=
+  `productName`/`imageUrl` (commit 9, order-item snapshot) and
+  `getVariantBySku` (commit 19, CSV SKU→variant);
+  `StockReservationService.listActiveForOrder` (commit 12, release/
+  fulfill targeting). All read-only.
+  **Pick up:** ongoing convention; revisit if either cross-module
   surface grows unwieldy.
+
+- **Customer identity narrowed GLOBAL → per-seller.** The pre-M6
+  canonical design was a GLOBAL phone-keyed `customers` row with
+  cross-seller risk aggregation (`rtoCount`/`fakeOrdersCount`/
+  `riskLevel` shared across sellers). Module 6 commit 1 deliberately
+  reversed this to `@@unique([sellerId, phoneE164])` for Phase 1A
+  privacy; risk aggregates are now per-seller. Cross-seller risk
+  aggregation (a fraud signal that would let one seller benefit from
+  another's RTO/fake history) is therefore NOT available.
+  **Pick up:** Phase 1B/2 fraud work — reintroduce a cross-seller risk
+  view (likely a separate aggregate keyed by phone, computed read-side,
+  not by re-globalizing the `customers` row).
+
+- **CSV order imports are single-line only.** CSV order imports support
+  one row → one order with single line item only. Multi-line orders
+  (multiple SKUs in one order) require manual entry via
+  `POST /seller/orders`. Phase 2 work: parent-row grouping logic for
+  multi-line CSV imports.
+  **Pick up:** Phase 2.
+
+- **Cross-module facade is convention, not compile-time.** `OrderModule`
+  exports exactly `OrderReadService` + `OrderWriteService`; the rest
+  live in the internal `OrderCoreModule` (consumed only by Module-6
+  controllers + `order-csv-import`). NestJS enforces the module export
+  list, but nothing stops a future module from importing
+  `OrderCoreModule` directly — same convention-not-lint caveat as the
+  `CatalogReadService` entry above.
+  **Pick up:** enforce via an architecture/lint test if drift appears.
+
+- **God mode opts OUT of the saga compensation guarantee.**
+  `OrderAdminOverrideService.forceMutate()` attempts reserve on a
+  → CONFIRMED bypass but NEVER blocks or compensates on failure (the
+  admin acknowledged the risk); transitioning away from CONFIRMED
+  leaves reservations intact (cleanup is the separate
+  `release-reservations` endpoint). `hasAdminOverride` is set-once,
+  never cleared. This is intentional, not a defect — recorded so future
+  readers don't "fix" it.
+  **Pick up:** never (documented design).
 
 ## Pricing & Multi-Currency (Modules 15–17)
 
