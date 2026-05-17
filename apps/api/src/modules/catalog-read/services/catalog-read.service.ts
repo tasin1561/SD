@@ -42,6 +42,17 @@ export interface ResolvedVariant {
    * not interpret it.
    */
   readonly lowStockThreshold: number | null;
+  /**
+   * Order-snapshot passthroughs (Module 6, expand-by-need — see
+   * phase-1a-debt "CatalogReadService expansion-by-need"). `productName`
+   * is `products.name`; `imageUrl` is the primary image URL (isPrimary,
+   * else lowest displayOrder) among non-deleted images, or null. Surfaced
+   * here purely so OrderService can snapshot SKU display info onto
+   * order_items without querying products/product_images directly
+   * (CLAUDE MUST #13). Catalog does not interpret these.
+   */
+  readonly productName: string;
+  readonly imageUrl: string | null;
 }
 
 const VARIANT_SELECT = {
@@ -60,8 +71,13 @@ const VARIANT_SELECT = {
   hsCode: true,
   gstRate: true,
   lowStockThreshold: true,
+  images: {
+    where: { deletedAt: null },
+    select: { url: true, isPrimary: true, displayOrder: true },
+  },
   product: {
     select: {
+      name: true,
       categoryId: true,
       deletedAt: true,
       defaultWeightGrams: true,
@@ -187,7 +203,28 @@ export class CatalogReadService {
         row.hsCode ?? product.defaultHsCode ?? category?.defaultHsCode ?? null,
       gstRate: row.gstRate ?? category?.defaultGstRate ?? gstDefault,
       lowStockThreshold: row.lowStockThreshold ?? null,
+      productName: product.name,
+      // Primary image: isPrimary wins, else lowest displayOrder. Picked
+      // in code so VARIANT_SELECT stays a plain `as const` (Prisma rejects
+      // a readonly `orderBy` tuple).
+      imageUrl: this.pickPrimaryImageUrl(row.images),
     });
+  }
+
+  private pickPrimaryImageUrl(
+    images: ReadonlyArray<{ url: string; isPrimary: boolean; displayOrder: number }>,
+  ): string | null {
+    let best: { url: string; isPrimary: boolean; displayOrder: number } | null = null;
+    for (const img of images) {
+      if (
+        best === null ||
+        (img.isPrimary && !best.isPrimary) ||
+        (img.isPrimary === best.isPrimary && img.displayOrder < best.displayOrder)
+      ) {
+        best = img;
+      }
+    }
+    return best?.url ?? null;
   }
 
   private coerceAttributes(raw: Prisma.JsonValue | null): Record<string, unknown> {

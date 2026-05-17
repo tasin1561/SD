@@ -6,6 +6,7 @@ import type { AttributeResolutionService } from '../../src/modules/catalog-attri
 const dec = (n: string | number): Prisma.Decimal => new Prisma.Decimal(n);
 
 interface ProductShape {
+  name: string;
   categoryId: string | null;
   deletedAt: Date | null;
   defaultWeightGrams: number | null;
@@ -37,11 +38,13 @@ interface VariantShape {
   hsCode: string | null;
   gstRate: Prisma.Decimal | null;
   deletedAt: Date | null;
+  images: { url: string; isPrimary: boolean; displayOrder: number }[];
   product: ProductShape;
 }
 
 function product(over: Partial<ProductShape> = {}): ProductShape {
   return {
+    name: 'Product',
     categoryId: null,
     deletedAt: null,
     defaultWeightGrams: null,
@@ -70,6 +73,7 @@ function variant(over: Partial<VariantShape> & Pick<VariantShape, 'id'>): Varian
     hsCode: null,
     gstRate: null,
     deletedAt: null,
+    images: [],
     product: product(),
     ...over,
   };
