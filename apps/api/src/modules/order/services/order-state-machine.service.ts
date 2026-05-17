@@ -1,0 +1,234 @@
+import { Injectable } from '@nestjs/common';
+import { OrderStatus } from '@skydrop/db';
+
+/**
+ * Stock side-effects a transition requires. OrderWriteService (commit 12)
+ * executes these inside the status-change transaction (ORD-3). The set is
+ * deliberately limited to what Module 6 owns — reservation lifecycle.
+ * Physical stock movements for pick/pack/RTO-restock belong to Module 8's
+ * StockMutationService and are NOT modelled here.
+ */
+export enum OrderSideEffect {
+  /** PENDING_CONFIRMATION-family → CONFIRMED: StockReservationService.reserve() per line. */
+  RESERVE_STOCK = 'RESERVE_STOCK',
+  /** A reserved order → CANCELLED/CANCELLED_BY_ADMIN/REJECTED: release() every active reservation. */
+  RELEASE_STOCK = 'RELEASE_STOCK',
+  /** → DELIVERED: fulfill() the reservations (clears the hold; the physical pick movement is Module 8's). */
+  FULFILL_STOCK = 'FULFILL_STOCK',
+}
+
+interface TransitionDef {
+  readonly to: OrderStatus;
+  readonly sideEffects: readonly OrderSideEffect[];
+}
+
+const { RESERVE_STOCK, RELEASE_STOCK, FULFILL_STOCK } = OrderSideEffect;
+
+/**
+ * Declarative transition table. Each row: from → list of (to, side-effects).
+ *
+ * Design notes:
+ *  - Pre-confirmation cancels (PENDING_CONFIRMATION / CALL_* / OUT_OF_STOCK
+ *    → CANCELLED) carry NO RELEASE_STOCK — nothing is reserved yet. This
+ *    is the single most important correctness property of the matrix.
+ *  - Reservation is created ONLY on entry to CONFIRMED (ORD-10), released
+ *    on cancel/reject from any reserved state, fulfilled on DELIVERED.
+ *  - The spec's vocabulary maps onto the real enum: PICKING≡PENDING_PICK,
+ *    MANIFESTED≡PENDING_DISPATCH; cancel-actor distinction is CANCELLED
+ *    (seller/customer, + cancellationReason/cancelledById) vs
+ *    CANCELLED_BY_ADMIN (admin sane-cancel + god-mode landing).
+ *  - Module 7 owns PENDING_CONFIRMATION→CONFIRMED; Module 8 owns the
+ *    warehouse/courier legs; Module 6 only DEFINES the lifecycle and
+ *    drives create/submit/confirm/cancel.
+ */
+const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]]> = [
+  [OrderStatus.DRAFT, [
+    { to: OrderStatus.PENDING_CONFIRMATION, sideEffects: [] }, // submit
+    { to: OrderStatus.CANCELLED, sideEffects: [] }, // discard a draft
+    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [] },
+  ]],
+
+  [OrderStatus.PENDING_CONFIRMATION, [
+    { to: OrderStatus.CONFIRMED, sideEffects: [RESERVE_STOCK] }, // Module 7
+    { to: OrderStatus.OUT_OF_STOCK, sideEffects: [] }, // reserve() failed at confirm (ORD-10)
+    { to: OrderStatus.CALL_NO_RESPONSE, sideEffects: [] },
+    { to: OrderStatus.CALL_RESCHEDULED, sideEffects: [] },
+    { to: OrderStatus.CANCELLED, sideEffects: [] }, // no reservation yet
+    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [] },
+    { to: OrderStatus.REJECTED, sideEffects: [] },
+  ]],
+
+  [OrderStatus.CALL_NO_RESPONSE, [
+    { to: OrderStatus.PENDING_CONFIRMATION, sideEffects: [] },
+    { to: OrderStatus.CALL_RESCHEDULED, sideEffects: [] },
+    { to: OrderStatus.CONFIRMED, sideEffects: [RESERVE_STOCK] },
+    { to: OrderStatus.CANCELLED, sideEffects: [] },
+    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [] },
+    { to: OrderStatus.REJECTED, sideEffects: [] },
+  ]],
+
+  [OrderStatus.CALL_RESCHEDULED, [
+    { to: OrderStatus.PENDING_CONFIRMATION, sideEffects: [] },
+    { to: OrderStatus.CALL_NO_RESPONSE, sideEffects: [] },
+    { to: OrderStatus.CONFIRMED, sideEffects: [RESERVE_STOCK] },
+    { to: OrderStatus.CANCELLED, sideEffects: [] },
+    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [] },
+    { to: OrderStatus.REJECTED, sideEffects: [] },
+  ]],
+
+  [OrderStatus.OUT_OF_STOCK, [
+    { to: OrderStatus.CONFIRMED, sideEffects: [RESERVE_STOCK] }, // retry succeeded
+    { to: OrderStatus.PENDING_CONFIRMATION, sideEffects: [] }, // re-queue
+    { to: OrderStatus.CANCELLED, sideEffects: [] }, // give up — nothing reserved
+    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [] },
+  ]],
+
+  [OrderStatus.CONFIRMED, [
+    { to: OrderStatus.PENDING_PICK, sideEffects: [] }, // Module 8 begins
+    { to: OrderStatus.PENDING_MANUAL_PLACEMENT, sideEffects: [] },
+    { to: OrderStatus.CANCELLED, sideEffects: [RELEASE_STOCK] },
+    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
+    { to: OrderStatus.REJECTED, sideEffects: [RELEASE_STOCK] },
+  ]],
+
+  [OrderStatus.PENDING_MANUAL_PLACEMENT, [
+    { to: OrderStatus.PENDING_PICK, sideEffects: [] },
+    { to: OrderStatus.CANCELLED, sideEffects: [RELEASE_STOCK] },
+    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
+  ]],
+
+  [OrderStatus.PENDING_PICK, [
+    { to: OrderStatus.PICKED, sideEffects: [] },
+    { to: OrderStatus.CANCELLED, sideEffects: [RELEASE_STOCK] },
+    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
+  ]],
+
+  [OrderStatus.PICKED, [
+    { to: OrderStatus.PACKED, sideEffects: [] },
+    { to: OrderStatus.PACK_FAILED, sideEffects: [] },
+    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
+  ]],
+
+  [OrderStatus.PACK_FAILED, [
+    { to: OrderStatus.PENDING_PICK, sideEffects: [] }, // re-pick
+    { to: OrderStatus.PICKED, sideEffects: [] },
+    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
+  ]],
+
+  [OrderStatus.PACKED, [
+    { to: OrderStatus.PENDING_DISPATCH, sideEffects: [] },
+    { to: OrderStatus.PACK_FAILED, sideEffects: [] }, // re-open
+    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
+  ]],
+
+  [OrderStatus.PENDING_DISPATCH, [
+    { to: OrderStatus.DISPATCHED, sideEffects: [] },
+    { to: OrderStatus.PENDING_MANUAL_PLACEMENT, sideEffects: [] }, // courier rejected
+    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
+  ]],
+
+  [OrderStatus.DISPATCHED, [
+    { to: OrderStatus.IN_TRANSIT, sideEffects: [] },
+    { to: OrderStatus.RTO_INITIATED, sideEffects: [] },
+    { to: OrderStatus.LOST_IN_TRANSIT, sideEffects: [] },
+    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
+  ]],
+
+  [OrderStatus.IN_TRANSIT, [
+    { to: OrderStatus.OUT_FOR_DELIVERY, sideEffects: [] },
+    { to: OrderStatus.DELIVERY_FAILED, sideEffects: [] },
+    { to: OrderStatus.RTO_INITIATED, sideEffects: [] },
+    { to: OrderStatus.LOST_IN_TRANSIT, sideEffects: [] },
+  ]],
+
+  [OrderStatus.OUT_FOR_DELIVERY, [
+    { to: OrderStatus.DELIVERED, sideEffects: [FULFILL_STOCK] },
+    { to: OrderStatus.DELIVERY_FAILED, sideEffects: [] },
+    { to: OrderStatus.RTO_INITIATED, sideEffects: [] },
+  ]],
+
+  [OrderStatus.DELIVERY_FAILED, [
+    { to: OrderStatus.OUT_FOR_DELIVERY, sideEffects: [] }, // retry
+    { to: OrderStatus.RTO_INITIATED, sideEffects: [] },
+    { to: OrderStatus.LOST_IN_TRANSIT, sideEffects: [] },
+  ]],
+
+  [OrderStatus.RTO_INITIATED, [
+    { to: OrderStatus.RTO_IN_TRANSIT, sideEffects: [] },
+    { to: OrderStatus.RTO_RECEIVED, sideEffects: [] },
+    { to: OrderStatus.LOST_IN_TRANSIT, sideEffects: [] },
+  ]],
+
+  [OrderStatus.RTO_IN_TRANSIT, [
+    { to: OrderStatus.RTO_RECEIVED, sideEffects: [] },
+    { to: OrderStatus.LOST_IN_TRANSIT, sideEffects: [] },
+  ]],
+
+  [OrderStatus.RTO_RECEIVED, [
+    { to: OrderStatus.RTO_RESTOCKED, sideEffects: [] }, // physical restock = Module 8
+    { to: OrderStatus.RTO_DAMAGED, sideEffects: [] },
+  ]],
+
+  // Terminal states — no outgoing transitions in the normal machine.
+  // (Admin god-mode bypasses this matrix entirely; LOST→found recovery
+  // is a deferred god-mode op per phase-1a-debt.)
+  [OrderStatus.DELIVERED, []],
+  [OrderStatus.RTO_RESTOCKED, []],
+  [OrderStatus.RTO_DAMAGED, []],
+  [OrderStatus.LOST_IN_TRANSIT, []],
+  [OrderStatus.CANCELLED, []],
+  [OrderStatus.CANCELLED_BY_ADMIN, []],
+  [OrderStatus.REJECTED, []],
+];
+
+/**
+ * ORD-1 backbone — the order lifecycle state machine. Pure logic, no
+ * Prisma. OrderWriteService consults this before every status change and
+ * executes the declared side-effects inside the transition transaction.
+ */
+@Injectable()
+export class OrderStateMachineService {
+  /** from → (to → side-effects). Built once; exhaustive over OrderStatus. */
+  private readonly graph: ReadonlyMap<OrderStatus, ReadonlyMap<OrderStatus, readonly OrderSideEffect[]>>;
+
+  constructor() {
+    const graph = new Map<OrderStatus, Map<OrderStatus, readonly OrderSideEffect[]>>();
+    // Guarantee every status is a key (terminals → empty map) so lookups
+    // never get `undefined` for a real status.
+    for (const status of Object.values(OrderStatus)) {
+      graph.set(status, new Map());
+    }
+    for (const [from, defs] of TRANSITIONS) {
+      const row = graph.get(from)!;
+      for (const def of defs) {
+        row.set(def.to, def.sideEffects);
+      }
+    }
+    this.graph = graph;
+  }
+
+  isValidTransition(from: OrderStatus, to: OrderStatus): boolean {
+    return this.graph.get(from)?.has(to) ?? false;
+  }
+
+  getAllowedTransitions(from: OrderStatus): OrderStatus[] {
+    return [...(this.graph.get(from)?.keys() ?? [])];
+  }
+
+  isTerminal(status: OrderStatus): boolean {
+    return (this.graph.get(status)?.size ?? 0) === 0;
+  }
+
+  /**
+   * Side-effects OrderWriteService must run for this transition. Throws on
+   * an invalid transition — callers MUST gate with isValidTransition first
+   * (OrderWriteService does, surfacing a 409 instead).
+   */
+  requiredSideEffects(from: OrderStatus, to: OrderStatus): readonly OrderSideEffect[] {
+    const effects = this.graph.get(from)?.get(to);
+    if (effects === undefined) {
+      throw new Error(`Invalid order transition ${from} → ${to}`);
+    }
+    return effects;
+  }
+}

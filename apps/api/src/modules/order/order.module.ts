@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { OrderNumberingService } from './services/order-numbering.service';
+import { OrderStateMachineService } from './services/order-state-machine.service';
 
 /**
  * Module 6 — Order Management.
@@ -10,7 +11,7 @@ import { OrderNumberingService } from './services/order-numbering.service';
  * controllers (commit 11).
  */
 @Module({
-  providers: [OrderNumberingService],
-  exports: [OrderNumberingService],
+  providers: [OrderNumberingService, OrderStateMachineService],
+  exports: [OrderNumberingService, OrderStateMachineService],
 })
 export class OrderModule {}

@@ -1,0 +1,136 @@
+import { OrderStatus } from '@skydrop/db';
+import {
+  OrderSideEffect,
+  OrderStateMachineService,
+} from '../../src/modules/order/services/order-state-machine.service';
+
+const TERMINAL: OrderStatus[] = [
+  OrderStatus.DELIVERED,
+  OrderStatus.RTO_RESTOCKED,
+  OrderStatus.RTO_DAMAGED,
+  OrderStatus.LOST_IN_TRANSIT,
+  OrderStatus.CANCELLED,
+  OrderStatus.CANCELLED_BY_ADMIN,
+  OrderStatus.REJECTED,
+];
+
+describe('OrderStateMachineService', () => {
+  const sm = new OrderStateMachineService();
+
+  it('covers all 26 OrderStatus values as graph keys', () => {
+    const all = Object.values(OrderStatus);
+    expect(all).toHaveLength(26);
+    for (const s of all) {
+      // never throws / never undefined for a real status
+      expect(Array.isArray(sm.getAllowedTransitions(s))).toBe(true);
+    }
+  });
+
+  it('marks exactly the expected terminal states', () => {
+    for (const s of Object.values(OrderStatus)) {
+      expect(sm.isTerminal(s)).toBe(TERMINAL.includes(s));
+    }
+  });
+
+  describe('valid transitions', () => {
+    it('DRAFT → PENDING_CONFIRMATION (submit), no side-effects', () => {
+      expect(sm.isValidTransition(OrderStatus.DRAFT, OrderStatus.PENDING_CONFIRMATION)).toBe(true);
+      expect(sm.requiredSideEffects(OrderStatus.DRAFT, OrderStatus.PENDING_CONFIRMATION)).toEqual([]);
+    });
+
+    it('PENDING_CONFIRMATION → CONFIRMED reserves stock', () => {
+      expect(
+        sm.requiredSideEffects(OrderStatus.PENDING_CONFIRMATION, OrderStatus.CONFIRMED),
+      ).toEqual([OrderSideEffect.RESERVE_STOCK]);
+    });
+
+    it.each([
+      OrderStatus.CALL_NO_RESPONSE,
+      OrderStatus.CALL_RESCHEDULED,
+      OrderStatus.OUT_OF_STOCK,
+    ])('%s → CONFIRMED also reserves stock', (from) => {
+      expect(sm.requiredSideEffects(from, OrderStatus.CONFIRMED)).toEqual([
+        OrderSideEffect.RESERVE_STOCK,
+      ]);
+    });
+
+    it('PENDING_CONFIRMATION → OUT_OF_STOCK is valid with NO side-effects', () => {
+      expect(sm.isValidTransition(OrderStatus.PENDING_CONFIRMATION, OrderStatus.OUT_OF_STOCK)).toBe(true);
+      expect(
+        sm.requiredSideEffects(OrderStatus.PENDING_CONFIRMATION, OrderStatus.OUT_OF_STOCK),
+      ).toEqual([]);
+    });
+
+    it('CONFIRMED → CANCELLED / CANCELLED_BY_ADMIN / REJECTED all release stock', () => {
+      for (const to of [
+        OrderStatus.CANCELLED,
+        OrderStatus.CANCELLED_BY_ADMIN,
+        OrderStatus.REJECTED,
+      ]) {
+        expect(sm.requiredSideEffects(OrderStatus.CONFIRMED, to)).toEqual([
+          OrderSideEffect.RELEASE_STOCK,
+        ]);
+      }
+    });
+
+    it('OUT_FOR_DELIVERY → DELIVERED fulfills the reservation', () => {
+      expect(
+        sm.requiredSideEffects(OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED),
+      ).toEqual([OrderSideEffect.FULFILL_STOCK]);
+    });
+
+    it('a downstream reserved state cancel still releases (PACKED → CANCELLED_BY_ADMIN)', () => {
+      expect(
+        sm.requiredSideEffects(OrderStatus.PACKED, OrderStatus.CANCELLED_BY_ADMIN),
+      ).toEqual([OrderSideEffect.RELEASE_STOCK]);
+    });
+  });
+
+  describe('the critical no-release-before-reserve property', () => {
+    it.each([
+      OrderStatus.PENDING_CONFIRMATION,
+      OrderStatus.CALL_NO_RESPONSE,
+      OrderStatus.CALL_RESCHEDULED,
+      OrderStatus.OUT_OF_STOCK,
+    ])('%s → CANCELLED has NO RELEASE_STOCK (nothing reserved yet)', (from) => {
+      expect(sm.isValidTransition(from, OrderStatus.CANCELLED)).toBe(true);
+      expect(sm.requiredSideEffects(from, OrderStatus.CANCELLED)).toEqual([]);
+    });
+
+    it('DRAFT → CANCELLED has no side-effects', () => {
+      expect(sm.requiredSideEffects(OrderStatus.DRAFT, OrderStatus.CANCELLED)).toEqual([]);
+    });
+  });
+
+  describe('invalid transitions', () => {
+    it.each([
+      [OrderStatus.DRAFT, OrderStatus.CONFIRMED], // must submit first
+      [OrderStatus.DRAFT, OrderStatus.DELIVERED],
+      [OrderStatus.PENDING_CONFIRMATION, OrderStatus.PENDING_PICK], // must confirm first
+      [OrderStatus.CONFIRMED, OrderStatus.DRAFT], // no going back
+      [OrderStatus.DELIVERED, OrderStatus.CONFIRMED], // terminal
+      [OrderStatus.CANCELLED, OrderStatus.CONFIRMED], // terminal
+      [OrderStatus.CONFIRMED, OrderStatus.CONFIRMED], // no self-loop
+    ])('%s → %s is rejected', (from, to) => {
+      expect(sm.isValidTransition(from, to)).toBe(false);
+      expect(() => sm.requiredSideEffects(from, to)).toThrow(/Invalid order transition/);
+    });
+
+    it('every terminal state has zero allowed transitions', () => {
+      for (const s of TERMINAL) {
+        expect(sm.getAllowedTransitions(s)).toEqual([]);
+      }
+    });
+  });
+
+  it('getAllowedTransitions returns the declared targets', () => {
+    expect(new Set(sm.getAllowedTransitions(OrderStatus.OUT_OF_STOCK))).toEqual(
+      new Set([
+        OrderStatus.CONFIRMED,
+        OrderStatus.PENDING_CONFIRMATION,
+        OrderStatus.CANCELLED,
+        OrderStatus.CANCELLED_BY_ADMIN,
+      ]),
+    );
+  });
+});
