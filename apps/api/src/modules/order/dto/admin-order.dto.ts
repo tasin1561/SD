@@ -36,3 +36,13 @@ export class AdminCancelOrderDto {
   @MaxLength(500)
   note?: string;
 }
+
+/** God-mode cleanup companion: manually release an order's ACTIVE
+ *  reservations (idempotent). Audited HIGH. */
+export class ReleaseReservationsDto {
+  @ApiProperty({ required: false, maxLength: 500 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
+}

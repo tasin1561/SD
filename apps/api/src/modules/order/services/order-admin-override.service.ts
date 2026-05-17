@@ -5,7 +5,12 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, OrderStatus, Prisma } from '@skydrop/db';
+import {
+  ActorType,
+  OrderStatus,
+  Prisma,
+  ReservationReleaseReason,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { StockReservationService } from '../../inventory-stock/services/stock-reservation.service';
@@ -50,6 +55,19 @@ export interface ForceMutateResult {
   hasAdminOverride: true;
   fieldChangesApplied: string[];
   reserveOutcomes: ReserveAttemptOutcome[] | null;
+}
+
+export interface ReleaseReservationsInput {
+  orderId: string;
+  reason?: string;
+  actorStaffId: string;
+  ctx?: ClientContext;
+}
+
+export interface ReleaseReservationsResult {
+  orderId: string;
+  releasedCount: number;
+  released: Array<{ reservationId: string; qtyReleased: number; alreadyInactive: boolean }>;
 }
 
 /**
@@ -185,6 +203,83 @@ export class OrderAdminOverrideService {
       fieldChangesApplied: applied,
       reserveOutcomes,
     };
+  }
+
+  /**
+   * God-mode cleanup companion (commit 16). Manually release every
+   * ACTIVE reservation on an order — the sanctioned way to clean up
+   * after a forceMutate() that moved an order away from CONFIRMED but
+   * deliberately left its holds intact. Idempotent: release() is
+   * no-op-safe and only ACTIVE rows are targeted, so a re-run releases
+   * nothing extra. Audited HIGH; an order_event records the outcome.
+   * Does NOT change order status.
+   */
+  async releaseReservations(
+    input: ReleaseReservationsInput,
+  ): Promise<ReleaseReservationsResult> {
+    const order = await this.prisma.client.order.findFirst({
+      where: { id: input.orderId, deletedAt: null },
+      select: { id: true, sellerId: true, orderNumber: true, status: true },
+    });
+    if (!order) {
+      throw new NotFoundException(`Order ${input.orderId} not found`);
+    }
+
+    const active = await this.reservations.listActiveForOrder(order.id);
+    const released: ReleaseReservationsResult['released'] = [];
+    for (const r of active) {
+      const res = await this.reservations.release(
+        r.id,
+        ReservationReleaseReason.MANUAL_RELEASE,
+        { type: ActorType.STAFF, id: input.actorStaffId },
+      );
+      released.push({
+        reservationId: res.reservationId,
+        qtyReleased: res.qtyReleased,
+        alreadyInactive: res.alreadyInactive,
+      });
+    }
+
+    const reason = input.reason?.trim() || 'Admin manual reservation release';
+    await this.prisma.client.$transaction(async (tx) => {
+      await this.events.adminAction(tx, {
+        orderId: order.id,
+        action: 'admin_release_reservations',
+        reason,
+        actorId: input.actorStaffId,
+        data: {
+          releasedCount: released.length,
+          released,
+          ipAddress: input.ctx?.ipAddress ?? null,
+          userAgent: input.ctx?.userAgent ?? null,
+          requestId: input.ctx?.requestId ?? null,
+        },
+      });
+      await this.audit.log(
+        {
+          actorType: ActorType.STAFF,
+          actorId: input.actorStaffId,
+          staffUserId: input.actorStaffId,
+          sellerId: order.sellerId,
+          action: 'order.release_reservations',
+          entityType: 'order',
+          entityId: order.id,
+          severity: 'HIGH',
+          metadata: {
+            orderNumber: order.orderNumber,
+            status: order.status,
+            reason,
+            releasedCount: released.length,
+            ipAddress: input.ctx?.ipAddress ?? null,
+            userAgent: input.ctx?.userAgent ?? null,
+            requestId: input.ctx?.requestId ?? null,
+          },
+        },
+        tx,
+      );
+    });
+
+    return { orderId: order.id, releasedCount: released.length, released };
   }
 
   // ── helpers ──────────────────────────────────────────────────────────

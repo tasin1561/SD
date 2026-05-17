@@ -8,7 +8,11 @@ type AnyArgs = Record<string, unknown>;
 const LONG_REASON = 'Customer escalation #4821 — courier lost the parcel, manual override agreed by ops lead';
 
 function makeService(
-  opts: { order?: AnyArgs | null; reserveThrows?: boolean } = {},
+  opts: {
+    order?: AnyArgs | null;
+    reserveThrows?: boolean;
+    active?: Array<{ id: string; orderItemId: string; qtyReserved: number }>;
+  } = {},
 ) {
   const order =
     opts.order === undefined
@@ -47,8 +51,14 @@ function makeService(
     if (opts.reserveThrows) throw new Error('INSUFFICIENT_STOCK');
     return { id: `r-${i.orderItemId}` };
   });
-  const release = jest.fn(async () => ({ alreadyInactive: false }));
-  const reservations = { reserve, release };
+  const release = jest.fn(async (id: string) => ({
+    reservationId: id,
+    qtyReleased: 2,
+    status: 'RELEASED',
+    alreadyInactive: false,
+  }));
+  const listActiveForOrder = jest.fn(async () => opts.active ?? []);
+  const reservations = { reserve, release, listActiveForOrder };
 
   const svc = new OrderAdminOverrideService(
     { client } as unknown as PrismaService,
@@ -56,7 +66,16 @@ function makeService(
     audit as never,
     reservations as never,
   );
-  return { svc, orderUpdate, orderFindFirst, events, audit, reserve, release };
+  return {
+    svc,
+    orderUpdate,
+    orderFindFirst,
+    events,
+    audit,
+    reserve,
+    release,
+    listActiveForOrder,
+  };
 }
 
 const baseInput = {
@@ -174,5 +193,46 @@ describe('OrderAdminOverrideService.forceMutate — behaviour', () => {
     expect(reserve).not.toHaveBeenCalled();
     expect(release).not.toHaveBeenCalled(); // cleanup is the separate endpoint
     expect(res.reserveOutcomes).toBeNull();
+  });
+});
+
+describe('OrderAdminOverrideService.releaseReservations', () => {
+  it('releases every ACTIVE reservation, audits HIGH, writes the event', async () => {
+    const { svc, release, events, audit } = makeService({
+      active: [
+        { id: 'r1', orderItemId: 'oi1', qtyReserved: 2 },
+        { id: 'r2', orderItemId: 'oi2', qtyReserved: 1 },
+      ],
+    });
+    const res = await svc.releaseReservations({
+      orderId: 'o1',
+      reason: 'Post god-mode cleanup',
+      actorStaffId: 'staff-1',
+      ctx: baseInput.ctx,
+    });
+    expect(release).toHaveBeenCalledTimes(2);
+    expect(res.releasedCount).toBe(2);
+    expect(res.released[0]).toMatchObject({ reservationId: 'r1', qtyReleased: 2 });
+    expect(events.adminAction).toHaveBeenCalledTimes(1);
+    expect(events.adminAction.mock.calls[0]![1].action).toBe('admin_release_reservations');
+    expect(audit.log.mock.calls[0]![0].severity).toBe('HIGH');
+  });
+
+  it('is idempotent — no ACTIVE reservations → releasedCount 0 (still audited)', async () => {
+    const { svc, release, audit } = makeService({ active: [] });
+    const res = await svc.releaseReservations({
+      orderId: 'o1',
+      actorStaffId: 'staff-1',
+    });
+    expect(release).not.toHaveBeenCalled();
+    expect(res.releasedCount).toBe(0);
+    expect(audit.log).toHaveBeenCalledTimes(1);
+  });
+
+  it('404s a missing order', async () => {
+    const { svc } = makeService({ order: null });
+    await expect(
+      svc.releaseReservations({ orderId: 'gone', actorStaffId: 'staff-1' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

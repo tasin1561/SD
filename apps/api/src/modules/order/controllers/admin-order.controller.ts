@@ -20,7 +20,11 @@ import {
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
-import { AdminCancelOrderDto, AdminListOrdersQueryDto } from '../dto/admin-order.dto';
+import {
+  AdminCancelOrderDto,
+  AdminListOrdersQueryDto,
+  ReleaseReservationsDto,
+} from '../dto/admin-order.dto';
 import { ForceMutationDto } from '../dto/force-mutation.dto';
 import {
   OrderService,
@@ -34,6 +38,7 @@ import {
 import {
   OrderAdminOverrideService,
   type ForceMutateResult,
+  type ReleaseReservationsResult,
 } from '../services/order-admin-override.service';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
@@ -114,6 +119,26 @@ export class AdminOrderController {
       ...(body.targetStatus !== undefined ? { targetStatus: body.targetStatus } : {}),
       reason: body.reason,
       acknowledgeDataIntegrityRisk: body.acknowledgeDataIntegrityRisk,
+      actorStaffId: staff.id,
+      ctx,
+    });
+  }
+
+  @Post(':id/release-reservations')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      "Manually release an order's ACTIVE reservations (god-mode cleanup; idempotent)",
+  })
+  releaseReservations(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('id', uuid()) id: string,
+    @Body() body: ReleaseReservationsDto,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<ReleaseReservationsResult> {
+    return this.override.releaseReservations({
+      orderId: id,
+      ...(body.reason !== undefined ? { reason: body.reason } : {}),
       actorStaffId: staff.id,
       ctx,
     });
