@@ -13,6 +13,7 @@ import { RecipientAddressCacheService } from './services/recipient-address-cache
 import { AddressValidationService } from './services/address-validation.service';
 import { OrderService } from './services/order.service';
 import { OrderWriteService } from './services/order-write.service';
+import { OrderReadService } from './services/order-read.service';
 
 /**
  * Module 6 — Order Management.
@@ -40,6 +41,7 @@ import { OrderWriteService } from './services/order-write.service';
     AddressValidationService,
     OrderService,
     OrderWriteService,
+    OrderReadService,
     SellerJwtGuard,
   ],
   exports: [
@@ -51,6 +53,7 @@ import { OrderWriteService } from './services/order-write.service';
     AddressValidationService,
     OrderService,
     OrderWriteService,
+    OrderReadService,
   ],
 })
 export class OrderModule {}
