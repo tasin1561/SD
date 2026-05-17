@@ -199,10 +199,9 @@ export class OrderStateMachineService {
       graph.set(status, new Map());
     }
     for (const [from, defs] of TRANSITIONS) {
-      const row = graph.get(from)!;
-      for (const def of defs) {
-        row.set(def.to, def.sideEffects);
-      }
+      const row = graph.get(from) ?? new Map<OrderStatus, readonly OrderSideEffect[]>();
+      for (const def of defs) row.set(def.to, def.sideEffects);
+      graph.set(from, row);
     }
     this.graph = graph;
   }
