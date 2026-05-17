@@ -114,9 +114,9 @@ SD/
 
 **Status: IMPLEMENTED.** Schema lives in `packages/db/`.
 
-**Canonical reference:** `docs/db-schema.md`. Currently **69 Prisma models** across 9 layers plus per-module additions (seller_onboarding_progress in M2; category_proposals, category_attribute_definitions, seller_csv_mappings, bulk_product_uploads in M4; stock_alert_state, stock_adjustment_lines in M5). When the schema and this doc diverge, the doc wins; update Prisma to match.
+**Canonical reference:** `docs/db-schema.md`. When the schema and this doc diverge, the doc wins; update Prisma to match.
 
-**Migrations applied:** 7 as of Module 5 (init, audit_logs entityId nullable, sellers email_verified_at/last_login_at, seller_onboarding_progress, catalog proposals/attributes/csv_mappings/bulk_product_uploads, stock_thresholds_and_alert_state_table, bump_stock_reservation_ttl_default, stock_adjustment_lines).
+**Migrations applied:** As of Module 6 — order schema additions (hasAdminOverride, CANCELLED_BY_ADMIN, OUT_OF_STOCK, per-seller customer constraint).
 
 **TimescaleDB hypertables:** `tracking_events` and `stock_movements` (composite PK, monthly chunks, 7d/30d compression).
 
@@ -143,10 +143,27 @@ The package exports a singleton `prisma` client (configured logging, graceful sh
 
 The schema gives you the shape; these rules give you correctness. Violating them creates data corruption that's expensive to detect and harder to fix.
 
-**Order rules:**
-1. Status transitions enforced by a state machine in code (22 statuses; not every transition is valid).
-2. Order numbers via Postgres SEQUENCE per year (`SD-YYYY-NN-XXXXXX`).
-3. Recipient address is immutable on order — snapshot at create, never re-link.
+**Order rules (ORD-1 through ORD-10 — NON-NEGOTIABLE):**
+
+1. **ORD-1: Lifecycle state machine.** `OrderStateMachineService` — 26-status declarative transition matrix; no any→any. Critical property: pre-confirmation cancels carry NO stock release (nothing was reserved yet — see ORD-10).
+
+2. **ORD-2: God mode is the ONE sanctioned bypass.** `OrderAdminOverrideService.forceMutate()` only. Guardrails: reason ≥30 chars, `acknowledgeDataIntegrityRisk` literal `true`, ≥1 of `fieldChanges`/`targetStatus`; DB + event + audit in one tx; `hasAdminOverride` set-once-NEVER-cleared; audit severity CRITICAL. Opts OUT of saga compensation (reserve attempted-not-blocking on →CONFIRMED; away-from-CONFIRMED leaves reservations — cleanup via `release-reservations` endpoint).
+
+3. **ORD-3: Status changes via `OrderWriteService.transitionStatus()`** — the sole cross-module WRITE boundary. Order row + events + audit are one tx. The stock side-effect is a **SAGA** (M5 INV-1/INV-6 owns its own tx, takes no tx param): RESERVE pre-tx (fail→OUT_OF_STOCK / 409; tx-fail→compensating release); RELEASE/FULFILL post-commit idempotent (mirrors INV-5).
+
+4. **ORD-4: `OrderEventWriterService` is the only writer of `order_events`**, append-only (no update/delete path by construction).
+
+5. **ORD-5: SOFT recipient validation** — format checks (PIN, E.164 phone) + `ops.allowed_indian_states` membership only; no PIN↔state cross-check (deferred).
+
+6. **ORD-6: Immutable snapshot.** Recipient block + per-line SKU info snapshotted at order create, never re-linked. Cross-module consumers read the order's snapshot via `OrderReadService`, never re-resolve from the live catalog.
+
+7. **ORD-7: Per-seller customer identity** — `@@unique(sellerId, phoneE164)`. Phone immutable once set (no mutation path by construction). Cross-seller customer dedup deferred (Phase 1A privacy choice).
+
+8. **ORD-8: Order numbers** via per-year Postgres SEQUENCE under a txn-scoped advisory lock, allocated INSIDE the create tx. Format: `SD-YYYY-NN-XXXXXX`.
+
+9. **ORD-9: CSV import is state-aware idempotent** by `(sellerId, externalRef→sellerOrderRef)`: new → create PENDING_CONFIRMATION; DRAFT/PENDING_CONFIRMATION → PATCH; CONFIRMED+ → error row. CSV is submission, not drafting. One row = one order, single line (Phase 1A; multi-line deferred to Phase 2).
+
+10. **ORD-10: Reservation is LATE.** NO stock reserved at order create (no availability check at create — M7 catches at confirm). Reservation is created only on entry to CONFIRMED via the M5 saga pattern in ORD-3.
 
 **Shipment rules:**
 1. Webhook idempotency: dedup key is `(courierCode, awbNumber, eventType, externalEventId)`. Duplicate webhooks stored (audit) but produce no duplicate tracking events.
@@ -177,7 +194,7 @@ The schema gives you the shape; these rules give you correctness. Violating them
 4. Idempotency: unique constraint on `(endpointId, eventType, eventId, attemptNumber)` prevents double-send.
 
 **Status-change rules (general):**
-1. Any status-change service wraps update + side-effects (token revoke, note, audit, email enqueue) in one `prisma.$transaction`.
+1. Any status-change service wraps update + side-effects (token revoke, note, audit, email enqueue) in one `prisma.$transaction` — EXCEPT where a cross-module service owns its own tx (e.g., M5 stock services), in which case use the SAGA pattern (see ORD-3).
 2. Email enqueue happens INSIDE the transaction. Phantom-job edge case (commit fails after enqueue) handled by consumer-side idempotency.
 3. Strict transition guards: each direction has exactly one valid source state. No "any → any" transitions.
 
@@ -224,14 +241,14 @@ The schema gives you the shape; these rules give you correctness. Violating them
 
 **Inventory module structure:**
 - **inventory-shared** (internal infrastructure): `WarehouseResolverService`, `StockMutationService`, `StockAvailabilityService` (INV-3 primitive), `StockCacheService`, `StockAlertService`. Consumed by every inventory submodule.
-- **inventory-stock** (cross-module surface): `StockReadService`, `StockReservationService`, `StockPickAllocationService`. **External consumers (Modules 6, 8) import this module and see only these three.** No other inventory services are exported externally.
+- **inventory-stock** (cross-module surface): `StockReadService`, `StockReservationService`, `StockPickAllocationService`. **External consumers (Modules 6, 8) import this module and see only these three.**
 
 **General:**
 1. All money stored as `Decimal`, INR canonical. BDT for display only via FX.
 2. All phone numbers E.164 (+91xxx, +880xxx). Validate at app boundary.
 3. All timestamps UTC. Display timezone is a per-user preference.
 4. Soft delete via `deletedAt` for user-facing data. Hard delete for tokens, sessions, transient/immutable rows.
-5. Audit log every sensitive action via `audit_logs` (auth, admin actions, sensitive data access).
+5. Audit log every sensitive action via `audit_logs` (auth, admin actions, sensitive data access). Severity scale: LOW / MEDIUM / HIGH / CRITICAL — CRITICAL reserved for god-mode and similar invariant-breach actions.
 
 ---
 
@@ -252,6 +269,7 @@ The schema gives you the shape; these rules give you correctness. Violating them
 
 - `strict: true` always. `noUncheckedIndexedAccess: true`. `noImplicitOverride: true`.
 - No `any` unless commented why (`// any: external lib has no types`).
+- No non-null assertions (`!`). `--max-warnings 0` enforces. Use nullish-coalescing fallbacks or proper type narrowing.
 - Prefer `type` for unions/aliases, `interface` for object shapes that may be extended.
 - All exported functions get explicit return types.
 - No barrel re-exports across module boundaries (no `import { x } from '@/modules'`). Import directly from the file.
@@ -267,14 +285,34 @@ The schema gives you the shape; these rules give you correctness. Violating them
 - Sub-feature modules (profile, address, notification-preference under seller) provide guards locally rather than importing the auth module — keeps dep direction one-way.
 - **Cross-module variant lookups** go via `CatalogReadService`. Cross-module catalog reads do NOT query the catalog tables directly.
 - **Cross-module stock reads** go via the three exported services in `inventory-stock`: `StockReadService`, `StockReservationService`, `StockPickAllocationService`. Other inventory services (cache, alert, mutation, availability primitive) are internal to inventory and NOT exposed externally.
+- **Cross-module order access** goes via the two services `OrderModule` exports: `OrderReadService` (reads) and `OrderWriteService.transitionStatus()` (the sole write boundary). All other order services are internal to `OrderCoreModule`; never imported by other domains.
+
+### Facade module pattern (Modules 4-6 surfaced)
+
+When a module needs to expose a narrow cross-module surface while keeping internal services from leaking:
+
+- **Catalog/Inventory pattern**: split services across two modules (e.g., `inventory-shared` internal + `inventory-stock` external). External module imports internal module; external module's exports list is the cross-module surface.
+- **Order pattern (NestJS-specific)**: NestJS forbids re-exporting an imported module's providers (UnknownExportException). The Module-5-style narrow facade required splitting into `OrderCoreModule` (internal) + `OrderModule` (provides Read/Write itself, drawing internal deps from the imported core). **Any future facade module must PROVIDE the exposed services itself, not re-export them.**
+- The split is convention-not-lint — internal modules are importable directly. Code review and CLAUDE.md MUSTs are the enforcement.
+
+### Cross-module integration with M5 stock services (saga pattern)
+
+The M5 reservation services (`StockReservationService.reserve()`, `.release()`, `.fulfill()`) own their own version-CAS transactions and **take no tx parameter**. They cannot be composed into another module's `prisma.$transaction`. Any M5↔M6/M8/M9 integration must use the documented **saga pattern**:
+
+- **Pre-tx fail-routing**: attempt the M5 call before opening the orchestrating tx; on `InsufficientStockError`, route to a non-terminal landing state (e.g., M6's OUT_OF_STOCK) rather than blocking
+- **Local-tx atomic**: the orchestrating module's own row + events + audit are one tx
+- **Compensating release on tx-fail**: if the orchestrating tx fails AFTER the M5 reserve succeeded, call `release()` as compensation
+- **Post-commit idempotent**: RELEASE/FULFILL calls happen AFTER the orchestrating tx commits (mirrors INV-5's post-commit cache/alert pattern); they are idempotent by design so retry is safe
+
+The canonical reference implementation is `OrderWriteService.transitionStatus()` in M6. M8 (warehouse pick) and M9 (courier dispatch) will both consume this pattern. **Never attempt a nested or distributed transaction across module boundaries.**
 
 ### Testing
 
 - Unit tests use mocked Prisma (or in-memory fakes for transaction-sensitive logic).
 - E2E tests run against the `skydrop_test` database (separate from dev) on logical Redis DB 1.
 - E2E global setup creates DB, runs migrate deploy + seed; teardown drops DB.
-- **Cascading reset helpers:** when adding a feature module with tables that FK to `sellers` (or any other reset-critical entity), add a `reset<Module>State()` helper and chain it BEFORE the parent reset (e.g., `resetAuthState`). Order-dependent test contamination is a real footgun without this. Each new module must do this proactively. Note: `resetInventoryState()` currently includes Order/OrderItem/Customer cleanup as interim coupling until Module 6 takes ownership.
-- Use `makeTestEnv()` from the shared test helpers when constructing `EnvService` in tests; don't inline literal env objects (forces drift maintenance).
+- **Cascading reset helpers:** when adding a feature module with tables that FK to `sellers` (or any other reset-critical entity), add a `reset<Module>State()` helper and chain it BEFORE the parent reset (e.g., `resetAuthState`). Order-dependent test contamination is a real footgun without this. Each new module must do this proactively. As of Module 6, the chain is: `resetOrderState → resetInventoryState → resetCatalogState → resetAuthState`.
+- Use `makeTestEnv()` from the shared test helpers when constructing `EnvService` in tests; don't inline literal env objects.
 - For test fakes that need `prisma.$transaction(fn)`, attach `$transaction` AFTER the client literal to avoid TS7024 implicit-any from self-reference.
 
 ### Next.js (when we get there)
@@ -295,6 +333,7 @@ The schema gives you the shape; these rules give you correctness. Violating them
 - Push at end of each Claude Code session. Auto-push permitted per `.claude/settings.local.json`.
 - NEVER force push to main. NEVER reset main. NEVER rewrite published history.
 - Existing tests must stay green at every commit boundary. Update assertions in the same commit that flips behavior.
+- Lint stays green at every commit boundary (`--max-warnings 0`). Module 6 surfaced a regression here — a non-null assertion landed in one commit and tripped lint. Always run lint in the verification gates per commit.
 
 ---
 
@@ -309,7 +348,7 @@ The schema gives you the shape; these rules give you correctness. Violating them
 5. Run `pnpm tsc --noEmit` before committing.
 6. Write tests for service-layer rules (state machines, transactions, idempotency).
 7. Use the `prisma` singleton from `@skydrop/db`, never `new PrismaClient()`.
-8. Wrap multi-write operations in `prisma.$transaction`.
+8. Wrap multi-write operations in `prisma.$transaction` — except where saga pattern applies (see "Cross-module integration with M5 stock services" above).
 9. Use BullMQ for async work (notifications, webhook delivery, cleanup jobs). No background work in HTTP request handlers.
 10. Snapshot data when immutability matters (order recipient address, order item SKU info, shipment dest address).
 11. Add new enums to `packages/db/src/enums.ts` after adding them to `schema.prisma`.
@@ -317,18 +356,20 @@ The schema gives you the shape; these rules give you correctness. Violating them
 13. Use `CatalogReadService` for cross-module variant **reads**; never query `product_variants` directly from outside the catalog modules. *Clarification (Module 5): this governs cross-module READS so inheritance precedence stays centralized. A column owned by another domain that lives on a catalog table for storage convenience — e.g., inventory's `product_variants.low_stock_threshold` — may be written by the owning domain directly, with an explicit code comment; its reads still go via `CatalogReadService` as a raw passthrough.*
 14. Use `makeTestEnv()` in test fixtures instead of inline literal env objects.
 15. All stock writes go through `StockMutationService` (INV-1); never write `stock_movements` or `stock_levels.qtyOnHand` elsewhere. Honor INV-2 (cache reads-only via method-name split), INV-3 (use `StockAvailabilityService.compute()` for the canonical scalar), INV-4 (`qtyReserved` = phase-2 only). For cross-module stock needs, import only the three services exported by `inventory-stock`.
+16. All cross-module order writes go through `OrderWriteService.transitionStatus()` (ORD-3). Never UPDATE `orders.status` directly from outside the order module. God mode (ORD-2) is the single sanctioned bypass and only via `OrderAdminOverrideService.forceMutate()` with full guardrails. For M5 integration, use the saga pattern (pre-tx reserve, compensating release on tx-fail, post-commit idempotent for release/fulfill).
 
 ### MUST NOT
 
 1. **NEVER** store API credentials in plaintext in the DB. Use `courier_credentials` with AES-256-GCM, key in env.
 2. **NEVER** log passwords, API keys, credential plaintext, or full webhook signatures.
-3. **NEVER** modify `stock_movements`, `tracking_events`, `call_attempts`, or `audit_logs` after insert.
+3. **NEVER** modify `stock_movements`, `tracking_events`, `call_attempts`, `audit_logs`, or `order_events` after insert.
 4. **NEVER** use `db:reset` or `prisma migrate reset` in production-like environments without explicit approval.
 5. **NEVER** install dependencies the user didn't approve. Ask first.
 6. **NEVER** commit `.env` files (`.env.example` only).
 7. **NEVER** push to a non-`main` remote branch without confirming the user wants it.
 8. **NEVER** delete files without verifying nothing depends on them.
 9. **NEVER** implement Phase 1B/2 features unless explicitly asked.
+10. **NEVER** clear `orders.hasAdminOverride` once set. The flag is the audit trail's hook for "this order's history was touched by god mode."
 
 ---
 
@@ -344,8 +385,8 @@ Module order — each builds on prior modules:
 | 3 | Seller Profile (merged into Module 2) | ✅ DONE |
 | 4 | Product/SKU Catalog (categories, products, variants, images, CSV upload) | ✅ DONE |
 | 5 | Inventory & WMS (warehouses, bins, batches, levels, movements, reservations, receiving, cycle counts) | ✅ DONE |
-| 6 | Order Management (manual entry, CSV upload, lifecycle, events) | NEXT |
-| 7 | Call Center Workflow (queue, distributor, attempt logging) | pending |
+| 6 | Order Management (manual entry, CSV upload, lifecycle, events) | ✅ DONE |
+| 7 | Call Center Workflow (queue, distributor, attempt logging) | NEXT |
 | 8 | Warehouse Operations (pick, pack, dispatch, RTO) | pending |
 | 9 | Courier Integration (Delhivery API + manual placement workflow) | pending |
 | 10 | Public Tracking Page (EN + HI) | pending |
@@ -374,19 +415,20 @@ Phase 1B modules (not in this roadmap):
 - Infrastructure (DO droplet, managed Postgres, Spaces, Cloudflare)
 - Local dev (WSL2, Docker Postgres + Redis with TimescaleDB)
 - Monorepo skeleton (Turborepo + pnpm)
-- `@skydrop/db` package: 69 Prisma models, 7 migrations applied, idempotent seed (system settings, couriers, FX, warehouse, rate card, 24 notification templates)
-- `apps/api` (NestJS): config (Zod-validated), Prisma module, Redis module, health endpoints, Swagger at /api/docs, Pino logging with redaction, global exception filter, request-id middleware, rate limiting, multiple BullMQ workers in-process (email, image-thumbnail, image-orphan-cleanup, csv-import-processor, reservation-cleanup, adjustment-executor)
-- **Module 1** — Auth & Access Control: staff + seller auth, refresh rotation with replay detection, invitations, API keys, email module with Resend + Nunjucks, audit logging via `AuditLogService`
-- **Module 2** — Seller Onboarding (also covers Module 3 scope): seller status transitions, `SellerOnboardingService` with step tracking, profile + bank details endpoints, address CRUD, notification preferences with registration pre-seed, admin seller management endpoints
-- **Module 4** — Product/SKU Catalog: admin category tree with full-path maintenance + cycle prevention, attribute definition CRUD with inheritance resolution (5-min Redis cache, descendant invalidation), category proposals (seller propose → admin approve), product/variant CRUD with attribute validation, presigned URL image uploads to Spaces with thumbnail generation + orphan cleanup, CSV import with template + auto-detect + preview + idempotent re-upload, saved column mappings, `CatalogReadService` as sanctioned cross-module variant read boundary
-- **Module 5** — Inventory & WMS: warehouse/zone/bin CRUD; `StockMutationService` (sole writer, version-CAS retry); `StockAvailabilityService` (INV-3 canonical scalar); two-path `StockReadService` (live vs cached, INV-2); LATE reservations (phase-1 reserve/release/fulfill → phase-2 FEFO+single-batch allocate with conservation invariants); hourly auto-release worker; goods receipts (declare → receive → complete / DISCREPANCY → resolve); threshold-gated adjustments (auto-execute below / approve→executor worker above); cycle counts (→ draft CYCLE_COUNT adjustments); `StockAlertService` state machine + cooldown (`stock_alert_state` table). Cross-module surface (Modules 6, 8): `StockReadService`, `StockReservationService`, `StockPickAllocationService`. Module 5 captured INV-1 through INV-9 as non-negotiable service-layer invariants codified above.
-- Test totals: 305 unit + 21 e2e tests, all green; fresh-clone simulation verified
+- `@skydrop/db` package: Prisma models across all 9 layers, multiple migrations, idempotent seed (system settings, couriers, FX, warehouse, rate card, 25+ notification templates)
+- `apps/api` (NestJS): config (Zod-validated), Prisma module, Redis module, health endpoints, Swagger at /api/docs, Pino logging with redaction, global exception filter, request-id middleware, rate limiting, multiple BullMQ workers in-process (email, image-thumbnail, image-orphan-cleanup, csv-import-processor, reservation-cleanup, adjustment-executor, order-csv-import)
+- **Module 1** — Auth & Access Control
+- **Module 2** — Seller Onboarding (also covers Module 3 scope)
+- **Module 4** — Product/SKU Catalog: `CatalogReadService` as sanctioned cross-module variant read boundary
+- **Module 5** — Inventory & WMS: `StockMutationService` sole writer with version-CAS retry; `StockAvailabilityService` INV-3 canonical scalar; two-path `StockReadService` (live vs cached, INV-2); LATE reservations with phase-1/phase-2 model; goods receipts; threshold-gated adjustments; cycle counts; `StockAlertService` state machine. Cross-module surface (Modules 6, 8): `StockReadService`, `StockReservationService`, `StockPickAllocationService`. INV-1 through INV-9 codified as non-negotiable invariants.
+- **Module 6** — Order Management: 26-status state machine; `OrderService.create()` snapshot pattern; CSV bulk import with state-aware idempotency (ORD-9); `OrderWriteService.transitionStatus()` as sanctioned cross-module write boundary using saga pattern for M5 integration; `OrderReadService` as read boundary; `OrderAdminOverrideService.forceMutate()` god mode with 8 hardened guardrails + `hasAdminOverride` flag set-once-never-cleared; admin sane-cancel + release-reservations endpoints. ORD-1 through ORD-10 codified as non-negotiable invariants.
+- Test totals: 453 unit + 27 e2e tests, all green; fresh-clone simulation verified.
 
 **Not yet implemented:**
 - All other apps (frontends in `apps/marketing`, `apps/seller`, `apps/admin`, `apps/track` are placeholders)
-- Modules 6-18
+- Modules 7-18
 
-**Next:** Module 6 — Order Management. Will consume Module 5's exported services (`StockReadService`, `StockReservationService`) at order confirmation. Will own the 22-status order state machine, manual order entry, bulk CSV upload, recipient address snapshotting, order events ledger. Design happens in chat with the user before implementation.
+**Next:** Module 7 — Call Center Workflow. **The first module to actually CALL `OrderWriteService.transitionStatus()` from outside the order domain.** Will own the call queue, round-robin distribution, attempt logging, outcome capture. On a successful confirmation outcome, calls `OrderWriteService.transitionStatus(orderId, CONFIRMED, ctx)` — which triggers the saga that calls `StockReservationService.reserve()`. The integration boundary between M5/M6/M7 is the first real test of the patterns established. Design happens in chat with the user before implementation.
 
 ---
 
@@ -406,4 +448,5 @@ Phase 1B modules (not in this roadmap):
 - Multi-checkpoint pacing for big modules. Use checkpoints when the module spans 15+ commits.
 - After every session, the assistant updates this `CLAUDE.md` if anything material changed.
 - Mid-module checkpoints when security-critical or data-integrity-critical work lands. Mechanical CRUD can run end-to-end without interruption.
-- **Pre-flight reviews catch real problems.** Module 5 surfaced 4 findings pre-implementation (FK constraint, alert grain mismatch, adjustment intent gap, refactor circular dep) — each would have caused painful rework if discovered post-code. When Claude Code proposes a plan, scrutinize it before approval.
+- **Pre-flight reviews catch real problems.** Modules 4-6 surfaced multiple findings pre-implementation (FK constraints, alert grain mismatch, adjustment intent gap, refactor circular dep, tx-boundary conflict with M5). When Claude Code proposes a plan, scrutinize it before approval.
+- **After a crash or environment loss**, recovery is straightforward: `git log` shows what landed; `git status` shows uncommitted state; push any unpushed commits first; verify gates green; then resume from the appropriate checkpoint. Working tree is the source of truth, not session memory.
