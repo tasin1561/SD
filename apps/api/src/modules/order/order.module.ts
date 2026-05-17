@@ -2,9 +2,11 @@ import { Module } from '@nestjs/common';
 import { CatalogReadModule } from '../catalog-read/catalog-read.module';
 import { InventoryStockModule } from '../inventory-stock/inventory-stock.module';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
+import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { SellerOrderController } from './controllers/seller-order.controller';
 import { SellerCustomerController } from './controllers/seller-customer.controller';
 import { SellerRecipientAddressController } from './controllers/seller-recipient-address.controller';
+import { AdminOrderController } from './controllers/admin-order.controller';
 import { OrderNumberingService } from './services/order-numbering.service';
 import { OrderStateMachineService } from './services/order-state-machine.service';
 import { OrderEventWriterService } from './services/order-event-writer.service';
@@ -31,6 +33,7 @@ import { OrderReadService } from './services/order-read.service';
     SellerOrderController,
     SellerCustomerController,
     SellerRecipientAddressController,
+    AdminOrderController,
   ],
   providers: [
     OrderNumberingService,
@@ -43,6 +46,7 @@ import { OrderReadService } from './services/order-read.service';
     OrderWriteService,
     OrderReadService,
     SellerJwtGuard,
+    StaffJwtGuard,
   ],
   exports: [
     OrderNumberingService,

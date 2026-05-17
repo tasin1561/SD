@@ -67,6 +67,10 @@ function makeService(
     items: [],
   }));
   const orderFindFirst = jest.fn(async () => opts.existing ?? null);
+  const orderFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => [
+    { id: 'o1' },
+  ]);
+  const orderCount = jest.fn<Promise<number>, [AnyArgs]>(async () => 1);
   const orderItemDeleteMany = jest.fn(async () => ({ count: 1 }));
   const txClient = {
     order: { create: orderCreate, update: orderUpdate },
@@ -75,12 +79,16 @@ function makeService(
 
   const client = {} as {
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
-    order: { findFirst: typeof orderFindFirst };
+    order: {
+      findFirst: typeof orderFindFirst;
+      findMany: typeof orderFindMany;
+      count: typeof orderCount;
+    };
   };
   // Attach $transaction AFTER the literal (CLAUDE testing note: avoids
   // TS7024 implicit-any from self-reference).
   client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient);
-  client.order = { findFirst: orderFindFirst };
+  client.order = { findFirst: orderFindFirst, findMany: orderFindMany, count: orderCount };
 
   const numbering = { nextOrderNumber: jest.fn(async () => 'SD-2026-26-000001') };
   const customers = {
@@ -115,6 +123,8 @@ function makeService(
     orderCreate,
     orderUpdate,
     orderFindFirst,
+    orderFindMany,
+    orderCount,
     orderItemDeleteMany,
     numbering,
     customers,
@@ -392,5 +402,36 @@ describe('OrderService.edit', () => {
     await expect(svc.edit('s1', 'o1', {}, ACTOR, CTX)).rejects.toMatchObject({
       response: { code: 'NOTHING_TO_UPDATE' },
     });
+  });
+});
+
+describe('OrderService admin reads', () => {
+  it('adminList is cross-seller by default (no sellerId in where)', async () => {
+    const { svc, orderFindMany } = makeService();
+    const res = await svc.adminList({});
+    const arg = orderFindMany.mock.calls[0]![0] as { where: AnyArgs };
+    expect(arg.where).toEqual({ deletedAt: null });
+    expect(res).toMatchObject({ total: 1, page: 1, pageSize: 20 });
+  });
+
+  it('adminList narrows to one seller when sellerId is set', async () => {
+    const { svc, orderFindMany } = makeService();
+    await svc.adminList({ sellerId: 's9', status: OrderStatus.CONFIRMED });
+    const arg = orderFindMany.mock.calls[0]![0] as { where: AnyArgs };
+    expect(arg.where).toMatchObject({
+      deletedAt: null,
+      sellerId: 's9',
+      status: OrderStatus.CONFIRMED,
+    });
+  });
+
+  it('adminGetById returns the order (no seller scope)', async () => {
+    const { svc } = makeService({ existing: existingOrder() });
+    await expect(svc.adminGetById('o1')).resolves.toMatchObject({ id: 'o1' });
+  });
+
+  it('adminGetById 404s a missing/soft-deleted order', async () => {
+    const { svc } = makeService({ existing: null });
+    await expect(svc.adminGetById('gone')).rejects.toBeInstanceOf(NotFoundException);
   });
 });

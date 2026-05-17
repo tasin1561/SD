@@ -91,6 +91,11 @@ export interface ListOrdersQuery {
   search?: string;
 }
 
+export interface AdminListOrdersQuery extends ListOrdersQuery {
+  /** Cross-seller by default; narrow to one seller when set. */
+  sellerId?: string;
+}
+
 /** Per-line snapshot resolved from the catalog before the write tx. */
 interface ResolvedLine {
   variantId: string;
@@ -804,6 +809,52 @@ export class OrderService {
       this.prisma.client.order.count({ where }),
     ]);
     return { items, total, page, pageSize };
+  }
+
+  /**
+   * Admin (cross-seller) list. RBAC scoping defers to Module 12
+   * (phase-1a-debt — same as every other admin surface in Phase 1A).
+   */
+  async adminList(
+    query: AdminListOrdersQuery,
+  ): Promise<{ items: OrderListItem[]; total: number; page: number; pageSize: number }> {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+    const where: Prisma.OrderWhereInput = { deletedAt: null };
+    if (query.sellerId) where.sellerId = query.sellerId;
+    if (query.status) where.status = query.status;
+    if (query.source) where.source = query.source;
+    if (query.search) {
+      where.OR = [
+        { orderNumber: { contains: query.search, mode: 'insensitive' } },
+        { sellerOrderRef: { contains: query.search, mode: 'insensitive' } },
+        { recipientName: { contains: query.search, mode: 'insensitive' } },
+        { recipientPhoneE164: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+    const [items, total] = await Promise.all([
+      this.prisma.client.order.findMany({
+        where,
+        orderBy: { placedAt: 'desc' },
+        take: pageSize,
+        skip: (page - 1) * pageSize,
+        select: ORDER_LIST_SELECT,
+      }),
+      this.prisma.client.order.count({ where }),
+    ]);
+    return { items, total, page, pageSize };
+  }
+
+  /** Admin order detail (no seller scope). 404 on missing/soft-deleted. */
+  async adminGetById(id: string): Promise<OrderView> {
+    const order = await this.prisma.client.order.findFirst({
+      where: { id, deletedAt: null },
+      include: ORDER_VIEW_INCLUDE,
+    });
+    if (!order) {
+      throw new NotFoundException(`Order ${id} not found`);
+    }
+    return order;
   }
 
   /** Seller-visible timeline. Internal-only events are filtered out. */
