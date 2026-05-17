@@ -129,6 +129,28 @@ export class CatalogReadService {
   }
 
   /**
+   * Resolve a variant by its per-seller SKU (product_variants is
+   * @@unique([sellerId, skuCode]), so this is an unambiguous single
+   * lookup). Sanctioned expand-by-need boundary read added for Module 6
+   * CSV import (productSku → variant) so the importer never queries
+   * product_variants directly (CLAUDE MUST #13). Soft-deleted variant /
+   * product → null.
+   */
+  async getVariantBySku(
+    sellerId: string,
+    skuCode: string,
+  ): Promise<ResolvedVariant | null> {
+    const [row, gstDefault] = await Promise.all([
+      this.prisma.client.productVariant.findFirst({
+        where: { sellerId, skuCode, deletedAt: null, product: { deletedAt: null } },
+        select: VARIANT_SELECT,
+      }),
+      this.resolveGstDefault(),
+    ]);
+    return row ? this.resolve(row, gstDefault) : null;
+  }
+
+  /**
    * Batch resolve. One query for all variants (+ product + category via a
    * nested select) and one query for the GST system default — no N+1
    * regardless of how many ids are passed. Missing/soft-deleted variants

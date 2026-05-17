@@ -96,6 +96,23 @@ export interface AdminListOrdersQuery extends ListOrdersQuery {
   sellerId?: string;
 }
 
+/** Neutral CSV-patch shape (processor maps CoercedOrderRow → this, so
+ *  the order module never depends on the csv-import module). */
+export interface BulkOrderPatchInput {
+  productSku: string;
+  quantity: number;
+  customerName: string;
+  customerPhone: string;
+  customerEmail?: string | null;
+  addressLine1: string;
+  addressLine2?: string | null;
+  landmark?: string | null;
+  city: string;
+  state: string;
+  pinCode: string;
+  codAmount?: number | null;
+}
+
 /** Per-line snapshot resolved from the catalog before the write tx. */
 interface ResolvedLine {
   variantId: string;
@@ -119,6 +136,14 @@ export interface CreateOrderOptions {
    * this snapshot logic without duplicating it.
    */
   source?: OrderSource;
+  /**
+   * Initial status. Manual entry → DRAFT (default). CSV bulk import →
+   * PENDING_CONFIRMATION ("CSV is submission, not drafting" — ORD-9).
+   * Only these two are accepted.
+   */
+  initialStatus?: OrderStatus;
+  /** Set on the order when created by a bulk upload. */
+  bulkUploadId?: string;
 }
 
 /**
@@ -161,6 +186,16 @@ export class OrderService {
     options: CreateOrderOptions = {},
   ): Promise<OrderView> {
     const source = options.source ?? OrderSource.MANUAL;
+    const initialStatus = options.initialStatus ?? OrderStatus.DRAFT;
+    if (
+      initialStatus !== OrderStatus.DRAFT &&
+      initialStatus !== OrderStatus.PENDING_CONFIRMATION
+    ) {
+      throw new BadRequestException({
+        code: 'INVALID_INITIAL_STATUS',
+        message: 'initialStatus must be DRAFT or PENDING_CONFIRMATION',
+      });
+    }
     const now = new Date();
 
     // ── Pre-tx validation (no writes; fail fast before allocating a
@@ -212,7 +247,8 @@ export class OrderService {
             customerId: customer.id,
             sellerOrderRef: input.sellerOrderRef ?? null,
             source,
-            status: OrderStatus.DRAFT,
+            status: initialStatus,
+            bulkUploadId: options.bulkUploadId ?? null,
             recipientName: input.recipientName,
             recipientPhoneE164: input.recipientPhoneE164.trim(),
             recipientAltPhoneE164: input.recipientAltPhoneE164 ?? null,
@@ -256,11 +292,13 @@ export class OrderService {
 
         await this.customers.recordNewOrder(tx, customer.id, now);
 
-        await this.events.created(tx, order.id, actor, {
-          orderNumber,
-          source,
-          itemCount: lines.length,
-        });
+        await this.events.created(
+          tx,
+          order.id,
+          actor,
+          { orderNumber, source, itemCount: lines.length },
+          initialStatus,
+        );
 
         // Locked decision #4: feed the autocomplete cache for MANUAL
         // entry only (bulk imports must not pollute suggestions).
@@ -903,6 +941,163 @@ export class OrderService {
         tx,
       );
     });
+  }
+
+  // ── CSV bulk-import helpers (ORD-9 state-aware idempotency) ──────────
+
+  /** Lightweight existence/state probe for CSV idempotency. */
+  async getBySellerOrderRef(
+    sellerId: string,
+    ref: string,
+  ): Promise<{ id: string; status: OrderStatus } | null> {
+    return this.prisma.client.order.findFirst({
+      where: { sellerId, sellerOrderRef: ref, deletedAt: null },
+      select: { id: true, status: true },
+    });
+  }
+
+  /**
+   * ORD-9 PATCH: re-upload of an externalRef that matches a
+   * DRAFT/PENDING_CONFIRMATION order. CSV-provided cells overwrite;
+   * recipient changes re-validate + re-resolve the per-seller customer
+   * on a phone change; the single CSV line's quantity/SKU is synced.
+   * The caller (processor) has already rejected CONFIRMED+ matches.
+   * Returns whether anything actually changed.
+   */
+  async applyBulkPatch(
+    sellerId: string,
+    orderId: string,
+    patch: BulkOrderPatchInput,
+    actor: EventActor,
+  ): Promise<'PATCHED' | 'UNCHANGED'> {
+    const order = await this.prisma.client.order.findFirst({
+      where: { id: orderId, sellerId, deletedAt: null },
+      select: {
+        id: true,
+        status: true,
+        recipientName: true,
+        recipientPhoneE164: true,
+        recipientEmail: true,
+        recipientAddressLine1: true,
+        recipientAddressLine2: true,
+        recipientLandmark: true,
+        recipientCity: true,
+        recipientStateProvince: true,
+        recipientPostalCode: true,
+        recipientCountryCode: true,
+        codAmountInr: true,
+        customerId: true,
+        items: { select: { id: true, variantId: true, quantity: true }, take: 1 },
+      },
+    });
+    if (!order) throw new NotFoundException(`Order ${orderId} not found`);
+    if (
+      order.status !== OrderStatus.DRAFT &&
+      order.status !== OrderStatus.PENDING_CONFIRMATION
+    ) {
+      throw new ConflictException({
+        code: 'BULK_PATCH_NOT_ALLOWED',
+        message: `Order in ${order.status} is not CSV-patchable`,
+      });
+    }
+
+    const canonicalState = await this.addressValidation.assertValid({
+      recipientPhoneE164: patch.customerPhone,
+      recipientPostalCode: patch.pinCode,
+      recipientStateProvince: patch.state,
+      recipientCountryCode: order.recipientCountryCode,
+    });
+
+    const data: Prisma.OrderUpdateInput = {};
+    const changed: string[] = [];
+    const setIf = (
+      cur: string | null,
+      next: string | null,
+      key: keyof Prisma.OrderUpdateInput,
+    ): void => {
+      if ((cur ?? null) !== (next ?? null)) {
+        (data as Record<string, unknown>)[key] = next;
+        changed.push(key as string);
+      }
+    };
+    setIf(order.recipientName, patch.customerName, 'recipientName');
+    setIf(order.recipientPhoneE164, patch.customerPhone.trim(), 'recipientPhoneE164');
+    setIf(order.recipientEmail, patch.customerEmail ?? null, 'recipientEmail');
+    setIf(order.recipientAddressLine1, patch.addressLine1, 'recipientAddressLine1');
+    setIf(order.recipientAddressLine2, patch.addressLine2 ?? null, 'recipientAddressLine2');
+    setIf(order.recipientLandmark, patch.landmark ?? null, 'recipientLandmark');
+    setIf(order.recipientCity, patch.city, 'recipientCity');
+    setIf(order.recipientStateProvince, canonicalState, 'recipientStateProvince');
+    setIf(order.recipientPostalCode, patch.pinCode.trim(), 'recipientPostalCode');
+
+    const curCod = order.codAmountInr === null ? null : Number(order.codAmountInr);
+    const nextCod = patch.codAmount ?? null;
+    if (curCod !== nextCod) {
+      data.codAmountInr = nextCod === null ? null : new Prisma.Decimal(nextCod);
+      changed.push('codAmountInr');
+    }
+
+    const phoneChanged = patch.customerPhone.trim() !== order.recipientPhoneE164;
+
+    // Single CSV line: sync quantity and (if the SKU moved) re-snapshot.
+    const line = order.items[0];
+    let lineUpdate: { id: string; data: Prisma.OrderItemUpdateInput } | null = null;
+    if (line) {
+      const resolved = await this.catalog.getVariantBySku(sellerId, patch.productSku);
+      if (!resolved || resolved.sellerId !== sellerId) {
+        throw new BadRequestException({
+          code: 'VARIANT_NOT_FOUND',
+          message: `Variant SKU "${patch.productSku}" not found for this seller`,
+        });
+      }
+      const liData: Prisma.OrderItemUpdateInput = {};
+      if (resolved.variantId !== line.variantId) {
+        liData.variant = { connect: { id: resolved.variantId } };
+        liData.skuCode = resolved.skuCode;
+        liData.productName = resolved.productName;
+        liData.variantLabel = resolved.variantLabel;
+        liData.imageUrl = resolved.imageUrl;
+        liData.unitWeightGrams = resolved.weightGrams;
+        liData.unitDeclaredValueInr = resolved.declaredValueInr;
+        liData.hsCode = resolved.hsCode;
+        changed.push('lineVariant');
+      }
+      if (patch.quantity !== line.quantity) {
+        liData.quantity = patch.quantity;
+        changed.push('lineQuantity');
+      }
+      if (Object.keys(liData).length > 0) {
+        lineUpdate = { id: line.id, data: liData };
+      }
+    }
+
+    if (changed.length === 0) return 'UNCHANGED';
+
+    await this.prisma.client.$transaction(async (tx) => {
+      if (phoneChanged) {
+        const customer = await this.customers.findOrCreate(tx, {
+          sellerId,
+          phoneE164: patch.customerPhone.trim(),
+          name: patch.customerName,
+          email: patch.customerEmail ?? null,
+        });
+        data.customer = { connect: { id: customer.id } };
+      }
+      if (Object.keys(data).length > 0) {
+        await tx.order.update({ where: { id: order.id }, data });
+      }
+      if (lineUpdate) {
+        await tx.orderItem.update({ where: { id: lineUpdate.id }, data: lineUpdate.data });
+      }
+      await this.events.note(
+        tx,
+        order.id,
+        `CSV re-upload patch (${changed.join(', ')})`,
+        actor,
+        false,
+      );
+    });
+    return 'PATCHED';
   }
 
   private ctxMeta(ctx: ClientContext): Record<string, unknown> {

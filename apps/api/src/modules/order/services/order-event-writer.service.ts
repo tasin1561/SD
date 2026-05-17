@@ -81,12 +81,16 @@ export class OrderEventWriterService {
     orderId: string,
     actor: EventActor,
     data?: Prisma.InputJsonValue,
+    toStatus: OrderStatus = OrderStatus.DRAFT,
   ): Promise<{ id: string }> {
     return this.write(client, {
       orderId,
       type: OrderEventType.CREATED,
-      toStatus: OrderStatus.DRAFT,
-      description: 'Order created',
+      toStatus,
+      description:
+        toStatus === OrderStatus.DRAFT
+          ? 'Order created'
+          : `Order created (${toStatus})`,
       data,
       actor,
       isVisibleToSeller: true,
