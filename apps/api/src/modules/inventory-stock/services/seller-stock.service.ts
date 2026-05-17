@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { VariantStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { StockReadService } from './stock-read.service';
-import type { CachedVariantStock } from './stock-cache.service';
+import type { CachedVariantStock } from '../../inventory-shared/stock-cache.service';
 
 export interface AggregatedVariantStock extends CachedVariantStock {
   /** How many warehouses contribute a stock footprint for this variant. */

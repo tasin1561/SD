@@ -11,7 +11,7 @@ import {
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
-import { StockReadService } from './stock-read.service';
+import { StockAvailabilityService } from '../../inventory-shared/stock-availability.service';
 
 const RESERVATION_TTL_SETTING_KEY = 'ops.stock_reservation_ttl_hours';
 /** Last-resort fallback if the system setting is somehow missing. */
@@ -135,7 +135,7 @@ export class StockReservationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
-    private readonly stockRead: StockReadService,
+    private readonly availability: StockAvailabilityService,
   ) {}
 
   /** PHASE-1: soft qty claim, NULL bin/batch. Module 6 calls this at
@@ -151,14 +151,16 @@ export class StockReservationService {
     const now = input.now ?? new Date();
 
     // INV-2: availability MUST be read live (never the display cache) on a
-    // mutation path.
-    const live = await this.stockRead.getVariantStockLive(
-      input.sellerId,
-      input.variantId,
-      input.warehouseId,
-    );
-    if (qty > live.qtyAvailable) {
-      throw new InsufficientStockError(qty, live.qtyAvailable);
+    // mutation path. The shared primitive clamps to ≥0 — the best-effort
+    // soft guard below is unchanged for any positive qty (the HARD guard
+    // is phase-2 version-CAS allocation, see class JSDoc).
+    const available = await this.availability.compute({
+      sellerId: input.sellerId,
+      variantId: input.variantId,
+      warehouseId: input.warehouseId,
+    });
+    if (qty > available) {
+      throw new InsufficientStockError(qty, available);
     }
 
     const ttlHours = await this.resolveTtlHours(input.sellerId);

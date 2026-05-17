@@ -1,6 +1,6 @@
 import { VariantStatus } from '@skydrop/db';
 import { StockReadService } from '../../src/modules/inventory-stock/services/stock-read.service';
-import type { StockCacheService } from '../../src/modules/inventory-stock/services/stock-cache.service';
+import type { StockCacheService } from '../../src/modules/inventory-shared/stock-cache.service';
 import type { CatalogReadService } from '../../src/modules/catalog-read/services/catalog-read.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 

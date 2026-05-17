@@ -3,7 +3,7 @@ import {
   StockCacheService,
   type CachedStockAggregate,
   type CachedStockDetail,
-} from '../../src/modules/inventory-stock/services/stock-cache.service';
+} from '../../src/modules/inventory-shared/stock-cache.service';
 import type { RedisService } from '../../src/infrastructure/redis/redis.service';
 
 function makeSut(opts: { failing?: boolean } = {}) {

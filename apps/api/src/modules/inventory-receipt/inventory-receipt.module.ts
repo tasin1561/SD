@@ -3,7 +3,6 @@ import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { CatalogReadModule } from '../catalog-read/catalog-read.module';
 import { EmailModule } from '../email/email.module';
 import { InventorySharedModule } from '../inventory-shared/inventory-shared.module';
-import { InventoryStockModule } from '../inventory-stock/inventory-stock.module';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { SellerGoodsReceiptController } from './seller-goods-receipt.controller';
 import { AdminGoodsReceiptController } from './admin-goods-receipt.controller';
@@ -15,7 +14,9 @@ import { GoodsReceiptService } from './services/goods-receipt.service';
  * module in commits 17–18.
  */
 @Module({
-  imports: [InventorySharedModule, CatalogReadModule, EmailModule, InventoryStockModule],
+  // StockAlertService + StockCacheService come from InventorySharedModule
+  // now (deviation #7) — no InventoryStockModule dependency needed.
+  imports: [InventorySharedModule, CatalogReadModule, EmailModule],
   controllers: [SellerGoodsReceiptController, AdminGoodsReceiptController],
   providers: [GoodsReceiptService, SellerJwtGuard, StaffJwtGuard],
   exports: [GoodsReceiptService],

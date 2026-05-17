@@ -7,7 +7,7 @@ import {
   type CachedStockAggregate,
   type CachedStockDetail,
   type CachedVariantStock,
-} from './stock-cache.service';
+} from '../../inventory-shared/stock-cache.service';
 
 /**
  * Live (uncached) stock position for a single (seller, variant, warehouse).

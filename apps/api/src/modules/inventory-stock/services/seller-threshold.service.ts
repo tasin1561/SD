@@ -8,7 +8,7 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
-import { StockCacheService } from './stock-cache.service';
+import { StockCacheService } from '../../inventory-shared/stock-cache.service';
 
 export interface AlertConfigView {
   defaultLowStockThreshold: number | null;

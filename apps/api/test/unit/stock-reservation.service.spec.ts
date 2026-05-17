@@ -5,7 +5,7 @@ import {
 } from '../../src/modules/inventory-stock/services/stock-reservation.service';
 import { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
-import type { StockReadService } from '../../src/modules/inventory-stock/services/stock-read.service';
+import type { StockAvailabilityService } from '../../src/modules/inventory-shared/stock-availability.service';
 
 const NOW = new Date('2026-05-16T12:00:00.000Z');
 
@@ -50,18 +50,11 @@ function makeSut(opts: {
   };
   const prisma = { client } as unknown as PrismaService;
   const audit = new AuditLogService(prisma);
-  const stockRead = {
-    getVariantStockLive: jest.fn(async () => ({
-      sellerId: 's1',
-      variantId: 'v1',
-      warehouseId: 'w1',
-      qtyOnHand: opts.available ?? 0,
-      qtyReservedActive: 0,
-      qtyAvailable: opts.available ?? 0,
-    })),
-  } as unknown as StockReadService;
+  const availability = {
+    compute: jest.fn(async () => opts.available ?? 0),
+  } as unknown as StockAvailabilityService;
 
-  const svc = new StockReservationService(prisma, audit, stockRead);
+  const svc = new StockReservationService(prisma, audit, availability);
   return { svc, created, updated, levelUpdates, client };
 }
 

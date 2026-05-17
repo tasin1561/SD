@@ -5,8 +5,8 @@ import type { PrismaService } from '../../src/infrastructure/prisma/prisma.servi
 import type { CatalogReadService } from '../../src/modules/catalog-read/services/catalog-read.service';
 import type { WarehouseResolverService } from '../../src/modules/inventory-shared/warehouse-resolver.service';
 import type { StockMutationService } from '../../src/modules/inventory-shared/stock-mutation.service';
-import type { StockAlertService } from '../../src/modules/inventory-stock/services/stock-alert.service';
-import type { StockCacheService } from '../../src/modules/inventory-stock/services/stock-cache.service';
+import type { StockAlertService } from '../../src/modules/inventory-shared/stock-alert.service';
+import type { StockCacheService } from '../../src/modules/inventory-shared/stock-cache.service';
 import type { EmailQueue } from '../../src/modules/email/queue/email.queue';
 import type { EnvService } from '../../src/config/env.service';
 

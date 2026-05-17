@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { NotificationRecipientType } from '@skydrop/db';
-import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
-import { EnvService } from '../../../config/env.service';
-import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
-import { EmailQueue } from '../../email/queue/email.queue';
-import { StockReadService } from './stock-read.service';
+import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import { EnvService } from '../../config/env.service';
+import { CatalogReadService } from '../catalog-read/services/catalog-read.service';
+import { EmailQueue } from '../email/queue/email.queue';
+import { StockAvailabilityService } from './stock-availability.service';
 
 const ALERT_TEMPLATE = 'seller.stock_low_alert.email';
 const COOLDOWN_SETTING_KEY = 'ops.stock_alert_cooldown_hours';
@@ -51,7 +51,7 @@ export class StockAlertService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly env: EnvService,
-    private readonly stockRead: StockReadService,
+    private readonly availability: StockAvailabilityService,
     private readonly catalog: CatalogReadService,
     private readonly email: EmailQueue,
   ) {}
@@ -86,8 +86,14 @@ export class StockAlertService {
     }
 
     const threshold = variant.lowStockThreshold ?? seller.defaultLowStockThreshold ?? null;
-    const live = await this.stockRead.getVariantStockLive(sellerId, variantId, warehouseId);
-    const qtyAvailable = live.qtyAvailable;
+    // INV-9 against LIVE availability via the shared primitive (never the
+    // display cache). compute() clamps to ≥0 — identical alert decisions
+    // to the old unclamped live.qtyAvailable for any positive threshold.
+    const qtyAvailable = await this.availability.compute({
+      sellerId,
+      variantId,
+      warehouseId,
+    });
 
     if (threshold === null) {
       return { outcome: 'SKIPPED_NO_THRESHOLD', wasAlertActive: false, qtyAvailable, threshold };

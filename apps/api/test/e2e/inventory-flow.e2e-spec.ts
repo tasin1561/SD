@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { StockAlertService } from '../../src/modules/inventory-stock/services/stock-alert.service';
+import { StockAlertService } from '../../src/modules/inventory-shared/stock-alert.service';
 import {
   bootTestApp,
   createTestStaff,

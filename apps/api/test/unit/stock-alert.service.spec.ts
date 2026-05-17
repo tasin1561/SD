@@ -1,8 +1,8 @@
 import { VariantStatus } from '@skydrop/db';
-import { StockAlertService } from '../../src/modules/inventory-stock/services/stock-alert.service';
+import { StockAlertService } from '../../src/modules/inventory-shared/stock-alert.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { EnvService } from '../../src/config/env.service';
-import type { StockReadService } from '../../src/modules/inventory-stock/services/stock-read.service';
+import type { StockAvailabilityService } from '../../src/modules/inventory-shared/stock-availability.service';
 import type { CatalogReadService } from '../../src/modules/catalog-read/services/catalog-read.service';
 import type { EmailQueue } from '../../src/modules/email/queue/email.queue';
 
@@ -40,16 +40,9 @@ function makeSut(opts: {
   };
   const prisma = { client } as unknown as PrismaService;
   const env = { sellerAppUrl: 'http://app' } as unknown as EnvService;
-  const stockRead = {
-    getVariantStockLive: jest.fn(async () => ({
-      sellerId: 's1',
-      variantId: 'v1',
-      warehouseId: 'w1',
-      qtyOnHand: opts.qtyAvailable,
-      qtyReservedActive: 0,
-      qtyAvailable: opts.qtyAvailable,
-    })),
-  } as unknown as StockReadService;
+  const availability = {
+    compute: jest.fn(async () => opts.qtyAvailable),
+  } as unknown as StockAvailabilityService;
   const catalog = {
     getVariantById: jest.fn(async () =>
       opts.foreignVariant
@@ -60,7 +53,7 @@ function makeSut(opts: {
   const enqueue = jest.fn(async () => 'job1');
   const email = { enqueue } as unknown as EmailQueue;
 
-  const svc = new StockAlertService(prisma, env, stockRead, catalog, email);
+  const svc = new StockAlertService(prisma, env, availability, catalog, email);
   return { svc, upsert, enqueue };
 }
 

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { VariantStatus } from '@skydrop/db';
-import { RedisService } from '../../../infrastructure/redis/redis.service';
+import { RedisService } from '../../infrastructure/redis/redis.service';
 
 /* ============================================================================
  * INV-2 — CACHE IS READS-ONLY FOR DISPLAYS. MUTATION PATHS READ LIVE FROM DB.
