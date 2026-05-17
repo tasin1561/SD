@@ -3,6 +3,7 @@ import { OrderNumberingService } from './services/order-numbering.service';
 import { OrderStateMachineService } from './services/order-state-machine.service';
 import { OrderEventWriterService } from './services/order-event-writer.service';
 import { CustomerService } from './services/customer.service';
+import { RecipientAddressCacheService } from './services/recipient-address-cache.service';
 
 /**
  * Module 6 — Order Management.
@@ -18,12 +19,14 @@ import { CustomerService } from './services/customer.service';
     OrderStateMachineService,
     OrderEventWriterService,
     CustomerService,
+    RecipientAddressCacheService,
   ],
   exports: [
     OrderNumberingService,
     OrderStateMachineService,
     OrderEventWriterService,
     CustomerService,
+    RecipientAddressCacheService,
   ],
 })
 export class OrderModule {}
