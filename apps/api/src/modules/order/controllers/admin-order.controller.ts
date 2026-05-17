@@ -21,6 +21,7 @@ import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import { AdminCancelOrderDto, AdminListOrdersQueryDto } from '../dto/admin-order.dto';
+import { ForceMutationDto } from '../dto/force-mutation.dto';
 import {
   OrderService,
   type OrderListItem,
@@ -30,6 +31,10 @@ import {
   OrderWriteService,
   type TransitionStatusResult,
 } from '../services/order-write.service';
+import {
+  OrderAdminOverrideService,
+  type ForceMutateResult,
+} from '../services/order-admin-override.service';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -51,6 +56,7 @@ export class AdminOrderController {
   constructor(
     private readonly orders: OrderService,
     private readonly orderWrite: OrderWriteService,
+    private readonly override: OrderAdminOverrideService,
   ) {}
 
   @Get()
@@ -86,6 +92,29 @@ export class AdminOrderController {
         ? { cancellationReason: body.cancellationReason }
         : {}),
       reason: body.note ?? 'Admin cancellation',
+      ctx,
+    });
+  }
+
+  @Post(':id/force-mutation')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'GOD MODE (ORD-2): bypass the state machine / edit rules. Audited CRITICAL.',
+  })
+  forceMutation(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('id', uuid()) id: string,
+    @Body() body: ForceMutationDto,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<ForceMutateResult> {
+    return this.override.forceMutate({
+      orderId: id,
+      ...(body.fieldChanges !== undefined ? { fieldChanges: body.fieldChanges } : {}),
+      ...(body.targetStatus !== undefined ? { targetStatus: body.targetStatus } : {}),
+      reason: body.reason,
+      acknowledgeDataIntegrityRisk: body.acknowledgeDataIntegrityRisk,
+      actorStaffId: staff.id,
       ctx,
     });
   }

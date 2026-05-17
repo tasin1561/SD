@@ -16,6 +16,7 @@ import { AddressValidationService } from './services/address-validation.service'
 import { OrderService } from './services/order.service';
 import { OrderWriteService } from './services/order-write.service';
 import { OrderReadService } from './services/order-read.service';
+import { OrderAdminOverrideService } from './services/order-admin-override.service';
 
 /**
  * Module 6 — Order Management.
@@ -45,6 +46,7 @@ import { OrderReadService } from './services/order-read.service';
     OrderService,
     OrderWriteService,
     OrderReadService,
+    OrderAdminOverrideService,
     SellerJwtGuard,
     StaffJwtGuard,
   ],
@@ -58,6 +60,7 @@ import { OrderReadService } from './services/order-read.service';
     OrderService,
     OrderWriteService,
     OrderReadService,
+    OrderAdminOverrideService,
   ],
 })
 export class OrderModule {}

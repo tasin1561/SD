@@ -101,6 +101,38 @@ export class OrderWriteService {
     private readonly reservations: StockReservationService,
   ) {}
 
+  /**
+   * Drive one order status transition + its stock side-effect.
+   *
+   * ── THE SAGA PATTERN (reusable for M5/M6-style boundary integrations,
+   *    e.g. Modules 8/9 courier/warehouse↔stock) ───────────────────────
+   * A cross-module side-effect whose owner runs its OWN transaction
+   * (here: M5 reservation, version-CAS/INV-1) cannot be enrolled in this
+   * service's `$transaction`. Resolve the boundary with a saga, never a
+   * distributed/nested tx:
+   *
+   *   1. PRE-TX, fail-routing side-effect (RESERVE): run the external op
+   *      BEFORE the local tx. On its typed failure, route the local
+   *      state to a designated non-terminal landing (here: OUT_OF_STOCK)
+   *      in its own tx — do not 500.
+   *   2. LOCAL TX: the local DB write + its events + audit commit
+   *      atomically together (the only true ACID unit).
+   *   3. COMPENSATION: if the local tx fails AFTER a successful pre-tx
+   *      side-effect, run the external op's idempotent inverse (here:
+   *      release()) to undo it. Best-effort; log on failure.
+   *   4. POST-COMMIT, idempotent side-effect (RELEASE/FULFILL): run
+   *      AFTER `tx.commit()`, idempotent, per target. A post-commit
+   *      failure must be SAFE by construction — the local state is
+   *      already correct and an out-of-band reconciler (M5 TTL + hourly
+   *      auto-release worker) sweeps the residue. Mirrors INV-5.
+   *
+   * The invariant: the local state is never left lying about a
+   * side-effect. Reserve failure → OUT_OF_STOCK (truthful); tx failure →
+   * compensated; post-commit failure → terminal state already truthful,
+   * reconciler cleans up. God mode (OrderAdminOverrideService) is the
+   * ONE sanctioned bypass of this engine and explicitly opts OUT of the
+   * compensation guarantee.
+   */
   async transitionStatus(
     input: TransitionStatusInput,
   ): Promise<TransitionStatusResult> {

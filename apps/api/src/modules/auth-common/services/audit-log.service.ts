@@ -26,7 +26,12 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
  * Entries are append-only (the underlying table is not modified after insert).
  * Severity goes into `metadata.severity` since the schema has no severity column.
  */
-export type AuditSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
+// CRITICAL added for Module 6 god mode (OrderAdminOverrideService
+// .forceMutate) — an admin deliberately bypassing the state machine /
+// edit rules is the highest-severity audited action. Additive widening;
+// severity is a metadata.severity string (no schema column), so no
+// existing caller is affected.
+export type AuditSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 export interface AuditLogInput {
   actorType: ActorType;
