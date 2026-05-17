@@ -120,6 +120,7 @@ model Seller {
   stockReservations       StockReservation[]
   stockAdjustments        StockAdjustment[]
   goodsReceipts           GoodsReceipt[]
+  customers               Customer[]
   orders                  Order[]
   bulkOrderUploads        BulkOrderUpload[]              @relation("BulkUploadSeller")
   bulkUploadsTriggered    BulkOrderUpload[]              @relation("BulkUploadUploadedBySeller")
@@ -1142,7 +1143,8 @@ model StockAlertState {
 
 model Customer {
   id                    String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  phoneE164             String            @unique @map("phone_e164")
+  sellerId              String            @map("seller_id") @db.Uuid
+  phoneE164             String            @map("phone_e164")
   name                  String?
   email                 String?
   altPhoneE164          String?           @map("alt_phone_e164")
@@ -1160,9 +1162,18 @@ model Customer {
   updatedAt             DateTime          @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt             DateTime?         @map("deleted_at") @db.Timestamptz
 
+  seller       Seller                       @relation(fields: [sellerId], references: [id])
   orders       Order[]
   addressCache OrderRecipientAddressCache[]
 
+  // Module 6: customer identity is per-seller (sellerId, phoneE164). The
+  // canonical pre-M6 design was a GLOBAL phone-keyed customer with
+  // cross-seller risk aggregation; that was deliberately narrowed to
+  // per-seller for Phase 1A privacy (see phase-1a-debt). Risk aggregates
+  // (rtoCount, fakeOrdersCount, riskLevel) are therefore per-seller now.
+  @@unique([sellerId, phoneE164])
+  @@index([sellerId])
+  @@index([phoneE164])
   @@index([riskLevel])
   @@index([lastOrderAt])
   @@index([deletedAt])
@@ -1196,6 +1207,11 @@ model Order {
   status                 OrderStatus              @default(DRAFT)
   isUrgent               Boolean                  @default(false) @map("is_urgent")
   isHighRisk             Boolean                  @default(false) @map("is_high_risk")
+  // Module 6 god mode (ORD-2): set true by OrderAdminOverrideService
+  // .forceMutate() and NEVER cleared. Flags an order whose state machine
+  // or edit rules were bypassed by an admin; per-field detail lives in
+  // order_events, not summarised here.
+  hasAdminOverride       Boolean                  @default(false) @map("has_admin_override")
   confirmedAt            DateTime?                @map("confirmed_at") @db.Timestamptz
   confirmedById          String?                  @map("confirmed_by_id") @db.Uuid
   cancellationReason     OrderCancellationReason? @map("cancellation_reason")
@@ -2520,7 +2536,13 @@ enum OrderStatus {
   CALL_NO_RESPONSE         @map("call_no_response")
   CALL_RESCHEDULED         @map("call_rescheduled")
   CONFIRMED                @map("confirmed")
+  // Module 6: reservation failure at PENDING_CONFIRMATION → CONFIRMED
+  // lands here (non-terminal; Module 7 retries → CONFIRMED or → CANCELLED).
+  OUT_OF_STOCK             @map("out_of_stock")
   CANCELLED                @map("cancelled")
+  // Module 6: admin-initiated cancel (sane admin cancel + god-mode).
+  // Seller/customer cancels use CANCELLED + cancellationReason.
+  CANCELLED_BY_ADMIN       @map("cancelled_by_admin")
   REJECTED                 @map("rejected")
   PENDING_PICK             @map("pending_pick")
   PICKED                   @map("picked")

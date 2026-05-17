@@ -642,17 +642,25 @@ Inbound stock receiving documents.
 # Layer 5 — Orders & Customers (6 tables)
 
 ## customers
-End customers (Indian recipients). Phone-keyed identity dedup.
+End customers (Indian recipients). **Per-seller** phone-keyed identity dedup
+(Module 6). Identity is `(sellerId, phoneE164)`.
 
 **Key fields:**
-- `phoneE164` (unique — primary identity)
+- `sellerId` (FK → sellers, ON DELETE RESTRICT) — customer scoped to one seller
+- `phoneE164` — primary identity *within a seller* (not globally unique)
 - `name`, `email`, `altPhoneE164`
-- Aggregates: `totalOrdersCount`, `successfulOrdersCount`, `rtoCount`, `refusedCount`, `fakeOrdersCount`
+- Aggregates: `totalOrdersCount`, `successfulOrdersCount`, `rtoCount`, `refusedCount`, `fakeOrdersCount` (per-seller)
 - `riskLevel: CustomerRiskLevel`, `riskNotes`
 - `preferredLanguage @default("en")` ("en"/"hi")
 - `firstOrderAt`, `lastOrderAt`
 
-**Indexes:** `phoneE164`, `riskLevel`, `lastOrderAt`, `deletedAt`
+**Constraints:** `@@unique([sellerId, phoneE164])`
+**Indexes:** `sellerId`, `phoneE164`, `riskLevel`, `lastOrderAt`, `deletedAt`
+
+> **Module 6 deviation:** the pre-M6 canonical design was a GLOBAL phone-keyed
+> customer with cross-seller risk aggregation (rtoCount/fakeOrdersCount/
+> riskLevel shared across sellers). Deliberately narrowed to per-seller for
+> Phase 1A privacy; cross-seller risk aggregation deferred (see phase-1a-debt).
 
 **CustomerRiskLevel enum:** `NONE`, `LOW`, `MEDIUM`, `HIGH`, `BLOCKED`
 
@@ -667,8 +675,8 @@ Central order record.
 - **Recipient (immutable snapshot):** `recipientName`, `recipientPhoneE164`, `recipientAltPhoneE164`, `recipientEmail`, `recipientAddressLine1/2`, `recipientLandmark`, `recipientCity`, `recipientStateProvince`, `recipientPostalCode`, `recipientCountryCode`
 - **Economics:** `paymentMode: PaymentMode`, `codAmountInr`, `declaredValueInr`
 - **Physical:** `totalWeightGrams`, `packageType`
-- `status: OrderStatus` (22 values — see enum below)
-- `isUrgent`, `isHighRisk`
+- `status: OrderStatus` (26 values — see enum below)
+- `isUrgent`, `isHighRisk`, `hasAdminOverride` (Module 6 god-mode flag — set once by `OrderAdminOverrideService.forceMutate()`, never cleared)
 - Confirmation: `confirmedAt`, `confirmedById`, `cancellationReason`, `cancelledAt`, `cancelledById`
 - Notes: `internalNotes`, `sellerNotes`, `callNotes` (latest summary)
 - SLA: `slaDeadline`, `expectedDeliveryAt`
@@ -681,13 +689,19 @@ Central order record.
 
 **PaymentMode enum:** `COD`, `PREPAID`
 
-**OrderStatus enum (22 values):**
+**OrderStatus enum (26 values):**
 Pre-confirmation: `DRAFT`, `PENDING_CONFIRMATION`, `CALL_NO_RESPONSE`, `CALL_RESCHEDULED`
-Post-confirmation: `CONFIRMED`, `CANCELLED`, `REJECTED`
+Post-confirmation: `CONFIRMED`, `OUT_OF_STOCK`, `CANCELLED`, `CANCELLED_BY_ADMIN`, `REJECTED`
 Warehouse: `PENDING_PICK`, `PICKED`, `PACKED`, `PACK_FAILED`
 Courier: `PENDING_DISPATCH`, `DISPATCHED`, `IN_TRANSIT`, `OUT_FOR_DELIVERY`, `DELIVERED`
 Failed: `DELIVERY_FAILED`, `RTO_INITIATED`, `RTO_IN_TRANSIT`, `RTO_RECEIVED`, `RTO_RESTOCKED`, `RTO_DAMAGED`, `LOST_IN_TRANSIT`
 Manual: `PENDING_MANUAL_PLACEMENT`
+
+> Module 6 added `OUT_OF_STOCK` (reservation-fail landing at confirm —
+> non-terminal; Module 7 retries → `CONFIRMED` or → `CANCELLED`) and
+> `CANCELLED_BY_ADMIN` (admin sane-cancel + god-mode). The earlier
+> "22 values" label was a stale miscount of an already-24-value list;
+> it is now genuinely 26.
 
 **OrderCancellationReason enum:** `CUSTOMER_REQUESTED`, `CUSTOMER_UNREACHABLE`, `FAKE_ORDER`, `WRONG_ADDRESS`, `OUT_OF_STOCK`, `HIGH_RISK_CUSTOMER`, `SELLER_REQUESTED`, `DUPLICATE_ORDER`, `NO_COURIER_AVAILABLE`, `OTHER`
 
