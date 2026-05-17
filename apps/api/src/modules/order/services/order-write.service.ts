@@ -88,6 +88,27 @@ export interface TransitionStatusResult {
  *
  * Email enqueue is intentionally NOT wired here — notification dispatch
  * is Module 11; this engine only owns status + stock + events + audit.
+ *
+ * ── SANCTIONED CROSS-MODULE API (Modules 7 / 8) ────────────────────────
+ *
+ * transitionStatus({ orderId, to, actor, expectedFrom?, reason?,
+ *                     cancellationReason?, ctx? }): TransitionStatusResult
+ *   The ONE post-DRAFT status-change entry point (ORD-1/ORD-3). Modules
+ *   7/8 NEVER write orders.status directly. Guards: state-machine
+ *   validity (409 INVALID_TRANSITION), optimistic `expectedFrom` (409
+ *   STALE_ORDER_STATUS), no-op (409), 404. Stock side-effects follow the
+ *   SAGA documented on the method JSDoc below: RESERVE pre-tx (failure →
+ *   OUT_OF_STOCK when the matrix allows, else 409; tx-failure →
+ *   compensating release); RELEASE/FULFILL post-commit & idempotent.
+ *   The result's `reservationOutcome` reports
+ *   RESERVED|OUT_OF_STOCK|RELEASED|FULFILLED|null and `status` is the
+ *   status actually persisted (may be OUT_OF_STOCK on a → CONFIRMED
+ *   reserve failure). The order DB write + its events + audit are the
+ *   only true ACID unit.
+ *
+ * God mode (OrderAdminOverrideService) is the ONE sanctioned bypass and
+ * is NOT part of this cross-module API.
+ * ───────────────────────────────────────────────────────────────────────
  */
 @Injectable()
 export class OrderWriteService {

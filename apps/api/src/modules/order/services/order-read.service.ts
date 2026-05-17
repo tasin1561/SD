@@ -127,6 +127,22 @@ type OrderRow = Prisma.OrderGetPayload<{ select: typeof ORDER_SELECT }>;
  * line data from the live catalog — ORD-6).
  *
  * Soft-deleted orders are absent (null / not in the map).
+ *
+ * ── SANCTIONED CROSS-MODULE API (Modules 7 / 8) ────────────────────────
+ *
+ * getById(orderId): ResolvedOrder | null
+ *   Single order resolved to a deep-frozen snapshot (recipient block +
+ *   per-line SKU snapshot + fulfillment-progress quantities). null when
+ *   missing or soft-deleted.
+ *
+ * requireById(orderId): ResolvedOrder
+ *   As getById but throws 404 instead of returning null — the ergonomic
+ *   default for Module 7/8 call sites that need the order to exist.
+ *
+ * getManyByIds(orderIds): ReadonlyMap<orderId, ResolvedOrder>
+ *   Batch resolve, deduped, ONE query (no N+1). Missing/soft-deleted ids
+ *   are simply absent from the map; [] in → empty map (no query).
+ * ───────────────────────────────────────────────────────────────────────
  */
 @Injectable()
 export class OrderReadService {

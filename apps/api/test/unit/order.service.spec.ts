@@ -97,7 +97,7 @@ function makeService(
     recordNewOrder: jest.fn(async () => undefined),
   };
   const events = {
-    created: jest.fn(async () => ({ id: 'e1' })),
+    created: jest.fn<Promise<{ id: string }>, unknown[]>(async () => ({ id: 'e1' })),
     statusChanged: jest.fn(async () => ({ id: 'e2' })),
     note: jest.fn(async () => ({ id: 'e3' })),
   };
