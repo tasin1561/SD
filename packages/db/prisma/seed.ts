@@ -11,6 +11,7 @@
 // admin UI / runtime to populate.
 
 import {
+  Prisma,
   PrismaClient,
   CourierIntegrationType,
   Currency,
@@ -33,7 +34,20 @@ type SystemSettingSeed = {
   valueInt?: number;
   valueDecimal?: string;
   valueBoolean?: boolean;
+  valueJson?: unknown;
 };
+
+// 28 Indian States + 8 Union Territories (Module 6 address validation).
+const ALLOWED_INDIAN_STATES: string[] = [
+  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
+  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
+  'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya',
+  'Mizoram', 'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim',
+  'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand',
+  'West Bengal', 'Andaman and Nicobar Islands', 'Chandigarh',
+  'Dadra and Nagar Haveli and Daman and Diu', 'Delhi', 'Jammu and Kashmir',
+  'Ladakh', 'Lakshadweep', 'Puducherry',
+];
 
 const systemSettings: SystemSettingSeed[] = [
   {
@@ -118,6 +132,33 @@ const systemSettings: SystemSettingSeed[] = [
     displayName: 'Webhook Max Retries',
     description: 'Max webhook delivery retry attempts',
   },
+  // ---- Module 6 — Order Management -------------------------------------
+  {
+    key: 'ops.csv_max_order_rows',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 1000,
+    displayName: 'Bulk Order CSV Max Rows',
+    description: 'Reject a bulk order CSV upload with more than this many data rows',
+  },
+  {
+    key: 'ops.order_draft_ttl_hours',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 72,
+    displayName: 'Order Draft TTL (hours)',
+    description:
+      'DRAFT orders older than this are eligible for cleanup (cleanup cron deferred to Phase 2 — value is informational in Phase 1A)',
+  },
+  {
+    key: 'ops.allowed_indian_states',
+    category: 'ops',
+    valueType: SettingValueType.JSON,
+    valueJson: ALLOWED_INDIAN_STATES,
+    displayName: 'Allowed Indian States/UTs',
+    description:
+      'Recipient state must match one of these (28 states + 8 union territories) — soft address validation in Module 6',
+  },
 ];
 
 async function seedSystemSettings() {
@@ -132,6 +173,7 @@ async function seedSystemSettings() {
         valueInt: s.valueInt ?? null,
         valueDecimal: s.valueDecimal ?? null,
         valueBoolean: s.valueBoolean ?? null,
+        valueJson: (s.valueJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
         displayName: s.displayName,
         description: s.description,
       },
@@ -508,6 +550,52 @@ const notificationTemplates: TemplateSeed[] = [
     subject: 'Stock adjustment applied at {{ warehouse_name }}',
     bodyTemplate:
       'Hi {{ company_name }}, a {{ adjustment_type }} stock adjustment was applied to your inventory at {{ warehouse_name }}. Reason: {{ reason_code }}. Net value impact: INR {{ value_impact_inr }}. Reference: {{ adjustment_id }}. Questions to {{ support_email }}.',
+  },
+  // ---- Module 6 — Order Management (sender resolves to hello@) ---------
+  {
+    code: 'seller.order_created.email',
+    name: 'Order created — email to seller',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Order {{ order_number }} created',
+    bodyTemplate:
+      'Hi {{ company_name }}, order {{ order_number }} for {{ recipient_name }} ({{ recipient_city }}, {{ recipient_state }}) has been created with {{ item_count }} item(s) and is now {{ order_status }}. View it at {{ app_url }}.',
+  },
+  {
+    code: 'seller.bulk_upload_completed.email',
+    name: 'Bulk order upload completed — email to seller',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Bulk order upload {{ file_name }} finished',
+    bodyTemplate:
+      'Hi {{ company_name }}, your bulk order upload "{{ file_name }}" finished with status {{ upload_status }}: {{ orders_created }} created, {{ rows_skipped }} skipped, {{ rows_failed }} failed.{{ error_report_line }} View details at {{ app_url }}.',
+  },
+  {
+    code: 'seller.order_status_changed.email',
+    name: 'Order status changed — email to seller',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Order {{ order_number }} is now {{ new_status }}',
+    bodyTemplate:
+      'Hi {{ company_name }}, order {{ order_number }} changed from {{ old_status }} to {{ new_status }}.{{ status_note }} Track progress at {{ app_url }}. (You can tune which status changes email you in notification preferences.)',
+  },
+  {
+    code: 'customer.order_confirmed.email',
+    name: 'Order confirmed — email to customer',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.CUSTOMER,
+    subject: 'Your order {{ order_number }} is confirmed',
+    bodyTemplate:
+      'Hi {{ customer_name }}, your order {{ order_number }} has been confirmed and is being prepared for dispatch. We will notify you when it ships. Track it any time at {{ tracking_url }}.',
+  },
+  {
+    code: 'customer.order_delivered.email',
+    name: 'Order delivered — email to customer',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.CUSTOMER,
+    subject: 'Your order {{ order_number }} was delivered',
+    bodyTemplate:
+      'Hi {{ customer_name }}, your order {{ order_number }} was delivered on {{ delivered_at }}. Thank you for shopping with {{ seller_company_name }}. Questions? Reply or visit {{ tracking_url }}.',
   },
 ];
 
