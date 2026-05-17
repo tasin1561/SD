@@ -72,9 +72,10 @@ function makeService(
   ]);
   const orderCount = jest.fn<Promise<number>, [AnyArgs]>(async () => 1);
   const orderItemDeleteMany = jest.fn(async () => ({ count: 1 }));
+  const orderItemUpdate = jest.fn(async () => ({ id: 'oi1' }));
   const txClient = {
     order: { create: orderCreate, update: orderUpdate },
-    orderItem: { deleteMany: orderItemDeleteMany },
+    orderItem: { deleteMany: orderItemDeleteMany, update: orderItemUpdate },
   };
 
   const client = {} as {
@@ -103,7 +104,10 @@ function makeService(
   const addressCache = { recordAddress: jest.fn(async () => undefined) };
   const addressValidation = { assertValid: jest.fn(async () => 'Karnataka') };
   const variants = opts.variants ?? new Map([['v1', resolvedVariant()]]);
-  const catalog = { getVariantsByIds: jest.fn(async () => variants) };
+  const catalog = {
+    getVariantsByIds: jest.fn(async () => variants),
+    getVariantBySku: jest.fn(async () => resolvedVariant()),
+  };
   const audit = { log: jest.fn(async () => 'a1') };
   const stateMachine = new OrderStateMachineService();
 
@@ -126,6 +130,7 @@ function makeService(
     orderFindMany,
     orderCount,
     orderItemDeleteMany,
+    orderItemUpdate,
     numbering,
     customers,
     events,
@@ -433,5 +438,124 @@ describe('OrderService admin reads', () => {
   it('adminGetById 404s a missing/soft-deleted order', async () => {
     const { svc } = makeService({ existing: null });
     await expect(svc.adminGetById('gone')).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('OrderService.create — bulk options (commit 19/21 gap-fill)', () => {
+  it('honors initialStatus=PENDING_CONFIRMATION + bulkUploadId', async () => {
+    const { svc, orderCreate, events } = makeService();
+    await svc.create('s1', baseDto(), ACTOR, CTX, {
+      source: OrderSource.BULK_UPLOAD,
+      initialStatus: OrderStatus.PENDING_CONFIRMATION,
+      bulkUploadId: 'bulk-1',
+    });
+    const data = orderCreate.mock.calls[0]![0].data as AnyArgs;
+    expect(data.status).toBe(OrderStatus.PENDING_CONFIRMATION);
+    expect(data.bulkUploadId).toBe('bulk-1');
+    // events.created carries the real initial status (not hardcoded DRAFT)
+    expect(events.created.mock.calls[0]![4]).toBe(OrderStatus.PENDING_CONFIRMATION);
+  });
+
+  it('rejects an initialStatus other than DRAFT/PENDING_CONFIRMATION', async () => {
+    const { svc } = makeService();
+    await expect(
+      svc.create('s1', baseDto(), ACTOR, CTX, {
+        initialStatus: OrderStatus.CONFIRMED,
+      }),
+    ).rejects.toMatchObject({ response: { code: 'INVALID_INITIAL_STATUS' } });
+  });
+});
+
+function patchableOrder(over: AnyArgs = {}): AnyArgs {
+  return {
+    id: 'o1',
+    status: OrderStatus.PENDING_CONFIRMATION,
+    recipientName: 'Asha',
+    recipientPhoneE164: '+919876543210',
+    recipientEmail: null,
+    recipientAddressLine1: '12 MG Road',
+    recipientAddressLine2: null,
+    recipientLandmark: null,
+    recipientCity: 'Bengaluru',
+    recipientStateProvince: 'Karnataka',
+    recipientPostalCode: '560001',
+    recipientCountryCode: 'IN',
+    codAmountInr: new Prisma.Decimal(999),
+    customerId: 'c1',
+    items: [{ id: 'oi1', variantId: 'v1', quantity: 2 }],
+    ...over,
+  };
+}
+
+const PATCH = {
+  productSku: 'SKU-1',
+  quantity: 2,
+  customerName: 'Asha',
+  customerPhone: '+919876543210',
+  addressLine1: '12 MG Road',
+  city: 'Bengaluru',
+  state: 'Karnataka',
+  pinCode: '560001',
+  codAmount: 999, // matches patchableOrder's codAmountInr so the
+  // identical-re-upload case is genuinely a no-op
+};
+
+describe('OrderService.applyBulkPatch — ORD-9 (commit 21 gap-fill)', () => {
+  it('returns UNCHANGED for an identical re-upload (no write)', async () => {
+    const { svc, orderUpdate } = makeService({ existing: patchableOrder() });
+    const r = await svc.applyBulkPatch('s1', 'o1', { ...PATCH }, ACTOR);
+    expect(r).toBe('UNCHANGED');
+    expect(orderUpdate).not.toHaveBeenCalled();
+  });
+
+  it('PATCHes a changed recipient field + writes a note event', async () => {
+    const { svc, orderUpdate, events } = makeService({ existing: patchableOrder() });
+    const r = await svc.applyBulkPatch('s1', 'o1', { ...PATCH, city: 'Mysuru' }, ACTOR);
+    expect(r).toBe('PATCHED');
+    expect((orderUpdate.mock.calls[0]![0].data as AnyArgs).recipientCity).toBe('Mysuru');
+    expect(events.note).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-resolves the per-seller customer when the phone changes', async () => {
+    const { svc, customers } = makeService({ existing: patchableOrder() });
+    await svc.applyBulkPatch('s1', 'o1', { ...PATCH, customerPhone: '+919800000000' }, ACTOR);
+    expect(customers.findOrCreate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ phoneE164: '+919800000000' }),
+    );
+  });
+
+  it('re-snapshots the line when the SKU moves', async () => {
+    const { svc, orderItemUpdate, catalog } = makeService({ existing: patchableOrder() });
+    (catalog.getVariantBySku as jest.Mock).mockResolvedValueOnce(
+      resolvedVariant({ variantId: 'v2', skuCode: 'SKU-2' }),
+    );
+    const r = await svc.applyBulkPatch('s1', 'o1', { ...PATCH, productSku: 'SKU-2' }, ACTOR);
+    expect(r).toBe('PATCHED');
+    expect(orderItemUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses to patch a CONFIRMED+ order', async () => {
+    const { svc } = makeService({
+      existing: patchableOrder({ status: OrderStatus.CONFIRMED }),
+    });
+    await expect(
+      svc.applyBulkPatch('s1', 'o1', { ...PATCH }, ACTOR),
+    ).rejects.toMatchObject({ response: { code: 'BULK_PATCH_NOT_ALLOWED' } });
+  });
+
+  it('404s a missing order', async () => {
+    const { svc } = makeService({ existing: null });
+    await expect(
+      svc.applyBulkPatch('s1', 'gone', { ...PATCH }, ACTOR),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('rejects an unresolvable SKU', async () => {
+    const { svc, catalog } = makeService({ existing: patchableOrder() });
+    (catalog.getVariantBySku as jest.Mock).mockResolvedValueOnce(null);
+    await expect(
+      svc.applyBulkPatch('s1', 'o1', { ...PATCH }, ACTOR),
+    ).rejects.toMatchObject({ response: { code: 'VARIANT_NOT_FOUND' } });
   });
 });
