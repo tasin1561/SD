@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { CatalogReadModule } from '../catalog-read/catalog-read.module';
+import { InventoryStockModule } from '../inventory-stock/inventory-stock.module';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { SellerOrderController } from './controllers/seller-order.controller';
 import { SellerCustomerController } from './controllers/seller-customer.controller';
@@ -11,6 +12,7 @@ import { CustomerService } from './services/customer.service';
 import { RecipientAddressCacheService } from './services/recipient-address-cache.service';
 import { AddressValidationService } from './services/address-validation.service';
 import { OrderService } from './services/order.service';
+import { OrderWriteService } from './services/order-write.service';
 
 /**
  * Module 6 — Order Management.
@@ -23,7 +25,7 @@ import { OrderService } from './services/order.service';
  * cross-module variant read boundary (CLAUDE MUST #13).
  */
 @Module({
-  imports: [CatalogReadModule],
+  imports: [CatalogReadModule, InventoryStockModule],
   controllers: [
     SellerOrderController,
     SellerCustomerController,
@@ -37,6 +39,7 @@ import { OrderService } from './services/order.service';
     RecipientAddressCacheService,
     AddressValidationService,
     OrderService,
+    OrderWriteService,
     SellerJwtGuard,
   ],
   exports: [
@@ -47,6 +50,7 @@ import { OrderService } from './services/order.service';
     RecipientAddressCacheService,
     AddressValidationService,
     OrderService,
+    OrderWriteService,
   ],
 })
 export class OrderModule {}

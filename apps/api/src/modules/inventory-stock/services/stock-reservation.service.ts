@@ -230,6 +230,24 @@ export class StockReservationService {
     );
   }
 
+  /**
+   * ACTIVE reservations for an order. Sanctioned cross-module read added
+   * for Module 6 (expand-by-need boundary — same precedent as
+   * CatalogReadService; see phase-1a-debt). OrderWriteService needs the
+   * reservation ids to release()/fulfill() on a *later* transition
+   * (cancel / delivered) without querying stock_reservations directly
+   * (CLAUDE MUST #15). Read-only; ACTIVE only (release/fulfill are no-op
+   * on the rest anyway, but filtering keeps the caller's intent clear).
+   */
+  async listActiveForOrder(
+    orderId: string,
+  ): Promise<Array<Pick<ReservationView, 'id' | 'orderItemId' | 'qtyReserved'>>> {
+    return this.prisma.client.stockReservation.findMany({
+      where: { orderId, status: ReservationStatus.ACTIVE },
+      select: { id: true, orderItemId: true, qtyReserved: true },
+    });
+  }
+
   // ---------- internal ----------
 
   private async transition(

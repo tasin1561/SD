@@ -1,0 +1,387 @@
+import {
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  ActorType,
+  OrderCancellationReason,
+  OrderStatus,
+  Prisma,
+  ReservationReleaseReason,
+} from '@skydrop/db';
+import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import {
+  InsufficientStockError,
+  StockReservationService,
+} from '../../inventory-stock/services/stock-reservation.service';
+import type { ClientContext } from '../../seller-auth/seller-auth.service';
+import { OrderEventWriterService, type EventActor } from './order-event-writer.service';
+import {
+  OrderSideEffect,
+  OrderStateMachineService,
+} from './order-state-machine.service';
+
+const DEFAULT_WAREHOUSE_SETTING_KEY = 'ops.default_warehouse_id';
+
+const CANCEL_FAMILY: ReadonlySet<OrderStatus> = new Set([
+  OrderStatus.CANCELLED,
+  OrderStatus.CANCELLED_BY_ADMIN,
+  OrderStatus.REJECTED,
+]);
+
+export type ReservationOutcome =
+  | 'RESERVED'
+  | 'OUT_OF_STOCK'
+  | 'RELEASED'
+  | 'FULFILLED'
+  | null;
+
+export interface TransitionStatusInput {
+  orderId: string;
+  to: OrderStatus;
+  actor: EventActor;
+  /** Optimistic guard: if set and != the order's current status → 409. */
+  expectedFrom?: OrderStatus;
+  /** Human-readable note recorded on the STATUS_CHANGED event. */
+  reason?: string;
+  /** Required-ish for the cancel family; defaults to OTHER. */
+  cancellationReason?: OrderCancellationReason;
+  ctx?: ClientContext;
+}
+
+export interface TransitionStatusResult {
+  orderId: string;
+  fromStatus: OrderStatus;
+  /** The status actually persisted — may be OUT_OF_STOCK if a reserve
+   *  failed on a → CONFIRMED attempt. */
+  status: OrderStatus;
+  reservationOutcome: ReservationOutcome;
+}
+
+/**
+ * ORD-1/ORD-3 — the order lifecycle WRITE engine and the sanctioned
+ * cross-module write boundary. Modules 7 (call centre) and 8 (warehouse
+ * ops) drive every post-DRAFT status change through `transitionStatus()`;
+ * they never write `orders.status` directly.
+ *
+ * ── Transaction boundary (locked decision, user-approved) ──────────────
+ * CLAUDE status-change rule #1 wants update + side-effects in ONE
+ * `$transaction`. The stock side-effect CANNOT comply: Module 5's
+ * `StockReservationService` owns its own version-CAS retry tx (INV-1/
+ * INV-6) and exposes no tx-accepting API. So this is a SAGA, not one
+ * ACID unit — a deliberate, recorded deviation (see phase-1a-debt):
+ *
+ *   • RESERVE_STOCK (→ CONFIRMED): reserve() per line BEFORE the status
+ *     tx. InsufficientStockError → land OUT_OF_STOCK (its own tx) when
+ *     the matrix allows that landing, else surface 409 with no status
+ *     change. If the status tx then fails, COMPENSATE by releasing the
+ *     reservations just created (release() is idempotent).
+ *   • The order DB write + its events + audit are still atomic together.
+ *   • RELEASE_STOCK / FULFILL_STOCK: run AFTER tx.commit(), idempotent,
+ *     exactly mirroring INV-5 (cache/alert AFTER commit). A post-commit
+ *     failure is safe — the order is correctly terminal and M5's TTL +
+ *     hourly auto-release worker reclaim any lingering hold.
+ *
+ * Email enqueue is intentionally NOT wired here — notification dispatch
+ * is Module 11; this engine only owns status + stock + events + audit.
+ */
+@Injectable()
+export class OrderWriteService {
+  private readonly logger = new Logger(OrderWriteService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly stateMachine: OrderStateMachineService,
+    private readonly events: OrderEventWriterService,
+    private readonly audit: AuditLogService,
+    private readonly reservations: StockReservationService,
+  ) {}
+
+  async transitionStatus(
+    input: TransitionStatusInput,
+  ): Promise<TransitionStatusResult> {
+    const order = await this.prisma.client.order.findFirst({
+      where: { id: input.orderId, deletedAt: null },
+      select: {
+        id: true,
+        sellerId: true,
+        orderNumber: true,
+        status: true,
+        items: { select: { id: true, variantId: true, quantity: true } },
+      },
+    });
+    if (!order) {
+      throw new NotFoundException(`Order ${input.orderId} not found`);
+    }
+
+    const from = order.status;
+    const { to } = input;
+
+    if (input.expectedFrom !== undefined && input.expectedFrom !== from) {
+      throw new ConflictException({
+        code: 'STALE_ORDER_STATUS',
+        message: `Expected order to be ${input.expectedFrom} but it is ${from}`,
+      });
+    }
+    if (from === to) {
+      throw new ConflictException({
+        code: 'NOOP_TRANSITION',
+        message: `Order is already ${to}`,
+      });
+    }
+    if (!this.stateMachine.isValidTransition(from, to)) {
+      throw new ConflictException({
+        code: 'INVALID_TRANSITION',
+        message: `${from} → ${to} is not a valid order transition`,
+      });
+    }
+
+    const sideEffects = this.stateMachine.requiredSideEffects(from, to);
+
+    if (sideEffects.includes(OrderSideEffect.RESERVE_STOCK)) {
+      return this.transitionWithReserve(order, from, to, input);
+    }
+    if (sideEffects.includes(OrderSideEffect.RELEASE_STOCK)) {
+      return this.transitionThenStock(order, from, to, input, 'RELEASE');
+    }
+    if (sideEffects.includes(OrderSideEffect.FULFILL_STOCK)) {
+      return this.transitionThenStock(order, from, to, input, 'FULFILL');
+    }
+    return this.transitionPlain(order, from, to, input);
+  }
+
+  // ── RESERVE_STOCK: reserve PRE-tx, compensate on tx failure ──────────
+
+  private async transitionWithReserve(
+    order: { id: string; sellerId: string; orderNumber: string; items: Array<{ id: string; variantId: string; quantity: number }> },
+    from: OrderStatus,
+    to: OrderStatus,
+    input: TransitionStatusInput,
+  ): Promise<TransitionStatusResult> {
+    const warehouseId = await this.resolveDefaultWarehouseId();
+    const createdReservationIds: string[] = [];
+
+    try {
+      for (const item of order.items) {
+        const r = await this.reservations.reserve({
+          sellerId: order.sellerId,
+          variantId: item.variantId,
+          warehouseId,
+          qtyToReserve: item.quantity,
+          orderId: order.id,
+          orderItemId: item.id,
+        });
+        createdReservationIds.push(r.id);
+      }
+    } catch (e) {
+      if (e instanceof InsufficientStockError) {
+        // Roll back the partial reservations from THIS attempt.
+        await this.bestEffortRelease(createdReservationIds, ReservationReleaseReason.OTHER, input.actor);
+        // Land OUT_OF_STOCK only if the matrix allows it from `from`;
+        // otherwise leave the status untouched and surface the 409 (the
+        // caller — Module 7 — owns retry/escalation).
+        if (this.stateMachine.isValidTransition(from, OrderStatus.OUT_OF_STOCK)) {
+          await this.writeStatusTx(order, from, OrderStatus.OUT_OF_STOCK, input, {
+            eventDescription: 'Reservation failed at confirm — out of stock',
+            auditAction: 'order.out_of_stock',
+          });
+          return {
+            orderId: order.id,
+            fromStatus: from,
+            status: OrderStatus.OUT_OF_STOCK,
+            reservationOutcome: 'OUT_OF_STOCK',
+          };
+        }
+      }
+      throw e;
+    }
+
+    try {
+      await this.writeStatusTx(order, from, to, input, {
+        eventDescription: input.reason ?? `Status ${from} → ${to}`,
+        auditAction: 'order.status_changed',
+        stockEvent: { kind: 'RESERVED', reservationIds: createdReservationIds },
+      });
+    } catch (e) {
+      // Status tx failed AFTER reservations committed → compensate.
+      this.logger.error(
+        { orderId: order.id, reservationIds: createdReservationIds, err: (e as Error).message },
+        'Status tx failed after reserve; compensating with release',
+      );
+      await this.bestEffortRelease(createdReservationIds, ReservationReleaseReason.OTHER, input.actor);
+      throw e;
+    }
+
+    return {
+      orderId: order.id,
+      fromStatus: from,
+      status: to,
+      reservationOutcome: 'RESERVED',
+    };
+  }
+
+  // ── RELEASE / FULFILL: status tx FIRST, stock AFTER commit ───────────
+
+  private async transitionThenStock(
+    order: { id: string; sellerId: string; orderNumber: string; items: unknown[] },
+    from: OrderStatus,
+    to: OrderStatus,
+    input: TransitionStatusInput,
+    mode: 'RELEASE' | 'FULFILL',
+  ): Promise<TransitionStatusResult> {
+    await this.writeStatusTx(order, from, to, input, {
+      eventDescription: input.reason ?? `Status ${from} → ${to}`,
+      auditAction: 'order.status_changed',
+    });
+
+    // POST-COMMIT, idempotent (INV-5 analogue). Failures are logged, not
+    // thrown — the order is already correctly terminal and M5's TTL +
+    // auto-release worker reclaim any lingering hold.
+    const active = await this.reservations.listActiveForOrder(order.id);
+    let outcome: ReservationOutcome = mode === 'RELEASE' ? 'RELEASED' : 'FULFILLED';
+    const releaseReason =
+      to === OrderStatus.REJECTED
+        ? ReservationReleaseReason.ORDER_REJECTED_BY_COURIER
+        : ReservationReleaseReason.ORDER_CANCELLED;
+
+    for (const r of active) {
+      try {
+        if (mode === 'RELEASE') {
+          await this.reservations.release(r.id, releaseReason, input.actor);
+        } else {
+          await this.reservations.fulfill(r.id, input.actor);
+        }
+      } catch (err) {
+        outcome = null;
+        this.logger.error(
+          { orderId: order.id, reservationId: r.id, mode, err: (err as Error).message },
+          'Post-commit reservation settle failed; TTL/worker will reconcile',
+        );
+      }
+    }
+    if (active.length === 0) outcome = null;
+
+    return { orderId: order.id, fromStatus: from, status: to, reservationOutcome: outcome };
+  }
+
+  private async transitionPlain(
+    order: { id: string; sellerId: string; orderNumber: string; items: unknown[] },
+    from: OrderStatus,
+    to: OrderStatus,
+    input: TransitionStatusInput,
+  ): Promise<TransitionStatusResult> {
+    await this.writeStatusTx(order, from, to, input, {
+      eventDescription: input.reason ?? `Status ${from} → ${to}`,
+      auditAction: 'order.status_changed',
+    });
+    return { orderId: order.id, fromStatus: from, status: to, reservationOutcome: null };
+  }
+
+  // ── the atomic order DB unit (status + events + audit) ───────────────
+
+  private async writeStatusTx(
+    order: { id: string; sellerId: string; orderNumber: string },
+    from: OrderStatus,
+    to: OrderStatus,
+    input: TransitionStatusInput,
+    opts: {
+      eventDescription: string;
+      auditAction: string;
+      stockEvent?: { kind: 'RESERVED'; reservationIds: string[] };
+    },
+  ): Promise<void> {
+    const now = new Date();
+    const isStaff = input.actor.type === ActorType.STAFF;
+    await this.prisma.client.$transaction(async (tx) => {
+      const staffConnect =
+        isStaff && input.actor.id ? { connect: { id: input.actor.id } } : null;
+      const data: Prisma.OrderUpdateInput = { status: to };
+      if (to === OrderStatus.CONFIRMED) {
+        data.confirmedAt = now;
+        if (staffConnect) data.confirmedBy = staffConnect;
+      }
+      if (CANCEL_FAMILY.has(to)) {
+        data.cancellationReason =
+          input.cancellationReason ?? OrderCancellationReason.OTHER;
+        data.cancelledAt = now;
+        if (staffConnect) data.cancelledBy = staffConnect;
+      }
+      await tx.order.update({ where: { id: order.id }, data });
+
+      await this.events.statusChanged(tx, {
+        orderId: order.id,
+        from,
+        to,
+        actor: input.actor,
+        description: opts.eventDescription,
+      });
+      if (opts.stockEvent?.kind === 'RESERVED') {
+        await this.events.stockReserved(tx, order.id, input.actor, {
+          reservationIds: opts.stockEvent.reservationIds,
+        });
+      }
+
+      await this.audit.log(
+        {
+          actorType: input.actor.type,
+          actorId: input.actor.id ?? null,
+          sellerId: order.sellerId,
+          action: opts.auditAction,
+          entityType: 'order',
+          entityId: order.id,
+          metadata: {
+            orderNumber: order.orderNumber,
+            fromStatus: from,
+            toStatus: to,
+            reason: input.reason ?? null,
+            ipAddress: input.ctx?.ipAddress ?? null,
+            userAgent: input.ctx?.userAgent ?? null,
+            requestId: input.ctx?.requestId ?? null,
+          },
+        },
+        tx,
+      );
+    });
+  }
+
+  // ── helpers ──────────────────────────────────────────────────────────
+
+  private async bestEffortRelease(
+    reservationIds: string[],
+    reason: ReservationReleaseReason,
+    actor: EventActor,
+  ): Promise<void> {
+    for (const id of reservationIds) {
+      try {
+        await this.reservations.release(id, reason, actor);
+      } catch (err) {
+        this.logger.error(
+          { reservationId: id, err: (err as Error).message },
+          'Compensating release failed; TTL/worker will reconcile',
+        );
+      }
+    }
+  }
+
+  private async resolveDefaultWarehouseId(): Promise<string> {
+    // Config read (system_settings is shared infra, not an inventory
+    // domain table) — mirrors AddressValidationService reading
+    // ops.allowed_indian_states. Phase 1A is single-warehouse.
+    const row = await this.prisma.client.systemSetting.findUnique({
+      where: { key: DEFAULT_WAREHOUSE_SETTING_KEY },
+      select: { valueString: true },
+    });
+    const id = row?.valueString?.trim();
+    if (!id) {
+      throw new InternalServerErrorException({
+        code: 'DEFAULT_WAREHOUSE_NOT_CONFIGURED',
+        message: `${DEFAULT_WAREHOUSE_SETTING_KEY} is not set`,
+      });
+    }
+    return id;
+  }
+}

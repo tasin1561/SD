@@ -238,6 +238,44 @@ pick it up.
 
 ---
 
+## Orders (Module 6)
+
+- **Status-change rule #1 deviation — stock side-effect is a SAGA, not
+  one ACID tx.** CLAUDE status-change rule #1 wants the status update and
+  its side-effects in a single `prisma.$transaction`. `OrderWriteService
+  .transitionStatus()` cannot comply for the *stock* side-effect:
+  Module 5's `StockReservationService.reserve/release/fulfill` own their
+  own version-CAS retry transaction (INV-1/INV-6) and expose no
+  tx-accepting API — a version-CAS retry loop cannot run inside an outer
+  tx. So the stock op sits OUTSIDE the order tx (user-approved design):
+  RESERVE_STOCK runs BEFORE the status tx (failure → OUT_OF_STOCK when
+  the matrix allows, else 409 with no status change; status-tx failure
+  after a successful reserve triggers a compensating `release()`);
+  RELEASE/FULFILL run AFTER `tx.commit()`, idempotent, exactly mirroring
+  INV-5 (cache/alert AFTER commit). The order DB write + its events +
+  audit remain atomic together. Reconciliation backstop for the
+  unavoidable saga window: M5 reservation `expiresAt` TTL + the hourly
+  auto-release worker, plus `release/fulfill` no-op idempotency.
+  **Pick up:** revisit only if M5 ever exposes a tx-enrollable
+  reservation API, or if the saga window bites operationally (Module 8
+  owns the persistent-shortfall escalation UX per the M5 debt entry).
+
+- **Email enqueue not wired in `transitionStatus()`.** Status-change
+  rule #2 (email enqueue inside the tx) is not yet honored — order
+  status-change notifications are deferred to Module 11 (notification
+  dispatch). The `seller.order_status_changed.email` template is seeded
+  but nothing enqueues it on transition yet.
+  **Pick up:** Module 11.
+
+- **`StockReservationService.listActiveForOrder` — sanctioned boundary
+  expansion.** Added in commit 12 so `OrderWriteService` can target a
+  prior transition's reservations for release/fulfill without querying
+  `stock_reservations` directly (CLAUDE MUST #15). Same expand-by-need
+  precedent as `CatalogReadService` (`productName`/`imageUrl` added for
+  the order-item snapshot in commit 9). Read-only, ACTIVE-filtered.
+  **Pick up:** ongoing convention; revisit if the M5 cross-module
+  surface grows unwieldy.
+
 ## Pricing & Multi-Currency (Modules 15–17)
 
 - **Historical FX rate tracking**. Phase 1A keeps a single current rate
