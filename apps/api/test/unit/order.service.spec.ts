@@ -1,6 +1,11 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { ActorType, OrderSource, OrderStatus, PaymentMode, Prisma } from '@skydrop/db';
 import { OrderService } from '../../src/modules/order/services/order.service';
+import { OrderStateMachineService } from '../../src/modules/order/services/order-state-machine.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { CreateOrderDto } from '../../src/modules/order/dto/create-order.dto';
 
@@ -48,30 +53,51 @@ function baseDto(over: Partial<CreateOrderDto> = {}): CreateOrderDto {
   } as CreateOrderDto;
 }
 
-function makeService(opts: { variants?: Map<string, AnyArgs> } = {}) {
+function makeService(
+  opts: { variants?: Map<string, AnyArgs>; existing?: AnyArgs | null } = {},
+) {
   const orderCreate = jest.fn(async (args: { data: AnyArgs }) => ({
     id: 'o1',
     ...args.data,
     items: [],
   }));
-  const txClient = { order: { create: orderCreate } };
+  const orderUpdate = jest.fn(async (args: { data: AnyArgs }) => ({
+    id: 'o1',
+    ...args.data,
+    items: [],
+  }));
+  const orderFindFirst = jest.fn(async () => opts.existing ?? null);
+  const orderItemDeleteMany = jest.fn(async () => ({ count: 1 }));
+  const txClient = {
+    order: { create: orderCreate, update: orderUpdate },
+    orderItem: { deleteMany: orderItemDeleteMany },
+  };
 
-  const client = {} as { $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T> };
+  const client = {} as {
+    $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
+    order: { findFirst: typeof orderFindFirst };
+  };
   // Attach $transaction AFTER the literal (CLAUDE testing note: avoids
   // TS7024 implicit-any from self-reference).
   client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient);
+  client.order = { findFirst: orderFindFirst };
 
   const numbering = { nextOrderNumber: jest.fn(async () => 'SD-2026-26-000001') };
   const customers = {
     findOrCreate: jest.fn(async () => ({ id: 'c1', sellerId: 's1' })),
     recordNewOrder: jest.fn(async () => undefined),
   };
-  const events = { created: jest.fn(async () => ({ id: 'e1' })) };
+  const events = {
+    created: jest.fn(async () => ({ id: 'e1' })),
+    statusChanged: jest.fn(async () => ({ id: 'e2' })),
+    note: jest.fn(async () => ({ id: 'e3' })),
+  };
   const addressCache = { recordAddress: jest.fn(async () => undefined) };
   const addressValidation = { assertValid: jest.fn(async () => 'Karnataka') };
   const variants = opts.variants ?? new Map([['v1', resolvedVariant()]]);
   const catalog = { getVariantsByIds: jest.fn(async () => variants) };
   const audit = { log: jest.fn(async () => 'a1') };
+  const stateMachine = new OrderStateMachineService();
 
   const svc = new OrderService(
     { client } as unknown as PrismaService,
@@ -82,8 +108,22 @@ function makeService(opts: { variants?: Map<string, AnyArgs> } = {}) {
     addressValidation as never,
     catalog as never,
     audit as never,
+    stateMachine,
   );
-  return { svc, orderCreate, numbering, customers, events, addressCache, addressValidation, catalog, audit };
+  return {
+    svc,
+    orderCreate,
+    orderUpdate,
+    orderFindFirst,
+    orderItemDeleteMany,
+    numbering,
+    customers,
+    events,
+    addressCache,
+    addressValidation,
+    catalog,
+    audit,
+  };
 }
 
 describe('OrderService.create', () => {
@@ -206,5 +246,151 @@ describe('OrderService.create', () => {
       BadRequestException,
     );
     expect(numbering.nextOrderNumber).not.toHaveBeenCalled();
+  });
+});
+
+function existingOrder(over: AnyArgs = {}): AnyArgs {
+  return {
+    id: 'o1',
+    sellerId: 's1',
+    orderNumber: 'SD-2026-26-000001',
+    status: OrderStatus.DRAFT,
+    customerId: 'c1',
+    recipientName: 'Asha',
+    recipientPhoneE164: '+919876543210',
+    recipientAltPhoneE164: null,
+    recipientEmail: null,
+    recipientPostalCode: '560001',
+    recipientStateProvince: 'Karnataka',
+    recipientCountryCode: 'IN',
+    paymentMode: PaymentMode.COD,
+    codAmountInr: new Prisma.Decimal(999),
+    items: [],
+    ...over,
+  };
+}
+
+describe('OrderService.submit', () => {
+  it('moves DRAFT → PENDING_CONFIRMATION with a status event', async () => {
+    const { svc, orderUpdate, events } = makeService({ existing: existingOrder() });
+    await svc.submit('s1', 'o1', ACTOR, CTX);
+    expect(orderUpdate.mock.calls[0]![0].data).toMatchObject({
+      status: OrderStatus.PENDING_CONFIRMATION,
+    });
+    expect(events.statusChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects submit from a non-DRAFT status', async () => {
+    const { svc } = makeService({
+      existing: existingOrder({ status: OrderStatus.CONFIRMED }),
+    });
+    await expect(svc.submit('s1', 'o1', ACTOR, CTX)).rejects.toMatchObject({
+      response: { code: 'NOT_SUBMITTABLE' },
+    });
+  });
+
+  it('404s when the order is not owned / missing', async () => {
+    const { svc } = makeService({ existing: null });
+    await expect(svc.submit('s1', 'o1', ACTOR, CTX)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+});
+
+describe('OrderService.cancel', () => {
+  it('cancels a PENDING_CONFIRMATION order with reason + no stock release', async () => {
+    const { svc, orderUpdate, events } = makeService({
+      existing: existingOrder({ status: OrderStatus.PENDING_CONFIRMATION }),
+    });
+    await svc.cancel('s1', 'o1', {}, ACTOR, CTX);
+    const data = orderUpdate.mock.calls[0]![0].data as AnyArgs;
+    expect(data.status).toBe(OrderStatus.CANCELLED);
+    expect(data.cancellationReason).toBe('SELLER_REQUESTED');
+    expect(data.cancelledAt).toBeInstanceOf(Date);
+    expect(events.statusChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses to cancel a CONFIRMED order here (needs stock release)', async () => {
+    const { svc } = makeService({
+      existing: existingOrder({ status: OrderStatus.CONFIRMED }),
+    });
+    await expect(svc.cancel('s1', 'o1', {}, ACTOR, CTX)).rejects.toMatchObject({
+      response: { code: 'CANCEL_NEEDS_STOCK_RELEASE' },
+    });
+  });
+
+  it('refuses to cancel a terminal order', async () => {
+    const { svc } = makeService({
+      existing: existingOrder({ status: OrderStatus.DELIVERED }),
+    });
+    await expect(svc.cancel('s1', 'o1', {}, ACTOR, CTX)).rejects.toMatchObject({
+      response: { code: 'NOT_CANCELLABLE' },
+    });
+  });
+});
+
+describe('OrderService.edit', () => {
+  it('edits a DRAFT note and writes a note event', async () => {
+    const { svc, orderUpdate, events } = makeService({ existing: existingOrder() });
+    await svc.edit('s1', 'o1', { sellerNotes: 'rush' }, ACTOR, CTX);
+    expect(orderUpdate.mock.calls[0]![0].data).toMatchObject({ sellerNotes: 'rush' });
+    expect(events.note).toHaveBeenCalledTimes(1);
+  });
+
+  it('revalidates the address and persists canonical state on recipient edit', async () => {
+    const { svc, orderUpdate, addressValidation } = makeService({
+      existing: existingOrder({ status: OrderStatus.PENDING_CONFIRMATION }),
+    });
+    await svc.edit('s1', 'o1', { recipientCity: 'Mysuru' }, ACTOR, CTX);
+    expect(addressValidation.assertValid).toHaveBeenCalledTimes(1);
+    expect(orderUpdate.mock.calls[0]![0].data).toMatchObject({
+      recipientCity: 'Mysuru',
+      recipientStateProvince: 'Karnataka',
+    });
+  });
+
+  it('rejects items/economics edits in PENDING_CONFIRMATION', async () => {
+    const { svc } = makeService({
+      existing: existingOrder({ status: OrderStatus.PENDING_CONFIRMATION }),
+    });
+    await expect(
+      svc.edit('s1', 'o1', { isUrgent: true }, ACTOR, CTX),
+    ).rejects.toMatchObject({ response: { code: 'EDIT_SCOPE_PENDING' } });
+  });
+
+  it('re-links the customer when the recipient phone is corrected', async () => {
+    const { svc, customers } = makeService({ existing: existingOrder() });
+    await svc.edit('s1', 'o1', { recipientPhoneE164: '+919811111111' }, ACTOR, CTX);
+    expect(customers.findOrCreate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ sellerId: 's1', phoneE164: '+919811111111' }),
+    );
+  });
+
+  it('replaces the line set in DRAFT and recomputes derived totals', async () => {
+    const { svc, orderUpdate, orderItemDeleteMany } = makeService({
+      existing: existingOrder(),
+    });
+    await svc.edit('s1', 'o1', { items: [{ variantId: 'v1', quantity: 3 }] }, ACTOR, CTX);
+    expect(orderItemDeleteMany).toHaveBeenCalledTimes(1);
+    const data = orderUpdate.mock.calls[0]![0].data as AnyArgs;
+    expect((data.declaredValueInr as Prisma.Decimal).toString()).toBe('600'); // 200 × 3
+    expect(data.totalWeightGrams).toBe(1500); // 500 × 3
+  });
+
+  it('refuses to edit a CONFIRMED order (god-mode is separate)', async () => {
+    const { svc } = makeService({
+      existing: existingOrder({ status: OrderStatus.CONFIRMED }),
+    });
+    await expect(
+      svc.edit('s1', 'o1', { sellerNotes: 'x' }, ACTOR, CTX),
+    ).rejects.toMatchObject({ response: { code: 'NOT_EDITABLE' } });
+  });
+
+  it('rejects an empty edit', async () => {
+    const { svc } = makeService({ existing: existingOrder() });
+    await expect(svc.edit('s1', 'o1', {}, ACTOR, CTX)).rejects.toMatchObject({
+      response: { code: 'NOTHING_TO_UPDATE' },
+    });
   });
 });
