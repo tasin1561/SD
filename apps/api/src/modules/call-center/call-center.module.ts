@@ -7,12 +7,14 @@ import { CallAssignmentService } from './services/call-assignment.service';
 import { CallAttemptService } from './services/call-attempt.service';
 import { AgentSettingsService } from './services/agent-settings.service';
 import { AdminCallQueueService } from './services/admin-call-queue.service';
+import { AdminAgentService } from './services/admin-agent.service';
 import { AssignmentExpirationService } from './services/assignment-expiration.service';
 import { AssignmentExpirationQueue } from './queue/assignment-expiration.queue';
 import { AssignmentExpirationWorker } from './queue/assignment-expiration.worker';
 import { AgentSettingsController } from './controllers/agent-settings.controller';
 import { AgentCallController } from './controllers/agent-call.controller';
 import { AdminCallQueueController } from './controllers/admin-call-queue.controller';
+import { AdminAgentController } from './controllers/admin-agent.controller';
 
 /**
  * Module 7 — Call Center Workflow.
@@ -38,6 +40,7 @@ import { AdminCallQueueController } from './controllers/admin-call-queue.control
     AgentSettingsController,
     AgentCallController,
     AdminCallQueueController,
+    AdminAgentController,
   ],
   providers: [
     CallOutcomeMappingService,
@@ -45,6 +48,7 @@ import { AdminCallQueueController } from './controllers/admin-call-queue.control
     CallAttemptService,
     AgentSettingsService,
     AdminCallQueueService,
+    AdminAgentService,
     AssignmentExpirationService,
     AssignmentExpirationQueue,
     AssignmentExpirationWorker,
