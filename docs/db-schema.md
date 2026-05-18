@@ -786,7 +786,15 @@ Address-level risk aggregation (optional in Phase 1A).
 Live worklist.
 
 **Key fields:**
-- `orderId` (unique — one entry per order, ever)
+- `orderId` — **NOT a hard unique** (Module 7). Locked decision #2
+  requires a NEW queue entry per re-attempt while the prior is
+  COMPLETED. Invariant: **at most one OPEN (PENDING/ASSIGNED) queue
+  entry per order**, enforced by the partial unique index
+  `call_queue_entries_open_order_uq` (`ON (order_id) WHERE status IN
+  ('pending','assigned')`). COMPLETED/EXPIRED entries accumulate as the
+  per-attempt historical record. Migration-managed (Prisma cannot
+  declare a filtered unique — see phase-1a-debt). `Order` ↔
+  `CallQueueEntry` is therefore **1:many** (`Order.callQueueEntries`).
 - `assignedAgentId?`, `assignedAt?`, `assignmentMethod: AssignmentMethod`
 - `previousAgentIds: String[]` (don't bounce back)
 - `priority` (int, default 100, higher = called first)

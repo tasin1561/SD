@@ -316,6 +316,22 @@ pick it up.
   readers don't "fix" it.
   **Pick up:** never (documented design).
 
+## Call Center (Module 7)
+
+- **Partial unique index is migration-managed, not in schema.prisma.**
+  `call_queue_entries_open_order_uq` (`ON (order_id) WHERE status IN
+  ('pending','assigned')`) enforces "at most one OPEN queue entry per
+  order" while allowing the locked-decision-#2 re-queue history. Prisma
+  cannot declare a filtered/partial unique index, so the migration
+  `20260518061351_call_queue_open_order_partial_unique` is the source of
+  truth (the hard `@unique` on `orderId` was dropped; `@@index([orderId])`
+  remains). Schema-introspection drift is suppressed by the
+  hand-authored `migrate diff` + `migrate deploy` workflow established in
+  commit 1 (we do NOT run interactive `migrate dev`).
+  **Pick up:** when upgrading Prisma, verify this index survives schema
+  regeneration / `db pull`; re-assert it in a migration if a Prisma
+  version ever drops unknown indexes on `migrate diff`.
+
 ## Pricing & Multi-Currency (Modules 15–17)
 
 - **Historical FX rate tracking**. Phase 1A keeps a single current rate

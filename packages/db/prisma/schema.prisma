@@ -1240,7 +1240,10 @@ model Order {
   events           OrderEvent[]
   reservations     StockReservation[]
   stockMovements   StockMovement[]
-  callQueueEntry   CallQueueEntry?
+  // Module 7: 1:many — an order has many queue entries over its
+  // lifecycle (new entry per re-attempt, locked decision #2); at most
+  // one is OPEN at a time (partial unique call_queue_entries_open_order_uq).
+  callQueueEntries CallQueueEntry[]
   callAttempts     CallAttempt[]
   orderShipments   OrderShipment[]
   charges          OrderCharge[]
@@ -1386,7 +1389,13 @@ model OrderRecipientAddressCache {
 
 model CallQueueEntry {
   id                String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  orderId           String              @unique @map("order_id") @db.Uuid
+  // Module 7: NOT a hard unique — locked decision #2 requires a NEW
+  // queue entry per re-attempt while the prior is COMPLETED. The
+  // "at most one OPEN entry per order" invariant is a PARTIAL unique
+  // index (call_queue_entries_open_order_uq, WHERE status IN
+  // ('pending','assigned')) — migration-managed, Prisma can't declare a
+  // filtered unique. See migration 20260518_… + phase-1a-debt.
+  orderId           String              @map("order_id") @db.Uuid
   assignedAgentId   String?             @map("assigned_agent_id") @db.Uuid
   assignedAt        DateTime?           @map("assigned_at") @db.Timestamptz
   assignmentMethod  AssignmentMethod    @default(AUTO_ROUND_ROBIN) @map("assignment_method")
