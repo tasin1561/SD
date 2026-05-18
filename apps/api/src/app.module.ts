@@ -35,6 +35,7 @@ import { InventoryAdjustmentModule } from './modules/inventory-adjustment/invent
 import { InventoryCycleCountModule } from './modules/inventory-cycle-count/inventory-cycle-count.module';
 import { OrderModule } from './modules/order/order.module';
 import { OrderCsvImportModule } from './modules/order-csv-import/order-csv-import.module';
+import { CallCenterModule } from './modules/call-center/call-center.module';
 import { ThrottlerModule } from './common/throttler/throttler.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { pinoConfig } from './common/pino/logger-config';
@@ -95,6 +96,7 @@ import { envSchema } from './config/env.schema';
     InventoryCycleCountModule,
     OrderModule,
     OrderCsvImportModule,
+    CallCenterModule,
     HealthModule,
   ],
 })
