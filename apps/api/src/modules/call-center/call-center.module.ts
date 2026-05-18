@@ -1,12 +1,15 @@
 import { Module } from '@nestjs/common';
 import { OrderModule } from '../order/order.module';
 import { CallQueueModule } from '../call-queue/call-queue.module';
+import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { CallOutcomeMappingService } from './services/call-outcome-mapping.service';
 import { CallAssignmentService } from './services/call-assignment.service';
 import { CallAttemptService } from './services/call-attempt.service';
+import { AgentSettingsService } from './services/agent-settings.service';
 import { AssignmentExpirationService } from './services/assignment-expiration.service';
 import { AssignmentExpirationQueue } from './queue/assignment-expiration.queue';
 import { AssignmentExpirationWorker } from './queue/assignment-expiration.worker';
+import { AgentSettingsController } from './controllers/agent-settings.controller';
 
 /**
  * Module 7 — Call Center Workflow.
@@ -28,13 +31,16 @@ import { AssignmentExpirationWorker } from './queue/assignment-expiration.worker
  */
 @Module({
   imports: [OrderModule, CallQueueModule],
+  controllers: [AgentSettingsController],
   providers: [
     CallOutcomeMappingService,
     CallAssignmentService,
     CallAttemptService,
+    AgentSettingsService,
     AssignmentExpirationService,
     AssignmentExpirationQueue,
     AssignmentExpirationWorker,
+    StaffJwtGuard,
   ],
   exports: [CallOutcomeMappingService],
 })
