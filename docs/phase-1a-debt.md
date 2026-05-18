@@ -332,6 +332,69 @@ pick it up.
   regeneration / `db pull`; re-assert it in a migration if a Prisma
   version ever drops unknown indexes on `migrate diff`.
 
+- **`QueueClosureReason` is imprecise for re-queued / transient closes.**
+  The enum (`ORDER_CONFIRMED`, `ORDER_CANCELLED`, `ORDER_REJECTED`,
+  `MAX_ATTEMPTS_EXCEEDED`, `ORDER_DELETED`, `ADMIN_CLOSED`) has no value
+  for "this entry was SUPERSEDED by a re-queue / the order left for a
+  transient non-terminal state (OUT_OF_STOCK) and will re-enqueue".
+  `CallAttemptService` leaves the (nullable) `closureReason` NULL for
+  requeue/non-terminal closes; `OrderWriteService.dequeueForExit` uses
+  `ADMIN_CLOSED` as the neutral fallback (its `dequeueOrder` arg is
+  non-null). This is secondary metadata only — the authoritative history
+  is the append-only `call_attempts` + `order_events` (CC-3).
+  **Pick up:** add a `SUPERSEDED` (or `REQUEUED`) `QueueClosureReason`
+  value in a later module and replace both fallbacks; backfill is
+  unnecessary (closed rows are immutable history).
+
+- **Legacy `ops.call_max_attempts` system setting is deprecated.**
+  Module 7 introduced `ops.call_max_attempts_before_ndr` (default 3) as
+  the NDR cap; the pre-existing `ops.call_max_attempts` is now dead
+  config and is read by nothing. Left in the seed untouched to avoid a
+  mid-module data change. **Pick up:** remove the key in a settings-
+  cleanup migration (or when Module 14's System Settings UI lands).
+
+- **Queue distribution is strict FIFO (locked decision #1).**
+  `ORDER BY available_at ASC, created_at ASC`. Round-robin /
+  priority-weighting / language-match / skill-based routing are
+  deferred — Phase-1A scale does not need them, and the `priority`,
+  `previousAgentIds`, `assignmentMethod` columns are intentionally
+  unwired (forward-compatible). **Pick up:** when call volume justifies
+  it, layer a distributor over `pullNext` (the FIFO SELECT is the seam).
+
+- **Agent available-hours are advisory only (locked decision 10b).**
+  `agent_call_settings` working hours / days / timezone are stored and
+  surfaced but NOT enforced anywhere (`pullNext` ignores them). **Pick
+  up:** enforce in the distributor when routing graduates beyond FIFO.
+
+- **Per-seller + time-series call metrics deferred to Module 13.**
+  `AdminAgentService`/`AdminCallQueueService` expose only per-agent +
+  per-queue SUMMARY counts (locked decision 12). Deep breakdowns,
+  per-seller rollups, and time-series belong to the Reports module.
+
+- **Status-change emails on PENDING_CONFIRMATION exit deferred to
+  Module 11.** A call outcome that transitions the order (CONFIRMED /
+  REJECTED_* / NDR) sends no customer/seller notification yet —
+  notification dispatch is Module 11 (consistent with ORD-3's existing
+  email-deferral debt). The `transitionStatus` engine deliberately owns
+  status + stock + events + audit only.
+
+- **Click-to-call / Twilio integration deferred to Phase 2.** Agents
+  log attempts MANUALLY (`startedAt`/`endedAt`/`outcome` posted to
+  `record-attempt`); there is no dialer integration, no auto-populated
+  call duration, no telephony webhooks.
+
+- **Voicemail / call-recording storage deferred to Phase 2.**
+  `VOICEMAIL_LEFT` is an outcome only; no recording is captured or
+  stored. No Spaces bucket / retention policy for call audio.
+
+- **Assignment expiration is pure time-out, no heartbeat (CC-7).** A
+  fixed `ops.call_assignment_timeout_minutes` BullMQ delayed job
+  reclaims an idle ASSIGNED entry. There is no agent heartbeat / "still
+  on the call" keep-alive, so a genuinely long call can be reclaimed at
+  the timeout (the agent simply re-pulls; the attempt is unaffected).
+  **Pick up:** add a heartbeat-extends-assignment mechanism if long
+  calls become common.
+
 ## Pricing & Multi-Currency (Modules 15–17)
 
 - **Historical FX rate tracking**. Phase 1A keeps a single current rate

@@ -145,7 +145,7 @@ The schema gives you the shape; these rules give you correctness. Violating them
 
 **Order rules (ORD-1 through ORD-10 — NON-NEGOTIABLE):**
 
-1. **ORD-1: Lifecycle state machine.** `OrderStateMachineService` — 26-status declarative transition matrix; no any→any. Critical property: pre-confirmation cancels carry NO stock release (nothing was reserved yet — see ORD-10).
+1. **ORD-1: Lifecycle state machine.** `OrderStateMachineService` — 28-status declarative transition matrix (Module 7 added `REJECTED_BY_CUSTOMER` + `REJECTED_NDR` reject terminals); no any→any. **Matrix-declared self-loops are valid event-writing transitions** (Module 7: `CALL_NO_RESPONSE→CALL_NO_RESPONSE`, `CALL_RESCHEDULED→CALL_RESCHEDULED` — "same state, a new attempt was logged"); `transitionStatus` lets `from===to` through ONLY when the matrix declares it, else 409 NOOP_TRANSITION. Critical property: pre-confirmation cancels carry NO stock release (nothing was reserved yet — see ORD-10).
 
 2. **ORD-2: God mode is the ONE sanctioned bypass.** `OrderAdminOverrideService.forceMutate()` only. Guardrails: reason ≥30 chars, `acknowledgeDataIntegrityRisk` literal `true`, ≥1 of `fieldChanges`/`targetStatus`; DB + event + audit in one tx; `hasAdminOverride` set-once-NEVER-cleared; audit severity CRITICAL. Opts OUT of saga compensation (reserve attempted-not-blocking on →CONFIRMED; away-from-CONFIRMED leaves reservations — cleanup via `release-reservations` endpoint).
 
@@ -164,6 +164,27 @@ The schema gives you the shape; these rules give you correctness. Violating them
 9. **ORD-9: CSV import is state-aware idempotent** by `(sellerId, externalRef→sellerOrderRef)`: new → create PENDING_CONFIRMATION; DRAFT/PENDING_CONFIRMATION → PATCH; CONFIRMED+ → error row. CSV is submission, not drafting. One row = one order, single line (Phase 1A; multi-line deferred to Phase 2).
 
 10. **ORD-10: Reservation is LATE.** NO stock reserved at order create (no availability check at create — M7 catches at confirm). Reservation is created only on entry to CONFIRMED via the M5 saga pattern in ORD-3.
+
+**Call Center rules (Module 7 — CC-1 through CC-7, NON-NEGOTIABLE):**
+
+1. **CC-1: `call_attempts` is APPEND-ONLY.** Each row is a historical fact; no UPDATE/DELETE path by construction (matches ORD-4 / `order_events` / `stock_movements`). Added to MUST NOT list.
+
+2. **CC-2: Outcome→transition mapping is centralized in `CallOutcomeMappingService`.** Single source of truth (pure logic, no Prisma, mirrors `OrderStateMachineService`). The 9-outcome table + the at-cap NDR reroute live ONLY here; never duplicated in controllers/other services. The 6/9 cap-counting set is derived from this service so it can't drift.
+
+3. **CC-3: The order transition is POST-COMMIT of the attempt write.** The attempt is the source of truth: it persists regardless of what the transition does. A `transitionStatus` failure is logged + audited HIGH (`call_attempt.transition_failed`) and swallowed — NEVER thrown upstream, NEVER rolls back the attempt. The M5 reserve saga may itself land CONFIRMED→OUT_OF_STOCK; that is M5's call and surfaces in `finalOrderStatus`.
+
+4. **CC-4: Attempt write + queue-entry COMPLETED are one tx.** Atomic: attempt inserted AND entry closed together, or neither. `priorAttemptCount` is counted BEFORE the insert (filtered to the 6 counting outcomes) so the resolver's +1 is exact.
+
+5. **CC-5: Attempt counting respects the 6/9 list.** CONFIRMED, CUSTOMER_DECLINED, WRONG_NUMBER, NO_ANSWER, BUSY, VOICEMAIL_LEFT count; CALLBACK_REQUESTED, TECHNICAL_FAILURE, LANGUAGE_BARRIER do NOT. At cap, a CALL_NO_RESPONSE-bound counting outcome reroutes to terminal REJECTED_NDR with no re-queue. Effective cap = `seller.callMaxAttemptsBeforeNdrOverride ?? ops.call_max_attempts_before_ndr ?? 3`.
+
+6. **CC-6: Enqueue on entry to PENDING_CONFIRMATION, dequeue on exit — both idempotent, both POST-COMMIT, best-effort.** Enqueue at `OrderService.create` (PENDING_CONFIRMATION initialStatus — covers the CSV worker) + `OrderService.submit` + `OrderWriteService.transitionStatus` (result.status===PENDING_CONFIRMATION). Dequeue at `transitionStatus` on any PENDING_CONFIRMATION exit. **Dual-path idempotency:** a CallAttemptService flow already COMPLETED the entry in its own tx, so the post-commit transition's dequeue is a safe no-op (`{dequeued:0}`); a direct admin/god-mode transition does the real close. enqueue no-ops on an existing OPEN entry (partial-unique). A best-effort failure never fails the order write — an admin re-enqueue / out-of-band reconciler recovers (mirrors INV-5 / the saga post-commit discipline).
+
+7. **CC-7: Assignment expiration is purely time-based + idempotent.** A delayed BullMQ job scheduled at pull time fires `AssignmentExpirationService.expire()`; a guarded conditional `updateMany` on `(status=ASSIGNED, that exact assignedAt)` reverts ASSIGNED→PENDING (clears agent, `availableAt` untouched → original FIFO position kept). Already-COMPLETED/EXPIRED, already-PENDING, or re-ASSIGNED-with-newer-assignedAt all no-op, so retries / duplicate deliveries / an old timer racing a fresh re-pull can never double-expire or steal a new assignment. The `expire()` method is public — it doubles as the manual trigger. Custom BullMQ jobId must be colon-free (Redis key separator) — encode the timestamp as epoch-ms.
+
+**Module 7 architecture (R3 + facade):**
+- The queue PRIMITIVE lives in a standalone `call-queue` module (`CallQueueService` — `enqueueOrder` / `enqueueAgain` / `dequeueOrder`; NO Order dependency). Imported by BOTH `order` and `call-center`; it imports neither. This **R3 split** removes the would-be `order ↔ call-center` circular module dependency WITHOUT `forwardRef` (same spirit as inventory-shared/inventory-stock and order-core/order). **When M8/M9 face the same "two domains need a shared cross-cutting primitive" shape, extract the primitive into its own dependency-free module rather than reaching for `forwardRef`.**
+- `pullNext` lives in `call-center`'s `CallAssignmentService` (NOT the queue primitive) because it enriches via `OrderReadService`. FIFO via `ORDER BY available_at ASC, created_at ASC` + `FOR UPDATE SKIP LOCKED LIMIT 1` inside the assigning tx (Postgres-native; two agents clicking "next" can never get the same row).
+- Cross-module export surface: `CallQueueService` (from `call-queue`) only. `call-center` exports NOTHING externally (CallOutcomeMappingService is exported intra-module only); CallAttemptService / AgentSettingsService / Admin* services are internal.
 
 **Shipment rules:**
 1. Webhook idempotency: dedup key is `(courierCode, awbNumber, eventType, externalEventId)`. Duplicate webhooks stored (audit) but produce no duplicate tracking events.
@@ -286,6 +307,7 @@ The schema gives you the shape; these rules give you correctness. Violating them
 - **Cross-module variant lookups** go via `CatalogReadService`. Cross-module catalog reads do NOT query the catalog tables directly.
 - **Cross-module stock reads** go via the three exported services in `inventory-stock`: `StockReadService`, `StockReservationService`, `StockPickAllocationService`. Other inventory services (cache, alert, mutation, availability primitive) are internal to inventory and NOT exposed externally.
 - **Cross-module order access** goes via the two services `OrderModule` exports: `OrderReadService` (reads) and `OrderWriteService.transitionStatus()` (the sole write boundary). All other order services are internal to `OrderCoreModule`; never imported by other domains.
+- **Cross-module call-queue access** goes via the single service the standalone `call-queue` module exports: `CallQueueService` (`enqueueOrder` / `enqueueAgain` / `dequeueOrder`). `call-center` exports NOTHING externally; its `CallAttemptService` / `AgentSettingsService` / `CallAssignmentService` / Admin* services are internal.
 
 ### Facade module pattern (Modules 4-6 surfaced)
 
@@ -293,6 +315,7 @@ When a module needs to expose a narrow cross-module surface while keeping intern
 
 - **Catalog/Inventory pattern**: split services across two modules (e.g., `inventory-shared` internal + `inventory-stock` external). External module imports internal module; external module's exports list is the cross-module surface.
 - **Order pattern (NestJS-specific)**: NestJS forbids re-exporting an imported module's providers (UnknownExportException). The Module-5-style narrow facade required splitting into `OrderCoreModule` (internal) + `OrderModule` (provides Read/Write itself, drawing internal deps from the imported core). **Any future facade module must PROVIDE the exposed services itself, not re-export them.**
+- **R3 shared-primitive pattern (Module 7)**: when two domains each need a cross-cutting primitive and wiring it into either creates a module cycle (here `order` ↔ `call-center` via the call queue), extract the primitive into its OWN dependency-free module (`call-queue`) imported by both. It depends on neither side → the cycle disappears with NO `forwardRef`. **Prefer this over `forwardRef` for M8/M9 — `forwardRef` is fragile and accumulates risk; the R3 extraction is explicit and was validated end-to-end in M7 (the full DI graph boots, no circular dependency).**
 - The split is convention-not-lint — internal modules are importable directly. Code review and CLAUDE.md MUSTs are the enforcement.
 
 ### Cross-module integration with M5 stock services (saga pattern)
@@ -306,12 +329,14 @@ The M5 reservation services (`StockReservationService.reserve()`, `.release()`, 
 
 The canonical reference implementation is `OrderWriteService.transitionStatus()` in M6. M8 (warehouse pick) and M9 (courier dispatch) will both consume this pattern. **Never attempt a nested or distributed transaction across module boundaries.**
 
+**Module 7 was the THIRD successful application** (CallAttemptService → transitionStatus → M5 reserve, the first from outside the order domain) and it composed with NO friction — the pattern is proven for M8/M9. M7 also contributed a reusable companion: the **dual-path idempotent dequeue callback** (CC-6). When two independent flows can both legitimately perform the same idempotent cross-module side-effect (here: the attempt flow closes the queue entry in its own tx; the post-commit `transitionStatus` also dequeues), make the side-effect a no-op when already done (`{dequeued:0}`) and let BOTH paths call it unconditionally — far simpler and race-safer than coordinating "who owns the close". Reuse this when an M8/M9 callback can be reached via more than one trigger.
+
 ### Testing
 
 - Unit tests use mocked Prisma (or in-memory fakes for transaction-sensitive logic).
 - E2E tests run against the `skydrop_test` database (separate from dev) on logical Redis DB 1.
 - E2E global setup creates DB, runs migrate deploy + seed; teardown drops DB.
-- **Cascading reset helpers:** when adding a feature module with tables that FK to `sellers` (or any other reset-critical entity), add a `reset<Module>State()` helper and chain it BEFORE the parent reset (e.g., `resetAuthState`). Order-dependent test contamination is a real footgun without this. Each new module must do this proactively. As of Module 6, the chain is: `resetOrderState → resetInventoryState → resetCatalogState → resetAuthState`.
+- **Cascading reset helpers:** when adding a feature module with tables that FK to `sellers` (or any other reset-critical entity), add a `reset<Module>State()` helper and chain it BEFORE the parent reset (e.g., `resetAuthState`). Order-dependent test contamination is a real footgun without this. Each new module must do this proactively. As of Module 7, the chain is: `resetCallCenterState → resetInventoryState → resetOrderState → resetCatalogState → (auth/seller wipe)` (call-center FIRST — `call_queue_entries`/`call_attempts` FK orders, `agent_call_settings` FK staff_users; explicit truncation rather than relying on the orders-CASCADE).
 - Use `makeTestEnv()` from the shared test helpers when constructing `EnvService` in tests; don't inline literal env objects.
 - For test fakes that need `prisma.$transaction(fn)`, attach `$transaction` AFTER the client literal to avoid TS7024 implicit-any from self-reference.
 
@@ -357,6 +382,7 @@ The canonical reference implementation is `OrderWriteService.transitionStatus()`
 14. Use `makeTestEnv()` in test fixtures instead of inline literal env objects.
 15. All stock writes go through `StockMutationService` (INV-1); never write `stock_movements` or `stock_levels.qtyOnHand` elsewhere. Honor INV-2 (cache reads-only via method-name split), INV-3 (use `StockAvailabilityService.compute()` for the canonical scalar), INV-4 (`qtyReserved` = phase-2 only). For cross-module stock needs, import only the three services exported by `inventory-stock`.
 16. All cross-module order writes go through `OrderWriteService.transitionStatus()` (ORD-3). Never UPDATE `orders.status` directly from outside the order module. God mode (ORD-2) is the single sanctioned bypass and only via `OrderAdminOverrideService.forceMutate()` with full guardrails. For M5 integration, use the saga pattern (pre-tx reserve, compensating release on tx-fail, post-commit idempotent for release/fulfill).
+17. Honor CC-1 through CC-7 (Module 7). The ONLY cross-module call-queue surface is `CallQueueService` (from the standalone `call-queue` module); never query `call_queue_entries` / `call_attempts` from another domain. Outcome→transition mapping lives ONLY in `CallOutcomeMappingService` (CC-2). The order transition is POST-COMMIT of the attempt and its failure never rolls back the attempt (CC-3). When a cross-cutting primitive would create a module cycle, apply the R3 extraction (own dependency-free module), not `forwardRef`.
 
 ### MUST NOT
 
@@ -386,8 +412,8 @@ Module order — each builds on prior modules:
 | 4 | Product/SKU Catalog (categories, products, variants, images, CSV upload) | ✅ DONE |
 | 5 | Inventory & WMS (warehouses, bins, batches, levels, movements, reservations, receiving, cycle counts) | ✅ DONE |
 | 6 | Order Management (manual entry, CSV upload, lifecycle, events) | ✅ DONE |
-| 7 | Call Center Workflow (queue, distributor, attempt logging) | NEXT |
-| 8 | Warehouse Operations (pick, pack, dispatch, RTO) | pending |
+| 7 | Call Center Workflow (queue, distributor, attempt logging) | ✅ DONE |
+| 8 | Warehouse Operations (pick, pack, dispatch, RTO) | NEXT |
 | 9 | Courier Integration (Delhivery API + manual placement workflow) | pending |
 | 10 | Public Tracking Page (EN + HI) | pending |
 | 11 | Notifications (templates, dispatcher, throttle, BullMQ workers) | pending |
@@ -409,7 +435,7 @@ Phase 1B modules (not in this roadmap):
 
 ---
 
-## Current State (2026-05-16)
+## Current State (2026-05-18)
 
 **Implemented:**
 - Infrastructure (DO droplet, managed Postgres, Spaces, Cloudflare)
@@ -421,14 +447,15 @@ Phase 1B modules (not in this roadmap):
 - **Module 2** — Seller Onboarding (also covers Module 3 scope)
 - **Module 4** — Product/SKU Catalog: `CatalogReadService` as sanctioned cross-module variant read boundary
 - **Module 5** — Inventory & WMS: `StockMutationService` sole writer with version-CAS retry; `StockAvailabilityService` INV-3 canonical scalar; two-path `StockReadService` (live vs cached, INV-2); LATE reservations with phase-1/phase-2 model; goods receipts; threshold-gated adjustments; cycle counts; `StockAlertService` state machine. Cross-module surface (Modules 6, 8): `StockReadService`, `StockReservationService`, `StockPickAllocationService`. INV-1 through INV-9 codified as non-negotiable invariants.
-- **Module 6** — Order Management: 26-status state machine; `OrderService.create()` snapshot pattern; CSV bulk import with state-aware idempotency (ORD-9); `OrderWriteService.transitionStatus()` as sanctioned cross-module write boundary using saga pattern for M5 integration; `OrderReadService` as read boundary; `OrderAdminOverrideService.forceMutate()` god mode with 8 hardened guardrails + `hasAdminOverride` flag set-once-never-cleared; admin sane-cancel + release-reservations endpoints. ORD-1 through ORD-10 codified as non-negotiable invariants.
-- Test totals: 453 unit + 27 e2e tests, all green; fresh-clone simulation verified.
+- **Module 6** — Order Management: 28-status state machine; `OrderService.create()` snapshot pattern; CSV bulk import with state-aware idempotency (ORD-9); `OrderWriteService.transitionStatus()` as sanctioned cross-module write boundary using saga pattern for M5 integration; `OrderReadService` as read boundary; `OrderAdminOverrideService.forceMutate()` god mode with 8 hardened guardrails + `hasAdminOverride` flag set-once-never-cleared; admin sane-cancel + release-reservations endpoints. ORD-1 through ORD-10 codified as non-negotiable invariants.
+- **Module 7** — Call Center Workflow: `call-queue` PRIMITIVE module (R3 — `CallQueueService`, no Order dep, imported by both `order` and `call-center`, breaking the cycle without `forwardRef` — the THIRD successful saga/facade-family integration after M5/M6); `CallAssignmentService.pullNext` strict-FIFO + `FOR UPDATE SKIP LOCKED`; `CallOutcomeMappingService` centralized 9-outcome→transition table (CC-2); `CallAttemptService.recordAttempt` tx-atomic attempt+queue close → post-commit M5/M6 saga + re-queue (CC-3); time-based idempotent `AssignmentExpirationService` + BullMQ; `AgentSettingsService` 10c split; agent + admin (queue/agent) endpoints; CC-6 enqueue/dequeue wired into OrderService/transitionStatus with dual-path idempotent dequeue. CC-1 through CC-7 codified as non-negotiable invariants. The first module to drive `OrderWriteService.transitionStatus()` from outside the order domain — saga pattern reused cleanly, no friction.
+- Test totals: 560 unit + 34 e2e tests, all green; fresh-clone simulation verified.
 
 **Not yet implemented:**
 - All other apps (frontends in `apps/marketing`, `apps/seller`, `apps/admin`, `apps/track` are placeholders)
-- Modules 7-18
+- Modules 8-18
 
-**Next:** Module 7 — Call Center Workflow. **The first module to actually CALL `OrderWriteService.transitionStatus()` from outside the order domain.** Will own the call queue, round-robin distribution, attempt logging, outcome capture. On a successful confirmation outcome, calls `OrderWriteService.transitionStatus(orderId, CONFIRMED, ctx)` — which triggers the saga that calls `StockReservationService.reserve()`. The integration boundary between M5/M6/M7 is the first real test of the patterns established. Design happens in chat with the user before implementation.
+**Next:** Module 8 — Warehouse Operations (pick, pack, dispatch, RTO). Consumes `StockPickAllocationService` (phase-2 bin+batch+version-CAS) and `OrderWriteService.transitionStatus()` for the CONFIRMED→PENDING_PICK→…→DISPATCHED legs. **If M8 needs a cross-cutting primitive shared with another domain, apply the R3 pattern (extract a dependency-free module) rather than `forwardRef` — M7 validated it.** Design happens in chat with the user before implementation.
 
 ---
 

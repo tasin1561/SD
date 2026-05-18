@@ -811,12 +811,24 @@ Live worklist.
 > set with the locked 4-value model. `scheduledFor` is NOT a new column —
 > the existing `availableAt` ("earliest pickable time") carries that
 > semantic. `priority`, `previousAgentIds`, `assignmentMethod`,
-> `closureReason`, `maxAttempts` are unused under locked-decision-#1
-> strict FIFO — left in place (forward-compatible), not wired.
+> `maxAttempts` are unused under locked-decision-#1 strict FIFO — left
+> in place (forward-compatible), not wired. `closureReason` IS wired by
+> Module 7 (set on `dequeueOrder` / attempt-close); it is nullable and
+> intentionally left NULL for re-queue / transient non-terminal closes
+> for which no enum value fits (see `QueueClosureReason` note +
+> phase-1a-debt).
 
 **AssignmentMethod enum:** `AUTO_ROUND_ROBIN`, `MANUAL`, `REASSIGNED`, `AGENT_PICKED` *(column unused in Phase 1A — strict FIFO)*
 
 **QueueClosureReason enum:** `ORDER_CONFIRMED`, `ORDER_CANCELLED`, `ORDER_REJECTED`, `MAX_ATTEMPTS_EXCEEDED`, `ORDER_DELETED`, `ADMIN_CLOSED`
+
+> Module 7 mapping: CONFIRMED→`ORDER_CONFIRMED`; CANCELLED*→`ORDER_CANCELLED`;
+> REJECTED/REJECTED_BY_CUSTOMER→`ORDER_REJECTED`; REJECTED_NDR→
+> `MAX_ATTEMPTS_EXCEEDED`; bulk-dequeue→`ADMIN_CLOSED`. No value means
+> "superseded by re-queue / transient OUT_OF_STOCK" — `CallAttemptService`
+> leaves it NULL, `OrderWriteService.dequeueForExit` falls back to
+> `ADMIN_CLOSED`. A future `SUPERSEDED` value is tracked in phase-1a-debt
+> (authoritative history = append-only `call_attempts` + `order_events`).
 
 ## call_attempts
 Append-mostly per-attempt log.
@@ -1406,12 +1418,18 @@ INSERT INTO system_settings (key, category, value_type, value_decimal, display_n
   ('pricing.fx_fallback_inr_to_bdt', 'pricing', 'decimal', 1.35, 'Fallback FX Rate INR→BDT', 'Used when FX fetch fails');
 
 INSERT INTO system_settings (key, category, value_type, value_int, display_name, description) VALUES
-  ('ops.call_max_attempts', 'ops', 'int', 3, 'Max Call Attempts', 'Calls before auto-cancel'),
+  ('ops.call_max_attempts', 'ops', 'int', 3, 'Max Call Attempts', 'Calls before auto-cancel'),  -- DEPRECATED by Module 7 (superseded by ops.call_max_attempts_before_ndr); dead config, see phase-1a-debt
   ('ops.call_retry_interval_hours', 'ops', 'int', 4, 'Call Retry Interval (hours)', 'Hours between no-response retries'),
   ('ops.stock_reservation_ttl_hours', 'ops', 'int', 24, 'Stock Reservation TTL (hours)', 'Auto-release reservations after N hours'),
   ('notifications.sms_throttle_per_recipient_per_hour', 'notifications', 'int', 10, 'SMS Throttle', 'Max SMS per recipient per hour'),
   ('webhooks.auto_disable_after_consecutive_failures', 'webhooks', 'int', 50, 'Webhook Auto-Disable Threshold', 'Disable webhook after N consecutive failures'),
-  ('webhooks.max_retry_attempts', 'webhooks', 'int', 5, 'Webhook Max Retries', 'Max webhook delivery retry attempts');
+  ('webhooks.max_retry_attempts', 'webhooks', 'int', 5, 'Webhook Max Retries', 'Max webhook delivery retry attempts'),
+  -- Module 7 call-center (seeded idempotently in seed.ts):
+  ('ops.call_max_attempts_before_ndr', 'ops', 'int', 3, 'Max Call Attempts before NDR', 'Cap-counting outcomes before REJECTED_NDR (per-seller override: sellers.call_max_attempts_before_ndr_override)'),
+  ('ops.call_assignment_timeout_minutes', 'ops', 'int', 30, 'Assignment Timeout (min)', 'Idle ASSIGNED entry reclaimed to PENDING (CC-7)'),
+  ('ops.call_reschedule_min_hours', 'ops', 'int', 1, 'Reschedule Min (hours)', 'Lower bound for CALLBACK_REQUESTED scheduledFor'),
+  ('ops.call_reschedule_max_days', 'ops', 'int', 7, 'Reschedule Max (days)', 'Upper bound for CALLBACK_REQUESTED scheduledFor'),
+  ('ops.call_busy_retry_delay_hours', 'ops', 'int', 1, 'Busy Retry Delay (hours)', 'BUSY outcome re-queue delay');
 ```
 
 ## couriers (initial)
