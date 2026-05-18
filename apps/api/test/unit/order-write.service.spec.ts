@@ -210,4 +210,43 @@ describe('OrderWriteService.transitionStatus', () => {
     expect(release).not.toHaveBeenCalled();
     expect(fulfill).not.toHaveBeenCalled();
   });
+
+  it('matrix-declared self-loop (CALL_NO_RESPONSE→CALL_NO_RESPONSE) proceeds: STATUS_CHANGED event, no side-effects', async () => {
+    const { svc, orderUpdate, events, reserve, release, fulfill } = makeService({
+      order: {
+        id: 'o1',
+        sellerId: 's1',
+        orderNumber: 'SD-1',
+        status: OrderStatus.CALL_NO_RESPONSE,
+        items: [],
+      },
+    });
+    const res = await svc.transitionStatus({
+      orderId: 'o1',
+      to: OrderStatus.CALL_NO_RESPONSE,
+      actor: ACTOR,
+    });
+    expect(res.status).toBe(OrderStatus.CALL_NO_RESPONSE);
+    expect(res.reservationOutcome).toBeNull();
+    expect(orderUpdate).toHaveBeenCalled();
+    expect(events.statusChanged).toHaveBeenCalled();
+    expect(reserve).not.toHaveBeenCalled();
+    expect(release).not.toHaveBeenCalled();
+    expect(fulfill).not.toHaveBeenCalled();
+  });
+
+  it('still 409 NOOP_TRANSITION for a from===to the matrix does NOT declare', async () => {
+    const { svc } = makeService({
+      order: {
+        id: 'o1',
+        sellerId: 's1',
+        orderNumber: 'SD-1',
+        status: OrderStatus.CONFIRMED,
+        items: [],
+      },
+    });
+    await expect(
+      svc.transitionStatus({ orderId: 'o1', to: OrderStatus.CONFIRMED, actor: ACTOR }),
+    ).rejects.toMatchObject({ response: { code: 'NOOP_TRANSITION' } });
+  });
 });

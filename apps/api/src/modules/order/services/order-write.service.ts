@@ -96,7 +96,10 @@ export interface TransitionStatusResult {
  *   The ONE post-DRAFT status-change entry point (ORD-1/ORD-3). Modules
  *   7/8 NEVER write orders.status directly. Guards: state-machine
  *   validity (409 INVALID_TRANSITION), optimistic `expectedFrom` (409
- *   STALE_ORDER_STATUS), no-op (409), 404. Stock side-effects follow the
+ *   STALE_ORDER_STATUS), no-op (409 NOOP_TRANSITION) — EXCEPT a
+ *   from===to that the matrix explicitly declares as a self-loop
+ *   (Module 7 CALL_NO_RESPONSE/CALL_RESCHEDULED repeats), which is a
+ *   valid event-writing transition and proceeds; 404. Stock side-effects follow the
  *   SAGA documented on the method JSDoc below: RESERVE pre-tx (failure →
  *   OUT_OF_STOCK when the matrix allows, else 409; tx-failure →
  *   compensating release); RELEASE/FULFILL post-commit & idempotent.
@@ -180,13 +183,21 @@ export class OrderWriteService {
         message: `Expected order to be ${input.expectedFrom} but it is ${from}`,
       });
     }
-    if (from === to) {
+    const isValid = this.stateMachine.isValidTransition(from, to);
+    // Matrix-declared self-loops (Module 7: CALL_NO_RESPONSE →
+    // CALL_NO_RESPONSE and CALL_RESCHEDULED → CALL_RESCHEDULED) are
+    // *valid* event-writing transitions — semantically "same state, a
+    // new call attempt was logged" (CC-3). They proceed normally: empty
+    // side-effects ⇒ transitionPlain ⇒ a STATUS_CHANGED event + audit
+    // (the attempt's order_events trail). A from===to the matrix does
+    // NOT declare is still a defensive 409 NOOP_TRANSITION.
+    if (from === to && !isValid) {
       throw new ConflictException({
         code: 'NOOP_TRANSITION',
         message: `Order is already ${to}`,
       });
     }
-    if (!this.stateMachine.isValidTransition(from, to)) {
+    if (!isValid) {
       throw new ConflictException({
         code: 'INVALID_TRANSITION',
         message: `${from} → ${to} is not a valid order transition`,
