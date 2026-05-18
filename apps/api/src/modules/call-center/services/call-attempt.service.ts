@@ -38,10 +38,17 @@ const MS_PER_HOUR = 3_600_000;
 const MS_PER_DAY = 86_400_000;
 
 export interface RecordAttemptInput {
-  /** CallQueueEntry.id — must be ASSIGNED and owned by `agentId`. */
+  /** CallQueueEntry.id — must be ASSIGNED and owned by `agentId`
+   *  (unless `forceByAdmin`). */
   assignmentId: string;
-  /** Calling agent (StaffUser.id) — from the authenticated staff ctx. */
+  /** Acting staff (StaffUser.id). Agent path = the calling agent;
+   *  admin-force path = the admin (recorded as the attempt's agent —
+   *  truthful about who performed the override). */
   agentId: string;
+  /** Admin force-outcome (decision 11): skip the ownership check and
+   *  accept any OPEN (PENDING/ASSIGNED) entry. The attempt is still a
+   *  real CC-1 fact; metadata.forcedByAdmin marks it. */
+  forceByAdmin?: boolean;
   outcome: CallOutcome;
   startedAt: Date;
   endedAt?: Date;
@@ -122,8 +129,9 @@ export class CallAttemptService {
   ): Promise<RecordAttemptResult> {
     const now = new Date();
 
-    // 1. Assignment must exist, still be ASSIGNED, and be owned by the
-    //    calling agent.
+    // 1. Assignment must exist. Agent path: must be ASSIGNED + owned by
+    //    the caller. Admin-force path (decision 11): any OPEN entry
+    //    (PENDING/ASSIGNED), ownership not required.
     const entry = await this.prisma.client.callQueueEntry.findUnique({
       where: { id: input.assignmentId },
       select: {
@@ -138,17 +146,30 @@ export class CallAttemptService {
         `Assignment ${input.assignmentId} not found`,
       );
     }
-    if (entry.status !== CallQueueStatus.ASSIGNED) {
-      throw new ConflictException({
-        code: 'ASSIGNMENT_NOT_ACTIVE',
-        message: `Assignment is ${entry.status}, not ASSIGNED`,
-      });
-    }
-    if (entry.assignedAgentId !== input.agentId) {
-      throw new ForbiddenException({
-        code: 'ASSIGNMENT_NOT_OWNED',
-        message: 'Assignment is held by another agent',
-      });
+    if (input.forceByAdmin) {
+      const open: CallQueueStatus[] = [
+        CallQueueStatus.PENDING,
+        CallQueueStatus.ASSIGNED,
+      ];
+      if (!open.includes(entry.status)) {
+        throw new ConflictException({
+          code: 'ASSIGNMENT_NOT_ACTIVE',
+          message: `Entry is ${entry.status} (closed); cannot force an outcome`,
+        });
+      }
+    } else {
+      if (entry.status !== CallQueueStatus.ASSIGNED) {
+        throw new ConflictException({
+          code: 'ASSIGNMENT_NOT_ACTIVE',
+          message: `Assignment is ${entry.status}, not ASSIGNED`,
+        });
+      }
+      if (entry.assignedAgentId !== input.agentId) {
+        throw new ForbiddenException({
+          code: 'ASSIGNMENT_NOT_OWNED',
+          message: 'Assignment is held by another agent',
+        });
+      }
     }
 
     // 2. scheduledFor invariants (only CALLBACK_REQUESTED carries one).
@@ -273,11 +294,12 @@ export class CallAttemptService {
             action: 'call_attempt.recorded',
             entityType: 'call_attempt',
             entityId: attempt.id,
-            severity: 'LOW',
+            severity: input.forceByAdmin ? 'MEDIUM' : 'LOW',
             metadata: {
               orderId: entry.orderId,
               queueEntryId: entry.id,
               outcome: input.outcome,
+              forcedByAdmin: input.forceByAdmin === true,
               targetStatus: r.targetStatus,
               hitCap: r.hitCap,
               requeue: r.requeue,

@@ -6,11 +6,13 @@ import { CallOutcomeMappingService } from './services/call-outcome-mapping.servi
 import { CallAssignmentService } from './services/call-assignment.service';
 import { CallAttemptService } from './services/call-attempt.service';
 import { AgentSettingsService } from './services/agent-settings.service';
+import { AdminCallQueueService } from './services/admin-call-queue.service';
 import { AssignmentExpirationService } from './services/assignment-expiration.service';
 import { AssignmentExpirationQueue } from './queue/assignment-expiration.queue';
 import { AssignmentExpirationWorker } from './queue/assignment-expiration.worker';
 import { AgentSettingsController } from './controllers/agent-settings.controller';
 import { AgentCallController } from './controllers/agent-call.controller';
+import { AdminCallQueueController } from './controllers/admin-call-queue.controller';
 
 /**
  * Module 7 — Call Center Workflow.
@@ -32,12 +34,17 @@ import { AgentCallController } from './controllers/agent-call.controller';
  */
 @Module({
   imports: [OrderModule, CallQueueModule],
-  controllers: [AgentSettingsController, AgentCallController],
+  controllers: [
+    AgentSettingsController,
+    AgentCallController,
+    AdminCallQueueController,
+  ],
   providers: [
     CallOutcomeMappingService,
     CallAssignmentService,
     CallAttemptService,
     AgentSettingsService,
+    AdminCallQueueService,
     AssignmentExpirationService,
     AssignmentExpirationQueue,
     AssignmentExpirationWorker,

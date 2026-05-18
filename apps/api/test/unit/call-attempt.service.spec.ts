@@ -358,6 +358,51 @@ describe('CallAttemptService.recordAttempt — outcome flows', () => {
   });
 });
 
+describe('CallAttemptService.recordAttempt — forceByAdmin', () => {
+  it('proceeds on a PENDING, un-owned entry; MEDIUM audit, forcedByAdmin=true', async () => {
+    const { svc, attemptCreate, auditLog } = makeService({
+      entry: {
+        id: 'q1',
+        orderId: 'o1',
+        status: CallQueueStatus.PENDING,
+        assignedAgentId: null,
+      },
+    });
+    const r = await svc.recordAttempt({
+      ...BASE,
+      agentId: 'admin-1',
+      forceByAdmin: true,
+      outcome: CallOutcome.NO_ANSWER,
+    });
+    expect(attemptCreate).toHaveBeenCalled();
+    expect(r.attemptId).toBe('att-1');
+    const rec = auditLog.mock.calls.find(
+      (c) => (c[0] as AnyArgs).action === 'call_attempt.recorded',
+    );
+    expect(rec![0]).toMatchObject({ severity: 'MEDIUM' });
+    expect((rec![0] as AnyArgs).metadata).toMatchObject({ forcedByAdmin: true });
+  });
+
+  it('still 409 ASSIGNMENT_NOT_ACTIVE when the entry is already closed', async () => {
+    const { svc } = makeService({
+      entry: {
+        id: 'q1',
+        orderId: 'o1',
+        status: CallQueueStatus.COMPLETED,
+        assignedAgentId: null,
+      },
+    });
+    await expect(
+      svc.recordAttempt({
+        ...BASE,
+        agentId: 'admin-1',
+        forceByAdmin: true,
+        outcome: CallOutcome.NO_ANSWER,
+      }),
+    ).rejects.toMatchObject({ response: { code: 'ASSIGNMENT_NOT_ACTIVE' } });
+  });
+});
+
 describe('CallAttemptService.listHistory', () => {
   it('paginates the agent-scoped attempts (newest first), shaped', async () => {
     const { svc, histFindMany, histCount } = makeService();
