@@ -19,6 +19,7 @@ import {
   StockReservationService,
 } from '../../inventory-stock/services/stock-reservation.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
+import { CallQueueService } from '../../call-queue/services/call-queue.service';
 import { OrderEventWriterService, type EventActor } from './order-event-writer.service';
 import {
   OrderSideEffect,
@@ -123,6 +124,7 @@ export class OrderWriteService {
     private readonly events: OrderEventWriterService,
     private readonly audit: AuditLogService,
     private readonly reservations: StockReservationService,
+    private readonly callQueue: CallQueueService,
   ) {}
 
   /**
@@ -206,16 +208,43 @@ export class OrderWriteService {
 
     const sideEffects = this.stateMachine.requiredSideEffects(from, to);
 
+    let result: TransitionStatusResult;
     if (sideEffects.includes(OrderSideEffect.RESERVE_STOCK)) {
-      return this.transitionWithReserve(order, from, to, input);
+      result = await this.transitionWithReserve(order, from, to, input);
+    } else if (sideEffects.includes(OrderSideEffect.RELEASE_STOCK)) {
+      result = await this.transitionThenStock(order, from, to, input, 'RELEASE');
+    } else if (sideEffects.includes(OrderSideEffect.FULFILL_STOCK)) {
+      result = await this.transitionThenStock(order, from, to, input, 'FULFILL');
+    } else {
+      result = await this.transitionPlain(order, from, to, input);
     }
-    if (sideEffects.includes(OrderSideEffect.RELEASE_STOCK)) {
-      return this.transitionThenStock(order, from, to, input, 'RELEASE');
+
+    // CC-6: a transition INTO PENDING_CONFIRMATION (OUT_OF_STOCK /
+    // CALL_NO_RESPONSE / CALL_RESCHEDULED → re-queue) re-joins the call
+    // queue. POST-COMMIT, idempotent (existing OPEN entry → no-op),
+    // best-effort — never undo a committed status change for this.
+    // `result.status` (not `to`) so a reserve-failed → OUT_OF_STOCK
+    // landing is NOT mis-enqueued.
+    if (result.status === OrderStatus.PENDING_CONFIRMATION) {
+      await this.enqueueForCall(order.id, input.ctx);
     }
-    if (sideEffects.includes(OrderSideEffect.FULFILL_STOCK)) {
-      return this.transitionThenStock(order, from, to, input, 'FULFILL');
+    return result;
+  }
+
+  /** CC-6 post-commit call-queue enqueue (idempotent, best-effort —
+   *  mirrors the saga's post-commit discipline). */
+  private async enqueueForCall(
+    orderId: string,
+    ctx?: ClientContext,
+  ): Promise<void> {
+    try {
+      await this.callQueue.enqueueOrder(orderId, ctx);
+    } catch (e) {
+      this.logger.error(
+        { orderId, err: (e as Error).message },
+        'Post-commit call-queue enqueue failed; status persisted, needs re-enqueue',
+      );
     }
-    return this.transitionPlain(order, from, to, input);
   }
 
   // ── RESERVE_STOCK: reserve PRE-tx, compensate on tx failure ──────────

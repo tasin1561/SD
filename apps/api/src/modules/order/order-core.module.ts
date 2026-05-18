@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { CatalogReadModule } from '../catalog-read/catalog-read.module';
 import { InventoryStockModule } from '../inventory-stock/inventory-stock.module';
+import { CallQueueModule } from '../call-queue/call-queue.module';
 import { OrderNumberingService } from './services/order-numbering.service';
 import { OrderStateMachineService } from './services/order-state-machine.service';
 import { OrderEventWriterService } from './services/order-event-writer.service';
@@ -26,9 +27,12 @@ import { OrderAdminOverrideService } from './services/order-admin-override.servi
  * is the sanctioned cross-module variant boundary (CLAUDE MUST #13);
  * InventoryStockModule supplies the three sanctioned stock services
  * (CLAUDE MUST #15) consumed by OrderWriteService / god mode.
+ * CallQueueModule is the shared R3 primitive (depends on neither side)
+ * so OrderService can enqueue a freshly-PENDING_CONFIRMATION order for
+ * call confirmation (CC-6) without a circular module dependency.
  */
 @Module({
-  imports: [CatalogReadModule, InventoryStockModule],
+  imports: [CatalogReadModule, InventoryStockModule, CallQueueModule],
   providers: [
     OrderNumberingService,
     OrderStateMachineService,

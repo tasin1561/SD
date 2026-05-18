@@ -60,14 +60,18 @@ function makeService(
   const listActiveForOrder = jest.fn(async () => opts.active ?? []);
   const reservations = { reserve, release, fulfill, listActiveForOrder };
 
+  const enqueueOrder = jest.fn(async () => ({ entry: {}, created: true }));
+  const callQueue = { enqueueOrder };
+
   const svc = new OrderWriteService(
     { client } as unknown as PrismaService,
     stateMachine,
     events as never,
     audit as never,
     reservations as never,
+    callQueue as never,
   );
-  return { svc, orderUpdate, orderFindFirst, events, audit, reserve, release, fulfill, listActiveForOrder };
+  return { svc, orderUpdate, orderFindFirst, events, audit, reserve, release, fulfill, listActiveForOrder, enqueueOrder };
 }
 
 describe('OrderWriteService.transitionStatus', () => {
@@ -248,5 +252,42 @@ describe('OrderWriteService.transitionStatus', () => {
     await expect(
       svc.transitionStatus({ orderId: 'o1', to: OrderStatus.CONFIRMED, actor: ACTOR }),
     ).rejects.toMatchObject({ response: { code: 'NOOP_TRANSITION' } });
+  });
+
+  it('CC-6: a transition INTO PENDING_CONFIRMATION enqueues the call (post-commit)', async () => {
+    const { svc, enqueueOrder } = makeService({
+      order: {
+        id: 'o1',
+        sellerId: 's1',
+        orderNumber: 'SD-1',
+        status: OrderStatus.OUT_OF_STOCK,
+        items: [],
+      },
+    });
+    const res = await svc.transitionStatus({
+      orderId: 'o1',
+      to: OrderStatus.PENDING_CONFIRMATION,
+      actor: ACTOR,
+    });
+    expect(res.status).toBe(OrderStatus.PENDING_CONFIRMATION);
+    expect(enqueueOrder).toHaveBeenCalledWith('o1', undefined);
+  });
+
+  it('CC-6: a non-PENDING_CONFIRMATION transition does NOT enqueue', async () => {
+    const { svc, enqueueOrder } = makeService({
+      order: {
+        id: 'o1',
+        sellerId: 's1',
+        orderNumber: 'SD-1',
+        status: OrderStatus.CONFIRMED,
+        items: [],
+      },
+    });
+    await svc.transitionStatus({
+      orderId: 'o1',
+      to: OrderStatus.PENDING_PICK,
+      actor: ACTOR,
+    });
+    expect(enqueueOrder).not.toHaveBeenCalled();
   });
 });

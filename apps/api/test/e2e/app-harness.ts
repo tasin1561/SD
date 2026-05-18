@@ -72,10 +72,13 @@ export async function bootTestApp(): Promise<AppHarness> {
  * run order.
  */
 export async function resetAuthState(prisma: PrismaClient): Promise<void> {
-  // Order-critical chain (CLAUDE MUST #12): stock rows FK orders/variants/
-  // sellers → inventory FIRST; then Module-6 order/customer rows (FK
-  // variants/sellers) → resetOrderState; then catalog (FK sellers); then
-  // the auth/seller wipe.
+  // Order-critical chain (CLAUDE MUST #12): Module-7 call-center rows
+  // (call_queue_entries/call_attempts FK orders; agent_call_settings FK
+  // staff_users) → resetCallCenterState FIRST; then stock rows FK
+  // orders/variants/sellers → inventory; then Module-6 order/customer
+  // rows → resetOrderState; then catalog (FK sellers); then the
+  // auth/seller wipe.
+  await resetCallCenterState(prisma);
   await resetInventoryState(prisma);
   await resetOrderState(prisma);
   await resetCatalogState(prisma);
@@ -178,6 +181,27 @@ export async function resetOrderState(prisma: PrismaClient): Promise<void> {
         'orders',
         'customers',
       ].join(', ') +
+      ' RESTART IDENTITY CASCADE',
+  );
+}
+
+/**
+ * Wipes Module-7 call-center tables (CLAUDE MUST #12). Chained BEFORE
+ * resetOrderState because call_queue_entries / call_attempts FK orders
+ * (CC-6 now enqueues on every PENDING_CONFIRMATION order created in
+ * e2e); agent_call_settings FK staff_users. Explicit truncation rather
+ * than relying on the orders-CASCADE so agent_call_settings is cleared
+ * too. call_attempts is append-only in the app (CC-1) — TRUNCATE here
+ * is test teardown, not an app mutation path.
+ */
+export async function resetCallCenterState(
+  prisma: PrismaClient,
+): Promise<void> {
+  await prisma.$executeRawUnsafe(
+    'TRUNCATE TABLE ' +
+      ['call_attempts', 'call_queue_entries', 'agent_call_settings'].join(
+        ', ',
+      ) +
       ' RESTART IDENTITY CASCADE',
   );
 }

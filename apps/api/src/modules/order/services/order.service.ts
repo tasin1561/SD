@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -23,6 +24,7 @@ import { OrderEventWriterService, type EventActor } from './order-event-writer.s
 import { OrderStateMachineService } from './order-state-machine.service';
 import { RecipientAddressCacheService } from './recipient-address-cache.service';
 import { AddressValidationService } from './address-validation.service';
+import { CallQueueService } from '../../call-queue/services/call-queue.service';
 import type { CreateOrderDto } from '../dto/create-order.dto';
 import type { UpdateOrderDto } from '../dto/update-order.dto';
 import type { CancelOrderDto } from '../dto/cancel-order.dto';
@@ -166,6 +168,8 @@ export interface CreateOrderOptions {
  */
 @Injectable()
 export class OrderService {
+  private readonly logger = new Logger(OrderService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly numbering: OrderNumberingService,
@@ -176,7 +180,30 @@ export class OrderService {
     private readonly catalog: CatalogReadService,
     private readonly audit: AuditLogService,
     private readonly stateMachine: OrderStateMachineService,
+    private readonly callQueue: CallQueueService,
   ) {}
+
+  /**
+   * CC-6 — a freshly-PENDING_CONFIRMATION order joins the call queue.
+   * POST-COMMIT + best-effort: enqueueOrder is idempotent (existing
+   * OPEN entry → no-op), so a retry / a racing enqueue is safe; a
+   * failure here must NOT fail the order write (the order is correctly
+   * persisted; an admin re-enqueue / reconciler recovers a missed
+   * enqueue). Mirrors the saga's post-commit discipline.
+   */
+  private async enqueueForCall(
+    orderId: string,
+    ctx: ClientContext,
+  ): Promise<void> {
+    try {
+      await this.callQueue.enqueueOrder(orderId, ctx);
+    } catch (e) {
+      this.logger.error(
+        { orderId, err: (e as Error).message },
+        'Post-commit call-queue enqueue failed; order persisted, needs re-enqueue',
+      );
+    }
+  }
 
   async create(
     sellerId: string,
@@ -227,8 +254,9 @@ export class OrderService {
           ? lines.reduce((sum, l) => sum + (l.unitWeightGrams ?? 0) * l.quantity, 0)
           : null;
 
+    let created;
     try {
-      return await this.prisma.client.$transaction(async (tx) => {
+      created = await this.prisma.client.$transaction(async (tx) => {
         const orderNumber = await this.numbering.nextOrderNumber(tx, now);
 
         const customer = await this.customers.findOrCreate(tx, {
@@ -354,6 +382,13 @@ export class OrderService {
       }
       throw e;
     }
+
+    // CC-6: created straight into PENDING_CONFIRMATION (CSV submission
+    // path / manual submit-on-create) → join the call queue post-commit.
+    if (initialStatus === OrderStatus.PENDING_CONFIRMATION) {
+      await this.enqueueForCall(created.id, ctx);
+    }
+    return created;
   }
 
   // ── helpers ────────────────────────────────────────────────────────
@@ -444,8 +479,8 @@ export class OrderService {
       });
     }
 
-    return this.prisma.client.$transaction(async (tx) => {
-      const updated = await tx.order.update({
+    const updated = await this.prisma.client.$transaction(async (tx) => {
+      const row = await tx.order.update({
         where: { id },
         data: { status: OrderStatus.PENDING_CONFIRMATION },
         include: ORDER_VIEW_INCLUDE,
@@ -469,8 +504,13 @@ export class OrderService {
         },
         tx,
       );
-      return updated;
+      return row;
     });
+
+    // CC-6: DRAFT → PENDING_CONFIRMATION → join the call queue
+    // (post-commit, idempotent, best-effort).
+    await this.enqueueForCall(id, ctx);
+    return updated;
   }
 
   /**

@@ -111,6 +111,9 @@ function makeService(
   const audit = { log: jest.fn(async () => 'a1') };
   const stateMachine = new OrderStateMachineService();
 
+  const enqueueOrder = jest.fn(async () => ({ entry: {}, created: true }));
+  const callQueue = { enqueueOrder };
+
   const svc = new OrderService(
     { client } as unknown as PrismaService,
     numbering as never,
@@ -121,9 +124,11 @@ function makeService(
     catalog as never,
     audit as never,
     stateMachine,
+    callQueue as never,
   );
   return {
     svc,
+    enqueueOrder,
     orderCreate,
     orderUpdate,
     orderFindFirst,
@@ -286,13 +291,16 @@ function existingOrder(over: AnyArgs = {}): AnyArgs {
 }
 
 describe('OrderService.submit', () => {
-  it('moves DRAFT → PENDING_CONFIRMATION with a status event', async () => {
-    const { svc, orderUpdate, events } = makeService({ existing: existingOrder() });
+  it('moves DRAFT → PENDING_CONFIRMATION with a status event + CC-6 enqueue', async () => {
+    const { svc, orderUpdate, events, enqueueOrder } = makeService({
+      existing: existingOrder(),
+    });
     await svc.submit('s1', 'o1', ACTOR, CTX);
     expect(orderUpdate.mock.calls[0]![0].data).toMatchObject({
       status: OrderStatus.PENDING_CONFIRMATION,
     });
     expect(events.statusChanged).toHaveBeenCalledTimes(1);
+    expect(enqueueOrder).toHaveBeenCalledWith('o1', CTX);
   });
 
   it('rejects submit from a non-DRAFT status', async () => {
@@ -442,8 +450,8 @@ describe('OrderService admin reads', () => {
 });
 
 describe('OrderService.create — bulk options (commit 19/21 gap-fill)', () => {
-  it('honors initialStatus=PENDING_CONFIRMATION + bulkUploadId', async () => {
-    const { svc, orderCreate, events } = makeService();
+  it('honors initialStatus=PENDING_CONFIRMATION + bulkUploadId + CC-6 enqueue', async () => {
+    const { svc, orderCreate, events, enqueueOrder } = makeService();
     await svc.create('s1', baseDto(), ACTOR, CTX, {
       source: OrderSource.BULK_UPLOAD,
       initialStatus: OrderStatus.PENDING_CONFIRMATION,
@@ -454,6 +462,14 @@ describe('OrderService.create — bulk options (commit 19/21 gap-fill)', () => {
     expect(data.bulkUploadId).toBe('bulk-1');
     // events.created carries the real initial status (not hardcoded DRAFT)
     expect(events.created.mock.calls[0]![4]).toBe(OrderStatus.PENDING_CONFIRMATION);
+    // CC-6: a straight-to-PENDING_CONFIRMATION create joins the queue
+    expect(enqueueOrder).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT enqueue a DRAFT create (CC-6 only fires on PENDING_CONFIRMATION)', async () => {
+    const { svc, enqueueOrder } = makeService();
+    await svc.create('s1', baseDto(), ACTOR, CTX);
+    expect(enqueueOrder).not.toHaveBeenCalled();
   });
 
   it('rejects an initialStatus other than DRAFT/PENDING_CONFIRMATION', async () => {
