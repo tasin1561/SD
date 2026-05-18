@@ -358,6 +358,61 @@ describe('CallAttemptService.recordAttempt — outcome flows', () => {
   });
 });
 
+describe('CallAttemptService.recordAttempt — terminal & remaining outcomes', () => {
+  it('CUSTOMER_DECLINED → REJECTED_BY_CUSTOMER, no requeue, ORDER_REJECTED', async () => {
+    const { svc, entryUpdate, transitionStatus, enqueueAgain } = makeService();
+    const r = await svc.recordAttempt({
+      ...BASE,
+      outcome: CallOutcome.CUSTOMER_DECLINED,
+    });
+    expect(transitionStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ to: OrderStatus.REJECTED_BY_CUSTOMER }),
+    );
+    expect(enqueueAgain).not.toHaveBeenCalled();
+    expect((entryUpdate.mock.calls[0]![0].data as AnyArgs).closureReason).toBe(
+      QueueClosureReason.ORDER_REJECTED,
+    );
+    expect(r).toMatchObject({ requeued: false, hitCap: false });
+  });
+
+  it('WRONG_NUMBER → REJECTED_BY_CUSTOMER terminal', async () => {
+    const { svc, transitionStatus, enqueueAgain } = makeService();
+    await svc.recordAttempt({ ...BASE, outcome: CallOutcome.WRONG_NUMBER });
+    expect(transitionStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ to: OrderStatus.REJECTED_BY_CUSTOMER }),
+    );
+    expect(enqueueAgain).not.toHaveBeenCalled();
+  });
+
+  it('VOICEMAIL_LEFT below cap → CALL_NO_RESPONSE, requeue immediate', async () => {
+    const { svc, transitionStatus, enqueueAgain } = makeService({ priorCount: 0 });
+    const r = await svc.recordAttempt({
+      ...BASE,
+      outcome: CallOutcome.VOICEMAIL_LEFT,
+    });
+    expect(transitionStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ to: OrderStatus.CALL_NO_RESPONSE }),
+    );
+    expect(enqueueAgain).toHaveBeenCalled();
+    const at = enqueueAgain.mock.calls[0]![1] as Date;
+    expect(Math.abs(at.getTime() - Date.now())).toBeLessThan(5_000);
+    expect(r.requeued).toBe(true);
+  });
+
+  it('VOICEMAIL_LEFT counts toward the cap (at cap → REJECTED_NDR)', async () => {
+    const { svc, transitionStatus, enqueueAgain } = makeService({ priorCount: 2 });
+    const r = await svc.recordAttempt({
+      ...BASE,
+      outcome: CallOutcome.VOICEMAIL_LEFT,
+    });
+    expect(transitionStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ to: OrderStatus.REJECTED_NDR }),
+    );
+    expect(enqueueAgain).not.toHaveBeenCalled();
+    expect(r.hitCap).toBe(true);
+  });
+});
+
 describe('CallAttemptService.recordAttempt — forceByAdmin', () => {
   it('proceeds on a PENDING, un-owned entry; MEDIUM audit, forcedByAdmin=true', async () => {
     const { svc, attemptCreate, auditLog } = makeService({

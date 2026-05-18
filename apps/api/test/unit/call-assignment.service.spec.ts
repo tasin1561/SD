@@ -15,6 +15,9 @@ function makeService(opts: {
   currentRows?: AnyArgs[];
   releaseEntry?: AnyArgs | null; // findUnique for release(); undefined → default ASSIGNED owned
   releaseUpdateCount?: number;
+  /** Simulate FOR UPDATE SKIP LOCKED: the pickable row is returned to
+   *  the FIRST locking SELECT only; concurrent SELECTs skip it (→ []). */
+  skipLockedOnce?: boolean;
 } = {}) {
   const count = jest.fn<Promise<number>, [AnyArgs]>(async () => opts.activeCount ?? 0);
   const agentSettingsFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
@@ -22,9 +25,15 @@ function makeService(opts: {
       ? null
       : { maxActiveCalls: opts.maxActive },
   );
-  const queryRawUnsafe = jest.fn<Promise<Array<{ id: string }>>, [string]>(async () =>
-    opts.picked ? [{ id: opts.picked.id }] : [],
-  );
+  let lockClaimed = false;
+  const queryRawUnsafe = jest.fn<Promise<Array<{ id: string }>>, [string]>(async () => {
+    if (!opts.picked) return [];
+    if (opts.skipLockedOnce) {
+      if (lockClaimed) return []; // row already locked by the winner
+      lockClaimed = true;
+    }
+    return [{ id: opts.picked.id }];
+  });
   const update = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({
     id: opts.picked?.id ?? 'q1',
     orderId: opts.picked?.orderId ?? 'o1',
@@ -233,5 +242,24 @@ describe('CallAssignmentService.release', () => {
     const { svc, auditLog } = makeService({ releaseUpdateCount: 0 });
     expect(await svc.release('q1', 'agent-1')).toEqual({ released: false });
     expect(auditLog).not.toHaveBeenCalled();
+  });
+});
+
+describe('CallAssignmentService.pullNext — concurrency (FOR UPDATE SKIP LOCKED)', () => {
+  it('two parallel pulls on a 1-entry queue: one ASSIGNED, one QUEUE_EMPTY', async () => {
+    const { svc, update } = makeService({
+      picked: { id: 'q1', orderId: 'o1' },
+      skipLockedOnce: true, // the locked row is invisible to the loser's SELECT
+    });
+    const [a, b] = await Promise.all([
+      svc.pullNext('agent-1'),
+      svc.pullNext('agent-2'),
+    ]);
+    const got = [a, b].filter((r) => r !== null);
+    const empty = [a, b].filter((r) => r === null);
+    expect(got).toHaveLength(1); // exactly one winner
+    expect(empty).toHaveLength(1); // the other sees QUEUE_EMPTY
+    expect(got[0]!.assignmentId).toBe('q1');
+    expect(update).toHaveBeenCalledTimes(1); // only the winner flips → ASSIGNED
   });
 });

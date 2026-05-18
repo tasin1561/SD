@@ -124,4 +124,12 @@ describe('AgentSettingsService.updateAsAdmin', () => {
       actorId: 'admin-1',
     });
   });
+
+  it('first-edit upsert create payload carries agentId + the patched field', async () => {
+    const { svc, upsert } = makeService();
+    await svc.updateAsAdmin('agent-1', { maxActiveCalls: 4 }, 'admin-1');
+    const call = upsert.mock.calls[0]![0];
+    expect(call.where).toEqual({ agentId: 'agent-1' });
+    expect(call.create).toEqual({ agentId: 'agent-1', maxActiveCalls: 4 });
+  });
 });
