@@ -374,6 +374,67 @@ export class CallAttemptService {
     };
   }
 
+  /** An agent's own attempt history (CC-1 rows are immutable facts),
+   *  newest first, paginated. Read-only — never mutates call_attempts. */
+  async listHistory(
+    agentId: string,
+    page: number,
+    pageSize: number,
+  ): Promise<{
+    items: Array<{
+      attemptId: string;
+      orderId: string;
+      queueEntryId: string;
+      outcome: CallOutcome;
+      startedAt: Date;
+      endedAt: Date | null;
+      durationSeconds: number | null;
+      outcomeNotes: string | null;
+      rescheduledFor: Date | null;
+    }>;
+    total: number;
+    page: number;
+    pageSize: number;
+  }> {
+    const where = { agentId };
+    const [rows, total] = await Promise.all([
+      this.prisma.client.callAttempt.findMany({
+        where,
+        orderBy: { startedAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          orderId: true,
+          queueEntryId: true,
+          outcome: true,
+          startedAt: true,
+          endedAt: true,
+          durationSeconds: true,
+          outcomeNotes: true,
+          rescheduledFor: true,
+        },
+      }),
+      this.prisma.client.callAttempt.count({ where }),
+    ]);
+    return {
+      items: rows.map((r) => ({
+        attemptId: r.id,
+        orderId: r.orderId,
+        queueEntryId: r.queueEntryId,
+        outcome: r.outcome,
+        startedAt: r.startedAt,
+        endedAt: r.endedAt,
+        durationSeconds: r.durationSeconds,
+        outcomeNotes: r.outcomeNotes,
+        rescheduledFor: r.rescheduledFor,
+      })),
+      total,
+      page,
+      pageSize,
+    };
+  }
+
   // ── helpers ──────────────────────────────────────────────────────────
 
   /** Best-effort closure reason for the entry this attempt closes.

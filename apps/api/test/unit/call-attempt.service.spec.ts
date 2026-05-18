@@ -75,12 +75,16 @@ function makeService(
     callAttempt: { count: attemptCount, create: attemptCreate },
     callQueueEntry: { update: entryUpdate },
   };
+  const histFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => []);
+  const histCount = jest.fn<Promise<number>, [AnyArgs]>(async () => 0);
   const client = {
     callQueueEntry: { findUnique: entryFindUnique },
+    callAttempt: { findMany: histFindMany, count: histCount },
     seller: { findUnique: sellerFindUnique },
     systemSetting: { findUnique: systemSettingFindUnique },
   } as {
     callQueueEntry: { findUnique: typeof entryFindUnique };
+    callAttempt: { findMany: typeof histFindMany; count: typeof histCount };
     seller: { findUnique: typeof sellerFindUnique };
     systemSetting: { findUnique: typeof systemSettingFindUnique };
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
@@ -138,6 +142,8 @@ function makeService(
     auditLog,
     transitionStatus,
     enqueueAgain,
+    histFindMany,
+    histCount,
   };
 }
 
@@ -349,5 +355,35 @@ describe('CallAttemptService.recordAttempt — outcome flows', () => {
     expect(transitionStatus).not.toHaveBeenCalled();
     expect(enqueueAgain).toHaveBeenCalled();
     expect(r.targetStatus).toBeNull();
+  });
+});
+
+describe('CallAttemptService.listHistory', () => {
+  it('paginates the agent-scoped attempts (newest first), shaped', async () => {
+    const { svc, histFindMany, histCount } = makeService();
+    histCount.mockResolvedValueOnce(7);
+    histFindMany.mockResolvedValueOnce([
+      {
+        id: 'att-1',
+        orderId: 'o1',
+        queueEntryId: 'q1',
+        outcome: CallOutcome.NO_ANSWER,
+        startedAt: new Date('2026-05-18T10:00:00Z'),
+        endedAt: null,
+        durationSeconds: null,
+        outcomeNotes: null,
+        rescheduledFor: null,
+      },
+    ]);
+    const r = await svc.listHistory('agent-1', 2, 20);
+    const args = histFindMany.mock.calls[0]![0];
+    expect(args).toMatchObject({
+      where: { agentId: 'agent-1' },
+      orderBy: { startedAt: 'desc' },
+      skip: 20,
+      take: 20,
+    });
+    expect(r).toMatchObject({ total: 7, page: 2, pageSize: 20 });
+    expect(r.items[0]).toMatchObject({ attemptId: 'att-1', outcome: CallOutcome.NO_ANSWER });
   });
 });

@@ -10,6 +10,7 @@ import { AssignmentExpirationService } from './services/assignment-expiration.se
 import { AssignmentExpirationQueue } from './queue/assignment-expiration.queue';
 import { AssignmentExpirationWorker } from './queue/assignment-expiration.worker';
 import { AgentSettingsController } from './controllers/agent-settings.controller';
+import { AgentCallController } from './controllers/agent-call.controller';
 
 /**
  * Module 7 — Call Center Workflow.
@@ -31,7 +32,7 @@ import { AgentSettingsController } from './controllers/agent-settings.controller
  */
 @Module({
   imports: [OrderModule, CallQueueModule],
-  controllers: [AgentSettingsController],
+  controllers: [AgentSettingsController, AgentCallController],
   providers: [
     CallOutcomeMappingService,
     CallAssignmentService,
