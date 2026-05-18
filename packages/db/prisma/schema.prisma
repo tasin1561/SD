@@ -73,35 +73,39 @@ model StaffUser {
 }
 
 model Seller {
-  id                          String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  email                       String       @unique
-  emailDisplay                String       @map("email_display")
-  passwordHash                String       @map("password_hash")
-  companyName                 String       @map("company_name")
-  contactPersonName           String       @map("contact_person_name")
-  phone                       String
-  whatsapp                    String?
-  status                      SellerStatus @default(PENDING)
-  approvedAt                  DateTime?    @map("approved_at") @db.Timestamptz
-  approvedById                String?      @map("approved_by_id") @db.Uuid
-  bankName                    String?      @map("bank_name")
-  bankAccountName             String?      @map("bank_account_name")
-  bankAccountNumber           String?      @map("bank_account_number")
-  bankRoutingNumber           String?      @map("bank_routing_number")
-  bankSwiftCode               String?      @map("bank_swift_code")
-  displayCurrency             Currency     @default(INR) @map("display_currency")
-  displayLanguage             String       @default("en") @map("display_language")
-  countryCode                 String       @default("BD") @map("country_code") @db.Char(2)
-  emailVerifiedAt             DateTime?    @map("email_verified_at") @db.Timestamptz
-  lastLoginAt                 DateTime?    @map("last_login_at") @db.Timestamptz
+  id                               String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  email                            String       @unique
+  emailDisplay                     String       @map("email_display")
+  passwordHash                     String       @map("password_hash")
+  companyName                      String       @map("company_name")
+  contactPersonName                String       @map("contact_person_name")
+  phone                            String
+  whatsapp                         String?
+  status                           SellerStatus @default(PENDING)
+  approvedAt                       DateTime?    @map("approved_at") @db.Timestamptz
+  approvedById                     String?      @map("approved_by_id") @db.Uuid
+  bankName                         String?      @map("bank_name")
+  bankAccountName                  String?      @map("bank_account_name")
+  bankAccountNumber                String?      @map("bank_account_number")
+  bankRoutingNumber                String?      @map("bank_routing_number")
+  bankSwiftCode                    String?      @map("bank_swift_code")
+  displayCurrency                  Currency     @default(INR) @map("display_currency")
+  displayLanguage                  String       @default("en") @map("display_language")
+  countryCode                      String       @default("BD") @map("country_code") @db.Char(2)
+  emailVerifiedAt                  DateTime?    @map("email_verified_at") @db.Timestamptz
+  lastLoginAt                      DateTime?    @map("last_login_at") @db.Timestamptz
   // Module 5 — inventory: per-seller low-stock threshold default (variant
   // override wins) and a per-seller reservation-TTL override (falls back to
   // ops.stock_reservation_ttl_hours).
-  defaultLowStockThreshold    Int?         @map("default_low_stock_threshold")
-  reservationTtlHoursOverride Int?         @map("reservation_ttl_hours_override")
-  createdAt                   DateTime     @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt                   DateTime     @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt                   DateTime?    @map("deleted_at") @db.Timestamptz
+  defaultLowStockThreshold         Int?         @map("default_low_stock_threshold")
+  reservationTtlHoursOverride      Int?         @map("reservation_ttl_hours_override")
+  // Module 7: per-seller override of ops.call_max_attempts_before_ndr.
+  // null = fall back to the system default. Effective max =
+  // override ?? system_settings.ops.call_max_attempts_before_ndr.
+  callMaxAttemptsBeforeNdrOverride Int?         @map("call_max_attempts_before_ndr_override")
+  createdAt                        DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                        DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt                        DateTime?    @map("deleted_at") @db.Timestamptz
 
   approvedBy              StaffUser?                     @relation("SellerApprovedBy", fields: [approvedById], references: [id])
   invitations             SellerInvitation[]
@@ -1388,7 +1392,7 @@ model CallQueueEntry {
   assignmentMethod  AssignmentMethod    @default(AUTO_ROUND_ROBIN) @map("assignment_method")
   previousAgentIds  String[]            @default([]) @map("previous_agent_ids") @db.Uuid
   priority          Int                 @default(100)
-  status            CallQueueStatus     @default(WAITING)
+  status            CallQueueStatus     @default(PENDING)
   availableAt       DateTime            @default(now()) @map("available_at") @db.Timestamptz
   scheduledAttempts Int                 @default(0) @map("scheduled_attempts")
   maxAttempts       Int                 @default(3) @map("max_attempts")
@@ -1446,7 +1450,9 @@ model CallAttempt {
 model AgentCallSettings {
   id                  String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
   agentId             String   @unique @map("agent_id") @db.Uuid
-  maxActiveCalls      Int      @default(20) @map("max_active_calls")
+  // Module 7 (locked decision 10a): reused as the concurrent-assignment
+  // cap; default migrated 20 → 1.
+  maxActiveCalls      Int      @default(1) @map("max_active_calls")
   isAvailable         Boolean  @default(true) @map("is_available")
   workingHoursStart   String   @default("09:00") @map("working_hours_start")
   workingHoursEnd     String   @default("18:00") @map("working_hours_end")
@@ -2544,6 +2550,12 @@ enum OrderStatus {
   // Seller/customer cancels use CANCELLED + cancellationReason.
   CANCELLED_BY_ADMIN       @map("cancelled_by_admin")
   REJECTED                 @map("rejected")
+  // Module 7 (call center): terminal rejections from the call workflow.
+  // REJECTED_BY_CUSTOMER = CUSTOMER_DECLINED / WRONG_NUMBER outcomes;
+  // REJECTED_NDR = attempt cap reached (no further queue entry). Both
+  // pre-reservation → no stock release. See ORD-1 matrix + CC-2 mapping.
+  REJECTED_BY_CUSTOMER     @map("rejected_by_customer")
+  REJECTED_NDR             @map("rejected_ndr")
   PENDING_PICK             @map("pending_pick")
   PICKED                   @map("picked")
   PACKED                   @map("packed")
@@ -2619,11 +2631,12 @@ enum BulkUploadStatus {
 }
 
 enum CallQueueStatus {
-  WAITING     @map("waiting")
-  ASSIGNED    @map("assigned")
-  IN_PROGRESS @map("in_progress")
-  SCHEDULED   @map("scheduled")
-  CLOSED      @map("closed")
+  // Module 7 reconciliation (doc wins): the original WAITING/IN_PROGRESS/
+  // SCHEDULED/CLOSED set was replaced by the locked 4-value model.
+  PENDING   @map("pending")
+  ASSIGNED  @map("assigned")
+  COMPLETED @map("completed")
+  EXPIRED   @map("expired")
 
   @@map("call_queue_status")
 }
@@ -2649,21 +2662,19 @@ enum QueueClosureReason {
 }
 
 enum CallOutcome {
-  CONFIRMED             @map("confirmed")
-  CANCELLED_BY_CUSTOMER @map("cancelled_by_customer")
-  RESCHEDULED           @map("rescheduled")
-  ADDRESS_CORRECTION    @map("address_correction")
-  ITEM_CORRECTION       @map("item_correction")
-  NO_ANSWER             @map("no_answer")
-  BUSY                  @map("busy")
-  CALL_REJECTED         @map("call_rejected")
-  VOICEMAIL             @map("voicemail")
-  WRONG_NUMBER          @map("wrong_number")
-  PHONE_DISCONNECTED    @map("phone_disconnected")
-  LANGUAGE_BARRIER      @map("language_barrier")
-  TECHNICAL_ISSUE       @map("technical_issue")
-  FAKE_ORDER            @map("fake_order")
-  OTHER                 @map("other")
+  // Module 7 reconciliation (doc wins): destructive replace of the
+  // original 15-value set with the locked 9-outcome list. call_attempts
+  // is empty (Module 7 unbuilt) so this is safe. Mapping to order
+  // transitions is centralized in CallOutcomeMappingService (CC-2).
+  CONFIRMED          @map("confirmed")
+  CUSTOMER_DECLINED  @map("customer_declined")
+  WRONG_NUMBER       @map("wrong_number")
+  NO_ANSWER          @map("no_answer")
+  BUSY               @map("busy")
+  VOICEMAIL_LEFT     @map("voicemail_left")
+  CALLBACK_REQUESTED @map("callback_requested")
+  TECHNICAL_FAILURE  @map("technical_failure")
+  LANGUAGE_BARRIER   @map("language_barrier")
 
   @@map("call_outcome")
 }

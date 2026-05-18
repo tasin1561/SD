@@ -593,6 +593,10 @@ single source of truth for fired/cleared/cooldown.
   low-stock threshold (variant override wins).
 - `sellers.reservation_ttl_hours_override (Int?)` — per-seller reservation
   TTL override (else `ops.stock_reservation_ttl_hours`, else 48).
+- `sellers.call_max_attempts_before_ndr_override (Int?)` — Module 7
+  per-seller override of `ops.call_max_attempts_before_ndr` (else system
+  default 3); when the attempt count hits the effective max, the next
+  attempt-counting non-confirm outcome → `REJECTED_NDR`.
 - `product_variants.low_stock_threshold (Int?)` — per-variant threshold;
   inventory-owned scalar surfaced cross-module via `CatalogReadService`
   (raw passthrough, not inheritance-resolved) so MUST #13 holds.
@@ -675,7 +679,7 @@ Central order record.
 - **Recipient (immutable snapshot):** `recipientName`, `recipientPhoneE164`, `recipientAltPhoneE164`, `recipientEmail`, `recipientAddressLine1/2`, `recipientLandmark`, `recipientCity`, `recipientStateProvince`, `recipientPostalCode`, `recipientCountryCode`
 - **Economics:** `paymentMode: PaymentMode`, `codAmountInr`, `declaredValueInr`
 - **Physical:** `totalWeightGrams`, `packageType`
-- `status: OrderStatus` (26 values — see enum below)
+- `status: OrderStatus` (28 values — see enum below)
 - `isUrgent`, `isHighRisk`, `hasAdminOverride` (Module 6 god-mode flag — set once by `OrderAdminOverrideService.forceMutate()`, never cleared)
 - Confirmation: `confirmedAt`, `confirmedById`, `cancellationReason`, `cancelledAt`, `cancelledById`
 - Notes: `internalNotes`, `sellerNotes`, `callNotes` (latest summary)
@@ -689,9 +693,9 @@ Central order record.
 
 **PaymentMode enum:** `COD`, `PREPAID`
 
-**OrderStatus enum (26 values):**
+**OrderStatus enum (28 values):**
 Pre-confirmation: `DRAFT`, `PENDING_CONFIRMATION`, `CALL_NO_RESPONSE`, `CALL_RESCHEDULED`
-Post-confirmation: `CONFIRMED`, `OUT_OF_STOCK`, `CANCELLED`, `CANCELLED_BY_ADMIN`, `REJECTED`
+Post-confirmation: `CONFIRMED`, `OUT_OF_STOCK`, `CANCELLED`, `CANCELLED_BY_ADMIN`, `REJECTED`, `REJECTED_BY_CUSTOMER`, `REJECTED_NDR`
 Warehouse: `PENDING_PICK`, `PICKED`, `PACKED`, `PACK_FAILED`
 Courier: `PENDING_DISPATCH`, `DISPATCHED`, `IN_TRANSIT`, `OUT_FOR_DELIVERY`, `DELIVERED`
 Failed: `DELIVERY_FAILED`, `RTO_INITIATED`, `RTO_IN_TRANSIT`, `RTO_RECEIVED`, `RTO_RESTOCKED`, `RTO_DAMAGED`, `LOST_IN_TRANSIT`
@@ -701,7 +705,15 @@ Manual: `PENDING_MANUAL_PLACEMENT`
 > non-terminal; Module 7 retries → `CONFIRMED` or → `CANCELLED`) and
 > `CANCELLED_BY_ADMIN` (admin sane-cancel + god-mode). The earlier
 > "22 values" label was a stale miscount of an already-24-value list;
-> it is now genuinely 26.
+> it became 26.
+>
+> **Module 7** added two terminal call-workflow rejections (→ 28):
+> `REJECTED_BY_CUSTOMER` (CUSTOMER_DECLINED / WRONG_NUMBER outcomes) and
+> `REJECTED_NDR` (attempt cap reached). Both are pre-reservation so the
+> ORD-1 matrix edges carry NO stock release. The matrix also gained
+> EXPLICIT `CALL_NO_RESPONSE`→`CALL_NO_RESPONSE` and
+> `CALL_RESCHEDULED`→`CALL_RESCHEDULED` self-loops ("same state, attempt
+> logged").
 
 **OrderCancellationReason enum:** `CUSTOMER_REQUESTED`, `CUSTOMER_UNREACHABLE`, `FAKE_ORDER`, `WRONG_ADDRESS`, `OUT_OF_STOCK`, `HIGH_RISK_CUSTOMER`, `SELLER_REQUESTED`, `DUPLICATE_ORDER`, `NO_COURIER_AVAILABLE`, `OTHER`
 
@@ -785,9 +797,16 @@ Live worklist.
 
 **Indexes:** `(assignedAgentId, status)`, `(status, availableAt, priority)`, `orderId`, `closureReason`
 
-**CallQueueStatus enum:** `WAITING`, `ASSIGNED`, `IN_PROGRESS`, `SCHEDULED`, `CLOSED`
+**CallQueueStatus enum (Module 7 reconciled — doc wins):** `PENDING`, `ASSIGNED`, `COMPLETED`, `EXPIRED` (model `@default(PENDING)`)
 
-**AssignmentMethod enum:** `AUTO_ROUND_ROBIN`, `MANUAL`, `REASSIGNED`, `AGENT_PICKED`
+> Module 7 replaced the original `WAITING/IN_PROGRESS/SCHEDULED/CLOSED`
+> set with the locked 4-value model. `scheduledFor` is NOT a new column —
+> the existing `availableAt` ("earliest pickable time") carries that
+> semantic. `priority`, `previousAgentIds`, `assignmentMethod`,
+> `closureReason`, `maxAttempts` are unused under locked-decision-#1
+> strict FIFO — left in place (forward-compatible), not wired.
+
+**AssignmentMethod enum:** `AUTO_ROUND_ROBIN`, `MANUAL`, `REASSIGNED`, `AGENT_PICKED` *(column unused in Phase 1A — strict FIFO)*
 
 **QueueClosureReason enum:** `ORDER_CONFIRMED`, `ORDER_CANCELLED`, `ORDER_REJECTED`, `MAX_ATTEMPTS_EXCEEDED`, `ORDER_DELETED`, `ADMIN_CLOSED`
 
@@ -807,20 +826,26 @@ Append-mostly per-attempt log.
 
 **Indexes:** `queueEntryId`, `orderId`, `(agentId, startedAt)`, `outcome`, `startedAt`, `flaggedAsSuspicious`
 
-**CallOutcome enum (15 values):**
-- Successful: `CONFIRMED`, `CANCELLED_BY_CUSTOMER`, `RESCHEDULED`
-- Issues: `ADDRESS_CORRECTION`, `ITEM_CORRECTION`
-- Failed contact: `NO_ANSWER`, `BUSY`, `CALL_REJECTED`, `VOICEMAIL`, `WRONG_NUMBER`, `PHONE_DISCONNECTED`
-- Quality: `LANGUAGE_BARRIER`, `TECHNICAL_ISSUE`
-- Fraud: `FAKE_ORDER`
-- `OTHER`
+**CallOutcome enum (Module 7 reconciled — doc wins, 9 values):**
+`CONFIRMED`, `CUSTOMER_DECLINED`, `WRONG_NUMBER`, `NO_ANSWER`, `BUSY`,
+`VOICEMAIL_LEFT`, `CALLBACK_REQUESTED`, `TECHNICAL_FAILURE`,
+`LANGUAGE_BARRIER`
+
+> Module 7 destructively replaced the original 15-value set (table was
+> empty). Outcome → order-transition mapping is centralized in
+> `CallOutcomeMappingService` (CC-2). Attempt-counting outcomes (6 of 9):
+> CONFIRMED, CUSTOMER_DECLINED, WRONG_NUMBER, NO_ANSWER, BUSY,
+> VOICEMAIL_LEFT. CALLBACK_REQUESTED / TECHNICAL_FAILURE /
+> LANGUAGE_BARRIER do NOT count toward the NDR cap.
+> `rescheduledFor`/`rescheduledReason` carry CALLBACK_REQUESTED's
+> agent-picked time.
 
 ## agent_call_settings
 Per-agent config (one row per agent).
 
 **Key fields:**
 - `agentId` (unique)
-- Capacity: `maxActiveCalls @default(20)`
+- Capacity: `maxActiveCalls @default(1)` *(Module 7: reused as the concurrent-assignment cap; default migrated 20 → 1 per locked decision 10a)*
 - `isAvailable`
 - Hours: `workingHoursStart` ("09:00"), `workingHoursEnd` ("18:00"), `workingDays: Int[] @default([1,2,3,4,5,6])` (0=Sun, 6=Sat)
 - `timezone @default("Asia/Kolkata")`

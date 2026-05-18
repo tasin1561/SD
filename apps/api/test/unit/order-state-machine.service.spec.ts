@@ -12,14 +12,16 @@ const TERMINAL: OrderStatus[] = [
   OrderStatus.CANCELLED,
   OrderStatus.CANCELLED_BY_ADMIN,
   OrderStatus.REJECTED,
+  OrderStatus.REJECTED_BY_CUSTOMER,
+  OrderStatus.REJECTED_NDR,
 ];
 
 describe('OrderStateMachineService', () => {
   const sm = new OrderStateMachineService();
 
-  it('covers all 26 OrderStatus values as graph keys', () => {
+  it('covers all 28 OrderStatus values as graph keys', () => {
     const all = Object.values(OrderStatus);
-    expect(all).toHaveLength(26);
+    expect(all).toHaveLength(28);
     for (const s of all) {
       // never throws / never undefined for a real status
       expect(Array.isArray(sm.getAllowedTransitions(s))).toBe(true);
@@ -100,6 +102,35 @@ describe('OrderStateMachineService', () => {
     it('DRAFT → CANCELLED has no side-effects', () => {
       expect(sm.requiredSideEffects(OrderStatus.DRAFT, OrderStatus.CANCELLED)).toEqual([]);
     });
+  });
+
+  describe('Module 7 call-workflow edges (REJECTED_BY_CUSTOMER / NDR)', () => {
+    it.each([
+      OrderStatus.PENDING_CONFIRMATION,
+      OrderStatus.CALL_NO_RESPONSE,
+      OrderStatus.CALL_RESCHEDULED,
+    ])('%s → REJECTED_BY_CUSTOMER / REJECTED_NDR valid, no side-effects', (from) => {
+      for (const to of [OrderStatus.REJECTED_BY_CUSTOMER, OrderStatus.REJECTED_NDR]) {
+        expect(sm.isValidTransition(from, to)).toBe(true);
+        expect(sm.requiredSideEffects(from, to)).toEqual([]);
+      }
+    });
+
+    it.each([OrderStatus.REJECTED_BY_CUSTOMER, OrderStatus.REJECTED_NDR])(
+      '%s is terminal',
+      (s) => {
+        expect(sm.isTerminal(s)).toBe(true);
+        expect(sm.getAllowedTransitions(s)).toEqual([]);
+      },
+    );
+
+    it.each([OrderStatus.CALL_NO_RESPONSE, OrderStatus.CALL_RESCHEDULED])(
+      '%s has an EXPLICIT self-loop (same state, attempt logged), no side-effects',
+      (s) => {
+        expect(sm.isValidTransition(s, s)).toBe(true);
+        expect(sm.requiredSideEffects(s, s)).toEqual([]);
+      },
+    );
   });
 
   describe('invalid transitions', () => {

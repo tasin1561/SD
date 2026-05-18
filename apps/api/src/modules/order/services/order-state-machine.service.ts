@@ -40,6 +40,15 @@ const { RESERVE_STOCK, RELEASE_STOCK, FULFILL_STOCK } = OrderSideEffect;
  *  - Module 7 owns PENDING_CONFIRMATION→CONFIRMED; Module 8 owns the
  *    warehouse/courier legs; Module 6 only DEFINES the lifecycle and
  *    drives create/submit/confirm/cancel.
+ *  - **Explicit self-loops** (Module 7): CALL_NO_RESPONSE→CALL_NO_RESPONSE
+ *    and CALL_RESCHEDULED→CALL_RESCHEDULED are *valid* transitions. A
+ *    state machine may carry explicit self-loops when "same state,
+ *    a new attempt was logged" is the real semantic (repeat NO_ANSWER /
+ *    CALLBACK_REQUESTED). Callers that route a self-loop through
+ *    OrderWriteService must still bypass its from===to NOOP guard — the
+ *    call-center flow does this by treating target===current as
+ *    "no status change needed" while still recording the attempt + re-
+ *    queueing (Module 7 CC-3).
  */
 const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]]> = [
   [OrderStatus.DRAFT, [
@@ -56,24 +65,38 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
     { to: OrderStatus.CANCELLED, sideEffects: [] }, // no reservation yet
     { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [] },
     { to: OrderStatus.REJECTED, sideEffects: [] },
+    // Module 7 call-workflow terminals (pre-reservation → no release).
+    { to: OrderStatus.REJECTED_BY_CUSTOMER, sideEffects: [] },
+    { to: OrderStatus.REJECTED_NDR, sideEffects: [] },
   ]],
 
   [OrderStatus.CALL_NO_RESPONSE, [
     { to: OrderStatus.PENDING_CONFIRMATION, sideEffects: [] },
+    // Self-loop (Module 7): a repeat NO_ANSWER/BUSY/VOICEMAIL_LEFT while
+    // already CALL_NO_RESPONSE is "same state, attempt logged" — an
+    // EXPLICIT, valid transition (see class JSDoc on self-loops).
+    { to: OrderStatus.CALL_NO_RESPONSE, sideEffects: [] },
     { to: OrderStatus.CALL_RESCHEDULED, sideEffects: [] },
     { to: OrderStatus.CONFIRMED, sideEffects: [RESERVE_STOCK] },
     { to: OrderStatus.CANCELLED, sideEffects: [] },
     { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [] },
     { to: OrderStatus.REJECTED, sideEffects: [] },
+    { to: OrderStatus.REJECTED_BY_CUSTOMER, sideEffects: [] },
+    { to: OrderStatus.REJECTED_NDR, sideEffects: [] },
   ]],
 
   [OrderStatus.CALL_RESCHEDULED, [
     { to: OrderStatus.PENDING_CONFIRMATION, sideEffects: [] },
     { to: OrderStatus.CALL_NO_RESPONSE, sideEffects: [] },
+    // Self-loop (Module 7): a repeat CALLBACK_REQUESTED re-schedules
+    // again — "same state, attempt logged".
+    { to: OrderStatus.CALL_RESCHEDULED, sideEffects: [] },
     { to: OrderStatus.CONFIRMED, sideEffects: [RESERVE_STOCK] },
     { to: OrderStatus.CANCELLED, sideEffects: [] },
     { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [] },
     { to: OrderStatus.REJECTED, sideEffects: [] },
+    { to: OrderStatus.REJECTED_BY_CUSTOMER, sideEffects: [] },
+    { to: OrderStatus.REJECTED_NDR, sideEffects: [] },
   ]],
 
   [OrderStatus.OUT_OF_STOCK, [
@@ -179,6 +202,8 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
   [OrderStatus.CANCELLED, []],
   [OrderStatus.CANCELLED_BY_ADMIN, []],
   [OrderStatus.REJECTED, []],
+  [OrderStatus.REJECTED_BY_CUSTOMER, []], // Module 7 terminal
+  [OrderStatus.REJECTED_NDR, []], // Module 7 terminal (attempt cap)
 ];
 
 /**
