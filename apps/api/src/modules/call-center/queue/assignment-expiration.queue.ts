@@ -56,14 +56,18 @@ export class AssignmentExpirationQueue implements OnModuleInit, OnModuleDestroy 
   /** Schedule a delayed expiry sweep. `jobId` is deterministic per
    *  (assignment, assignedAt) so a re-pull producing the *same*
    *  assignedAt can't pile up duplicate timers (extra idempotency atop
-   *  the time-based check in the service). */
+   *  the time-based check in the service). BullMQ forbids ':' in a
+   *  custom jobId (its Redis key separator), so the ISO timestamp is
+   *  encoded as epoch-ms and joined with '_'. */
   async enqueueExpiration(
     data: ExpireAssignmentJob,
     delayMs: number,
   ): Promise<string> {
+    const stamp = Date.parse(data.assignedAtIso);
+    const jobId = `${data.assignmentId}_${Number.isNaN(stamp) ? data.assignedAtIso.replace(/[:.]/g, '-') : stamp}`;
     const job = await this.queue.add(JOB_EXPIRE_ASSIGNMENT, data, {
       delay: Math.max(0, delayMs),
-      jobId: `${data.assignmentId}:${data.assignedAtIso}`,
+      jobId,
     });
     return String(job.id);
   }
