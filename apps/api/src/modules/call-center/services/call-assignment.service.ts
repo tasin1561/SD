@@ -6,6 +6,7 @@ import {
   type ResolvedOrder,
 } from '../../order/services/order-read.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
+import { AssignmentExpirationService } from './assignment-expiration.service';
 
 /** Effective concurrent-assignment cap when an agent has no settings
  *  row — mirrors agent_call_settings.maxActiveCalls @default(1). */
@@ -45,6 +46,7 @@ export class CallAssignmentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orders: OrderReadService,
+    private readonly expiration: AssignmentExpirationService,
   ) {}
 
   /** Returns the assigned entry (+ order snapshot), or `null` when no
@@ -93,6 +95,13 @@ export class CallAssignmentService {
     });
 
     if (!picked) return null; // QUEUE_EMPTY
+
+    // CC-7: arm the timeout sweep immediately (before enrichment) so a
+    // slow/failing OrderReadService can't leave the entry un-expirable.
+    await this.expiration.scheduleExpiration(
+      picked.id,
+      picked.assignedAt ?? now,
+    );
 
     const order = await this.orders.getById(picked.orderId);
     if (!order) {

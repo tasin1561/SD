@@ -2,6 +2,7 @@ import { CallQueueStatus } from '@skydrop/db';
 import { CallAssignmentService } from '../../src/modules/call-center/services/call-assignment.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { OrderReadService } from '../../src/modules/order/services/order-read.service';
+import type { AssignmentExpirationService } from '../../src/modules/call-center/services/assignment-expiration.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -40,27 +41,43 @@ function makeService(opts: {
   const orders = {
     getById: jest.fn(async () => (opts.order === undefined ? { orderId: 'o1' } : opts.order)),
   };
+  const scheduleExpiration = jest.fn<Promise<void>, [string, Date]>(async () => {});
+  const expiration = { scheduleExpiration };
   const svc = new CallAssignmentService(
     { client } as unknown as PrismaService,
     orders as unknown as OrderReadService,
+    expiration as unknown as AssignmentExpirationService,
   );
-  return { svc, count, agentSettingsFindUnique, queryRawUnsafe, update, orders };
+  return {
+    svc,
+    count,
+    agentSettingsFindUnique,
+    queryRawUnsafe,
+    update,
+    orders,
+    scheduleExpiration,
+  };
 }
 
 describe('CallAssignmentService.pullNext', () => {
   it('returns null (QUEUE_EMPTY) when no entry is pickable', async () => {
-    const { svc, update } = makeService({ picked: null });
+    const { svc, update, scheduleExpiration } = makeService({ picked: null });
     expect(await svc.pullNext('agent-1')).toBeNull();
     expect(update).not.toHaveBeenCalled();
+    expect(scheduleExpiration).not.toHaveBeenCalled();
   });
 
   it('locks FIFO + assigns + enriches via OrderReadService', async () => {
-    const { svc, queryRawUnsafe, update, orders } = makeService({
+    const { svc, queryRawUnsafe, update, orders, scheduleExpiration } = makeService({
       picked: { id: 'q1', orderId: 'o1' },
       order: { orderId: 'o1', recipient: { name: 'Asha' } },
     });
     const r = await svc.pullNext('agent-1');
     expect(r).not.toBeNull();
+    expect(scheduleExpiration).toHaveBeenCalledWith(
+      'q1',
+      new Date('2026-05-18T10:00:00Z'),
+    );
     const sql = queryRawUnsafe.mock.calls[0]![0];
     expect(sql).toContain('FOR UPDATE SKIP LOCKED');
     expect(sql).toContain('ORDER BY available_at ASC, created_at ASC');

@@ -2,6 +2,9 @@ import { Module } from '@nestjs/common';
 import { OrderModule } from '../order/order.module';
 import { CallOutcomeMappingService } from './services/call-outcome-mapping.service';
 import { CallAssignmentService } from './services/call-assignment.service';
+import { AssignmentExpirationService } from './services/assignment-expiration.service';
+import { AssignmentExpirationQueue } from './queue/assignment-expiration.queue';
+import { AssignmentExpirationWorker } from './queue/assignment-expiration.worker';
 
 /**
  * Module 7 — Call Center Workflow.
@@ -19,7 +22,13 @@ import { CallAssignmentService } from './services/call-assignment.service';
  */
 @Module({
   imports: [OrderModule],
-  providers: [CallOutcomeMappingService, CallAssignmentService],
+  providers: [
+    CallOutcomeMappingService,
+    CallAssignmentService,
+    AssignmentExpirationService,
+    AssignmentExpirationQueue,
+    AssignmentExpirationWorker,
+  ],
   exports: [CallOutcomeMappingService],
 })
 export class CallCenterModule {}
