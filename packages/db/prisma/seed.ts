@@ -159,6 +159,53 @@ const systemSettings: SystemSettingSeed[] = [
     description:
       'Recipient state must match one of these (28 states + 8 union territories) — soft address validation in Module 6',
   },
+  // Module 7 — Call Center. Effective NDR cap = sellers
+  // .callMaxAttemptsBeforeNdrOverride ?? ops.call_max_attempts_before_ndr.
+  {
+    key: 'ops.call_max_attempts_before_ndr',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 3,
+    displayName: 'Call Attempts Before NDR',
+    description:
+      'Default max attempt-counting call outcomes before an order is auto-rejected as REJECTED_NDR (per-seller override: sellers.call_max_attempts_before_ndr_override)',
+  },
+  {
+    key: 'ops.call_assignment_timeout_minutes',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 30,
+    displayName: 'Call Assignment Timeout (minutes)',
+    description:
+      'A pulled queue entry the agent does not act on within this window is auto-returned to PENDING by the BullMQ expiration worker',
+  },
+  {
+    key: 'ops.call_reschedule_min_hours',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 1,
+    displayName: 'Call Reschedule Min (hours)',
+    description:
+      'CALLBACK_REQUESTED scheduledFor must be at least this many hours in the future',
+  },
+  {
+    key: 'ops.call_reschedule_max_days',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 7,
+    displayName: 'Call Reschedule Max (days)',
+    description:
+      'CALLBACK_REQUESTED scheduledFor must be at most this many days in the future',
+  },
+  {
+    key: 'ops.call_busy_retry_delay_hours',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 1,
+    displayName: 'Call Busy Retry Delay (hours)',
+    description:
+      'BUSY outcome re-queues the order with availableAt = now + this many hours',
+  },
 ];
 
 async function seedSystemSettings() {
