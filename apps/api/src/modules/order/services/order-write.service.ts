@@ -10,6 +10,7 @@ import {
   OrderCancellationReason,
   OrderStatus,
   Prisma,
+  QueueClosureReason,
   ReservationReleaseReason,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -89,6 +90,15 @@ export interface TransitionStatusResult {
  *
  * Email enqueue is intentionally NOT wired here — notification dispatch
  * is Module 11; this engine only owns status + stock + events + audit.
+ *
+ * ── CC-6 call-queue coupling (Module 7) ────────────────────────────────
+ * POST-COMMIT, idempotent, best-effort (never undoes a committed status
+ * change): a transition whose RESULT status is PENDING_CONFIRMATION
+ * re-enqueues the order for a call; leaving PENDING_CONFIRMATION
+ * dequeues the OPEN entry. The dequeue is a safe no-op when a
+ * CallAttemptService flow already COMPLETED the entry in its own tx —
+ * that is the documented "idempotent, safe alongside an in-flight call
+ * attempt" property. Via the shared `call-queue` R3 primitive.
  *
  * ── SANCTIONED CROSS-MODULE API (Modules 7 / 8) ────────────────────────
  *
@@ -227,8 +237,58 @@ export class OrderWriteService {
     // landing is NOT mis-enqueued.
     if (result.status === OrderStatus.PENDING_CONFIRMATION) {
       await this.enqueueForCall(order.id, input.ctx);
+    } else if (from === OrderStatus.PENDING_CONFIRMATION) {
+      // CC-6: leaving PENDING_CONFIRMATION (any non-confirm/confirm exit)
+      // closes the OPEN call-queue entry. POST-COMMIT + IDEMPOTENT — when
+      // a CallAttemptService flow already COMPLETED the entry in its own
+      // tx this is a safe no-op ({dequeued:0}); when transitionStatus is
+      // driven directly (admin sane-cancel / god-mode) it does the close.
+      await this.dequeueForExit(order.id, result.status, input.ctx);
     }
     return result;
+  }
+
+  /** CC-6 post-commit call-queue dequeue (idempotent, best-effort). */
+  private async dequeueForExit(
+    orderId: string,
+    landed: OrderStatus,
+    ctx?: ClientContext,
+  ): Promise<void> {
+    try {
+      await this.callQueue.dequeueOrder(
+        orderId,
+        this.closureReasonFor(landed),
+        ctx,
+      );
+    } catch (e) {
+      this.logger.error(
+        { orderId, landed, err: (e as Error).message },
+        'Post-commit call-queue dequeue failed; status persisted, entry self-heals on next dequeue',
+      );
+    }
+  }
+
+  /** Best-effort closure reason for the entry being closed on
+   *  PENDING_CONFIRMATION exit. OUT_OF_STOCK (and any other transient
+   *  non-terminal landing) has no precise QueueClosureReason value — it
+   *  re-enqueues on return to PENDING_CONFIRMATION; ADMIN_CLOSED is the
+   *  neutral system-closed fallback (debt-tracked imprecision, final
+   *  stretch). */
+  private closureReasonFor(landed: OrderStatus): QueueClosureReason {
+    switch (landed) {
+      case OrderStatus.CONFIRMED:
+        return QueueClosureReason.ORDER_CONFIRMED;
+      case OrderStatus.CANCELLED:
+      case OrderStatus.CANCELLED_BY_ADMIN:
+        return QueueClosureReason.ORDER_CANCELLED;
+      case OrderStatus.REJECTED:
+      case OrderStatus.REJECTED_BY_CUSTOMER:
+        return QueueClosureReason.ORDER_REJECTED;
+      case OrderStatus.REJECTED_NDR:
+        return QueueClosureReason.MAX_ATTEMPTS_EXCEEDED;
+      default:
+        return QueueClosureReason.ADMIN_CLOSED;
+    }
   }
 
   /** CC-6 post-commit call-queue enqueue (idempotent, best-effort —

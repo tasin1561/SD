@@ -1,5 +1,5 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { ActorType, OrderStatus } from '@skydrop/db';
+import { ActorType, OrderStatus, QueueClosureReason } from '@skydrop/db';
 import { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import { OrderStateMachineService } from '../../src/modules/order/services/order-state-machine.service';
 import { InsufficientStockError } from '../../src/modules/inventory-stock/services/stock-reservation.service';
@@ -61,7 +61,8 @@ function makeService(
   const reservations = { reserve, release, fulfill, listActiveForOrder };
 
   const enqueueOrder = jest.fn(async () => ({ entry: {}, created: true }));
-  const callQueue = { enqueueOrder };
+  const dequeueOrder = jest.fn(async () => ({ dequeued: 0, preemptedAssigned: false }));
+  const callQueue = { enqueueOrder, dequeueOrder };
 
   const svc = new OrderWriteService(
     { client } as unknown as PrismaService,
@@ -71,7 +72,7 @@ function makeService(
     reservations as never,
     callQueue as never,
   );
-  return { svc, orderUpdate, orderFindFirst, events, audit, reserve, release, fulfill, listActiveForOrder, enqueueOrder };
+  return { svc, orderUpdate, orderFindFirst, events, audit, reserve, release, fulfill, listActiveForOrder, enqueueOrder, dequeueOrder };
 }
 
 describe('OrderWriteService.transitionStatus', () => {
@@ -274,7 +275,7 @@ describe('OrderWriteService.transitionStatus', () => {
   });
 
   it('CC-6: a non-PENDING_CONFIRMATION transition does NOT enqueue', async () => {
-    const { svc, enqueueOrder } = makeService({
+    const { svc, enqueueOrder, dequeueOrder } = makeService({
       order: {
         id: 'o1',
         sellerId: 's1',
@@ -289,5 +290,65 @@ describe('OrderWriteService.transitionStatus', () => {
       actor: ACTOR,
     });
     expect(enqueueOrder).not.toHaveBeenCalled();
+    expect(dequeueOrder).not.toHaveBeenCalled(); // not leaving PENDING_CONFIRMATION
+  });
+
+  it('CC-6: PENDING_CONFIRMATION → CONFIRMED dequeues (ORDER_CONFIRMED)', async () => {
+    const { svc, dequeueOrder } = makeService(); // default reserve → CONFIRMED
+    const r = await svc.transitionStatus({
+      orderId: 'o1',
+      to: OrderStatus.CONFIRMED,
+      actor: ACTOR,
+    });
+    expect(r.status).toBe(OrderStatus.CONFIRMED);
+    expect(dequeueOrder).toHaveBeenCalledWith(
+      'o1',
+      QueueClosureReason.ORDER_CONFIRMED,
+      undefined,
+    );
+  });
+
+  it('CC-6: PENDING_CONFIRMATION → REJECTED_NDR dequeues (MAX_ATTEMPTS_EXCEEDED)', async () => {
+    const { svc, dequeueOrder } = makeService({
+      order: {
+        id: 'o1',
+        sellerId: 's1',
+        orderNumber: 'SD-1',
+        status: OrderStatus.PENDING_CONFIRMATION,
+        items: [],
+      },
+    });
+    await svc.transitionStatus({
+      orderId: 'o1',
+      to: OrderStatus.REJECTED_NDR,
+      actor: ACTOR,
+    });
+    expect(dequeueOrder).toHaveBeenCalledWith(
+      'o1',
+      QueueClosureReason.MAX_ATTEMPTS_EXCEEDED,
+      undefined,
+    );
+  });
+
+  it('CC-6: PENDING_CONFIRMATION → CANCELLED dequeues (ORDER_CANCELLED)', async () => {
+    const { svc, dequeueOrder } = makeService({
+      order: {
+        id: 'o1',
+        sellerId: 's1',
+        orderNumber: 'SD-1',
+        status: OrderStatus.PENDING_CONFIRMATION,
+        items: [],
+      },
+    });
+    await svc.transitionStatus({
+      orderId: 'o1',
+      to: OrderStatus.CANCELLED,
+      actor: ACTOR,
+    });
+    expect(dequeueOrder).toHaveBeenCalledWith(
+      'o1',
+      QueueClosureReason.ORDER_CANCELLED,
+      undefined,
+    );
   });
 });
