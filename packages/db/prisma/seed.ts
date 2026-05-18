@@ -206,6 +206,43 @@ const systemSettings: SystemSettingSeed[] = [
     description:
       'BUSY outcome re-queues the order with availableAt = now + this many hours',
   },
+  // Module 8 — Warehouse Operations.
+  {
+    key: 'ops.default_courier_code',
+    category: 'ops',
+    valueType: SettingValueType.STRING,
+    valueString: 'delhivery',
+    displayName: 'Default Courier Code',
+    description:
+      'Courier assigned to a shipment at provisioning (FK couriers.code). Hardcoded in Phase 1A; Module 9 introduces serviceability/multi-courier routing',
+  },
+  {
+    key: 'ops.pick_task_timeout_hours',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 4,
+    displayName: 'Pick Timeout (hours)',
+    description:
+      'A shipment whose pick has been in progress longer than this is auto-reverted to re-pickable by the BullMQ pick-expiration worker (WMS-5)',
+  },
+  {
+    key: 'ops.pick_allocation_retry_max',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 3,
+    displayName: 'Pick Allocation Retry Max',
+    description:
+      'Max attempts when M5 allocateAndPopulate surfaces PICK_ALLOCATION_CONFLICT before surfacing PICK_ALLOCATION_RETRY_EXHAUSTED (WMS-3)',
+  },
+  {
+    key: 'ops.pick_allocation_retry_backoff_ms',
+    category: 'ops',
+    valueType: SettingValueType.JSON,
+    valueJson: [100, 250, 500],
+    displayName: 'Pick Allocation Retry Backoff (ms)',
+    description:
+      'Per-attempt backoff delays for the WMS-3 pick allocation retry loop',
+  },
 ];
 
 async function seedSystemSettings() {
