@@ -66,6 +66,10 @@ model StaffUser {
   fxRatesOverridden         FxRate[]                      @relation("FxRateOverrideBy")
   notificationTemplatesEdit NotificationTemplate[]        @relation("NotificationTemplateEditedBy")
   systemSettingsEdited      SystemSetting[]               @relation("SystemSettingEditedBy")
+  shipmentsPickStarted      Shipment[]                    @relation("ShipmentPickStartedBy")
+  shipmentsPacked           Shipment[]                    @relation("ShipmentPackedBy")
+  shipmentItemsRtoDisposed  ShipmentItem[]                @relation("ShipmentItemRtoDisposedBy")
+  manifestsClosed           Manifest[]                    @relation("ManifestClosedBy")
 
   @@index([role])
   @@index([deletedAt])
@@ -398,6 +402,7 @@ model Warehouse {
   goodsReceipts     GoodsReceipt[]
   shipmentsAsOrigin Shipment[]
   stockAlertStates  StockAlertState[]
+  manifests         Manifest[]
 
   @@index([status])
   @@map("warehouses")
@@ -1532,6 +1537,18 @@ model Shipment {
   podRecipientName       String?        @map("pod_recipient_name")
   hasIssue               Boolean        @default(false) @map("has_issue")
   estimatedCostInr       Decimal?       @map("estimated_cost_inr") @db.Decimal(12, 2)
+  // Module 8 — warehouse pick/pack operational state. The order status
+  // (PENDING_PICK/PICKED/PACKED) is the authoritative lifecycle gate
+  // (WMS-9); these track who/when + the pick-timeout CAS token (WMS-5,
+  // M7-assignedAt analogue). `manifestId` is the (movable pre-close)
+  // DRAFT manifest assignment (WMS-7).
+  pickStartedAt          DateTime?      @map("pick_started_at") @db.Timestamptz
+  pickStartedByStaffId   String?        @map("pick_started_by_staff_id") @db.Uuid
+  pickExpiresAt          DateTime?      @map("pick_expires_at") @db.Timestamptz
+  pickCompletedAt        DateTime?      @map("pick_completed_at") @db.Timestamptz
+  packCompletedAt        DateTime?      @map("pack_completed_at") @db.Timestamptz
+  packedByStaffId        String?        @map("packed_by_staff_id") @db.Uuid
+  manifestId             String?        @map("manifest_id") @db.Uuid
   createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz
   updatedAt              DateTime       @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt              DateTime?      @map("deleted_at") @db.Timestamptz
@@ -1540,6 +1557,9 @@ model Shipment {
   originWarehouse  Warehouse         @relation(fields: [originWarehouseId], references: [id])
   supersedes       Shipment?         @relation("ShipmentSupersedes", fields: [supersedesShipmentId], references: [id])
   supersededBy     Shipment[]        @relation("ShipmentSupersedes")
+  pickStartedBy    StaffUser?        @relation("ShipmentPickStartedBy", fields: [pickStartedByStaffId], references: [id])
+  packedBy         StaffUser?        @relation("ShipmentPackedBy", fields: [packedByStaffId], references: [id])
+  manifest         Manifest?         @relation(fields: [manifestId], references: [id])
   orderShipments   OrderShipment[]
   items            ShipmentItem[]
   awbLabels        AwbLabel[]
@@ -1559,6 +1579,13 @@ model Shipment {
   @@index([supersedesShipmentId])
   @@index([originWarehouseId])
   @@index([deletedAt])
+  // Module 8: pick-queue pull (status + pickStartedAt + FIFO created_at)
+  // and the pick-timeout sweep.
+  @@index([status, pickStartedAt, createdAt])
+  @@index([pickExpiresAt])
+  @@index([manifestId])
+  @@index([pickStartedByStaffId])
+  @@index([packedByStaffId])
   @@map("shipments")
 }
 
@@ -1581,32 +1608,72 @@ model OrderShipment {
 }
 
 model ShipmentItem {
-  id                   String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  shipmentId           String   @map("shipment_id") @db.Uuid
-  orderItemId          String   @map("order_item_id") @db.Uuid
+  id                   String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  shipmentId           String            @map("shipment_id") @db.Uuid
+  orderItemId          String            @map("order_item_id") @db.Uuid
   quantity             Int
-  skuCode              String   @map("sku_code")
-  productName          String   @map("product_name")
-  variantLabel         String?  @map("variant_label")
-  unitWeightGrams      Int?     @map("unit_weight_grams")
-  unitDeclaredValueInr Decimal? @map("unit_declared_value_inr") @db.Decimal(12, 2)
-  hsCode               String?  @map("hs_code")
-  unitPriceInr         Decimal? @map("unit_price_inr") @db.Decimal(12, 2)
-  pickedBatchId        String?  @map("picked_batch_id") @db.Uuid
-  pickedBinId          String?  @map("picked_bin_id") @db.Uuid
-  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  skuCode              String            @map("sku_code")
+  productName          String            @map("product_name")
+  variantLabel         String?           @map("variant_label")
+  unitWeightGrams      Int?              @map("unit_weight_grams")
+  unitDeclaredValueInr Decimal?          @map("unit_declared_value_inr") @db.Decimal(12, 2)
+  hsCode               String?           @map("hs_code")
+  unitPriceInr         Decimal?          @map("unit_price_inr") @db.Decimal(12, 2)
+  pickedBatchId        String?           @map("picked_batch_id") @db.Uuid
+  pickedBinId          String?           @map("picked_bin_id") @db.Uuid
+  // Module 8 — RTO per-item inspection (WMS-8). On the line snapshot,
+  // matching the pickedBatchId/pickedBinId "operational context on
+  // shipment_items" precedent (no separate rto_receipts table).
+  rtoCondition         RtoItemCondition? @map("rto_condition")
+  rtoDisposition       RtoDisposition?   @map("rto_disposition")
+  rtoDisposedByStaffId String?           @map("rto_disposed_by_staff_id") @db.Uuid
+  rtoInspectionNotes   String?           @map("rto_inspection_notes") @db.Text
+  createdAt            DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime          @updatedAt @map("updated_at") @db.Timestamptz
 
-  shipment    Shipment      @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
-  orderItem   OrderItem     @relation(fields: [orderItemId], references: [id])
-  pickedBatch StockBatch?   @relation(fields: [pickedBatchId], references: [id])
-  pickedBin   WarehouseBin? @relation(fields: [pickedBinId], references: [id])
+  shipment      Shipment      @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  orderItem     OrderItem     @relation(fields: [orderItemId], references: [id])
+  pickedBatch   StockBatch?   @relation(fields: [pickedBatchId], references: [id])
+  pickedBin     WarehouseBin? @relation(fields: [pickedBinId], references: [id])
+  rtoDisposedBy StaffUser?    @relation("ShipmentItemRtoDisposedBy", fields: [rtoDisposedByStaffId], references: [id])
 
   @@index([shipmentId])
   @@index([orderItemId])
   @@index([pickedBatchId])
   @@index([pickedBinId])
+  @@index([rtoDisposedByStaffId])
   @@map("shipment_items")
+}
+
+// Module 8 — warehouse dispatch manifest. A per-courier grouping of
+// PACKED shipments closed on-demand by a WAREHOUSE_SUPERVISOR (WMS-6);
+// closure enqueues the M9 AWB batch (stubbed until Module 9). A shipment
+// belongs to ≤1 manifest at a time (movable between DRAFT manifests
+// pre-close, WMS-7) via the nullable Shipment.manifestId. ManifestStatus
+// is intentionally DRAFT/CLOSED only for Module 8; Module 9 extends it
+// with AWB_PENDING/CONFIRMED/FAILED.
+model Manifest {
+  id                 String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  manifestNumber     String         @unique @map("manifest_number")
+  courierCode        String         @map("courier_code")
+  originWarehouseId  String         @map("origin_warehouse_id") @db.Uuid
+  status             ManifestStatus @default(DRAFT)
+  closedByStaffId    String?        @map("closed_by_staff_id") @db.Uuid
+  closedAt           DateTime?      @map("closed_at") @db.Timestamptz
+  awbBatchEnqueuedAt DateTime?      @map("awb_batch_enqueued_at") @db.Timestamptz
+  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  courier         Courier    @relation(fields: [courierCode], references: [code])
+  originWarehouse Warehouse  @relation(fields: [originWarehouseId], references: [id])
+  closedByStaff   StaffUser? @relation("ManifestClosedBy", fields: [closedByStaffId], references: [id])
+  shipments       Shipment[]
+
+  @@index([courierCode, status])
+  @@index([originWarehouseId])
+  @@index([status, createdAt])
+  @@index([closedByStaffId])
+  @@map("manifests")
 }
 
 model AwbLabel {
@@ -1786,6 +1853,7 @@ model Courier {
   zoneMatrixEntries ZoneMatrixEntry[]
   shipments         Shipment[]
   webhooks          CourierWebhook[]
+  manifests         Manifest[]
 
   @@index([isActive])
   @@index([priorityForRouting])
@@ -2260,6 +2328,8 @@ enum StaffRole {
   SELLER_APPROVAL_ADMIN  @map("seller_approval_admin")
   CALL_AGENT             @map("call_agent")
   WAREHOUSE_STAFF        @map("warehouse_staff")
+  // Module 8: manifest close + supervisor pick/RTO overrides (WMS-6/10).
+  WAREHOUSE_SUPERVISOR   @map("warehouse_supervisor")
   MANUAL_PLACEMENT_ADMIN @map("manual_placement_admin")
   FINANCE                @map("finance")
 
@@ -2707,6 +2777,32 @@ enum ShipmentStatus {
   CANCELLED          @map("cancelled")
 
   @@map("shipment_status")
+}
+
+// Module 8 — warehouse dispatch manifest lifecycle. DRAFT/CLOSED only;
+// Module 9 extends with AWB_PENDING/CONFIRMED/FAILED.
+enum ManifestStatus {
+  DRAFT  @map("draft")
+  CLOSED @map("closed")
+
+  @@map("manifest_status")
+}
+
+// Module 8 — RTO per-item inspection (locked decision #8: condition is
+// GOOD/DAMAGED/MISSING; disposition is RESTOCK/WRITE_OFF only).
+enum RtoItemCondition {
+  GOOD    @map("good")
+  DAMAGED @map("damaged")
+  MISSING @map("missing")
+
+  @@map("rto_item_condition")
+}
+
+enum RtoDisposition {
+  RESTOCK   @map("restock")
+  WRITE_OFF @map("write_off")
+
+  @@map("rto_disposition")
 }
 
 enum LabelPaperSize {

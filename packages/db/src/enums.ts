@@ -51,6 +51,10 @@ export {
   CallOutcome,
   // Layer 7 — Shipments & Tracking
   ShipmentStatus,
+  // Module 8 — Warehouse Operations (manifest + RTO inspection)
+  ManifestStatus,
+  RtoItemCondition,
+  RtoDisposition,
   LabelPaperSize,
   LabelGenerationReason,
   TrackingEventType,

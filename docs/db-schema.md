@@ -97,6 +97,7 @@ Admin, agents, warehouse staff. Has password auth, role.
 - `SELLER_APPROVAL_ADMIN`
 - `CALL_AGENT`
 - `WAREHOUSE_STAFF`
+- `WAREHOUSE_SUPERVISOR` *(Module 8 — manifest close + supervisor pick/RTO overrides, WMS-6/10)*
 - `MANUAL_PLACEMENT_ADMIN`
 - `FINANCE` (Phase 1B)
 
@@ -877,7 +878,28 @@ Per-agent config (one row per agent).
 
 ---
 
-# Layer 7 — Shipments & Tracking (7 tables)
+# Layer 7 — Shipments & Tracking (8 tables)
+
+> **Module 8 (Warehouse Operations) is shipment-centric** — it adds NO
+> task tables. Pick/pack/dispatch/RTO are driven by the existing
+> `OrderStatus` lifecycle (`PENDING_PICK → PICKED → PACKED →
+> PENDING_DISPATCH → DISPATCHED → … → RTO_RECEIVED → RTO_RESTOCKED`,
+> WMS-9 via `OrderWriteService.transitionStatus` only) with the
+> `Shipment` as the parcel record (`status` stays `CREATED` until the
+> Module-9 AWB leg) and the pick allocation captured on
+> `shipment_items.pickedBatchId/pickedBinId`. Module 8 adds: pick/pack
+> operational columns + RTO inspection columns (below), one new
+> `manifests` table, the `WAREHOUSE_SUPERVISOR` role, and 3 enums
+> (`ManifestStatus`, `RtoItemCondition`, `RtoDisposition`).
+> **Pick-queue semantics (WMS-1):** order `CONFIRMED` = "in pick queue,
+> not started"; `PENDING_PICK` = "pick in progress". `CONFIRMED →
+> PENDING_PICK` fires on the first pick START; pick expiry clears
+> `shipments.pickStartedAt` + `releaseAllocation`s and leaves the order
+> in `PENDING_PICK` (re-pickable via the `pickStartedAt IS NULL`
+> pull-next filter — no `PENDING_PICK → CONFIRMED` bounce). Added matrix
+> edge (controlled M6 extension, no side-effects): `PENDING_PICK →
+> PENDING_MANUAL_PLACEMENT` (WMS-4 pick shortfall; M5 conservation
+> keeps the residual phase-1 reservation).
 
 ## shipments
 The physical parcel.
@@ -944,6 +966,30 @@ Versioned PDF labels.
 **LabelPaperSize enum:** `A4`, `A6`, `THERMAL_4X6`
 
 **LabelGenerationReason enum:** `INITIAL`, `REPRINT_DAMAGED`, `AWB_REISSUED`, `FORMAT_CHANGED`, `MANUAL_REQUEST`
+
+## manifests *(Module 8)*
+Per-courier dispatch grouping of PACKED shipments, closed on-demand by a
+`WAREHOUSE_SUPERVISOR` (WMS-6). Closure enqueues the Module-9 AWB batch
+(stubbed until M9). A shipment belongs to ≤1 manifest at a time, movable
+between DRAFT manifests pre-close (WMS-7) via the nullable
+`shipments.manifest_id` (no join table).
+
+**Key fields:**
+- `manifestNumber` (unique, `MF-YYYY-NN-XXXXXX`, per-year sequence)
+- `courierCode` (FK `couriers.code`), `originWarehouseId` (FK)
+- `status: ManifestStatus`, `closedByStaffId?` (FK `staff_users`), `closedAt?`
+- `awbBatchEnqueuedAt?` (M9-stub marker)
+
+**Indexes:** `(courierCode, status)`, `originWarehouseId`, `(status, createdAt)`, `closedByStaffId`
+
+**ManifestStatus enum:** `DRAFT`, `CLOSED` *(Module 8 only; Module 9 extends with `AWB_PENDING`/`CONFIRMED`/`FAILED`)*
+
+## Module 8 columns on existing shipment tables
+- `shipments` += `pickStartedAt`, `pickStartedByStaffId` (FK `staff_users`), `pickExpiresAt` (4h pick-timeout CAS token — M7-`assignedAt` analogue, WMS-5), `pickCompletedAt`, `packCompletedAt`, `packedByStaffId` (FK `staff_users`), `manifestId` (FK `manifests`, nullable). New indexes: `(status, pickStartedAt, createdAt)` (pull-next FIFO), `pickExpiresAt`, `manifestId`, the two staff FKs. The order status is the authoritative lifecycle gate (WMS-9); these are operational who/when + the timeout token.
+- `shipment_items` += `rtoCondition: RtoItemCondition?`, `rtoDisposition: RtoDisposition?`, `rtoDisposedByStaffId?` (FK `staff_users`), `rtoInspectionNotes?`. RTO inspection lives on the line snapshot (matching the `pickedBatchId/pickedBinId` "operational context on shipment_items" precedent — no `rto_receipts` table; the RTO receipt is order `RTO_RECEIVED` + existing `shipments.rtoReceivedAt`).
+
+**RtoItemCondition enum:** `GOOD`, `DAMAGED`, `MISSING`
+**RtoDisposition enum:** `RESTOCK`, `WRITE_OFF` *(locked decision #8 — RESTOCK uses the existing `RETURN_RESTOCK` StockMovementType; WMS-8 finalize is one tx: all RESTOCK movements + order → `RTO_RESTOCKED`)*
 
 ## tracking_events
 **TimescaleDB HYPERTABLE. Append-only.**

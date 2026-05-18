@@ -122,6 +122,11 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
 
   [OrderStatus.PENDING_PICK, [
     { to: OrderStatus.PICKED, sideEffects: [] },
+    // Module 8 (WMS-4): a pick shortfall routes here. NO side-effect —
+    // the M5 conservation invariant keeps the residual phase-1
+    // reservation intact (allocateAndPopulate/releaseAllocation conserve
+    // total reserved qty); a supervisor resolves the manual placement.
+    { to: OrderStatus.PENDING_MANUAL_PLACEMENT, sideEffects: [] },
     { to: OrderStatus.CANCELLED, sideEffects: [RELEASE_STOCK] },
     { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
   ]],

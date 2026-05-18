@@ -64,6 +64,17 @@ export interface AppliedAllocation {
   alreadyAllocated: boolean;
 }
 
+export interface ReleasedAllocation {
+  reservationId: string;
+  /** The single ACTIVE phase-1 row the holds collapsed back into. */
+  phase1ReservationId: string;
+  /** Phase-2 qty returned to a phase-1 float (= the qtyReserved given
+   *  back on stock_levels). */
+  releasedQty: number;
+  /** true ⇒ already phase-1, untouched (idempotent no-op). */
+  alreadyPhase1: boolean;
+}
+
 interface LevelRow {
   binId: string;
   batchId: string;
@@ -135,6 +146,22 @@ interface BatchGroup {
  *   version-CAS on stock_levels (≤3 attempts → 409
  *   PICK_ALLOCATION_CONFLICT). Module 8 owns operational escalation of a
  *   persistent shortfall.
+ *
+ * releaseAllocation(reservationId, actor?): ReleasedAllocation
+ *   The INVERSE of allocateAndPopulate — Module 8 calls this on pick
+ *   abandonment / 4h pick-timeout (WMS-5) to undo the phase-1 → phase-2
+ *   split so the line is cleanly re-pickable. Collapses ALL ACTIVE
+ *   reservation rows for the line's (orderId, orderItemId) group back
+ *   into a SINGLE ACTIVE phase-1 row (bin/batch NULL) of the conserved
+ *   total qty, deleting the transient extra rows, and gives the phase-2
+ *   holds back to stock_levels.qtyReserved via the CLAMPED monotonic
+ *   decrement (INV-4 — no version-CAS needed for a give-back, exactly
+ *   mirroring StockReservationService.release/fulfill). Conservation:
+ *   Σ(group rows) is preserved (= the original phase-1 qty), so INV-3
+ *   availability is unchanged. Idempotent: a group with no phase-2 rows
+ *   returns alreadyPhase1:true untouched. 404/409 mirror
+ *   allocateAndPopulate. Expand-by-need on the M5 boundary (same
+ *   precedent as StockReservationService.listActiveForOrder).
  * ───────────────────────────────────────────────────────────────────────
  */
 @Injectable()
@@ -431,6 +458,153 @@ export class StockPickAllocationService {
       message: `Could not allocate after ${MAX_POPULATE_ATTEMPTS} attempts (concurrent contention)`,
       cause: lastErr instanceof Error ? lastErr.message : String(lastErr),
     });
+  }
+
+  /**
+   * Inverse of allocateAndPopulate (WMS-5). Collapses the line's ACTIVE
+   * reservation group back to ONE phase-1 row of the conserved total,
+   * giving phase-2 holds back to stock_levels (clamped, no version-CAS).
+   */
+  async releaseAllocation(
+    reservationId: string,
+    actor: { type: ActorType; id?: string | null } = { type: ActorType.SYSTEM },
+  ): Promise<ReleasedAllocation> {
+    const anchor = await this.prisma.client.stockReservation.findUnique({
+      where: { id: reservationId },
+      select: {
+        id: true,
+        status: true,
+        orderId: true,
+        orderItemId: true,
+      },
+    });
+    if (!anchor) {
+      throw new NotFoundException({
+        code: 'RESERVATION_NOT_FOUND',
+        message: 'Reservation not found',
+      });
+    }
+    if (anchor.status !== ReservationStatus.ACTIVE) {
+      throw new ConflictException({
+        code: 'RESERVATION_NOT_ACTIVE',
+        message: `Reservation is ${anchor.status}, cannot release allocation`,
+      });
+    }
+
+    // The whole line's allocation group (allocateAndPopulate may have
+    // split it into the converted original + extra phase-2 rows + a
+    // residual phase-1 row).
+    const group = await this.prisma.client.stockReservation.findMany({
+      where: {
+        orderId: anchor.orderId,
+        orderItemId: anchor.orderItemId,
+        status: ReservationStatus.ACTIVE,
+      },
+      select: {
+        id: true,
+        sellerId: true,
+        variantId: true,
+        warehouseId: true,
+        binId: true,
+        batchId: true,
+        qtyReserved: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const phase2 = group.filter(
+      (r) => r.binId !== null && r.batchId !== null,
+    );
+    // Survivor: the anchor if still in the group, else the FEFO-earliest
+    // row — deterministic so concurrent callers converge.
+    const survivor =
+      group.find((r) => r.id === reservationId) ?? group[0];
+    if (!survivor) {
+      // Group vanished between the two reads (released elsewhere) — no-op.
+      return {
+        reservationId,
+        phase1ReservationId: reservationId,
+        releasedQty: 0,
+        alreadyPhase1: true,
+      };
+    }
+    if (phase2.length === 0) {
+      // Already a pure phase-1 float — idempotent no-op.
+      return {
+        reservationId,
+        phase1ReservationId: survivor.id,
+        releasedQty: 0,
+        alreadyPhase1: true,
+      };
+    }
+
+    const total = group.reduce((s, r) => s + r.qtyReserved, 0);
+    const releasedQty = phase2.reduce((s, r) => s + r.qtyReserved, 0);
+
+    await this.prisma.client.$transaction(async (tx) => {
+      // 1. Give the phase-2 holds back to stock_levels — atomic SQL
+      //    decrement, clamped so a double-release can't go negative
+      //    (INV-4; monotonic give-back ⇒ no version-CAS, mirrors
+      //    StockReservationService.release/fulfill).
+      for (const r of phase2) {
+        // Locals so TS narrows null away for the phase-2 filter (the
+        // `phase2` array predicate doesn't narrow the element type).
+        const binId = r.binId;
+        const batchId = r.batchId;
+        if (binId === null || batchId === null) continue;
+        await tx.stockLevel.updateMany({
+          where: {
+            sellerId: r.sellerId,
+            variantId: r.variantId,
+            warehouseId: r.warehouseId,
+            binId,
+            batchId,
+            qtyReserved: { gte: r.qtyReserved },
+          },
+          data: { qtyReserved: { decrement: r.qtyReserved } },
+        });
+      }
+
+      // 2. Collapse the group → the survivor becomes the single phase-1
+      //    row holding the conserved total; the rest are deleted.
+      await tx.stockReservation.update({
+        where: { id: survivor.id },
+        data: { binId: null, batchId: null, qtyReserved: total },
+      });
+      const toDelete = group
+        .filter((r) => r.id !== survivor.id)
+        .map((r) => r.id);
+      if (toDelete.length > 0) {
+        await tx.stockReservation.deleteMany({
+          where: { id: { in: toDelete } },
+        });
+      }
+
+      await this.audit.log(
+        {
+          actorType: actor.type,
+          actorId: actor.id ?? null,
+          action: 'inventory.reservation.allocation_released',
+          entityType: 'stock_reservation',
+          entityId: survivor.id,
+          metadata: {
+            orderId: anchor.orderId,
+            orderItemId: anchor.orderItemId,
+            releasedQty,
+            conservedTotal: total,
+            collapsedReservationIds: group.map((r) => r.id),
+          },
+        },
+        tx,
+      );
+    });
+
+    return {
+      reservationId,
+      phase1ReservationId: survivor.id,
+      releasedQty,
+      alreadyPhase1: false,
+    };
   }
 
   // ---------- internal ----------

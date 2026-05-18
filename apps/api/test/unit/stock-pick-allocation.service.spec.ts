@@ -180,3 +180,158 @@ describe('StockPickAllocationService.allocateForOrderLine', () => {
     expect(plan.picks).toEqual([{ binId: 'binB', batchId: 'B1', qty: 5 }]);
   });
 });
+
+// ── releaseAllocation (WMS-5 — inverse of allocateAndPopulate) ──────────
+import { ReservationStatus } from '@skydrop/db';
+
+type RAnyArgs = Record<string, unknown>;
+
+function makeReleaseSut(opts: { anchor?: RAnyArgs | null; group?: RAnyArgs[] } = {}) {
+  const reservationFindUnique = jest.fn<Promise<RAnyArgs | null>, [RAnyArgs]>(async () =>
+    opts.anchor === undefined
+      ? { id: 'r1', status: ReservationStatus.ACTIVE, orderId: 'o1', orderItemId: 'oi1' }
+      : opts.anchor,
+  );
+  const reservationFindMany = jest.fn<Promise<RAnyArgs[]>, [RAnyArgs]>(
+    async () => opts.group ?? [],
+  );
+  const stockLevelUpdateMany = jest.fn<Promise<{ count: number }>, [RAnyArgs]>(
+    async () => ({ count: 1 }),
+  );
+  const reservationUpdate = jest.fn<Promise<RAnyArgs>, [RAnyArgs]>(
+    async () => ({}),
+  );
+  const reservationDeleteMany = jest.fn<Promise<{ count: number }>, [RAnyArgs]>(
+    async () => ({ count: 0 }),
+  );
+  const txClient = {
+    stockLevel: { updateMany: stockLevelUpdateMany },
+    stockReservation: { update: reservationUpdate, deleteMany: reservationDeleteMany },
+  };
+  const client = {
+    stockReservation: {
+      findUnique: reservationFindUnique,
+      findMany: reservationFindMany,
+    },
+  } as {
+    stockReservation: {
+      findUnique: typeof reservationFindUnique;
+      findMany: typeof reservationFindMany;
+    };
+    $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
+  };
+  client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> =>
+    fn(txClient);
+  const auditLog = jest.fn<Promise<string | null>, [RAnyArgs, unknown?]>(
+    async () => 'a1',
+  );
+  const audit = { log: auditLog } as unknown as AuditLogService;
+  const svc = new StockPickAllocationService(
+    { client } as unknown as PrismaService,
+    audit,
+  );
+  return {
+    svc,
+    reservationFindUnique,
+    stockLevelUpdateMany,
+    reservationUpdate,
+    reservationDeleteMany,
+    auditLog,
+  };
+}
+
+const P2 = (id: string, qty: number): RAnyArgs => ({
+  id,
+  sellerId: 's1',
+  variantId: 'v1',
+  warehouseId: 'w1',
+  binId: `bin-${id}`,
+  batchId: `batch-${id}`,
+  qtyReserved: qty,
+});
+const P1 = (id: string, qty: number): RAnyArgs => ({
+  id,
+  sellerId: 's1',
+  variantId: 'v1',
+  warehouseId: 'w1',
+  binId: null,
+  batchId: null,
+  qtyReserved: qty,
+});
+
+describe('StockPickAllocationService.releaseAllocation', () => {
+  it('404 when the reservation does not exist', async () => {
+    const { svc } = makeReleaseSut({ anchor: null });
+    await expect(svc.releaseAllocation('rX')).rejects.toMatchObject({
+      response: { code: 'RESERVATION_NOT_FOUND' },
+    });
+  });
+
+  it('409 when the reservation is not ACTIVE', async () => {
+    const { svc } = makeReleaseSut({
+      anchor: { id: 'r1', status: ReservationStatus.FULFILLED, orderId: 'o1', orderItemId: 'oi1' },
+    });
+    await expect(svc.releaseAllocation('r1')).rejects.toMatchObject({
+      response: { code: 'RESERVATION_NOT_ACTIVE' },
+    });
+  });
+
+  it('idempotent no-op when the group is already a pure phase-1 float', async () => {
+    const { svc, stockLevelUpdateMany, reservationUpdate } = makeReleaseSut({
+      group: [P1('r1', 5)],
+    });
+    const r = await svc.releaseAllocation('r1');
+    expect(r).toEqual({
+      reservationId: 'r1',
+      phase1ReservationId: 'r1',
+      releasedQty: 0,
+      alreadyPhase1: true,
+    });
+    expect(stockLevelUpdateMany).not.toHaveBeenCalled();
+    expect(reservationUpdate).not.toHaveBeenCalled();
+  });
+
+  it('collapses phase-2 rows back to one conserved phase-1 row + gives holds back (clamped)', async () => {
+    const { svc, stockLevelUpdateMany, reservationUpdate, reservationDeleteMany, auditLog } =
+      makeReleaseSut({ group: [P2('r1', 3), P2('r2', 2)] });
+    const r = await svc.releaseAllocation('r1');
+
+    expect(r).toMatchObject({
+      reservationId: 'r1',
+      phase1ReservationId: 'r1',
+      releasedQty: 5,
+      alreadyPhase1: false,
+    });
+    // one clamped decrement per phase-2 row
+    expect(stockLevelUpdateMany).toHaveBeenCalledTimes(2);
+    const firstDec = stockLevelUpdateMany.mock.calls[0]![0] as RAnyArgs;
+    expect((firstDec.where as RAnyArgs).qtyReserved).toEqual({ gte: 3 });
+    expect((firstDec.data as RAnyArgs).qtyReserved).toEqual({ decrement: 3 });
+    // survivor reverts to phase-1 holding the conserved total (3+2)
+    expect((reservationUpdate.mock.calls[0]![0] as RAnyArgs).data).toEqual({
+      binId: null,
+      batchId: null,
+      qtyReserved: 5,
+    });
+    // the extra row is deleted
+    expect((reservationDeleteMany.mock.calls[0]![0] as RAnyArgs).where).toEqual({
+      id: { in: ['r2'] },
+    });
+    expect(auditLog.mock.calls[0]![0]).toMatchObject({
+      action: 'inventory.reservation.allocation_released',
+    });
+  });
+
+  it('conserves total across mixed phase-2 + residual phase-1 rows', async () => {
+    const { svc, reservationUpdate } = makeReleaseSut({
+      group: [P2('r1', 3), P1('r-res', 2)], // allocated 3 + residual 2 = 5
+    });
+    const r = await svc.releaseAllocation('r1');
+    expect(r.releasedQty).toBe(3); // only the phase-2 hold is given back
+    expect((reservationUpdate.mock.calls[0]![0] as RAnyArgs).data).toEqual({
+      binId: null,
+      batchId: null,
+      qtyReserved: 5, // conserved total
+    });
+  });
+});

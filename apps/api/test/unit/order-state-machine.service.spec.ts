@@ -133,6 +133,32 @@ describe('OrderStateMachineService', () => {
     );
   });
 
+  describe('Module 8 warehouse edges (WMS-4 pick shortfall)', () => {
+    it('PENDING_PICK → PENDING_MANUAL_PLACEMENT is valid with NO side-effects (M5 conservation keeps the residual phase-1 reservation)', () => {
+      expect(
+        sm.isValidTransition(
+          OrderStatus.PENDING_PICK,
+          OrderStatus.PENDING_MANUAL_PLACEMENT,
+        ),
+      ).toBe(true);
+      expect(
+        sm.requiredSideEffects(
+          OrderStatus.PENDING_PICK,
+          OrderStatus.PENDING_MANUAL_PLACEMENT,
+        ),
+      ).toEqual([]);
+    });
+
+    it('the supervisor can route PENDING_MANUAL_PLACEMENT back to PENDING_PICK (re-pick)', () => {
+      expect(
+        sm.isValidTransition(
+          OrderStatus.PENDING_MANUAL_PLACEMENT,
+          OrderStatus.PENDING_PICK,
+        ),
+      ).toBe(true);
+    });
+  });
+
   describe('invalid transitions', () => {
     it.each([
       [OrderStatus.DRAFT, OrderStatus.CONFIRMED], // must submit first
