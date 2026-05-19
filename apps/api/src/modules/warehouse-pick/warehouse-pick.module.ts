@@ -3,6 +3,7 @@ import { OrderModule } from '../order/order.module';
 import { InventoryStockModule } from '../inventory-stock/inventory-stock.module';
 import { PickQueueService } from './services/pick-queue.service';
 import { PickAllocationService } from './services/pick-allocation.service';
+import { PickExecutionService } from './services/pick-execution.service';
 
 /**
  * Module 8 — Warehouse Operations (pick). Grows commit-by-commit
@@ -10,8 +11,9 @@ import { PickAllocationService } from './services/pick-allocation.service';
  *
  * Imports the Order facade (OrderModule — exports only OrderReadService
  * + OrderWriteService) for pull enrichment and the commit-6 pick saga,
- * and InventoryStockModule for the M5 cross-module surface (only
- * StockPickAllocationService is consumed — WMS-3, commit 5). It is a
+ * and InventoryStockModule for the M5 cross-module surface
+ * (StockPickAllocationService — WMS-3, commit 5; StockReservationService
+ * — listActiveForOrder at pick start, commit 6). It is a
  * LEAF consumer: nothing imports `warehouse-pick`, and the
  * order ↔ warehouse-pick cycle is already broken by the R3
  * `shipment-provision` primitive (commit 3) — `warehouse-pick` carries
@@ -21,6 +23,6 @@ import { PickAllocationService } from './services/pick-allocation.service';
  */
 @Module({
   imports: [OrderModule, InventoryStockModule],
-  providers: [PickQueueService, PickAllocationService],
+  providers: [PickQueueService, PickAllocationService, PickExecutionService],
 })
 export class WarehousePickModule {}
