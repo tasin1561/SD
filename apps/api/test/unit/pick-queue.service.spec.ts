@@ -2,6 +2,7 @@ import { PickQueueService } from '../../src/modules/warehouse-pick/services/pick
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { OrderReadService } from '../../src/modules/order/services/order-read.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
+import type { PickExpirationService } from '../../src/modules/warehouse-pick/services/pick-expiration.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -74,30 +75,47 @@ function makeService(
     async () => 'a1',
   );
   const audit = { log: auditLog };
+  const scheduleExpiration = jest.fn<Promise<void>, [string, Date, Date]>(
+    async () => {},
+  );
+  const expiration = { scheduleExpiration };
 
   const svc = new PickQueueService(
     { client } as unknown as PrismaService,
     orders as unknown as OrderReadService,
     audit as unknown as AuditLogService,
+    expiration as unknown as PickExpirationService,
   );
-  return { svc, queryRawUnsafe, update, systemSettingFindUnique, getById, auditLog };
+  return {
+    svc,
+    queryRawUnsafe,
+    update,
+    systemSettingFindUnique,
+    getById,
+    auditLog,
+    scheduleExpiration,
+  };
 }
 
 describe('PickQueueService.pullNext', () => {
   it('returns null (QUEUE_EMPTY) when no parcel is pickable', async () => {
-    const { svc, update, auditLog, getById } = makeService({ queue: [] });
+    const { svc, update, auditLog, getById, scheduleExpiration } = makeService({
+      queue: [],
+    });
     expect(await svc.pullNext('staff-1')).toBeNull();
     expect(update).not.toHaveBeenCalled();
     expect(auditLog).not.toHaveBeenCalled();
     expect(getById).not.toHaveBeenCalled();
+    expect(scheduleExpiration).not.toHaveBeenCalled();
   });
 
   it('locks FIFO eligible parcels + claims (who/when/expiry) + enriches', async () => {
-    const { svc, queryRawUnsafe, update, getById } = makeService({
-      queue: ['s1'],
-      order: { orderId: 'o1', recipient: { name: 'Asha' } },
-      orderIdForShipment: () => 'o1',
-    });
+    const { svc, queryRawUnsafe, update, getById, scheduleExpiration } =
+      makeService({
+        queue: ['s1'],
+        order: { orderId: 'o1', recipient: { name: 'Asha' } },
+        orderIdForShipment: () => 'o1',
+      });
     const r = await svc.pullNext('staff-7');
     expect(r).not.toBeNull();
 
@@ -118,6 +136,12 @@ describe('PickQueueService.pullNext', () => {
     expect(data.pickExpiresAt).toBeInstanceOf(Date);
 
     expect(getById).toHaveBeenCalledWith('o1');
+    // WMS-5: timeout sweep armed at claim, before enrichment.
+    expect(scheduleExpiration).toHaveBeenCalledWith(
+      's1',
+      expect.any(Date),
+      expect.any(Date),
+    );
     expect(r).toMatchObject({
       pickId: 's1',
       shipmentId: 's1',

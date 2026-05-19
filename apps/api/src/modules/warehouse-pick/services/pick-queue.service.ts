@@ -7,6 +7,7 @@ import {
   type ResolvedOrder,
 } from '../../order/services/order-read.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
+import { PickExpirationService } from './pick-expiration.service';
 
 /** Effective pick-task timeout when ops.pick_task_timeout_hours is unset
  *  — mirrors the seeded default (commit 2). */
@@ -83,6 +84,7 @@ export class PickQueueService {
     private readonly prisma: PrismaService,
     private readonly orders: OrderReadService,
     private readonly audit: AuditLogService,
+    private readonly expiration: PickExpirationService,
   ) {}
 
   /** Returns the claimed parcel (+ order snapshot), or `null` when no
@@ -188,6 +190,15 @@ export class PickQueueService {
     });
 
     if (!picked) return null; // QUEUE_EMPTY
+
+    // WMS-5: arm the timeout sweep immediately (before enrichment) so a
+    // slow/failing OrderReadService can't leave the claim un-expirable
+    // (mirrors M7 CC-7 pullNext ordering).
+    await this.expiration.scheduleExpiration(
+      picked.shipmentId,
+      now,
+      pickExpiresAt,
+    );
 
     if (picked.orderId === null) {
       // The parcel passed the orders-join filter but its OrderShipment
