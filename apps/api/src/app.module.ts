@@ -37,6 +37,7 @@ import { OrderModule } from './modules/order/order.module';
 import { OrderCsvImportModule } from './modules/order-csv-import/order-csv-import.module';
 import { CallCenterModule } from './modules/call-center/call-center.module';
 import { ShipmentProvisionModule } from './modules/shipment-provision/shipment-provision.module';
+import { WarehousePickModule } from './modules/warehouse-pick/warehouse-pick.module';
 import { ThrottlerModule } from './common/throttler/throttler.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { pinoConfig } from './common/pino/logger-config';
@@ -99,6 +100,7 @@ import { envSchema } from './config/env.schema';
     OrderCsvImportModule,
     CallCenterModule,
     ShipmentProvisionModule,
+    WarehousePickModule,
     HealthModule,
   ],
 })
