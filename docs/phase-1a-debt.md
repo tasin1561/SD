@@ -395,6 +395,190 @@ pick it up.
   **Pick up:** add a heartbeat-extends-assignment mechanism if long
   calls become common.
 
+## Warehouse Operations (Module 8)
+
+### HIGH-priority latent bug — qtyOnHand never decrements on the normal lifecycle
+
+- **BUG (latent, HIGH): `stock_levels.qtyOnHand` is never decremented in
+  the normal order lifecycle.** `StockReservationService.fulfill()` at
+  `DELIVERED` decrements `qtyReserved` (clamped, INV-4) and marks the
+  reservation `FULFILLED`, but its JSDoc-promised "separate PICK
+  movement for the physical qtyOnHand decrement" was never implemented.
+  No `StockMovementType.PICK` / `PACK_CONFIRM` / `DISPATCH` /
+  `RETURN_RECEIVE` movement is issued anywhere in M8 (or anywhere
+  else; system-wide grep confirms — the only `mutation.apply` call
+  sites are `goods-receipt`, `inventory-adjustment`, and M8's
+  `warehouse-rto` for `ADJUSTMENT_DECREASE` on WRITE_OFF).
+
+  **Consequence:** every delivered order would leave `qtyOnHand`
+  inflated by `quantity` (the ledger says the goods are still on the
+  shelf, but they're physically gone). Across many delivered orders,
+  inventory drifts unboundedly above reality.
+
+  **Latency:** currently UNREACHABLE in normal operation — no flow
+  drives orders to `DELIVERED` without M9 (courier integration) /
+  M10 (tracking webhooks). Only god mode (`OrderAdminOverrideService.
+  forceMutate`) could force the transition, and it accepts data-
+  integrity risk by contract. Tests / staging cannot exercise the
+  happy delivery path either, so the bug stays inert behind the M9/M10
+  boundary.
+
+  **Resolution requires choosing the qtyOnHand decrement-timing model —
+  an M9/M10 design decision needing courier/tracking context:**
+  - **Model A** (decrement at DISPATCH): `qtyOnHand` reflects physical
+    shelf count at all times. Pick allocates a reservation; DISPATCH
+    issues a `PICK` (or new `DISPATCH`) `StockMovement` `-qty`
+    decrementing on-hand. RTO re-adds via `RETURN_RESTOCK +qty`.
+  - **Model B** (decrement at permanent departure): `qtyOnHand` stays
+    static through transit. `DELIVERED`'s `FULFILL_STOCK` saga issues
+    a `PICK` / `DISPATCH` `-qty` movement AT delivered (the actual
+    physical-departure event); RTO never inflates.
+
+  **COUPLING TO WMS-8 (M8 commit-15 follow-on fix):** The M8 finalize()
+  fix is currently RELEASE-BASED — correct under Model B (qtyOnHand
+  was never decremented, so RTO doesn't need to add it back; only
+  WRITE_OFF needs an `ADJUSTMENT_DECREASE` for the truly-departed unit).
+  **Under Model A, `RtoDispositionService.finalize()` RESTOCK path
+  MUST be revisited (`RETURN_RESTOCK +qty` becomes correct again, the
+  original commit-15 design).** Do NOT fix the qtyOnHand-decrement bug
+  without simultaneously revisiting finalize() — this entry links the
+  two. The break-on-regression assertion in `test/e2e/stock-
+  conservation-rto.e2e-spec.ts` (currently codifies the latent state —
+  "no PICK movement issued for the lifecycle") FLIPS the moment Model
+  A or B is implemented, forcing the finalize() revisit.
+
+  **Pick up:** Module 9 design conversation begins with this decision.
+  This is THE FIRST AGENDA ITEM for M9. Do not resolve reactively.
+
+### M8 commit-15 enum gaps (uncovered during the conservation fix)
+
+- **`StockMovementReasonCode` has no RTO-flavored value.**
+  `RtoDispositionService.finalize()` WRITE_OFF path issues
+  `ADJUSTMENT_DECREASE -qty` movements with `reasonCode` mapped from
+  `shipment_items.rtoCondition`:
+  - `DAMAGED` → `DAMAGED_IN_WAREHOUSE`
+  - `MISSING` → `LOST`
+  - `GOOD` / null → `OTHER` (operationally rare: writing off a GOOD
+    item)
+  These reuse existing enum values; semantically they're close-but-
+  not-exact (`DAMAGED_IN_WAREHOUSE` applies to a unit damaged at the
+  RTO receive, not strictly "in our warehouse"; `LOST` applies to a
+  unit that returned but was missing from the parcel). **Pick up:**
+  add dedicated `RTO_WRITE_OFF_DAMAGED` / `RTO_WRITE_OFF_MISSING` /
+  `RTO_WRITE_OFF_OTHER` values in Phase 2 if ops/reports demand
+  RTO-specific filtering. Additive enum migration; no backfill.
+
+- **`ReservationReleaseReason` has no RTO terminal value.**
+  `RtoDispositionService.finalize()` releases both RESTOCK and
+  WRITE_OFF reservations with `reason=OTHER`. The closest existing
+  value is `ORDER_REJECTED_BY_COURIER` but that semantically refers to
+  pre-shipment courier rejection (e.g., DG goods, weight limits), NOT
+  RTO terminal. **Pick up:** add `RTO_FINALIZED` (or split into
+  `RTO_RESTOCKED` / `RTO_WRITTEN_OFF`) in Phase 2; additive enum.
+
+### M8 endpoint / feature deferrals
+
+- **Supervisor empty-manifest create endpoint deferred.** In Phase 1A
+  manifests are born ONLY from `PackService.complete`'s find-or-create
+  logic (one DRAFT per `(courierCode, originWarehouseId)`). There is no
+  HTTP endpoint for a supervisor to manually create an empty DRAFT
+  manifest. The e2e for `moveShipment` therefore had to insert a target
+  DRAFT directly via `prisma.manifest.create`. **Pick up:** if/when
+  multi-courier (M9 or Phase 2) introduces use cases where supervisors
+  need to pre-create manifests for incoming volume planning, add
+  `POST /admin/warehouse/manifests` to `AdminManifestController`.
+
+- **`ManifestService.moveShipment` is dormant in Phase 1A.** With a
+  single hardcoded courier (`ops.default_courier_code='delhivery'`) and
+  single seeded warehouse (BLR-01), there is typically only ONE DRAFT
+  manifest at any moment per `(courierCode, originWarehouseId)`. The
+  move endpoint exists, is unit + e2e tested, but has no organic
+  multi-DRAFT scenario to flex against. **Pick up:** reachable when M9
+  introduces multi-courier serviceability routing or M5/Phase-2
+  introduces multi-warehouse.
+
+- **Admin RTO list endpoint deferred (CP3).** `WarehouseRtoController`
+  exposes the operator workflow (receive / inspect / finalize) but no
+  `GET /admin/warehouse/rto/shipments` for a supervisor list view.
+  M12 (Admin Dashboard) will likely surface this alongside other
+  operational lists. **Pick up:** add when M12 lands.
+
+### M8 design deferrals (from the original module design)
+
+- **`audit_logs.severity` lives in `metadata.severity`, not a top-level
+  column.** Every audit call's `severity` field (`LOW`/`MEDIUM`/`HIGH`/
+  `CRITICAL`) is written into `metadata.severity`. Severity-based
+  queries currently filter via `metadata.severity` (e.g., the
+  conservation e2e asserts `awbAudit.metadata.severity==='HIGH'`).
+  **Pick up:** if M13 (Reports) needs efficient severity filtering or
+  M12 needs severity-faceted admin dashboards, promote to a top-level
+  column with a partial index. Additive migration; backfill from
+  `metadata.severity`.
+
+- **Pick batching deferred.** `PickQueueService.pullNext` returns ONE
+  shipment per pull. Multi-shipment pick-batch generation (grouping
+  pick paths by zone for efficiency) is deferred to Phase 2 when pick
+  volume warrants the operational complexity. The current FIFO is a
+  reasonable baseline.
+
+- **Voice/scanner integrations deferred.** Picker recordItem is a JSON
+  POST with bin/batch IDs the operator types/selects. Barcode scanner
+  integration, voice-pick, or RF-gun integration are all Phase 2.
+
+- **Multi-warehouse pick routing deferred.** Phase 1A has a single
+  warehouse (BLR-01, hardcoded `ops.default_warehouse_id`). Pick
+  allocation uses `WarehouseResolverService` (M5) which has no
+  multi-warehouse routing logic. Out-of-scope per CLAUDE.md.
+
+- **Pack-time measurement deferred.** No `packStartedAt` /
+  `packCompletedAt` delta tracking surfaced for ops metrics. The schema
+  has `packCompletedAt` only; no claim/start column. **Pick up:** add
+  `packStartedAt` if M13 wants pack-throughput metrics; M12 supervisor
+  dashboard may benefit.
+
+- **Auto-close-manifest-on-threshold deferred.** Manifests close only
+  on explicit supervisor action (`AdminManifestController.close`).
+  Auto-close at N shipments or T hours is a Phase 2 operational
+  convenience. **Pick up:** when manifest volume justifies it (M9
+  multi-courier likely triggers).
+
+- **RTO `INSPECT_LATER` / `RETURN_TO_SELLER` dispositions deferred.**
+  `RtoDisposition` enum is `RESTOCK` / `WRITE_OFF` only. Phase 2 may
+  add `INSPECT_LATER` (defer disposition decision, hold in RTO_HOLD
+  bin) and `RETURN_TO_SELLER` (ship back to BD seller). Schema is
+  forward-compatible (enum extension; condition column already
+  supports DAMAGED/MISSING/GOOD for inspection-later staging).
+
+- **Courier hardcoded to `delhivery`.** `ops.default_courier_code` is
+  the single value `ShipmentProvisionService` uses for every parcel.
+  Multi-courier serviceability + carrier selection is M9. The
+  `ManifestService.attachShipment` find-or-create + `moveShipment`
+  same-courier guard are already shaped for multi-courier (the
+  per-`(courierCode, originWarehouseId)` advisory lock + courier-match
+  validation are forward-compatible).
+
+- **Status-change emails for warehouse transitions deferred to M11.**
+  PICKED / PACKED / DISPATCHED / RTO_RECEIVED / RTO_RESTOCKED transitions
+  emit NO customer/seller notification yet. M11 (Notifications) owns
+  status-change template dispatch. The `transitionStatus` engine
+  deliberately owns status + stock + events + audit only (matches CC
+  status-change-email debt).
+
+- **M9 AWB enqueue is STUBBED in `ManifestService.close`.** Closure
+  emits an audit HIGH `manifest.awb_enqueue_stub` with
+  `metadata.{manifestId, shipmentIds, moduleStubbed:'M9'}` and the
+  manifest stays `CLOSED` (no `AWB_PENDING`/`CONFIRMED`/`FAILED`
+  states — `ManifestStatus` is `DRAFT`/`CLOSED` only for M8). **Pick
+  up:** M9 replaces the stub audit with a real BullMQ
+  `awbBatchQueue.enqueue({manifestId, shipmentIds})` and extends
+  `ManifestStatus` with the three M9 states.
+
+- **AWB stamping is manual in e2e** (test-only): `warehouse-rto-flow`
+  and `stock-conservation-rto` set `shipments.awbNumber` directly via
+  `prisma.shipment.update` because no AWB generator exists yet. M9
+  replaces this with the real generation flow; the e2e helpers
+  collapse to a no-op once M9 stamps the AWB on dispatch.
+
 ## Pricing & Multi-Currency (Modules 15–17)
 
 - **Historical FX rate tracking**. Phase 1A keeps a single current rate

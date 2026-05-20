@@ -886,11 +886,13 @@ Per-agent config (one row per agent).
 > PENDING_DISPATCH → DISPATCHED → … → RTO_RECEIVED → RTO_RESTOCKED`,
 > WMS-9 via `OrderWriteService.transitionStatus` only) with the
 > `Shipment` as the parcel record (`status` stays `CREATED` until the
-> Module-9 AWB leg) and the pick allocation captured on
-> `shipment_items.pickedBatchId/pickedBinId`. Module 8 adds: pick/pack
-> operational columns + RTO inspection columns (below), one new
-> `manifests` table, the `WAREHOUSE_SUPERVISOR` role, and 3 enums
-> (`ManifestStatus`, `RtoItemCondition`, `RtoDisposition`).
+> Module-9 AWB leg) and the pick allocation captured operationally on
+> `shipment_items.pickedBatchId/pickedBinId` (hint only — the
+> authoritative source-of-truth is the phase-2 `stock_reservations`,
+> INV-4; WMS-9). Module 8 adds: pick/pack operational columns + RTO
+> inspection columns (below), one new `manifests` table, the
+> `WAREHOUSE_SUPERVISOR` role, and 3 enums (`ManifestStatus`,
+> `RtoItemCondition`, `RtoDisposition`).
 > **Pick-queue semantics (WMS-1):** order `CONFIRMED` = "in pick queue,
 > not started"; `PENDING_PICK` = "pick in progress". `CONFIRMED →
 > PENDING_PICK` fires on the first pick START; pick expiry clears
@@ -900,6 +902,17 @@ Per-agent config (one row per agent).
 > edge (controlled M6 extension, no side-effects): `PENDING_PICK →
 > PENDING_MANUAL_PLACEMENT` (WMS-4 pick shortfall; M5 conservation
 > keeps the residual phase-1 reservation).
+> **LATENT BUG (HIGH, phase-1a-debt):** `stock_levels.qtyOnHand` is
+> never decremented during the normal lifecycle (no `PICK`/`PACK_CONFIRM`/
+> `DISPATCH` movement is issued anywhere). The
+> `StockReservationService.fulfill()` at DELIVERED only clears
+> `qtyReserved`; the JSDoc-promised "separate PICK movement for the
+> physical qtyOnHand decrement" is unimplemented. Latent because no
+> happy-path flow drives orders to DELIVERED until M9 (courier) /
+> M10 (tracking). Resolution requires choosing the decrement-timing
+> model (A: at-dispatch / B: at-permanent-departure) — see phase-1a-debt
+> Module 8 entry. WMS-8 RTO finalize() is currently release-based
+> (correct under Model B); under Model A it MUST be revisited.
 
 ## shipments
 The physical parcel.
@@ -975,7 +988,7 @@ between DRAFT manifests pre-close (WMS-7) via the nullable
 `shipments.manifest_id` (no join table).
 
 **Key fields:**
-- `manifestNumber` (unique, `MF-YYYY-NN-XXXXXX`, per-year sequence)
+- `manifestNumber` (unique, `MF-YYYY-MM-XXXXXX`, per-year sequence + advisory lock 0x04d46 — mirrors `ShipmentNumberingService` / ORD-8)
 - `courierCode` (FK `couriers.code`), `originWarehouseId` (FK)
 - `status: ManifestStatus`, `closedByStaffId?` (FK `staff_users`), `closedAt?`
 - `awbBatchEnqueuedAt?` (M9-stub marker)
