@@ -3,6 +3,8 @@ import { OrderModule } from '../order/order.module';
 import { WarehouseManifestModule } from '../warehouse-manifest/warehouse-manifest.module';
 import { PackQueueService } from './services/pack-queue.service';
 import { PackService } from './services/pack.service';
+import { PackerController } from './controllers/packer.controller';
+import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 
 /**
  * Module 8 — warehouse-pack module. Commit 9 = service layer
@@ -23,6 +25,7 @@ import { PackService } from './services/pack.service';
  */
 @Module({
   imports: [OrderModule, WarehouseManifestModule],
-  providers: [PackQueueService, PackService],
+  controllers: [PackerController],
+  providers: [PackQueueService, PackService, StaffJwtGuard],
 })
 export class WarehousePackModule {}
