@@ -3,6 +3,7 @@ import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { InventoryStockModule } from '../inventory-stock/inventory-stock.module';
 import { CallQueueModule } from '../call-queue/call-queue.module';
+import { ShipmentProvisionModule } from '../shipment-provision/shipment-provision.module';
 import { OrderCoreModule } from './order-core.module';
 import { SellerOrderController } from './controllers/seller-order.controller';
 import { SellerCustomerController } from './controllers/seller-customer.controller';
@@ -45,7 +46,12 @@ import { OrderWriteService } from './services/order-write.service';
  * AuditLogService is global (AuthCommonModule @Global).
  */
 @Module({
-  imports: [OrderCoreModule, InventoryStockModule, CallQueueModule],
+  imports: [
+    OrderCoreModule,
+    InventoryStockModule,
+    CallQueueModule,
+    ShipmentProvisionModule,
+  ],
   controllers: [
     SellerOrderController,
     SellerCustomerController,

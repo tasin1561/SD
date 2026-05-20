@@ -64,6 +64,13 @@ function makeService(
   const dequeueOrder = jest.fn(async () => ({ dequeued: 0, preemptedAssigned: false }));
   const callQueue = { enqueueOrder, dequeueOrder };
 
+  const provisionFromSnapshot = jest.fn(async () => ({
+    shipmentId: 'ship-new',
+    created: true,
+  }));
+  const voidForOrder = jest.fn(async () => ({ voided: 0 }));
+  const shipmentProvision = { provisionFromSnapshot, voidForOrder };
+
   const svc = new OrderWriteService(
     { client } as unknown as PrismaService,
     stateMachine,
@@ -71,8 +78,23 @@ function makeService(
     audit as never,
     reservations as never,
     callQueue as never,
+    shipmentProvision as never,
   );
-  return { svc, orderUpdate, orderFindFirst, events, audit, reserve, release, fulfill, listActiveForOrder, enqueueOrder, dequeueOrder };
+  return {
+    svc,
+    orderUpdate,
+    orderFindFirst,
+    events,
+    audit,
+    reserve,
+    release,
+    fulfill,
+    listActiveForOrder,
+    enqueueOrder,
+    dequeueOrder,
+    provisionFromSnapshot,
+    voidForOrder,
+  };
 }
 
 describe('OrderWriteService.transitionStatus', () => {

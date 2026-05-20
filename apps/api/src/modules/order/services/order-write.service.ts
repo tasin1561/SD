@@ -21,6 +21,7 @@ import {
 } from '../../inventory-stock/services/stock-reservation.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { CallQueueService } from '../../call-queue/services/call-queue.service';
+import { ShipmentProvisionService } from '../../shipment-provision/services/shipment-provision.service';
 import { OrderEventWriterService, type EventActor } from './order-event-writer.service';
 import {
   OrderSideEffect,
@@ -34,6 +35,48 @@ const CANCEL_FAMILY: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.CANCELLED_BY_ADMIN,
   OrderStatus.REJECTED,
 ]);
+
+/** M8 commit 16: the set of "deliberately ending the order" landings
+ *  on which the shipment-provision wiring (R3) should void a CREATED
+ *  shipment. voidForOrder is idempotent against non-CREATED shipments,
+ *  so this list is intentionally generous — post-pick/pack/dispatch
+ *  shipments are no longer CREATED and are naturally untouched. */
+const VOIDABLE_TERMINAL_STATES: ReadonlySet<OrderStatus> = new Set([
+  OrderStatus.CANCELLED,
+  OrderStatus.CANCELLED_BY_ADMIN,
+  OrderStatus.REJECTED,
+  OrderStatus.REJECTED_BY_CUSTOMER,
+  OrderStatus.REJECTED_NDR,
+]);
+
+/** Structural shape the shipment-provision hook needs from the loaded
+ *  order — kept local + decoupled from the Prisma payload type so the
+ *  helper signature reads at the call site. */
+interface ProvisionableOrder {
+  readonly id: string;
+  readonly recipientName: string;
+  readonly recipientPhoneE164: string;
+  readonly recipientAddressLine1: string;
+  readonly recipientAddressLine2: string | null;
+  readonly recipientLandmark: string | null;
+  readonly recipientCity: string;
+  readonly recipientStateProvince: string;
+  readonly recipientPostalCode: string;
+  readonly recipientCountryCode: string;
+  readonly declaredValueInr: Prisma.Decimal;
+  readonly codAmountInr: Prisma.Decimal | null;
+  readonly items: ReadonlyArray<{
+    readonly id: string;
+    readonly quantity: number;
+    readonly skuCode: string;
+    readonly productName: string;
+    readonly variantLabel: string | null;
+    readonly unitWeightGrams: number | null;
+    readonly unitDeclaredValueInr: Prisma.Decimal | null;
+    readonly hsCode: string | null;
+    readonly unitPriceInr: Prisma.Decimal | null;
+  }>;
+}
 
 export type ReservationOutcome =
   | 'RESERVED'
@@ -135,6 +178,7 @@ export class OrderWriteService {
     private readonly audit: AuditLogService,
     private readonly reservations: StockReservationService,
     private readonly callQueue: CallQueueService,
+    private readonly shipmentProvision: ShipmentProvisionService,
   ) {}
 
   /**
@@ -179,7 +223,35 @@ export class OrderWriteService {
         sellerId: true,
         orderNumber: true,
         status: true,
-        items: { select: { id: true, variantId: true, quantity: true } },
+        // M8 commit-16 shipment-provision snapshot fields (recipient
+        // block + per-line snapshot; immutable per ORD-6 so pre-tx read
+        // is identical to post-tx). Selected here so the post-commit
+        // CONFIRMED hook doesn't need a re-load.
+        recipientName: true,
+        recipientPhoneE164: true,
+        recipientAddressLine1: true,
+        recipientAddressLine2: true,
+        recipientLandmark: true,
+        recipientCity: true,
+        recipientStateProvince: true,
+        recipientPostalCode: true,
+        recipientCountryCode: true,
+        declaredValueInr: true,
+        codAmountInr: true,
+        items: {
+          select: {
+            id: true,
+            variantId: true,
+            quantity: true,
+            skuCode: true,
+            productName: true,
+            variantLabel: true,
+            unitWeightGrams: true,
+            unitDeclaredValueInr: true,
+            hsCode: true,
+            unitPriceInr: true,
+          },
+        },
       },
     });
     if (!order) {
@@ -258,6 +330,30 @@ export class OrderWriteService {
     if (result.status === OrderStatus.PICKED && from !== OrderStatus.PICKED) {
       await this.signalPackEligible(order.id, input.ctx);
     }
+
+    // M8 commit 16: shipment-provision wiring (R3 dual-path,
+    // mirrors CC-6 enqueueForCall/dequeueForExit).
+    //   - On entry to CONFIRMED: provisionFromSnapshot (the R3
+    //     primitive — idempotent on an existing non-CANCELLED shipment,
+    //     so a retried hook is a {created:false} no-op).
+    //   - On entry to a deliberately-ending state (CANCELLED / REJECTED
+    //     family): voidForOrder (idempotent — no CREATED shipment ⇒
+    //     {voided:0}; post-pick/pack shipments are no longer CREATED
+    //     and are naturally untouched).
+    // POST-COMMIT, best-effort, NEVER undoes the committed status
+    // change — failures here surface as warnings, the next caller's
+    // idempotent re-attempt (or out-of-band ops) reconciles.
+    if (
+      result.status === OrderStatus.CONFIRMED &&
+      from !== OrderStatus.CONFIRMED
+    ) {
+      await this.provisionShipmentForOrder(order, input.ctx);
+    } else if (
+      from !== result.status &&
+      VOIDABLE_TERMINAL_STATES.has(result.status)
+    ) {
+      await this.voidShipmentForOrder(order.id, result.status, input.ctx);
+    }
     return result;
   }
 
@@ -286,6 +382,79 @@ export class OrderWriteService {
       this.logger.error(
         { orderId, err: (e as Error).message },
         'Post-commit pack-eligibility signal failed; status persisted',
+      );
+    }
+  }
+
+  /** M8 commit 16: shipment-provision wiring on entry to CONFIRMED.
+   *  POST-COMMIT, best-effort, idempotent on existing non-CANCELLED
+   *  shipments (CC-6 dual-path — a retried hook is a {created:false}
+   *  no-op). The snapshot is built from the order we already loaded
+   *  (recipient + items immutable per ORD-6). */
+  private async provisionShipmentForOrder(
+    order: ProvisionableOrder,
+    ctx?: ClientContext,
+  ): Promise<void> {
+    try {
+      await this.shipmentProvision.provisionFromSnapshot(
+        {
+          orderId: order.id,
+          recipient: {
+            name: order.recipientName,
+            phoneE164: order.recipientPhoneE164,
+            addressLine1: order.recipientAddressLine1,
+            addressLine2: order.recipientAddressLine2,
+            landmark: order.recipientLandmark,
+            city: order.recipientCity,
+            stateProvince: order.recipientStateProvince,
+            postalCode: order.recipientPostalCode,
+            countryCode: order.recipientCountryCode,
+          },
+          declaredValueInr: order.declaredValueInr,
+          codAmountInr: order.codAmountInr,
+          items: order.items.map((i) => ({
+            orderItemId: i.id,
+            quantity: i.quantity,
+            skuCode: i.skuCode,
+            productName: i.productName,
+            variantLabel: i.variantLabel,
+            unitWeightGrams: i.unitWeightGrams,
+            unitDeclaredValueInr: i.unitDeclaredValueInr,
+            hsCode: i.hsCode,
+            unitPriceInr: i.unitPriceInr,
+          })),
+        },
+        { type: ActorType.SYSTEM, id: null },
+        ctx,
+      );
+    } catch (e) {
+      this.logger.error(
+        { orderId: order.id, err: (e as Error).message },
+        'Post-commit shipment provision failed; order CONFIRMED persisted, supervisor/reconciler can re-trigger via OrderAdminOverrideService or a follow-up CONFIRMED→CONFIRMED matrix self-loop',
+      );
+    }
+  }
+
+  /** M8 commit 16: shipment-void wiring on entry to a deliberately
+   *  ending state. POST-COMMIT, best-effort, idempotent (no CREATED
+   *  shipment ⇒ {voided:0}). Cancellation reason is carried as the
+   *  destination status. */
+  private async voidShipmentForOrder(
+    orderId: string,
+    landed: OrderStatus,
+    ctx?: ClientContext,
+  ): Promise<void> {
+    try {
+      await this.shipmentProvision.voidForOrder(
+        orderId,
+        `Order transitioned to ${landed}`,
+        { type: ActorType.SYSTEM, id: null },
+        ctx,
+      );
+    } catch (e) {
+      this.logger.error(
+        { orderId, landed, err: (e as Error).message },
+        'Post-commit shipment void failed; order status persisted, supervisor/reconciler can re-trigger',
       );
     }
   }
