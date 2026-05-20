@@ -245,7 +245,49 @@ export class OrderWriteService {
       // driven directly (admin sane-cancel / god-mode) it does the close.
       await this.dequeueForExit(order.id, result.status, input.ctx);
     }
+
+    // M8 commit 9: pack-queue eligibility hook. The pack queue is a
+    // VIRTUAL FIFO query (PackQueueService.pullNext joins on
+    // o.status='picked'), so no physical row insert is needed — entry
+    // into PICKED makes the shipment pack-eligible by construction.
+    // We emit a structured audit entry as the OBSERVABILITY HOOK +
+    // future extension point: when packer notification (BullMQ /
+    // WebSocket) lands, replace this audit call with the real
+    // enqueue/event (mirrors the CC-6 enqueueForCall shape). POST-COMMIT,
+    // best-effort, never undoes the committed status change.
+    if (result.status === OrderStatus.PICKED && from !== OrderStatus.PICKED) {
+      await this.signalPackEligible(order.id, input.ctx);
+    }
     return result;
+  }
+
+  /** M8 pack-eligibility hook — audit-only for Phase 1A. Best-effort:
+   *  a failure here NEVER undoes the committed PICKED transition. */
+  private async signalPackEligible(
+    orderId: string,
+    ctx?: ClientContext,
+  ): Promise<void> {
+    try {
+      await this.audit.log({
+        actorType: ActorType.SYSTEM,
+        actorId: null,
+        action: 'pack_queue.eligible',
+        entityType: 'order',
+        entityId: orderId,
+        severity: 'LOW',
+        metadata: {
+          orderId,
+          ipAddress: ctx?.ipAddress ?? null,
+          userAgent: ctx?.userAgent ?? null,
+          requestId: ctx?.requestId ?? null,
+        },
+      });
+    } catch (e) {
+      this.logger.error(
+        { orderId, err: (e as Error).message },
+        'Post-commit pack-eligibility signal failed; status persisted',
+      );
+    }
   }
 
   /** CC-6 post-commit call-queue dequeue (idempotent, best-effort). */
