@@ -221,6 +221,197 @@ describe('ManifestService.attachShipment', () => {
   });
 });
 
+describe('ManifestService.moveShipment', () => {
+  const SRC = 'man-src';
+  const TGT = 'man-tgt';
+  const draftSrc = {
+    id: SRC,
+    status: ManifestStatus.DRAFT,
+    manifestNumber: 'MF-2026-05-000001',
+    courierCode: COURIER,
+    originWarehouseId: WAREHOUSE,
+  };
+
+  function makeMoveService(
+    opts: {
+      shipment?: AnyArgs | null;
+      target?: AnyArgs | null;
+    } = {},
+  ) {
+    const defaultShipment = {
+      id: SHIP,
+      status: ShipmentStatus.CREATED,
+      courierCode: COURIER,
+      originWarehouseId: WAREHOUSE,
+      packCompletedAt: PACKED_AT,
+      manifestId: SRC,
+      manifest: draftSrc,
+    };
+    const shipmentFindFirst = jest.fn(async () =>
+      opts.shipment === undefined ? defaultShipment : opts.shipment,
+    );
+    const manifestFindUnique = jest.fn(async () =>
+      opts.target === undefined
+        ? {
+            id: TGT,
+            status: ManifestStatus.DRAFT,
+            manifestNumber: 'MF-2026-05-000002',
+            courierCode: COURIER,
+            originWarehouseId: WAREHOUSE,
+          }
+        : opts.target,
+    );
+    const shipmentUpdate = jest.fn(async () => ({}));
+    const txClient = { shipment: { update: shipmentUpdate } };
+    const client = {
+      shipment: { findFirst: shipmentFindFirst },
+      manifest: { findUnique: manifestFindUnique },
+    } as {
+      shipment: { findFirst: typeof shipmentFindFirst };
+      manifest: { findUnique: typeof manifestFindUnique };
+      $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
+    };
+    client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> =>
+      fn(txClient);
+    const auditLog = jest.fn(async () => 'a');
+    const audit = { log: auditLog };
+    const nextManifestNumber = jest.fn(async () => 'MF-2026-05-000099');
+    const numbering = { nextManifestNumber };
+    const svc = new ManifestService(
+      { client } as unknown as PrismaService,
+      audit as unknown as AuditLogService,
+      numbering as unknown as ManifestNumberingService,
+    );
+    return { svc, shipmentFindFirst, manifestFindUnique, shipmentUpdate, auditLog };
+  }
+
+  it('moves DRAFT → DRAFT (same courier+warehouse) + audit MEDIUM', async () => {
+    const { svc, shipmentUpdate, auditLog } = makeMoveService();
+    const r = await svc.moveShipment(SHIP, TGT);
+    expect(r).toEqual({
+      shipmentId: SHIP,
+      sourceManifestId: SRC,
+      targetManifestId: TGT,
+      alreadyOnTarget: false,
+    });
+    expect(shipmentUpdate).toHaveBeenCalledWith({
+      where: { id: SHIP },
+      data: { manifestId: TGT },
+    });
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'manifest.shipment_moved',
+        severity: 'MEDIUM',
+      }),
+      expect.anything(),
+    );
+  });
+
+  it('idempotent: already on target → no-op (no update, no audit)', async () => {
+    const { svc, shipmentUpdate, auditLog } = makeMoveService({
+      shipment: {
+        id: SHIP,
+        status: ShipmentStatus.CREATED,
+        courierCode: COURIER,
+        originWarehouseId: WAREHOUSE,
+        packCompletedAt: PACKED_AT,
+        manifestId: TGT,
+        manifest: { ...draftSrc, id: TGT },
+      },
+    });
+    const r = await svc.moveShipment(SHIP, TGT);
+    expect(r.alreadyOnTarget).toBe(true);
+    expect(shipmentUpdate).not.toHaveBeenCalled();
+    expect(auditLog).not.toHaveBeenCalled();
+  });
+
+  it('rejects SOURCE_MANIFEST_CLOSED', async () => {
+    const { svc } = makeMoveService({
+      shipment: {
+        id: SHIP,
+        status: ShipmentStatus.CREATED,
+        courierCode: COURIER,
+        originWarehouseId: WAREHOUSE,
+        packCompletedAt: PACKED_AT,
+        manifestId: SRC,
+        manifest: { ...draftSrc, status: ManifestStatus.CLOSED },
+      },
+    });
+    await expect(svc.moveShipment(SHIP, TGT)).rejects.toMatchObject({
+      response: { code: 'SOURCE_MANIFEST_CLOSED' },
+    });
+  });
+
+  it('rejects TARGET_MANIFEST_NOT_DRAFT (CLOSED target)', async () => {
+    const { svc } = makeMoveService({
+      target: {
+        id: TGT,
+        status: ManifestStatus.CLOSED,
+        manifestNumber: 'MF-X',
+        courierCode: COURIER,
+        originWarehouseId: WAREHOUSE,
+      },
+    });
+    await expect(svc.moveShipment(SHIP, TGT)).rejects.toMatchObject({
+      response: { code: 'TARGET_MANIFEST_NOT_DRAFT' },
+    });
+  });
+
+  it('404 when target manifest is missing', async () => {
+    const { svc } = makeMoveService({ target: null });
+    await expect(svc.moveShipment(SHIP, TGT)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('rejects COURIER_MISMATCH', async () => {
+    const { svc } = makeMoveService({
+      target: {
+        id: TGT,
+        status: ManifestStatus.DRAFT,
+        manifestNumber: 'MF-X',
+        courierCode: 'bluedart',
+        originWarehouseId: WAREHOUSE,
+      },
+    });
+    await expect(svc.moveShipment(SHIP, TGT)).rejects.toMatchObject({
+      response: { code: 'COURIER_MISMATCH' },
+    });
+  });
+
+  it('rejects WAREHOUSE_MISMATCH', async () => {
+    const { svc } = makeMoveService({
+      target: {
+        id: TGT,
+        status: ManifestStatus.DRAFT,
+        manifestNumber: 'MF-X',
+        courierCode: COURIER,
+        originWarehouseId: 'wh-2',
+      },
+    });
+    await expect(svc.moveShipment(SHIP, TGT)).rejects.toMatchObject({
+      response: { code: 'WAREHOUSE_MISMATCH' },
+    });
+  });
+
+  it('rejects SHIPMENT_NOT_ATTACHED when manifestId is null', async () => {
+    const { svc } = makeMoveService({
+      shipment: {
+        id: SHIP,
+        status: ShipmentStatus.CREATED,
+        courierCode: COURIER,
+        originWarehouseId: WAREHOUSE,
+        packCompletedAt: PACKED_AT,
+        manifestId: null,
+        manifest: null,
+      },
+    });
+    await expect(svc.moveShipment(SHIP, TGT)).rejects.toMatchObject({
+      response: { code: 'SHIPMENT_NOT_ATTACHED' },
+    });
+  });
+});
+
 describe('ManifestService.attachShipment — advisory lock', () => {
   it('takes the (courier, warehouse) advisory lock inside the create tx', async () => {
     const { svc, executeRawUnsafe } = makeService();

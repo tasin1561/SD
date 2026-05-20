@@ -28,6 +28,14 @@ export interface AttachShipmentResult {
   alreadyAttached: boolean;
 }
 
+export interface MoveShipmentResult {
+  shipmentId: string;
+  sourceManifestId: string;
+  targetManifestId: string;
+  /** true ⇒ idempotent no-op (already on the target DRAFT). */
+  alreadyOnTarget: boolean;
+}
+
 /**
  * Module 8 — manifest service (commit-9 scope: `attachShipment` only;
  * commit 11 adds `moveShipment`; commit 12 adds `close`). Provides the
@@ -193,6 +201,155 @@ export class ManifestService {
       manifestNumber: result.manifest.manifestNumber,
       manifestCreated: result.manifestCreated,
       alreadyAttached: false,
+    };
+  }
+
+  /**
+   * Supervisor move (WMS-7 pre-close): reassign a packed shipment from
+   * its current DRAFT manifest to another DRAFT manifest. Guards:
+   *   - shipment exists, status CREATED, packCompletedAt set, currently
+   *     attached to a manifest
+   *   - source manifest is DRAFT (CLOSED → 409 SOURCE_MANIFEST_CLOSED)
+   *   - target manifest exists + DRAFT
+   *   - both manifests same courierCode (+ same originWarehouseId, since
+   *     a manifest groups parcels leaving one warehouse via one courier)
+   * Idempotent on already-on-target. Audit MEDIUM.
+   */
+  async moveShipment(
+    shipmentId: string,
+    targetManifestId: string,
+    actor: { type: ActorType; id?: string | null } = { type: ActorType.SYSTEM },
+    ctx?: ClientContext,
+  ): Promise<MoveShipmentResult> {
+    const shipment = await this.prisma.client.shipment.findFirst({
+      where: { id: shipmentId, deletedAt: null },
+      select: {
+        id: true,
+        status: true,
+        courierCode: true,
+        originWarehouseId: true,
+        packCompletedAt: true,
+        manifestId: true,
+        manifest: {
+          select: {
+            id: true,
+            status: true,
+            manifestNumber: true,
+            courierCode: true,
+            originWarehouseId: true,
+          },
+        },
+      },
+    });
+    if (!shipment) {
+      throw new NotFoundException({
+        code: 'SHIPMENT_NOT_FOUND',
+        message: `Shipment ${shipmentId} not found`,
+      });
+    }
+    if (shipment.status !== ShipmentStatus.CREATED) {
+      throw new ConflictException({
+        code: 'SHIPMENT_NOT_MOVABLE',
+        message: `Shipment is ${shipment.status}; move requires CREATED`,
+      });
+    }
+    if (shipment.packCompletedAt === null) {
+      throw new ConflictException({
+        code: 'SHIPMENT_NOT_PACKED',
+        message: 'Shipment must be packed before being moved between manifests',
+      });
+    }
+    if (!shipment.manifest || shipment.manifestId === null) {
+      throw new ConflictException({
+        code: 'SHIPMENT_NOT_ATTACHED',
+        message: 'Shipment is not currently attached to any manifest',
+      });
+    }
+    if (shipment.manifest.status !== ManifestStatus.DRAFT) {
+      throw new ConflictException({
+        code: 'SOURCE_MANIFEST_CLOSED',
+        message: `Source manifest ${shipment.manifest.manifestNumber} is ${shipment.manifest.status}; only DRAFT shipments can be moved`,
+      });
+    }
+
+    if (shipment.manifestId === targetManifestId) {
+      return {
+        shipmentId,
+        sourceManifestId: shipment.manifestId,
+        targetManifestId,
+        alreadyOnTarget: true,
+      };
+    }
+
+    const target = await this.prisma.client.manifest.findUnique({
+      where: { id: targetManifestId },
+      select: {
+        id: true,
+        status: true,
+        manifestNumber: true,
+        courierCode: true,
+        originWarehouseId: true,
+      },
+    });
+    if (!target) {
+      throw new NotFoundException({
+        code: 'TARGET_MANIFEST_NOT_FOUND',
+        message: `Target manifest ${targetManifestId} not found`,
+      });
+    }
+    if (target.status !== ManifestStatus.DRAFT) {
+      throw new ConflictException({
+        code: 'TARGET_MANIFEST_NOT_DRAFT',
+        message: `Target manifest ${target.manifestNumber} is ${target.status}; only DRAFT targets are valid`,
+      });
+    }
+    if (target.courierCode !== shipment.manifest.courierCode) {
+      throw new ConflictException({
+        code: 'COURIER_MISMATCH',
+        message: `Target manifest courier ${target.courierCode} does not match source ${shipment.manifest.courierCode}`,
+      });
+    }
+    if (target.originWarehouseId !== shipment.manifest.originWarehouseId) {
+      throw new ConflictException({
+        code: 'WAREHOUSE_MISMATCH',
+        message: 'Target manifest origin warehouse does not match source',
+      });
+    }
+
+    const sourceManifestId = shipment.manifestId;
+    await this.prisma.client.$transaction(async (tx) => {
+      await tx.shipment.update({
+        where: { id: shipmentId },
+        data: { manifestId: targetManifestId },
+      });
+      await this.audit.log(
+        {
+          actorType: actor.type,
+          actorId: actor.id ?? null,
+          action: 'manifest.shipment_moved',
+          entityType: 'manifest',
+          entityId: targetManifestId,
+          severity: 'MEDIUM',
+          metadata: {
+            shipmentId,
+            sourceManifestId,
+            targetManifestId,
+            sourceManifestNumber: shipment.manifest?.manifestNumber ?? null,
+            targetManifestNumber: target.manifestNumber,
+            ipAddress: ctx?.ipAddress ?? null,
+            userAgent: ctx?.userAgent ?? null,
+            requestId: ctx?.requestId ?? null,
+          },
+        },
+        tx,
+      );
+    });
+
+    return {
+      shipmentId,
+      sourceManifestId,
+      targetManifestId,
+      alreadyOnTarget: false,
     };
   }
 }
