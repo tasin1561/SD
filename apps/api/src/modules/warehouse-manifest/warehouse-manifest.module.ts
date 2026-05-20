@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { OrderModule } from '../order/order.module';
 import { ManifestService } from './services/manifest.service';
 import { ManifestNumberingService } from './services/manifest-numbering.service';
 
@@ -18,6 +19,7 @@ import { ManifestNumberingService } from './services/manifest-numbering.service'
  * those domains call into (one-way fan-in).
  */
 @Module({
+  imports: [OrderModule],
   providers: [ManifestService, ManifestNumberingService],
   exports: [ManifestService],
 })

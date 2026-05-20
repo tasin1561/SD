@@ -1,9 +1,10 @@
 import { NotFoundException } from '@nestjs/common';
-import { ActorType, ManifestStatus, ShipmentStatus } from '@skydrop/db';
+import { ActorType, ManifestStatus, OrderStatus, ShipmentStatus } from '@skydrop/db';
 import { ManifestService } from '../../src/modules/warehouse-manifest/services/manifest.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { ManifestNumberingService } from '../../src/modules/warehouse-manifest/services/manifest-numbering.service';
+import type { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -62,11 +63,14 @@ function makeService(
   const audit = { log: auditLog };
   const nextManifestNumber = jest.fn(async () => 'MF-2026-05-000001');
   const numbering = { nextManifestNumber };
+  const transitionStatus = jest.fn(async () => ({ status: 'PACKED' }));
+  const orderWrite = { transitionStatus };
 
   const svc = new ManifestService(
     { client } as unknown as PrismaService,
     audit as unknown as AuditLogService,
     numbering as unknown as ManifestNumberingService,
+    orderWrite as unknown as OrderWriteService,
   );
   return {
     svc,
@@ -77,6 +81,7 @@ function makeService(
     auditLog,
     executeRawUnsafe,
     nextManifestNumber,
+    transitionStatus,
   };
 }
 
@@ -277,10 +282,13 @@ describe('ManifestService.moveShipment', () => {
     const audit = { log: auditLog };
     const nextManifestNumber = jest.fn(async () => 'MF-2026-05-000099');
     const numbering = { nextManifestNumber };
+    const transitionStatus = jest.fn(async () => ({ status: 'PACKED' }));
+    const orderWrite = { transitionStatus };
     const svc = new ManifestService(
       { client } as unknown as PrismaService,
       audit as unknown as AuditLogService,
       numbering as unknown as ManifestNumberingService,
+      orderWrite as unknown as OrderWriteService,
     );
     return { svc, shipmentFindFirst, manifestFindUnique, shipmentUpdate, auditLog };
   }
@@ -409,6 +417,199 @@ describe('ManifestService.moveShipment', () => {
     await expect(svc.moveShipment(SHIP, TGT)).rejects.toMatchObject({
       response: { code: 'SHIPMENT_NOT_ATTACHED' },
     });
+  });
+});
+
+describe('ManifestService.close', () => {
+  const MAN = 'man-1';
+
+  function makeCloseService(
+    opts: {
+      manifest?: AnyArgs | null;
+      transitionResults?: Array<{ ok: true } | { ok: false; err: string }>;
+      updateCount?: number;
+    } = {},
+  ) {
+    const defaultManifest = {
+      id: MAN,
+      manifestNumber: 'MF-2026-05-000001',
+      status: ManifestStatus.DRAFT,
+      closedAt: null,
+      closedByStaffId: null,
+      shipments: [
+        {
+          id: 's1',
+          status: ShipmentStatus.CREATED,
+          orderShipments: [{ orderId: 'o1' }],
+        },
+        {
+          id: 's2',
+          status: ShipmentStatus.CREATED,
+          orderShipments: [{ orderId: 'o2' }],
+        },
+      ],
+    };
+    const manifestFindUnique = jest.fn(async () =>
+      opts.manifest === undefined ? defaultManifest : opts.manifest,
+    );
+    const manifestUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(
+      async () => ({ count: opts.updateCount ?? 1 }),
+    );
+    const txClient = { manifest: { updateMany: manifestUpdateMany } };
+    const client = {
+      manifest: { findUnique: manifestFindUnique },
+    } as {
+      manifest: { findUnique: typeof manifestFindUnique };
+      $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
+    };
+    client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> =>
+      fn(txClient);
+
+    const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown?]>(
+      async () => 'a',
+    );
+    const audit = { log: auditLog };
+    const nextManifestNumber = jest.fn(async () => 'MF-X');
+    const numbering = { nextManifestNumber };
+
+    const results = opts.transitionResults ?? [{ ok: true }, { ok: true }];
+    let txIdx = 0;
+    const transitionStatus = jest.fn(async () => {
+      const r = results[txIdx++];
+      if (r && !r.ok) throw new Error(r.err);
+      return { status: OrderStatus.PENDING_DISPATCH };
+    });
+    const orderWrite = { transitionStatus };
+
+    const svc = new ManifestService(
+      { client } as unknown as PrismaService,
+      audit as unknown as AuditLogService,
+      numbering as unknown as ManifestNumberingService,
+      orderWrite as unknown as OrderWriteService,
+    );
+    return { svc, manifestUpdateMany, transitionStatus, auditLog };
+  }
+
+  it('happy: closes DRAFT + transitions each shipment + emits AWB stub', async () => {
+    const { svc, manifestUpdateMany, transitionStatus, auditLog } =
+      makeCloseService();
+    const r = await svc.close(MAN, 'sup-1');
+    expect(r.status).toBe(ManifestStatus.CLOSED);
+    expect(r.alreadyClosed).toBe(false);
+    expect(r.shipmentIds).toEqual(['s1', 's2']);
+    expect(r.transitionedCount).toBe(2);
+    expect(r.failures).toEqual([]);
+
+    expect(manifestUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: MAN, status: ManifestStatus.DRAFT },
+        data: expect.objectContaining({
+          status: ManifestStatus.CLOSED,
+          closedByStaffId: 'sup-1',
+        }),
+      }),
+    );
+    expect(transitionStatus).toHaveBeenCalledTimes(2);
+    expect(transitionStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: OrderStatus.PENDING_DISPATCH,
+        expectedFrom: OrderStatus.PACKED,
+      }),
+    );
+    const awbAudit = auditLog.mock.calls.find(
+      (c) => (c[0] as AnyArgs).action === 'manifest.awb_enqueue_stub',
+    );
+    expect(awbAudit).toBeDefined();
+    expect((awbAudit?.[0] as AnyArgs).severity).toBe('HIGH');
+    expect((awbAudit?.[0] as AnyArgs).metadata).toMatchObject({
+      manifestId: MAN,
+      shipmentIds: ['s1', 's2'],
+      moduleStubbed: 'M9',
+    });
+  });
+
+  it('idempotent: already CLOSED → no transitions, no AWB stub, alreadyClosed:true', async () => {
+    const closedAt = new Date('2026-05-19T15:00:00Z');
+    const { svc, manifestUpdateMany, transitionStatus, auditLog } =
+      makeCloseService({
+        manifest: {
+          id: MAN,
+          manifestNumber: 'MF-2026-05-000001',
+          status: ManifestStatus.CLOSED,
+          closedAt,
+          closedByStaffId: 'prev-sup',
+          shipments: [
+            { id: 's1', status: ShipmentStatus.CREATED, orderShipments: [{ orderId: 'o1' }] },
+          ],
+        },
+      });
+    const r = await svc.close(MAN, 'sup-1');
+    expect(r).toEqual({
+      manifestId: MAN,
+      manifestNumber: 'MF-2026-05-000001',
+      status: ManifestStatus.CLOSED,
+      closedAt,
+      closedByStaffId: 'prev-sup',
+      shipmentIds: ['s1'],
+      transitionedCount: 0,
+      failures: [],
+      alreadyClosed: true,
+    });
+    expect(manifestUpdateMany).not.toHaveBeenCalled();
+    expect(transitionStatus).not.toHaveBeenCalled();
+    expect(auditLog).not.toHaveBeenCalled();
+  });
+
+  it('rejects MANIFEST_EMPTY when manifest has no shipments', async () => {
+    const { svc } = makeCloseService({
+      manifest: {
+        id: MAN,
+        manifestNumber: 'MF-X',
+        status: ManifestStatus.DRAFT,
+        closedAt: null,
+        closedByStaffId: null,
+        shipments: [],
+      },
+    });
+    await expect(svc.close(MAN, 'sup-1')).rejects.toMatchObject({
+      response: { code: 'MANIFEST_EMPTY' },
+    });
+  });
+
+  it('404 when manifest is missing', async () => {
+    const { svc } = makeCloseService({ manifest: null });
+    await expect(svc.close(MAN, 'sup-1')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('partial transition failure: manifest still CLOSED, failures collected', async () => {
+    const { svc, auditLog } = makeCloseService({
+      transitionResults: [{ ok: true }, { ok: false, err: 'INVALID_TRANSITION' }],
+    });
+    const r = await svc.close(MAN, 'sup-1');
+    expect(r.status).toBe(ManifestStatus.CLOSED);
+    expect(r.transitionedCount).toBe(1);
+    expect(r.failures).toEqual([
+      { shipmentId: 's2', orderId: 'o2', error: 'INVALID_TRANSITION' },
+    ]);
+    // AWB stub still emitted (manifest IS closed).
+    const awbAudit = auditLog.mock.calls.find(
+      (c) => (c[0] as AnyArgs).action === 'manifest.awb_enqueue_stub',
+    );
+    expect(awbAudit).toBeDefined();
+    expect((awbAudit?.[0] as AnyArgs).metadata).toMatchObject({
+      transitionedCount: 1,
+      failureCount: 1,
+    });
+  });
+
+  it('race: 409 MANIFEST_CLOSE_RACE when updateMany count=0', async () => {
+    const { svc, transitionStatus } = makeCloseService({ updateCount: 0 });
+    await expect(svc.close(MAN, 'sup-1')).rejects.toMatchObject({
+      response: { code: 'MANIFEST_CLOSE_RACE' },
+    });
+    expect(transitionStatus).not.toHaveBeenCalled();
   });
 });
 

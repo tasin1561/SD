@@ -1,11 +1,13 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, ManifestStatus, ShipmentStatus } from '@skydrop/db';
+import { ActorType, ManifestStatus, OrderStatus, ShipmentStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { OrderWriteService } from '../../order/services/order-write.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { ManifestNumberingService } from './manifest-numbering.service';
 
@@ -36,6 +38,27 @@ export interface MoveShipmentResult {
   alreadyOnTarget: boolean;
 }
 
+export interface CloseManifestFailure {
+  shipmentId: string;
+  orderId: string | null;
+  error: string;
+}
+
+export interface CloseManifestResult {
+  manifestId: string;
+  manifestNumber: string;
+  status: ManifestStatus;
+  closedAt: Date;
+  closedByStaffId: string;
+  shipmentIds: string[];
+  /** Successful PACKED → PENDING_DISPATCH transitions. */
+  transitionedCount: number;
+  /** Per-shipment post-commit failures (closure itself succeeded). */
+  failures: CloseManifestFailure[];
+  /** true ⇒ idempotent no-op (manifest was already CLOSED). */
+  alreadyClosed: boolean;
+}
+
 /**
  * Module 8 — manifest service (commit-9 scope: `attachShipment` only;
  * commit 11 adds `moveShipment`; commit 12 adds `close`). Provides the
@@ -55,10 +78,13 @@ export interface MoveShipmentResult {
  */
 @Injectable()
 export class ManifestService {
+  private readonly logger = new Logger(ManifestService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
     private readonly numbering: ManifestNumberingService,
+    private readonly orderWrite: OrderWriteService,
   ) {}
 
   /**
@@ -350,6 +376,198 @@ export class ManifestService {
       sourceManifestId,
       targetManifestId,
       alreadyOnTarget: false,
+    };
+  }
+
+  /**
+   * WMS-6 manifest close (supervisor — role gated at controller layer).
+   * Closes a DRAFT manifest, then drives every attached shipment's order
+   * PACKED → PENDING_DISPATCH (saga, post-commit, best-effort), and
+   * emits the Module-9 AWB enqueue STUB (audit HIGH, manifestId +
+   * shipmentIds in metadata). Manifest stays CLOSED (commit-1 schema
+   * intentionally restricts ManifestStatus to DRAFT/CLOSED for M8;
+   * Module 9 extends with AWB_PENDING/CONFIRMED/FAILED).
+   *
+   * Saga discipline: the CLOSURE TX (manifest update + audit) commits
+   * atomically. The per-shipment order transitions are POST-COMMIT, each
+   * its own transitionStatus tx (matrix PACKED→PENDING_DISPATCH has
+   * EMPTY side-effects so no nested M5 work). A per-shipment failure is
+   * collected into `failures` and the loop continues — the manifest is
+   * correctly CLOSED, the supervisor can investigate via the response.
+   * A persistent transition failure does NOT undo the closure (the
+   * authoritative state — manifest closed — is the supervisor's
+   * intent and the AWB pipeline lives downstream).
+   *
+   * Idempotent on already-CLOSED (no transitions, no AWB stub re-emit).
+   */
+  async close(
+    manifestId: string,
+    staffId: string,
+    ctx?: ClientContext,
+  ): Promise<CloseManifestResult> {
+    const manifest = await this.prisma.client.manifest.findUnique({
+      where: { id: manifestId },
+      select: {
+        id: true,
+        manifestNumber: true,
+        status: true,
+        closedAt: true,
+        closedByStaffId: true,
+        shipments: {
+          select: {
+            id: true,
+            status: true,
+            orderShipments: {
+              select: { orderId: true },
+              orderBy: { shipmentSequence: 'asc' },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+    if (!manifest) {
+      throw new NotFoundException({
+        code: 'MANIFEST_NOT_FOUND',
+        message: `Manifest ${manifestId} not found`,
+      });
+    }
+    const shipmentIds = manifest.shipments.map((s) => s.id);
+
+    if (manifest.status === ManifestStatus.CLOSED) {
+      return {
+        manifestId,
+        manifestNumber: manifest.manifestNumber,
+        status: ManifestStatus.CLOSED,
+        closedAt: manifest.closedAt ?? new Date(),
+        closedByStaffId: manifest.closedByStaffId ?? staffId,
+        shipmentIds,
+        transitionedCount: 0,
+        failures: [],
+        alreadyClosed: true,
+      };
+    }
+    if (manifest.shipments.length === 0) {
+      throw new ConflictException({
+        code: 'MANIFEST_EMPTY',
+        message: `Manifest ${manifest.manifestNumber} has no shipments; closing an empty manifest is not allowed`,
+      });
+    }
+
+    const now = new Date();
+    // 1. CLOSURE TX — atomic state change + audit.
+    await this.prisma.client.$transaction(async (tx) => {
+      const upd = await tx.manifest.updateMany({
+        where: { id: manifestId, status: ManifestStatus.DRAFT },
+        data: {
+          status: ManifestStatus.CLOSED,
+          closedAt: now,
+          closedByStaffId: staffId,
+        },
+      });
+      if (upd.count !== 1) {
+        // Lost a race to another close call — treat as idempotent.
+        throw new ConflictException({
+          code: 'MANIFEST_CLOSE_RACE',
+          message: 'Manifest was already closed concurrently',
+        });
+      }
+      await this.audit.log(
+        {
+          actorType: ActorType.STAFF,
+          actorId: staffId,
+          action: 'manifest.closed',
+          entityType: 'manifest',
+          entityId: manifestId,
+          severity: 'MEDIUM',
+          metadata: {
+            manifestNumber: manifest.manifestNumber,
+            shipmentCount: shipmentIds.length,
+            shipmentIds,
+            ipAddress: ctx?.ipAddress ?? null,
+            userAgent: ctx?.userAgent ?? null,
+            requestId: ctx?.requestId ?? null,
+          },
+        },
+        tx,
+      );
+    });
+
+    // 2. POST-COMMIT per-shipment PACKED → PENDING_DISPATCH (saga). The
+    //    matrix edge has EMPTY side-effects (no M5 work). Failures are
+    //    collected per-shipment and DO NOT undo the closure (manifest is
+    //    correctly CLOSED; supervisor sees failures in the response).
+    const actor = { type: ActorType.STAFF, id: staffId };
+    let transitionedCount = 0;
+    const failures: CloseManifestFailure[] = [];
+    for (const ship of manifest.shipments) {
+      const orderId = ship.orderShipments[0]?.orderId ?? null;
+      if (orderId === null) {
+        failures.push({
+          shipmentId: ship.id,
+          orderId: null,
+          error: 'ORDER_SHIPMENT_MISSING',
+        });
+        continue;
+      }
+      try {
+        await this.orderWrite.transitionStatus({
+          orderId,
+          to: OrderStatus.PENDING_DISPATCH,
+          actor,
+          expectedFrom: OrderStatus.PACKED,
+          reason: `Manifest ${manifest.manifestNumber} closed`,
+          ...(ctx !== undefined ? { ctx } : {}),
+        });
+        transitionedCount += 1;
+      } catch (e) {
+        const err = e as Error;
+        this.logger.warn(
+          { manifestId, shipmentId: ship.id, orderId, err: err.message },
+          'Manifest close: PACKED→PENDING_DISPATCH failed for shipment — supervisor will reconcile',
+        );
+        failures.push({ shipmentId: ship.id, orderId, error: err.message });
+      }
+    }
+
+    // 3. POST-COMMIT M9 AWB enqueue STUB. Audit HIGH (signal: an
+    //    integration boundary; M9 will replace with the real BullMQ
+    //    enqueue). Idempotency on a re-close call is provided by the
+    //    alreadyClosed short-circuit at the top — this branch is only
+    //    reached on the genuine DRAFT→CLOSED transition.
+    //
+    // TODO(Module 9): replace with `awbBatchQueue.enqueue({ manifestId,
+    // shipmentIds })` and flip the manifest into AWB_PENDING. Until then
+    // the manifest stays CLOSED and the AWB pipeline is a paper process
+    // (manual upload).
+    await this.audit.log({
+      actorType: ActorType.SYSTEM,
+      actorId: null,
+      action: 'manifest.awb_enqueue_stub',
+      entityType: 'manifest',
+      entityId: manifestId,
+      severity: 'HIGH',
+      metadata: {
+        manifestId,
+        manifestNumber: manifest.manifestNumber,
+        shipmentIds,
+        shipmentCount: shipmentIds.length,
+        transitionedCount,
+        failureCount: failures.length,
+        moduleStubbed: 'M9',
+      },
+    });
+
+    return {
+      manifestId,
+      manifestNumber: manifest.manifestNumber,
+      status: ManifestStatus.CLOSED,
+      closedAt: now,
+      closedByStaffId: staffId,
+      shipmentIds,
+      transitionedCount,
+      failures,
+      alreadyClosed: false,
     };
   }
 }
