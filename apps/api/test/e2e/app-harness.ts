@@ -72,12 +72,15 @@ export async function bootTestApp(): Promise<AppHarness> {
  * run order.
  */
 export async function resetAuthState(prisma: PrismaClient): Promise<void> {
-  // Order-critical chain (CLAUDE MUST #12): Module-7 call-center rows
-  // (call_queue_entries/call_attempts FK orders; agent_call_settings FK
-  // staff_users) → resetCallCenterState FIRST; then stock rows FK
-  // orders/variants/sellers → inventory; then Module-6 order/customer
-  // rows → resetOrderState; then catalog (FK sellers); then the
-  // auth/seller wipe.
+  // Order-critical chain (CLAUDE MUST #12): Module-8 warehouse rows
+  // (shipment_items FK stock_batches/warehouse_bins; shipments FK
+  // orders/staff_users; manifests FK staff_users) → resetWarehouseState
+  // FIRST; then Module-7 call-center rows (call_queue_entries/
+  // call_attempts FK orders; agent_call_settings FK staff_users) →
+  // resetCallCenterState; then stock rows FK orders/variants/sellers →
+  // inventory; then Module-6 order/customer rows → resetOrderState;
+  // then catalog (FK sellers); then the auth/seller wipe.
+  await resetWarehouseState(prisma);
   await resetCallCenterState(prisma);
   await resetInventoryState(prisma);
   await resetOrderState(prisma);
@@ -202,6 +205,34 @@ export async function resetCallCenterState(
       ['call_attempts', 'call_queue_entries', 'agent_call_settings'].join(
         ', ',
       ) +
+      ' RESTART IDENTITY CASCADE',
+  );
+}
+
+/**
+ * Wipes Module-8 warehouse tables. Chained FIRST in the reset cascade —
+ * BEFORE resetCallCenterState (the call-center tables are independent
+ * but the cascade order documents intent) and BEFORE resetInventoryState
+ * (shipment_items.pickedBatchId/pickedBinId FK stock_batches/
+ * warehouse_bins; deleting stock_batches before shipment_items would
+ * blow the FK). Also BEFORE resetOrderState (order_shipments junction
+ * FK orders) and BEFORE the staff wipe (shipments.pickStartedByStaffId/
+ * packedByStaffId and manifests.closedByStaffId FK staff_users with
+ * SET NULL). CASCADE handles the awb_labels/order_shipments/
+ * shipment_items child ordering.
+ */
+export async function resetWarehouseState(
+  prisma: PrismaClient,
+): Promise<void> {
+  await prisma.$executeRawUnsafe(
+    'TRUNCATE TABLE ' +
+      [
+        'shipment_items',
+        'awb_labels',
+        'order_shipments',
+        'shipments',
+        'manifests',
+      ].join(', ') +
       ' RESTART IDENTITY CASCADE',
   );
 }

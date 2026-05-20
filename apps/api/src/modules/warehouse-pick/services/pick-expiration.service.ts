@@ -61,6 +61,19 @@ export class PickExpirationService {
     private readonly allocation: StockPickAllocationService,
   ) {}
 
+  /** Look up the current claim and run `expire` against it. The
+   *  supervisor manual-trigger entry point (no pickStartedAt arg
+   *  required from the caller); falls through to the same time-based
+   *  idempotent CAS. */
+  async forceExpire(shipmentId: string): Promise<PickExpireResult> {
+    const row = await this.prisma.client.shipment.findUnique({
+      where: { id: shipmentId },
+      select: { pickStartedAt: true },
+    });
+    if (!row || row.pickStartedAt === null) return { expired: false };
+    return this.expire(shipmentId, row.pickStartedAt.toISOString());
+  }
+
   /** Schedule the delayed expiry sweep for a freshly-claimed parcel.
    *  Called post-claim by PickQueueService.pullNext. The deadline was
    *  already computed at claim time (ops.pick_task_timeout_hours). */

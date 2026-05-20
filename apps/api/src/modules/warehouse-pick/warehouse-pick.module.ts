@@ -7,6 +7,9 @@ import { PickExecutionService } from './services/pick-execution.service';
 import { PickExpirationService } from './services/pick-expiration.service';
 import { PickExpirationQueue } from './queue/pick-expiration.queue';
 import { PickExpirationWorker } from './queue/pick-expiration.worker';
+import { PickerController } from './controllers/picker.controller';
+import { AdminPickController } from './controllers/admin-pick.controller';
+import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 
 /**
  * Module 8 — Warehouse Operations (pick). Checkpoint 1 = the full
@@ -28,6 +31,7 @@ import { PickExpirationWorker } from './queue/pick-expiration.worker';
  */
 @Module({
   imports: [OrderModule, InventoryStockModule],
+  controllers: [PickerController, AdminPickController],
   providers: [
     PickQueueService,
     PickAllocationService,
@@ -35,6 +39,7 @@ import { PickExpirationWorker } from './queue/pick-expiration.worker';
     PickExpirationService,
     PickExpirationQueue,
     PickExpirationWorker,
+    StaffJwtGuard,
   ],
 })
 export class WarehousePickModule {}
