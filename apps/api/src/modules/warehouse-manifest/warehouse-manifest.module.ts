@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { OrderModule } from '../order/order.module';
 import { ManifestService } from './services/manifest.service';
 import { ManifestNumberingService } from './services/manifest-numbering.service';
+import { AdminManifestController } from './controllers/admin-manifest.controller';
+import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 
 /**
  * Module 8 — warehouse manifest module. Grows commit-by-commit:
@@ -20,7 +22,8 @@ import { ManifestNumberingService } from './services/manifest-numbering.service'
  */
 @Module({
   imports: [OrderModule],
-  providers: [ManifestService, ManifestNumberingService],
+  controllers: [AdminManifestController],
+  providers: [ManifestService, ManifestNumberingService, StaffJwtGuard],
   exports: [ManifestService],
 })
 export class WarehouseManifestModule {}

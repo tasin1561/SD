@@ -44,6 +44,36 @@ export interface CloseManifestFailure {
   error: string;
 }
 
+export interface ManifestListRow {
+  id: string;
+  manifestNumber: string;
+  status: ManifestStatus;
+  courierCode: string;
+  originWarehouseId: string;
+  closedAt: Date | null;
+  closedByStaffId: string | null;
+  createdAt: Date;
+  shipmentCount: number;
+}
+
+export interface ManifestDetail extends ManifestListRow {
+  shipments: Array<{
+    id: string;
+    shipmentNumber: string;
+    status: ShipmentStatus;
+    packCompletedAt: Date | null;
+    orderId: string | null;
+  }>;
+}
+
+export interface ListManifestsInput {
+  status?: ManifestStatus;
+  courierCode?: string;
+  warehouseId?: string;
+  page: number;
+  pageSize: number;
+}
+
 export interface CloseManifestResult {
   manifestId: string;
   manifestNumber: string;
@@ -568,6 +598,116 @@ export class ManifestService {
       transitionedCount,
       failures,
       alreadyClosed: false,
+    };
+  }
+
+  /** Paginated admin/supervisor list. status / courierCode /
+   *  warehouseId optional filters; default page 1 / size 20. */
+  async listManifests(input: ListManifestsInput): Promise<{
+    items: ManifestListRow[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }> {
+    const where = {
+      ...(input.status !== undefined ? { status: input.status } : {}),
+      ...(input.courierCode !== undefined
+        ? { courierCode: input.courierCode }
+        : {}),
+      ...(input.warehouseId !== undefined
+        ? { originWarehouseId: input.warehouseId }
+        : {}),
+    };
+    const [total, rows] = await Promise.all([
+      this.prisma.client.manifest.count({ where }),
+      this.prisma.client.manifest.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: input.pageSize,
+        skip: (input.page - 1) * input.pageSize,
+        select: {
+          id: true,
+          manifestNumber: true,
+          status: true,
+          courierCode: true,
+          originWarehouseId: true,
+          closedAt: true,
+          closedByStaffId: true,
+          createdAt: true,
+          _count: { select: { shipments: true } },
+        },
+      }),
+    ]);
+    return {
+      total,
+      page: input.page,
+      pageSize: input.pageSize,
+      items: rows.map((r) => ({
+        id: r.id,
+        manifestNumber: r.manifestNumber,
+        status: r.status,
+        courierCode: r.courierCode,
+        originWarehouseId: r.originWarehouseId,
+        closedAt: r.closedAt,
+        closedByStaffId: r.closedByStaffId,
+        createdAt: r.createdAt,
+        shipmentCount: r._count.shipments,
+      })),
+    };
+  }
+
+  /** Manifest detail (header + attached shipments). 404 on missing. */
+  async getById(manifestId: string): Promise<ManifestDetail> {
+    const m = await this.prisma.client.manifest.findUnique({
+      where: { id: manifestId },
+      select: {
+        id: true,
+        manifestNumber: true,
+        status: true,
+        courierCode: true,
+        originWarehouseId: true,
+        closedAt: true,
+        closedByStaffId: true,
+        createdAt: true,
+        shipments: {
+          select: {
+            id: true,
+            shipmentNumber: true,
+            status: true,
+            packCompletedAt: true,
+            orderShipments: {
+              select: { orderId: true },
+              orderBy: { shipmentSequence: 'asc' },
+              take: 1,
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+    if (!m) {
+      throw new NotFoundException({
+        code: 'MANIFEST_NOT_FOUND',
+        message: `Manifest ${manifestId} not found`,
+      });
+    }
+    return {
+      id: m.id,
+      manifestNumber: m.manifestNumber,
+      status: m.status,
+      courierCode: m.courierCode,
+      originWarehouseId: m.originWarehouseId,
+      closedAt: m.closedAt,
+      closedByStaffId: m.closedByStaffId,
+      createdAt: m.createdAt,
+      shipmentCount: m.shipments.length,
+      shipments: m.shipments.map((s) => ({
+        id: s.id,
+        shipmentNumber: s.shipmentNumber,
+        status: s.status,
+        packCompletedAt: s.packCompletedAt,
+        orderId: s.orderShipments[0]?.orderId ?? null,
+      })),
     };
   }
 }
