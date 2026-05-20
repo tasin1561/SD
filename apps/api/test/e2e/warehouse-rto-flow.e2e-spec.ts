@@ -2,8 +2,10 @@ import request from 'supertest';
 import {
   ActorType,
   OrderStatus,
+  ReservationStatus,
   RtoDisposition,
   RtoItemCondition,
+  StockMovementReasonCode,
   StockMovementType,
 } from '@skydrop/db';
 import { OrderWriteService } from '../../src/modules/order/services/order-write.service';
@@ -17,10 +19,18 @@ import {
 } from './app-harness';
 
 /**
- * Module 8 warehouse-rto HTTP surface (commits 14 + 15, WMS-8).
- * Drives the FULL CONFIRMED → pack → DISPATCHED → RTO_INITIATED →
- * receive → inspect → finalize pipeline through the HTTP layer +
- * asserts the WMS-8 two-gate Option A atomicity contract.
+ * Module 8 warehouse-rto HTTP surface (commits 14 + 15 + the
+ * conservation bug-fix follow-on). Drives the FULL CONFIRMED → pack →
+ * DISPATCHED → RTO_INITIATED → receive → inspect → finalize pipeline.
+ *
+ * Post-fix semantics (model B — qtyOnHand only changes when goods truly
+ * leave permanently; pre-DELIVERED never decrements; tracked as latent
+ * debt for M9/M10):
+ *   - RESTOCK : release() the phase-2 reservation → qtyReserved
+ *               clamped-decrements. NO RETURN_RESTOCK movement. qtyOnHand
+ *               unchanged (was never decremented).
+ *   - WRITE_OFF: release() the reservation + ADJUSTMENT_DECREASE -qty
+ *                with reasonCode mapped from rtoCondition.
  */
 describe('Warehouse RTO flow (e2e)', () => {
   let h: AppHarness;
@@ -127,7 +137,6 @@ describe('Warehouse RTO flow (e2e)', () => {
       .expect(200);
   }
 
-  /** Drive an order all the way to RTO_INITIATED with a manually-set AWB. */
   async function makeRtoInitiatedShipment(qty = 2): Promise<{
     orderId: string;
     shipmentId: string;
@@ -164,7 +173,8 @@ describe('Warehouse RTO flow (e2e)', () => {
       where: { id: orderId },
       include: { items: true },
     });
-    const prov = await h.app.get(ShipmentProvisionService).provisionFromSnapshot({
+    // commit-16 auto-provisions; redundant call is idempotent.
+    await h.app.get(ShipmentProvisionService).provisionFromSnapshot({
       orderId,
       recipient: {
         name: order.recipientName,
@@ -182,9 +192,11 @@ describe('Warehouse RTO flow (e2e)', () => {
         productName: 'Widget',
       })),
     });
-    const shipmentId = prov.shipmentId;
+    const shipment = await h.prisma.shipment.findFirstOrThrow({
+      where: { orderShipments: { some: { orderId } } },
+    });
+    const shipmentId = shipment.id;
 
-    // Pick.
     await request(h.baseUrl).post('/warehouse/picks/next').set(staffAuth).expect(200);
     await request(h.baseUrl)
       .post(`/warehouse/picks/${shipmentId}/start`)
@@ -211,20 +223,15 @@ describe('Warehouse RTO flow (e2e)', () => {
       .set(staffAuth)
       .expect(200);
 
-    // Pack (auto-attaches to a DRAFT manifest).
     const pack = await request(h.baseUrl)
       .post(`/warehouse/packs/${shipmentId}/complete`)
       .set(staffAuth)
       .expect(200);
-
-    // Close manifest → PACKED → PENDING_DISPATCH.
     await request(h.baseUrl)
       .post(`/admin/warehouse/manifests/${pack.body.manifestId}/close`)
       .set(staffAuth)
       .expect(200);
 
-    // Drive through DISPATCHED → RTO_INITIATED (via the OrderWriteService
-    // directly — M9 courier integration would normally drive these).
     await ow.transitionStatus({
       orderId,
       to: OrderStatus.DISPATCHED,
@@ -236,8 +243,6 @@ describe('Warehouse RTO flow (e2e)', () => {
       actor: { type: ActorType.STAFF, id: staffId },
     });
 
-    // Stamp an AWB on the shipment (M9 will auto-generate; for now we
-    // set it directly so the receive lookup-by-AWB works).
     const awbNumber = `AWB-TEST-${Date.now()}`;
     await h.prisma.shipment.update({
       where: { id: shipmentId },
@@ -252,25 +257,23 @@ describe('Warehouse RTO flow (e2e)', () => {
     };
   }
 
-  it('full RTO flow: receive → inspect → finalize (all RESTOCK; stock returned, order RTO_RESTOCKED)', async () => {
+  it('RESTOCK happy: release-only — qtyReserved cleared, qtyOnHand unchanged, no RETURN_RESTOCK movement, reservation status RELEASED', async () => {
     await receiveStock(10);
     const { orderId, shipmentId, shipmentItemIds, awbNumber } =
       await makeRtoInitiatedShipment(2);
 
-    // After pick, on-hand decreased by 2; restock should put it back.
-    const levelBeforeRto = await h.prisma.stockLevel.findFirstOrThrow({
+    // After pick-start, phase-2 hold raised stock_levels.qtyReserved by 2.
+    const beforeFinalize = await h.prisma.stockLevel.findFirstOrThrow({
       where: { variantId, binId },
     });
+    expect(beforeFinalize.qtyOnHand).toBe(10);
+    expect(beforeFinalize.qtyReserved).toBe(2);
 
-    const recv = await request(h.baseUrl)
+    await request(h.baseUrl)
       .post('/warehouse/rto/receive')
       .set(staffAuth)
       .send({ awbNumber })
       .expect(200);
-    expect(recv.body.status).toBe(OrderStatus.RTO_RECEIVED);
-    expect(recv.body.alreadyReceived).toBe(false);
-
-    // Inspect every line as RESTOCK.
     for (const itemId of shipmentItemIds) {
       await request(h.baseUrl)
         .post(`/warehouse/rto/items/${itemId}/inspect`)
@@ -281,7 +284,6 @@ describe('Warehouse RTO flow (e2e)', () => {
         })
         .expect(200);
     }
-
     const fin = await request(h.baseUrl)
       .post(`/warehouse/rto/shipments/${shipmentId}/finalize`)
       .set(staffAuth)
@@ -292,147 +294,39 @@ describe('Warehouse RTO flow (e2e)', () => {
       writtenOffCount: 0,
       movementsAlreadyApplied: false,
       alreadyFinalized: false,
+      reservationsReleased: 1,
     });
 
-    const order = await h.prisma.order.findUniqueOrThrow({
-      where: { id: orderId },
-    });
+    const order = await h.prisma.order.findUniqueOrThrow({ where: { id: orderId } });
     expect(order.status).toBe(OrderStatus.RTO_RESTOCKED);
 
-    const levelAfter = await h.prisma.stockLevel.findFirstOrThrow({
+    const afterFinalize = await h.prisma.stockLevel.findFirstOrThrow({
       where: { variantId, binId },
     });
-    expect(levelAfter.qtyOnHand).toBe(levelBeforeRto.qtyOnHand + 2);
+    expect(afterFinalize.qtyOnHand).toBe(10); // unchanged — model B
+    expect(afterFinalize.qtyReserved).toBe(0); // release decremented the hold
 
+    // No RETURN_RESTOCK movement was issued (the bug-fix removed it).
     const restockMovements = await h.prisma.stockMovement.findMany({
       where: { shipmentId, type: StockMovementType.RETURN_RESTOCK },
     });
-    expect(restockMovements).toHaveLength(1);
-    expect(restockMovements[0]!.qtyChange).toBe(2);
-    expect(restockMovements[0]!.reasonCode).toBeNull();
+    expect(restockMovements).toHaveLength(0);
+
+    // No ACTIVE reservations leaked — RTO conservation invariant.
+    const active = await h.prisma.stockReservation.findMany({
+      where: { orderId, status: ReservationStatus.ACTIVE },
+    });
+    expect(active).toHaveLength(0);
+    const released = await h.prisma.stockReservation.findMany({
+      where: { orderId, status: ReservationStatus.RELEASED },
+    });
+    expect(released.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('idempotency gate 2: pre-existing RETURN_RESTOCK movement → skip re-apply, transition runs', async () => {
+  it('WRITE_OFF happy: release + ADJUSTMENT_DECREASE with rtoCondition-mapped reasonCode (DAMAGED → DAMAGED_IN_WAREHOUSE)', async () => {
     await receiveStock(10);
     const { orderId, shipmentId, shipmentItemIds, awbNumber } =
       await makeRtoInitiatedShipment(2);
-
-    await request(h.baseUrl)
-      .post('/warehouse/rto/receive')
-      .set(staffAuth)
-      .send({ awbNumber })
-      .expect(200);
-    for (const itemId of shipmentItemIds) {
-      await request(h.baseUrl)
-        .post(`/warehouse/rto/items/${itemId}/inspect`)
-        .set(staffAuth)
-        .send({
-          condition: RtoItemCondition.GOOD,
-          disposition: RtoDisposition.RESTOCK,
-        })
-        .expect(200);
-    }
-
-    // Simulate a prior crash-after-movements: write a RETURN_RESTOCK
-    // movement directly (bypassing the service) so the gate fires.
-    // INV-1 violation in test-only context — exclusively a crash-recovery
-    // simulator; not a code path the app ever takes.
-    const order = await h.prisma.order.findUniqueOrThrow({
-      where: { id: orderId },
-      include: { items: true },
-    });
-    await h.prisma.stockMovement.create({
-      data: {
-        sellerId: order.sellerId,
-        variantId,
-        warehouseId,
-        binId,
-        batchId: (await h.prisma.stockBatch.findFirstOrThrow({ where: { variantId } })).id,
-        type: StockMovementType.RETURN_RESTOCK,
-        qtyChange: 0, // marker; the gate only checks existence
-        qtyBefore: 0,
-        qtyAfter: 0,
-        actorType: ActorType.SYSTEM,
-        orderId,
-        shipmentId,
-      },
-    });
-
-    const fin = await request(h.baseUrl)
-      .post(`/warehouse/rto/shipments/${shipmentId}/finalize`)
-      .set(staffAuth)
-      .expect(200);
-    expect(fin.body.movementsAlreadyApplied).toBe(true);
-    expect(fin.body.status).toBe(OrderStatus.RTO_RESTOCKED);
-
-    // Only the manually-inserted marker movement exists (no double-apply).
-    const movements = await h.prisma.stockMovement.findMany({
-      where: { shipmentId, type: StockMovementType.RETURN_RESTOCK },
-    });
-    expect(movements).toHaveLength(1);
-  });
-
-  it('idempotency gate 1: re-finalize after success → alreadyFinalized, no extra movements', async () => {
-    await receiveStock(10);
-    const { shipmentId, shipmentItemIds, awbNumber } =
-      await makeRtoInitiatedShipment(2);
-
-    await request(h.baseUrl)
-      .post('/warehouse/rto/receive')
-      .set(staffAuth)
-      .send({ awbNumber })
-      .expect(200);
-    for (const itemId of shipmentItemIds) {
-      await request(h.baseUrl)
-        .post(`/warehouse/rto/items/${itemId}/inspect`)
-        .set(staffAuth)
-        .send({
-          condition: RtoItemCondition.GOOD,
-          disposition: RtoDisposition.RESTOCK,
-        })
-        .expect(200);
-    }
-    await request(h.baseUrl)
-      .post(`/warehouse/rto/shipments/${shipmentId}/finalize`)
-      .set(staffAuth)
-      .expect(200);
-
-    const second = await request(h.baseUrl)
-      .post(`/warehouse/rto/shipments/${shipmentId}/finalize`)
-      .set(staffAuth)
-      .expect(200);
-    expect(second.body.alreadyFinalized).toBe(true);
-    expect(second.body.movementsAlreadyApplied).toBe(true);
-
-    const movements = await h.prisma.stockMovement.findMany({
-      where: { shipmentId, type: StockMovementType.RETURN_RESTOCK },
-    });
-    expect(movements).toHaveLength(1); // only one restock, despite two finalize calls
-  });
-
-  it('finalize rejects RTO_INSPECTION_INCOMPLETE when an item is unrinspected', async () => {
-    await receiveStock(10);
-    const { shipmentId, awbNumber } = await makeRtoInitiatedShipment(2);
-    await request(h.baseUrl)
-      .post('/warehouse/rto/receive')
-      .set(staffAuth)
-      .send({ awbNumber })
-      .expect(200);
-    // Skip inspection — call finalize directly.
-    const r = await request(h.baseUrl)
-      .post(`/warehouse/rto/shipments/${shipmentId}/finalize`)
-      .set(staffAuth)
-      .expect(409);
-    expect(r.body.code).toBe('RTO_INSPECTION_INCOMPLETE');
-  });
-
-  it('finalize all-WRITE_OFF: order RTO_RESTOCKED with no movements, original PICK decrement stands', async () => {
-    await receiveStock(10);
-    const { shipmentId, shipmentItemIds, awbNumber } =
-      await makeRtoInitiatedShipment(2);
-    const onHandAfterPick = (
-      await h.prisma.stockLevel.findFirstOrThrow({ where: { variantId, binId } })
-    ).qtyOnHand;
 
     await request(h.baseUrl)
       .post('/warehouse/rto/receive')
@@ -446,7 +340,7 @@ describe('Warehouse RTO flow (e2e)', () => {
         .send({
           condition: RtoItemCondition.DAMAGED,
           disposition: RtoDisposition.WRITE_OFF,
-          notes: 'damaged in transit',
+          notes: 'box crushed',
         })
         .expect(200);
     }
@@ -458,16 +352,138 @@ describe('Warehouse RTO flow (e2e)', () => {
       status: OrderStatus.RTO_RESTOCKED,
       restockedCount: 0,
       writtenOffCount: 1,
+      reservationsReleased: 1,
     });
-    // Stock NOT restored — original PICK decrement stands.
-    const after = await h.prisma.stockLevel.findFirstOrThrow({
+
+    const afterFinalize = await h.prisma.stockLevel.findFirstOrThrow({
       where: { variantId, binId },
     });
-    expect(after.qtyOnHand).toBe(onHandAfterPick);
-    // No RETURN_RESTOCK movements.
-    const movements = await h.prisma.stockMovement.findMany({
-      where: { shipmentId, type: StockMovementType.RETURN_RESTOCK },
+    expect(afterFinalize.qtyOnHand).toBe(8); // ADJUSTMENT_DECREASE -2: the 2 units truly left
+    expect(afterFinalize.qtyReserved).toBe(0); // release cleared the hold
+
+    const adjustments = await h.prisma.stockMovement.findMany({
+      where: { shipmentId, type: StockMovementType.ADJUSTMENT_DECREASE },
     });
-    expect(movements).toHaveLength(0);
+    expect(adjustments).toHaveLength(1);
+    expect(adjustments[0]!.qtyChange).toBe(-2);
+    expect(adjustments[0]!.reasonCode).toBe(
+      StockMovementReasonCode.DAMAGED_IN_WAREHOUSE,
+    );
+
+    const active = await h.prisma.stockReservation.findMany({
+      where: { orderId, status: ReservationStatus.ACTIVE },
+    });
+    expect(active).toHaveLength(0);
+  });
+
+  it('gate-2 (WRITE_OFF): pre-existing ADJUSTMENT_DECREASE marker → skip re-apply, transition still runs', async () => {
+    await receiveStock(10);
+    const { orderId, shipmentId, shipmentItemIds, awbNumber } =
+      await makeRtoInitiatedShipment(2);
+
+    await request(h.baseUrl)
+      .post('/warehouse/rto/receive')
+      .set(staffAuth)
+      .send({ awbNumber })
+      .expect(200);
+    for (const itemId of shipmentItemIds) {
+      await request(h.baseUrl)
+        .post(`/warehouse/rto/items/${itemId}/inspect`)
+        .set(staffAuth)
+        .send({
+          condition: RtoItemCondition.DAMAGED,
+          disposition: RtoDisposition.WRITE_OFF,
+        })
+        .expect(200);
+    }
+
+    // Simulate prior crash-after-movements: insert an ADJUSTMENT_DECREASE
+    // marker directly so the gate fires. Test-only INV-1 bypass; this
+    // path is NEVER taken by app code.
+    const order = await h.prisma.order.findUniqueOrThrow({
+      where: { id: orderId },
+    });
+    await h.prisma.stockMovement.create({
+      data: {
+        sellerId: order.sellerId,
+        variantId,
+        warehouseId,
+        binId,
+        batchId: (await h.prisma.stockBatch.findFirstOrThrow({ where: { variantId } })).id,
+        type: StockMovementType.ADJUSTMENT_DECREASE,
+        qtyChange: 0, // marker; only existence matters for the gate
+        qtyBefore: 0,
+        qtyAfter: 0,
+        actorType: ActorType.SYSTEM,
+        reasonCode: StockMovementReasonCode.OTHER,
+        orderId,
+        shipmentId,
+      },
+    });
+
+    const fin = await request(h.baseUrl)
+      .post(`/warehouse/rto/shipments/${shipmentId}/finalize`)
+      .set(staffAuth)
+      .expect(200);
+    expect(fin.body.movementsAlreadyApplied).toBe(true);
+    expect(fin.body.status).toBe(OrderStatus.RTO_RESTOCKED);
+
+    // Only the manually-inserted marker — no double-apply.
+    const adjustments = await h.prisma.stockMovement.findMany({
+      where: { shipmentId, type: StockMovementType.ADJUSTMENT_DECREASE },
+    });
+    expect(adjustments).toHaveLength(1);
+  });
+
+  it('gate-1 idempotency: re-finalize after success → alreadyFinalized, no double-release, no extra movements', async () => {
+    await receiveStock(10);
+    const { shipmentId, shipmentItemIds, awbNumber } =
+      await makeRtoInitiatedShipment(2);
+
+    await request(h.baseUrl)
+      .post('/warehouse/rto/receive')
+      .set(staffAuth)
+      .send({ awbNumber })
+      .expect(200);
+    for (const itemId of shipmentItemIds) {
+      await request(h.baseUrl)
+        .post(`/warehouse/rto/items/${itemId}/inspect`)
+        .set(staffAuth)
+        .send({
+          condition: RtoItemCondition.DAMAGED,
+          disposition: RtoDisposition.WRITE_OFF,
+        })
+        .expect(200);
+    }
+    await request(h.baseUrl)
+      .post(`/warehouse/rto/shipments/${shipmentId}/finalize`)
+      .set(staffAuth)
+      .expect(200);
+
+    const second = await request(h.baseUrl)
+      .post(`/warehouse/rto/shipments/${shipmentId}/finalize`)
+      .set(staffAuth)
+      .expect(200);
+    expect(second.body.alreadyFinalized).toBe(true);
+
+    const adjustments = await h.prisma.stockMovement.findMany({
+      where: { shipmentId, type: StockMovementType.ADJUSTMENT_DECREASE },
+    });
+    expect(adjustments).toHaveLength(1);
+  });
+
+  it('finalize rejects RTO_INSPECTION_INCOMPLETE when an item is uninspected', async () => {
+    await receiveStock(10);
+    const { shipmentId, awbNumber } = await makeRtoInitiatedShipment(2);
+    await request(h.baseUrl)
+      .post('/warehouse/rto/receive')
+      .set(staffAuth)
+      .send({ awbNumber })
+      .expect(200);
+    const r = await request(h.baseUrl)
+      .post(`/warehouse/rto/shipments/${shipmentId}/finalize`)
+      .set(staffAuth)
+      .expect(409);
+    expect(r.body.code).toBe('RTO_INSPECTION_INCOMPLETE');
   });
 });

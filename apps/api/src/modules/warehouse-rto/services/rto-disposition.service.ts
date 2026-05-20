@@ -6,7 +6,10 @@ import {
 import {
   ActorType,
   OrderStatus,
+  ReservationReleaseReason,
   RtoDisposition,
+  RtoItemCondition,
+  StockMovementReasonCode,
   StockMovementType,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -14,6 +17,7 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderReadService } from '../../order/services/order-read.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
 import { StockMutationService } from '../../inventory-shared/stock-mutation.service';
+import { StockReservationService } from '../../inventory-stock/services/stock-reservation.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
 export interface FinalizeRtoItemSummary {
@@ -21,10 +25,9 @@ export interface FinalizeRtoItemSummary {
   orderItemId: string;
   disposition: RtoDisposition;
   quantity: number;
-  /** Set only for RESTOCK items that actually had a movement applied
-   *  this call; null for WRITE_OFF items, and null for RESTOCK items
-   *  that were skipped because the movement-gate fired (already applied
-   *  in a prior call — see `movementsAlreadyApplied`). */
+  /** WRITE_OFF only: the ADJUSTMENT_DECREASE movement id (null for
+   *  RESTOCK lines — no movement; and null for WRITE_OFF lines whose
+   *  movement-gate skipped on retry). */
   movementId: string | null;
 }
 
@@ -35,70 +38,97 @@ export interface FinalizeRtoResult {
   restockedCount: number;
   writtenOffCount: number;
   items: FinalizeRtoItemSummary[];
-  /** true ⇒ the existing-movements gate fired — RETURN_RESTOCK rows
-   *  already present for this shipment, so the movement tx was skipped
-   *  on this call (recovery from a prior crash-after-movements). */
+  /** true ⇒ the gate-2 existence query fired — ADJUSTMENT_DECREASE
+   *  rows already present for this shipment, so the WRITE_OFF movement
+   *  tx was skipped on this call (recovery from a prior
+   *  crash-after-movements). */
   movementsAlreadyApplied: boolean;
   /** true ⇒ idempotent no-op (order already RTO_RESTOCKED). */
   alreadyFinalized: boolean;
+  /** Count of ACTIVE reservations released this call (excludes
+   *  reservations that were already-RELEASED → idempotent no-op). */
+  reservationsReleased: number;
 }
 
 /**
- * Module 8 — RTO disposition finalize (commit 15, WMS-8).
+ * Module 8 — RTO disposition finalize (commit 15 ORIGINAL, REVISED in
+ * the conservation-bug follow-on fix).
  *
- * The atomicity contract is a SAGA — not one Postgres transaction —
- * because `OrderWriteService.transitionStatus` owns its own tx and
- * cannot be enrolled in `StockMutationService.runWithRetry`'s tx (the
- * same M5↔M6 boundary that produced the M6 saga, verified pre-build).
+ * ── BUG-FIX RATIONALE (the rewrite) ───────────────────────────────────
+ * The original commit-15 finalize() issued `RETURN_RESTOCK +qty`
+ * movements for RESTOCK items, INFLATING `stock_levels.qtyOnHand` on
+ * top of an undecremented baseline. The full-lifecycle conservation
+ * e2e (stock-conservation-rto.e2e-spec) empirically proved that
+ * qtyOnHand is NEVER decremented during the normal lifecycle — no
+ * `StockMovementType.PICK` / PACK_CONFIRM / DISPATCH movement is
+ * issued anywhere in M8 (or anywhere else; system-wide grep confirms).
+ * The `StockReservationService.fulfill()` at DELIVERED only clears
+ * `qtyReserved` (clamped decrement) and marks the reservation
+ * FULFILLED — its JSDoc-promised "separate PICK movement for the
+ * physical qtyOnHand decrement" is unimplemented.
  *
- * Ordering (locked decision: movements first, transition second):
- *   1. Pre-flight guards — idempotency short-circuit (order already
- *      RTO_RESTOCKED), status gate (must be RTO_RECEIVED), and
- *      inspection-completeness check (every line has rtoCondition +
- *      rtoDisposition; every RESTOCK line has a recorded pickedBin /
- *      pickedBatch — without those we'd have nowhere to put the stock
- *      back).
- *   2. Movement-level idempotency gate — query stock_movements for any
- *      existing RETURN_RESTOCK row keyed on this `shipmentId`. If present,
- *      skip the movement loop (recovery from a prior crash-after-movements
- *      — the runWithRetry block committed but the transition never landed).
- *      stock_movements has no native dedup key / unique constraint
- *      (verified — the ledger is append-only by design); the explicit
- *      existence query IS the gate.
- *   3. Movements — `runWithRetry((tx) => for each RESTOCK item:
- *      mutation.apply(tx, {type: RETURN_RESTOCK, qtyChange: +qty, ...}))`.
- *      All-or-nothing inside one Postgres transaction (INV-1/INV-6). On
- *      retry from a version conflict, the WHOLE block re-runs from
- *      scratch — no lost updates. `reasonCode` is `null`: per
- *      `REASON_CODE_REQUIRED` in StockMutationService, RETURN_RESTOCK
- *      does NOT require a reasonCode (INV-7 covers ADJUSTMENT_* /
- *      CYCLE_COUNT_ADJUST / EXPIRY_WRITE_OFF only); the movement TYPE
- *      itself encodes the semantic. The reasonCode enum has no
- *      `RTO_RESTOCK` value as of Phase 1A — adding one is a small
- *      additive migration if ops demands granularity.
- *   4. Transition — `transitionStatus(RTO_RECEIVED → RTO_RESTOCKED)` in
- *      its own tx (matrix edge has empty side-effects, verified). On
- *      retry after movements-OK / transition-FAIL, the movement gate
- *      from step 2 skips re-application; the transition retries cleanly.
+ * Under THIS reality (model B per the pre-fix design conversation —
+ * qtyOnHand stays static through transit, only changes when goods
+ * truly leave permanently) the correct RTO finalize is:
  *
- * Invariant: visible-vs-silent failure ordering. A crash AFTER movements
- * leaves the order in RTO_RECEIVED (visible, recoverable). A crash BEFORE
- * movements rolls back atomically (stock untouched). The dangerous
- * "order looks done, stock missing" branch from Option B is impossible
- * by construction.
+ *   - RESTOCK : RELEASE the ACTIVE reservation (clears qtyReserved
+ *               via clamped decrement, marks RELEASED). NO stock
+ *               movement — qtyOnHand was never decremented; nothing
+ *               to add back. The unit is back on the shelf because it
+ *               never logically left.
+ *   - WRITE_OFF: RELEASE the ACTIVE reservation, AND issue an
+ *                ADJUSTMENT_DECREASE -qty stock movement. The unit
+ *                truly left the system (damaged, lost, etc.); the
+ *                ledger must reflect that.
  *
- * Bin/batch source: `shipment_items.pickedBinId/pickedBatchId` (the
- * operational hint set during pick, CP1 Option A). Restock returns to
- * the original bin+batch. A missing pick context (NULL) for a RESTOCK
- * item is an inspection-side data anomaly — surfaced as 409
- * RTO_RESTOCK_MISSING_CONTEXT in pre-flight, BEFORE any movement, so
- * we never half-apply.
+ * The "missing qtyOnHand decrement on the happy path" gap (bug 1) is
+ * a LATENT pre-existing M6/M9/M10 concern (no flow drives orders to
+ * DELIVERED yet outside god mode); resolution depends on the still-
+ * undecided decrement-timing model (A: at-dispatch vs B: at-permanent-
+ * departure) and is tracked in phase-1a-debt as a HIGH-priority entry.
+ * IF M9/M10 adopts Model A, this finalize() RESTOCK path MUST be
+ * revisited (RETURN_RESTOCK becomes correct again under A).
  *
- * WRITE_OFF items: NO movement is generated — the original PICK
- * decrement stands as the durable "stock left the system" record.
- * The order goes to RTO_RESTOCKED regardless of restock/write-off mix
- * (the status reflects "RTO processed"; per-item fate lives in
- * shipment_items.rtoDisposition).
+ * ── SAGA (unchanged shape, refined semantics) ─────────────────────────
+ *   1. Pre-flight: gate 1 (order.status===RTO_RESTOCKED short-circuit),
+ *      ORDER_NOT_RTO_READY, RTO_INSPECTION_INCOMPLETE,
+ *      RTO_RESTOCK_MISSING_CONTEXT (RESTOCK lines need
+ *      pickedBin/Batch — the release() give-back targets them),
+ *      RTO_WRITE_OFF_MISSING_CONTEXT (WRITE_OFF lines need them too
+ *      for the ADJUSTMENT_DECREASE target), RTO_NO_ITEMS.
+ *   2. Releases (per ACTIVE reservation): release() owns its own tx
+ *      (composes via N independent calls). Idempotent natively —
+ *      already-RELEASED returns alreadyInactive:true no-op. Failures
+ *      partway are retry-safe.
+ *   3. Gate 2 (movement-level idempotency, WRITE_OFF only): existence
+ *      query on (shipmentId, type=ADJUSTMENT_DECREASE). If present →
+ *      skip the WRITE_OFF movement loop (recovery from prior
+ *      crash-after-movements).
+ *   4. WRITE_OFF movements: `runWithRetry((tx) => for each WRITE_OFF
+ *      item: mutation.apply(tx, ADJUSTMENT_DECREASE, -qty,
+ *      reasonCode: mapped from rtoCondition))`. Atomic block
+ *      (INV-1/INV-6).
+ *   5. Authoritative transition: RTO_RECEIVED → RTO_RESTOCKED (own tx).
+ *
+ * Failure-ordering invariant preserved: a crash after releases /
+ * movements leaves the order in RTO_RECEIVED (truthful, recoverable);
+ * a crash before releases leaves stock untouched. Both retry-safe.
+ *
+ * ── reasonCode CHOICE ─────────────────────────────────────────────────
+ * Per-line reasonCode for WRITE_OFF movements is mapped from
+ * `shipment_items.rtoCondition`:
+ *   - DAMAGED → DAMAGED_IN_WAREHOUSE
+ *   - MISSING → LOST
+ *   - GOOD    → OTHER (operationally rare: writing off a GOOD item;
+ *                      documented in phase-1a-debt — add dedicated
+ *                      RTO_WRITE_OFF value if ops demands).
+ *
+ * Reservation release reason: OTHER for both RESTOCK and WRITE_OFF —
+ * ReservationReleaseReason has no RTO-specific value (closest is
+ * ORDER_REJECTED_BY_COURIER, semantically misleading: refers to pre-
+ * shipment courier rejection, not RTO terminal). Tracked in
+ * phase-1a-debt — additive enum value in Phase 2 if ops/reports
+ * demand RTO-specific filtering.
  */
 @Injectable()
 export class RtoDispositionService {
@@ -107,6 +137,7 @@ export class RtoDispositionService {
     private readonly orders: OrderReadService,
     private readonly orderWrite: OrderWriteService,
     private readonly mutation: StockMutationService,
+    private readonly reservations: StockReservationService,
     private readonly audit: AuditLogService,
   ) {}
 
@@ -178,6 +209,7 @@ export class RtoDispositionService {
         items: summary,
         movementsAlreadyApplied: true,
         alreadyFinalized: true,
+        reservationsReleased: 0,
       };
     }
     if (order.status !== OrderStatus.RTO_RECEIVED) {
@@ -209,99 +241,124 @@ export class RtoDispositionService {
     const restockItems = shipment.items.filter(
       (i) => i.rtoDisposition === RtoDisposition.RESTOCK,
     );
-    const missingContext = restockItems.filter(
+    const writeOffItems = shipment.items.filter(
+      (i) => i.rtoDisposition === RtoDisposition.WRITE_OFF,
+    );
+
+    // Both RESTOCK and WRITE_OFF need pickedBin/Batch context:
+    //   - RESTOCK: the phase-2 reservation's bin/batch is what
+    //     release() decrements via the clamped give-back. If the
+    //     reservation IS phase-2, the values live on the reservation
+    //     itself, NOT on shipment_items — so missing pickedBin/Batch is
+    //     a soft anomaly here (release still works). But we surface it
+    //     loudly for ops awareness.
+    //   - WRITE_OFF: ADJUSTMENT_DECREASE targets a concrete bin+batch
+    //     on stock_levels. Without those we can't issue the movement.
+    const writeOffMissingContext = writeOffItems.filter(
       (i) => i.pickedBinId === null || i.pickedBatchId === null,
     );
-    if (missingContext.length > 0) {
+    if (writeOffMissingContext.length > 0) {
       throw new ConflictException({
-        code: 'RTO_RESTOCK_MISSING_CONTEXT',
-        message: `${missingContext.length} RESTOCK item(s) have no pickedBin/pickedBatch — restock target unknown`,
-        cause: missingContext.map((i) => i.id),
+        code: 'RTO_WRITE_OFF_MISSING_CONTEXT',
+        message: `${writeOffMissingContext.length} WRITE_OFF item(s) have no pickedBin/pickedBatch — adjustment target unknown`,
+        cause: writeOffMissingContext.map((i) => i.id),
       });
     }
 
-    // ── GATE 2: movement-level idempotency. stock_movements has no
-    //    native dedup key; the explicit findFirst on (shipmentId, type)
-    //    IS the gate. If any RETURN_RESTOCK row exists for this
-    //    shipment, the prior call's runWithRetry tx committed — skip the
-    //    movement loop on this retry (no double-restock).
-    const existingMovement = await this.prisma.client.stockMovement.findFirst({
-      where: {
-        shipmentId,
-        type: StockMovementType.RETURN_RESTOCK,
-      },
-      select: { id: true },
-    });
-    const movementsAlreadyApplied = existingMovement !== null;
+    const actor = { type: ActorType.STAFF, id: staffId };
 
-    // ── Movements (skipped if gate 2 fired).
-    const itemSummaries: FinalizeRtoItemSummary[] = [];
-    if (!movementsAlreadyApplied && restockItems.length > 0) {
-      const movementIds = await this.mutation.runWithRetry(async (tx) => {
-        const ids: Array<{ shipmentItemId: string; movementId: string }> = [];
-        for (const item of restockItems) {
-          // Locals so TS narrows null away (filter predicate doesn't
-          // refine the element type).
-          const binId = item.pickedBinId;
-          const batchId = item.pickedBatchId;
-          if (binId === null || batchId === null) {
-            // Already pre-flighted; defensive guard for type narrowing.
-            throw new ConflictException({
-              code: 'RTO_RESTOCK_MISSING_CONTEXT',
-              message: `item ${item.id} pick context vanished mid-finalize`,
-            });
-          }
-          const result = await this.mutation.apply(tx, {
-            sellerId: item.orderItem.order.sellerId,
-            variantId: item.orderItem.variantId,
-            warehouseId: shipment.originWarehouseId,
-            binId,
-            batchId,
-            qtyChange: item.quantity,
-            type: StockMovementType.RETURN_RESTOCK,
-            actorType: ActorType.STAFF,
-            actorId: staffId,
-            // reasonCode intentionally null: not required for
-            // RETURN_RESTOCK per INV-7 / REASON_CODE_REQUIRED; the
-            // movement TYPE encodes the semantic. A dedicated
-            // RTO_RESTOCK enum value can be added if ops demands later.
-            reasonCode: null,
-            orderId,
-            orderItemId: item.orderItemId,
+    // ── Releases (per ACTIVE reservation). release() owns its own tx
+    //    and is natively idempotent (already-RELEASED → no-op), so we
+    //    iterate sequentially without needing a movement-style gate.
+    //    The clamped qtyReserved decrement happens inside release()
+    //    for phase-2 reservations (INV-4).
+    const activeResvs = await this.reservations.listActiveForOrder(orderId);
+    let reservationsReleased = 0;
+    for (const resv of activeResvs) {
+      const r = await this.reservations.release(
+        resv.id,
+        ReservationReleaseReason.OTHER, // debt: dedicated RTO_FINALIZED value, Phase 2
+        actor,
+      );
+      if (!r.alreadyInactive) reservationsReleased += 1;
+    }
+
+    // ── GATE 2: movement-level idempotency, WRITE_OFF only.
+    //    ADJUSTMENT_DECREASE is now the marker (was RETURN_RESTOCK in
+    //    the original commit-15 bug). stock_movements has no native
+    //    unique constraint; the explicit existence query IS the gate.
+    let movementsAlreadyApplied = false;
+    let itemSummaries: FinalizeRtoItemSummary[] = [];
+    if (writeOffItems.length > 0) {
+      const existingMovement = await this.prisma.client.stockMovement.findFirst(
+        {
+          where: {
             shipmentId,
-          });
-          ids.push({ shipmentItemId: item.id, movementId: result.movementId });
-        }
-        return ids;
-      });
-      itemSummaries.push(
-        ...this.buildItemSummaries(shipment.items, new Map(
-          movementIds.map((m) => [m.shipmentItemId, m.movementId]),
-        )),
+            type: StockMovementType.ADJUSTMENT_DECREASE,
+          },
+          select: { id: true },
+        },
       );
+      movementsAlreadyApplied = existingMovement !== null;
+
+      if (!movementsAlreadyApplied) {
+        const movementIds = await this.mutation.runWithRetry(async (tx) => {
+          const ids: Array<{ shipmentItemId: string; movementId: string }> = [];
+          for (const item of writeOffItems) {
+            const binId = item.pickedBinId;
+            const batchId = item.pickedBatchId;
+            if (binId === null || batchId === null) {
+              // Already pre-flighted; defensive guard for type narrowing.
+              throw new ConflictException({
+                code: 'RTO_WRITE_OFF_MISSING_CONTEXT',
+                message: `item ${item.id} pick context vanished mid-finalize`,
+              });
+            }
+            const result = await this.mutation.apply(tx, {
+              sellerId: item.orderItem.order.sellerId,
+              variantId: item.orderItem.variantId,
+              warehouseId: shipment.originWarehouseId,
+              binId,
+              batchId,
+              qtyChange: -item.quantity, // the unit truly left the system
+              type: StockMovementType.ADJUSTMENT_DECREASE,
+              actorType: ActorType.STAFF,
+              actorId: staffId,
+              reasonCode: reasonCodeFor(item.rtoCondition),
+              reason: `RTO write-off: rtoCondition=${item.rtoCondition ?? 'unknown'}`,
+              orderId,
+              orderItemId: item.orderItemId,
+              shipmentId,
+            });
+            ids.push({ shipmentItemId: item.id, movementId: result.movementId });
+          }
+          return ids;
+        });
+        itemSummaries = this.buildItemSummaries(
+          shipment.items,
+          new Map(movementIds.map((m) => [m.shipmentItemId, m.movementId])),
+        );
+      } else {
+        itemSummaries = this.buildItemSummaries(shipment.items, null);
+      }
     } else {
-      itemSummaries.push(
-        ...this.buildItemSummaries(shipment.items, null),
-      );
+      itemSummaries = this.buildItemSummaries(shipment.items, null);
     }
 
-    // ── Authoritative transition (its own tx). Gate 2 ensures retry
-    //    doesn't double-restock; this step retries idempotently.
+    // ── Authoritative transition (its own tx). Gate 1 ensures retry
+    //    safety; gate 2 ensures no double-decrement; release()
+    //    idempotency handles the reservation side.
     await this.orderWrite.transitionStatus({
       orderId,
       to: OrderStatus.RTO_RESTOCKED,
-      actor: { type: ActorType.STAFF, id: staffId },
+      actor,
       expectedFrom: OrderStatus.RTO_RECEIVED,
       reason: `RTO finalize on shipment ${shipmentId}`,
       ...(ctx !== undefined ? { ctx } : {}),
     });
 
-    const restockedCount = itemSummaries.filter(
-      (s) => s.disposition === RtoDisposition.RESTOCK,
-    ).length;
-    const writtenOffCount = itemSummaries.filter(
-      (s) => s.disposition === RtoDisposition.WRITE_OFF,
-    ).length;
+    const restockedCount = restockItems.length;
+    const writtenOffCount = writeOffItems.length;
 
     await this.audit.log({
       actorType: ActorType.STAFF,
@@ -314,6 +371,7 @@ export class RtoDispositionService {
         orderId,
         restockedCount,
         writtenOffCount,
+        reservationsReleased,
         movementsAlreadyApplied,
         ipAddress: ctx?.ipAddress ?? null,
         userAgent: ctx?.userAgent ?? null,
@@ -330,6 +388,7 @@ export class RtoDispositionService {
       items: itemSummaries,
       movementsAlreadyApplied,
       alreadyFinalized: false,
+      reservationsReleased,
     };
   }
 
@@ -351,5 +410,22 @@ export class RtoDispositionService {
       quantity: i.quantity,
       movementId: movementIdByItem?.get(i.id) ?? null,
     }));
+  }
+}
+
+/** Map the inspector's per-line rtoCondition to the most specific
+ *  reasonCode the existing enum offers. DAMAGED→DAMAGED_IN_WAREHOUSE,
+ *  MISSING→LOST, GOOD/null→OTHER (operationally rare to write off a
+ *  GOOD item; debt-noted for a dedicated value). */
+function reasonCodeFor(
+  condition: RtoItemCondition | null,
+): StockMovementReasonCode {
+  switch (condition) {
+    case RtoItemCondition.DAMAGED:
+      return StockMovementReasonCode.DAMAGED_IN_WAREHOUSE;
+    case RtoItemCondition.MISSING:
+      return StockMovementReasonCode.LOST;
+    default:
+      return StockMovementReasonCode.OTHER;
   }
 }

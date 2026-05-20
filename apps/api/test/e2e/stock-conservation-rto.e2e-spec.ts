@@ -1,0 +1,525 @@
+import request from 'supertest';
+import {
+  ActorType,
+  OrderStatus,
+  ReservationStatus,
+  RtoDisposition,
+  RtoItemCondition,
+  StockMovementType,
+} from '@skydrop/db';
+import { OrderWriteService } from '../../src/modules/order/services/order-write.service';
+import {
+  bootTestApp,
+  createTestStaff,
+  flushTestRedis,
+  resetAuthState,
+  type AppHarness,
+} from './app-harness';
+
+/**
+ * Stock conservation invariant across the FULL order lifecycle —
+ * commit-17 pre-flight verification. Drives the order through the real
+ * dispatch path (NOT manual AWB stamping) and asserts that
+ * stock_levels.qtyOnHand + stock_levels.qtyReserved + active reservation
+ * rows return to the expected baseline after both RESTOCK and WRITE_OFF
+ * RTO finalize.
+ *
+ * Baseline: 10 on-hand, 0 reserved, no active reservations. Order qty=2.
+ *
+ * Expected post-RESTOCK: 10 on-hand, 0 reserved, 0 active reservations
+ *   (the 2 units returned to the shelf; nothing leaked).
+ * Expected post-WRITE_OFF: 8 on-hand, 0 reserved, 0 active reservations
+ *   (the 2 units truly left the system; nothing leaked).
+ */
+describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => {
+  let h: AppHarness;
+  let staffAuth: { Authorization: string };
+  let staffId: string;
+  let sellerAuth: { Authorization: string };
+  let warehouseId: string;
+  let binId: string;
+  let variantId: string;
+
+  beforeAll(async () => {
+    h = await bootTestApp();
+  });
+  afterAll(async () => {
+    await h.close();
+  });
+
+  beforeEach(async () => {
+    await flushTestRedis();
+    await resetAuthState(h.prisma);
+
+    const staff = await createTestStaff(h.prisma);
+    staffId = staff.id;
+    const sLogin = await request(h.baseUrl)
+      .post('/auth/staff/login')
+      .send({ email: staff.email, password: staff.password })
+      .expect(200);
+    staffAuth = { Authorization: `Bearer ${sLogin.body.accessToken}` };
+
+    const email = `cons-seller-${Date.now()}@brand.com`;
+    const invite = await request(h.baseUrl)
+      .post('/admin/seller-invitations')
+      .set(staffAuth)
+      .send({ email })
+      .expect(201);
+    const reg = await request(h.baseUrl)
+      .post('/auth/seller/register/invite')
+      .send({
+        token: invite.body.token,
+        companyName: 'Cons Brand',
+        contactPersonName: 'Cons Owner',
+        phone: '+8801712345682',
+        password: 'SellerPass-1234',
+      })
+      .expect(201);
+    sellerAuth = { Authorization: `Bearer ${reg.body.accessToken}` };
+
+    const whs = await request(h.baseUrl)
+      .get('/admin/warehouses')
+      .set(staffAuth)
+      .expect(200);
+    warehouseId = (whs.body as Array<{ id: string; code: string }>).find(
+      (w) => w.code === 'BLR-01',
+    )!.id;
+    const zone = await request(h.baseUrl)
+      .post(`/admin/warehouses/${warehouseId}/zones`)
+      .set(staffAuth)
+      .send({ code: 'A', name: 'Zone A' })
+      .expect(201);
+    const bin = await request(h.baseUrl)
+      .post(`/admin/warehouses/${warehouseId}/bins`)
+      .set(staffAuth)
+      .send({ zoneId: zone.body.id, code: 'A-1-1', type: 'STORAGE' })
+      .expect(201);
+    binId = bin.body.id as string;
+
+    const product = await request(h.baseUrl)
+      .post('/seller/products')
+      .set(sellerAuth)
+      .send({ name: 'Widget', externalRef: 'W-1' })
+      .expect(201);
+    const variant = await request(h.baseUrl)
+      .post(`/seller/products/${product.body.id}/variants`)
+      .set(sellerAuth)
+      .send({ skuCode: 'W-1-STD' })
+      .expect(201);
+    variantId = variant.body.id as string;
+  });
+
+  async function receiveStock(qty: number): Promise<void> {
+    const gr = await request(h.baseUrl)
+      .post('/seller/goods-receipts')
+      .set(sellerAuth)
+      .send({ lines: [{ variantId, expectedQty: qty }] })
+      .expect(201);
+    await request(h.baseUrl)
+      .post(`/admin/goods-receipts/${gr.body.id}/start-receiving`)
+      .set(staffAuth)
+      .expect(200);
+    await request(h.baseUrl)
+      .post(`/admin/goods-receipts/${gr.body.id}/lines`)
+      .set(staffAuth)
+      .send({
+        lines: [
+          { lineId: gr.body.lines[0].id, receivedQty: qty, putawayBinId: binId },
+        ],
+      })
+      .expect(200);
+    await request(h.baseUrl)
+      .post(`/admin/goods-receipts/${gr.body.id}/complete`)
+      .set(staffAuth)
+      .expect(200);
+  }
+
+  interface Snapshot {
+    qtyOnHand: number;
+    qtyReserved: number;
+    activeResvCount: number;
+    activeResvTotalQty: number;
+  }
+  async function snapshot(): Promise<Snapshot> {
+    const level = await h.prisma.stockLevel.findFirst({
+      where: { variantId, binId },
+    });
+    const active = await h.prisma.stockReservation.findMany({
+      where: { status: ReservationStatus.ACTIVE, variantId },
+    });
+    return {
+      qtyOnHand: level?.qtyOnHand ?? 0,
+      qtyReserved: level?.qtyReserved ?? 0,
+      activeResvCount: active.length,
+      activeResvTotalQty: active.reduce((s, r) => s + r.qtyReserved, 0),
+    };
+  }
+
+  /** Drive the order through the REAL dispatch path: pick → pack →
+   *  manifest close → DISPATCHED → RTO_INITIATED → RTO_RECEIVED. No
+   *  manual AWB stamping for receive (we set AWB only because M9 isn't
+   *  built, but the order status path is real). */
+  async function driveToRtoReceived(qty: number): Promise<{
+    orderId: string;
+    shipmentId: string;
+    shipmentItemIds: string[];
+    awbNumber: string;
+  }> {
+    const created = await request(h.baseUrl)
+      .post('/seller/orders')
+      .set(sellerAuth)
+      .send({
+        recipientName: 'Asha Verma',
+        recipientPhoneE164: '+919876543210',
+        recipientAddressLine1: '12 MG Road',
+        recipientCity: 'Bengaluru',
+        recipientStateProvince: 'Karnataka',
+        recipientPostalCode: '560001',
+        paymentMode: 'COD',
+        codAmountInr: 999,
+        items: [{ variantId, quantity: qty }],
+      })
+      .expect(201);
+    const orderId = created.body.id as string;
+    await request(h.baseUrl)
+      .post(`/seller/orders/${orderId}/submit`)
+      .set(sellerAuth)
+      .expect(200);
+    const ow = h.app.get(OrderWriteService);
+    await ow.transitionStatus({
+      orderId,
+      to: OrderStatus.CONFIRMED,
+      actor: { type: ActorType.STAFF, id: staffId },
+    });
+    // commit-16 auto-provisions the shipment on CONFIRMED.
+    const shipment = await h.prisma.shipment.findFirstOrThrow({
+      where: { orderShipments: { some: { orderId } } },
+    });
+    const shipmentId = shipment.id;
+
+    // Real pick path (HTTP).
+    await request(h.baseUrl).post('/warehouse/picks/next').set(staffAuth).expect(200);
+    await request(h.baseUrl)
+      .post(`/warehouse/picks/${shipmentId}/start`)
+      .set(staffAuth)
+      .expect(200);
+    const resv = await h.prisma.stockReservation.findFirstOrThrow({
+      where: { orderId, status: 'ACTIVE', NOT: { binId: null } },
+    });
+    const items = await h.prisma.shipmentItem.findMany({
+      where: { shipmentId },
+      select: { id: true },
+    });
+    await request(h.baseUrl)
+      .post(`/warehouse/picks/${shipmentId}/items`)
+      .set(staffAuth)
+      .send({
+        shipmentItemId: items[0]!.id,
+        pickedBinId: resv.binId,
+        pickedBatchId: resv.batchId,
+      })
+      .expect(200);
+    await request(h.baseUrl)
+      .post(`/warehouse/picks/${shipmentId}/complete`)
+      .set(staffAuth)
+      .expect(200);
+
+    // Real pack path (HTTP).
+    const pack = await request(h.baseUrl)
+      .post(`/warehouse/packs/${shipmentId}/complete`)
+      .set(staffAuth)
+      .expect(200);
+    await request(h.baseUrl)
+      .post(`/admin/warehouse/manifests/${pack.body.manifestId}/close`)
+      .set(staffAuth)
+      .expect(200);
+
+    // DISPATCHED via OrderWriteService (M9 would normally drive this;
+    // we go through the real saga). NB this is the path the user
+    // mandated — drive through real transitions, not manual stamping.
+    await ow.transitionStatus({
+      orderId,
+      to: OrderStatus.DISPATCHED,
+      actor: { type: ActorType.STAFF, id: staffId },
+    });
+    await ow.transitionStatus({
+      orderId,
+      to: OrderStatus.RTO_INITIATED,
+      actor: { type: ActorType.STAFF, id: staffId },
+    });
+
+    // AWB stamp is the ONLY non-real step (M9 not built). All ORDER
+    // transitions above flowed through the real saga.
+    const awbNumber = `AWB-CONS-${Date.now()}`;
+    await h.prisma.shipment.update({
+      where: { id: shipmentId },
+      data: { awbNumber },
+    });
+
+    // RTO receive via real HTTP.
+    await request(h.baseUrl)
+      .post('/warehouse/rto/receive')
+      .set(staffAuth)
+      .send({ awbNumber })
+      .expect(200);
+
+    return {
+      orderId,
+      shipmentId,
+      shipmentItemIds: items.map((i) => i.id),
+      awbNumber,
+    };
+  }
+
+  it('LIFECYCLE TRACE: baseline 10/0 → CONFIRMED → PICKED → DISPATCHED → RTO_RECEIVED', async () => {
+    await receiveStock(10);
+    const baseline = await snapshot();
+    expect(baseline).toEqual({
+      qtyOnHand: 10,
+      qtyReserved: 0,
+      activeResvCount: 0,
+      activeResvTotalQty: 0,
+    });
+
+    const ow = h.app.get(OrderWriteService);
+
+    // Step 1: create + submit + CONFIRMED → phase-1 reservation.
+    const created = await request(h.baseUrl)
+      .post('/seller/orders')
+      .set(sellerAuth)
+      .send({
+        recipientName: 'Asha',
+        recipientPhoneE164: '+919876543210',
+        recipientAddressLine1: '12 MG Road',
+        recipientCity: 'Bengaluru',
+        recipientStateProvince: 'Karnataka',
+        recipientPostalCode: '560001',
+        paymentMode: 'COD',
+        codAmountInr: 999,
+        items: [{ variantId, quantity: 2 }],
+      })
+      .expect(201);
+    const orderId = created.body.id as string;
+    await request(h.baseUrl)
+      .post(`/seller/orders/${orderId}/submit`)
+      .set(sellerAuth)
+      .expect(200);
+    await ow.transitionStatus({
+      orderId,
+      to: OrderStatus.CONFIRMED,
+      actor: { type: ActorType.STAFF, id: staffId },
+    });
+    const afterConfirmed = await snapshot();
+    // CONFIRMED: phase-1 reservation (NULL bin) — does NOT touch
+    // stock_levels.qtyReserved (INV-4: counts phase-2 only).
+    expect(afterConfirmed).toMatchObject({
+      qtyOnHand: 10,
+      qtyReserved: 0,
+      activeResvCount: 1,
+      activeResvTotalQty: 2,
+    });
+
+    // Step 2: pick.start → phase-2 allocation (bin/batch set,
+    // stock_levels.qtyReserved += 2).
+    const shipment = await h.prisma.shipment.findFirstOrThrow({
+      where: { orderShipments: { some: { orderId } } },
+    });
+    await request(h.baseUrl).post('/warehouse/picks/next').set(staffAuth).expect(200);
+    await request(h.baseUrl)
+      .post(`/warehouse/picks/${shipment.id}/start`)
+      .set(staffAuth)
+      .expect(200);
+    const afterPickStart = await snapshot();
+    expect(afterPickStart).toMatchObject({
+      qtyOnHand: 10, // physical inventory not yet decremented
+      qtyReserved: 2, // phase-2 hold appeared on stock_levels
+      activeResvCount: 1,
+      activeResvTotalQty: 2,
+    });
+
+    // Step 3: pick.recordItem + pick.complete → order PICKED.
+    const resv = await h.prisma.stockReservation.findFirstOrThrow({
+      where: { orderId, status: 'ACTIVE', NOT: { binId: null } },
+    });
+    const items = await h.prisma.shipmentItem.findMany({
+      where: { shipmentId: shipment.id },
+      select: { id: true },
+    });
+    await request(h.baseUrl)
+      .post(`/warehouse/picks/${shipment.id}/items`)
+      .set(staffAuth)
+      .send({
+        shipmentItemId: items[0]!.id,
+        pickedBinId: resv.binId,
+        pickedBatchId: resv.batchId,
+      })
+      .expect(200);
+    await request(h.baseUrl)
+      .post(`/warehouse/picks/${shipment.id}/complete`)
+      .set(staffAuth)
+      .expect(200);
+    const afterPickComplete = await snapshot();
+    // PICKED: PickExecutionService.complete in commit 6 issues NO
+    // StockMutationService PICK movement (the matrix edge PENDING_PICK
+    // → PICKED has empty side-effects). The "physical pick movement is
+    // Module 8's" promise from StockReservationService.fulfill JSDoc
+    // is UNFULFILLED in commit 6.
+    expect(afterPickComplete).toMatchObject({
+      qtyOnHand: 10, // STILL 10 — no pick decrement happened
+      qtyReserved: 2,
+      activeResvCount: 1,
+      activeResvTotalQty: 2,
+    });
+
+    // Step 4: pack.complete → PACKED (no stock side-effect per matrix).
+    const pack = await request(h.baseUrl)
+      .post(`/warehouse/packs/${shipment.id}/complete`)
+      .set(staffAuth)
+      .expect(200);
+    const afterPack = await snapshot();
+    expect(afterPack).toMatchObject({
+      qtyOnHand: 10,
+      qtyReserved: 2,
+    });
+
+    // Step 5: manifest close → PENDING_DISPATCH (no side-effect).
+    await request(h.baseUrl)
+      .post(`/admin/warehouse/manifests/${pack.body.manifestId}/close`)
+      .set(staffAuth)
+      .expect(200);
+    const afterClose = await snapshot();
+    expect(afterClose).toMatchObject({
+      qtyOnHand: 10,
+      qtyReserved: 2,
+    });
+
+    // Step 6: DISPATCHED (no side-effect per matrix).
+    await ow.transitionStatus({
+      orderId,
+      to: OrderStatus.DISPATCHED,
+      actor: { type: ActorType.STAFF, id: staffId },
+    });
+    const afterDispatch = await snapshot();
+    expect(afterDispatch).toMatchObject({
+      qtyOnHand: 10,
+      qtyReserved: 2,
+    });
+
+    // Step 7: DISPATCHED → RTO_INITIATED → RTO_RECEIVED.
+    await ow.transitionStatus({
+      orderId,
+      to: OrderStatus.RTO_INITIATED,
+      actor: { type: ActorType.STAFF, id: staffId },
+    });
+    await h.prisma.shipment.update({
+      where: { id: shipment.id },
+      data: { awbNumber: `AWB-TRACE-${Date.now()}` },
+    });
+    const updatedShipment = await h.prisma.shipment.findUniqueOrThrow({
+      where: { id: shipment.id },
+    });
+    await request(h.baseUrl)
+      .post('/warehouse/rto/receive')
+      .set(staffAuth)
+      .send({ awbNumber: updatedShipment.awbNumber })
+      .expect(200);
+    const afterRtoReceived = await snapshot();
+    expect(afterRtoReceived).toMatchObject({
+      qtyOnHand: 10,
+      qtyReserved: 2, // phase-2 reservation STILL active
+      activeResvCount: 1,
+    });
+  });
+
+  it('CONSERVATION RESTOCK: full lifecycle through all-RESTOCK finalize → expect baseline (10/0) restored', async () => {
+    await receiveStock(10);
+    const baseline = await snapshot();
+    expect(baseline.qtyOnHand).toBe(10);
+    expect(baseline.qtyReserved).toBe(0);
+
+    const { shipmentId, shipmentItemIds } = await driveToRtoReceived(2);
+
+    for (const itemId of shipmentItemIds) {
+      await request(h.baseUrl)
+        .post(`/warehouse/rto/items/${itemId}/inspect`)
+        .set(staffAuth)
+        .send({
+          condition: RtoItemCondition.GOOD,
+          disposition: RtoDisposition.RESTOCK,
+        })
+        .expect(200);
+    }
+    await request(h.baseUrl)
+      .post(`/warehouse/rto/shipments/${shipmentId}/finalize`)
+      .set(staffAuth)
+      .expect(200);
+
+    const final = await snapshot();
+
+    // CONSERVATION CHECK: baseline 10/0 → after RESTOCK → expect 10/0/0/0.
+    expect(final).toEqual({
+      qtyOnHand: 10,
+      qtyReserved: 0,
+      activeResvCount: 0,
+      activeResvTotalQty: 0,
+    });
+
+    // INV-3 availability sanity: qtyOnHand - qtyReserved - active phase-1 = 10.
+    const availability = final.qtyOnHand - final.qtyReserved;
+    expect(availability).toBe(10);
+  });
+
+  it('CONSERVATION WRITE_OFF: full lifecycle through all-WRITE_OFF finalize → expect on-hand=8 (2 units left the system), 0 reserved, 0 active', async () => {
+    await receiveStock(10);
+    const { shipmentId, shipmentItemIds } = await driveToRtoReceived(2);
+
+    for (const itemId of shipmentItemIds) {
+      await request(h.baseUrl)
+        .post(`/warehouse/rto/items/${itemId}/inspect`)
+        .set(staffAuth)
+        .send({
+          condition: RtoItemCondition.DAMAGED,
+          disposition: RtoDisposition.WRITE_OFF,
+        })
+        .expect(200);
+    }
+    await request(h.baseUrl)
+      .post(`/warehouse/rto/shipments/${shipmentId}/finalize`)
+      .set(staffAuth)
+      .expect(200);
+
+    const final = await snapshot();
+    // CONSERVATION CHECK: 2 units physically left the system; on-hand
+    // should be 8; no reserved; no active reservations.
+    expect(final).toEqual({
+      qtyOnHand: 8,
+      qtyReserved: 0,
+      activeResvCount: 0,
+      activeResvTotalQty: 0,
+    });
+  });
+
+  it('DEFERRED DEBT (latent, HIGH): no PICK/PACK_CONFIRM/DISPATCH movement issued on the order lifecycle — qtyOnHand decrement timing is M9/M10', async () => {
+    await receiveStock(10);
+    const { orderId } = await driveToRtoReceived(2);
+    const movements = await h.prisma.stockMovement.findMany({
+      where: { orderId },
+    });
+    const types = movements.map((m) => m.type);
+    // This test DOCUMENTS the LATENT pre-existing gap:
+    // StockReservationService.fulfill()'s JSDoc-promised "separate PICK
+    // movement for the physical qtyOnHand decrement" was never
+    // implemented anywhere. No happy-path flow currently drives the
+    // qtyOnHand decrement at pick/pack/dispatch/delivered. Resolution
+    // depends on the decrement-timing model (A: at-dispatch vs B: at-
+    // permanent-departure), an M9/M10 design decision with courier /
+    // tracking context. See phase-1a-debt commit-17 HIGH entry.
+    //
+    // If M9/M10 adopts Model A, RtoDispositionService.finalize()'s
+    // RESTOCK path MUST be revisited to re-add stock (RETURN_RESTOCK)
+    // rather than the current release-only.
+    expect(types).not.toContain(StockMovementType.PICK);
+    expect(types).not.toContain(StockMovementType.PACK_CONFIRM);
+    expect(types).not.toContain(StockMovementType.DISPATCH);
+  });
+});

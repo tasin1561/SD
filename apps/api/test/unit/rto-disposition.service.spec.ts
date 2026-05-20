@@ -2,8 +2,10 @@ import { NotFoundException } from '@nestjs/common';
 import {
   ActorType,
   OrderStatus,
+  ReservationReleaseReason,
   RtoDisposition,
   RtoItemCondition,
+  StockMovementReasonCode,
   StockMovementType,
 } from '@skydrop/db';
 import { RtoDispositionService } from '../../src/modules/warehouse-rto/services/rto-disposition.service';
@@ -11,6 +13,7 @@ import type { PrismaService } from '../../src/infrastructure/prisma/prisma.servi
 import type { OrderReadService } from '../../src/modules/order/services/order-read.service';
 import type { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import type { StockMutationService } from '../../src/modules/inventory-shared/stock-mutation.service';
+import type { StockReservationService } from '../../src/modules/inventory-stock/services/stock-reservation.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 
 type AnyArgs = Record<string, unknown>;
@@ -57,6 +60,10 @@ function makeService(
     orderStatus?: OrderStatus | 'missing';
     items?: AnyArgs[];
     existingMovement?: AnyArgs | null;
+    activeReservations?: Array<{ id: string; orderItemId: string; qtyReserved: number }>;
+    /** Per-reservation release outcome. Indexed by reservation id;
+     *  missing → defaults to {alreadyInactive:false}. */
+    releaseOutcomes?: Record<string, { alreadyInactive: boolean }>;
   } = {},
 ) {
   const defaultItems = opts.items ?? [item('si-1', RtoDisposition.RESTOCK)];
@@ -88,13 +95,13 @@ function makeService(
   }));
   const orderWrite = { transitionStatus };
   let movementCounter = 0;
-  const apply = jest.fn(async () => {
+  const apply = jest.fn<Promise<AnyArgs>, [unknown, AnyArgs]>(async () => {
     movementCounter += 1;
     return {
       movementId: `mv-${movementCounter}`,
       stockLevelId: 'sl-1',
-      qtyBefore: 0,
-      qtyAfter: 1,
+      qtyBefore: 10,
+      qtyAfter: 8,
       version: 1,
     };
   });
@@ -102,6 +109,19 @@ function makeService(
     fn({}),
   );
   const mutation = { apply, runWithRetry };
+
+  const listActiveForOrder = jest.fn(async () => opts.activeReservations ?? []);
+  const release = jest.fn(async (id: string) => {
+    const outcome = opts.releaseOutcomes?.[id] ?? { alreadyInactive: false };
+    return {
+      reservationId: id,
+      qtyReleased: outcome.alreadyInactive ? 0 : 1,
+      status: 'RELEASED',
+      alreadyInactive: outcome.alreadyInactive,
+    };
+  });
+  const reservations = { listActiveForOrder, release };
+
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs]>(async () => 'a');
   const audit = { log: auditLog };
 
@@ -110,6 +130,7 @@ function makeService(
     orders as unknown as OrderReadService,
     orderWrite as unknown as OrderWriteService,
     mutation as unknown as StockMutationService,
+    reservations as unknown as StockReservationService,
     audit as unknown as AuditLogService,
   );
   return {
@@ -120,40 +141,32 @@ function makeService(
     transitionStatus,
     apply,
     runWithRetry,
+    listActiveForOrder,
+    release,
     auditLog,
   };
 }
 
 describe('RtoDispositionService.finalize — retry-state matrix', () => {
-  it('STATE 1 (neither done): applies movements then transitions', async () => {
-    const { svc, runWithRetry, apply, transitionStatus, auditLog } =
+  it('STATE 1 (neither done) RESTOCK: release() reservations, NO movement, transition', async () => {
+    const { svc, runWithRetry, apply, release, transitionStatus, auditLog } =
       makeService({
         items: [item('si-1', RtoDisposition.RESTOCK, { quantity: 3 })],
+        activeReservations: [
+          { id: 'r1', orderItemId: 'oi-si-1', qtyReserved: 3 },
+        ],
       });
     const r = await svc.finalize(SHIP, STAFF);
 
-    expect(runWithRetry).toHaveBeenCalledTimes(1);
-    expect(apply).toHaveBeenCalledWith(
-      {},
-      expect.objectContaining({
-        type: StockMovementType.RETURN_RESTOCK,
-        qtyChange: 3,
-        binId: 'bin-1',
-        batchId: 'bat-1',
-        sellerId: SELLER,
-        warehouseId: WH,
-        actorType: ActorType.STAFF,
-        actorId: STAFF,
-        orderId: ORDER,
-        shipmentId: SHIP,
-        reasonCode: null,
-      }),
+    // Release was called per active reservation — no movement.
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(release).toHaveBeenCalledWith(
+      'r1',
+      ReservationReleaseReason.OTHER,
+      expect.objectContaining({ type: ActorType.STAFF }),
     );
-
-    // Movement BEFORE transition.
-    const movOrd = apply.mock.invocationCallOrder[0] ?? 0;
-    const transOrd = transitionStatus.mock.invocationCallOrder[0] ?? 0;
-    expect(movOrd).toBeLessThan(transOrd);
+    expect(runWithRetry).not.toHaveBeenCalled(); // no WRITE_OFF movements
+    expect(apply).not.toHaveBeenCalled();
 
     expect(transitionStatus).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -162,34 +175,76 @@ describe('RtoDispositionService.finalize — retry-state matrix', () => {
       }),
     );
     expect(r).toMatchObject({
-      shipmentId: SHIP,
-      orderId: ORDER,
-      status: OrderStatus.RTO_RESTOCKED,
       restockedCount: 1,
       writtenOffCount: 0,
       movementsAlreadyApplied: false,
       alreadyFinalized: false,
+      reservationsReleased: 1,
     });
-    expect(r.items[0]).toMatchObject({
-      shipmentItemId: 'si-1',
-      disposition: RtoDisposition.RESTOCK,
-      movementId: 'mv-1',
-    });
+    expect(r.items[0]?.movementId).toBeNull();
     expect(auditLog).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'rto.finalized' }),
     );
   });
 
-  it('STATE 2 (movements done, transition pending): gate-2 skips re-apply, transition runs', async () => {
-    const { svc, runWithRetry, apply, transitionStatus } = makeService({
-      existingMovement: { id: 'mv-prior' }, // gate 2 fires
-      items: [item('si-1', RtoDisposition.RESTOCK)],
+  it('STATE 1 (neither done) WRITE_OFF: release + ADJUSTMENT_DECREASE -qty + transition', async () => {
+    const { svc, release, apply, transitionStatus } = makeService({
+      items: [
+        item('si-1', RtoDisposition.WRITE_OFF, {
+          quantity: 2,
+          rtoCondition: RtoItemCondition.DAMAGED,
+        }),
+      ],
+      activeReservations: [
+        { id: 'r1', orderItemId: 'oi-si-1', qtyReserved: 2 },
+      ],
     });
     const r = await svc.finalize(SHIP, STAFF);
-    // Movement loop completely skipped → no double-restock.
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        type: StockMovementType.ADJUSTMENT_DECREASE,
+        qtyChange: -2,
+        reasonCode: StockMovementReasonCode.DAMAGED_IN_WAREHOUSE,
+        binId: 'bin-1',
+        batchId: 'bat-1',
+        actorType: ActorType.STAFF,
+        actorId: STAFF,
+        orderId: ORDER,
+        shipmentId: SHIP,
+      }),
+    );
+
+    // Release BEFORE movement BEFORE transition.
+    const relOrd = release.mock.invocationCallOrder[0] ?? 0;
+    const movOrd = apply.mock.invocationCallOrder[0] ?? 0;
+    const transOrd = transitionStatus.mock.invocationCallOrder[0] ?? 0;
+    expect(relOrd).toBeLessThan(movOrd);
+    expect(movOrd).toBeLessThan(transOrd);
+
+    expect(r).toMatchObject({
+      restockedCount: 0,
+      writtenOffCount: 1,
+      reservationsReleased: 1,
+    });
+    expect(r.items[0]?.movementId).toBe('mv-1');
+  });
+
+  it('STATE 2 (movements done, transition pending): gate-2 skips re-apply, releases run, transition runs', async () => {
+    const { svc, runWithRetry, apply, release, transitionStatus } = makeService({
+      existingMovement: { id: 'mv-prior' }, // gate 2 keyed on ADJUSTMENT_DECREASE
+      items: [item('si-1', RtoDisposition.WRITE_OFF)],
+      activeReservations: [
+        { id: 'r1', orderItemId: 'oi-si-1', qtyReserved: 2 },
+      ],
+      releaseOutcomes: { r1: { alreadyInactive: true } }, // already released in prior call too
+    });
+    const r = await svc.finalize(SHIP, STAFF);
+    expect(release).toHaveBeenCalled(); // attempted, but idempotent
     expect(runWithRetry).not.toHaveBeenCalled();
     expect(apply).not.toHaveBeenCalled();
-    // Transition still runs to complete the retry.
     expect(transitionStatus).toHaveBeenCalledWith(
       expect.objectContaining({ to: OrderStatus.RTO_RESTOCKED }),
     );
@@ -197,12 +252,12 @@ describe('RtoDispositionService.finalize — retry-state matrix', () => {
       status: OrderStatus.RTO_RESTOCKED,
       movementsAlreadyApplied: true,
       alreadyFinalized: false,
+      reservationsReleased: 0, // all already-released
     });
-    expect(r.items[0]?.movementId).toBeNull(); // not applied this call
   });
 
-  it('STATE 3 (both done): alreadyFinalized short-circuit', async () => {
-    const { svc, stockMovementFindFirst, runWithRetry, apply, transitionStatus } =
+  it('STATE 3 (both done): alreadyFinalized short-circuit, no releases', async () => {
+    const { svc, stockMovementFindFirst, runWithRetry, apply, release, transitionStatus } =
       makeService({
         orderStatus: OrderStatus.RTO_RESTOCKED,
         items: [
@@ -217,9 +272,10 @@ describe('RtoDispositionService.finalize — retry-state matrix', () => {
       writtenOffCount: 1,
       movementsAlreadyApplied: true,
       alreadyFinalized: true,
+      reservationsReleased: 0,
     });
-    // No further work past pre-flight.
     expect(stockMovementFindFirst).not.toHaveBeenCalled();
+    expect(release).not.toHaveBeenCalled();
     expect(runWithRetry).not.toHaveBeenCalled();
     expect(apply).not.toHaveBeenCalled();
     expect(transitionStatus).not.toHaveBeenCalled();
@@ -227,57 +283,121 @@ describe('RtoDispositionService.finalize — retry-state matrix', () => {
 });
 
 describe('RtoDispositionService.finalize — disposition mixes', () => {
-  it('all-WRITE_OFF: no movements, transition still runs', async () => {
+  it('all-RESTOCK with NO active reservations (already released): no movement, transition runs', async () => {
     const { svc, runWithRetry, apply, transitionStatus } = makeService({
       items: [
-        item('si-1', RtoDisposition.WRITE_OFF),
-        item('si-2', RtoDisposition.WRITE_OFF),
+        item('si-1', RtoDisposition.RESTOCK),
+        item('si-2', RtoDisposition.RESTOCK),
       ],
+      activeReservations: [], // all reservations already gone (e.g., released elsewhere)
     });
     const r = await svc.finalize(SHIP, STAFF);
-    expect(runWithRetry).not.toHaveBeenCalled(); // empty restock set
+    expect(runWithRetry).not.toHaveBeenCalled();
     expect(apply).not.toHaveBeenCalled();
     expect(transitionStatus).toHaveBeenCalledWith(
       expect.objectContaining({ to: OrderStatus.RTO_RESTOCKED }),
     );
-    expect(r.restockedCount).toBe(0);
-    expect(r.writtenOffCount).toBe(2);
-    expect(r.movementsAlreadyApplied).toBe(false); // no movements existed; loop also skipped
-    expect(r.items.every((i) => i.movementId === null)).toBe(true);
+    expect(r.restockedCount).toBe(2);
+    expect(r.reservationsReleased).toBe(0);
   });
 
-  it('mixed RESTOCK + WRITE_OFF: only RESTOCK gets a movement', async () => {
-    const { svc, runWithRetry, apply } = makeService({
+  it('all-WRITE_OFF: release + ADJUSTMENT_DECREASE per item, transition runs', async () => {
+    const { svc, release, apply, runWithRetry } = makeService({
       items: [
-        item('si-1', RtoDisposition.RESTOCK, { quantity: 2 }),
-        item('si-2', RtoDisposition.WRITE_OFF, { quantity: 3 }),
-        item('si-3', RtoDisposition.RESTOCK, { quantity: 1 }),
+        item('si-1', RtoDisposition.WRITE_OFF, {
+          quantity: 2,
+          rtoCondition: RtoItemCondition.DAMAGED,
+        }),
+        item('si-2', RtoDisposition.WRITE_OFF, {
+          quantity: 3,
+          rtoCondition: RtoItemCondition.MISSING,
+        }),
+      ],
+      activeReservations: [
+        { id: 'r1', orderItemId: 'oi-si-1', qtyReserved: 2 },
+        { id: 'r2', orderItemId: 'oi-si-2', qtyReserved: 3 },
       ],
     });
     const r = await svc.finalize(SHIP, STAFF);
+    expect(release).toHaveBeenCalledTimes(2);
     expect(runWithRetry).toHaveBeenCalledTimes(1);
     expect(apply).toHaveBeenCalledTimes(2);
+    // DAMAGED → DAMAGED_IN_WAREHOUSE; MISSING → LOST
+    const reasonCodes = apply.mock.calls.map(
+      (c) => (c[1] as { reasonCode: StockMovementReasonCode }).reasonCode,
+    );
+    expect(reasonCodes).toEqual(
+      expect.arrayContaining([
+        StockMovementReasonCode.DAMAGED_IN_WAREHOUSE,
+        StockMovementReasonCode.LOST,
+      ]),
+    );
+    expect(r.writtenOffCount).toBe(2);
+    expect(r.reservationsReleased).toBe(2);
+  });
+
+  it('mixed RESTOCK + WRITE_OFF: ALL reservations released, ONLY WRITE_OFF gets a movement', async () => {
+    const { svc, release, runWithRetry, apply } = makeService({
+      items: [
+        item('si-1', RtoDisposition.RESTOCK, { quantity: 2 }),
+        item('si-2', RtoDisposition.WRITE_OFF, {
+          quantity: 3,
+          rtoCondition: RtoItemCondition.DAMAGED,
+        }),
+        item('si-3', RtoDisposition.RESTOCK, { quantity: 1 }),
+      ],
+      activeReservations: [
+        { id: 'r1', orderItemId: 'oi-si-1', qtyReserved: 2 },
+        { id: 'r2', orderItemId: 'oi-si-2', qtyReserved: 3 },
+        { id: 'r3', orderItemId: 'oi-si-3', qtyReserved: 1 },
+      ],
+    });
+    const r = await svc.finalize(SHIP, STAFF);
+    expect(release).toHaveBeenCalledTimes(3); // all reservations
+    expect(runWithRetry).toHaveBeenCalledTimes(1);
+    expect(apply).toHaveBeenCalledTimes(1); // only the WRITE_OFF item
     expect(r.restockedCount).toBe(2);
     expect(r.writtenOffCount).toBe(1);
+    expect(r.reservationsReleased).toBe(3);
     const movementIds = r.items.map((i) => i.movementId);
-    expect(movementIds.filter((m) => m !== null)).toHaveLength(2);
+    expect(movementIds.filter((m) => m !== null)).toHaveLength(1);
     expect(
       r.items.find((i) => i.shipmentItemId === 'si-2')?.movementId,
-    ).toBeNull();
+    ).toBe('mv-1');
+  });
+
+  it('reasonCode mapping: GOOD/null → OTHER (debt-flagged fallback)', async () => {
+    const { svc, apply } = makeService({
+      items: [
+        item('si-1', RtoDisposition.WRITE_OFF, {
+          quantity: 1,
+          rtoCondition: RtoItemCondition.GOOD,
+        }),
+      ],
+      activeReservations: [
+        { id: 'r1', orderItemId: 'oi-si-1', qtyReserved: 1 },
+      ],
+    });
+    await svc.finalize(SHIP, STAFF);
+    expect(apply).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({ reasonCode: StockMovementReasonCode.OTHER }),
+    );
   });
 });
 
 describe('RtoDispositionService.finalize — guards', () => {
   it('RTO_INSPECTION_INCOMPLETE when any item lacks inspection', async () => {
-    const { svc, runWithRetry, transitionStatus } = makeService({
+    const { svc, runWithRetry, release, transitionStatus } = makeService({
       items: [
         item('si-1', RtoDisposition.RESTOCK),
-        item('si-2', null, { rtoCondition: null }), // uninspected
+        item('si-2', null, { rtoCondition: null }),
       ],
     });
     await expect(svc.finalize(SHIP, STAFF)).rejects.toMatchObject({
       response: { code: 'RTO_INSPECTION_INCOMPLETE' },
     });
+    expect(release).not.toHaveBeenCalled();
     expect(runWithRetry).not.toHaveBeenCalled();
     expect(transitionStatus).not.toHaveBeenCalled();
   });
@@ -289,17 +409,17 @@ describe('RtoDispositionService.finalize — guards', () => {
     });
   });
 
-  it('RTO_RESTOCK_MISSING_CONTEXT when a RESTOCK item has no pickedBin/Batch', async () => {
-    const { svc, runWithRetry, transitionStatus } = makeService({
+  it('RTO_WRITE_OFF_MISSING_CONTEXT when a WRITE_OFF item has no pickedBin/Batch', async () => {
+    const { svc, release, runWithRetry } = makeService({
       items: [
-        item('si-1', RtoDisposition.RESTOCK, { pickedBin: null }),
+        item('si-1', RtoDisposition.WRITE_OFF, { pickedBin: null }),
       ],
     });
     await expect(svc.finalize(SHIP, STAFF)).rejects.toMatchObject({
-      response: { code: 'RTO_RESTOCK_MISSING_CONTEXT' },
+      response: { code: 'RTO_WRITE_OFF_MISSING_CONTEXT' },
     });
+    expect(release).not.toHaveBeenCalled();
     expect(runWithRetry).not.toHaveBeenCalled();
-    expect(transitionStatus).not.toHaveBeenCalled();
   });
 
   it('RTO_NO_ITEMS when shipment has zero items', async () => {
@@ -330,4 +450,3 @@ describe('RtoDispositionService.finalize — guards', () => {
     );
   });
 });
-
