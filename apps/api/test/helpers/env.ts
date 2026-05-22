@@ -22,6 +22,9 @@ const BASE_ENV: Env = {
   IMAGE_MAX_SIZE_BYTES: 10485760,
   CSV_MAX_ROWS: 1000,
   CSV_PRESIGN_TTL_SECONDS: 900,
+  // 32-byte AES key (64 hex chars) — fixed test fixture for the courier
+  // credential cipher; never a real key.
+  COURIER_CREDENTIALS_KEY_V1: 'f'.repeat(64),
 };
 
 /** Shared EnvService fixture; pass overrides for the few vars a test cares about. */

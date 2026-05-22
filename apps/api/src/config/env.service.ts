@@ -104,4 +104,20 @@ export class EnvService {
   get corsOrigins(): string[] {
     return [this.env.SELLER_APP_URL, this.env.ADMIN_APP_URL];
   }
+
+  /**
+   * Courier-credential AES-256-GCM key (hex) for a given key version
+   * (CUR-1). The `courier_credentials` row records `encryptionKeyVersion`;
+   * the decrypter passes it here. Returns `''` when the version's key is
+   * not configured — the caller treats an empty key as "credentials
+   * unavailable" (stub mode). The key is NEVER persisted to the DB.
+   */
+  courierCredentialsKey(version: number): string {
+    switch (version) {
+      case 1:
+        return this.env.COURIER_CREDENTIALS_KEY_V1;
+      default:
+        return '';
+    }
+  }
 }

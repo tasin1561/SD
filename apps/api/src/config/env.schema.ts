@@ -36,6 +36,19 @@ export const envSchema = z.object({
   IMAGE_MAX_SIZE_BYTES: z.coerce.number().int().positive().default(10_485_760),
   CSV_MAX_ROWS: z.coerce.number().int().positive().default(1000),
   CSV_PRESIGN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+
+  // --- Courier credential encryption (Module 9, CUR-1) -----------------
+  // AES-256-GCM key as 64 hex chars (32 bytes). VERSIONED — the
+  // courier_credentials row records `encryptionKeyVersion`; a future key
+  // rotation adds COURIER_CREDENTIALS_KEY_V2 without touching V1-encrypted
+  // rows. Optional/empty so the app boots in stub mode (empty
+  // courier.delhivery_api_base_url) without real courier creds — used by
+  // e2e + local dev. The decryption key is NEVER in the DB (MUST NOT #1).
+  COURIER_CREDENTIALS_KEY_V1: z
+    .string()
+    .regex(/^([0-9a-fA-F]{64})?$/, 'COURIER_CREDENTIALS_KEY_V1 must be 64 hex chars (32 bytes) or empty')
+    .optional()
+    .default(''),
 });
 
 export type Env = z.infer<typeof envSchema>;
