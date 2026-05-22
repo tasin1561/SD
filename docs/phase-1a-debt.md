@@ -397,7 +397,31 @@ pick it up.
 
 ## Warehouse Operations (Module 8)
 
-### HIGH-priority latent bug — qtyOnHand never decrements on the normal lifecycle
+### HIGH-priority latent bug — qtyOnHand never decrements on the normal lifecycle — ✅ RESOLVED (Module 9, Model A)
+
+- **RESOLVED (M9 commit 12, `6d1b71a`) — Model A chosen.** The bug was:
+  `stock_levels.qtyOnHand` was never decremented in the normal order
+  lifecycle (no `PICK`/`PACK_CONFIRM`/`DISPATCH` movement issued
+  anywhere), so every delivered order left `qtyOnHand` inflated by
+  `quantity`. M9 resolved it by **Model A — qtyOnHand decrements at
+  DISPATCH**: the `PENDING_DISPATCH → DISPATCHED` matrix edge (and, M9
+  commit 14, `PENDING_MANUAL_PLACEMENT → DISPATCHED`) gained the
+  `DISPATCH_STOCK` side-effect — per phase-2 reservation,
+  `StockMutationService` issues a `DISPATCH` movement (`−qtyReserved`)
+  and `StockReservationService.fulfill()` consumes the reservation.
+  This is the ONE normal-lifecycle qtyOnHand decrement; DELIVERED is
+  stock-neutral. **The coupled WMS-8 finalize() was reverted to Model A
+  in the SAME atomic commit**: RESTOCK → `RETURN_RESTOCK +qty` re-add;
+  WRITE_OFF → no movement (the dispatch decrement stands). The
+  `stock-conservation-rto.e2e-spec` break-on-regression assertion was
+  flipped to assert the fix (DISPATCH movement fires, qtyOnHand 10→8 at
+  dispatch) and the full-lifecycle conservation trace is green. The
+  conservation e2e remains a permanent regression guard. **Nothing
+  below this line about Model A vs B / "first agenda item" applies any
+  more — kept for provenance only.**
+
+  ---
+  *Original entry (for provenance):*
 
 - **BUG (latent, HIGH): `stock_levels.qtyOnHand` is never decremented in
   the normal order lifecycle.** `StockReservationService.fulfill()` at
@@ -564,20 +588,117 @@ pick it up.
   deliberately owns status + stock + events + audit only (matches CC
   status-change-email debt).
 
-- **M9 AWB enqueue is STUBBED in `ManifestService.close`.** Closure
-  emits an audit HIGH `manifest.awb_enqueue_stub` with
-  `metadata.{manifestId, shipmentIds, moduleStubbed:'M9'}` and the
-  manifest stays `CLOSED` (no `AWB_PENDING`/`CONFIRMED`/`FAILED`
-  states — `ManifestStatus` is `DRAFT`/`CLOSED` only for M8). **Pick
-  up:** M9 replaces the stub audit with a real BullMQ
-  `awbBatchQueue.enqueue({manifestId, shipmentIds})` and extends
-  `ManifestStatus` with the three M9 states.
+- **M9 AWB enqueue stub in `ManifestService.close` — ✅ RESOLVED (M9
+  commit 10).** The stub audit was replaced with a real
+  `AwbGenerationQueue.enqueue({manifestId})`; `ManifestStatus` was
+  extended with `CONFIRMED`/`DISPATCHED`/`FAILED`. Recorded for
+  provenance.
 
-- **AWB stamping is manual in e2e** (test-only): `warehouse-rto-flow`
-  and `stock-conservation-rto` set `shipments.awbNumber` directly via
-  `prisma.shipment.update` because no AWB generator exists yet. M9
-  replaces this with the real generation flow; the e2e helpers
-  collapse to a no-op once M9 stamps the AWB on dispatch.
+- **AWB stamping was manual in e2e — ✅ RESOLVED (M9).** `warehouse-rto-
+  flow` and `stock-conservation-rto` no longer set `shipments.awbNumber`
+  directly — they drive `manifest close`, the in-process AWB worker
+  generates the AWB (stub-mode Delhivery), and the helpers `waitFor`
+  the real `awbNumber` to land. Recorded for provenance.
+
+## Courier Integration (Module 9)
+
+### HIGH-priority real-mode bug — AWB label-upload ordering
+
+- **BUG (real-mode only, HIGH): the label upload precedes the `awbNumber`
+  persist in `AwbGenerationService.generateForShipment`.** Current order:
+  (1) call Delhivery `generateAwb`, (2) fetch the label, (3) upload the
+  label bytes to Spaces, (4) ONE tx — stamp the shipment (`awbNumber` /
+  `courierShipmentId` / status `AWB_GENERATED`) + insert the `awb_labels`
+  row. If step 3 (Spaces upload) fails AFTER Delhivery already issued a
+  real AWB, that AWB is **generated-but-unpersisted**: the shipment row
+  still has `awbNumber === null`, so the CUR-9 idempotency gate
+  (`shipment.awbNumber !== null`) MISSES it, and the BullMQ retry calls
+  Delhivery's `generateAwb` AGAIN → a SECOND real AWB + a second courier
+  charge for one parcel.
+
+  **Inert in Phase 1A**: the stub `DelhiveryAwbService` is deterministic
+  and issues no real AWB / no charge, and `SpacesService.putObject`
+  against the test/dev bucket effectively never fails — so the window is
+  unreachable until real-mode Delhivery is wired.
+
+  **Fix (when real mode lands — same visible-vs-silent principle as
+  CUR-3/WMS-8):** persist the `awbNumber` FIRST (the durable
+  source-of-truth fact — the AWB exists and the charge was incurred the
+  moment Delhivery returns), then make the label upload a RETRYABLE
+  follow-on keyed off "shipment has `awbNumber` but no current
+  `awb_label` row". The CUR-9 gate then correctly short-circuits the
+  retry (AWB already persisted) and only the idempotent label upload
+  re-runs. **Pick up:** when the `TODO(delhivery-api)` real-mode wire
+  contract is validated against Delhivery's sandbox — do NOT ship real
+  mode without this fix.
+
+### M9 design deferrals (from the original module design)
+
+- **Delhivery wire contract is NOT validated — 6 `TODO(delhivery-api)`
+  seams.** M9 was built against a clean `DelhiveryClient` adapter
+  interface in STUB MODE; the real Delhivery endpoints/auth/payloads/
+  error-codes were not reliably known and were NOT hallucinated. Every
+  real-mode call site is flagged `TODO(delhivery-api)` and throws until
+  validated. The seams: (1) `DelhiveryAwbService.generateAwb` —
+  create-shipment endpoint + envelope + response parse + non-serviceable
+  vs transient error mapping; (2) `DelhiveryLabelService.fetchLabel` —
+  label endpoint + response (bytes vs URL); (3)
+  `DelhiveryServiceabilityService` — serviceability/pincode endpoint;
+  (4) `DelhiveryHttpService.authHeaders` — the real auth scheme
+  (token/API-key header); (5) `DelhiveryHttpService.request` — base URL,
+  error envelope, status-code mapping; (6) the rate-limit handling
+  (currently retry-only). **Pick up:** a separate sandbox-validation
+  task — validate each seam against Delhivery's real sandbox, then flip
+  `courier.delhivery_api_base_url` to enable real mode.
+
+- **Proactive serviceability check deferred (CUR-5).**
+  `DelhiveryServiceabilityService` exists but nothing calls it on the
+  critical path — serviceability is REACTIVE (an AWB rejection routes
+  the order to manual placement). A proactive pre-dispatch / pre-confirm
+  serviceability check (warn the seller a pincode is non-serviceable
+  before the order is taken) is deferred. **Pick up:** Phase 2, or when
+  ops asks for it.
+
+- **Multi-courier routing deferred.** Phase 1A has a single integrated
+  courier (`delhivery`) + the generic `manual` courier. Carrier
+  SELECTION (cheapest/fastest/serviceable courier per shipment), the
+  `Courier.priorityForRouting` column, and `ManifestService.moveShipment`
+  (DRAFT↔DRAFT, dormant with one courier) all stay unwired.
+  `attachShipment`'s per-`(courierCode, originWarehouseId)` find-or-create
+  is already shaped for it. **Pick up:** Phase 2 multi-courier work.
+
+- **Delhivery rate-limit handling is retry-only.** The BullMQ AWB job
+  retries with backoff (`courier.awb_job_retry_*`); there is no
+  token-bucket / proactive throttle against Delhivery's rate limits.
+  Adequate at Phase-1A volume. **Pick up:** when AWB volume warrants a
+  real client-side limiter.
+
+- **Pickup scheduling is manual.** M9 generates AWBs + hands parcels to
+  the courier (`confirmHandoff`) but does NOT call a Delhivery
+  pickup-request API — pickup is arranged out of band by ops. **Pick
+  up:** Phase 2 if pickup-API integration is wanted.
+
+- **Manual-courier tracking is hand-entered.** A manual-courier shipment
+  (`isManualCourier`, CUR-8) has no courier webhook — there is no
+  Delhivery-style event feed for a non-integrated carrier in Phase 1A.
+  Its post-dispatch `tracking_events` are entered by ops manually. M10's
+  public tracking page reads `tracking_events` uniformly; the manual vs
+  webhook-driven distinction is upstream. **Pick up:** M10 (tracking)
+  surfaces the read side; manual event entry UX is M12 (admin) or later.
+
+- **Post-dispatch ADMIN cancel does NOT auto-restock.** A god-mode /
+  admin `→ CANCELLED_BY_ADMIN` from a post-DISPATCHED state carries
+  `RELEASE_STOCK`, but under Model A the reservation was already
+  `FULFILLED` at dispatch and `qtyOnHand` already decremented — so
+  `release()` is a no-op on a fulfilled reservation and **nothing is
+  added back to `qtyOnHand`**. This is correct by the Model-A semantics
+  (the goods physically left at dispatch; a post-dispatch cancel does
+  not teleport them back). If the parcel is genuinely recovered, ops
+  re-adds stock via an explicit `ADJUSTMENT_INCREASE` (INV-7) — NOT via
+  the cancel path. Recorded so a future reader does not "fix" the
+  cancel path to auto-restock. **Pick up:** never (documented design);
+  an admin restock-on-recovery UX could wrap the `ADJUSTMENT_INCREASE`
+  later.
 
 ## Pricing & Multi-Currency (Modules 15–17)
 

@@ -1008,7 +1008,7 @@ between DRAFT manifests pre-close (WMS-7) via the nullable
 - `shipment_items` += `rtoCondition: RtoItemCondition?`, `rtoDisposition: RtoDisposition?`, `rtoDisposedByStaffId?` (FK `staff_users`), `rtoInspectionNotes?`. RTO inspection lives on the line snapshot (matching the `pickedBatchId/pickedBinId` "operational context on shipment_items" precedent — no `rto_receipts` table; the RTO receipt is order `RTO_RECEIVED` + existing `shipments.rtoReceivedAt`).
 
 **RtoItemCondition enum:** `GOOD`, `DAMAGED`, `MISSING`
-**RtoDisposition enum:** `RESTOCK`, `WRITE_OFF` *(locked decision #8 — RESTOCK uses the existing `RETURN_RESTOCK` StockMovementType; WMS-8 finalize is one tx: all RESTOCK movements + order → `RTO_RESTOCKED`)*
+**RtoDisposition enum:** `RESTOCK`, `WRITE_OFF` *(WMS-8 finalize, Model A — set by M9 commit 12: RESTOCK issues a `RETURN_RESTOCK +qty` movement re-adding the dispatched-then-returned units; WRITE_OFF issues NO movement — the Model-A `DISPATCH` decrement at dispatch already removed them. Reservations are FULFILLED at dispatch (CUR-3), so finalize does not release. Saga ordering: movements first, order → `RTO_RESTOCKED` last — visible-vs-silent, two-gate idempotent.)*
 
 ## tracking_events
 **TimescaleDB HYPERTABLE. Append-only.**
