@@ -42,6 +42,7 @@ import { WarehouseManifestModule } from './modules/warehouse-manifest/warehouse-
 import { WarehousePackModule } from './modules/warehouse-pack/warehouse-pack.module';
 import { WarehouseRtoModule } from './modules/warehouse-rto/warehouse-rto.module';
 import { CourierSharedModule } from './modules/courier-shared/courier-shared.module';
+import { CourierDelhiveryModule } from './modules/courier-delhivery/courier-delhivery.module';
 import { ThrottlerModule } from './common/throttler/throttler.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { pinoConfig } from './common/pino/logger-config';
@@ -109,6 +110,7 @@ import { envSchema } from './config/env.schema';
     WarehousePackModule,
     WarehouseRtoModule,
     CourierSharedModule,
+    CourierDelhiveryModule,
     HealthModule,
   ],
 })
