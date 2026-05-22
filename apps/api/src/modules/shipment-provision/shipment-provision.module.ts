@@ -14,6 +14,12 @@ import { ShipmentNumberingService } from './services/shipment-numbering.service'
  */
 @Module({
   providers: [ShipmentProvisionService, ShipmentNumberingService],
-  exports: [ShipmentProvisionService],
+  // ShipmentNumberingService is exported (Module 9) so AwbSupersedeService
+  // can allocate a shipment number for the replacement parcel it creates
+  // on auto-supersede (CUR-7). It is a pure number allocator — not a
+  // write boundary — so exposing it does not widen the provisioning
+  // surface; provisionFromSnapshot / voidForOrder stay the only
+  // shipment-creation entry points for the CONFIRMED / cancel paths.
+  exports: [ShipmentProvisionService, ShipmentNumberingService],
 })
 export class ShipmentProvisionModule {}
