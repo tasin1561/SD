@@ -14,10 +14,12 @@ function makeSut(opts: {
   sellerTtlOverride?: number | null;
   settingTtl?: number | null;
   reservation?: Record<string, unknown> | null;
+  manyRows?: Array<Record<string, unknown>>;
 } = {}) {
   const created: Array<Record<string, unknown>> = [];
   const updated: Array<{ where: unknown; data: Record<string, unknown> }> = [];
   const levelUpdates: Array<{ where: Record<string, unknown>; data: Record<string, unknown> }> = [];
+  const findManyCalls: Array<{ where: Record<string, unknown>; select: Record<string, unknown> }> = [];
 
   const client = {
     $transaction: <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(client),
@@ -27,6 +29,12 @@ function makeSut(opts: {
         return { id: 'r1', ...args.data };
       }),
       findUnique: jest.fn(async () => opts.reservation ?? null),
+      findMany: jest.fn(
+        async (args: { where: Record<string, unknown>; select: Record<string, unknown> }) => {
+          findManyCalls.push(args);
+          return opts.manyRows ?? [];
+        },
+      ),
       update: jest.fn(async (args: { where: unknown; data: Record<string, unknown> }) => {
         updated.push(args);
         return {};
@@ -55,7 +63,7 @@ function makeSut(opts: {
   } as unknown as StockAvailabilityService;
 
   const svc = new StockReservationService(prisma, audit, availability);
-  return { svc, created, updated, levelUpdates, client };
+  return { svc, created, updated, levelUpdates, findManyCalls, client };
 }
 
 const reserveInput = (qty: number) => ({
@@ -192,5 +200,62 @@ describe('StockReservationService.release / fulfill', () => {
     const res = await svc.fulfill('r1');
     expect(res).toMatchObject({ qtyReleased: 9, status: ReservationStatus.FULFILLED });
     expect(updated[0]?.data).toMatchObject({ status: ReservationStatus.FULFILLED });
+  });
+});
+
+describe('StockReservationService.listActiveForOrderWithLocations (M9 expand-by-need)', () => {
+  it('returns ACTIVE reservations with bin/batch location for the order', async () => {
+    const rows = [
+      {
+        id: 'r1',
+        orderItemId: 'oi1',
+        qtyReserved: 2,
+        sellerId: 's1',
+        variantId: 'v1',
+        warehouseId: 'w1',
+        binId: 'bin-1',
+        batchId: 'bat-1',
+      },
+    ];
+    const { svc, findManyCalls } = makeSut({ manyRows: rows });
+    const result = await svc.listActiveForOrderWithLocations('o1');
+    expect(result).toEqual(rows);
+    // ACTIVE-only filter + the location columns selected.
+    expect(findManyCalls[0]?.where).toMatchObject({
+      orderId: 'o1',
+      status: ReservationStatus.ACTIVE,
+    });
+    expect(findManyCalls[0]?.select).toMatchObject({
+      binId: true,
+      batchId: true,
+      sellerId: true,
+      variantId: true,
+      warehouseId: true,
+    });
+  });
+
+  it('surfaces a phase-1 residual (null bin/batch) so the dispatch caller can skip it', async () => {
+    const { svc } = makeSut({
+      manyRows: [
+        {
+          id: 'r1',
+          orderItemId: 'oi1',
+          qtyReserved: 1,
+          sellerId: 's1',
+          variantId: 'v1',
+          warehouseId: 'w1',
+          binId: null,
+          batchId: null,
+        },
+      ],
+    });
+    const result = await svc.listActiveForOrderWithLocations('o1');
+    expect(result[0]?.binId).toBeNull();
+    expect(result[0]?.batchId).toBeNull();
+  });
+
+  it('returns [] when the order has no ACTIVE reservations', async () => {
+    const { svc } = makeSut({ manyRows: [] });
+    expect(await svc.listActiveForOrderWithLocations('o1')).toEqual([]);
   });
 });

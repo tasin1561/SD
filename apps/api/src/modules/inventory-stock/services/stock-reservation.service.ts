@@ -248,6 +248,52 @@ export class StockReservationService {
     });
   }
 
+  /**
+   * ACTIVE reservations for an order WITH their stock location
+   * (sellerId / variantId / warehouseId / binId / batchId). Sanctioned
+   * cross-module read added for Module 9 (expand-by-need — same
+   * precedent as `listActiveForOrder` and M8's `releaseAllocation`).
+   * The Model-A `DISPATCH_STOCK` saga (M9 commit 12) needs bin+batch
+   * per phase-2 reservation to issue the `DISPATCH` StockMovement that
+   * decrements qtyOnHand at dispatch.
+   *
+   * A row with `binId === null || batchId === null` is a phase-1
+   * residual (an unallocated shortfall — should not exist at
+   * PENDING_DISPATCH, but the caller defensively skips it rather than
+   * issuing a movement with no concrete location).
+   */
+  async listActiveForOrderWithLocations(
+    orderId: string,
+  ): Promise<
+    Array<
+      Pick<
+        ReservationView,
+        | 'id'
+        | 'orderItemId'
+        | 'qtyReserved'
+        | 'sellerId'
+        | 'variantId'
+        | 'warehouseId'
+        | 'binId'
+        | 'batchId'
+      >
+    >
+  > {
+    return this.prisma.client.stockReservation.findMany({
+      where: { orderId, status: ReservationStatus.ACTIVE },
+      select: {
+        id: true,
+        orderItemId: true,
+        qtyReserved: true,
+        sellerId: true,
+        variantId: true,
+        warehouseId: true,
+        binId: true,
+        batchId: true,
+      },
+    });
+  }
+
   // ---------- internal ----------
 
   private async transition(

@@ -13,8 +13,20 @@ export enum OrderSideEffect {
   RESERVE_STOCK = 'RESERVE_STOCK',
   /** A reserved order → CANCELLED/CANCELLED_BY_ADMIN/REJECTED: release() every active reservation. */
   RELEASE_STOCK = 'RELEASE_STOCK',
-  /** → DELIVERED: fulfill() the reservations (clears the hold; the physical pick movement is Module 8's). */
+  /** → DELIVERED: fulfill() the reservations (clears the hold). NOTE
+   *  (Module 9, Model A): under the dispatch-decrement model this is no
+   *  longer attached to any matrix edge — DELIVERED is stock-neutral and
+   *  the reservation is FULFILLED at DISPATCH via DISPATCH_STOCK. The
+   *  value is retained for the saga handler's `transitionThenStock`
+   *  'FULFILL' path which DISPATCH_STOCK reuses post-commit. */
   FULFILL_STOCK = 'FULFILL_STOCK',
+  /** Module 9 (Model A — the bug-1 fix): PENDING_DISPATCH → DISPATCHED.
+   *  Per phase-2 reservation: a DISPATCH StockMovement decrements
+   *  qtyOnHand (the ONE normal-lifecycle physical decrement) AND
+   *  fulfill() consumes the reservation. DECLARED here in M9 commit 1;
+   *  the matrix edge + handler are wired in M9 commit 12 (the atomic
+   *  bug-1 fix landing). Unused until then. */
+  DISPATCH_STOCK = 'DISPATCH_STOCK',
 }
 
 interface TransitionDef {

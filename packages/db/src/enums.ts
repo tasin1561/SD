@@ -55,6 +55,8 @@ export {
   ManifestStatus,
   RtoItemCondition,
   RtoDisposition,
+  // Module 9 — Courier Integration
+  SupersedeReason,
   LabelPaperSize,
   LabelGenerationReason,
   TrackingEventType,

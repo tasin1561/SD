@@ -980,10 +980,10 @@ Versioned PDF labels.
 
 **LabelGenerationReason enum:** `INITIAL`, `REPRINT_DAMAGED`, `AWB_REISSUED`, `FORMAT_CHANGED`, `MANUAL_REQUEST`
 
-## manifests *(Module 8)*
+## manifests *(Module 8, extended Module 9)*
 Per-courier dispatch grouping of PACKED shipments, closed on-demand by a
-`WAREHOUSE_SUPERVISOR` (WMS-6). Closure enqueues the Module-9 AWB batch
-(stubbed until M9). A shipment belongs to ≤1 manifest at a time, movable
+`WAREHOUSE_SUPERVISOR` (WMS-6). Closure enqueues the Module-9 per-manifest
+AWB batch job (CUR-2). A shipment belongs to ≤1 manifest at a time, movable
 between DRAFT manifests pre-close (WMS-7) via the nullable
 `shipments.manifest_id` (no join table).
 
@@ -991,14 +991,20 @@ between DRAFT manifests pre-close (WMS-7) via the nullable
 - `manifestNumber` (unique, `MF-YYYY-MM-XXXXXX`, per-year sequence + advisory lock 0x04d46 — mirrors `ShipmentNumberingService` / ORD-8)
 - `courierCode` (FK `couriers.code`), `originWarehouseId` (FK)
 - `status: ManifestStatus`, `closedByStaffId?` (FK `staff_users`), `closedAt?`
-- `awbBatchEnqueuedAt?` (M9-stub marker)
+- *(Module 9)* `awbJobEnqueuedAt?` (renamed from M8's unused `awb_batch_enqueued_at`), `awbJobCompletedAt?` (per-manifest AWB BullMQ job lifecycle, CUR-2)
+- *(Module 9)* `handoffConfirmedAt?`, `handoffConfirmedByStaffId?` (FK `staff_users`) — per-manifest dispatch handoff (CUR-4, supervisor-confirmed)
 
-**Indexes:** `(courierCode, status)`, `originWarehouseId`, `(status, createdAt)`, `closedByStaffId`
+**Indexes:** `(courierCode, status)`, `originWarehouseId`, `(status, createdAt)`, `closedByStaffId`, `handoffConfirmedByStaffId`
 
-**ManifestStatus enum:** `DRAFT`, `CLOSED` *(Module 8 only; Module 9 extends with `AWB_PENDING`/`CONFIRMED`/`FAILED`)*
+**ManifestStatus enum:** `DRAFT`, `CLOSED`, `CONFIRMED`, `DISPATCHED`, `FAILED` *(Module 8 introduced DRAFT/CLOSED; Module 9 extends. Lifecycle: `DRAFT → CLOSED → CONFIRMED → DISPATCHED`, with a `FAILED` branch when the whole per-manifest AWB batch fails.)*
 
 ## Module 8 columns on existing shipment tables
 - `shipments` += `pickStartedAt`, `pickStartedByStaffId` (FK `staff_users`), `pickExpiresAt` (4h pick-timeout CAS token — M7-`assignedAt` analogue, WMS-5), `pickCompletedAt`, `packCompletedAt`, `packedByStaffId` (FK `staff_users`), `manifestId` (FK `manifests`, nullable). New indexes: `(status, pickStartedAt, createdAt)` (pull-next FIFO), `pickExpiresAt`, `manifestId`, the two staff FKs. The order status is the authoritative lifecycle gate (WMS-9); these are operational who/when + the timeout token.
+
+## Module 9 columns on existing shipment tables
+- `shipments` += `supersededAt?`, `supersedeReason?` (`SupersedeReason` enum). The supersede chain (CUR-7): the pre-existing `supersedesShipmentId` self-FK points **NEW → OLD** (the replacement carries the FK); the OLD shipment reads its replacement via the inverse virtual relation `supersededBy[0]`. `supersededAt` / `supersedeReason` are set **on the OLD shipment** when it is retired. The pre-existing `awbNumber` (unique), `courierShipmentId`, `awbGeneratedAt`, `isManualCourier` cover M9's AWB needs — no add.
+- **`SupersedeReason` enum:** `AWB_REJECTED`, `NON_SERVICEABLE`, `COURIER_FAILURE`, `MANUAL_REPLACEMENT`.
+- **`StockMovementType.DISPATCH`** (pre-existing enum value) is the Model-A qtyOnHand decrement at `PENDING_DISPATCH → DISPATCHED` (the bug-1 fix, CUR-3) — the ONE normal-lifecycle physical decrement. `DELIVERED` becomes stock-neutral.
 - `shipment_items` += `rtoCondition: RtoItemCondition?`, `rtoDisposition: RtoDisposition?`, `rtoDisposedByStaffId?` (FK `staff_users`), `rtoInspectionNotes?`. RTO inspection lives on the line snapshot (matching the `pickedBatchId/pickedBinId` "operational context on shipment_items" precedent — no `rto_receipts` table; the RTO receipt is order `RTO_RECEIVED` + existing `shipments.rtoReceivedAt`).
 
 **RtoItemCondition enum:** `GOOD`, `DAMAGED`, `MISSING`

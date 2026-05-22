@@ -70,6 +70,7 @@ model StaffUser {
   shipmentsPacked           Shipment[]                    @relation("ShipmentPackedBy")
   shipmentItemsRtoDisposed  ShipmentItem[]                @relation("ShipmentItemRtoDisposedBy")
   manifestsClosed           Manifest[]                    @relation("ManifestClosedBy")
+  manifestsHandoffConfirmed Manifest[]                    @relation("ManifestHandoffConfirmedBy")
 
   @@index([role])
   @@index([deletedAt])
@@ -1494,64 +1495,72 @@ model AgentCallSettings {
 // courierCode is a string ref to couriers.code (Layer 8); promoted to
 // @relation in the Layer 8 commit.
 model Shipment {
-  id                     String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  shipmentNumber         String         @unique @map("shipment_number")
-  courierCode            String         @map("courier_code")
-  awbNumber              String?        @unique @map("awb_number")
-  courierShipmentId      String?        @map("courier_shipment_id")
-  serviceType            String?        @map("service_type")
-  originWarehouseId      String         @map("origin_warehouse_id") @db.Uuid
-  destRecipientName      String         @map("dest_recipient_name")
-  destRecipientPhoneE164 String         @map("dest_recipient_phone_e164")
-  destAddressLine1       String         @map("dest_address_line1")
-  destAddressLine2       String?        @map("dest_address_line2")
-  destLandmark           String?        @map("dest_landmark")
-  destCity               String         @map("dest_city")
-  destStateProvince      String         @map("dest_state_province")
-  destPostalCode         String         @map("dest_postal_code")
-  destCountryCode        String         @default("IN") @map("dest_country_code") @db.Char(2)
-  totalWeightGrams       Int            @map("total_weight_grams")
-  declaredWeightGrams    Int?           @map("declared_weight_grams")
-  actualWeightGrams      Int?           @map("actual_weight_grams")
-  lengthCm               Decimal?       @map("length_cm") @db.Decimal(6, 2)
-  widthCm                Decimal?       @map("width_cm") @db.Decimal(6, 2)
-  heightCm               Decimal?       @map("height_cm") @db.Decimal(6, 2)
-  volumetricWeightGrams  Int?           @map("volumetric_weight_grams")
-  chargeableWeightGrams  Int?           @map("chargeable_weight_grams")
-  packageType            PackageType?   @map("package_type")
-  declaredValueInr       Decimal        @map("declared_value_inr") @db.Decimal(12, 2)
-  codAmountInr           Decimal?       @map("cod_amount_inr") @db.Decimal(12, 2)
-  status                 ShipmentStatus @default(CREATED)
-  awbGeneratedAt         DateTime?      @map("awb_generated_at") @db.Timestamptz
-  pickedUpByCourierAt    DateTime?      @map("picked_up_by_courier_at") @db.Timestamptz
-  firstScanAt            DateTime?      @map("first_scan_at") @db.Timestamptz
-  outForDeliveryAt       DateTime?      @map("out_for_delivery_at") @db.Timestamptz
-  deliveredAt            DateTime?      @map("delivered_at") @db.Timestamptz
-  rtoInitiatedAt         DateTime?      @map("rto_initiated_at") @db.Timestamptz
-  rtoReceivedAt          DateTime?      @map("rto_received_at") @db.Timestamptz
-  expectedDeliveryAt     DateTime?      @map("expected_delivery_at") @db.Timestamptz
-  isManualCourier        Boolean        @default(false) @map("is_manual_courier")
-  supersedesShipmentId   String?        @map("supersedes_shipment_id") @db.Uuid
-  podPhotoSpacesKeys     String[]       @default([]) @map("pod_photo_spaces_keys")
-  podSignatureSpacesKey  String?        @map("pod_signature_spaces_key")
-  podRecipientName       String?        @map("pod_recipient_name")
-  hasIssue               Boolean        @default(false) @map("has_issue")
-  estimatedCostInr       Decimal?       @map("estimated_cost_inr") @db.Decimal(12, 2)
+  id                     String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  shipmentNumber         String           @unique @map("shipment_number")
+  courierCode            String           @map("courier_code")
+  awbNumber              String?          @unique @map("awb_number")
+  courierShipmentId      String?          @map("courier_shipment_id")
+  serviceType            String?          @map("service_type")
+  originWarehouseId      String           @map("origin_warehouse_id") @db.Uuid
+  destRecipientName      String           @map("dest_recipient_name")
+  destRecipientPhoneE164 String           @map("dest_recipient_phone_e164")
+  destAddressLine1       String           @map("dest_address_line1")
+  destAddressLine2       String?          @map("dest_address_line2")
+  destLandmark           String?          @map("dest_landmark")
+  destCity               String           @map("dest_city")
+  destStateProvince      String           @map("dest_state_province")
+  destPostalCode         String           @map("dest_postal_code")
+  destCountryCode        String           @default("IN") @map("dest_country_code") @db.Char(2)
+  totalWeightGrams       Int              @map("total_weight_grams")
+  declaredWeightGrams    Int?             @map("declared_weight_grams")
+  actualWeightGrams      Int?             @map("actual_weight_grams")
+  lengthCm               Decimal?         @map("length_cm") @db.Decimal(6, 2)
+  widthCm                Decimal?         @map("width_cm") @db.Decimal(6, 2)
+  heightCm               Decimal?         @map("height_cm") @db.Decimal(6, 2)
+  volumetricWeightGrams  Int?             @map("volumetric_weight_grams")
+  chargeableWeightGrams  Int?             @map("chargeable_weight_grams")
+  packageType            PackageType?     @map("package_type")
+  declaredValueInr       Decimal          @map("declared_value_inr") @db.Decimal(12, 2)
+  codAmountInr           Decimal?         @map("cod_amount_inr") @db.Decimal(12, 2)
+  status                 ShipmentStatus   @default(CREATED)
+  awbGeneratedAt         DateTime?        @map("awb_generated_at") @db.Timestamptz
+  pickedUpByCourierAt    DateTime?        @map("picked_up_by_courier_at") @db.Timestamptz
+  firstScanAt            DateTime?        @map("first_scan_at") @db.Timestamptz
+  outForDeliveryAt       DateTime?        @map("out_for_delivery_at") @db.Timestamptz
+  deliveredAt            DateTime?        @map("delivered_at") @db.Timestamptz
+  rtoInitiatedAt         DateTime?        @map("rto_initiated_at") @db.Timestamptz
+  rtoReceivedAt          DateTime?        @map("rto_received_at") @db.Timestamptz
+  expectedDeliveryAt     DateTime?        @map("expected_delivery_at") @db.Timestamptz
+  isManualCourier        Boolean          @default(false) @map("is_manual_courier")
+  // Module 9 — supersede chain (CUR-7). `supersedesShipmentId` points
+  // NEW → OLD (the replacement carries the FK); the OLD shipment reads
+  // its replacement via the inverse virtual `supersededBy[0]`.
+  // `supersededAt` / `supersedeReason` are set ON the OLD shipment when
+  // it is retired (auto-supersede on AWB rejection / non-serviceability
+  // / courier failure, or a manual replacement).
+  supersedesShipmentId   String?          @map("supersedes_shipment_id") @db.Uuid
+  supersededAt           DateTime?        @map("superseded_at") @db.Timestamptz
+  supersedeReason        SupersedeReason? @map("supersede_reason")
+  podPhotoSpacesKeys     String[]         @default([]) @map("pod_photo_spaces_keys")
+  podSignatureSpacesKey  String?          @map("pod_signature_spaces_key")
+  podRecipientName       String?          @map("pod_recipient_name")
+  hasIssue               Boolean          @default(false) @map("has_issue")
+  estimatedCostInr       Decimal?         @map("estimated_cost_inr") @db.Decimal(12, 2)
   // Module 8 — warehouse pick/pack operational state. The order status
   // (PENDING_PICK/PICKED/PACKED) is the authoritative lifecycle gate
   // (WMS-9); these track who/when + the pick-timeout CAS token (WMS-5,
   // M7-assignedAt analogue). `manifestId` is the (movable pre-close)
   // DRAFT manifest assignment (WMS-7).
-  pickStartedAt          DateTime?      @map("pick_started_at") @db.Timestamptz
-  pickStartedByStaffId   String?        @map("pick_started_by_staff_id") @db.Uuid
-  pickExpiresAt          DateTime?      @map("pick_expires_at") @db.Timestamptz
-  pickCompletedAt        DateTime?      @map("pick_completed_at") @db.Timestamptz
-  packCompletedAt        DateTime?      @map("pack_completed_at") @db.Timestamptz
-  packedByStaffId        String?        @map("packed_by_staff_id") @db.Uuid
-  manifestId             String?        @map("manifest_id") @db.Uuid
-  createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt              DateTime       @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt              DateTime?      @map("deleted_at") @db.Timestamptz
+  pickStartedAt          DateTime?        @map("pick_started_at") @db.Timestamptz
+  pickStartedByStaffId   String?          @map("pick_started_by_staff_id") @db.Uuid
+  pickExpiresAt          DateTime?        @map("pick_expires_at") @db.Timestamptz
+  pickCompletedAt        DateTime?        @map("pick_completed_at") @db.Timestamptz
+  packCompletedAt        DateTime?        @map("pack_completed_at") @db.Timestamptz
+  packedByStaffId        String?          @map("packed_by_staff_id") @db.Uuid
+  manifestId             String?          @map("manifest_id") @db.Uuid
+  createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt              DateTime?        @map("deleted_at") @db.Timestamptz
 
   courier          Courier           @relation(fields: [courierCode], references: [code])
   originWarehouse  Warehouse         @relation(fields: [originWarehouseId], references: [id])
@@ -1647,32 +1656,43 @@ model ShipmentItem {
 
 // Module 8 — warehouse dispatch manifest. A per-courier grouping of
 // PACKED shipments closed on-demand by a WAREHOUSE_SUPERVISOR (WMS-6);
-// closure enqueues the M9 AWB batch (stubbed until Module 9). A shipment
-// belongs to ≤1 manifest at a time (movable between DRAFT manifests
-// pre-close, WMS-7) via the nullable Shipment.manifestId. ManifestStatus
-// is intentionally DRAFT/CLOSED only for Module 8; Module 9 extends it
-// with AWB_PENDING/CONFIRMED/FAILED.
+// closure enqueues the M9 AWB batch job. A shipment belongs to ≤1
+// manifest at a time (movable between DRAFT manifests pre-close, WMS-7)
+// via the nullable Shipment.manifestId. ManifestStatus lifecycle
+// (Module 9): DRAFT → CLOSED → CONFIRMED → DISPATCHED, with a FAILED
+// branch when the whole AWB batch fails.
 model Manifest {
-  id                 String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  manifestNumber     String         @unique @map("manifest_number")
-  courierCode        String         @map("courier_code")
-  originWarehouseId  String         @map("origin_warehouse_id") @db.Uuid
-  status             ManifestStatus @default(DRAFT)
-  closedByStaffId    String?        @map("closed_by_staff_id") @db.Uuid
-  closedAt           DateTime?      @map("closed_at") @db.Timestamptz
-  awbBatchEnqueuedAt DateTime?      @map("awb_batch_enqueued_at") @db.Timestamptz
-  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt          DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+  id                        String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  manifestNumber            String         @unique @map("manifest_number")
+  courierCode               String         @map("courier_code")
+  originWarehouseId         String         @map("origin_warehouse_id") @db.Uuid
+  status                    ManifestStatus @default(DRAFT)
+  closedByStaffId           String?        @map("closed_by_staff_id") @db.Uuid
+  closedAt                  DateTime?      @map("closed_at") @db.Timestamptz
+  // Module 9 — AWB batch job lifecycle. `awbJobEnqueuedAt` renamed from
+  // M8's unused `awb_batch_enqueued_at` (M8 close only emitted a stub
+  // audit, never wrote the column). `awbJobCompletedAt` set when the
+  // per-manifest BullMQ job finishes (some shipments may still have
+  // failed — see per-shipment isolation, CUR-2).
+  awbJobEnqueuedAt          DateTime?      @map("awb_job_enqueued_at") @db.Timestamptz
+  awbJobCompletedAt         DateTime?      @map("awb_job_completed_at") @db.Timestamptz
+  // Module 9 — per-manifest dispatch handoff (CUR-4, supervisor-confirmed).
+  handoffConfirmedAt        DateTime?      @map("handoff_confirmed_at") @db.Timestamptz
+  handoffConfirmedByStaffId String?        @map("handoff_confirmed_by_staff_id") @db.Uuid
+  createdAt                 DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                 DateTime       @updatedAt @map("updated_at") @db.Timestamptz
 
-  courier         Courier    @relation(fields: [courierCode], references: [code])
-  originWarehouse Warehouse  @relation(fields: [originWarehouseId], references: [id])
-  closedByStaff   StaffUser? @relation("ManifestClosedBy", fields: [closedByStaffId], references: [id])
-  shipments       Shipment[]
+  courier            Courier    @relation(fields: [courierCode], references: [code])
+  originWarehouse    Warehouse  @relation(fields: [originWarehouseId], references: [id])
+  closedByStaff      StaffUser? @relation("ManifestClosedBy", fields: [closedByStaffId], references: [id])
+  handoffConfirmedBy StaffUser? @relation("ManifestHandoffConfirmedBy", fields: [handoffConfirmedByStaffId], references: [id])
+  shipments          Shipment[]
 
   @@index([courierCode, status])
   @@index([originWarehouseId])
   @@index([status, createdAt])
   @@index([closedByStaffId])
+  @@index([handoffConfirmedByStaffId])
   @@map("manifests")
 }
 
@@ -2781,11 +2801,28 @@ enum ShipmentStatus {
 
 // Module 8 — warehouse dispatch manifest lifecycle. DRAFT/CLOSED only;
 // Module 9 extends with AWB_PENDING/CONFIRMED/FAILED.
+// Module 8 introduced DRAFT/CLOSED; Module 9 extends with the AWB +
+// dispatch lifecycle: DRAFT → CLOSED → CONFIRMED → DISPATCHED, with a
+// FAILED branch when the whole per-manifest AWB batch fails.
 enum ManifestStatus {
-  DRAFT  @map("draft")
-  CLOSED @map("closed")
+  DRAFT      @map("draft")
+  CLOSED     @map("closed")
+  CONFIRMED  @map("confirmed")
+  DISPATCHED @map("dispatched")
+  FAILED     @map("failed")
 
   @@map("manifest_status")
+}
+
+// Module 9 — why an OLD shipment was retired in favour of a replacement
+// (CUR-7 supersede chain).
+enum SupersedeReason {
+  AWB_REJECTED       @map("awb_rejected")
+  NON_SERVICEABLE    @map("non_serviceable")
+  COURIER_FAILURE    @map("courier_failure")
+  MANUAL_REPLACEMENT @map("manual_replacement")
+
+  @@map("supersede_reason")
 }
 
 // Module 8 — RTO per-item inspection (locked decision #8: condition is
