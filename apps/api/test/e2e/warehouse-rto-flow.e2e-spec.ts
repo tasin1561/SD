@@ -19,18 +19,17 @@ import {
 } from './app-harness';
 
 /**
- * Module 8 warehouse-rto HTTP surface (commits 14 + 15 + the
- * conservation bug-fix follow-on). Drives the FULL CONFIRMED → pack →
- * DISPATCHED → RTO_INITIATED → receive → inspect → finalize pipeline.
+ * Module 8 warehouse-rto HTTP surface, MODEL A (M9 commit 12 bug-1 fix).
+ * Drives the FULL CONFIRMED → pack → DISPATCHED → RTO_INITIATED →
+ * receive → inspect → finalize pipeline.
  *
- * Post-fix semantics (model B — qtyOnHand only changes when goods truly
- * leave permanently; pre-DELIVERED never decrements; tracked as latent
- * debt for M9/M10):
- *   - RESTOCK : release() the phase-2 reservation → qtyReserved
- *               clamped-decrements. NO RETURN_RESTOCK movement. qtyOnHand
- *               unchanged (was never decremented).
- *   - WRITE_OFF: release() the reservation + ADJUSTMENT_DECREASE -qty
- *                with reasonCode mapped from rtoCondition.
+ * Model A semantics — qtyOnHand decrements at DISPATCH (the one
+ * normal-lifecycle decrement); the phase-2 reservation is FULFILLED
+ * there. finalize() therefore:
+ *   - RESTOCK : RETURN_RESTOCK +qty re-add — qtyOnHand returns to
+ *               baseline. No reservation release (already FULFILLED).
+ *   - WRITE_OFF: NO movement — the dispatch decrement stands; the unit
+ *               is gone.
  */
 describe('Warehouse RTO flow (e2e)', () => {
   let h: AppHarness;
