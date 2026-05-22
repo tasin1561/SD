@@ -3,6 +3,7 @@ import {
   ActorType,
   ManifestStatus,
   OrderStatus,
+  ShipmentStatus,
   StaffRole,
 } from '@skydrop/db';
 import { OrderWriteService } from '../../src/modules/order/services/order-write.service';
@@ -10,6 +11,7 @@ import { ShipmentProvisionService } from '../../src/modules/shipment-provision/s
 import {
   bootTestApp,
   createTestStaff,
+  waitFor,
   flushTestRedis,
   resetAuthState,
   type AppHarness,
@@ -266,27 +268,32 @@ describe('Warehouse manifest flow (e2e)', () => {
     const manifest = await h.prisma.manifest.findUniqueOrThrow({
       where: { id: a.manifestId },
     });
-    expect(manifest.status).toBe(ManifestStatus.CLOSED);
     expect(manifest.closedByStaffId).toBe(staffId);
     expect(manifest.closedAt).not.toBeNull();
+    expect(manifest.awbJobEnqueuedAt).not.toBeNull();
 
-    // M9 AWB enqueue stub audit (HIGH).
-    const awbAudit = await h.prisma.auditLog.findFirst({
-      where: { action: 'manifest.awb_enqueue_stub', entityId: a.manifestId },
-    });
-    expect(awbAudit).not.toBeNull();
-    const meta = awbAudit!.metadata as {
-      severity: string;
-      shipmentIds: string[];
-      moduleStubbed: string;
-    };
-    expect(meta.severity).toBe('HIGH');
-    expect(meta.moduleStubbed).toBe('M9');
-    expect(meta.shipmentIds.sort()).toEqual(
-      [a.shipmentId, b.shipmentId].sort(),
+    // M9 commit 10: close enqueues the AWB job (replacing the M8 stub).
+    // The in-process worker processes it asynchronously — wait for the
+    // manifest to settle at CONFIRMED (stub-mode Delhivery → all AWBs
+    // succeed), then assert the AWBs landed.
+    const settled = await waitFor(
+      async () => {
+        const m = await h.prisma.manifest.findUniqueOrThrow({
+          where: { id: a.manifestId },
+        });
+        return m.status === ManifestStatus.CONFIRMED ? m : null;
+      },
+      { timeoutMs: 15_000, description: 'manifest → CONFIRMED via AWB job' },
     );
+    expect(settled.awbJobCompletedAt).not.toBeNull();
+    const shA = await h.prisma.shipment.findUniqueOrThrow({
+      where: { id: a.shipmentId },
+    });
+    expect(shA.awbNumber).not.toBeNull();
+    expect(shA.status).toBe(ShipmentStatus.AWB_GENERATED);
 
-    // Idempotent re-close.
+    // Idempotent re-close — the manifest is now CONFIRMED; re-close is a
+    // no-op (alreadyClosed:true, not a 409 race).
     const again = await request(h.baseUrl)
       .post(`/admin/warehouse/manifests/${a.manifestId}/close`)
       .set(staffAuth)

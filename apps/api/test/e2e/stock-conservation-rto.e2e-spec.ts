@@ -13,6 +13,7 @@ import {
   createTestStaff,
   flushTestRedis,
   resetAuthState,
+  waitFor,
   type AppHarness,
 } from './app-harness';
 
@@ -234,9 +235,21 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
       .set(staffAuth)
       .expect(200);
 
-    // DISPATCHED via OrderWriteService (M9 would normally drive this;
-    // we go through the real saga). NB this is the path the user
-    // mandated — drive through real transitions, not manual stamping.
+    // M9 commit 10: close enqueues the AWB job; the in-process worker
+    // generates the AWB (stub-mode Delhivery — the REAL AWB-generation
+    // path, no manual stamping).
+    const withAwb = await waitFor(
+      async () => {
+        const s = await h.prisma.shipment.findUniqueOrThrow({
+          where: { id: shipmentId },
+        });
+        return s.awbNumber !== null ? s : null;
+      },
+      { timeoutMs: 15_000, description: 'AWB generated for the shipment' },
+    );
+    const awbNumber = withAwb.awbNumber as string;
+
+    // DISPATCHED via OrderWriteService — real saga transitions.
     await ow.transitionStatus({
       orderId,
       to: OrderStatus.DISPATCHED,
@@ -246,14 +259,6 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
       orderId,
       to: OrderStatus.RTO_INITIATED,
       actor: { type: ActorType.STAFF, id: staffId },
-    });
-
-    // AWB stamp is the ONLY non-real step (M9 not built). All ORDER
-    // transitions above flowed through the real saga.
-    const awbNumber = `AWB-CONS-${Date.now()}`;
-    await h.prisma.shipment.update({
-      where: { id: shipmentId },
-      data: { awbNumber },
     });
 
     // RTO receive via real HTTP.
@@ -382,7 +387,9 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
       qtyReserved: 2,
     });
 
-    // Step 5: manifest close → PENDING_DISPATCH (no side-effect).
+    // Step 5: manifest close → PENDING_DISPATCH + (M9 commit 10) the AWB
+    // job is enqueued. The AWB job touches NO stock (it sets awbNumber +
+    // shipment status only) — the snapshot is unaffected.
     await request(h.baseUrl)
       .post(`/admin/warehouse/manifests/${pack.body.manifestId}/close`)
       .set(staffAuth)
@@ -393,7 +400,18 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
       qtyReserved: 2,
     });
 
-    // Step 6: DISPATCHED (no side-effect per matrix).
+    // Wait for the AWB job (stub-mode Delhivery) to stamp the awbNumber.
+    const withAwb = await waitFor(
+      async () => {
+        const s = await h.prisma.shipment.findUniqueOrThrow({
+          where: { id: shipment.id },
+        });
+        return s.awbNumber !== null ? s : null;
+      },
+      { timeoutMs: 15_000, description: 'AWB generated' },
+    );
+
+    // Step 6: DISPATCHED (no side-effect per matrix — pre-commit-12).
     await ow.transitionStatus({
       orderId,
       to: OrderStatus.DISPATCHED,
@@ -411,17 +429,10 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
       to: OrderStatus.RTO_INITIATED,
       actor: { type: ActorType.STAFF, id: staffId },
     });
-    await h.prisma.shipment.update({
-      where: { id: shipment.id },
-      data: { awbNumber: `AWB-TRACE-${Date.now()}` },
-    });
-    const updatedShipment = await h.prisma.shipment.findUniqueOrThrow({
-      where: { id: shipment.id },
-    });
     await request(h.baseUrl)
       .post('/warehouse/rto/receive')
       .set(staffAuth)
-      .send({ awbNumber: updatedShipment.awbNumber })
+      .send({ awbNumber: withAwb.awbNumber })
       .expect(200);
     const afterRtoReceived = await snapshot();
     expect(afterRtoReceived).toMatchObject({

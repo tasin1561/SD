@@ -8,6 +8,7 @@ import { ActorType, ManifestStatus, OrderStatus, ShipmentStatus } from '@skydrop
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
+import { AwbGenerationQueue } from '../../courier-awb/queue/awb-generation.queue';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { ManifestNumberingService } from './manifest-numbering.service';
 
@@ -115,6 +116,7 @@ export class ManifestService {
     private readonly audit: AuditLogService,
     private readonly numbering: ManifestNumberingService,
     private readonly orderWrite: OrderWriteService,
+    private readonly awbQueue: AwbGenerationQueue,
   ) {}
 
   /**
@@ -464,11 +466,17 @@ export class ManifestService {
     }
     const shipmentIds = manifest.shipments.map((s) => s.id);
 
-    if (manifest.status === ManifestStatus.CLOSED) {
+    // Idempotent on any ALREADY-PROGRESSED manifest. Module 9 expanded
+    // ManifestStatus (DRAFT → CLOSED → CONFIRMED → DISPATCHED, + FAILED):
+    // re-closing a manifest the async AWB job has already advanced to
+    // CONFIRMED/DISPATCHED/FAILED must be a no-op, not a 409 race —
+    // `!== DRAFT` is the correct gate (was `=== CLOSED` when CLOSED was
+    // the only post-DRAFT state).
+    if (manifest.status !== ManifestStatus.DRAFT) {
       return {
         manifestId,
         manifestNumber: manifest.manifestNumber,
-        status: ManifestStatus.CLOSED,
+        status: manifest.status,
         closedAt: manifest.closedAt ?? new Date(),
         closedByStaffId: manifest.closedByStaffId ?? staffId,
         shipmentIds,
@@ -493,6 +501,10 @@ export class ManifestService {
           status: ManifestStatus.CLOSED,
           closedAt: now,
           closedByStaffId: staffId,
+          // Module 9: the AWB job WILL be enqueued post-commit. Stamping
+          // the intent inside the closure tx; if the post-commit enqueue
+          // fails, an admin re-trigger / re-close recovers.
+          awbJobEnqueuedAt: now,
         },
       });
       if (upd.count !== 1) {
@@ -560,33 +572,21 @@ export class ManifestService {
       }
     }
 
-    // 3. POST-COMMIT M9 AWB enqueue STUB. Audit HIGH (signal: an
-    //    integration boundary; M9 will replace with the real BullMQ
-    //    enqueue). Idempotency on a re-close call is provided by the
-    //    alreadyClosed short-circuit at the top — this branch is only
-    //    reached on the genuine DRAFT→CLOSED transition.
-    //
-    // TODO(Module 9): replace with `awbBatchQueue.enqueue({ manifestId,
-    // shipmentIds })` and flip the manifest into AWB_PENDING. Until then
-    // the manifest stays CLOSED and the AWB pipeline is a paper process
-    // (manual upload).
-    await this.audit.log({
-      actorType: ActorType.SYSTEM,
-      actorId: null,
-      action: 'manifest.awb_enqueue_stub',
-      entityType: 'manifest',
-      entityId: manifestId,
-      severity: 'HIGH',
-      metadata: {
-        manifestId,
-        manifestNumber: manifest.manifestNumber,
-        shipmentIds,
-        shipmentCount: shipmentIds.length,
-        transitionedCount,
-        failureCount: failures.length,
-        moduleStubbed: 'M9',
-      },
-    });
+    // 3. POST-COMMIT — enqueue the per-manifest AWB generation job
+    //    (Module 9, CUR-2; replaces the M8 audit-only stub). The job is
+    //    idempotent (jobId = manifestId dedup; AwbGenerationJobService
+    //    CUR-9) and the worker drives the manifest CLOSED → CONFIRMED/
+    //    FAILED transition. Best-effort: a failed enqueue leaves the
+    //    manifest CLOSED with awbJobEnqueuedAt set — an admin re-close
+    //    (idempotent) or a manual processManifest trigger recovers.
+    try {
+      await this.awbQueue.enqueueManifest(manifestId);
+    } catch (e) {
+      this.logger.error(
+        { manifestId, err: (e as Error).message },
+        'Manifest closed but AWB job enqueue failed — manifest is CLOSED; admin re-trigger required',
+      );
+    }
 
     return {
       manifestId,

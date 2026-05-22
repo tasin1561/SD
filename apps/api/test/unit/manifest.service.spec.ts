@@ -5,8 +5,21 @@ import type { PrismaService } from '../../src/infrastructure/prisma/prisma.servi
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { ManifestNumberingService } from '../../src/modules/warehouse-manifest/services/manifest-numbering.service';
 import type { OrderWriteService } from '../../src/modules/order/services/order-write.service';
+import type { AwbGenerationQueue } from '../../src/modules/courier-awb/queue/awb-generation.queue';
 
 type AnyArgs = Record<string, unknown>;
+
+/** Shared AWB-queue mock factory — close() enqueues the AWB job. */
+function makeAwbQueue(): {
+  awbQueue: AwbGenerationQueue;
+  enqueueManifest: jest.Mock;
+} {
+  const enqueueManifest = jest.fn(async () => 'awb-job-1');
+  return {
+    awbQueue: { enqueueManifest } as unknown as AwbGenerationQueue,
+    enqueueManifest,
+  };
+}
 
 const COURIER = 'delhivery';
 const WAREHOUSE = 'wh-1';
@@ -71,6 +84,7 @@ function makeService(
     audit as unknown as AuditLogService,
     numbering as unknown as ManifestNumberingService,
     orderWrite as unknown as OrderWriteService,
+    makeAwbQueue().awbQueue,
   );
   return {
     svc,
@@ -289,6 +303,7 @@ describe('ManifestService.moveShipment', () => {
       audit as unknown as AuditLogService,
       numbering as unknown as ManifestNumberingService,
       orderWrite as unknown as OrderWriteService,
+      makeAwbQueue().awbQueue,
     );
     return { svc, shipmentFindFirst, manifestFindUnique, shipmentUpdate, auditLog };
   }
@@ -481,17 +496,19 @@ describe('ManifestService.close', () => {
     });
     const orderWrite = { transitionStatus };
 
+    const { awbQueue, enqueueManifest } = makeAwbQueue();
     const svc = new ManifestService(
       { client } as unknown as PrismaService,
       audit as unknown as AuditLogService,
       numbering as unknown as ManifestNumberingService,
       orderWrite as unknown as OrderWriteService,
+      awbQueue,
     );
-    return { svc, manifestUpdateMany, transitionStatus, auditLog };
+    return { svc, manifestUpdateMany, transitionStatus, auditLog, enqueueManifest };
   }
 
-  it('happy: closes DRAFT + transitions each shipment + emits AWB stub', async () => {
-    const { svc, manifestUpdateMany, transitionStatus, auditLog } =
+  it('happy: closes DRAFT + transitions each shipment + enqueues the AWB job', async () => {
+    const { svc, manifestUpdateMany, transitionStatus, enqueueManifest } =
       makeCloseService();
     const r = await svc.close(MAN, 'sup-1');
     expect(r.status).toBe(ManifestStatus.CLOSED);
@@ -506,6 +523,7 @@ describe('ManifestService.close', () => {
         data: expect.objectContaining({
           status: ManifestStatus.CLOSED,
           closedByStaffId: 'sup-1',
+          awbJobEnqueuedAt: expect.any(Date),
         }),
       }),
     );
@@ -516,21 +534,13 @@ describe('ManifestService.close', () => {
         expectedFrom: OrderStatus.PACKED,
       }),
     );
-    const awbAudit = auditLog.mock.calls.find(
-      (c) => (c[0] as AnyArgs).action === 'manifest.awb_enqueue_stub',
-    );
-    expect(awbAudit).toBeDefined();
-    expect((awbAudit?.[0] as AnyArgs).severity).toBe('HIGH');
-    expect((awbAudit?.[0] as AnyArgs).metadata).toMatchObject({
-      manifestId: MAN,
-      shipmentIds: ['s1', 's2'],
-      moduleStubbed: 'M9',
-    });
+    // M9 commit 10: the AWB job is enqueued (replaces the M8 audit stub).
+    expect(enqueueManifest).toHaveBeenCalledWith(MAN);
   });
 
-  it('idempotent: already CLOSED → no transitions, no AWB stub, alreadyClosed:true', async () => {
+  it('idempotent: already CLOSED → no transitions, no AWB enqueue, alreadyClosed:true', async () => {
     const closedAt = new Date('2026-05-19T15:00:00Z');
-    const { svc, manifestUpdateMany, transitionStatus, auditLog } =
+    const { svc, manifestUpdateMany, transitionStatus, auditLog, enqueueManifest } =
       makeCloseService({
         manifest: {
           id: MAN,
@@ -558,6 +568,7 @@ describe('ManifestService.close', () => {
     expect(manifestUpdateMany).not.toHaveBeenCalled();
     expect(transitionStatus).not.toHaveBeenCalled();
     expect(auditLog).not.toHaveBeenCalled();
+    expect(enqueueManifest).not.toHaveBeenCalled();
   });
 
   it('rejects MANIFEST_EMPTY when manifest has no shipments', async () => {
@@ -583,8 +594,8 @@ describe('ManifestService.close', () => {
     );
   });
 
-  it('partial transition failure: manifest still CLOSED, failures collected', async () => {
-    const { svc, auditLog } = makeCloseService({
+  it('partial transition failure: manifest still CLOSED, failures collected, AWB job still enqueued', async () => {
+    const { svc, enqueueManifest } = makeCloseService({
       transitionResults: [{ ok: true }, { ok: false, err: 'INVALID_TRANSITION' }],
     });
     const r = await svc.close(MAN, 'sup-1');
@@ -593,15 +604,9 @@ describe('ManifestService.close', () => {
     expect(r.failures).toEqual([
       { shipmentId: 's2', orderId: 'o2', error: 'INVALID_TRANSITION' },
     ]);
-    // AWB stub still emitted (manifest IS closed).
-    const awbAudit = auditLog.mock.calls.find(
-      (c) => (c[0] as AnyArgs).action === 'manifest.awb_enqueue_stub',
-    );
-    expect(awbAudit).toBeDefined();
-    expect((awbAudit?.[0] as AnyArgs).metadata).toMatchObject({
-      transitionedCount: 1,
-      failureCount: 1,
-    });
+    // The AWB job is still enqueued — the manifest IS closed; a
+    // per-shipment transition failure does not undo the closure.
+    expect(enqueueManifest).toHaveBeenCalledWith(MAN);
   });
 
   it('race: 409 MANIFEST_CLOSE_RACE when updateMany count=0', async () => {

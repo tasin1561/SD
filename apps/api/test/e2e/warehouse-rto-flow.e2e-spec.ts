@@ -15,6 +15,7 @@ import {
   createTestStaff,
   flushTestRedis,
   resetAuthState,
+  waitFor,
   type AppHarness,
 } from './app-harness';
 
@@ -232,6 +233,19 @@ describe('Warehouse RTO flow (e2e)', () => {
       .set(staffAuth)
       .expect(200);
 
+    // M9 commit 10: close enqueues the AWB job; the in-process worker
+    // generates the AWB (stub-mode Delhivery). Wait for it to land — the
+    // job stamps the real awbNumber (no manual stamping needed).
+    const withAwb = await waitFor(
+      async () => {
+        const s = await h.prisma.shipment.findUniqueOrThrow({
+          where: { id: shipmentId },
+        });
+        return s.awbNumber !== null ? s : null;
+      },
+      { timeoutMs: 15_000, description: 'AWB generated for the shipment' },
+    );
+
     await ow.transitionStatus({
       orderId,
       to: OrderStatus.DISPATCHED,
@@ -243,17 +257,11 @@ describe('Warehouse RTO flow (e2e)', () => {
       actor: { type: ActorType.STAFF, id: staffId },
     });
 
-    const awbNumber = `AWB-TEST-${Date.now()}`;
-    await h.prisma.shipment.update({
-      where: { id: shipmentId },
-      data: { awbNumber },
-    });
-
     return {
       orderId,
       shipmentId,
       shipmentItemIds: items.map((i) => i.id),
-      awbNumber,
+      awbNumber: withAwb.awbNumber as string,
     };
   }
 
