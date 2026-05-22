@@ -75,10 +75,19 @@ describe('OrderStateMachineService', () => {
       }
     });
 
-    it('OUT_FOR_DELIVERY → DELIVERED fulfills the reservation', () => {
+    it('PENDING_DISPATCH → DISPATCHED carries DISPATCH_STOCK (M9 Model A — the bug-1 fix)', () => {
+      expect(
+        sm.requiredSideEffects(
+          OrderStatus.PENDING_DISPATCH,
+          OrderStatus.DISPATCHED,
+        ),
+      ).toEqual([OrderSideEffect.DISPATCH_STOCK]);
+    });
+
+    it('OUT_FOR_DELIVERY → DELIVERED is STOCK-NEUTRAL (M9 Model A — qtyOnHand decremented + fulfilled at DISPATCH)', () => {
       expect(
         sm.requiredSideEffects(OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED),
-      ).toEqual([OrderSideEffect.FULFILL_STOCK]);
+      ).toEqual([]);
     });
 
     it('a downstream reserved state cancel still releases (PACKED → CANCELLED_BY_ADMIN)', () => {

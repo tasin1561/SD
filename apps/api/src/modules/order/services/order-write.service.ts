@@ -12,9 +12,12 @@ import {
   Prisma,
   QueueClosureReason,
   ReservationReleaseReason,
+  ShipmentStatus,
+  StockMovementType,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { StockMutationService } from '../../inventory-shared/stock-mutation.service';
 import {
   InsufficientStockError,
   StockReservationService,
@@ -179,6 +182,7 @@ export class OrderWriteService {
     private readonly reservations: StockReservationService,
     private readonly callQueue: CallQueueService,
     private readonly shipmentProvision: ShipmentProvisionService,
+    private readonly mutation: StockMutationService,
   ) {}
 
   /**
@@ -295,7 +299,11 @@ export class OrderWriteService {
       result = await this.transitionWithReserve(order, from, to, input);
     } else if (sideEffects.includes(OrderSideEffect.RELEASE_STOCK)) {
       result = await this.transitionThenStock(order, from, to, input, 'RELEASE');
+    } else if (sideEffects.includes(OrderSideEffect.DISPATCH_STOCK)) {
+      result = await this.transitionWithDispatch(order, from, to, input);
     } else if (sideEffects.includes(OrderSideEffect.FULFILL_STOCK)) {
+      // Model A: no matrix edge carries FULFILL_STOCK (DELIVERED is
+      // stock-neutral). Branch retained defensively / for god-mode use.
       result = await this.transitionThenStock(order, from, to, input, 'FULFILL');
     } else {
       result = await this.transitionPlain(order, from, to, input);
@@ -630,6 +638,136 @@ export class OrderWriteService {
     if (active.length === 0) outcome = null;
 
     return { orderId: order.id, fromStatus: from, status: to, reservationOutcome: outcome };
+  }
+
+  // ── DISPATCH_STOCK (Module 9, Model A — the bug-1 fix): the ONE
+  //    normal-lifecycle qtyOnHand decrement, PENDING_DISPATCH →
+  //    DISPATCHED. ──────────────────────────────────────────────────
+  //
+  // SAGA, visible-vs-silent failure ordering (same shape as WMS-8):
+  //   1. GATE (shipment-grained): a prior DISPATCH movement for this
+  //      shipment ⇒ movements already applied — skip (retry-safe, no
+  //      double-decrement). stock_movements has no native dedup key;
+  //      the existence query IS the gate.
+  //   2. PRE-TX: one runWithRetry block issues a DISPATCH StockMovement
+  //      (qtyOnHand −= qty) per PHASE-2 reservation (bin+batch from
+  //      listActiveForOrderWithLocations; phase-1 residuals — null
+  //      bin/batch — skipped). The durable physical fact goes FIRST.
+  //   3. LOCAL TX: the authoritative DISPATCHED transition (writeStatusTx).
+  //   4. POST-COMMIT: fulfill() per ACTIVE reservation — marks FULFILLED
+  //      + clamped qtyReserved give-back (INV-4); idempotent on
+  //      already-FULFILLED.
+  //
+  // Crash after step 2 / before step 3 → order stays PENDING_DISPATCH,
+  // qtyOnHand correctly decremented (visible, recoverable); the retry's
+  // gate skips re-application and re-runs the transition. Crash inside
+  // step 2 → runWithRetry's tx rolls back atomically.
+  private async transitionWithDispatch(
+    order: { id: string; sellerId: string; orderNumber: string; items: unknown[] },
+    from: OrderStatus,
+    to: OrderStatus,
+    input: TransitionStatusInput,
+  ): Promise<TransitionStatusResult> {
+    // Resolve the order's LIVE shipment (Phase 1A: one shipment per
+    // order; CANCELLED / FAILED_AT_CREATION — e.g. a superseded parcel —
+    // excluded). The DISPATCH movements + the gate are keyed on it.
+    const liveOrderShipment = await this.prisma.client.orderShipment.findFirst({
+      where: {
+        orderId: order.id,
+        shipment: {
+          status: {
+            notIn: [
+              ShipmentStatus.CANCELLED,
+              ShipmentStatus.FAILED_AT_CREATION,
+            ],
+          },
+          deletedAt: null,
+        },
+      },
+      orderBy: { shipmentSequence: 'desc' },
+      select: { shipmentId: true },
+    });
+    const shipmentId = liveOrderShipment?.shipmentId ?? null;
+    if (shipmentId === null) {
+      this.logger.warn(
+        { orderId: order.id },
+        'DISPATCH_STOCK: order has no live shipment — movements will not be shipment-grained',
+      );
+    }
+
+    // 1. GATE — shipment-grained existence query (orderId fallback only
+    //    in the no-live-shipment anomaly).
+    const existingDispatch = await this.prisma.client.stockMovement.findFirst({
+      where: {
+        type: StockMovementType.DISPATCH,
+        ...(shipmentId !== null ? { shipmentId } : { orderId: order.id }),
+      },
+      select: { id: true },
+    });
+    const movementsAlreadyApplied = existingDispatch !== null;
+
+    // 2. PRE-TX — DISPATCH movements per phase-2 reservation.
+    const locations = await this.reservations.listActiveForOrderWithLocations(
+      order.id,
+    );
+    const phase2 = locations.filter(
+      (r) => r.binId !== null && r.batchId !== null,
+    );
+    if (!movementsAlreadyApplied && phase2.length > 0) {
+      await this.mutation.runWithRetry(async (tx) => {
+        for (const r of phase2) {
+          const binId = r.binId;
+          const batchId = r.batchId;
+          if (binId === null || batchId === null) continue; // narrowing
+          await this.mutation.apply(tx, {
+            sellerId: r.sellerId,
+            variantId: r.variantId,
+            warehouseId: r.warehouseId,
+            binId,
+            batchId,
+            qtyChange: -r.qtyReserved, // the ONE lifecycle decrement
+            type: StockMovementType.DISPATCH,
+            actorType: input.actor.type,
+            actorId: input.actor.id ?? null,
+            // DISPATCH self-describes — INV-7 requires reasonCode only
+            // for ADJUSTMENT_* / CYCLE_COUNT_ADJUST / EXPIRY_WRITE_OFF.
+            reasonCode: null,
+            orderId: order.id,
+            orderItemId: r.orderItemId,
+            shipmentId,
+          });
+        }
+      });
+    }
+
+    // 3. LOCAL TX — the authoritative transition.
+    await this.writeStatusTx(order, from, to, input, {
+      eventDescription: input.reason ?? `Status ${from} → ${to}`,
+      auditAction: 'order.status_changed',
+    });
+
+    // 4. POST-COMMIT — fulfill() per ACTIVE reservation, idempotent.
+    const active = await this.reservations.listActiveForOrder(order.id);
+    let outcome: ReservationOutcome = 'FULFILLED';
+    for (const r of active) {
+      try {
+        await this.reservations.fulfill(r.id, input.actor);
+      } catch (err) {
+        outcome = null;
+        this.logger.error(
+          { orderId: order.id, reservationId: r.id, err: (err as Error).message },
+          'Post-commit dispatch fulfill failed; TTL/worker will reconcile',
+        );
+      }
+    }
+    if (active.length === 0) outcome = null;
+
+    return {
+      orderId: order.id,
+      fromStatus: from,
+      status: to,
+      reservationOutcome: outcome,
+    };
   }
 
   private async transitionPlain(

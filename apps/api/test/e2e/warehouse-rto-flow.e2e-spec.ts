@@ -5,7 +5,6 @@ import {
   ReservationStatus,
   RtoDisposition,
   RtoItemCondition,
-  StockMovementReasonCode,
   StockMovementType,
 } from '@skydrop/db';
 import { OrderWriteService } from '../../src/modules/order/services/order-write.service';
@@ -265,17 +264,18 @@ describe('Warehouse RTO flow (e2e)', () => {
     };
   }
 
-  it('RESTOCK happy: release-only — qtyReserved cleared, qtyOnHand unchanged, no RETURN_RESTOCK movement, reservation status RELEASED', async () => {
+  it('RESTOCK happy (Model A): RETURN_RESTOCK +qty re-adds — qtyOnHand 8 → 10', async () => {
     await receiveStock(10);
     const { orderId, shipmentId, shipmentItemIds, awbNumber } =
       await makeRtoInitiatedShipment(2);
 
-    // After pick-start, phase-2 hold raised stock_levels.qtyReserved by 2.
+    // Model A: the DISPATCH decrement already fired — qtyOnHand 8, the
+    // phase-2 reservation FULFILLED (qtyReserved 0).
     const beforeFinalize = await h.prisma.stockLevel.findFirstOrThrow({
       where: { variantId, binId },
     });
-    expect(beforeFinalize.qtyOnHand).toBe(10);
-    expect(beforeFinalize.qtyReserved).toBe(2);
+    expect(beforeFinalize.qtyOnHand).toBe(8);
+    expect(beforeFinalize.qtyReserved).toBe(0);
 
     await request(h.baseUrl)
       .post('/warehouse/rto/receive')
@@ -302,7 +302,6 @@ describe('Warehouse RTO flow (e2e)', () => {
       writtenOffCount: 0,
       movementsAlreadyApplied: false,
       alreadyFinalized: false,
-      reservationsReleased: 1,
     });
 
     const order = await h.prisma.order.findUniqueOrThrow({ where: { id: orderId } });
@@ -311,27 +310,23 @@ describe('Warehouse RTO flow (e2e)', () => {
     const afterFinalize = await h.prisma.stockLevel.findFirstOrThrow({
       where: { variantId, binId },
     });
-    expect(afterFinalize.qtyOnHand).toBe(10); // unchanged — model B
-    expect(afterFinalize.qtyReserved).toBe(0); // release decremented the hold
+    expect(afterFinalize.qtyOnHand).toBe(10); // RETURN_RESTOCK +2 — back to baseline
+    expect(afterFinalize.qtyReserved).toBe(0);
 
-    // No RETURN_RESTOCK movement was issued (the bug-fix removed it).
     const restockMovements = await h.prisma.stockMovement.findMany({
       where: { shipmentId, type: StockMovementType.RETURN_RESTOCK },
     });
-    expect(restockMovements).toHaveLength(0);
+    expect(restockMovements).toHaveLength(1);
+    expect(restockMovements[0]!.qtyChange).toBe(2);
 
-    // No ACTIVE reservations leaked — RTO conservation invariant.
+    // No ACTIVE reservations — fulfilled at dispatch, not re-created.
     const active = await h.prisma.stockReservation.findMany({
       where: { orderId, status: ReservationStatus.ACTIVE },
     });
     expect(active).toHaveLength(0);
-    const released = await h.prisma.stockReservation.findMany({
-      where: { orderId, status: ReservationStatus.RELEASED },
-    });
-    expect(released.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('WRITE_OFF happy: release + ADJUSTMENT_DECREASE with rtoCondition-mapped reasonCode (DAMAGED → DAMAGED_IN_WAREHOUSE)', async () => {
+  it('WRITE_OFF happy (Model A): NO movement — the dispatch decrement stands (qtyOnHand stays 8)', async () => {
     await receiveStock(10);
     const { orderId, shipmentId, shipmentItemIds, awbNumber } =
       await makeRtoInitiatedShipment(2);
@@ -360,23 +355,19 @@ describe('Warehouse RTO flow (e2e)', () => {
       status: OrderStatus.RTO_RESTOCKED,
       restockedCount: 0,
       writtenOffCount: 1,
-      reservationsReleased: 1,
     });
 
     const afterFinalize = await h.prisma.stockLevel.findFirstOrThrow({
       where: { variantId, binId },
     });
-    expect(afterFinalize.qtyOnHand).toBe(8); // ADJUSTMENT_DECREASE -2: the 2 units truly left
-    expect(afterFinalize.qtyReserved).toBe(0); // release cleared the hold
+    expect(afterFinalize.qtyOnHand).toBe(8); // unchanged — the unit left at dispatch
+    expect(afterFinalize.qtyReserved).toBe(0);
 
-    const adjustments = await h.prisma.stockMovement.findMany({
-      where: { shipmentId, type: StockMovementType.ADJUSTMENT_DECREASE },
+    // WRITE_OFF issues NO movement under Model A.
+    const restockMovements = await h.prisma.stockMovement.findMany({
+      where: { shipmentId, type: StockMovementType.RETURN_RESTOCK },
     });
-    expect(adjustments).toHaveLength(1);
-    expect(adjustments[0]!.qtyChange).toBe(-2);
-    expect(adjustments[0]!.reasonCode).toBe(
-      StockMovementReasonCode.DAMAGED_IN_WAREHOUSE,
-    );
+    expect(restockMovements).toHaveLength(0);
 
     const active = await h.prisma.stockReservation.findMany({
       where: { orderId, status: ReservationStatus.ACTIVE },
@@ -384,7 +375,7 @@ describe('Warehouse RTO flow (e2e)', () => {
     expect(active).toHaveLength(0);
   });
 
-  it('gate-2 (WRITE_OFF): pre-existing ADJUSTMENT_DECREASE marker → skip re-apply, transition still runs', async () => {
+  it('gate-2 (RESTOCK): pre-existing RETURN_RESTOCK marker → skip re-apply, transition still runs', async () => {
     await receiveStock(10);
     const { orderId, shipmentId, shipmentItemIds, awbNumber } =
       await makeRtoInitiatedShipment(2);
@@ -399,15 +390,14 @@ describe('Warehouse RTO flow (e2e)', () => {
         .post(`/warehouse/rto/items/${itemId}/inspect`)
         .set(staffAuth)
         .send({
-          condition: RtoItemCondition.DAMAGED,
-          disposition: RtoDisposition.WRITE_OFF,
+          condition: RtoItemCondition.GOOD,
+          disposition: RtoDisposition.RESTOCK,
         })
         .expect(200);
     }
 
-    // Simulate prior crash-after-movements: insert an ADJUSTMENT_DECREASE
-    // marker directly so the gate fires. Test-only INV-1 bypass; this
-    // path is NEVER taken by app code.
+    // Simulate a prior crash-after-movements: insert a RETURN_RESTOCK
+    // marker directly so the gate fires. Test-only INV-1 bypass.
     const order = await h.prisma.order.findUniqueOrThrow({
       where: { id: orderId },
     });
@@ -418,12 +408,11 @@ describe('Warehouse RTO flow (e2e)', () => {
         warehouseId,
         binId,
         batchId: (await h.prisma.stockBatch.findFirstOrThrow({ where: { variantId } })).id,
-        type: StockMovementType.ADJUSTMENT_DECREASE,
+        type: StockMovementType.RETURN_RESTOCK,
         qtyChange: 0, // marker; only existence matters for the gate
         qtyBefore: 0,
         qtyAfter: 0,
         actorType: ActorType.SYSTEM,
-        reasonCode: StockMovementReasonCode.OTHER,
         orderId,
         shipmentId,
       },
@@ -437,13 +426,13 @@ describe('Warehouse RTO flow (e2e)', () => {
     expect(fin.body.status).toBe(OrderStatus.RTO_RESTOCKED);
 
     // Only the manually-inserted marker — no double-apply.
-    const adjustments = await h.prisma.stockMovement.findMany({
-      where: { shipmentId, type: StockMovementType.ADJUSTMENT_DECREASE },
+    const restockMovements = await h.prisma.stockMovement.findMany({
+      where: { shipmentId, type: StockMovementType.RETURN_RESTOCK },
     });
-    expect(adjustments).toHaveLength(1);
+    expect(restockMovements).toHaveLength(1);
   });
 
-  it('gate-1 idempotency: re-finalize after success → alreadyFinalized, no double-release, no extra movements', async () => {
+  it('gate-1 idempotency: re-finalize after success → alreadyFinalized, exactly one RETURN_RESTOCK', async () => {
     await receiveStock(10);
     const { shipmentId, shipmentItemIds, awbNumber } =
       await makeRtoInitiatedShipment(2);
@@ -458,8 +447,8 @@ describe('Warehouse RTO flow (e2e)', () => {
         .post(`/warehouse/rto/items/${itemId}/inspect`)
         .set(staffAuth)
         .send({
-          condition: RtoItemCondition.DAMAGED,
-          disposition: RtoDisposition.WRITE_OFF,
+          condition: RtoItemCondition.GOOD,
+          disposition: RtoDisposition.RESTOCK,
         })
         .expect(200);
     }
@@ -474,10 +463,10 @@ describe('Warehouse RTO flow (e2e)', () => {
       .expect(200);
     expect(second.body.alreadyFinalized).toBe(true);
 
-    const adjustments = await h.prisma.stockMovement.findMany({
-      where: { shipmentId, type: StockMovementType.ADJUSTMENT_DECREASE },
+    const restockMovements = await h.prisma.stockMovement.findMany({
+      where: { shipmentId, type: StockMovementType.RETURN_RESTOCK },
     });
-    expect(adjustments).toHaveLength(1);
+    expect(restockMovements).toHaveLength(1); // not double-applied
   });
 
   it('finalize rejects RTO_INSPECTION_INCOMPLETE when an item is uninspected', async () => {

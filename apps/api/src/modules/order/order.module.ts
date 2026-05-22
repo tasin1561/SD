@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { InventoryStockModule } from '../inventory-stock/inventory-stock.module';
+import { InventorySharedModule } from '../inventory-shared/inventory-shared.module';
 import { CallQueueModule } from '../call-queue/call-queue.module';
 import { ShipmentProvisionModule } from '../shipment-provision/shipment-provision.module';
 import { OrderCoreModule } from './order-core.module';
@@ -49,6 +50,10 @@ import { OrderWriteService } from './services/order-write.service';
   imports: [
     OrderCoreModule,
     InventoryStockModule,
+    // Module 9: OrderWriteService's DISPATCH_STOCK handler (the bug-1
+    // fix) issues DISPATCH StockMovements via StockMutationService —
+    // the only sanctioned stock writer (INV-1), from inventory-shared.
+    InventorySharedModule,
     CallQueueModule,
     ShipmentProvisionModule,
   ],

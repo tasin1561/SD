@@ -15,6 +15,12 @@ function makeService(
     reserveThrows?: boolean;
     statusTxThrows?: boolean;
     active?: Array<{ id: string; orderItemId: string; qtyReserved: number }>;
+    /** Phase-2 reservation rows for the DISPATCH_STOCK handler. */
+    activeWithLocations?: Array<AnyArgs>;
+    /** Live OrderShipment for the order ({ shipmentId } or null). */
+    liveOrderShipment?: { shipmentId: string } | null;
+    /** Pre-existing DISPATCH movement → the gate fires. */
+    existingDispatchMovement?: boolean;
   } = {},
 ) {
   const order =
@@ -33,10 +39,21 @@ function makeService(
   const orderFindFirst = jest.fn(async () => order);
   const systemSettingFindUnique = jest.fn(async () => ({ valueString: 'wh-1' }));
 
+  const orderShipmentFindFirst = jest.fn(async () =>
+    opts.liveOrderShipment === undefined
+      ? { shipmentId: 'ship-1' }
+      : opts.liveOrderShipment,
+  );
+  const stockMovementFindFirst = jest.fn(async () =>
+    opts.existingDispatchMovement ? { id: 'mv-prior' } : null,
+  );
+
   const client = {} as {
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
     order: { findFirst: typeof orderFindFirst };
     systemSetting: { findUnique: typeof systemSettingFindUnique };
+    orderShipment: { findFirst: typeof orderShipmentFindFirst };
+    stockMovement: { findFirst: typeof stockMovementFindFirst };
   };
   client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => {
     if (opts.statusTxThrows) throw new Error('status tx boom');
@@ -44,6 +61,8 @@ function makeService(
   };
   client.order = { findFirst: orderFindFirst };
   client.systemSetting = { findUnique: systemSettingFindUnique };
+  client.orderShipment = { findFirst: orderShipmentFindFirst };
+  client.stockMovement = { findFirst: stockMovementFindFirst };
 
   const stateMachine = new OrderStateMachineService();
   const events = {
@@ -58,7 +77,22 @@ function makeService(
   const release = jest.fn(async () => ({ alreadyInactive: false }));
   const fulfill = jest.fn(async () => ({ alreadyInactive: false }));
   const listActiveForOrder = jest.fn(async () => opts.active ?? []);
-  const reservations = { reserve, release, fulfill, listActiveForOrder };
+  const listActiveForOrderWithLocations = jest.fn(
+    async () => opts.activeWithLocations ?? [],
+  );
+  const reservations = {
+    reserve,
+    release,
+    fulfill,
+    listActiveForOrder,
+    listActiveForOrderWithLocations,
+  };
+
+  const mutationApply = jest.fn(async () => ({ movementId: 'mv-1' }));
+  const runWithRetry = jest.fn(
+    async (fn: (tx: unknown) => Promise<unknown>) => fn({}),
+  );
+  const mutation = { apply: mutationApply, runWithRetry };
 
   const enqueueOrder = jest.fn(async () => ({ entry: {}, created: true }));
   const dequeueOrder = jest.fn(async () => ({ dequeued: 0, preemptedAssigned: false }));
@@ -79,11 +113,17 @@ function makeService(
     reservations as never,
     callQueue as never,
     shipmentProvision as never,
+    mutation as never,
   );
   return {
     svc,
     orderUpdate,
     orderFindFirst,
+    orderShipmentFindFirst,
+    stockMovementFindFirst,
+    listActiveForOrderWithLocations,
+    mutationApply,
+    runWithRetry,
     events,
     audit,
     reserve,
@@ -163,8 +203,8 @@ describe('OrderWriteService.transitionStatus', () => {
     expect(data.cancelledAt).toBeInstanceOf(Date);
   });
 
-  it('FULFILL on OUT_FOR_DELIVERY → DELIVERED', async () => {
-    const { svc, fulfill } = makeService({
+  it('OUT_FOR_DELIVERY → DELIVERED is STOCK-NEUTRAL (M9 Model A — no fulfill)', async () => {
+    const { svc, fulfill, mutationApply, orderUpdate } = makeService({
       order: {
         id: 'o1',
         sellerId: 's1',
@@ -179,8 +219,13 @@ describe('OrderWriteService.transitionStatus', () => {
       to: OrderStatus.DELIVERED,
       actor: ACTOR,
     });
-    expect(fulfill).toHaveBeenCalledTimes(1);
-    expect(res.reservationOutcome).toBe('FULFILLED');
+    // Model A: qtyOnHand was decremented + the reservation FULFILLED at
+    // DISPATCH; DELIVERED touches no stock.
+    expect(fulfill).not.toHaveBeenCalled();
+    expect(mutationApply).not.toHaveBeenCalled();
+    expect(orderUpdate).toHaveBeenCalledTimes(1); // plain transition
+    expect(res.status).toBe(OrderStatus.DELIVERED);
+    expect(res.reservationOutcome).toBeNull();
   });
 
   it('rejects an invalid transition', async () => {
@@ -372,5 +417,105 @@ describe('OrderWriteService.transitionStatus', () => {
       QueueClosureReason.ORDER_CANCELLED,
       undefined,
     );
+  });
+});
+
+describe('OrderWriteService.transitionStatus — DISPATCH_STOCK (M9 bug-1 fix)', () => {
+  const dispatchOrder = {
+    id: 'o1',
+    sellerId: 's1',
+    orderNumber: 'SD-2026-26-000001',
+    status: OrderStatus.PENDING_DISPATCH,
+    items: [{ id: 'oi1', variantId: 'v1', quantity: 2 }],
+  };
+  const phase2 = [
+    {
+      id: 'r1',
+      orderItemId: 'oi1',
+      qtyReserved: 2,
+      sellerId: 's1',
+      variantId: 'v1',
+      warehouseId: 'wh-1',
+      binId: 'bin-1',
+      batchId: 'bat-1',
+    },
+  ];
+
+  it('PENDING_DISPATCH → DISPATCHED: DISPATCH movement (−qty) then fulfill', async () => {
+    const { svc, mutationApply, runWithRetry, orderUpdate, fulfill } =
+      makeService({
+        order: dispatchOrder,
+        activeWithLocations: phase2,
+        active: [{ id: 'r1', orderItemId: 'oi1', qtyReserved: 2 }],
+      });
+    const res = await svc.transitionStatus({
+      orderId: 'o1',
+      to: OrderStatus.DISPATCHED,
+      actor: ACTOR,
+    });
+    expect(res.status).toBe(OrderStatus.DISPATCHED);
+    // Movement applied: DISPATCH, −2, shipment-grained.
+    expect(runWithRetry).toHaveBeenCalledTimes(1);
+    expect(mutationApply).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        type: 'DISPATCH',
+        qtyChange: -2,
+        binId: 'bin-1',
+        batchId: 'bat-1',
+        shipmentId: 'ship-1',
+      }),
+    );
+    // Movement applied BEFORE the status tx (visible-vs-silent).
+    expect(mutationApply.mock.invocationCallOrder[0]).toBeLessThan(
+      orderUpdate.mock.invocationCallOrder[0] ?? Infinity,
+    );
+    // Post-commit fulfill.
+    expect(fulfill).toHaveBeenCalledWith('r1', ACTOR);
+    expect(res.reservationOutcome).toBe('FULFILLED');
+  });
+
+  it('idempotency gate: a pre-existing DISPATCH movement skips re-application', async () => {
+    const { svc, runWithRetry, mutationApply, orderUpdate } = makeService({
+      order: dispatchOrder,
+      activeWithLocations: phase2,
+      active: [{ id: 'r1', orderItemId: 'oi1', qtyReserved: 2 }],
+      existingDispatchMovement: true,
+    });
+    const res = await svc.transitionStatus({
+      orderId: 'o1',
+      to: OrderStatus.DISPATCHED,
+      actor: ACTOR,
+    });
+    expect(runWithRetry).not.toHaveBeenCalled(); // gate fired — no re-decrement
+    expect(mutationApply).not.toHaveBeenCalled();
+    expect(orderUpdate).toHaveBeenCalled(); // transition still runs
+    expect(res.status).toBe(OrderStatus.DISPATCHED);
+  });
+
+  it('skips phase-1 residual reservations (null bin/batch) — no movement', async () => {
+    const { svc, mutationApply, runWithRetry } = makeService({
+      order: dispatchOrder,
+      activeWithLocations: [
+        {
+          id: 'r1',
+          orderItemId: 'oi1',
+          qtyReserved: 2,
+          sellerId: 's1',
+          variantId: 'v1',
+          warehouseId: 'wh-1',
+          binId: null,
+          batchId: null,
+        },
+      ],
+      active: [{ id: 'r1', orderItemId: 'oi1', qtyReserved: 2 }],
+    });
+    await svc.transitionStatus({
+      orderId: 'o1',
+      to: OrderStatus.DISPATCHED,
+      actor: ACTOR,
+    });
+    expect(runWithRetry).not.toHaveBeenCalled(); // no phase-2 rows
+    expect(mutationApply).not.toHaveBeenCalled();
   });
 });

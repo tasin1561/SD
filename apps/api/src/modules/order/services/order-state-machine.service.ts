@@ -34,7 +34,12 @@ interface TransitionDef {
   readonly sideEffects: readonly OrderSideEffect[];
 }
 
-const { RESERVE_STOCK, RELEASE_STOCK, FULFILL_STOCK } = OrderSideEffect;
+// Module 9 (Model A): FULFILL_STOCK is no longer attached to any matrix
+// edge — DELIVERED is stock-neutral; the reservation is FULFILLED at
+// DISPATCH via DISPATCH_STOCK. The enum member is retained (the
+// OrderWriteService switch still has a — now unreachable — branch for
+// it), so it is intentionally not destructured here.
+const { RESERVE_STOCK, RELEASE_STOCK, DISPATCH_STOCK } = OrderSideEffect;
 
 /**
  * Declarative transition table. Each row: from → list of (to, side-effects).
@@ -162,7 +167,11 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
   ]],
 
   [OrderStatus.PENDING_DISPATCH, [
-    { to: OrderStatus.DISPATCHED, sideEffects: [] },
+    // Module 9 (Model A — the bug-1 fix): DISPATCH_STOCK decrements
+    // qtyOnHand (DISPATCH StockMovement) + fulfill()s the phase-2
+    // reservation. This is the ONE normal-lifecycle qtyOnHand decrement
+    // — qtyOnHand now tracks the physical shelf count.
+    { to: OrderStatus.DISPATCHED, sideEffects: [DISPATCH_STOCK] },
     { to: OrderStatus.PENDING_MANUAL_PLACEMENT, sideEffects: [] }, // courier rejected
     { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
   ]],
@@ -182,7 +191,11 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
   ]],
 
   [OrderStatus.OUT_FOR_DELIVERY, [
-    { to: OrderStatus.DELIVERED, sideEffects: [FULFILL_STOCK] },
+    // Module 9 (Model A): DELIVERED is now STOCK-NEUTRAL — qtyOnHand was
+    // decremented + the reservation FULFILLED at DISPATCH (DISPATCH_STOCK).
+    // FULFILL_STOCK removed from this edge; M10 tracking webhooks never
+    // touch stock.
+    { to: OrderStatus.DELIVERED, sideEffects: [] },
     { to: OrderStatus.DELIVERY_FAILED, sideEffects: [] },
     { to: OrderStatus.RTO_INITIATED, sideEffects: [] },
   ]],

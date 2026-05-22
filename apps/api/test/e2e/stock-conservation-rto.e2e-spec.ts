@@ -411,19 +411,24 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
       { timeoutMs: 15_000, description: 'AWB generated' },
     );
 
-    // Step 6: DISPATCHED (no side-effect per matrix — pre-commit-12).
+    // Step 6: DISPATCHED — THE BUG-1 FIX (Model A): the DISPATCH_STOCK
+    // side-effect decrements qtyOnHand (DISPATCH movement −2) AND
+    // fulfill()s the phase-2 reservation. This is the ONE
+    // normal-lifecycle qtyOnHand decrement.
     await ow.transitionStatus({
       orderId,
       to: OrderStatus.DISPATCHED,
       actor: { type: ActorType.STAFF, id: staffId },
     });
     const afterDispatch = await snapshot();
-    expect(afterDispatch).toMatchObject({
-      qtyOnHand: 10,
-      qtyReserved: 2,
+    expect(afterDispatch).toEqual({
+      qtyOnHand: 8, // decremented at dispatch
+      qtyReserved: 0, // phase-2 hold given back by fulfill()
+      activeResvCount: 0, // reservation FULFILLED
+      activeResvTotalQty: 0,
     });
 
-    // Step 7: DISPATCHED → RTO_INITIATED → RTO_RECEIVED.
+    // Step 7: DISPATCHED → RTO_INITIATED → RTO_RECEIVED — stock-neutral.
     await ow.transitionStatus({
       orderId,
       to: OrderStatus.RTO_INITIATED,
@@ -435,10 +440,11 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
       .send({ awbNumber: withAwb.awbNumber })
       .expect(200);
     const afterRtoReceived = await snapshot();
-    expect(afterRtoReceived).toMatchObject({
-      qtyOnHand: 10,
-      qtyReserved: 2, // phase-2 reservation STILL active
-      activeResvCount: 1,
+    expect(afterRtoReceived).toEqual({
+      qtyOnHand: 8, // unchanged — RTO receive touches no stock
+      qtyReserved: 0,
+      activeResvCount: 0, // reservation was FULFILLED at dispatch
+      activeResvTotalQty: 0,
     });
   });
 
@@ -510,27 +516,19 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
     });
   });
 
-  it('DEFERRED DEBT (latent, HIGH): no PICK/PACK_CONFIRM/DISPATCH movement issued on the order lifecycle — qtyOnHand decrement timing is M9/M10', async () => {
+  it('BUG-1 RESOLVED (Model A): the DISPATCH movement fires — qtyOnHand decremented exactly once at dispatch', async () => {
+    // FLIPPED from the M8 "latent bug-1" guard. Module 9 implemented the
+    // Model-A dispatch decrement: the PENDING_DISPATCH → DISPATCHED edge
+    // carries DISPATCH_STOCK, which issues a DISPATCH StockMovement
+    // (−qty) + fulfill()s the reservation. This test is now the
+    // break-on-regression guard for the bug-1 fix.
     await receiveStock(10);
     const { orderId } = await driveToRtoReceived(2);
-    const movements = await h.prisma.stockMovement.findMany({
-      where: { orderId },
+    const dispatchMovements = await h.prisma.stockMovement.findMany({
+      where: { orderId, type: StockMovementType.DISPATCH },
     });
-    const types = movements.map((m) => m.type);
-    // This test DOCUMENTS the LATENT pre-existing gap:
-    // StockReservationService.fulfill()'s JSDoc-promised "separate PICK
-    // movement for the physical qtyOnHand decrement" was never
-    // implemented anywhere. No happy-path flow currently drives the
-    // qtyOnHand decrement at pick/pack/dispatch/delivered. Resolution
-    // depends on the decrement-timing model (A: at-dispatch vs B: at-
-    // permanent-departure), an M9/M10 design decision with courier /
-    // tracking context. See phase-1a-debt commit-17 HIGH entry.
-    //
-    // If M9/M10 adopts Model A, RtoDispositionService.finalize()'s
-    // RESTOCK path MUST be revisited to re-add stock (RETURN_RESTOCK)
-    // rather than the current release-only.
-    expect(types).not.toContain(StockMovementType.PICK);
-    expect(types).not.toContain(StockMovementType.PACK_CONFIRM);
-    expect(types).not.toContain(StockMovementType.DISPATCH);
+    expect(dispatchMovements).toHaveLength(1);
+    expect(dispatchMovements[0]!.qtyChange).toBe(-2); // the ONE decrement
+    expect(dispatchMovements[0]!.shipmentId).not.toBeNull(); // shipment-grained
   });
 });
