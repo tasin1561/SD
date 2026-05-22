@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { CourierSharedModule } from '../courier-shared/courier-shared.module';
 import { DelhiveryHttpService } from './services/delhivery-http.service';
+import { DelhiveryAwbService } from './services/delhivery-awb.service';
 
 /**
  * Module 9 — courier-delhivery: the Delhivery adapter. Grows
@@ -17,7 +18,7 @@ import { DelhiveryHttpService } from './services/delhivery-http.service';
  */
 @Module({
   imports: [CourierSharedModule],
-  providers: [DelhiveryHttpService],
-  exports: [DelhiveryHttpService],
+  providers: [DelhiveryHttpService, DelhiveryAwbService],
+  exports: [DelhiveryHttpService, DelhiveryAwbService],
 })
 export class CourierDelhiveryModule {}
