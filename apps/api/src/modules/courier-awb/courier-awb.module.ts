@@ -1,25 +1,44 @@
 import { Module } from '@nestjs/common';
 import { ShipmentProvisionModule } from '../shipment-provision/shipment-provision.module';
 import { CourierDelhiveryModule } from '../courier-delhivery/courier-delhivery.module';
+import { OrderModule } from '../order/order.module';
 import { AwbSupersedeService } from './services/awb-supersede.service';
 import { AwbGenerationService } from './services/awb-generation.service';
+import { AwbGenerationJobService } from './services/awb-generation-job.service';
+import { AwbGenerationQueue } from './queue/awb-generation.queue';
+import { AwbGenerationWorker } from './queue/awb-generation.worker';
 
 /**
- * Module 9 — courier-awb: the AWB generation saga. Grows
- * commit-by-commit:
- *   - commit 7 (this): AwbSupersedeService — auto-supersede chain (CUR-7)
- *   - commit 8       : + AwbGenerationService (per-shipment generate +
- *                      label→Spaces, CUR-6/CUR-9)
- *   - commit 9       : + the per-manifest AWB BullMQ job (CUR-2)
- *   - commit 10      : wire manifest CLOSED → enqueue job
+ * Module 9 — courier-awb: the AWB generation saga (CP2).
+ *   - AwbSupersedeService — auto-supersede chain (CUR-7)
+ *   - AwbGenerationService — per-shipment generate + label→Spaces (CUR-6/9)
+ *   - AwbGenerationJobService — per-manifest orchestration, per-shipment
+ *     failure isolation (CUR-2); public — also the manual ops trigger
+ *   - AwbGenerationQueue / AwbGenerationWorker — the per-manifest BullMQ
+ *     job (data-driven retry from courier.awb_job_retry_*)
  *
- * Imports ShipmentProvisionModule for ShipmentNumberingService (the
- * replacement parcel needs a shipment number). PrismaService +
- * AuditLogService global.
+ * Imports ShipmentProvisionModule (ShipmentNumberingService for the
+ * supersede replacement), CourierDelhiveryModule (the mockable adapter),
+ * OrderModule (OrderWriteService — route a failed shipment's order to
+ * PENDING_MANUAL_PLACEMENT). RedisService is global.
+ *
+ * Exports AwbGenerationJobService + AwbGenerationQueue for commit 10
+ * (manifest CLOSED → enqueue).
  */
 @Module({
-  imports: [ShipmentProvisionModule, CourierDelhiveryModule],
-  providers: [AwbSupersedeService, AwbGenerationService],
-  exports: [AwbSupersedeService, AwbGenerationService],
+  imports: [ShipmentProvisionModule, CourierDelhiveryModule, OrderModule],
+  providers: [
+    AwbSupersedeService,
+    AwbGenerationService,
+    AwbGenerationJobService,
+    AwbGenerationQueue,
+    AwbGenerationWorker,
+  ],
+  exports: [
+    AwbSupersedeService,
+    AwbGenerationService,
+    AwbGenerationJobService,
+    AwbGenerationQueue,
+  ],
 })
 export class CourierAwbModule {}
