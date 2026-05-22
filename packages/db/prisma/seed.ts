@@ -243,6 +243,43 @@ const systemSettings: SystemSettingSeed[] = [
     description:
       'Per-attempt backoff delays for the WMS-3 pick allocation retry loop',
   },
+  // Module 9 — Courier Integration.
+  {
+    key: 'courier.delhivery_api_base_url',
+    category: 'courier',
+    valueType: SettingValueType.STRING,
+    valueString: '',
+    displayName: 'Delhivery API Base URL',
+    description:
+      'Delhivery REST API base URL. EMPTY = stub mode (DelhiveryClient returns deterministic mock responses; no network). Set to the sandbox/production URL once the real wire contract is validated against Delhivery credentials — TODO(delhivery-api)',
+  },
+  {
+    key: 'courier.delhivery_awb_batch_size',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 50,
+    displayName: 'Delhivery AWB Batch Size',
+    description:
+      'Max shipments processed per per-manifest AWB generation job iteration (CUR-2 — per-shipment failure isolation within the batch)',
+  },
+  {
+    key: 'courier.awb_job_retry_max',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 3,
+    displayName: 'AWB Job Retry Max',
+    description:
+      'Max BullMQ attempts for the per-manifest AWB generation job before the manifest is marked FAILED (CUR-2). Per-shipment idempotency (CUR-9) makes retries safe',
+  },
+  {
+    key: 'courier.awb_job_retry_backoff_ms',
+    category: 'courier',
+    valueType: SettingValueType.JSON,
+    valueJson: [1000, 5000, 15000],
+    displayName: 'AWB Job Retry Backoff (ms)',
+    description:
+      'Per-attempt backoff delays for the AWB generation BullMQ job',
+  },
 ];
 
 async function seedSystemSettings() {
