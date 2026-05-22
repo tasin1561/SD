@@ -166,6 +166,21 @@ describe('OrderStateMachineService', () => {
         ),
       ).toBe(true);
     });
+
+    it('PENDING_MANUAL_PLACEMENT → DISPATCHED is valid and carries DISPATCH_STOCK (M9 commit 14, CUR-8 — manual placement dispatches directly)', () => {
+      expect(
+        sm.isValidTransition(
+          OrderStatus.PENDING_MANUAL_PLACEMENT,
+          OrderStatus.DISPATCHED,
+        ),
+      ).toBe(true);
+      expect(
+        sm.requiredSideEffects(
+          OrderStatus.PENDING_MANUAL_PLACEMENT,
+          OrderStatus.DISPATCHED,
+        ),
+      ).toEqual([OrderSideEffect.DISPATCH_STOCK]);
+    });
   });
 
   describe('invalid transitions', () => {

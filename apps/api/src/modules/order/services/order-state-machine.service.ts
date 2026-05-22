@@ -133,6 +133,15 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
 
   [OrderStatus.PENDING_MANUAL_PLACEMENT, [
     { to: OrderStatus.PENDING_PICK, sideEffects: [] },
+    // Module 9 (commit 14, CUR-8): a MANUAL_PLACEMENT_ADMIN records a
+    // manually-arranged courier AWB on the (already picked + packed)
+    // shipment and the order dispatches directly. DISPATCH_STOCK fires
+    // the Model-A qtyOnHand decrement + reservation fulfill — identical
+    // to the PENDING_DISPATCH → DISPATCHED edge. ManualPlacementService
+    // guards that the order is fully phase-2-allocated before allowing
+    // this (a pick-shortfall PENDING_MANUAL_PLACEMENT order must re-pick
+    // via → PENDING_PICK first; conservation cannot hold otherwise).
+    { to: OrderStatus.DISPATCHED, sideEffects: [DISPATCH_STOCK] },
     { to: OrderStatus.CANCELLED, sideEffects: [RELEASE_STOCK] },
     { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
   ]],
