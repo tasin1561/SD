@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ShipmentProvisionModule } from '../shipment-provision/shipment-provision.module';
+import { CourierDelhiveryModule } from '../courier-delhivery/courier-delhivery.module';
 import { AwbSupersedeService } from './services/awb-supersede.service';
+import { AwbGenerationService } from './services/awb-generation.service';
 
 /**
  * Module 9 — courier-awb: the AWB generation saga. Grows
@@ -16,8 +18,8 @@ import { AwbSupersedeService } from './services/awb-supersede.service';
  * AuditLogService global.
  */
 @Module({
-  imports: [ShipmentProvisionModule],
-  providers: [AwbSupersedeService],
-  exports: [AwbSupersedeService],
+  imports: [ShipmentProvisionModule, CourierDelhiveryModule],
+  providers: [AwbSupersedeService, AwbGenerationService],
+  exports: [AwbSupersedeService, AwbGenerationService],
 })
 export class CourierAwbModule {}
