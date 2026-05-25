@@ -311,7 +311,11 @@ function makeProcessor(setup: Setup = {}) {
           webhookId: input.webhookId ?? null,
           actorType: input.actorType ?? null,
           actorId: input.actorId ?? null,
-          metadata: input.metadata ?? null,
+          // The Prisma JsonValue / InputJsonValue split: InputJsonValue
+          // accepts class instances at the type level but JsonValue is
+          // structural. The test payload is plain JSON-compatible, so
+          // a structural cast is the right move here.
+          metadata: (input.metadata ?? null) as TrackingEventRow['metadata'],
           isVisibleToCustomer: row.isVisibleToCustomer,
         };
       },

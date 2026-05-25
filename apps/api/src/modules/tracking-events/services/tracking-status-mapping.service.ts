@@ -112,10 +112,22 @@ export class TrackingStatusMappingService {
           trackingEventType: TrackingEventType.IN_TRANSIT_UPDATE,
         };
       case ShipmentStatus.OUT_FOR_DELIVERY:
+        // Matrix inbound to OUT_FOR_DELIVERY (M9 OrderStateMachineService):
+        //   IN_TRANSIT → OUT_FOR_DELIVERY
+        //   DELIVERY_FAILED → OUT_FOR_DELIVERY  (NDR retry cycle — COD)
+        // The DELIVERY_FAILED edge is the second leg of the NDR retry
+        // cycle: an order in DELIVERY_FAILED receives an OUT_FOR_DELIVERY
+        // scan when the courier attempts redelivery. Commit 9 of M10
+        // wired this — without DELIVERY_FAILED in this list, the
+        // processor's monotonic-forward guard would treat the retry as
+        // a stale-backward scan and skip the transition.
         return {
           kind: 'TRANSITION',
           targetOrderStatus: OrderStatus.OUT_FOR_DELIVERY,
-          allowedFromOrderStatuses: [OrderStatus.IN_TRANSIT],
+          allowedFromOrderStatuses: [
+            OrderStatus.IN_TRANSIT,
+            OrderStatus.DELIVERY_FAILED,
+          ],
           trackingEventType: TrackingEventType.OUT_FOR_DELIVERY,
         };
       case ShipmentStatus.DELIVERED:
@@ -132,20 +144,26 @@ export class TrackingStatusMappingService {
 
       // ── NDR — delivery attempted, failed ─────────────────────────
       case ShipmentStatus.DELIVERY_ATTEMPTED:
-        // Re-enterable: DELIVERY_FAILED → OUT_FOR_DELIVERY → … →
-        // DELIVERY_FAILED is the common COD retry cycle. Each NDR
-        // records its own delivery_attempts row (processor stamps
-        // attemptNumber from a count); duplicate DELIVERY_FAILED
-        // scans on an already-DELIVERY_FAILED order land as
-        // "no-op transition, attempt row written" (TRK-2 + the
-        // app-level dedup on delivery_attempts).
+        // Matrix inbound to DELIVERY_FAILED (M9 OrderStateMachineService):
+        //   IN_TRANSIT → DELIVERY_FAILED
+        //   OUT_FOR_DELIVERY → DELIVERY_FAILED
+        // The retry cycle DELIVERY_FAILED → OUT_FOR_DELIVERY → … →
+        // DELIVERY_FAILED (common COD path) is supported by the matrix
+        // edge DELIVERY_FAILED → OUT_FOR_DELIVERY (handled in the
+        // OUT_FOR_DELIVERY case above) — NOT by a DELIVERY_FAILED
+        // self-loop (the matrix has none). The processor's
+        // current===target ALREADY_AT_TARGET guard short-circuits a
+        // repeat NDR scan on an already-DELIVERY_FAILED order: the
+        // delivery_attempts row is STILL written (the NDR is a real
+        // event) but the transition is a no-op. Thus this list mirrors
+        // the matrix's actual inbound edges EXACTLY — no defensive
+        // self-edge.
         return {
           kind: 'DELIVERY_ATTEMPT',
           targetOrderStatus: OrderStatus.DELIVERY_FAILED,
           allowedFromOrderStatuses: [
             OrderStatus.IN_TRANSIT,
             OrderStatus.OUT_FOR_DELIVERY,
-            OrderStatus.DELIVERY_FAILED, // self-edge for repeat NDRs
           ],
           trackingEventType: TrackingEventType.DELIVERY_ATTEMPTED,
         };

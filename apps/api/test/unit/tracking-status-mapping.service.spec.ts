@@ -1,5 +1,6 @@
 import { OrderStatus, ShipmentStatus, TrackingEventType } from '@skydrop/db';
 import { TrackingStatusMappingService } from '../../src/modules/tracking-events/services/tracking-status-mapping.service';
+import { OrderStateMachineService } from '../../src/modules/order/services/order-state-machine.service';
 
 describe('TrackingStatusMappingService.mapScan (TRK-5)', () => {
   const svc = new TrackingStatusMappingService();
@@ -14,11 +15,17 @@ describe('TrackingStatusMappingService.mapScan (TRK-5)', () => {
     });
   });
 
-  it('OUT_FOR_DELIVERY scan → TRANSITION from IN_TRANSIT', () => {
+  it('OUT_FOR_DELIVERY scan → TRANSITION from IN_TRANSIT OR DELIVERY_FAILED (NDR retry cycle — M10 commit 9 / F6)', () => {
     expect(svc.mapScan(ShipmentStatus.OUT_FOR_DELIVERY)).toMatchObject({
       kind: 'TRANSITION',
       targetOrderStatus: OrderStatus.OUT_FOR_DELIVERY,
-      allowedFromOrderStatuses: [OrderStatus.IN_TRANSIT],
+      // DELIVERY_FAILED is the second leg of the COD retry cycle —
+      // omitting it would make the processor skip the legitimate
+      // redelivery transition as a "stale-backward" scan.
+      allowedFromOrderStatuses: [
+        OrderStatus.IN_TRANSIT,
+        OrderStatus.DELIVERY_FAILED,
+      ],
     });
   });
 
@@ -47,14 +54,13 @@ describe('TrackingStatusMappingService.mapScan (TRK-5)', () => {
   });
 
   // ── DELIVERY_ATTEMPT (NDR) ───────────────────────────────────────
-  it('DELIVERY_ATTEMPTED scan → DELIVERY_ATTEMPT decision, target DELIVERY_FAILED, self-edge allowed for repeat NDRs', () => {
+  it('DELIVERY_ATTEMPTED scan → DELIVERY_ATTEMPT, target DELIVERY_FAILED, allowedFrom mirrors matrix inbound exactly (M10 commit 9 — no defensive self-edge; repeats handled by the processor current===target guard)', () => {
     expect(svc.mapScan(ShipmentStatus.DELIVERY_ATTEMPTED)).toEqual({
       kind: 'DELIVERY_ATTEMPT',
       targetOrderStatus: OrderStatus.DELIVERY_FAILED,
       allowedFromOrderStatuses: [
         OrderStatus.IN_TRANSIT,
         OrderStatus.OUT_FOR_DELIVERY,
-        OrderStatus.DELIVERY_FAILED,
       ],
       trackingEventType: TrackingEventType.DELIVERY_ATTEMPTED,
     });
@@ -145,5 +151,90 @@ describe('TrackingStatusMappingService.mapScan (TRK-5)', () => {
       expect(['TRANSITION', 'DELIVERY_ATTEMPT', 'INFORMATIONAL', 'REJECT'])
         .toContain(decision.kind);
     }
+  });
+});
+
+// ── Matrix consistency (M10 commit 9 / F6 reconciliation) ──────────────────
+//
+// The mapping service's `allowedFromOrderStatuses` for each TRANSITION /
+// DELIVERY_ATTEMPT decision MUST mirror the M9 OrderStateMachineService
+// matrix's actual inbound edges to `targetOrderStatus`. Drift in either
+// direction is a bug:
+//
+//   - mapping lists a `from` that the matrix doesn't allow → the processor
+//     would call transitionStatus and get an INVALID_TRANSITION 409 the
+//     guard didn't catch (works, but noisy + indicates a docs gap);
+//   - matrix has an inbound edge the mapping omits → the processor's
+//     monotonic-forward guard skips a legitimate forward transition (the
+//     real bug — silent regression).
+//
+// This regression test pins the bidirectional equivalence.
+describe('TrackingStatusMappingService ↔ OrderStateMachineService matrix consistency (F6)', () => {
+  const svc = new TrackingStatusMappingService();
+  const matrix = new OrderStateMachineService();
+
+  const orderStatuses = Object.values(OrderStatus);
+  const inboundEdges = (target: OrderStatus): OrderStatus[] =>
+    orderStatuses.filter((from) => matrix.isValidTransition(from, target));
+
+  // Scan-driven TRANSITION + DELIVERY_ATTEMPT decisions whose
+  // allowedFromOrderStatuses we expect to match the matrix exactly.
+  // (INFORMATIONAL / REJECT don't drive transitions; excluded by design.)
+  const expectations: ReadonlyArray<{
+    scan: ShipmentStatus;
+    target: OrderStatus;
+  }> = [
+    { scan: ShipmentStatus.IN_TRANSIT, target: OrderStatus.IN_TRANSIT },
+    {
+      scan: ShipmentStatus.OUT_FOR_DELIVERY,
+      target: OrderStatus.OUT_FOR_DELIVERY,
+    },
+    { scan: ShipmentStatus.DELIVERED, target: OrderStatus.DELIVERED },
+    {
+      scan: ShipmentStatus.DELIVERY_ATTEMPTED,
+      target: OrderStatus.DELIVERY_FAILED,
+    },
+    { scan: ShipmentStatus.RTO_INITIATED, target: OrderStatus.RTO_INITIATED },
+    { scan: ShipmentStatus.RTO_IN_TRANSIT, target: OrderStatus.RTO_IN_TRANSIT },
+    { scan: ShipmentStatus.LOST, target: OrderStatus.LOST_IN_TRANSIT },
+  ];
+
+  it.each(expectations)(
+    '$scan: mapping.allowedFromOrderStatuses == matrix inbound to $target',
+    ({ scan, target }) => {
+      const decision = svc.mapScan(scan);
+      expect(decision.kind === 'TRANSITION' || decision.kind === 'DELIVERY_ATTEMPT').toBe(true);
+      if (decision.kind !== 'TRANSITION' && decision.kind !== 'DELIVERY_ATTEMPT') return;
+      expect(decision.targetOrderStatus).toBe(target);
+      // Both sides as sorted lists so order differences don't false-fail.
+      const mappingFroms = [...decision.allowedFromOrderStatuses].sort();
+      const matrixFroms = inboundEdges(target).sort();
+      expect(mappingFroms).toEqual(matrixFroms);
+    },
+  );
+
+  // TRK-7 spot-check: DELIVERED edge carries NO side-effects (stock-neutral,
+  // Model A — CUR-3 / M9 commit 12). Mapping must NEVER add a stock-bearing
+  // facet — guarded by the type itself (no sideEffects field on
+  // ScanMappingDecision), but pin the matrix invariant here so an accidental
+  // matrix change is caught at the M10 layer too.
+  it('TRK-7: OUT_FOR_DELIVERY → DELIVERED matrix edge has empty side-effects (stock-neutral)', () => {
+    const effects = matrix.requiredSideEffects(
+      OrderStatus.OUT_FOR_DELIVERY,
+      OrderStatus.DELIVERED,
+    );
+    expect(effects).toEqual([]);
+  });
+
+  // The NDR retry cycle's second leg — without this matrix edge the
+  // mapping for OUT_FOR_DELIVERY (DELIVERY_FAILED in allowedFrom) would
+  // lie about what's actually reachable.
+  it('NDR retry cycle: DELIVERY_FAILED → OUT_FOR_DELIVERY is a matrix-valid edge', () => {
+    expect(
+      matrix.isValidTransition(
+        OrderStatus.DELIVERY_FAILED,
+        OrderStatus.OUT_FOR_DELIVERY,
+      ),
+    ).toBe(true);
   });
 });
