@@ -902,17 +902,16 @@ Per-agent config (one row per agent).
 > edge (controlled M6 extension, no side-effects): `PENDING_PICK →
 > PENDING_MANUAL_PLACEMENT` (WMS-4 pick shortfall; M5 conservation
 > keeps the residual phase-1 reservation).
-> **LATENT BUG (HIGH, phase-1a-debt):** `stock_levels.qtyOnHand` is
-> never decremented during the normal lifecycle (no `PICK`/`PACK_CONFIRM`/
-> `DISPATCH` movement is issued anywhere). The
-> `StockReservationService.fulfill()` at DELIVERED only clears
-> `qtyReserved`; the JSDoc-promised "separate PICK movement for the
-> physical qtyOnHand decrement" is unimplemented. Latent because no
-> happy-path flow drives orders to DELIVERED until M9 (courier) /
-> M10 (tracking). Resolution requires choosing the decrement-timing
-> model (A: at-dispatch / B: at-permanent-departure) — see phase-1a-debt
-> Module 8 entry. WMS-8 RTO finalize() is currently release-based
-> (correct under Model B); under Model A it MUST be revisited.
+> **HIGH-priority bug-1 — qtyOnHand normal-lifecycle decrement
+> RESOLVED (M9 commit 12, Model A).** The `PENDING_DISPATCH /
+> PENDING_MANUAL_PLACEMENT → DISPATCHED` matrix edges carry
+> `DISPATCH_STOCK` — `StockMutationService` issues a `DISPATCH`
+> movement (`−qtyReserved`, the ONE normal-lifecycle physical
+> decrement) AND `StockReservationService.fulfill()` consumes the
+> reservation. DELIVERED is stock-neutral. RTO finalize is Model A
+> (RESTOCK → `RETURN_RESTOCK +qty`; WRITE_OFF → no movement; the
+> dispatch decrement stands). See phase-1a-debt Module 8 entry for
+> the full resolution trace.
 
 ## shipments
 The physical parcel.
@@ -1009,6 +1008,30 @@ between DRAFT manifests pre-close (WMS-7) via the nullable
 
 **RtoItemCondition enum:** `GOOD`, `DAMAGED`, `MISSING`
 **RtoDisposition enum:** `RESTOCK`, `WRITE_OFF` *(WMS-8 finalize, Model A — set by M9 commit 12: RESTOCK issues a `RETURN_RESTOCK +qty` movement re-adding the dispatched-then-returned units; WRITE_OFF issues NO movement — the Model-A `DISPATCH` decrement at dispatch already removed them. Reservations are FULFILLED at dispatch (CUR-3), so finalize does not release. Saga ordering: movements first, order → `RTO_RESTOCKED` last — visible-vs-silent, two-gate idempotent.)*
+
+> **Module 10 (Public Tracking) is API-only on this layer** — it adds
+> NO new tables. `tracking_events`, `courier_webhooks`, and
+> `delivery_attempts` (all schema-present since the initial Layer 7
+> migration) are now ACTIVELY WRITTEN by the M10 webhook ingestion +
+> processor pipeline. M10's only schema delta is `tracking_events
+> .event_at` (Timestamptz, NOT NULL) + the `(shipment_id, event_at
+> DESC)` index — TRK-3, the SCAN timestamp the customer-visible
+> timeline + the monotonic-forward transition guard order by, distinct
+> from `created_at` (the hypertable's partition key + receive time).
+> CLAUDE.md TRK-1 through TRK-9 codify M10's non-negotiable
+> invariants. Notable M10-derived rules touching this layer:
+> **TRK-2 webhook idempotency** — ingest-time dedup keys on
+> `(courier_code, signature)` (byte-identical signed body) +
+> processor-time master gate on `courier_webhooks.status !=
+> RECEIVED`; **TRK-3 scan-time ordering** — every read orders by
+> `event_at` (never `created_at`); **TRK-6 RTO boundary** — webhook
+> `tracking_events` may carry status up to `RTO_IN_TRANSIT` only;
+> `RTO_RECEIVED` is owned by the warehouse `RtoReceiptService`;
+> **TRK-7 DELIVERED stock-neutrality** — no `stock_movements` row
+> fires on DELIVERED (the dispatch decrement at `DISPATCHED` is the
+> one normal-lifecycle physical decrement, CUR-3 / Model A);
+> **TRK-8 public projection** — no internal IDs / PII surface in
+> the public read.
 
 ## tracking_events
 **TimescaleDB HYPERTABLE. Append-only.**

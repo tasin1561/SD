@@ -692,10 +692,13 @@ pick it up.
 - **Manual-courier tracking is hand-entered.** A manual-courier shipment
   (`isManualCourier`, CUR-8) has no courier webhook — there is no
   Delhivery-style event feed for a non-integrated carrier in Phase 1A.
-  Its post-dispatch `tracking_events` are entered by ops manually. M10's
-  public tracking page reads `tracking_events` uniformly; the manual vs
-  webhook-driven distinction is upstream. **Pick up:** M10 (tracking)
-  surfaces the read side; manual event entry UX is M12 (admin) or later.
+  Its post-dispatch `tracking_events` are entered by ops manually. M10
+  surfaced the read side (`PublicTrackingReadService` reads
+  `tracking_events` uniformly) AND the WRITE side
+  (`POST /admin/tracking/shipments/:shipmentId/manual-scan` —
+  `ManualTrackingService`, TRK-9). The admin UI for the manual-scan
+  entry remains deferred. **Pick up:** API-side complete in M10; admin
+  UI in M12.
 
 - **Post-dispatch ADMIN cancel does NOT auto-restock.** A god-mode /
   admin `→ CANCELLED_BY_ADMIN` from a post-DISPATCHED state carries
@@ -710,6 +713,79 @@ pick it up.
   cancel path to auto-restock. **Pick up:** never (documented design);
   an admin restock-on-recovery UX could wrap the `ADJUSTMENT_INCREASE`
   later.
+
+## Public Tracking (Module 10)
+
+### M10 design deferrals
+
+- **Delhivery wire contract — TWO NEW `TODO(delhivery-api)` seams
+  joining M9's existing 6 (8 total).** M10 was built against
+  `DelhiveryClient.normalizeScan` in stub mode (the deterministic
+  `DLV-IN-TRANSIT` / `DLV-OFD` / `DLV-DELIVERED` / `DLV-NDR` /
+  `DLV-RTO-INIT` / `DLV-RTO-IT` / `DLV-RTO-DEL` / `DLV-LOST` /
+  `DLV-DAMAGED` table); the real Delhivery scan-code taxonomy is NOT
+  reliably known. Similarly, the webhook HMAC scheme (algorithm:
+  SHA-256 vs SHA-1; encoding: hex vs base64; the header NAME the
+  courier uses; replay-protection timestamp/nonce window; body
+  canonicalization) is NOT validated — Phase 1A reads
+  `x-skydrop-signature` as hex-encoded HMAC-SHA256 over the raw bytes,
+  matching the WebhookAuthService stub. Both NEW seams are flagged
+  `TODO(delhivery-api)` at the implementation site
+  (`DelhiveryTrackingService.normalizeScan` JSDoc; `WebhookAuthService`
+  JSDoc). **Pick up:** the same sandbox-validation task that closes the
+  M9 wire seams — flip together when Delhivery sandbox credentials are
+  wired.
+
+- **Customer-facing tracking page (`apps/track`) deferred to the
+  frontend cycle.** M10 ships the API layer end-to-end —
+  `PublicTrackingReadService.findByAwb` returns the customer-safe
+  projection; the controller is open + rate-limited. The SSR Next.js
+  page (EN + HI per the original M10 plan) that reads
+  `GET /public/tracking/:awbNumber` and renders the timeline is a
+  frontend-cycle deliverable; `apps/track` is a placeholder. The API
+  contract is i18n-neutral (enum-style display statuses, no localized
+  copy in the response) — the frontend owns the translation tables.
+  **Pick up:** the frontend cycle (alongside the seller / admin /
+  marketing apps).
+
+- **NDR → call-center re-queue loop deferred to Phase 2.** A
+  DELIVERY_FAILED order currently sits in its terminal-ish state with
+  a recorded `delivery_attempts` row until the next courier scan
+  (redelivery → OUT_FOR_DELIVERY, or RTO_INITIATED). In Phase 2 the
+  workflow should auto-enqueue the order back into the call-center
+  queue (CC-6 shape) so an agent can confirm the customer's
+  availability before redelivery. The plumbing is mostly there — CC-6
+  is the enqueue mechanism, the matrix supports DELIVERY_FAILED →
+  OUT_FOR_DELIVERY for the retry — but the NDR → call-center bridge
+  service does NOT exist yet. **Pick up:** Phase 2 when the call-center
+  capacity model is sized for NDR retries.
+
+- **Public tracking rate-limit value is hard-coded in the controller.**
+  The seed `tracking.public_lookup_rate_limit_per_min = 30` documents
+  the intent + is the future hook, but `@Throttle({ default: { limit:
+  30, ttl: minutes(1) } })` on `PublicTrackingController` takes a
+  static literal — the seed value is duplicated in code. Tuning the
+  limit requires a redeploy. A dynamic-limit guard that reads the seed
+  at startup (or on each request, cached) is straightforward but
+  unnecessary at Phase-1A volume. **Pick up:** when ops asks to tune
+  without a deploy.
+
+- **Manual-tracking endpoint has no per-request idempotency key.** A
+  double-submit by an operator produces two `tracking_events` rows
+  (and, for DELIVERY_ATTEMPTED, two `delivery_attempts` rows with
+  sequential attemptNumber). The actorId + eventAt on the rows makes
+  corrections discoverable via the audit trail; an idempotency-key
+  header would prevent the duplicate up front. Deferred because the
+  ops workflow is supervised + the audit path exists. **Pick up:** if
+  duplicate-submit incidents become an ops complaint.
+
+- **Public tracking page i18n is API-neutral.** The API returns
+  enum-style display statuses (`PublicShipmentDisplayStatus`); the EN
+  + HI localized copy lives in the deferred frontend
+  (`packages/i18n`). The original M10 plan called for EN + HI; this
+  remains as a frontend deliverable. Recorded so the frontend cycle
+  knows the translation table to author. **Pick up:** with the
+  customer-facing frontend page above.
 
 ## Pricing & Multi-Currency (Modules 15–17)
 
