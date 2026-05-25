@@ -28,6 +28,12 @@ export async function bootTestApp(): Promise<AppHarness> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
     logger: false,
+    // Module 10 (TRK-1) — mirrors main.ts so the public tracking
+    // webhook controller can verify the HMAC over the EXACT bytes the
+    // courier signed (re-serializing the parsed JSON would change
+    // whitespace and break the signature). E2E specs that send a
+    // signed webhook depend on this.
+    rawBody: true,
   });
 
   app.useLogger(app.get(Logger));
@@ -220,6 +226,21 @@ export async function resetCallCenterState(
  * packedByStaffId and manifests.closedByStaffId FK staff_users with
  * SET NULL). CASCADE handles the awb_labels/order_shipments/
  * shipment_items child ordering.
+ *
+ * Module 10 (F9): courier_webhooks + tracking_events + delivery_attempts
+ * are TRUNCATED EXPLICITLY in the same statement, BEFORE shipments.
+ *   - courier_webhooks.shipment_id is a NULLABLE FK with default
+ *     onDelete=SetNull — a `TRUNCATE shipments CASCADE` would leave
+ *     courier_webhooks rows behind with NULL shipment_id, leaking
+ *     state across suites. Explicit truncation here is the F9 fix.
+ *   - tracking_events (CASCADE on shipment delete) is a TimescaleDB
+ *     hypertable; explicit truncation is consistent with how
+ *     `stock_movements` (also a hypertable) is handled in
+ *     resetInventoryState — works fine and is auditable.
+ *   - delivery_attempts (CASCADE on shipment delete) is explicit for
+ *     the same auditability reason.
+ * The single TRUNCATE … CASCADE statement handles cross-table FK
+ * cascading; the order of the table list is documentary.
  */
 export async function resetWarehouseState(
   prisma: PrismaClient,
@@ -227,6 +248,11 @@ export async function resetWarehouseState(
   await prisma.$executeRawUnsafe(
     'TRUNCATE TABLE ' +
       [
+        // Module 10 (F9) — must precede shipments because courier_webhooks
+        // is SET NULL (not CASCADE) on shipment delete.
+        'courier_webhooks',
+        'tracking_events',
+        'delivery_attempts',
         'shipment_items',
         'awb_labels',
         'order_shipments',
