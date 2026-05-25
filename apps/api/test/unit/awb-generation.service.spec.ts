@@ -18,6 +18,7 @@ function shipmentRow(over: AnyArgs = {}): AnyArgs {
     id: SHIP,
     shipmentNumber: 'SH-2026-05-000042',
     awbNumber: null,
+    courierShipmentId: null,
     status: ShipmentStatus.CREATED,
     destRecipientName: 'Asha',
     destRecipientPhoneE164: '+919876543210',
@@ -31,6 +32,9 @@ function shipmentRow(over: AnyArgs = {}): AnyArgs {
     declaredValueInr: { toString: () => '999.00' },
     codAmountInr: { toString: () => '999.00' },
     items: [{ productName: 'Widget', quantity: 2 }],
+    // M10 commit 1: CUR-9 gate considers "current awb_label" alongside
+    // shipment.awbNumber. Default: no current label.
+    awbLabels: [],
     ...over,
   };
 }
@@ -40,6 +44,10 @@ function makeService(
     shipment?: AnyArgs | null;
     awbResult?: DelhiveryAwbResult;
     priorLabelVersion?: number;
+    /** Configure spaces.putObject to throw on first call. */
+    putObjectThrows?: Error;
+    /** Configure delhiveryLabel.fetchLabel to throw on first call. */
+    fetchLabelThrows?: Error;
   } = {},
 ) {
   const shipmentFindUnique = jest.fn(async () =>
@@ -69,7 +77,9 @@ function makeService(
     fn(txClient);
 
   const putObject = jest.fn<Promise<void>, [string, Buffer, string]>(
-    async () => {},
+    async () => {
+      if (opts.putObjectThrows) throw opts.putObjectThrows;
+    },
   );
   const spaces = { putObject };
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown]>(
@@ -86,10 +96,13 @@ function makeService(
       },
   );
   const delhiveryAwb = { generateAwb };
-  const fetchLabel = jest.fn(async () => ({
-    bytes: Buffer.from('%PDF-1.4 stub'),
-    mimeType: 'application/pdf',
-  }));
+  const fetchLabel = jest.fn(async () => {
+    if (opts.fetchLabelThrows) throw opts.fetchLabelThrows;
+    return {
+      bytes: Buffer.from('%PDF-1.4 stub'),
+      mimeType: 'application/pdf',
+    };
+  });
   const delhiveryLabel = { fetchLabel };
 
   const svc = new AwbGenerationService(
@@ -112,10 +125,27 @@ function makeService(
   };
 }
 
+/** Filter the audit-log mock calls by action name. */
+function auditCalls(
+  log: jest.Mock<Promise<string | null>, [Record<string, unknown>, unknown]>,
+  action: string,
+): Array<[Record<string, unknown>, unknown]> {
+  return log.mock.calls.filter(
+    ([entry]) => (entry as { action?: string }).action === action,
+  );
+}
+
 describe('AwbGenerationService.generateForShipment', () => {
-  it('GENERATED: generates AWB, persists label to Spaces, stamps shipment + awb_labels', async () => {
-    const { svc, putObject, txShipmentUpdate, txAwbLabelCreate, auditLog } =
-      makeService();
+  it('GENERATED: generates AWB, persists label to Spaces, stamps shipment (tx1) + awb_labels (tx2), writes both audits', async () => {
+    const {
+      svc,
+      putObject,
+      txShipmentUpdate,
+      txAwbLabelCreate,
+      auditLog,
+      generateAwb,
+      fetchLabel,
+    } = makeService();
     const r = await svc.generateForShipment(SHIP, { type: ActorType.SYSTEM });
     expect(r).toEqual({
       status: 'GENERATED',
@@ -125,34 +155,44 @@ describe('AwbGenerationService.generateForShipment', () => {
       labelSpacesKey: 'awb-labels/ship-1/v1-DLVSTUB202605000042.pdf',
       labelVersion: 1,
     });
-    expect(putObject).toHaveBeenCalledWith(
-      'awb-labels/ship-1/v1-DLVSTUB202605000042.pdf',
-      expect.any(Buffer),
-      'application/pdf',
-    );
+    // tx1 stamped the AWB (the source-of-truth-first write).
     expect(txShipmentUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           awbNumber: 'DLVSTUB202605000042',
+          courierShipmentId: 'DLVSHP202605000042',
           status: ShipmentStatus.AWB_GENERATED,
         }),
       }),
+    );
+    // Phase D ran AFTER tx1: fetchLabel + putObject + tx2 awb_labels create.
+    expect(fetchLabel).toHaveBeenCalledWith('DLVSTUB202605000042');
+    expect(putObject).toHaveBeenCalledWith(
+      'awb-labels/ship-1/v1-DLVSTUB202605000042.pdf',
+      expect.any(Buffer),
+      'application/pdf',
     );
     expect(txAwbLabelCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ version: 1, isCurrent: true }),
       }),
     );
-    expect(auditLog).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'awb.generated' }),
-      expect.anything(),
-    );
+    // Both audits present (tx1: awb.generated; tx2: awb.label_persisted).
+    expect(auditCalls(auditLog, 'awb.generated')).toHaveLength(1);
+    expect(auditCalls(auditLog, 'awb.label_persisted')).toHaveLength(1);
+    // Delhivery generateAwb was called exactly once (no second real call).
+    expect(generateAwb).toHaveBeenCalledTimes(1);
   });
 
-  it('CUR-9: a shipment that already has an AWB is skipped (ALREADY_HAS_AWB)', async () => {
-    const { svc, generateAwb, putObject, txShipmentUpdate } = makeService({
-      shipment: shipmentRow({ awbNumber: 'EXISTING-AWB' }),
-    });
+  it('CUR-9: a shipment with awbNumber AND a current awb_label is ALREADY_HAS_AWB (no Delhivery call, no upload, no DB write)', async () => {
+    const { svc, generateAwb, putObject, txShipmentUpdate, fetchLabel } =
+      makeService({
+        shipment: shipmentRow({
+          awbNumber: 'EXISTING-AWB',
+          courierShipmentId: 'EXISTING-CS',
+          awbLabels: [{ id: 'label-1' }],
+        }),
+      });
     const r = await svc.generateForShipment(SHIP);
     expect(r).toEqual({
       status: 'ALREADY_HAS_AWB',
@@ -160,12 +200,108 @@ describe('AwbGenerationService.generateForShipment', () => {
       awbNumber: 'EXISTING-AWB',
     });
     expect(generateAwb).not.toHaveBeenCalled();
+    expect(fetchLabel).not.toHaveBeenCalled();
     expect(putObject).not.toHaveBeenCalled();
     expect(txShipmentUpdate).not.toHaveBeenCalled();
   });
 
+  it('M10 commit 1 — GENERATED_AWB_LABEL_PENDING: tx1 commits then Spaces.putObject throws → AWB durably persisted, NO awb_labels row, only awb.generated audit', async () => {
+    const {
+      svc,
+      generateAwb,
+      txShipmentUpdate,
+      txAwbLabelCreate,
+      auditLog,
+      putObject,
+    } = makeService({
+      putObjectThrows: new Error('SpacesUnavailable'),
+    });
+    const r = await svc.generateForShipment(SHIP);
+    // The half-finished run is SELF-ANNOUNCING — the outcome carries
+    // the AWB so the caller (job service) can throw to BullMQ.
+    expect(r).toEqual({
+      status: 'GENERATED_AWB_LABEL_PENDING',
+      shipmentId: SHIP,
+      awbNumber: 'DLVSTUB202605000042',
+      courierShipmentId: 'DLVSHP202605000042',
+      errorMessage: 'SpacesUnavailable',
+    });
+    // tx1 ran (AWB IS persisted — the CUR-9 gate will now fire on retry).
+    expect(txShipmentUpdate).toHaveBeenCalledTimes(1);
+    expect(auditCalls(auditLog, 'awb.generated')).toHaveLength(1);
+    // tx2 did NOT run (label upload failed before it).
+    expect(txAwbLabelCreate).not.toHaveBeenCalled();
+    expect(auditCalls(auditLog, 'awb.label_persisted')).toHaveLength(0);
+    // Spaces was attempted.
+    expect(putObject).toHaveBeenCalledTimes(1);
+    // Delhivery was called exactly once (the whole point of the reorder).
+    expect(generateAwb).toHaveBeenCalledTimes(1);
+  });
+
+  it('M10 commit 1 — recovery path: a re-call on a shipment with awbNumber set + NO current label SKIPS Delhivery and runs label-only (no double AWB / no double charge)', async () => {
+    const {
+      svc,
+      generateAwb,
+      fetchLabel,
+      putObject,
+      txShipmentUpdate,
+      txAwbLabelCreate,
+      auditLog,
+    } = makeService({
+      shipment: shipmentRow({
+        awbNumber: 'DLVSTUB202605000042',
+        courierShipmentId: 'DLVSHP202605000042',
+        status: ShipmentStatus.AWB_GENERATED,
+        awbLabels: [], // tx1 ran on the prior attempt; tx2 didn't.
+      }),
+    });
+    const r = await svc.generateForShipment(SHIP);
+    // Recovery completes the run cleanly: no second generateAwb,
+    // label now uploaded + persisted.
+    expect(r).toEqual({
+      status: 'GENERATED',
+      shipmentId: SHIP,
+      awbNumber: 'DLVSTUB202605000042',
+      courierShipmentId: 'DLVSHP202605000042',
+      labelSpacesKey: 'awb-labels/ship-1/v1-DLVSTUB202605000042.pdf',
+      labelVersion: 1,
+    });
+    // CUR-9 honored — NO second Delhivery call.
+    expect(generateAwb).not.toHaveBeenCalled();
+    // tx1 NOT re-run (AWB was already persisted).
+    expect(txShipmentUpdate).not.toHaveBeenCalled();
+    expect(auditCalls(auditLog, 'awb.generated')).toHaveLength(0);
+    // Phase D ran to completion.
+    expect(fetchLabel).toHaveBeenCalledWith('DLVSTUB202605000042');
+    expect(putObject).toHaveBeenCalledTimes(1);
+    expect(txAwbLabelCreate).toHaveBeenCalledTimes(1);
+    expect(auditCalls(auditLog, 'awb.label_persisted')).toHaveLength(1);
+  });
+
+  it('M10 commit 1 — recovery path also catches a fetchLabel failure (same GENERATED_AWB_LABEL_PENDING outcome, AWB stays durable)', async () => {
+    const { svc, txShipmentUpdate, auditLog, putObject } = makeService({
+      shipment: shipmentRow({
+        awbNumber: 'DLVSTUB202605000042',
+        courierShipmentId: 'DLVSHP202605000042',
+        status: ShipmentStatus.AWB_GENERATED,
+        awbLabels: [],
+      }),
+      fetchLabelThrows: new Error('LabelFetchTimeout'),
+    });
+    const r = await svc.generateForShipment(SHIP);
+    expect(r).toMatchObject({
+      status: 'GENERATED_AWB_LABEL_PENDING',
+      shipmentId: SHIP,
+      awbNumber: 'DLVSTUB202605000042',
+      errorMessage: 'LabelFetchTimeout',
+    });
+    expect(putObject).not.toHaveBeenCalled();
+    expect(txShipmentUpdate).not.toHaveBeenCalled();
+    expect(auditCalls(auditLog, 'awb.label_persisted')).toHaveLength(0);
+  });
+
   it('FAILED non-serviceable: returns FAILED serviceable:false, no DB write, no label upload', async () => {
-    const { svc, putObject, txShipmentUpdate } = makeService({
+    const { svc, putObject, txShipmentUpdate, auditLog } = makeService({
       awbResult: {
         ok: false,
         serviceable: false,
@@ -181,6 +317,7 @@ describe('AwbGenerationService.generateForShipment', () => {
     });
     expect(putObject).not.toHaveBeenCalled();
     expect(txShipmentUpdate).not.toHaveBeenCalled();
+    expect(auditCalls(auditLog, 'awb.generated')).toHaveLength(0);
   });
 
   it('FAILED transient: returns FAILED serviceable:true', async () => {
@@ -220,9 +357,12 @@ describe('AwbGenerationService.generateForShipment', () => {
     );
   });
 
-  it('409 when the shipment is not CREATED', async () => {
+  it('409 when the shipment is not CREATED (and has no awbNumber so the recovery path does not apply)', async () => {
     const { svc } = makeService({
-      shipment: shipmentRow({ status: ShipmentStatus.HANDED_TO_COURIER }),
+      shipment: shipmentRow({
+        awbNumber: null,
+        status: ShipmentStatus.HANDED_TO_COURIER,
+      }),
     });
     await expect(svc.generateForShipment(SHIP)).rejects.toBeInstanceOf(
       ConflictException,

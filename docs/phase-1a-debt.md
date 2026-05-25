@@ -602,35 +602,46 @@ pick it up.
 
 ## Courier Integration (Module 9)
 
-### HIGH-priority real-mode bug — AWB label-upload ordering
+### HIGH-priority real-mode bug — AWB label-upload ordering — ✅ RESOLVED (M10 commit 1)
 
-- **BUG (real-mode only, HIGH): the label upload precedes the `awbNumber`
-  persist in `AwbGenerationService.generateForShipment`.** Current order:
-  (1) call Delhivery `generateAwb`, (2) fetch the label, (3) upload the
-  label bytes to Spaces, (4) ONE tx — stamp the shipment (`awbNumber` /
-  `courierShipmentId` / status `AWB_GENERATED`) + insert the `awb_labels`
-  row. If step 3 (Spaces upload) fails AFTER Delhivery already issued a
-  real AWB, that AWB is **generated-but-unpersisted**: the shipment row
-  still has `awbNumber === null`, so the CUR-9 idempotency gate
-  (`shipment.awbNumber !== null`) MISSES it, and the BullMQ retry calls
-  Delhivery's `generateAwb` AGAIN → a SECOND real AWB + a second courier
-  charge for one parcel.
+- **RESOLVED (M10 commit 1).** The fix landed exactly as proposed in the
+  original entry — source-of-truth-first / visible-vs-silent ordering,
+  mirroring CUR-3 / WMS-8 / RTO-finalize. `AwbGenerationService.
+  generateForShipment` now runs in four phases:
+  - **A (Phase A — CUR-9 gates).** `shipment.awbNumber !== null` + a
+    current `awb_label` row exists → `ALREADY_HAS_AWB` (truly complete).
+    `shipment.awbNumber !== null` + NO current `awb_label` row → RECOVERY
+    PATH: skip Delhivery entirely, run only Phase D against the
+    persisted AWB.
+  - **B (Phase B).** Delhivery `generateAwb`. Failure → `FAILED`, no DB
+    write.
+  - **C (Phase C — tx1, the durable source-of-truth write).** Stamp the
+    shipment (`awbNumber` / `courierShipmentId` / `awbGeneratedAt` /
+    status `AWB_GENERATED`) + audit `awb.generated`. From this commit
+    on the CUR-9 gate fires on any retry — a BullMQ re-delivery CANNOT
+    re-call `generateAwb`.
+  - **D (Phase D — retryable follow-on).** Fetch label, upload to
+    Spaces, tx2 insert the `awb_labels` row (versioned, isCurrent;
+    prior current demoted) + audit `awb.label_persisted`. Any failure
+    in Phase D returns the new `GENERATED_AWB_LABEL_PENDING` outcome
+    (preserves the AWB-is-durable fact).
+  - **Job handling.** `AwbGenerationJobService.processManifest` counts
+    label-pending outcomes, audits `manifest.awb_job_label_pending` at
+    HIGH, and THROWS so BullMQ retries the whole job. On retry the
+    Phase-A recovery path runs only the label leg (zero second
+    Delhivery calls). The manifest stays CLOSED until every label
+    persists — a half-done run is visible, not silent.
+  - **Regression guard.** The exact scenario the old ordering would
+    have re-charged on is unit-tested in
+    `awb-generation.service.spec.ts` ("M10 commit 1 —
+    GENERATED_AWB_LABEL_PENDING: tx1 commits then Spaces.putObject
+    throws"); the recovery path is asserted to make NO second
+    `generateAwb` call.
+  - **All M9 AWB e2e (6 suites, 25 tests) stay green after the
+    reorder** — generation, supersede, dispatch, conservation, manual
+    placement, manifest flow.
 
-  **Inert in Phase 1A**: the stub `DelhiveryAwbService` is deterministic
-  and issues no real AWB / no charge, and `SpacesService.putObject`
-  against the test/dev bucket effectively never fails — so the window is
-  unreachable until real-mode Delhivery is wired.
-
-  **Fix (when real mode lands — same visible-vs-silent principle as
-  CUR-3/WMS-8):** persist the `awbNumber` FIRST (the durable
-  source-of-truth fact — the AWB exists and the charge was incurred the
-  moment Delhivery returns), then make the label upload a RETRYABLE
-  follow-on keyed off "shipment has `awbNumber` but no current
-  `awb_label` row". The CUR-9 gate then correctly short-circuits the
-  retry (AWB already persisted) and only the idempotent label upload
-  re-runs. **Pick up:** when the `TODO(delhivery-api)` real-mode wire
-  contract is validated against Delhivery's sandbox — do NOT ship real
-  mode without this fix.
+  Correct for both stub mode and real mode now. Recorded for provenance.
 
 ### M9 design deferrals (from the original module design)
 

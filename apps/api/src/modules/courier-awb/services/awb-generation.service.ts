@@ -27,7 +27,26 @@ export type AwbGenerationOutcome =
       labelVersion: number;
     }
   | {
-      /** CUR-9 idempotent skip — the shipment already carries an AWB. */
+      /**
+       * M10 commit 1 (resolves the M9 real-mode label-upload-ordering
+       * debt): the AWB has been DURABLY PERSISTED on the shipment
+       * (`awbNumber` set, status=AWB_GENERATED, audit `awb.generated`
+       * written) but the label fetch / Spaces upload / awb_labels row
+       * insert failed. The caller (AWB job) MUST treat this as a
+       * retryable failure — throw to BullMQ so the whole job re-runs
+       * and the CUR-9 recovery path re-attempts ONLY the label leg
+       * (no second Delhivery `generateAwb` call → no double real AWB
+       * / double charge in real mode).
+       */
+      status: 'GENERATED_AWB_LABEL_PENDING';
+      shipmentId: string;
+      awbNumber: string;
+      courierShipmentId: string;
+      errorMessage: string;
+    }
+  | {
+      /** CUR-9 idempotent skip — the shipment already carries an AWB
+       *  AND a current awb_label row (truly complete). */
       status: 'ALREADY_HAS_AWB';
       shipmentId: string;
       awbNumber: string;
@@ -44,33 +63,54 @@ export type AwbGenerationOutcome =
     };
 
 /**
- * Module 9 — per-shipment AWB generation (commit 8, CUR-6 + CUR-9).
+ * Module 9 — per-shipment AWB generation (CUR-6 + CUR-9). M10 commit 1
+ * applied the visible-vs-silent / source-of-truth-first reorder that
+ * resolves the M9 real-mode label-upload-ordering debt.
  *
- * generateForShipment:
- *   1. CUR-9 idempotency — a shipment that ALREADY has an awbNumber is
- *      SKIPPED (`ALREADY_HAS_AWB`), never re-generated. The skip IS the
- *      gate that makes a BullMQ retry safe (and, in real mode, prevents
- *      a double Delhivery call / double charge).
- *   2. Marshal a DelhiveryAwbRequest from the shipment's immutable dest
- *      snapshot + line snapshots, call the (mockable) DelhiveryAwbService.
- *   3. On failure → return `FAILED` with the `serviceable` flag; NO DB
- *      write. The AWB job (commit 9) owns the supersede + order-status
- *      routing.
- *   4. On success → fetch the label (DelhiveryLabelService), upload the
- *      bytes to OUR Spaces (CUR-6), then in ONE tx: stamp the shipment
- *      (awbNumber / courierShipmentId / awbGeneratedAt / status
- *      AWB_GENERATED) + insert the awb_labels row (versioned, isCurrent;
- *      a prior current label, if any, is demoted). Audit awb.generated.
+ * ── Saga ordering (the M10-commit-1 fix) ────────────────────────────
+ * The previous ordering uploaded the label to Spaces BEFORE persisting
+ * `awbNumber`, in one transaction. Real-mode bug: if Spaces.putObject
+ * failed AFTER Delhivery had already issued a real AWB, the AWB was
+ * generated-but-unpersisted (`awbNumber === null`), the CUR-9
+ * idempotency gate missed it, and a BullMQ retry called `generateAwb`
+ * AGAIN — a SECOND real AWB + a second courier charge for one parcel.
+ * Inert in Phase 1A (stub Delhivery, dev/test Spaces never fails) but
+ * a real-mode footgun.
+ *
+ * The fix: split the cross-module side-effects so the durable
+ * source-of-truth (the AWB, which cost a real API call) lands FIRST
+ * and a half-finished run is SELF-ANNOUNCING (visible, recoverable),
+ * never silent (mirrors the WMS-8 / CUR-3 / RTO-finalize family — see
+ * "Saga: visible-vs-silent failure ordering" in CLAUDE.md).
+ *
+ *   Phase A — eligibility + CUR-9 gates
+ *     • shipment.awbNumber !== null + a current awb_label row exists
+ *       → ALREADY_HAS_AWB (truly complete, idempotent no-op).
+ *     • shipment.awbNumber !== null + NO current awb_label row
+ *       → RECOVERY PATH: skip Delhivery (CUR-9 honored — exactly the
+ *       case the old ordering's retry would have re-charged on), run
+ *       Phase C only against the persisted AWB.
+ *     • shipment.awbNumber === null but status !== CREATED → 409.
+ *
+ *   Phase B — Delhivery `generateAwb`. On failure → return FAILED, NO
+ *     DB write (the AWB job's caller owns the supersede + order-status
+ *     routing).
+ *
+ *   Phase C — tx1 (THE source-of-truth write): stamp the shipment
+ *     (`awbNumber` / `courierShipmentId` / `awbGeneratedAt` / status
+ *     `AWB_GENERATED`) + audit `awb.generated`. From this commit on,
+ *     a BullMQ retry CANNOT re-call `generateAwb` (CUR-9 gate fires).
+ *
+ *   Phase D — label fetch (DelhiveryLabelService) + Spaces upload
+ *     (CUR-6) + tx2: insert the `awb_labels` row (versioned,
+ *     isCurrent; a prior current label, if any, is demoted) + audit
+ *     `awb.label_persisted`. On ANY failure in this phase → return
+ *     `GENERATED_AWB_LABEL_PENDING`. The job service throws on that
+ *     outcome so BullMQ retries the whole job; on retry the Phase-A
+ *     recovery path skips Phase B+C entirely and re-runs only Phase D.
  *
  * Shipment-grained: operates on a shipmentId; CUR-9 idempotency keyed
  * on shipment.awbNumber. Split-shipment orders correct by construction.
- *
- * NOTE (real-mode, TODO(delhivery-api) / phase-1a-debt): the label
- * upload precedes the persist tx. If the upload fails AFTER Delhivery
- * issued a real AWB, that AWB is generated-but-unpersisted and the
- * retry re-generates. The stub adapter is deterministic so this is
- * inert in Phase 1A; a real-mode fix (persist awbNumber first, label
- * async) is tracked in phase-1a-debt.
  */
 @Injectable()
 export class AwbGenerationService {
@@ -95,6 +135,7 @@ export class AwbGenerationService {
         id: true,
         shipmentNumber: true,
         awbNumber: true,
+        courierShipmentId: true,
         status: true,
         destRecipientName: true,
         destRecipientPhoneE164: true,
@@ -110,6 +151,15 @@ export class AwbGenerationService {
         items: {
           select: { productName: true, quantity: true },
         },
+        // CUR-9 gate enrichment (M10 commit 1): the gate now considers
+        // "awbNumber set + current label persisted" the truly-complete
+        // state; "awbNumber set + no current label" routes to the
+        // Phase-D recovery path instead of being treated as complete.
+        awbLabels: {
+          where: { isCurrent: true },
+          select: { id: true },
+          take: 1,
+        },
       },
     });
     if (!shipment) {
@@ -119,14 +169,33 @@ export class AwbGenerationService {
       });
     }
 
-    // CUR-9: never re-generate an AWB.
+    // Phase A — CUR-9 gates.
     if (shipment.awbNumber !== null) {
-      return {
-        status: 'ALREADY_HAS_AWB',
+      if (shipment.awbLabels.length > 0) {
+        return {
+          status: 'ALREADY_HAS_AWB',
+          shipmentId,
+          awbNumber: shipment.awbNumber,
+        };
+      }
+      // Recovery path: AWB was persisted by a prior attempt; the label
+      // leg failed. Skip Delhivery (NO second `generateAwb` — the whole
+      // point of the M10 commit 1 reorder) and re-run Phase D only.
+      // courierShipmentId was also persisted in the prior Phase C; if
+      // somehow null (data anomaly), fall back to empty for the outcome
+      // — the shipment row is the source of truth either way.
+      this.logger.log(
+        { shipmentId, awbNumber: shipment.awbNumber },
+        'AWB persisted from prior attempt; running label recovery (Phase D)',
+      );
+      return this.uploadAndPersistLabel(
         shipmentId,
-        awbNumber: shipment.awbNumber,
-      };
+        shipment.awbNumber,
+        shipment.courierShipmentId ?? '',
+        actor,
+      );
     }
+
     if (shipment.status !== ShipmentStatus.CREATED) {
       throw new ConflictException({
         code: 'SHIPMENT_NOT_AWB_ELIGIBLE',
@@ -134,6 +203,7 @@ export class AwbGenerationService {
       });
     }
 
+    // Phase B — Delhivery generateAwb.
     const req: DelhiveryAwbRequest = {
       shipmentNumber: shipment.shipmentNumber,
       recipientName: shipment.destRecipientName,
@@ -167,43 +237,17 @@ export class AwbGenerationService {
       };
     }
 
-    // CUR-6: fetch the label + persist to OUR Spaces.
-    const label = await this.delhiveryLabel.fetchLabel(awb.awbNumber);
-    const labelVersion = await this.nextLabelVersion(shipmentId);
-    const spacesKey = `awb-labels/${shipmentId}/v${labelVersion}-${awb.awbNumber}.pdf`;
-    await this.spaces.putObject(spacesKey, label.bytes, label.mimeType);
-
-    const now = new Date();
+    // Phase C — tx1: durable source-of-truth FIRST. Once this commits,
+    // the AWB exists on the shipment row; CUR-9 will fire on any retry.
+    const generatedAt = new Date();
     await this.prisma.client.$transaction(async (tx) => {
-      // Demote any prior current label for this shipment.
-      if (labelVersion > 1) {
-        await tx.awbLabel.updateMany({
-          where: { shipmentId, isCurrent: true },
-          data: { isCurrent: false },
-        });
-      }
       await tx.shipment.update({
         where: { id: shipmentId },
         data: {
           awbNumber: awb.awbNumber,
           courierShipmentId: awb.courierShipmentId,
-          awbGeneratedAt: now,
+          awbGeneratedAt: generatedAt,
           status: ShipmentStatus.AWB_GENERATED,
-        },
-      });
-      await tx.awbLabel.create({
-        data: {
-          shipmentId,
-          version: labelVersion,
-          isCurrent: true,
-          spacesKey,
-          spacesBucket: this.env.spacesBucket,
-          mimeType: label.mimeType,
-          generatedByStaffId: actor.id ?? null,
-          generatedReason:
-            labelVersion > 1
-              ? LabelGenerationReason.AWB_REISSUED
-              : LabelGenerationReason.INITIAL,
         },
       });
       await this.audit.log(
@@ -217,22 +261,106 @@ export class AwbGenerationService {
           metadata: {
             awbNumber: awb.awbNumber,
             courierShipmentId: awb.courierShipmentId,
-            labelVersion,
-            labelSpacesKey: spacesKey,
           },
         },
         tx,
       );
     });
 
-    return {
-      status: 'GENERATED',
+    // Phase D — label fetch + Spaces upload + tx2 (retryable follow-on).
+    return this.uploadAndPersistLabel(
       shipmentId,
-      awbNumber: awb.awbNumber,
-      courierShipmentId: awb.courierShipmentId,
-      labelSpacesKey: spacesKey,
-      labelVersion,
-    };
+      awb.awbNumber,
+      awb.courierShipmentId,
+      actor,
+    );
+  }
+
+  /**
+   * Phase D — fetch the label, upload to Spaces, persist the awb_labels
+   * row. Catches every failure into `GENERATED_AWB_LABEL_PENDING` so the
+   * AWB-already-persisted fact is preserved and the caller can drive a
+   * retry (BullMQ). Versioning + isCurrent demotion handles the
+   * re-issue case (CUR-6) AND the recovery path (a prior failed attempt
+   * left no current row → version 1 isCurrent).
+   */
+  private async uploadAndPersistLabel(
+    shipmentId: string,
+    awbNumber: string,
+    courierShipmentId: string,
+    actor: { type: ActorType; id?: string | null },
+  ): Promise<AwbGenerationOutcome> {
+    try {
+      const label = await this.delhiveryLabel.fetchLabel(awbNumber);
+      const labelVersion = await this.nextLabelVersion(shipmentId);
+      const spacesKey = `awb-labels/${shipmentId}/v${labelVersion}-${awbNumber}.pdf`;
+      await this.spaces.putObject(spacesKey, label.bytes, label.mimeType);
+
+      await this.prisma.client.$transaction(async (tx) => {
+        // Demote any prior current label for this shipment (re-issue
+        // path). A first label / recovery-after-zero-prior-labels case
+        // is a no-op updateMany.
+        if (labelVersion > 1) {
+          await tx.awbLabel.updateMany({
+            where: { shipmentId, isCurrent: true },
+            data: { isCurrent: false },
+          });
+        }
+        await tx.awbLabel.create({
+          data: {
+            shipmentId,
+            version: labelVersion,
+            isCurrent: true,
+            spacesKey,
+            spacesBucket: this.env.spacesBucket,
+            mimeType: label.mimeType,
+            generatedByStaffId: actor.id ?? null,
+            generatedReason:
+              labelVersion > 1
+                ? LabelGenerationReason.AWB_REISSUED
+                : LabelGenerationReason.INITIAL,
+          },
+        });
+        await this.audit.log(
+          {
+            actorType: actor.type,
+            actorId: actor.id ?? null,
+            action: 'awb.label_persisted',
+            entityType: 'shipment',
+            entityId: shipmentId,
+            severity: 'LOW',
+            metadata: {
+              awbNumber,
+              labelVersion,
+              labelSpacesKey: spacesKey,
+            },
+          },
+          tx,
+        );
+      });
+
+      return {
+        status: 'GENERATED',
+        shipmentId,
+        awbNumber,
+        courierShipmentId,
+        labelSpacesKey: spacesKey,
+        labelVersion,
+      };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        { shipmentId, awbNumber, err: errorMessage },
+        'AWB label upload failed — AWB is durable, label leg will retry',
+      );
+      return {
+        status: 'GENERATED_AWB_LABEL_PENDING',
+        shipmentId,
+        awbNumber,
+        courierShipmentId,
+        errorMessage,
+      };
+    }
   }
 
   /** Next awb_labels.version for a shipment (1 when none exists). */

@@ -14,6 +14,7 @@ const MAN = 'man-1';
  *  to produce (or 'throw' for an unexpected exception). */
 type GenPlan =
   | { kind: 'ok' }
+  | { kind: 'label_pending' }
   | { kind: 'fail'; serviceable: boolean }
   | { kind: 'throw' };
 
@@ -70,6 +71,16 @@ function makeService(
         serviceable: plan.serviceable,
         errorCode: 'X',
         errorMessage: 'fail',
+      };
+    }
+    if (plan.kind === 'label_pending') {
+      // M10 commit 1: AWB durably persisted, label leg pending retry.
+      return {
+        status: 'GENERATED_AWB_LABEL_PENDING' as const,
+        shipmentId,
+        awbNumber: `AWB-${shipmentId}`,
+        courierShipmentId: `CS-${shipmentId}`,
+        errorMessage: 'SpacesUnavailable',
       };
     }
     return {
@@ -231,5 +242,42 @@ describe('AwbGenerationJobService.processManifest', () => {
     await expect(svc.processManifest(MAN)).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+
+  it('M10 commit 1 — label-pending outcome blocks the manifest flip and THROWS so BullMQ retries', async () => {
+    const { svc, manifestUpdate, auditLog } = makeService({
+      shipments: [
+        { id: 's1', orderId: 'o1', plan: { kind: 'ok' } },
+        { id: 's2', orderId: 'o2', plan: { kind: 'label_pending' } },
+      ],
+    });
+    // Throws so BullMQ's retry policy fires the whole job again; the
+    // CUR-9 recovery path re-runs only the label leg next time.
+    await expect(svc.processManifest(MAN)).rejects.toThrow(
+      /AWB label upload pending for 1 shipment/,
+    );
+    // Manifest status NOT flipped — stays CLOSED until every label persists.
+    expect(manifestUpdate).not.toHaveBeenCalled();
+    // The HIGH-severity pending audit is the visible breadcrumb.
+    const pendingAudit = auditLog.mock.calls.find(
+      ([entry]) =>
+        (entry as { action?: string }).action ===
+        'manifest.awb_job_label_pending',
+    );
+    expect(pendingAudit).toBeDefined();
+    expect(pendingAudit?.[0]).toMatchObject({
+      severity: 'HIGH',
+      metadata: expect.objectContaining({
+        labelPendingCount: 1,
+        generatedCount: 2, // s1 fully done + s2 AWB durable = 2
+        failedCount: 0,
+      }),
+    });
+    // The successful audit is NOT written (we threw before it).
+    const completedAudit = auditLog.mock.calls.find(
+      ([entry]) =>
+        (entry as { action?: string }).action === 'manifest.awb_job_completed',
+    );
+    expect(completedAudit).toBeUndefined();
   });
 });

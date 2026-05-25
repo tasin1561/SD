@@ -14,10 +14,17 @@ import { AwbSupersedeService } from './awb-supersede.service';
 
 export interface AwbJobShipmentOutcome {
   shipmentId: string;
-  /** GENERATED — AWB issued; SUPERSEDED — AWB failed, shipment retired
-   *  + replacement created + order routed to manual placement;
-   *  ERROR — an unexpected exception (state uncertain, ops investigates). */
-  result: 'GENERATED' | 'SUPERSEDED' | 'ERROR';
+  /** GENERATED — AWB issued AND label persisted; GENERATED_AWB_LABEL_PENDING
+   *  — AWB durably persisted but the label upload is pending a retry
+   *  (M10 commit 1 visible-vs-silent ordering); SUPERSEDED — AWB failed,
+   *  shipment retired + replacement created + order routed to manual
+   *  placement; ERROR — an unexpected exception (state uncertain, ops
+   *  investigates). */
+  result:
+    | 'GENERATED'
+    | 'GENERATED_AWB_LABEL_PENDING'
+    | 'SUPERSEDED'
+    | 'ERROR';
   awbNumber?: string;
   newShipmentId?: string;
   error?: string;
@@ -118,6 +125,13 @@ export class AwbGenerationJobService {
     const outcomes: AwbJobShipmentOutcome[] = [];
     let generatedCount = 0;
     let failedCount = 0;
+    /** M10 commit 1 — count of shipments where the AWB is durably
+     *  persisted but the label upload (Phase D) is pending a retry. A
+     *  non-zero count at the end of the loop blocks the manifest status
+     *  flip and throws so BullMQ retries the whole job; on retry the
+     *  CUR-9 recovery path runs ONLY the label leg (no second
+     *  Delhivery generateAwb / no double real charge). */
+    let labelPendingCount = 0;
 
     for (const shipment of manifest.shipments) {
       const orderId = shipment.orderShipments[0]?.orderId ?? null;
@@ -131,6 +145,22 @@ export class AwbGenerationJobService {
             shipmentId: shipment.id,
             result: 'GENERATED',
             awbNumber: gen.awbNumber,
+          });
+          continue;
+        }
+        if (gen.status === 'GENERATED_AWB_LABEL_PENDING') {
+          // Forward progress (AWB durably persisted) but not done —
+          // count as generated for the manifest-status decision (the
+          // AWB is real, the shipment can dispatch) yet record the
+          // label-pending flag so the post-loop block throws to BullMQ
+          // for a retry of the label leg.
+          generatedCount += 1;
+          labelPendingCount += 1;
+          outcomes.push({
+            shipmentId: shipment.id,
+            result: 'GENERATED_AWB_LABEL_PENDING',
+            awbNumber: gen.awbNumber,
+            error: gen.errorMessage,
           });
           continue;
         }
@@ -165,6 +195,31 @@ export class AwbGenerationJobService {
           error: message,
         });
       }
+    }
+
+    // M10 commit 1: do NOT flip the manifest status while any label is
+    // pending. The manifest stays CLOSED, the AWB-already-persisted gate
+    // (CUR-9 recovery) handles the retry, and only once every label has
+    // landed does the manifest move forward. Throwing here is the
+    // RETRY signal to BullMQ (one queue, one policy — F11 decision).
+    if (labelPendingCount > 0) {
+      await this.audit.log({
+        actorType: ActorType.SYSTEM,
+        actorId: null,
+        action: 'manifest.awb_job_label_pending',
+        entityType: 'manifest',
+        entityId: manifestId,
+        severity: 'HIGH',
+        metadata: {
+          generatedCount,
+          failedCount,
+          labelPendingCount,
+          shipmentCount: manifest.shipments.length,
+        },
+      });
+      throw new Error(
+        `AWB label upload pending for ${labelPendingCount} shipment(s) on manifest ${manifestId}; BullMQ will retry`,
+      );
     }
 
     // Manifest status: ≥1 AWB → CONFIRMED; zero → FAILED.
