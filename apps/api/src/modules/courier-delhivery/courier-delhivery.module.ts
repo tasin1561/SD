@@ -4,6 +4,7 @@ import { DelhiveryHttpService } from './services/delhivery-http.service';
 import { DelhiveryAwbService } from './services/delhivery-awb.service';
 import { DelhiveryLabelService } from './services/delhivery-label.service';
 import { DelhiveryServiceabilityService } from './services/delhivery-serviceability.service';
+import { DelhiveryTrackingService } from './services/delhivery-tracking.service';
 
 /**
  * Module 9 — courier-delhivery: the Delhivery adapter (CP1 complete).
@@ -12,12 +13,14 @@ import { DelhiveryServiceabilityService } from './services/delhivery-serviceabil
  *   - DelhiveryAwbService — generateAwb (stub-mode + real-mode seam)
  *   - DelhiveryLabelService — fetchLabel
  *   - DelhiveryServiceabilityService — checkServiceability (advisory)
+ *   - DelhiveryTrackingService — normalizeScan (M10 commit 6)
  *
- * Together the three capability services realise the `DelhiveryClient`
+ * Together the four capability services realise the `DelhiveryClient`
  * adapter interface. Imports CourierSharedModule for
  * CourierCredentialService (CUR-1). Exports its services for
- * courier-awb / courier-dispatch; those modules mock these wholesale
- * in tests — no real Delhivery network is ever hit in the suite.
+ * courier-awb / courier-dispatch / tracking-ingestion; those modules
+ * mock these wholesale in tests — no real Delhivery network is ever
+ * hit in the suite.
  */
 @Module({
   imports: [CourierSharedModule],
@@ -26,12 +29,14 @@ import { DelhiveryServiceabilityService } from './services/delhivery-serviceabil
     DelhiveryAwbService,
     DelhiveryLabelService,
     DelhiveryServiceabilityService,
+    DelhiveryTrackingService,
   ],
   exports: [
     DelhiveryHttpService,
     DelhiveryAwbService,
     DelhiveryLabelService,
     DelhiveryServiceabilityService,
+    DelhiveryTrackingService,
   ],
 })
 export class CourierDelhiveryModule {}
