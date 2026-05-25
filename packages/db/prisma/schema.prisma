@@ -1733,6 +1733,13 @@ model AwbLabel {
 model TrackingEvent {
   id                  String              @default(dbgenerated("uuidv7()")) @db.Uuid
   createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  // Module 10 (TRK-3): the SCAN timestamp the courier (or the manual
+  // operator for source=MANUAL_ENTRY) reports. ALL reads + the
+  // monotonic-forward transition guard ORDER BY this column, never
+  // createdAt — receive-time ≠ scan-time. The hypertable partition
+  // stays on createdAt (insertion-time partitioning is the canonical
+  // Timescale pattern); ordering ≠ partitioning.
+  eventAt             DateTime            @map("event_at") @db.Timestamptz
   shipmentId          String              @map("shipment_id") @db.Uuid
   eventType           TrackingEventType   @map("event_type")
   status              ShipmentStatus
@@ -1756,6 +1763,10 @@ model TrackingEvent {
 
   @@id([id, createdAt])
   @@index([shipmentId, createdAt(sort: Desc)])
+  // Module 10 (TRK-3): scan-time ordering for the public read + the
+  // monotonic-forward guard. The (shipmentId, createdAt) index above is
+  // kept for insertion-order audit queries.
+  @@index([shipmentId, eventAt(sort: Desc)])
   @@index([eventType])
   @@index([source])
   @@index([webhookId])

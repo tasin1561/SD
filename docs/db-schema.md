@@ -1017,16 +1017,17 @@ between DRAFT manifests pre-close (WMS-7) via the nullable
 
 **Key fields:**
 - `shipmentId` (cascade)
-- `eventType: TrackingEventType`, `status: ShipmentStatus`
+- `eventAt: Timestamptz` — **SCAN timestamp** (Module 10, TRK-3). All public reads + the monotonic-forward transition guard ORDER BY this column, never `createdAt` (receive-time). The hypertable partition stays on `createdAt` — Timescale's canonical insertion-time partitioning pattern; ordering ≠ partitioning. NOT NULL: webhook scans carry it from the payload; manual entries (TRK-9) require the operator to supply it.
+- `eventType: TrackingEventType`, `status: ShipmentStatus` — `status` is the **normalized** ShipmentStatus the scan asserts (Module 10 F2 — reused as the normalized intermediate; no parallel `CourierTrackingStatus` enum)
 - `description`
 - Location: `locationName`, `locationCity`, `locationPincode`, `latitude`, `longitude`
-- Source: `source: TrackingEventSource`, `courierCode`, `rawCourierStatus`
+- Source: `source: TrackingEventSource`, `courierCode`, `rawCourierStatus` — `rawCourierStatus` carries the original courier scan code (audit + TODO(delhivery-api) sandbox-validation reference)
 - Origin: `webhookId?`, `actorType?`, `actorId?`
 - `metadata: Json?`
 - `isVisibleToCustomer`
 - **No updatedAt, no deletedAt** — immutable
 
-**Indexes:** `(shipmentId, createdAt(sort: Desc))`, `eventType`, `source`, `webhookId`
+**Indexes:** `(shipmentId, createdAt(sort: Desc))` (insertion-order audit), `(shipmentId, eventAt(sort: Desc))` (Module 10 — customer-visible timeline + monotonic-forward guard), `eventType`, `source`, `webhookId`
 
 **TrackingEventType enum (20 values):** `AWB_GENERATED`, `COURIER_PICKUP_SCHEDULED`, `COURIER_PICKUP_DONE`, `ARRIVED_AT_HUB`, `DEPARTED_HUB`, `IN_TRANSIT_UPDATE`, `ARRIVED_AT_DESTINATION_HUB`, `OUT_FOR_DELIVERY`, `DELIVERY_ATTEMPTED`, `DELIVERED`, `DELIVERY_FAILED`, `ADDRESS_ISSUE`, `CUSTOMER_REQUESTED_RESCHEDULE`, `CUSTOMER_REFUSED`, `RTO_INITIATED`, `RTO_IN_TRANSIT`, `RTO_DELIVERED`, `LOST`, `DAMAGED`, `STATUS_SYNC`, `MANUAL_UPDATE`
 
