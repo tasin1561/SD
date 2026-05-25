@@ -49,6 +49,16 @@ export const envSchema = z.object({
     .regex(/^([0-9a-fA-F]{64})?$/, 'COURIER_CREDENTIALS_KEY_V1 must be 64 hex chars (32 bytes) or empty')
     .optional()
     .default(''),
+
+  // --- Module 10 — Public Tracking webhook HMAC secrets ---------------
+  // CUR-1 discipline (same as the courier-credential key): the secret
+  // lives in env, never the DB. The `tracking.webhook_secret_ref`
+  // system setting names which env var to read for a given courier
+  // (Phase 1A has one — Delhivery). Optional/empty so the app boots
+  // without it; an unconfigured secret means inbound webhooks for that
+  // courier 401 (fail-closed, TRK-1). Real-mode HMAC scheme + header
+  // name are TODO(delhivery-api).
+  TRACKING_WEBHOOK_SECRET_DELHIVERY: z.string().optional().default(''),
 });
 
 export type Env = z.infer<typeof envSchema>;

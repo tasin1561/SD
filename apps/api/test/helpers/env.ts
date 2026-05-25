@@ -25,6 +25,12 @@ const BASE_ENV: Env = {
   // 32-byte AES key (64 hex chars) — fixed test fixture for the courier
   // credential cipher; never a real key.
   COURIER_CREDENTIALS_KEY_V1: 'f'.repeat(64),
+  // Module 10 — deterministic test secret for the tracking webhook
+  // HMAC. WebhookAuthService treats an empty secret as fail-closed,
+  // so the default fixture has a concrete value (any non-empty string)
+  // and tests that exercise the unconfigured-secret 401 path override
+  // it to ''. Never a real Delhivery secret.
+  TRACKING_WEBHOOK_SECRET_DELHIVERY: 'test-tracking-webhook-secret-delhivery',
 };
 
 /** Shared EnvService fixture; pass overrides for the few vars a test cares about. */

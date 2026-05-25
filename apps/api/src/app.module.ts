@@ -46,6 +46,7 @@ import { CourierDelhiveryModule } from './modules/courier-delhivery/courier-delh
 import { CourierAwbModule } from './modules/courier-awb/courier-awb.module';
 import { CourierDispatchModule } from './modules/courier-dispatch/courier-dispatch.module';
 import { CourierManualPlacementModule } from './modules/courier-manual-placement/courier-manual-placement.module';
+import { TrackingIngestionModule } from './modules/tracking-ingestion/tracking-ingestion.module';
 import { ThrottlerModule } from './common/throttler/throttler.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { pinoConfig } from './common/pino/logger-config';
@@ -117,6 +118,7 @@ import { envSchema } from './config/env.schema';
     CourierAwbModule,
     CourierDispatchModule,
     CourierManualPlacementModule,
+    TrackingIngestionModule,
     HealthModule,
   ],
 })

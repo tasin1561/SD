@@ -120,4 +120,25 @@ export class EnvService {
         return '';
     }
   }
+
+  /**
+   * Module 10 — tracking webhook HMAC secret resolved by env-var name
+   * (CUR-1 discipline). The `tracking.webhook_secret_ref` system setting
+   * stores the env-var NAME for a given courier; the secret value lives
+   * here. Returns `''` for any unknown / unconfigured name — the
+   * WebhookAuthService treats an empty secret as fail-closed (401) so
+   * unauthenticated webhooks are NEVER stored (TRK-1).
+   *
+   * Phase 1A maps one courier — Delhivery. Add another case as each new
+   * integrated courier lands; the dispatch table is intentionally
+   * explicit (no `process.env` indirection) so env wiring stays auditable.
+   */
+  trackingWebhookSecretByRef(envVarName: string): string {
+    switch (envVarName) {
+      case 'TRACKING_WEBHOOK_SECRET_DELHIVERY':
+        return this.env.TRACKING_WEBHOOK_SECRET_DELHIVERY;
+      default:
+        return '';
+    }
+  }
 }
