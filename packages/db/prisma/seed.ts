@@ -280,6 +280,34 @@ const systemSettings: SystemSettingSeed[] = [
     description:
       'Per-attempt backoff delays for the AWB generation BullMQ job',
   },
+  // Module 10 — Public Tracking.
+  {
+    key: 'tracking.webhook_secret_ref',
+    category: 'tracking',
+    valueType: SettingValueType.STRING,
+    valueString: 'TRACKING_WEBHOOK_SECRET_DELHIVERY',
+    displayName: 'Tracking Webhook Secret Env Key (Delhivery)',
+    description:
+      'Name of the env var that holds the HMAC secret used to authenticate inbound Delhivery tracking webhooks (CUR-1 discipline — the secret value lives in env, never the DB). Phase 1A stub mode reads a configured test secret directly; real-mode HMAC scheme is TODO(delhivery-api).',
+  },
+  {
+    key: 'tracking.public_lookup_rate_limit_per_min',
+    category: 'tracking',
+    valueType: SettingValueType.INT,
+    valueInt: 30,
+    displayName: 'Public Tracking Lookup Rate Limit (per IP/min)',
+    description:
+      'TRK-8 anti-enumeration ceiling on the open public AWB lookup endpoint. A legitimate customer refreshes their tracking page a handful of times; bulk enumeration of AWBs triggers rate limiting.',
+  },
+  {
+    key: 'tracking.webhook_processing_retry_max',
+    category: 'tracking',
+    valueType: SettingValueType.INT,
+    valueInt: 3,
+    displayName: 'Tracking Webhook Processing Retry Max',
+    description:
+      'Max BullMQ attempts for the tracking-webhook processor before the courier_webhooks row is left FAILED for ops investigation. Per-payload idempotency (TRK-2) makes retries safe.',
+  },
 ];
 
 async function seedSystemSettings() {
