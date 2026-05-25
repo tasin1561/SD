@@ -13,6 +13,12 @@ import { EnvService } from './config/env.service';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
+    // Module 10 (TRK-1) — captures the raw request bytes so the
+    // tracking webhook controller can verify the HMAC signature over
+    // the EXACT bytes signed by the courier (re-serializing the parsed
+    // JSON would change whitespace and break the signature). Adds a
+    // small per-request memory cost; acceptable at Phase 1A volume.
+    rawBody: true,
   });
 
   app.useLogger(app.get(Logger));
