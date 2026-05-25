@@ -48,6 +48,7 @@ import { CourierDispatchModule } from './modules/courier-dispatch/courier-dispat
 import { CourierManualPlacementModule } from './modules/courier-manual-placement/courier-manual-placement.module';
 import { TrackingIngestionModule } from './modules/tracking-ingestion/tracking-ingestion.module';
 import { TrackingEventsModule } from './modules/tracking-events/tracking-events.module';
+import { TrackingPublicModule } from './modules/tracking-public/tracking-public.module';
 import { ThrottlerModule } from './common/throttler/throttler.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { pinoConfig } from './common/pino/logger-config';
@@ -121,6 +122,7 @@ import { envSchema } from './config/env.schema';
     CourierManualPlacementModule,
     TrackingIngestionModule,
     TrackingEventsModule,
+    TrackingPublicModule,
     HealthModule,
   ],
 })
