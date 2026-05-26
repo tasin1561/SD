@@ -12,7 +12,7 @@
 
 import type { StaffRole } from '@skydrop/db';
 import type { ApiClient, StaffMe, SellerMe } from '@skydrop/api-client';
-import { useAuthCtx } from './context.js';
+import { useAuthCtx } from './context';
 
 export function useApiClient(): ApiClient {
   return useAuthCtx<unknown>().client;

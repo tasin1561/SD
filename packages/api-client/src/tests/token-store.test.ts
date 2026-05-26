@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AccessTokenStore } from '../auth/token-store.js';
+import { AccessTokenStore } from '../auth/token-store';
 
 describe('AccessTokenStore', () => {
   it('set/get round trip + subscribers fire on change', () => {

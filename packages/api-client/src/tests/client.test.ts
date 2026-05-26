@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AccessTokenStore } from '../auth/token-store.js';
-import { ApiClient, ApiError } from '../client.js';
+import { AccessTokenStore } from '../auth/token-store';
+import { ApiClient, ApiError } from '../client';
 
 interface FakeResponse {
   status: number;

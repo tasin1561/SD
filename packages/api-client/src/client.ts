@@ -15,9 +15,9 @@
  *   - cookies (the __Host- refresh) are always sent (credentials:
  *     'include' → relative paths) so the proxy can forward them
  */
-import { AccessTokenStore } from './auth/token-store.js';
-import { SingleFlightRefresh, type RefreshOutcome } from './refresh/single-flight.js';
-import type { AccessTokenResponse, LoginRequest, StaffMe, SellerMe } from './endpoints/auth.js';
+import { AccessTokenStore } from './auth/token-store';
+import { SingleFlightRefresh, type RefreshOutcome } from './refresh/single-flight';
+import type { AccessTokenResponse, LoginRequest, StaffMe, SellerMe } from './endpoints/auth';
 
 export type IdentityKind = 'staff' | 'seller';
 

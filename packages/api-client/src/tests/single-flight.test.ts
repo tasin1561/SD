@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { SingleFlightRefresh } from '../refresh/single-flight.js';
+import { SingleFlightRefresh } from '../refresh/single-flight';
 
 describe('SingleFlightRefresh', () => {
   it('coalesces concurrent callers: 3 simultaneous .run() calls → underlying refresh fires EXACTLY ONCE', async () => {

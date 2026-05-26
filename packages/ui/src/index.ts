@@ -12,5 +12,5 @@
  *   import { orderStatusKind, kindTokens } from '@skydrop/ui/status';
  *   import { SPACING, TYPE_SCALE } from '@skydrop/ui/tokens';
  */
-export * from './status/index.js';
-export * from './tokens/index.js';
+export * from './status/index';
+export * from './tokens/index';

@@ -3,8 +3,8 @@
  *
  *   import { AuthProvider, useStaffIdentity, hasStaffRole } from '@skydrop/auth/client';
  */
-export { AuthProvider, useAuthCtx } from './context.js';
-export type { AuthContextValue, AuthProviderProps } from './context.js';
+export { AuthProvider, useAuthCtx } from './context';
+export type { AuthContextValue, AuthProviderProps } from './context';
 export {
   useApiClient,
   useStaffIdentity,
@@ -12,4 +12,4 @@ export {
   useSetIdentity,
   useHasAccessToken,
   hasStaffRole,
-} from './hooks.js';
+} from './hooks';

@@ -9,5 +9,5 @@
  * server/client subpath imports so the bundler can tree-shake the
  * appropriate half.
  */
-export * from './client/index.js';
-export * from './server/index.js';
+export * from './client/index';
+export * from './server/index';

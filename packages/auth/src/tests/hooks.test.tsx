@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import type React from 'react';
 import type { StaffMe } from '@skydrop/api-client';
-import { AuthProvider } from '../client/context.js';
+import { AuthProvider } from '../client/context';
 import {
   useStaffIdentity,
   useApiClient,
   useHasAccessToken,
   hasStaffRole,
   useSetIdentity,
-} from '../client/hooks.js';
+} from '../client/hooks';
 
 const STAFF: StaffMe = {
   id: 'sx',

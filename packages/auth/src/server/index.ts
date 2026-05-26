@@ -6,5 +6,5 @@
 export {
   resolveStaffSsrIdentity,
   resolveSellerSsrIdentity,
-} from './identity.js';
-export type { SsrIdentityRequest, SsrIdentityResult } from './identity.js';
+} from './identity';
+export type { SsrIdentityRequest, SsrIdentityResult } from './identity';

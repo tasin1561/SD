@@ -3,19 +3,19 @@
  * single-flight refresh-on-401. Identity-parameterized (staff +
  * seller share the mechanics).
  */
-export { ApiClient, ApiError } from './client.js';
-export type { ApiClientOptions, ApiRequestInit, IdentityKind } from './client.js';
-export { AccessTokenStore } from './auth/token-store.js';
-export type { AccessTokenSnapshot, AccessTokenListener } from './auth/token-store.js';
-export { SingleFlightRefresh } from './refresh/single-flight.js';
-export type { RefreshFn, RefreshOutcome } from './refresh/single-flight.js';
+export { ApiClient, ApiError } from './client';
+export type { ApiClientOptions, ApiRequestInit, IdentityKind } from './client';
+export { AccessTokenStore } from './auth/token-store';
+export type { AccessTokenSnapshot, AccessTokenListener } from './auth/token-store';
+export { SingleFlightRefresh } from './refresh/single-flight';
+export type { RefreshFn, RefreshOutcome } from './refresh/single-flight';
 
 export type {
   AccessTokenResponse,
   LoginRequest,
   StaffMe,
   SellerMe,
-} from './endpoints/auth.js';
+} from './endpoints/auth';
 export type {
   ListSellersQuery,
   SellerListItem,
@@ -24,7 +24,7 @@ export type {
   UpdateSellerStatusRequest,
   UpdateSellerStatusResponse,
   SellerInvitationListItem,
-} from './endpoints/admin-sellers.js';
+} from './endpoints/admin-sellers';
 export type {
   ListOrdersQuery,
   OrderListItem,
@@ -39,4 +39,4 @@ export type {
   ForceMutationResult,
   ReleaseReservationsRequest,
   ReleaseReservationsResult,
-} from './endpoints/admin-orders.js';
+} from './endpoints/admin-orders';

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   resolveStaffSsrIdentity,
   resolveSellerSsrIdentity,
-} from '../server/identity.js';
+} from '../server/identity';
 
 function jsonResponse(status: number, body: unknown = null): Response {
   return new Response(body === null ? '' : JSON.stringify(body), {
