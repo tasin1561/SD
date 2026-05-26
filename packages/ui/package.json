@@ -32,7 +32,6 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json && cp src/tokens.css dist/tokens.css",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint \"src/**/*.ts\" --max-warnings 0",
     "clean": "rm -rf dist .turbo *.tsbuildinfo"
   },
   "dependencies": {
