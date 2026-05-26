@@ -316,4 +316,142 @@ describe('Seller flow (e2e): invitation → register → login → api keys → 
     const fresh = await h.prisma.seller.findUnique({ where: { id: reg.body.seller.id } });
     expect(fresh!.emailVerifiedAt).toBeInstanceOf(Date);
   });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Module 12 — hybrid bearer-OR-cookie /me for SSR-auth (Decision #1).
+  // Mirrors the staff /me tests; adds the SUSPENDED 403 case because
+  // the cookie path STILL re-runs the seller status check (preserving
+  // the previous SellerJwtGuard semantics).
+  // ─────────────────────────────────────────────────────────────────────
+
+  describe('hybrid /me (Module 12 — bearer OR __Host-sellerRefresh cookie)', () => {
+    async function registerSeller() {
+      const created = await request(h.baseUrl)
+        .post('/admin/seller-invitations')
+        .set('Authorization', `Bearer ${staffAccess}`)
+        .send({ email: inviteEmail })
+        .expect(201);
+
+      const reg = await request(h.baseUrl)
+        .post('/auth/seller/register/invite')
+        .send({
+          token: created.body.token,
+          companyName: 'Brand Co',
+          contactPersonName: 'Sara Khan',
+          phone: '+8801712345678',
+          password: 'SellerPass-1234',
+        })
+        .expect(201);
+
+      const cookieLine = toCookieList(reg.headers['set-cookie']).find((c) =>
+        c.startsWith(SELLER_COOKIE),
+      )!;
+      const cookieValue = `${SELLER_COOKIE}=${cookieLine.split(';')[0]!.split('=')[1]}`;
+      return {
+        sellerId: reg.body.seller.id as string,
+        accessToken: reg.body.accessToken as string,
+        cookieValue,
+      };
+    }
+
+    it('cookie path: returns identity for a valid __Host- cookie + NO rotation', async () => {
+      const { cookieValue } = await registerSeller();
+      const me = await request(h.baseUrl)
+        .get('/auth/seller/me')
+        .set('Cookie', cookieValue)
+        .expect(200);
+      expect(me.body.companyName).toBe('Brand Co');
+      expect(me.body.status).toBe('APPROVED');
+      expect(me.headers['set-cookie']).toBeUndefined();
+    });
+
+    it('cookie path is read-only: same cookie still works twice + no new refresh row created', async () => {
+      const { sellerId, cookieValue } = await registerSeller();
+
+      const before = await h.prisma.sellerRefreshToken.findFirst({
+        where: { sellerId },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(before!.revokedAt).toBeNull();
+
+      await request(h.baseUrl).get('/auth/seller/me').set('Cookie', cookieValue).expect(200);
+      await request(h.baseUrl).get('/auth/seller/me').set('Cookie', cookieValue).expect(200);
+
+      const allRows = await h.prisma.sellerRefreshToken.findMany({ where: { sellerId } });
+      expect(allRows).toHaveLength(1);
+      expect(allRows[0]!.id).toBe(before!.id);
+      expect(allRows[0]!.revokedAt).toBeNull();
+
+      // The cookie still rotates successfully — confirms it was not
+      // consumed by /me.
+      await request(h.baseUrl)
+        .post('/auth/seller/refresh')
+        .set('Cookie', cookieValue)
+        .expect(200);
+    });
+
+    it('cookie path does NOT trip reuse-detection on a revoked cookie', async () => {
+      const { cookieValue: originalCookie } = await registerSeller();
+      await request(h.baseUrl)
+        .post('/auth/seller/refresh')
+        .set('Cookie', originalCookie)
+        .expect(200);
+
+      const replayAuditBefore = await h.prisma.auditLog.findMany({
+        where: { action: 'security.refresh_replay_detected' },
+      });
+      expect(replayAuditBefore).toHaveLength(0);
+
+      await request(h.baseUrl)
+        .get('/auth/seller/me')
+        .set('Cookie', originalCookie)
+        .expect(401)
+        .expect((res) => expect(res.body.code).toBe('UNAUTHORIZED'));
+
+      const replayAuditAfter = await h.prisma.auditLog.findMany({
+        where: { action: 'security.refresh_replay_detected' },
+      });
+      expect(replayAuditAfter).toHaveLength(0);
+    });
+
+    it('bearer wins; invalid bearer + valid cookie → 401, never falls through', async () => {
+      const { cookieValue } = await registerSeller();
+      await request(h.baseUrl)
+        .get('/auth/seller/me')
+        .set('Authorization', 'Bearer not-a-valid-jwt')
+        .set('Cookie', cookieValue)
+        .expect(401)
+        .expect((res) => expect(res.body.code).toBe('INVALID_TOKEN'));
+    });
+
+    it('cookie path still 403s a SUSPENDED seller (preserves the bearer-path semantic)', async () => {
+      const { sellerId, cookieValue } = await registerSeller();
+      // Flip to SUSPENDED.
+      await h.prisma.seller.update({
+        where: { id: sellerId },
+        data: { status: SellerStatus.SUSPENDED },
+      });
+
+      await request(h.baseUrl)
+        .get('/auth/seller/me')
+        .set('Cookie', cookieValue)
+        .expect(403)
+        .expect((res) => expect(res.body.code).toBe('ACCOUNT_NOT_ACTIVE'));
+
+      // Audit row written, severity MEDIUM, matches the SellerJwtGuard
+      // pattern.
+      const audit = await h.prisma.auditLog.findFirst({
+        where: { action: 'seller.access_denied_status', sellerId },
+      });
+      expect(audit).toBeTruthy();
+      expect((audit!.metadata as { status: string }).status).toBe('SUSPENDED');
+    });
+
+    it('no auth at all → 401', async () => {
+      await request(h.baseUrl)
+        .get('/auth/seller/me')
+        .expect(401)
+        .expect((res) => expect(res.body.code).toBe('UNAUTHORIZED'));
+    });
+  });
 });

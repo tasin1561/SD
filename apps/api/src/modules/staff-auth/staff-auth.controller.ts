@@ -7,6 +7,7 @@ import {
   Post,
   Req,
   Res,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -23,6 +24,8 @@ import {
   clearStaffRefreshCookie,
   setStaffRefreshCookie,
 } from '../../common/cookies/auth-cookies';
+import { JwtService } from '../auth-common/services/jwt.service';
+import { RefreshTokenService } from '../auth-common/services/refresh-token.service';
 import { StaffLoginDto } from './dto/login.dto';
 import {
   StaffPasswordResetConfirmDto,
@@ -41,7 +44,11 @@ interface AccessTokenResponse {
 @Controller('auth/staff')
 @ThrottleKey('auth-user')
 export class StaffAuthController {
-  constructor(private readonly svc: StaffAuthService) {}
+  constructor(
+    private readonly svc: StaffAuthService,
+    private readonly jwt: JwtService,
+    private readonly refreshTokens: RefreshTokenService,
+  ) {}
 
   // ---------- LOGIN ----------
 
@@ -182,17 +189,84 @@ export class StaffAuthController {
 
   // ---------- ME ----------
 
-  @UseGuards(StaffJwtGuard)
-  @ApiBearerAuth('staff-jwt')
+  /**
+   * Hybrid auth (Module 12 / Decision #1): accepts EITHER the
+   * `Authorization: Bearer <access>` token (client-side, the existing
+   * flow) OR the `__Host-staffRefresh` cookie (server-side SSR, the
+   * Next.js admin app's authenticated-page boot path).
+   *
+   * Bearer wins when both are present. The cookie path uses the
+   * READ-ONLY `RefreshTokenService.validateByPlaintext` — strictly
+   * distinct from `rotate()`:
+   *   - This handler NEVER calls rotate(); the cookie passes through
+   *     untouched, with no Set-Cookie on the response.
+   *   - A revoked cookie returns 401 here WITHOUT firing the
+   *     reuse-detection family-burn. The family-burn is reserved for
+   *     the consumption path (`POST /refresh`) where presenting a
+   *     revoked token is unambiguous replay; presenting the same
+   *     token to /me repeatedly is validation, not replay.
+   *
+   * This non-rotating property is the load-bearing detail of the
+   * SSR-auth model: the client owns rotation (silent-refresh on 401);
+   * the server-component path never rotates so it can never race the
+   * client's own rotation and burn its session.
+   *
+   * Marked `@Public()` so `StaffJwtGuard` does NOT auto-reject when a
+   * bearer is absent — handler does its own resolution.
+   */
+  @Public()
   @Get('me')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Return the authenticated staff profile' })
-  async me(@CurrentStaff() staff: AuthenticatedStaff) {
-    return this.svc.getMe(staff.id);
+  @ApiBearerAuth('staff-jwt')
+  @ApiOperation({
+    summary:
+      'Authenticated staff profile — accepts bearer access token OR __Host-staffRefresh cookie (cookie path is read-only, no rotation)',
+  })
+  async me(@Req() req: Request) {
+    const staffId = await this.resolveStaffId(req);
+    return this.svc.getMe(staffId);
+  }
+
+  /**
+   * Resolution order: bearer wins. The `JwtService.verifyStaffAccess`
+   * call throws on invalid bearer (signature/expiry/audience); we
+   * deliberately do NOT fall back to the cookie when the bearer is
+   * malformed — that would mask client bugs and let a stale bearer
+   * silently elevate to a cookie-derived identity. Only an ABSENT
+   * bearer triggers the cookie path.
+   */
+  private async resolveStaffId(req: Request): Promise<string> {
+    const bearer = extractBearer(req.header('authorization'));
+    if (bearer !== null) {
+      // Throws UnauthorizedException on invalid bearer — surface as 401.
+      const claims = this.jwt.verifyStaffAccess(bearer);
+      return claims.sub;
+    }
+    const cookie = readRefreshCookie(req);
+    if (!cookie) {
+      throw new UnauthorizedException({
+        code: 'UNAUTHORIZED',
+        message: 'Bearer token or __Host-staffRefresh cookie required',
+      });
+    }
+    const validated = await this.refreshTokens.validateByPlaintext('staff', cookie);
+    if (!validated) {
+      throw new UnauthorizedException({
+        code: 'UNAUTHORIZED',
+        message: 'Invalid or expired refresh session',
+      });
+    }
+    return validated.userId;
   }
 }
 
 function readRefreshCookie(req: Request): string {
   const raw = (req.cookies as Record<string, string | undefined> | undefined)?.[STAFF_REFRESH_COOKIE];
   return typeof raw === 'string' ? raw : '';
+}
+
+function extractBearer(header: string | undefined): string | null {
+  if (!header) return null;
+  const match = /^Bearer\s+(.+)$/i.exec(header);
+  return match?.[1]?.trim() ?? null;
 }

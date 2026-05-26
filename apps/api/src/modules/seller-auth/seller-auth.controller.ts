@@ -1,17 +1,21 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
   Post,
   Req,
   Res,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { ActorType, SellerStatus } from '@skydrop/db';
 import type { Request, Response } from 'express';
+import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentSeller } from '../../common/decorators/current-seller.decorator';
 import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/client-info.decorator';
@@ -23,6 +27,9 @@ import {
   clearSellerRefreshCookie,
   setSellerRefreshCookie,
 } from '../../common/cookies/auth-cookies';
+import { JwtService } from '../auth-common/services/jwt.service';
+import { RefreshTokenService } from '../auth-common/services/refresh-token.service';
+import { AuditLogService } from '../auth-common/services/audit-log.service';
 import { SellerLoginDto } from './dto/login.dto';
 import {
   SellerPasswordResetConfirmDto,
@@ -42,7 +49,13 @@ interface AccessTokenResponse {
 @Controller('auth/seller')
 @ThrottleKey('auth-user')
 export class SellerAuthController {
-  constructor(private readonly svc: SellerAuthService) {}
+  constructor(
+    private readonly svc: SellerAuthService,
+    private readonly jwt: JwtService,
+    private readonly refreshTokens: RefreshTokenService,
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditLogService,
+  ) {}
 
   // ---------- REGISTER VIA INVITATION ----------
 
@@ -200,17 +213,103 @@ export class SellerAuthController {
 
   // ---------- ME ----------
 
-  @UseGuards(SellerJwtGuard)
-  @ApiBearerAuth('seller-jwt')
+  /**
+   * Hybrid auth (Module 12 / Decision #1): accepts EITHER the
+   * `Authorization: Bearer <access>` token OR the
+   * `__Host-sellerRefresh` cookie. Bearer wins when both are present.
+   * The cookie path uses `RefreshTokenService.validateByPlaintext` —
+   * read-only, no rotation, no family-burn on revoked tokens (see
+   * StaffAuthController.me JSDoc for the full rationale). Mirrors the
+   * staff path for symmetry.
+   */
+  @Public()
   @Get('me')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Return the authenticated seller profile' })
-  async me(@CurrentSeller() seller: AuthenticatedSeller): Promise<SellerMe> {
-    return this.svc.getMe(seller.id);
+  @ApiBearerAuth('seller-jwt')
+  @ApiOperation({
+    summary:
+      'Authenticated seller profile — accepts bearer access token OR __Host-sellerRefresh cookie (cookie path is read-only, no rotation)',
+  })
+  async me(@Req() req: Request): Promise<SellerMe> {
+    const sellerId = await this.resolveSellerId(req);
+    // Status recheck — preserves the existing SellerJwtGuard semantics
+    // (suspended sellers 403 on /me; PENDING/REJECTED never pass). The
+    // guard is bypassed for the hybrid route, so we re-implement the
+    // check inline against either auth path. Audit the denial first so
+    // it survives a downstream response failure.
+    await this.assertActiveSeller(sellerId, req);
+    return this.svc.getMe(sellerId);
+  }
+
+  private async resolveSellerId(req: Request): Promise<string> {
+    const bearer = extractBearer(req.header('authorization'));
+    if (bearer !== null) {
+      const claims = this.jwt.verifySellerAccess(bearer);
+      return claims.sub;
+    }
+    const cookie = readRefreshCookie(req);
+    if (!cookie) {
+      throw new UnauthorizedException({
+        code: 'UNAUTHORIZED',
+        message: 'Bearer token or __Host-sellerRefresh cookie required',
+      });
+    }
+    const validated = await this.refreshTokens.validateByPlaintext('seller', cookie);
+    if (!validated) {
+      throw new UnauthorizedException({
+        code: 'UNAUTHORIZED',
+        message: 'Invalid or expired refresh session',
+      });
+    }
+    return validated.userId;
+  }
+
+  /** Mirrors SellerJwtGuard's status recheck on the hybrid /me path
+   *  (the guard is bypassed here so we run the check inline). /me is
+   *  not @SellerAuthAllowSuspended — SUSPENDED returns 403, same as
+   *  the previous bearer-only behavior. */
+  private async assertActiveSeller(sellerId: string, req: Request): Promise<void> {
+    const seller = await this.prisma.client.seller.findFirst({
+      where: { id: sellerId, deletedAt: null },
+      select: { id: true, status: true },
+    });
+    if (!seller) {
+      throw new UnauthorizedException({
+        code: 'UNAUTHORIZED',
+        message: 'Seller session no longer valid',
+      });
+    }
+    if (seller.status !== SellerStatus.APPROVED) {
+      await this.audit.log({
+        actorType: ActorType.SELLER,
+        sellerId: seller.id,
+        action: 'seller.access_denied_status',
+        entityType: 'seller',
+        entityId: seller.id,
+        metadata: {
+          status: seller.status,
+          path: req.url,
+          method: req.method,
+          ipAddress: req.ip ?? null,
+          userAgent: req.header('user-agent') ?? null,
+        },
+        severity: 'MEDIUM',
+      });
+      throw new ForbiddenException({
+        code: 'ACCOUNT_NOT_ACTIVE',
+        message: 'Account not active. Contact support.',
+      });
+    }
   }
 }
 
 function readRefreshCookie(req: Request): string {
   const raw = (req.cookies as Record<string, string | undefined> | undefined)?.[SELLER_REFRESH_COOKIE];
   return typeof raw === 'string' ? raw : '';
+}
+
+function extractBearer(header: string | undefined): string | null {
+  if (!header) return null;
+  const match = /^Bearer\s+(.+)$/i.exec(header);
+  return match?.[1]?.trim() ?? null;
 }

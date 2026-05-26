@@ -176,6 +176,43 @@ export class RefreshTokenService {
     return r.count;
   }
 
+  /**
+   * Module 12 (FE-4 / Decision #1) — READ-ONLY VALIDATION of a refresh
+   * token plaintext. Looks up by hash, returns the userId iff the row
+   * exists, is not expired, and is NOT revoked. Returns `null` for any
+   * other state (missing / expired / revoked) — NEVER throws, NEVER
+   * rotates, NEVER writes anything.
+   *
+   * The SSR flow (`GET /auth/{staff,seller}/me` via cookie, no bearer)
+   * depends on this. The browser holds the access token in MEMORY ONLY,
+   * so the server-rendered page boot has only the `__Host-` cookie to
+   * authenticate with — but it must NOT rotate (a server-side rotate
+   * would race the client's own silent-refresh and trip the
+   * reuse-detection family-burn against a legitimate session).
+   *
+   * Strict separation from `rotate()`:
+   *   - `rotate()` is the CONSUMPTION path: revoked-token reuse fires
+   *     the family-burn + writes `security.refresh_replay_detected`.
+   *   - `validateByPlaintext()` is the VALIDATION path: revoked-token
+   *     presentation returns `null`, no audit, no family burn.
+   *   - Presenting the SAME token to /me repeatedly is validation, not
+   *     replay. Presenting the same token to /refresh twice IS replay
+   *     (the first call revokes the row, the second hits the revoked
+   *     branch and burns the family). The split is by entry point.
+   */
+  async validateByPlaintext(
+    subject: SubjectKind,
+    plaintext: string,
+  ): Promise<{ userId: string } | null> {
+    if (!plaintext) return null;
+    const tokenHash = this.hashes.sha256Hex(plaintext);
+    const existing = await this.findByHash(this.prisma.client, subject, tokenHash);
+    if (!existing) return null;
+    if (existing.revokedAt !== null) return null;
+    if (existing.expiresAt.getTime() <= Date.now()) return null;
+    return { userId: existing.userId };
+  }
+
   /** Revoke a specific refresh token by its plaintext (used by logout). */
   async revokeByPlaintext(subject: SubjectKind, plaintext: string): Promise<boolean> {
     const tokenHash = this.hashes.sha256Hex(plaintext);
