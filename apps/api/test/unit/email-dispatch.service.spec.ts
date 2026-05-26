@@ -24,6 +24,7 @@ function makeSut(opts: {
   const captured: CapturedCreate[] = [];
   let nextId = 0;
 
+  const capturedUpdates: Array<{ where: { id: string }; data: Record<string, unknown> }> = [];
   const prisma = {
     client: {
       notificationLog: {
@@ -31,6 +32,10 @@ function makeSut(opts: {
           nextId += 1;
           captured.push(args);
           return { id: `log-${nextId}` };
+        }),
+        update: jest.fn(async (args: { where: { id: string }; data: Record<string, unknown> }) => {
+          capturedUpdates.push(args);
+          return { id: args.where.id };
         }),
       },
     },
@@ -56,6 +61,8 @@ function makeSut(opts: {
   return {
     svc: new EmailDispatchService(prisma, render, resend),
     captured,
+    capturedUpdates,
+    prisma,
     resendSendMock,
     renderMock: render.render as jest.Mock,
   };
@@ -170,5 +177,75 @@ describe('EmailDispatchService', () => {
       { order_number: 'SD-2026-12-000001' },
       'hi',
     );
+  });
+
+  // ── M11 (NOTIF-2 store-then-send) ─────────────────────────────────
+  describe('existingNotificationLogId — M11 store-then-send UPDATE path', () => {
+    it('UPDATEs the pre-created row instead of CREATing a fresh one on SENT', async () => {
+      const { svc, captured, capturedUpdates, prisma } = makeSut({
+        resendResponse: { ok: true, providerMessageId: 'msg-existing' },
+        templateHasHtml: true,
+      });
+
+      const res = await svc.send({
+        templateCode: 'seller.order_dispatched.email',
+        recipient: {
+          type: NotificationRecipientType.SELLER,
+          id: 'seller-1',
+          email: 'seller@x.io',
+        },
+        variables: { order_number: 'SD-X-1' },
+        existingNotificationLogId: 'preflight-log-1',
+      });
+
+      expect(res.status).toBe('SENT');
+      // No CREATE — the ledger already inserted the PENDING row.
+      expect((prisma.client.notificationLog.create as jest.Mock).mock.calls).toHaveLength(
+        0,
+      );
+      expect(captured).toHaveLength(0);
+      // ONE update to the pre-created row id.
+      expect(capturedUpdates).toHaveLength(1);
+      expect(capturedUpdates[0]?.where.id).toBe('preflight-log-1');
+      expect(capturedUpdates[0]?.data['status']).toBe(NotificationStatus.SENT);
+      expect(capturedUpdates[0]?.data['providerMessageId']).toBe('msg-existing');
+      expect(capturedUpdates[0]?.data['sentAt']).toBeInstanceOf(Date);
+      expect(res.notificationLogId).toBe('preflight-log-1');
+    });
+
+    it('UPDATEs the pre-created row to FAILED on send failure', async () => {
+      const { svc, capturedUpdates } = makeSut({
+        resendResponse: { ok: false, code: 'RESEND_ERROR', message: 'down' },
+      });
+      const res = await svc.send({
+        templateCode: 'seller.order_dispatched.email',
+        recipient: {
+          type: NotificationRecipientType.SELLER,
+          id: 'seller-1',
+          email: 'seller@x.io',
+        },
+        existingNotificationLogId: 'preflight-log-2',
+      });
+      expect(res.status).toBe('FAILED');
+      expect(capturedUpdates).toHaveLength(1);
+      expect(capturedUpdates[0]?.where.id).toBe('preflight-log-2');
+      expect(capturedUpdates[0]?.data['status']).toBe(NotificationStatus.FAILED);
+      expect(capturedUpdates[0]?.data['failureCode']).toBe('RESEND_ERROR');
+      expect(capturedUpdates[0]?.data['failedAt']).toBeInstanceOf(Date);
+      expect(capturedUpdates[0]?.data['sentAt']).toBeNull();
+    });
+
+    it('legacy call path (no existingNotificationLogId) still CREATEs', async () => {
+      const { svc, captured, capturedUpdates } = makeSut({
+        resendResponse: { ok: true, providerMessageId: 'msg' },
+      });
+      await svc.send({
+        templateCode: 'staff.password_reset.email',
+        recipient: { type: NotificationRecipientType.STAFF, email: 'alex@x.io' },
+      });
+      // Legacy fire-once path unchanged: CREATE one row, no UPDATE.
+      expect(captured).toHaveLength(1);
+      expect(capturedUpdates).toHaveLength(0);
+    });
   });
 });
