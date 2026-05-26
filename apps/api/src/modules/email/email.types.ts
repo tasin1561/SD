@@ -27,6 +27,19 @@ export interface EmailDispatchInput {
   triggerEvent?: string | null;
   /** Optional override for the "from" address (mostly for tests). */
   fromOverride?: string;
+  /**
+   * Module 11 (NOTIF-2 store-then-send): when set, EmailDispatchService
+   * UPDATES the existing notification_logs row (created in PENDING/
+   * QUEUED state by NotificationLedgerService.enqueue) instead of
+   * INSERTING a new row. This is the M11 fan-out path's pre-flight
+   * gate model — the row IS the dedup gate, created BEFORE the BullMQ
+   * enqueue so a retry hits the partial-unique on (event_id, …)
+   * before Resend is called a second time. Legacy fire-once call
+   * sites (auth, seller-mgmt, inventory alerts/receipt/adjustments,
+   * category-proposal) omit this field and keep the create-on-send
+   * model unchanged.
+   */
+  existingNotificationLogId?: string;
 }
 
 export interface ResolvedSender {

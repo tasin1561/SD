@@ -48,33 +48,61 @@ export class EmailDispatchService {
       ? NotificationStatus.SENT
       : NotificationStatus.FAILED;
 
-    const log = await this.prisma.client.notificationLog.create({
-      data: {
-        templateId: rendered.templateId,
-        templateCode: rendered.templateCode,
-        templateVersion: rendered.templateVersion,
-        channel: NotificationChannel.EMAIL,
-        recipientType: input.recipient.type,
-        recipientId: input.recipient.id ?? null,
-        toEmail: input.recipient.email,
-        subject,
-        body: rendered.body,
-        htmlBody: rendered.htmlBody,
-        variables: (input.variables ?? Prisma.DbNull) as Prisma.InputJsonValue,
-        orderId: input.orderId ?? null,
-        shipmentId: input.shipmentId ?? null,
-        callAttemptId: input.callAttemptId ?? null,
-        triggerEvent: input.triggerEvent ?? null,
-        provider: 'resend',
-        providerMessageId: sendResult.ok ? sendResult.providerMessageId : null,
-        status,
-        sentAt: sendResult.ok ? new Date() : null,
-        failedAt: sendResult.ok ? null : new Date(),
-        failureCode: sendResult.ok ? null : sendResult.code,
-        failureMessage: sendResult.ok ? null : sendResult.message,
-      },
-      select: { id: true },
-    });
+    // Module 11 (NOTIF-2 store-then-send): when the M11 fan-out path
+    // pre-created the ledger row, UPDATE that row instead of creating
+    // a fresh one. Keeps the row stable from intent (QUEUED) →
+    // outcome (SENT/FAILED); the row id stays the dedup gate's anchor.
+    // Legacy fire-once callers (the 8+ existing sites — auth,
+    // seller-mgmt, inventory, category-proposal) leave
+    // existingNotificationLogId unset and get the original create
+    // path unchanged.
+    const log = input.existingNotificationLogId
+      ? await this.prisma.client.notificationLog.update({
+          where: { id: input.existingNotificationLogId },
+          data: {
+            templateId: rendered.templateId,
+            templateCode: rendered.templateCode,
+            templateVersion: rendered.templateVersion,
+            subject,
+            body: rendered.body,
+            htmlBody: rendered.htmlBody,
+            provider: 'resend',
+            providerMessageId: sendResult.ok ? sendResult.providerMessageId : null,
+            status,
+            sentAt: sendResult.ok ? new Date() : null,
+            failedAt: sendResult.ok ? null : new Date(),
+            failureCode: sendResult.ok ? null : sendResult.code,
+            failureMessage: sendResult.ok ? null : sendResult.message,
+          },
+          select: { id: true },
+        })
+      : await this.prisma.client.notificationLog.create({
+          data: {
+            templateId: rendered.templateId,
+            templateCode: rendered.templateCode,
+            templateVersion: rendered.templateVersion,
+            channel: NotificationChannel.EMAIL,
+            recipientType: input.recipient.type,
+            recipientId: input.recipient.id ?? null,
+            toEmail: input.recipient.email,
+            subject,
+            body: rendered.body,
+            htmlBody: rendered.htmlBody,
+            variables: (input.variables ?? Prisma.DbNull) as Prisma.InputJsonValue,
+            orderId: input.orderId ?? null,
+            shipmentId: input.shipmentId ?? null,
+            callAttemptId: input.callAttemptId ?? null,
+            triggerEvent: input.triggerEvent ?? null,
+            provider: 'resend',
+            providerMessageId: sendResult.ok ? sendResult.providerMessageId : null,
+            status,
+            sentAt: sendResult.ok ? new Date() : null,
+            failedAt: sendResult.ok ? null : new Date(),
+            failureCode: sendResult.ok ? null : sendResult.code,
+            failureMessage: sendResult.ok ? null : sendResult.message,
+          },
+          select: { id: true },
+        });
 
     if (!sendResult.ok) {
       this.logger.warn(

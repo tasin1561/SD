@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { EmailModule } from '../email/email.module';
 import { NotificationEventMappingService } from './services/notification-event-mapping.service';
+import { NotificationLedgerService } from './services/notification-ledger.service';
 
 /**
  * Module 11 — Notifications fan-out.
@@ -12,9 +14,11 @@ import { NotificationEventMappingService } from './services/notification-event-m
  * gate + post-commit enqueue), listener (post-commit subscriber on
  * the R3 OrderLifecycleEventBus) — without duplicating the substrate.
  *
- * Service surface (commit 3 of 10 — only the mapping service is
- * provided in this commit; ledger + listener land in commits 4 + 6):
+ * Service surface (commit 4 of 10 — listener + event-bus land in
+ * commits 5 + 6 + 7):
  *   - NotificationEventMappingService  (NOTIF-4, pure logic)
+ *   - NotificationLedgerService        (NOTIF-2/3/8 — composite-key
+ *                                       gate + enqueue + SKIPPED)
  *
  * Nothing is exported externally yet — `NotificationListener` (commit
  * 6) is the only consumer; it subscribes to the event bus and calls
@@ -22,7 +26,8 @@ import { NotificationEventMappingService } from './services/notification-event-m
  * this module's internals (NOTIF-5 — order module remains unaware).
  */
 @Module({
-  providers: [NotificationEventMappingService],
+  imports: [EmailModule],
+  providers: [NotificationEventMappingService, NotificationLedgerService],
   exports: [],
 })
 export class NotificationsModule {}
