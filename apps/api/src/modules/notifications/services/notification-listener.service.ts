@@ -147,7 +147,19 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
           toEmail: resolved.toEmail,
           variables,
           orderId: ctx.orderId,
-          shipmentId: ctx.shipmentId,
+          // DELIBERATELY null: a notification_logs.shipment_id FK
+          // INSERT acquires a PG `FOR KEY SHARE` row lock on the
+          // parent `shipments` row for the duration of the INSERT.
+          // That conflicts with PickQueueService.pullNext's
+          // `FOR UPDATE OF s SKIP LOCKED` (WMS-2), causing pullNext
+          // to silently skip the just-provisioned shipment on a
+          // CONFIRMED transition fan-out race (characterised at
+          // ~80% flake rate against tracking-flow's
+          // driveToDispatched helper before this fix). The forensic
+          // linkage via notification_logs.order_id is sufficient —
+          // the live shipment is reachable through the order's
+          // relations. Captured in phase-1a-debt (commit 10).
+          shipmentId: null,
           triggerEvent,
         });
       } catch (err) {
