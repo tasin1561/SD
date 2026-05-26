@@ -2171,6 +2171,16 @@ model NotificationLog {
   shipmentId           String?                   @map("shipment_id") @db.Uuid
   callAttemptId        String?                   @map("call_attempt_id") @db.Uuid
   triggerEvent         String?                   @map("trigger_event")
+  // Module 11 (NOTIF-2): deterministic per-lifecycle-event idempotency
+  // key (e.g., "order_status:<orderId>:<from>:<to>"). Gated by a
+  // PARTIAL unique index — see the migration
+  // 20260526000000_notifications_eventid_skipped_partial_unique
+  // (Prisma cannot express WHERE clauses on unique indexes — same
+  // migration-managed pattern as call_queue_entries_open_order_uq).
+  // Legacy fire-once call sites (auth/seller-mgmt/inventory/category-
+  // proposal) leave this NULL and continue to dedup by hand-coded
+  // findFirst; only the M11 fan-out path populates it.
+  eventId              String?                   @map("event_id")
   provider             String?
   providerMessageId    String?                   @map("provider_message_id")
   status               NotificationStatus        @default(QUEUED)
@@ -3051,6 +3061,11 @@ enum NotificationStatus {
   FAILED    @map("failed")
   THROTTLED @map("throttled")
   CANCELLED @map("cancelled")
+  // Module 11 (NOTIF-8): a fan-out target with no resolvable address
+  // (e.g., a customer with no recipient email on the order snapshot)
+  // lands a ledger row in SKIPPED — not FAILED. Lets reports
+  // distinguish "provider rejected" from "send never attempted".
+  SKIPPED   @map("skipped")
 
   @@map("notification_status")
 }

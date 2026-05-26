@@ -1284,6 +1284,10 @@ Every send attempt.
 - Destinations: `toEmail?`, `toPhoneE164?`, `toInAppUserId?`
 - Content: `subject?`, `body: Text`, `htmlBody: Text?`, `variables: Json?`
 - Context: `orderId?`, `shipmentId?`, `callAttemptId?`, `triggerEvent`
+- **`eventId?`** (M11, NOTIF-2) — deterministic per-lifecycle-event
+  idempotency key (e.g. `order_status:<orderId>:<from>:<to>`). Carried
+  ONLY by the M11 lifecycle-event fan-out path; legacy fire-once call
+  sites leave it NULL.
 - Provider: `provider`, `providerMessageId`
 - `status: NotificationStatus`
 - Lifecycle: `sentAt`, `deliveredAt`, `failedAt`
@@ -1292,9 +1296,18 @@ Every send attempt.
 - Retries: `attemptNumber`, `parentNotificationId?`
 - `readAt?`
 
-**Indexes:** `(recipientType, recipientId)`, `orderId`, `shipmentId`, `status`, `providerMessageId`, `(templateCode, createdAt)`, `createdAt`
+**Indexes:** `(recipientType, recipientId)`, `orderId`, `shipmentId`, `status`, `providerMessageId`, `(templateCode, createdAt)`, `createdAt`, **`eventId WHERE event_id IS NOT NULL`** (M11)
 
-**NotificationStatus enum:** `QUEUED`, `SENDING`, `SENT`, `DELIVERED`, `READ`, `BOUNCED`, `FAILED`, `THROTTLED`, `CANCELLED`
+**Migration-managed partial unique** (M11, NOTIF-2/3 — Prisma cannot
+express `WHERE` on unique indexes; same pattern as
+`call_queue_entries_open_order_uq`):
+`UNIQUE (event_id, recipient_type, recipient_id, channel, template_code) WHERE event_id IS NOT NULL`
+(see migration `20260526000000_notifications_eventid_skipped_partial_unique`).
+A duplicate insert from a re-emitted lifecycle event lands a
+unique-violation that the `NotificationLedgerService` catches and
+converts to `{deduped:true}` — the row is the dedup gate.
+
+**NotificationStatus enum:** `QUEUED`, `SENDING`, `SENT`, `DELIVERED`, `READ`, `BOUNCED`, `FAILED`, `THROTTLED`, `CANCELLED`, **`SKIPPED`** (M11, NOTIF-8: fan-out target had no resolvable address — send never attempted)
 
 ## seller_webhook_endpoints
 Seller-configured outbound webhooks.
