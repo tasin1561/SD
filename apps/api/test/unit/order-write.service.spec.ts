@@ -105,6 +105,13 @@ function makeService(
   const voidForOrder = jest.fn(async () => ({ voided: 0 }));
   const shipmentProvision = { provisionFromSnapshot, voidForOrder };
 
+  // M11: the post-commit lifecycle-event emit (6th hook). The test
+  // doesn't need to assert emits here — that's covered by the
+  // dedicated bus + listener + e2e tests — but the constructor signature
+  // is mandatory.
+  const busEmit = jest.fn();
+  const lifecycleBus = { emit: busEmit };
+
   const svc = new OrderWriteService(
     { client } as unknown as PrismaService,
     stateMachine,
@@ -114,6 +121,7 @@ function makeService(
     callQueue as never,
     shipmentProvision as never,
     mutation as never,
+    lifecycleBus as never,
   );
   return {
     svc,

@@ -25,6 +25,7 @@ import {
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { CallQueueService } from '../../call-queue/services/call-queue.service';
 import { ShipmentProvisionService } from '../../shipment-provision/services/shipment-provision.service';
+import { OrderLifecycleEventBus } from '../../lifecycle-events/order-lifecycle-event-bus.service';
 import { OrderEventWriterService, type EventActor } from './order-event-writer.service';
 import {
   OrderSideEffect,
@@ -111,6 +112,17 @@ export interface TransitionStatusResult {
 }
 
 /**
+ * M11: internal-only extension carrying the per-occurrence statusEventId
+ * needed by the post-commit lifecycle-event emit (NOTIF-1). Kept off
+ * the public TransitionStatusResult so cross-module consumers (Modules
+ * 7, 8, 9, future pricing/shipments) don't ripple-rebuild against an
+ * implementation detail of the M11 emit wiring.
+ */
+interface InternalTransitionResult extends TransitionStatusResult {
+  readonly statusEventId: string;
+}
+
+/**
  * ORD-1/ORD-3 — the order lifecycle WRITE engine and the sanctioned
  * cross-module write boundary. Modules 7 (call centre) and 8 (warehouse
  * ops) drive every post-DRAFT status change through `transitionStatus()`;
@@ -183,6 +195,11 @@ export class OrderWriteService {
     private readonly callQueue: CallQueueService,
     private readonly shipmentProvision: ShipmentProvisionService,
     private readonly mutation: StockMutationService,
+    // M11 (NOTIF-5): the order module emits to the R3 dependency-
+    // free bus; it has NO awareness of the notifications module. A
+    // listener that does not exist (or hasn't subscribed yet) is a
+    // SILENT no-op — emit() is best-effort by contract (NOTIF-1).
+    private readonly lifecycleBus: OrderLifecycleEventBus,
   ) {}
 
   /**
@@ -294,7 +311,7 @@ export class OrderWriteService {
 
     const sideEffects = this.stateMachine.requiredSideEffects(from, to);
 
-    let result: TransitionStatusResult;
+    let result: InternalTransitionResult;
     if (sideEffects.includes(OrderSideEffect.RESERVE_STOCK)) {
       result = await this.transitionWithReserve(order, from, to, input);
     } else if (sideEffects.includes(OrderSideEffect.RELEASE_STOCK)) {
@@ -362,7 +379,67 @@ export class OrderWriteService {
     ) {
       await this.voidShipmentForOrder(order.id, result.status, input.ctx);
     }
-    return result;
+
+    // M11 (NOTIF-1 / NOTIF-5): 6th post-commit hook — emit the
+    // lifecycle event to the R3 OrderLifecycleEventBus. The
+    // notifications module subscribes; the order module knows nothing
+    // about it (the bus is the dep-free shared primitive). Three
+    // layers of "never block / never rollback":
+    //   1. emit() runs AFTER all the prior post-commit hooks AND
+    //      after the transition tx committed → the transition is
+    //      durable regardless of what the bus does.
+    //   2. The bus' emit() itself wraps Subject.next() in try/catch
+    //      and never re-throws (NOTIF-1 contract guarantee).
+    //   3. We wrap it again here in try/catch for defence-in-depth —
+    //      a future bus impl with different semantics (e.g., a
+    //      Phase-2 Redis pub/sub) must not be able to leak failures
+    //      into the order transition return path either.
+    // We use result.status (NOT `to`) so a reserve-failed →
+    // OUT_OF_STOCK landing fires its OWN lifecycle event (mapping
+    // routes OUT_OF_STOCK to [] anyway, but the emit is the
+    // observable record).
+    this.emitLifecycleEvent(order.sellerId, result, input);
+
+    // Strip the internal-only statusEventId — public callers see only
+    // TransitionStatusResult.
+    const { statusEventId: _unused, ...publicResult } = result;
+    return publicResult;
+  }
+
+  /** M11 6th post-commit hook — best-effort, double-wrapped (the bus
+   *  also swallows). NEVER awaited: a synchronous Subject emit is
+   *  the contract, and even if a future async listener path is added
+   *  it must not block the transition. */
+  private emitLifecycleEvent(
+    sellerId: string,
+    result: InternalTransitionResult,
+    input: TransitionStatusInput,
+  ): void {
+    try {
+      this.lifecycleBus.emit({
+        orderId: result.orderId,
+        sellerId,
+        from: result.fromStatus,
+        to: result.status,
+        statusEventId: result.statusEventId,
+        actorType: input.actor.type,
+        actorId: input.actor.id ?? null,
+        occurredAt: new Date(),
+      });
+    } catch (err) {
+      // The bus contracts NEVER to re-throw, but defensively swallow
+      // any path that might (e.g., a future bus impl swap-in).
+      this.logger.error(
+        {
+          orderId: result.orderId,
+          from: result.fromStatus,
+          to: result.status,
+          statusEventId: result.statusEventId,
+          err: (err as Error).message,
+        },
+        'Lifecycle-event emit threw despite bus contract; swallowed (NOTIF-1)',
+      );
+    }
   }
 
   /** M8 pack-eligibility hook — audit-only for Phase 1A. Best-effort:
@@ -533,7 +610,7 @@ export class OrderWriteService {
     from: OrderStatus,
     to: OrderStatus,
     input: TransitionStatusInput,
-  ): Promise<TransitionStatusResult> {
+  ): Promise<InternalTransitionResult> {
     const warehouseId = await this.resolveDefaultWarehouseId();
     const createdReservationIds: string[] = [];
 
@@ -557,7 +634,7 @@ export class OrderWriteService {
         // otherwise leave the status untouched and surface the 409 (the
         // caller — Module 7 — owns retry/escalation).
         if (this.stateMachine.isValidTransition(from, OrderStatus.OUT_OF_STOCK)) {
-          await this.writeStatusTx(order, from, OrderStatus.OUT_OF_STOCK, input, {
+          const { statusEventId } = await this.writeStatusTx(order, from, OrderStatus.OUT_OF_STOCK, input, {
             eventDescription: 'Reservation failed at confirm — out of stock',
             auditAction: 'order.out_of_stock',
           });
@@ -566,18 +643,20 @@ export class OrderWriteService {
             fromStatus: from,
             status: OrderStatus.OUT_OF_STOCK,
             reservationOutcome: 'OUT_OF_STOCK',
+            statusEventId,
           };
         }
       }
       throw e;
     }
 
+    let statusEventId: string;
     try {
-      await this.writeStatusTx(order, from, to, input, {
+      ({ statusEventId } = await this.writeStatusTx(order, from, to, input, {
         eventDescription: input.reason ?? `Status ${from} → ${to}`,
         auditAction: 'order.status_changed',
         stockEvent: { kind: 'RESERVED', reservationIds: createdReservationIds },
-      });
+      }));
     } catch (e) {
       // Status tx failed AFTER reservations committed → compensate.
       this.logger.error(
@@ -593,6 +672,7 @@ export class OrderWriteService {
       fromStatus: from,
       status: to,
       reservationOutcome: 'RESERVED',
+      statusEventId,
     };
   }
 
@@ -604,8 +684,8 @@ export class OrderWriteService {
     to: OrderStatus,
     input: TransitionStatusInput,
     mode: 'RELEASE' | 'FULFILL',
-  ): Promise<TransitionStatusResult> {
-    await this.writeStatusTx(order, from, to, input, {
+  ): Promise<InternalTransitionResult> {
+    const { statusEventId } = await this.writeStatusTx(order, from, to, input, {
       eventDescription: input.reason ?? `Status ${from} → ${to}`,
       auditAction: 'order.status_changed',
     });
@@ -637,7 +717,7 @@ export class OrderWriteService {
     }
     if (active.length === 0) outcome = null;
 
-    return { orderId: order.id, fromStatus: from, status: to, reservationOutcome: outcome };
+    return { orderId: order.id, fromStatus: from, status: to, reservationOutcome: outcome, statusEventId };
   }
 
   // ── DISPATCH_STOCK (Module 9, Model A — the bug-1 fix): the ONE
@@ -667,7 +747,7 @@ export class OrderWriteService {
     from: OrderStatus,
     to: OrderStatus,
     input: TransitionStatusInput,
-  ): Promise<TransitionStatusResult> {
+  ): Promise<InternalTransitionResult> {
     // Resolve the order's LIVE shipment (Phase 1A: one shipment per
     // order; CANCELLED / FAILED_AT_CREATION — e.g. a superseded parcel —
     // excluded). The DISPATCH movements + the gate are keyed on it.
@@ -741,7 +821,7 @@ export class OrderWriteService {
     }
 
     // 3. LOCAL TX — the authoritative transition.
-    await this.writeStatusTx(order, from, to, input, {
+    const { statusEventId } = await this.writeStatusTx(order, from, to, input, {
       eventDescription: input.reason ?? `Status ${from} → ${to}`,
       auditAction: 'order.status_changed',
     });
@@ -767,6 +847,7 @@ export class OrderWriteService {
       fromStatus: from,
       status: to,
       reservationOutcome: outcome,
+      statusEventId,
     };
   }
 
@@ -775,12 +856,12 @@ export class OrderWriteService {
     from: OrderStatus,
     to: OrderStatus,
     input: TransitionStatusInput,
-  ): Promise<TransitionStatusResult> {
-    await this.writeStatusTx(order, from, to, input, {
+  ): Promise<InternalTransitionResult> {
+    const { statusEventId } = await this.writeStatusTx(order, from, to, input, {
       eventDescription: input.reason ?? `Status ${from} → ${to}`,
       auditAction: 'order.status_changed',
     });
-    return { orderId: order.id, fromStatus: from, status: to, reservationOutcome: null };
+    return { orderId: order.id, fromStatus: from, status: to, reservationOutcome: null, statusEventId };
   }
 
   // ── the atomic order DB unit (status + events + audit) ───────────────
@@ -795,9 +876,16 @@ export class OrderWriteService {
       auditAction: string;
       stockEvent?: { kind: 'RESERVED'; reservationIds: string[] };
     },
-  ): Promise<void> {
+  ): Promise<{ statusEventId: string }> {
     const now = new Date();
     const isStaff = input.actor.type === ActorType.STAFF;
+    // Captured INSIDE the tx and returned to the caller — used by the
+    // M11 post-commit lifecycle-event emit (commit 7) as the unique
+    // per-occurrence dedup anchor (OrderEvent.id is a uuidv7 generated
+    // per STATUS_CHANGED row; the NDR retry cycle DELIVERY_FAILED →
+    // OFD → DELIVERY_FAILED produces three distinct ids — both NDR
+    // occurrences fan out as distinct notification rounds).
+    let capturedStatusEventId: string | null = null;
     await this.prisma.client.$transaction(async (tx) => {
       const staffConnect =
         isStaff && input.actor.id ? { connect: { id: input.actor.id } } : null;
@@ -814,13 +902,14 @@ export class OrderWriteService {
       }
       await tx.order.update({ where: { id: order.id }, data });
 
-      await this.events.statusChanged(tx, {
+      const statusEvent = await this.events.statusChanged(tx, {
         orderId: order.id,
         from,
         to,
         actor: input.actor,
         description: opts.eventDescription,
       });
+      capturedStatusEventId = statusEvent.id;
       if (opts.stockEvent?.kind === 'RESERVED') {
         await this.events.stockReserved(tx, order.id, input.actor, {
           reservationIds: opts.stockEvent.reservationIds,
@@ -848,6 +937,17 @@ export class OrderWriteService {
         tx,
       );
     });
+    // INVARIANT: capturedStatusEventId is set by the events.statusChanged
+    // call above which always runs inside the tx and which Prisma will
+    // not allow to resolve to undefined (uuidv7 is dbgenerated, NOT
+    // NULL). If we somehow reach this point with a null, the tx
+    // must have committed an incomplete write — refuse to continue.
+    if (capturedStatusEventId === null) {
+      throw new InternalServerErrorException(
+        'writeStatusTx: STATUS_CHANGED event id was not captured',
+      );
+    }
+    return { statusEventId: capturedStatusEventId };
   }
 
   // ── helpers ──────────────────────────────────────────────────────────

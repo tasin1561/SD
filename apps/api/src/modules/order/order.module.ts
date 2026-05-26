@@ -5,6 +5,7 @@ import { InventoryStockModule } from '../inventory-stock/inventory-stock.module'
 import { InventorySharedModule } from '../inventory-shared/inventory-shared.module';
 import { CallQueueModule } from '../call-queue/call-queue.module';
 import { ShipmentProvisionModule } from '../shipment-provision/shipment-provision.module';
+import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.module';
 import { OrderCoreModule } from './order-core.module';
 import { SellerOrderController } from './controllers/seller-order.controller';
 import { SellerCustomerController } from './controllers/seller-customer.controller';
@@ -56,6 +57,11 @@ import { OrderWriteService } from './services/order-write.service';
     InventorySharedModule,
     CallQueueModule,
     ShipmentProvisionModule,
+    // Module 11 (NOTIF-5): the R3 lifecycle-event primitive — provides
+    // OrderLifecycleEventBus to OrderWriteService for the post-commit
+    // emit hook. The order module knows nothing about the
+    // notifications module on the other side of the bus.
+    LifecycleEventsModule,
   ],
   controllers: [
     SellerOrderController,
