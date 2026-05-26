@@ -16,6 +16,7 @@ import argon2 from 'argon2';
 import { prisma, StaffRole, type PrismaClient } from '@skydrop/db';
 import { AppModule } from '../../src/app.module';
 import { AllExceptionsFilter } from '../../src/common/filters/all-exceptions.filter';
+import { NotificationListener } from '../../src/modules/notifications/services/notification-listener.service';
 
 export interface AppHarness {
   app: NestExpressApplication;
@@ -70,14 +71,49 @@ export async function bootTestApp(): Promise<AppHarness> {
 }
 
 /**
+ * M11 follow-up: quiesce any in-flight NotificationListener work
+ * BEFORE the harness starts wiping tables. The lifecycle emit is
+ * fire-and-forget (NOTIF-1 best-effort); within a single test suite
+ * the app stays up across tests, and a leaked handle() from the
+ * previous test can be mid-INSERT on notification_logs (which holds
+ * FK RowShareLocks on orders/shipments) at the exact moment the next
+ * test's beforeEach issues a TRUNCATE … CASCADE (AccessExclusiveLock).
+ * Postgres detects the lock-cycle and aborts the TRUNCATE — surfaced
+ * as the `40P01 deadlock detected` errors against
+ * `resetWarehouseState`. Calling listener.drainInFlight() first
+ * serialises the listener's writes before the truncate; for suites
+ * that pass a harness this is automatic, callers that pass only
+ * prisma (legacy) get the old behavior. Safe + no-op when the app
+ * has no NotificationListener provider (it is universally registered
+ * via AppModule → NotificationsModule, so this is always available
+ * in e2e).
+ */
+export async function drainNotificationListener(
+  app: NestExpressApplication,
+): Promise<void> {
+  const listener = app.get(NotificationListener, { strict: false });
+  await listener.drainInFlight();
+}
+
+/**
  * Wipes the auth-related tables so each test starts from a clean slate
  * (seed reference data — notification_templates, system_settings, etc.
  * — is preserved). Catalog tables go first: products/variants/proposals
  * FK-restrict seller deletion, so a suite that created catalog rows
  * would otherwise block the next suite's seller.deleteMany regardless of
  * run order.
+ *
+ * When the `app` argument is supplied, the harness first drains any
+ * in-flight NotificationListener work (M11 follow-up — see
+ * `drainNotificationListener` docs). All e2e specs that exercise an
+ * order lifecycle transition SHOULD pass the app; specs that don't
+ * touch orders can still call the legacy single-arg form.
  */
-export async function resetAuthState(prisma: PrismaClient): Promise<void> {
+export async function resetAuthState(
+  prisma: PrismaClient,
+  app?: NestExpressApplication,
+): Promise<void> {
+  if (app) await drainNotificationListener(app);
   // Order-critical chain (CLAUDE MUST #12): Module-8 warehouse rows
   // (shipment_items FK stock_batches/warehouse_bins; shipments FK
   // orders/staff_users; manifests FK staff_users) → resetWarehouseState

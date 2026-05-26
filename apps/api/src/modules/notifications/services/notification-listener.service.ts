@@ -60,6 +60,23 @@ import type { EmailVariables } from '../../email/email.types';
 export class NotificationListener implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(NotificationListener.name);
   private subscription: Subscription | null = null;
+  // M11 follow-up: in-flight handle() promises must be DRAINED at
+  // teardown. Bus.emit is synchronous; the subscribe wrapper spawns
+  // handle() via `void ... .catch()` and returns to the emitter
+  // immediately — so handle()'s async work (loadOrderContext +
+  // per-target ledger.enqueue) outlives emit. In the e2e harness each
+  // test SUITE boots and closes its own Nest app; without an explicit
+  // drain, the prior suite's in-flight handle() promises continue
+  // executing against the (singleton) PrismaClient + (logical) Redis
+  // db while the next suite resets state. That manifests as the
+  // "Force exiting Jest async operations" warning AND surfaces as
+  // intermittent cross-suite flakes when a leaked write contends with
+  // the next suite's TRUNCATE / next test's reservation assertions.
+  // We track every in-flight promise here and Promise.allSettled them
+  // in onModuleDestroy AFTER unsubscribing (so no new work joins the
+  // set mid-drain). Production cost is negligible (a Set add/delete
+  // per emit); the value is deterministic test teardown.
+  private readonly inFlight = new Set<Promise<void>>();
 
   constructor(
     private readonly bus: OrderLifecycleEventBus,
@@ -75,27 +92,61 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
     // can never fire before the rest of the app is ready.
     this.subscription = this.bus.subscribe((event) => {
       // The handler returns a Promise; the bus' subscribe wrapper
-      // catches sync throws but NOT promise rejections. Use a
-      // void-returning trampoline that catches the rejection.
-      void this.handle(event).catch((err) => {
-        this.logger.error(
-          {
-            orderId: event.orderId,
-            from: event.from,
-            to: event.to,
-            statusEventId: event.statusEventId,
-            err: (err as Error).message,
-          },
-          'NotificationListener: handle() rejected; swallowed (NOTIF-1)',
-        );
-      });
+      // catches sync throws but NOT promise rejections. Track the
+      // promise so onModuleDestroy can drain it; the .catch keeps
+      // NOTIF-1 (best-effort, never throws to the emitter); the
+      // .finally removes it from the in-flight set on settle so the
+      // set stays bounded under steady-state load.
+      const p = this.handle(event)
+        .catch((err) => {
+          this.logger.error(
+            {
+              orderId: event.orderId,
+              from: event.from,
+              to: event.to,
+              statusEventId: event.statusEventId,
+              err: (err as Error).message,
+            },
+            'NotificationListener: handle() rejected; swallowed (NOTIF-1)',
+          );
+        })
+        .finally(() => {
+          this.inFlight.delete(p);
+        });
+      this.inFlight.add(p);
     });
     this.logger.log('NotificationListener subscribed to OrderLifecycleEventBus');
   }
 
-  onModuleDestroy(): void {
+  async onModuleDestroy(): Promise<void> {
+    // Unsubscribe FIRST so a late emit during drain doesn't append a
+    // new promise to the set; allSettled (never throws) AWAITS every
+    // in-flight handle() so cross-suite contamination cannot happen.
+    // The bus' own onModuleDestroy completes the Subject — Nest tears
+    // down dependents (this listener) before dependencies (the bus
+    // module), so unsubscribe + drain run BEFORE the bus completes,
+    // matching the documented teardown ordering invariant.
     this.subscription?.unsubscribe();
     this.subscription = null;
+    await this.drainInFlight();
+  }
+
+  /**
+   * Await every in-flight handle() promise. Public so the e2e harness
+   * can quiesce listener work BETWEEN tests within a suite (the app
+   * stays up across tests in a suite; only afterAll closes it, so
+   * onModuleDestroy alone is insufficient for within-suite
+   * isolation). The use case: a test's transition emits a lifecycle
+   * event → handle() spawns async ledger writes that acquire FK
+   * RowShareLocks on orders/shipments → the NEXT test's beforeEach
+   * TRUNCATE wants AccessExclusiveLock and deadlocks against the
+   * still-running INSERT. Calling drainInFlight() before the
+   * TRUNCATE chain serialises listener work and prevents the
+   * deadlock. Safe to call repeatedly; no-op when the set is empty.
+   */
+  async drainInFlight(): Promise<void> {
+    if (this.inFlight.size === 0) return;
+    await Promise.allSettled([...this.inFlight]);
   }
 
   async handle(event: OrderLifecycleEvent): Promise<void> {

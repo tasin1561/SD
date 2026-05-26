@@ -41,7 +41,7 @@ describe('Warehouse manifest flow (e2e)', () => {
 
   beforeEach(async () => {
     await flushTestRedis();
-    await resetAuthState(h.prisma);
+    await resetAuthState(h.prisma, h.app);
 
     const staff = await createTestStaff(h.prisma); // SUPER_ADMIN
     staffId = staff.id;

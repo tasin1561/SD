@@ -50,7 +50,7 @@ describe('Warehouse RTO flow (e2e)', () => {
 
   beforeEach(async () => {
     await flushTestRedis();
-    await resetAuthState(h.prisma);
+    await resetAuthState(h.prisma, h.app);
 
     const staff = await createTestStaff(h.prisma);
     staffId = staff.id;

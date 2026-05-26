@@ -29,7 +29,7 @@ describe('Staff auth (e2e)', () => {
 
   beforeEach(async () => {
     await flushTestRedis();
-    await resetAuthState(h.prisma);
+    await resetAuthState(h.prisma, h.app);
     staff = await createTestStaff(h.prisma);
   });
 

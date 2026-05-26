@@ -24,7 +24,7 @@ describe('Module 2 (e2e): onboarding flow + suspension + addresses + prefs', () 
 
   beforeEach(async () => {
     await flushTestRedis();
-    await resetAuthState(h.prisma);
+    await resetAuthState(h.prisma, h.app);
     const staff = await createTestStaff(h.prisma);
     const login = await request(h.baseUrl)
       .post('/auth/staff/login')

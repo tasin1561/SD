@@ -76,7 +76,7 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
 
   beforeEach(async () => {
     await flushTestRedis();
-    await resetAuthState(h.prisma);
+    await resetAuthState(h.prisma, h.app);
 
     const staff = await createTestStaff(h.prisma);
     staffId = staff.id;

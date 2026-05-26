@@ -49,7 +49,7 @@ describe('Courier dispatch lifecycle (e2e)', () => {
 
   beforeEach(async () => {
     await flushTestRedis();
-    await resetAuthState(h.prisma);
+    await resetAuthState(h.prisma, h.app);
 
     const staff = await createTestStaff(h.prisma);
     staffId = staff.id;
@@ -283,19 +283,28 @@ describe('Courier dispatch lifecycle (e2e)', () => {
       .expect(200);
 
     // AWB job: A generates, B fails → supersede + order B → manual.
-    // Manifest → CONFIRMED (≥1 success). Wait for B's replacement.
-    const replacementB = await waitFor(
+    // Manifest → CONFIRMED (≥1 success). The mid-loop supersede write
+    // lands BEFORE the post-loop manifest update; wait on the LAST
+    // step (manifest CONFIRMED) — that implicitly guarantees the
+    // replacement is visible too, and mirrors the full-lifecycle
+    // test's waitFor pattern. (Pre-M11 the gap was tight enough that
+    // a replacement-only wait worked by accident; M11's per-emit
+    // listener fan-out widened the window enough to expose the race.)
+    await waitFor(
       async () => {
-        return h.prisma.shipment.findFirst({
-          where: { supersedesShipmentId: b.shipmentId },
+        const m = await h.prisma.manifest.findUniqueOrThrow({
+          where: { id: manifestId },
         });
+        return m.status === ManifestStatus.CONFIRMED ? m : null;
       },
-      { timeoutMs: 15_000, description: 'order B superseded' },
+      {
+        timeoutMs: 15_000,
+        description: 'manifest CONFIRMED (AWB job loop finished)',
+      },
     );
-    const manifest = await h.prisma.manifest.findUniqueOrThrow({
-      where: { id: manifestId },
+    const replacementB = await h.prisma.shipment.findFirstOrThrow({
+      where: { supersedesShipmentId: b.shipmentId },
     });
-    expect(manifest.status).toBe(ManifestStatus.CONFIRMED);
 
     const orderA = await h.prisma.order.findUniqueOrThrow({
       where: { id: a.orderId },
