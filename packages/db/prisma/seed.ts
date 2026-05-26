@@ -730,21 +730,134 @@ const notificationTemplates: TemplateSeed[] = [
   },
   {
     code: 'customer.order_confirmed.email',
-    name: 'Order confirmed — email to customer',
+    name: 'Order confirmed — bilingual email to customer (M11)',
     channel: NotificationChannel.EMAIL,
     recipientType: NotificationRecipientType.CUSTOMER,
-    subject: 'Your order {{ order_number }} is confirmed',
+    subject: 'Your order {{ order_number }} is confirmed / आपका ऑर्डर {{ order_number }} पुष्टि हुआ',
     bodyTemplate:
-      'Hi {{ customer_name }}, your order {{ order_number }} has been confirmed and is being prepared for dispatch. We will notify you when it ships. Track it any time at {{ tracking_url }}.',
+      'Hi {{ customer_name }}, your order {{ order_number }} has been confirmed and is being prepared for dispatch. We will notify you when it ships. Track it any time at {{ tracking_url }}.\n\n' +
+      '---\n\n' +
+      'नमस्ते {{ customer_name }}, आपका ऑर्डर {{ order_number }} पुष्टि हो गया है और शिप करने की तैयारी चल रही है। शिप होने पर हम आपको सूचित करेंगे। ट्रैक करें: {{ tracking_url }}',
   },
   {
     code: 'customer.order_delivered.email',
-    name: 'Order delivered — email to customer',
+    name: 'Order delivered — bilingual email to customer (M11)',
     channel: NotificationChannel.EMAIL,
     recipientType: NotificationRecipientType.CUSTOMER,
-    subject: 'Your order {{ order_number }} was delivered',
+    subject: 'Your order {{ order_number }} was delivered / आपका ऑर्डर {{ order_number }} डिलीवर हो गया',
     bodyTemplate:
-      'Hi {{ customer_name }}, your order {{ order_number }} was delivered on {{ delivered_at }}. Thank you for shopping with {{ seller_company_name }}. Questions? Reply or visit {{ tracking_url }}.',
+      'Hi {{ customer_name }}, your order {{ order_number }} was delivered on {{ delivered_at }}. Thank you for shopping with {{ seller_company_name }}. Questions? Reply or visit {{ tracking_url }}.\n\n' +
+      '---\n\n' +
+      'नमस्ते {{ customer_name }}, आपका ऑर्डर {{ order_number }} {{ delivered_at }} को डिलीवर हो गया है। {{ seller_company_name }} से खरीदारी करने के लिए धन्यवाद। प्रश्न? उत्तर दें या यहाँ जाएँ: {{ tracking_url }}',
+  },
+  // ---- Module 11 — Lifecycle-event fan-out templates -----------------
+  // Customer templates: bilingual body (EN + HI in one email; Q6 — per-
+  // locale rendering structure is the Phase-2 seam for stored
+  // recipient preference). Seller templates: EN only.
+  // Subject convention for bilingual customer: "{EN} / {HI}".
+  // The dispatched customer template is the M11 PRIORITY template —
+  // it carries {{ tracking_url }} pointing at M10's
+  // GET /public/tracking/:awb endpoint.
+  {
+    code: 'customer.order_dispatched.email',
+    name: 'Order dispatched — bilingual email to customer (M11, ★ tracking link)',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.CUSTOMER,
+    subject:
+      'Your order {{ order_number }} has shipped (AWB {{ awb_number }}) / आपका ऑर्डर {{ order_number }} शिप हो गया',
+    bodyTemplate:
+      'Hi {{ customer_name }}, your order {{ order_number }} from {{ seller_company_name }} has been dispatched via {{ courier_name }} (AWB {{ awb_number }}). Track its progress any time at {{ tracking_url }}. Expected delivery: {{ expected_delivery_at }}.\n\n' +
+      '---\n\n' +
+      'नमस्ते {{ customer_name }}, {{ seller_company_name }} से आपका ऑर्डर {{ order_number }} {{ courier_name }} के माध्यम से शिप कर दिया गया है (AWB {{ awb_number }})। यहाँ ट्रैक करें: {{ tracking_url }}. अनुमानित डिलीवरी: {{ expected_delivery_at }}.',
+  },
+  {
+    code: 'customer.order_out_for_delivery.email',
+    name: 'Out for delivery — bilingual email to customer (M11)',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.CUSTOMER,
+    subject:
+      'Your order {{ order_number }} is out for delivery / आपका ऑर्डर {{ order_number }} डिलीवरी के लिए निकल चुका है',
+    bodyTemplate:
+      'Hi {{ customer_name }}, your order {{ order_number }} is out for delivery today. Please keep {{ cod_amount_inr }} INR ready if this is a Cash-on-Delivery order. Track at {{ tracking_url }}.\n\n' +
+      '---\n\n' +
+      'नमस्ते {{ customer_name }}, आपका ऑर्डर {{ order_number }} आज डिलीवरी के लिए निकल चुका है। यदि यह COD है तो कृपया {{ cod_amount_inr }} INR तैयार रखें। ट्रैक करें: {{ tracking_url }}',
+  },
+  {
+    code: 'customer.order_delivery_failed.email',
+    name: 'Delivery attempt failed — bilingual email to customer (M11, NDR)',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.CUSTOMER,
+    subject:
+      'Delivery attempt for order {{ order_number }} did not succeed / आपके ऑर्डर {{ order_number }} की डिलीवरी विफल हुई',
+    bodyTemplate:
+      'Hi {{ customer_name }}, our courier {{ courier_name }} attempted to deliver order {{ order_number }} today but could not complete it. Reason: {{ ndr_reason }}. The courier will reattempt; please ensure someone is available at the address. Track at {{ tracking_url }}.\n\n' +
+      '---\n\n' +
+      'नमस्ते {{ customer_name }}, हमारे कूरियर {{ courier_name }} ने आज आपका ऑर्डर {{ order_number }} डिलीवर करने का प्रयास किया लेकिन सफल नहीं हो सका। कारण: {{ ndr_reason }}। कूरियर फिर से प्रयास करेगा; कृपया सुनिश्चित करें कि कोई पते पर उपलब्ध हो। ट्रैक करें: {{ tracking_url }}',
+  },
+  {
+    code: 'customer.order_cancelled.email',
+    name: 'Order cancelled — bilingual email to customer (M11)',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.CUSTOMER,
+    subject:
+      'Your order {{ order_number }} was cancelled / आपका ऑर्डर {{ order_number }} रद्द कर दिया गया',
+    bodyTemplate:
+      'Hi {{ customer_name }}, your order {{ order_number }} from {{ seller_company_name }} has been cancelled. Reason: {{ cancellation_reason }}. If this was unexpected, please reply to this email or contact {{ support_email }}.\n\n' +
+      '---\n\n' +
+      'नमस्ते {{ customer_name }}, {{ seller_company_name }} से आपका ऑर्डर {{ order_number }} रद्द कर दिया गया है। कारण: {{ cancellation_reason }}। यदि यह अप्रत्याशित था, तो कृपया इस ईमेल का उत्तर दें या {{ support_email }} से संपर्क करें।',
+  },
+  // Seller lifecycle templates (EN only — Q6). Some lifecycle events
+  // already had seeded seller templates from earlier modules and are
+  // reused by the M11 mapping unchanged:
+  //   - CONFIRMED          → order.confirmed.seller.email (M7)
+  //   - RTO_INITIATED      → shipment.rto_initiated.seller.email (M5)
+  // The ones below are new (or upgraded from generic
+  // seller.order_status_changed.email, which stays seeded for legacy
+  // back-compat but is no longer in the M11 mapping).
+  {
+    code: 'seller.order_dispatched.email',
+    name: 'Order dispatched — email to seller (M11)',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Order {{ order_number }} dispatched ({{ courier_name }} AWB {{ awb_number }})',
+    bodyTemplate:
+      'Hi {{ company_name }}, order {{ order_number }} for {{ recipient_name }} ({{ recipient_city }}, {{ recipient_state }}) has been dispatched via {{ courier_name }} with AWB {{ awb_number }}. Track its progress at {{ app_url }}.',
+  },
+  {
+    code: 'seller.order_delivered.email',
+    name: 'Order delivered — email to seller (M11)',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Order {{ order_number }} delivered',
+    bodyTemplate:
+      'Hi {{ company_name }}, order {{ order_number }} for {{ recipient_name }} was delivered on {{ delivered_at }}. AWB {{ awb_number }} / {{ courier_name }}. View the order at {{ app_url }}.',
+  },
+  {
+    code: 'seller.order_delivery_failed.email',
+    name: 'Order delivery failed — email to seller (M11, NDR)',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Delivery attempt failed for order {{ order_number }}',
+    bodyTemplate:
+      'Hi {{ company_name }}, courier {{ courier_name }} attempted to deliver order {{ order_number }} (AWB {{ awb_number }}) but could not complete it. Reason: {{ ndr_reason }}. The courier will reattempt. View the order at {{ app_url }}.',
+  },
+  {
+    code: 'seller.order_rto_received.email',
+    name: 'RTO received — email to seller (M11; resolves M8 deferred status-change email)',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Returned shipment received at warehouse — order {{ order_number }}',
+    bodyTemplate:
+      'Hi {{ company_name }}, the return for order {{ order_number }} (AWB {{ awb_number }}) has arrived at our warehouse and has been received. The disposition (restock vs. write-off) will follow inspection. View the order at {{ app_url }}.',
+  },
+  {
+    code: 'seller.order_cancelled.email',
+    name: 'Order cancelled — email to seller (M11)',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Order {{ order_number }} cancelled',
+    bodyTemplate:
+      'Hi {{ company_name }}, order {{ order_number }} for {{ recipient_name }} has been cancelled. Reason: {{ cancellation_reason }}. Any reserved stock has been released. View the order at {{ app_url }}.',
   },
 ];
 
