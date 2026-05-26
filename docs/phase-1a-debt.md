@@ -260,12 +260,25 @@ pick it up.
   reservation API, or if the saga window bites operationally (Module 8
   owns the persistent-shortfall escalation UX per the M5 debt entry).
 
-- **Email enqueue not wired in `transitionStatus()`.** Status-change
-  rule #2 (email enqueue inside the tx) is not yet honored — order
-  status-change notifications are deferred to Module 11 (notification
-  dispatch). The `seller.order_status_changed.email` template is seeded
-  but nothing enqueues it on transition yet.
-  **Pick up:** Module 11.
+- **Email enqueue not wired in `transitionStatus()` — ✅ RESOLVED (M11).**
+  Status-change rule #2 ("email enqueue inside the tx") is satisfied
+  obliquely — not by enqueueing INSIDE the tx but by emitting a
+  lifecycle event POST-COMMIT (the 6th post-commit hook in
+  `OrderWriteService.transitionStatus`, NOTIF-1) to the R3
+  `OrderLifecycleEventBus`. The `NotificationListener` (M11 commit 6)
+  is the subscriber; it resolves the fan-out via
+  `NotificationEventMappingService` (NOTIF-4) and calls
+  `NotificationLedgerService.enqueue()` per target (NOTIF-2/3/8).
+  The original rule's "email inside the tx" intent — atomic with the
+  status update — is replaced by a stronger guarantee: the
+  notification_logs row is INSERTed (PG durable) BEFORE the BullMQ
+  send job is enqueued, and the composite-key partial-unique
+  `(event_id, recipient_type, recipient_id, channel, template_code)
+  WHERE event_id IS NOT NULL` dedup gate makes a re-emit on the same
+  lifecycle event a no-op (NOTIF-2 store-then-send). The order module
+  remains unaware of notifications (NOTIF-5); the bus is the
+  dependency-free shared primitive (R3 #4, the same shape as
+  `call-queue` / `shipment-provision`). Recorded for provenance.
 
 - **Sanctioned boundary expansions (expand-by-need).** Three additive
   cross-module reads were added so Module 6 never queries another
@@ -371,12 +384,17 @@ pick it up.
   per-queue SUMMARY counts (locked decision 12). Deep breakdowns,
   per-seller rollups, and time-series belong to the Reports module.
 
-- **Status-change emails on PENDING_CONFIRMATION exit deferred to
-  Module 11.** A call outcome that transitions the order (CONFIRMED /
-  REJECTED_* / NDR) sends no customer/seller notification yet —
-  notification dispatch is Module 11 (consistent with ORD-3's existing
-  email-deferral debt). The `transitionStatus` engine deliberately owns
-  status + stock + events + audit only.
+- **Status-change emails on PENDING_CONFIRMATION exit — ✅ RESOLVED
+  (M11).** Call outcomes that transition the order (CONFIRMED /
+  REJECTED_* / NDR) now fan out via the same NOTIF-1 lifecycle-event
+  emit path used by every other transition (the CC-3 attempt → M5/M6
+  saga → `transitionStatus` chain feeds the bus uniformly; the call-
+  attempt itself is not the trigger, the resulting transition is —
+  which means the CC-1 append-only attempt and the notification fan-
+  out share NO state and CANNOT corrupt each other). `transitionStatus`
+  still owns status + stock + events + audit only; notification fan-
+  out is the post-commit subscriber's job (NOTIF-3/4/5). Recorded for
+  provenance.
 
 - **Click-to-call / Twilio integration deferred to Phase 2.** Agents
   log attempts MANUALLY (`startedAt`/`endedAt`/`outcome` posted to
@@ -581,12 +599,19 @@ pick it up.
   per-`(courierCode, originWarehouseId)` advisory lock + courier-match
   validation are forward-compatible).
 
-- **Status-change emails for warehouse transitions deferred to M11.**
-  PICKED / PACKED / DISPATCHED / RTO_RECEIVED / RTO_RESTOCKED transitions
-  emit NO customer/seller notification yet. M11 (Notifications) owns
-  status-change template dispatch. The `transitionStatus` engine
-  deliberately owns status + stock + events + audit only (matches CC
-  status-change-email debt).
+- **Status-change emails for warehouse transitions — ✅ RESOLVED (M11).**
+  The R3 lifecycle event bus is fed by `OrderWriteService.transitionStatus`,
+  which IS the call path warehouse-pick / warehouse-pack / warehouse-rto
+  use (per WMS-9: cross-module readers go through the order facade, not
+  shipment columns); every PICKED / PACKED / DISPATCHED / RTO_RECEIVED /
+  RTO_RESTOCKED transition fires the post-commit emit and the M11
+  mapping decides per-status fan-out (DISPATCHED + RTO_INITIATED +
+  RTO_RECEIVED are wired in the Q5 mapping; PICKED / PACKED are
+  internal-only by Q5 — listener sees them, mapping resolves [],
+  zero ledger writes). `transitionStatus` still owns status + stock +
+  events + audit only; the lifecycle bus is the new sixth post-commit
+  hook (matching the documented CC / RTO / pack-eligible / shipment-
+  provision pattern). Recorded for provenance.
 
 - **M9 AWB enqueue stub in `ManifestService.close` — ✅ RESOLVED (M9
   commit 10).** The stub audit was replaced with a real
@@ -786,6 +811,92 @@ pick it up.
   remains as a frontend deliverable. Recorded so the frontend cycle
   knows the translation table to author. **Pick up:** with the
   customer-facing frontend page above.
+
+## Notifications (Module 11)
+
+### M11 design deferrals
+
+- **Two idempotency regimes coexist on notification_logs.** Pre-M11
+  fire-once sites (auth/seller-mgmt/inventory/category-proposal — the
+  8+ existing callers) dedup via the polymorphic
+  `(templateCode, recipientType, recipientId)` LOOKUP in the caller
+  service BEFORE enqueueing; the row carries NO eventId and lives
+  outside the M11 partial-unique gate. M11 lifecycle fan-out callers
+  set `eventId = order_status:<statusEventId>` and rely on the
+  partial-unique `(event_id, recipient_type, recipient_id, channel,
+  template_code) WHERE event_id IS NOT NULL` for dedup
+  (NOTIF-2 store-then-send). Both regimes operate on the same table
+  without conflict — the partial-unique only fires when eventId is
+  present, the legacy lookup ignores eventId entirely. **DO NOT add
+  eventId to legacy callers** without auditing their dedup logic; they
+  would suddenly start consuming the M11 gate and could double-write
+  on a logical re-fire that the legacy template-code lookup currently
+  catches. Conversely, NEW lifecycle-event fan-out paths MUST set
+  eventId — the partial-unique is the only protection. **Pick up:**
+  potentially migrate legacy callers to the eventId regime in a Phase-2
+  cleanup, with per-caller audit of their re-fire semantics; not
+  urgent.
+
+- **NDR ndr_reason variable is empty.** The Q5 NDR templates
+  (`seller.order_ndr.email`, `customer.order_ndr.email`) include
+  `{{ ndr_reason }}` but the listener passes `ndr_reason: ''` — M10
+  does not yet surface the courier's reason code on the order
+  (`delivery_attempts.reason` is captured per-attempt but not promoted
+  to the order header that the listener loads). The template body
+  reads naturally with an empty reason (a generic NDR notification);
+  once M10 / M12 exposes the latest attempt's reason on the order
+  read-model, the listener's `buildVariables` can wire it. **Pick up:**
+  M12 admin order detail (which will need the same surface).
+
+- **Listener fan-out is best-effort, NO retry of the LISTENER itself.**
+  NOTIF-1 says the listener is best-effort; an error in
+  `loadOrderContext` (e.g., the order vanished between emit and load —
+  observed as the soft-delete / race log line) returns silently with
+  zero ledger rows. Per-target failures inside the loop are isolated
+  (NOTIF-3) — one target's enqueue() throw never aborts the others —
+  but the FAILED target itself has no retry. The DOWNSTREAM ledger row
+  IS retried by BullMQ (5 attempts, the existing email queue policy)
+  once it is enqueued; the failure window is strictly the
+  "load + per-target enqueue" path. An out-of-band reconciler that
+  walks transitions without matching ledger rows would close the gap;
+  not built in Phase 1A. **Pick up:** if observed listener-side
+  failures become a real ops concern (the M11 commits' log lines are
+  the forensic trail; an alert on the `'NotificationListener: ...
+  swallowed'` log level pages ops).
+
+- **The bus is in-process — single-instance API only.** The R3
+  `OrderLifecycleEventBus` is an in-process rxjs Subject; a multi-
+  instance API deployment would need a Redis pub/sub (BullMQ events
+  or rxjs over Redis) — emit on instance A would not reach a listener
+  on instance B. Phase 1A runs a single API instance per droplet so
+  this is a non-issue, but the seam is documented (the bus
+  module-comment flags it). **Pick up:** Phase-2 multi-instance API
+  (likely with the marketing/seller/admin frontends scaling
+  separately).
+
+- **Locale is hard-coded 'en' even for customer templates.** The Q6
+  decision was bilingual-in-one-email — the seeded customer EN-tagged
+  templates contain BOTH English + Hindi blocks. So the listener
+  passes `locale: 'en'` and the rendered body has both languages. A
+  per-recipient stored locale preference (Phase-2 customer model
+  enhancement) would let us split into separate EN-only / HI-only
+  templates — the mapping is the single seam to change. **Pick up:**
+  when the Phase-2 customer profile model lands stored locale
+  preferences.
+
+- **Force-exit warning in e2e is pre-existing (BullMQ + ioredis
+  internal handles).** `jest.e2e.config.ts` sets `forceExit: true` —
+  needed since M1 because BullMQ + ioredis hold internal connection
+  handles past `app.close()` even after `worker.close()` / `client
+  .quit()`. The "Force exiting Jest async operations" line prints
+  whenever forceExit is on AND a handle is pending; removing forceExit
+  hangs jest 60s+ on a single suite. The M11 follow-up commit
+  drained the listener's own in-flight handle() promises (which fixed
+  the actual cross-suite TRUNCATE deadlock — `40P01` from notification_logs
+  FK locks racing the harness reset); the warning is unrelated to
+  M11 and remains. **Pick up:** the BullMQ + ioredis handle leak is
+  upstream; revisit only if forceExit ever becomes the wrong default
+  (e.g., a future test wants to assert post-teardown state).
 
 ## Pricing & Multi-Currency (Modules 15–17)
 
