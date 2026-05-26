@@ -46,28 +46,23 @@ export interface OrderListResponse {
   readonly pageSize: number;
 }
 
-export interface OrderEventView {
-  readonly id: string;
-  readonly type: string;
-  readonly description: string | null;
-  readonly fromStatus: OrderStatus | null;
-  readonly toStatus: OrderStatus | null;
-  readonly actorType: string;
-  readonly actorId: string | null;
-  readonly isVisibleToSeller: boolean;
-  readonly createdAt: string;
-}
-
-/** The full admin order view — items + events + everything the
- *  detail screen renders. Loosely typed where it mirrors the
- *  Prisma `ORDER_VIEW_INCLUDE` select; tighten as the UI consumes
- *  specific fields. */
+/** The full admin order view — items + everything the detail screen
+ *  renders. Mirrors `ORDER_VIEW_INCLUDE` on the server (M12 commit 9
+ *  discovery: today this is items-only; an admin events / delivery-
+ *  attempts include is a follow-up — see phase-1a-debt M12). */
 export interface OrderItemView {
   readonly id: string;
   readonly variantId: string;
   readonly productName: string;
+  readonly variantLabel: string | null;
+  readonly imageUrl: string | null;
   readonly skuCode: string;
   readonly quantity: number;
+  readonly unitWeightGrams: number | null;
+  readonly unitDeclaredValueInr: string | null;
+  readonly unitPriceInr: string | null;
+  readonly hsCode: string | null;
+  readonly qtyReserved: number;
 }
 
 export interface OrderView {
@@ -122,7 +117,9 @@ export interface OrderView {
 
   // Children
   readonly items: readonly OrderItemView[];
-  readonly events: readonly OrderEventView[];
+  // Events / delivery attempts are NOT on ORDER_VIEW_INCLUDE today;
+  // an admin events endpoint is the M12 follow-up. The UI degrades
+  // gracefully (skips the timeline) until that lands.
 }
 
 export interface AdminCancelOrderRequest {

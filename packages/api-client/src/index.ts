@@ -29,7 +29,6 @@ export type {
   ListOrdersQuery,
   OrderListItem,
   OrderListResponse,
-  OrderEventView,
   OrderItemView,
   OrderView,
   AdminCancelOrderRequest,
