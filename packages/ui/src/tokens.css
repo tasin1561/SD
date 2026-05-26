@@ -1,0 +1,236 @@
+/*
+ * Skydrop design tokens — the SINGLE SOURCE OF TRUTH for colors,
+ * type, spacing, radii. Every frontend (admin / seller / track /
+ * marketing) imports this exact file; the apps inherit. FE-6.
+ *
+ * Lineage: Linear / Stripe dashboard / Vercel dashboard — clean,
+ * information-rich, fast, dense. No grain/gradients/staggered
+ * animations. Color expresses STATE — semantic status kinds are
+ * the load-bearing communication channel; UI chrome stays quiet
+ * so status reads at a glance.
+ *
+ * Dark theme is PRIMARY. The light theme override lives under
+ * [data-theme='light'] and is fully derived from the same scale
+ * (no two parallel palettes; the same color slots in dark/light
+ * variants).
+ */
+
+:root {
+  /* ───────── Base scale (neutral) — dark primary ─────────
+     Slate scale. 950 = canvas, 900 = panel, 800 = elevated,
+     700 = hairline border, 500 = muted text, 300 = body text,
+     100 = high-contrast text. */
+  --color-bg: #0a0c10;
+  --color-surface: #11141a;
+  --color-surface-raised: #171b23;
+  --color-surface-hover: #1c2129;
+  --color-border: #232934;
+  --color-border-strong: #2e3543;
+  --color-text-faint: #5b6479;
+  --color-text-muted: #8a93a8;
+  --color-text-body: #c4cad7;
+  --color-text-strong: #e6e9f0;
+  --color-text-bright: #f6f7fa;
+
+  /* ───────── Brand accent (used sparingly — for primary actions
+     + selected nav) ───────── */
+  --color-accent: #6e8aff;
+  --color-accent-hover: #8298ff;
+  --color-accent-fg: #0a0c10; /* text on accent fill */
+  --color-accent-tint: rgba(110, 138, 255, 0.08);
+  --color-accent-ring: rgba(110, 138, 255, 0.35);
+
+  /* ───────── Critical surface (god-mode, destructive
+     confirmations) — distinct from semantic 'failed' status
+     bucket; god-mode UI is a UI-state, not a data-state ───────── */
+  --color-critical: #ff5c5c;
+  --color-critical-tint: rgba(255, 92, 92, 0.12);
+  --color-critical-ring: rgba(255, 92, 92, 0.4);
+
+  /* ───────── Semantic status — 8 kinds covering all 28
+     OrderStatus + 16 ShipmentStatus values. Mapping lives in
+     packages/ui/src/status/. Each kind exposes:
+       --status-{kind}-bg    : subtle tinted fill (table cells / chip)
+       --status-{kind}-fg    : the legible foreground (text on bg)
+       --status-{kind}-ring  : focus / hover ring
+     The DARK values here; light overrides below. ───────── */
+
+  /* draft — DRAFT */
+  --status-draft-bg: rgba(138, 147, 168, 0.12);
+  --status-draft-fg: #aab2c4;
+  --status-draft-ring: rgba(138, 147, 168, 0.35);
+
+  /* pending — PENDING_CONFIRMATION, CALL_NO_RESPONSE,
+     CALL_RESCHEDULED, PENDING_PICK, PENDING_DISPATCH,
+     PENDING_MANUAL_PLACEMENT, AWB_PENDING */
+  --status-pending-bg: rgba(245, 178, 71, 0.12);
+  --status-pending-fg: #f5b247;
+  --status-pending-ring: rgba(245, 178, 71, 0.35);
+
+  /* confirmed — CONFIRMED, PICKED, PACKED, AWB_GENERATED,
+     HANDED_TO_COURIER, AT_HUB */
+  --status-confirmed-bg: rgba(96, 165, 250, 0.12);
+  --status-confirmed-fg: #60a5fa;
+  --status-confirmed-ring: rgba(96, 165, 250, 0.35);
+
+  /* in-transit — DISPATCHED, IN_TRANSIT, OUT_FOR_DELIVERY,
+     DELIVERY_ATTEMPTED */
+  --status-in-transit-bg: rgba(167, 139, 250, 0.12);
+  --status-in-transit-fg: #a78bfa;
+  --status-in-transit-ring: rgba(167, 139, 250, 0.35);
+
+  /* delivered — DELIVERED (terminal happy path) */
+  --status-delivered-bg: rgba(74, 222, 128, 0.12);
+  --status-delivered-fg: #4ade80;
+  --status-delivered-ring: rgba(74, 222, 128, 0.35);
+
+  /* rto — RTO_INITIATED, RTO_IN_TRANSIT, RTO_DELIVERED,
+     RTO_RECEIVED, RTO_RESTOCKED */
+  --status-rto-bg: rgba(251, 146, 60, 0.12);
+  --status-rto-fg: #fb923c;
+  --status-rto-ring: rgba(251, 146, 60, 0.35);
+
+  /* failed — OUT_OF_STOCK, REJECTED, REJECTED_BY_CUSTOMER,
+     REJECTED_NDR, PACK_FAILED, DELIVERY_FAILED,
+     FAILED_AT_CREATION, LOST_IN_TRANSIT, LOST, DAMAGED,
+     RTO_DAMAGED */
+  --status-failed-bg: rgba(248, 113, 113, 0.12);
+  --status-failed-fg: #f87171;
+  --status-failed-ring: rgba(248, 113, 113, 0.35);
+
+  /* cancelled — CANCELLED, CANCELLED_BY_ADMIN (benign terminal —
+     distinct from failed to prevent alarm-fatigue) */
+  --status-cancelled-bg: rgba(100, 116, 139, 0.12);
+  --status-cancelled-fg: #94a3b8;
+  --status-cancelled-ring: rgba(100, 116, 139, 0.35);
+
+  /* ───────── Spacing scale — base 4px ─────────
+     Multiples 1–8 cover dense table padding (0.5/1) through
+     section gaps (6/8). */
+  --space-0: 0;
+  --space-0_5: 2px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ───────── Type scale ─────────
+     Tighter than marketing-default — dense workspaces benefit. */
+  --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', monospace;
+
+  --text-xs: 11px;     /* table meta, timestamps */
+  --text-sm: 13px;     /* table body, labels — DEFAULT for dense */
+  --text-base: 14px;   /* body copy */
+  --text-md: 15px;     /* primary content */
+  --text-lg: 17px;     /* page heading */
+  --text-xl: 22px;     /* section title */
+  --text-2xl: 28px;    /* page title */
+
+  --leading-tight: 1.25;
+  --leading-snug: 1.4;
+  --leading-normal: 1.55;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  /* ───────── Radii ─────────
+     Small radii for the utilitarian aesthetic — large rounding
+     reads as marketing/consumer; we want technical tool. */
+  --radius-1: 3px;
+  --radius-2: 5px;
+  --radius-3: 7px;
+  --radius-pill: 9999px;
+
+  /* ───────── Elevation — shadows are MINIMAL on dark; mostly
+     used for popovers/dropdowns/modals only ───────── */
+  --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-3: 0 12px 36px rgba(0, 0, 0, 0.45);
+
+  /* ───────── Motion ─────────
+     Fast, subtle. No staggered choreography. */
+  --duration-fast: 80ms;
+  --duration-base: 140ms;
+  --easing-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme='light'] {
+  --color-bg: #f8f9fb;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-hover: #f1f3f7;
+  --color-border: #e2e6ec;
+  --color-border-strong: #ccd2dc;
+  --color-text-faint: #9aa1b2;
+  --color-text-muted: #6c7488;
+  --color-text-body: #2a2f3a;
+  --color-text-strong: #14171f;
+  --color-text-bright: #0a0c10;
+
+  --color-accent: #4566e6;
+  --color-accent-hover: #3753c9;
+  --color-accent-fg: #ffffff;
+  --color-accent-tint: rgba(69, 102, 230, 0.08);
+  --color-accent-ring: rgba(69, 102, 230, 0.35);
+
+  --color-critical: #d93838;
+  --color-critical-tint: rgba(217, 56, 56, 0.1);
+  --color-critical-ring: rgba(217, 56, 56, 0.4);
+
+  /* Light-theme status: same hues, deeper/less-transparent
+     foreground to maintain contrast on white. */
+  --status-draft-bg: rgba(108, 116, 136, 0.1);
+  --status-draft-fg: #5b6479;
+  --status-draft-ring: rgba(108, 116, 136, 0.35);
+
+  --status-pending-bg: rgba(217, 145, 33, 0.12);
+  --status-pending-fg: #a16207;
+  --status-pending-ring: rgba(217, 145, 33, 0.35);
+
+  --status-confirmed-bg: rgba(37, 99, 235, 0.1);
+  --status-confirmed-fg: #1d4ed8;
+  --status-confirmed-ring: rgba(37, 99, 235, 0.35);
+
+  --status-in-transit-bg: rgba(124, 58, 237, 0.1);
+  --status-in-transit-fg: #6d28d9;
+  --status-in-transit-ring: rgba(124, 58, 237, 0.35);
+
+  --status-delivered-bg: rgba(21, 128, 61, 0.1);
+  --status-delivered-fg: #15803d;
+  --status-delivered-ring: rgba(21, 128, 61, 0.35);
+
+  --status-rto-bg: rgba(194, 65, 12, 0.1);
+  --status-rto-fg: #b45309;
+  --status-rto-ring: rgba(194, 65, 12, 0.35);
+
+  --status-failed-bg: rgba(185, 28, 28, 0.1);
+  --status-failed-fg: #b91c1c;
+  --status-failed-ring: rgba(185, 28, 28, 0.35);
+
+  --status-cancelled-bg: rgba(100, 116, 139, 0.1);
+  --status-cancelled-fg: #475569;
+  --status-cancelled-ring: rgba(100, 116, 139, 0.35);
+
+  --shadow-1: 0 1px 0 rgba(20, 23, 31, 0.04);
+  --shadow-2: 0 4px 12px rgba(20, 23, 31, 0.06);
+  --shadow-3: 0 12px 36px rgba(20, 23, 31, 0.1);
+}
+
+/* Body baseline — the consuming app sets this on its <html>/<body>;
+   exposed as a class so apps can opt in instead of overriding ours. */
+.skydrop-baseline {
+  background: var(--color-bg);
+  color: var(--color-text-body);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+}

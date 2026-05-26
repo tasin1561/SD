@@ -197,6 +197,16 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  packages/ui:
+    dependencies:
+      '@skydrop/db':
+        specifier: workspace:*
+        version: link:../db
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
 packages:
 
   '@angular-devkit/core@19.2.24':
