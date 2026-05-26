@@ -39,7 +39,8 @@ export function AuthedShell({
 
   const navItems: { href: string; label: string }[] = [
     { href: '/dashboard', label: 'Dashboard' },
-    // CP2 will add Sellers + Orders here.
+    { href: '/sellers', label: 'Sellers' },
+    { href: '/orders', label: 'Orders' },
   ];
 
   return (
