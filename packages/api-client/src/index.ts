@@ -36,6 +36,7 @@ export type {
   ForceMutationFields,
   ForceMutationRequest,
   ForceMutationResult,
+  ReserveAttemptOutcome,
   ReleaseReservationsRequest,
   ReleaseReservationsResult,
 } from './endpoints/admin-orders';

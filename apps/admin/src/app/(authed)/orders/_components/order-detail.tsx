@@ -259,11 +259,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
           )}
 
           <Section title="Actions">
-            <OrderActionsPanel
-              orderId={detail.data.id}
-              orderNumber={detail.data.orderNumber}
-              status={detail.data.status}
-            />
+            <OrderActionsPanel order={detail.data} />
           </Section>
 
           <div className="text-text-faint text-xs text-center mt-8">

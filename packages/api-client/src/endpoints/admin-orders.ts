@@ -167,12 +167,27 @@ export interface ForceMutationRequest {
   readonly acknowledgeDataIntegrityRisk: true; // literal true required by API
 }
 
+/** Per-line outcome of the attempted-not-blocking reserve on a
+ *  god-mode → CONFIRMED move. Mirrors the server's
+ *  `ReserveAttemptOutcome` shape. */
+export interface ReserveAttemptOutcome {
+  readonly orderItemId: string;
+  readonly ok: boolean;
+  readonly reservationId?: string;
+  readonly error?: string;
+}
+
 export interface ForceMutationResult {
   readonly orderId: string;
-  readonly hasAdminOverride: true; // always true after a successful forceMutate
-  readonly previousStatus: OrderStatus;
-  readonly newStatus: OrderStatus;
-  readonly fieldsChanged: readonly string[];
+  readonly fromStatus: OrderStatus;
+  readonly status: OrderStatus;
+  readonly hasAdminOverride: true; // permanent flag, set-once
+  readonly fieldChangesApplied: readonly string[];
+  /** Non-null only when a → CONFIRMED move attempted reservations.
+   *  Each row is `{ok: true, reservationId}` or `{ok: false, error}`.
+   *  The saga does NOT block on shortfall — god mode opts out of
+   *  compensation. */
+  readonly reserveOutcomes: readonly ReserveAttemptOutcome[] | null;
 }
 
 export interface ReleaseReservationsRequest {
@@ -182,4 +197,9 @@ export interface ReleaseReservationsRequest {
 export interface ReleaseReservationsResult {
   readonly orderId: string;
   readonly releasedCount: number;
+  readonly released: ReadonlyArray<{
+    readonly reservationId: string;
+    readonly qtyReleased: number;
+    readonly alreadyInactive: boolean;
+  }>;
 }
