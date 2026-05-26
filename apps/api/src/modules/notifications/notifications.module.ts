@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { EmailModule } from '../email/email.module';
+import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.module';
 import { NotificationEventMappingService } from './services/notification-event-mapping.service';
 import { NotificationLedgerService } from './services/notification-ledger.service';
+import { NotificationListener } from './services/notification-listener.service';
 
 /**
  * Module 11 — Notifications fan-out.
@@ -26,8 +28,12 @@ import { NotificationLedgerService } from './services/notification-ledger.servic
  * this module's internals (NOTIF-5 — order module remains unaware).
  */
 @Module({
-  imports: [EmailModule],
-  providers: [NotificationEventMappingService, NotificationLedgerService],
+  imports: [EmailModule, LifecycleEventsModule],
+  providers: [
+    NotificationEventMappingService,
+    NotificationLedgerService,
+    NotificationListener,
+  ],
   exports: [],
 })
 export class NotificationsModule {}

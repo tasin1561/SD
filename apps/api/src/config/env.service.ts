@@ -53,6 +53,10 @@ export class EnvService {
     return this.env.ADMIN_APP_URL;
   }
 
+  get publicTrackingUrl(): string {
+    return this.env.PUBLIC_TRACKING_URL;
+  }
+
   get supportEmail(): string {
     return this.env.SUPPORT_EMAIL;
   }

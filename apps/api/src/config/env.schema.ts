@@ -16,6 +16,14 @@ export const envSchema = z.object({
 
   SELLER_APP_URL: z.string().url(),
   ADMIN_APP_URL: z.string().url(),
+  // Module 11: base URL of the customer-facing tracking page (the
+  // future apps/track SSR; the M10 GET /public/tracking/:awb endpoint
+  // is the API side). M11 customer notifications template
+  // {{ tracking_url }} as `${PUBLIC_TRACKING_URL}/${awb}` — the
+  // priority template customer.order_dispatched.email is the most
+  // visible consumer. Default to track.skydrop.online for Phase-1A
+  // dev; prod sets this explicitly.
+  PUBLIC_TRACKING_URL: z.string().url().default('https://track.skydrop.online'),
 
   SUPPORT_EMAIL: z.string().email().default('support@skydrop.online'),
 

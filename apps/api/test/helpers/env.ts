@@ -11,6 +11,10 @@ const BASE_ENV: Env = {
   RESEND_API_KEY: '',
   SELLER_APP_URL: 'http://localhost:3001',
   ADMIN_APP_URL: 'http://localhost:3002',
+  // Module 11 — deterministic test fixture for the customer tracking
+  // URL composed by NotificationListener as `${url}/${awb}` in
+  // {{ tracking_url }} template variables.
+  PUBLIC_TRACKING_URL: 'http://localhost:3003/track',
   SUPPORT_EMAIL: 'support@skydrop.online',
   DEV_MOCK_SPACES: true,
   SPACES_ENDPOINT: 'https://sgp1.digitaloceanspaces.com',
