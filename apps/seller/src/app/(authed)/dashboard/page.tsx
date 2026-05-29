@@ -1,28 +1,13 @@
 import type { ReactElement } from 'react';
+import { DashboardView } from './_components/dashboard-view';
 
 /**
- * Dashboard — placeholder for CP1.3. CP1.5 wraps this route under the
- * (authed) gate (cookie→/me, FE-4); CP1.6 wires the seller shell
- * (sidebar + topbar) at the (authed)/layout.tsx; CP2 fills the
- * dashboard with synthesis panels (orders today, low stock, recent
- * dispatches). For now it just confirms the dev server boots and
- * SSR works.
+ * Dashboard — CP2.A.6 synthesis. The shell-level chrome already
+ * shows the company name + email in the topbar; this page surfaces
+ * recent orders + a navigation pivot into the pattern-setter
+ * features. CP2.B will add a low-stock panel + a recent-dispatches
+ * summary once catalog + inventory views ship.
  */
 export default function DashboardPage(): ReactElement {
-  return (
-    <main style={{ padding: 'var(--space-6)' }}>
-      <h1
-        style={{
-          fontSize: 'var(--text-xl)',
-          color: 'var(--color-text-bright)',
-          marginBottom: 'var(--space-2)',
-        }}
-      >
-        Skydrop Seller
-      </h1>
-      <p style={{ color: 'var(--color-text-muted)' }}>
-        Dashboard placeholder. CP1 foundation in flight.
-      </p>
-    </main>
-  );
+  return <DashboardView />;
 }
