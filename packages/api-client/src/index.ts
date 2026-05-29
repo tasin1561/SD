@@ -69,3 +69,4 @@ export type {
   PricingUnresolvedReason,
   PricingUnresolvedFallback,
 } from './endpoints/admin-pricing';
+export type { FxRateView, SetFxRateRequest } from './endpoints/admin-fx';

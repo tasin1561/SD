@@ -613,7 +613,7 @@ Module order — each builds on prior modules:
 | 13 | apps/seller — second consumer of FE foundation; CP1 foundation + CP2 Orders/Catalog pattern-setters | ✅ DONE |
 | 14 | System Settings UI | ✅ DONE |
 | 15 | Pricing Engine (calculate only, no billing) | ✅ DONE (backend; M6 integration fast-follow) |
-| 16 | Multi-Currency & FX | pending |
+| 16 | Multi-Currency & FX | ✅ DONE (current rates only; historical timeseries Phase-1B) |
 | 17 | Order Charges & Cost Breakdown UI | pending |
 | 18 | Live Chat (ChatWoot integration) | pending (deferred droplet install) |
 
