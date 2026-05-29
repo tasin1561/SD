@@ -2876,17 +2876,28 @@ SELECT create_hypertable(
   if_not_exists => TRUE
 );
 
-ALTER TABLE tracking_events SET (
-  timescaledb.compress,
-  timescaledb.compress_orderby = 'created_at DESC',
-  timescaledb.compress_segmentby = 'shipment_id'
-);
-
-SELECT add_compression_policy(
-  'tracking_events',
-  INTERVAL '7 days',
-  if_not_exists => TRUE
-);
+-- Compression is a TimescaleDB Community-license feature.
+-- Local Docker has Community (compression runs); DO managed has
+-- Apache only (this block is silently skipped via the EXCEPTION
+-- guard). Migrate to Timescale Cloud or self-host for compression
+-- when traffic justifies — see docs/phase-1a-debt.md.
+DO $compress_te$
+BEGIN
+  ALTER TABLE tracking_events SET (
+    timescaledb.compress,
+    timescaledb.compress_orderby = 'created_at DESC',
+    timescaledb.compress_segmentby = 'shipment_id'
+  );
+  PERFORM add_compression_policy(
+    'tracking_events',
+    INTERVAL '7 days',
+    if_not_exists => TRUE
+  );
+EXCEPTION
+  WHEN feature_not_supported THEN
+    RAISE NOTICE 'TimescaleDB compression skipped on tracking_events (Apache license tier): %', SQLERRM;
+END
+$compress_te$;
 
 -- Convert stock_movements to a hypertable partitioned by created_at,
 -- with 1-month chunks.
@@ -2897,14 +2908,21 @@ SELECT create_hypertable(
   if_not_exists => TRUE
 );
 
-ALTER TABLE stock_movements SET (
-  timescaledb.compress,
-  timescaledb.compress_orderby = 'created_at DESC',
-  timescaledb.compress_segmentby = 'seller_id, variant_id'
-);
-
-SELECT add_compression_policy(
-  'stock_movements',
-  INTERVAL '30 days',
-  if_not_exists => TRUE
-);
+-- See note above on TimescaleDB compression licensing.
+DO $compress_sm$
+BEGIN
+  ALTER TABLE stock_movements SET (
+    timescaledb.compress,
+    timescaledb.compress_orderby = 'created_at DESC',
+    timescaledb.compress_segmentby = 'seller_id, variant_id'
+  );
+  PERFORM add_compression_policy(
+    'stock_movements',
+    INTERVAL '30 days',
+    if_not_exists => TRUE
+  );
+EXCEPTION
+  WHEN feature_not_supported THEN
+    RAISE NOTICE 'TimescaleDB compression skipped on stock_movements (Apache license tier): %', SQLERRM;
+END
+$compress_sm$;
