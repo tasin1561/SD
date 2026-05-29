@@ -21,9 +21,12 @@ import type {
   ReleaseReservationsResult,
   SellerInvitationListItem,
   SellerListResponse,
+  SystemSettingFull,
+  SystemSettingsCategoryGroup,
   TransitionStatusResult,
   UpdateSellerStatusRequest,
   UpdateSellerStatusResponse,
+  UpdateSystemSettingRequest,
 } from '@skydrop/api-client';
 
 /**
@@ -258,6 +261,50 @@ export function useReleaseReservations(
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
+    },
+  });
+}
+
+// ───────── Admin system settings (Module 14) ─────────
+
+export function useSystemSettingsList(): UseQueryResult<
+  readonly SystemSettingsCategoryGroup[]
+> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-system-settings', 'list'],
+    queryFn: () =>
+      client.request<readonly SystemSettingsCategoryGroup[]>(
+        '/api/admin/system-settings',
+      ),
+  });
+}
+
+export function useSystemSetting(key: string): UseQueryResult<SystemSettingFull> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-system-settings', 'detail', key],
+    queryFn: () =>
+      client.request<SystemSettingFull>(
+        `/api/admin/system-settings/${encodeURIComponent(key)}`,
+      ),
+    enabled: Boolean(key),
+  });
+}
+
+export function useUpdateSystemSetting(
+  key: string,
+): UseMutationResult<SystemSettingFull, Error, UpdateSystemSettingRequest> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<SystemSettingFull>(
+        `/api/admin/system-settings/${encodeURIComponent(key)}`,
+        { method: 'PATCH', body },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-system-settings'] });
     },
   });
 }
