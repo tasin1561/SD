@@ -56,6 +56,12 @@ coverage/
 .nyc_output/
 *.lcov
 
+# ----- Playwright (M13 CP1.7) -----
+test-results/
+playwright-report/
+playwright/.cache/
+blob-report/
+
 # ----- IDE / editor -----
 .vscode/*
 !.vscode/settings.json

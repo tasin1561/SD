@@ -19,9 +19,11 @@
     "db:up": "docker compose -f docker/docker-compose.yml up -d",
     "db:down": "docker compose -f docker/docker-compose.yml down",
     "db:reset": "docker compose -f docker/docker-compose.yml down -v && docker compose -f docker/docker-compose.yml up -d",
-    "db:logs": "docker compose -f docker/docker-compose.yml logs -f"
+    "db:logs": "docker compose -f docker/docker-compose.yml logs -f",
+    "e2e:fe": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@types/node": "^22.10.0",
     "prettier": "^3.4.0",
     "turbo": "^2.3.0",
