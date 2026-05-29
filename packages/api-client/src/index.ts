@@ -40,3 +40,7 @@ export type {
   ReleaseReservationsRequest,
   ReleaseReservationsResult,
 } from './endpoints/admin-orders';
+export type {
+  ListSellerOrdersQuery,
+  SellerOrderEventView,
+} from './endpoints/seller-orders';
