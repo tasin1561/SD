@@ -44,6 +44,11 @@ export function AuthedShell({
 
   const navItems: { href: string; label: string }[] = [
     { href: '/dashboard', label: 'Dashboard' },
+    { href: '/orders', label: 'Orders' },
+    { href: '/catalog', label: 'Catalog' },
+    { href: '/tracking', label: 'Tracking' },
+    { href: '/profile', label: 'Profile' },
+    { href: '/settings', label: 'Settings' },
   ];
 
   return (
