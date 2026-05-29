@@ -55,6 +55,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { SystemSettingsModule } from './modules/system-settings/system-settings.module';
 import { PricingModule } from './modules/pricing/pricing.module';
 import { FxModule } from './modules/fx/fx.module';
+import { OrderChargesModule } from './modules/order-charges/order-charges.module';
 import { ThrottlerModule } from './common/throttler/throttler.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { pinoConfig } from './common/pino/logger-config';
@@ -135,6 +136,7 @@ import { envSchema } from './config/env.schema';
     SystemSettingsModule,
     PricingModule,
     FxModule,
+    OrderChargesModule,
     HealthModule,
   ],
 })

@@ -17,6 +17,7 @@ import {
   OrderStatusBadge,
 } from '@skydrop/ui/components';
 import { OrderTimeline } from './order-timeline';
+import { OrderChargesSection } from './order-charges';
 
 /**
  * Seller order detail. Two fetches: the order body (with items) and
@@ -215,6 +216,10 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               </Card>
             </Section>
           )}
+
+          <Section title="Charges">
+            <OrderChargesSection orderId={orderId} />
+          </Section>
 
           <Section title="Timeline">
             <OrderTimelineSection

@@ -16,6 +16,7 @@ import {
   OrderStatusBadge,
 } from '@skydrop/ui/components';
 import { OrderActionsPanel } from './order-actions-panel';
+import { OrderChargesSection } from './order-charges';
 
 /**
  * Order detail. Single-fetch (admin /orders/:id). Renders:
@@ -259,6 +260,10 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               </Card>
             </Section>
           )}
+
+          <Section title="Charges">
+            <OrderChargesSection orderId={orderId} />
+          </Section>
 
           <Section title="Actions">
             <OrderActionsPanel order={detail.data} />

@@ -12,6 +12,7 @@ import type {
   ApiClient,
   ListSellerOrdersQuery,
   ListSellerProductsQuery,
+  OrderChargeView,
   OrderListResponse,
   OrderView,
   PresignVariantImageRequest,
@@ -80,6 +81,20 @@ export function useOrderEvents(
     queryFn: () =>
       client.request<readonly SellerOrderEventView[]>(
         `/api/seller/orders/${id}/events`,
+      ),
+    enabled: Boolean(id),
+  });
+}
+
+export function useOrderCharges(
+  id: string,
+): UseQueryResult<readonly OrderChargeView[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-orders', 'charges', id],
+    queryFn: () =>
+      client.request<readonly OrderChargeView[]>(
+        `/api/seller/orders/${id}/charges`,
       ),
     enabled: Boolean(id),
   });

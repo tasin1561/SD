@@ -11,9 +11,11 @@ import { useApiClient } from '@skydrop/auth/client';
 import type {
   AdminCancelOrderRequest,
   ApiClient,
+  ComputeOrderChargesResponse,
   ForceMutationRequest,
   ForceMutationResult,
   ListOrdersQuery,
+  OrderChargeView,
   ListSellersQuery,
   OrderListResponse,
   OrderView,
@@ -305,6 +307,39 @@ export function useUpdateSystemSetting(
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-system-settings'] });
+    },
+  });
+}
+
+// ───────── Admin order charges (Module 17) ─────────
+
+export function useOrderCharges(
+  orderId: string,
+): UseQueryResult<readonly OrderChargeView[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-order-charges', orderId],
+    queryFn: () =>
+      client.request<readonly OrderChargeView[]>(
+        `/api/admin/orders/${orderId}/charges`,
+      ),
+    enabled: Boolean(orderId),
+  });
+}
+
+export function useComputeOrderCharges(
+  orderId: string,
+): UseMutationResult<ComputeOrderChargesResponse, Error, void> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      client.request<ComputeOrderChargesResponse>(
+        `/api/admin/orders/${orderId}/charges/compute`,
+        { method: 'POST', body: {} },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-order-charges', orderId] });
     },
   });
 }

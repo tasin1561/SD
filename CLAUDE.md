@@ -614,7 +614,7 @@ Module order — each builds on prior modules:
 | 14 | System Settings UI | ✅ DONE |
 | 15 | Pricing Engine (calculate only, no billing) | ✅ DONE (backend; M6 integration fast-follow) |
 | 16 | Multi-Currency & FX | ✅ DONE (current rates only; historical timeseries Phase-1B) |
-| 17 | Order Charges & Cost Breakdown UI | pending |
+| 17 | Order Charges & Cost Breakdown UI | ✅ DONE (read endpoints + admin/seller UI + admin Compute action) |
 | 18 | Live Chat (ChatWoot integration) | pending (deferred droplet install) |
 
 Phase 1B modules (not in this roadmap):
