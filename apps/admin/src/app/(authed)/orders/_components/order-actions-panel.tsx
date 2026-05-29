@@ -11,10 +11,17 @@ import {
 import { OrderCancellationReason, OrderStatus, type StaffRole } from '@skydrop/db';
 import { hasStaffRole, useStaffIdentity } from '@skydrop/auth/client';
 import { useCancelOrder } from '@/lib/api-hooks';
-import { Button } from '@/components/ui/button';
-import { Card, CardBody, CardHeader } from '@/components/ui/card';
-import { FormField, Select, Textarea } from '@/components/ui/form';
-import { Modal, ModalFooter } from '@/components/ui/modal';
+import {
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  FormField,
+  Select,
+  Textarea,
+  Modal,
+  ModalFooter,
+} from '@skydrop/ui/components';
 import { ForceMutationDialog } from './force-mutation-dialog';
 import { ReleaseReservationsDialog } from './release-reservations-dialog';
 

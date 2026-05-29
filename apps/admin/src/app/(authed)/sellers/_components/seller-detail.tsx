@@ -6,9 +6,16 @@ import type { ReactElement } from 'react';
 import { useSellerDetail } from '@/lib/api-hooks';
 import { useStaffIdentity, hasStaffRole } from '@skydrop/auth/client';
 import type { StaffRole } from '@skydrop/db';
-import { Card, CardBody, CardHeader } from '@/components/ui/card';
-import { ErrorState, LoadingState, PageHeader, Section } from '@/components/ui/page';
-import { SellerStatusBadge } from '@/components/ui/status-badge';
+import {
+  Card,
+  CardBody,
+  CardHeader,
+  ErrorState,
+  LoadingState,
+  PageHeader,
+  Section,
+  SellerStatusBadge,
+} from '@skydrop/ui/components';
 import { StatusActionPanel } from './status-action-panel';
 
 const STATUS_ROLES: readonly StaffRole[] = [

@@ -2,9 +2,13 @@
 
 import { useState, type ReactElement } from 'react';
 import { useCreateInvitation } from '@/lib/api-hooks';
-import { Button } from '@/components/ui/button';
-import { FormActions, FormField, Input } from '@/components/ui/form';
-import { Modal } from '@/components/ui/modal';
+import {
+  Button,
+  FormActions,
+  FormField,
+  Input,
+  Modal,
+} from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 
 /**

@@ -3,9 +3,13 @@
 import { useState, type ReactElement } from 'react';
 import { useUpdateSellerStatus } from '@/lib/api-hooks';
 import { ApiError, type SellerStatusValue } from '@skydrop/api-client';
-import { Button } from '@/components/ui/button';
-import { FormField, Textarea } from '@/components/ui/form';
-import { Modal, ModalFooter } from '@/components/ui/modal';
+import {
+  Button,
+  FormField,
+  Textarea,
+  Modal,
+  ModalFooter,
+} from '@skydrop/ui/components';
 
 /**
  * The well-built "action" of the seller list→detail→action→audit

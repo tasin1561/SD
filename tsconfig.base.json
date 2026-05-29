@@ -31,6 +31,7 @@
       "@skydrop/db/*": ["packages/db/src/*"],
       "@skydrop/ui": ["packages/ui/src/index.ts"],
       "@skydrop/ui/*": ["packages/ui/src/*"],
+      "@skydrop/ui/components": ["packages/ui/src/components/index.ts"],
       "@skydrop/types": ["packages/types/src/index.ts"],
       "@skydrop/types/*": ["packages/types/src/*"],
       "@skydrop/config": ["packages/config/src/index.ts"],

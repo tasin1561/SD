@@ -5,8 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
 import { OrderSource, OrderStatus } from '@skydrop/db';
 import { useOrdersList } from '@/lib/api-hooks';
-import { Input, Select } from '@/components/ui/form';
 import {
+  Input,
+  Select,
   Table,
   TBody,
   Td,
@@ -14,14 +15,12 @@ import {
   THead,
   Tr,
   TablePaginator,
-} from '@/components/ui/data-table';
-import {
   EmptyState,
   ErrorState,
   LoadingState,
   PageHeader,
-} from '@/components/ui/page';
-import { OrderStatusBadge } from '@/components/ui/status-badge';
+  OrderStatusBadge,
+} from '@skydrop/ui/components';
 
 /**
  * Order list — URL-driven filter state so a deep-linked filter is

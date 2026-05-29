@@ -7,9 +7,12 @@ import {
   useResendInvitation,
   useDeleteInvitation,
 } from '@/lib/api-hooks';
-import { Button } from '@/components/ui/button';
-import { Card, CardBody } from '@/components/ui/card';
-import { ConfirmDialog } from '@/components/ui/modal';
+import {
+  Button,
+  Card,
+  CardBody,
+  ConfirmDialog,
+} from '@skydrop/ui/components';
 
 /**
  * Inline panel listing pending invitations on the sellers page. Most

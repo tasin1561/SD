@@ -53,6 +53,9 @@
       ],
       "@skydrop/ui/status": [
         "../../packages/ui/src/status/index.ts"
+      ],
+      "@skydrop/ui/components": [
+        "../../packages/ui/src/components/index.ts"
       ]
     },
     "allowJs": true

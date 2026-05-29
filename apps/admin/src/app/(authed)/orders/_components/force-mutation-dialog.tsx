@@ -16,9 +16,15 @@ import {
   type OrderView,
 } from '@skydrop/api-client';
 import { useForceMutation } from '@/lib/api-hooks';
-import { Button } from '@/components/ui/button';
-import { FormField, Input, Select, Textarea } from '@/components/ui/form';
-import { Modal, ModalFooter } from '@/components/ui/modal';
+import {
+  Button,
+  FormField,
+  Input,
+  Select,
+  Textarea,
+  Modal,
+  ModalFooter,
+} from '@skydrop/ui/components';
 
 /**
  * The god-mode override surface (CP2.10).

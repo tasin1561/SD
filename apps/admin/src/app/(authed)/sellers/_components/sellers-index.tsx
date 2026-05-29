@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
 import { useSellersList } from '@/lib/api-hooks';
 import type { SellerStatusValue } from '@skydrop/api-client';
-import { Button } from '@/components/ui/button';
-import { Input, Select } from '@/components/ui/form';
 import {
+  Button,
+  Input,
+  Select,
   Table,
   TBody,
   Td,
@@ -15,14 +16,12 @@ import {
   Tr,
   TableEmpty,
   TablePaginator,
-} from '@/components/ui/data-table';
-import {
   EmptyState,
   ErrorState,
   LoadingState,
   PageHeader,
-} from '@/components/ui/page';
-import { SellerStatusBadge } from '@/components/ui/status-badge';
+  SellerStatusBadge,
+} from '@skydrop/ui/components';
 import { InvitationsPanel } from './invitations-panel';
 import { Plus } from 'lucide-react';
 import { CreateInvitationDialog } from './create-invitation-dialog';

@@ -4,15 +4,17 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { useOrderDetail } from '@/lib/api-hooks';
-import { Card, CardBody, CardHeader } from '@/components/ui/card';
 import {
+  Card,
+  CardBody,
+  CardHeader,
   ErrorState,
   HasOverrideBadge,
   LoadingState,
   PageHeader,
   Section,
-} from '@/components/ui/page';
-import { OrderStatusBadge } from '@/components/ui/status-badge';
+  OrderStatusBadge,
+} from '@skydrop/ui/components';
 import { OrderActionsPanel } from './order-actions-panel';
 
 /**

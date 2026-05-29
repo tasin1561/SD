@@ -2,7 +2,7 @@
   "name": "@skydrop/ui",
   "version": "0.0.0",
   "private": true,
-  "description": "Skydrop shared design tokens — semantic status colors + type scale + spacing + radii. Tokens ONLY; components live in apps/admin until apps/seller forces extraction (per FE-6).",
+  "description": "Skydrop shared design tokens + React component primitives. Tokens (FE-6, semantic status colors + type/spacing/radii) on ./tokens and ./status subpaths. Components (Button/Card/DataTable/Form/Modal/Page/StatusBadge — extracted M13 CP1 once apps/seller forced the shape) on ./components.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -23,6 +23,10 @@
       "types": "./dist/status/index.d.ts",
       "default": "./dist/status/index.js"
     },
+    "./components": {
+      "types": "./dist/components/index.d.ts",
+      "default": "./dist/components/index.js"
+    },
     "./tokens.css": "./dist/tokens.css"
   },
   "files": [
@@ -35,9 +39,18 @@
     "clean": "rm -rf dist .turbo *.tsbuildinfo"
   },
   "dependencies": {
-    "@skydrop/db": "workspace:*"
+    "@radix-ui/react-dialog": "^1.1.4",
+    "@skydrop/db": "workspace:*",
+    "clsx": "^2.1.0",
+    "lucide-react": "^0.469.0"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
     "typescript": "^5.7.0"
   }
 }
