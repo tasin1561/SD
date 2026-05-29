@@ -44,3 +44,15 @@ export type {
   ListSellerOrdersQuery,
   SellerOrderEventView,
 } from './endpoints/seller-orders';
+export type {
+  ListSellerProductsQuery,
+  SellerProductView,
+  SellerProductListResponse,
+  UpdateSellerProductRequest,
+  SellerVariantView,
+  UpdateSellerVariantRequest,
+  PresignVariantImageRequest,
+  PresignVariantImageResponse,
+  RegisterVariantImageRequest,
+  SellerVariantImageView,
+} from './endpoints/seller-catalog';

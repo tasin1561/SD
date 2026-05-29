@@ -1,20 +1,12 @@
 import type { ReactElement } from 'react';
-import { PageHeader, EmptyState } from '@skydrop/ui/components';
+import { CatalogIndex } from './_components/catalog-index';
 
 /**
- * Catalog — CP2.B pattern-setter (write-heavy: products list at
- * variant grain, variant detail edit, product edit, image upload
- * drag-drop multi). This is the seller's onboarding workflow start
- * — no products → no orders.
+ * Catalog — CP2.B pattern-setter (write-heavy: product list at top
+ * level, variant-grain at the product detail, image upload via
+ * drag-drop multi). The list page is URL-driven; click a product to
+ * drill into its detail + variants.
  */
 export default function CatalogPage(): ReactElement {
-  return (
-    <>
-      <PageHeader title="Catalog" subtitle="Products, variants, images." />
-      <EmptyState
-        title="Catalog coming in CP2.B"
-        description="Write-heavy pattern-setter: variant-grain list, edit forms, image upload presign + register. Exercises the form/modal/upload primitives for every seller write to mirror."
-      />
-    </>
-  );
+  return <CatalogIndex />;
 }

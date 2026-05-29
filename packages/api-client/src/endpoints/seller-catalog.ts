@@ -1,0 +1,145 @@
+/**
+ * Seller catalog surface (M4 seller-facing endpoints).
+ *
+ * The CP2.B "Catalog" pattern-setter uses:
+ *   GET    /seller/products                            (list — pagination + filters)
+ *   GET    /seller/products/:id                        (product detail)
+ *   PATCH  /seller/products/:id                        (update product)
+ *   POST   /seller/products/:id/archive                (archive/unarchive)
+ *   GET    /seller/products/:productId/variants        (list variants under product)
+ *   GET    /seller/products/:productId/variants/:variantId  (variant detail)
+ *   PATCH  /seller/products/:productId/variants/:variantId  (update variant)
+ *   POST   /seller/images/presign                      (S3 presigned URL request)
+ *   POST   /seller/images                              (register after upload)
+ *   GET    /seller/images                              (list)
+ *   DELETE /seller/images/:imageId                     (soft-delete)
+ *
+ * Phase-1A scope keeps the catalog grain at PRODUCTS for the list
+ * (backend serves /seller/products paginated); variant-grain UI lives
+ * at the product detail level (variants are listed per-product via
+ * /seller/products/:id/variants).
+ */
+import type { ProductStatus, VariantStatus } from '@skydrop/db';
+
+export interface ListSellerProductsQuery {
+  readonly status?: ProductStatus;
+  readonly categoryId?: string;
+  readonly search?: string;
+  readonly page?: number;
+  readonly pageSize?: number;
+}
+
+export interface SellerProductView {
+  readonly id: string;
+  readonly sellerId: string;
+  readonly categoryId: string | null;
+  readonly name: string;
+  readonly description: string | null;
+  readonly brand: string | null;
+  readonly externalRef: string | null;
+  readonly externalSku: string | null;
+  readonly defaultWeightGrams: number | null;
+  readonly defaultLengthCm: string | null;
+  readonly defaultWidthCm: string | null;
+  readonly defaultHeightCm: string | null;
+  readonly defaultDeclaredValueInr: string | null;
+  readonly defaultHsCode: string | null;
+  readonly status: ProductStatus;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface SellerProductListResponse {
+  readonly items: readonly SellerProductView[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+}
+
+export interface UpdateSellerProductRequest {
+  readonly name?: string;
+  readonly description?: string | null;
+  readonly brand?: string | null;
+  readonly categoryId?: string | null;
+  readonly externalRef?: string | null;
+  readonly externalSku?: string | null;
+  readonly defaultWeightGrams?: number | null;
+  readonly defaultLengthCm?: number | null;
+  readonly defaultWidthCm?: number | null;
+  readonly defaultHeightCm?: number | null;
+  readonly defaultDeclaredValueInr?: number | null;
+  readonly defaultHsCode?: string | null;
+}
+
+export interface SellerVariantView {
+  readonly id: string;
+  readonly productId: string;
+  readonly sellerId: string;
+  readonly skuCode: string;
+  readonly attributes: Record<string, unknown> | null;
+  readonly variantLabel: string | null;
+  readonly weightGrams: number | null;
+  readonly lengthCm: string | null;
+  readonly widthCm: string | null;
+  readonly heightCm: string | null;
+  readonly declaredValueInr: string | null;
+  readonly hsCode: string | null;
+  readonly gstRate: string | null;
+  readonly barcode: string | null;
+  readonly externalSku: string | null;
+  readonly status: VariantStatus;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface UpdateSellerVariantRequest {
+  readonly variantLabel?: string | null;
+  readonly weightGrams?: number | null;
+  readonly lengthCm?: number | null;
+  readonly widthCm?: number | null;
+  readonly heightCm?: number | null;
+  readonly declaredValueInr?: number | null;
+  readonly hsCode?: string | null;
+  readonly gstRate?: number | null;
+  readonly barcode?: string | null;
+  readonly externalSku?: string | null;
+  readonly attributes?: Record<string, unknown>;
+}
+
+/** Image presign request — the FE asks the API for an S3 presigned
+ *  URL keyed to the seller's variant. */
+export interface PresignVariantImageRequest {
+  readonly variantId: string;
+  readonly filename: string;
+  readonly contentType: string;
+  readonly sizeBytes: number;
+}
+
+export interface PresignVariantImageResponse {
+  readonly uploadUrl: string;
+  readonly spacesKey: string;
+  readonly expiresAt: string;
+}
+
+export interface RegisterVariantImageRequest {
+  readonly variantId: string;
+  readonly spacesKey: string;
+  readonly filename: string;
+  readonly contentType: string;
+  readonly sizeBytes: number;
+  readonly altText?: string;
+}
+
+export interface SellerVariantImageView {
+  readonly id: string;
+  readonly variantId: string;
+  readonly spacesKey: string;
+  readonly thumbnailSpacesKey: string | null;
+  readonly displayUrl: string;
+  readonly thumbnailUrl: string | null;
+  readonly contentType: string;
+  readonly sizeBytes: number;
+  readonly altText: string | null;
+  readonly sortOrder: number;
+  readonly createdAt: string;
+}
