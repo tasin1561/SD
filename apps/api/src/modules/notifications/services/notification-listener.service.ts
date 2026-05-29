@@ -282,9 +282,12 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
       delivered_at: ctx.deliveredAt ?? '',
       // Cancellation
       cancellation_reason: ctx.cancellationReason ?? '',
-      // NDR — the courier reason is not currently surfaced on the
-      // order in M10; pass a generic copy until M10/M12 surfaces it.
-      ndr_reason: '',
+      // NDR reason — M13 CP2.A.1 surfaces it from the latest
+      // delivery_attempt on the live shipment (closes the M11
+      // ndr_reason phase-1a-debt entry). Humanized enum (e.g.,
+      // 'Customer Phone Unreachable'), free-text notes fallback,
+      // empty string if neither is present.
+      ndr_reason: ctx.ndrReason ?? '',
       // Static
       app_url: this.env.sellerAppUrl,
       support_email: this.env.supportEmail,
@@ -318,7 +321,10 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
         },
         // The live shipment (excluding CANCELLED / FAILED_AT_CREATION
         // — same predicate transitionWithDispatch uses) so we get the
-        // AWB + courier display name.
+        // AWB + courier display name. M13 CP2.A.1 added the latest
+        // delivery_attempts row so the NDR template variables can
+        // surface a real failure reason (phase-1a-debt M11 ndr_reason
+        // closure).
         orderShipments: {
           where: {
             shipment: {
@@ -340,6 +346,14 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
                 awbNumber: true,
                 deliveredAt: true,
                 courier: { select: { name: true, code: true } },
+                deliveryAttempts: {
+                  orderBy: { attemptedAt: 'desc' },
+                  take: 1,
+                  select: {
+                    failureReason: true,
+                    failureNotes: true,
+                  },
+                },
               },
             },
           },
@@ -351,6 +365,16 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
     const liveShipment = order.orderShipments[0]?.shipment ?? null;
     const formatDate = (d: Date | null | undefined): string =>
       d ? d.toISOString().slice(0, 10) : '';
+    // M13 CP2.A.1 — surface the NDR reason from the latest delivery
+    // attempt. Prefer the structured enum (humanized) over the
+    // free-text notes (operator-authored, may contain PII). Null both
+    // → empty (the NDR templates read naturally without it; the M11
+    // generic-copy fallback from the original M11 work remains the
+    // intent).
+    const latestAttempt = liveShipment?.deliveryAttempts?.[0] ?? null;
+    const ndrReason: string | null = latestAttempt?.failureReason
+      ? humanizeFailureReason(latestAttempt.failureReason)
+      : (latestAttempt?.failureNotes?.trim() || null);
     return {
       orderId: order.id,
       orderNumber: order.orderNumber,
@@ -369,8 +393,20 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
       awbNumber: liveShipment?.awbNumber ?? null,
       courierName: liveShipment?.courier?.name ?? null,
       deliveredAt: formatDate(liveShipment?.deliveredAt),
+      ndrReason,
     };
   }
+}
+
+/** Underscore-snake_case enum → Title Case display string. Mirrors
+ *  the @skydrop/ui statusLabel helper but lives here to avoid a
+ *  frontend package import. */
+function humanizeFailureReason(reason: string): string {
+  return String(reason)
+    .toLowerCase()
+    .split('_')
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+    .join(' ');
 }
 
 interface OrderContext {
@@ -391,6 +427,10 @@ interface OrderContext {
   readonly awbNumber: string | null;
   readonly courierName: string | null;
   readonly deliveredAt: string;
+  /** M13 CP2.A.1: the NDR template's `ndr_reason` variable. Humanized
+   *  enum from the latest delivery_attempt's failureReason, falling
+   *  back to failureNotes, null if neither is present. */
+  readonly ndrReason: string | null;
 }
 
 // Local re-import for the orderShipments type narrowing — keeps the

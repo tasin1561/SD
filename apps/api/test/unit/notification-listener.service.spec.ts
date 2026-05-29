@@ -32,6 +32,9 @@ interface OrderFixture {
   awbNumber: string | null;
   courierName: string | null;
   deliveredAt: Date | null;
+  /** M13 CP2.A.1 — latest delivery_attempt on the live shipment.
+   *  null when no attempts have been recorded. */
+  deliveryAttempt?: { failureReason: string | null; failureNotes: string | null } | null;
 }
 
 function makeSut(fixture: OrderFixture | null) {
@@ -66,6 +69,9 @@ function makeSut(fixture: OrderFixture | null) {
                       courier: fixture.courierName
                         ? { name: fixture.courierName, code: 'delhivery' }
                         : null,
+                      deliveryAttempts: fixture.deliveryAttempt
+                        ? [fixture.deliveryAttempt]
+                        : [],
                     },
                   },
                 ]
@@ -269,6 +275,51 @@ describe('NotificationListener', () => {
       expect(enqueueCalls).toHaveLength(1);
       expect(enqueueCalls[0]?.recipientType).toBe(NotificationRecipientType.CUSTOMER);
       expect(enqueueCalls[0]?.channel).toBe(NotificationChannel.EMAIL);
+    });
+  });
+
+  // ── M13 CP2.A.1 — closes the M11 ndr_reason phase-1a-debt entry ─────
+  describe('DELIVERY_FAILED — ndr_reason surfaces from latest delivery_attempt', () => {
+    it('humanizes the failureReason enum (CUSTOMER_PHONE_UNREACHABLE → "Customer Phone Unreachable")', async () => {
+      const { listener, enqueueCalls } = makeSut({
+        ...ORDER_BASE,
+        deliveryAttempt: {
+          failureReason: 'CUSTOMER_PHONE_UNREACHABLE',
+          failureNotes: null,
+        },
+      });
+      await listener.handle(lifecycleEvent(OrderStatus.DELIVERY_FAILED));
+      // Q5 maps DELIVERY_FAILED → seller + customer; both rows carry
+      // the same templateData (ndr_reason in particular).
+      expect(enqueueCalls.length).toBeGreaterThan(0);
+      for (const call of enqueueCalls) {
+        expect(call.variables.ndr_reason).toBe('Customer Phone Unreachable');
+      }
+    });
+
+    it('falls back to failureNotes when failureReason is null', async () => {
+      const { listener, enqueueCalls } = makeSut({
+        ...ORDER_BASE,
+        deliveryAttempt: {
+          failureReason: null,
+          failureNotes: '  Customer requested redelivery tomorrow  ',
+        },
+      });
+      await listener.handle(lifecycleEvent(OrderStatus.DELIVERY_FAILED));
+      for (const call of enqueueCalls) {
+        // trimmed, raw notes — operator authored
+        expect(call.variables.ndr_reason).toBe(
+          'Customer requested redelivery tomorrow',
+        );
+      }
+    });
+
+    it('empty string when no delivery_attempt is recorded (generic NDR copy)', async () => {
+      const { listener, enqueueCalls } = makeSut(ORDER_BASE);
+      await listener.handle(lifecycleEvent(OrderStatus.DELIVERY_FAILED));
+      for (const call of enqueueCalls) {
+        expect(call.variables.ndr_reason).toBe('');
+      }
     });
   });
 });

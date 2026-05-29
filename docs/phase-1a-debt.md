@@ -837,16 +837,19 @@ pick it up.
   cleanup, with per-caller audit of their re-fire semantics; not
   urgent.
 
-- **NDR ndr_reason variable is empty.** The Q5 NDR templates
-  (`seller.order_ndr.email`, `customer.order_ndr.email`) include
-  `{{ ndr_reason }}` but the listener passes `ndr_reason: ''` — M10
-  does not yet surface the courier's reason code on the order
-  (`delivery_attempts.reason` is captured per-attempt but not promoted
-  to the order header that the listener loads). The template body
-  reads naturally with an empty reason (a generic NDR notification);
-  once M10 / M12 exposes the latest attempt's reason on the order
-  read-model, the listener's `buildVariables` can wire it. **Pick up:**
-  M12 admin order detail (which will need the same surface).
+- **NDR ndr_reason variable is empty — ✅ RESOLVED (M13 CP2.A.1).**
+  `NotificationListener.loadOrderContext` now fetches the latest
+  `delivery_attempts` row (per-shipment, ordered by `attemptedAt
+  DESC LIMIT 1`) and surfaces `failureReason` (humanized — the enum
+  `CUSTOMER_PHONE_UNREACHABLE` becomes `'Customer Phone Unreachable'`)
+  with a free-text `failureNotes` fallback and empty-string fallback
+  when neither is present (preserves the generic-NDR copy that the
+  M11 templates were authored against). The same query shape is the
+  load-bearing addition; admin-side `/events` UI (separate concern)
+  is unaffected. The fix is pinned by three unit tests in
+  `notification-listener.service.spec.ts` (`DELIVERY_FAILED —
+  ndr_reason surfaces ...` describe block: humanized enum / notes
+  fallback / empty-no-attempt). Recorded for provenance.
 
 - **Listener fan-out is best-effort, NO retry of the LISTENER itself.**
   NOTIF-1 says the listener is best-effort; an error in
