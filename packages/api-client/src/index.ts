@@ -45,6 +45,12 @@ export type {
   SellerOrderEventView,
 } from './endpoints/seller-orders';
 export type {
+  SystemSettingView,
+  SystemSettingFull,
+  SystemSettingsCategoryGroup,
+  UpdateSystemSettingRequest,
+} from './endpoints/admin-system-settings';
+export type {
   ListSellerProductsQuery,
   SellerProductView,
   SellerProductListResponse,
