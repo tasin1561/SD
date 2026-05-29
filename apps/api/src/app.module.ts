@@ -53,6 +53,7 @@ import { TrackingManualModule } from './modules/tracking-manual/tracking-manual.
 import { LifecycleEventsModule } from './modules/lifecycle-events/lifecycle-events.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { SystemSettingsModule } from './modules/system-settings/system-settings.module';
+import { PricingModule } from './modules/pricing/pricing.module';
 import { ThrottlerModule } from './common/throttler/throttler.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { pinoConfig } from './common/pino/logger-config';
@@ -131,6 +132,7 @@ import { envSchema } from './config/env.schema';
     LifecycleEventsModule,
     NotificationsModule,
     SystemSettingsModule,
+    PricingModule,
     HealthModule,
   ],
 })

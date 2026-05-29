@@ -62,3 +62,10 @@ export type {
   RegisterVariantImageRequest,
   SellerVariantImageView,
 } from './endpoints/seller-catalog';
+export type {
+  PreviewPricingRequest,
+  PricingPreviewResponse,
+  PricingChargeLine,
+  PricingUnresolvedReason,
+  PricingUnresolvedFallback,
+} from './endpoints/admin-pricing';
