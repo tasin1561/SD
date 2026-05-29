@@ -269,6 +269,91 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  apps/seller:
+    dependencies:
+      '@skydrop/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
+      '@skydrop/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@skydrop/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@skydrop/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      '@tanstack/react-query':
+        specifier: ^5.62.0
+        version: 5.100.14(react@19.2.6)
+      clsx:
+        specifier: ^2.1.0
+        version: 2.1.1
+      lucide-react:
+        specifier: ^0.469.0
+        version: 0.469.0(react@19.2.6)
+      next:
+        specifier: ^15.1.0
+        version: 15.5.18(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.6(react@19.2.6)
+      server-only:
+        specifier: ^0.0.1
+        version: 0.0.1
+    devDependencies:
+      '@eslint/eslintrc':
+        specifier: ^3.2.0
+        version: 3.3.5
+      '@tailwindcss/postcss':
+        specifier: ^4.1.0
+        version: 4.3.0
+      '@testing-library/jest-dom':
+        specifier: ^6.6.0
+        version: 6.9.1
+      '@testing-library/react':
+        specifier: ^16.1.0
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      '@testing-library/user-event':
+        specifier: ^14.5.0
+        version: 14.6.1(@testing-library/dom@10.4.1)
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.19.19
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.15
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.3(@types/react@19.2.15)
+      autoprefixer:
+        specifier: ^10.4.20
+        version: 10.5.0(postcss@8.5.15)
+      eslint:
+        specifier: ^9.16.0
+        version: 9.39.4(jiti@2.7.0)
+      eslint-config-next:
+        specifier: ^15.1.0
+        version: 15.5.18(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+      happy-dom:
+        specifier: ^15.11.0
+        version: 15.11.7
+      postcss:
+        specifier: ^8.5.0
+        version: 8.5.15
+      tailwindcss:
+        specifier: ^4.1.0
+        version: 4.3.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.19)(happy-dom@15.11.7)(lightningcss@1.32.0)(terser@5.47.1)
+
   packages/api-client:
     dependencies:
       '@skydrop/db':

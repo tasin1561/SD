@@ -1,0 +1,46 @@
+{
+  "name": "@skydrop/seller",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Skydrop seller portal — app.skydrop.online — BD seller-facing dashboard (catalog, orders, tracking, profile).",
+  "scripts": {
+    "dev": "next dev -p 3003",
+    "build": "next build",
+    "start": "next start -p 3003",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "clean": "rm -rf .next .turbo dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@skydrop/api-client": "workspace:*",
+    "@skydrop/auth": "workspace:*",
+    "@skydrop/db": "workspace:*",
+    "@skydrop/ui": "workspace:*",
+    "@tanstack/react-query": "^5.62.0",
+    "clsx": "^2.1.0",
+    "lucide-react": "^0.469.0",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.2.0",
+    "@tailwindcss/postcss": "^4.1.0",
+    "@testing-library/jest-dom": "^6.6.0",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/user-event": "^14.5.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9.16.0",
+    "eslint-config-next": "^15.1.0",
+    "happy-dom": "^15.11.0",
+    "postcss": "^8.5.0",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}
