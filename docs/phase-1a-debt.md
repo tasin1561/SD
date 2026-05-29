@@ -898,6 +898,112 @@ pick it up.
   upstream; revisit only if forceExit ever becomes the wrong default
   (e.g., a future test wants to assert post-teardown state).
 
+## Admin Dashboard + Frontend Foundation (Module 12)
+
+### M12 design deferrals
+
+- **`ORDER_VIEW_INCLUDE` is items-only on the admin order detail
+  endpoint** — no `events`, no `delivery_attempts`. This is a single
+  shared root that blocks TWO M12 follow-ups:
+    1. **Lifecycle history timeline on the order detail page.** The
+       UI currently renders Recipient / Payment / Physical / Items /
+       Notes but NOT the order_events history. A future admin
+       endpoint that includes `events` (filtered to admin-visible
+       rows) lights up the section.
+    2. **M11 NDR `ndr_reason` debt closure (#13 from the M12 plan).**
+       The customer-side NDR notification template's `ndr_reason`
+       variable is empty because the listener loads the order header
+       without the latest `delivery_attempts.reason`. Adding
+       `delivery_attempts` (latest, scoped to non-cancelled
+       shipments) to the same admin include unblocks the listener's
+       `buildVariables` to surface a real reason.
+  Both are unblocked by one small backend change — a deliberate
+  admin events/delivery-attempts include on the order view. The two
+  share a root by design: the M12 plan explicitly chose NOT to
+  expand the endpoint inside M12 (the /me cookie path was the only
+  sanctioned backend touch), so both stay as debt for the same
+  follow-up. **Pick up:** a small backend commit on the order
+  domain when admin dashboard timeline + M11 NDR copy are
+  prioritised; one PR closes both.
+
+- **Component extraction to `packages/ui` is intentionally
+  deferred until apps/seller forces the shape.** Every admin
+  component lives in `apps/admin/src/components/ui/` and is
+  TOKEN-DRIVEN — no `@/...` imports inside that folder. When
+  apps/seller lands (M13 frontend cycle direction), the entire
+  folder lifts to `packages/ui/src/components/` and the shared API
+  is shaped against the dual-app demand. Premature abstraction
+  with only one app would shape the API around admin's quirks; the
+  delay is a deliberate quality bet. The token system + status
+  mapping ARE shared from M12 onward (FE-6).
+  **Pick up:** with apps/seller scaffolding (M13+ frontend cycle).
+
+- **Warehouse-ops and queue-management feature areas in
+  apps/admin are M12 fast-follow modules.** The CP2 scope was
+  Seller management + Order ops; the M12 spec explicitly excluded
+  Warehouse + Queue management. Both fit cleanly into the
+  existing patterns (list → detail → action → audit template
+  from CP2.7; same shared component primitives; same RBAC
+  cosmetic gates; the M8/M9 endpoints are already exposed). No
+  architectural blockers — just feature scope.
+  **Pick up:** as standalone fast-follow modules once apps/seller
+  shapes the shared-component API more firmly.
+
+- **`moduleResolution: bundler` source-vs-dist consumption
+  discipline** — packages use extension-less relative imports
+  (`from './client'` not `'./client.js'`) so Next.js webpack
+  resolves directly from `src/` via tsconfig paths. apps/api
+  consumes built dist/ via package `main`. When apps/seller
+  lands as a SECOND Next.js consumer, verify the same discipline
+  holds (both apps' tsconfigs have aliases pointing at packages/X/
+  src/index.ts) — and that the BUILT dist/ stays consistent
+  (apps/admin's production build needs `paths: {}` in
+  tsconfig.build.json to override the inherited base; without it
+  the build emits into the wrong rootDir). The M12 packages all
+  do this correctly today; the comment is a guard against
+  drift.
+  **Pick up:** if/when apps/seller's build surfaces a
+  resolution issue.
+
+- **Frontend e2e harness (Playwright) deferred to apps/seller.**
+  The cost-benefit calc at M12 strongly favored
+  integration-tests + a documented manual smoke
+  (`apps/admin/CP2_FEATURE_SMOKE.md`) over a Playwright
+  installation (~150MB browsers + harness time). When apps/seller
+  doubles the surface, Playwright amortizes across two apps and
+  becomes the right investment — the manual smoke then becomes
+  documentation, not the test gate.
+  **Pick up:** with apps/seller, OR earlier if a UI regression
+  occurs that the boundary + manual-smoke layers don't catch.
+
+- **Cosmetic RBAC awaits server gates landing.** The M12 UI gates
+  Suspend/Reapprove behind `SUPER_ADMIN` / `SELLER_APPROVAL_ADMIN`
+  and god-mode behind `SUPER_ADMIN` only — but the underlying
+  endpoints have NO `requireStaffRoles` on them today (every admin
+  endpoint is `StaffJwtGuard`-only in Phase 1A). When the server
+  RBAC sweep lands, the cosmetic gates become accurate by
+  construction (UI mirrors the server). Until then, the FE-2
+  discipline holds: even with the UI's cosmetic gates open, the
+  server rejects with `[INSUFFICIENT_ROLE]` and the UI displays it
+  verbatim (pinned by `seller-status-fe2.test.tsx`).
+  **Pick up:** with the server RBAC sweep across all admin
+  endpoints.
+
+- **Login-form one-shot ApiClient** — the /login page is not
+  wrapped in `<AuthProvider>` (the provider mounts under (authed)
+  only). The form instantiates its own one-shot `ApiClient` to
+  perform the login mutation. On success, a hard navigation
+  (`window.location.assign('/dashboard')`) triggers a fresh SSR
+  pass that hydrates identity via cookie→/me + mints a fresh
+  access token via silent-refresh. This is intentional symmetry
+  (every authed page gets its token via a refresh, never via the
+  login response), but it costs one extra network round-trip on
+  login. A future optimization could persist the access token via
+  a server action that ALSO sets the cookie, eliminating the
+  refresh — at the cost of a more complex auth-state hand-off.
+  Not worth it at Phase-1A scale.
+  **Pick up:** if login-time latency becomes a UX concern.
+
 ## Pricing & Multi-Currency (Modules 15–17)
 
 - **Historical FX rate tracking**. Phase 1A keeps a single current rate
