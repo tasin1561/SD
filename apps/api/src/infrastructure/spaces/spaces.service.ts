@@ -75,7 +75,7 @@ export class SpacesService implements OnModuleInit {
       Key: key,
       ContentType: contentType,
     });
-    return getSignedUrl(this.requireClient(), cmd, { expiresIn: ttlSeconds });
+    return getSignedUrl(this.requireClient() as unknown as Parameters<typeof getSignedUrl>[0], cmd, { expiresIn: ttlSeconds });
   }
 
   async headObject(key: string): Promise<ObjectHead | null> {
