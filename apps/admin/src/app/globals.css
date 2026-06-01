@@ -18,6 +18,18 @@
 @import 'tailwindcss';
 
 /*
+ * Scan @skydrop/ui sources so Tailwind picks up classes used in
+ * the shared component primitives (Modal, etc.). Tailwind v4
+ * auto-scans only the current app's directory; without this,
+ * utilities used ONLY in packages/ui (e.g. the Modal's
+ * `fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50`)
+ * never make it into the production CSS, and Radix Dialog.Content
+ * renders unstyled at the bottom of the document instead of as a
+ * centered fixed overlay.
+ */
+@source '../../../../packages/ui/src';
+
+/*
  * Tailwind v4 @theme — map our CSS variables to Tailwind's utility
  * tokens so `bg-surface`, `text-body`, etc. work alongside raw
  * var(--…) references. Keeps the utility-class fluency without
