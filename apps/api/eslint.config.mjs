@@ -32,6 +32,13 @@ export default [
         __filename: 'readonly',
         URL: 'readonly',
         URLSearchParams: 'readonly',
+        // Node 18+ built-in fetch + AbortController/AbortSignal.
+        fetch: 'readonly',
+        Response: 'readonly',
+        Request: 'readonly',
+        Headers: 'readonly',
+        AbortController: 'readonly',
+        AbortSignal: 'readonly',
       },
     },
     plugins: {
