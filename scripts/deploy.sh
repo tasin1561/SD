@@ -110,15 +110,31 @@ fi
 pm2 save
 
 # ── 8. Health smoke ──────────────────────────────────────────────────
+# pm2 restart returns the moment the new process is spawned, but the
+# Next.js servers take ~3-10s to actually bind their port. Poll each
+# URL up to ~30s before giving up.
 echo "── health smoke ──"
+check_url() {
+  local url="$1"
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    local code
+    code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 "$url" 2>/dev/null || echo "000")
+    if [[ "$code" == 2* || "$code" == 3* ]]; then
+      echo "  $url → $code"
+      return 0
+    fi
+    sleep 2
+  done
+  echo "  ✗ $url unhealthy after 30s (last status: $code)"
+  return 1
+}
+
 for url in \
   http://127.0.0.1:4000/health \
   http://127.0.0.1:3002/login \
   http://127.0.0.1:3003/login \
   http://127.0.0.1:3004/; do
-  code=$(curl -s -o /dev/null -w "%{http_code}" "$url")
-  echo "  $url → $code"
-  [[ "$code" == 2* || "$code" == 3* ]] || { echo "  ✗ unhealthy"; exit 1; }
+  check_url "$url" || exit 1
 done
 
 echo
