@@ -216,6 +216,24 @@ export function useOrderDetail(id: string): UseQueryResult<OrderView> {
   });
 }
 
+// Admin order events — full timeline (all events, including
+// isVisibleToSeller=false ones the seller wouldn't see).
+import type { SellerOrderEventView as AdminOrderEventView } from '@skydrop/api-client';
+
+export function useAdminOrderEvents(
+  id: string,
+): UseQueryResult<ReadonlyArray<AdminOrderEventView>> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-orders', 'events', id],
+    queryFn: () =>
+      client.request<ReadonlyArray<AdminOrderEventView>>(
+        `/api/admin/orders/${id}/events`,
+      ),
+    enabled: Boolean(id),
+  });
+}
+
 export function useCancelOrder(
   orderId: string,
 ): UseMutationResult<TransitionStatusResult, Error, AdminCancelOrderRequest> {
@@ -676,5 +694,30 @@ export function useReleaseCall(): UseMutationResult<
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['agent-calls'] });
     },
+  });
+}
+
+export interface AdminShipmentRow {
+  readonly id: string;
+  readonly shipmentNumber: string;
+  readonly status: string;
+  readonly awbNumber: string | null;
+  readonly courierCode: string;
+  readonly isManualCourier: boolean;
+  readonly createdAt: string;
+  readonly supersedesShipmentId: string | null;
+}
+
+export function useAdminOrderShipments(
+  id: string,
+): UseQueryResult<ReadonlyArray<AdminShipmentRow>> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-orders', 'shipments', id],
+    queryFn: () =>
+      client.request<ReadonlyArray<AdminShipmentRow>>(
+        `/api/admin/orders/${id}/shipments`,
+      ),
+    enabled: Boolean(id),
   });
 }

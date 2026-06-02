@@ -846,9 +846,127 @@ type TemplateSeed = {
   htmlBodyTemplate?: string;
 };
 
-// Placeholder content using Jinja-style {{ }} variables. The notifications
-// module will refine wording, add HTML versions, and seed Hindi variants
-// for the customer-facing SMS templates.
+/**
+ * Branded HTML wrapper for transactional emails — applied to every
+ * customer + seller + staff email template via `wrapHtml(...)`. Takes
+ * a title, body HTML (paragraphs / lists / details), and optional
+ * primary CTA (label + url). All inline styles so it renders the
+ * same in Gmail / Outlook / Apple Mail. Light-theme palette (the
+ * dark-theme variant uses the same hex codes — recipients see a
+ * white card on a neutral background regardless of their app theme).
+ */
+function wrapHtml(opts: {
+  title: string;
+  bodyHtml: string;
+  cta?: { label: string; url: string };
+}): string {
+  const cta = opts.cta
+    ? `
+            <tr>
+              <td style="padding:0 32px 24px 32px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td style="background:#4566e6;border-radius:6px;">
+                      <a href="${opts.cta.url}" style="display:inline-block;padding:11px 22px;font-size:14px;font-weight:500;color:#ffffff;text-decoration:none;letter-spacing:0.01em;">${opts.cta.label}</a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>`
+    : '';
+  return `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f4f6fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2937;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f6fa;padding:40px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border-radius:10px;border:1px solid #e5e7eb;max-width:560px;width:100%;box-shadow:0 1px 2px rgba(15,23,42,0.04);">
+            <tr>
+              <td style="padding:28px 32px 0 32px;">
+                <div style="font-size:16px;font-weight:600;color:#0f172a;letter-spacing:-0.01em;">Skydrop</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px 32px 0 32px;">
+                <h1 style="margin:0 0 16px 0;font-size:20px;font-weight:600;color:#0f172a;letter-spacing:-0.015em;line-height:1.35;">${opts.title}</h1>
+                <div style="font-size:14px;line-height:1.65;color:#4b5563;">
+                  ${opts.bodyHtml}
+                </div>
+              </td>
+            </tr>${cta}
+            <tr>
+              <td style="padding:0 32px 28px 32px;">
+                <div style="border-top:1px solid #e5e7eb;padding-top:14px;">
+                  <p style="margin:0;font-size:11px;line-height:1.6;color:#9ca3af;">
+                    Skydrop — cross-border courier &amp; warehouse aggregator.
+                  </p>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+/**
+ * Auto-generate an HTML body when an email template doesn't supply
+ * its own htmlBodyTemplate. Wraps the plain-text body in the brand
+ * shell using the subject as the headline and the body broken into
+ * paragraphs on blank lines or full-stop boundaries.
+ *
+ * Safe with Nunjucks `{{ var }}` placeholders: they're preserved
+ * verbatim because we don't HTML-escape them (Nunjucks will render
+ * the result with autoescape ON for the htmlBodyTemplate path —
+ * see EmailDispatchService).
+ *
+ * Light-touch CTA detection: a `{{ ..._url }}` placeholder in the
+ * body promotes to a button when there's exactly one. The body is
+ * then trimmed of that URL fragment.
+ */
+function autoHtmlFromText(subject: string, body: string): string {
+  // Paragraphify on blank lines OR sentence boundaries followed by space.
+  const segments = body
+    .split(/\n{2,}/g)
+    .flatMap((p) => p.split(/(?<=[.!?])\s+(?=[A-Z{])/g))
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
+  // Detect first `{{ *_url }}` and promote it to a CTA when there's
+  // exactly one in the body.
+  const urlMatches = body.match(/\{\{\s*\w*_url\s*\}\}/g) ?? [];
+  let cta: { label: string; url: string } | undefined;
+  if (urlMatches.length === 1) {
+    const placeholder = urlMatches[0];
+    const url = placeholder;
+    const labelFromVar = placeholder
+      .replace(/\{\{|\}\}|\s/g, '')
+      .replace(/_url$/, '')
+      .replace(/_/g, ' ');
+    cta = {
+      label:
+        labelFromVar === 'invite' ? 'Accept invitation'
+        : labelFromVar === 'reset' ? 'Reset password'
+        : labelFromVar === 'verify' ? 'Verify email'
+        : labelFromVar === 'tracking' ? 'Track shipment'
+        : labelFromVar === 'app' ? 'Open Skydrop'
+        : 'Open',
+      url,
+    };
+  }
+
+  const bodyHtml = segments
+    .map((p) => `<p style="margin:0 0 12px 0;">${p}</p>`)
+    .join('\n                  ');
+
+  return wrapHtml({ title: subject, bodyHtml, ...(cta ? { cta } : {}) });
+}
+
+// Placeholder content using Jinja-style {{ }} variables. Customer-
+// facing templates additionally seed Hindi variants (deferred until
+// the customer apps land).
 const notificationTemplates: TemplateSeed[] = [
   {
     code: 'order.confirmed.customer.sms',
@@ -1292,7 +1410,16 @@ const notificationTemplates: TemplateSeed[] = [
 ];
 
 async function seedNotificationTemplates() {
+  let autoHtmlCount = 0;
   for (const t of notificationTemplates) {
+    // Auto-generate an HTML body for every EMAIL template that didn't
+    // supply one. Keeps the bar high without writing 30+ unique
+    // HTML strings — branded shell on every email, day one.
+    let htmlBody = t.htmlBodyTemplate ?? null;
+    if (htmlBody === null && t.channel === NotificationChannel.EMAIL) {
+      htmlBody = autoHtmlFromText(t.subject ?? t.name, t.bodyTemplate);
+      autoHtmlCount += 1;
+    }
     await prisma.notificationTemplate.upsert({
       where: { code_language: { code: t.code, language: 'en' } },
       create: {
@@ -1303,7 +1430,7 @@ async function seedNotificationTemplates() {
         language: 'en',
         subject: t.subject ?? null,
         bodyTemplate: t.bodyTemplate,
-        htmlBodyTemplate: t.htmlBodyTemplate ?? null,
+        htmlBodyTemplate: htmlBody,
         isActive: true,
         version: 1,
       },
@@ -1313,11 +1440,13 @@ async function seedNotificationTemplates() {
         recipientType: t.recipientType,
         subject: t.subject ?? null,
         bodyTemplate: t.bodyTemplate,
-        htmlBodyTemplate: t.htmlBodyTemplate ?? null,
+        htmlBodyTemplate: htmlBody,
       },
     });
   }
-  console.log(`  notification_templates: ${notificationTemplates.length} upserted (en)`);
+  console.log(
+    `  notification_templates: ${notificationTemplates.length} upserted (en) — ${autoHtmlCount} HTML bodies auto-generated`,
+  );
 }
 
 async function main() {

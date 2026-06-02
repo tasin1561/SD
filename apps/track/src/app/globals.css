@@ -1,0 +1,62 @@
+/*
+ * apps/track global stylesheet — mirrors apps/seller. Dark theme
+ * primary; @skydrop/ui tokens drive every color. Tailwind v4 utilities
+ * layered on top.
+ */
+
+@import '@skydrop/ui/tokens.css';
+@import 'tailwindcss';
+
+@source '../../../../packages/ui/src';
+
+@theme {
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-surface-raised: var(--color-surface-raised);
+  --color-surface-hover: var(--color-surface-hover);
+  --color-border: var(--color-border);
+  --color-border-strong: var(--color-border-strong);
+  --color-text-faint: var(--color-text-faint);
+  --color-text-muted: var(--color-text-muted);
+  --color-text-body: var(--color-text-body);
+  --color-text-strong: var(--color-text-strong);
+  --color-text-bright: var(--color-text-bright);
+  --color-accent: var(--color-accent);
+  --color-accent-hover: var(--color-accent-hover);
+  --color-accent-fg: var(--color-accent-fg);
+  --color-critical: var(--color-critical);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --radius-1: var(--radius-1);
+  --radius-2: var(--radius-2);
+  --radius-3: var(--radius-3);
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text-body);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent-ring);
+  outline-offset: 1px;
+  border-radius: var(--radius-1);
+}

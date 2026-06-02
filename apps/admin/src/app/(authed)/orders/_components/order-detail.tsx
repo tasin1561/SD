@@ -17,6 +17,8 @@ import {
 } from '@skydrop/ui/components';
 import { OrderActionsPanel } from './order-actions-panel';
 import { OrderChargesSection } from './order-charges';
+import { OrderShipmentsSection } from './order-shipments-section';
+import { OrderTimelineSection } from './order-timeline-section';
 
 /**
  * Order detail. Single-fetch (admin /orders/:id). Renders:
@@ -263,6 +265,14 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
 
           <Section title="Charges">
             <OrderChargesSection orderId={orderId} />
+          </Section>
+
+          <Section title="Shipments">
+            <OrderShipmentsSection orderId={orderId} />
+          </Section>
+
+          <Section title="Timeline">
+            <OrderTimelineSection orderId={orderId} />
           </Section>
 
           <Section title="Actions">

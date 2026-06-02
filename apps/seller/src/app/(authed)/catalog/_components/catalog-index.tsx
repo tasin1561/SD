@@ -6,6 +6,7 @@ import { useCallback, useMemo, useState, type ReactElement } from 'react';
 import { ProductStatus } from '@skydrop/db';
 import { useProductsList } from '@/lib/api-hooks';
 import {
+  Button,
   Input,
   Select,
   Table,
@@ -94,6 +95,13 @@ export function CatalogIndex(): ReactElement {
       <PageHeader
         title="Catalog"
         subtitle="Products, variants, images. Click a product to edit or manage its variants."
+        action={
+          <Link href="/catalog/import">
+            <Button variant="ghost" size="md">
+              CSV import
+            </Button>
+          </Link>
+        }
       />
 
       <div className="flex flex-wrap items-center gap-2 mb-3">

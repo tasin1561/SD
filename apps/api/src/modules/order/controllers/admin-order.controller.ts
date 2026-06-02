@@ -28,6 +28,7 @@ import {
 import { ForceMutationDto } from '../dto/force-mutation.dto';
 import {
   OrderService,
+  type OrderEventView,
   type OrderListItem,
   type OrderView,
 } from '../services/order.service';
@@ -78,6 +79,28 @@ export class AdminOrderController {
   @ApiOperation({ summary: 'Get one order (with items)' })
   get(@Param('id', uuid()) id: string): Promise<OrderView> {
     return this.orders.adminGetById(id);
+  }
+
+  @Get(':id/events')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Admin order timeline — every event (incl. internal-only), oldest first',
+  })
+  events(@Param('id', uuid()) id: string): Promise<OrderEventView[]> {
+    return this.orders.listEventsForAdmin(id);
+  }
+
+  @Get(':id/shipments')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Shipments associated with an order — newest first, includes superseded entries',
+  })
+  shipments(
+    @Param('id', uuid()) id: string,
+  ): ReturnType<OrderService['listShipmentsForAdmin']> {
+    return this.orders.listShipmentsForAdmin(id);
   }
 
   @Post(':id/cancel')

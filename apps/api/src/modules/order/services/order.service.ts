@@ -967,6 +967,74 @@ export class OrderService {
     });
   }
 
+  /** Shipments associated with an order (via order_shipments).
+   *  Returns ordering of newest-first; supersede chains keep older
+   *  rows around so the operator sees the whole lineage. */
+  async listShipmentsForAdmin(orderId: string): Promise<
+    Array<{
+      id: string;
+      shipmentNumber: string;
+      status: string;
+      awbNumber: string | null;
+      courierCode: string;
+      isManualCourier: boolean;
+      createdAt: Date;
+      supersedesShipmentId: string | null;
+    }>
+  > {
+    const order = await this.prisma.client.order.findFirst({
+      where: { id: orderId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!order) {
+      throw new NotFoundException({
+        code: 'ORDER_NOT_FOUND',
+        message: `Order ${orderId} not found`,
+      });
+    }
+    const rows = await this.prisma.client.orderShipment.findMany({
+      where: { orderId },
+      select: {
+        shipment: {
+          select: {
+            id: true,
+            shipmentNumber: true,
+            status: true,
+            awbNumber: true,
+            courierCode: true,
+            isManualCourier: true,
+            createdAt: true,
+            supersedesShipmentId: true,
+          },
+        },
+      },
+    });
+    return rows
+      .map((r) => r.shipment)
+      .filter((s): s is NonNullable<typeof s> => s !== null)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  /** Admin / staff timeline — every event regardless of
+   *  isVisibleToSeller. No ownership scoping; staff JWT is the gate. */
+  async listEventsForAdmin(orderId: string): Promise<OrderEventView[]> {
+    const order = await this.prisma.client.order.findFirst({
+      where: { id: orderId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!order) {
+      throw new NotFoundException({
+        code: 'ORDER_NOT_FOUND',
+        message: `Order ${orderId} not found`,
+      });
+    }
+    return this.prisma.client.orderEvent.findMany({
+      where: { orderId },
+      orderBy: { createdAt: 'asc' },
+      select: ORDER_EVENT_SELECT,
+    });
+  }
+
   /**
    * Soft-delete (discard) a DRAFT order. Only DRAFT is discardable — a
    * submitted/active order must be cancelled, not deleted, so its history

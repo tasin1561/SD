@@ -87,11 +87,18 @@ export function OrdersIndex(): ReactElement {
         title="Orders"
         subtitle="Your orders. Filter by status / search; rows link to detail + tracking."
         action={
-          <Link href="/orders/new">
-            <Button variant="primary" size="md">
-              <Plus size={14} /> New order
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/orders/import">
+              <Button variant="ghost" size="md">
+                CSV import
+              </Button>
+            </Link>
+            <Link href="/orders/new">
+              <Button variant="primary" size="md">
+                <Plus size={14} /> New order
+              </Button>
+            </Link>
+          </div>
         }
       />
 
