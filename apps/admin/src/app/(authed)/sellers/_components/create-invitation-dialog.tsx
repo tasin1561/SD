@@ -8,6 +8,7 @@ import {
   FormField,
   Input,
   Modal,
+  useToast,
 } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 
@@ -26,6 +27,7 @@ export function CreateInvitationDialog({
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const create = useCreateInvitation();
+  const toast = useToast();
 
   function close(): void {
     setEmail('');
@@ -40,7 +42,9 @@ export function CreateInvitationDialog({
       return;
     }
     try {
-      await create.mutateAsync({ email: email.trim() });
+      const trimmed = email.trim();
+      await create.mutateAsync({ email: trimmed });
+      toast.success(`Invitation sent to ${trimmed}`);
       close();
     } catch (err) {
       if (err instanceof ApiError && typeof err.body === 'object' && err.body !== null) {
