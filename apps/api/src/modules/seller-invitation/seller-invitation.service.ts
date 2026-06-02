@@ -98,6 +98,7 @@ export class SellerInvitationService {
         contact_name: input.email,
         invite_url: this.inviteUrlFor(plaintext),
         expires_at: expiresAt.toISOString(),
+        expires_at_display: this.formatExpiresAt(expiresAt),
       },
       triggerEvent: 'seller.invitation.created',
     });
@@ -239,6 +240,7 @@ export class SellerInvitationService {
         contact_name: row.email,
         invite_url: this.inviteUrlFor(plaintext),
         expires_at: expiresAt.toISOString(),
+        expires_at_display: this.formatExpiresAt(expiresAt),
       },
       triggerEvent: 'seller.invitation.resent',
     });
@@ -347,5 +349,24 @@ export class SellerInvitationService {
 
   private inviteUrlFor(plaintext: string): string {
     return `${this.env.sellerAppUrl}/auth/accept-invitation?token=${plaintext}`;
+  }
+
+  /** Human-readable form for the email template (e.g.
+   *  "9 June 2026, 03:32 UTC"). Avoids dumping a raw ISO string at
+   *  the recipient. */
+  private formatExpiresAt(d: Date): string {
+    const date = d.toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+    const time = d.toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'UTC',
+      hour12: false,
+    });
+    return `${date}, ${time} UTC`;
   }
 }

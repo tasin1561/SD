@@ -481,6 +481,10 @@ type TemplateSeed = {
   recipientType: NotificationRecipientType;
   subject?: string;
   bodyTemplate: string;
+  /** Optional HTML version. When set, the EmailDispatchService sends
+   *  both text + HTML (multipart/alternative). Email clients prefer
+   *  HTML when available; the text body is the fallback. */
+  htmlBodyTemplate?: string;
 };
 
 // Placeholder content using Jinja-style {{ }} variables. The notifications
@@ -543,8 +547,75 @@ const notificationTemplates: TemplateSeed[] = [
     channel: NotificationChannel.EMAIL,
     recipientType: NotificationRecipientType.SELLER,
     subject: 'You are invited to Skydrop',
-    bodyTemplate:
-      'Hi {{ contact_name }}, you have been invited to join Skydrop. Set up your account here: {{ invite_url }}. This link expires on {{ expires_at }}.',
+    bodyTemplate: [
+      "You're invited to Skydrop.",
+      '',
+      "You've been invited to join Skydrop — the cross-border courier aggregator helping Bangladeshi sellers ship into India.",
+      '',
+      'Set up your seller account here:',
+      '{{ invite_url }}',
+      '',
+      'This invitation expires on {{ expires_at_display }}.',
+      '',
+      "If you weren't expecting this, you can safely ignore this email.",
+      '',
+      '— The Skydrop team',
+    ].join('\n'),
+    htmlBodyTemplate: `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f4f6fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2937;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f6fa;padding:40px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border-radius:10px;border:1px solid #e5e7eb;max-width:560px;width:100%;box-shadow:0 1px 2px rgba(15,23,42,0.04);">
+            <tr>
+              <td style="padding:28px 32px 0 32px;">
+                <div style="font-size:16px;font-weight:600;color:#0f172a;letter-spacing:-0.01em;">Skydrop</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px 32px 0 32px;">
+                <h1 style="margin:0 0 12px 0;font-size:22px;font-weight:600;color:#0f172a;letter-spacing:-0.015em;line-height:1.3;">You're invited to Skydrop</h1>
+                <p style="margin:0 0 14px 0;font-size:14px;line-height:1.65;color:#4b5563;">
+                  You've been invited to join <strong style="color:#1f2937;">Skydrop</strong> — the cross-border courier aggregator helping Bangladeshi sellers ship into India.
+                </p>
+                <p style="margin:0 0 24px 0;font-size:14px;line-height:1.65;color:#4b5563;">
+                  Use the button below to create your seller account. This invitation expires on <strong style="color:#1f2937;">{{ expires_at_display }}</strong>.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 32px 24px 32px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td style="background:#4566e6;border-radius:6px;">
+                      <a href="{{ invite_url }}" style="display:inline-block;padding:11px 22px;font-size:14px;font-weight:500;color:#ffffff;text-decoration:none;letter-spacing:0.01em;">Accept invitation</a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 32px 28px 32px;">
+                <div style="border-top:1px solid #e5e7eb;padding-top:18px;">
+                  <p style="margin:0 0 6px 0;font-size:12px;line-height:1.6;color:#6b7280;">
+                    Button not working? Paste this link into your browser:
+                  </p>
+                  <p style="margin:0;font-size:12px;line-height:1.6;color:#4566e6;word-break:break-all;">
+                    <a href="{{ invite_url }}" style="color:#4566e6;text-decoration:underline;">{{ invite_url }}</a>
+                  </p>
+                </div>
+              </td>
+            </tr>
+          </table>
+          <p style="font-size:11px;color:#9ca3af;margin:18px 0 0 0;max-width:560px;line-height:1.6;">
+            You're receiving this because someone at Skydrop invited you. If you weren't expecting this, you can safely ignore this email.
+          </p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`,
   },
   {
     code: 'seller.welcome.email',
@@ -873,6 +944,7 @@ async function seedNotificationTemplates() {
         language: 'en',
         subject: t.subject ?? null,
         bodyTemplate: t.bodyTemplate,
+        htmlBodyTemplate: t.htmlBodyTemplate ?? null,
         isActive: true,
         version: 1,
       },
@@ -882,6 +954,7 @@ async function seedNotificationTemplates() {
         recipientType: t.recipientType,
         subject: t.subject ?? null,
         bodyTemplate: t.bodyTemplate,
+        htmlBodyTemplate: t.htmlBodyTemplate ?? null,
       },
     });
   }
