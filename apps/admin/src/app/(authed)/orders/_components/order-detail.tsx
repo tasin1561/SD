@@ -28,11 +28,8 @@ import { OrderTimelineSection } from './order-timeline-section';
  *   - Items table
  *   - Notes
  *   - Action panel (sane admin cancel here; god-mode in CP2.10)
- *
- * NOTE: An admin events / delivery-attempts timeline is NOT here —
- * `ORDER_VIEW_INCLUDE` on the server is items-only today. An admin
- * events endpoint is the M12 follow-up tracked in phase-1a-debt.
- * Until then the lifecycle history is only visible via API logs.
+ *   - Timeline (full admin events incl. internal-only — uses
+ *     /admin/orders/:id/events via OrderTimelineSection)
  */
 export function OrderDetailView({ orderId }: { orderId: string }): ReactElement {
   const detail = useOrderDetail(orderId);
