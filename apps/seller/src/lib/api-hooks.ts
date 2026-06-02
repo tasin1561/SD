@@ -12,6 +12,7 @@ import type {
   ApiClient,
   ListSellerOrdersQuery,
   ListSellerProductsQuery,
+  ListSellerStockQuery,
   OrderChargeView,
   OrderListResponse,
   OrderView,
@@ -21,6 +22,8 @@ import type {
   SellerOrderEventView,
   SellerProductListResponse,
   SellerProductView,
+  SellerStockListResponse,
+  SellerStockSummary,
   SellerVariantImageView,
   SellerVariantView,
   UpdateSellerProductRequest,
@@ -97,6 +100,77 @@ export function useOrderCharges(
         `/api/seller/orders/${id}/charges`,
       ),
     enabled: Boolean(id),
+  });
+}
+
+/**
+ * Manual order create — POST /seller/orders. Surface area mirrors the
+ * server-side CreateOrderDto; the only thing the page assembles is a
+ * single-line items array (a future multi-line UI hangs off the same
+ * mutation).
+ */
+export interface CreateOrderItemInput {
+  readonly variantId: string;
+  readonly quantity: number;
+  readonly unitPriceInr?: number;
+}
+
+export interface CreateOrderInput {
+  readonly sellerOrderRef?: string;
+  readonly recipientName: string;
+  readonly recipientPhoneE164: string;
+  readonly recipientAltPhoneE164?: string;
+  readonly recipientEmail?: string;
+  readonly recipientAddressLine1: string;
+  readonly recipientAddressLine2?: string;
+  readonly recipientLandmark?: string;
+  readonly recipientCity: string;
+  readonly recipientStateProvince: string;
+  readonly recipientPostalCode: string;
+  readonly recipientCountryCode?: string;
+  readonly paymentMode: 'COD' | 'PREPAID';
+  readonly codAmountInr?: number;
+  readonly declaredValueInr?: number;
+  readonly totalWeightGrams?: number;
+  readonly preferredLanguage?: 'en' | 'hi';
+  readonly sellerNotes?: string;
+  readonly items: readonly CreateOrderItemInput[];
+}
+
+export function useCreateOrder(): UseMutationResult<
+  OrderView,
+  Error,
+  CreateOrderInput
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<OrderView>(`/api/seller/orders`, {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-orders'] });
+    },
+  });
+}
+
+export function useSubmitOrder(): UseMutationResult<
+  OrderView,
+  Error,
+  { id: string }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }) =>
+      client.request<OrderView>(`/api/seller/orders/${id}/submit`, {
+        method: 'POST',
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-orders'] });
+    },
   });
 }
 
@@ -280,5 +354,35 @@ export function useDeleteImage(): UseMutationResult<void, Error, string> {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['seller-catalog', 'images'] });
     },
+  });
+}
+
+// ───────── Seller stock (read-only, cross-warehouse aggregate) ─────────
+
+export function useStockList(
+  query: ListSellerStockQuery,
+): UseQueryResult<SellerStockListResponse> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-stock', 'list', query],
+    queryFn: () => {
+      const sp = new URLSearchParams();
+      if (query.categoryId) sp.set('categoryId', query.categoryId);
+      if (query.status) sp.set('status', query.status);
+      if (query.page) sp.set('page', String(query.page));
+      if (query.pageSize) sp.set('pageSize', String(query.pageSize));
+      const qs = sp.toString();
+      return client.request<SellerStockListResponse>(
+        `/api/seller/stock${qs ? `?${qs}` : ''}`,
+      );
+    },
+  });
+}
+
+export function useStockSummary(): UseQueryResult<SellerStockSummary> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-stock', 'summary'],
+    queryFn: () => client.request<SellerStockSummary>(`/api/seller/stock/summary`),
   });
 }

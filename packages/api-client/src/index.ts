@@ -74,3 +74,9 @@ export type {
   OrderChargeView,
   ComputeOrderChargesResponse,
 } from './endpoints/order-charges';
+export type {
+  SellerStockRow,
+  SellerStockListResponse,
+  SellerStockSummary,
+  ListSellerStockQuery,
+} from './endpoints/seller-stock';

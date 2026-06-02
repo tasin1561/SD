@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useState, type ReactNode, type ReactElement } from 'react';
 import { useApiClient } from '@skydrop/auth/client';
 import type { SellerMe } from '@skydrop/api-client';
+import { Toaster } from '@skydrop/ui/components';
 
 /**
  * The dark-primary seller shell — fixed sidebar, slim topbar, dense
@@ -46,12 +47,14 @@ export function AuthedShell({
     { href: '/dashboard', label: 'Dashboard' },
     { href: '/orders', label: 'Orders' },
     { href: '/catalog', label: 'Catalog' },
+    { href: '/inventory', label: 'Inventory' },
     { href: '/tracking', label: 'Tracking' },
     { href: '/profile', label: 'Profile' },
     { href: '/settings', label: 'Settings' },
   ];
 
   return (
+    <Toaster>
     <div className="grid min-h-screen grid-cols-[220px_1fr] bg-bg text-text-body">
       {/* Sidebar */}
       <aside className="border-r border-border bg-surface flex flex-col">
@@ -107,5 +110,6 @@ export function AuthedShell({
         <main className="flex-1 min-w-0 px-6 py-6 overflow-auto">{children}</main>
       </div>
     </div>
+    </Toaster>
   );
 }

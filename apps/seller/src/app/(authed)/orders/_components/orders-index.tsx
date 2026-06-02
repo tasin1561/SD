@@ -5,7 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
 import { OrderStatus } from '@skydrop/db';
 import { useOrdersList } from '@/lib/api-hooks';
+import { Plus } from 'lucide-react';
 import {
+  Button,
   Input,
   Select,
   Table,
@@ -84,6 +86,13 @@ export function OrdersIndex(): ReactElement {
       <PageHeader
         title="Orders"
         subtitle="Your orders. Filter by status / search; rows link to detail + tracking."
+        action={
+          <Link href="/orders/new">
+            <Button variant="primary" size="md">
+              <Plus size={14} /> New order
+            </Button>
+          </Link>
+        }
       />
 
       <div className="flex flex-wrap items-center gap-2 mb-3">
