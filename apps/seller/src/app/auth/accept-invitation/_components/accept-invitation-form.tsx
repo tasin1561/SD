@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent, type ReactElement } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { AccessTokenStore, ApiClient, ApiError } from '@skydrop/api-client';
 
 /**
@@ -19,6 +20,7 @@ interface FormState {
   readonly phone: string;
   readonly whatsapp: string;
   readonly password: string;
+  readonly confirmPassword: string;
 }
 
 const INITIAL: FormState = {
@@ -27,6 +29,7 @@ const INITIAL: FormState = {
   phone: '',
   whatsapp: '',
   password: '',
+  confirmPassword: '',
 };
 
 export function AcceptInvitationForm({
@@ -37,6 +40,7 @@ export function AcceptInvitationForm({
   const [form, setForm] = useState<FormState>(INITIAL);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPw, setShowPw] = useState(false);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]): void {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -45,8 +49,16 @@ export function AcceptInvitationForm({
   async function handleSubmit(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
     if (submitting) return;
-    setSubmitting(true);
     setError(null);
+    if (form.password.length < 10) {
+      setError('Password must be at least 10 characters.');
+      return;
+    }
+    if (form.password !== form.confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+    setSubmitting(true);
 
     const body = {
       token,
@@ -159,15 +171,43 @@ export function AcceptInvitationForm({
           Password{' '}
           <span className="text-text-faint">(min 10 characters)</span>
         </label>
+        <div className="relative">
+          <input
+            id="password"
+            type={showPw ? 'text' : 'password'}
+            autoComplete="new-password"
+            required
+            minLength={10}
+            maxLength={256}
+            value={form.password}
+            onChange={(e) => set('password', e.target.value)}
+            disabled={submitting}
+            className={`${fieldClass} pr-9`}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPw((s) => !s)}
+            tabIndex={-1}
+            aria-label={showPw ? 'Hide password' : 'Show password'}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-body transition-colors p-1 rounded-[3px]"
+          >
+            {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+        </div>
+      </div>
+      <div>
+        <label htmlFor="confirm-password" className={labelClass}>
+          Confirm password
+        </label>
         <input
-          id="password"
-          type="password"
+          id="confirm-password"
+          type={showPw ? 'text' : 'password'}
           autoComplete="new-password"
           required
           minLength={10}
           maxLength={256}
-          value={form.password}
-          onChange={(e) => set('password', e.target.value)}
+          value={form.confirmPassword}
+          onChange={(e) => set('confirmPassword', e.target.value)}
           disabled={submitting}
           className={fieldClass}
         />
