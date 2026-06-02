@@ -600,7 +600,9 @@ async function seedRateCardItems() {
   });
   let count = 0;
   for (const courier of couriers) {
-    for (const serviceType of ['express', 'surface']) {
+    // 'standard' is the PricingEngineService default service type;
+    // 'express' / 'surface' are Delhivery tier alternatives.
+    for (const serviceType of ['standard', 'express', 'surface']) {
       for (const row of RATE_CARD_ROWS) {
         await prisma.rateCardItem.upsert({
           where: {
