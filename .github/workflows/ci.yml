@@ -19,8 +19,14 @@ jobs:
     timeout-minutes: 20
 
     services:
+      # TimescaleDB-on-Postgres image — the M0 migration's
+      # `CREATE EXTENSION timescaledb` requires the extension be
+      # bundled, which the vanilla postgres:18-alpine doesn't carry.
+      # `ha:pg17` is the TimescaleDB org's official Postgres-17 image
+      # with timescaledb installed (matches what apps/api connects to
+      # in prod against DO Managed Postgres + the timescaledb add-on).
       postgres:
-        image: postgres:18-alpine
+        image: timescale/timescaledb-ha:pg17
         env:
           POSTGRES_USER: skydrop
           POSTGRES_PASSWORD: skydrop
