@@ -18,7 +18,13 @@ import {
   FxRateSource,
   NotificationChannel,
   NotificationRecipientType,
+  PaymentMode,
+  PinCodeSource,
+  ServiceArea,
   SettingValueType,
+  SurchargeBaseField,
+  SurchargeComputationMethod,
+  SurchargeType,
   WarehouseStatus,
 } from '@prisma/client';
 
@@ -472,6 +478,359 @@ async function seedRateCards() {
     update: {},
   });
   console.log(`  rate_cards: 1 upserted (default-2026)`);
+}
+
+/**
+ * Zone matrix: origin METRO (BLR-01) → destination area → letter zone.
+ * Same five zones (A..E) for both seeded couriers. The pricing engine
+ * looks up (courier, origin, dest) and uses the zone string as part
+ * of the RateCardItem key.
+ *
+ * Phase 1A is single-origin (BLR-01); when multi-warehouse lands the
+ * matrix must be regenerated per origin.
+ */
+const ZONE_MATRIX_ROWS: ReadonlyArray<{
+  destArea: ServiceArea;
+  zone: string;
+}> = [
+  { destArea: ServiceArea.METRO, zone: 'A' },
+  { destArea: ServiceArea.TIER1, zone: 'B' },
+  { destArea: ServiceArea.TIER2, zone: 'C' },
+  { destArea: ServiceArea.REST, zone: 'D' },
+  { destArea: ServiceArea.SPECIAL_NE, zone: 'E' },
+  { destArea: ServiceArea.SPECIAL_JK, zone: 'E' },
+];
+
+async function seedZoneMatrix() {
+  const couriers = await prisma.courier.findMany({
+    where: { code: { in: ['delhivery', 'manual'] } },
+    select: { id: true, code: true },
+  });
+  let count = 0;
+  for (const courier of couriers) {
+    for (const row of ZONE_MATRIX_ROWS) {
+      await prisma.zoneMatrixEntry.upsert({
+        where: {
+          courierId_originArea_destArea: {
+            courierId: courier.id,
+            originArea: ServiceArea.METRO,
+            destArea: row.destArea,
+          },
+        },
+        create: {
+          courierId: courier.id,
+          originArea: ServiceArea.METRO,
+          destArea: row.destArea,
+          zone: row.zone,
+        },
+        update: { zone: row.zone },
+      });
+      count += 1;
+    }
+  }
+  console.log(`  zone_matrix_entries: ${count} upserted`);
+}
+
+/**
+ * Rate card items: (zone × weight slab) base rate + per-kg overage.
+ *
+ * Numbers chosen as a reasonable Phase-1A starting point — match a
+ * Delhivery surface-express ballpark for India. Admin can override
+ * via the rate-card admin tooling later.
+ */
+interface RateRow {
+  zone: string;
+  weightSlabFromGrams: number;
+  weightSlabToGrams: number;
+  baseChargeInr: string;
+  perKgChargeInr: string | null;
+}
+
+const RATE_CARD_ROWS: ReadonlyArray<RateRow> = [
+  // 0–500g
+  { zone: 'A', weightSlabFromGrams: 0, weightSlabToGrams: 500, baseChargeInr: '60.00', perKgChargeInr: null },
+  { zone: 'B', weightSlabFromGrams: 0, weightSlabToGrams: 500, baseChargeInr: '80.00', perKgChargeInr: null },
+  { zone: 'C', weightSlabFromGrams: 0, weightSlabToGrams: 500, baseChargeInr: '100.00', perKgChargeInr: null },
+  { zone: 'D', weightSlabFromGrams: 0, weightSlabToGrams: 500, baseChargeInr: '130.00', perKgChargeInr: null },
+  { zone: 'E', weightSlabFromGrams: 0, weightSlabToGrams: 500, baseChargeInr: '180.00', perKgChargeInr: null },
+  // 500g–1kg
+  { zone: 'A', weightSlabFromGrams: 500, weightSlabToGrams: 1000, baseChargeInr: '90.00', perKgChargeInr: null },
+  { zone: 'B', weightSlabFromGrams: 500, weightSlabToGrams: 1000, baseChargeInr: '120.00', perKgChargeInr: null },
+  { zone: 'C', weightSlabFromGrams: 500, weightSlabToGrams: 1000, baseChargeInr: '150.00', perKgChargeInr: null },
+  { zone: 'D', weightSlabFromGrams: 500, weightSlabToGrams: 1000, baseChargeInr: '190.00', perKgChargeInr: null },
+  { zone: 'E', weightSlabFromGrams: 500, weightSlabToGrams: 1000, baseChargeInr: '260.00', perKgChargeInr: null },
+  // 1kg–2kg
+  { zone: 'A', weightSlabFromGrams: 1000, weightSlabToGrams: 2000, baseChargeInr: '130.00', perKgChargeInr: null },
+  { zone: 'B', weightSlabFromGrams: 1000, weightSlabToGrams: 2000, baseChargeInr: '170.00', perKgChargeInr: null },
+  { zone: 'C', weightSlabFromGrams: 1000, weightSlabToGrams: 2000, baseChargeInr: '215.00', perKgChargeInr: null },
+  { zone: 'D', weightSlabFromGrams: 1000, weightSlabToGrams: 2000, baseChargeInr: '280.00', perKgChargeInr: null },
+  { zone: 'E', weightSlabFromGrams: 1000, weightSlabToGrams: 2000, baseChargeInr: '380.00', perKgChargeInr: null },
+  // 2kg–5kg with per-kg overage above 2kg floor
+  { zone: 'A', weightSlabFromGrams: 2000, weightSlabToGrams: 5000, baseChargeInr: '180.00', perKgChargeInr: '40.00' },
+  { zone: 'B', weightSlabFromGrams: 2000, weightSlabToGrams: 5000, baseChargeInr: '240.00', perKgChargeInr: '55.00' },
+  { zone: 'C', weightSlabFromGrams: 2000, weightSlabToGrams: 5000, baseChargeInr: '300.00', perKgChargeInr: '70.00' },
+  { zone: 'D', weightSlabFromGrams: 2000, weightSlabToGrams: 5000, baseChargeInr: '400.00', perKgChargeInr: '95.00' },
+  { zone: 'E', weightSlabFromGrams: 2000, weightSlabToGrams: 5000, baseChargeInr: '540.00', perKgChargeInr: '130.00' },
+  // 5kg–10kg per-kg only (base lifted)
+  { zone: 'A', weightSlabFromGrams: 5000, weightSlabToGrams: 10000, baseChargeInr: '300.00', perKgChargeInr: '40.00' },
+  { zone: 'B', weightSlabFromGrams: 5000, weightSlabToGrams: 10000, baseChargeInr: '405.00', perKgChargeInr: '55.00' },
+  { zone: 'C', weightSlabFromGrams: 5000, weightSlabToGrams: 10000, baseChargeInr: '510.00', perKgChargeInr: '70.00' },
+  { zone: 'D', weightSlabFromGrams: 5000, weightSlabToGrams: 10000, baseChargeInr: '685.00', perKgChargeInr: '95.00' },
+  { zone: 'E', weightSlabFromGrams: 5000, weightSlabToGrams: 10000, baseChargeInr: '930.00', perKgChargeInr: '130.00' },
+  // 10kg–30kg
+  { zone: 'A', weightSlabFromGrams: 10000, weightSlabToGrams: 30000, baseChargeInr: '500.00', perKgChargeInr: '38.00' },
+  { zone: 'B', weightSlabFromGrams: 10000, weightSlabToGrams: 30000, baseChargeInr: '680.00', perKgChargeInr: '52.00' },
+  { zone: 'C', weightSlabFromGrams: 10000, weightSlabToGrams: 30000, baseChargeInr: '860.00', perKgChargeInr: '66.00' },
+  { zone: 'D', weightSlabFromGrams: 10000, weightSlabToGrams: 30000, baseChargeInr: '1160.00', perKgChargeInr: '90.00' },
+  { zone: 'E', weightSlabFromGrams: 10000, weightSlabToGrams: 30000, baseChargeInr: '1580.00', perKgChargeInr: '125.00' },
+];
+
+async function seedRateCardItems() {
+  const rateCard = await prisma.rateCard.findUnique({
+    where: { code: 'default-2026' },
+    select: { id: true },
+  });
+  if (!rateCard) {
+    console.log('  rate_card_items: SKIPPED (default-2026 not found)');
+    return;
+  }
+  const couriers = await prisma.courier.findMany({
+    where: { code: { in: ['delhivery', 'manual'] } },
+    select: { id: true, code: true },
+  });
+  let count = 0;
+  for (const courier of couriers) {
+    for (const serviceType of ['express', 'surface']) {
+      for (const row of RATE_CARD_ROWS) {
+        await prisma.rateCardItem.upsert({
+          where: {
+            rateCardId_courierId_serviceType_zone_weightSlabFromGrams: {
+              rateCardId: rateCard.id,
+              courierId: courier.id,
+              serviceType,
+              zone: row.zone,
+              weightSlabFromGrams: row.weightSlabFromGrams,
+            },
+          },
+          create: {
+            rateCardId: rateCard.id,
+            courierId: courier.id,
+            serviceType,
+            zone: row.zone,
+            weightSlabFromGrams: row.weightSlabFromGrams,
+            weightSlabToGrams: row.weightSlabToGrams,
+            baseChargeInr: row.baseChargeInr,
+            perKgChargeInr: row.perKgChargeInr,
+            isActive: true,
+          },
+          update: {
+            weightSlabToGrams: row.weightSlabToGrams,
+            baseChargeInr: row.baseChargeInr,
+            perKgChargeInr: row.perKgChargeInr,
+            isActive: true,
+          },
+        });
+        count += 1;
+      }
+    }
+  }
+  console.log(`  rate_card_items: ${count} upserted`);
+}
+
+/**
+ * Surcharge rules — COD fee, fuel surcharge, remote area fee.
+ *
+ * Identified by a unique (rateCardId, type, name) tuple in seed via
+ * findFirst → upsert (the schema doesn't define a natural-key unique
+ * on the table, so the seed manages idempotency in code).
+ */
+interface SurchargeSeed {
+  type: SurchargeType;
+  name: string;
+  computationMethod: SurchargeComputationMethod;
+  flatAmountInr: string | null;
+  percentage: string | null;
+  minAmountInr: string | null;
+  maxAmountInr: string | null;
+  baseField: SurchargeBaseField | null;
+  appliesOnlyIfPaymentMode: PaymentMode | null;
+  appliesOnlyForServiceAreas: ServiceArea[];
+  isVisibleToSeller: boolean;
+  displayOrder: number;
+}
+
+const SURCHARGE_SEEDS: ReadonlyArray<SurchargeSeed> = [
+  {
+    type: SurchargeType.COD_FEE,
+    name: 'COD handling fee',
+    computationMethod: SurchargeComputationMethod.PERCENTAGE,
+    flatAmountInr: null,
+    percentage: '2.00',
+    minAmountInr: '30.00',
+    maxAmountInr: '100.00',
+    baseField: SurchargeBaseField.COD_AMOUNT,
+    appliesOnlyIfPaymentMode: PaymentMode.COD,
+    appliesOnlyForServiceAreas: [],
+    isVisibleToSeller: true,
+    displayOrder: 10,
+  },
+  {
+    type: SurchargeType.FUEL_SURCHARGE,
+    name: 'Fuel surcharge',
+    computationMethod: SurchargeComputationMethod.PERCENTAGE,
+    flatAmountInr: null,
+    percentage: '8.00',
+    minAmountInr: null,
+    maxAmountInr: null,
+    baseField: SurchargeBaseField.SHIPPING_CHARGE,
+    appliesOnlyIfPaymentMode: null,
+    appliesOnlyForServiceAreas: [],
+    isVisibleToSeller: true,
+    displayOrder: 20,
+  },
+  {
+    type: SurchargeType.REMOTE_AREA_FEE,
+    name: 'Remote area surcharge',
+    computationMethod: SurchargeComputationMethod.FLAT,
+    flatAmountInr: '50.00',
+    percentage: null,
+    minAmountInr: null,
+    maxAmountInr: null,
+    baseField: null,
+    appliesOnlyIfPaymentMode: null,
+    appliesOnlyForServiceAreas: [ServiceArea.SPECIAL_NE, ServiceArea.SPECIAL_JK],
+    isVisibleToSeller: true,
+    displayOrder: 30,
+  },
+];
+
+async function seedSurchargeRules() {
+  const rateCard = await prisma.rateCard.findUnique({
+    where: { code: 'default-2026' },
+    select: { id: true },
+  });
+  if (!rateCard) {
+    console.log('  surcharge_rules: SKIPPED (default-2026 not found)');
+    return;
+  }
+  let count = 0;
+  for (const s of SURCHARGE_SEEDS) {
+    const existing = await prisma.surchargeRule.findFirst({
+      where: { rateCardId: rateCard.id, type: s.type, name: s.name },
+      select: { id: true },
+    });
+    if (existing) {
+      await prisma.surchargeRule.update({
+        where: { id: existing.id },
+        data: {
+          computationMethod: s.computationMethod,
+          flatAmountInr: s.flatAmountInr,
+          percentage: s.percentage,
+          minAmountInr: s.minAmountInr,
+          maxAmountInr: s.maxAmountInr,
+          baseField: s.baseField,
+          appliesOnlyIfPaymentMode: s.appliesOnlyIfPaymentMode,
+          appliesOnlyForServiceAreas: s.appliesOnlyForServiceAreas,
+          isVisibleToSeller: s.isVisibleToSeller,
+          displayOrder: s.displayOrder,
+          isActive: true,
+        },
+      });
+    } else {
+      await prisma.surchargeRule.create({
+        data: {
+          rateCardId: rateCard.id,
+          type: s.type,
+          name: s.name,
+          computationMethod: s.computationMethod,
+          flatAmountInr: s.flatAmountInr,
+          percentage: s.percentage,
+          minAmountInr: s.minAmountInr,
+          maxAmountInr: s.maxAmountInr,
+          baseField: s.baseField,
+          appliesOnlyIfPaymentMode: s.appliesOnlyIfPaymentMode,
+          appliesOnlyForServiceAreas: s.appliesOnlyForServiceAreas,
+          isVisibleToSeller: s.isVisibleToSeller,
+          displayOrder: s.displayOrder,
+          isActive: true,
+        },
+      });
+    }
+    count += 1;
+  }
+  console.log(`  surcharge_rules: ${count} upserted`);
+}
+
+/**
+ * Sample PIN codes for the major Indian metros + tier-1 cities.
+ * Not exhaustive — only enough to let the pricing engine resolve
+ * realistic zones for the most common destinations. Production
+ * imports a full PIN-code dump (DoT-published) via a separate job.
+ */
+interface PinSeed {
+  pin: string;
+  city: string;
+  state: string;
+  area: ServiceArea;
+}
+
+const PIN_SEEDS: ReadonlyArray<PinSeed> = [
+  // METRO — top 8 metros
+  { pin: '110001', city: 'New Delhi', state: 'Delhi', area: ServiceArea.METRO },
+  { pin: '400001', city: 'Mumbai', state: 'Maharashtra', area: ServiceArea.METRO },
+  { pin: '600001', city: 'Chennai', state: 'Tamil Nadu', area: ServiceArea.METRO },
+  { pin: '700001', city: 'Kolkata', state: 'West Bengal', area: ServiceArea.METRO },
+  { pin: '560001', city: 'Bengaluru', state: 'Karnataka', area: ServiceArea.METRO },
+  { pin: '500001', city: 'Hyderabad', state: 'Telangana', area: ServiceArea.METRO },
+  { pin: '380001', city: 'Ahmedabad', state: 'Gujarat', area: ServiceArea.METRO },
+  { pin: '411001', city: 'Pune', state: 'Maharashtra', area: ServiceArea.METRO },
+  // TIER1
+  { pin: '302001', city: 'Jaipur', state: 'Rajasthan', area: ServiceArea.TIER1 },
+  { pin: '226001', city: 'Lucknow', state: 'Uttar Pradesh', area: ServiceArea.TIER1 },
+  { pin: '440001', city: 'Nagpur', state: 'Maharashtra', area: ServiceArea.TIER1 },
+  { pin: '160001', city: 'Chandigarh', state: 'Chandigarh', area: ServiceArea.TIER1 },
+  { pin: '462001', city: 'Bhopal', state: 'Madhya Pradesh', area: ServiceArea.TIER1 },
+  { pin: '751001', city: 'Bhubaneswar', state: 'Odisha', area: ServiceArea.TIER1 },
+  { pin: '682001', city: 'Kochi', state: 'Kerala', area: ServiceArea.TIER1 },
+  { pin: '530001', city: 'Visakhapatnam', state: 'Andhra Pradesh', area: ServiceArea.TIER1 },
+  // TIER2
+  { pin: '641001', city: 'Coimbatore', state: 'Tamil Nadu', area: ServiceArea.TIER2 },
+  { pin: '395001', city: 'Surat', state: 'Gujarat', area: ServiceArea.TIER2 },
+  { pin: '452001', city: 'Indore', state: 'Madhya Pradesh', area: ServiceArea.TIER2 },
+  { pin: '110085', city: 'Delhi NCR – Rohini', state: 'Delhi', area: ServiceArea.METRO },
+  { pin: '201301', city: 'Noida', state: 'Uttar Pradesh', area: ServiceArea.METRO },
+  { pin: '122001', city: 'Gurugram', state: 'Haryana', area: ServiceArea.METRO },
+  // SPECIAL_NE — north-east
+  { pin: '781001', city: 'Guwahati', state: 'Assam', area: ServiceArea.SPECIAL_NE },
+  { pin: '795001', city: 'Imphal', state: 'Manipur', area: ServiceArea.SPECIAL_NE },
+  { pin: '797001', city: 'Kohima', state: 'Nagaland', area: ServiceArea.SPECIAL_NE },
+  // SPECIAL_JK
+  { pin: '180001', city: 'Jammu', state: 'Jammu & Kashmir', area: ServiceArea.SPECIAL_JK },
+  { pin: '190001', city: 'Srinagar', state: 'Jammu & Kashmir', area: ServiceArea.SPECIAL_JK },
+];
+
+async function seedPinCodes() {
+  let count = 0;
+  for (const p of PIN_SEEDS) {
+    await prisma.pinCode.upsert({
+      where: { pinCode: p.pin },
+      create: {
+        pinCode: p.pin,
+        countryCode: 'IN',
+        city: p.city,
+        stateProvince: p.state,
+        serviceArea: p.area,
+        source: PinCodeSource.MANUAL_IMPORT,
+      },
+      update: {
+        city: p.city,
+        stateProvince: p.state,
+        serviceArea: p.area,
+      },
+    });
+    count += 1;
+  }
+  console.log(`  pin_codes: ${count} upserted`);
 }
 
 type TemplateSeed = {
@@ -969,6 +1328,11 @@ async function main() {
   await seedCouriers();
   await seedFxRates();
   await seedRateCards();
+  // M15 pricing data: depends on rate-card + couriers.
+  await seedZoneMatrix();
+  await seedRateCardItems();
+  await seedSurchargeRules();
+  await seedPinCodes();
   await seedNotificationTemplates();
   console.log('Done.');
 }

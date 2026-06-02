@@ -25,6 +25,7 @@ import { OrderStateMachineService } from './order-state-machine.service';
 import { RecipientAddressCacheService } from './recipient-address-cache.service';
 import { AddressValidationService } from './address-validation.service';
 import { CallQueueService } from '../../call-queue/services/call-queue.service';
+import { OrderChargesService } from '../../order-charges/services/order-charges.service';
 import type { CreateOrderDto } from '../dto/create-order.dto';
 import type { UpdateOrderDto } from '../dto/update-order.dto';
 import type { CancelOrderDto } from '../dto/cancel-order.dto';
@@ -181,7 +182,26 @@ export class OrderService {
     private readonly audit: AuditLogService,
     private readonly stateMachine: OrderStateMachineService,
     private readonly callQueue: CallQueueService,
+    private readonly orderCharges: OrderChargesService,
   ) {}
+
+  /**
+   * M15→M6 auto-compute charges. POST-COMMIT, best-effort: a failure
+   * is logged + audited but NEVER rolls back the order create. Mirrors
+   * the CC-6 enqueueForCall discipline. CHARGES_ALREADY_EXIST (which
+   * the system variant catches and turns into `skipped`) is a benign
+   * no-op — the admin Compute action already wrote them.
+   */
+  private async computeChargesAsync(orderId: string): Promise<void> {
+    try {
+      await this.orderCharges.persistForOrderSystem(orderId);
+    } catch (e) {
+      this.logger.error(
+        { orderId, err: (e as Error).message },
+        'Post-commit auto-compute charges failed; order persisted, charges not written',
+      );
+    }
+  }
 
   /**
    * CC-6 — a freshly-PENDING_CONFIRMATION order joins the call queue.
@@ -388,6 +408,8 @@ export class OrderService {
     if (initialStatus === OrderStatus.PENDING_CONFIRMATION) {
       await this.enqueueForCall(created.id, ctx);
     }
+    // M15→M6: auto-compute order charges post-commit (best-effort).
+    await this.computeChargesAsync(created.id);
     return created;
   }
 

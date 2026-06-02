@@ -102,7 +102,36 @@ export class OrderChargesService {
    * This is the M15 integration at the order level; the future M6
    * order-create hook can call the same method post-commit.
    */
+  /**
+   * System-actor variant for the auto-compute-on-order-create hook
+   * (M15→M6 wire). Delegates to the same write path but audits as
+   * ActorType.SYSTEM and treats `CHARGES_ALREADY_EXIST` as a clean
+   * no-op (the admin "compute" button surfaces it as 409 to the
+   * operator; the post-commit hook should never noisily error
+   * because of a benign duplicate).
+   */
+  async persistForOrderSystem(orderId: string): Promise<PersistChargesResult | { skipped: true; reason: string }> {
+    try {
+      return await this.persistForOrderInternal(orderId, { kind: 'system' });
+    } catch (e) {
+      if (
+        e instanceof Error &&
+        e.message.includes('CHARGES_ALREADY_EXIST')
+      ) {
+        return { skipped: true, reason: 'CHARGES_ALREADY_EXIST' };
+      }
+      throw e;
+    }
+  }
+
   async persistForOrder(orderId: string, staffId: string): Promise<PersistChargesResult> {
+    return this.persistForOrderInternal(orderId, { kind: 'staff', staffId });
+  }
+
+  private async persistForOrderInternal(
+    orderId: string,
+    actor: { kind: 'staff'; staffId: string } | { kind: 'system' },
+  ): Promise<PersistChargesResult> {
     const order = await this.prisma.client.order.findFirst({
       where: { id: orderId, deletedAt: null },
       select: {
@@ -205,9 +234,12 @@ export class OrderChargesService {
 
       await this.audit.log(
         {
-          actorType: ActorType.STAFF,
-          staffUserId: staffId,
-          action: 'staff.order_charges.persisted',
+          actorType: actor.kind === 'staff' ? ActorType.STAFF : ActorType.SYSTEM,
+          staffUserId: actor.kind === 'staff' ? actor.staffId : null,
+          action:
+            actor.kind === 'staff'
+              ? 'staff.order_charges.persisted'
+              : 'system.order_charges.persisted',
           entityType: 'order',
           entityId: orderId,
           metadata: {

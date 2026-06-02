@@ -114,6 +114,10 @@ function makeService(
   const enqueueOrder = jest.fn(async () => ({ entry: {}, created: true }));
   const callQueue = { enqueueOrder };
 
+  // M15→M6 best-effort post-commit hook: tests treat as a no-op.
+  const persistForOrderSystem = jest.fn(async () => ({ skipped: true, reason: 'TEST' }));
+  const orderCharges = { persistForOrderSystem };
+
   const svc = new OrderService(
     { client } as unknown as PrismaService,
     numbering as never,
@@ -125,6 +129,7 @@ function makeService(
     audit as never,
     stateMachine,
     callQueue as never,
+    orderCharges as never,
   );
   return {
     svc,
