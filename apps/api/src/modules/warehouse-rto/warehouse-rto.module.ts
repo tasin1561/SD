@@ -4,6 +4,7 @@ import { InventorySharedModule } from '../inventory-shared/inventory-shared.modu
 import { RtoReceiptService } from './services/rto-receipt.service';
 import { RtoInspectionService } from './services/rto-inspection.service';
 import { RtoDispositionService } from './services/rto-disposition.service';
+import { RtoReadService } from './services/rto-read.service';
 import { WarehouseRtoController } from './controllers/warehouse-rto.controller';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 
@@ -31,6 +32,7 @@ import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
     RtoReceiptService,
     RtoInspectionService,
     RtoDispositionService,
+    RtoReadService,
     StaffJwtGuard,
   ],
 })

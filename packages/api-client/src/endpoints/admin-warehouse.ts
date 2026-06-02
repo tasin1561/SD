@@ -1,0 +1,260 @@
+/**
+ * Admin warehouse-ops endpoint types — pick / pack / manifest / RTO /
+ * courier dispatch / manual placement.
+ *
+ * Mirrors apps/api's service-layer result interfaces. Date fields are
+ * serialized as ISO strings over the wire (Nest's default class-
+ * serializer returns Date via toJSON() = ISO string).
+ */
+import type {
+  ManifestStatus,
+  OrderStatus,
+  RtoDisposition,
+  RtoItemCondition,
+  ShipmentStatus,
+} from '@skydrop/db';
+
+// ── Pick ─────────────────────────────────────────────────────────────
+
+export interface PulledPickItem {
+  readonly shipmentItemId: string;
+  readonly orderItemId: string;
+  readonly skuCode: string;
+  readonly productName: string;
+  readonly variantLabel: string | null;
+  readonly quantity: number;
+  readonly unitWeightGrams: number | null;
+}
+
+export interface PulledPick {
+  readonly pickId: string;
+  readonly shipmentId: string;
+  readonly shipmentNumber: string;
+  readonly orderId: string;
+  readonly pickStartedAt: string;
+  readonly pickExpiresAt: string;
+  readonly items: ReadonlyArray<PulledPickItem>;
+  readonly order: unknown;
+}
+
+export interface PickAllocationSummary {
+  readonly reservationId: string;
+  readonly orderItemId: string;
+  readonly strategy: string;
+  readonly allocatedQty: number;
+  readonly shortfall: number;
+}
+
+export interface StartPickResult {
+  readonly shipmentId: string;
+  readonly orderId: string;
+  readonly status: OrderStatus;
+  readonly fullyAllocated: boolean;
+  readonly allocations: ReadonlyArray<PickAllocationSummary>;
+}
+
+export interface RecordPickItemRequest {
+  readonly shipmentItemId: string;
+  readonly pickedBinId: string;
+  readonly pickedBatchId: string;
+}
+
+export interface RecordPickItemResult {
+  readonly shipmentItemId: string;
+  readonly pickedBinId: string;
+  readonly pickedBatchId: string;
+}
+
+export interface CompletePickResult {
+  readonly shipmentId: string;
+  readonly orderId: string;
+  readonly status: OrderStatus;
+  readonly pickCompletedAt: string;
+  readonly alreadyComplete: boolean;
+}
+
+// ── Pack ─────────────────────────────────────────────────────────────
+
+export interface PulledPackItem {
+  readonly shipmentItemId: string;
+  readonly orderItemId: string;
+  readonly skuCode: string;
+  readonly productName: string;
+  readonly variantLabel: string | null;
+  readonly quantity: number;
+  readonly unitWeightGrams: number | null;
+  readonly pickedBinId: string | null;
+  readonly pickedBatchId: string | null;
+}
+
+export interface PulledPack {
+  readonly shipmentId: string;
+  readonly shipmentNumber: string;
+  readonly orderId: string;
+  readonly pickCompletedAt: string | null;
+  readonly items: ReadonlyArray<PulledPackItem>;
+  readonly order: unknown;
+}
+
+export interface CompletePackResult {
+  readonly shipmentId: string;
+  readonly orderId: string;
+  readonly status: ShipmentStatus;
+  readonly packCompletedAt: string;
+  readonly alreadyComplete: boolean;
+}
+
+// ── Manifest ─────────────────────────────────────────────────────────
+
+export interface ManifestListRow {
+  readonly id: string;
+  readonly manifestNumber: string;
+  readonly status: ManifestStatus;
+  readonly courierCode: string;
+  readonly originWarehouseId: string;
+  readonly closedAt: string | null;
+  readonly closedByStaffId: string | null;
+  readonly createdAt: string;
+  readonly shipmentCount: number;
+}
+
+export interface ManifestDetail extends ManifestListRow {
+  readonly shipments: ReadonlyArray<{
+    readonly id: string;
+    readonly shipmentNumber: string;
+    readonly status: ShipmentStatus;
+    readonly packCompletedAt: string | null;
+    readonly orderId: string | null;
+  }>;
+}
+
+export interface ListManifestsQuery {
+  readonly status?: ManifestStatus;
+  readonly courierCode?: string;
+  readonly warehouseId?: string;
+  readonly page?: number;
+  readonly pageSize?: number;
+}
+
+export interface ListManifestsResponse {
+  readonly items: ReadonlyArray<ManifestListRow>;
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+}
+
+export interface CloseManifestResult {
+  readonly manifestId: string;
+  readonly manifestNumber: string;
+  readonly status: ManifestStatus;
+  readonly closedAt: string;
+  readonly closedByStaffId: string;
+  readonly shipmentIds: ReadonlyArray<string>;
+  readonly transitionedCount: number;
+  readonly failures: ReadonlyArray<{
+    readonly shipmentId: string;
+    readonly orderId: string | null;
+    readonly error: string;
+  }>;
+  readonly alreadyClosed: boolean;
+}
+
+export interface MoveShipmentRequest {
+  readonly targetManifestId: string;
+}
+
+export interface MoveShipmentResult {
+  readonly shipmentId: string;
+  readonly fromManifestId: string;
+  readonly toManifestId: string;
+  readonly alreadyMoved: boolean;
+}
+
+// ── Dispatch ─────────────────────────────────────────────────────────
+
+export interface ConfirmHandoffResult {
+  readonly manifestId: string;
+  readonly manifestNumber: string;
+  readonly manifestStatus: ManifestStatus;
+  readonly dispatchedShipmentIds: ReadonlyArray<string>;
+  readonly failures: ReadonlyArray<{
+    readonly shipmentId: string;
+    readonly error: string;
+  }>;
+  readonly alreadyDispatched: boolean;
+}
+
+// ── Manual placement ────────────────────────────────────────────────
+
+export interface PlaceManualAwbRequest {
+  readonly awbNumber: string;
+  readonly courierName?: string;
+  readonly trackingUrl?: string;
+}
+
+export interface PlaceManualAwbResult {
+  readonly shipmentId: string;
+  readonly awbNumber: string;
+  readonly orderStatus: OrderStatus;
+}
+
+export interface CancelManualPlacementRequest {
+  readonly reason: string;
+}
+
+// ── RTO ──────────────────────────────────────────────────────────────
+
+export interface RtoShipmentItem {
+  readonly shipmentItemId: string;
+  readonly orderItemId: string;
+  readonly skuCode: string;
+  readonly productName: string;
+  readonly variantLabel: string | null;
+  readonly quantity: number;
+  readonly rtoCondition: RtoItemCondition | null;
+  readonly rtoDisposition: RtoDisposition | null;
+  readonly rtoInspectionNotes: string | null;
+}
+
+export interface RtoShipmentDetail {
+  readonly shipmentId: string;
+  readonly shipmentNumber: string;
+  readonly orderId: string | null;
+  readonly orderStatus: OrderStatus | null;
+  readonly awbNumber: string | null;
+  readonly rtoReceivedAt: string | null;
+  readonly items: ReadonlyArray<RtoShipmentItem>;
+}
+
+export interface ReceiveRtoRequest {
+  readonly awbNumber: string;
+}
+
+export interface ReceiveRtoResult {
+  readonly shipmentId: string;
+  readonly orderId: string;
+  readonly orderStatus: OrderStatus;
+  readonly rtoReceivedAt: string;
+  readonly alreadyReceived: boolean;
+}
+
+export interface InspectRtoItemRequest {
+  readonly condition: RtoItemCondition;
+  readonly disposition: RtoDisposition;
+  readonly notes?: string;
+}
+
+export interface InspectRtoItemResult {
+  readonly shipmentItemId: string;
+  readonly condition: RtoItemCondition;
+  readonly disposition: RtoDisposition;
+}
+
+export interface FinalizeRtoResult {
+  readonly shipmentId: string;
+  readonly orderId: string;
+  readonly orderStatus: OrderStatus;
+  readonly restockedLines: number;
+  readonly writtenOffLines: number;
+  readonly alreadyFinalized: boolean;
+}

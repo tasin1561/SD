@@ -343,3 +343,338 @@ export function useComputeOrderCharges(
     },
   });
 }
+
+// ───────── Admin warehouse-ops (M8 + M9 manual placement / dispatch) ─────────
+
+import type {
+  PulledPick,
+  StartPickResult,
+  RecordPickItemRequest,
+  RecordPickItemResult,
+  CompletePickResult,
+  PulledPack,
+  CompletePackResult,
+  ListManifestsQuery,
+  ListManifestsResponse,
+  ManifestDetail,
+  CloseManifestResult,
+  MoveShipmentRequest,
+  MoveShipmentResult,
+  ConfirmHandoffResult,
+  PlaceManualAwbRequest,
+  PlaceManualAwbResult,
+  CancelManualPlacementRequest,
+  RtoShipmentDetail,
+  ReceiveRtoRequest,
+  ReceiveRtoResult,
+  InspectRtoItemRequest,
+  InspectRtoItemResult,
+  FinalizeRtoResult,
+} from '@skydrop/api-client';
+
+// Pick
+export function usePullNextPick(): UseMutationResult<
+  { pick: PulledPick | null },
+  Error,
+  void
+> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: () =>
+      client.request<{ pick: PulledPick | null }>(`/api/warehouse/picks/next`, {
+        method: 'POST',
+        body: {},
+      }),
+  });
+}
+export function useStartPick(): UseMutationResult<StartPickResult, Error, { shipmentId: string }> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: ({ shipmentId }) =>
+      client.request<StartPickResult>(`/api/warehouse/picks/${shipmentId}/start`, {
+        method: 'POST',
+        body: {},
+      }),
+  });
+}
+export function useRecordPickItem(): UseMutationResult<
+  RecordPickItemResult,
+  Error,
+  { shipmentId: string } & RecordPickItemRequest
+> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: ({ shipmentId, ...body }) =>
+      client.request<RecordPickItemResult>(`/api/warehouse/picks/${shipmentId}/items`, {
+        method: 'POST',
+        body,
+      }),
+  });
+}
+export function useCompletePick(): UseMutationResult<CompletePickResult, Error, { shipmentId: string }> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: ({ shipmentId }) =>
+      client.request<CompletePickResult>(`/api/warehouse/picks/${shipmentId}/complete`, {
+        method: 'POST',
+        body: {},
+      }),
+  });
+}
+
+// Pack
+export function usePullNextPack(): UseMutationResult<
+  { pack: PulledPack | null },
+  Error,
+  void
+> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: () =>
+      client.request<{ pack: PulledPack | null }>(`/api/warehouse/packs/next`, {
+        method: 'POST',
+        body: {},
+      }),
+  });
+}
+export function useCompletePack(): UseMutationResult<CompletePackResult, Error, { shipmentId: string }> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: ({ shipmentId }) =>
+      client.request<CompletePackResult>(`/api/warehouse/packs/${shipmentId}/complete`, {
+        method: 'POST',
+        body: {},
+      }),
+  });
+}
+
+// Manifest
+export function useManifestsList(query: ListManifestsQuery): UseQueryResult<ListManifestsResponse> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-manifests', 'list', query],
+    queryFn: () => {
+      const sp = new URLSearchParams();
+      if (query.status) sp.set('status', query.status);
+      if (query.courierCode) sp.set('courierCode', query.courierCode);
+      if (query.warehouseId) sp.set('warehouseId', query.warehouseId);
+      if (query.page) sp.set('page', String(query.page));
+      if (query.pageSize) sp.set('pageSize', String(query.pageSize));
+      const qs = sp.toString();
+      return client.request<ListManifestsResponse>(
+        `/api/admin/warehouse/manifests${qs ? `?${qs}` : ''}`,
+      );
+    },
+  });
+}
+export function useManifestDetail(id: string): UseQueryResult<ManifestDetail> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-manifests', 'detail', id],
+    queryFn: () =>
+      client.request<ManifestDetail>(`/api/admin/warehouse/manifests/${id}`),
+    enabled: Boolean(id),
+  });
+}
+export function useCloseManifest(): UseMutationResult<CloseManifestResult, Error, { manifestId: string }> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ manifestId }) =>
+      client.request<CloseManifestResult>(
+        `/api/admin/warehouse/manifests/${manifestId}/close`,
+        { method: 'POST', body: {} },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-manifests'] });
+    },
+  });
+}
+export function useMoveShipment(): UseMutationResult<
+  MoveShipmentResult,
+  Error,
+  { shipmentId: string } & MoveShipmentRequest
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ shipmentId, ...body }) =>
+      client.request<MoveShipmentResult>(
+        `/api/admin/warehouse/shipments/${shipmentId}/move-manifest`,
+        { method: 'POST', body },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-manifests'] });
+    },
+  });
+}
+
+// Dispatch
+export function useConfirmHandoff(): UseMutationResult<
+  ConfirmHandoffResult,
+  Error,
+  { manifestId: string }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ manifestId }) =>
+      client.request<ConfirmHandoffResult>(
+        `/api/admin/courier/manifests/${manifestId}/confirm-handoff`,
+        { method: 'POST', body: {} },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-manifests'] });
+    },
+  });
+}
+
+// Manual placement
+export function usePlaceManualAwb(): UseMutationResult<
+  PlaceManualAwbResult,
+  Error,
+  { shipmentId: string } & PlaceManualAwbRequest
+> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: ({ shipmentId, ...body }) =>
+      client.request<PlaceManualAwbResult>(
+        `/api/admin/courier/manual-placement/shipments/${shipmentId}/place-awb`,
+        { method: 'POST', body },
+      ),
+  });
+}
+export function useCancelManualPlacement(): UseMutationResult<
+  void,
+  Error,
+  { shipmentId: string } & CancelManualPlacementRequest
+> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: ({ shipmentId, ...body }) =>
+      client.request<void>(
+        `/api/admin/courier/manual-placement/shipments/${shipmentId}/cancel`,
+        { method: 'POST', body },
+      ),
+  });
+}
+
+// RTO
+export function useReceiveRto(): UseMutationResult<ReceiveRtoResult, Error, ReceiveRtoRequest> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<ReceiveRtoResult>(`/api/warehouse/rto/receive`, {
+        method: 'POST',
+        body,
+      }),
+  });
+}
+export function useInspectRtoItem(): UseMutationResult<
+  InspectRtoItemResult,
+  Error,
+  { shipmentItemId: string } & InspectRtoItemRequest
+> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: ({ shipmentItemId, ...body }) =>
+      client.request<InspectRtoItemResult>(
+        `/api/warehouse/rto/items/${shipmentItemId}/inspect`,
+        { method: 'POST', body },
+      ),
+  });
+}
+export function useFinalizeRto(): UseMutationResult<FinalizeRtoResult, Error, { shipmentId: string }> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: ({ shipmentId }) =>
+      client.request<FinalizeRtoResult>(
+        `/api/warehouse/rto/shipments/${shipmentId}/finalize`,
+        { method: 'POST', body: {} },
+      ),
+  });
+}
+
+export function useRtoShipmentDetail(shipmentId: string | null): UseQueryResult<RtoShipmentDetail> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-rto', 'shipment', shipmentId],
+    queryFn: () =>
+      client.request<RtoShipmentDetail>(`/api/warehouse/rto/shipments/${shipmentId}`),
+    enabled: Boolean(shipmentId),
+  });
+}
+
+// ───────── Admin call-center (CC-1 / CC-3 / CC-4) ─────────
+
+import type {
+  PulledAssignment,
+  RecordAttemptRequest,
+  RecordAttemptResult,
+} from '@skydrop/api-client';
+
+export function usePullNextCall(): UseMutationResult<
+  { assignment: PulledAssignment | null },
+  Error,
+  void
+> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: () =>
+      client.request<{ assignment: PulledAssignment | null }>(`/api/agent/calls/next`, {
+        method: 'POST',
+        body: {},
+      }),
+  });
+}
+
+export function useCurrentCalls(): UseQueryResult<{
+  readonly assignments: ReadonlyArray<PulledAssignment>;
+}> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['agent-calls', 'current'],
+    queryFn: () =>
+      client.request<{ assignments: ReadonlyArray<PulledAssignment> }>(
+        `/api/agent/calls/current`,
+      ),
+  });
+}
+
+export function useRecordCallAttempt(): UseMutationResult<
+  RecordAttemptResult,
+  Error,
+  { assignmentId: string } & RecordAttemptRequest
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ assignmentId, ...body }) =>
+      client.request<RecordAttemptResult>(
+        `/api/agent/calls/${assignmentId}/record-attempt`,
+        { method: 'POST', body },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['agent-calls'] });
+    },
+  });
+}
+
+export function useReleaseCall(): UseMutationResult<
+  { released: boolean },
+  Error,
+  { assignmentId: string }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ assignmentId }) =>
+      client.request<{ released: boolean }>(
+        `/api/agent/calls/${assignmentId}/release`,
+        { method: 'POST', body: {} },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['agent-calls'] });
+    },
+  });
+}

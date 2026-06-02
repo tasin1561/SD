@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
@@ -30,6 +31,10 @@ import {
   type FinalizeRtoResult,
 } from '../services/rto-disposition.service';
 import {
+  RtoReadService,
+  type RtoShipmentDetail,
+} from '../services/rto-read.service';
+import {
   InspectRtoItemDto,
   ReceiveRtoDto,
 } from '../dto/warehouse-rto.dto';
@@ -51,7 +56,21 @@ export class WarehouseRtoController {
     private readonly receipt: RtoReceiptService,
     private readonly inspection: RtoInspectionService,
     private readonly disposition: RtoDispositionService,
+    private readonly read: RtoReadService,
   ) {}
+
+  @Get('shipments/:shipmentId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Load a shipment for RTO inspection — header (status, AWB, rtoReceivedAt) + per-line shipment_items with their current inspection (rtoCondition / rtoDisposition / notes)',
+  })
+  loadShipment(
+    @Param('shipmentId', new ParseUUIDPipe({ version: '7' }))
+    shipmentId: string,
+  ): Promise<RtoShipmentDetail> {
+    return this.read.loadShipment(shipmentId);
+  }
 
   @Post('receive')
   @HttpCode(HttpStatus.OK)
