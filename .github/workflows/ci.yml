@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel in-flight runs of the same ref so an opening PR's second push
+# doesn't queue up extra work.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    name: typecheck + lint + unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: skydrop
+          POSTGRES_PASSWORD: skydrop
+          POSTGRES_DB: skydrop_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 6379:6379
+
+    env:
+      # Single source of truth for envs the test harness reads.
+      DATABASE_URL: postgresql://skydrop:skydrop@localhost:5432/skydrop_test?schema=public
+      REDIS_URL: redis://localhost:6379/0
+      NODE_ENV: test
+      # Email + S3 + courier are stub-mode in CI.
+      RESEND_API_KEY: ""
+      JWT_ACCESS_SECRET: ci-access-secret-not-prod
+      JWT_REFRESH_SECRET: ci-refresh-secret-not-prod
+      COURIER_CREDENTIALS_KEY_v1: ci-aes-gcm-32byte-key-padding-32x
+      TRACKING_WEBHOOK_SECRET_DELHIVERY: ci-tracking-webhook
+      SELLER_APP_URL: http://localhost:3003
+      ADMIN_APP_URL: http://localhost:3002
+      API_BASE_URL: http://localhost:4000
+      DO_SPACES_ACCESS_KEY: ci-stub
+      DO_SPACES_SECRET_KEY: ci-stub
+      DO_SPACES_BUCKET: ci-stub
+      DO_SPACES_REGION: sgp1
+      DO_SPACES_ENDPOINT: https://sgp1.digitaloceanspaces.com
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.1
+          run_install: false
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the workspace packages (db / api-client / ui)
+        # apps depend on the compiled `dist` of these — Turbo `^build`
+        # would do this transitively but we keep it explicit so a CI
+        # failure is in the obvious step.
+        run: |
+          pnpm --filter @skydrop/db build
+          pnpm --filter @skydrop/api-client build
+          pnpm --filter @skydrop/ui build
+
+      - name: Prisma migrate (test DB)
+        working-directory: packages/db
+        run: pnpm exec prisma migrate deploy
+
+      - name: Typecheck — all workspaces
+        run: pnpm -r typecheck
+
+      - name: Lint — all workspaces that have lint
+        run: pnpm -r --if-present lint
+
+      - name: Unit tests — API (jest)
+        run: pnpm --filter @skydrop/api test
+
+      - name: Unit tests — admin (vitest)
+        run: pnpm --filter @skydrop/admin test
+
+      - name: Unit tests — seller (vitest)
+        run: pnpm --filter @skydrop/seller test
+
+      - name: Unit tests — packages
+        run: pnpm --filter './packages/*' --if-present test
+
+      - name: Build the four Next apps
+        run: |
+          pnpm --filter @skydrop/api build
+          pnpm --filter @skydrop/admin build
+          pnpm --filter @skydrop/seller build
+          pnpm --filter @skydrop/track build

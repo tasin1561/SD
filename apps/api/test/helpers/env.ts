@@ -35,6 +35,9 @@ const BASE_ENV: Env = {
   // and tests that exercise the unconfigured-secret 401 path override
   // it to ''. Never a real Delhivery secret.
   TRACKING_WEBHOOK_SECRET_DELHIVERY: 'test-tracking-webhook-secret-delhivery',
+  // Module 18 — ChatWoot live chat (stub mode in tests; empty is fine).
+  CHATWOOT_API_TOKEN: '',
+  CHATWOOT_HMAC_SECRET: '',
 };
 
 /** Shared EnvService fixture; pass overrides for the few vars a test cares about. */

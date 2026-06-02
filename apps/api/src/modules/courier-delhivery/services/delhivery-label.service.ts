@@ -6,17 +6,21 @@ import type {
 } from '../types/delhivery.types';
 
 /**
- * Module 9 — Delhivery shipping-label fetch (commit 6). Implements the
+ * Module 9 — Delhivery shipping-label fetch. Implements the
  * `fetchLabel` slice of the DelhiveryClient adapter.
  *
- * STUB MODE: returns deterministic mock PDF bytes (a minimal valid PDF
- * header) — AwbGenerationService uploads them to OUR Spaces and records
- * the key in `awb_labels` (CUR-6). The bytes' content is not inspected
- * downstream; only the persist-to-Spaces path is exercised.
+ * STUB MODE: returns deterministic mock PDF bytes — AwbGenerationService
+ * uploads them to OUR Spaces and records the key in `awb_labels` (CUR-6).
  *
- * REAL MODE: TODO(delhivery-api) — fetch the label PDF from Delhivery's
- * label endpoint. DelhiveryHttpService.request throws until the wire
- * contract is validated.
+ * REAL MODE: per https://track.delhivery.com/api/ — the packing-slip
+ * endpoint returns JSON whose `packages[].pdf_download_link` is a
+ * pre-signed URL we then fetch the raw PDF from.
+ *
+ *   GET /api/p/packing_slip?wbns=<AWB>&pdf=true
+ *
+ * Two-step: (1) JSON call to get the URL; (2) GET that URL → PDF bytes.
+ * If Delhivery decides to return the PDF inline some day, the second
+ * fetch returns bytes directly and we use those.
  */
 @Injectable()
 export class DelhiveryLabelService implements Pick<DelhiveryClient, 'fetchLabel'> {
@@ -24,8 +28,6 @@ export class DelhiveryLabelService implements Pick<DelhiveryClient, 'fetchLabel'
 
   async fetchLabel(awbNumber: string): Promise<DelhiveryLabelResult> {
     if (await this.http.isStubMode()) {
-      // Minimal deterministic PDF stub — keyed on the AWB so distinct
-      // shipments produce distinct bytes.
       const bytes = Buffer.from(
         `%PDF-1.4\n% Skydrop stub label for AWB ${awbNumber}\n%%EOF\n`,
         'utf8',
@@ -33,15 +35,33 @@ export class DelhiveryLabelService implements Pick<DelhiveryClient, 'fetchLabel'
       return { bytes, mimeType: 'application/pdf' };
     }
 
-    // ── REAL MODE — TODO(delhivery-api) ──────────────────────────────
-    // GET the label PDF for `awbNumber`.
-    //   - TODO(delhivery-api): label endpoint path + query params
-    //   - TODO(delhivery-api): whether the response is the raw PDF or a
-    //     URL to follow; map to DelhiveryLabelResult.bytes
-    await this.http.authHeaders();
-    return this.http.request<DelhiveryLabelResult>({
+    const meta = await this.http.request<{
+      packages?: Array<{ waybill?: string; pdf_download_link?: string }>;
+    }>({
       method: 'GET',
-      path: `/TODO(delhivery-api):label/${awbNumber}`,
+      path: `/api/p/packing_slip?wbns=${encodeURIComponent(awbNumber)}&pdf=true`,
     });
+
+    const link = meta.packages?.[0]?.pdf_download_link;
+    if (!link) {
+      throw new Error(
+        `Delhivery did not return a pdf_download_link for AWB ${awbNumber}`,
+      );
+    }
+
+    // The pre-signed URL is fetched directly (no auth header — the URL
+    // carries its own signature). 30s timeout for the binary.
+    const res = await fetch(link, {
+      method: 'GET',
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) {
+      throw new Error(
+        `Delhivery label download for ${awbNumber} → HTTP ${res.status}`,
+      );
+    }
+    const arrayBuf = await res.arrayBuffer();
+    const mime = res.headers.get('content-type') ?? 'application/pdf';
+    return { bytes: Buffer.from(arrayBuf), mimeType: mime };
   }
 }

@@ -67,6 +67,15 @@ export const envSchema = z.object({
   // courier 401 (fail-closed, TRK-1). Real-mode HMAC scheme + header
   // name are TODO(delhivery-api).
   TRACKING_WEBHOOK_SECRET_DELHIVERY: z.string().optional().default(''),
+
+  // --- Module 18 — ChatWoot live chat ---------------------------------
+  // Real-mode token + HMAC secret. Both optional/empty so the app
+  // boots in stub mode (chat.chatwoot_base_url unset). The system
+  // settings (chat.chatwoot_base_url / _account_id / _inbox_id) gate
+  // when these are READ; an empty token in real mode = silently no-op
+  // (logged warning, no chat traffic).
+  CHATWOOT_API_TOKEN: z.string().optional().default(''),
+  CHATWOOT_HMAC_SECRET: z.string().optional().default(''),
 });
 
 export type Env = z.infer<typeof envSchema>;

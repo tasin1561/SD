@@ -6,21 +6,20 @@ import type {
 } from '../types/delhivery.types';
 
 /**
- * Module 9 — Delhivery pincode serviceability (commit 6). Implements
- * the `checkServiceability` slice of the DelhiveryClient adapter.
+ * Module 9 — Delhivery pincode serviceability. Implements the
+ * `checkServiceability` slice of the DelhiveryClient adapter.
  *
  * CUR-5: serviceability is REACTIVE — the AUTHORITATIVE answer is the
- * AWB-generation response (DelhiveryAwbResult.serviceable). This
- * service is an OPTIONAL advisory pre-check, NOT wired into the AWB
- * saga (proactive/cached serviceability is a Phase-2 deferral —
- * phase-1a-debt). `fromLiveApi:false` marks a stub answer as a
- * non-authoritative assumption.
+ * AWB-generation response. This service is an OPTIONAL advisory
+ * pre-check.
  *
- * STUB MODE: '000000' → not serviceable (consistent with
- * DelhiveryAwbService's stub convention); any other pincode →
- * serviceable. `fromLiveApi:false` always in stub mode.
+ * REAL MODE: per https://track.delhivery.com/api/ — the pincode lookup
  *
- * REAL MODE: TODO(delhivery-api) — the pincode-serviceability endpoint.
+ *   GET /c/api/pin-codes/json/?filter_codes=<pincode>
+ *
+ * Response shape:
+ *   { delivery_codes: [{ postal_code: { pin, city, ..., covid_zone, ... } }] }
+ * A non-empty `delivery_codes` array → Delhivery serves this pin.
  */
 @Injectable()
 export class DelhiveryServiceabilityService
@@ -38,15 +37,13 @@ export class DelhiveryServiceabilityService
       };
     }
 
-    // ── REAL MODE — TODO(delhivery-api) ──────────────────────────────
-    //   - TODO(delhivery-api): serviceability endpoint path + the
-    //     pin-code query param name
-    //   - TODO(delhivery-api): parse the response → serviceable boolean
-    await this.http.authHeaders();
-    const result = await this.http.request<{ serviceable: boolean }>({
+    const result = await this.http.request<{
+      delivery_codes?: Array<{ postal_code?: { pin?: number | string } }>;
+    }>({
       method: 'GET',
-      path: `/TODO(delhivery-api):serviceability/${pincode}`,
+      path: `/c/api/pin-codes/json/?filter_codes=${encodeURIComponent(pincode)}`,
     });
-    return { serviceable: result.serviceable, fromLiveApi: true };
+    const serviceable = (result.delivery_codes ?? []).length > 0;
+    return { serviceable, fromLiveApi: true };
   }
 }

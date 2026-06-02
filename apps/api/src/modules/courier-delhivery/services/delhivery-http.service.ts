@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { CredentialEnvironment } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { EnvService } from '../../../config/env.service';
@@ -15,11 +15,19 @@ const TOKEN_FIELD = 'apiToken';
 
 export interface DelhiveryRequestOptions {
   method: 'GET' | 'POST';
-  /** Path appended to the resolved base URL. */
+  /** Path appended to the resolved base URL (must start with `/`). */
   path: string;
   body?: unknown;
   /** Override environment; defaults to PRODUCTION outside NODE_ENV!=production. */
   environment?: CredentialEnvironment;
+  /** Per-endpoint body encoding for POST.
+   *   - 'json'           : JSON.stringify body, content-type application/json
+   *   - 'form-data-key'  : application/x-www-form-urlencoded;
+   *                        body sent as `format=json&data=<json>`
+   *                        (Delhivery legacy endpoints). */
+  encoding?: 'json' | 'form-data-key';
+  /** Per-request timeout in ms (default 25 000). */
+  timeoutMs?: number;
 }
 
 /**
@@ -47,6 +55,7 @@ export interface DelhiveryRequestOptions {
  */
 @Injectable()
 export class DelhiveryHttpService {
+  private readonly logger = new Logger(DelhiveryHttpService.name);
   constructor(
     private readonly prisma: PrismaService,
     private readonly env: EnvService,
@@ -107,23 +116,91 @@ export class DelhiveryHttpService {
   }
 
   /**
-   * Raw request helper for real mode. Deliberately unimplemented until
-   * the Delhivery wire contract is validated — see class JSDoc. Callers
-   * reach this ONLY when `isStubMode()` is false, which only happens
-   * once an operator sets the base URL.
+   * Raw request helper for real mode.
+   *
+   * Built against the public Delhivery API documentation
+   * (https://track.delhivery.com/api/ — last reviewed at the time of
+   * commit). Endpoint paths + request envelopes are encoded in each
+   * capability service; this helper handles the transport: base URL
+   * resolution, auth headers, body encoding, status mapping.
+   *
+   * Delhivery's older "Create / Edit" endpoints take a peculiar
+   * `format=json&data=<urlencoded-json>` body via
+   * `application/x-www-form-urlencoded` (NOT a JSON POST). The capability
+   * services choose the encoding per endpoint via `opts.encoding`.
+   * GET endpoints are vanilla query-string.
+   *
+   * Until the sandbox round-trips a real request, this code is
+   * "documented best-effort" — flip a single setting
+   * (`courier.delhivery_api_base_url`) to enable, then validate with a
+   * smoke. Any wire mismatch surfaces as a normal HTTP error with the
+   * raw body in the log.
    */
-  async request<T>(_opts: DelhiveryRequestOptions): Promise<T> {
-    // TODO(delhivery-api): implement the fetch call —
-    //   - exact endpoint paths (per capability)
-    //   - request JSON field names + envelope shape
-    //   - response parsing → our DTOs
-    //   - HTTP + Delhivery error-code → DelhiveryAwbFailure mapping
-    //   - rate-limit / timeout handling (phase-1a-debt: retry/backoff only)
-    // Until then real mode is not operable; stub mode is the build +
-    // test path.
-    throw new Error(
-      'DelhiveryHttpService.request: real-mode Delhivery wire contract not yet implemented (TODO(delhivery-api)). Run in stub mode (empty courier.delhivery_api_base_url).',
+  async request<T>(opts: DelhiveryRequestOptions): Promise<T> {
+    const baseUrl = await this.getBaseUrl();
+    const headers = await this.authHeaders(
+      opts.environment ?? this.environment(),
     );
+    const url = `${baseUrl.replace(/\/$/, '')}${opts.path}`;
+
+    let body: string | undefined;
+    let finalHeaders: Record<string, string> = { ...headers };
+
+    if (opts.method === 'POST') {
+      if (opts.encoding === 'form-data-key') {
+        // Delhivery legacy: POST with content-type
+        // application/x-www-form-urlencoded and a single `data=` key
+        // whose value is JSON.stringify(...) of the payload. Some
+        // endpoints additionally want `format=json`.
+        const payloadJson = JSON.stringify(opts.body ?? {});
+        const params = new URLSearchParams();
+        params.set('format', 'json');
+        params.set('data', payloadJson);
+        body = params.toString();
+        finalHeaders['Content-Type'] = 'application/x-www-form-urlencoded';
+      } else {
+        body = JSON.stringify(opts.body ?? {});
+        finalHeaders['Content-Type'] = 'application/json';
+      }
+    }
+
+    const res = await fetch(url, {
+      method: opts.method,
+      headers: finalHeaders,
+      ...(body !== undefined ? { body } : {}),
+      // Caller can override; default 25s matches the saga's budget.
+      signal: AbortSignal.timeout(opts.timeoutMs ?? 25_000),
+    });
+
+    const text = await res.text();
+    let parsed: unknown;
+    try {
+      parsed = text === '' ? null : JSON.parse(text);
+    } catch {
+      parsed = text;
+    }
+
+    if (!res.ok) {
+      // Strip the auth header from the log; never log token plaintext.
+      this.logger.warn(
+        {
+          status: res.status,
+          path: opts.path,
+          method: opts.method,
+          body:
+            typeof parsed === 'string' ? parsed.slice(0, 500) : parsed,
+        },
+        'Delhivery non-2xx response',
+      );
+      const e = new Error(
+        `Delhivery ${opts.method} ${opts.path} → HTTP ${res.status}`,
+      );
+      (e as Error & { status?: number; body?: unknown }).status = res.status;
+      (e as Error & { status?: number; body?: unknown }).body = parsed;
+      throw e;
+    }
+
+    return parsed as T;
   }
 
   private async rawBaseUrl(): Promise<string> {

@@ -30,8 +30,16 @@ function makeService(opts: { stubMode?: boolean } = {}) {
     );
   });
   const http = { isStubMode, authHeaders, request };
+  // PrismaService is needed for real-mode pickup-location lookup;
+  // stub-mode tests never reach it. Provide a minimal stub.
+  const prisma = {
+    client: {
+      systemSetting: { findUnique: jest.fn(async () => null) },
+    },
+  };
   const svc = new DelhiveryAwbService(
     http as unknown as DelhiveryHttpService,
+    prisma as never,
   );
   return { svc, isStubMode, authHeaders, request };
 }
@@ -85,12 +93,88 @@ describe('DelhiveryAwbService.generateAwb — stub mode', () => {
 });
 
 describe('DelhiveryAwbService.generateAwb — real mode', () => {
-  it('routes through authHeaders + request (which throws — TODO(delhivery-api))', async () => {
-    const { svc, authHeaders, request } = makeService({ stubMode: false });
+  it('throws when pickup location is not configured', async () => {
+    const { svc } = makeService({ stubMode: false });
+    // prisma.systemSetting.findUnique returns null by default in the
+    // makeService mock — so the pickup-location lookup fails fast.
     await expect(svc.generateAwb(awbReq())).rejects.toThrow(
-      /TODO\(delhivery-api\)/,
+      /pickup location not configured/i,
     );
-    expect(authHeaders).toHaveBeenCalled();
-    expect(request).toHaveBeenCalled();
+  });
+
+  it('marshals the wire envelope + parses a success response', async () => {
+    const { svc, request } = makeServiceWithPickup('Skydrop-BLR-01');
+    request.mockResolvedValueOnce({
+      success: true,
+      packages: [{ waybill: 'DLV123456789', refnum: 'SH-2026-05-000042' }],
+    });
+    const r = await svc.generateAwb(awbReq());
+    expect(r).toEqual({
+      ok: true,
+      awbNumber: 'DLV123456789',
+      courierShipmentId: 'SH-2026-05-000042',
+      labelUrl: null,
+    });
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'POST',
+        path: '/api/cmu/create.json',
+        encoding: 'form-data-key',
+        body: expect.objectContaining({
+          shipments: expect.any(Array),
+          pickup_location: { name: 'Skydrop-BLR-01' },
+        }),
+      }),
+    );
+  });
+
+  it('maps a non-serviceable rejection to ok:false serviceable:false', async () => {
+    const { svc, request } = makeServiceWithPickup('Skydrop-BLR-01');
+    request.mockResolvedValueOnce({
+      success: false,
+      rmk: 'ClientWarning : ServiceableArea — pincode not serviceable',
+    });
+    const r = await svc.generateAwb(awbReq());
+    expect(r).toEqual({
+      ok: false,
+      serviceable: false,
+      errorCode: 'DELHIVERY_NON_SERVICEABLE',
+      errorMessage: expect.stringMatching(/serviceable/i),
+    });
+  });
+
+  it('maps a transport error to ok:false serviceable:true (CUR-2 retryable)', async () => {
+    const { svc, request } = makeServiceWithPickup('Skydrop-BLR-01');
+    request.mockRejectedValueOnce(new Error('socket hang up'));
+    const r = await svc.generateAwb(awbReq());
+    expect(r).toEqual({
+      ok: false,
+      serviceable: true,
+      errorCode: 'DELHIVERY_TRANSPORT_ERROR',
+      errorMessage: 'socket hang up',
+    });
   });
 });
+
+/**
+ * Variant of makeService that pre-seeds the pickup-location lookup
+ * so real-mode tests can drive the wire path.
+ */
+function makeServiceWithPickup(name: string) {
+  const isStubMode = jest.fn(async () => false);
+  const authHeaders = jest.fn(async () => ({ Authorization: 'Token x' }));
+  const request = jest.fn();
+  const http = { isStubMode, authHeaders, request };
+  const prisma = {
+    client: {
+      systemSetting: {
+        findUnique: jest.fn(async () => ({ valueString: name })),
+      },
+    },
+  };
+  const svc = new DelhiveryAwbService(
+    http as unknown as DelhiveryHttpService,
+    prisma as never,
+  );
+  return { svc, request, prisma };
+}

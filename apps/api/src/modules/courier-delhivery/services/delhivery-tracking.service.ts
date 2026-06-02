@@ -50,9 +50,8 @@ export class DelhiveryTrackingService
   private readonly logger = new Logger(DelhiveryTrackingService.name);
 
   /**
-   * Stub raw-code → ShipmentStatus table. The keys are deliberately
-   * exhaustive over our test paths; an unknown raw code is a
-   * STUB_UNKNOWN_CODE → UNMAPPABLE (still audited downstream).
+   * Stub raw-code → ShipmentStatus table (DLV- prefix; intentionally
+   * distinguishable from real Delhivery codes so no collision).
    */
   private static readonly STUB_TABLE: ReadonlyMap<string, ShipmentStatus> =
     new Map([
@@ -67,19 +66,66 @@ export class DelhiveryTrackingService
       ['DLV-DAMAGED', ShipmentStatus.DAMAGED],
     ]);
 
+  /**
+   * Real-mode mapping — Delhivery's published "Status Push" taxonomy
+   * uses StatusType codes (two/three letters). Documented set as of
+   * 2025-Q4 docs:
+   *
+   *   StatusType         Meaning                          → ShipmentStatus
+   *   ---------          -------                          ---------------
+   *   PU                 Manifested / pickup awaited      (informational; not mapped)
+   *   IT / UD            In transit / At hub              IN_TRANSIT
+   *   OFD                Out for delivery                 OUT_FOR_DELIVERY
+   *   DL / DLVD          Delivered                        DELIVERED
+   *   UD-EOD / UD-NDR    Undelivered / NDR                DELIVERY_ATTEMPTED
+   *   RT / DTO           RTO initiated                    RTO_INITIATED
+   *   RT-IT              RTO in transit                   RTO_IN_TRANSIT
+   *   RT-DLVD            RTO delivered to seller          RTO_DELIVERED
+   *   LT                 Lost in transit                  LOST
+   *   DG                 Damaged in transit               DAMAGED
+   *
+   * Any other code → UNMAPPABLE (still audited as a tracking_event).
+   * The list is best-effort against the public docs; the sandbox-smoke
+   * surfaces real codes that don't appear here as STUB-style audit
+   * entries the operator can review.
+   */
+  private static readonly REAL_TABLE: ReadonlyMap<string, ShipmentStatus> =
+    new Map([
+      ['IT', ShipmentStatus.IN_TRANSIT],
+      ['UD', ShipmentStatus.IN_TRANSIT],
+      ['OFD', ShipmentStatus.OUT_FOR_DELIVERY],
+      ['DL', ShipmentStatus.DELIVERED],
+      ['DLVD', ShipmentStatus.DELIVERED],
+      ['UD-EOD', ShipmentStatus.DELIVERY_ATTEMPTED],
+      ['UD-NDR', ShipmentStatus.DELIVERY_ATTEMPTED],
+      ['NDR', ShipmentStatus.DELIVERY_ATTEMPTED],
+      ['RT', ShipmentStatus.RTO_INITIATED],
+      ['DTO', ShipmentStatus.RTO_INITIATED],
+      ['RT-IT', ShipmentStatus.RTO_IN_TRANSIT],
+      ['RT-DLVD', ShipmentStatus.RTO_DELIVERED],
+      ['LT', ShipmentStatus.LOST],
+      ['DG', ShipmentStatus.DAMAGED],
+    ]);
+
   normalizeScan(raw: DelhiveryRawScan): NormalizedScan {
-    // Stub mode is the only operational mode in Phase 1A. Real-mode
-    // mapping is a separate sandbox-validation task — see the
-    // TODO(delhivery-api) note on the class JSDoc.
     const code = raw.rawStatus.trim().toUpperCase();
-    const status = DelhiveryTrackingService.STUB_TABLE.get(code);
-    if (status === undefined) {
-      this.logger.debug(
-        { awbNumber: raw.awbNumber, rawStatus: raw.rawStatus },
-        'normalizeScan: unmappable raw code (stub)',
-      );
-      return { kind: 'UNMAPPABLE', reason: 'STUB_UNKNOWN_CODE' };
+    // Try the stub table first (DLV- prefixed) for back-compat with
+    // existing e2e specs; then the real table.
+    const stub = DelhiveryTrackingService.STUB_TABLE.get(code);
+    if (stub !== undefined) {
+      return { kind: 'NORMALIZED', shipmentStatus: stub };
     }
-    return { kind: 'NORMALIZED', shipmentStatus: status };
+    const real = DelhiveryTrackingService.REAL_TABLE.get(code);
+    if (real !== undefined) {
+      return { kind: 'NORMALIZED', shipmentStatus: real };
+    }
+    this.logger.debug(
+      { awbNumber: raw.awbNumber, rawStatus: raw.rawStatus },
+      'normalizeScan: unmappable raw code',
+    );
+    return {
+      kind: 'UNMAPPABLE',
+      reason: code.startsWith('DLV-') ? 'STUB_UNKNOWN_CODE' : 'UNKNOWN_COURIER_CODE',
+    };
   }
 }

@@ -260,6 +260,15 @@ const systemSettings: SystemSettingSeed[] = [
       'Delhivery REST API base URL. EMPTY = stub mode (DelhiveryClient returns deterministic mock responses; no network). Set to the sandbox/production URL once the real wire contract is validated against Delhivery credentials — TODO(delhivery-api)',
   },
   {
+    key: 'courier.delhivery_pickup_location',
+    category: 'courier',
+    valueType: SettingValueType.STRING,
+    valueString: '',
+    displayName: 'Delhivery Pickup Location Name',
+    description:
+      'Name of the warehouse pickup location pre-registered in Delhivery\'s partner portal. Required when real mode is enabled (DelhiveryAwbService passes it as pickup_location.name on create-shipment). Phase-1A is single-warehouse (BLR-01); a multi-warehouse setup adds one key per origin.',
+  },
+  {
     key: 'courier.delhivery_awb_batch_size',
     category: 'courier',
     valueType: SettingValueType.INT,
@@ -313,6 +322,34 @@ const systemSettings: SystemSettingSeed[] = [
     displayName: 'Tracking Webhook Processing Retry Max',
     description:
       'Max BullMQ attempts for the tracking-webhook processor before the courier_webhooks row is left FAILED for ops investigation. Per-payload idempotency (TRK-2) makes retries safe.',
+  },
+  // Module 18 — ChatWoot live chat.
+  {
+    key: 'chat.chatwoot_base_url',
+    category: 'chat',
+    valueType: SettingValueType.STRING,
+    valueString: '',
+    displayName: 'ChatWoot Base URL',
+    description:
+      'Self-hosted ChatWoot URL (e.g. https://chat.skydrop.online). EMPTY = stub mode — ChatWootClientService returns no-op refs, webhook controller accepts payloads without HMAC verify. Set this once the chat droplet is provisioned + CHATWOOT_API_TOKEN env is configured.',
+  },
+  {
+    key: 'chat.chatwoot_account_id',
+    category: 'chat',
+    valueType: SettingValueType.INT,
+    valueInt: 0,
+    displayName: 'ChatWoot Account ID',
+    description:
+      'Numeric account id from your ChatWoot dashboard (URL: /app/accounts/<id>/...). Real-mode API calls embed it in the path. Leave 0 in stub mode.',
+  },
+  {
+    key: 'chat.chatwoot_inbox_id',
+    category: 'chat',
+    valueType: SettingValueType.INT,
+    valueInt: 0,
+    displayName: 'ChatWoot Inbox ID',
+    description:
+      'Numeric inbox id for the API channel that Skydrop sends customer order updates through. Visible at /app/accounts/<account_id>/settings/inboxes/<id>. Leave 0 in stub mode.',
   },
 ];
 

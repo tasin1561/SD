@@ -47,24 +47,30 @@ describe('DelhiveryTrackingService.normalizeScan (stub mode)', () => {
     });
   });
 
-  it('unknown raw code → UNMAPPABLE with STUB_UNKNOWN_CODE reason', () => {
+  it('unknown DLV- prefixed code → UNMAPPABLE with STUB_UNKNOWN_CODE reason', () => {
     expect(svc.normalizeScan(raw({ rawStatus: 'DLV-UNKNOWN' }))).toEqual({
-      kind: 'UNMAPPABLE',
-      reason: 'STUB_UNKNOWN_CODE',
-    });
-    // A real Delhivery scan code that hasn't been mapped yet: same
-    // outcome (stub doesn't know it → UNMAPPABLE; real-mode is a
-    // TODO(delhivery-api) separate task).
-    expect(svc.normalizeScan(raw({ rawStatus: 'UD' }))).toEqual({
       kind: 'UNMAPPABLE',
       reason: 'STUB_UNKNOWN_CODE',
     });
   });
 
-  it('empty string → UNMAPPABLE', () => {
+  it('real Delhivery code in the documented table → NORMALIZED', () => {
+    // 'UD' is one of Delhivery's published StatusType codes; the
+    // adapter now recognises it even in mixed stub+real operation.
+    expect(svc.normalizeScan(raw({ rawStatus: 'UD' }))).toEqual({
+      kind: 'NORMALIZED',
+      shipmentStatus: ShipmentStatus.IN_TRANSIT,
+    });
+  });
+
+  it('empty or unknown non-prefixed code → UNMAPPABLE with UNKNOWN_COURIER_CODE reason', () => {
     expect(svc.normalizeScan(raw({ rawStatus: '' }))).toEqual({
       kind: 'UNMAPPABLE',
-      reason: 'STUB_UNKNOWN_CODE',
+      reason: 'UNKNOWN_COURIER_CODE',
+    });
+    expect(svc.normalizeScan(raw({ rawStatus: 'NOPE' }))).toEqual({
+      kind: 'UNMAPPABLE',
+      reason: 'UNKNOWN_COURIER_CODE',
     });
   });
 });

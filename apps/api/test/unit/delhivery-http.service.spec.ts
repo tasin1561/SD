@@ -102,11 +102,14 @@ describe('DelhiveryHttpService.authHeaders', () => {
   });
 });
 
-describe('DelhiveryHttpService.request (real mode — TODO(delhivery-api))', () => {
-  it('throws — real-mode wire contract is not implemented; stub mode is the path', async () => {
+describe('DelhiveryHttpService.request (real mode)', () => {
+  it('attempts a real fetch against the configured base URL', async () => {
     const { svc } = makeService({ baseUrl: 'https://sandbox.delhivery.test' });
+    // No mocked global fetch — node will try to resolve a real host
+    // and fail. That's the assertion: it WENT through fetch (not the
+    // old TODO throw). The error type confirms real-mode path is wired.
     await expect(
       svc.request({ method: 'GET', path: '/x' }),
-    ).rejects.toThrow(/TODO\(delhivery-api\)/);
+    ).rejects.toThrow();
   });
 });

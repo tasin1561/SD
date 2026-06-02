@@ -38,6 +38,51 @@ export function parseScanPayload(
   if (!isObject(parsedBody)) return null;
   const b = parsedBody as Record<string, unknown>;
 
+  // Delhivery's documented "Status Push" wraps the actual scan inside
+  // a `Shipment` envelope:
+  //   { "Shipment": { "AWB": "...", "Status": { "Status": "...",
+  //       "StatusType": "...", "StatusDateTime": "...",
+  //       "StatusLocation": "...", "Instructions": "..." } } }
+  // We accept both that envelope AND the stub-mode flat snake_case
+  // shape the M10 tests already use.
+  if (isObject(b['Shipment'])) {
+    const s = b['Shipment'] as Record<string, unknown>;
+    const status = isObject(s['Status'])
+      ? (s['Status'] as Record<string, unknown>)
+      : {};
+    const awbNumber = pickString(s, ['AWB', 'awb']);
+    // Prefer StatusType (terse machine code IT/OFD/DL/etc — what
+    // normalizeScan keys off); fall back to Status (verbose label).
+    const rawStatus =
+      pickString(status, ['StatusType', 'NSLCode']) ??
+      pickString(status, ['Status']);
+    const eventAtIso = pickString(status, [
+      'StatusDateTime',
+      'StatusDate',
+      'EventDateTime',
+    ]);
+    if (
+      awbNumber === null ||
+      rawStatus === null ||
+      eventAtIso === null ||
+      Number.isNaN(new Date(eventAtIso).getTime())
+    ) {
+      return null;
+    }
+    const location = pickString(status, ['StatusLocation']);
+    return {
+      awbNumber,
+      rawStatus,
+      eventAtIso,
+      locationName: location,
+      locationCity: location, // Delhivery doesn't split; reuse for both.
+      locationPincode: null,
+      description: pickString(status, ['Instructions', 'StatusRemarks']),
+      failureReason:
+        pickString(status, ['CancellationReason', 'FailureReason']) ?? null,
+    };
+  }
+
   const awbNumber = pickString(b, ['awb_number', 'awbNumber']);
   const rawStatus = pickString(b, ['raw_status', 'rawStatus', 'status']);
   const eventAtIso = pickString(b, ['event_at', 'eventAt', 'eventAtIso']);

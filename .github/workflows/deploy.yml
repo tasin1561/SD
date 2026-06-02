@@ -1,0 +1,47 @@
+name: Deploy
+
+# Runs ONLY after `main` advances. Requires CI to have passed (the CI
+# workflow runs on push-to-main; this workflow waits for it and exits
+# early if CI didn't succeed).
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+    branches: [main]
+  # Allows a manual re-deploy from the Actions tab without a new push.
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: ssh → pull → build → restart
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Skip if CI didn't pass (a failed CI also triggers workflow_run with
+    # conclusion='failure'; we only proceed on 'success' OR manual dispatch).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+
+    steps:
+      - name: Trigger deploy on droplet
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          port: 22
+          envs: SHA
+          # Single shell session. The droplet has scripts/deploy.sh
+          # checked in — it's the source of truth for build/seed/restart.
+          script: |
+            set -e
+            cd ~/app
+            bash scripts/deploy.sh "$SHA"

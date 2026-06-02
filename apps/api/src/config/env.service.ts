@@ -45,6 +45,15 @@ export class EnvService {
     return this.env.RESEND_API_KEY.length > 0;
   }
 
+  // Module 18 — ChatWoot live chat. Stub mode when token is empty OR
+  // the chat.chatwoot_base_url system setting is empty.
+  get chatwootApiToken(): string {
+    return this.env.CHATWOOT_API_TOKEN;
+  }
+  get chatwootHmacSecret(): string {
+    return this.env.CHATWOOT_HMAC_SECRET;
+  }
+
   get sellerAppUrl(): string {
     return this.env.SELLER_APP_URL;
   }
