@@ -85,14 +85,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build the workspace packages (db / api-client / ui)
+      - name: Build the workspace packages (db / api-client / ui / auth)
         # apps depend on the compiled `dist` of these — Turbo `^build`
         # would do this transitively but we keep it explicit so a CI
         # failure is in the obvious step.
+        # @skydrop/auth MUST be built before vitest runs in
+        # apps/admin + apps/seller — its `./client` / `./server`
+        # subpath exports point at `dist/`, so unbuilt = vitest fails
+        # to resolve `@skydrop/auth/client`.
         run: |
           pnpm --filter @skydrop/db build
           pnpm --filter @skydrop/api-client build
           pnpm --filter @skydrop/ui build
+          pnpm --filter @skydrop/auth build
 
       - name: Prisma migrate (test DB)
         working-directory: packages/db
