@@ -174,6 +174,53 @@ export function useSubmitOrder(): UseMutationResult<
   });
 }
 
+/**
+ * PATCH /seller/orders/:id — DRAFT full edit / PENDING_CONFIRMATION
+ * corrections (see UpdateOrderDto on the server). Every field is
+ * optional; only-provided keys are touched. `items` triggers a full
+ * line-replace and is DRAFT-only (server enforces).
+ */
+export type UpdateOrderInput = Partial<CreateOrderInput> & {
+  readonly internalNotes?: string;
+  readonly packageType?: 'STANDARD' | 'FRAGILE' | 'DOCUMENT';
+  readonly isUrgent?: boolean;
+};
+
+export function useUpdateOrder(
+  orderId: string,
+): UseMutationResult<OrderView, Error, UpdateOrderInput> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<OrderView>(`/api/seller/orders/${orderId}`, {
+        method: 'PATCH',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-orders'] });
+    },
+  });
+}
+
+/** DELETE /seller/orders/:id — DRAFT-only soft-delete. */
+export function useDiscardDraftOrder(
+  orderId: string,
+): UseMutationResult<void, Error, void> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      await client.request<void>(`/api/seller/orders/${orderId}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-orders'] });
+    },
+  });
+}
+
 /** Pre-reservation cancel (DRAFT / PENDING_CONFIRMATION). The server
  *  matrix enforces the allowed source states; the UI surfaces server
  *  rejection verbatim (FE-2). */
@@ -384,5 +431,113 @@ export function useStockSummary(): UseQueryResult<SellerStockSummary> {
   return useQuery({
     queryKey: ['seller-stock', 'summary'],
     queryFn: () => client.request<SellerStockSummary>(`/api/seller/stock/summary`),
+  });
+}
+
+// ───────── Seller webhooks (outbound) ─────────
+
+import type {
+  WebhookEndpointView,
+  WebhookEndpointWithSecret,
+  CreateWebhookEndpointRequest,
+  UpdateWebhookEndpointRequest,
+} from '@skydrop/api-client';
+
+export function useWebhookEndpointsList(): UseQueryResult<
+  ReadonlyArray<WebhookEndpointView>
+> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-webhooks', 'list'],
+    queryFn: () =>
+      client.request<ReadonlyArray<WebhookEndpointView>>(
+        `/api/seller/webhook-endpoints`,
+      ),
+  });
+}
+
+export function useWebhookEndpointDetail(
+  id: string,
+): UseQueryResult<WebhookEndpointView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-webhooks', 'detail', id],
+    queryFn: () =>
+      client.request<WebhookEndpointView>(
+        `/api/seller/webhook-endpoints/${id}`,
+      ),
+    enabled: Boolean(id),
+  });
+}
+
+export function useCreateWebhookEndpoint(): UseMutationResult<
+  WebhookEndpointWithSecret,
+  Error,
+  CreateWebhookEndpointRequest
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<WebhookEndpointWithSecret>(
+        `/api/seller/webhook-endpoints`,
+        { method: 'POST', body },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-webhooks'] });
+    },
+  });
+}
+
+export function useUpdateWebhookEndpoint(
+  id: string,
+): UseMutationResult<WebhookEndpointView, Error, UpdateWebhookEndpointRequest> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<WebhookEndpointView>(
+        `/api/seller/webhook-endpoints/${id}`,
+        { method: 'PATCH', body },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-webhooks'] });
+    },
+  });
+}
+
+export function useRotateWebhookSecret(
+  id: string,
+): UseMutationResult<WebhookEndpointWithSecret, Error, void> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      client.request<WebhookEndpointWithSecret>(
+        `/api/seller/webhook-endpoints/${id}/rotate-secret`,
+        { method: 'POST', body: {} },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-webhooks'] });
+    },
+  });
+}
+
+export function useDeleteWebhookEndpoint(): UseMutationResult<
+  void,
+  Error,
+  string
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id) => {
+      await client.request<void>(`/api/seller/webhook-endpoints/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-webhooks'] });
+    },
   });
 }

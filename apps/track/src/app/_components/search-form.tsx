@@ -2,8 +2,10 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent, type ReactElement } from 'react';
+import type { Locale } from '@/lib/i18n';
+import { t } from '@/lib/i18n';
 
-export function SearchForm(): ReactElement {
+export function SearchForm({ locale }: { readonly locale: Locale }): ReactElement {
   const router = useRouter();
   const [awb, setAwb] = useState('');
 
@@ -18,7 +20,7 @@ export function SearchForm(): ReactElement {
     <form onSubmit={onSubmit} className="space-y-3">
       <div>
         <label htmlFor="awb" className="block text-text-muted text-xs mb-1">
-          AWB number
+          {t(locale, 'awbLabel')}
         </label>
         <input
           id="awb"
@@ -27,7 +29,7 @@ export function SearchForm(): ReactElement {
           required
           value={awb}
           onChange={(e) => setAwb(e.target.value)}
-          placeholder="e.g. DL12345678"
+          placeholder={t(locale, 'awbPlaceholder')}
           className="w-full px-3 py-1.5 rounded-[5px] bg-bg border border-border text-text-bright text-sm focus:border-accent focus:outline-none transition-colors"
         />
       </div>
@@ -35,7 +37,7 @@ export function SearchForm(): ReactElement {
         type="submit"
         className="w-full px-3 py-1.5 rounded-[5px] bg-accent text-accent-fg text-sm font-medium hover:bg-accent-hover transition-colors"
       >
-        Track
+        {t(locale, 'trackButton')}
       </button>
     </form>
   );

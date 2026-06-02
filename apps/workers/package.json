@@ -1,0 +1,18 @@
+{
+  "name": "@skydrop/workers",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Skydrop BullMQ workers process — runs the same NestJS AppModule as @skydrop/api but without an HTTP server. Bootstrapped from apps/api/dist/workers-main.js so the DI graph + module wiring is shared (no double-build).",
+  "scripts": {
+    "build": "echo 'No build — workers run @skydrop/api dist output; ensure @skydrop/api built first.'",
+    "start": "node ../api/dist/workers-main.js",
+    "start:prod": "node ../api/dist/workers-main.js",
+    "dev": "node --enable-source-maps ../api/dist/workers-main.js",
+    "typecheck": "echo 'typecheck delegated to @skydrop/api'",
+    "lint": "echo 'lint delegated to @skydrop/api'",
+    "clean": "echo 'no build artefacts to clean'"
+  },
+  "dependencies": {
+    "@skydrop/api": "workspace:*"
+  }
+}

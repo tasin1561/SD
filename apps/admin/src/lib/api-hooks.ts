@@ -721,3 +721,224 @@ export function useAdminOrderShipments(
     enabled: Boolean(id),
   });
 }
+
+// ───────── Admin goods-receipts ─────────
+
+import type {
+  AdminGoodsReceiptListResponse,
+  GoodsReceiptView,
+  ListAdminGoodsReceiptsQuery,
+  RecordReceiptLineInput,
+} from '@skydrop/api-client';
+
+export function useGoodsReceiptsList(
+  query: ListAdminGoodsReceiptsQuery,
+): UseQueryResult<AdminGoodsReceiptListResponse> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-goods-receipts', 'list', query],
+    queryFn: () => {
+      const sp = new URLSearchParams();
+      if (query.sellerId) sp.set('sellerId', query.sellerId);
+      if (query.warehouseId) sp.set('warehouseId', query.warehouseId);
+      if (query.status) sp.set('status', query.status);
+      if (query.page) sp.set('page', String(query.page));
+      if (query.pageSize) sp.set('pageSize', String(query.pageSize));
+      const qs = sp.toString();
+      return client.request<AdminGoodsReceiptListResponse>(
+        `/api/admin/goods-receipts${qs ? `?${qs}` : ''}`,
+      );
+    },
+  });
+}
+
+export function useGoodsReceiptDetail(
+  id: string,
+): UseQueryResult<GoodsReceiptView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-goods-receipts', 'detail', id],
+    queryFn: () =>
+      client.request<GoodsReceiptView>(`/api/admin/goods-receipts/${id}`),
+    enabled: Boolean(id),
+  });
+}
+
+export function useStartReceiving(): UseMutationResult<
+  GoodsReceiptView,
+  Error,
+  { id: string }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }) =>
+      client.request<GoodsReceiptView>(
+        `/api/admin/goods-receipts/${id}/start-receiving`,
+        { method: 'POST', body: {} },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-goods-receipts'] });
+    },
+  });
+}
+
+export function useRecordReceiptLines(): UseMutationResult<
+  GoodsReceiptView,
+  Error,
+  { id: string; lines: ReadonlyArray<RecordReceiptLineInput> }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, lines }) =>
+      client.request<GoodsReceiptView>(
+        `/api/admin/goods-receipts/${id}/lines`,
+        { method: 'POST', body: { lines } },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-goods-receipts'] });
+    },
+  });
+}
+
+export function useCompleteGoodsReceipt(): UseMutationResult<
+  GoodsReceiptView,
+  Error,
+  { id: string }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }) =>
+      client.request<GoodsReceiptView>(
+        `/api/admin/goods-receipts/${id}/complete`,
+        { method: 'POST', body: {} },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-goods-receipts'] });
+    },
+  });
+}
+
+// Warehouse bins for a putaway-bin picker
+export interface WarehouseBin {
+  readonly id: string;
+  readonly code: string;
+  readonly type: string;
+  readonly zoneId: string;
+}
+
+export function useWarehouseBins(warehouseId: string): UseQueryResult<ReadonlyArray<WarehouseBin>> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-warehouses', 'bins', warehouseId],
+    queryFn: () =>
+      client.request<ReadonlyArray<WarehouseBin>>(
+        `/api/admin/warehouses/${warehouseId}/bins`,
+      ),
+    enabled: Boolean(warehouseId),
+  });
+}
+
+// ───────── Admin: categories ─────────
+
+import type {
+  CategoryView,
+  CategoryTreeNode,
+  CreateCategoryRequest,
+  UpdateCategoryRequest,
+  MoveCategoryRequest,
+} from '@skydrop/api-client';
+
+export function useCategoriesList(): UseQueryResult<ReadonlyArray<CategoryView>> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-categories', 'list'],
+    queryFn: () =>
+      client.request<ReadonlyArray<CategoryView>>(`/api/admin/categories`),
+  });
+}
+
+export function useCategoryTree(): UseQueryResult<ReadonlyArray<CategoryTreeNode>> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-categories', 'tree'],
+    queryFn: () =>
+      client.request<ReadonlyArray<CategoryTreeNode>>(
+        `/api/admin/categories/tree`,
+      ),
+  });
+}
+
+export function useCreateCategory(): UseMutationResult<
+  CategoryView,
+  Error,
+  CreateCategoryRequest
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<CategoryView>(`/api/admin/categories`, {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-categories'] });
+    },
+  });
+}
+
+export function useUpdateCategory(): UseMutationResult<
+  CategoryView,
+  Error,
+  { id: string; body: UpdateCategoryRequest }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }) =>
+      client.request<CategoryView>(`/api/admin/categories/${id}`, {
+        method: 'PATCH',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-categories'] });
+    },
+  });
+}
+
+export function useMoveCategory(): UseMutationResult<
+  CategoryView,
+  Error,
+  { id: string; body: MoveCategoryRequest }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }) =>
+      client.request<CategoryView>(`/api/admin/categories/${id}/move`, {
+        method: 'PATCH',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-categories'] });
+    },
+  });
+}
+
+export function useDeleteCategory(): UseMutationResult<void, Error, string> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id) => {
+      await client.request<void>(`/api/admin/categories/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-categories'] });
+    },
+  });
+}

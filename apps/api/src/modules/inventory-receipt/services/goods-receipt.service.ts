@@ -46,7 +46,22 @@ const RECEIPT_VIEW_INCLUDE = {
       manufacturedAt: true,
       expiresAt: true,
       putawayBinId: true,
+      // Enriched in M0-follow-up for the admin/seller goods-receipt
+      // UIs — operator needs the SKU + product name (not just the
+      // variantId UUID) to verify against the physical parcel.
+      variant: {
+        select: {
+          skuCode: true,
+          variantLabel: true,
+          product: { select: { name: true } },
+        },
+      },
     },
+  },
+  // Seller display for the admin list — operator picks a receipt
+  // from a queue and needs to know whose parcel this is.
+  seller: {
+    select: { id: true, companyName: true, email: true },
   },
 } as const;
 

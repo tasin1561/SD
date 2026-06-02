@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import type { PublicTrackingTimelineEvent } from '@/lib/types';
+import { type Locale, statusKey, t } from '@/lib/i18n';
 
 const STATUS_DOT: Record<string, string> = {
   delivered: 'var(--color-accent)',
@@ -16,34 +17,21 @@ const STATUS_DOT: Record<string, string> = {
   cancelled: 'var(--color-text-faint)',
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  processing: 'Processing',
-  dispatched: 'Dispatched',
-  in_transit: 'In transit',
-  out_for_delivery: 'Out for delivery',
-  delivery_attempted: 'Delivery attempted',
-  delivered: 'Delivered',
-  return_initiated: 'Return initiated',
-  returning: 'Returning',
-  returned: 'Returned',
-  lost: 'Lost',
-  damaged: 'Damaged',
-  cancelled: 'Cancelled',
-};
-
 export function TimelineView({
   events,
+  locale,
 }: {
   readonly events: ReadonlyArray<PublicTrackingTimelineEvent>;
+  readonly locale: Locale;
 }): ReactElement {
   if (events.length === 0) {
     return (
       <div className="rounded-[7px] border border-border bg-surface p-4 text-text-muted text-sm">
-        No scans yet. Once the courier picks up the parcel, scan events
-        will appear here.
+        {t(locale, 'noScansYet')}
       </div>
     );
   }
+  const bcp = locale === 'hi' ? 'hi-IN' : 'en-IN';
   return (
     <ol className="rounded-[7px] border border-border bg-surface divide-y divide-border">
       {events.map((e, idx) => (
@@ -55,13 +43,13 @@ export function TimelineView({
           />
           <div className="flex-1 min-w-0">
             <div className="text-text-bright text-sm font-medium">
-              {STATUS_LABEL[e.status] ?? e.status}
+              {t(locale, statusKey(e.status))}
             </div>
             {e.description && (
               <div className="text-text-muted text-xs mt-0.5">{e.description}</div>
             )}
             <div className="text-text-faint text-xs mt-1">
-              {new Date(e.eventAt).toLocaleString()}
+              {new Date(e.eventAt).toLocaleString(bcp)}
               {e.locationCity ? ` · ${e.locationCity}` : ''}
             </div>
           </div>

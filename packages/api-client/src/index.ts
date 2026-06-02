@@ -81,6 +81,26 @@ export type {
   ListSellerStockQuery,
 } from './endpoints/seller-stock';
 export type {
+  GoodsReceiptView,
+  GoodsReceiptLineView,
+  AdminGoodsReceiptListResponse,
+  ListAdminGoodsReceiptsQuery,
+  RecordReceiptLineInput,
+} from './endpoints/admin-goods-receipts';
+export type {
+  CategoryView,
+  CategoryTreeNode,
+  CreateCategoryRequest,
+  UpdateCategoryRequest,
+  MoveCategoryRequest,
+} from './endpoints/admin-categories';
+export type {
+  WebhookEndpointView,
+  WebhookEndpointWithSecret,
+  CreateWebhookEndpointRequest,
+  UpdateWebhookEndpointRequest,
+} from './endpoints/seller-webhooks';
+export type {
   PulledAssignment,
   RecordAttemptRequest,
   RecordAttemptResult,

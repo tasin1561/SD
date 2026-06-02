@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Pencil } from 'lucide-react';
 import type { ReactElement } from 'react';
 import type { OrderStatus } from '@skydrop/db';
 import type { SellerOrderEventView } from '@skydrop/api-client';
 import { useOrderDetail, useOrderEvents } from '@/lib/api-hooks';
 import {
+  Button,
   Card,
   CardBody,
   CardHeader,
@@ -67,7 +68,19 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                 </span>
               ) : undefined
             }
-            action={<OrderStatusBadge status={detail.data.status as OrderStatus} />}
+            action={
+              <div className="flex items-center gap-2">
+                {(detail.data.status === 'DRAFT' ||
+                  detail.data.status === 'PENDING_CONFIRMATION') && (
+                  <Link href={`/orders/${orderId}/edit`}>
+                    <Button variant="secondary" size="sm">
+                      <Pencil size={12} /> Edit
+                    </Button>
+                  </Link>
+                )}
+                <OrderStatusBadge status={detail.data.status as OrderStatus} />
+              </div>
+            }
           />
 
           <Section title="Recipient">
