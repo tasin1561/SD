@@ -8,6 +8,6 @@ import { EmailModule } from '../email/email.module';
   imports: [EmailModule],
   controllers: [StaffAuthController],
   providers: [StaffAuthService, StaffJwtGuard],
-  exports: [StaffJwtGuard],
+  exports: [StaffJwtGuard, StaffAuthService],
 })
 export class StaffAuthModule {}
