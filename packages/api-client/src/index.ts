@@ -119,6 +119,10 @@ export type {
 } from './endpoints/admin-remittances';
 export type { ReportSummary } from './endpoints/admin-reports';
 export type {
+  WebhookDeliveryView,
+  WebhookDeliveryListResponse,
+} from './endpoints/admin-webhook-deliveries';
+export type {
   PulledAssignment,
   RecordAttemptRequest,
   RecordAttemptResult,

@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
+import { Download } from 'lucide-react';
 import {
+  Button,
   Card,
   CardBody,
   CardHeader,
@@ -65,22 +67,33 @@ export default function WalletPage(): ReactElement {
         <CardHeader
           title="Ledger"
           action={
-            <div className="flex items-center gap-1 text-xs">
-              {(['all', 'INR', 'BDT'] as const).map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setFilter(f)}
-                  className={
-                    'px-2 py-0.5 rounded-[4px] transition-colors ' +
-                    (filter === f
-                      ? 'bg-surface border border-border text-text-bright'
-                      : 'text-text-muted hover:text-text-body')
-                  }
-                >
-                  {f}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 text-xs">
+                {(['all', 'INR', 'BDT'] as const).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setFilter(f)}
+                    className={
+                      'px-2 py-0.5 rounded-[4px] transition-colors ' +
+                      (filter === f
+                        ? 'bg-surface border border-border text-text-bright'
+                        : 'text-text-muted hover:text-text-body')
+                    }
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={!entries.data || entries.data.items.length === 0}
+                onClick={() => downloadCsv(entries.data?.items ?? [])}
+              >
+                <Download size={12} /> Export CSV
+              </Button>
             </div>
           }
         />
@@ -190,6 +203,56 @@ function humanizeDirection(d: WalletEntryView['direction']): string {
     case 'OPENING_BALANCE':
       return 'Opening balance';
   }
+}
+
+/**
+ * CSV export of the visible ledger page.
+ * Header row first; one row per entry. Values are RFC-4180 quoted
+ * (embedded `"` → `""`) so the file opens cleanly in Excel/Sheets.
+ */
+function downloadCsv(items: ReadonlyArray<WalletEntryView>): void {
+  if (items.length === 0) return;
+  const header = [
+    'created_at',
+    'currency',
+    'direction',
+    'amount',
+    'running_balance_after',
+    'linked_order_id',
+    'linked_remittance_id',
+    'reason_code',
+    'note',
+  ];
+  const quote = (v: string | null): string => {
+    if (v === null) return '';
+    return `"${v.replace(/"/g, '""')}"`;
+  };
+  const rows = items.map((e) =>
+    [
+      e.createdAt,
+      e.currency,
+      e.direction,
+      e.amount,
+      e.runningBalanceAfter,
+      e.linkedOrderId ?? '',
+      e.linkedRemittanceId ?? '',
+      e.reasonCode ?? '',
+      e.note ?? '',
+    ]
+      .map(quote)
+      .join(','),
+  );
+  const csv = [header.map(quote).join(','), ...rows].join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  a.href = url;
+  a.download = `skydrop-wallet-ledger-${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function formatMoney(value: string, currency: string): string {

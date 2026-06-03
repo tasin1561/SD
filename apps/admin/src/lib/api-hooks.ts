@@ -1018,3 +1018,32 @@ export function useReportSummary(query?: {
     },
   });
 }
+
+// ───────── Admin: webhook deliveries (bundle #4) ─────────
+
+import type { WebhookDeliveryListResponse } from '@skydrop/api-client';
+
+export function useWebhookDeliveriesList(query?: {
+  sellerId?: string;
+  endpointId?: string;
+  status?: string;
+  page?: number;
+  pageSize?: number;
+}): UseQueryResult<WebhookDeliveryListResponse> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-webhook-deliveries', 'list', query ?? {}],
+    queryFn: () => {
+      const sp = new URLSearchParams();
+      if (query?.sellerId) sp.set('sellerId', query.sellerId);
+      if (query?.endpointId) sp.set('endpointId', query.endpointId);
+      if (query?.status) sp.set('status', query.status);
+      if (query?.page) sp.set('page', String(query.page));
+      if (query?.pageSize) sp.set('pageSize', String(query.pageSize));
+      const qs = sp.toString();
+      return client.request<WebhookDeliveryListResponse>(
+        `/api/admin/webhook-deliveries${qs ? `?${qs}` : ''}`,
+      );
+    },
+  });
+}

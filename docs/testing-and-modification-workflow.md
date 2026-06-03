@@ -303,6 +303,49 @@ path passes.
    address validation; if PIN/state mismatch, FE-2 surfaces verbatim.
 4. **Discard draft** → typed-confirm. Order soft-deletes.
 
+### 2.10a. Wallet + COD accrual (Phase 1B)
+
+1. After a COD order goes DELIVERED, switch to seller window →
+   **Wallet** in the left nav.
+2. Balance card shows INR > 0 (COD amount minus charges). BDT
+   shows 0 until a remittance with FX conversion is recorded.
+3. Ledger lists exactly TWO entries per delivered COD order:
+   one CREDIT (COD_COLLECTION) and one DEBIT (ORDER_CHARGES),
+   both linked to the same order id.
+4. Click **Export CSV** → file downloads with the visible page's
+   rows. Open in Excel/Sheets to verify.
+
+### 2.10b. Admin remittance (Phase 1B)
+
+1. Admin window → **Remittances** → **Record remittance**.
+2. Pick the seller; source currency INR, bank currency BDT
+   (cross-border default). Source amount = the INR balance from
+   the wallet page. FX rate (e.g. 1.38). Destination amount =
+   derived. Bank reference = your bank's payout id.
+3. Submit. Validation errors surface verbatim (`[BANK_DETAILS_MISSING]`
+   if the seller hasn't filled in their bank account; `[INSUFFICIENT_WALLET_BALANCE]`
+   if source amount > balance).
+4. Switch to seller window → /wallet → INR debit + BDT credit
+   visible; the BDT balance equals source × FX.
+
+### 2.10c. Admin reports (Phase 1B)
+
+1. Admin window → **Reports**. Default date range = trailing 30 days.
+2. Cards: Orders (confirm/NDR/RTO/delivery rates color-coded),
+   Shipments (dispatch + delivery time averages), Wallet flows
+   (COD collected, charges debited, remittances paid, net
+   outstanding).
+3. Change date range → numbers update.
+
+### 2.10d. Admin webhook deliveries (Phase 1B)
+
+1. Set up a seller webhook with `webhook.site/<token>` as the URL
+   (Section 2.7).
+2. Drive any order through CONFIRMED + DISPATCHED + DELIVERED.
+3. Admin window → **Webhooks** → see the DELIVERED rows with HTTP
+   200 + response time. Filter by status FAILED to find broken
+   endpoints (e.g. wrong URL — 404, expired DNS — NETWORK_ERROR).
+
 ### 2.10. Public anti-enumeration
 
 1. `track.skydrop.online/UNKNOWN-AWB-123` → generic "not found".

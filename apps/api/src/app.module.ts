@@ -64,6 +64,7 @@ import { SellerWalletAccrualModule } from './modules/seller-wallet-accrual/selle
 import { SellerWalletReadModule } from './modules/seller-wallet-read/seller-wallet-read.module';
 import { AdminRemittanceModule } from './modules/admin-remittance/admin-remittance.module';
 import { AdminReportsModule } from './modules/admin-reports/admin-reports.module';
+import { AdminWebhookDeliveriesModule } from './modules/admin-webhook-deliveries/admin-webhook-deliveries.module';
 import { ThrottlerModule } from './common/throttler/throttler.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { pinoConfig } from './common/pino/logger-config';
@@ -153,6 +154,7 @@ import { envSchema } from './config/env.schema';
     SellerWalletReadModule,
     AdminRemittanceModule,
     AdminReportsModule,
+    AdminWebhookDeliveriesModule,
     HealthModule,
   ],
 })
