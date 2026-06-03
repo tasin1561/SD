@@ -121,12 +121,12 @@ export function useInvitationsList(): UseQueryResult<{
 }> {
   const client = useApiClient();
   return useQuery({
-    queryKey: ['admin-invitations', 'list'],
+    queryKey: ['admin-invitations', 'list', 'PENDING'],
     queryFn: () =>
       client.request<{
         items: SellerInvitationListItem[];
         total: number;
-      }>(`/api/admin/seller-invitations`),
+      }>(`/api/admin/seller-invitations?status=PENDING`),
   });
 }
 
