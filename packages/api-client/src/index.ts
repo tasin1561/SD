@@ -117,6 +117,7 @@ export type {
   RemittanceListResponse,
   CreateRemittanceRequest,
 } from './endpoints/admin-remittances';
+export type { ReportSummary } from './endpoints/admin-reports';
 export type {
   PulledAssignment,
   RecordAttemptRequest,

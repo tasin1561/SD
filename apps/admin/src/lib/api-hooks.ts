@@ -995,3 +995,26 @@ export function useCreateRemittance(): UseMutationResult<
  *  (uses the admin /admin/sellers/:id/wallet endpoint when it lands; for
  *  now we approximate by reading seller list + leaving balance fetch as a
  *  TODO when the admin-side wallet read endpoint is added). */
+
+// ───────── Admin: reports / ops dashboard (#3) ─────────
+
+import type { ReportSummary } from '@skydrop/api-client';
+
+export function useReportSummary(query?: {
+  from?: string;
+  to?: string;
+}): UseQueryResult<ReportSummary> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-reports', 'summary', query ?? {}],
+    queryFn: () => {
+      const sp = new URLSearchParams();
+      if (query?.from) sp.set('from', query.from);
+      if (query?.to) sp.set('to', query.to);
+      const qs = sp.toString();
+      return client.request<ReportSummary>(
+        `/api/admin/reports/summary${qs ? `?${qs}` : ''}`,
+      );
+    },
+  });
+}
