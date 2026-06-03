@@ -1157,3 +1157,125 @@ export function useSellerWalletBalance(
     enabled: Boolean(sellerId),
   });
 }
+
+// ───────── Admin: staff invitations + users ─────────
+
+import type {
+  StaffInvitationListItem,
+  CreatedStaffInvitation,
+  CreateStaffInvitationRequest,
+  StaffUserRow,
+} from '@skydrop/api-client';
+
+export function useStaffInvitationsList(): UseQueryResult<{
+  items: StaffInvitationListItem[];
+  total: number;
+}> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-staff', 'invitations'],
+    queryFn: () =>
+      client.request<{ items: StaffInvitationListItem[]; total: number }>(
+        '/api/admin/staff/invitations',
+      ),
+  });
+}
+
+export function useCreateStaffInvitation(): UseMutationResult<
+  CreatedStaffInvitation,
+  Error,
+  CreateStaffInvitationRequest
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<CreatedStaffInvitation>('/api/admin/staff/invitations', {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-staff'] });
+    },
+  });
+}
+
+export function useResendStaffInvitation(): UseMutationResult<
+  CreatedStaffInvitation,
+  Error,
+  { id: string }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }) =>
+      client.request<CreatedStaffInvitation>(
+        `/api/admin/staff/invitations/${id}/resend`,
+        { method: 'POST', body: {} },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-staff'] });
+    },
+  });
+}
+
+export function useRevokeStaffInvitation(): UseMutationResult<
+  void,
+  Error,
+  { id: string }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }) => {
+      await client.request<void>(`/api/admin/staff/invitations/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-staff'] });
+    },
+  });
+}
+
+export function useStaffUsersList(): UseQueryResult<StaffUserRow[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-staff', 'users'],
+    queryFn: () => client.request<StaffUserRow[]>('/api/admin/staff/users'),
+  });
+}
+
+export function useUpdateStaffRole(): UseMutationResult<
+  { id: string; role: string },
+  Error,
+  { id: string; role: string }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, role }) =>
+      client.request<{ id: string; role: string }>(
+        `/api/admin/staff/users/${id}/role`,
+        { method: 'PATCH', body: { role } },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-staff'] });
+    },
+  });
+}
+
+export function useDeactivateStaffUser(): UseMutationResult<void, Error, { id: string }> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }) => {
+      await client.request<void>(`/api/admin/staff/users/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-staff'] });
+    },
+  });
+}

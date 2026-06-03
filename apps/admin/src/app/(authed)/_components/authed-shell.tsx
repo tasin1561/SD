@@ -49,6 +49,7 @@ export function AuthedShell({
     { href: '/fx', label: 'FX rates' },
     { href: '/reports', label: 'Reports' },
     { href: '/webhooks', label: 'Webhooks' },
+    { href: '/staff', label: 'Staff' },
     { href: '/settings', label: 'Settings' },
   ];
 

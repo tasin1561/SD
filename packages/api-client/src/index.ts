@@ -128,6 +128,13 @@ export type {
 } from './endpoints/admin-remittances';
 export type { ReportSummary } from './endpoints/admin-reports';
 export type {
+  StaffInvitationListItem,
+  CreatedStaffInvitation,
+  CreateStaffInvitationRequest,
+  StaffUserRow,
+  AcceptStaffInvitationRequest,
+} from './endpoints/admin-staff';
+export type {
   WebhookDeliveryView,
   WebhookDeliveryListResponse,
   RetryWebhookDeliveryResponse,

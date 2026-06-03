@@ -41,6 +41,8 @@ model StaffUser {
 
   sellersApproved           Seller[]                      @relation("SellerApprovedBy")
   invitesAuthored           SellerInvitation[]            @relation("SellerInvitedBy")
+  staffInvitesAuthored      StaffInvitation[]             @relation("StaffInvitedBy")
+  staffInvitationsAccepted  StaffInvitation[]             @relation("StaffInvitationAccepted")
   refreshTokens             StaffRefreshToken[]
   passwordResetTokens       StaffPasswordResetToken[]
   emailVerificationTokens   StaffEmailVerificationToken[]
@@ -179,6 +181,32 @@ model SellerInvitation {
   @@index([invitedById])
   @@index([sellerId])
   @@map("seller_invitations")
+}
+
+// Phase 1B — admin staff invitation. Mirrors SellerInvitation; carries
+// a StaffRole assigned at invite-time (immutable through registration;
+// admin can change the role later with audit MEDIUM). Only SUPER_ADMIN
+// can invite.
+model StaffInvitation {
+  id           String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  email        String
+  token        String    @unique
+  role         StaffRole
+  invitedById  String    @map("invited_by_id") @db.Uuid
+  acceptedById String?   @map("accepted_by_id") @db.Uuid
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz
+  usedAt       DateTime? @map("used_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+
+  invitedBy  StaffUser  @relation("StaffInvitedBy", fields: [invitedById], references: [id])
+  acceptedBy StaffUser? @relation("StaffInvitationAccepted", fields: [acceptedById], references: [id])
+
+  @@index([email])
+  @@index([expiresAt])
+  @@index([invitedById])
+  @@map("staff_invitations")
 }
 
 model StaffRefreshToken {
