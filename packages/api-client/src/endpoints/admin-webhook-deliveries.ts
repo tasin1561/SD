@@ -24,3 +24,8 @@ export interface WebhookDeliveryListResponse {
   readonly page: number;
   readonly pageSize: number;
 }
+
+export interface RetryWebhookDeliveryResponse {
+  readonly jobId: string;
+  readonly status: 'enqueued';
+}

@@ -1,16 +1,20 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
-import type { ReactElement } from 'react';
-import { useSellerDetail } from '@/lib/api-hooks';
+import { ArrowLeft, Copy, Eye } from 'lucide-react';
+import { useState, type ReactElement } from 'react';
+import { ApiError } from '@skydrop/api-client';
+import { useRevealBankAccount, useSellerDetail } from '@/lib/api-hooks';
 import { useStaffIdentity, hasStaffRole } from '@skydrop/auth/client';
 import type { StaffRole } from '@skydrop/db';
 import {
+  Button,
   Card,
   CardBody,
   CardHeader,
   ErrorState,
+  FormField,
+  Input,
   LoadingState,
   PageHeader,
   Section,
@@ -119,7 +123,118 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
               </CardBody>
             </Card>
           </Section>
+
+          <Section title="Bank account">
+            <Card>
+              <CardHeader
+                title="Reveal bank account number"
+                subtitle="Decrypts + audits HIGH. Use only when copying into a bank portal for a manual payout."
+              />
+              <CardBody>
+                <RevealBankAccountPanel sellerId={detail.data.id} />
+              </CardBody>
+            </Card>
+          </Section>
         </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Reveal panel — admin types a short reason, server decrypts the
+ * encrypted account number + writes a HIGH audit, the plaintext
+ * shows in a one-shot input the operator can copy to clipboard.
+ * Refreshing the page clears it. FE-2: server rejection verbatim.
+ */
+function RevealBankAccountPanel({
+  sellerId,
+}: {
+  readonly sellerId: string;
+}): ReactElement {
+  const [reason, setReason] = useState('');
+  const [revealed, setRevealed] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const reveal = useRevealBankAccount(sellerId);
+
+  async function onReveal(): Promise<void> {
+    setError(null);
+    setRevealed(null);
+    try {
+      const res = await reveal.mutateAsync({
+        ...(reason.trim() ? { reason: reason.trim() } : {}),
+      });
+      setRevealed(res.accountNumber ?? '(no account number captured)');
+    } catch (e) {
+      if (e instanceof ApiError) {
+        const b = e.body as { code?: unknown; message?: unknown } | null;
+        const code = typeof b?.code === 'string' ? b.code : null;
+        const msg = typeof b?.message === 'string' ? b.message : e.message;
+        setError(code ? `[${code}] ${msg}` : msg);
+      } else {
+        setError(e instanceof Error ? e.message : 'Reveal failed');
+      }
+    }
+  }
+
+  async function onCopy(): Promise<void> {
+    if (!revealed) return;
+    try {
+      await navigator.clipboard.writeText(revealed);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2_500);
+    } catch {
+      // Falls back to manual selection in the input.
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <FormField
+        label="Reason for revealing (recorded in the audit log)"
+        hint="Optional but recommended"
+      >
+        <Input
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          maxLength={200}
+          placeholder="e.g. manual payout via DBBL portal — TRF-2026-06-03"
+          disabled={reveal.isPending}
+        />
+      </FormField>
+      <Button
+        variant="primary"
+        size="md"
+        disabled={reveal.isPending}
+        onClick={() => void onReveal()}
+      >
+        <Eye size={12} /> {reveal.isPending ? 'Revealing…' : 'Reveal account number'}
+      </Button>
+
+      {revealed !== null && (
+        <div className="mt-2 flex items-stretch gap-2">
+          <input
+            readOnly
+            value={revealed}
+            onFocus={(e) => e.currentTarget.select()}
+            className="flex-1 px-3 py-1.5 rounded-[5px] bg-bg border border-border text-text-bright text-sm font-mono focus:border-accent focus:outline-none"
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            onClick={() => void onCopy()}
+          >
+            <Copy size={12} /> {copied ? 'Copied!' : 'Copy'}
+          </Button>
+        </div>
+      )}
+
+      {error && (
+        <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
+          {error}
+        </div>
       )}
     </div>
   );

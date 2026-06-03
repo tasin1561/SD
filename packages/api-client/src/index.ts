@@ -121,7 +121,12 @@ export type { ReportSummary } from './endpoints/admin-reports';
 export type {
   WebhookDeliveryView,
   WebhookDeliveryListResponse,
+  RetryWebhookDeliveryResponse,
 } from './endpoints/admin-webhook-deliveries';
+export type {
+  RevealBankAccountRequest,
+  RevealBankAccountResponse,
+} from './endpoints/admin-bank-reveal';
 export type {
   PulledAssignment,
   RecordAttemptRequest,

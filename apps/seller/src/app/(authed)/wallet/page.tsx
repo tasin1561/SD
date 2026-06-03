@@ -12,7 +12,7 @@ import {
   LoadingState,
   PageHeader,
 } from '@skydrop/ui/components';
-import { useWalletBalances, useWalletEntries } from '@/lib/api-hooks';
+import { useInfiniteWalletEntries, useWalletBalances } from '@/lib/api-hooks';
 import type { WalletEntryView } from '@skydrop/api-client';
 
 /**
@@ -26,7 +26,10 @@ import type { WalletEntryView } from '@skydrop/api-client';
 export default function WalletPage(): ReactElement {
   const [filter, setFilter] = useState<'all' | 'INR' | 'BDT'>('all');
   const balances = useWalletBalances();
-  const entries = useWalletEntries(filter === 'all' ? undefined : filter);
+  const entries = useInfiniteWalletEntries(
+    filter === 'all' ? undefined : filter,
+  );
+  const accumulated = entries.data?.pages.flatMap((p) => p.items) ?? [];
 
   return (
     <div className="max-w-4xl space-y-4">
@@ -89,8 +92,8 @@ export default function WalletPage(): ReactElement {
                 type="button"
                 variant="ghost"
                 size="sm"
-                disabled={!entries.data || entries.data.items.length === 0}
-                onClick={() => downloadCsv(entries.data?.items ?? [])}
+                disabled={accumulated.length === 0}
+                onClick={() => downloadCsv(accumulated)}
               >
                 <Download size={12} /> Export CSV
               </Button>
@@ -102,7 +105,7 @@ export default function WalletPage(): ReactElement {
             <LoadingState label="Loading ledger…" />
           ) : entries.isError ? (
             <ErrorState message={entries.error?.message ?? 'Failed.'} />
-          ) : !entries.data || entries.data.items.length === 0 ? (
+          ) : accumulated.length === 0 ? (
             <div className="text-text-muted text-sm py-4">
               No ledger entries yet. Once an order delivers (COD), your
               wallet will accrue (COD amount − shipping + GST).
@@ -119,11 +122,24 @@ export default function WalletPage(): ReactElement {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {entries.data.items.map((e) => (
+                {accumulated.map((e) => (
                   <LedgerRow key={e.id} entry={e} />
                 ))}
               </tbody>
             </table>
+          )}
+          {entries.hasNextPage && (
+            <div className="flex justify-center mt-3">
+              <Button
+                type="button"
+                variant="ghost"
+                size="md"
+                disabled={entries.isFetchingNextPage}
+                onClick={() => void entries.fetchNextPage()}
+              >
+                {entries.isFetchingNextPage ? 'Loading…' : 'Load more'}
+              </Button>
+            </div>
           )}
         </CardBody>
       </Card>

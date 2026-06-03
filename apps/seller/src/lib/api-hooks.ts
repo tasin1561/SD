@@ -1,9 +1,12 @@
 'use client';
 
 import {
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
+  type UseInfiniteQueryResult,
+  type InfiniteData,
   type UseMutationResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
@@ -621,5 +624,27 @@ export function useWalletEntries(
       client.request<WalletEntriesPage>(
         `/api/seller/wallet/entries${currency ? `?currency=${currency}` : ''}`,
       ),
+  });
+}
+
+// ───────── Seller wallet — infinite-scroll variant (cursor-based) ─────────
+
+export function useInfiniteWalletEntries(
+  currency?: 'INR' | 'BDT',
+): UseInfiniteQueryResult<InfiniteData<WalletEntriesPage>, Error> {
+  const client = useApiClient();
+  return useInfiniteQuery<WalletEntriesPage, Error, InfiniteData<WalletEntriesPage>, ReadonlyArray<unknown>, string | null>({
+    queryKey: ['seller-wallet', 'entries-infinite', currency ?? 'all'],
+    queryFn: ({ pageParam }) => {
+      const sp = new URLSearchParams();
+      if (currency) sp.set('currency', currency);
+      if (pageParam) sp.set('cursor', pageParam);
+      const qs = sp.toString();
+      return client.request<WalletEntriesPage>(
+        `/api/seller/wallet/entries${qs ? `?${qs}` : ''}`,
+      );
+    },
+    initialPageParam: null,
+    getNextPageParam: (last) => last.nextCursor,
   });
 }

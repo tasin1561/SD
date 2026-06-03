@@ -2,15 +2,21 @@
 
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
+import { ApiError } from '@skydrop/api-client';
 import {
+  Button,
   Card,
   CardBody,
   ErrorState,
   LoadingState,
   PageHeader,
   Select,
+  useToast,
 } from '@skydrop/ui/components';
-import { useWebhookDeliveriesList } from '@/lib/api-hooks';
+import {
+  useRetryWebhookDelivery,
+  useWebhookDeliveriesList,
+} from '@/lib/api-hooks';
 
 const STATUSES = [
   '',
@@ -29,6 +35,28 @@ export function WebhookDeliveriesIndex(): ReactElement {
     pageSize: 100,
     ...(status ? { status } : {}),
   });
+  const retry = useRetryWebhookDelivery();
+  const toast = useToast();
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+
+  async function onRetry(id: string): Promise<void> {
+    setRetryingId(id);
+    try {
+      const res = await retry.mutateAsync({ id });
+      toast.success(`Re-enqueued (job ${res.jobId.slice(0, 8)}…)`);
+    } catch (e) {
+      if (e instanceof ApiError) {
+        const b = e.body as { code?: unknown; message?: unknown } | null;
+        const code = typeof b?.code === 'string' ? b.code : null;
+        const msg = typeof b?.message === 'string' ? b.message : e.message;
+        toast.error(code ? `[${code}] ${msg}` : msg);
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Retry failed');
+      }
+    } finally {
+      setRetryingId(null);
+    }
+  }
 
   return (
     <div className="max-w-6xl">
@@ -83,6 +111,7 @@ export function WebhookDeliveriesIndex(): ReactElement {
                   <th className="text-left px-3 py-2 font-medium">Status</th>
                   <th className="text-right px-3 py-2 font-medium">HTTP</th>
                   <th className="text-right px-3 py-2 font-medium">Time</th>
+                  <th className="text-right px-3 py-2 font-medium">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -116,6 +145,20 @@ export function WebhookDeliveriesIndex(): ReactElement {
                     </td>
                     <td className="px-3 py-2 text-right text-text-muted font-mono text-xs">
                       {d.responseTimeMs !== null ? `${d.responseTimeMs} ms` : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      {(d.status === 'FAILED' ||
+                        d.status === 'ABANDONED' ||
+                        d.status === 'ENDPOINT_DISABLED') && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={retryingId === d.id}
+                          onClick={() => void onRetry(d.id)}
+                        >
+                          {retryingId === d.id ? 'Retrying…' : 'Retry'}
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))}

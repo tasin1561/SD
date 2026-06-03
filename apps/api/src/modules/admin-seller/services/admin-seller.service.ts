@@ -16,6 +16,7 @@ import {
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { SellerAccountStatusService } from '../../seller-management/services/seller-account-status.service';
+import { BankAccountCipherService } from '../../seller-profile/services/bank-account-cipher.service';
 import {
   SellerOnboardingService,
   type OnboardingProgressView,
@@ -119,7 +120,72 @@ export class AdminSellerService {
     private readonly audit: AuditLogService,
     private readonly status: SellerAccountStatusService,
     private readonly onboarding: SellerOnboardingService,
+    private readonly bankCipher: BankAccountCipherService,
   ) {}
+
+  /**
+   * Phase 1B #6 — admin bank-account reveal.
+   *
+   * Decrypts the seller's `bank_account_number` using the env key
+   * + writes a HIGH audit BEFORE returning the plaintext (mirrors
+   * CourierCredentialService.decryptCredentialPayload). Plaintext
+   * is never logged anywhere except the response body.
+   *
+   * Use: admin clicks "Reveal" on the seller detail page to copy
+   * the full account number into a bank portal for a manual payout.
+   * Each click is auditable to the staff user.
+   */
+  async revealBankAccount(
+    sellerId: string,
+    actor: { staffId: string },
+    ctx: ClientContext,
+    reason?: string,
+  ): Promise<{ accountNumber: string | null }> {
+    const seller = await this.prisma.client.seller.findFirst({
+      where: { id: sellerId, deletedAt: null },
+      select: {
+        id: true,
+        bankAccountNumber: true,
+        bankAccountNumberKeyVersion: true,
+      },
+    });
+    if (!seller) {
+      throw new NotFoundException({
+        code: 'SELLER_NOT_FOUND',
+        message: 'Seller not found',
+      });
+    }
+
+    const plaintext = this.bankCipher.reveal(
+      seller.bankAccountNumber,
+      seller.bankAccountNumberKeyVersion,
+    );
+
+    // HIGH audit BEFORE return — plaintext is the sensitive payload,
+    // so the audit row must land first (W-7 discipline; mirrors
+    // CourierCredentialService.decrypt audit ordering).
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      staffUserId: actor.staffId,
+      sellerId,
+      action: 'staff.seller.bank_account.revealed',
+      entityType: 'seller',
+      entityId: sellerId,
+      severity: 'HIGH',
+      changes: {
+        hasAccountNumber: plaintext !== null,
+        keyVersion: seller.bankAccountNumberKeyVersion,
+        reason: reason ?? null,
+      },
+      metadata: {
+        ipAddress: ctx.ipAddress,
+        userAgent: ctx.userAgent,
+        requestId: ctx.requestId,
+      },
+    });
+
+    return { accountNumber: plaintext };
+  }
 
   async list(query: ListSellersQueryDto): Promise<SellerListResponse> {
     const page = query.page ?? 1;

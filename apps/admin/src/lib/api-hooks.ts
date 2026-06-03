@@ -1047,3 +1047,46 @@ export function useWebhookDeliveriesList(query?: {
     },
   });
 }
+
+// ───────── Admin: webhook retry + bank reveal (bundle followup) ─────────
+
+import type {
+  RetryWebhookDeliveryResponse,
+  RevealBankAccountRequest,
+  RevealBankAccountResponse,
+} from '@skydrop/api-client';
+
+export function useRetryWebhookDelivery(): UseMutationResult<
+  RetryWebhookDeliveryResponse,
+  Error,
+  { id: string }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }) =>
+      client.request<RetryWebhookDeliveryResponse>(
+        `/api/admin/webhook-deliveries/${id}/retry`,
+        { method: 'POST', body: {} },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['admin-webhook-deliveries'],
+      });
+    },
+  });
+}
+
+export function useRevealBankAccount(
+  sellerId: string,
+): UseMutationResult<RevealBankAccountResponse, Error, RevealBankAccountRequest> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<RevealBankAccountResponse>(
+        `/api/admin/sellers/${sellerId}/bank-account/reveal`,
+        { method: 'POST', body },
+      ),
+    // No invalidation — this is a transient reveal, not a state mutation.
+  });
+}

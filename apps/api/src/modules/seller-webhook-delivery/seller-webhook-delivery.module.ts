@@ -22,8 +22,9 @@ import { OutboundWebhookWorker } from './queue/outbound-webhook.worker';
  *     handles endpoint bookkeeping (consecutiveFailureCount,
  *     auto-disable on threshold).
  *
- * Exports NOTHING — LEAF consumer. The listener subscribes on
- * bootstrap; no other module calls into this one.
+ * Exports OutboundWebhookQueue so the admin webhook-deliveries
+ * controller can enqueue manual retries (Phase 1B bundle #4). All
+ * other providers stay internal.
  */
 @Module({
   imports: [LifecycleEventsModule],
@@ -34,5 +35,6 @@ import { OutboundWebhookWorker } from './queue/outbound-webhook.worker';
     OutboundWebhookQueue,
     OutboundWebhookWorker,
   ],
+  exports: [OutboundWebhookQueue],
 })
 export class SellerWebhookDeliveryModule {}

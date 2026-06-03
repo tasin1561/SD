@@ -80,6 +80,26 @@ export class AdminSellerController {
     return this.svc.updateStatus(id, body, staff.id, ctx);
   }
 
+  @Post(':id/bank-account/reveal')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Decrypt + return the seller bank account number (HIGH audit; SUPER_ADMIN + FINANCE only)',
+  })
+  revealBankAccount(
+    @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
+    @Body() body: { reason?: string },
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<{ accountNumber: string | null }> {
+    return this.svc.revealBankAccount(
+      id,
+      { staffId: staff.id },
+      ctx,
+      body?.reason,
+    );
+  }
+
   @Get(':id/notes')
   @ApiOperation({ summary: 'Paginated notes for a seller (optional category filter)' })
   listNotes(
