@@ -48,6 +48,8 @@ export interface SellerProfileView {
   bankAccountNumber: string | null;
   bankRoutingNumber: string | null;
   bankSwiftCode: string | null;
+  logoUrl: string | null;
+  logoMimeType: string | null;
   createdAt: Date;
   onboarding: OnboardingProgressView;
 }
@@ -75,6 +77,8 @@ const PROFILE_SELECT = {
   bankAccountNumberMasked: true,
   bankRoutingNumber: true,
   bankSwiftCode: true,
+  logoUrl: true,
+  logoMimeType: true,
   createdAt: true,
 } as const;
 

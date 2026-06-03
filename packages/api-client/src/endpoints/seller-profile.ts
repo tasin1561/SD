@@ -31,6 +31,8 @@ export interface SellerProfileView {
   readonly bankAccountNumber: string | null;
   readonly bankRoutingNumber: string | null;
   readonly bankSwiftCode: string | null;
+  readonly logoUrl: string | null;
+  readonly logoMimeType: string | null;
   readonly createdAt: string;
   readonly onboarding: OnboardingProgressView;
 }
@@ -50,4 +52,22 @@ export interface UpdateSellerBankDetailsRequest {
   readonly bankAccountNumber?: string | null;
   readonly bankRoutingNumber?: string | null;
   readonly bankSwiftCode?: string | null;
+}
+
+export interface PresignLogoRequest {
+  readonly mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
+}
+export interface PresignLogoResponse {
+  readonly storageKey: string;
+  readonly uploadUrl: string;
+  readonly expiresInSeconds: number;
+  readonly maxSizeBytes: number;
+}
+export interface RegisterLogoRequest {
+  readonly storageKey: string;
+  readonly mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
+}
+export interface LogoView {
+  readonly logoUrl: string | null;
+  readonly logoMimeType: string | null;
 }

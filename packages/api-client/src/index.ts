@@ -106,6 +106,10 @@ export type {
   SellerProfileView,
   UpdateSellerProfileRequest,
   UpdateSellerBankDetailsRequest,
+  PresignLogoRequest,
+  PresignLogoResponse,
+  RegisterLogoRequest,
+  LogoView,
 } from './endpoints/seller-profile';
 export type {
   WalletBalanceView,

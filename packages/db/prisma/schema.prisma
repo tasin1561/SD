@@ -98,6 +98,9 @@ model Seller {
   bankAccountNumberKeyVersion      Int?         @map("bank_account_number_key_version") @db.SmallInt
   bankRoutingNumber                String?      @map("bank_routing_number")
   bankSwiftCode                    String?      @map("bank_swift_code")
+  logoStorageKey                   String?      @map("logo_storage_key")
+  logoUrl                          String?      @map("logo_url")
+  logoMimeType                     String?      @map("logo_mime_type")
   displayCurrency                  Currency     @default(INR) @map("display_currency")
   displayLanguage                  String       @default("en") @map("display_language")
   countryCode                      String       @default("BD") @map("country_code") @db.Char(2)

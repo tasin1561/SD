@@ -22,6 +22,9 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import {
+  usePresignLogo,
+  useRegisterLogo,
+  useRemoveLogo,
   useSellerProfile,
   useUpdateSellerBankDetails,
   useUpdateSellerProfile,
@@ -70,6 +73,7 @@ export default function ProfilePage(): ReactElement {
         subtitle="Company info + bank details. Edit a section by clicking the pencil."
       />
       <CompanyInfoSection profile={detail.data} />
+      <LogoSection profile={detail.data} />
       <BankDetailsSection profile={detail.data} />
       <div className="text-text-faint text-xs">
         Account status:{' '}
@@ -508,6 +512,163 @@ function BankDetailsSection({
             </div>
           </form>
         )}
+      </CardBody>
+    </Card>
+  );
+}
+
+function LogoSection({
+  profile,
+}: {
+  readonly profile: SellerProfileView;
+}): ReactElement {
+  const presign = usePresignLogo();
+  const register = useRegisterLogo();
+  const remove = useRemoveLogo();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+
+  function fmtErr(e: unknown): string {
+    if (e instanceof ApiError) {
+      const b = e.body as { code?: unknown; message?: unknown } | null;
+      const code = typeof b?.code === 'string' ? b.code : null;
+      const msg = typeof b?.message === 'string' ? b.message : e.message;
+      return code ? `[${code}] ${msg}` : msg;
+    }
+    return e instanceof Error ? e.message : 'Action failed';
+  }
+
+  async function onPick(file: File): Promise<void> {
+    setError(null);
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setError('Logo must be JPG, PNG, or WEBP');
+      return;
+    }
+    if (file.size > 1_048_576) {
+      setError('Logo must be under 1 MB');
+      return;
+    }
+    setBusy(true);
+    try {
+      const ps = await presign.mutateAsync({
+        mimeType: file.type as 'image/jpeg' | 'image/png' | 'image/webp',
+      });
+      // Direct PUT to Spaces — bypasses our /api/* proxy because the
+      // presigned URL is to Spaces, not our origin.
+      const put = await fetch(ps.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+      if (!put.ok) {
+        throw new Error(`Spaces upload failed: ${put.status}`);
+      }
+      await register.mutateAsync({
+        storageKey: ps.storageKey,
+        mimeType: file.type as 'image/jpeg' | 'image/png' | 'image/webp',
+      });
+      toast.success('Logo updated.');
+    } catch (e) {
+      setError(fmtErr(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onRemove(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      await remove.mutateAsync();
+      toast.success('Logo removed.');
+      setConfirmRemove(false);
+    } catch (e) {
+      setError(fmtErr(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader title="Company logo" />
+      <CardBody>
+        <div className="flex items-start gap-4">
+          {profile.logoUrl ? (
+            <div className="w-24 h-24 rounded-[6px] border border-border bg-bg overflow-hidden shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={profile.logoUrl}
+                alt="Logo"
+                className="w-full h-full object-contain"
+              />
+            </div>
+          ) : (
+            <div className="w-24 h-24 rounded-[6px] border border-dashed border-border-strong bg-surface flex items-center justify-center text-text-faint text-xs shrink-0">
+              No logo
+            </div>
+          )}
+
+          <div className="flex-1 space-y-2">
+            <div className="text-text-muted text-xs">
+              JPG, PNG, or WEBP. Up to 1 MB. Recommended 256×256, square.
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="inline-flex items-center gap-2 cursor-pointer">
+                <span className="px-3 py-1.5 rounded-[5px] text-sm bg-accent text-accent-fg hover:bg-accent-hover transition-colors">
+                  {busy ? 'Uploading…' : 'Choose file'}
+                </span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  disabled={busy}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void onPick(f);
+                    e.target.value = '';
+                  }}
+                  className="hidden"
+                />
+              </label>
+              {profile.logoUrl && !confirmRemove && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => setConfirmRemove(true)}
+                >
+                  Remove
+                </Button>
+              )}
+              {confirmRemove && (
+                <>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => void onRemove()}
+                  >
+                    Confirm remove
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setConfirmRemove(false)}
+                  >
+                    Cancel
+                  </Button>
+                </>
+              )}
+            </div>
+            {error && (
+              <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
+                {error}
+              </div>
+            )}
+          </div>
+        </div>
       </CardBody>
     </Card>
   );

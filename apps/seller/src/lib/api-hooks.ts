@@ -648,3 +648,60 @@ export function useInfiniteWalletEntries(
     getNextPageParam: (last) => last.nextCursor,
   });
 }
+
+// ───────── Seller logo upload ─────────
+
+import type {
+  LogoView,
+  PresignLogoRequest,
+  PresignLogoResponse,
+  RegisterLogoRequest,
+} from '@skydrop/api-client';
+
+export function usePresignLogo(): UseMutationResult<
+  PresignLogoResponse,
+  Error,
+  PresignLogoRequest
+> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<PresignLogoResponse>('/api/seller/profile/logo/presign', {
+        method: 'POST',
+        body,
+      }),
+  });
+}
+
+export function useRegisterLogo(): UseMutationResult<
+  LogoView,
+  Error,
+  RegisterLogoRequest
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<LogoView>('/api/seller/profile/logo/register', {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-profile'] });
+    },
+  });
+}
+
+export function useRemoveLogo(): UseMutationResult<LogoView, Error, void> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      client.request<LogoView>('/api/seller/profile/logo', {
+        method: 'DELETE',
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-profile'] });
+    },
+  });
+}
