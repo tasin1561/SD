@@ -84,12 +84,12 @@ non-trivial. Takes ~15 minutes.
    country `BD`. Submit.
 3. You're auto-logged-in on `app.skydrop.online/dashboard`.
 
-### 1.3. Admin: approve the seller
+### 1.3. (no manual approval step — the invite IS the approval)
 
-1. `admin.skydrop.online/sellers` → click the new row.
-2. **Approve** → confirm. The seller's `status` flips
-   `PENDING` → `APPROVED`. The seller will be able to create orders +
-   ship stock from now on.
+Sellers register straight into `APPROVED` status — the admin already
+vetted by sending the invite. The `Seller.status` column still exists
+because admin can later `SUSPEND` / `REAPPROVE` a seller, but no
+manual-approval action lives at registration time. Move on.
 
 ### 1.4. Seller: build a category-product-variant chain
 
