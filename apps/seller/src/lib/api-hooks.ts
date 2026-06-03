@@ -595,3 +595,31 @@ export function useUpdateSellerBankDetails(): UseMutationResult<
     },
   });
 }
+
+// ───────── Seller wallet (M21 ledger reads) ─────────
+
+import type {
+  WalletBalancesResponse,
+  WalletEntriesPage,
+} from '@skydrop/api-client';
+
+export function useWalletBalances(): UseQueryResult<WalletBalancesResponse> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-wallet', 'balances'],
+    queryFn: () => client.request<WalletBalancesResponse>('/api/seller/wallet'),
+  });
+}
+
+export function useWalletEntries(
+  currency?: 'INR' | 'BDT',
+): UseQueryResult<WalletEntriesPage> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-wallet', 'entries', currency ?? 'all'],
+    queryFn: () =>
+      client.request<WalletEntriesPage>(
+        `/api/seller/wallet/entries${currency ? `?currency=${currency}` : ''}`,
+      ),
+  });
+}

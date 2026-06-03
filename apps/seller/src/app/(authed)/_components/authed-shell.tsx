@@ -49,6 +49,7 @@ export function AuthedShell({
     { href: '/catalog', label: 'Catalog' },
     { href: '/inventory', label: 'Inventory' },
     { href: '/tracking', label: 'Tracking' },
+    { href: '/wallet', label: 'Wallet' },
     { href: '/profile', label: 'Profile' },
     { href: '/settings', label: 'Settings' },
   ];

@@ -107,6 +107,12 @@ export type {
   UpdateSellerBankDetailsRequest,
 } from './endpoints/seller-profile';
 export type {
+  WalletBalanceView,
+  WalletEntryView,
+  WalletBalancesResponse,
+  WalletEntriesPage,
+} from './endpoints/seller-wallet';
+export type {
   PulledAssignment,
   RecordAttemptRequest,
   RecordAttemptResult,

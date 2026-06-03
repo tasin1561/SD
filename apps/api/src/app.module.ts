@@ -59,6 +59,10 @@ import { OrderChargesModule } from './modules/order-charges/order-charges.module
 import { ChatModule } from './modules/chat/chat.module';
 import { SellerWebhookModule } from './modules/seller-webhook/seller-webhook.module';
 import { SellerWebhookDeliveryModule } from './modules/seller-webhook-delivery/seller-webhook-delivery.module';
+import { SellerWalletModule } from './modules/seller-wallet/seller-wallet.module';
+import { SellerWalletAccrualModule } from './modules/seller-wallet-accrual/seller-wallet-accrual.module';
+import { SellerWalletReadModule } from './modules/seller-wallet-read/seller-wallet-read.module';
+import { AdminRemittanceModule } from './modules/admin-remittance/admin-remittance.module';
 import { ThrottlerModule } from './common/throttler/throttler.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { pinoConfig } from './common/pino/logger-config';
@@ -143,6 +147,10 @@ import { envSchema } from './config/env.schema';
     ChatModule,
     SellerWebhookModule,
     SellerWebhookDeliveryModule,
+    SellerWalletModule,
+    SellerWalletAccrualModule,
+    SellerWalletReadModule,
+    AdminRemittanceModule,
     HealthModule,
   ],
 })

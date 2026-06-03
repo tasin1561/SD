@@ -81,4 +81,6 @@ export {
   SettingValueType,
   SellerNotificationCategory,
   NotificationFrequency,
+  // Phase 1B — Wallet + remittance
+  WalletEntryDirection,
 } from '@prisma/client';

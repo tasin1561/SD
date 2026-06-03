@@ -71,6 +71,7 @@ model StaffUser {
   shipmentItemsRtoDisposed  ShipmentItem[]                @relation("ShipmentItemRtoDisposedBy")
   manifestsClosed           Manifest[]                    @relation("ManifestClosedBy")
   manifestsHandoffConfirmed Manifest[]                    @relation("ManifestHandoffConfirmedBy")
+  remittancesCreated        Remittance[]                  @relation("RemittanceStaff")
 
   @@index([role])
   @@index([deletedAt])
@@ -141,6 +142,9 @@ model Seller {
   sellerCsvMappings       SellerCsvMapping[]
   bulkProductUploads      BulkProductUpload[]
   stockAlertStates        StockAlertState[]
+  walletEntries           SellerWalletEntry[]
+  walletBalances          SellerWalletBalance[]
+  remittances             Remittance[]
 
   @@index([status])
   @@index([deletedAt])
@@ -1237,11 +1241,11 @@ model Order {
   updatedAt              DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt              DateTime?                @map("deleted_at") @db.Timestamptz
 
-  seller           Seller             @relation(fields: [sellerId], references: [id])
-  customer         Customer?          @relation(fields: [customerId], references: [id])
-  bulkUpload       BulkOrderUpload?   @relation(fields: [bulkUploadId], references: [id])
-  confirmedBy      StaffUser?         @relation("OrderConfirmedBy", fields: [confirmedById], references: [id])
-  cancelledBy      StaffUser?         @relation("OrderCancelledBy", fields: [cancelledById], references: [id])
+  seller           Seller              @relation(fields: [sellerId], references: [id])
+  customer         Customer?           @relation(fields: [customerId], references: [id])
+  bulkUpload       BulkOrderUpload?    @relation(fields: [bulkUploadId], references: [id])
+  confirmedBy      StaffUser?          @relation("OrderConfirmedBy", fields: [confirmedById], references: [id])
+  cancelledBy      StaffUser?          @relation("OrderCancelledBy", fields: [cancelledById], references: [id])
   items            OrderItem[]
   events           OrderEvent[]
   reservations     StockReservation[]
@@ -1254,6 +1258,7 @@ model Order {
   orderShipments   OrderShipment[]
   charges          OrderCharge[]
   notificationLogs NotificationLog[]
+  walletEntries    SellerWalletEntry[] @relation("WalletEntryOrder")
 
   @@unique([sellerId, sellerOrderRef])
   @@index([sellerId, status])
@@ -3133,4 +3138,150 @@ enum OnboardingStepActor {
   ADMIN  @map("admin")
 
   @@map("onboarding_step_actor")
+}
+
+// ============================================================================
+// Phase 1B — Wallet + ledger (M21)
+// ============================================================================
+//
+// W-1 (append-only): seller_wallet_entries is the books of record. No UPDATE,
+// no DELETE path. A correction is a NEW entry with direction = ADJUSTMENT_*
+// + linkedEntryId pointing at the original.
+//
+// W-3 (balance computed): SellerWalletBalance is a CACHE; the authoritative
+// balance is SUM(credits) - SUM(debits) per (sellerId, currency). The cache
+// is recomputed post-commit after every WalletService.applyEntry() (mirrors
+// INV-5 for stock).
+//
+// W-4 (per-currency wallets): Each seller has independent wallets per
+// Currency. Cross-border remittance writes a paired (REMITTANCE_OUT debit
+// on INR, REMITTANCE_FX credit on BDT) so both ledgers conserve.
+
+enum WalletEntryDirection {
+  // M22 — COD collected from customer credits the seller wallet on
+  // DELIVERED. Always CREDIT.
+  COD_COLLECTION    @map("cod_collection")
+  // M22 — sum of order's BASE_SHIPPING + surcharges + GST debits the
+  // seller wallet on DELIVERED. Always DEBIT.
+  ORDER_CHARGES     @map("order_charges")
+  // M23 — admin records a payout to the seller. DEBIT on the wallet
+  // matching the bank-account currency.
+  REMITTANCE_OUT    @map("remittance_out")
+  // M23 — paired with REMITTANCE_OUT for cross-currency: the BD seller
+  // receives BDT, but COD was collected in INR. CREDIT on the
+  // destination currency wallet (BDT) at the FX-snapshotted rate.
+  REMITTANCE_FX     @map("remittance_fx")
+  // Operator correction: a NEW entry that compensates an earlier
+  // mistaken entry. linkedEntryId points at the original. reasonCode +
+  // note required.
+  ADJUSTMENT_CREDIT @map("adjustment_credit")
+  ADJUSTMENT_DEBIT  @map("adjustment_debit")
+  // Initial balance on wallet creation (zero unless backfilled).
+  OPENING_BALANCE   @map("opening_balance")
+
+  @@map("wallet_entry_direction")
+}
+
+model SellerWalletEntry {
+  id                  String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId            String               @map("seller_id") @db.Uuid
+  currency            Currency
+  direction           WalletEntryDirection
+  // Always positive — `direction` encodes sign. 2dp precision (matches
+  // money convention).
+  amount              Decimal              @db.Decimal(14, 2)
+  // Snapshot of the wallet balance after this entry was applied.
+  // Denormalised; useful for the ledger display + audit reconstruction
+  // without re-summing the full history.
+  runningBalanceAfter Decimal              @map("running_balance_after") @db.Decimal(14, 2)
+  // Optional linkage targets.
+  linkedOrderId       String?              @map("linked_order_id") @db.Uuid
+  linkedRemittanceId  String?              @map("linked_remittance_id") @db.Uuid
+  // ADJUSTMENT_* compensates an earlier entry — null otherwise.
+  linkedEntryId       String?              @map("linked_entry_id") @db.Uuid
+  // Required on ADJUSTMENT_* and REMITTANCE_FX; otherwise null.
+  reasonCode          String?              @map("reason_code")
+  note                String?              @db.Text
+  // Actor for audit.
+  actorType           ActorType            @map("actor_type")
+  actorId             String?              @map("actor_id") @db.Uuid
+  // FX snapshot for cross-currency entries (REMITTANCE_FX). Decimal(18,6)
+  // matches the FxRate precision in M16.
+  fxRateSnapshot      Decimal?             @map("fx_rate_snapshot") @db.Decimal(18, 6)
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz
+
+  seller      Seller              @relation(fields: [sellerId], references: [id])
+  linkedOrder Order?              @relation("WalletEntryOrder", fields: [linkedOrderId], references: [id])
+  linkedEntry SellerWalletEntry?  @relation("WalletEntryAdjustment", fields: [linkedEntryId], references: [id])
+  adjustments SellerWalletEntry[] @relation("WalletEntryAdjustment")
+  remittance  Remittance?         @relation(fields: [linkedRemittanceId], references: [id])
+
+  @@index([sellerId, currency, createdAt])
+  @@index([linkedOrderId])
+  @@index([linkedRemittanceId])
+  @@index([linkedEntryId])
+  @@map("seller_wallet_entries")
+}
+
+model SellerWalletBalance {
+  id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId    String   @map("seller_id") @db.Uuid
+  currency    Currency
+  // Cached SUM of ledger; recomputed post-commit on every applyEntry.
+  balance     Decimal  @default(0) @db.Decimal(14, 2)
+  // Snapshot of the most-recently-applied entry to detect lag (rare).
+  lastEntryId String?  @map("last_entry_id") @db.Uuid
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller Seller @relation(fields: [sellerId], references: [id])
+
+  @@unique([sellerId, currency])
+  @@index([sellerId])
+  @@map("seller_wallet_balances")
+}
+
+// ============================================================================
+// Phase 1B — Admin remittance (M23)
+// ============================================================================
+//
+// W-6 (admin-driven, manual reference): Phase 1B remittance is the admin
+// entering a bank transfer reference + amount + FX rate snapshot. The row
+// links to N ledger entries (typically 2: one REMITTANCE_OUT, one
+// REMITTANCE_FX for cross-currency). No bank API integration; that's
+// Phase 2.
+
+model Remittance {
+  id                  String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId            String   @map("seller_id") @db.Uuid
+  // Destination currency (matches seller's bank account currency).
+  currency            Currency
+  // Amount paid (in destination currency).
+  amount              Decimal  @db.Decimal(14, 2)
+  // Source currency, source amount — for cross-currency this is the
+  // INR side; for same-currency these mirror currency + amount.
+  sourceCurrency      Currency @map("source_currency")
+  sourceAmount        Decimal  @map("source_amount") @db.Decimal(14, 2)
+  // FX rate snapshot used at remittance time. 1 for same-currency.
+  fxRateSnapshot      Decimal  @map("fx_rate_snapshot") @db.Decimal(18, 6)
+  // Bank account that received the payout. Snapshotted on the seller
+  // row in Phase 1A schema; future-proofing for the multi-bank-account
+  // refactor.
+  bankAccountSnapshot Json     @map("bank_account_snapshot")
+  // Bank reference for ops reconciliation.
+  bankReference       String   @map("bank_reference")
+  // When the bank confirmed the payout (operator enters this).
+  paidAt              DateTime @map("paid_at") @db.Timestamptz
+  // Audit + ops.
+  staffId             String   @map("staff_id") @db.Uuid
+  note                String?  @db.Text
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  seller        Seller              @relation(fields: [sellerId], references: [id])
+  staff         StaffUser           @relation("RemittanceStaff", fields: [staffId], references: [id])
+  ledgerEntries SellerWalletEntry[]
+
+  @@index([sellerId, paidAt])
+  @@index([paidAt])
+  @@index([staffId])
+  @@map("remittances")
 }
