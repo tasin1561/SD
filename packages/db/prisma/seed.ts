@@ -1140,7 +1140,7 @@ const notificationTemplates: TemplateSeed[] = [
     recipientType: NotificationRecipientType.SELLER,
     subject: 'Welcome to Skydrop — {{ company_name }}',
     bodyTemplate:
-      'Welcome aboard, {{ contact_name }}. Your Skydrop seller account for {{ company_name }} is set up. Next step: complete your profile and verify your bank details.',
+      'Welcome aboard, {{ contact_name }}. Your Skydrop seller account for {{ company_name }} is set up and you can sign in to {{ seller_app_url }} now. Start by adding products to your catalog and shipping stock to our warehouse.',
   },
   {
     code: 'seller.approved.email',

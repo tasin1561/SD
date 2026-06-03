@@ -235,6 +235,7 @@ export class SellerAuthService {
         variables: {
           contact_name: input.contactPersonName,
           company_name: input.companyName,
+          seller_app_url: this.env.sellerAppUrl,
         },
         triggerEvent: 'seller.registered_via_invitation',
       });
