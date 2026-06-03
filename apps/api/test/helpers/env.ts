@@ -38,6 +38,10 @@ const BASE_ENV: Env = {
   // Module 18 — ChatWoot live chat (stub mode in tests; empty is fine).
   CHATWOOT_API_TOKEN: '',
   CHATWOOT_HMAC_SECRET: '',
+  // Phase 1B #2 — bank account encryption AES key. Tests that exercise
+  // encrypted-write path use this; tests that exercise the legacy
+  // plaintext path override to '' explicitly.
+  BANK_ACCOUNTS_KEY_V1: 'a'.repeat(64),
 };
 
 /** Shared EnvService fixture; pass overrides for the few vars a test cares about. */

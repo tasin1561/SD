@@ -20,6 +20,7 @@ import {
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import type { UpdateSellerProfileDto } from '../dto/update-profile.dto';
 import type { UpdateSellerBankDetailsDto } from '../dto/update-bank-details.dto';
+import { BankAccountCipherService } from './bank-account-cipher.service';
 
 export interface SellerProfileView {
   id: string;
@@ -37,6 +38,13 @@ export interface SellerProfileView {
   emailVerifiedAt: Date | null;
   bankName: string | null;
   bankAccountName: string | null;
+  /**
+   * MASKED display — the plaintext last-4 of the account number (or
+   * the full account number if it's ≤4 chars). The full account
+   * number is NEVER returned by the read endpoints; only the
+   * remittance form's bank-account-snapshot capture and a future
+   * admin-reveal endpoint decrypt it.
+   */
   bankAccountNumber: string | null;
   bankRoutingNumber: string | null;
   bankSwiftCode: string | null;
@@ -60,7 +68,11 @@ const PROFILE_SELECT = {
   emailVerifiedAt: true,
   bankName: true,
   bankAccountName: true,
-  bankAccountNumber: true,
+  // Plaintext last-4 (or the full value when length <=4). The
+  // ENCRYPTED column `bankAccountNumber` is intentionally NOT in
+  // the read projection — the masked column is the only thing
+  // clients see.
+  bankAccountNumberMasked: true,
   bankRoutingNumber: true,
   bankSwiftCode: true,
   createdAt: true,
@@ -72,6 +84,7 @@ export class SellerProfileService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
     private readonly onboarding: SellerOnboardingService,
+    private readonly bankCipher: BankAccountCipherService,
   ) {}
 
   async getProfile(sellerId: string): Promise<SellerProfileView> {
@@ -86,7 +99,15 @@ export class SellerProfileService {
       });
     }
     const onboarding = await this.onboarding.getProgress(sellerId);
-    return { ...seller, onboarding };
+    // Surface the masked field as `bankAccountNumber` in the API view.
+    // The ENCRYPTED column is intentionally unreachable from the read
+    // path; only the cipher service can decrypt it.
+    const { bankAccountNumberMasked, ...rest } = seller;
+    return {
+      ...rest,
+      bankAccountNumber: bankAccountNumberMasked,
+      onboarding,
+    };
   }
 
   async updateProfile(
@@ -173,8 +194,19 @@ export class SellerProfileService {
     for (const f of fields) {
       const value = input[f];
       if (value !== undefined) {
-        // Mark for update; value can be string or null (null clears the field).
-        (data as Record<string, string | null>)[f] = value;
+        if (f === 'bankAccountNumber') {
+          // Phase 1B #2 — encrypt at rest. The cipher returns a
+          // ciphertext blob + plaintext last-4 + key version. We store
+          // all three; the masked is what reads return, the version is
+          // how a future decrypt path picks the right env key.
+          const enc = this.bankCipher.encrypt(value);
+          data.bankAccountNumber = enc.storedValue;
+          data.bankAccountNumberMasked = enc.masked;
+          data.bankAccountNumberKeyVersion = enc.keyVersion;
+        } else {
+          // Mark for update; value can be string or null (null clears the field).
+          (data as Record<string, string | null>)[f] = value;
+        }
         // Never log the bank-detail values themselves to audit — only the
         // field names that changed. KYC/PII is not put into audit_logs.
         changes[f] = value === null ? null : 'updated';

@@ -146,6 +146,21 @@ export class EnvService {
    * integrated courier lands; the dispatch table is intentionally
    * explicit (no `process.env` indirection) so env wiring stays auditable.
    */
+  /**
+   * Phase 1B #2 — AES-256-GCM key (hex) for `sellers.bank_account_number`
+   * by version. Mirrors `courierCredentialsKey`. Returns '' when the
+   * version's key is unconfigured — callers treat that as "encryption
+   * disabled, store plaintext".
+   */
+  bankAccountsKey(version: number): string {
+    switch (version) {
+      case 1:
+        return this.env.BANK_ACCOUNTS_KEY_V1;
+      default:
+        return '';
+    }
+  }
+
   trackingWebhookSecretByRef(envVarName: string): string {
     switch (envVarName) {
       case 'TRACKING_WEBHOOK_SECRET_DELHIVERY':

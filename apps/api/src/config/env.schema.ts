@@ -76,6 +76,23 @@ export const envSchema = z.object({
   // (logged warning, no chat traffic).
   CHATWOOT_API_TOKEN: z.string().optional().default(''),
   CHATWOOT_HMAC_SECRET: z.string().optional().default(''),
+
+  // --- Phase 1B #2 — Bank account number encryption ------------------
+  // AES-256-GCM key (32 bytes / 64 hex chars) for encrypting the
+  // `sellers.bank_account_number` plaintext at rest. Same shape as
+  // COURIER_CREDENTIALS_KEY_V1. When empty the encryption layer is
+  // disabled — writes pass through plaintext + `_key_version` stays
+  // null. Reads of pre-encryption rows continue to work; encrypted
+  // rows require the key. Rotating: deploy V2 alongside V1, run a
+  // re-encrypt script, drop V1.
+  BANK_ACCOUNTS_KEY_V1: z
+    .string()
+    .regex(
+      /^([0-9a-fA-F]{64})?$/,
+      'BANK_ACCOUNTS_KEY_V1 must be 64 hex chars (32 bytes) or empty',
+    )
+    .optional()
+    .default(''),
 });
 
 export type Env = z.infer<typeof envSchema>;
