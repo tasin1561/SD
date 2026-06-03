@@ -151,6 +151,7 @@ model Seller {
   walletEntries           SellerWalletEntry[]
   walletBalances          SellerWalletBalance[]
   remittances             Remittance[]
+  invoices                Invoice[]
 
   @@index([status])
   @@index([deletedAt])
@@ -1265,6 +1266,7 @@ model Order {
   charges          OrderCharge[]
   notificationLogs NotificationLog[]
   walletEntries    SellerWalletEntry[] @relation("WalletEntryOrder")
+  invoice          Invoice?
 
   @@unique([sellerId, sellerOrderRef])
   @@index([sellerId, status])
@@ -3312,4 +3314,55 @@ model Remittance {
   @@index([paidAt])
   @@index([staffId])
   @@map("remittances")
+}
+
+// ============================================================================
+// Phase 1B — GST-compliant tax invoices
+// ============================================================================
+//
+// One invoice per delivered order. Auto-generated post-commit when an
+// order lands on DELIVERED. The PDF is rendered with pdfkit + uploaded
+// to Spaces; the row stores the storage key + a snapshot of the
+// invoice payload so a future regeneration produces the SAME content
+// regardless of catalog / order-charge edits.
+//
+// Invoice numbering: SD/INV/<fy>/<6-digit-seq>; per-financial-year
+// (April-March) sequence drawn under a Postgres advisory lock so two
+// concurrent generations never collide.
+
+model Invoice {
+  id              String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  orderId         String   @unique @map("order_id") @db.Uuid
+  sellerId        String   @map("seller_id") @db.Uuid
+  invoiceNumber   String   @unique @map("invoice_number")
+  invoiceDate     DateTime @default(now()) @map("invoice_date") @db.Timestamptz
+  fiscalYear      String   @map("fiscal_year")
+  // Money. INR canonical.
+  subtotalInr     Decimal  @map("subtotal_inr") @db.Decimal(14, 2)
+  gstInr          Decimal  @map("gst_inr") @db.Decimal(14, 2)
+  totalInr        Decimal  @map("total_inr") @db.Decimal(14, 2)
+  // Immutable snapshot of every payload field used in the PDF so a
+  // regeneration produces the exact same content. Includes:
+  //   - seller block (GSTIN, name, address)
+  //   - buyer block (name, address, GSTIN if any)
+  //   - items array (HSN, description, qty, unit price, taxable value)
+  //   - tax breakdown (taxable value, GST rate, IGST amount)
+  payloadSnapshot Json     @map("payload_snapshot")
+  // Spaces.
+  pdfStorageKey   String   @map("pdf_storage_key")
+  pdfUrl          String?  @map("pdf_url")
+  pdfMimeType     String   @default("application/pdf") @map("pdf_mime_type")
+  pdfSizeBytes    Int?     @map("pdf_size_bytes")
+  // Status — DRAFT (row but no PDF yet) → ISSUED (PDF uploaded).
+  // Phase 2: CANCELLED for credit notes.
+  status          String   @default("ISSUED")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  order  Order  @relation(fields: [orderId], references: [id])
+  seller Seller @relation(fields: [sellerId], references: [id])
+
+  @@index([sellerId, invoiceDate])
+  @@index([fiscalYear, invoiceNumber])
+  @@map("invoices")
 }

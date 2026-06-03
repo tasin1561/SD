@@ -1,9 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import { Check, Circle } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { useSellerIdentity } from '@skydrop/auth/client';
-import { useOrdersList } from '@/lib/api-hooks';
+import {
+  useOrdersList,
+  useProductsList,
+  useSellerProfile,
+} from '@/lib/api-hooks';
 import {
   Card,
   CardBody,
@@ -35,7 +40,27 @@ import {
 export function DashboardView(): ReactElement {
   const identity = useSellerIdentity();
   const recent = useOrdersList({ page: 1, pageSize: 5 });
+  const profile = useSellerProfile();
+  const products = useProductsList({ page: 1, pageSize: 1, status: 'ACTIVE' });
   const companyName = identity?.companyName ?? 'there';
+
+  // Onboarding checklist — show only when at least one step is unmet.
+  const profileComplete = Boolean(
+    profile.data &&
+      profile.data.companyName &&
+      profile.data.contactPersonName &&
+      profile.data.phone,
+  );
+  const bankDetailsComplete = Boolean(
+    profile.data &&
+      profile.data.bankName &&
+      profile.data.bankAccountName &&
+      profile.data.bankAccountNumber,
+  );
+  const hasProduct = (products.data?.total ?? 0) > 0;
+  const hasOrder = (recent.data?.total ?? 0) > 0;
+  const onboardingDone =
+    profileComplete && bankDetailsComplete && hasProduct && hasOrder;
 
   return (
     <div className="max-w-5xl">
@@ -43,6 +68,44 @@ export function DashboardView(): ReactElement {
         title={`Hello, ${companyName}`}
         subtitle="Your most recent orders + quick navigation."
       />
+
+      {!onboardingDone && (
+        <Section title="Get started">
+          <Card>
+            <CardBody>
+              <p className="text-text-muted text-xs mb-3">
+                Complete these to be ready for your first delivered order.
+              </p>
+              <ul className="space-y-1.5">
+                <ChecklistItem
+                  done={profileComplete}
+                  label="Complete your profile"
+                  hint="Company name, contact person, and phone"
+                  href="/profile"
+                />
+                <ChecklistItem
+                  done={bankDetailsComplete}
+                  label="Add bank details"
+                  hint="Required before we can remit your COD collections"
+                  href="/profile"
+                />
+                <ChecklistItem
+                  done={hasProduct}
+                  label="Add your first product"
+                  hint="At least one ACTIVE product + variant"
+                  href="/catalog"
+                />
+                <ChecklistItem
+                  done={hasOrder}
+                  label="Place your first order"
+                  hint="Manually or via CSV upload"
+                  href="/orders/new"
+                />
+              </ul>
+            </CardBody>
+          </Card>
+        </Section>
+      )}
 
       <Section
         title="Recent orders"
@@ -132,5 +195,47 @@ function NavCard({
         </CardBody>
       </Card>
     </Link>
+  );
+}
+
+function ChecklistItem({
+  done,
+  label,
+  hint,
+  href,
+}: {
+  readonly done: boolean;
+  readonly label: string;
+  readonly hint: string;
+  readonly href: string;
+}): ReactElement {
+  return (
+    <li className="flex items-start gap-3 py-1">
+      <div className={done ? 'text-accent mt-0.5' : 'text-text-faint mt-0.5'}>
+        {done ? <Check size={16} /> : <Circle size={16} />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline justify-between gap-2">
+          <span
+            className={
+              done
+                ? 'text-text-muted text-sm line-through'
+                : 'text-text-bright text-sm font-medium'
+            }
+          >
+            {label}
+          </span>
+          {!done && (
+            <Link
+              href={href}
+              className="text-accent hover:underline text-xs shrink-0"
+            >
+              Go →
+            </Link>
+          )}
+        </div>
+        <div className="text-text-faint text-xs mt-0.5">{hint}</div>
+      </div>
+    </li>
   );
 }

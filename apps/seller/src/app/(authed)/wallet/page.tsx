@@ -25,11 +25,29 @@ import type { WalletEntryView } from '@skydrop/api-client';
  */
 export default function WalletPage(): ReactElement {
   const [filter, setFilter] = useState<'all' | 'INR' | 'BDT'>('all');
+  const [exporting, setExporting] = useState(false);
   const balances = useWalletBalances();
   const entries = useInfiniteWalletEntries(
     filter === 'all' ? undefined : filter,
   );
   const accumulated = entries.data?.pages.flatMap((p) => p.items) ?? [];
+
+  async function exportAll(): Promise<void> {
+    // Fetch any remaining pages BEFORE rendering the CSV so the
+    // download contains the entire ledger, not just the visible
+    // window. Safe: useInfiniteWalletEntries' getNextPageParam
+    // returns null when the server runs out.
+    setExporting(true);
+    try {
+      while (entries.hasNextPage && !entries.isFetchingNextPage) {
+        await entries.fetchNextPage();
+      }
+      const full = entries.data?.pages.flatMap((p) => p.items) ?? [];
+      downloadCsv(full);
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <div className="max-w-4xl space-y-4">
@@ -92,10 +110,11 @@ export default function WalletPage(): ReactElement {
                 type="button"
                 variant="ghost"
                 size="sm"
-                disabled={accumulated.length === 0}
-                onClick={() => downloadCsv(accumulated)}
+                disabled={accumulated.length === 0 || exporting}
+                onClick={() => void exportAll()}
               >
-                <Download size={12} /> Export CSV
+                <Download size={12} />{' '}
+                {exporting ? 'Loading all…' : 'Export CSV'}
               </Button>
             </div>
           }

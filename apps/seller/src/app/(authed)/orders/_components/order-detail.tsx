@@ -2,10 +2,16 @@
 
 import Link from 'next/link';
 import { ArrowLeft, Pencil } from 'lucide-react';
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import type { OrderStatus } from '@skydrop/db';
+import { ApiError } from '@skydrop/api-client';
 import type { SellerOrderEventView } from '@skydrop/api-client';
-import { useOrderDetail, useOrderEvents } from '@/lib/api-hooks';
+import {
+  useGenerateInvoice,
+  useOrderDetail,
+  useOrderEvents,
+  useOrderInvoice,
+} from '@/lib/api-hooks';
 import {
   Button,
   Card,
@@ -16,6 +22,7 @@ import {
   PageHeader,
   Section,
   OrderStatusBadge,
+  useToast,
 } from '@skydrop/ui/components';
 import { OrderTimeline } from './order-timeline';
 import { OrderChargesSection } from './order-charges';
@@ -234,6 +241,10 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             <OrderChargesSection orderId={orderId} />
           </Section>
 
+          <Section title="Invoice">
+            <OrderInvoiceSection orderId={orderId} status={detail.data.status} />
+          </Section>
+
           <Section title="Timeline">
             <OrderTimelineSection
               loading={events.isLoading}
@@ -278,4 +289,104 @@ function OrderTimelineSection({
     );
   }
   return <OrderTimeline events={events} />;
+}
+
+function OrderInvoiceSection({
+  orderId,
+  status,
+}: {
+  readonly orderId: string;
+  readonly status: string;
+}): ReactElement {
+  const invoice = useOrderInvoice(orderId);
+  const generate = useGenerateInvoice(orderId);
+  const toast = useToast();
+  const [error, setError] = useState<string | null>(null);
+
+  if (status !== 'DELIVERED') {
+    return (
+      <Card>
+        <CardBody>
+          <p className="text-text-muted text-sm">
+            Invoices are auto-generated when the order is delivered.
+          </p>
+        </CardBody>
+      </Card>
+    );
+  }
+
+  async function onGenerate(): Promise<void> {
+    setError(null);
+    try {
+      const res = await generate.mutateAsync();
+      toast.success(
+        res.alreadyExisted ? 'Invoice loaded.' : 'Invoice generated.',
+      );
+    } catch (e) {
+      if (e instanceof ApiError) {
+        const b = e.body as { code?: unknown; message?: unknown } | null;
+        const code = typeof b?.code === 'string' ? b.code : null;
+        const msg = typeof b?.message === 'string' ? b.message : e.message;
+        setError(code ? `[${code}] ${msg}` : msg);
+      } else {
+        setError(e instanceof Error ? e.message : 'Generation failed');
+      }
+    }
+  }
+
+  if (invoice.isLoading) return <LoadingState label="Loading invoice…" />;
+
+  if (!invoice.data) {
+    return (
+      <Card>
+        <CardBody>
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-text-muted text-sm">
+              No invoice yet — usually generated within seconds of delivery.
+            </p>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={generate.isPending}
+              onClick={() => void onGenerate()}
+            >
+              {generate.isPending ? 'Generating…' : 'Generate now'}
+            </Button>
+          </div>
+          {error && (
+            <div className="text-critical text-xs mt-2">{error}</div>
+          )}
+        </CardBody>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardBody>
+        <div className="flex items-baseline justify-between gap-3">
+          <div>
+            <div className="text-text-bright text-sm font-mono">
+              {invoice.data.invoiceNumber}
+            </div>
+            <div className="text-text-muted text-xs mt-0.5">
+              Issued {new Date(invoice.data.invoiceDate).toLocaleString()} ·
+              Total ₹ {invoice.data.totalInr}
+            </div>
+          </div>
+          {invoice.data.pdfUrl && (
+            <a
+              href={invoice.data.pdfUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-accent hover:underline text-sm"
+            >
+              Download PDF →
+            </a>
+          )}
+        </div>
+      </CardBody>
+    </Card>
+  );
 }

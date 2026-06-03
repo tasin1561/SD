@@ -1141,3 +1141,19 @@ export function useFxRateHistory(
     enabled: Boolean(from && to),
   });
 }
+
+// ───────── Admin: seller wallet balance (for the remittance form) ─────────
+
+export function useSellerWalletBalance(
+  sellerId: string,
+): UseQueryResult<{ balances: Array<{ currency: string; balance: string }> }> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-remittance', 'seller-balance', sellerId],
+    queryFn: () =>
+      client.request<{ balances: Array<{ currency: string; balance: string }> }>(
+        `/api/admin/remittances/seller/${sellerId}/balance`,
+      ),
+    enabled: Boolean(sellerId),
+  });
+}

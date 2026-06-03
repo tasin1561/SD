@@ -56,6 +56,39 @@ const ALLOWED_INDIAN_STATES: string[] = [
 ];
 
 const systemSettings: SystemSettingSeed[] = [
+  // ── Invoice header (used by InvoiceService for the PDF Tax Invoice) ──
+  {
+    key: 'invoice.company_name',
+    category: 'invoice',
+    valueType: SettingValueType.STRING,
+    valueString: 'Skydrop Logistics Pvt Ltd',
+    displayName: 'Invoice — Company name',
+    description: 'Legal entity name as printed at the top of every GST tax invoice',
+  },
+  {
+    key: 'invoice.gstin',
+    category: 'invoice',
+    valueType: SettingValueType.STRING,
+    valueString: '',
+    displayName: 'Invoice — GSTIN',
+    description: 'Skydrop GSTIN; leave blank until registration completes',
+  },
+  {
+    key: 'invoice.address',
+    category: 'invoice',
+    valueType: SettingValueType.STRING,
+    valueString: 'Bengaluru, Karnataka, India',
+    displayName: 'Invoice — Address',
+    description: 'Multi-line address (free text) printed under the GSTIN',
+  },
+  {
+    key: 'invoice.state',
+    category: 'invoice',
+    valueType: SettingValueType.STRING,
+    valueString: 'Karnataka',
+    displayName: 'Invoice — State',
+    description: 'State of supply for IGST/CGST/SGST determination',
+  },
   {
     key: 'pricing.gst_rate',
     category: 'pricing',

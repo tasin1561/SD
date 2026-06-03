@@ -112,6 +112,10 @@ export type {
   LogoView,
 } from './endpoints/seller-profile';
 export type {
+  SellerInvoiceView,
+  GenerateInvoiceResponse,
+} from './endpoints/seller-invoice';
+export type {
   WalletBalanceView,
   WalletEntryView,
   WalletBalancesResponse,

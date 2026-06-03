@@ -12,7 +12,11 @@ import {
 } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 import type { CreateRemittanceRequest } from '@skydrop/api-client';
-import { useCreateRemittance, useSellersList } from '@/lib/api-hooks';
+import {
+  useCreateRemittance,
+  useSellersList,
+  useSellerWalletBalance,
+} from '@/lib/api-hooks';
 
 /**
  * Record a remittance. Two-currency model:
@@ -38,6 +42,7 @@ export function RemittanceFormModal({
   const create = useCreateRemittance();
 
   const [sellerId, setSellerId] = useState(initialSellerId ?? '');
+  const balance = useSellerWalletBalance(sellerId);
   const [sourceCurrency, setSourceCurrency] = useState<'INR' | 'BDT'>('INR');
   const [currency, setCurrency] = useState<'INR' | 'BDT'>('BDT');
   const [sourceAmount, setSourceAmount] = useState('');
@@ -146,6 +151,46 @@ export function RemittanceFormModal({
             ))}
           </Select>
         </FormField>
+
+        {sellerId && (
+          <div className="rounded-[6px] border border-border bg-surface-raised px-3 py-2 text-xs">
+            <div className="text-text-faint uppercase tracking-wide mb-1">
+              Current wallet balance
+            </div>
+            {balance.isLoading ? (
+              <div className="text-text-muted">Loading…</div>
+            ) : balance.isError ? (
+              <div className="text-critical">Failed to load balance</div>
+            ) : (
+              <div className="flex items-center gap-4 font-mono">
+                {(balance.data?.balances ?? []).map((b) => {
+                  const amt = Number(b.balance);
+                  return (
+                    <div key={b.currency} className="flex items-baseline gap-1">
+                      <span className="text-text-muted">{b.currency}:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSourceCurrency(b.currency as 'INR' | 'BDT');
+                          setSourceAmount(b.balance);
+                        }}
+                        disabled={amt <= 0}
+                        className={
+                          amt > 0
+                            ? 'text-accent hover:underline'
+                            : 'text-text-muted'
+                        }
+                        title={amt > 0 ? 'Click to fill source amount' : ''}
+                      >
+                        {b.currency === 'INR' ? '₹' : '৳'} {amt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Wallet currency (debit)" required>

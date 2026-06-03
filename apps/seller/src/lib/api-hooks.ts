@@ -705,3 +705,50 @@ export function useRemoveLogo(): UseMutationResult<LogoView, Error, void> {
     },
   });
 }
+
+// ───────── Seller invoices (Phase 1B GST PDF) ─────────
+
+import type {
+  SellerInvoiceView,
+  GenerateInvoiceResponse,
+} from '@skydrop/api-client';
+
+export function useOrderInvoice(orderId: string): UseQueryResult<SellerInvoiceView | null> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-invoice', orderId],
+    queryFn: async () => {
+      try {
+        return await client.request<SellerInvoiceView>(
+          `/api/seller/orders/${orderId}/invoice`,
+        );
+      } catch (e) {
+        // 404 is the "no invoice yet" path — return null instead of
+        // surfacing as a query error.
+        const err = e as { status?: number };
+        if (err.status === 404) return null;
+        throw e;
+      }
+    },
+    enabled: Boolean(orderId),
+    // Don't auto-refetch the invoice constantly; once it's there it's there.
+    staleTime: 30_000,
+  });
+}
+
+export function useGenerateInvoice(
+  orderId: string,
+): UseMutationResult<GenerateInvoiceResponse, Error, void> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      client.request<GenerateInvoiceResponse>(
+        `/api/seller/orders/${orderId}/invoice`,
+        { method: 'POST', body: {} },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-invoice', orderId] });
+    },
+  });
+}

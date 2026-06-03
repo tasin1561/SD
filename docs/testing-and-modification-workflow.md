@@ -346,6 +346,53 @@ path passes.
    200 + response time. Filter by status FAILED to find broken
    endpoints (e.g. wrong URL — 404, expired DNS — NETWORK_ERROR).
 
+### 2.10d-bis. Webhook delivery retry button
+
+1. Find a FAILED row in the Webhooks page.
+2. Click **Retry** — the worker re-signs the payload with the
+   endpoint's CURRENT secret + enqueues a fresh BullMQ job.
+3. New attempt row appears.
+
+### 2.10e. Admin FX rates + history
+
+1. Admin → **FX rates** → click **Override** on a pair, enter new
+   rate + reason ≥10 chars, save. `isManualOverride` badge appears.
+2. **Timeline** → modal shows append-only history with ↑/↓ delta
+   diff per change.
+
+### 2.10f. Seller company logo
+
+1. Seller → **Profile** → Logo section.
+2. Choose JPG/PNG/WEBP ≤ 1 MB → presign → direct PUT → register.
+3. Preview replaces immediately. **Remove** typed-confirm clears.
+
+### 2.10g. Admin bank-account reveal
+
+1. Admin → **Sellers** → seller detail → Bank-account section.
+2. Enter reason → **Reveal**. HIGH audit row
+   (`staff.seller.bank_account.revealed`) written BEFORE plaintext
+   returns. Plaintext shown read-only with Copy button. Refresh
+   clears.
+
+### 2.10h. Seller invoice (GST PDF, Phase 1B)
+
+1. Drive an order to DELIVERED (Section 1.10).
+2. Seller → order detail → Invoice section auto-populates within
+   seconds (`OrderDeliveredInvoiceListener` fires on the lifecycle
+   bus). Open the PDF link — GST tax-invoice format with line items,
+   IGST breakdown, place of supply, totals.
+3. Manual regen via the **Generate now** button on a non-listened
+   path; idempotent.
+
+### 2.10i. Wallet CSV export-all + onboarding checklist
+
+1. Seller dashboard → "Get started" card lists 4 onboarding steps
+   (profile, bank, first product, first order); each strikes
+   through as you complete it. Card auto-hides when all done.
+2. Seller wallet with >50 entries: **Export CSV** button changes to
+   "Loading all…" while it walks every page, then downloads the
+   full ledger (not just visible page).
+
 ### 2.10. Public anti-enumeration
 
 1. `track.skydrop.online/UNKNOWN-AWB-123` → generic "not found".
