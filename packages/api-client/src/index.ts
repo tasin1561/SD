@@ -101,6 +101,12 @@ export type {
   UpdateWebhookEndpointRequest,
 } from './endpoints/seller-webhooks';
 export type {
+  OnboardingProgressView,
+  SellerProfileView,
+  UpdateSellerProfileRequest,
+  UpdateSellerBankDetailsRequest,
+} from './endpoints/seller-profile';
+export type {
   PulledAssignment,
   RecordAttemptRequest,
   RecordAttemptResult,

@@ -541,3 +541,57 @@ export function useDeleteWebhookEndpoint(): UseMutationResult<
     },
   });
 }
+
+// ───────── Seller profile + bank details ─────────
+
+import type {
+  SellerProfileView,
+  UpdateSellerBankDetailsRequest,
+  UpdateSellerProfileRequest,
+} from '@skydrop/api-client';
+
+export function useSellerProfile(): UseQueryResult<SellerProfileView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-profile'],
+    queryFn: () => client.request<SellerProfileView>('/api/seller/profile'),
+  });
+}
+
+export function useUpdateSellerProfile(): UseMutationResult<
+  SellerProfileView,
+  Error,
+  UpdateSellerProfileRequest
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<SellerProfileView>('/api/seller/profile', {
+        method: 'PATCH',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-profile'] });
+    },
+  });
+}
+
+export function useUpdateSellerBankDetails(): UseMutationResult<
+  SellerProfileView,
+  Error,
+  UpdateSellerBankDetailsRequest
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<SellerProfileView>('/api/seller/profile/bank-details', {
+        method: 'PATCH',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-profile'] });
+    },
+  });
+}
