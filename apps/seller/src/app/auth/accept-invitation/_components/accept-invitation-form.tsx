@@ -41,6 +41,7 @@ export function AcceptInvitationForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPw, setShowPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]): void {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -199,18 +200,29 @@ export function AcceptInvitationForm({
         <label htmlFor="confirm-password" className={labelClass}>
           Confirm password
         </label>
-        <input
-          id="confirm-password"
-          type={showPw ? 'text' : 'password'}
-          autoComplete="new-password"
-          required
-          minLength={10}
-          maxLength={256}
-          value={form.confirmPassword}
-          onChange={(e) => set('confirmPassword', e.target.value)}
-          disabled={submitting}
-          className={fieldClass}
-        />
+        <div className="relative">
+          <input
+            id="confirm-password"
+            type={showConfirmPw ? 'text' : 'password'}
+            autoComplete="new-password"
+            required
+            minLength={10}
+            maxLength={256}
+            value={form.confirmPassword}
+            onChange={(e) => set('confirmPassword', e.target.value)}
+            disabled={submitting}
+            className={`${fieldClass} pr-9`}
+          />
+          <button
+            type="button"
+            onClick={() => setShowConfirmPw((s) => !s)}
+            tabIndex={-1}
+            aria-label={showConfirmPw ? 'Hide confirm password' : 'Show confirm password'}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-body transition-colors p-1 rounded-[3px]"
+          >
+            {showConfirmPw ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+        </div>
       </div>
       {error && (
         <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-2.5 py-1.5 rounded-[5px]">
