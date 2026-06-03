@@ -140,6 +140,21 @@ export class FxRateService {
         },
       });
 
+      // Phase 1B — record an append-only history row in the same tx
+      // so the timeline can never disagree with the live FxRate row.
+      await tx.fxRateHistory.create({
+        data: {
+          fromCurrency: input.from,
+          toCurrency: input.to,
+          rate: parsed,
+          previousRate: existing?.rate ?? null,
+          source: FxRateSource.MANUAL,
+          isManualOverride: true,
+          changedByStaffId: input.staffId,
+          changeReason: input.reason,
+        },
+      });
+
       await this.audit.log(
         {
           actorType: ActorType.STAFF,
@@ -161,6 +176,54 @@ export class FxRateService {
 
       return this.toView(upserted);
     });
+  }
+
+  /**
+   * Return the history (most recent first) for a (from, to) pair.
+   * Cap at 200 rows — anything older is forensic.
+   */
+  async listHistory(
+    from: Currency,
+    to: Currency,
+    limit = 50,
+  ): Promise<
+    Array<{
+      id: string;
+      rate: string;
+      previousRate: string | null;
+      source: FxRateSource;
+      isManualOverride: boolean;
+      changedByStaffId: string | null;
+      changeReason: string | null;
+      recordedAt: string;
+    }>
+  > {
+    const lim = Math.min(200, Math.max(1, limit));
+    const rows = await this.prisma.client.fxRateHistory.findMany({
+      where: { fromCurrency: from, toCurrency: to },
+      orderBy: { recordedAt: 'desc' },
+      take: lim,
+      select: {
+        id: true,
+        rate: true,
+        previousRate: true,
+        source: true,
+        isManualOverride: true,
+        changedByStaffId: true,
+        changeReason: true,
+        recordedAt: true,
+      },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      rate: r.rate.toString(),
+      previousRate: r.previousRate?.toString() ?? null,
+      source: r.source,
+      isManualOverride: r.isManualOverride,
+      changedByStaffId: r.changedByStaffId,
+      changeReason: r.changeReason,
+      recordedAt: r.recordedAt.toISOString(),
+    }));
   }
 
   private toView(row: Prisma.FxRateGetPayload<object>): FxRateView {

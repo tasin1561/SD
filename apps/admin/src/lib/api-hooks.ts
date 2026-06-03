@@ -1090,3 +1090,54 @@ export function useRevealBankAccount(
     // No invalidation — this is a transient reveal, not a state mutation.
   });
 }
+
+// ───────── Admin: FX rates + history ─────────
+
+import type {
+  FxRateView,
+  SetFxRateRequest,
+  FxRateHistoryRow,
+} from '@skydrop/api-client';
+
+export function useFxRatesList(): UseQueryResult<ReadonlyArray<FxRateView>> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-fx', 'list'],
+    queryFn: () =>
+      client.request<ReadonlyArray<FxRateView>>('/api/admin/fx-rates'),
+  });
+}
+
+export function useSetFxRate(): UseMutationResult<
+  FxRateView,
+  Error,
+  SetFxRateRequest
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<FxRateView>('/api/admin/fx-rates', {
+        method: 'PATCH',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-fx'] });
+    },
+  });
+}
+
+export function useFxRateHistory(
+  from: string,
+  to: string,
+): UseQueryResult<ReadonlyArray<FxRateHistoryRow>> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-fx', 'history', from, to],
+    queryFn: () =>
+      client.request<ReadonlyArray<FxRateHistoryRow>>(
+        `/api/admin/fx-rates/history/${from}/${to}`,
+      ),
+    enabled: Boolean(from && to),
+  });
+}

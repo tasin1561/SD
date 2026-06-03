@@ -1,5 +1,6 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseEnumPipe, Patch, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Currency } from '@skydrop/db';
 import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
@@ -42,5 +43,19 @@ export class AdminFxController {
       staffId: staff.id,
       reason: body.reason,
     });
+  }
+
+  @Get('history/:from/:to')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Historical timeseries for a (from,to) pair (most recent first; max 200)',
+  })
+  history(
+    @Param('from', new ParseEnumPipe(Currency)) from: Currency,
+    @Param('to', new ParseEnumPipe(Currency)) to: Currency,
+    @Query('limit') limit?: string,
+  ) {
+    return this.svc.listHistory(from, to, Number(limit) || 50);
   }
 }

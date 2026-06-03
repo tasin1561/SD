@@ -46,6 +46,7 @@ export function AuthedShell({
     { href: '/call-center', label: 'Call centre' },
     { href: '/warehouse', label: 'Warehouse' },
     { href: '/remittances', label: 'Remittances' },
+    { href: '/fx', label: 'FX rates' },
     { href: '/reports', label: 'Reports' },
     { href: '/webhooks', label: 'Webhooks' },
     { href: '/settings', label: 'Settings' },

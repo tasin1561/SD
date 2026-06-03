@@ -70,6 +70,7 @@ export type {
   PricingUnresolvedFallback,
 } from './endpoints/admin-pricing';
 export type { FxRateView, SetFxRateRequest } from './endpoints/admin-fx';
+export type { FxRateHistoryRow } from './endpoints/admin-fx-history';
 export type {
   OrderChargeView,
   ComputeOrderChargesResponse,
