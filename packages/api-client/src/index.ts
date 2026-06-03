@@ -113,6 +113,11 @@ export type {
   WalletEntriesPage,
 } from './endpoints/seller-wallet';
 export type {
+  RemittanceListItem,
+  RemittanceListResponse,
+  CreateRemittanceRequest,
+} from './endpoints/admin-remittances';
+export type {
   PulledAssignment,
   RecordAttemptRequest,
   RecordAttemptResult,

@@ -942,3 +942,56 @@ export function useDeleteCategory(): UseMutationResult<void, Error, string> {
     },
   });
 }
+
+// ───────── Admin: remittances (Phase 1B M23) ─────────
+
+import type {
+  RemittanceListResponse,
+  CreateRemittanceRequest,
+} from '@skydrop/api-client';
+
+export function useRemittancesList(query?: {
+  sellerId?: string;
+  page?: number;
+  pageSize?: number;
+}): UseQueryResult<RemittanceListResponse> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-remittances', 'list', query ?? {}],
+    queryFn: () => {
+      const sp = new URLSearchParams();
+      if (query?.sellerId) sp.set('sellerId', query.sellerId);
+      if (query?.page) sp.set('page', String(query.page));
+      if (query?.pageSize) sp.set('pageSize', String(query.pageSize));
+      const qs = sp.toString();
+      return client.request<RemittanceListResponse>(
+        `/api/admin/remittances${qs ? `?${qs}` : ''}`,
+      );
+    },
+  });
+}
+
+export function useCreateRemittance(): UseMutationResult<
+  { id: string },
+  Error,
+  CreateRemittanceRequest
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<{ id: string }>('/api/admin/remittances', {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-remittances'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-sellers'] });
+    },
+  });
+}
+
+/** Read-only view of any seller's wallet balance for the remittance form
+ *  (uses the admin /admin/sellers/:id/wallet endpoint when it lands; for
+ *  now we approximate by reading seller list + leaving balance fetch as a
+ *  TODO when the admin-side wallet read endpoint is added). */
