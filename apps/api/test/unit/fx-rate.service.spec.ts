@@ -39,11 +39,18 @@ function makeSut(opts: { rows?: AnyArgs[]; existing?: AnyArgs | null } = {}) {
     ...makeRow({}),
     ...((a.create ?? a.update) as AnyArgs),
   }));
+  // Phase 1B — fxRateHistory.create is called inside the same tx as the
+  // upsert + audit. Stub it as a no-op for the existing test cases.
+  const historyCreate = jest.fn(async () => ({ id: 'hist-1' }));
   const $transaction = jest.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({ fxRate: { findUnique, upsert } }),
+    fn({
+      fxRate: { findUnique, upsert },
+      fxRateHistory: { create: historyCreate },
+    }),
   );
   const client = {
     fxRate: { findMany, findUnique, upsert },
+    fxRateHistory: { create: historyCreate, findMany: jest.fn() },
     $transaction,
   } as unknown as PrismaService['client'];
   const prisma = { client } as unknown as PrismaService;
