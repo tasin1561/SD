@@ -87,7 +87,7 @@ export class RefreshTokenService {
           ).id
         : (
             await client.sellerRefreshToken.create({
-              data: { ...data, sellerId: input.userId },
+              data: { ...data, sellerUserId: input.userId },
               select: { id: true },
             })
           ).id;
@@ -142,7 +142,10 @@ export class RefreshTokenService {
         {
           actorType: input.subject === 'staff' ? ActorType.STAFF : ActorType.SELLER,
           staffUserId: input.subject === 'staff' ? existing.userId : null,
-          sellerId: input.subject === 'seller' ? existing.userId : null,
+          // existing.userId is the SellerUser id for seller subject;
+          // audit_logs.seller_id is the COMPANY id and is left null
+          // here. The action + refresh-token entity_id carry the trace.
+          sellerId: null,
           action: `${input.subject}.refresh.rotated`,
           entityType: 'refresh_token',
           entityId: existing.id,
@@ -170,7 +173,7 @@ export class RefreshTokenService {
       return r.count;
     }
     const r = await this.prisma.client.sellerRefreshToken.updateMany({
-      where: { sellerId: input.userId, revokedAt: null },
+      where: { sellerUserId: input.userId, revokedAt: null },
       data: { revokedAt: now },
     });
     return r.count;
@@ -257,10 +260,10 @@ export class RefreshTokenService {
     }
     const row = await tx.sellerRefreshToken.findFirst({
       where: { tokenHash },
-      select: { id: true, sellerId: true, expiresAt: true, revokedAt: true },
+      select: { id: true, sellerUserId: true, expiresAt: true, revokedAt: true },
     });
     return row
-      ? { id: row.id, userId: row.sellerId, expiresAt: row.expiresAt, revokedAt: row.revokedAt }
+      ? { id: row.id, userId: row.sellerUserId, expiresAt: row.expiresAt, revokedAt: row.revokedAt }
       : null;
   }
 
@@ -294,7 +297,7 @@ export class RefreshTokenService {
       revokedCount = r.count;
     } else {
       const r = await tx.sellerRefreshToken.updateMany({
-        where: { sellerId: userId, revokedAt: null },
+        where: { sellerUserId: userId, revokedAt: null },
         data: { revokedAt: now },
       });
       revokedCount = r.count;
@@ -306,7 +309,10 @@ export class RefreshTokenService {
       {
         actorType: subject === 'staff' ? ActorType.STAFF : ActorType.SELLER,
         staffUserId: subject === 'staff' ? userId : null,
-        sellerId: subject === 'seller' ? userId : null,
+        // userId is the SellerUser id for seller subject; audit_logs.seller_id
+        // is the COMPANY id and is left null here. The refresh-token entity
+        // id below carries the trace.
+        sellerId: null,
         action: 'security.refresh_replay_detected',
         entityType: 'refresh_token',
         entityId: context.presentedRecordId,

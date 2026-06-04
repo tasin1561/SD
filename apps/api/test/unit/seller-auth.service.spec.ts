@@ -52,7 +52,7 @@ interface InvitationRow {
 
 interface PrtRow {
   id: string;
-  sellerId: string;
+  sellerUserId: string;
   tokenHash: string;
   ipAddress: string | null;
   expiresAt: Date;
@@ -61,7 +61,7 @@ interface PrtRow {
 
 interface EvtRow {
   id: string;
-  sellerId: string;
+  sellerUserId: string;
   tokenHash: string;
   email: string;
   expiresAt: Date;
@@ -291,8 +291,20 @@ function buildClient(): FakeClient {
       findFirst: jest.fn(async ({ where }: { where: { tokenHash: string } }) => {
         const row = tables.prts.find((r) => r.tokenHash === where.tokenHash);
         if (!row) return null;
-        const seller = tables.sellers.find((s) => s.id === row.sellerId);
-        return { ...row, seller: seller ? { id: seller.id, deletedAt: seller.deletedAt } : null };
+        const user = tables.sellerUsers.find((u) => u.id === row.sellerUserId);
+        const seller = user ? tables.sellers.find((s) => s.id === user.sellerId) : undefined;
+        return {
+          ...row,
+          sellerUser: user
+            ? {
+                id: user.id,
+                deletedAt: user.deletedAt,
+                seller: seller
+                  ? { id: seller.id, deletedAt: seller.deletedAt }
+                  : null,
+              }
+            : null,
+        };
       }),
       update: jest.fn(async ({ where, data }: { where: { id: string }; data: Partial<PrtRow> }) => {
         const row = tables.prts.find((r) => r.id === where.id);
@@ -311,10 +323,20 @@ function buildClient(): FakeClient {
       findFirst: jest.fn(async ({ where }: { where: { tokenHash: string } }) => {
         const row = tables.evts.find((r) => r.tokenHash === where.tokenHash);
         if (!row) return null;
-        const seller = tables.sellers.find((s) => s.id === row.sellerId);
+        const user = tables.sellerUsers.find((u) => u.id === row.sellerUserId);
+        const seller = user ? tables.sellers.find((s) => s.id === user.sellerId) : undefined;
         return {
           ...row,
-          seller: seller ? { id: seller.id, email: seller.email, deletedAt: seller.deletedAt } : null,
+          sellerUser: user
+            ? {
+                id: user.id,
+                email: user.email,
+                deletedAt: user.deletedAt,
+                seller: seller
+                  ? { id: seller.id, deletedAt: seller.deletedAt }
+                  : null,
+              }
+            : null,
         };
       }),
       update: jest.fn(async ({ where, data }: { where: { id: string }; data: Partial<EvtRow> }) => {
@@ -710,8 +732,12 @@ describe('SellerAuthService — refresh', () => {
 describe('SellerAuthService — email verification', () => {
   it('already-verified → 409', async () => {
     const sut = makeSut();
-    const seller = await seedSeller(sut, { emailVerifiedAt: new Date() });
-    await expect(sut.svc.requestEmailVerification(seller.id, ctx)).rejects.toMatchObject({
+    const seller = await seedSeller(sut);
+    // Mark the OWNER sellerUser as verified — emailVerifiedAt now lives
+    // on the user, not the company.
+    const owner = sut.client.tables.sellerUsers.find((u) => u.sellerId === seller.id)!;
+    owner.emailVerifiedAt = new Date();
+    await expect(sut.svc.requestEmailVerification(owner.id, ctx)).rejects.toMatchObject({
       response: { code: 'ALREADY_VERIFIED' },
     });
   });
@@ -719,10 +745,13 @@ describe('SellerAuthService — email verification', () => {
   it('confirm: stale email mismatch → 400', async () => {
     const sut = makeSut();
     const seller = await seedSeller(sut, { email: 'new@brand.com' });
+    // The OWNER sellerUser carries the new email; the token carries the old.
+    const owner = sut.client.tables.sellerUsers.find((u) => u.sellerId === seller.id)!;
+    owner.email = 'new@brand.com';
     const plaintext = sut.hashes.generateEmailVerificationToken();
     sut.client.tables.evts.push({
       id: 'evt-1',
-      sellerId: seller.id,
+      sellerUserId: owner.id,
       tokenHash: sut.hashes.sha256Hex(plaintext),
       email: 'old@brand.com',
       expiresAt: new Date(Date.now() + 86400000),
@@ -736,17 +765,19 @@ describe('SellerAuthService — email verification', () => {
   it('confirm: happy path sets emailVerifiedAt + audits', async () => {
     const sut = makeSut();
     const seller = await seedSeller(sut);
+    const owner = sut.client.tables.sellerUsers.find((u) => u.sellerId === seller.id)!;
     const plaintext = sut.hashes.generateEmailVerificationToken();
     sut.client.tables.evts.push({
       id: 'evt-2',
-      sellerId: seller.id,
+      sellerUserId: owner.id,
       tokenHash: sut.hashes.sha256Hex(plaintext),
-      email: seller.email,
+      email: owner.email,
       expiresAt: new Date(Date.now() + 86400000),
       usedAt: null,
     });
     await sut.svc.confirmEmailVerification({ token: plaintext }, ctx);
-    expect(sut.client.tables.sellers[0]!.emailVerifiedAt).toBeInstanceOf(Date);
+    // emailVerifiedAt now lands on the sellerUser, not the seller.
+    expect(owner.emailVerifiedAt).toBeInstanceOf(Date);
     expect(sut.client.tables.evts[0]!.usedAt).toBeInstanceOf(Date);
   });
 });

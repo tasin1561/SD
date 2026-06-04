@@ -93,7 +93,7 @@ export class SellerAccountStatusService {
       });
 
       await tx.sellerRefreshToken.updateMany({
-        where: { sellerId: seller.id, revokedAt: null },
+        where: { sellerUser: { sellerId: seller.id }, revokedAt: null },
         data: { revokedAt: now },
       });
 

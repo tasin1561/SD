@@ -12,6 +12,7 @@ import {
   OnboardingStepActor,
   SellerOnboardingStep,
   SellerStatus,
+  SellerUserRole,
 } from '@skydrop/db';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { EnvService } from '../../config/env.service';
@@ -56,7 +57,10 @@ export interface SellerRegistrationResult {
 }
 
 export interface SellerMe {
+  // id is the COMPANY id (back-compat with all existing consumers).
   id: string;
+  // email is the AUTHENTICATED USER's email (Phase 1B — the person who
+  // signed in), not the company contact email.
   email: string;
   emailDisplay: string;
   companyName: string;
@@ -70,6 +74,10 @@ export interface SellerMe {
   countryCode: string;
   emailVerifiedAt: Date | null;
   createdAt: Date;
+  // Phase 1B — the signed-in user identity.
+  sellerUserId: string;
+  role: SellerUserRole;
+  fullName: string;
 }
 
 @Injectable()
@@ -486,16 +494,25 @@ export class SellerAuthService {
   async requestPasswordReset(input: { email: string }, ctx: ClientContext): Promise<{ message: string }> {
     const normalizedEmail = input.email.trim().toLowerCase();
 
-    const seller = await this.prisma.client.seller.findFirst({
+    // Phase 1B — password reset is now keyed on the SellerUser (the
+    // signing-in person), not the Seller (the company). Any team
+    // member can request a reset for THEIR account.
+    const user = await this.prisma.client.sellerUser.findFirst({
       where: { email: normalizedEmail, deletedAt: null },
-      select: { id: true, email: true, contactPersonName: true, status: true },
+      select: {
+        id: true,
+        email: true,
+        emailDisplay: true,
+        fullName: true,
+        seller: { select: { id: true, status: true, deletedAt: true } },
+      },
     });
 
-    if (!seller) {
+    if (!user || user.seller.deletedAt !== null) {
       await this.audit.log({
         actorType: ActorType.SYSTEM,
         action: 'seller.password_reset.requested',
-        entityType: 'seller',
+        entityType: 'seller_user',
         entityId: null,
         metadata: {
           attemptedEmail: normalizedEmail,
@@ -515,7 +532,7 @@ export class SellerAuthService {
 
     await this.prisma.client.sellerPasswordResetToken.create({
       data: {
-        sellerId: seller.id,
+        sellerUserId: user.id,
         tokenHash,
         expiresAt,
         ipAddress: ctx.ipAddress ?? null,
@@ -524,9 +541,9 @@ export class SellerAuthService {
 
     await this.email.enqueue({
       templateCode: 'seller.password_reset.email',
-      recipient: { type: NotificationRecipientType.SELLER, id: seller.id, email: seller.email },
+      recipient: { type: NotificationRecipientType.SELLER, id: user.seller.id, email: user.email },
       variables: {
-        contact_name: seller.contactPersonName,
+        contact_name: user.fullName,
         reset_url: `${this.env.sellerAppUrl}/auth/reset-password?token=${plaintext}`,
         expires_minutes: 30,
       },
@@ -535,15 +552,15 @@ export class SellerAuthService {
 
     await this.audit.log({
       actorType: ActorType.SELLER,
-      sellerId: seller.id,
+      sellerId: user.seller.id,
       action: 'seller.password_reset.requested',
-      entityType: 'seller',
-      entityId: seller.id,
+      entityType: 'seller_user',
+      entityId: user.id,
       metadata: {
         ipAddress: ctx.ipAddress,
         userAgent: ctx.userAgent,
         expiresAt: expiresAt.toISOString(),
-        status: seller.status,
+        status: user.seller.status,
       },
     });
 
@@ -560,10 +577,16 @@ export class SellerAuthService {
       where: { tokenHash },
       select: {
         id: true,
-        sellerId: true,
+        sellerUserId: true,
         expiresAt: true,
         usedAt: true,
-        seller: { select: { id: true, deletedAt: true } },
+        sellerUser: {
+          select: {
+            id: true,
+            deletedAt: true,
+            seller: { select: { id: true, deletedAt: true } },
+          },
+        },
       },
     });
 
@@ -571,8 +594,9 @@ export class SellerAuthService {
       !row ||
       row.usedAt !== null ||
       row.expiresAt.getTime() <= Date.now() ||
-      !row.seller ||
-      row.seller.deletedAt !== null
+      !row.sellerUser ||
+      row.sellerUser.deletedAt !== null ||
+      row.sellerUser.seller.deletedAt !== null
     ) {
       throw new BadRequestException({
         code: 'INVALID_RESET_TOKEN',
@@ -581,10 +605,11 @@ export class SellerAuthService {
     }
 
     const newHash = await this.password.hash(input.newPassword);
+    const sellerId = row.sellerUser.seller.id;
 
     await this.prisma.client.$transaction(async (tx) => {
-      await tx.seller.update({
-        where: { id: row.sellerId },
+      await tx.sellerUser.update({
+        where: { id: row.sellerUserId },
         data: { passwordHash: newHash },
       });
       await tx.sellerPasswordResetToken.update({
@@ -592,16 +617,16 @@ export class SellerAuthService {
         data: { usedAt: new Date() },
       });
       await tx.sellerRefreshToken.updateMany({
-        where: { sellerId: row.sellerId, revokedAt: null },
+        where: { sellerUserId: row.sellerUserId, revokedAt: null },
         data: { revokedAt: new Date() },
       });
       await this.audit.log(
         {
           actorType: ActorType.SELLER,
-          sellerId: row.sellerId,
+          sellerId,
           action: 'seller.password_reset.completed',
-          entityType: 'seller',
-          entityId: row.sellerId,
+          entityType: 'seller_user',
+          entityId: row.sellerUserId,
           metadata: { ipAddress: ctx.ipAddress, userAgent: ctx.userAgent },
         },
         tx,
@@ -613,20 +638,22 @@ export class SellerAuthService {
 
   // ---------- EMAIL VERIFICATION ----------
 
-  async requestEmailVerification(sellerId: string, ctx: ClientContext): Promise<{ ok: true }> {
-    const seller = await this.prisma.client.seller.findFirst({
-      where: { id: sellerId, deletedAt: null },
+  async requestEmailVerification(sellerUserId: string, ctx: ClientContext): Promise<{ ok: true }> {
+    // Phase 1B — email verification is per-user, not per-company.
+    const user = await this.prisma.client.sellerUser.findFirst({
+      where: { id: sellerUserId, deletedAt: null },
       select: {
         id: true,
         email: true,
-        contactPersonName: true,
+        fullName: true,
         emailVerifiedAt: true,
+        seller: { select: { id: true, deletedAt: true } },
       },
     });
-    if (!seller) {
+    if (!user || user.seller.deletedAt !== null) {
       throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Seller session no longer valid' });
     }
-    if (seller.emailVerifiedAt !== null) {
+    if (user.emailVerifiedAt !== null) {
       throw new ConflictException({
         code: 'ALREADY_VERIFIED',
         message: 'Email is already verified',
@@ -639,18 +666,18 @@ export class SellerAuthService {
 
     await this.prisma.client.sellerEmailVerificationToken.create({
       data: {
-        sellerId: seller.id,
+        sellerUserId: user.id,
         tokenHash,
-        email: seller.email,
+        email: user.email,
         expiresAt,
       },
     });
 
     await this.email.enqueue({
       templateCode: 'seller.email_verification.email',
-      recipient: { type: NotificationRecipientType.SELLER, id: seller.id, email: seller.email },
+      recipient: { type: NotificationRecipientType.SELLER, id: user.seller.id, email: user.email },
       variables: {
-        contact_name: seller.contactPersonName,
+        contact_name: user.fullName,
         verify_url: `${this.env.sellerAppUrl}/auth/verify-email?token=${plaintext}`,
         expires_hours: 24,
       },
@@ -659,11 +686,11 @@ export class SellerAuthService {
 
     await this.audit.log({
       actorType: ActorType.SELLER,
-      sellerId: seller.id,
+      sellerId: user.seller.id,
       action: 'seller.email_verification.requested',
-      entityType: 'seller',
-      entityId: seller.id,
-      metadata: { ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, email: seller.email },
+      entityType: 'seller_user',
+      entityId: user.id,
+      metadata: { ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, email: user.email },
     });
 
     return { ok: true };
@@ -676,11 +703,18 @@ export class SellerAuthService {
       where: { tokenHash },
       select: {
         id: true,
-        sellerId: true,
+        sellerUserId: true,
         email: true,
         expiresAt: true,
         usedAt: true,
-        seller: { select: { id: true, email: true, deletedAt: true } },
+        sellerUser: {
+          select: {
+            id: true,
+            email: true,
+            deletedAt: true,
+            seller: { select: { id: true, deletedAt: true } },
+          },
+        },
       },
     });
 
@@ -688,9 +722,10 @@ export class SellerAuthService {
       !row ||
       row.usedAt !== null ||
       row.expiresAt.getTime() <= Date.now() ||
-      !row.seller ||
-      row.seller.deletedAt !== null ||
-      row.seller.email !== row.email
+      !row.sellerUser ||
+      row.sellerUser.deletedAt !== null ||
+      row.sellerUser.seller.deletedAt !== null ||
+      row.sellerUser.email !== row.email
     ) {
       throw new BadRequestException({
         code: 'INVALID_VERIFICATION_TOKEN',
@@ -698,9 +733,11 @@ export class SellerAuthService {
       });
     }
 
+    const sellerId = row.sellerUser.seller.id;
+
     await this.prisma.client.$transaction(async (tx) => {
-      await tx.seller.update({
-        where: { id: row.sellerId },
+      await tx.sellerUser.update({
+        where: { id: row.sellerUserId },
         data: { emailVerifiedAt: new Date() },
       });
       await tx.sellerEmailVerificationToken.update({
@@ -710,16 +747,16 @@ export class SellerAuthService {
       await this.audit.log(
         {
           actorType: ActorType.SELLER,
-          sellerId: row.sellerId,
+          sellerId,
           action: 'seller.email_verification.completed',
-          entityType: 'seller',
-          entityId: row.sellerId,
+          entityType: 'seller_user',
+          entityId: row.sellerUserId,
           metadata: { ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, email: row.email },
         },
         tx,
       );
       await this.onboarding.markStepComplete(
-        row.sellerId,
+        sellerId,
         SellerOnboardingStep.EMAIL_VERIFIED,
         OnboardingStepActor.SYSTEM,
         { email: row.email },
@@ -732,30 +769,60 @@ export class SellerAuthService {
 
   // ---------- ME ----------
 
-  async getMe(sellerId: string): Promise<SellerMe> {
-    const seller = await this.prisma.client.seller.findFirst({
-      where: { id: sellerId, deletedAt: null },
+  async getMe(sellerUserId: string): Promise<SellerMe> {
+    // Phase 1B: the auth path identifies a SellerUser (the person who
+    // signed in). The SellerMe projection still mirrors the COMPANY
+    // shape downstream FE expects — companyName/phone/etc. come from
+    // the parent Seller; the user's own email/role/fullName are
+    // surfaced alongside for the team-aware UI.
+    const user = await this.prisma.client.sellerUser.findFirst({
+      where: { id: sellerUserId, deletedAt: null },
       select: {
         id: true,
         email: true,
         emailDisplay: true,
-        companyName: true,
-        contactPersonName: true,
-        phone: true,
-        whatsapp: true,
-        status: true,
-        approvedAt: true,
-        displayCurrency: true,
-        displayLanguage: true,
-        countryCode: true,
+        fullName: true,
+        role: true,
         emailVerifiedAt: true,
-        createdAt: true,
+        seller: {
+          select: {
+            id: true,
+            companyName: true,
+            contactPersonName: true,
+            phone: true,
+            whatsapp: true,
+            status: true,
+            approvedAt: true,
+            displayCurrency: true,
+            displayLanguage: true,
+            countryCode: true,
+            createdAt: true,
+          },
+        },
       },
     });
-    if (!seller) {
+    if (!user) {
       throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Seller session no longer valid' });
     }
-    return seller;
+    return {
+      id: user.seller.id,
+      email: user.email,
+      emailDisplay: user.emailDisplay,
+      companyName: user.seller.companyName,
+      contactPersonName: user.seller.contactPersonName,
+      phone: user.seller.phone,
+      whatsapp: user.seller.whatsapp,
+      status: user.seller.status,
+      approvedAt: user.seller.approvedAt,
+      displayCurrency: user.seller.displayCurrency,
+      displayLanguage: user.seller.displayLanguage,
+      countryCode: user.seller.countryCode,
+      emailVerifiedAt: user.emailVerifiedAt,
+      createdAt: user.seller.createdAt,
+      sellerUserId: user.id,
+      role: user.role,
+      fullName: user.fullName,
+    };
   }
 
   // ---------- internal ----------

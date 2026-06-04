@@ -123,10 +123,7 @@ model Seller {
 
   approvedBy              StaffUser?                     @relation("SellerApprovedBy", fields: [approvedById], references: [id])
   invitations             SellerInvitation[]
-  refreshTokens           SellerRefreshToken[]
   apiKeys                 SellerApiKey[]
-  passwordResetTokens     SellerPasswordResetToken[]
-  emailVerificationTokens SellerEmailVerificationToken[]
   notes                   SellerNote[]
   auditLogsAsSeller       AuditLog[]                     @relation("AuditLogSeller")
   products                Product[]
@@ -231,19 +228,19 @@ model StaffRefreshToken {
 }
 
 model SellerRefreshToken {
-  id        String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  sellerId  String    @map("seller_id") @db.Uuid
-  tokenHash String    @map("token_hash")
-  userAgent String?   @map("user_agent")
-  ipAddress String?   @map("ip_address") @db.Inet
-  expiresAt DateTime  @map("expires_at") @db.Timestamptz
-  revokedAt DateTime? @map("revoked_at") @db.Timestamptz
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  id           String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerUserId String    @map("seller_user_id") @db.Uuid
+  tokenHash    String    @map("token_hash")
+  userAgent    String?   @map("user_agent")
+  ipAddress    String?   @map("ip_address") @db.Inet
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  seller Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  sellerUser SellerUser @relation(fields: [sellerUserId], references: [id], onDelete: Cascade)
 
-  @@index([sellerId])
+  @@index([sellerUserId])
   @@index([tokenHash])
   @@index([expiresAt])
   @@map("seller_refresh_tokens")
@@ -288,18 +285,18 @@ model StaffPasswordResetToken {
 }
 
 model SellerPasswordResetToken {
-  id        String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  sellerId  String    @map("seller_id") @db.Uuid
-  tokenHash String    @map("token_hash")
-  ipAddress String?   @map("ip_address") @db.Inet
-  expiresAt DateTime  @map("expires_at") @db.Timestamptz
-  usedAt    DateTime? @map("used_at") @db.Timestamptz
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  id           String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerUserId String    @map("seller_user_id") @db.Uuid
+  tokenHash    String    @map("token_hash")
+  ipAddress    String?   @map("ip_address") @db.Inet
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz
+  usedAt       DateTime? @map("used_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  seller Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  sellerUser SellerUser @relation(fields: [sellerUserId], references: [id], onDelete: Cascade)
 
-  @@index([sellerId])
+  @@index([sellerUserId])
   @@index([tokenHash])
   @@index([expiresAt])
   @@map("seller_password_reset_tokens")
@@ -324,18 +321,18 @@ model StaffEmailVerificationToken {
 }
 
 model SellerEmailVerificationToken {
-  id        String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  sellerId  String    @map("seller_id") @db.Uuid
-  tokenHash String    @map("token_hash")
-  email     String
-  expiresAt DateTime  @map("expires_at") @db.Timestamptz
-  usedAt    DateTime? @map("used_at") @db.Timestamptz
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  id           String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerUserId String    @map("seller_user_id") @db.Uuid
+  tokenHash    String    @map("token_hash")
+  email        String
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz
+  usedAt       DateTime? @map("used_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  seller Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  sellerUser SellerUser @relation(fields: [sellerUserId], references: [id], onDelete: Cascade)
 
-  @@index([sellerId])
+  @@index([sellerUserId])
   @@index([tokenHash])
   @@index([expiresAt])
   @@map("seller_email_verification_tokens")
@@ -3450,11 +3447,14 @@ model SellerUser {
   updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt       DateTime?      @map("deleted_at") @db.Timestamptz
 
-  seller              Seller                 @relation(fields: [sellerId], references: [id])
-  invitedBy           SellerUser?            @relation("SellerUserInvitedBy", fields: [invitedById], references: [id])
-  invitedUsers        SellerUser[]           @relation("SellerUserInvitedBy")
-  invitationsAuthored SellerUserInvitation[] @relation("SellerUserInvitedByUser")
-  invitationsAccepted SellerUserInvitation[] @relation("SellerUserInvitationAccepted")
+  seller                  Seller                         @relation(fields: [sellerId], references: [id])
+  invitedBy               SellerUser?                    @relation("SellerUserInvitedBy", fields: [invitedById], references: [id])
+  invitedUsers            SellerUser[]                   @relation("SellerUserInvitedBy")
+  invitationsAuthored     SellerUserInvitation[]         @relation("SellerUserInvitedByUser")
+  invitationsAccepted     SellerUserInvitation[]         @relation("SellerUserInvitationAccepted")
+  refreshTokens           SellerRefreshToken[]
+  passwordResetTokens     SellerPasswordResetToken[]
+  emailVerificationTokens SellerEmailVerificationToken[]
 
   @@index([sellerId])
   @@index([sellerId, role])

@@ -22,7 +22,7 @@ interface FakeRow {
 class FakeTable {
   rows: FakeRow[] = [];
   private seq = 0;
-  constructor(private readonly userField: 'staffUserId' | 'sellerId') {}
+  constructor(private readonly userField: 'staffUserId' | 'sellerUserId') {}
 
   async create({
     data,
@@ -115,7 +115,7 @@ interface FakeClient {
 function buildFakeClient(): FakeClient {
   const client: FakeClient = {
     staffRefreshToken: new FakeTable('staffUserId'),
-    sellerRefreshToken: new FakeTable('sellerId'),
+    sellerRefreshToken: new FakeTable('sellerUserId'),
     auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-row' }) },
     $transaction: async (cb) => {
       const snapshot = {

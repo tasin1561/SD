@@ -41,6 +41,10 @@ export interface SellerMe {
   readonly countryCode: string;
   readonly emailVerifiedAt: string | null;
   readonly createdAt: string;
+  // Phase 1B — the signed-in team member identity.
+  readonly sellerUserId: string;
+  readonly role: 'OWNER' | 'ADMIN' | 'OPS' | 'INVENTORY' | 'FINANCE' | 'VIEWER';
+  readonly fullName: string;
 }
 
 export interface LoginRequest {

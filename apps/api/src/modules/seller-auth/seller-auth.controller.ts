@@ -197,7 +197,7 @@ export class SellerAuthController {
     @CurrentSeller() seller: AuthenticatedSeller,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<{ ok: true }> {
-    return this.svc.requestEmailVerification(seller.id, ctx);
+    return this.svc.requestEmailVerification(seller.userId, ctx);
   }
 
   @Public()
@@ -231,17 +231,17 @@ export class SellerAuthController {
       'Authenticated seller profile — accepts bearer access token OR __Host-sellerRefresh cookie (cookie path is read-only, no rotation)',
   })
   async me(@Req() req: Request): Promise<SellerMe> {
-    const sellerId = await this.resolveSellerId(req);
+    const sellerUserId = await this.resolveSellerUserId(req);
     // Status recheck — preserves the existing SellerJwtGuard semantics
     // (suspended sellers 403 on /me; PENDING/REJECTED never pass). The
     // guard is bypassed for the hybrid route, so we re-implement the
     // check inline against either auth path. Audit the denial first so
     // it survives a downstream response failure.
-    await this.assertActiveSeller(sellerId, req);
-    return this.svc.getMe(sellerId);
+    await this.assertActiveSeller(sellerUserId, req);
+    return this.svc.getMe(sellerUserId);
   }
 
-  private async resolveSellerId(req: Request): Promise<string> {
+  private async resolveSellerUserId(req: Request): Promise<string> {
     const bearer = extractBearer(req.header('authorization'));
     if (bearer !== null) {
       const claims = this.jwt.verifySellerAccess(bearer);
@@ -267,27 +267,31 @@ export class SellerAuthController {
   /** Mirrors SellerJwtGuard's status recheck on the hybrid /me path
    *  (the guard is bypassed here so we run the check inline). /me is
    *  not @SellerAuthAllowSuspended — SUSPENDED returns 403, same as
-   *  the previous bearer-only behavior. */
-  private async assertActiveSeller(sellerId: string, req: Request): Promise<void> {
-    const seller = await this.prisma.client.seller.findFirst({
-      where: { id: sellerId, deletedAt: null },
-      select: { id: true, status: true },
+   *  the previous bearer-only behavior. Phase 1B: the auth path now
+   *  identifies a SellerUser; we join through to the parent Seller. */
+  private async assertActiveSeller(sellerUserId: string, req: Request): Promise<void> {
+    const user = await this.prisma.client.sellerUser.findFirst({
+      where: { id: sellerUserId, deletedAt: null },
+      select: {
+        id: true,
+        seller: { select: { id: true, status: true, deletedAt: true } },
+      },
     });
-    if (!seller) {
+    if (!user || user.seller.deletedAt !== null) {
       throw new UnauthorizedException({
         code: 'UNAUTHORIZED',
         message: 'Seller session no longer valid',
       });
     }
-    if (seller.status !== SellerStatus.APPROVED) {
+    if (user.seller.status !== SellerStatus.APPROVED) {
       await this.audit.log({
         actorType: ActorType.SELLER,
-        sellerId: seller.id,
+        sellerId: user.seller.id,
         action: 'seller.access_denied_status',
         entityType: 'seller',
-        entityId: seller.id,
+        entityId: user.seller.id,
         metadata: {
-          status: seller.status,
+          status: user.seller.status,
           path: req.url,
           method: req.method,
           ipAddress: req.ip ?? null,
