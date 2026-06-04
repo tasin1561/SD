@@ -1,7 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ChargeType, OrderStatus, Prisma } from '@skydrop/db';
+import {
+  ChargeType,
+  NotificationRecipientType,
+  OrderStatus,
+  Prisma,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
+import { EmailQueue } from '../../email/queue/email.queue';
 import { InvoiceNumberingService } from './invoice-numbering.service';
 import { InvoicePdfService, type InvoicePayload } from './invoice-pdf.service';
 
@@ -29,7 +35,36 @@ export class InvoiceService {
     private readonly spaces: SpacesService,
     private readonly numbering: InvoiceNumberingService,
     private readonly pdf: InvoicePdfService,
+    private readonly email: EmailQueue,
   ) {}
+
+  private async sendInvoiceEmail(
+    to: string,
+    sellerName: string,
+    payload: {
+      invoiceNumber: string;
+      orderNumber: string;
+      totalInr: string;
+      pdfUrl: string;
+    },
+  ): Promise<void> {
+    try {
+      await this.email.enqueue({
+        templateCode: 'seller.invoice.delivered.email',
+        recipient: { type: NotificationRecipientType.SELLER, email: to },
+        variables: {
+          contact_name: sellerName,
+          invoice_number: payload.invoiceNumber,
+          order_number: payload.orderNumber,
+          total_inr: payload.totalInr,
+          pdf_url: payload.pdfUrl,
+        },
+        triggerEvent: 'invoice.issued',
+      });
+    } catch {
+      // Best-effort: a queue failure must not block the invoice flow.
+    }
+  }
 
   /**
    * Generate (or return existing) invoice for an order. Caller is the
@@ -235,6 +270,15 @@ export class InvoiceService {
         status: 'ISSUED',
       },
       select: { id: true, invoiceNumber: true, pdfUrl: true },
+    });
+
+    // Best-effort email to the seller. Failure logged + swallowed
+    // (mirrors notification listener discipline).
+    await this.sendInvoiceEmail(order.seller.email, order.seller.companyName, {
+      invoiceNumber: created.invoiceNumber,
+      orderNumber: order.orderNumber,
+      totalInr: totalInr.toFixed(2),
+      pdfUrl: created.pdfUrl ?? pdfUrl,
     });
 
     return {

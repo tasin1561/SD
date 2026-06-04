@@ -752,3 +752,95 @@ export function useGenerateInvoice(
     },
   });
 }
+
+// ───────── Seller notification preferences ─────────
+
+import type {
+  NotificationPreferenceView,
+  UpdateNotificationPreferenceRequest,
+} from '@skydrop/api-client';
+
+export function useNotificationPreferences(): UseQueryResult<
+  NotificationPreferenceView[]
+> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-notification-preferences'],
+    queryFn: () =>
+      client.request<NotificationPreferenceView[]>(
+        '/api/seller/notification-preferences',
+      ),
+  });
+}
+
+export function useUpdateNotificationPreference(): UseMutationResult<
+  NotificationPreferenceView,
+  Error,
+  { category: string; body: UpdateNotificationPreferenceRequest }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ category, body }) =>
+      client.request<NotificationPreferenceView>(
+        `/api/seller/notification-preferences/${category}`,
+        { method: 'PATCH', body },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['seller-notification-preferences'],
+      });
+    },
+  });
+}
+
+// ───────── Seller API keys ─────────
+
+import type {
+  SellerApiKeyView,
+  CreatedSellerApiKey,
+  CreateSellerApiKeyRequest,
+} from '@skydrop/api-client';
+
+export function useApiKeysList(): UseQueryResult<SellerApiKeyView[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-api-keys'],
+    queryFn: () => client.request<SellerApiKeyView[]>('/api/seller/api-keys'),
+  });
+}
+
+export function useCreateApiKey(): UseMutationResult<
+  CreatedSellerApiKey,
+  Error,
+  CreateSellerApiKeyRequest
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<CreatedSellerApiKey>('/api/seller/api-keys', {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-api-keys'] });
+    },
+  });
+}
+
+export function useRevokeApiKey(): UseMutationResult<void, Error, { id: string }> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }) => {
+      await client.request<void>(`/api/seller/api-keys/${id}/revoke`, {
+        method: 'POST',
+        body: {},
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-api-keys'] });
+    },
+  });
+}

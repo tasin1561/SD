@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
+import { EmailModule } from '../email/email.module';
 import { StaffAuthModule } from '../staff-auth/staff-auth.module';
 import { AdminStaffController } from './admin-staff.controller';
 import { StaffInvitationPublicController } from './staff-invitation-public.controller';
@@ -13,7 +14,7 @@ import { StaffInvitationService } from './services/staff-invitation.service';
  *   /auth/staff/accept-invitation — public, used by the invitee page
  */
 @Module({
-  imports: [AuthCommonModule, StaffAuthModule],
+  imports: [AuthCommonModule, StaffAuthModule, EmailModule],
   controllers: [AdminStaffController, StaffInvitationPublicController],
   providers: [StaffInvitationService, StaffJwtGuard],
 })

@@ -4,12 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, StaffRole } from '@skydrop/db';
+import { ActorType, NotificationRecipientType, StaffRole } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { EnvService } from '../../../config/env.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { PasswordService } from '../../auth-common/services/password.service';
 import { TokenHashService } from '../../auth-common/services/token-hash.service';
+import { EmailQueue } from '../../email/queue/email.queue';
 import type { ClientContext } from '../../staff-auth/staff-auth.service';
 import type { CreateStaffInvitationDto } from '../dto/create-staff-invitation.dto';
 
@@ -51,7 +52,35 @@ export class StaffInvitationService {
     private readonly hashes: TokenHashService,
     private readonly password: PasswordService,
     private readonly audit: AuditLogService,
+    private readonly email: EmailQueue,
   ) {}
+
+  private async sendInvitationEmail(
+    to: string,
+    role: StaffRole,
+    inviteUrl: string,
+    expiresAt: Date,
+  ): Promise<void> {
+    try {
+      await this.email.enqueue({
+        templateCode: 'staff.invitation.email',
+        recipient: { type: NotificationRecipientType.SELLER, email: to },
+        variables: {
+          role,
+          invite_url: inviteUrl,
+          expires_at: expiresAt.toISOString(),
+          expires_at_display: expiresAt.toLocaleString('en-IN', {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+          }),
+        },
+        triggerEvent: 'staff.invitation.created',
+      });
+    } catch {
+      // Best-effort: a queue failure must not block the invite.
+      // The admin still has the link in the reveal card.
+    }
+  }
 
   async create(
     input: CreateStaffInvitationDto,
@@ -121,6 +150,7 @@ export class StaffInvitationService {
     });
 
     const url = this.inviteUrlFor(plaintext);
+    await this.sendInvitationEmail(input.email, input.role, url, expiresAt);
     return {
       ...this.toView(row),
       token: plaintext,
@@ -207,6 +237,7 @@ export class StaffInvitationService {
     });
 
     const url = this.inviteUrlFor(plaintext);
+    await this.sendInvitationEmail(updated.email, updated.role, url, expiresAt);
     return { ...this.toView(updated), token: plaintext, inviteUrl: url };
   }
 

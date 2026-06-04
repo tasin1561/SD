@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { SpacesModule } from '../../infrastructure/spaces/spaces.module';
+import { EmailModule } from '../email/email.module';
 import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.module';
 import { SellerInvoiceController } from './seller-invoice.controller';
 import { InvoiceNumberingService } from './services/invoice-numbering.service';
@@ -16,7 +17,7 @@ import { OrderDeliveredInvoiceListener } from './services/order-delivered-invoic
  *   GET /seller/orders/:id/invoice → { pdfUrl, invoiceNumber, ... }
  */
 @Module({
-  imports: [LifecycleEventsModule, SpacesModule],
+  imports: [LifecycleEventsModule, SpacesModule, EmailModule],
   controllers: [SellerInvoiceController],
   providers: [
     InvoiceService,

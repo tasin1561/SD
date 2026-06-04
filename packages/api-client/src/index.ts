@@ -116,6 +116,15 @@ export type {
   GenerateInvoiceResponse,
 } from './endpoints/seller-invoice';
 export type {
+  NotificationPreferenceView,
+  UpdateNotificationPreferenceRequest,
+} from './endpoints/seller-notification-preferences';
+export type {
+  SellerApiKeyView,
+  CreatedSellerApiKey,
+  CreateSellerApiKeyRequest,
+} from './endpoints/seller-api-keys';
+export type {
   WalletBalanceView,
   WalletEntryView,
   WalletBalancesResponse,

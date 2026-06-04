@@ -5,80 +5,57 @@ import { Webhook, Bell, Key } from 'lucide-react';
 
 /**
  * Settings hub — links into each settings sub-area.
- * - Webhooks (outbound) — Phase 1A scope, full CRUD + secret rotation.
- * - Notification preferences — fast-follow (backend exists).
- * - API keys — fast-follow (backend exists).
  */
 export default function SettingsPage(): ReactElement {
+  const items = [
+    {
+      href: '/settings/webhooks',
+      icon: <Webhook size={20} />,
+      title: 'Outbound webhooks',
+      description:
+        'Configure HTTPS endpoints to receive event POSTs from Skydrop. Each gets a unique HMAC secret.',
+    },
+    {
+      href: '/settings/notifications',
+      icon: <Bell size={20} />,
+      title: 'Notification preferences',
+      description:
+        'Pick channels (email/SMS/in-app/webhook) per category, set quiet hours and timezone.',
+    },
+    {
+      href: '/settings/api-keys',
+      icon: <Key size={20} />,
+      title: 'API keys',
+      description:
+        'Programmatic access to the Skydrop seller API. Create, label, and revoke keys.',
+    },
+  ];
   return (
     <div className="max-w-4xl">
       <PageHeader
         title="Settings"
-        subtitle="Webhooks, notifications, API keys, preferences."
+        subtitle="Webhooks, notifications, API keys."
       />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <Link href="/settings/webhooks" className="block">
-          <Card className="hover:border-border-strong transition-colors">
-            <CardBody>
-              <div className="flex items-start gap-3">
-                <div className="text-accent">
-                  <Webhook size={20} />
-                </div>
-                <div>
-                  <div className="text-text-bright font-medium text-sm">
-                    Outbound webhooks
+        {items.map((it) => (
+          <Link key={it.href} href={it.href} className="block">
+            <Card className="hover:border-border-strong transition-colors">
+              <CardBody>
+                <div className="flex items-start gap-3">
+                  <div className="text-accent">{it.icon}</div>
+                  <div>
+                    <div className="text-text-bright font-medium text-sm">
+                      {it.title}
+                    </div>
+                    <div className="text-text-muted text-xs mt-0.5">
+                      {it.description}
+                    </div>
                   </div>
-                  <div className="text-text-muted text-xs mt-0.5">
-                    Configure HTTPS endpoints to receive event POSTs from
-                    Skydrop. Each gets a unique HMAC secret.
-                  </div>
                 </div>
-              </div>
-            </CardBody>
-          </Card>
-        </Link>
-        <Card className="opacity-60">
-          <CardBody>
-            <div className="flex items-start gap-3">
-              <div className="text-text-muted">
-                <Bell size={20} />
-              </div>
-              <div>
-                <div className="text-text-bright font-medium text-sm">
-                  Notification preferences{' '}
-                  <span className="text-text-faint text-[10px] uppercase ml-1">
-                    fast-follow
-                  </span>
-                </div>
-                <div className="text-text-muted text-xs mt-0.5">
-                  Channels, categories, quiet hours. Backend ready; UI
-                  scheduled post-CP2.
-                </div>
-              </div>
-            </div>
-          </CardBody>
-        </Card>
-        <Card className="opacity-60">
-          <CardBody>
-            <div className="flex items-start gap-3">
-              <div className="text-text-muted">
-                <Key size={20} />
-              </div>
-              <div>
-                <div className="text-text-bright font-medium text-sm">
-                  API keys{' '}
-                  <span className="text-text-faint text-[10px] uppercase ml-1">
-                    fast-follow
-                  </span>
-                </div>
-                <div className="text-text-muted text-xs mt-0.5">
-                  Programmatic access to the Skydrop seller API. Backend
-                  ready; UI scheduled post-CP2.
-                </div>
-              </div>
-            </div>
-          </CardBody>
-        </Card>
+              </CardBody>
+            </Card>
+          </Link>
+        ))}
       </div>
     </div>
   );
