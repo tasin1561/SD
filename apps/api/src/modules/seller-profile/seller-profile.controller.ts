@@ -1,13 +1,16 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
   Patch,
+  Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiProperty, ApiTags } from '@nestjs/swagger';
+import { IsIn, IsString, MaxLength, MinLength } from 'class-validator';
 import { CurrentSeller } from '../../common/decorators/current-seller.decorator';
 import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/client-info.decorator';
 import { SellerAuthAllowSuspended } from '../../common/decorators/seller-auth-allow-suspended.decorator';
@@ -17,6 +20,30 @@ import type { AuthenticatedSeller } from '../../common/types/request';
 import { UpdateSellerProfileDto } from './dto/update-profile.dto';
 import { UpdateSellerBankDetailsDto } from './dto/update-bank-details.dto';
 import { SellerProfileService, type SellerProfileView } from './services/seller-profile.service';
+import { SellerLogoService } from './services/seller-logo.service';
+
+const ALLOWED_LOGO_MIME = ['image/jpeg', 'image/png', 'image/webp'] as const;
+type AllowedLogoMime = (typeof ALLOWED_LOGO_MIME)[number];
+
+class PresignLogoDto {
+  @ApiProperty({ enum: ALLOWED_LOGO_MIME })
+  @IsString()
+  @IsIn(ALLOWED_LOGO_MIME as unknown as readonly string[])
+  mimeType!: AllowedLogoMime;
+}
+
+class RegisterLogoDto {
+  @ApiProperty({ description: 'storageKey returned by /logo/presign' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(512)
+  storageKey!: string;
+
+  @ApiProperty({ enum: ALLOWED_LOGO_MIME })
+  @IsString()
+  @IsIn(ALLOWED_LOGO_MIME as unknown as readonly string[])
+  mimeType!: AllowedLogoMime;
+}
 
 @ApiTags('seller-profile')
 @ApiBearerAuth('seller-jwt')
@@ -24,7 +51,10 @@ import { SellerProfileService, type SellerProfileView } from './services/seller-
 @ThrottleKey('auth-user')
 @Controller('seller/profile')
 export class SellerProfileController {
-  constructor(private readonly svc: SellerProfileService) {}
+  constructor(
+    private readonly svc: SellerProfileService,
+    private readonly logoSvc: SellerLogoService,
+  ) {}
 
   @Get()
   @SellerAuthAllowSuspended()
@@ -60,5 +90,41 @@ export class SellerProfileController {
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<SellerProfileView> {
     return this.svc.updateBankDetails(seller.id, body, ctx);
+  }
+
+  @Post('logo/presign')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Presign a PUT URL for uploading the company logo',
+    description: 'Returns storageKey + presigned PUT URL; client PUTs the file then POSTs /logo/register.',
+  })
+  presignLogo(
+    @Body() body: PresignLogoDto,
+    @CurrentSeller() seller: AuthenticatedSeller,
+  ) {
+    return this.logoSvc.presign(seller.id, body.mimeType);
+  }
+
+  @Post('logo/register')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Register an uploaded logo (called after the presigned PUT succeeds)',
+  })
+  registerLogo(
+    @Body() body: RegisterLogoDto,
+    @CurrentSeller() seller: AuthenticatedSeller,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ) {
+    return this.logoSvc.register(seller.id, body.storageKey, body.mimeType, ctx);
+  }
+
+  @Delete('logo')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Remove the company logo' })
+  removeLogo(
+    @CurrentSeller() seller: AuthenticatedSeller,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ) {
+    return this.logoSvc.remove(seller.id, ctx);
   }
 }

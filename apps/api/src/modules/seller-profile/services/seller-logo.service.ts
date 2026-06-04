@@ -27,14 +27,14 @@ import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
 const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
-interface PresignResult {
+export interface PresignResult {
   readonly storageKey: string;
   readonly uploadUrl: string;
   readonly expiresInSeconds: number;
   readonly maxSizeBytes: number;
 }
 
-interface LogoView {
+export interface LogoView {
   readonly logoUrl: string | null;
   readonly logoMimeType: string | null;
 }
