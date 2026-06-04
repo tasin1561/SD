@@ -15,9 +15,14 @@ export interface StaffAccessClaims extends JwtPayload {
 }
 
 export interface SellerAccessClaims extends JwtPayload {
+  /** SellerUser.id — the person who signed in (Phase 1B RBAC). */
   sub: string;
   aud: 'skydrop-seller';
   status: string;
+  /** Parent Seller.id (the company). */
+  sellerId: string;
+  /** SellerUser.role. */
+  role: string;
   jti: string;
 }
 
@@ -40,9 +45,14 @@ export class JwtService {
     });
   }
 
-  signSellerAccess(input: { subject: string; status: string }): SignedAccessToken {
+  signSellerAccess(input: {
+    subject: string;
+    status: string;
+    sellerId: string;
+    role: string;
+  }): SignedAccessToken {
     return this.sign({
-      payload: { status: input.status },
+      payload: { status: input.status, sellerId: input.sellerId, role: input.role },
       subject: input.subject,
       audience: 'skydrop-seller',
     });

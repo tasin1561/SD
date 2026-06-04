@@ -154,6 +154,8 @@ model Seller {
   walletBalances          SellerWalletBalance[]
   remittances             Remittance[]
   invoices                Invoice[]
+  users                   SellerUser[]
+  userInvitations         SellerUserInvitation[]
 
   @@index([status])
   @@index([deletedAt])
@@ -3393,4 +3395,93 @@ model Invoice {
   @@index([sellerId, invoiceDate])
   @@index([fiscalYear, invoiceNumber])
   @@map("invoices")
+}
+
+// ============================================================================
+// Phase 1B — Seller team members (RBAC)
+// ============================================================================
+//
+// A `Seller` is the COMPANY (legal entity, bank account, brand, etc.).
+// A `SellerUser` is a person at that company who can sign in. The
+// existing seller-auth flow looks up credentials on `seller_users.email`
+// instead of `sellers.email`; for backward compatibility the original
+// password/email columns on `sellers` are retained but unused — to be
+// dropped in a Phase-2 migration after the legacy fields are stripped
+// from every code path.
+//
+// One Seller has many SellerUsers. Exactly one is OWNER per Seller
+// (enforced at the service layer — the SQL has no partial-unique
+// because ownership transfer is a deliberate 2-step in the service).
+//
+// Roles:
+//   OWNER     — everything; only role that can transfer ownership;
+//               cannot be removed by other team members
+//   ADMIN     — everything except team-management mutations on the
+//               OWNER row; can invite/promote/demote other roles
+//   OPS       — orders, call-centre view, tracking; no catalog/wallet
+//   INVENTORY — catalog, products, variants, images, goods receipts;
+//               no orders or wallet
+//   FINANCE   — wallet, invoices, remittances view, reports
+//   VIEWER    — read-only access to everything visible to the company
+
+enum SellerUserRole {
+  OWNER     @map("owner")
+  ADMIN     @map("admin")
+  OPS       @map("ops")
+  INVENTORY @map("inventory")
+  FINANCE   @map("finance")
+  VIEWER    @map("viewer")
+
+  @@map("seller_user_role")
+}
+
+model SellerUser {
+  id              String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId        String         @map("seller_id") @db.Uuid
+  email           String         @unique
+  emailDisplay    String         @map("email_display")
+  passwordHash    String         @map("password_hash")
+  fullName        String         @map("full_name")
+  role            SellerUserRole
+  invitedById     String?        @map("invited_by_id") @db.Uuid
+  emailVerifiedAt DateTime?      @map("email_verified_at") @db.Timestamptz
+  lastLoginAt     DateTime?      @map("last_login_at") @db.Timestamptz
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt       DateTime?      @map("deleted_at") @db.Timestamptz
+
+  seller              Seller                 @relation(fields: [sellerId], references: [id])
+  invitedBy           SellerUser?            @relation("SellerUserInvitedBy", fields: [invitedById], references: [id])
+  invitedUsers        SellerUser[]           @relation("SellerUserInvitedBy")
+  invitationsAuthored SellerUserInvitation[] @relation("SellerUserInvitedByUser")
+  invitationsAccepted SellerUserInvitation[] @relation("SellerUserInvitationAccepted")
+
+  @@index([sellerId])
+  @@index([sellerId, role])
+  @@map("seller_users")
+}
+
+model SellerUserInvitation {
+  id           String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId     String         @map("seller_id") @db.Uuid
+  email        String
+  token        String         @unique
+  role         SellerUserRole
+  invitedById  String         @map("invited_by_id") @db.Uuid
+  acceptedById String?        @map("accepted_by_id") @db.Uuid
+  expiresAt    DateTime       @map("expires_at") @db.Timestamptz
+  usedAt       DateTime?      @map("used_at") @db.Timestamptz
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt    DateTime?      @map("deleted_at") @db.Timestamptz
+
+  seller     Seller      @relation(fields: [sellerId], references: [id])
+  invitedBy  SellerUser  @relation("SellerUserInvitedByUser", fields: [invitedById], references: [id])
+  acceptedBy SellerUser? @relation("SellerUserInvitationAccepted", fields: [acceptedById], references: [id])
+
+  @@index([sellerId])
+  @@index([email])
+  @@index([expiresAt])
+  @@index([invitedById])
+  @@map("seller_user_invitations")
 }

@@ -10,6 +10,6 @@ import { SellerNotificationPreferenceModule } from '../seller-notification-prefe
   imports: [EmailModule, SellerOnboardingModule, SellerNotificationPreferenceModule],
   controllers: [SellerAuthController],
   providers: [SellerAuthService, SellerJwtGuard],
-  exports: [SellerJwtGuard],
+  exports: [SellerJwtGuard, SellerAuthService],
 })
 export class SellerAuthModule {}

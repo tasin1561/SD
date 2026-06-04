@@ -49,13 +49,24 @@ export class SellerJwtGuard implements CanActivate {
 
     const claims = this.jwt.verifySellerAccess(token);
 
-    const seller = await this.prisma.client.seller.findFirst({
+    // Phase 1B RBAC — token.sub is the SellerUser id; join Seller for status.
+    const user = await this.prisma.client.sellerUser.findFirst({
       where: { id: claims.sub, deletedAt: null },
-      select: { id: true, email: true, status: true, emailVerifiedAt: true },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        role: true,
+        emailVerifiedAt: true,
+        seller: {
+          select: { id: true, email: true, status: true, deletedAt: true },
+        },
+      },
     });
-    if (!seller) {
+    if (!user || user.seller.deletedAt !== null) {
       throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Seller session no longer valid' });
     }
+    const seller = user.seller;
 
     const allowSuspended =
       this.reflector.getAllAndOverride<boolean>(SELLER_AUTH_ALLOW_SUSPENDED_KEY, [
@@ -98,8 +109,11 @@ export class SellerJwtGuard implements CanActivate {
       id: seller.id,
       email: seller.email,
       status: seller.status,
-      emailVerifiedAt: seller.emailVerifiedAt,
+      emailVerifiedAt: user.emailVerifiedAt,
       jti: claims.jti,
+      userId: user.id,
+      role: user.role,
+      fullName: user.fullName,
     };
     return true;
   }

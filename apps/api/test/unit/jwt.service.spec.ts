@@ -26,12 +26,19 @@ describe('JwtService', () => {
     expect(claims.iss).toBe('skydrop');
   });
 
-  it('signs a seller access token with status claim', () => {
-    const signed = svc.signSellerAccess({ subject: 'seller-uuid-1', status: 'APPROVED' });
+  it('signs a seller access token with status + sellerId + role claims', () => {
+    const signed = svc.signSellerAccess({
+      subject: 'user-uuid-1',
+      status: 'APPROVED',
+      sellerId: 'seller-uuid-1',
+      role: 'OWNER',
+    });
     const claims = svc.verifySellerAccess(signed.token);
-    expect(claims.sub).toBe('seller-uuid-1');
+    expect(claims.sub).toBe('user-uuid-1');
     expect(claims.aud).toBe('skydrop-seller');
     expect(claims.status).toBe('APPROVED');
+    expect(claims.sellerId).toBe('seller-uuid-1');
+    expect(claims.role).toBe('OWNER');
   });
 
   it('rejects a token with the wrong audience', () => {

@@ -844,3 +844,129 @@ export function useRevokeApiKey(): UseMutationResult<void, Error, { id: string }
     },
   });
 }
+
+// ───────── Seller team (RBAC) ─────────
+
+import type {
+  TeamInvitationListItem,
+  CreatedTeamInvitation,
+  CreateTeamInvitationRequest,
+  TeamMemberRow,
+} from '@skydrop/api-client';
+
+export function useTeamInvitationsList(): UseQueryResult<{
+  items: TeamInvitationListItem[];
+  total: number;
+}> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-team', 'invitations'],
+    queryFn: () =>
+      client.request<{ items: TeamInvitationListItem[]; total: number }>(
+        '/api/seller/team/invitations',
+      ),
+  });
+}
+
+export function useCreateTeamInvitation(): UseMutationResult<
+  CreatedTeamInvitation,
+  Error,
+  CreateTeamInvitationRequest
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<CreatedTeamInvitation>('/api/seller/team/invitations', {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-team'] });
+    },
+  });
+}
+
+export function useResendTeamInvitation(): UseMutationResult<
+  CreatedTeamInvitation,
+  Error,
+  { id: string }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }) =>
+      client.request<CreatedTeamInvitation>(
+        `/api/seller/team/invitations/${id}/resend`,
+        { method: 'POST', body: {} },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-team'] });
+    },
+  });
+}
+
+export function useRevokeTeamInvitation(): UseMutationResult<
+  void,
+  Error,
+  { id: string }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }) => {
+      await client.request<void>(`/api/seller/team/invitations/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-team'] });
+    },
+  });
+}
+
+export function useTeamMembersList(): UseQueryResult<TeamMemberRow[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-team', 'members'],
+    queryFn: () => client.request<TeamMemberRow[]>('/api/seller/team/members'),
+  });
+}
+
+export function useUpdateTeamMemberRole(): UseMutationResult<
+  { id: string; role: string },
+  Error,
+  { id: string; role: string }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, role }) =>
+      client.request<{ id: string; role: string }>(
+        `/api/seller/team/members/${id}/role`,
+        { method: 'PATCH', body: { role } },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-team'] });
+    },
+  });
+}
+
+export function useDeactivateTeamMember(): UseMutationResult<
+  void,
+  Error,
+  { id: string }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }) => {
+      await client.request<void>(`/api/seller/team/members/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-team'] });
+    },
+  });
+}

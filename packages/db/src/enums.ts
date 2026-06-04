@@ -83,4 +83,6 @@ export {
   NotificationFrequency,
   // Phase 1B — Wallet + remittance
   WalletEntryDirection,
+  // Seller team (RBAC)
+  SellerUserRole,
 } from '@prisma/client';

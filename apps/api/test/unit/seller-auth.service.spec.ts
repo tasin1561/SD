@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common';
-import { ActorType, Currency, SellerStatus } from '@skydrop/db';
+import { ActorType, Currency, SellerStatus, SellerUserRole } from '@skydrop/db';
 import { SellerAuthService } from '../../src/modules/seller-auth/seller-auth.service';
 import { PasswordService } from '../../src/modules/auth-common/services/password.service';
 import { JwtService } from '../../src/modules/auth-common/services/jwt.service';
@@ -76,12 +76,27 @@ interface RtRow {
   revokedAt: Date | null;
 }
 
+interface SellerUserRow {
+  id: string;
+  sellerId: string;
+  email: string;
+  emailDisplay: string;
+  fullName: string;
+  passwordHash: string;
+  role: SellerUserRole;
+  emailVerifiedAt: Date | null;
+  lastLoginAt: Date | null;
+  createdAt: Date;
+  deletedAt: Date | null;
+}
+
 interface Tables {
   sellers: SellerRow[];
   invitations: InvitationRow[];
   prts: PrtRow[];
   evts: EvtRow[];
   rts: RtRow[];
+  sellerUsers: SellerUserRow[];
 }
 
 interface FakeClient {
@@ -89,6 +104,11 @@ interface FakeClient {
   seller: {
     findFirst: jest.Mock;
     findUnique: jest.Mock;
+    create: jest.Mock;
+    update: jest.Mock;
+  };
+  sellerUser: {
+    findFirst: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
   };
@@ -124,11 +144,19 @@ interface FakeClient {
 }
 
 function buildClient(): FakeClient {
-  const tables: Tables = { sellers: [], invitations: [], prts: [], evts: [], rts: [] };
+  const tables: Tables = {
+    sellers: [],
+    invitations: [],
+    prts: [],
+    evts: [],
+    rts: [],
+    sellerUsers: [],
+  };
   let prtSeq = 0;
   let evtSeq = 0;
   let rtSeq = 0;
   let sellerSeq = 0;
+  let sellerUserSeq = 0;
 
   const client: FakeClient = {
     tables,
@@ -179,6 +207,52 @@ function buildClient(): FakeClient {
       update: jest.fn(async ({ where, data }: { where: { id: string }; data: Partial<SellerRow> }) => {
         const row = tables.sellers.find((r) => r.id === where.id);
         if (!row) throw new Error('seller not found');
+        Object.assign(row, data);
+        return row;
+      }),
+    },
+    sellerUser: {
+      findFirst: jest.fn(async ({ where }: { where: Record<string, unknown> }) => {
+        const row = tables.sellerUsers.find((r) => {
+          if (where['email'] !== undefined && r.email !== where['email']) return false;
+          if (where['id'] !== undefined && r.id !== where['id']) return false;
+          if (where['deletedAt'] === null && r.deletedAt !== null) return false;
+          return true;
+        });
+        if (!row) return null;
+        const seller = tables.sellers.find((s) => s.id === row.sellerId);
+        return {
+          id: row.id,
+          email: row.email,
+          passwordHash: row.passwordHash,
+          role: row.role,
+          deletedAt: row.deletedAt,
+          seller: seller
+            ? { id: seller.id, status: seller.status, deletedAt: seller.deletedAt }
+            : null,
+        };
+      }),
+      create: jest.fn(async ({ data }: { data: Partial<SellerUserRow> & { sellerId: string; email: string; emailDisplay: string; fullName: string; passwordHash: string; role: SellerUserRole } }) => {
+        sellerUserSeq += 1;
+        const row: SellerUserRow = {
+          id: `seller-user-${sellerUserSeq}`,
+          sellerId: data.sellerId,
+          email: data.email,
+          emailDisplay: data.emailDisplay,
+          fullName: data.fullName,
+          passwordHash: data.passwordHash,
+          role: data.role,
+          emailVerifiedAt: data.emailVerifiedAt ?? null,
+          lastLoginAt: data.lastLoginAt ?? null,
+          createdAt: new Date(),
+          deletedAt: null,
+        };
+        tables.sellerUsers.push(row);
+        return { id: row.id };
+      }),
+      update: jest.fn(async ({ where, data }: { where: { id: string }; data: Partial<SellerUserRow> }) => {
+        const row = tables.sellerUsers.find((r) => r.id === where.id);
+        if (!row) throw new Error('seller user not found');
         Object.assign(row, data);
         return row;
       }),
@@ -366,6 +440,22 @@ async function seedSeller(
     ...overrides,
   };
   client.tables.sellers.push(row);
+  // Phase 1B RBAC: every active seller has at least one OWNER SellerUser.
+  // The legacy sellers.email/passwordHash are kept on the parent row for
+  // back-compat, but auth + RBAC are driven by SellerUser.
+  client.tables.sellerUsers.push({
+    id: `${row.id}-owner`,
+    sellerId: row.id,
+    email: row.email,
+    emailDisplay: row.emailDisplay,
+    fullName: row.contactPersonName,
+    passwordHash: row.passwordHash,
+    role: SellerUserRole.OWNER,
+    emailVerifiedAt: row.emailVerifiedAt,
+    lastLoginAt: row.lastLoginAt,
+    createdAt: row.createdAt,
+    deletedAt: null,
+  });
   return row;
 }
 

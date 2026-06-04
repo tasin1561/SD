@@ -124,6 +124,12 @@ export class ApiKeyGuard implements CanActivate {
       status: row.seller.status,
       emailVerifiedAt: null,
       jti: row.id, // surface the api-key id as the "jti" for downstream audits
+      // API-key auth doesn't have a person — synthesise an ADMIN-equivalent
+      // attribution. Endpoints that want fine-grained per-person attribution
+      // should use bearer-token auth instead.
+      userId: row.id,
+      role: 'ADMIN',
+      fullName: 'API Key',
     };
 
     // Fire-and-forget lastUsedAt update — don't block the request on this.

@@ -180,6 +180,22 @@ export class SellerAuthService {
         select: { id: true, email: true, status: true },
       });
 
+      // Phase 1B — the OWNER SellerUser row carries the auth credentials
+      // for the new RBAC flow. Same tx so the company + owner come up
+      // together or not at all.
+      const createdOwner = await tx.sellerUser.create({
+        data: {
+          sellerId: createdSeller.id,
+          email: normalizedEmail,
+          emailDisplay: invitation.email,
+          passwordHash,
+          fullName: input.contactPersonName,
+          role: 'OWNER',
+          emailVerifiedAt: now,
+        },
+        select: { id: true, role: true },
+      });
+
       await tx.sellerInvitation.update({
         where: { id: invitation.id },
         data: { usedAt: now, sellerId: createdSeller.id },
@@ -187,14 +203,16 @@ export class SellerAuthService {
 
       const issued = await this.refresh.issue({
         subject: 'seller',
-        userId: createdSeller.id,
+        userId: createdOwner.id,
         userAgent: ctx.userAgent ?? null,
         ipAddress: ctx.ipAddress ?? null,
         tx,
       });
       const access = this.jwt.signSellerAccess({
-        subject: createdSeller.id,
+        subject: createdOwner.id,
         status: createdSeller.status,
+        sellerId: createdSeller.id,
+        role: createdOwner.role,
       });
 
       await this.audit.log(
@@ -252,16 +270,28 @@ export class SellerAuthService {
   async login(input: { email: string; password: string }, ctx: ClientContext): Promise<SellerLoginResult> {
     const normalizedEmail = input.email.trim().toLowerCase();
 
-    const seller = await this.prisma.client.seller.findFirst({
+    // Phase 1B RBAC — look up the SellerUser; the parent Seller is
+    // joined for the status recheck. The legacy sellers.email/password
+    // columns are retained for back-compat but no longer used here.
+    const user = await this.prisma.client.sellerUser.findFirst({
       where: { email: normalizedEmail },
-      select: { id: true, email: true, passwordHash: true, status: true, deletedAt: true },
+      select: {
+        id: true,
+        email: true,
+        passwordHash: true,
+        role: true,
+        deletedAt: true,
+        seller: {
+          select: { id: true, status: true, deletedAt: true },
+        },
+      },
     });
 
-    if (!seller) {
+    if (!user) {
       await this.audit.log({
         actorType: ActorType.SYSTEM,
         action: 'seller.login.failure',
-        entityType: 'seller',
+        entityType: 'seller_user',
         entityId: null,
         metadata: {
           attemptedEmail: normalizedEmail,
@@ -273,19 +303,26 @@ export class SellerAuthService {
       throw this.invalidCredentials();
     }
 
-    if (seller.deletedAt !== null) {
+    const seller = {
+      id: user.seller.id,
+      email: user.email,
+      status: user.seller.status,
+      deletedAt: user.seller.deletedAt,
+    };
+
+    if (user.deletedAt !== null || seller.deletedAt !== null) {
       await this.audit.log({
         actorType: ActorType.SELLER,
         sellerId: seller.id,
         action: 'seller.login.failure',
-        entityType: 'seller',
-        entityId: seller.id,
+        entityType: 'seller_user',
+        entityId: user.id,
         metadata: { reason: 'soft_deleted', ipAddress: ctx.ipAddress, userAgent: ctx.userAgent },
       });
       throw this.invalidCredentials();
     }
 
-    const ok = await this.password.verify(seller.passwordHash, input.password);
+    const ok = await this.password.verify(user.passwordHash, input.password);
     if (!ok) {
       await this.audit.log({
         actorType: ActorType.SELLER,
@@ -328,12 +365,22 @@ export class SellerAuthService {
     return this.prisma.client.$transaction(async (tx) => {
       const refresh = await this.refresh.issue({
         subject: 'seller',
-        userId: seller.id,
+        userId: user.id,
         userAgent: ctx.userAgent ?? null,
         ipAddress: ctx.ipAddress ?? null,
         tx,
       });
-      const accessToken = this.jwt.signSellerAccess({ subject: seller.id, status: seller.status });
+      const accessToken = this.jwt.signSellerAccess({
+        subject: user.id,
+        status: seller.status,
+        sellerId: seller.id,
+        role: user.role,
+      });
+
+      await tx.sellerUser.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+      });
 
       await this.audit.log(
         {
@@ -372,18 +419,22 @@ export class SellerAuthService {
       userAgent: ctx.userAgent ?? null,
     });
 
-    const seller = await this.prisma.client.seller.findFirst({
+    // Phase 1B RBAC — userId is the SellerUser id (we updated the
+    // issue() callsites). Look up the user + join the parent Seller.
+    const user = await this.prisma.client.sellerUser.findFirst({
       where: { id: userId, deletedAt: null },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        role: true,
+        seller: { select: { id: true, status: true, deletedAt: true } },
+      },
     });
     if (
-      !seller ||
-      (seller.status !== SellerStatus.APPROVED &&
-        seller.status !== SellerStatus.SUSPENDED)
+      !user ||
+      user.seller.deletedAt !== null ||
+      (user.seller.status !== SellerStatus.APPROVED &&
+        user.seller.status !== SellerStatus.SUSPENDED)
     ) {
-      // Refresh issued, but the underlying seller is gone or in a status
-      // that blocks even read-only access (PENDING/REJECTED). Revoke the
-      // new token immediately so the cookie is dead.
       await this.refresh.revokeByPlaintext('seller', issued.token);
       throw new ForbiddenException({
         code: 'ACCOUNT_NOT_ACTIVE',
@@ -391,7 +442,12 @@ export class SellerAuthService {
       });
     }
 
-    const accessToken = this.jwt.signSellerAccess({ subject: seller.id, status: seller.status });
+    const accessToken = this.jwt.signSellerAccess({
+      subject: user.id,
+      status: user.seller.status,
+      sellerId: user.seller.id,
+      role: user.role,
+    });
     return { accessToken, refresh: issued };
   }
 

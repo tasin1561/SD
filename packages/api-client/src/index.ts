@@ -144,6 +144,13 @@ export type {
   AcceptStaffInvitationRequest,
 } from './endpoints/admin-staff';
 export type {
+  TeamInvitationListItem,
+  CreatedTeamInvitation,
+  CreateTeamInvitationRequest,
+  TeamMemberRow,
+  AcceptTeamInvitationRequest,
+} from './endpoints/seller-team';
+export type {
   WebhookDeliveryView,
   WebhookDeliveryListResponse,
   RetryWebhookDeliveryResponse,
