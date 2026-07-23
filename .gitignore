@@ -110,3 +110,6 @@ tmp/
 
 # ----- Local dev artifacts -----
 *.local
+/test.png
+/screenshots/
+.playwright-artifacts/
