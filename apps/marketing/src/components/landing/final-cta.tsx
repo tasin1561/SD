@@ -7,14 +7,13 @@ import { fadeUp, viewportOnce } from '@/lib/motion';
 
 export function FinalCta(): ReactElement {
   return (
-    <section className="relative bg-ink text-white py-20 lg:py-28 overflow-hidden">
-      {/* Ambient glow */}
+    <section className="relative bg-surface-2 py-20 lg:py-28 overflow-hidden border-t border-line">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-40"
+        className="pointer-events-none absolute inset-0 opacity-50"
         style={{
           background:
-            'radial-gradient(circle at 50% 40%, rgba(56,189,248,0.15), transparent 60%)',
+            'radial-gradient(circle at 50% 40%, color-mix(in oklab, var(--sky) 15%, transparent), transparent 60%)',
         }}
       />
 
@@ -26,18 +25,18 @@ export function FinalCta(): ReactElement {
         variants={fadeUp}
       >
         <h2
-          className="font-display font-semibold text-white"
+          className="font-display font-semibold text-fg-strong"
           style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', letterSpacing: '-0.02em', lineHeight: 1.1 }}
         >
           Ready to ship into India?
         </h2>
-        <p className="mt-5 text-[var(--muted-dark)] text-base sm:text-lg mx-auto max-w-[42ch]">
+        <p className="mt-5 text-fg-muted text-base sm:text-lg mx-auto max-w-[42ch]">
           Tell us about your store — we reply within one working day.
         </p>
         <div className="mt-9 flex flex-wrap justify-center items-center gap-4">
           <a
             href="mailto:hello@skydrop.online?subject=Skydrop%20invite%20request"
-            className="group inline-flex items-center gap-2 rounded-xl bg-sky px-5 py-3.5 text-sm font-medium text-ink transition-all hover:bg-white hover:-translate-y-px"
+            className="group inline-flex items-center gap-2 rounded-xl bg-sky px-5 py-3.5 text-sm font-medium text-accent-fg transition-all hover:bg-sky-deep hover:-translate-y-px"
           >
             Request an invite
             <ArrowUpRight
@@ -47,7 +46,7 @@ export function FinalCta(): ReactElement {
           </a>
           <a
             href="mailto:hello@skydrop.online"
-            className="font-mono text-sm text-[var(--muted-dark)] hover:text-white transition-colors"
+            className="font-mono text-sm text-fg-muted hover:text-fg-strong transition-colors"
           >
             hello@skydrop.online
           </a>

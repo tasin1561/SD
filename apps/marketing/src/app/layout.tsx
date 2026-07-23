@@ -2,9 +2,8 @@ import type { Metadata } from 'next';
 import type { ReactElement, ReactNode } from 'react';
 import { Instrument_Sans, Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
+import { themeInitScript } from '@/lib/theme-init';
 
-// Fonts — subset latin, display: swap, next/font auto-hosts them locally.
-// No external font request at runtime; no FOIT.
 const instrument = Instrument_Sans({
   subsets: ['latin'],
   variable: '--font-instrument',
@@ -32,7 +31,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: 'Skydrop — Sell to India from Bangladesh | COD fulfillment, warehousing, remittance',
   description:
-    'Selling into India is a six-headed problem. Skydrop holds your stock in India, confirms every COD order by phone, and dispatches via Delhivery — you just sell.',
+    'Selling into India is a six-headed problem. Skydrop holds your stock in India, confirms every order by phone, and dispatches via Delhivery — you just sell.',
   robots: { index: true, follow: true },
   alternates: { canonical: siteUrl },
   openGraph: {
@@ -54,8 +53,6 @@ export const metadata: Metadata = {
   },
 };
 
-// JSON-LD: Organization schema. FAQPage lives in the FAQ section itself so
-// its questions/answers stay co-located with the visible content.
 const organizationJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'Organization',
@@ -78,11 +75,13 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${instrument.variable} ${inter.variable} ${jetbrains.variable}`}
+      suppressHydrationWarning
     >
       <head>
+        {/* No-flash theme init — runs before hydration */}
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <script
           type="application/ld+json"
-          // eslint-disable-next-line react/no-danger
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
         />
       </head>

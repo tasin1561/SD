@@ -64,7 +64,7 @@ export function RouteSvg(): ReactElement {
                 cx={50 + i * 50}
                 cy={30 + j * 45}
                 r="1"
-                fill="var(--muted-dark)"
+                fill="var(--fg-muted)"
               />
             )),
           )}
@@ -124,7 +124,7 @@ export function RouteSvg(): ReactElement {
               <motion.text
                 x={n.x}
                 y={n.y + 32}
-                fill={n.muted ? 'var(--muted-dark)' : 'var(--white)'}
+                fill={n.muted ? 'var(--fg-muted)' : 'var(--fg-strong)'}
                 fontSize="11"
                 fontFamily="var(--font-mono), monospace"
                 textAnchor="middle"
@@ -142,7 +142,7 @@ export function RouteSvg(): ReactElement {
         <text
           x="30"
           y="270"
-          fill="var(--muted-dark)"
+          fill="var(--fg-muted)"
           fontSize="10"
           fontFamily="var(--font-mono), monospace"
           opacity="0.5"
@@ -152,7 +152,7 @@ export function RouteSvg(): ReactElement {
         <text
           x="560"
           y="270"
-          fill="var(--muted-dark)"
+          fill="var(--fg-muted)"
           fontSize="10"
           fontFamily="var(--font-mono), monospace"
           textAnchor="end"

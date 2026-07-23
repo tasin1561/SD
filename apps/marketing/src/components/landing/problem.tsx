@@ -23,38 +23,38 @@ const CARDS: Card[] = [
   {
     icon: Warehouse,
     title: 'Warehouse',
-    body: 'Shipping every order from Dhaka takes weeks and returns are ruinous.',
+    body: 'Shipping every order from Dhaka takes weeks, and returns cost more than the sale.',
   },
   {
     icon: FileSignature,
     title: 'Courier contracts',
-    body: 'Delhivery and Bluedart only sign Indian entities, and price hard on volume.',
+    body: 'Delhivery and Bluedart only sign Indian entities, and price hard on volume you can’t promise.',
   },
   {
     icon: PhoneCall,
     title: 'COD confirmation',
-    body: 'Without a Hindi call-confirm team, RTO hits 40%+ and every order loses money.',
+    body: 'Without a Hindi call-confirm team, RTO reaches 40% or more — every dispatched parcel loses money.',
   },
   {
     icon: Boxes,
     title: 'Warehouse ops',
-    body: 'Receive, pick, pack, dispatch, RTO — a full operation you’d have to staff.',
+    body: 'Receive, pick, pack, dispatch, RTO — a full operation you would otherwise have to staff.',
   },
   {
     icon: Banknote,
     title: 'Money',
-    body: 'Indian bank accounts, GST invoicing, COD reconciliation, remittance to BD.',
+    body: 'Indian bank accounts, GST invoicing, COD reconciliation, and remittance back to Bangladesh.',
   },
   {
     icon: Headset,
     title: 'Support',
-    body: 'Customers expect help in Hindi.',
+    body: 'Indian customers expect help in Hindi, delivered within a working day.',
   },
 ];
 
 export function Problem(): ReactElement {
   return (
-    <section className="bg-paper py-16 lg:py-24">
+    <section className="bg-surface-2 py-16 lg:py-24">
       <div className="max-w-7xl mx-auto px-5 sm:px-8">
         <motion.div
           initial="hidden"
@@ -62,11 +62,11 @@ export function Problem(): ReactElement {
           viewport={viewportOnce}
           variants={fadeUp}
         >
-          <div className="inline-flex items-center gap-2 rounded-full bg-white border border-border-light px-3 py-1 text-[11px] font-mono uppercase tracking-wide text-muted">
+          <div className="inline-flex items-center gap-2 rounded-full bg-surface border border-line px-3 py-1 text-[11px] font-mono uppercase tracking-wide text-fg-muted">
             The problem
           </div>
           <h2
-            className="mt-4 font-display font-semibold text-ink"
+            className="mt-4 font-display font-semibold text-fg-strong"
             style={{
               fontSize: 'clamp(1.75rem, 3.5vw, 2.75rem)',
               letterSpacing: '-0.02em',
@@ -89,15 +89,15 @@ export function Problem(): ReactElement {
               <motion.li
                 key={c.title}
                 variants={fadeUp}
-                className="group relative rounded-2xl border border-border-light bg-white p-6 transition-shadow duration-150 hover:shadow-lg"
+                className="group relative rounded-2xl border border-line bg-surface p-6 transition-shadow duration-150 hover:shadow-lg"
               >
-                <div className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-ink text-sky">
+                <div className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-surface-3 text-sky border border-line">
                   <Icon size={20} aria-hidden="true" />
                 </div>
-                <h3 className="font-display text-lg font-semibold text-ink mb-2">
+                <h3 className="font-display text-lg font-semibold text-fg-strong mb-2">
                   {c.title}
                 </h3>
-                <p className="text-[15px] text-muted leading-relaxed">
+                <p className="text-[15px] text-fg-muted leading-relaxed">
                   {c.body}
                 </p>
               </motion.li>
@@ -106,16 +106,16 @@ export function Problem(): ReactElement {
         </motion.ul>
 
         <motion.p
-          className="mt-10 lg:mt-14 max-w-2xl text-ink text-lg"
+          className="mt-10 lg:mt-14 max-w-2xl text-fg-strong text-lg"
           initial="hidden"
           whileInView="show"
           viewport={viewportOnce}
           variants={fadeUp}
         >
-          Doing it yourself:{' '}
-          <span className="font-mono text-ink">6+ months</span>,{' '}
-          <span className="font-mono text-ink">₹50 lakh+</span>, and an Indian
-          company. Most sellers never try.
+          Building this yourself takes{' '}
+          <span className="font-mono">6+ months</span>,{' '}
+          <span className="font-mono">₹50 lakh+</span>, and an Indian company.
+          Most sellers never try.
         </motion.p>
       </div>
     </section>

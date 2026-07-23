@@ -1,13 +1,21 @@
 /*
  * Skydrop marketing globals — tokens per .claude/skills/skydrop-design/SKILL.md
- * Standalone: does NOT import @skydrop/ui (that's for the app portals; the
- * marketing site has its own brand personality — Linear meets Delhivery).
+ *
+ * Two-layer token system:
+ *   1. Raw palette (from skill) — never changes.
+ *   2. Semantic tokens (--surface / --fg / etc.) — swap based on
+ *      html[data-theme="dark|light"]. Sections use semantic only, so
+ *      the same markup renders correctly in either theme.
+ *
+ * Default (no data-theme attr): follows prefers-color-scheme, defaulting
+ * to DARK if the OS has no preference (matches the skill's brand-dark
+ * primary personality).
  */
 
 @import 'tailwindcss';
 
 :root {
-  /* ── Color tokens ─────────────────────────────────────────── */
+  /* ── Raw palette (skill, immutable) ───────────────────────── */
   --ink: #0B1220;
   --ink-soft: #1A2333;
   --sky: #38BDF8;
@@ -19,15 +27,76 @@
   --red: #EF4444;
   --muted: #64748B;
   --muted-dark: #94A3B8;
-
-  /* Borders */
   --border-light: #E2E8F0;
   --border-dark: rgba(255, 255, 255, 0.08);
+
+  /* ── Semantic tokens — DEFAULT = DARK (skill's brand primary) ── */
+  --surface: var(--ink);            /* page background */
+  --surface-2: var(--ink-soft);     /* card / raised background */
+  --surface-3: rgba(255, 255, 255, 0.03); /* hover / faint fill */
+  --fg: var(--white);                /* primary text */
+  --fg-strong: var(--white);         /* headings on surface */
+  --fg-muted: var(--muted-dark);     /* secondary text */
+  --border: var(--border-dark);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --accent-fg: var(--ink);           /* text ON top of the sky button */
+  --divider: rgba(255, 255, 255, 0.06);
+  --scrim: rgba(11, 18, 32, 0.85);   /* mobile sheet overlay */
+  color-scheme: dark;
 }
 
-/* Tailwind v4 theme extension — expose the tokens as Tailwind color
-   utilities like text-ink, bg-sky, border-border-dark, etc. */
+/* System = light + user hasn't explicitly picked a theme */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --surface: var(--paper);
+    --surface-2: var(--white);
+    --surface-3: rgba(11, 18, 32, 0.03);
+    --fg: var(--ink);
+    --fg-strong: var(--ink);
+    --fg-muted: var(--muted);
+    --border: var(--border-light);
+    --border-strong: #CBD5E1;
+    --accent-fg: var(--white);
+    --divider: var(--border-light);
+    --scrim: rgba(11, 18, 32, 0.55);
+    color-scheme: light;
+  }
+}
+
+/* Explicit user choice (persists in localStorage) — highest specificity */
+:root[data-theme='dark'] {
+  --surface: var(--ink);
+  --surface-2: var(--ink-soft);
+  --surface-3: rgba(255, 255, 255, 0.03);
+  --fg: var(--white);
+  --fg-strong: var(--white);
+  --fg-muted: var(--muted-dark);
+  --border: var(--border-dark);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --accent-fg: var(--ink);
+  --divider: rgba(255, 255, 255, 0.06);
+  --scrim: rgba(11, 18, 32, 0.85);
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  --surface: var(--paper);
+  --surface-2: var(--white);
+  --surface-3: rgba(11, 18, 32, 0.03);
+  --fg: var(--ink);
+  --fg-strong: var(--ink);
+  --fg-muted: var(--muted);
+  --border: var(--border-light);
+  --border-strong: #CBD5E1;
+  --accent-fg: var(--white);
+  --divider: var(--border-light);
+  --scrim: rgba(11, 18, 32, 0.55);
+  color-scheme: light;
+}
+
+/* Tailwind v4 @theme extension — expose semantic + raw as utilities */
 @theme inline {
+  /* Raw palette (unchanged utilities: bg-ink, text-sky, etc.) */
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
   --color-sky: var(--sky);
@@ -42,6 +111,17 @@
   --color-border-light: var(--border-light);
   --color-border-dark: var(--border-dark);
 
+  /* Semantic (theme-aware) — bg-surface, text-fg, border-line, etc. */
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-fg: var(--fg);
+  --color-fg-strong: var(--fg-strong);
+  --color-fg-muted: var(--fg-muted);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-accent-fg: var(--accent-fg);
+
   --font-sans: var(--font-inter);
   --font-display: var(--font-instrument);
   --font-mono: var(--font-mono);
@@ -54,11 +134,12 @@ body {
 }
 
 body {
-  background: var(--paper);
-  color: var(--ink);
+  background: var(--surface);
+  color: var(--fg);
   font-family: var(--font-inter), system-ui, sans-serif;
   font-size: 1rem;
   line-height: 1.6;
+  transition: background-color 200ms ease, color 200ms ease;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -69,21 +150,20 @@ body {
   box-sizing: border-box;
 }
 
-/* Focus rings — visible + tokenized. Skill: accessible on both dark + light. */
 :focus-visible {
   outline: 2px solid var(--sky);
   outline-offset: 2px;
   border-radius: 4px;
 }
 
-/* Skip-to-content link — visible only on focus. */
 .skip-to-content {
   position: absolute;
   left: -9999px;
   top: 0;
   padding: 0.75rem 1rem;
-  background: var(--ink);
-  color: var(--white);
+  background: var(--surface-2);
+  color: var(--fg-strong);
+  border: 1px solid var(--border-strong);
   border-radius: 0.5rem;
   z-index: 100;
 }
@@ -92,27 +172,24 @@ body {
   top: 1rem;
 }
 
-/* Headings — tight tracking on the display font per skill */
 h1, h2, h3 {
   font-family: var(--font-instrument), system-ui, sans-serif;
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.1;
-  color: var(--ink);
+  color: var(--fg-strong);
 }
 
-/* Text-max-65ch utility (Tailwind v4 style @utility API) */
 @utility text-max {
   max-width: 65ch;
 }
 
-/* Selection style */
 ::selection {
   background: var(--sky);
   color: var(--ink);
 }
 
-/* Marquee — for the mono capabilities strip under the hero */
+/* Marquee */
 @keyframes marquee {
   from { transform: translateX(0); }
   to { transform: translateX(-50%); }
@@ -126,7 +203,7 @@ h1, h2, h3 {
   animation-play-state: paused;
 }
 
-/* Reduced motion — collapse every custom animation */
+/* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .marquee-track {
     animation: none;

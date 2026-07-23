@@ -27,41 +27,29 @@ const STANDARD: Cell[] = [
   },
   {
     icon: Truck,
-    title: 'Delhivery + backups',
+    title: 'Delhivery + backup couriers',
     body: 'API-primary; non-serviceable PINs quietly re-routed.',
   },
   {
     icon: RotateCcw,
     title: 'Transparent RTO',
-    body: 'Returns inspected; restock or write-off is your call.',
+    body: 'Returns inspected; restock or write-off is your call, per item.',
   },
   {
     icon: BarChart3,
     title: 'Operational reports',
-    body: 'Confirm-rate, NDR-rate, RTO-rate, dispatch times.',
+    body: 'Confirm-rate, NDR-rate, RTO-rate, dispatch times — the numbers you need.',
   },
   {
     icon: Building2,
-    title: 'You stay in BD',
+    title: 'You stay in Bangladesh',
     body: 'No Indian office, staff, or GST registration to start.',
   },
 ];
 
-/**
- * Bento layout (desktop, lg+): 3-col × 3-row grid.
- *   ┌────────────────┬─────┐
- *   │                │  1  │
- *   │    LARGE       ├─────┤
- *   │ (call-confirm) │  2  │
- *   ├─────┬─────┬────┴─────┤
- *   │  3  │  4  │    5     │
- *   └─────┴─────┴──────────┘
- * Auto-flow places the standard cells around the row-span/col-span
- * large one. Mobile: single-column stack.
- */
 export function WhySkydrop(): ReactElement {
   return (
-    <section id="why-skydrop" className="bg-paper py-16 lg:py-24">
+    <section id="why-skydrop" className="bg-surface py-16 lg:py-24">
       <div className="max-w-7xl mx-auto px-5 sm:px-8">
         <motion.div
           initial="hidden"
@@ -69,11 +57,11 @@ export function WhySkydrop(): ReactElement {
           viewport={viewportOnce}
           variants={fadeUp}
         >
-          <div className="inline-flex items-center gap-2 rounded-full bg-white border border-border-light px-3 py-1 text-[11px] font-mono uppercase tracking-wide text-muted">
+          <div className="inline-flex items-center gap-2 rounded-full bg-surface-2 border border-line px-3 py-1 text-[11px] font-mono uppercase tracking-wide text-fg-muted">
             Why Skydrop
           </div>
           <h2
-            className="mt-4 font-display font-semibold text-ink"
+            className="mt-4 font-display font-semibold text-fg-strong"
             style={{
               fontSize: 'clamp(1.75rem, 3.5vw, 2.75rem)',
               letterSpacing: '-0.02em',
@@ -90,10 +78,15 @@ export function WhySkydrop(): ReactElement {
           viewport={viewportOnce}
           variants={staggerContainer}
         >
-          {/* Large hero cell */}
+          {/* SIGNATURE cell — intentionally dark accent in both themes */}
           <motion.div
             variants={fadeUp}
-            className="sm:col-span-2 lg:col-span-2 lg:row-span-2 relative overflow-hidden rounded-2xl bg-ink text-white p-8 lg:p-10 border border-[var(--border-dark)]"
+            className="sm:col-span-2 lg:col-span-2 lg:row-span-2 relative overflow-hidden rounded-2xl p-8 lg:p-10"
+            style={{
+              background: 'var(--ink)',
+              color: 'var(--white)',
+              border: '1px solid rgba(255,255,255,0.08)',
+            }}
           >
             <div
               aria-hidden
@@ -105,37 +98,53 @@ export function WhySkydrop(): ReactElement {
             />
 
             <div className="relative flex flex-col h-full">
-              <div className="inline-flex items-center gap-2 self-start rounded-full border border-[var(--border-dark)] px-3 py-1 text-[10px] font-mono uppercase tracking-wide text-sky">
+              <div className="inline-flex items-center gap-2 self-start rounded-full border border-white/10 px-3 py-1 text-[10px] font-mono uppercase tracking-wide text-sky">
                 Signature capability
               </div>
-              <h3 className="mt-6 font-display text-2xl lg:text-3xl font-semibold text-white leading-tight tracking-tight">
-                Call-confirmed COD orders — every single one.
+              <h3
+                className="mt-6 font-display text-2xl lg:text-3xl font-semibold leading-tight tracking-tight"
+                style={{ color: 'var(--white)' }}
+              >
+                Every COD order confirmed by phone.
               </h3>
-              <p className="mt-4 text-[15px] text-[var(--muted-dark)] max-w-[38ch]">
-                Agents log every attempt; unreachable orders never dispatch.
-                The single biggest lever on RTO.
+              <p
+                className="mt-4 text-[15px] max-w-[38ch]"
+                style={{ color: 'var(--muted-dark)' }}
+              >
+                Agents log every attempt. Unreachable orders never dispatch.
+                The single biggest lever on RTO — and the one nobody else
+                bothers to pull.
               </p>
 
               <div className="mt-auto pt-10 grid grid-cols-2 gap-6">
                 <div>
-                  <div className="text-[11px] uppercase tracking-wider text-[var(--muted-dark)] mb-2">
+                  <div
+                    className="text-[11px] uppercase tracking-wider mb-2"
+                    style={{ color: 'var(--muted-dark)' }}
+                  >
                     Skydrop target
                   </div>
                   <div className="font-mono text-4xl lg:text-5xl text-sky tracking-tight">
                     &lt;<Counter to={15} suffix="%" />
                   </div>
-                  <div className="mt-1 text-xs text-[var(--muted-dark)]">
+                  <div className="mt-1 text-xs" style={{ color: 'var(--muted-dark)' }}>
                     RTO rate
                   </div>
                 </div>
                 <div>
-                  <div className="text-[11px] uppercase tracking-wider text-[var(--muted-dark)] mb-2">
+                  <div
+                    className="text-[11px] uppercase tracking-wider mb-2"
+                    style={{ color: 'var(--muted-dark)' }}
+                  >
                     Industry
                   </div>
-                  <div className="font-mono text-4xl lg:text-5xl text-[var(--muted-dark)]/50 tracking-tight">
+                  <div
+                    className="font-mono text-4xl lg:text-5xl tracking-tight"
+                    style={{ color: 'rgba(148,163,184,0.5)' }}
+                  >
                     <Counter to={40} suffix="%+" />
                   </div>
-                  <div className="mt-1 text-xs text-[var(--muted-dark)]">
+                  <div className="mt-1 text-xs" style={{ color: 'var(--muted-dark)' }}>
                     without call-confirm
                   </div>
                 </div>
@@ -143,24 +152,24 @@ export function WhySkydrop(): ReactElement {
             </div>
           </motion.div>
 
-          {/* 5 standard cells — auto-flow into the remaining slots */}
+          {/* 5 standard cells — theme-aware */}
           {STANDARD.map((c) => {
             const Icon = c.icon;
             return (
               <motion.div
                 key={c.title}
                 variants={fadeUp}
-                className="group rounded-2xl bg-white border border-border-light p-6 transition-shadow duration-150 hover:shadow-lg"
+                className="group rounded-2xl bg-surface-2 border border-line p-6 transition-shadow duration-150 hover:shadow-lg"
               >
                 <div className="flex items-start gap-4 h-full">
-                  <div className="shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-ink text-sky">
+                  <div className="shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-surface-3 border border-line text-sky">
                     <Icon size={19} aria-hidden="true" />
                   </div>
                   <div>
-                    <h3 className="font-display text-base font-semibold text-ink mb-1.5">
+                    <h3 className="font-display text-base font-semibold text-fg-strong mb-1.5">
                       {c.title}
                     </h3>
-                    <p className="text-sm text-muted leading-relaxed">
+                    <p className="text-sm text-fg-muted leading-relaxed">
                       {c.body}
                     </p>
                   </div>
