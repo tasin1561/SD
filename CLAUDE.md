@@ -685,3 +685,8 @@ Phase 1B modules (not in this roadmap):
 - Mid-module checkpoints when security-critical or data-integrity-critical work lands. Mechanical CRUD can run end-to-end without interruption.
 - **Pre-flight reviews catch real problems.** Modules 4-6 surfaced multiple findings pre-implementation (FK constraints, alert grain mismatch, adjustment intent gap, refactor circular dep, tx-boundary conflict with M5). When Claude Code proposes a plan, scrutinize it before approval.
 - **After a crash or environment loss**, recovery is straightforward: `git log` shows what landed; `git status` shows uncommitted state; push any unpushed commits first; verify gates green; then resume from the appropriate checkpoint. Working tree is the source of truth, not session memory.
+
+## Package management
+- This is a pnpm + Turborepo workspace. NEVER use npm or yarn.
+- Install deps into specific apps: pnpm --filter ./apps/<app> add <pkg>
+- The landing page is apps/marketing. Dev: pnpm --filter ./apps/marketing dev
