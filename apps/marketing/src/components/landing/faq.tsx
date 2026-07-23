@@ -118,7 +118,7 @@ export function Faq(): ReactElement {
                       }}
                       className="overflow-hidden"
                     >
-                      <p className="pb-6 text-[15px] text-fg-muted leading-relaxed max-w-[62ch]">
+                      <p className="pb-6 text-[15px] text-fg-body leading-relaxed max-w-[62ch]">
                         {qa.a}
                       </p>
                     </motion.div>

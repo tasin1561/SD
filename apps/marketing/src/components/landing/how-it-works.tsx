@@ -128,7 +128,7 @@ export function HowItWorks(): ReactElement {
                   <h3 className="font-display text-lg lg:text-xl font-semibold text-fg-strong mb-2">
                     {s.title}
                   </h3>
-                  <p className="text-[15px] text-fg-muted leading-relaxed max-w-[42ch]">
+                  <p className="text-[15px] text-fg-body leading-relaxed max-w-[42ch]">
                     {s.body}
                   </p>
                 </motion.li>

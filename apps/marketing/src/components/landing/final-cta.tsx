@@ -30,7 +30,7 @@ export function FinalCta(): ReactElement {
         >
           Ready to ship into India?
         </h2>
-        <p className="mt-5 text-fg-muted text-base sm:text-lg mx-auto max-w-[42ch]">
+        <p className="mt-5 text-fg-body text-base sm:text-lg mx-auto max-w-[42ch]">
           Tell us about your store — we reply within one working day.
         </p>
         <div className="mt-9 flex flex-wrap justify-center items-center gap-4">

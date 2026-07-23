@@ -30,18 +30,23 @@
   --border-light: #E2E8F0;
   --border-dark: rgba(255, 255, 255, 0.08);
 
-  /* ── Semantic tokens — DEFAULT = DARK (skill's brand primary) ── */
-  --surface: var(--ink);            /* page background */
-  --surface-2: var(--ink-soft);     /* card / raised background */
-  --surface-3: rgba(255, 255, 255, 0.03); /* hover / faint fill */
-  --fg: var(--white);                /* primary text */
-  --fg-strong: var(--white);         /* headings on surface */
-  --fg-muted: var(--muted-dark);     /* secondary text */
+  /* ── Semantic tokens — DEFAULT = DARK (skill's brand primary) ──
+   * Three-step text ramp per WCAG AAA on both themes:
+   *   --fg-strong  headings — highest contrast
+   *   --fg-body    body copy — high contrast, readable at 14–18px
+   *   --fg-muted   captions, chips, footnotes — mid contrast
+   */
+  --surface: var(--ink);
+  --surface-2: var(--ink-soft);
+  --surface-3: rgba(255, 255, 255, 0.03);
+  --fg-strong: var(--white);
+  --fg-body: #CBD5E1;   /* slate-300 — body on ink ≈ 11:1 */
+  --fg-muted: var(--muted-dark);
   --border: var(--border-dark);
   --border-strong: rgba(255, 255, 255, 0.16);
-  --accent-fg: var(--ink);           /* text ON top of the sky button */
+  --accent-fg: var(--ink);
   --divider: rgba(255, 255, 255, 0.06);
-  --scrim: rgba(11, 18, 32, 0.85);   /* mobile sheet overlay */
+  --scrim: rgba(11, 18, 32, 0.85);
   color-scheme: dark;
 }
 
@@ -51,8 +56,8 @@
     --surface: var(--paper);
     --surface-2: var(--white);
     --surface-3: rgba(11, 18, 32, 0.03);
-    --fg: var(--ink);
     --fg-strong: var(--ink);
+    --fg-body: #334155;   /* slate-700 — body on paper ≈ 10.5:1 */
     --fg-muted: var(--muted);
     --border: var(--border-light);
     --border-strong: #CBD5E1;
@@ -68,8 +73,8 @@
   --surface: var(--ink);
   --surface-2: var(--ink-soft);
   --surface-3: rgba(255, 255, 255, 0.03);
-  --fg: var(--white);
   --fg-strong: var(--white);
+  --fg-body: #CBD5E1;
   --fg-muted: var(--muted-dark);
   --border: var(--border-dark);
   --border-strong: rgba(255, 255, 255, 0.16);
@@ -83,8 +88,8 @@
   --surface: var(--paper);
   --surface-2: var(--white);
   --surface-3: rgba(11, 18, 32, 0.03);
-  --fg: var(--ink);
   --fg-strong: var(--ink);
+  --fg-body: #334155;
   --fg-muted: var(--muted);
   --border: var(--border-light);
   --border-strong: #CBD5E1;
@@ -111,12 +116,12 @@
   --color-border-light: var(--border-light);
   --color-border-dark: var(--border-dark);
 
-  /* Semantic (theme-aware) — bg-surface, text-fg, border-line, etc. */
+  /* Semantic (theme-aware) — bg-surface, text-fg-strong/-body/-muted, etc. */
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
-  --color-fg: var(--fg);
   --color-fg-strong: var(--fg-strong);
+  --color-fg-body: var(--fg-body);
   --color-fg-muted: var(--fg-muted);
   --color-line: var(--border);
   --color-line-strong: var(--border-strong);
@@ -135,7 +140,7 @@ body {
 
 body {
   background: var(--surface);
-  color: var(--fg);
+  color: var(--fg-body);
   font-family: var(--font-inter), system-ui, sans-serif;
   font-size: 1rem;
   line-height: 1.6;

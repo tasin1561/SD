@@ -49,7 +49,7 @@ export function Hero(): ReactElement {
               <span className="text-sky">no Indian operation required.</span>
             </h1>
 
-            <p className="mt-6 text-fg-muted text-base sm:text-lg max-w-[42ch]">
+            <p className="mt-6 text-fg-body text-base sm:text-lg max-w-[42ch]">
               Skydrop holds your stock in India, calls every buyer to confirm
               before we dispatch, and ships through Delhivery. You keep the
               store; we run the operation.

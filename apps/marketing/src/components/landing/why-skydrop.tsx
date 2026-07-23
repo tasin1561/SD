@@ -169,7 +169,7 @@ export function WhySkydrop(): ReactElement {
                     <h3 className="font-display text-base font-semibold text-fg-strong mb-1.5">
                       {c.title}
                     </h3>
-                    <p className="text-sm text-fg-muted leading-relaxed">
+                    <p className="text-sm text-fg-body leading-relaxed">
                       {c.body}
                     </p>
                   </div>

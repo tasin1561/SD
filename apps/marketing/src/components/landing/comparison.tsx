@@ -120,7 +120,7 @@ export function Comparison(): ReactElement {
                       key={r.label}
                       className="flex items-baseline justify-between gap-4 border-t border-line pt-3"
                     >
-                      <dt className="text-sm text-fg-muted">{r.label}</dt>
+                      <dt className="text-sm text-fg-body">{r.label}</dt>
                       <dd className="text-sm font-medium text-fg-strong text-right">
                         <CellRender c={r[col]} highlight={col === 'skydrop'} />
                       </dd>
@@ -226,7 +226,7 @@ function CellRender({ c, highlight }: { c: Cell; highlight?: boolean }): ReactEl
     return (
       <span className="inline-flex items-center gap-2">
         <Check size={16} className="text-green" aria-hidden="true" />
-        <span className={highlight ? 'text-fg-strong font-medium' : 'text-fg-muted'}>
+        <span className={highlight ? 'text-fg-strong font-medium' : 'text-fg-body'}>
           {c.label ?? 'Yes'}
         </span>
       </span>
@@ -241,7 +241,7 @@ function CellRender({ c, highlight }: { c: Cell; highlight?: boolean }): ReactEl
     );
   }
   return (
-    <span className={highlight ? 'font-medium' : 'text-fg-muted'}>
+    <span className={highlight ? 'text-fg-strong font-medium' : 'text-fg-body'}>
       {c.label}
     </span>
   );

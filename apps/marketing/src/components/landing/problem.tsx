@@ -97,7 +97,7 @@ export function Problem(): ReactElement {
                 <h3 className="font-display text-lg font-semibold text-fg-strong mb-2">
                   {c.title}
                 </h3>
-                <p className="text-[15px] text-fg-muted leading-relaxed">
+                <p className="text-[15px] text-fg-body leading-relaxed">
                   {c.body}
                 </p>
               </motion.li>
