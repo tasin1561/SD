@@ -690,3 +690,23 @@ Phase 1B modules (not in this roadmap):
 - This is a pnpm + Turborepo workspace. NEVER use npm or yarn.
 - Install deps into specific apps: pnpm --filter ./apps/<app> add <pkg>
 - The landing page is apps/marketing. Dev: pnpm --filter ./apps/marketing dev
+
+## Creative authority (landing page / apps/marketing)
+Fable has FULL creative freedom over aesthetics: layout, style direction, color exploration,
+typography, animations, 3D. The skydrop-design skill is now a REFERENCE for brand identity,
+not a constraint. Use ui-ux-pro-max's design intelligence freely, including generating a
+design system.
+
+NON-NEGOTIABLE constraints (these are still law):
+1. Brand anchors: it must read as "Skydrop" — sky-blue as a core accent, dark-leaning,
+   logistics/precision personality. Beyond that, go wild.
+2. Performance: Lighthouse mobile ≥ 90 all categories. First-load JS < 170KB (lazy 3D chunk
+   allowed). LCP < 2.5s on simulated 4G. No Lottie, no video backgrounds.
+3. Responsive: flawless at 360px, 768px, 1440px. Touch targets ≥ 44px. 360px is the primary
+   audience (budget Androids in BD/IN).
+4. Accessibility: prefers-reduced-motion fallbacks for EVERY animation, keyboard focus
+   states, semantic HTML.
+5. All content/copy facts stay truthful to the product (COD call-confirm, WMS, Delhivery,
+   remittance, invite-only beta).
+6. pnpm only. All new deps go into apps/marketing via pnpm --filter.
+7. 21st.dev: search/install tools only — generation is blocked, never attempt it.
