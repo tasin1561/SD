@@ -7,13 +7,14 @@
     "dev": "next dev -p 3005",
     "build": "next build",
     "start": "next start -p 3005",
+    "serve": "npx serve out -p 3005",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf .next .turbo dist *.tsbuildinfo"
+    "clean": "rm -rf .next out .turbo dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@skydrop/ui": "workspace:*",
     "clsx": "^2.1.0",
+    "framer-motion": "^11.15.0",
     "lucide-react": "^0.469.0",
     "next": "^15.1.0",
     "react": "^19.0.0",
@@ -28,6 +29,7 @@
     "autoprefixer": "^10.4.20",
     "eslint": "^9.16.0",
     "eslint-config-next": "^15.1.0",
+    "playwright": "^1.61.1",
     "postcss": "^8.5.0",
     "tailwindcss": "^4.1.0",
     "typescript": "^5.7.0"

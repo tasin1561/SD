@@ -13,11 +13,7 @@
     "plugins": [{ "name": "next" }],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@skydrop/ui": ["../../packages/ui/src/index.ts"],
-      "@skydrop/ui/tokens": ["../../packages/ui/src/tokens/index.ts"],
-      "@skydrop/ui/status": ["../../packages/ui/src/status/index.ts"],
-      "@skydrop/ui/components": ["../../packages/ui/src/components/index.ts"]
+      "@/*": ["src/*"]
     },
     "allowJs": true
   },
@@ -27,5 +23,5 @@
     "src/**/*.tsx",
     ".next/types/**/*.ts"
   ],
-  "exclude": ["node_modules", ".next", ".turbo"]
+  "exclude": ["node_modules", ".next", ".turbo", "out"]
 }

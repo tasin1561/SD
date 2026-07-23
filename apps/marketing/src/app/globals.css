@@ -1,49 +1,64 @@
 /*
- * apps/marketing global stylesheet — dark theme primary, @skydrop/ui
- * tokens drive every color. Tailwind v4 utilities layered on top.
+ * Skydrop marketing globals — tokens per .claude/skills/skydrop-design/SKILL.md
+ * Standalone: does NOT import @skydrop/ui (that's for the app portals; the
+ * marketing site has its own brand personality — Linear meets Delhivery).
  */
 
-@import '@skydrop/ui/tokens.css';
 @import 'tailwindcss';
 
-@source '../../../../packages/ui/src';
+:root {
+  /* ── Color tokens ─────────────────────────────────────────── */
+  --ink: #0B1220;
+  --ink-soft: #1A2333;
+  --sky: #38BDF8;
+  --sky-deep: #0284C7;
+  --paper: #F8FAFC;
+  --white: #FFFFFF;
+  --saffron: #F59E0B;
+  --green: #10B981;
+  --red: #EF4444;
+  --muted: #64748B;
+  --muted-dark: #94A3B8;
 
-@theme {
-  --color-bg: var(--color-bg);
-  --color-surface: var(--color-surface);
-  --color-surface-raised: var(--color-surface-raised);
-  --color-surface-hover: var(--color-surface-hover);
-  --color-border: var(--color-border);
-  --color-border-strong: var(--color-border-strong);
-  --color-text-faint: var(--color-text-faint);
-  --color-text-muted: var(--color-text-muted);
-  --color-text-body: var(--color-text-body);
-  --color-text-strong: var(--color-text-strong);
-  --color-text-bright: var(--color-text-bright);
-  --color-accent: var(--color-accent);
-  --color-accent-hover: var(--color-accent-hover);
-  --color-accent-fg: var(--color-accent-fg);
-  --color-critical: var(--color-critical);
-  --font-sans: var(--font-sans);
+  /* Borders */
+  --border-light: #E2E8F0;
+  --border-dark: rgba(255, 255, 255, 0.08);
+}
+
+/* Tailwind v4 theme extension — expose the tokens as Tailwind color
+   utilities like text-ink, bg-sky, border-border-dark, etc. */
+@theme inline {
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-sky: var(--sky);
+  --color-sky-deep: var(--sky-deep);
+  --color-paper: var(--paper);
+  --color-white: var(--white);
+  --color-saffron: var(--saffron);
+  --color-green: var(--green);
+  --color-red: var(--red);
+  --color-muted: var(--muted);
+  --color-muted-dark: var(--muted-dark);
+  --color-border-light: var(--border-light);
+  --color-border-dark: var(--border-dark);
+
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-instrument);
   --font-mono: var(--font-mono);
-  --radius-1: var(--radius-1);
-  --radius-2: var(--radius-2);
-  --radius-3: var(--radius-3);
 }
 
 html,
 body {
   margin: 0;
   padding: 0;
-  min-height: 100vh;
 }
 
 body {
-  background: var(--color-bg);
-  color: var(--color-text-body);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  line-height: var(--leading-normal);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: 1rem;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -54,8 +69,74 @@ body {
   box-sizing: border-box;
 }
 
+/* Focus rings — visible + tokenized. Skill: accessible on both dark + light. */
 :focus-visible {
-  outline: 2px solid var(--color-accent-ring);
-  outline-offset: 1px;
-  border-radius: var(--radius-1);
+  outline: 2px solid var(--sky);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Skip-to-content link — visible only on focus. */
+.skip-to-content {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  padding: 0.75rem 1rem;
+  background: var(--ink);
+  color: var(--white);
+  border-radius: 0.5rem;
+  z-index: 100;
+}
+.skip-to-content:focus {
+  left: 1rem;
+  top: 1rem;
+}
+
+/* Headings — tight tracking on the display font per skill */
+h1, h2, h3 {
+  font-family: var(--font-instrument), system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+/* Text-max-65ch utility (Tailwind v4 style @utility API) */
+@utility text-max {
+  max-width: 65ch;
+}
+
+/* Selection style */
+::selection {
+  background: var(--sky);
+  color: var(--ink);
+}
+
+/* Marquee — for the mono capabilities strip under the hero */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.marquee-track {
+  animation: marquee 40s linear infinite;
+  will-change: transform;
+}
+.marquee-track:hover,
+.marquee-track:focus-within {
+  animation-play-state: paused;
+}
+
+/* Reduced motion — collapse every custom animation */
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
