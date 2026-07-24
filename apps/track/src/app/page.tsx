@@ -3,6 +3,8 @@ import { SearchForm } from './_components/search-form';
 import { LocaleSwitcher } from './_components/locale-switcher';
 import { ThemeToggle } from './_components/theme-toggle';
 import { getActiveLocale } from '@/lib/locale';
+import { TiltPanel } from '@/lib/tilt';
+import { CorridorConsole } from './_components/corridor-console';
 import { t } from '@/lib/i18n';
 
 /**
@@ -26,7 +28,7 @@ export default async function Home(): Promise<ReactElement> {
           <ThemeToggle />
           <LocaleSwitcher active={locale} />
         </div>
-        <div className="mb-8 text-center">
+        <div className="boot-rise mb-6 text-center">
           <div className="flex items-baseline justify-center gap-3">
             <span className="font-display font-semibold text-2xl tracking-tight text-fg-strong">
               {t(locale, 'brand')}
@@ -39,16 +41,27 @@ export default async function Home(): Promise<ReactElement> {
           <div className="telemetry text-fg-muted mt-2">{t(locale, 'tagline')}</div>
         </div>
 
-        <div className="panel ticks p-6 sm:p-7">
-          <div className="telemetry text-sky mb-3">lookup</div>
-          <h1 className="text-fg-strong text-lg font-semibold mb-1">
-            {t(locale, 'landingTitle')}
-          </h1>
-          <p className="text-fg-muted text-sm mb-6">
-            {t(locale, 'landingSubtitle')}
-          </p>
-          <SearchForm locale={locale} />
+        {/* Live corridor — the brand's signature, miniaturized */}
+        <div className="boot-rise boot-rise-2 panel ticks relative h-44 sm:h-52 overflow-hidden mb-4">
+          <div className="telemetry absolute top-2.5 left-1/2 -translate-x-1/2 z-10 text-fg-muted">
+            corridor · live
+          </div>
+          <CorridorConsole />
         </div>
+
+        <TiltPanel max={3} className="boot-rise boot-rise-3">
+          <div className="panel ticks relative overflow-hidden p-6 sm:p-7">
+            <div className="telemetry text-sky mb-3">lookup</div>
+            <h1 className="text-fg-strong text-lg font-semibold mb-1">
+              {t(locale, 'landingTitle')}
+            </h1>
+            <p className="text-fg-muted text-sm mb-6">
+              {t(locale, 'landingSubtitle')}
+            </p>
+            <SearchForm locale={locale} />
+            <div aria-hidden className="glow-follow" />
+          </div>
+        </TiltPanel>
 
         <p className="telemetry text-fg-muted text-center mt-5">
           bd → in corridor · webhook tracking

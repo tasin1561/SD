@@ -6,6 +6,7 @@ import { TimelineView } from './_components/timeline-view';
 import { LocaleSwitcher } from '../_components/locale-switcher';
 import { ThemeToggle } from '../_components/theme-toggle';
 import { getActiveLocale } from '@/lib/locale';
+import { TiltPanel } from '@/lib/tilt';
 import { type Locale, statusKey, t } from '@/lib/i18n';
 
 /**
@@ -133,7 +134,8 @@ export default async function AwbPage({
         <Header locale={locale} />
 
         {/* Status instrument */}
-        <div className="panel ticks p-6 sm:p-7 mb-5">
+        <TiltPanel max={2.5} className="boot-rise mb-5">
+        <div className="panel ticks relative overflow-hidden p-6 sm:p-7">
           <div className="flex items-baseline justify-between gap-3 mb-4">
             <span className="telemetry text-fg-muted">{data.courierDisplayName}</span>
             <span className="telemetry text-sky">{data.awbNumber}</span>
@@ -141,7 +143,9 @@ export default async function AwbPage({
           <div className="flex items-center gap-3">
             <span
               aria-hidden
-              className="status-dot inline-block h-2.5 w-2.5 rounded-full shrink-0"
+              className={`status-dot relative inline-block h-2.5 w-2.5 rounded-full shrink-0${
+                data.currentStatus === 'delivered' ? ' delivered-ring' : ''
+              }`}
               style={{ background: tone }}
             />
             <h1
@@ -174,10 +178,12 @@ export default async function AwbPage({
               </div>
             )}
           </dl>
+          <div aria-hidden className="glow-follow" />
         </div>
+        </TiltPanel>
 
         {/* Event log */}
-        <div className="telemetry text-fg-muted mb-3 flex items-center gap-3">
+        <div className="boot-rise boot-rise-2 telemetry text-fg-muted mb-3 flex items-center gap-3">
           <span className="text-sky">{t(locale, 'timelineHeading')}</span>
           <span aria-hidden className="inline-block h-px flex-1 bg-line-strong" />
         </div>

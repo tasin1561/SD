@@ -43,7 +43,11 @@ export function TimelineView({
         const tone = STATUS_DOT[e.status] ?? 'var(--fg-muted)';
         const latest = idx === 0;
         return (
-          <li key={`${e.eventAt}-${idx}`} className="relative flex items-start gap-4 py-3.5 pl-1">
+          <li
+            key={`${e.eventAt}-${idx}`}
+            className="evt-rise relative flex items-start gap-4 py-3.5 pl-1"
+            style={{ animationDelay: `${240 + Math.min(idx, 8) * 70}ms` }}
+          >
             <span
               aria-hidden
               className={`relative z-10 mt-1.5 h-[7px] w-[7px] rounded-full shrink-0 ${latest ? 'status-dot' : ''}`}

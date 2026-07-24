@@ -224,3 +224,53 @@ h1, h2, h3 {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ── 3D + entrance motion (ported from apps/marketing) ───────── */
+
+@keyframes bootRise {
+  from { transform: translateY(14px); }
+  to { transform: none; }
+}
+.boot-rise { animation: bootRise 480ms cubic-bezier(0.22, 0.68, 0.34, 1) backwards; }
+.boot-rise-2 { animation-delay: 90ms; }
+.boot-rise-3 { animation-delay: 180ms; }
+.boot-rise-4 { animation-delay: 270ms; }
+
+/* Pointer-tracking glow — reads --px/--py set by TiltPanel */
+.glow-follow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 300ms ease;
+  border-radius: inherit;
+  background: radial-gradient(
+    300px circle at var(--px, 50%) var(--py, 50%),
+    color-mix(in oklab, var(--sky) 9%, transparent),
+    transparent 70%
+  );
+}
+*:hover > .glow-follow { opacity: 1; }
+
+/* Event-log entries rise in sequence on load */
+.evt-rise { animation: bootRise 420ms cubic-bezier(0.22, 0.68, 0.34, 1) backwards; }
+
+/* Delivered celebration — one expanding ring behind the status dot */
+@keyframes deliveredRing {
+  0% { transform: scale(0.4); opacity: 0.7; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+.delivered-ring::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  border: 1.5px solid var(--green);
+  animation: deliveredRing 1.6s ease-out 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-rise, .evt-rise { animation: none; }
+  .glow-follow { display: none; }
+  .delivered-ring::after { animation: none; opacity: 0; }
+}
