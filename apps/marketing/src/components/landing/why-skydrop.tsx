@@ -63,9 +63,9 @@ export function WhySkydrop(): ReactElement {
           sub="Not a generic aggregator with a corridor bolted on — every instrument below exists because this lane demands it."
         />
 
-        <div className="persp mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:auto-rows-fr">
+        <div className="persp mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
           {/* Signature cell — subtle tilt + pointer glow */}
-          <Reveal className="sm:col-span-2 lg:col-span-2 lg:row-span-2">
+          <Reveal className="sm:col-span-2 lg:col-span-4 lg:row-span-3">
           <TiltPanel max={2.5} className="h-full">
           <div className="panel ticks relative overflow-hidden p-7 lg:p-9 h-full">
             <div
@@ -118,9 +118,11 @@ export function WhySkydrop(): ReactElement {
               <Reveal
                 key={c.title}
                 delay={(i + 1) * 60}
-                className="group panel tilt-card p-6 hover:border-line-strong"
+                className={`group panel tilt-card p-6 hover:border-line-strong ${
+                  i < 3 ? 'lg:col-span-2' : 'lg:col-span-3'
+                }`}
               >
-                <div className="flex items-start gap-4 h-full">
+                <div className="flex items-center gap-4 h-full">
                   <div className="shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface-3 text-sky">
                     <Icon size={18} aria-hidden="true" />
                   </div>
