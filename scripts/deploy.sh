@@ -40,7 +40,9 @@ fi
 
 # Which apps changed? (Cheap proxy: any file under each app/ tree.)
 CHANGED_FILES="$(git diff --name-only "$PRIOR_SHA" "$NEW_SHA")"
-echo "$CHANGED_FILES" | head -20
+# NB: `| head` under `set -o pipefail` SIGPIPEs (141) when the list is
+# long — the `|| true` keeps the preview best-effort.
+{ echo "$CHANGED_FILES" | head -20; } || true
 
 did_change() { echo "$CHANGED_FILES" | grep -qE "$1"; }
 

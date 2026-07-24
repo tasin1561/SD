@@ -4,6 +4,7 @@ import { apiOrigin } from '@/lib/api-origin';
 import type { PublicShipmentDisplayStatus, PublicTrackingResponse } from '@/lib/types';
 import { TimelineView } from './_components/timeline-view';
 import { LocaleSwitcher } from '../_components/locale-switcher';
+import { ThemeToggle } from '../_components/theme-toggle';
 import { getActiveLocale } from '@/lib/locale';
 import { type Locale, statusKey, t } from '@/lib/i18n';
 
@@ -62,9 +63,13 @@ function Header({ locale }: { locale: Locale }): ReactElement {
           sys online
         </span>
       </Link>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
+        <ThemeToggle />
         <LocaleSwitcher active={locale} />
-        <Link href="/" className="text-fg-muted hover:text-fg-strong text-xs transition-colors">
+        <Link
+          href="/"
+          className="hidden sm:inline text-fg-muted hover:text-fg-strong text-xs transition-colors"
+        >
           {t(locale, 'trackAnother')}
         </Link>
       </div>
@@ -87,7 +92,11 @@ export default async function AwbPage({
       <div className="relative min-h-screen grid place-items-center bg-surface text-fg-body p-6 overflow-hidden">
         <div aria-hidden className="console-grid absolute inset-0" />
         <div className="relative w-full max-w-md">
-          <div className="mb-8 text-center relative">
+          <div className="mb-4 flex items-center justify-end gap-2">
+            <ThemeToggle />
+            <LocaleSwitcher active={locale} />
+          </div>
+          <div className="mb-8 text-center">
             <Link
               href="/"
               className="font-display font-semibold text-2xl tracking-tight text-fg-strong"
@@ -95,9 +104,6 @@ export default async function AwbPage({
               {t(locale, 'brand')}
             </Link>
             <div className="telemetry text-fg-muted mt-2">{t(locale, 'tagline')}</div>
-            <div className="absolute right-0 top-1">
-              <LocaleSwitcher active={locale} />
-            </div>
           </div>
           <div className="panel ticks p-6 sm:p-7">
             <div className="telemetry text-saffron mb-3">no signal</div>

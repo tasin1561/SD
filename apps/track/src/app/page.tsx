@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { SearchForm } from './_components/search-form';
 import { LocaleSwitcher } from './_components/locale-switcher';
+import { ThemeToggle } from './_components/theme-toggle';
 import { getActiveLocale } from '@/lib/locale';
 import { t } from '@/lib/i18n';
 
@@ -21,7 +22,11 @@ export default async function Home(): Promise<ReactElement> {
       />
 
       <div className="relative w-full max-w-md">
-        <div className="mb-8 text-center relative">
+        <div className="mb-4 flex items-center justify-end gap-2">
+          <ThemeToggle />
+          <LocaleSwitcher active={locale} />
+        </div>
+        <div className="mb-8 text-center">
           <div className="flex items-baseline justify-center gap-3">
             <span className="font-display font-semibold text-2xl tracking-tight text-fg-strong">
               {t(locale, 'brand')}
@@ -32,9 +37,6 @@ export default async function Home(): Promise<ReactElement> {
             </span>
           </div>
           <div className="telemetry text-fg-muted mt-2">{t(locale, 'tagline')}</div>
-          <div className="absolute right-0 top-1">
-            <LocaleSwitcher active={locale} />
-          </div>
         </div>
 
         <div className="panel ticks p-6 sm:p-7">

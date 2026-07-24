@@ -29,7 +29,7 @@
 }
 
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme]) {
     --sky: #0284C7;
     --sky-deep: #075985;
     --surface: #F6F8FB;
@@ -45,6 +45,42 @@
     --glow: rgba(2, 132, 199, 0.18);
     color-scheme: light;
   }
+}
+
+
+/* Explicit user choice (theme toggle) — beats the media query. */
+:root[data-theme='dark'] {
+  --sky: #38BDF8;
+  --sky-deep: #0284C7;
+  --surface: #060B16;
+  --surface-2: #0C1424;
+  --surface-3: rgba(56, 189, 248, 0.05);
+  --fg-strong: #F3F7FC;
+  --fg-body: #C3D0E0;
+  --fg-muted: #8296AE;
+  --line: rgba(148, 178, 255, 0.10);
+  --line-strong: rgba(148, 178, 255, 0.22);
+  --grid: rgba(56, 189, 248, 0.05);
+  --accent-fg: #051018;
+  --glow: rgba(56, 189, 248, 0.35);
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  --sky: #0284C7;
+  --sky-deep: #075985;
+  --surface: #F6F8FB;
+  --surface-2: #FFFFFF;
+  --surface-3: rgba(2, 132, 199, 0.04);
+  --fg-strong: #0B1523;
+  --fg-body: #31435A;
+  --fg-muted: #5B6B7F;
+  --line: rgba(15, 42, 78, 0.12);
+  --line-strong: rgba(15, 42, 78, 0.26);
+  --grid: rgba(2, 132, 199, 0.07);
+  --accent-fg: #FFFFFF;
+  --glow: rgba(2, 132, 199, 0.18);
+  color-scheme: light;
 }
 
 @theme inline {

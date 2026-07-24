@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Space_Grotesk, Inter, JetBrains_Mono } from 'next/font/google';
 import { getActiveLocale } from '@/lib/locale';
+import { themeInitScript } from '@/lib/theme-init';
 import './globals.css';
 
 // MISSION CONTROL type stack — matches apps/marketing.
@@ -41,7 +42,11 @@ export default async function RootLayout({
     <html
       lang={locale}
       className={`${grotesk.variable} ${inter.variable} ${jetbrains.variable}`}
+      suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body>{children}</body>
     </html>
   );
