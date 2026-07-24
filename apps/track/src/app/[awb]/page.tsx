@@ -96,11 +96,11 @@ export default async function AwbPage({
         <div aria-hidden className="pointer-events-none absolute inset-0 opacity-55">
           <CorridorConsole />
         </div>
+        <div className="absolute top-4 right-4 sm:top-5 sm:right-6 z-20 flex items-center gap-2">
+          <ThemeToggle />
+          <LocaleSwitcher active={locale} />
+        </div>
         <div className="relative w-full max-w-md">
-          <div className="mb-4 flex items-center justify-end gap-2">
-            <ThemeToggle />
-            <LocaleSwitcher active={locale} />
-          </div>
           <div className="mb-8 text-center">
             <Link
               href="/"

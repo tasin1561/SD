@@ -27,11 +27,13 @@ export default async function Home(): Promise<ReactElement> {
         style={{ background: 'radial-gradient(closest-side, var(--glow), transparent)', opacity: 0.45 }}
       />
 
+      {/* Controls — pinned to the viewport corner, clear of the map */}
+      <div className="absolute top-4 right-4 sm:top-5 sm:right-6 z-20 flex items-center gap-2">
+        <ThemeToggle />
+        <LocaleSwitcher active={locale} />
+      </div>
+
       <div className="relative w-full max-w-md">
-        <div className="mb-4 flex items-center justify-end gap-2">
-          <ThemeToggle />
-          <LocaleSwitcher active={locale} />
-        </div>
         <div className="boot-rise mb-6 text-center">
           <div className="flex items-baseline justify-center gap-3">
             <span className="font-display font-semibold text-2xl tracking-tight text-fg-strong">
