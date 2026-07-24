@@ -1,17 +1,27 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Space_Grotesk, Inter, JetBrains_Mono } from 'next/font/google';
 import { getActiveLocale } from '@/lib/locale';
 import './globals.css';
 
-const geistSans = Geist({
+// MISSION CONTROL type stack — matches apps/marketing.
+const grotesk = Space_Grotesk({
   subsets: ['latin'],
-  variable: '--font-geist-sans',
+  variable: '--font-grotesk',
+  weight: ['500', '600', '700'],
   display: 'swap',
 });
 
-const geistMono = Geist_Mono({
+const inter = Inter({
   subsets: ['latin'],
-  variable: '--font-geist-mono',
+  variable: '--font-inter',
+  weight: ['400', '500'],
+  display: 'swap',
+});
+
+const jetbrains = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-jetbrains',
+  weight: ['400', '500'],
   display: 'swap',
 });
 
@@ -28,7 +38,10 @@ export default async function RootLayout({
 }): Promise<React.ReactElement> {
   const locale = await getActiveLocale();
   return (
-    <html lang={locale} className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html
+      lang={locale}
+      className={`${grotesk.variable} ${inter.variable} ${jetbrains.variable}`}
+    >
       <body>{children}</body>
     </html>
   );

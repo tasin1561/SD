@@ -8,11 +8,10 @@ import { getActiveLocale } from '@/lib/locale';
 import { type Locale, statusKey, t } from '@/lib/i18n';
 
 /**
- * Public AWB detail. Server-side fetches the customer-safe projection
- * from /public/tracking/:awb and renders. The API returns the same
- * generic 404 body for every miss (unknown, soft-deleted, unissued) —
- * TRK-8 anti-enumeration — so the page shows a single "not found"
- * regardless. Bilingual via the `lang` cookie.
+ * Public AWB detail — MISSION CONTROL skin. Status card as an
+ * instrument panel; scan history as a console event log. The API
+ * returns one generic 404 body for every miss (TRK-8) so the page
+ * shows a single "not found" regardless.
  */
 async function fetchTracking(
   awb: string,
@@ -36,6 +35,43 @@ async function fetchTracking(
   }
 }
 
+const STATUS_TONE: Record<string, string> = {
+  delivered: 'var(--green)',
+  out_for_delivery: 'var(--sky)',
+  in_transit: 'var(--sky)',
+  dispatched: 'var(--sky)',
+  delivery_attempted: 'var(--saffron)',
+  processing: 'var(--fg-muted)',
+  return_initiated: 'var(--fg-muted)',
+  returning: 'var(--fg-muted)',
+  returned: 'var(--fg-muted)',
+  lost: 'var(--red)',
+  damaged: 'var(--red)',
+  cancelled: 'var(--fg-muted)',
+};
+
+function Header({ locale }: { locale: Locale }): ReactElement {
+  return (
+    <div className="mb-6 flex items-baseline justify-between gap-3">
+      <Link href="/" className="flex items-baseline gap-3">
+        <span className="font-display font-semibold text-lg tracking-tight text-fg-strong">
+          {t(locale, 'brand')}
+        </span>
+        <span className="telemetry hidden sm:inline-flex items-center gap-1.5 text-fg-muted">
+          <span aria-hidden className="status-dot inline-block h-1 w-1 rounded-full bg-green" />
+          sys online
+        </span>
+      </Link>
+      <div className="flex items-center gap-3">
+        <LocaleSwitcher active={locale} />
+        <Link href="/" className="text-fg-muted hover:text-fg-strong text-xs transition-colors">
+          {t(locale, 'trackAnother')}
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export default async function AwbPage({
   params,
 }: {
@@ -48,30 +84,31 @@ export default async function AwbPage({
 
   if (!data) {
     return (
-      <div className="min-h-screen grid place-items-center bg-bg text-text-body p-6">
-        <div className="w-full max-w-md">
+      <div className="relative min-h-screen grid place-items-center bg-surface text-fg-body p-6 overflow-hidden">
+        <div aria-hidden className="console-grid absolute inset-0" />
+        <div className="relative w-full max-w-md">
           <div className="mb-8 text-center relative">
-            <Link href="/" className="text-text-bright font-semibold text-2xl tracking-tight">
+            <Link
+              href="/"
+              className="font-display font-semibold text-2xl tracking-tight text-fg-strong"
+            >
               {t(locale, 'brand')}
             </Link>
-            <div className="text-text-faint text-xs mt-1">{t(locale, 'tagline')}</div>
+            <div className="telemetry text-fg-muted mt-2">{t(locale, 'tagline')}</div>
             <div className="absolute right-0 top-1">
               <LocaleSwitcher active={locale} />
             </div>
           </div>
-          <div className="rounded-[7px] border border-border bg-surface p-6">
-            <h1 className="text-text-bright text-base font-semibold mb-1">
+          <div className="panel ticks p-6 sm:p-7">
+            <div className="telemetry text-saffron mb-3">no signal</div>
+            <h1 className="text-fg-strong text-lg font-semibold mb-2">
               {t(locale, 'notFoundTitle')}
             </h1>
-            <p className="text-text-muted text-xs mb-3">
-              <span className="font-mono text-text-bright">{decoded}</span>
-            </p>
-            <p className="text-text-muted text-xs mb-4">
-              {t(locale, 'notFoundBody')}
-            </p>
+            <p className="font-mono text-sm text-fg-strong mb-2">{decoded}</p>
+            <p className="text-fg-muted text-sm mb-5">{t(locale, 'notFoundBody')}</p>
             <Link
               href="/"
-              className="inline-block px-3 py-1.5 rounded-[5px] bg-accent text-accent-fg text-sm font-medium hover:bg-accent-hover transition-colors"
+              className="inline-flex items-center justify-center h-11 px-5 rounded-xl bg-sky text-accent-fg text-sm font-medium hover:bg-sky-deep transition-colors"
             >
               {t(locale, 'tryAnother')}
             </Link>
@@ -81,61 +118,63 @@ export default async function AwbPage({
     );
   }
 
-  return (
-    <div className="min-h-screen bg-bg text-text-body p-6">
-      <div className="max-w-2xl mx-auto">
-        <div className="mb-6 flex items-baseline justify-between gap-3">
-          <Link href="/" className="text-text-bright font-semibold text-lg tracking-tight">
-            {t(locale, 'brand')}
-          </Link>
-          <div className="flex items-center gap-3">
-            <LocaleSwitcher active={locale} />
-            <Link
-              href="/"
-              className="text-text-muted hover:text-text-body text-xs"
-            >
-              {t(locale, 'trackAnother')}
-            </Link>
-          </div>
-        </div>
+  const tone = STATUS_TONE[data.currentStatus] ?? 'var(--sky)';
 
-        <div className="rounded-[7px] border border-border bg-surface p-5 mb-4">
-          <div className="text-text-faint text-xs uppercase tracking-wide mb-1">
-            {data.courierDisplayName}
+  return (
+    <div className="relative min-h-screen bg-surface text-fg-body p-5 sm:p-6 overflow-hidden">
+      <div aria-hidden className="console-grid absolute inset-0 opacity-60" />
+      <div className="relative max-w-2xl mx-auto pt-2">
+        <Header locale={locale} />
+
+        {/* Status instrument */}
+        <div className="panel ticks p-6 sm:p-7 mb-5">
+          <div className="flex items-baseline justify-between gap-3 mb-4">
+            <span className="telemetry text-fg-muted">{data.courierDisplayName}</span>
+            <span className="telemetry text-sky">{data.awbNumber}</span>
           </div>
-          <div className="text-text-bright font-mono text-sm mb-3">
-            {data.awbNumber}
+          <div className="flex items-center gap-3">
+            <span
+              aria-hidden
+              className="status-dot inline-block h-2.5 w-2.5 rounded-full shrink-0"
+              style={{ background: tone }}
+            />
+            <h1
+              className="font-display text-2xl sm:text-3xl font-semibold tracking-tight"
+              style={{ color: tone }}
+            >
+              {humanizeStatus(data.currentStatus, locale)}
+            </h1>
           </div>
-          <div className="text-text-bright text-2xl font-semibold tracking-tight">
-            {humanizeStatus(data.currentStatus, locale)}
-          </div>
-          <div className="text-text-muted text-xs mt-1">
+          <div className="telemetry text-fg-muted mt-2">
             {t(locale, 'updated')}{' '}
             {new Date(data.currentStatusAt).toLocaleString(localeBcp47(locale))}
           </div>
-          <div className="mt-3 pt-3 border-t border-border text-xs text-text-muted">
+
+          <dl className="mt-5 pt-5 border-t border-line grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <div>
-              <span className="text-text-faint">{t(locale, 'destination')}: </span>
-              <span className="text-text-body">{data.destinationCity}</span>
+              <dt className="telemetry text-fg-muted mb-1">{t(locale, 'destination')}</dt>
+              <dd className="text-fg-strong m-0">{data.destinationCity}</dd>
             </div>
             {data.estimatedDeliveryAt && (
-              <div className="mt-1">
-                <span className="text-text-faint">
-                  {t(locale, 'estimatedDelivery')}:{' '}
-                </span>
-                <span className="text-text-body">
+              <div>
+                <dt className="telemetry text-fg-muted mb-1">
+                  {t(locale, 'estimatedDelivery')}
+                </dt>
+                <dd className="text-fg-strong m-0 font-mono">
                   {new Date(data.estimatedDeliveryAt).toLocaleDateString(
                     localeBcp47(locale),
                   )}
-                </span>
+                </dd>
               </div>
             )}
-          </div>
+          </dl>
         </div>
 
-        <h2 className="text-text-bright text-sm font-medium mb-2">
-          {t(locale, 'timelineHeading')}
-        </h2>
+        {/* Event log */}
+        <div className="telemetry text-fg-muted mb-3 flex items-center gap-3">
+          <span className="text-sky">{t(locale, 'timelineHeading')}</span>
+          <span aria-hidden className="inline-block h-px flex-1 bg-line-strong" />
+        </div>
         <TimelineView events={data.timeline} locale={locale} />
       </div>
     </div>

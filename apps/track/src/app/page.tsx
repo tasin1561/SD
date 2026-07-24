@@ -5,37 +5,52 @@ import { getActiveLocale } from '@/lib/locale';
 import { t } from '@/lib/i18n';
 
 /**
- * Public landing — anonymous AWB tracking lookup.
- *
- * No auth, no shell. Black background, centered card. Locale read
- * from cookie at request time; LocaleSwitcher sets the cookie and
- * reloads. Form navigates to /[awb]; that route SSRs the lookup.
+ * Public landing — anonymous AWB lookup, MISSION CONTROL skin.
+ * Console-grid backdrop, phosphor bloom, panel with corner ticks,
+ * telemetry chrome. Bilingual via the `lang` cookie.
  */
 export default async function Home(): Promise<ReactElement> {
   const locale = await getActiveLocale();
   return (
-    <div className="min-h-screen grid place-items-center bg-bg text-text-body p-6">
-      <div className="w-full max-w-md">
+    <div className="relative min-h-screen grid place-items-center bg-surface text-fg-body p-6 overflow-hidden">
+      <div aria-hidden className="console-grid absolute inset-0" />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[700px] h-[480px] rounded-full"
+        style={{ background: 'radial-gradient(closest-side, var(--glow), transparent)', opacity: 0.45 }}
+      />
+
+      <div className="relative w-full max-w-md">
         <div className="mb-8 text-center relative">
-          <div className="text-text-bright font-semibold text-2xl tracking-tight">
-            {t(locale, 'brand')}
+          <div className="flex items-baseline justify-center gap-3">
+            <span className="font-display font-semibold text-2xl tracking-tight text-fg-strong">
+              {t(locale, 'brand')}
+            </span>
+            <span className="telemetry inline-flex items-center gap-1.5 text-fg-muted">
+              <span aria-hidden className="status-dot inline-block h-1 w-1 rounded-full bg-green" />
+              sys online
+            </span>
           </div>
-          <div className="text-text-faint text-xs mt-1">
-            {t(locale, 'tagline')}
-          </div>
+          <div className="telemetry text-fg-muted mt-2">{t(locale, 'tagline')}</div>
           <div className="absolute right-0 top-1">
             <LocaleSwitcher active={locale} />
           </div>
         </div>
-        <div className="rounded-[7px] border border-border bg-surface p-6">
-          <h1 className="text-text-bright text-base font-semibold mb-1">
+
+        <div className="panel ticks p-6 sm:p-7">
+          <div className="telemetry text-sky mb-3">lookup</div>
+          <h1 className="text-fg-strong text-lg font-semibold mb-1">
             {t(locale, 'landingTitle')}
           </h1>
-          <p className="text-text-muted text-xs mb-5">
+          <p className="text-fg-muted text-sm mb-6">
             {t(locale, 'landingSubtitle')}
           </p>
           <SearchForm locale={locale} />
         </div>
+
+        <p className="telemetry text-fg-muted text-center mt-5">
+          bd → in corridor · webhook tracking
+        </p>
       </div>
     </div>
   );

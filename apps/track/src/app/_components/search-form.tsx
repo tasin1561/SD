@@ -17,25 +17,33 @@ export function SearchForm({ locale }: { readonly locale: Locale }): ReactElemen
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-3">
+    <form onSubmit={onSubmit} className="space-y-4">
       <div>
-        <label htmlFor="awb" className="block text-text-muted text-xs mb-1">
+        <label htmlFor="awb" className="telemetry block text-fg-muted mb-2">
           {t(locale, 'awbLabel')}
         </label>
-        <input
-          id="awb"
-          type="text"
-          autoComplete="off"
-          required
-          value={awb}
-          onChange={(e) => setAwb(e.target.value)}
-          placeholder={t(locale, 'awbPlaceholder')}
-          className="w-full px-3 py-1.5 rounded-[5px] bg-bg border border-border text-text-bright text-sm focus:border-accent focus:outline-none transition-colors"
-        />
+        <div className="relative">
+          <span
+            aria-hidden
+            className="prompt-blink absolute left-3.5 top-1/2 -translate-y-1/2 font-mono text-sm text-sky"
+          >
+            &gt;_
+          </span>
+          <input
+            id="awb"
+            type="text"
+            autoComplete="off"
+            required
+            value={awb}
+            onChange={(e) => setAwb(e.target.value)}
+            placeholder={t(locale, 'awbPlaceholder')}
+            className="w-full h-12 pl-12 pr-4 rounded-xl bg-surface border border-line text-fg-strong placeholder:text-fg-muted font-mono text-sm focus:border-sky focus:outline-none transition-colors"
+          />
+        </div>
       </div>
       <button
         type="submit"
-        className="w-full px-3 py-1.5 rounded-[5px] bg-accent text-accent-fg text-sm font-medium hover:bg-accent-hover transition-colors"
+        className="w-full h-12 rounded-xl bg-sky text-accent-fg text-sm font-medium hover:bg-sky-deep transition-colors"
       >
         {t(locale, 'trackButton')}
       </button>

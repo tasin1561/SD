@@ -2,19 +2,24 @@ import type { ReactElement } from 'react';
 import type { PublicTrackingTimelineEvent } from '@/lib/types';
 import { type Locale, statusKey, t } from '@/lib/i18n';
 
+/**
+ * Scan history as a console event log — mono timestamps, toned nodes
+ * on a vertical rail, newest first (API order preserved).
+ */
+
 const STATUS_DOT: Record<string, string> = {
-  delivered: 'var(--color-accent)',
-  out_for_delivery: 'var(--color-accent)',
-  in_transit: 'var(--color-text-body)',
-  dispatched: 'var(--color-text-body)',
-  delivery_attempted: 'var(--color-critical)',
-  processing: 'var(--color-text-faint)',
-  return_initiated: 'var(--color-text-muted)',
-  returning: 'var(--color-text-muted)',
-  returned: 'var(--color-text-muted)',
-  lost: 'var(--color-critical)',
-  damaged: 'var(--color-critical)',
-  cancelled: 'var(--color-text-faint)',
+  delivered: 'var(--green)',
+  out_for_delivery: 'var(--sky)',
+  in_transit: 'var(--sky)',
+  dispatched: 'var(--sky)',
+  delivery_attempted: 'var(--saffron)',
+  processing: 'var(--fg-muted)',
+  return_initiated: 'var(--fg-muted)',
+  returning: 'var(--fg-muted)',
+  returned: 'var(--fg-muted)',
+  lost: 'var(--red)',
+  damaged: 'var(--red)',
+  cancelled: 'var(--fg-muted)',
 };
 
 export function TimelineView({
@@ -26,35 +31,49 @@ export function TimelineView({
 }): ReactElement {
   if (events.length === 0) {
     return (
-      <div className="rounded-[7px] border border-border bg-surface p-4 text-text-muted text-sm">
+      <div className="panel p-5 text-fg-muted text-sm">
         {t(locale, 'noScansYet')}
       </div>
     );
   }
   const bcp = locale === 'hi' ? 'hi-IN' : 'en-IN';
   return (
-    <ol className="rounded-[7px] border border-border bg-surface divide-y divide-border">
-      {events.map((e, idx) => (
-        <li key={`${e.eventAt}-${idx}`} className="flex items-start gap-3 px-4 py-3">
-          <div
-            className="w-2 h-2 rounded-full mt-1.5 shrink-0"
-            style={{ background: STATUS_DOT[e.status] ?? 'var(--color-text-faint)' }}
-            aria-hidden="true"
-          />
-          <div className="flex-1 min-w-0">
-            <div className="text-text-bright text-sm font-medium">
-              {t(locale, statusKey(e.status))}
+    <ol className="panel evt-rail list-none m-0 py-2 px-4 sm:px-5">
+      {events.map((e, idx) => {
+        const tone = STATUS_DOT[e.status] ?? 'var(--fg-muted)';
+        const latest = idx === 0;
+        return (
+          <li key={`${e.eventAt}-${idx}`} className="relative flex items-start gap-4 py-3.5 pl-1">
+            <span
+              aria-hidden
+              className={`relative z-10 mt-1.5 h-[7px] w-[7px] rounded-full shrink-0 ${latest ? 'status-dot' : ''}`}
+              style={{
+                background: tone,
+                boxShadow: latest ? `0 0 10px ${tone}` : undefined,
+              }}
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
+                <span
+                  className={`text-sm font-medium ${latest ? '' : 'text-fg-strong'}`}
+                  style={latest ? { color: tone } : undefined}
+                >
+                  {t(locale, statusKey(e.status))}
+                </span>
+                <span className="font-mono text-[11px] text-fg-muted">
+                  {new Date(e.eventAt).toLocaleString(bcp)}
+                </span>
+              </div>
+              {e.description && (
+                <div className="text-fg-body text-xs mt-0.5">{e.description}</div>
+              )}
+              {e.locationCity && (
+                <div className="telemetry text-fg-muted mt-1">{e.locationCity}</div>
+              )}
             </div>
-            {e.description && (
-              <div className="text-text-muted text-xs mt-0.5">{e.description}</div>
-            )}
-            <div className="text-text-faint text-xs mt-1">
-              {new Date(e.eventAt).toLocaleString(bcp)}
-              {e.locationCity ? ` · ${e.locationCity}` : ''}
-            </div>
-          </div>
-        </li>
-      ))}
+          </li>
+        );
+      })}
     </ol>
   );
 }
