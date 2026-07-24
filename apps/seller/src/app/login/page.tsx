@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { resolveSellerSsrIdentity } from '@skydrop/auth/server';
 import { apiOrigin } from '@/lib/api-origin';
+import { TiltPanel } from '@/lib/tilt';
 import { LoginForm } from './_components/login-form';
 
 /**
@@ -25,22 +26,51 @@ export default async function LoginPage(): Promise<ReactElement> {
   }
 
   return (
-    <div className="w-full max-w-sm">
-      <div className="mb-8 text-center">
-        <div className="text-text-bright font-semibold text-lg tracking-tight">Skydrop</div>
-        <div className="text-text-faint text-xs mt-0.5">Seller</div>
+    <>
+      <div className="boot-rise mb-6 text-center">
+        <div className="flex items-baseline justify-center gap-3">
+          <span className="text-text-bright font-semibold text-2xl tracking-tight">
+            Skydrop
+          </span>
+          <span className="telemetry inline-flex items-center gap-1.5 text-text-muted">
+            <span
+              aria-hidden
+              className="status-dot inline-block h-1 w-1 rounded-full"
+              style={{ background: 'var(--green)' }}
+            />
+            sys online
+          </span>
+        </div>
+        <div className="telemetry text-text-muted mt-2">seller portal</div>
       </div>
-      <div className="rounded-[7px] border border-border bg-surface p-6">
-        <h1 className="text-text-bright text-base font-semibold mb-1">Sign in</h1>
-        <p className="text-text-muted text-xs mb-5">Seller portal — invite-only.</p>
-        <LoginForm />
-      </div>
-      <div className="text-text-faint text-xs text-center mt-4">
-        Forgot your password?{' '}
-        <a href="/password-reset" className="text-text-muted hover:text-text-body">
-          Reset
+
+      <TiltPanel max={3} className="boot-rise boot-rise-2">
+        <div className="relative overflow-hidden rounded-xl border border-border bg-surface ticks p-6 sm:p-7">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="telemetry" style={{ color: 'var(--sky)' }}>
+              access
+            </span>
+            <span className="telemetry text-text-muted">invite-only</span>
+          </div>
+          <h1 className="text-text-bright text-lg font-semibold mb-1">Sign in</h1>
+          <p className="text-text-muted text-sm mb-6">
+            Use the credentials from your Skydrop invitation.
+          </p>
+          <LoginForm />
+          <div aria-hidden className="glow-follow" />
+        </div>
+      </TiltPanel>
+
+      <div className="boot-rise boot-rise-3 telemetry text-text-muted text-center mt-5">
+        forgot password?{' '}
+        <a
+          href="/password-reset"
+          className="hover:text-text-bright transition-colors"
+          style={{ color: 'var(--sky)' }}
+        >
+          reset
         </a>
       </div>
-    </div>
+    </>
   );
 }

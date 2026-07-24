@@ -61,10 +61,10 @@ export function LoginForm(): ReactElement {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label htmlFor="email" className="block text-text-muted text-xs mb-1">
-          Email
+        <label htmlFor="email" className="telemetry block text-text-muted mb-2">
+          email
         </label>
         <input
           id="email"
@@ -74,12 +74,12 @@ export function LoginForm(): ReactElement {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           disabled={submitting}
-          className="w-full px-3 py-1.5 rounded-[5px] bg-bg border border-border text-text-bright text-sm focus:border-accent focus:outline-none transition-colors"
+          className="w-full h-12 px-4 rounded-xl bg-bg border border-border text-text-bright text-sm focus:border-accent focus:outline-none transition-colors disabled:opacity-50"
         />
       </div>
       <div>
-        <label htmlFor="password" className="block text-text-muted text-xs mb-1">
-          Password
+        <label htmlFor="password" className="telemetry block text-text-muted mb-2">
+          password
         </label>
         <input
           id="password"
@@ -89,18 +89,18 @@ export function LoginForm(): ReactElement {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           disabled={submitting}
-          className="w-full px-3 py-1.5 rounded-[5px] bg-bg border border-border text-text-bright text-sm focus:border-accent focus:outline-none transition-colors"
+          className="w-full h-12 px-4 rounded-xl bg-bg border border-border text-text-bright text-sm focus:border-accent focus:outline-none transition-colors disabled:opacity-50"
         />
       </div>
       {error && (
-        <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-2.5 py-1.5 rounded-[5px]">
+        <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2.5 rounded-xl">
           {error}
         </div>
       )}
       <button
         type="submit"
         disabled={submitting}
-        className="w-full mt-2 px-3 py-1.5 rounded-[5px] bg-accent text-accent-fg text-sm font-medium hover:bg-accent-hover disabled:opacity-50 transition-colors"
+        className="w-full h-12 mt-2 rounded-xl bg-accent text-accent-fg text-sm font-medium hover:bg-accent-hover disabled:opacity-50 transition-colors"
       >
         {submitting ? 'Signing in…' : 'Sign in'}
       </button>

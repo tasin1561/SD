@@ -1,0 +1,161 @@
+/*
+ * MISSION CONTROL skin — SCOPED TO THE LOGIN ROUTE ONLY.
+ *
+ * The authed shell runs on @skydrop/ui tokens and must not change, so
+ * this file re-declares those same token variables inside `.mc-login`.
+ * Every existing Tailwind utility (bg-bg, text-text-bright, bg-accent…)
+ * therefore renders in the marketing palette without touching a single
+ * component class outside this route.
+ *
+ * Palette source: docs/design-direction.md
+ * Shared verbatim with apps/admin/src/app/login/login-console.css —
+ * keep the two in sync.
+ */
+
+.mc-login {
+  /* MISSION CONTROL raw palette */
+  --sky: #38bdf8;
+  --sky-deep: #0284c7;
+  --saffron: #f59e0b;
+  --green: #34d399;
+  --grid: rgba(56, 189, 248, 0.05);
+  --glow: rgba(56, 189, 248, 0.35);
+
+  /* @skydrop/ui token overrides → NIGHT OPS */
+  --color-bg: #060b16;
+  --color-surface: #0c1424;
+  --color-surface-raised: #131d31;
+  --color-surface-hover: rgba(56, 189, 248, 0.06);
+  --color-border: rgba(148, 178, 255, 0.1);
+  --color-border-strong: rgba(148, 178, 255, 0.22);
+  --color-text-faint: #6c8098;
+  --color-text-muted: #8296ae;
+  --color-text-body: #c3d0e0;
+  --color-text-bright: #f3f7fc;
+  --color-accent: #38bdf8;
+  --color-accent-hover: #0284c7;
+  --color-accent-fg: #051018;
+  --color-accent-ring: rgba(56, 189, 248, 0.45);
+  --color-critical: #f87171;
+  --color-critical-tint: rgba(248, 113, 113, 0.12);
+  --color-critical-ring: rgba(248, 113, 113, 0.4);
+}
+
+/* DAY OPS — follows the OS unless the app pinned a theme. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) .mc-login {
+    --sky: #0284c7;
+    --sky-deep: #075985;
+    --grid: rgba(2, 132, 199, 0.07);
+    --glow: rgba(2, 132, 199, 0.18);
+
+    --color-bg: #f6f8fb;
+    --color-surface: #ffffff;
+    --color-surface-raised: #ffffff;
+    --color-surface-hover: rgba(2, 132, 199, 0.05);
+    --color-border: rgba(15, 42, 78, 0.12);
+    --color-border-strong: rgba(15, 42, 78, 0.26);
+    --color-text-faint: #7c8ba0;
+    --color-text-muted: #5b6b7f;
+    --color-text-body: #31435a;
+    --color-text-bright: #0b1523;
+    --color-accent: #0284c7;
+    --color-accent-hover: #075985;
+    --color-accent-fg: #ffffff;
+    --color-accent-ring: rgba(2, 132, 199, 0.4);
+  }
+}
+
+[data-theme='light'] .mc-login {
+  --sky: #0284c7;
+  --sky-deep: #075985;
+  --grid: rgba(2, 132, 199, 0.07);
+  --glow: rgba(2, 132, 199, 0.18);
+
+  --color-bg: #f6f8fb;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-hover: rgba(2, 132, 199, 0.05);
+  --color-border: rgba(15, 42, 78, 0.12);
+  --color-border-strong: rgba(15, 42, 78, 0.26);
+  --color-text-faint: #7c8ba0;
+  --color-text-muted: #5b6b7f;
+  --color-text-body: #31435a;
+  --color-text-bright: #0b1523;
+  --color-accent: #0284c7;
+  --color-accent-hover: #075985;
+  --color-accent-fg: #ffffff;
+  --color-accent-ring: rgba(2, 132, 199, 0.4);
+}
+
+/* ── Instrument chrome ─────────────────────────────────────────── */
+
+.mc-login .telemetry {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mc-login .console-grid {
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.mc-login .ticks {
+  position: relative;
+}
+.mc-login .ticks::before,
+.mc-login .ticks::after {
+  content: '+';
+  position: absolute;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--color-text-muted);
+  opacity: 0.6;
+  pointer-events: none;
+}
+.mc-login .ticks::before { top: 6px; left: 8px; }
+.mc-login .ticks::after { bottom: 6px; right: 8px; }
+
+@keyframes mcStatusPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.mc-login .status-dot { animation: mcStatusPulse 2.4s ease-in-out infinite; }
+
+@keyframes mcBootRise {
+  from { transform: translateY(14px); }
+  to { transform: none; }
+}
+.mc-login .boot-rise {
+  animation: mcBootRise 480ms cubic-bezier(0.22, 0.68, 0.34, 1) backwards;
+}
+.mc-login .boot-rise-2 { animation-delay: 90ms; }
+.mc-login .boot-rise-3 { animation-delay: 180ms; }
+
+.mc-login .glow-follow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 300ms ease;
+  border-radius: inherit;
+  background: radial-gradient(
+    300px circle at var(--px, 50%) var(--py, 50%),
+    color-mix(in oklab, var(--sky) 9%, transparent),
+    transparent 70%
+  );
+}
+.mc-login *:hover > .glow-follow { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mc-login .status-dot,
+  .mc-login .boot-rise {
+    animation: none;
+  }
+  .mc-login .glow-follow { display: none; }
+}
