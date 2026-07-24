@@ -45,9 +45,9 @@ export function TrackWidget(): ReactElement {
               <div className="relative flex-1">
                 <span
                   aria-hidden
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 font-mono text-sm text-sky"
+                  className="prompt-blink absolute left-3.5 top-1/2 -translate-y-1/2 font-mono text-sm text-sky"
                 >
-                  &gt;
+                  &gt;_
                 </span>
                 <input
                   id="awb-input"
@@ -57,7 +57,7 @@ export function TrackWidget(): ReactElement {
                   autoComplete="off"
                   value={awb}
                   onChange={(e) => setAwb(e.target.value)}
-                  className="w-full h-12 pl-9 pr-4 rounded-xl bg-surface border border-line text-fg-strong placeholder:text-fg-muted font-mono text-sm focus:outline-none focus:border-sky transition-colors"
+                  className="w-full h-12 pl-12 pr-4 rounded-xl bg-surface border border-line text-fg-strong placeholder:text-fg-muted font-mono text-sm focus:outline-none focus:border-sky transition-colors"
                 />
               </div>
               <button

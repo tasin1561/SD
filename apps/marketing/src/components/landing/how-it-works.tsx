@@ -77,7 +77,7 @@ export function HowItWorks(): ReactElement {
                 <Reveal as="li" key={p.n} delay={i * 60} className="relative pl-14 lg:pl-0">
                   <div className="absolute left-0 top-0 lg:relative lg:mb-6">
                     <div
-                      className={`inline-flex h-[42px] w-[42px] items-center justify-center rounded-xl border bg-surface-2 ${
+                      className={`phase-node phase-node-${i + 1} inline-flex h-[42px] w-[42px] items-center justify-center rounded-xl border bg-surface-2 ${
                         last ? 'border-green/50 text-green' : 'border-line-strong text-sky'
                       }`}
                     >

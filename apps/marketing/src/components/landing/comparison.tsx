@@ -132,7 +132,7 @@ export function Comparison(): ReactElement {
                     }}
                   >
                     <div className="flex items-center gap-2 font-display text-base font-semibold text-sky">
-                      <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-sky" />
+                      <span aria-hidden className="status-dot h-1.5 w-1.5 rounded-full bg-sky" />
                       Skydrop
                     </div>
                     <div className="telemetry mt-1 text-fg-muted">rte a · this service</div>
@@ -153,7 +153,10 @@ export function Comparison(): ReactElement {
               </thead>
               <tbody>
                 {ROWS.map((r, i) => (
-                  <tr key={r.label} className={i > 0 ? 'border-t border-line' : ''}>
+                  <tr
+                    key={r.label}
+                    className={`stagger-row stagger-row-${i + 1}${i > 0 ? ' border-t border-line' : ''}`}
+                  >
                     <td className="px-6 py-4.5 text-fg-strong font-medium">{r.label}</td>
                     <td
                       className="px-6 py-4.5 text-fg-strong"

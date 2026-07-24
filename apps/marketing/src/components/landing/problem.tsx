@@ -85,7 +85,7 @@ export function Problem(): ReactElement {
                 as="li"
                 key={f.code}
                 delay={i * 60}
-                className="group panel tilt-card relative p-6 hover:border-line-strong"
+                className={`group panel tilt-card relative p-6 hover:border-line-strong${f.critical ? ' fault-critical' : ''}`}
               >
                 <div className="flex items-center justify-between">
                   <span className={`telemetry ${f.critical ? 'text-saffron' : 'text-fg-muted'}`}>

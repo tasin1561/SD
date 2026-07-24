@@ -354,3 +354,85 @@ h1, h2, h3 {
   .tilt-card, .tilt-card:hover, .tilt-pop { transform: none !important; }
   .glow-follow { display: none; }
 }
+
+/* ── Section-level motion (post-hero sections) ───────────────── */
+
+/* FLIGHT PLAN — phase nodes light up in sequence once revealed */
+@keyframes phaseOn {
+  0% { border-color: var(--line-strong); color: var(--fg-muted); }
+  55% { border-color: var(--sky); color: var(--sky); box-shadow: 0 0 18px var(--glow); }
+  100% { border-color: var(--line-strong); color: var(--sky); box-shadow: 0 0 0 transparent; }
+}
+[data-shown] .phase-node { animation: phaseOn 700ms ease-out backwards; }
+[data-shown] .phase-node-1 { animation-delay: 200ms; }
+[data-shown] .phase-node-2 { animation-delay: 500ms; }
+[data-shown] .phase-node-3 { animation-delay: 800ms; }
+[data-shown] .phase-node-4 { animation-delay: 1100ms; }
+
+/* MANIFEST — table rows rise in sequence under the section reveal */
+.stagger-row {
+  transform: translateY(8px);
+  transition: transform 300ms cubic-bezier(0.22, 0.68, 0.34, 1);
+}
+[data-shown] .stagger-row { transform: none; }
+[data-shown] .stagger-row-1 { transition-delay: 60ms; }
+[data-shown] .stagger-row-2 { transition-delay: 120ms; }
+[data-shown] .stagger-row-3 { transition-delay: 180ms; }
+[data-shown] .stagger-row-4 { transition-delay: 240ms; }
+[data-shown] .stagger-row-5 { transition-delay: 300ms; }
+[data-shown] .stagger-row-6 { transition-delay: 360ms; }
+
+/* LOOKUP — blinking console cursor on the prompt */
+@keyframes promptBlink {
+  0%, 55% { opacity: 1; }
+  56%, 100% { opacity: 0.15; }
+}
+.prompt-blink { animation: promptBlink 1.1s steps(1) infinite; }
+
+/* CLEARANCE — runway approach lights under the CTA */
+@keyframes runwayLight {
+  0%, 100% { opacity: 0.15; }
+  12% { opacity: 1; }
+  30% { opacity: 0.35; }
+}
+.runway span {
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: var(--sky);
+  opacity: 0.15;
+  animation: runwayLight 2.8s ease-in-out infinite;
+}
+.runway span:nth-child(2) { animation-delay: 160ms; }
+.runway span:nth-child(3) { animation-delay: 320ms; }
+.runway span:nth-child(4) { animation-delay: 480ms; }
+.runway span:nth-child(5) { animation-delay: 640ms; }
+.runway span:nth-child(6) { animation-delay: 800ms; }
+.runway span:nth-child(7) { animation-delay: 960ms; }
+
+/* DIAGNOSTICS — the critical fault card carries an amber signature */
+.fault-critical {
+  border-color: color-mix(in oklab, var(--saffron) 35%, transparent) !important;
+}
+.fault-critical:hover {
+  border-color: color-mix(in oklab, var(--saffron) 55%, transparent) !important;
+}
+.fault-critical::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(
+    240px circle at 85% 0%,
+    color-mix(in oklab, var(--saffron) 7%, transparent),
+    transparent 70%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-shown] .phase-node { animation: none; color: var(--sky); }
+  .stagger-row { transform: none; transition: none; }
+  .prompt-blink { animation: none; }
+  .runway span { animation: none; opacity: 0.5; }
+}
