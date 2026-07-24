@@ -7,6 +7,7 @@ import { LocaleSwitcher } from '../_components/locale-switcher';
 import { ThemeToggle } from '../_components/theme-toggle';
 import { getActiveLocale } from '@/lib/locale';
 import { TiltPanel } from '@/lib/tilt';
+import { CorridorConsole } from '../_components/corridor-console';
 import { type Locale, statusKey, t } from '@/lib/i18n';
 
 /**
@@ -92,6 +93,9 @@ export default async function AwbPage({
     return (
       <div className="relative min-h-screen grid place-items-center bg-surface text-fg-body p-6 overflow-hidden">
         <div aria-hidden className="console-grid absolute inset-0" />
+        <div aria-hidden className="pointer-events-none absolute inset-0 opacity-55">
+          <CorridorConsole />
+        </div>
         <div className="relative w-full max-w-md">
           <div className="mb-4 flex items-center justify-end gap-2">
             <ThemeToggle />
@@ -130,6 +134,9 @@ export default async function AwbPage({
   return (
     <div className="relative min-h-screen bg-surface text-fg-body p-5 sm:p-6 overflow-hidden">
       <div aria-hidden className="console-grid absolute inset-0 opacity-60" />
+      <div aria-hidden className="pointer-events-none fixed inset-0 opacity-40">
+        <CorridorConsole />
+      </div>
       <div className="relative max-w-2xl mx-auto pt-2">
         <Header locale={locale} />
 
