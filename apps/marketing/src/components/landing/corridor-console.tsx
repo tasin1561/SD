@@ -1,48 +1,60 @@
 'use client';
 
 import { useEffect, useRef, type ReactElement } from 'react';
+import { BD_RINGS, LAND_RINGS, GEO_NODES, type Ring } from './map-geometry';
 
 /**
- * THE SIGNATURE MOMENT (docs/design-direction.md §5).
+ * THE SIGNATURE MOMENT (docs/design-direction.md §5) — v2 with REAL
+ * cartography. Natural Earth 50m coastlines (simplified + projected at
+ * build time into map-geometry.ts) drawn as a phosphor basemap; corridor
+ * nodes pinned to true lat/lon — Dhaka east, Indian metros west, so
+ * flights read geographically correctly (right → left).
  *
- * Hand-built canvas 2D: a long-range phosphor map of the BD → IN
- * corridor. Dhaka origin, four Indian destination nodes, parcels flying
- * the arcs with fading trails, arrival pulses, and a periodic scan
- * sweep. Zero libraries (~6KB), DPR-aware (≤2), rAF pauses when the
- * canvas leaves the viewport or the tab hides.
- *
- * Reduced-motion: renders ONE static frame (routes + nodes, no parcels
- * in flight, no sweep) and never animates.
- *
- * Geography note: stylized, not literal — flow reads left (BD) → right
- * (IN) because forward motion reads LTR; the label set is real.
+ * Still zero libraries. Base layer (map + grid + routes + nodes) is
+ * rendered ONCE to an offscreen canvas and blitted per frame; the rAF
+ * loop (30fps cap) only draws flights, pulses, and the scan sweep.
+ * Starts on requestIdleCallback; pauses off-viewport + tab-hidden;
+ * reduced-motion renders a single static frame.
  */
 
-interface Node {
+interface NodeDef {
+  id: string;
   x: number;
   y: number;
   label: string;
+  labelDx: number;
+  labelDy: number;
   origin?: boolean;
 }
 
-const ORIGIN: Node = { x: 0.10, y: 0.58, label: 'DAC', origin: true };
-const DESTS: Node[] = [
-  { x: 0.58, y: 0.20, label: 'DEL' },
-  { x: 0.46, y: 0.52, label: 'CCU' },
-  { x: 0.74, y: 0.74, label: 'BOM' },
-  { x: 0.90, y: 0.44, label: 'BLR' },
-];
-
-// Quadratic-bezier control point for each arc — lifts the route.
-function ctrl(a: Node, b: Node): { x: number; y: number } {
-  const mx = (a.x + b.x) / 2;
-  const my = (a.y + b.y) / 2;
-  // Perpendicular lift, sign chosen to arc "up" mostly
-  const lift = 0.16 * (b.x - a.x);
-  return { x: mx, y: my - Math.abs(lift) - 0.06 };
+function geo(id: string): readonly [number, number] {
+  return GEO_NODES[id] ?? [0.5, 0.5];
 }
 
-function qPoint(a: Node, c: { x: number; y: number }, b: Node, t: number): { x: number; y: number } {
+const ORIGIN: NodeDef = {
+  id: 'DAC', x: geo('DAC')[0], y: geo('DAC')[1],
+  label: 'DAC', labelDx: 12, labelDy: -10, origin: true,
+};
+const DESTS: NodeDef[] = [
+  { id: 'DEL', x: geo('DEL')[0], y: geo('DEL')[1], label: 'DEL', labelDx: -34, labelDy: -8 },
+  { id: 'CCU', x: geo('CCU')[0], y: geo('CCU')[1], label: 'CCU', labelDx: -36, labelDy: 18 },
+  { id: 'BOM', x: geo('BOM')[0], y: geo('BOM')[1], label: 'BOM', labelDx: -38, labelDy: 4 },
+  { id: 'BLR', x: geo('BLR')[0], y: geo('BLR')[1], label: 'BLR', labelDx: 12, labelDy: 12 },
+];
+
+function ctrl(a: NodeDef, b: NodeDef): { x: number; y: number } {
+  const mx = (a.x + b.x) / 2;
+  const my = (a.y + b.y) / 2;
+  const lift = 0.14 * Math.hypot(b.x - a.x, b.y - a.y);
+  return { x: mx, y: my - lift - 0.03 };
+}
+
+function qPoint(
+  a: { x: number; y: number },
+  c: { x: number; y: number },
+  b: { x: number; y: number },
+  t: number,
+): { x: number; y: number } {
   const u = 1 - t;
   return {
     x: u * u * a.x + 2 * u * t * c.x + t * t * b.x,
@@ -54,7 +66,7 @@ interface Parcel {
   dest: number;
   t: number;
   speed: number;
-  delay: number; // frames to wait before (re)launch
+  delay: number;
 }
 
 interface Pulse {
@@ -77,17 +89,22 @@ export function CorridorConsole(): ReactElement {
 
     let W = 0;
     let H = 0;
+    // Aspect-preserving map fit: normalized [0..1]² region → centered
+    // square of side S with offsets (OX, OY). Margins show the dot grid.
+    let S = 0;
+    let OX = 0;
+    let OY = 0;
     let raf = 0;
     let running = false;
 
     const colors = {
-      sky: '#38BDF8',
       saffron: '#F59E0B',
-      green: '#34D399',
       muted: '#8296AE',
       grid: 'rgba(56,189,248,0.06)',
-      // Theme-tuned stroke alphas — DAY OPS needs deeper ink than the
-      // phosphor look; these are re-derived on theme change.
+      land: 'rgba(56,189,248,0.04)',
+      coast: 'rgba(116,166,220,0.35)',
+      bdFill: 'rgba(245,158,11,0.08)',
+      bdCoast: 'rgba(245,158,11,0.45)',
       route: 'rgba(56,189,248,0.16)',
       halo: 'rgba(56,189,248,0.35)',
       trail: 'rgba(56,189,248,0.5)',
@@ -96,17 +113,19 @@ export function CorridorConsole(): ReactElement {
     };
     const readColors = (): void => {
       const cs = getComputedStyle(document.documentElement);
-      colors.sky = cs.getPropertyValue('--sky').trim() || colors.sky;
       colors.saffron = cs.getPropertyValue('--saffron').trim() || colors.saffron;
-      colors.green = cs.getPropertyValue('--green').trim() || colors.green;
       colors.muted = cs.getPropertyValue('--fg-muted').trim() || colors.muted;
       colors.grid = cs.getPropertyValue('--grid').trim() || colors.grid;
       const light = cs.colorScheme.includes('light');
+      colors.land = light ? 'rgba(2,132,199,0.05)' : 'rgba(56,189,248,0.04)';
+      colors.coast = light ? 'rgba(2,110,170,0.45)' : 'rgba(116,166,220,0.35)';
+      colors.bdFill = light ? 'rgba(217,119,6,0.10)' : 'rgba(245,158,11,0.08)';
+      colors.bdCoast = light ? 'rgba(217,119,6,0.55)' : 'rgba(245,158,11,0.45)';
       colors.route = light ? 'rgba(2,132,199,0.30)' : 'rgba(56,189,248,0.16)';
       colors.halo = light ? 'rgba(2,132,199,0.45)' : 'rgba(56,189,248,0.35)';
       colors.trail = light ? 'rgba(2,132,199,0.60)' : 'rgba(56,189,248,0.5)';
       colors.sweepTint = light ? '2,132,199' : '56,189,248';
-      colors.blip = light ? '#0284C7' : colors.sky;
+      colors.blip = light ? '#0284C7' : '#38BDF8';
     };
     readColors();
 
@@ -117,7 +136,7 @@ export function CorridorConsole(): ReactElement {
       delay: 0,
     }));
     const pulses: Pulse[] = [];
-    let sweep = -0.2; // sweep x position in normalized units
+    let sweep = -0.2;
 
     const resize = (): void => {
       const rect = canvas.getBoundingClientRect();
@@ -127,16 +146,34 @@ export function CorridorConsole(): ReactElement {
       canvas.width = Math.round(W * dpr);
       canvas.height = Math.round(H * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // Map region is square-ish; scale it to fill the panel's height
+      // generously — coastlines may bleed past the sides, which reads
+      // as a real console viewport, not a shrunken postage stamp.
+      S = Math.max(Math.min(W, H) * 1.06, Math.min(W * 0.8, H * 1.35));
+      OX = (W - S) / 2;
+      OY = (H - S) / 2;
     };
 
     const px = (n: { x: number; y: number }): { x: number; y: number } => ({
-      x: n.x * W,
-      y: n.y * H,
+      x: OX + n.x * S,
+      y: OY + n.y * S,
     });
 
-    // Offscreen cache for the static base layer (grid + routes + nodes).
-    // Software-rendered environments choke on hundreds of fillRects per
-    // frame; blitting one cached bitmap keeps frames ~1ms.
+    const tracePath = (g: CanvasRenderingContext2D, ring: Ring): void => {
+      const first = ring[0];
+      if (!first) return;
+      const f = px({ x: first[0], y: first[1] });
+      g.beginPath();
+      g.moveTo(f.x, f.y);
+      for (let i = 1; i < ring.length; i++) {
+        const pt = ring[i];
+        if (!pt) continue;
+        const p = px({ x: pt[0], y: pt[1] });
+        g.lineTo(p.x, p.y);
+      }
+      g.closePath();
+    };
+
     let base: HTMLCanvasElement | null = null;
     const renderBase = (): void => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -159,8 +196,9 @@ export function CorridorConsole(): ReactElement {
     };
 
     const drawBase = (g: CanvasRenderingContext2D): void => {
+      g.clearRect(0, 0, W, H);
 
-      // Dot grid
+      // Dot grid across the whole panel
       g.fillStyle = colors.grid;
       const step = 34;
       for (let gx = step / 2; gx < W; gx += step) {
@@ -169,11 +207,29 @@ export function CorridorConsole(): ReactElement {
         }
       }
 
+      // Landmass — real Natural Earth coastlines
+      g.lineWidth = 1;
+      for (const ring of LAND_RINGS) {
+        tracePath(g, ring);
+        g.fillStyle = colors.land;
+        g.fill();
+        g.strokeStyle = colors.coast;
+        g.stroke();
+      }
+      // Bangladesh — origin country, warmer
+      for (const ring of BD_RINGS) {
+        tracePath(g, ring);
+        g.fillStyle = colors.bdFill;
+        g.fill();
+        g.strokeStyle = colors.bdCoast;
+        g.stroke();
+      }
+
       // Routes
       const o = px(ORIGIN);
       for (const d of DESTS) {
         const c = ctrl(ORIGIN, d);
-        const cp = px({ label: '', ...c } as Node);
+        const cp = px(c);
         const dp = px(d);
         g.beginPath();
         g.moveTo(o.x, o.y);
@@ -186,7 +242,7 @@ export function CorridorConsole(): ReactElement {
       }
 
       // Destination nodes
-      g.font = '10px var(--font-jetbrains), monospace';
+      g.font = '10px ui-monospace, monospace';
       for (const d of DESTS) {
         const dp = px(d);
         g.beginPath();
@@ -199,10 +255,10 @@ export function CorridorConsole(): ReactElement {
         g.lineWidth = 1;
         g.stroke();
         g.fillStyle = colors.muted;
-        g.fillText(d.label, dp.x + 12, dp.y + 3);
+        g.fillText(d.label, dp.x + d.labelDx, dp.y + d.labelDy);
       }
 
-      // Origin node — saffron (the one saffron use in the hero viewport)
+      // Origin — saffron
       g.beginPath();
       g.arc(o.x, o.y, 4, 0, Math.PI * 2);
       g.fillStyle = colors.saffron;
@@ -212,13 +268,13 @@ export function CorridorConsole(): ReactElement {
       g.strokeStyle = 'rgba(245,158,11,0.4)';
       g.stroke();
       g.fillStyle = colors.muted;
-      g.fillText(ORIGIN.label, o.x - 4, o.y + 24);
+      g.fillText(ORIGIN.label, o.x + ORIGIN.labelDx, o.y + ORIGIN.labelDy);
     };
 
     const drawFrame = (): void => {
       drawStatic();
 
-      // Scan sweep — a vertical soft band gliding across
+      // Scan sweep
       sweep += 0.0016;
       if (sweep > 1.25) sweep = -0.25;
       const sx = sweep * W;
@@ -247,18 +303,16 @@ export function CorridorConsole(): ReactElement {
         }
         const c = ctrl(ORIGIN, dest);
         const pos = qPoint(ORIGIN, c, dest, p.t);
-        const pp = px({ label: '', ...pos } as Node);
-        // Tail
+        const pp = px(pos);
         const back = qPoint(ORIGIN, c, dest, Math.max(0, p.t - 0.05));
-        const bp = px({ label: '', ...back } as Node);
+        const bp = px(back);
         ctx.beginPath();
         ctx.moveTo(bp.x, bp.y);
         ctx.lineTo(pp.x, pp.y);
         ctx.strokeStyle = colors.trail;
         ctx.lineWidth = 1.6;
         ctx.stroke();
-        // Blip
-        // Glow: two concentric fills — no shadowBlur (kills software rendering)
+        // Glow: concentric fills — no shadowBlur (kills software rendering)
         ctx.beginPath();
         ctx.arc(pp.x, pp.y, 5.5, 0, Math.PI * 2);
         ctx.fillStyle = colors.trail.replace(/[\d.]+\)$/, '0.18)');
@@ -269,7 +323,7 @@ export function CorridorConsole(): ReactElement {
         ctx.fill();
       }
 
-      // Arrival pulses — expanding green rings (delivered)
+      // Arrival pulses
       for (let i = pulses.length - 1; i >= 0; i--) {
         const pu = pulses[i];
         if (!pu) continue;
@@ -285,14 +339,12 @@ export function CorridorConsole(): ReactElement {
         ctx.lineWidth = 1.2;
         ctx.stroke();
       }
-
     };
 
     let lastT = 0;
     const loop = (t: number): void => {
       if (!running) return;
       raf = requestAnimationFrame(loop);
-      // 30fps cap — half the work, visually identical for slow blips
       if (t - lastT < 33) return;
       lastT = t;
       drawFrame();
@@ -325,7 +377,7 @@ export function CorridorConsole(): ReactElement {
     const ro = new ResizeObserver(() => {
       resize();
       renderBase();
-      if (reduced) drawStatic();
+      drawStatic();
     });
     ro.observe(canvas);
 
@@ -350,7 +402,7 @@ export function CorridorConsole(): ReactElement {
     const mo = new MutationObserver(() => {
       readColors();
       renderBase();
-      if (reduced) drawStatic();
+      drawStatic();
     });
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
@@ -370,7 +422,7 @@ export function CorridorConsole(): ReactElement {
         ref={canvasRef}
         className="absolute inset-0 w-full h-full"
         role="img"
-        aria-label="Live corridor map: parcels moving from Dhaka to Delhi, Kolkata, Mumbai, and Bangalore with delivery confirmations"
+        aria-label="Live corridor map of South Asia: parcels moving from Dhaka to Delhi, Kolkata, Mumbai, and Bangalore with delivery confirmations"
       />
     </div>
   );
