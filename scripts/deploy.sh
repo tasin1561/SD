@@ -56,17 +56,21 @@ fi
 # Per-app dirty bits
 APPS_CHANGED=()
 did_change '^packages/(db|api-client|auth)/'                       && APPS_CHANGED+=(skydrop-api skydrop-admin skydrop-seller skydrop-track)
-did_change '^packages/ui/'                                         && APPS_CHANGED+=(skydrop-admin skydrop-seller skydrop-track skydrop-marketing)
+did_change '^packages/ui/'                                         && APPS_CHANGED+=(skydrop-admin skydrop-seller skydrop-track)
 did_change '^apps/api/'                                            && APPS_CHANGED+=(skydrop-api)
 did_change '^apps/admin/'                                          && APPS_CHANGED+=(skydrop-admin)
 did_change '^apps/seller/'                                         && APPS_CHANGED+=(skydrop-seller)
 did_change '^apps/track/'                                          && APPS_CHANGED+=(skydrop-track)
-did_change '^apps/marketing/'                                      && APPS_CHANGED+=(skydrop-marketing)
 # apps/workers shares apps/api dist output (workers-main.js), so api
 # changes are workers changes too. (No separate build step.)
 did_change '^apps/(api|workers)/'                                  && APPS_CHANGED+=(skydrop-workers)
 # de-dup
 APPS_CHANGED=($(printf '%s\n' "${APPS_CHANGED[@]:-}" | awk 'NF' | sort -u))
+
+# Marketing is a static export (output: 'export') served by Caddy from
+# /var/www/skydrop-marketing — no pm2 process. Publish when it changes.
+MARKETING_TOUCHED=false
+did_change '^apps/marketing/|^packages/ui/' && MARKETING_TOUCHED=true
 
 # Seed reruns when seed file or schema change
 SEED_TOUCHED=false
@@ -102,13 +106,23 @@ pnpm --filter @skydrop/seller build
 pnpm --filter @skydrop/track build
 pnpm --filter @skydrop/marketing build
 
+# ── 6b. Publish marketing static export ─────────────────────────────
+if [ "$MARKETING_TOUCHED" = true ]; then
+  echo "── publish marketing static ──"
+  sudo rsync -a --delete apps/marketing/out/ /var/www/skydrop-marketing/
+  sudo chown -R caddy:caddy /var/www/skydrop-marketing
+  sudo chmod -R u=rwX,go=rX /var/www/skydrop-marketing
+else
+  echo "── marketing unchanged — skipping publish ──"
+fi
+
 # ── 7. Restart pm2 ───────────────────────────────────────────────────
 # If a shared package changed, restart everything; otherwise restart
 # only the apps with code changes. Fall back to all-four if we can't
 # tell.
 if [ "$PKG_TOUCHED" = true ] || [ ${#APPS_CHANGED[@]} -eq 0 ]; then
   echo "── pm2 restart all ──"
-  pm2 restart skydrop-api skydrop-admin skydrop-seller skydrop-track skydrop-marketing --update-env
+  pm2 restart skydrop-api skydrop-admin skydrop-seller skydrop-track --update-env
 else
   echo "── pm2 restart ${APPS_CHANGED[*]} ──"
   pm2 restart "${APPS_CHANGED[@]}" --update-env
@@ -140,8 +154,7 @@ for url in \
   http://127.0.0.1:4000/health \
   http://127.0.0.1:3002/login \
   http://127.0.0.1:3003/login \
-  http://127.0.0.1:3004/ \
-  http://127.0.0.1:3005/; do
+  http://127.0.0.1:3004/; do
   check_url "$url" || exit 1
 done
 
