@@ -1,6 +1,3 @@
-'use client';
-
-import { motion } from 'framer-motion';
 import {
   Warehouse,
   FileSignature,
@@ -11,112 +8,111 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { ReactElement } from 'react';
-import { fadeUp, staggerContainer, viewportOnce } from '@/lib/motion';
+import { Reveal } from '@/lib/reveal';
+import { SectionHeader } from './section-header';
 
-interface Card {
+/**
+ * SEC 02 — DIAGNOSTICS. The six-headed problem rendered as a fault
+ * readout: each blocker is a FAULT card with a mono code, not a
+ * generic icon-title-blurb marketing card.
+ */
+
+interface Fault {
+  code: string;
   icon: LucideIcon;
   title: string;
   body: string;
+  /** The killer fault — the one saffron accent this viewport gets. */
+  critical?: boolean;
 }
 
-const CARDS: Card[] = [
+const FAULTS: Fault[] = [
   {
+    code: 'FAULT 01',
     icon: Warehouse,
-    title: 'Warehouse',
+    title: 'No Indian warehouse',
     body: 'Shipping every order from Dhaka takes weeks, and returns cost more than the sale.',
   },
   {
+    code: 'FAULT 02',
     icon: FileSignature,
-    title: 'Courier contracts',
+    title: 'No courier contract',
     body: 'Delhivery and Bluedart only sign Indian entities, and price hard on volume you can’t promise.',
   },
   {
+    code: 'FAULT 03',
     icon: PhoneCall,
-    title: 'COD confirmation',
+    title: 'No COD confirmation',
     body: 'Without a Hindi call-confirm team, RTO reaches 40% or more — every dispatched parcel loses money.',
+    critical: true,
   },
   {
+    code: 'FAULT 04',
     icon: Boxes,
-    title: 'Warehouse ops',
+    title: 'No warehouse ops',
     body: 'Receive, pick, pack, dispatch, RTO — a full operation you would otherwise have to staff.',
   },
   {
+    code: 'FAULT 05',
     icon: Banknote,
-    title: 'Money',
+    title: 'No money rail',
     body: 'Indian bank accounts, GST invoicing, COD reconciliation, and remittance back to Bangladesh.',
   },
   {
+    code: 'FAULT 06',
     icon: Headset,
-    title: 'Support',
+    title: 'No Hindi support',
     body: 'Indian customers expect help in Hindi, delivered within a working day.',
   },
 ];
 
 export function Problem(): ReactElement {
   return (
-    <section className="bg-surface-2 py-16 lg:py-24">
+    <section className="bg-surface py-20 lg:py-28 border-t border-line">
       <div className="max-w-7xl mx-auto px-5 sm:px-8">
-        <motion.div
-          initial="hidden"
-          whileInView="show"
-          viewport={viewportOnce}
-          variants={fadeUp}
-        >
-          <div className="inline-flex items-center gap-2 rounded-full bg-surface border border-line px-3 py-1 text-[11px] font-mono uppercase tracking-wide text-fg-muted">
-            The problem
-          </div>
-          <h2
-            className="mt-4 font-display font-semibold text-fg-strong"
-            style={{
-              fontSize: 'clamp(1.75rem, 3.5vw, 2.75rem)',
-              letterSpacing: '-0.02em',
-            }}
-          >
-            Selling into India is a six-headed problem.
-          </h2>
-        </motion.div>
+        <SectionHeader
+          index="02"
+          code="DIAGNOSTICS"
+          title="Selling into India fails six ways."
+          sub="Run the pre-flight check on a solo India launch and every subsystem throws the same class of error: you need an operation you don’t have."
+        />
 
-        <motion.ul
-          className="mt-10 lg:mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-          initial="hidden"
-          whileInView="show"
-          viewport={viewportOnce}
-          variants={staggerContainer}
-        >
-          {CARDS.map((c) => {
-            const Icon = c.icon;
+        <ul className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 list-none p-0">
+          {FAULTS.map((f, i) => {
+            const Icon = f.icon;
             return (
-              <motion.li
-                key={c.title}
-                variants={fadeUp}
-                className="group relative rounded-2xl border border-line bg-surface p-6 transition-shadow duration-150 hover:shadow-lg"
+              <Reveal
+                as="li"
+                key={f.code}
+                delay={i * 60}
+                className="group panel relative p-6 hover:border-line-strong"
               >
-                <div className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-surface-3 text-sky border border-line">
-                  <Icon size={20} aria-hidden="true" />
+                <div className="flex items-center justify-between">
+                  <span className={`telemetry ${f.critical ? 'text-saffron' : 'text-fg-muted'}`}>
+                    {f.code}
+                    {f.critical ? ' · critical' : ''}
+                  </span>
+                  <Icon size={18} className="text-fg-muted group-hover:text-sky transition-colors" aria-hidden="true" />
                 </div>
-                <h3 className="font-display text-lg font-semibold text-fg-strong mb-2">
-                  {c.title}
+                <h3 className="mt-5 font-display text-lg font-semibold text-fg-strong">
+                  {f.title}
                 </h3>
-                <p className="text-[15px] text-fg-body leading-relaxed">
-                  {c.body}
+                <p className="mt-2 text-[15px] text-fg-body leading-relaxed">
+                  {f.body}
                 </p>
-              </motion.li>
+              </Reveal>
             );
           })}
-        </motion.ul>
+        </ul>
 
-        <motion.p
-          className="mt-10 lg:mt-14 max-w-2xl text-fg-strong text-lg"
-          initial="hidden"
-          whileInView="show"
-          viewport={viewportOnce}
-          variants={fadeUp}
-        >
-          Building this yourself takes{' '}
-          <span className="font-mono">6+ months</span>,{' '}
-          <span className="font-mono">₹50 lakh+</span>, and an Indian company.
-          Most sellers never try.
-        </motion.p>
+        <Reveal className="mt-10 panel ticks px-6 py-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-8">
+          <span className="telemetry text-fg-muted shrink-0">diagnosis</span>
+          <p className="text-fg-strong text-base sm:text-lg m-0">
+            Solo build: <span className="font-mono">6+ months</span>,{' '}
+            <span className="font-mono">₹50 lakh+</span>, an Indian company —
+            most sellers never try.
+          </p>
+        </Reveal>
       </div>
     </section>
   );

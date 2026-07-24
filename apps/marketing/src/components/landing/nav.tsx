@@ -6,11 +6,16 @@ import { cn } from '@/lib/cn';
 import { ThemeToggle } from './theme-toggle';
 
 const LINKS = [
-  { href: '#how-it-works', label: 'How it works' },
+  { href: '#how-it-works', label: 'Flight plan' },
   { href: '#why-skydrop', label: 'Why Skydrop' },
   { href: 'https://track.skydrop.online', label: 'Track a parcel', external: true },
 ];
 
+/**
+ * Console top bar — wordmark + SYS ONLINE status, links, theme toggle,
+ * invite CTA. Transparent over the hero grid; solid + hairline once
+ * scrolled.
+ */
 export function Nav(): ReactElement {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
@@ -36,23 +41,25 @@ export function Nav(): ReactElement {
     <header
       className={cn(
         'sticky top-0 z-40 transition-all duration-200',
-        scrolled
-          ? 'backdrop-blur-md border-b border-line'
-          : 'border-b border-transparent',
+        scrolled ? 'backdrop-blur-md border-b border-line' : 'border-b border-transparent',
       )}
       style={
         scrolled
-          ? { backgroundColor: 'color-mix(in oklab, var(--surface) 80%, transparent)' }
+          ? { backgroundColor: 'color-mix(in oklab, var(--surface) 82%, transparent)' }
           : undefined
       }
     >
       <div className="max-w-7xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between">
         <a
           href="#top"
-          className="font-display font-semibold text-lg tracking-tight text-fg-strong"
+          className="flex items-baseline gap-3 font-display font-semibold text-lg tracking-tight text-fg-strong"
           aria-label="Skydrop home"
         >
           Skydrop
+          <span className="telemetry hidden sm:inline-flex items-center gap-1.5 text-fg-muted">
+            <span aria-hidden className="status-dot inline-block h-1 w-1 rounded-full bg-green" />
+            sys online
+          </span>
         </a>
 
         <nav className="hidden lg:flex items-center gap-1">
@@ -113,9 +120,7 @@ export function Nav(): ReactElement {
           )}
         >
           <div className="flex items-center justify-between mb-10">
-            <span className="text-fg-strong font-display font-semibold text-lg">
-              Skydrop
-            </span>
+            <span className="text-fg-strong font-display font-semibold text-lg">Skydrop</span>
             <button
               type="button"
               className="inline-flex items-center justify-center w-11 h-11 -mr-2 text-fg-strong rounded-lg hover:bg-surface-3 transition-colors"

@@ -1,61 +1,54 @@
 import { ArrowUpRight, Search } from 'lucide-react';
 import type { ReactElement } from 'react';
-import { RouteSvg } from './route-svg';
-import { Marquee } from './marquee';
+import { CorridorConsole } from './corridor-console';
+import { TelemetryTicker } from './telemetry-ticker';
 
 /**
- * Hero — surface-following background with a sky glow. Signature route
- * animation on the right at desktop; stacks under the copy on mobile.
+ * SEC 01 — the Corridor Console hero.
+ * Full-bleed console-grid backdrop; copy panel left, live corridor
+ * canvas right (stacked below copy on mobile); telemetry ticker seals
+ * the section.
  */
 export function Hero(): ReactElement {
   return (
-    <section
-      id="top"
-      className="relative bg-surface text-fg overflow-hidden"
-    >
-      {/* Ambient sky glow — decorative, cheap, works in both themes */}
+    <section id="top" className="relative bg-surface overflow-hidden">
+      <div aria-hidden className="console-grid absolute inset-0" />
+      {/* Phosphor bloom top-center */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[800px] h-[800px] rounded-full opacity-40 blur-3xl"
-        style={{
-          background:
-            'radial-gradient(closest-side, color-mix(in oklab, var(--sky) 35%, transparent), transparent)',
-        }}
+        className="pointer-events-none absolute -top-48 left-1/2 -translate-x-1/2 w-[900px] h-[560px] rounded-full"
+        style={{ background: 'radial-gradient(closest-side, var(--glow), transparent)', opacity: 0.5 }}
       />
 
-      <div className="relative max-w-7xl mx-auto px-5 sm:px-8 pt-14 pb-16 lg:pt-24 lg:pb-28">
-        <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-center">
-          {/* Left: copy + CTAs */}
+      <div className="relative max-w-7xl mx-auto px-5 sm:px-8 pt-12 pb-14 lg:pt-20 lg:pb-20">
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,44%)_minmax(0,56%)] lg:items-center">
+          {/* Copy */}
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-line bg-surface-3 px-3 py-1.5 text-xs text-fg-muted">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-saffron opacity-60" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-saffron" />
-              </span>
-              <span className="font-mono uppercase tracking-wide">
-                Invite-only beta · BD → IN
-              </span>
+            <div className="telemetry inline-flex items-center gap-2.5 rounded-full border border-line bg-surface-2 px-3.5 py-2 text-fg-muted">
+              <span aria-hidden className="status-dot inline-block h-1.5 w-1.5 rounded-full bg-green" />
+              <span>corridor online · BD → IN · invite-only beta</span>
             </div>
 
             <h1
               className="mt-6 font-display font-semibold text-fg-strong"
               style={{
-                fontSize: 'clamp(2.25rem, 5vw, 4rem)',
-                letterSpacing: '-0.02em',
-                lineHeight: 1.05,
+                fontSize: 'clamp(2.5rem, 5.6vw, 4.25rem)',
+                letterSpacing: '-0.025em',
+                lineHeight: 1.04,
               }}
             >
-              Sell to India from Bangladesh —{' '}
-              <span className="text-sky">no Indian operation required.</span>
+              Your India operation,
+              <br />
+              <span className="text-sky">running without&nbsp;you.</span>
             </h1>
 
-            <p className="mt-6 text-fg-body text-base sm:text-lg max-w-[42ch]">
-              Skydrop holds your stock in India, calls every buyer to confirm
-              before we dispatch, and ships through Delhivery. You keep the
-              store; we run the operation.
+            <p className="mt-6 text-fg-body text-base sm:text-lg max-w-[46ch]">
+              Skydrop holds your stock in India, confirms every COD buyer by
+              phone, and dispatches through Delhivery. You sell from
+              Bangladesh — this console is what we run for you.
             </p>
 
-            <div className="mt-9 flex flex-wrap gap-3">
+            <div className="mt-8 flex flex-wrap gap-3">
               <a
                 href="mailto:hello@skydrop.online?subject=Skydrop%20invite%20request"
                 className="group inline-flex items-center gap-2 rounded-xl bg-sky px-5 py-3.5 text-sm font-medium text-accent-fg transition-all hover:bg-sky-deep hover:-translate-y-px"
@@ -75,32 +68,34 @@ export function Hero(): ReactElement {
               </a>
             </div>
 
-            <div className="mt-10 grid grid-cols-3 gap-6 max-w-md text-left border-t border-line pt-6">
-              <MicroStat n="< 3 weeks" k="first dispatch" />
-              <MicroStat n="< 15%" k="RTO target" />
-              <MicroStat n="0 rupees" k="Indian setup" />
-            </div>
+            {/* Instrument stats */}
+            <dl className="mt-10 grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-line bg-line max-w-md">
+              <Stat n="<3 weeks" k="first dispatch" />
+              <Stat n="<15%" k="RTO target" />
+              <Stat n="₹0" k="Indian setup" />
+            </dl>
           </div>
 
-          {/* Right: route illustration */}
-          <div className="lg:pl-6">
-            <RouteSvg />
+          {/* Console */}
+          <div className="panel ticks relative h-[300px] sm:h-[360px] lg:h-[440px] overflow-hidden">
+            <div className="telemetry absolute top-3 left-1/2 -translate-x-1/2 z-10 text-fg-muted">
+              corridor · live
+            </div>
+            <CorridorConsole />
           </div>
         </div>
       </div>
 
-      <Marquee />
+      <TelemetryTicker />
     </section>
   );
 }
 
-function MicroStat({ n, k }: { n: string; k: string }): ReactElement {
+function Stat({ n, k }: { n: string; k: string }): ReactElement {
   return (
-    <div>
-      <div className="font-mono text-lg text-fg-strong tracking-tight">{n}</div>
-      <div className="mt-1 text-[11px] uppercase tracking-wider text-fg-muted">
-        {k}
-      </div>
+    <div className="bg-surface-2 px-4 py-3.5">
+      <dt className="telemetry text-fg-muted order-2">{k}</dt>
+      <dd className="font-mono text-lg text-fg-strong tracking-tight m-0">{n}</dd>
     </div>
   );
 }

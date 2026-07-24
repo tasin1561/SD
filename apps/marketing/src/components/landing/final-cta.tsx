@@ -1,32 +1,28 @@
-'use client';
-
-import { motion } from 'framer-motion';
 import { ArrowUpRight } from 'lucide-react';
 import type { ReactElement } from 'react';
-import { fadeUp, viewportOnce } from '@/lib/motion';
+import { Reveal } from '@/lib/reveal';
 
+/**
+ * SEC 08 — CLEARANCE. The closing ask, staged like a runway clearance.
+ */
 export function FinalCta(): ReactElement {
   return (
-    <section className="relative bg-surface-2 py-20 lg:py-28 overflow-hidden border-t border-line">
+    <section className="relative bg-surface-2/40 py-24 lg:py-32 overflow-hidden border-t border-line">
+      <div aria-hidden className="console-grid absolute inset-0 opacity-60" />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-50"
+        className="pointer-events-none absolute inset-0"
         style={{
-          background:
-            'radial-gradient(circle at 50% 40%, color-mix(in oklab, var(--sky) 15%, transparent), transparent 60%)',
+          background: 'radial-gradient(circle at 50% 45%, var(--glow), transparent 55%)',
+          opacity: 0.45,
         }}
       />
 
-      <motion.div
-        className="relative mx-auto max-w-2xl px-5 sm:px-8 text-center"
-        initial="hidden"
-        whileInView="show"
-        viewport={viewportOnce}
-        variants={fadeUp}
-      >
+      <Reveal className="relative mx-auto max-w-2xl px-5 sm:px-8 text-center">
+        <div className="telemetry text-fg-muted">sec 08 · clearance</div>
         <h2
-          className="font-display font-semibold text-fg-strong"
-          style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', letterSpacing: '-0.02em', lineHeight: 1.1 }}
+          className="mt-4 font-display font-semibold text-fg-strong"
+          style={{ fontSize: 'clamp(2.1rem, 4.2vw, 3.2rem)', letterSpacing: '-0.025em', lineHeight: 1.06 }}
         >
           Ready to ship into India?
         </h2>
@@ -36,7 +32,8 @@ export function FinalCta(): ReactElement {
         <div className="mt-9 flex flex-wrap justify-center items-center gap-4">
           <a
             href="mailto:hello@skydrop.online?subject=Skydrop%20invite%20request"
-            className="group inline-flex items-center gap-2 rounded-xl bg-sky px-5 py-3.5 text-sm font-medium text-accent-fg transition-all hover:bg-sky-deep hover:-translate-y-px"
+            className="group inline-flex items-center gap-2 rounded-xl bg-sky px-6 py-4 text-sm font-medium text-accent-fg transition-all hover:bg-sky-deep hover:-translate-y-px"
+            style={{ boxShadow: '0 0 42px var(--glow)' }}
           >
             Request an invite
             <ArrowUpRight
@@ -51,7 +48,7 @@ export function FinalCta(): ReactElement {
             hello@skydrop.online
           </a>
         </div>
-      </motion.div>
+      </Reveal>
     </section>
   );
 }

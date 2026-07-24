@@ -1,9 +1,13 @@
 import type { ReactElement } from 'react';
 
-const CHIPS = [
-  'Delhivery API-integrated',
-  'WMS bin-level',
-  'Webhook tracking',
+/**
+ * Status-bar footer — capability chips as system readouts.
+ */
+
+const READOUTS = [
+  'delhivery api · integrated',
+  'wms · bin-level',
+  'tracking · webhook',
 ];
 
 const LINKS = [
@@ -18,17 +22,21 @@ export function SiteFooter(): ReactElement {
       <div className="max-w-7xl mx-auto px-5 sm:px-8 py-12 lg:py-14">
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-10">
           <div>
-            <div className="font-display font-semibold text-fg-strong text-lg">
-              Skydrop
+            <div className="flex items-baseline gap-3">
+              <span className="font-display font-semibold text-fg-strong text-lg">Skydrop</span>
+              <span className="telemetry inline-flex items-center gap-1.5 text-fg-muted">
+                <span aria-hidden className="status-dot inline-block h-1 w-1 rounded-full bg-green" />
+                sys online
+              </span>
             </div>
             <p className="mt-2 text-sm text-fg-muted">
               © 2026 Skydrop · BD → IN cross-border logistics.
             </p>
             <div className="mt-5 flex flex-wrap gap-2">
-              {CHIPS.map((chip) => (
+              {READOUTS.map((chip) => (
                 <span
                   key={chip}
-                  className="inline-flex items-center rounded-full bg-surface-2 border border-line px-3 py-1 text-[11px] font-mono text-fg-muted"
+                  className="telemetry inline-flex items-center rounded-full border border-line bg-surface-2 px-3 py-1.5 text-fg-muted"
                 >
                   {chip}
                 </span>
@@ -36,10 +44,7 @@ export function SiteFooter(): ReactElement {
             </div>
           </div>
 
-          <nav
-            className="flex flex-col sm:flex-row gap-2 sm:gap-6 text-sm"
-            aria-label="Footer"
-          >
+          <nav className="flex flex-col sm:flex-row gap-2 sm:gap-6 text-sm" aria-label="Footer">
             {LINKS.map((l) => (
               <a
                 key={l.label}

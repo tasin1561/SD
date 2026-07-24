@@ -1,12 +1,16 @@
 import type { Metadata } from 'next';
 import type { ReactElement, ReactNode } from 'react';
-import { Instrument_Sans, Inter, JetBrains_Mono } from 'next/font/google';
+import { Space_Grotesk, Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { themeInitScript } from '@/lib/theme-init';
 
-const instrument = Instrument_Sans({
+// MISSION CONTROL type stack (docs/design-direction.md):
+// Space Grotesk — display, geometric/technical voice
+// Inter — body workhorse
+// JetBrains Mono — telemetry, event codes, data
+const grotesk = Space_Grotesk({
   subsets: ['latin'],
-  variable: '--font-instrument',
+  variable: '--font-grotesk',
   weight: ['500', '600', '700'],
   display: 'swap',
 });
@@ -20,7 +24,7 @@ const inter = Inter({
 
 const jetbrains = JetBrains_Mono({
   subsets: ['latin'],
-  variable: '--font-mono',
+  variable: '--font-jetbrains',
   weight: ['400', '500'],
   display: 'swap',
 });
@@ -74,11 +78,10 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${instrument.variable} ${inter.variable} ${jetbrains.variable}`}
+      className={`${grotesk.variable} ${inter.variable} ${jetbrains.variable}`}
       suppressHydrationWarning
     >
       <head>
-        {/* No-flash theme init — runs before hydration */}
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <script
           type="application/ld+json"

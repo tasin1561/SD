@@ -1,6 +1,3 @@
-'use client';
-
-import { motion } from 'framer-motion';
 import {
   Database,
   Truck,
@@ -10,8 +7,15 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { ReactElement } from 'react';
-import { fadeUp, staggerContainer, viewportOnce } from '@/lib/motion';
+import { Reveal } from '@/lib/reveal';
+import { SectionHeader } from './section-header';
 import { Counter } from './counter';
+import { CallLog } from './call-log';
+
+/**
+ * SEC 04 — INSTRUMENTS. Bento: one signature cell (call-confirm, with
+ * a live outcome log + RTO counters) and five instrument cells.
+ */
 
 interface Cell {
   icon: LucideIcon;
@@ -19,7 +23,7 @@ interface Cell {
   body: string;
 }
 
-const STANDARD: Cell[] = [
+const CELLS: Cell[] = [
   {
     icon: Database,
     title: 'A real WMS, not a spreadsheet',
@@ -49,135 +53,82 @@ const STANDARD: Cell[] = [
 
 export function WhySkydrop(): ReactElement {
   return (
-    <section id="why-skydrop" className="bg-surface py-16 lg:py-24">
+    <section id="why-skydrop" className="bg-surface py-20 lg:py-28 border-t border-line">
       <div className="max-w-7xl mx-auto px-5 sm:px-8">
-        <motion.div
-          initial="hidden"
-          whileInView="show"
-          viewport={viewportOnce}
-          variants={fadeUp}
-        >
-          <div className="inline-flex items-center gap-2 rounded-full bg-surface-2 border border-line px-3 py-1 text-[11px] font-mono uppercase tracking-wide text-fg-muted">
-            Why Skydrop
-          </div>
-          <h2
-            className="mt-4 font-display font-semibold text-fg-strong"
-            style={{
-              fontSize: 'clamp(1.75rem, 3.5vw, 2.75rem)',
-              letterSpacing: '-0.02em',
-            }}
-          >
-            Built specifically for the BD → IN lane.
-          </h2>
-        </motion.div>
+        <SectionHeader
+          index="04"
+          code="INSTRUMENTS"
+          title="Built specifically for the BD → IN lane."
+          sub="Not a generic aggregator with a corridor bolted on — every instrument below exists because this lane demands it."
+        />
 
-        <motion.div
-          className="mt-10 lg:mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:auto-rows-fr"
-          initial="hidden"
-          whileInView="show"
-          viewport={viewportOnce}
-          variants={staggerContainer}
-        >
-          {/* SIGNATURE cell — intentionally dark accent in both themes */}
-          <motion.div
-            variants={fadeUp}
-            className="sm:col-span-2 lg:col-span-2 lg:row-span-2 relative overflow-hidden rounded-2xl p-8 lg:p-10"
-            style={{
-              background: 'var(--ink)',
-              color: 'var(--white)',
-              border: '1px solid rgba(255,255,255,0.08)',
-            }}
-          >
+        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:auto-rows-fr">
+          {/* Signature cell */}
+          <Reveal className="sm:col-span-2 lg:col-span-2 lg:row-span-2 panel ticks relative overflow-hidden p-7 lg:p-9">
             <div
               aria-hidden
-              className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full blur-3xl opacity-40"
-              style={{
-                background:
-                  'radial-gradient(closest-side, rgba(56,189,248,0.6), transparent)',
-              }}
+              className="pointer-events-none absolute -right-28 -top-28 h-72 w-72 rounded-full"
+              style={{ background: 'radial-gradient(closest-side, var(--glow), transparent)', opacity: 0.55 }}
             />
 
             <div className="relative flex flex-col h-full">
-              <div className="inline-flex items-center gap-2 self-start rounded-full border border-white/10 px-3 py-1 text-[10px] font-mono uppercase tracking-wide text-sky">
-                Signature capability
-              </div>
-              <h3
-                className="mt-6 font-display text-2xl lg:text-3xl font-semibold leading-tight tracking-tight"
-                style={{ color: 'var(--white)' }}
-              >
+              <span className="telemetry text-sky">signature instrument</span>
+              <h3 className="mt-5 font-display text-2xl lg:text-3xl font-semibold text-fg-strong leading-tight tracking-tight">
                 Every COD order confirmed by phone.
               </h3>
-              <p
-                className="mt-4 text-[15px] max-w-[38ch]"
-                style={{ color: 'var(--muted-dark)' }}
-              >
-                Agents log every attempt. Unreachable orders never dispatch.
-                The single biggest lever on RTO — and the one nobody else
-                bothers to pull.
+              <p className="mt-3 text-[15px] text-fg-body max-w-[44ch]">
+                Agents log every attempt. Unreachable orders are held at NDR —
+                they never dispatch. The single biggest lever on RTO, and the
+                one nobody else bothers to pull.
               </p>
 
-              <div className="mt-auto pt-10 grid grid-cols-2 gap-6">
+              <div className="mt-6">
+                <CallLog />
+              </div>
+
+              <div className="mt-auto pt-8 grid grid-cols-2 gap-6">
                 <div>
-                  <div
-                    className="text-[11px] uppercase tracking-wider mb-2"
-                    style={{ color: 'var(--muted-dark)' }}
-                  >
-                    Skydrop target
-                  </div>
+                  <div className="telemetry text-fg-muted mb-2">skydrop target</div>
                   <div className="font-mono text-4xl lg:text-5xl text-sky tracking-tight">
                     &lt;<Counter to={15} suffix="%" />
                   </div>
-                  <div className="mt-1 text-xs" style={{ color: 'var(--muted-dark)' }}>
-                    RTO rate
-                  </div>
+                  <div className="mt-1 text-xs text-fg-muted">RTO rate</div>
                 </div>
                 <div>
-                  <div
-                    className="text-[11px] uppercase tracking-wider mb-2"
-                    style={{ color: 'var(--muted-dark)' }}
-                  >
-                    Industry
-                  </div>
-                  <div
-                    className="font-mono text-4xl lg:text-5xl tracking-tight"
-                    style={{ color: 'rgba(148,163,184,0.5)' }}
-                  >
+                  <div className="telemetry text-fg-muted mb-2">industry</div>
+                  <div className="font-mono text-4xl lg:text-5xl text-fg-muted/60 tracking-tight">
                     <Counter to={40} suffix="%+" />
                   </div>
-                  <div className="mt-1 text-xs" style={{ color: 'var(--muted-dark)' }}>
-                    without call-confirm
-                  </div>
+                  <div className="mt-1 text-xs text-fg-muted">without call-confirm</div>
                 </div>
               </div>
             </div>
-          </motion.div>
+          </Reveal>
 
-          {/* 5 standard cells — theme-aware */}
-          {STANDARD.map((c) => {
+          {/* Instrument cells */}
+          {CELLS.map((c, i) => {
             const Icon = c.icon;
             return (
-              <motion.div
+              <Reveal
                 key={c.title}
-                variants={fadeUp}
-                className="group rounded-2xl bg-surface-2 border border-line p-6 transition-shadow duration-150 hover:shadow-lg"
+                delay={(i + 1) * 60}
+                className="group panel p-6 hover:border-line-strong"
               >
                 <div className="flex items-start gap-4 h-full">
-                  <div className="shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-surface-3 border border-line text-sky">
-                    <Icon size={19} aria-hidden="true" />
+                  <div className="shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface-3 text-sky">
+                    <Icon size={18} aria-hidden="true" />
                   </div>
                   <div>
                     <h3 className="font-display text-base font-semibold text-fg-strong mb-1.5">
                       {c.title}
                     </h3>
-                    <p className="text-sm text-fg-body leading-relaxed">
-                      {c.body}
-                    </p>
+                    <p className="text-sm text-fg-body leading-relaxed">{c.body}</p>
                   </div>
                 </div>
-              </motion.div>
+              </Reveal>
             );
           })}
-        </motion.div>
+        </div>
       </div>
     </section>
   );

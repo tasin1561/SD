@@ -1,135 +1,115 @@
 /*
- * Skydrop marketing globals — tokens per .claude/skills/skydrop-design/SKILL.md
+ * Skydrop marketing — MISSION CONTROL direction.
+ * Token authority: docs/design-direction.md
  *
- * Two-layer token system:
- *   1. Raw palette (from skill) — never changes.
- *   2. Semantic tokens (--surface / --fg / etc.) — swap based on
- *      html[data-theme="dark|light"]. Sections use semantic only, so
- *      the same markup renders correctly in either theme.
- *
- * Default (no data-theme attr): follows prefers-color-scheme, defaulting
- * to DARK if the OS has no preference (matches the skill's brand-dark
- * primary personality).
+ * Two themes:
+ *   NIGHT OPS (default) — near-black blue console, phosphor sky accents
+ *   DAY OPS  (light)    — blueprint on paper, same instrument chrome
  */
 
 @import 'tailwindcss';
 
 :root {
-  /* ── Raw palette (skill, immutable) ───────────────────────── */
-  --ink: #0B1220;
-  --ink-soft: #1A2333;
+  /* ── Raw palette ──────────────────────────────────────────── */
   --sky: #38BDF8;
   --sky-deep: #0284C7;
-  --paper: #F8FAFC;
-  --white: #FFFFFF;
   --saffron: #F59E0B;
-  --green: #10B981;
-  --red: #EF4444;
-  --muted: #64748B;
-  --muted-dark: #94A3B8;
-  --border-light: #E2E8F0;
-  --border-dark: rgba(255, 255, 255, 0.08);
+  --green: #34D399;
+  --red: #F87171;
 
-  /* ── Semantic tokens — DEFAULT = DARK (skill's brand primary) ──
-   * Three-step text ramp per WCAG AAA on both themes:
-   *   --fg-strong  headings — highest contrast
-   *   --fg-body    body copy — high contrast, readable at 14–18px
-   *   --fg-muted   captions, chips, footnotes — mid contrast
-   */
-  --surface: var(--ink);
-  --surface-2: var(--ink-soft);
-  --surface-3: rgba(255, 255, 255, 0.03);
-  --fg-strong: var(--white);
-  --fg-body: #CBD5E1;   /* slate-300 — body on ink ≈ 11:1 */
-  --fg-muted: var(--muted-dark);
-  --border: var(--border-dark);
-  --border-strong: rgba(255, 255, 255, 0.16);
-  --accent-fg: var(--ink);
-  --divider: rgba(255, 255, 255, 0.06);
-  --scrim: rgba(11, 18, 32, 0.85);
+  /* ── Semantic — NIGHT OPS default ─────────────────────────── */
+  --surface: #060B16;
+  --surface-2: #0C1424;
+  --surface-3: rgba(56, 189, 248, 0.05);
+  --fg-strong: #F3F7FC;
+  --fg-body: #C3D0E0;
+  --fg-muted: #8296AE;
+  --line: rgba(148, 178, 255, 0.10);
+  --line-strong: rgba(148, 178, 255, 0.22);
+  --grid: rgba(56, 189, 248, 0.05);
+  --accent-fg: #051018;
+  --scrim: rgba(4, 8, 16, 0.88);
+  --glow: rgba(56, 189, 248, 0.35);
   color-scheme: dark;
 }
 
-/* System = light + user hasn't explicitly picked a theme */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) {
-    --surface: var(--paper);
-    --surface-2: var(--white);
-    --surface-3: rgba(11, 18, 32, 0.03);
-    --fg-strong: var(--ink);
-    --fg-body: #334155;   /* slate-700 — body on paper ≈ 10.5:1 */
-    --fg-muted: var(--muted);
-    --border: var(--border-light);
-    --border-strong: #CBD5E1;
-    --accent-fg: var(--white);
-    --divider: var(--border-light);
-    --scrim: rgba(11, 18, 32, 0.55);
+    --sky: #0284C7;
+    --sky-deep: #075985;
+    --surface: #F6F8FB;
+    --surface-2: #FFFFFF;
+    --surface-3: rgba(2, 132, 199, 0.04);
+    --fg-strong: #0B1523;
+    --fg-body: #31435A;
+    --fg-muted: #5B6B7F;
+    --line: rgba(15, 42, 78, 0.12);
+    --line-strong: rgba(15, 42, 78, 0.26);
+    --grid: rgba(2, 132, 199, 0.07);
+    --accent-fg: #FFFFFF;
+    --scrim: rgba(11, 21, 35, 0.55);
+    --glow: rgba(2, 132, 199, 0.18);
     color-scheme: light;
   }
 }
 
-/* Explicit user choice (persists in localStorage) — highest specificity */
 :root[data-theme='dark'] {
-  --surface: var(--ink);
-  --surface-2: var(--ink-soft);
-  --surface-3: rgba(255, 255, 255, 0.03);
-  --fg-strong: var(--white);
-  --fg-body: #CBD5E1;
-  --fg-muted: var(--muted-dark);
-  --border: var(--border-dark);
-  --border-strong: rgba(255, 255, 255, 0.16);
-  --accent-fg: var(--ink);
-  --divider: rgba(255, 255, 255, 0.06);
-  --scrim: rgba(11, 18, 32, 0.85);
+  --sky: #38BDF8;
+  --sky-deep: #0284C7;
+  --surface: #060B16;
+  --surface-2: #0C1424;
+  --surface-3: rgba(56, 189, 248, 0.05);
+  --fg-strong: #F3F7FC;
+  --fg-body: #C3D0E0;
+  --fg-muted: #8296AE;
+  --line: rgba(148, 178, 255, 0.10);
+  --line-strong: rgba(148, 178, 255, 0.22);
+  --grid: rgba(56, 189, 248, 0.05);
+  --accent-fg: #051018;
+  --scrim: rgba(4, 8, 16, 0.88);
+  --glow: rgba(56, 189, 248, 0.35);
   color-scheme: dark;
 }
 
 :root[data-theme='light'] {
-  --surface: var(--paper);
-  --surface-2: var(--white);
-  --surface-3: rgba(11, 18, 32, 0.03);
-  --fg-strong: var(--ink);
-  --fg-body: #334155;
-  --fg-muted: var(--muted);
-  --border: var(--border-light);
-  --border-strong: #CBD5E1;
-  --accent-fg: var(--white);
-  --divider: var(--border-light);
-  --scrim: rgba(11, 18, 32, 0.55);
+  --sky: #0284C7;
+  --sky-deep: #075985;
+  --surface: #F6F8FB;
+  --surface-2: #FFFFFF;
+  --surface-3: rgba(2, 132, 199, 0.04);
+  --fg-strong: #0B1523;
+  --fg-body: #31435A;
+  --fg-muted: #5B6B7F;
+  --line: rgba(15, 42, 78, 0.12);
+  --line-strong: rgba(15, 42, 78, 0.26);
+  --grid: rgba(2, 132, 199, 0.07);
+  --accent-fg: #FFFFFF;
+  --scrim: rgba(11, 21, 35, 0.55);
+  --glow: rgba(2, 132, 199, 0.18);
   color-scheme: light;
 }
 
-/* Tailwind v4 @theme extension — expose semantic + raw as utilities */
+/* Tailwind v4 utilities from tokens */
 @theme inline {
-  /* Raw palette (unchanged utilities: bg-ink, text-sky, etc.) */
-  --color-ink: var(--ink);
-  --color-ink-soft: var(--ink-soft);
   --color-sky: var(--sky);
   --color-sky-deep: var(--sky-deep);
-  --color-paper: var(--paper);
-  --color-white: var(--white);
   --color-saffron: var(--saffron);
   --color-green: var(--green);
   --color-red: var(--red);
-  --color-muted: var(--muted);
-  --color-muted-dark: var(--muted-dark);
-  --color-border-light: var(--border-light);
-  --color-border-dark: var(--border-dark);
 
-  /* Semantic (theme-aware) — bg-surface, text-fg-strong/-body/-muted, etc. */
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
   --color-fg-strong: var(--fg-strong);
   --color-fg-body: var(--fg-body);
   --color-fg-muted: var(--fg-muted);
-  --color-line: var(--border);
-  --color-line-strong: var(--border-strong);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
   --color-accent-fg: var(--accent-fg);
 
   --font-sans: var(--font-inter);
-  --font-display: var(--font-instrument);
-  --font-mono: var(--font-mono);
+  --font-display: var(--font-grotesk);
+  --font-mono: var(--font-jetbrains);
 }
 
 html,
@@ -168,7 +148,7 @@ body {
   padding: 0.75rem 1rem;
   background: var(--surface-2);
   color: var(--fg-strong);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--line-strong);
   border-radius: 0.5rem;
   z-index: 100;
 }
@@ -178,39 +158,88 @@ body {
 }
 
 h1, h2, h3 {
-  font-family: var(--font-instrument), system-ui, sans-serif;
+  font-family: var(--font-grotesk), system-ui, sans-serif;
   font-weight: 600;
   letter-spacing: -0.02em;
-  line-height: 1.1;
+  line-height: 1.08;
   color: var(--fg-strong);
-}
-
-@utility text-max {
-  max-width: 65ch;
 }
 
 ::selection {
   background: var(--sky);
-  color: var(--ink);
+  color: #051018;
 }
 
-/* Marquee */
-@keyframes marquee {
+/* ── Instrument chrome utilities ─────────────────────────────── */
+
+/* Telemetry label — mono, uppercase, tracked */
+@utility telemetry {
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Panel — the standard instrument surface */
+@utility panel {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+/* Corner ticks — cartographic '+' marks on key panels */
+.ticks {
+  position: relative;
+}
+.ticks::before,
+.ticks::after {
+  content: '+';
+  position: absolute;
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--fg-muted);
+  opacity: 0.6;
+  pointer-events: none;
+}
+.ticks::before { top: 6px; left: 8px; }
+.ticks::after { bottom: 6px; right: 8px; }
+
+/* Graph-grid background for hero/section backdrops */
+.console-grid {
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* Telemetry ticker track */
+@keyframes tickerScroll {
   from { transform: translateX(0); }
   to { transform: translateX(-50%); }
 }
-.marquee-track {
-  animation: marquee 40s linear infinite;
+.ticker-track {
+  animation: tickerScroll 60s linear infinite;
   will-change: transform;
 }
-.marquee-track:hover,
-.marquee-track:focus-within {
+.ticker-track:hover,
+.ticker-track:focus-within {
   animation-play-state: paused;
 }
 
-/* Reduced motion */
+/* Status dot pulse */
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.status-dot {
+  animation: statusPulse 2.4s ease-in-out infinite;
+}
+
+/* Reduced motion — everything static */
 @media (prefers-reduced-motion: reduce) {
-  .marquee-track {
+  .ticker-track,
+  .status-dot {
     animation: none;
   }
   *,
@@ -220,5 +249,48 @@ h1, h2, h3 {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ── Reveal system (lib/reveal.tsx) ──────────────────────────── */
+/* Transform-only: SSR HTML is always fully visible. */
+.reveal {
+  transform: translateY(10px);
+  transition: transform 220ms cubic-bezier(0.22, 0.68, 0.34, 1);
+}
+.reveal[data-shown] {
+  transform: none;
+}
+
+/* Rail draw-in (how-it-works) */
+.rail-draw {
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 1.2s cubic-bezier(0.22, 0.68, 0.34, 1);
+}
+.rail-draw[data-shown],
+[data-shown] .rail-draw {
+  transform: scaleX(1);
+}
+
+/* FAQ panel expand — grid-rows trick, no JS measurement */
+.faq-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 240ms cubic-bezier(0.22, 0.68, 0.34, 1);
+}
+.faq-panel[data-open] {
+  grid-template-rows: 1fr;
+}
+.faq-panel > div {
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .rail-draw,
+  .faq-panel {
+    transform: none !important;
+    transition: none !important;
   }
 }

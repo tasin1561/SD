@@ -2,9 +2,15 @@
 
 import { useState, type ReactElement } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/cn';
-import { revealEase, fadeUp, staggerContainer, viewportOnce } from '@/lib/motion';
+import { Reveal } from '@/lib/reveal';
+import { SectionHeader } from './section-header';
+
+/**
+ * SEC 07 — QUERIES. Accordion with mono indices. Panel expansion uses
+ * the CSS grid-template-rows 0fr→1fr trick — no JS measurement, no
+ * animation library, honors reduced-motion via the global override.
+ */
 
 interface QA {
   q: string;
@@ -36,7 +42,6 @@ const QA_LIST: QA[] = [
 
 export function Faq(): ReactElement {
   const [openIdx, setOpenIdx] = useState<number | null>(0);
-  const prefersReduced = useReducedMotion();
 
   const faqSchema = {
     '@context': 'https://schema.org',
@@ -49,49 +54,32 @@ export function Faq(): ReactElement {
   };
 
   return (
-    <section className="bg-surface py-16 lg:py-24">
+    <section className="bg-surface py-20 lg:py-28 border-t border-line">
       <div className="max-w-3xl mx-auto px-5 sm:px-8">
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
         />
 
-        <motion.div
-          initial="hidden"
-          whileInView="show"
-          viewport={viewportOnce}
-          variants={fadeUp}
-        >
-          <div className="inline-flex items-center gap-2 rounded-full bg-surface-2 border border-line px-3 py-1 text-[11px] font-mono uppercase tracking-wide text-fg-muted">
-            FAQ
-          </div>
-          <h2
-            className="mt-4 font-display font-semibold text-fg-strong"
-            style={{ fontSize: 'clamp(1.75rem, 3.5vw, 2.75rem)', letterSpacing: '-0.02em' }}
-          >
-            Questions we hear often.
-          </h2>
-        </motion.div>
+        <SectionHeader index="07" code="QUERIES" title="Questions we hear often." />
 
-        <motion.ul
-          className="mt-10 lg:mt-14 divide-y divide-line border-y border-line"
-          initial="hidden"
-          whileInView="show"
-          viewport={viewportOnce}
-          variants={staggerContainer}
-        >
+        <ul className="mt-12 divide-y divide-line border-y border-line list-none p-0">
           {QA_LIST.map((qa, i) => {
             const isOpen = openIdx === i;
+            const idx = String(i + 1).padStart(2, '0');
             return (
-              <motion.li key={qa.q} variants={fadeUp}>
+              <Reveal as="li" key={qa.q} delay={i * 50}>
                 <button
                   type="button"
                   onClick={() => setOpenIdx(isOpen ? null : i)}
                   aria-expanded={isOpen}
                   aria-controls={`faq-panel-${i}`}
-                  className="group flex w-full items-center justify-between gap-4 py-5 lg:py-6 text-left"
+                  className="group flex w-full items-center gap-4 py-5 lg:py-6 text-left"
                 >
-                  <span className="font-display text-base lg:text-lg font-semibold text-fg-strong pr-4">
+                  <span className={cn('telemetry shrink-0', isOpen ? 'text-sky' : 'text-fg-muted')}>
+                    Q.{idx}
+                  </span>
+                  <span className="flex-1 font-display text-base lg:text-lg font-semibold text-fg-strong pr-2">
                     {qa.q}
                   </span>
                   <ChevronDown
@@ -99,35 +87,26 @@ export function Faq(): ReactElement {
                     aria-hidden="true"
                     className={cn(
                       'shrink-0 text-fg-muted transition-transform duration-200',
-                      isOpen && 'rotate-180 text-sky-deep',
+                      isOpen && 'rotate-180 text-sky',
                     )}
                   />
                 </button>
-                <AnimatePresence initial={false}>
-                  {isOpen ? (
-                    <motion.div
-                      id={`faq-panel-${i}`}
-                      role="region"
-                      key="content"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{
-                        duration: prefersReduced ? 0 : 0.25,
-                        ease: revealEase as unknown as number[],
-                      }}
-                      className="overflow-hidden"
-                    >
-                      <p className="pb-6 text-[15px] text-fg-body leading-relaxed max-w-[62ch]">
-                        {qa.a}
-                      </p>
-                    </motion.div>
-                  ) : null}
-                </AnimatePresence>
-              </motion.li>
+                <div
+                  id={`faq-panel-${i}`}
+                  role="region"
+                  className="faq-panel"
+                  {...(isOpen ? { 'data-open': '' } : {})}
+                >
+                  <div>
+                    <p className="pb-6 pl-12 text-[15px] text-fg-body leading-relaxed max-w-[62ch] m-0">
+                      {qa.a}
+                    </p>
+                  </div>
+                </div>
+              </Reveal>
             );
           })}
-        </motion.ul>
+        </ul>
       </div>
     </section>
   );

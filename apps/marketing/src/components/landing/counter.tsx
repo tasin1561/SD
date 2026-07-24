@@ -1,27 +1,11 @@
 'use client';
 
-import { motion, useInView, useMotionValue, useTransform, animate, useReducedMotion } from 'framer-motion';
-import { useEffect, useRef, type ReactElement } from 'react';
-
-interface Props {
-  from?: number;
-  to: number;
-  suffix?: string;
-  prefix?: string;
-  duration?: number;
-  className?: string;
-}
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 
 /**
- * SSR-safe number counter.
- *
- * Renders the TARGET value on first paint (SEO + screenshot friendly).
- * Once mounted, if reduced-motion is not requested and the counter is
- * in view, animates from `from` up to `to`. That means:
- *   - SSR HTML shows "40%+" not "0%+"
- *   - Playwright fullPage screenshots capture the final value
- *   - Real users on scroll see the animation
- *   - Reduced-motion users see the final value with no animation
+ * Hand-rolled count-up (no framer-motion). SSR + first paint show the
+ * TARGET value; once scrolled into view (and motion allowed) it snaps
+ * to `from` and counts up over `duration`s with the boot ease.
  */
 export function Counter({
   from = 0,
@@ -30,30 +14,51 @@ export function Counter({
   prefix = '',
   duration = 1.2,
   className,
-}: Props): ReactElement {
+}: {
+  from?: number;
+  to: number;
+  suffix?: string;
+  prefix?: string;
+  duration?: number;
+  className?: string;
+}): ReactElement {
   const ref = useRef<HTMLSpanElement>(null);
-  const prefersReduced = useReducedMotion();
-  const inView = useInView(ref, { once: true, margin: '-40px' });
-  // Motion value starts at the TARGET so SSR + first paint show it.
-  const mv = useMotionValue(to);
-  const rounded = useTransform(mv, (v) => `${prefix}${Math.round(v)}${suffix}`);
+  const [value, setValue] = useState(to);
 
   useEffect(() => {
-    if (prefersReduced) return; // Skip — mv already at target
-    if (!inView) return;
-    // Snap back to `from`, then animate to `to`. This gives the count-up
-    // effect once we know the user is scrolling to the element.
-    mv.set(from);
-    const controls = animate(mv, to, {
-      duration,
-      ease: [0.21, 0.47, 0.32, 0.98],
-    });
-    return () => controls.stop();
-  }, [inView, from, to, duration, mv, prefersReduced]);
+    const el = ref.current;
+    if (!el) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    let raf = 0;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) return;
+        io.disconnect();
+        const t0 = performance.now();
+        const ms = duration * 1000;
+        const ease = (x: number): number => 1 - Math.pow(1 - x, 3);
+        const tick = (t: number): void => {
+          const p = Math.min(1, (t - t0) / ms);
+          setValue(Math.round(from + (to - from) * ease(p)));
+          if (p < 1) raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+      },
+      { rootMargin: '-40px 0px' },
+    );
+    io.observe(el);
+    return () => {
+      io.disconnect();
+      cancelAnimationFrame(raf);
+    };
+  }, [from, to, duration]);
 
   return (
-    <motion.span ref={ref} className={className}>
-      {rounded}
-    </motion.span>
+    <span ref={ref} className={className}>
+      {prefix}
+      {value}
+      {suffix}
+    </span>
   );
 }
