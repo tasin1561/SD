@@ -43,6 +43,8 @@ const DESTS: NodeDef[] = [
   { id: 'JAI', x: geo('JAI')[0], y: geo('JAI')[1], label: 'JAI', labelDx: -32, labelDy: 10 },
   { id: 'LKO', x: geo('LKO')[0], y: geo('LKO')[1], label: 'LKO', labelDx: 10, labelDy: -6 },
   { id: 'GAU', x: geo('GAU')[0], y: geo('GAU')[1], label: 'GAU', labelDx: 12, labelDy: 0 },
+  { id: 'PAT', x: geo('PAT')[0], y: geo('PAT')[1], label: 'PAT', labelDx: -32, labelDy: -6 },
+  { id: 'BBI', x: geo('BBI')[0], y: geo('BBI')[1], label: 'BBI', labelDx: 10, labelDy: 14 },
   { id: 'AMD', x: geo('AMD')[0], y: geo('AMD')[1], label: 'AMD', labelDx: -36, labelDy: 4 },
   { id: 'CCU', x: geo('CCU')[0], y: geo('CCU')[1], label: 'CCU', labelDx: -36, labelDy: 18 },
   { id: 'NAG', x: geo('NAG')[0], y: geo('NAG')[1], label: 'NAG', labelDx: 10, labelDy: 14 },
