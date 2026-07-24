@@ -35,11 +35,22 @@ const ORIGIN: NodeDef = {
   id: 'DAC', x: geo('DAC')[0], y: geo('DAC')[1],
   label: 'DAC', labelDx: 12, labelDy: -10, origin: true,
 };
+
+// Pan-India destination set — Delhivery covers all of these lanes.
+// Label offsets hand-placed to avoid collisions at hero scale.
 const DESTS: NodeDef[] = [
-  { id: 'DEL', x: geo('DEL')[0], y: geo('DEL')[1], label: 'DEL', labelDx: -34, labelDy: -8 },
+  { id: 'DEL', x: geo('DEL')[0], y: geo('DEL')[1], label: 'DEL', labelDx: -34, labelDy: -6 },
+  { id: 'JAI', x: geo('JAI')[0], y: geo('JAI')[1], label: 'JAI', labelDx: -32, labelDy: 10 },
+  { id: 'LKO', x: geo('LKO')[0], y: geo('LKO')[1], label: 'LKO', labelDx: 10, labelDy: -6 },
+  { id: 'GAU', x: geo('GAU')[0], y: geo('GAU')[1], label: 'GAU', labelDx: 12, labelDy: 0 },
+  { id: 'AMD', x: geo('AMD')[0], y: geo('AMD')[1], label: 'AMD', labelDx: -36, labelDy: 4 },
   { id: 'CCU', x: geo('CCU')[0], y: geo('CCU')[1], label: 'CCU', labelDx: -36, labelDy: 18 },
-  { id: 'BOM', x: geo('BOM')[0], y: geo('BOM')[1], label: 'BOM', labelDx: -38, labelDy: 4 },
-  { id: 'BLR', x: geo('BLR')[0], y: geo('BLR')[1], label: 'BLR', labelDx: 12, labelDy: 12 },
+  { id: 'NAG', x: geo('NAG')[0], y: geo('NAG')[1], label: 'NAG', labelDx: 10, labelDy: 14 },
+  { id: 'BOM', x: geo('BOM')[0], y: geo('BOM')[1], label: 'BOM', labelDx: -38, labelDy: 0 },
+  { id: 'PNQ', x: geo('PNQ')[0], y: geo('PNQ')[1], label: 'PNQ', labelDx: 10, labelDy: 12 },
+  { id: 'HYD', x: geo('HYD')[0], y: geo('HYD')[1], label: 'HYD', labelDx: 11, labelDy: 4 },
+  { id: 'MAA', x: geo('MAA')[0], y: geo('MAA')[1], label: 'MAA', labelDx: 11, labelDy: 6 },
+  { id: 'BLR', x: geo('BLR')[0], y: geo('BLR')[1], label: 'BLR', labelDx: -34, labelDy: 12 },
 ];
 
 function ctrl(a: NodeDef, b: NodeDef): { x: number; y: number } {
@@ -129,11 +140,13 @@ export function CorridorConsole(): ReactElement {
     };
     readColors();
 
+    // With 12 lanes, keep ~4 parcels airborne at once — the rest wait
+    // on staggered delays so traffic reads alive, not swarmed.
     const parcels: Parcel[] = DESTS.map((_, i) => ({
       dest: i,
-      t: Math.random() * 0.9,
+      t: i % 3 === 0 ? Math.random() * 0.8 : 0,
       speed: 0.0016 + Math.random() * 0.0012,
-      delay: 0,
+      delay: i % 3 === 0 ? 0 : 90 + Math.random() * 700,
     }));
     const pulses: Pulse[] = [];
     let sweep = -0.2;
@@ -297,7 +310,7 @@ export function CorridorConsole(): ReactElement {
           const dp = px(dest);
           pulses.push({ x: dp.x, y: dp.y, r: 4, alpha: 0.7 });
           p.t = 0;
-          p.delay = 120 + Math.random() * 260;
+          p.delay = 260 + Math.random() * 640;
           p.speed = 0.0016 + Math.random() * 0.0012;
           continue;
         }
