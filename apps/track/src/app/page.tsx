@@ -17,6 +17,10 @@ export default async function Home(): Promise<ReactElement> {
   return (
     <div className="relative min-h-screen grid place-items-center bg-surface text-fg-body p-6 overflow-hidden">
       <div aria-hidden className="console-grid absolute inset-0" />
+      {/* The corridor runs across the WHOLE page — ambient, behind everything */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 opacity-55">
+        <CorridorConsole />
+      </div>
       <div
         aria-hidden
         className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[700px] h-[480px] rounded-full"
@@ -41,17 +45,12 @@ export default async function Home(): Promise<ReactElement> {
           <div className="telemetry text-fg-muted mt-2">{t(locale, 'tagline')}</div>
         </div>
 
-        {/* Live corridor — the brand's signature, miniaturized */}
-        <div className="boot-rise boot-rise-2 panel ticks relative h-44 sm:h-52 overflow-hidden mb-4">
-          <div className="telemetry absolute top-2.5 left-1/2 -translate-x-1/2 z-10 text-fg-muted">
-            corridor · live
-          </div>
-          <CorridorConsole />
-        </div>
-
-        <TiltPanel max={3} className="boot-rise boot-rise-3">
+        <TiltPanel max={3} className="boot-rise boot-rise-2">
           <div className="panel ticks relative overflow-hidden p-6 sm:p-7">
-            <div className="telemetry text-sky mb-3">lookup</div>
+            <div className="mb-3 flex items-center justify-between">
+              <span className="telemetry text-sky">lookup</span>
+              <span className="telemetry text-fg-muted">corridor · live</span>
+            </div>
             <h1 className="text-fg-strong text-lg font-semibold mb-1">
               {t(locale, 'landingTitle')}
             </h1>
