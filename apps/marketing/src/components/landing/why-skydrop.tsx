@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { Reveal } from '@/lib/reveal';
+import { TiltPanel } from '@/lib/tilt';
 import { SectionHeader } from './section-header';
 import { Counter } from './counter';
 import { CallLog } from './call-log';
@@ -62,9 +63,11 @@ export function WhySkydrop(): ReactElement {
           sub="Not a generic aggregator with a corridor bolted on — every instrument below exists because this lane demands it."
         />
 
-        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:auto-rows-fr">
-          {/* Signature cell */}
-          <Reveal className="sm:col-span-2 lg:col-span-2 lg:row-span-2 panel ticks relative overflow-hidden p-7 lg:p-9">
+        <div className="persp mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:auto-rows-fr">
+          {/* Signature cell — subtle tilt + pointer glow */}
+          <Reveal className="sm:col-span-2 lg:col-span-2 lg:row-span-2">
+          <TiltPanel max={2.5} className="h-full">
+          <div className="panel ticks relative overflow-hidden p-7 lg:p-9 h-full">
             <div
               aria-hidden
               className="pointer-events-none absolute -right-28 -top-28 h-72 w-72 rounded-full"
@@ -103,6 +106,9 @@ export function WhySkydrop(): ReactElement {
                 </div>
               </div>
             </div>
+          <div aria-hidden className="glow-follow" />
+          </div>
+          </TiltPanel>
           </Reveal>
 
           {/* Instrument cells */}
@@ -112,7 +118,7 @@ export function WhySkydrop(): ReactElement {
               <Reveal
                 key={c.title}
                 delay={(i + 1) * 60}
-                className="group panel p-6 hover:border-line-strong"
+                className="group panel tilt-card p-6 hover:border-line-strong"
               >
                 <div className="flex items-start gap-4 h-full">
                   <div className="shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface-3 text-sky">

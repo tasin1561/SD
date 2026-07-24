@@ -294,3 +294,63 @@ h1, h2, h3 {
     transition: none !important;
   }
 }
+
+/* ── 3D + entrance motion (lib/tilt.tsx + hero boot) ─────────── */
+
+/* Hero boot-rise: transform-only entrance on page load. Opacity stays
+   ≥1 so LCP is never delayed and SSR HTML is always readable. */
+@keyframes bootRise {
+  from { transform: translateY(14px); }
+  to { transform: none; }
+}
+.boot-rise {
+  animation: bootRise 480ms cubic-bezier(0.22, 0.68, 0.34, 1) backwards;
+}
+.boot-rise-2 { animation-delay: 90ms; }
+.boot-rise-3 { animation-delay: 180ms; }
+.boot-rise-4 { animation-delay: 270ms; }
+
+/* Pointer-tracking glow overlay — reads --px/--py set by TiltPanel. */
+.glow-follow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 300ms ease;
+  border-radius: inherit;
+  background: radial-gradient(
+    340px circle at var(--px, 50%) var(--py, 50%),
+    color-mix(in oklab, var(--sky) 9%, transparent),
+    transparent 70%
+  );
+}
+*:hover > .glow-follow {
+  opacity: 1;
+}
+
+/* 3D context for tilting card grids */
+.persp {
+  perspective: 1100px;
+}
+.tilt-card {
+  transform-style: preserve-3d;
+  transition: transform 200ms cubic-bezier(0.22, 0.68, 0.34, 1), border-color 150ms ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .tilt-card:hover {
+    transform: translateY(-3px) rotateX(1.6deg);
+  }
+  .tilt-card:hover .tilt-pop {
+    transform: translateZ(22px);
+  }
+}
+.tilt-pop {
+  transition: transform 200ms cubic-bezier(0.22, 0.68, 0.34, 1);
+  transform-style: preserve-3d;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-rise { animation: none; }
+  .tilt-card, .tilt-card:hover, .tilt-pop { transform: none !important; }
+  .glow-follow { display: none; }
+}

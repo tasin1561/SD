@@ -319,21 +319,39 @@ export function CorridorConsole(): ReactElement {
         const c = ctrl(ORIGIN, dest);
         const pos = qPoint(ORIGIN, c, dest, p.t);
         const pp = px(pos);
-        const back = qPoint(ORIGIN, c, dest, Math.max(0, p.t - 0.05));
+        const tBack = Math.max(0, p.t - 0.05);
+        const back = qPoint(ORIGIN, c, dest, tBack);
         const bp = px(back);
+        // Altitude — parcels FLY above the route: lift peaks mid-flight.
+        // A faint ground marker stays on the route line below the blip,
+        // selling the third dimension without any 3D library.
+        const alt = Math.sin(p.t * Math.PI) * S * 0.035;
+        const altBack = Math.sin(tBack * Math.PI) * S * 0.035;
+        // Ground marker + altitude leg
         ctx.beginPath();
-        ctx.moveTo(bp.x, bp.y);
-        ctx.lineTo(pp.x, pp.y);
+        ctx.arc(pp.x, pp.y, 1.4, 0, Math.PI * 2);
+        ctx.fillStyle = colors.route;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(pp.x, pp.y);
+        ctx.lineTo(pp.x, pp.y - alt);
+        ctx.strokeStyle = colors.route;
+        ctx.lineWidth = 0.75;
+        ctx.stroke();
+        // Trail at altitude
+        ctx.beginPath();
+        ctx.moveTo(bp.x, bp.y - altBack);
+        ctx.lineTo(pp.x, pp.y - alt);
         ctx.strokeStyle = colors.trail;
         ctx.lineWidth = 1.6;
         ctx.stroke();
         // Glow: concentric fills — no shadowBlur (kills software rendering)
         ctx.beginPath();
-        ctx.arc(pp.x, pp.y, 5.5, 0, Math.PI * 2);
+        ctx.arc(pp.x, pp.y - alt, 5.5, 0, Math.PI * 2);
         ctx.fillStyle = colors.trail.replace(/[\d.]+\)$/, '0.18)');
         ctx.fill();
         ctx.beginPath();
-        ctx.arc(pp.x, pp.y, 2.6, 0, Math.PI * 2);
+        ctx.arc(pp.x, pp.y - alt, 2.6, 0, Math.PI * 2);
         ctx.fillStyle = colors.blip;
         ctx.fill();
       }

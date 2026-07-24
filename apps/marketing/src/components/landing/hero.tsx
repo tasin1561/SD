@@ -1,5 +1,6 @@
 import { ArrowUpRight, Search } from 'lucide-react';
 import type { ReactElement } from 'react';
+import { TiltPanel } from '@/lib/tilt';
 import { CorridorConsole } from './corridor-console';
 import { TelemetryTicker } from './telemetry-ticker';
 
@@ -24,13 +25,13 @@ export function Hero(): ReactElement {
         <div className="grid gap-10 lg:grid-cols-[minmax(0,44%)_minmax(0,56%)] lg:items-center">
           {/* Copy */}
           <div>
-            <div className="telemetry inline-flex items-center gap-2.5 rounded-full border border-line bg-surface-2 px-3.5 py-2 text-fg-muted">
+            <div className="boot-rise telemetry inline-flex items-center gap-2.5 rounded-full border border-line bg-surface-2 px-3.5 py-2 text-fg-muted">
               <span aria-hidden className="status-dot inline-block h-1.5 w-1.5 rounded-full bg-green" />
               <span>corridor online · BD → IN · invite-only beta</span>
             </div>
 
             <h1
-              className="mt-6 font-display font-semibold text-fg-strong"
+              className="boot-rise boot-rise-2 mt-6 font-display font-semibold text-fg-strong"
               style={{
                 fontSize: 'clamp(2.5rem, 5.6vw, 4.25rem)',
                 letterSpacing: '-0.025em',
@@ -42,13 +43,13 @@ export function Hero(): ReactElement {
               <span className="text-sky">running without&nbsp;you.</span>
             </h1>
 
-            <p className="mt-6 text-fg-body text-base sm:text-lg max-w-[46ch]">
+            <p className="boot-rise boot-rise-3 mt-6 text-fg-body text-base sm:text-lg max-w-[46ch]">
               Skydrop holds your stock in India, confirms every COD buyer by
               phone, and dispatches through Delhivery. You sell from
               Bangladesh — this console is what we run for you.
             </p>
 
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="boot-rise boot-rise-4 mt-8 flex flex-wrap gap-3">
               <a
                 href="mailto:hello@skydrop.online?subject=Skydrop%20invite%20request"
                 className="group inline-flex items-center gap-2 rounded-xl bg-sky px-5 py-3.5 text-sm font-medium text-accent-fg transition-all hover:bg-sky-deep hover:-translate-y-px"
@@ -76,13 +77,16 @@ export function Hero(): ReactElement {
             </dl>
           </div>
 
-          {/* Console */}
-          <div className="panel ticks relative h-[300px] sm:h-[360px] lg:h-[440px] overflow-hidden">
-            <div className="telemetry absolute top-3 left-1/2 -translate-x-1/2 z-10 text-fg-muted">
-              corridor · live
+          {/* Console — 3D tilt follows the pointer; glow tracks it */}
+          <TiltPanel max={4.5} className="lg:pl-0">
+            <div className="panel ticks relative h-[300px] sm:h-[360px] lg:h-[440px] overflow-hidden">
+              <div className="telemetry absolute top-3 left-1/2 -translate-x-1/2 z-10 text-fg-muted">
+                corridor · live
+              </div>
+              <CorridorConsole />
+              <div aria-hidden className="glow-follow" />
             </div>
-            <CorridorConsole />
-          </div>
+          </TiltPanel>
         </div>
       </div>
 

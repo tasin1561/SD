@@ -77,7 +77,7 @@ export function Problem(): ReactElement {
           sub="Run the pre-flight check on a solo India launch and every subsystem throws the same class of error: you need an operation you don’t have."
         />
 
-        <ul className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 list-none p-0">
+        <ul className="persp mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 list-none p-0">
           {FAULTS.map((f, i) => {
             const Icon = f.icon;
             return (
@@ -85,14 +85,14 @@ export function Problem(): ReactElement {
                 as="li"
                 key={f.code}
                 delay={i * 60}
-                className="group panel relative p-6 hover:border-line-strong"
+                className="group panel tilt-card relative p-6 hover:border-line-strong"
               >
                 <div className="flex items-center justify-between">
                   <span className={`telemetry ${f.critical ? 'text-saffron' : 'text-fg-muted'}`}>
                     {f.code}
                     {f.critical ? ' · critical' : ''}
                   </span>
-                  <Icon size={18} className="text-fg-muted group-hover:text-sky transition-colors" aria-hidden="true" />
+                  <span className="tilt-pop inline-flex"><Icon size={18} className="text-fg-muted group-hover:text-sky transition-colors" aria-hidden="true" /></span>
                 </div>
                 <h3 className="mt-5 font-display text-lg font-semibold text-fg-strong">
                   {f.title}
