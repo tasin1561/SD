@@ -21,6 +21,21 @@ export function Hero(): ReactElement {
         style={{ background: 'radial-gradient(closest-side, var(--glow), transparent)', opacity: 0.5 }}
       />
 
+      {/* Mobile-only: the corridor runs as the section background (the
+          separate console panel below is desktop-only). A bottom-anchored
+          scrim keeps the copy legible over the map. */}
+      <div aria-hidden className="lg:hidden pointer-events-none absolute inset-0 opacity-40">
+        <CorridorConsole />
+      </div>
+      <div
+        aria-hidden
+        className="lg:hidden pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'linear-gradient(180deg, color-mix(in oklab, var(--surface) 55%, transparent) 0%, color-mix(in oklab, var(--surface) 78%, transparent) 55%, var(--surface) 100%)',
+        }}
+      />
+
       <div className="relative max-w-7xl mx-auto px-5 sm:px-8 pt-12 pb-14 lg:pt-20 lg:pb-20">
         <div className="grid gap-10 lg:grid-cols-[minmax(0,44%)_minmax(0,56%)] lg:items-center">
           {/* Copy */}
@@ -77,9 +92,10 @@ export function Hero(): ReactElement {
             </dl>
           </div>
 
-          {/* Console — 3D tilt follows the pointer; glow tracks it */}
-          <TiltPanel max={4.5} className="lg:pl-0">
-            <div className="panel ticks relative h-[300px] sm:h-[360px] lg:h-[440px] overflow-hidden">
+          {/* Console panel — DESKTOP only; on mobile the corridor is the
+              section background instead. 3D tilt follows the pointer. */}
+          <TiltPanel max={4.5} className="hidden lg:block lg:pl-0">
+            <div className="panel ticks relative h-[440px] overflow-hidden">
               <div className="telemetry absolute top-3 left-1/2 -translate-x-1/2 z-10 text-fg-muted">
                 corridor · live
               </div>

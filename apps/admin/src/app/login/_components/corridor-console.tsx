@@ -198,6 +198,10 @@ export function CorridorConsole(): ReactElement {
 
     let base: HTMLCanvasElement | null = null;
     const renderBase = (): void => {
+      if (W === 0 || H === 0) {
+        base = null;
+        return;
+      }
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       base = document.createElement('canvas');
       base.width = Math.round(W * dpr);
@@ -209,6 +213,7 @@ export function CorridorConsole(): ReactElement {
     };
 
     const drawStatic = (): void => {
+      if (W === 0 || H === 0) return;
       ctx.clearRect(0, 0, W, H);
       if (base) {
         ctx.drawImage(base, 0, 0, W, H);
@@ -294,6 +299,7 @@ export function CorridorConsole(): ReactElement {
     };
 
     const drawFrame = (): void => {
+      if (W === 0 || H === 0) return;
       drawStatic();
 
       // Scan sweep
