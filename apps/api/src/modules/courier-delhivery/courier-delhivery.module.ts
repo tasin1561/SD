@@ -5,6 +5,7 @@ import { DelhiveryAwbService } from './services/delhivery-awb.service';
 import { DelhiveryLabelService } from './services/delhivery-label.service';
 import { DelhiveryServiceabilityService } from './services/delhivery-serviceability.service';
 import { DelhiveryTrackingService } from './services/delhivery-tracking.service';
+import { DelhiveryTrackingFetchService } from './services/delhivery-tracking-fetch.service';
 
 /**
  * Module 9 — courier-delhivery: the Delhivery adapter (CP1 complete).
@@ -30,6 +31,7 @@ import { DelhiveryTrackingService } from './services/delhivery-tracking.service'
     DelhiveryLabelService,
     DelhiveryServiceabilityService,
     DelhiveryTrackingService,
+    DelhiveryTrackingFetchService,
   ],
   exports: [
     DelhiveryHttpService,
@@ -37,6 +39,7 @@ import { DelhiveryTrackingService } from './services/delhivery-tracking.service'
     DelhiveryLabelService,
     DelhiveryServiceabilityService,
     DelhiveryTrackingService,
+    DelhiveryTrackingFetchService,
   ],
 })
 export class CourierDelhiveryModule {}

@@ -91,6 +91,7 @@ export class DelhiveryTrackingService
    */
   private static readonly REAL_TABLE: ReadonlyMap<string, ShipmentStatus> =
     new Map([
+      // ── StatusType / short-code keys (documented push taxonomy) ──
       ['IT', ShipmentStatus.IN_TRANSIT],
       ['UD', ShipmentStatus.IN_TRANSIT],
       ['OFD', ShipmentStatus.OUT_FOR_DELIVERY],
@@ -105,6 +106,25 @@ export class DelhiveryTrackingService
       ['RT-DLVD', ShipmentStatus.RTO_DELIVERED],
       ['LT', ShipmentStatus.LOST],
       ['DG', ShipmentStatus.DAMAGED],
+      // ── Human `Scan` strings (what the poll fetch marshals into
+      //    rawStatus; live-observed + documented taxonomy, best-effort).
+      //    "Manifested" / "Not Picked" / "Pending" are intentionally
+      //    NOT mapped → UNMAPPABLE (audited, no transition): pre-transit
+      //    states must not fire a lifecycle move. Unmapped real codes
+      //    are logged for tuning. ────────────────────────────────────
+      ['IN TRANSIT', ShipmentStatus.IN_TRANSIT],
+      ['IN-TRANSIT', ShipmentStatus.IN_TRANSIT],
+      ['DISPATCHED', ShipmentStatus.OUT_FOR_DELIVERY],
+      ['OUT FOR DELIVERY', ShipmentStatus.OUT_FOR_DELIVERY],
+      ['DELIVERED', ShipmentStatus.DELIVERED],
+      ['UNDELIVERED', ShipmentStatus.DELIVERY_ATTEMPTED],
+      ['RTO', ShipmentStatus.RTO_INITIATED],
+      ['RTO INITIATED', ShipmentStatus.RTO_INITIATED],
+      ['RTO IN TRANSIT', ShipmentStatus.RTO_IN_TRANSIT],
+      ['RTO DELIVERED', ShipmentStatus.RTO_DELIVERED],
+      ['DTO DELIVERED', ShipmentStatus.RTO_DELIVERED],
+      ['LOST', ShipmentStatus.LOST],
+      ['DAMAGED', ShipmentStatus.DAMAGED],
     ]);
 
   normalizeScan(raw: DelhiveryRawScan): NormalizedScan {

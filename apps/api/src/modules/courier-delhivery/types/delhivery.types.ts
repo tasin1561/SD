@@ -126,11 +126,24 @@ export type NormalizedScan =
     };
 
 /**
+ * Module 10 (poll) — the parsed tracking result for a single AWB, as
+ * returned by `fetchTracking`. `scans` is the courier's scan history
+ * for the AWB, marshalled into our `DelhiveryRawScan` shape and sorted
+ * oldest-first (the poll service applies each scan newer than the
+ * shipment's tracking-event watermark, in order).
+ */
+export interface CourierTrackingResult {
+  awbNumber: string;
+  scans: DelhiveryRawScan[];
+}
+
+/**
  * The adapter surface the courier-awb / courier-dispatch /
- * tracking-ingestion modules depend on. Implemented by the
- * courier-delhivery services (DelhiveryAwbService /
+ * tracking-ingestion / tracking-poll modules depend on. Implemented by
+ * the courier-delhivery services (DelhiveryAwbService /
  * DelhiveryLabelService / DelhiveryServiceabilityService /
- * DelhiveryTrackingService); mocked wholesale in their tests.
+ * DelhiveryTrackingService / DelhiveryTrackingFetchService); mocked
+ * wholesale in their tests.
  */
 export interface DelhiveryClient {
   generateAwb(req: DelhiveryAwbRequest): Promise<DelhiveryAwbResult>;
@@ -141,4 +154,9 @@ export interface DelhiveryClient {
    *  deterministic raw-code table (DLV-* prefix); real-mode mapping
    *  is TODO(delhivery-api). */
   normalizeScan(raw: DelhiveryRawScan): NormalizedScan;
+  /** Module 10 (poll) — fetch current tracking + scan history for up
+   *  to 50 AWBs. STUB MODE returns `[]` (the poller is a no-op with no
+   *  network). REAL MODE calls Delhivery's `GET /api/v1/packages/json`
+   *  and marshals `ShipmentData[].Shipment.Scans[]` into raw scans. */
+  fetchTracking(awbNumbers: string[]): Promise<CourierTrackingResult[]>;
 }
