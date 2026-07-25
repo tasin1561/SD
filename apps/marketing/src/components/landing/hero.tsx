@@ -22,9 +22,9 @@ export function Hero(): ReactElement {
       />
 
       {/* Mobile-only: the corridor runs as the section background (the
-          separate console panel below is desktop-only). A bottom-anchored
-          scrim keeps the copy legible over the map. */}
-      <div aria-hidden className="lg:hidden pointer-events-none absolute inset-0 opacity-40">
+          separate console panel below is desktop-only). A light scrim
+          keeps the copy legible without washing the map out. */}
+      <div aria-hidden className="lg:hidden pointer-events-none absolute inset-0 opacity-70">
         <CorridorConsole />
       </div>
       <div
@@ -32,7 +32,7 @@ export function Hero(): ReactElement {
         className="lg:hidden pointer-events-none absolute inset-0"
         style={{
           background:
-            'linear-gradient(180deg, color-mix(in oklab, var(--surface) 55%, transparent) 0%, color-mix(in oklab, var(--surface) 78%, transparent) 55%, var(--surface) 100%)',
+            'linear-gradient(180deg, color-mix(in oklab, var(--surface) 20%, transparent) 0%, color-mix(in oklab, var(--surface) 45%, transparent) 60%, color-mix(in oklab, var(--surface) 82%, transparent) 100%)',
         }}
       />
 
