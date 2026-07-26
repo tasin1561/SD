@@ -363,7 +363,7 @@
 <div class="wrap">
   <div class="tiles">
     <div class="tile"><div class="n"><em>18</em>/18</div><div class="k tel">Phase 1A modules live</div></div>
-    <div class="tile"><div class="n"><em>6</em></div><div class="k tel">Phase 1B money live</div></div>
+    <div class="tile"><div class="n"><em>6</em></div><div class="k tel">Phase 1B money · in build</div></div>
     <div class="tile"><div class="n"><em>2</em></div><div class="k tel">inventory modes · normal + strict</div></div>
     <div class="tile"><div class="n"><em>4</em></div><div class="k tel">refinement phases</div></div>
     <div class="tile"><div class="n">1,100</div><div class="k tel">automated tests</div></div>
@@ -460,8 +460,8 @@
 
     <div class="grid3" style="margin-top:16px;">
       <div class="panel">
-        <h3>Wallet &amp; withdrawals <span class="pill live">foundation live</span></h3>
-        <p>The per-currency wallet ledger + live balance runs today. Adding self-service withdrawals (min threshold + daily count limit), auto-withdraw cycles, and instant credit-at-delivery as a paid priority add-on.</p>
+        <h3>Wallet &amp; withdrawals <span class="pill sky">built · not live</span></h3>
+        <p>The per-currency wallet ledger + balance is built but not yet live. Phase A brings it live with self-service withdrawals (min threshold + daily count limit), auto-withdraw cycles, and instant credit-at-delivery as a paid priority add-on.</p>
       </div>
       <div class="panel">
         <h3>Advance credit &amp; float <span class="pill sky">designed</span></h3>
@@ -538,7 +538,6 @@
           <tr><td>Notifications</td><td>Lifecycle event bus + email fan-out (SMS channel scaffolded)</td><td><span class="pill live">Live</span></td></tr>
           <tr><td>Admin &amp; seller portals</td><td>Two frontends on a shared, identity-parameterized foundation — seller mgmt, orders, catalog, image upload, god-mode</td><td><span class="pill live">Live</span></td></tr>
           <tr><td>Pricing · FX · charges · settings</td><td>Charge calculator, INR↔BDT rates, cost breakdown, runtime config UI</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td><strong>Phase 1B — money layer</strong></td><td>Per-currency wallet ledger + balance, COD accrual on delivery, admin remittance/payout, FX (manual INR↔BDT + history), 18% GST tax-invoice PDF, bank-account AES encryption</td><td><span class="pill live">Live</span></td></tr>
           <tr><td>Marketing + tracking UI</td><td>skydrop.online + track.skydrop.online — brand, live corridor map, EN/HI, light/dark</td><td><span class="pill live">Live</span></td></tr>
         </tbody>
       </table>
@@ -570,7 +569,7 @@
         <p>Multi-warehouse routing + cross-warehouse RTO transfer; virtual booking with seller-decided unbook; scrap + damage tickets and a seller support-ticket panel; a warehouse scanner app; and an exception dashboard unifying missing/mismatch/damaged/failed-courier/unbook queues.</p>
       </div>
     </div>
-    <div class="callout"><strong>Why this is low-risk:</strong> none of it is a rewrite. The wallet ledger, COD accrual, FX and 18% GST engine already run in production; reservations already model virtual holds; the warehouse already has bins, batches and quarantine/damaged bin types; the courier layer already has a fallback; and per-seller overrides already exist. Each phase generalizes a seam that is already load-bearing in production.</div>
+    <div class="callout"><strong>Why this is low-risk:</strong> none of it is a rewrite. The wallet ledger + COD accrual are already built (awaiting go-live); reservations already model virtual holds; the warehouse already has bins, batches and quarantine/damaged bin types; the courier layer already has a fallback; and per-seller overrides already exist. Each phase generalizes a seam that is already in the codebase.</div>
   </div>
 </section>
 
