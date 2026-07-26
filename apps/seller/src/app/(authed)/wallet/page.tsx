@@ -175,12 +175,24 @@ export default function WalletPage(): ReactElement {
   );
 }
 
+/**
+ * Directions that ADD to the wallet. MUST mirror the API's
+ * `CREDIT_DIRECTIONS` (seller-wallet/services/wallet.service.ts) — this
+ * only drives the sign + colour, so drift here would render a credit as
+ * a red "−250.50" (or vice versa) while the ledger says the opposite.
+ * Unlike `humanizeDirection` below, TypeScript cannot catch an omission
+ * here, so it has to be updated deliberately alongside the API set.
+ */
+const CREDIT_DIRECTIONS: ReadonlySet<WalletEntryView['direction']> = new Set([
+  'COD_COLLECTION',
+  'REMITTANCE_FX',
+  'ADJUSTMENT_CREDIT',
+  'OPENING_BALANCE',
+  'SCRAP_REFUND',
+]);
+
 function LedgerRow({ entry }: { readonly entry: WalletEntryView }): ReactElement {
-  const isCredit =
-    entry.direction === 'COD_COLLECTION' ||
-    entry.direction === 'REMITTANCE_FX' ||
-    entry.direction === 'ADJUSTMENT_CREDIT' ||
-    entry.direction === 'OPENING_BALANCE';
+  const isCredit = CREDIT_DIRECTIONS.has(entry.direction);
   const sign = isCredit ? '+' : '−';
   const color = isCredit ? 'text-accent' : 'text-critical';
   return (
@@ -237,6 +249,9 @@ function humanizeDirection(d: WalletEntryView['direction']): string {
       return 'Adjustment (debit)';
     case 'OPENING_BALANCE':
       return 'Opening balance';
+    // R7 — a damage/loss ticket settled in the seller's favour.
+    case 'SCRAP_REFUND':
+      return 'Damage settlement';
   }
 }
 
