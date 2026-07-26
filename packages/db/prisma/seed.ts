@@ -41,6 +41,11 @@ type SystemSettingSeed = {
   valueDecimal?: string;
   valueBoolean?: boolean;
   valueJson?: unknown;
+  // Seller-override caps (settings-resolver mechanism, R0 of the
+  // revised-plan roadmap). Unset = not seller-overridable.
+  sellerOverridable?: boolean;
+  overrideMinInt?: number;
+  overrideMaxInt?: number;
 };
 
 // 28 Indian States + 8 Union Territories (Module 6 address validation).
@@ -207,7 +212,10 @@ const systemSettings: SystemSettingSeed[] = [
     valueInt: 3,
     displayName: 'Call Attempts Before NDR',
     description:
-      'Default max attempt-counting call outcomes before an order is auto-rejected as REJECTED_NDR (per-seller override: sellers.call_max_attempts_before_ndr_override)',
+      'Default max attempt-counting call outcomes before an order is auto-rejected as REJECTED_NDR (per-seller override: sellers.call_max_attempts_before_ndr_override, or the newer seller_setting_overrides row for this same key)',
+    sellerOverridable: true,
+    overrideMinInt: 1,
+    overrideMaxInt: 10,
   },
   {
     key: 'ops.call_assignment_timeout_minutes',
@@ -401,12 +409,18 @@ async function seedSystemSettings() {
         valueJson: (s.valueJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
         displayName: s.displayName,
         description: s.description,
+        sellerOverridable: s.sellerOverridable ?? false,
+        overrideMinInt: s.overrideMinInt ?? null,
+        overrideMaxInt: s.overrideMaxInt ?? null,
       },
       update: {
         category: s.category,
         valueType: s.valueType,
         displayName: s.displayName,
         description: s.description,
+        sellerOverridable: s.sellerOverridable ?? false,
+        overrideMinInt: s.overrideMinInt ?? null,
+        overrideMaxInt: s.overrideMaxInt ?? null,
       },
     });
   }

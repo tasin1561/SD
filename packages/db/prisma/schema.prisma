@@ -69,6 +69,7 @@ model StaffUser {
   fxRateHistoryChanges      FxRateHistory[]               @relation("FxRateHistoryChangedBy")
   notificationTemplatesEdit NotificationTemplate[]        @relation("NotificationTemplateEditedBy")
   systemSettingsEdited      SystemSetting[]               @relation("SystemSettingEditedBy")
+  sellerSettingOverridesSet SellerSettingOverride[]       @relation("SellerSettingOverrideSetBy")
   shipmentsPickStarted      Shipment[]                    @relation("ShipmentPickStartedBy")
   shipmentsPacked           Shipment[]                    @relation("ShipmentPackedBy")
   shipmentItemsRtoDisposed  ShipmentItem[]                @relation("ShipmentItemRtoDisposedBy")
@@ -153,6 +154,7 @@ model Seller {
   invoices                Invoice[]
   users                   SellerUser[]
   userInvitations         SellerUserInvitation[]
+  settingOverrides        SellerSettingOverride[]
 
   @@index([status])
   @@index([deletedAt])
@@ -2368,6 +2370,18 @@ model SystemSetting {
   isEditableByAdmin   Boolean          @default(true) @map("is_editable_by_admin")
   isSensitive         Boolean          @default(false) @map("is_sensitive")
   requiresRestart     Boolean          @default(false) @map("requires_restart")
+  // Seller-override caps (Phase-1B settings-resolver mechanism): a key
+  // can only receive a SellerSettingOverride row if sellerOverridable
+  // is true; the override*Min/Max bounds (only the pair matching the
+  // key's valueType is ever populated) are enforced by
+  // SettingsResolverService.setOverride at write time, not just in
+  // the UI — a seller can never set an override the system didn't
+  // explicitly permit and bound.
+  sellerOverridable   Boolean          @default(false) @map("seller_overridable")
+  overrideMinInt      Int?             @map("override_min_int")
+  overrideMaxInt      Int?             @map("override_max_int")
+  overrideMinDecimal  Decimal?         @map("override_min_decimal") @db.Decimal(20, 6)
+  overrideMaxDecimal  Decimal?         @map("override_max_decimal") @db.Decimal(20, 6)
   lastEditedByStaffId String?          @map("last_edited_by_staff_id") @db.Uuid
   lastEditedAt        DateTime?        @map("last_edited_at") @db.Timestamptz
   createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz
@@ -2378,6 +2392,37 @@ model SystemSetting {
   @@index([category])
   @@index([lastEditedByStaffId])
   @@map("system_settings")
+}
+
+/// Per-seller override of an overridable SystemSetting key (Phase-1B
+/// generalized settings mechanism — replaces the pattern of adding a
+/// bespoke nullable column to `Seller` for every new per-seller
+/// setting). Mirrors SystemSetting's value-column shape exactly so
+/// SettingsResolverService can share the same parse/format logic.
+/// `SettingsResolverService.setOverride` is the sole writer; reads
+/// resolve as `sellerOverride ?? systemDefault` via `.resolve()`.
+model SellerSettingOverride {
+  id           String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId     String           @map("seller_id") @db.Uuid
+  key          String
+  valueType    SettingValueType @map("value_type")
+  valueString  String?          @map("value_string") @db.Text
+  valueInt     Int?             @map("value_int")
+  valueDecimal Decimal?         @map("value_decimal") @db.Decimal(20, 6)
+  valueBoolean Boolean?         @map("value_boolean")
+  valueJson    Json?            @map("value_json")
+  valueDate    DateTime?        @map("value_date") @db.Timestamptz
+  setByStaffId String?          @map("set_by_staff_id") @db.Uuid
+  note         String?          @db.Text
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller     Seller     @relation(fields: [sellerId], references: [id])
+  setByStaff StaffUser? @relation("SellerSettingOverrideSetBy", fields: [setByStaffId], references: [id])
+
+  @@unique([sellerId, key])
+  @@index([key])
+  @@map("seller_setting_overrides")
 }
 
 model SellerNotificationPreference {
