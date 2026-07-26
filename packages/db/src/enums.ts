@@ -88,4 +88,7 @@ export {
   // R2 — withdrawal requests
   WithdrawalRequestStatus,
   WithdrawalRequestedBy,
+  // R7 — unified scrap/damage + seller-issue tickets
+  TicketType,
+  TicketStatus,
 } from '@prisma/client';

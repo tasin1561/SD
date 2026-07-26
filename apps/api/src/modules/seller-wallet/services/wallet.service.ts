@@ -63,11 +63,17 @@ export interface AppliedEntry {
   readonly runningBalanceAfter: Prisma.Decimal;
 }
 
+/** Directions that ADD to the wallet. Anything not listed here is
+ *  treated as a DEBIT, so forgetting to register a new credit direction
+ *  would silently take money FROM the seller — add new credits here in
+ *  the same change that adds the enum value. */
 const CREDIT_DIRECTIONS: ReadonlySet<WalletEntryDirection> = new Set([
   WalletEntryDirection.COD_COLLECTION,
   WalletEntryDirection.REMITTANCE_FX,
   WalletEntryDirection.ADJUSTMENT_CREDIT,
   WalletEntryDirection.OPENING_BALANCE,
+  // R7 — damage/loss ticket settled in the seller's favour.
+  WalletEntryDirection.SCRAP_REFUND,
 ]);
 
 function isCredit(d: WalletEntryDirection): boolean {

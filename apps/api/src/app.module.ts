@@ -61,6 +61,7 @@ import { PricingModule } from './modules/pricing/pricing.module';
 import { FxModule } from './modules/fx/fx.module';
 import { OrderChargesModule } from './modules/order-charges/order-charges.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { TicketModule } from './modules/ticket/ticket.module';
 import { SellerWebhookModule } from './modules/seller-webhook/seller-webhook.module';
 import { SellerWebhookDeliveryModule } from './modules/seller-webhook-delivery/seller-webhook-delivery.module';
 import { SellerWalletModule } from './modules/seller-wallet/seller-wallet.module';
@@ -159,6 +160,7 @@ import { envSchema } from './config/env.schema';
     FxModule,
     OrderChargesModule,
     ChatModule,
+    TicketModule,
     SellerWebhookModule,
     SellerWebhookDeliveryModule,
     SellerWalletModule,

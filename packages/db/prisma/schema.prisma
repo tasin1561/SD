@@ -79,6 +79,8 @@ model StaffUser {
   manifestsHandoffConfirmed  Manifest[]                    @relation("ManifestHandoffConfirmedBy")
   remittancesCreated         Remittance[]                  @relation("RemittanceStaff")
   withdrawalRequestsResolved WithdrawalRequest[]           @relation("WithdrawalRequestResolvedBy")
+  ticketsOpened              Ticket[]                      @relation("TicketOpenedByStaff")
+  ticketsResolved            Ticket[]                      @relation("TicketResolvedByStaff")
 
   @@index([role])
   @@index([deletedAt])
@@ -156,6 +158,7 @@ model Seller {
   remittances             Remittance[]
   withdrawalRequests      WithdrawalRequest[]
   pendingAccruals         PendingAccrual[]
+  tickets                 Ticket[]
   invoices                Invoice[]
   users                   SellerUser[]
   userInvitations         SellerUserInvitation[]
@@ -1306,6 +1309,7 @@ model Order {
   walletEntries    SellerWalletEntry[] @relation("WalletEntryOrder")
   invoice          Invoice?
   pendingAccrual   PendingAccrual?
+  tickets          Ticket[]
 
   @@unique([sellerId, sellerOrderRef])
   @@index([sellerId, status])
@@ -1646,6 +1650,7 @@ model Shipment {
   stockMovements       StockMovement[]
   charges              OrderCharge[]
   notificationLogs     NotificationLog[]
+  tickets              Ticket[]
 
   @@index([courierCode, status])
   @@index([status, createdAt])
@@ -1715,6 +1720,7 @@ model ShipmentItem {
   pickedBatch   StockBatch?   @relation(fields: [pickedBatchId], references: [id])
   pickedBin     WarehouseBin? @relation(fields: [pickedBinId], references: [id])
   rtoDisposedBy StaffUser?    @relation("ShipmentItemRtoDisposedBy", fields: [rtoDisposedByStaffId], references: [id])
+  tickets       Ticket[]
 
   @@index([shipmentId])
   @@index([orderItemId])
@@ -3380,6 +3386,13 @@ enum WalletEntryDirection {
   ADJUSTMENT_DEBIT  @map("adjustment_debit")
   // Initial balance on wallet creation (zero unless backfilled).
   OPENING_BALANCE   @map("opening_balance")
+  // R7 — a damage/loss ticket resolved in the seller's favour credits
+  // them the agreed amount. Deliberately NOT ADJUSTMENT_CREDIT: that one
+  // is reserved for operator error-correction (and requires
+  // reasonCode + linkedEntryId), so overloading it would make genuine
+  // ledger corrections indistinguishable from damage settlements in
+  // every report. Registered in WalletService's CREDIT_DIRECTIONS.
+  SCRAP_REFUND      @map("scrap_refund")
 
   @@map("wallet_entry_direction")
 }
@@ -3565,6 +3578,118 @@ model PendingAccrual {
   @@map("pending_accruals")
 }
 
+enum TicketType {
+  /// Auto-raised by RtoInspectionService when a returned line is
+  /// inspected DAMAGED or MISSING. Carries the shipment item + courier
+  /// so liability can be argued with the courier or settled with the
+  /// seller.
+  SCRAP_DAMAGE        @map("scrap_damage")
+  /// Raised by a seller about a specific parcel/order ("where is this",
+  /// "arrived broken", "wrong item"). Same lifecycle + resolution
+  /// mechanics, so ops works ONE queue instead of two.
+  SELLER_RAISED_ISSUE @map("seller_raised_issue")
+
+  @@map("ticket_type")
+}
+
+enum TicketStatus {
+  OPEN                        @map("open")
+  /// Under discussion with the seller and/or courier.
+  NEGOTIATING                 @map("negotiating")
+  /// Settled by crediting the seller (writes a SCRAP_REFUND wallet entry).
+  RESOLVED_REFUND             @map("resolved_refund")
+  /// Settled by physically returning the goods to the seller.
+  RESOLVED_RETURNED           @map("resolved_returned")
+  /// Seller accepted the loss; no money moves.
+  RESOLVED_WRITE_OFF_ACCEPTED @map("resolved_write_off_accepted")
+  /// Not a valid claim (e.g. seller-raised issue found unfounded).
+  REJECTED                    @map("rejected")
+
+  @@map("ticket_status")
+}
+
+/// R7 (revised-plan roadmap) — ONE ticket system for both
+/// auto-raised scrap/damage claims and seller-raised parcel issues
+/// (`ticketType` discriminates). Before this, a DAMAGED/MISSING RTO line
+/// was a silent per-item flag with no counterparty, no money trail and
+/// no workflow, and sellers had no way to raise a parcel problem at all.
+///
+/// `TicketService` is the sole writer; every status change also appends
+/// a `TicketEvent`, so the negotiation history is reconstructable rather
+/// than collapsed into a current-status column.
+model Ticket {
+  id             String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  ticketType     TicketType        @map("ticket_type")
+  status         TicketStatus      @default(OPEN)
+  sellerId       String            @map("seller_id") @db.Uuid
+  // Context. Nullable because a seller-raised issue may reference only
+  // an order, while a scrap ticket always has the full chain.
+  orderId        String?           @map("order_id") @db.Uuid
+  shipmentId     String?           @map("shipment_id") @db.Uuid
+  shipmentItemId String?           @map("shipment_item_id") @db.Uuid
+  /// Denormalised courier ref for liability attribution/reporting.
+  courierCode    String?           @map("courier_code")
+  /// For SCRAP_DAMAGE: the inspected condition that triggered the ticket.
+  rtoCondition   RtoItemCondition? @map("rto_condition")
+
+  subject     String
+  description String? @db.Text
+
+  // Resolution.
+  resolutionAmountInr     Decimal? @map("resolution_amount_inr") @db.Decimal(14, 2)
+  resolutionWalletEntryId String?  @map("resolution_wallet_entry_id") @db.Uuid
+  resolutionNotes         String?  @map("resolution_notes") @db.Text
+
+  // Who raised it (exactly one of these is set in practice).
+  openedByStaffId      String?   @map("opened_by_staff_id") @db.Uuid
+  openedBySellerUserId String?   @map("opened_by_seller_user_id") @db.Uuid
+  resolvedByStaffId    String?   @map("resolved_by_staff_id") @db.Uuid
+  resolvedAt           DateTime? @map("resolved_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller             Seller        @relation(fields: [sellerId], references: [id])
+  order              Order?        @relation(fields: [orderId], references: [id])
+  shipment           Shipment?     @relation(fields: [shipmentId], references: [id])
+  shipmentItem       ShipmentItem? @relation(fields: [shipmentItemId], references: [id])
+  openedByStaff      StaffUser?    @relation("TicketOpenedByStaff", fields: [openedByStaffId], references: [id])
+  openedBySellerUser SellerUser?   @relation("TicketOpenedBySellerUser", fields: [openedBySellerUserId], references: [id])
+  resolvedByStaff    StaffUser?    @relation("TicketResolvedByStaff", fields: [resolvedByStaffId], references: [id])
+  events             TicketEvent[]
+
+  /// Auto-raise idempotency: at most ONE ticket of a given type per
+  /// shipment item, so re-inspecting a line (the operator may correct
+  /// their judgement) never spawns duplicates. Seller-raised tickets
+  /// leave shipmentItemId NULL, and Postgres permits many NULLs in a
+  /// unique index, so they are unconstrained.
+  @@unique([shipmentItemId, ticketType])
+  @@index([sellerId, status])
+  @@index([status, createdAt])
+  @@index([ticketType])
+  @@index([orderId])
+  @@index([shipmentId])
+  @@map("tickets")
+}
+
+/// Append-only status history for a Ticket (mirrors `order_events`).
+/// Never updated, never deleted.
+model TicketEvent {
+  id         String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  ticketId   String        @map("ticket_id") @db.Uuid
+  fromStatus TicketStatus? @map("from_status")
+  toStatus   TicketStatus  @map("to_status")
+  note       String?       @db.Text
+  actorType  ActorType     @map("actor_type")
+  actorId    String?       @map("actor_id") @db.Uuid
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_events")
+}
+
 // ============================================================================
 // Phase 1B — GST-compliant tax invoices
 // ============================================================================
@@ -3678,6 +3803,7 @@ model SellerUser {
   passwordResetTokens     SellerPasswordResetToken[]
   emailVerificationTokens SellerEmailVerificationToken[]
   withdrawalRequestsMade  WithdrawalRequest[]
+  ticketsOpened           Ticket[]                       @relation("TicketOpenedBySellerUser")
 
   @@index([sellerId])
   @@index([sellerId, role])

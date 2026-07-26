@@ -8,6 +8,7 @@ import { RtoInspectionService } from '../../src/modules/warehouse-rto/services/r
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { OrderReadService } from '../../src/modules/order/services/order-read.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
+import type { TicketService } from '../../src/modules/ticket/services/ticket.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -22,14 +23,20 @@ function makeService(
   const defaultItem = {
     id: ITEM,
     shipmentId: SHIP,
-    shipment: { id: SHIP, orderShipments: [{ orderId: ORDER }] },
+    skuCode: 'SKU-1',
+    productName: 'Widget',
+    shipment: { id: SHIP, courierCode: 'delhivery', orderShipments: [{ orderId: ORDER }] },
+    orderItem: { order: { sellerId: 'seller-1' } },
   };
   const shipmentItemFindUnique = jest.fn(async () =>
     opts.item === undefined ? defaultItem : opts.item,
   );
   const shipmentItemUpdate = jest.fn(async () => ({}));
+  const tx = { shipmentItem: { update: shipmentItemUpdate } };
+  const $transaction = jest.fn(async (fn: (t: unknown) => Promise<unknown>) => fn(tx));
   const client = {
     shipmentItem: { findUnique: shipmentItemFindUnique, update: shipmentItemUpdate },
+    $transaction,
   };
   const getById = jest.fn(async () =>
     opts.orderStatus === 'missing'
@@ -40,12 +47,18 @@ function makeService(
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs]>(async () => 'a');
   const audit = { log: auditLog };
 
+  const openTicket = jest.fn<Promise<AnyArgs>, [AnyArgs, AnyArgs, unknown?]>(async () => ({
+    id: 'ticket-1',
+  }));
+  const tickets = { open: openTicket };
+
   const svc = new RtoInspectionService(
     { client } as unknown as PrismaService,
     orders as unknown as OrderReadService,
     audit as unknown as AuditLogService,
+    tickets as unknown as TicketService,
   );
-  return { svc, shipmentItemFindUnique, shipmentItemUpdate, auditLog };
+  return { svc, shipmentItemFindUnique, shipmentItemUpdate, auditLog, openTicket };
 }
 
 describe('RtoInspectionService.inspect', () => {
@@ -108,7 +121,10 @@ describe('RtoInspectionService.inspect', () => {
       item: {
         id: ITEM,
         shipmentId: SHIP,
-        shipment: { id: SHIP, orderShipments: [{ orderId: ORDER }] },
+        skuCode: 'SKU-1',
+        productName: 'Widget',
+        shipment: { id: SHIP, courierCode: 'delhivery', orderShipments: [{ orderId: ORDER }] },
+        orderItem: { order: { sellerId: 'seller-1' } },
         rtoCondition: RtoItemCondition.GOOD,
         rtoDisposition: RtoDisposition.RESTOCK,
         rtoInspectionNotes: 'looks fine',
@@ -153,5 +169,52 @@ describe('RtoInspectionService.inspect', () => {
         STAFF,
       ),
     ).rejects.toMatchObject({ response: { code: 'ORDER_NOT_INSPECTABLE' } });
+  });
+  // ── R7: scrap-ticket auto-raise ──────────────────────────────────────
+
+  it('R7: a DAMAGED line auto-raises a SCRAP_DAMAGE ticket inside the inspection tx', async () => {
+    const { svc, openTicket } = makeService();
+    await svc.inspect(
+      ITEM,
+      { condition: RtoItemCondition.DAMAGED, disposition: RtoDisposition.WRITE_OFF },
+      STAFF,
+    );
+    expect(openTicket).toHaveBeenCalledTimes(1);
+    const [input, actor, tx] = openTicket.mock.calls[0]!;
+    expect(input).toMatchObject({
+      ticketType: 'SCRAP_DAMAGE',
+      sellerId: 'seller-1',
+      shipmentItemId: ITEM,
+      shipmentId: SHIP,
+      orderId: ORDER,
+      courierCode: 'delhivery',
+      rtoCondition: RtoItemCondition.DAMAGED,
+    });
+    expect((actor as Record<string, unknown>).staffId).toBe(STAFF);
+    // Passed the tx handle => atomic with the inspection write.
+    expect(tx).toBeDefined();
+  });
+
+  it('R7: a MISSING line also auto-raises', async () => {
+    const { svc, openTicket } = makeService();
+    await svc.inspect(
+      ITEM,
+      { condition: RtoItemCondition.MISSING, disposition: RtoDisposition.WRITE_OFF },
+      STAFF,
+    );
+    expect(openTicket).toHaveBeenCalledTimes(1);
+    expect((openTicket.mock.calls[0]![0] as Record<string, unknown>).rtoCondition).toBe(
+      RtoItemCondition.MISSING,
+    );
+  });
+
+  it('R7: a GOOD line raises NO ticket', async () => {
+    const { svc, openTicket } = makeService();
+    await svc.inspect(
+      ITEM,
+      { condition: RtoItemCondition.GOOD, disposition: RtoDisposition.RESTOCK },
+      STAFF,
+    );
+    expect(openTicket).not.toHaveBeenCalled();
   });
 });

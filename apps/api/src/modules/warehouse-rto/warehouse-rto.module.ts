@@ -7,6 +7,7 @@ import { RtoDispositionService } from './services/rto-disposition.service';
 import { RtoReadService } from './services/rto-read.service';
 import { WarehouseRtoController } from './controllers/warehouse-rto.controller';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
+import { TicketModule } from '../ticket/ticket.module';
 
 /**
  * Module 8 warehouse-rto module — reverted to MODEL A by Module 9
@@ -26,7 +27,7 @@ import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
  * LEAF consumer — nothing imports `warehouse-rto`.
  */
 @Module({
-  imports: [OrderModule, InventorySharedModule],
+  imports: [OrderModule, InventorySharedModule, TicketModule],
   controllers: [WarehouseRtoController],
   providers: [
     RtoReceiptService,

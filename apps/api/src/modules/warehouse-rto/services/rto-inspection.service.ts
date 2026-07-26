@@ -8,10 +8,12 @@ import {
   OrderStatus,
   RtoDisposition,
   RtoItemCondition,
+  TicketType,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderReadService } from '../../order/services/order-read.service';
+import { TicketService } from '../../ticket/services/ticket.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
 export interface InspectRtoItemInput {
@@ -52,6 +54,7 @@ export class RtoInspectionService {
     private readonly prisma: PrismaService,
     private readonly orders: OrderReadService,
     private readonly audit: AuditLogService,
+    private readonly tickets: TicketService,
   ) {}
 
   async inspect(
@@ -65,9 +68,12 @@ export class RtoInspectionService {
       select: {
         id: true,
         shipmentId: true,
+        skuCode: true,
+        productName: true,
         shipment: {
           select: {
             id: true,
+            courierCode: true,
             orderShipments: {
               select: { orderId: true },
               orderBy: { shipmentSequence: 'asc' },
@@ -75,6 +81,9 @@ export class RtoInspectionService {
             },
           },
         },
+        // R7 — the seller who owns the returned goods; needed to raise
+        // the scrap ticket against the right wallet.
+        orderItem: { select: { order: { select: { sellerId: true } } } },
       },
     });
     if (!item) {
@@ -105,14 +114,44 @@ export class RtoInspectionService {
     }
 
     const notes = input.notes ?? null;
-    await this.prisma.client.shipmentItem.update({
-      where: { id: shipmentItemId },
-      data: {
-        rtoCondition: input.condition,
-        rtoDisposition: input.disposition,
-        rtoDisposedByStaffId: staffId,
-        rtoInspectionNotes: notes,
-      },
+    // R7: the inspection write and the scrap ticket land in ONE tx. A
+    // DAMAGED/MISSING judgement is exactly the moment a liability claim
+    // comes into existence, so recording the judgement without the
+    // ticket would reintroduce the silent-write-off gap this closes.
+    const damaged =
+      input.condition === RtoItemCondition.DAMAGED ||
+      input.condition === RtoItemCondition.MISSING;
+    await this.prisma.client.$transaction(async (tx) => {
+      await tx.shipmentItem.update({
+        where: { id: shipmentItemId },
+        data: {
+          rtoCondition: input.condition,
+          rtoDisposition: input.disposition,
+          rtoDisposedByStaffId: staffId,
+          rtoInspectionNotes: notes,
+        },
+      });
+
+      if (damaged) {
+        // Idempotent per (shipmentItem, SCRAP_DAMAGE) — re-inspecting a
+        // line to correct a judgement returns the existing ticket rather
+        // than stacking duplicates.
+        await this.tickets.open(
+          {
+            ticketType: TicketType.SCRAP_DAMAGE,
+            sellerId: item.orderItem.order.sellerId,
+            subject: `RTO ${input.condition}: ${item.productName} (${item.skuCode})`,
+            description: notes,
+            orderId,
+            shipmentId: item.shipmentId,
+            shipmentItemId,
+            courierCode: item.shipment.courierCode,
+            rtoCondition: input.condition,
+          },
+          { type: ActorType.STAFF, staffId },
+          tx,
+        );
+      }
     });
 
     await this.audit.log({
