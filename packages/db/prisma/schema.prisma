@@ -39,45 +39,46 @@ model StaffUser {
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt       DateTime? @map("deleted_at") @db.Timestamptz
 
-  sellersApproved           Seller[]                      @relation("SellerApprovedBy")
-  invitesAuthored           SellerInvitation[]            @relation("SellerInvitedBy")
-  staffInvitesAuthored      StaffInvitation[]             @relation("StaffInvitedBy")
-  staffInvitationsAccepted  StaffInvitation[]             @relation("StaffInvitationAccepted")
-  refreshTokens             StaffRefreshToken[]
-  passwordResetTokens       StaffPasswordResetToken[]
-  emailVerificationTokens   StaffEmailVerificationToken[]
-  sellerNotesAuthored       SellerNote[]                  @relation("SellerNoteAuthor")
-  auditLogsAsStaff          AuditLog[]                    @relation("AuditLogStaff")
-  productImagesUploaded     ProductImage[]                @relation("ProductImageUploadedByStaff")
-  stockBatchesReceived      StockBatch[]                  @relation("StockBatchReceivedBy")
-  stockAdjustmentsInit      StockAdjustment[]             @relation("StockAdjustmentInitiatedBy")
-  stockAdjustmentsApprove   StockAdjustment[]             @relation("StockAdjustmentApprovedBy")
-  cycleCountsInitiated      CycleCount[]                  @relation("CycleCountInitiatedBy")
-  cycleCountItemsCounted    CycleCountItem[]              @relation("CycleCountItemCountedBy")
-  goodsReceiptsReceived     GoodsReceipt[]                @relation("GoodsReceiptReceivedBy")
-  ordersConfirmed           Order[]                       @relation("OrderConfirmedBy")
-  ordersCancelled           Order[]                       @relation("OrderCancelledBy")
-  bulkUploadsByStaff        BulkOrderUpload[]             @relation("BulkUploadUploadedByStaff")
-  callQueueAssigned         CallQueueEntry[]              @relation("CallQueueAssignedAgent")
-  callAttempts              CallAttempt[]
-  callSettings              AgentCallSettings?
-  awbLabelsGenerated        AwbLabel[]                    @relation("AwbLabelGeneratedBy")
-  courierCredentialsCreated CourierCredential[]           @relation("CourierCredentialCreatedBy")
-  rateCardsCreated          RateCard[]                    @relation("RateCardCreatedBy")
-  sellerPricingApproved     SellerPricing[]               @relation("SellerPricingApprovedBy")
-  fxRatesOverridden         FxRate[]                      @relation("FxRateOverrideBy")
-  fxRateHistoryChanges      FxRateHistory[]               @relation("FxRateHistoryChangedBy")
-  notificationTemplatesEdit NotificationTemplate[]        @relation("NotificationTemplateEditedBy")
-  systemSettingsEdited      SystemSetting[]               @relation("SystemSettingEditedBy")
-  sellerSettingOverridesSet SellerSettingOverride[]       @relation("SellerSettingOverrideSetBy")
-  courierAccountsCreated    CourierAccount[]              @relation("CourierAccountCreatedBy")
-  sellerCourierLinksCreated SellerCourierAccountLink[]    @relation("SellerCourierAccountLinkCreatedBy")
-  shipmentsPickStarted      Shipment[]                    @relation("ShipmentPickStartedBy")
-  shipmentsPacked           Shipment[]                    @relation("ShipmentPackedBy")
-  shipmentItemsRtoDisposed  ShipmentItem[]                @relation("ShipmentItemRtoDisposedBy")
-  manifestsClosed           Manifest[]                    @relation("ManifestClosedBy")
-  manifestsHandoffConfirmed Manifest[]                    @relation("ManifestHandoffConfirmedBy")
-  remittancesCreated        Remittance[]                  @relation("RemittanceStaff")
+  sellersApproved            Seller[]                      @relation("SellerApprovedBy")
+  invitesAuthored            SellerInvitation[]            @relation("SellerInvitedBy")
+  staffInvitesAuthored       StaffInvitation[]             @relation("StaffInvitedBy")
+  staffInvitationsAccepted   StaffInvitation[]             @relation("StaffInvitationAccepted")
+  refreshTokens              StaffRefreshToken[]
+  passwordResetTokens        StaffPasswordResetToken[]
+  emailVerificationTokens    StaffEmailVerificationToken[]
+  sellerNotesAuthored        SellerNote[]                  @relation("SellerNoteAuthor")
+  auditLogsAsStaff           AuditLog[]                    @relation("AuditLogStaff")
+  productImagesUploaded      ProductImage[]                @relation("ProductImageUploadedByStaff")
+  stockBatchesReceived       StockBatch[]                  @relation("StockBatchReceivedBy")
+  stockAdjustmentsInit       StockAdjustment[]             @relation("StockAdjustmentInitiatedBy")
+  stockAdjustmentsApprove    StockAdjustment[]             @relation("StockAdjustmentApprovedBy")
+  cycleCountsInitiated       CycleCount[]                  @relation("CycleCountInitiatedBy")
+  cycleCountItemsCounted     CycleCountItem[]              @relation("CycleCountItemCountedBy")
+  goodsReceiptsReceived      GoodsReceipt[]                @relation("GoodsReceiptReceivedBy")
+  ordersConfirmed            Order[]                       @relation("OrderConfirmedBy")
+  ordersCancelled            Order[]                       @relation("OrderCancelledBy")
+  bulkUploadsByStaff         BulkOrderUpload[]             @relation("BulkUploadUploadedByStaff")
+  callQueueAssigned          CallQueueEntry[]              @relation("CallQueueAssignedAgent")
+  callAttempts               CallAttempt[]
+  callSettings               AgentCallSettings?
+  awbLabelsGenerated         AwbLabel[]                    @relation("AwbLabelGeneratedBy")
+  courierCredentialsCreated  CourierCredential[]           @relation("CourierCredentialCreatedBy")
+  rateCardsCreated           RateCard[]                    @relation("RateCardCreatedBy")
+  sellerPricingApproved      SellerPricing[]               @relation("SellerPricingApprovedBy")
+  fxRatesOverridden          FxRate[]                      @relation("FxRateOverrideBy")
+  fxRateHistoryChanges       FxRateHistory[]               @relation("FxRateHistoryChangedBy")
+  notificationTemplatesEdit  NotificationTemplate[]        @relation("NotificationTemplateEditedBy")
+  systemSettingsEdited       SystemSetting[]               @relation("SystemSettingEditedBy")
+  sellerSettingOverridesSet  SellerSettingOverride[]       @relation("SellerSettingOverrideSetBy")
+  courierAccountsCreated     CourierAccount[]              @relation("CourierAccountCreatedBy")
+  sellerCourierLinksCreated  SellerCourierAccountLink[]    @relation("SellerCourierAccountLinkCreatedBy")
+  shipmentsPickStarted       Shipment[]                    @relation("ShipmentPickStartedBy")
+  shipmentsPacked            Shipment[]                    @relation("ShipmentPackedBy")
+  shipmentItemsRtoDisposed   ShipmentItem[]                @relation("ShipmentItemRtoDisposedBy")
+  manifestsClosed            Manifest[]                    @relation("ManifestClosedBy")
+  manifestsHandoffConfirmed  Manifest[]                    @relation("ManifestHandoffConfirmedBy")
+  remittancesCreated         Remittance[]                  @relation("RemittanceStaff")
+  withdrawalRequestsResolved WithdrawalRequest[]           @relation("WithdrawalRequestResolvedBy")
 
   @@index([role])
   @@index([deletedAt])
@@ -153,6 +154,7 @@ model Seller {
   walletEntries           SellerWalletEntry[]
   walletBalances          SellerWalletBalance[]
   remittances             Remittance[]
+  withdrawalRequests      WithdrawalRequest[]
   invoices                Invoice[]
   users                   SellerUser[]
   userInvitations         SellerUserInvitation[]
@@ -3462,14 +3464,67 @@ model Remittance {
   note                String?  @db.Text
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  seller        Seller              @relation(fields: [sellerId], references: [id])
-  staff         StaffUser           @relation("RemittanceStaff", fields: [staffId], references: [id])
-  ledgerEntries SellerWalletEntry[]
+  seller            Seller              @relation(fields: [sellerId], references: [id])
+  staff             StaffUser           @relation("RemittanceStaff", fields: [staffId], references: [id])
+  ledgerEntries     SellerWalletEntry[]
+  withdrawalRequest WithdrawalRequest?
 
   @@index([sellerId, paidAt])
   @@index([paidAt])
   @@index([staffId])
   @@map("remittances")
+}
+
+enum WithdrawalRequestStatus {
+  PENDING  @map("pending")
+  APPROVED @map("approved")
+  PAID     @map("paid")
+  REJECTED @map("rejected")
+
+  @@map("withdrawal_request_status")
+}
+
+enum WithdrawalRequestedBy {
+  SELLER @map("seller")
+  SYSTEM @map("system")
+
+  @@map("withdrawal_requested_by")
+}
+
+/// R2 (revised-plan roadmap) — a seller's (or, later, an auto-withdraw
+/// cycle's) REQUEST to withdraw wallet balance. Never itself moves
+/// money — `RemittanceService.create()` (the existing admin-manual-
+/// payout flow, W-6) remains the sole executor; an admin resolving a
+/// request creates the actual Remittance separately and links it here
+/// via `linkedRemittanceId`. This preserves "no seller-initiated
+/// direct debit" — the wallet ledger is only ever touched by
+/// `WalletService.applyEntry`, never by this model.
+model WithdrawalRequest {
+  id                 String                  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId           String                  @map("seller_id") @db.Uuid
+  currency           Currency
+  amountRequested    Decimal                 @map("amount_requested") @db.Decimal(14, 2)
+  status             WithdrawalRequestStatus @default(PENDING)
+  requestedBy        WithdrawalRequestedBy   @map("requested_by")
+  requestedByUserId  String?                 @map("requested_by_user_id") @db.Uuid
+  linkedRemittanceId String?                 @unique @map("linked_remittance_id") @db.Uuid
+  resolvedByStaffId  String?                 @map("resolved_by_staff_id") @db.Uuid
+  resolvedAt         DateTime?               @map("resolved_at") @db.Timestamptz
+  rejectionReason    String?                 @map("rejection_reason") @db.Text
+  note               String?                 @db.Text
+  createdAt          DateTime                @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime                @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller           Seller      @relation(fields: [sellerId], references: [id])
+  requestedByUser  SellerUser? @relation(fields: [requestedByUserId], references: [id])
+  linkedRemittance Remittance? @relation(fields: [linkedRemittanceId], references: [id])
+  resolvedByStaff  StaffUser?  @relation("WithdrawalRequestResolvedBy", fields: [resolvedByStaffId], references: [id])
+
+  @@index([sellerId, status])
+  @@index([status])
+  @@index([requestedByUserId])
+  @@index([resolvedByStaffId])
+  @@map("withdrawal_requests")
 }
 
 // ============================================================================
@@ -3584,6 +3639,7 @@ model SellerUser {
   refreshTokens           SellerRefreshToken[]
   passwordResetTokens     SellerPasswordResetToken[]
   emailVerificationTokens SellerEmailVerificationToken[]
+  withdrawalRequestsMade  WithdrawalRequest[]
 
   @@index([sellerId])
   @@index([sellerId, role])

@@ -408,6 +408,29 @@ const systemSettings: SystemSettingSeed[] = [
       "Default timing for debiting a seller's ORDER_CHARGES: 'AT_DELIVERY' (default — debited when the order is DELIVERED) or 'AT_AWB' (debited as soon as an AWB is generated, before delivery is known). Per-seller override via seller_setting_overrides.",
     sellerOverridable: true,
   },
+  // R2 — seller-initiated withdrawal requests.
+  {
+    key: 'wallet.withdrawal_min_threshold_inr',
+    category: 'wallet',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '500.00',
+    displayName: 'Withdrawal Minimum Threshold (INR)',
+    description:
+      'Minimum wallet balance a seller must request in one withdrawal. Per-seller override via seller_setting_overrides.',
+    sellerOverridable: true,
+  },
+  {
+    key: 'wallet.withdrawal_max_per_day',
+    category: 'wallet',
+    valueType: SettingValueType.INT,
+    valueInt: 1,
+    displayName: 'Withdrawal Requests Per Day (max)',
+    description:
+      'Maximum number of withdrawal requests a seller may submit in a rolling 24h window. Per-seller override via seller_setting_overrides.',
+    sellerOverridable: true,
+    overrideMinInt: 1,
+    overrideMaxInt: 20,
+  },
 ];
 
 async function seedSystemSettings() {

@@ -85,4 +85,7 @@ export {
   WalletEntryDirection,
   // Seller team (RBAC)
   SellerUserRole,
+  // R2 — withdrawal requests
+  WithdrawalRequestStatus,
+  WithdrawalRequestedBy,
 } from '@prisma/client';
