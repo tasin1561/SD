@@ -21,6 +21,7 @@ import {
   RtoRestockTargetService,
   type RestockTarget,
 } from './rto-restock-target.service';
+import { InboundFreightAmortisationService } from '../../inbound-freight/services/inbound-freight-amortisation.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
 export interface FinalizeRtoItemSummary {
@@ -112,6 +113,7 @@ export class RtoDispositionService {
     private readonly audit: AuditLogService,
     private readonly units: StockUnitService,
     private readonly restockTargets: RtoRestockTargetService,
+    private readonly freightAmortisation: InboundFreightAmortisationService,
   ) {}
 
   async finalize(
@@ -382,6 +384,39 @@ export class RtoDispositionService {
         );
       }
     }
+    // R3 amortisation (founder's call): a written-off unit still owes its
+    // share of the inbound freight — that money was genuinely spent
+    // carrying the goods into India, and the unit was the seller's
+    // property. Compensation for the LOST GOODS themselves is handled
+    // separately (manually, or via an R7 damage ticket), which is why this
+    // is a freight debit and not a stock credit.
+    // Best-effort + gated on one INBOUND_FREIGHT entry per order, so a
+    // re-run cannot double-charge; the finalize itself must not fail
+    // because a wallet debit did.
+    const writeOffSellerId = writeOffItems[0]?.orderItem.order.sellerId;
+    if (writeOffSellerId !== undefined) {
+      try {
+        const charged = await this.prisma.client.$transaction((tx) =>
+          this.freightAmortisation.debitForWrittenOffItems(tx, {
+            orderId,
+            sellerId: writeOffSellerId,
+            shipmentItemIds: writeOffItems.map((i) => i.id),
+          }),
+        );
+        if (Number(charged.amountInr) > 0) {
+          this.logger.log(
+            { orderId, shipmentId, freightChargedInr: charged.amountInr },
+            'R3: charged inbound-freight share for written-off units',
+          );
+        }
+      } catch (err) {
+        this.logger.warn(
+          { orderId, shipmentId, err: (err as Error).message },
+          'RTO finalize: inbound-freight debit for written-off units failed — order IS finalized; charge it manually',
+        );
+      }
+    }
+
     for (const item of writeOffItems) {
       try {
         await this.prisma.client.$transaction((tx) =>

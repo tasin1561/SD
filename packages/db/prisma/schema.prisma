@@ -646,18 +646,19 @@ model ProductVariant {
   updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt         DateTime?      @map("deleted_at") @db.Timestamptz
 
-  product           Product            @relation(fields: [productId], references: [id])
-  seller            Seller             @relation(fields: [sellerId], references: [id])
-  images            ProductImage[]
-  stockBatches      StockBatch[]
-  stockLevels       StockLevel[]
-  stockMovements    StockMovement[]
-  stockReservations StockReservation[]
-  cycleCountItems   CycleCountItem[]
-  goodsReceiptLines GoodsReceiptLine[]
-  orderItems        OrderItem[]
-  stockAlertStates  StockAlertState[]
-  stockUnits        StockUnit[]
+  product            Product                    @relation(fields: [productId], references: [id])
+  seller             Seller                     @relation(fields: [sellerId], references: [id])
+  images             ProductImage[]
+  stockBatches       StockBatch[]
+  stockLevels        StockLevel[]
+  stockMovements     StockMovement[]
+  stockReservations  StockReservation[]
+  cycleCountItems    CycleCountItem[]
+  goodsReceiptLines  GoodsReceiptLine[]
+  orderItems         OrderItem[]
+  stockAlertStates   StockAlertState[]
+  stockUnits         StockUnit[]
+  freightAllocations InboundFreightAllocation[]
 
   @@unique([sellerId, skuCode])
   @@index([productId])
@@ -1292,11 +1293,12 @@ model GoodsReceiptLine {
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  receipt    GoodsReceipt   @relation(fields: [receiptId], references: [id], onDelete: Cascade)
-  variant    ProductVariant @relation(fields: [variantId], references: [id])
-  batch      StockBatch?    @relation(fields: [batchId], references: [id])
-  putawayBin WarehouseBin?  @relation(fields: [putawayBinId], references: [id])
-  stockUnits StockUnit[]
+  receipt           GoodsReceipt              @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  freightAllocation InboundFreightAllocation?
+  variant           ProductVariant            @relation(fields: [variantId], references: [id])
+  batch             StockBatch?               @relation(fields: [batchId], references: [id])
+  putawayBin        WarehouseBin?             @relation(fields: [putawayBinId], references: [id])
+  stockUnits        StockUnit[]
 
   @@index([receiptId])
   @@index([variantId])
@@ -1331,6 +1333,15 @@ model InboundFreightCharge {
   serviceChargeInr     Decimal?             @map("service_charge_inr") @db.Decimal(12, 2)
   /// amountInr + serviceChargeInr — what the seller actually owes.
   totalInr             Decimal              @map("total_inr") @db.Decimal(12, 2)
+  /// R3 amortisation — how many physical units this bill covers, and how
+  /// much of it has actually been charged so far. Freight is a per-unit
+  /// LANDED COST: 100 units arrive on one bill, and the seller pays a
+  /// unit's share as that unit leaves (delivered, or written off). The
+  /// other 99 stay due. PAY_NOW bills are settled in full up front and
+  /// are never amortised.
+  totalUnits           Int                  @default(0) @map("total_units")
+  unitsSettled         Int                  @default(0) @map("units_settled")
+  amountSettledInr     Decimal              @default(0) @map("amount_settled_inr") @db.Decimal(12, 2)
   status               InboundFreightStatus @default(PENDING)
   settledAt            DateTime?            @map("settled_at") @db.Timestamptz
   settledByStaffId     String?              @map("settled_by_staff_id") @db.Uuid
@@ -1342,15 +1353,57 @@ model InboundFreightCharge {
   createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz
   updatedAt            DateTime             @updatedAt @map("updated_at") @db.Timestamptz
 
-  seller       Seller             @relation(fields: [sellerId], references: [id])
-  goodsReceipt GoodsReceipt       @relation(fields: [goodsReceiptId], references: [id])
-  settledBy    StaffUser?         @relation("InboundFreightSettledBy", fields: [settledByStaffId], references: [id])
-  walletEntry  SellerWalletEntry? @relation(fields: [walletEntryId], references: [id])
+  seller       Seller                     @relation(fields: [sellerId], references: [id])
+  goodsReceipt GoodsReceipt               @relation(fields: [goodsReceiptId], references: [id])
+  allocations  InboundFreightAllocation[]
+  settledBy    StaffUser?                 @relation("InboundFreightSettledBy", fields: [settledByStaffId], references: [id])
+  walletEntry  SellerWalletEntry?         @relation(fields: [walletEntryId], references: [id])
 
   @@index([sellerId, status])
   @@index([status])
   @@index([settledByStaffId])
   @@map("inbound_freight_charges")
+}
+
+/// R3 amortisation — one row per consignment LINE, carrying that line's
+/// share of the freight bill split down to a per-unit rate.
+///
+/// Why per line and not one flat rate for the whole consignment: freight
+/// is priced by WEIGHT, so a shipment of 100 phone cases and 20 kettles
+/// must not charge the case what it charges the kettle. The split is by
+/// total line weight (unit weight × units), falling back to unit COUNT
+/// for lines whose SKU has no weight recorded — the fallback is honest
+/// rather than silently treating a missing weight as zero.
+///
+/// The rate is SNAPSHOTTED here at record time; it is never recomputed,
+/// so a later catalog weight edit cannot retro-price goods that have
+/// already landed.
+model InboundFreightAllocation {
+  id                 String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  freightChargeId    String   @map("freight_charge_id") @db.Uuid
+  /// The consignment line. UNIQUE — one allocation per line, which is
+  /// also what makes re-recording idempotent.
+  goodsReceiptLineId String   @unique @map("goods_receipt_line_id") @db.Uuid
+  variantId          String   @map("variant_id") @db.Uuid
+  units              Int
+  /// Effective per-unit weight used for the split (null ⇒ this line fell
+  /// back to a count-based share).
+  unitWeightGrams    Int?     @map("unit_weight_grams")
+  /// 4dp: a bill divided across many units needs more precision than the
+  /// 2dp money columns, or the rounding drift becomes visible.
+  perUnitInr         Decimal  @map("per_unit_inr") @db.Decimal(12, 4)
+  unitsSettled       Int      @default(0) @map("units_settled")
+  amountSettledInr   Decimal  @default(0) @map("amount_settled_inr") @db.Decimal(12, 2)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  freightCharge    InboundFreightCharge @relation(fields: [freightChargeId], references: [id], onDelete: Cascade)
+  goodsReceiptLine GoodsReceiptLine     @relation(fields: [goodsReceiptLineId], references: [id])
+  variant          ProductVariant       @relation(fields: [variantId], references: [id])
+
+  @@index([freightChargeId])
+  @@index([variantId])
+  @@map("inbound_freight_allocations")
 }
 
 // Module 5 — low-stock alert state, one row per
@@ -3630,11 +3683,14 @@ enum InboundFreightMode {
 }
 
 enum InboundFreightStatus {
-  PENDING @map("pending")
-  SETTLED @map("settled")
+  PENDING           @map("pending")
+  /// R3 amortisation — some units' shares have been charged, the rest of
+  /// the consignment is still sitting in stock and still owes.
+  PARTIALLY_SETTLED @map("partially_settled")
+  SETTLED           @map("settled")
   /// Ops forgave the bill (goodwill, our own error, a consignment we
   /// mis-handled). Distinct from SETTLED so waivers stay countable.
-  WAIVED  @map("waived")
+  WAIVED            @map("waived")
 
   @@map("inbound_freight_status")
 }

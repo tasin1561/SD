@@ -185,7 +185,11 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
     'TRUNCATE TABLE ' +
       [
         // R3 inbound freight bills — FK-RESTRICT sellers + goods_receipts
-        // + seller_wallet_entries, so they must go before all three.
+        // + seller_wallet_entries, so they must go before all three. The
+        // allocations table FK-RESTRICTs goods_receipt_lines too (it
+        // cascades off charges, but naming it keeps the intent readable
+        // and the ordering explicit — MUST #12).
+        'inbound_freight_allocations',
         'inbound_freight_charges',
         // R5 early-reservation reviews — FK-RESTRICT orders + sellers.
         'early_reservation_reviews',

@@ -3,6 +3,7 @@ import { AccrualExecutionService } from '../../src/modules/seller-wallet-accrual
 import { OrderChargesAccrualService } from '../../src/modules/seller-wallet-accrual/services/order-charges-accrual.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
+import type { InboundFreightAmortisationService } from '../../src/modules/inbound-freight/services/inbound-freight-amortisation.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -61,12 +62,32 @@ function makeService(
 
   const chargesAccrual = new OrderChargesAccrualService(wallet as unknown as WalletService);
 
+  // R3 amortisation: these fixtures cover orders whose goods came from no
+  // billed consignment, so the freight hook is a no-op (0 debited).
+  const debitForDeliveredOrder = jest.fn(async () => ({
+    amountInr: '0',
+    unitsCharged: 0,
+    alreadyCharged: false,
+  }));
+  const freightAmortisation = {
+    debitForDeliveredOrder,
+  } as unknown as InboundFreightAmortisationService;
+
   const svc = new AccrualExecutionService(
     prisma,
     wallet as unknown as WalletService,
     chargesAccrual,
+    freightAmortisation,
   );
-  return { svc, applyEntry, recomputeCacheAfterCommit, orderFindUnique, orderChargeFindMany, walletEntryFindFirst };
+  return {
+    svc,
+    applyEntry,
+    recomputeCacheAfterCommit,
+    orderFindUnique,
+    orderChargeFindMany,
+    walletEntryFindFirst,
+    debitForDeliveredOrder,
+  };
 }
 
 describe('AccrualExecutionService.executeAccrual', () => {
@@ -156,7 +177,19 @@ describe('AccrualExecutionService.executeAccrual', () => {
     const recomputeCacheAfterCommit = jest.fn(async () => undefined);
     const wallet = { applyEntry, recomputeCacheAfterCommit };
     const chargesAccrual = new OrderChargesAccrualService(wallet as unknown as WalletService);
-    const svc = new AccrualExecutionService(prisma, wallet as unknown as WalletService, chargesAccrual);
+    const freightAmortisation = {
+      debitForDeliveredOrder: jest.fn(async () => ({
+        amountInr: '0',
+        unitsCharged: 0,
+        alreadyCharged: false,
+      })),
+    } as unknown as InboundFreightAmortisationService;
+    const svc = new AccrualExecutionService(
+      prisma,
+      wallet as unknown as WalletService,
+      chargesAccrual,
+      freightAmortisation,
+    );
 
     await svc.executeAccrual('order-1');
     await svc.executeAccrual('order-1');

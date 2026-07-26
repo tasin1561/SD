@@ -10,6 +10,7 @@ import { OrderChargesAccrualService } from './services/order-charges-accrual.ser
 import { OrderDeliveredAccrualListener } from './services/order-delivered-accrual-listener.service';
 import { PendingAccrualSchedulerService } from './services/pending-accrual-scheduler.service';
 import { PendingAccrualSweepService } from './services/pending-accrual-sweep.service';
+import { InboundFreightModule } from '../inbound-freight/inbound-freight.module';
 
 /**
  * Phase 1B M22 — COD accrual on DELIVERED.
@@ -38,7 +39,14 @@ import { PendingAccrualSweepService } from './services/pending-accrual-sweep.ser
  *   - M24 SellerWalletController — exposes balance + ledger to /seller/wallet
  */
 @Module({
-  imports: [LifecycleEventsModule, SellerWalletModule, SettingsModule],
+  imports: [
+    LifecycleEventsModule,
+    SellerWalletModule,
+    SettingsModule,
+    // R3 amortisation: the DELIVERED accrual also charges the delivered
+    // units' share of the inbound freight bill.
+    InboundFreightModule,
+  ],
   providers: [
     OrderDeliveredAccrualListener,
     OrderChargesAccrualService,

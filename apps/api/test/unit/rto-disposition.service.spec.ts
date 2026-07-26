@@ -14,6 +14,7 @@ import type { StockMutationService } from '../../src/modules/inventory-shared/st
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { StockUnitService } from '../../src/modules/inventory-shared/stock-unit.service';
 import type { RtoRestockTargetService } from '../../src/modules/warehouse-rto/services/rto-restock-target.service';
+import type { InboundFreightAmortisationService } from '../../src/modules/inbound-freight/services/inbound-freight-amortisation.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -116,6 +117,15 @@ function makeService(
     crossWarehouse: i['receivedWarehouseId'] !== i['originWarehouseId'],
   }));
   const restockTargets = { resolve: resolveTarget };
+  // R3: a written-off unit's freight share. Default fixture charges
+  // nothing (goods from no billed consignment), so the existing
+  // assertions are unaffected.
+  const debitForWrittenOffItems = jest.fn(async () => ({
+    amountInr: '0',
+    unitsCharged: 0,
+    alreadyCharged: false,
+  }));
+  const freightAmortisation = { debitForWrittenOffItems };
   const svc = new RtoDispositionService(
     { client } as unknown as PrismaService,
     orders as unknown as OrderReadService,
@@ -124,6 +134,7 @@ function makeService(
     audit as unknown as AuditLogService,
     unitLedger as unknown as StockUnitService,
     restockTargets as unknown as RtoRestockTargetService,
+    freightAmortisation as unknown as InboundFreightAmortisationService,
   );
   return {
     svc,
@@ -133,6 +144,7 @@ function makeService(
     runWithRetry,
     auditLog,
     resolveTarget,
+    debitForWrittenOffItems,
   };
 }
 

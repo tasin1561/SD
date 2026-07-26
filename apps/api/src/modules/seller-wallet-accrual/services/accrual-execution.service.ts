@@ -3,6 +3,7 @@ import { ActorType, Currency, PaymentMode, Prisma, WalletEntryDirection } from '
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import { OrderChargesAccrualService } from './order-charges-accrual.service';
+import { InboundFreightAmortisationService } from '../../inbound-freight/services/inbound-freight-amortisation.service';
 
 /**
  * R2b (revised-plan roadmap) — the actual COD-credit + charges-debit
@@ -27,6 +28,7 @@ export class AccrualExecutionService {
     private readonly prisma: PrismaService,
     private readonly wallet: WalletService,
     private readonly chargesAccrual: OrderChargesAccrualService,
+    private readonly freightAmortisation: InboundFreightAmortisationService,
   ) {}
 
   async executeAccrual(orderId: string): Promise<void> {
@@ -60,6 +62,18 @@ export class AccrualExecutionService {
       }
 
       await this.chargesAccrual.debitIfNeeded(tx, order.id, order.sellerId);
+
+      // R3 amortisation: the delivered units' share of the BD→India
+      // inbound freight bill. Separate from ORDER_CHARGES (that is the
+      // outbound India-domestic courier leg) and charged per unit, so the
+      // rest of the consignment still owes. No-op for orders whose goods
+      // came from a PAY_NOW consignment or from no billed consignment at
+      // all.
+      await this.freightAmortisation.debitForDeliveredOrder(
+        tx,
+        order.id,
+        order.sellerId,
+      );
     });
 
     await this.wallet.recomputeCacheAfterCommit(order.sellerId, Currency.INR, 'post-commit-accrual');

@@ -9,6 +9,7 @@ import { RtoReadService } from './services/rto-read.service';
 import { WarehouseRtoController } from './controllers/warehouse-rto.controller';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { TicketModule } from '../ticket/ticket.module';
+import { InboundFreightModule } from '../inbound-freight/inbound-freight.module';
 
 /**
  * Module 8 warehouse-rto module — reverted to MODEL A by Module 9
@@ -28,7 +29,13 @@ import { TicketModule } from '../ticket/ticket.module';
  * LEAF consumer — nothing imports `warehouse-rto`.
  */
 @Module({
-  imports: [OrderModule, InventorySharedModule, TicketModule],
+  imports: [
+    OrderModule,
+    InventorySharedModule,
+    TicketModule,
+    // R3: a written-off unit still owes its inbound-freight share.
+    InboundFreightModule,
+  ],
   controllers: [WarehouseRtoController],
   providers: [
     RtoReceiptService,

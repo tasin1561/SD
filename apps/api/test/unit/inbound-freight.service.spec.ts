@@ -10,6 +10,7 @@ import type { PrismaService } from '../../src/infrastructure/prisma/prisma.servi
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { SettingsResolverService } from '../../src/modules/settings/services/settings-resolver.service';
 import type { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
+import type { InboundFreightAmortisationService } from '../../src/modules/inbound-freight/services/inbound-freight-amortisation.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -28,6 +29,9 @@ function chargeRow(over: AnyArgs = {}): AnyArgs {
     serviceChargePercent: null,
     serviceChargeInr: null,
     totalInr: new Prisma.Decimal('4500.00'),
+    totalUnits: 10,
+    unitsSettled: 0,
+    amountSettledInr: new Prisma.Decimal('0.00'),
     status: InboundFreightStatus.PENDING,
     settledAt: null,
     settledByStaffId: null,
@@ -78,6 +82,7 @@ function makeSut(
   const client: AnyArgs = {
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(client),
     goodsReceipt: { findFirst: receiptFindFirst },
+    inboundFreightAllocation: { create: jest.fn(async () => ({ id: 'alloc-1' })) },
     inboundFreightCharge: {
       findUnique: jest.fn(async () =>
         opts.loaded === undefined ? (opts.existing ?? null) : opts.loaded,
@@ -121,11 +126,35 @@ function makeSut(
   });
   const settings = { resolve } as unknown as SettingsResolverService;
 
+  // R3 amortisation: a single 10-unit line at 45/unit, so `record` writes
+  // one allocation row and totalUnits 10.
+  const planAllocation = jest.fn(async () => ({
+    lines: [
+      {
+        goodsReceiptLineId: 'grl-1',
+        variantId: 'v-1',
+        units: 10,
+        unitWeightGrams: 500,
+        perUnitInr: new Prisma.Decimal('450.0000'),
+      },
+    ],
+    totalUnits: 10,
+  }));
+  const amortisation = {
+    planAllocation,
+  } as unknown as InboundFreightAmortisationService;
+
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown?]>(async () => 'a1');
   const audit = { log: auditLog } as unknown as AuditLogService;
 
   return {
-    svc: new InboundFreightService(prisma, audit, settings, wallet),
+    svc: new InboundFreightService(
+      prisma,
+      audit,
+      settings,
+      wallet,
+      amortisation,
+    ),
     applyEntry,
     auditLog,
     created,
