@@ -157,25 +157,27 @@
   #viewBudget:not(.is-active) { animation: budgetGlow 2.4s ease-in-out infinite; }
   [data-seen-budget] #viewBudget { animation: none; }
   @keyframes budgetGlow { 0%,100% { color: var(--fg-muted); } 50% { color: var(--sky); } }
+  .theme-btn { display: none; }
+  .seg-wrap { position: relative; }
   .budget-hint {
-    position: fixed; z-index: 40; top: 62px; right: 22px;
-    display: inline-flex; align-items: center; gap: 7px;
-    font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.06em; text-transform: uppercase;
+    position: absolute; z-index: 40; top: calc(100% + 12px); right: 0;
+    display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+    font-family: var(--font-mono); font-size: 0.64rem; letter-spacing: 0.06em; text-transform: uppercase;
     color: var(--surface); background: var(--sky); border: 0;
     padding: 8px 13px; border-radius: 999px; cursor: pointer;
     box-shadow: 0 10px 26px var(--glow), 0 0 0 4px color-mix(in oklab, var(--sky) 18%, transparent);
     animation: hintFloat 2.6s ease-in-out infinite;
   }
   .budget-hint::before {
-    content: ''; position: absolute; top: -6px; right: 40px;
+    content: ''; position: absolute; top: -6px; right: 26px;
     border-left: 6px solid transparent; border-right: 6px solid transparent;
     border-bottom: 6px solid var(--sky);
   }
-  @keyframes hintFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+  @keyframes hintFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
   [data-view="budget"] .budget-hint, [data-seen-budget] .budget-hint { display: none; }
   @media (max-width: 640px) {
-    .budget-hint { top: 56px; right: 12px; font-size: 0.58rem; padding: 6px 10px; }
-    .budget-hint::before { right: 28px; }
+    .budget-hint { font-size: 0.56rem; padding: 6px 10px; }
+    .budget-hint::before { right: 22px; }
   }
   @media (prefers-reduced-motion: reduce) {
     .budget-hint { animation: none; }
@@ -324,9 +326,12 @@
       <span class="status tel"><span class="dot"></span>operating model · v2</span>
     </div>
     <div class="controls">
-      <div class="seg" role="tablist" aria-label="View">
-        <button class="seg-btn is-active" id="viewPlan" type="button">Plan</button>
-        <button class="seg-btn" id="viewBudget" type="button">Budget</button>
+      <div class="seg-wrap">
+        <div class="seg" role="tablist" aria-label="View">
+          <button class="seg-btn is-active" id="viewPlan" type="button">Plan</button>
+          <button class="seg-btn" id="viewBudget" type="button">Budget</button>
+        </div>
+        <button class="budget-hint" id="budgetHint" type="button" aria-label="Open budget and funding">💰&nbsp;Budget here</button>
       </div>
       <button class="theme-btn" id="themeToggle" type="button">Toggle theme</button>
     </div>
@@ -334,7 +339,6 @@
 </div>
 
 <div class="view-plan">
-<button class="budget-hint" id="budgetHint" type="button" aria-label="Open budget and funding">💰&nbsp;Investor budget here</button>
 <div class="hero">
   <div class="wrap">
     <div class="tel" style="margin-bottom:14px;">Target operating model · on a shipped, production-grade foundation</div>
