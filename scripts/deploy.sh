@@ -61,9 +61,6 @@ did_change '^apps/api/'                                            && APPS_CHANG
 did_change '^apps/admin/'                                          && APPS_CHANGED+=(skydrop-admin)
 did_change '^apps/seller/'                                         && APPS_CHANGED+=(skydrop-seller)
 did_change '^apps/track/'                                          && APPS_CHANGED+=(skydrop-track)
-# apps/workers shares apps/api dist output (workers-main.js), so api
-# changes are workers changes too. (No separate build step.)
-did_change '^apps/(api|workers)/'                                  && APPS_CHANGED+=(skydrop-workers)
 # de-dup
 APPS_CHANGED=($(printf '%s\n' "${APPS_CHANGED[@]:-}" | awk 'NF' | sort -u))
 
