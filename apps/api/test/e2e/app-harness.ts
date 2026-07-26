@@ -184,6 +184,10 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(
     'TRUNCATE TABLE ' +
       [
+        // R2c courier settlements — settlement LINES FK-RESTRICT orders,
+        // so both must go before resetOrderState's orders truncate.
+        'courier_settlement_lines',
+        'courier_settlements',
         // R3 inbound freight bills — FK-RESTRICT sellers + goods_receipts
         // + seller_wallet_entries, so they must go before all three. The
         // allocations table FK-RESTRICTs goods_receipt_lines too (it

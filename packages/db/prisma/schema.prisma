@@ -81,6 +81,7 @@ model StaffUser {
   withdrawalRequestsResolved WithdrawalRequest[]           @relation("WithdrawalRequestResolvedBy")
   ticketsOpened              Ticket[]                      @relation("TicketOpenedByStaff")
   ticketsResolved            Ticket[]                      @relation("TicketResolvedByStaff")
+  courierSettlementsRecorded CourierSettlement[]           @relation("CourierSettlementRecordedBy")
   stockUnitsScanned          StockUnit[]                   @relation("StockUnitLastScanBy")
   inboundFreightSettled      InboundFreightCharge[]        @relation("InboundFreightSettledBy")
 
@@ -1406,6 +1407,75 @@ model InboundFreightAllocation {
   @@map("inbound_freight_allocations")
 }
 
+/// R2c — money the COURIER paid US.
+///
+/// This is the missing half of the COD loop. Delhivery collects cash from
+/// the customer on delivery and settles with Skydrop 5-10 days later; up
+/// to now nothing in the system recorded that inbound payment, so "have we
+/// actually been paid for the orders we already credited sellers for?" was
+/// unanswerable. Every payout is recorded here and allocated to the orders
+/// it covers, which is what turns "we can't lose a rupee" from an
+/// assertion into a number.
+///
+/// APPEND-MOSTLY: a settlement is a historical fact about a bank credit.
+/// Corrections are made by recording an adjusting settlement, not by
+/// editing a past one.
+model CourierSettlement {
+  id                String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courierAccountId  String   @map("courier_account_id") @db.Uuid
+  /// The courier's own payout/UTR reference. UNIQUE per account — the
+  /// idempotency gate against recording the same bank credit twice.
+  reference         String
+  /// What actually landed in the bank, INR.
+  amountInr         Decimal  @map("amount_inr") @db.Decimal(14, 2)
+  /// Sum of this settlement's allocated lines. Kept alongside amountInr
+  /// so an under- or over-allocated payout is visible without a join.
+  allocatedInr      Decimal  @default(0) @map("allocated_inr") @db.Decimal(14, 2)
+  receivedAt        DateTime @map("received_at") @db.Timestamptz
+  recordedByStaffId String?  @map("recorded_by_staff_id") @db.Uuid
+  note              String?  @db.Text
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  courierAccount CourierAccount          @relation(fields: [courierAccountId], references: [id])
+  recordedBy     StaffUser?              @relation("CourierSettlementRecordedBy", fields: [recordedByStaffId], references: [id])
+  lines          CourierSettlementLine[]
+
+  @@unique([courierAccountId, reference])
+  @@index([courierAccountId, receivedAt])
+  @@index([receivedAt])
+  @@index([recordedByStaffId])
+  @@map("courier_settlements")
+}
+
+/// R2c — how much of a payout belongs to ONE order.
+///
+/// `expectedInr` is snapshotted from the order's COD amount at allocation
+/// time, so `settledInr - expectedInr` is the short-payment (or overpay)
+/// for that order, permanently, even if the order is later adjusted.
+model CourierSettlementLine {
+  id           String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  settlementId String   @map("settlement_id") @db.Uuid
+  orderId      String   @map("order_id") @db.Uuid
+  /// What the courier should have remitted for this order (its COD amount).
+  expectedInr  Decimal  @map("expected_inr") @db.Decimal(12, 2)
+  /// What this payout actually attributed to it.
+  settledInr   Decimal  @map("settled_inr") @db.Decimal(12, 2)
+  note         String?  @db.Text
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  settlement CourierSettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  order      Order             @relation(fields: [orderId], references: [id])
+
+  /// One line per order per settlement — a payout cannot pay the same
+  /// order twice. An order CAN legitimately appear across settlements
+  /// (a part-payment then a top-up), which is why this is not unique on
+  /// orderId alone.
+  @@unique([settlementId, orderId])
+  @@index([orderId])
+  @@map("courier_settlement_lines")
+}
+
 // Module 5 — low-stock alert state, one row per
 // (seller × variant × warehouse). NOT on stock_levels: availability and the
 // threshold are evaluated at the (seller,variant,warehouse) grain, while
@@ -1544,6 +1614,7 @@ model Order {
   pendingAccrual         PendingAccrual?
   tickets                Ticket[]
   earlyReservationReview EarlyReservationReview?
+  courierSettlementLines CourierSettlementLine[]
 
   @@unique([sellerId, sellerOrderRef])
   @@index([sellerId, status])
@@ -2269,6 +2340,7 @@ model CourierAccount {
   createdByStaff StaffUser?                 @relation("CourierAccountCreatedBy", fields: [createdByStaffId], references: [id])
   sellerLinks    SellerCourierAccountLink[]
   shipments      Shipment[]
+  settlements    CourierSettlement[]
 
   // Exactly one DEFAULT active account per (courier_id, environment) —
   // partial unique index courier_accounts_default_uq
