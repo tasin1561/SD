@@ -3,15 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Skydrop — System Report</title>
-<meta name="description" content="Skydrop system report — the BD → IN cross-border logistics backbone: what it is, how it works, what's built, the stack, capacity, and roadmap.">
+<title>Skydrop — Operating Model &amp; System Report</title>
+<meta name="description" content="Skydrop — the operating system for BD → IN cross-border commerce. Target operating model (serialized inventory, virtual booking, courier-first dispatch, multi-warehouse, scrap resolution) on a shipped, production-grade foundation.">
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    /* NIGHT OPS (default) — the platform's own console palette */
     --sky: #38bdf8;
     --sky-deep: #0284c7;
     --saffron: #f59e0b;
@@ -121,7 +120,6 @@
     color: var(--fg-muted);
   }
 
-  /* ── Top status bar ──────────────────────────────────────── */
   .topbar {
     position: sticky; top: 0; z-index: 20;
     backdrop-filter: blur(10px);
@@ -144,7 +142,6 @@
   }
   .theme-btn:hover { color: var(--fg-strong); border-color: var(--sky); }
 
-  /* ── Hero ─────────────────────────────────────────────────── */
   .hero { padding: 62px 0 34px; position: relative; }
   .hero::before {
     content: ''; position: absolute; top: -60px; left: 50%; transform: translateX(-50%);
@@ -152,11 +149,10 @@
     background: radial-gradient(closest-side, var(--glow), transparent); opacity: 0.7; pointer-events: none;
   }
   .hero h1 { font-size: clamp(2.1rem, 5vw, 3.4rem); font-weight: 600; position: relative; }
-  .hero .sub { color: var(--fg-body); max-width: 60ch; margin-top: 16px; font-size: 1.06rem; position: relative; }
+  .hero .sub { color: var(--fg-body); max-width: 62ch; margin-top: 16px; font-size: 1.06rem; position: relative; }
   .hero .meta { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 20px; position: relative; }
   .hero .meta span { display: inline-flex; align-items: center; gap: 7px; }
 
-  /* ── Metric tiles ─────────────────────────────────────────── */
   .tiles {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 1px; background: var(--panel-edge);
@@ -168,13 +164,12 @@
   .tile .n em { font-style: normal; color: var(--sky); }
   .tile .k { margin-top: 8px; }
 
-  /* ── Sections / panels ────────────────────────────────────── */
   section { padding: 34px 0; }
   .sechead { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
   .sechead .idx { color: var(--sky); }
   .sechead .bar { flex: 0 0 34px; height: 1px; background: var(--panel-edge-strong); }
   section > .wrap > h2 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 600; margin-bottom: 6px; }
-  section > .wrap > .lead { color: var(--fg-body); max-width: 68ch; margin: 8px 0 22px; }
+  section > .wrap > .lead { color: var(--fg-body); max-width: 70ch; margin: 8px 0 22px; }
 
   .panel {
     position: relative; background: var(--surface-2);
@@ -191,13 +186,12 @@
   .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   @media (max-width: 780px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
 
-  .panel h3 { font-size: 1.05rem; margin-bottom: 8px; }
+  .panel h3 { font-size: 1.05rem; margin-bottom: 8px; display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
   .panel p { margin: 0 0 10px; font-size: 0.95rem; }
   .panel ul { margin: 8px 0 0; padding-left: 18px; font-size: 0.93rem; }
   .panel li { margin: 4px 0; }
   .panel li::marker { color: var(--sky); }
 
-  /* ── Tables ───────────────────────────────────────────────── */
   .tbl-scroll { overflow-x: auto; border: 1px solid var(--panel-edge); border-radius: 14px; }
   table { width: 100%; border-collapse: collapse; font-size: 0.92rem; min-width: 560px; }
   thead th {
@@ -210,32 +204,37 @@
   tbody td:first-child { color: var(--fg-strong); font-weight: 500; }
   td .mono, th .mono { font-variant-numeric: tabular-nums; }
 
-  /* ── Status pills ─────────────────────────────────────────── */
   .pill {
     display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono);
-    font-size: 0.64rem; letter-spacing: 0.06em; text-transform: uppercase;
-    padding: 3px 9px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap;
+    font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 3px 9px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap; vertical-align: middle;
   }
   .pill.live { color: var(--green); border-color: color-mix(in oklab, var(--green) 40%, transparent); background: color-mix(in oklab, var(--green) 10%, transparent); }
   .pill.stub { color: var(--saffron); border-color: color-mix(in oklab, var(--saffron) 40%, transparent); background: color-mix(in oklab, var(--saffron) 10%, transparent); }
   .pill.plan { color: var(--fg-muted); border-color: var(--panel-edge-strong); }
   .pill.sky { color: var(--sky); border-color: color-mix(in oklab, var(--sky) 40%, transparent); background: color-mix(in oklab, var(--sky) 8%, transparent); }
 
-  /* ── Pipeline flow ────────────────────────────────────────── */
   .flow { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
   .flow .step {
-    flex: 1 1 150px; min-width: 150px; background: var(--surface-2);
+    flex: 1 1 155px; min-width: 155px; background: var(--surface-2);
     border: 1px solid var(--panel-edge); border-radius: 12px; padding: 14px 14px 12px; position: relative;
   }
+  .flow .step.refined { border-color: color-mix(in oklab, var(--saffron) 40%, var(--panel-edge)); background: color-mix(in oklab, var(--saffron) 5%, var(--surface-2)); }
   .flow .step .s-idx { font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.08em; color: var(--sky); text-transform: uppercase; }
+  .flow .step.refined .s-idx { color: var(--saffron); }
   .flow .step .s-t { font-family: var(--font-display); color: var(--fg-strong); font-weight: 600; font-size: 0.98rem; margin: 5px 0 4px; }
   .flow .step .s-b { font-size: 0.82rem; color: var(--fg-muted); line-height: 1.5; }
   .flow .step[data-edge]::after {
     content: attr(data-edge); position: absolute; top: 12px; right: 12px;
-    font-family: var(--font-mono); font-size: 0.58rem; letter-spacing: 0.05em; color: var(--saffron); text-transform: uppercase;
+    font-family: var(--font-mono); font-size: 0.56rem; letter-spacing: 0.05em; color: var(--saffron); text-transform: uppercase;
   }
 
-  /* ── Capacity gauge ───────────────────────────────────────── */
+  .legend { display:flex; flex-wrap:wrap; gap:8px 18px; margin: 14px 0 0; }
+  .legend span { display:inline-flex; align-items:center; gap:7px; font-family:var(--font-mono); font-size:0.64rem; letter-spacing:0.05em; text-transform:uppercase; color:var(--fg-muted); }
+  .sw { width:22px; height:10px; border-radius:3px; display:inline-block; }
+  .sw.a { background: var(--surface-2); border:1px solid var(--panel-edge); }
+  .sw.b { background: color-mix(in oklab, var(--saffron) 22%, var(--surface-2)); border:1px solid color-mix(in oklab, var(--saffron) 40%, transparent); }
+
   .gauge { margin-top: 6px; }
   .gauge .track {
     position: relative; height: 40px; border-radius: 10px; overflow: hidden;
@@ -246,10 +245,7 @@
       color-mix(in oklab, var(--saffron) 24%, var(--surface-2)) 68%,
       color-mix(in oklab, var(--red) 26%, var(--surface-2)) 100%);
   }
-  .gauge .now {
-    position: absolute; top: -6px; bottom: -6px; width: 2px; background: var(--fg-strong);
-    left: 14%;
-  }
+  .gauge .now { position: absolute; top: -6px; bottom: -6px; width: 2px; background: var(--fg-strong); left: 14%; }
   .gauge .now::after {
     content: 'current load · beta'; position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
     font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-strong); white-space: nowrap;
@@ -263,11 +259,19 @@
   }
   .callout strong { color: var(--fg-strong); }
 
+  .phase { display:grid; grid-template-columns: auto 1fr; gap: 0 18px; }
+  .phase .rail { position: relative; width: 14px; }
+  .phase .rail::before { content:''; position:absolute; left:6px; top:6px; bottom:-6px; width:2px; background:var(--panel-edge-strong); }
+  .phase .node { position:absolute; left:0; top:4px; width:14px; height:14px; border-radius:50%; background:var(--surface); border:2px solid var(--sky); }
+  .phase .item { padding-bottom: 20px; }
+  .phase .item:last-child { padding-bottom: 0; }
+  .phase .item h3 { font-size: 1.02rem; margin-bottom: 4px; display:flex; gap:9px; align-items:center; flex-wrap:wrap; }
+  .phase .item p { margin: 0; font-size: 0.92rem; color: var(--fg-body); }
+
   footer { border-top: 1px solid var(--panel-edge); padding: 26px 0 44px; margin-top: 20px; }
   footer .row { display: flex; flex-wrap: wrap; gap: 10px 22px; justify-content: space-between; align-items: center; }
 
   ::selection { background: var(--sky); color: #051018; }
-
   @media (prefers-reduced-motion: reduce) { .dot { animation: none; } }
 </style>
 </head>
@@ -277,7 +281,7 @@
   <div class="row">
     <div class="brand">
       <span class="name">Skydrop</span>
-      <span class="status tel"><span class="dot"></span>system report · v1</span>
+      <span class="status tel"><span class="dot"></span>operating model · v2</span>
     </div>
     <button class="theme-btn" id="themeToggle" type="button">Toggle theme</button>
   </div>
@@ -285,167 +289,212 @@
 
 <div class="hero">
   <div class="wrap">
-    <div class="tel" style="margin-bottom:14px;">Operational status · Phase 1A complete · Phase 1B built · pre-launch beta</div>
-    <h1>The cross-border operation, end&#8209;to&#8209;end.</h1>
-    <p class="sub">Skydrop is the operational backbone that lets Bangladeshi e-commerce sellers sell into India without running an Indian operation themselves — warehousing, phone-confirmed COD, courier dispatch, tracking, returns, and remittance, run as one service.</p>
+    <div class="tel" style="margin-bottom:14px;">Target operating model · on a shipped, production-grade foundation</div>
+    <h1>The operating system for cross&#8209;border commerce.</h1>
+    <p class="sub">Skydrop lets a Bangladeshi seller sell into India as if they had a full Indian operation — a scan-driven warehouse with unit-level inventory integrity, phone-confirmed COD, courier-first dispatch across multiple carriers, live tracking, structured returns and scrap resolution, and remittance home. One system, three operators, zero Indian entity required.</p>
     <div class="hero meta tel">
       <span><span class="dot" style="background:var(--sky)"></span>corridor BD → IN</span>
-      <span>4 live web apps</span>
-      <span>~113K lines of TypeScript</span>
-      <span>1,100 automated tests</span>
+      <span>3 operator roles</span>
+      <span>unit-level inventory</span>
+      <span>multi-warehouse · multi-courier</span>
     </div>
   </div>
 </div>
 
 <div class="wrap">
   <div class="tiles">
-    <div class="tile"><div class="n"><em>18</em>/18</div><div class="k tel">Phase 1A modules</div></div>
-    <div class="tile"><div class="n"><em>6</em></div><div class="k tel">Phase 1B modules</div></div>
+    <div class="tile"><div class="n"><em>18</em>/18</div><div class="k tel">Phase 1A modules live</div></div>
+    <div class="tile"><div class="n"><em>6</em></div><div class="k tel">Phase 1B (money) live</div></div>
     <div class="tile"><div class="n">78</div><div class="k tel">data models</div></div>
     <div class="tile"><div class="n">64</div><div class="k tel">API modules</div></div>
-    <div class="tile"><div class="n">1,100</div><div class="k tel">unit + e2e tests</div></div>
-    <div class="tile"><div class="n">13</div><div class="k tel">background workers</div></div>
+    <div class="tile"><div class="n">1,100</div><div class="k tel">automated tests</div></div>
+    <div class="tile"><div class="n">Live</div><div class="k tel">Delhivery real API</div></div>
   </div>
+  <p class="tel" style="margin:12px 2px 0; color:var(--fg-muted);">This report leads with the <span style="color:var(--saffron)">target operating model</span> and marks every capability by build status: <span class="pill live">live</span> shipped &amp; running · <span class="pill sky">designed</span> architecture locked, in build · <span class="pill plan">next</span> planned.</p>
 </div>
 
-<!-- 01 — WHAT IT IS -->
-<section id="overview">
+<!-- 01 — THE OPERATING MODEL -->
+<section id="model">
   <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 01</span><span class="bar"></span><span>The problem &amp; the wedge</span></div>
+    <div class="sechead tel"><span class="idx">SEC 01</span><span class="bar"></span><span>The wedge</span></div>
     <h2>What Skydrop is</h2>
-    <p class="lead">Selling into India from Bangladesh fails on six fronts at once — no Indian warehouse, no courier contract, no COD call-confirmation, no warehouse ops, no money rail, no Hindi support. Building all of it solo takes 6+ months, ₹50 lakh+, and an Indian company. Skydrop is the shared backbone that removes every one of those blockers so the seller just sells.</p>
+    <p class="lead">Selling into India from Bangladesh fails on six fronts at once — no Indian warehouse, no courier contract, no COD call-confirmation, no warehouse operation, no money rail, no local support. Building all of it alone takes 6+ months, ₹50 lakh+, and an Indian company. Skydrop is the shared operating system that removes every one of those blockers, so the seller only sells.</p>
     <div class="grid3">
       <div class="panel">
-        <h3>For the seller (BD)</h3>
-        <p>A web dashboard to onboard, manage catalog &amp; inventory, place or bulk-upload orders, watch shipments, and see money owed. No Indian entity required.</p>
+        <h3>Seller <span class="tel" style="color:var(--fg-muted)">· Bangladesh</span></h3>
+        <p>A company account with many staff/agent logins under one roof — role-scoped (owner, ops, inventory, finance, viewer). Onboard, manage catalog &amp; stock, place or bulk-upload orders, watch shipments, resolve exceptions, and see money owed.</p>
       </div>
       <div class="panel">
-        <h3>For Skydrop staff (IN)</h3>
-        <p>An internal console to approve sellers, confirm orders by phone, pick/pack, dispatch via courier, handle RTOs, and run remittances.</p>
+        <h3>Skydrop staff <span class="tel" style="color:var(--fg-muted)">· India</span></h3>
+        <p>The internal console — approve sellers, confirm orders by phone, receive &amp; label stock, pick/pack under scan discipline, book couriers, run returns and scrap tickets, and process remittance.</p>
       </div>
       <div class="panel">
-        <h3>For the end customer (IN)</h3>
-        <p>An ordinary Indian delivery with public parcel tracking. They never see that the seller is across a border.</p>
+        <h3>Customer <span class="tel" style="color:var(--fg-muted)">· India</span></h3>
+        <p>An ordinary Indian delivery, phone-confirmed, with public parcel tracking in English and Hindi. They never see there's a border in the middle.</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- 02 — HOW IT WORKS -->
+<!-- 02 — INVENTORY INTEGRITY (the moat) -->
+<section id="inventory">
+  <div class="wrap">
+    <div class="sechead tel"><span class="idx">SEC 02</span><span class="bar"></span><span>The differentiator</span></div>
+    <h2>Inventory integrity, down to the unit</h2>
+    <p class="lead">Cross-border trust lives or dies on inventory accuracy — the seller's stock is in someone else's country. Skydrop runs a real WMS where every movement is a scan, and offers two integrity modes per seller.</p>
+
+    <div class="grid2">
+      <div class="panel">
+        <h3>Normal mode <span class="pill live">foundation live</span></h3>
+        <p>One barcode per SKU. Ten identical bottles share one code, tracked as a quantity across bins and batches — fast, cheap, ideal for fungible goods.</p>
+        <ul>
+          <li>Bins, batches, FIFO/FEFO, append-only stock ledger</li>
+          <li>Low-stock alerts, cycle counts, receiving flows</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>Strict mode <span class="pill sky">designed</span></h3>
+        <p>One unique barcode per <em>physical unit</em>. Ten bottles carry ten codes, applied by Skydrop at receiving and followed individually — through pick, pack, dispatch, and all the way to RTO.</p>
+        <ul>
+          <li>Serialized unit ledger; each item auditable end-to-end</li>
+          <li>Damaged-label recovery on returns; missing-unit detection</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="grid3" style="margin-top:16px;">
+      <div class="panel">
+        <h3>Virtual vs physical <span class="pill sky">designed</span></h3>
+        <p><strong>Physical</strong> inventory is confirmed by scan at pack. <strong>Virtual</strong> inventory can be booked earlier — at order placement or at call-confirmation — as a per-seller option, with auto- or seller-decided release when a customer can't be reached.</p>
+      </div>
+      <div class="panel">
+        <h3>Scrap &amp; damage tickets <span class="pill sky">designed</span></h3>
+        <p>Any unit damaged in operations or on return moves to a scrap hold and raises a ticket — settled with the seller and courier by reimbursement or physical return, never silently written off.</p>
+      </div>
+      <div class="panel">
+        <h3>Multi-warehouse network <span class="pill sky">designed</span></h3>
+        <p>Stock lives across warehouses by product. Returns can be received at any location, entered, and routed to the item's designated warehouse — the network stays consistent.</p>
+      </div>
+    </div>
+    <div class="callout"><strong>Why it compounds:</strong> every gate — receive, pick, pack, hand-off, return — is a barcode scan tied to the order's invoice. That single discipline is what makes strict serialization, scrap accountability, and multi-warehouse routing trustworthy rather than aspirational.</div>
+  </div>
+</section>
+
+<!-- 03 — THE LIFECYCLE -->
 <section id="flow">
   <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 02</span><span class="bar"></span><span>The operational pipeline</span></div>
-    <h2>How the full system works</h2>
-    <p class="lead">One order travels a fully instrumented lifecycle. Every stage is enforced by a state machine — no “any-to-any” jumps — with an append-only event log, and stock is conserved end-to-end (it decrements exactly once, at dispatch).</p>
+    <div class="sechead tel"><span class="idx">SEC 03</span><span class="bar"></span><span>The operational pipeline</span></div>
+    <h2>How an order flows, end-to-end</h2>
+    <p class="lead">Every order travels one instrumented lifecycle, enforced by a state machine — no “any-to-any” jumps — with an append-only event log and stock conserved so it decrements exactly once, at dispatch. Amber stages are the refined operating model now in build.</p>
     <div class="flow">
-      <div class="step"><div class="s-idx">01 · stock in</div><div class="s-t">Ship &amp; receive</div><div class="s-b">Seller ships inventory once. It lands in a real WMS — bins, batches, FIFO/FEFO.</div></div>
-      <div class="step"><div class="s-idx">02 · order</div><div class="s-t">Order placed</div><div class="s-b">Indian customer orders; single entry or CSV. Recipient + SKU snapshotted immutably.</div></div>
-      <div class="step" data-edge="RTO lever"><div class="s-idx">03 · confirm</div><div class="s-t">Call-confirm</div><div class="s-b">Round-robin queue rings the buyer. Unreachable → NDR-routed, never shipped blind.</div></div>
-      <div class="step"><div class="s-idx">04 · fulfil</div><div class="s-t">Pick &amp; pack</div><div class="s-b">Bin-level allocation, race-safe pick queue, pack, auto-attach to a courier manifest.</div></div>
-      <div class="step" data-edge="stock −1"><div class="s-idx">05 · dispatch</div><div class="s-t">AWB &amp; dispatch</div><div class="s-b">Delhivery AWB via API; non-serviceable PINs fall back to manual placement.</div></div>
-      <div class="step"><div class="s-idx">06 · track</div><div class="s-t">Track &amp; deliver</div><div class="s-b">Courier scans drive the timeline; public AWB lookup for the buyer.</div></div>
-      <div class="step"><div class="s-idx">07 · returns</div><div class="s-t">RTO handling</div><div class="s-b">Returns inspected at the warehouse; restock or write-off, per item, with stock write-back.</div></div>
-      <div class="step"><div class="s-idx">08 · money</div><div class="s-t">Remit to BD</div><div class="s-b">COD accrues to a wallet ledger; GST invoicing on our side; remittance back to Bangladesh.</div></div>
+      <div class="step refined" data-edge="scan"><div class="s-idx">01 · stock in</div><div class="s-t">Receive &amp; label</div><div class="s-b">Goods arrive; in strict mode Skydrop applies a per-unit barcode. Scanned into bins.</div></div>
+      <div class="step refined" data-edge="virtual"><div class="s-idx">02 · order</div><div class="s-t">Order placed</div><div class="s-b">Single or CSV. Recipient + SKU snapshotted immutably; optional virtual booking holds stock now.</div></div>
+      <div class="step" data-edge="RTO lever"><div class="s-idx">03 · confirm</div><div class="s-t">Call-confirm</div><div class="s-b">Round-robin queue rings the buyer. Unreachable → seller decides: keep trying or unbook.</div></div>
+      <div class="step refined" data-edge="before pack"><div class="s-idx">04 · courier</div><div class="s-t">Courier-first booking</div><div class="s-b">AWB booked via the seller's default courier the moment it's confirmed. Rejection → fallback panel → another carrier.</div></div>
+      <div class="step refined" data-edge="scan"><div class="s-idx">05 · pick</div><div class="s-t">Scan-gated pick</div><div class="s-b">Only booked orders reach the floor. Picker scans each unit against the invoice.</div></div>
+      <div class="step refined" data-edge="scan"><div class="s-idx">06 · pack</div><div class="s-t">Scan-gated pack</div><div class="s-b">Scan items, then scan the invoice to seal. Orders kept separate by courier.</div></div>
+      <div class="step refined" data-edge="scan"><div class="s-idx">07 · hand-off</div><div class="s-t">Scan-gated handover</div><div class="s-b">Every parcel re-scanned before the courier takes custody. Nothing leaves unscanned.</div></div>
+      <div class="step"><div class="s-idx">08 · track</div><div class="s-t">Track &amp; deliver</div><div class="s-b">Courier scans drive the timeline; public AWB lookup for the buyer, EN + हिन्दी.</div></div>
+      <div class="step refined" data-edge="route"><div class="s-idx">09 · returns</div><div class="s-t">RTO intake</div><div class="s-b">Received at any warehouse, entered, and routed to the designated one; damaged labels recovered.</div></div>
+      <div class="step refined" data-edge="ticket"><div class="s-idx">10 · resolve</div><div class="s-t">Scrap &amp; settle</div><div class="s-b">Healthy units restock; damaged units raise a scrap ticket, settled by money or return.</div></div>
+      <div class="step"><div class="s-idx">11 · money</div><div class="s-t">Remit to BD</div><div class="s-b">COD accrues to a wallet ledger; GST invoicing on our side; remittance back to Bangladesh.</div></div>
     </div>
-    <div class="callout"><strong>Design discipline that holds it together:</strong> a saga pattern (“visible-vs-silent failure ordering”) across every cross-module step, so a crash mid-flow always leaves a self-announcing, recoverable state; three single-source mapping services for call-outcome, tracking-scan, and notification fan-out; and a permanent stock-conservation regression test proving inventory is never inflated or leaked.</div>
+    <div class="legend">
+      <span><span class="sw a"></span>live today</span>
+      <span><span class="sw b"></span>refined model · in build</span>
+    </div>
+    <div class="callout"><strong>The engineering discipline that holds it together:</strong> a saga pattern (“visible-vs-silent failure ordering”) across every cross-module step, so a crash mid-flow always leaves a self-announcing, recoverable state; single-source mapping services for call-outcome, tracking-scan, and notification fan-out; and a permanent stock-conservation regression test proving inventory is never inflated or leaked.</div>
   </div>
 </section>
 
-<!-- 03 — WHAT'S BUILT -->
+<!-- 04 — FOUNDATION SHIPPED -->
 <section id="built">
   <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 03</span><span class="bar"></span><span>Delivered surface</span></div>
-    <h2>What we have built</h2>
-    <p class="lead">All 18 Phase 1A modules landed, the Phase 1B money layer is built on top, and the four public/authenticated frontends are live in production.</p>
+    <div class="sechead tel"><span class="idx">SEC 04</span><span class="bar"></span><span>Proof it's real</span></div>
+    <h2>The foundation is already shipped</h2>
+    <p class="lead">The target model isn't drawn on a whiteboard — it sits on a production platform. All 18 Phase-1A modules, the 6-module Phase-1B money layer, four web apps, and the live Delhivery integration are running today, behind 1,100 automated tests.</p>
     <div class="tbl-scroll">
       <table>
-        <thead><tr><th>Module</th><th>Scope</th><th>Status</th></tr></thead>
+        <thead><tr><th>Capability</th><th>What's running</th><th>Status</th></tr></thead>
         <tbody>
-          <tr><td>Auth &amp; access control</td><td>Staff + seller, JWT + refresh rotation, reuse-detection, API keys, 6-role seller RBAC + team invitations</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Seller onboarding</td><td>Invite-only registration, approval workflow, profile, bank details (encrypted), logo</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Catalog</td><td>Categories, products, variants, image upload, CSV import, inheritance rules</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Inventory &amp; WMS</td><td>Warehouses, bins, batches, append-only ledger, late reservations, receiving, cycle counts, alerts</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Order management</td><td>28-status state machine, snapshots, CSV bulk import, god-mode override</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Call center</td><td>Round-robin queue, attempt logging, outcome→transition mapping, time-based expiry</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Warehouse ops</td><td>Pick / pack / manifest / dispatch / RTO, race-safe queues</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Courier integration</td><td>Delhivery adapter + AWB saga + supersede chain + manual placement + poll-based tracking</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Public tracking</td><td>HMAC webhook ingestion, poll processor, customer-safe AWB lookup (EN + हिन्दी), manual scan</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Notifications</td><td>Lifecycle event bus + fan-out on the email substrate (SMS deferred)</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Admin dashboard + FE foundation</td><td>First frontend, shared identity-parameterized packages, god-mode, seller mgmt</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Seller portal</td><td>Second consumer of the FE foundation — orders, catalog, image upload UX</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>System settings · Pricing · FX · Charges</td><td>Runtime config UI, charge calculator, INR↔BDT rates, cost breakdown</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Live chat (M18)</td><td>ChatWoot scaffold + webhook stub</td><td><span class="pill stub">Scaffold</span></td></tr>
-          <tr><td><strong>Phase 1B</strong> — wallet + ledger, COD accrual, remittance, GST invoice PDF, bank-account AES encryption</td><td>The money layer — built this cycle on top of Phase 1A</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Marketing site + tracking UI</td><td>skydrop.online + track.skydrop.online — “Mission Control” brand, live corridor map, EN/HI, both themes</td><td><span class="pill live">Live</span></td></tr>
+          <tr><td>Auth &amp; multi-seat sellers</td><td>Staff + seller, JWT + refresh rotation with reuse-detection, API keys, 6-role seller RBAC + team invitations</td><td><span class="pill live">Live</span></td></tr>
+          <tr><td>Seller onboarding</td><td>Invite-only registration, approval workflow, profile, encrypted bank details, logo</td><td><span class="pill live">Live</span></td></tr>
+          <tr><td>Catalog &amp; WMS</td><td>Categories/products/variants, images, CSV import; warehouses, bins, batches, append-only ledger, reservations, receiving, cycle counts, alerts</td><td><span class="pill live">Live</span></td></tr>
+          <tr><td>Orders &amp; call center</td><td>28-status state machine, snapshots, CSV bulk import, god-mode override; round-robin queue, attempt logging, outcome mapping</td><td><span class="pill live">Live</span></td></tr>
+          <tr><td>Warehouse ops</td><td>Pick / pack / manifest / dispatch / RTO with race-safe queues</td><td><span class="pill live">Live</span></td></tr>
+          <tr><td>Courier integration</td><td>Delhivery real API — AWB creation validated end-to-end, poll-based tracking, supersede chain, manual placement</td><td><span class="pill live">Live</span></td></tr>
+          <tr><td>Public tracking</td><td>Webhook + poll ingestion, processor, customer-safe AWB lookup (EN + हिन्दी), manual scan entry</td><td><span class="pill live">Live</span></td></tr>
+          <tr><td>Notifications</td><td>Lifecycle event bus + email fan-out (SMS channel scaffolded)</td><td><span class="pill live">Live</span></td></tr>
+          <tr><td>Admin &amp; seller portals</td><td>Two frontends on a shared, identity-parameterized foundation — seller mgmt, orders, catalog, image upload, god-mode</td><td><span class="pill live">Live</span></td></tr>
+          <tr><td>Pricing · FX · charges · settings</td><td>Charge calculator, INR↔BDT rates, cost breakdown, runtime config UI</td><td><span class="pill live">Live</span></td></tr>
+          <tr><td><strong>Phase 1B — money layer</strong></td><td>Wallet + ledger, COD accrual, remittance, GST tax-invoice PDF, bank-account AES encryption</td><td><span class="pill live">Live</span></td></tr>
+          <tr><td>Marketing + tracking UI</td><td>skydrop.online + track.skydrop.online — brand, live corridor map, EN/HI, light/dark</td><td><span class="pill live">Live</span></td></tr>
         </tbody>
       </table>
     </div>
   </div>
 </section>
 
-<!-- 04 — TECH -->
+<!-- 05 — ROADMAP TO TARGET -->
+<section id="roadmap">
+  <div class="wrap">
+    <div class="sechead tel"><span class="idx">SEC 05</span><span class="bar"></span><span>The build ahead</span></div>
+    <h2>Roadmap to the target operating model</h2>
+    <p class="lead">The refinement is additive — the schema was designed forward-compatible, and the reservation, warehouse, courier, and settings seams already exist. Four focused phases close the gap between the shipped foundation and the operating model above.</p>
+    <div class="phase">
+      <div class="rail"></div>
+      <div>
+        <div class="item" style="position:relative;"><span class="node"></span>
+          <h3>Phase A · Inventory integrity <span class="pill sky">designed</span></h3>
+          <p>Serialized per-unit model behind a per-seller normal/strict toggle; barcode label generation at receiving; mandatory scan gates at pick, pack and hand-off; a general per-seller settings-override framework (global defaults, seller overrides).</p>
+        </div>
+        <div class="item" style="position:relative;"><span class="node"></span>
+          <h3>Phase B · Courier-first dispatch <span class="pill sky">designed</span></h3>
+          <p>Book the courier immediately after call-confirm; packing begins only once a carrier accepts. Per-seller default courier + a fallback panel to re-book a rejected order into another integrated carrier by API, or manually. Pack floor partitioned by courier.</p>
+        </div>
+        <div class="item" style="position:relative;"><span class="node"></span>
+          <h3>Phase C · Multi-warehouse network <span class="pill sky">designed</span></h3>
+          <p>Product-to-warehouse assignment, order routing to the right location, and inter-warehouse transfer — including receiving an RTO at any warehouse and moving it to its designated home.</p>
+        </div>
+        <div class="item" style="position:relative;"><span class="node"></span>
+          <h3>Phase D · Exceptions, scrap &amp; virtual booking <span class="pill sky">designed</span></h3>
+          <p>Virtual booking at placement with seller-decided unbook; scrap inventory + damage tickets settled by money-or-return with courier-claim tracking; a warehouse scanner app; and an exception dashboard unifying missing/mismatch/damaged/failed-courier/unbook queues.</p>
+        </div>
+      </div>
+    </div>
+    <div class="callout"><strong>Why this is low-risk:</strong> none of it is a rewrite. Reservations already model virtual holds; the warehouse already has bins, batches and quarantine/damaged bin types; the courier layer already has a manual-placement fallback; and per-seller overrides already exist for a handful of settings. Each phase generalizes a seam that is already load-bearing in production.</div>
+  </div>
+</section>
+
+<!-- 06 — TECH -->
 <section id="tech">
   <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 04</span><span class="bar"></span><span>The stack</span></div>
-    <h2>Technology</h2>
-    <p class="lead">A single TypeScript monorepo (Turborepo + pnpm), one language end-to-end, deployed to DigitalOcean in Singapore.</p>
+    <div class="sechead tel"><span class="idx">SEC 06</span><span class="bar"></span><span>The stack</span></div>
+    <h2>Technology &amp; architecture</h2>
+    <p class="lead">A single TypeScript monorepo (Turborepo + pnpm), one language end-to-end, deployed to DigitalOcean in Singapore. One application droplet fronts everything; managed Postgres and object storage are the external stateful services.</p>
     <div class="tbl-scroll">
       <table>
         <thead><tr><th>Layer</th><th>Choice</th><th>Notes</th></tr></thead>
         <tbody>
           <tr><td>Frontend</td><td>Next.js 15 (App Router) · TypeScript · Tailwind v4</td><td>4 apps: admin, seller, tracking, marketing</td></tr>
-          <tr><td>Backend</td><td>NestJS · Prisma 6.x · REST/OpenAPI</td><td>64 feature modules, Swagger at <span class="mono">/api/docs</span></td></tr>
-          <tr><td>Database</td><td>PostgreSQL 18 + TimescaleDB</td><td>78 models · hypertables for tracking events &amp; stock movements</td></tr>
+          <tr><td>Backend</td><td>NestJS · Prisma 6.x · REST/OpenAPI</td><td>64 feature modules, Swagger docs</td></tr>
+          <tr><td>Database</td><td>PostgreSQL 18 + TimescaleDB</td><td>78 models · hypertables for tracking &amp; stock movements</td></tr>
           <tr><td>Queue / cache</td><td>BullMQ on Redis · Redis cache</td><td>13 in-process background workers</td></tr>
-          <tr><td>Object storage</td><td>DigitalOcean Spaces (S3-compatible)</td><td>Product images, logos, AWB labels, invoices</td></tr>
-          <tr><td>Auth</td><td>Passport.js + JWT, HttpOnly refresh cookies</td><td>Access token in memory only; single-flight silent refresh</td></tr>
-          <tr><td>Email / SMS</td><td>Resend (live) · Twilio (planned)</td><td>DB-stored templates rendered with Nunjucks</td></tr>
-          <tr><td>Edge / TLS</td><td>Caddy reverse proxy · Cloudflare DNS</td><td>Automatic Let's Encrypt certificates</td></tr>
-          <tr><td>Process mgmt / CI</td><td>pm2 · GitHub Actions</td><td>Push to <span class="mono">main</span> → build → migrate → restart</td></tr>
+          <tr><td>Object storage</td><td>DigitalOcean Spaces (S3-compatible)</td><td>Images, logos, AWB labels, invoices</td></tr>
+          <tr><td>Auth &amp; security</td><td>Passport.js + JWT, HttpOnly refresh cookies</td><td>Access token in memory only; AES-256-GCM for all secrets, keys in env never the DB</td></tr>
+          <tr><td>Edge / delivery</td><td>Caddy reverse proxy · Cloudflare DNS · Resend email</td><td>Automatic TLS; push-to-main → build → migrate → restart</td></tr>
         </tbody>
       </table>
     </div>
   </div>
 </section>
 
-<!-- 05 — ARCHITECTURE -->
-<section id="infra">
-  <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 05</span><span class="bar"></span><span>How it's deployed</span></div>
-    <h2>Runtime architecture</h2>
-    <p class="lead">One application droplet fronts everything; managed Postgres and Spaces are the two external stateful services. The API and workers run in the same Node process today.</p>
-    <div class="grid2">
-      <div class="panel">
-        <h3>Application droplet <span class="tel" style="color:var(--fg-muted)">· SGP1 · 4 GB / 2 vCPU</span></h3>
-        <ul>
-          <li><strong>Caddy</strong> — TLS + reverse proxy for all subdomains</li>
-          <li><strong>skydrop-api</strong> — NestJS + 13 BullMQ workers (in-process) · ~200 MB</li>
-          <li><strong>skydrop-admin</strong> <span class="mono">:3002</span> · <strong>skydrop-seller</strong> <span class="mono">:3003</span> · <strong>skydrop-track</strong> <span class="mono">:3004</span> — ~125 MB each</li>
-          <li><strong>marketing</strong> — static export served from disk by Caddy (no process)</li>
-          <li><strong>Redis 7</strong> — Docker, append-only</li>
-          <li>RAM in use ≈ <span class="mono">1.1 / 3.8 GB</span> · disk <span class="mono">6.7 / 116 GB</span></li>
-        </ul>
-      </div>
-      <div class="panel">
-        <h3>External services</h3>
-        <ul>
-          <li><strong>Managed PostgreSQL 18</strong> — Basic tier, private VPC only</li>
-          <li><strong>Spaces bucket</strong> — S3-compatible object store, SGP1</li>
-          <li><strong>Cloudflare</strong> — DNS + edge; secrets live in env, never the DB</li>
-          <li><strong>Resend</strong> — transactional email</li>
-        </ul>
-        <p style="margin-top:12px; color:var(--fg-muted); font-size:0.88rem;">Encryption keys (courier credentials, bank account numbers, webhook HMAC) are AES-256-GCM with the key held in environment variables — never persisted to the database.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- 06 — CAPACITY -->
+<!-- 07 — CAPACITY -->
 <section id="capacity">
   <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 06</span><span class="bar"></span><span>Load &amp; capacity</span></div>
-    <h2>How much load it can bear</h2>
-    <p class="lead">The current deployment is sized for pre-launch beta, and it is comfortably inside that envelope — the droplet sits at ~29% RAM and near-zero CPU at rest. The honest ceiling is set by two deliberate single-instance choices, not by the droplet.</p>
+    <div class="sechead tel"><span class="idx">SEC 07</span><span class="bar"></span><span>Load &amp; scale</span></div>
+    <h2>Capacity today, and the path to scale</h2>
+    <p class="lead">The current deployment is sized for pre-launch beta and sits comfortably inside it — the droplet is near-idle at rest. The honest ceiling is set by two deliberate single-instance choices, not by the design.</p>
 
     <div class="gauge panel" style="padding:26px 22px 20px;">
       <div class="tel" style="margin-bottom:22px;">throughput headroom · single-instance topology</div>
@@ -462,89 +511,19 @@
       <div class="panel">
         <h3>Comfortable today</h3>
         <ul>
-          <li>On the order of <strong>tens of active sellers</strong> and <strong>hundreds to low-thousands of orders/day</strong></li>
-          <li>A handful of concurrent call-center agents and warehouse staff operating the queues</li>
-          <li>Light JSON reads served in low single-digit milliseconds; the droplet is idle at rest</li>
-          <li>Public tracking is rate-limited per-IP (30/min) and cheap — the highest-volume anonymous surface</li>
+          <li>Tens of active sellers and hundreds to low-thousands of orders/day</li>
+          <li>Concurrent call-center agents and warehouse staff on the queues</li>
+          <li>Light reads served in low single-digit milliseconds; idle at rest</li>
+          <li>Public tracking is per-IP rate-limited and cheap — the highest-volume anonymous surface</li>
         </ul>
       </div>
       <div class="panel">
-        <h3>What breaks first</h3>
+        <h3>The scaling path <span class="pill plan">designed-for</span></h3>
         <ul>
-          <li><strong>Postgres Basic tier</strong> — caps concurrent connections and write throughput. Order/pick/dispatch flows are multi-statement transactions; this tier is the real ceiling.</li>
-          <li><strong>Single API process</strong> — one Node event loop on 2 vCPU. Fine for hundreds of req/s of light work; CPU-bound spikes queue behind it.</li>
-          <li><strong>In-process workers</strong> — the 13 BullMQ workers share the API's process, so heavy background bursts compete with request handling.</li>
-        </ul>
-      </div>
-    </div>
-
-    <div class="callout">
-      <strong>Scaling path (already designed for):</strong> the codebase separates cleanly along these seams — move BullMQ workers into the dedicated <span class="mono">apps/workers</span> process; run the API in pm2 cluster mode or across droplets behind a load balancer (rate-limiting already supports a shared Redis store); upgrade managed Postgres and add read replicas; promote Redis to managed. None of these require re-architecture — they are the intended next steps, deferred because beta load doesn't need them yet.
-    </div>
-  </div>
-</section>
-
-<!-- 07 — WHAT'S LEFT -->
-<section id="left">
-  <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 07</span><span class="bar"></span><span>Remaining work</span></div>
-    <h2>What's left to build</h2>
-    <p class="lead">The platform is functionally complete for Phase 1A + 1B. Delhivery is now integrated against the live API (dispatch validated, poll-based tracking wired). What remains is mostly the other external channels and a set of internal-tooling UIs whose backends already exist.</p>
-    <div class="grid2">
-      <div class="panel">
-        <h3>Launch wiring <span class="pill stub" style="margin-left:6px;">integration</span></h3>
-        <ul>
-          <li><strong>Delhivery</strong> — <span class="pill live">live</span> real API: AWB creation validated end-to-end, poll-based tracking active (B2C accounts have no webhooks)</li>
-          <li><strong>Transactional email in production</strong> — wire the Resend key + verify the sending domain</li>
-          <li><strong>Twilio SMS</strong> — the notification channel is scaffolded but not connected</li>
-        </ul>
-      </div>
-      <div class="panel">
-        <h3>Fast-follow UIs <span class="pill sky" style="margin-left:6px;">backend exists</span></h3>
-        <ul>
-          <li>Warehouse-ops &amp; call-queue admin screens (pick/pack/manifest management)</li>
-          <li>CSV order/product import UIs</li>
-          <li>Seller inventory view &amp; manual order-create screen</li>
-          <li>Auto-compute order charges at creation (currently a manual admin action)</li>
-          <li>Admin order-event timeline + tracking deep-links</li>
-        </ul>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- 08 — FUTURE -->
-<section id="future">
-  <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 08</span><span class="bar"></span><span>Beyond launch</span></div>
-    <h2>What can be built in the future</h2>
-    <p class="lead">The schema was designed forward-compatible, so these are additive — Phase 2 and operational maturity, not rewrites.</p>
-    <div class="grid3">
-      <div class="panel">
-        <h3>Operations depth</h3>
-        <ul>
-          <li>Multi-warehouse routing logic</li>
-          <li>Click-to-call + call-recording storage</li>
-          <li>Live driver GPS tracking</li>
-          <li>Additional integrated couriers (Bluedart, Ecom Express)</li>
-        </ul>
-      </div>
-      <div class="panel">
-        <h3>Money &amp; compliance</h3>
-        <ul>
-          <li>Payment-gateway wallet top-up</li>
-          <li>COD reconciliation automation</li>
-          <li>Full cross-border remittance rails</li>
-          <li>Historical FX rate timeseries</li>
-        </ul>
-      </div>
-      <div class="panel">
-        <h3>Scale &amp; experience</h3>
-        <ul>
-          <li>Horizontal scale-out (API cluster, worker split, read replicas)</li>
-          <li>Customer accounts on the tracking side</li>
-          <li>ChatWoot live-chat real install</li>
-          <li>Seller B2B outbound webhooks &amp; deeper reporting</li>
+          <li>Move the 13 background workers into the dedicated worker process</li>
+          <li>Run the API in cluster mode / behind a load balancer (rate-limiting already supports a shared Redis store)</li>
+          <li>Upgrade managed Postgres + add read replicas; promote Redis to managed</li>
+          <li>None require re-architecture — they are the intended next steps, deferred because beta load doesn't need them</li>
         </ul>
       </div>
     </div>
@@ -553,8 +532,8 @@
 
 <footer>
   <div class="wrap row">
-    <span class="tel">Skydrop · BD → IN cross-border logistics · system report</span>
-    <span class="tel">Phase 1A complete · Phase 1B built · pre-launch</span>
+    <span class="tel">Skydrop · BD → IN cross-border commerce · operating model &amp; system report</span>
+    <span class="tel">Foundation shipped · refinement in build · pre-launch</span>
   </div>
 </footer>
 
