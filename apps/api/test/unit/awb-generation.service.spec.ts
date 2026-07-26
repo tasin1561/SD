@@ -7,6 +7,7 @@ import type { AuditLogService } from '../../src/modules/auth-common/services/aud
 import type { DelhiveryAwbService } from '../../src/modules/courier-delhivery/services/delhivery-awb.service';
 import type { DelhiveryLabelService } from '../../src/modules/courier-delhivery/services/delhivery-label.service';
 import type { DelhiveryAwbResult } from '../../src/modules/courier-delhivery/types/delhivery.types';
+import type { CourierAccountRoutingService } from '../../src/modules/courier-shared/services/courier-account-routing.service';
 import { makeTestEnv } from '../helpers/env';
 
 type AnyArgs = Record<string, unknown>;
@@ -19,6 +20,8 @@ function shipmentRow(over: AnyArgs = {}): AnyArgs {
     shipmentNumber: 'SH-2026-05-000042',
     awbNumber: null,
     courierShipmentId: null,
+    courierCode: 'delhivery',
+    orderShipments: [{ order: { sellerId: 'seller-1' } }],
     status: ShipmentStatus.CREATED,
     destRecipientName: 'Asha',
     destRecipientPhoneE164: '+919876543210',
@@ -48,17 +51,31 @@ function makeService(
     putObjectThrows?: Error;
     /** Configure delhiveryLabel.fetchLabel to throw on first call. */
     fetchLabelThrows?: Error;
+    /** Configure courierAccountRouting.selectAccount's result/behavior. */
+    courierAccountResult?: { courierAccountId: string; source: 'SELLER_LINK' | 'DEFAULT_ACCOUNT' } | Error;
+    courierRow?: AnyArgs | null;
   } = {},
 ) {
   const shipmentFindUnique = jest.fn(async () =>
     opts.shipment === undefined ? shipmentRow() : opts.shipment,
   );
+  const courierFindUnique = jest.fn(async () =>
+    opts.courierRow === undefined ? { id: 'courier-1' } : opts.courierRow,
+  );
+  const selectAccount = jest.fn(async () => {
+    if (opts.courierAccountResult instanceof Error) throw opts.courierAccountResult;
+    if (opts.courierAccountResult) return opts.courierAccountResult;
+    throw Object.assign(new Error('NO_COURIER_ACCOUNT_AVAILABLE'), {
+      response: { code: 'NO_COURIER_ACCOUNT_AVAILABLE' },
+    });
+  });
+  const courierAccountRouting = { selectAccount };
   const awbLabelFindFirst = jest.fn(async () =>
     opts.priorLabelVersion === undefined
       ? null
       : { version: opts.priorLabelVersion },
   );
-  const txShipmentUpdate = jest.fn(async () => ({}));
+  const txShipmentUpdate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({}));
   const txAwbLabelCreate = jest.fn(async () => ({}));
   const txAwbLabelUpdateMany = jest.fn(async () => ({ count: 0 }));
   const txClient = {
@@ -68,9 +85,11 @@ function makeService(
   const client = {
     shipment: { findUnique: shipmentFindUnique },
     awbLabel: { findFirst: awbLabelFindFirst },
+    courier: { findUnique: courierFindUnique },
   } as {
     shipment: { findUnique: typeof shipmentFindUnique };
     awbLabel: { findFirst: typeof awbLabelFindFirst };
+    courier: { findUnique: typeof courierFindUnique };
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
   };
   client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> =>
@@ -112,6 +131,7 @@ function makeService(
     audit as unknown as AuditLogService,
     delhiveryAwb as unknown as DelhiveryAwbService,
     delhiveryLabel as unknown as DelhiveryLabelService,
+    courierAccountRouting as unknown as CourierAccountRoutingService,
   );
   return {
     svc,
@@ -122,6 +142,8 @@ function makeService(
     auditLog,
     generateAwb,
     fetchLabel,
+    selectAccount,
+    courierFindUnique,
   };
 }
 
@@ -348,6 +370,35 @@ describe('AwbGenerationService.generateForShipment', () => {
     expect(txAwbLabelCreate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ version: 2 }) }),
     );
+  });
+
+  it('R1: stamps courierAccountId in tx1 when an account resolves', async () => {
+    const { svc, txShipmentUpdate, selectAccount } = makeService({
+      courierAccountResult: { courierAccountId: 'acct-42', source: 'DEFAULT_ACCOUNT' },
+    });
+    await svc.generateForShipment(SHIP);
+    expect(selectAccount).toHaveBeenCalledWith('seller-1', 'courier-1', expect.any(String));
+    expect(txShipmentUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ courierAccountId: 'acct-42' }) }),
+    );
+  });
+
+  it('R1: leaves courierAccountId unset (no field in the update) when no account resolves — never blocks AWB generation', async () => {
+    const { svc, txShipmentUpdate } = makeService(); // default: selectAccount throws NO_COURIER_ACCOUNT_AVAILABLE
+    const r = await svc.generateForShipment(SHIP);
+    expect(r.status).toBe('GENERATED');
+    const data = txShipmentUpdate.mock.calls[0]![0]!.data as AnyArgs;
+    expect('courierAccountId' in data).toBe(false);
+  });
+
+  it('R1: leaves courierAccountId unset when the shipment has no resolvable order/seller', async () => {
+    const { svc, txShipmentUpdate, selectAccount } = makeService({
+      shipment: shipmentRow({ orderShipments: [] }),
+    });
+    await svc.generateForShipment(SHIP);
+    expect(selectAccount).not.toHaveBeenCalled();
+    const data = txShipmentUpdate.mock.calls[0]![0]!.data as AnyArgs;
+    expect('courierAccountId' in data).toBe(false);
   });
 
   it('404 when the shipment is missing', async () => {

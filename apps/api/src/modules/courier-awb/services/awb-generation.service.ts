@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   ActorType,
+  CredentialEnvironment,
   LabelGenerationReason,
   ShipmentStatus,
 } from '@skydrop/db';
@@ -13,6 +14,7 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { EnvService } from '../../../config/env.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { CourierAccountRoutingService } from '../../courier-shared/services/courier-account-routing.service';
 import { DelhiveryAwbService } from '../../courier-delhivery/services/delhivery-awb.service';
 import { DelhiveryLabelService } from '../../courier-delhivery/services/delhivery-label.service';
 import type { DelhiveryAwbRequest } from '../../courier-delhivery/types/delhivery.types';
@@ -123,6 +125,7 @@ export class AwbGenerationService {
     private readonly audit: AuditLogService,
     private readonly delhiveryAwb: DelhiveryAwbService,
     private readonly delhiveryLabel: DelhiveryLabelService,
+    private readonly courierAccountRouting: CourierAccountRoutingService,
   ) {}
 
   async generateForShipment(
@@ -136,7 +139,13 @@ export class AwbGenerationService {
         shipmentNumber: true,
         awbNumber: true,
         courierShipmentId: true,
+        courierCode: true,
         status: true,
+        orderShipments: {
+          select: { order: { select: { sellerId: true } } },
+          orderBy: { shipmentSequence: 'asc' },
+          take: 1,
+        },
         destRecipientName: true,
         destRecipientPhoneE164: true,
         destAddressLine1: true,
@@ -237,6 +246,15 @@ export class AwbGenerationService {
       };
     }
 
+    // R1 (revised-plan roadmap): best-effort account resolution for
+    // traceability. Phase 1A seeds NO CourierAccount rows at all, so
+    // this MUST NEVER block AWB generation — it only opportunistically
+    // populates courierAccountId once accounts + seller links exist.
+    // The actual credential/HTTP auth path is untouched (still the
+    // legacy per-courier getCredential — real mode is unvalidated
+    // regardless, see CLAUDE.md CUR TODO(delhivery-api) seams).
+    const courierAccountId = await this.resolveCourierAccountId(shipment);
+
     // Phase C — tx1: durable source-of-truth FIRST. Once this commits,
     // the AWB exists on the shipment row; CUR-9 will fire on any retry.
     const generatedAt = new Date();
@@ -248,6 +266,7 @@ export class AwbGenerationService {
           courierShipmentId: awb.courierShipmentId,
           awbGeneratedAt: generatedAt,
           status: ShipmentStatus.AWB_GENERATED,
+          ...(courierAccountId === null ? {} : { courierAccountId }),
         },
       });
       await this.audit.log(
@@ -371,5 +390,45 @@ export class AwbGenerationService {
       select: { version: true },
     });
     return (latest?.version ?? 0) + 1;
+  }
+
+  /**
+   * R1 — best-effort CourierAccount resolution for traceability only.
+   * Returns `null` (never throws) whenever the seller/courier can't be
+   * resolved or `CourierAccountRoutingService.selectAccount` has
+   * nothing to offer (NO_COURIER_ACCOUNT_AVAILABLE is the Phase-1A norm
+   * — no accounts are seeded yet). This is deliberately decoupled from
+   * the actual credential/HTTP auth path (still `getCredential` via
+   * DelhiveryHttpService) — wiring THAT through per-account credentials
+   * is a separate follow-up once real mode is validated.
+   */
+  private async resolveCourierAccountId(shipment: {
+    courierCode: string;
+    orderShipments: readonly { order: { sellerId: string } }[];
+  }): Promise<string | null> {
+    const sellerId = shipment.orderShipments[0]?.order.sellerId;
+    if (sellerId === undefined) return null;
+    try {
+      const courier = await this.prisma.client.courier.findUnique({
+        where: { code: shipment.courierCode },
+        select: { id: true },
+      });
+      if (!courier) return null;
+      const environment = this.env.isProduction
+        ? CredentialEnvironment.PRODUCTION
+        : CredentialEnvironment.SANDBOX;
+      const selected = await this.courierAccountRouting.selectAccount(
+        sellerId,
+        courier.id,
+        environment,
+      );
+      return selected.courierAccountId;
+    } catch (err) {
+      this.logger.debug(
+        { sellerId, courierCode: shipment.courierCode, err: err instanceof Error ? err.message : String(err) },
+        'No courier account resolved for this shipment (expected until accounts are configured) — courierAccountId left unset',
+      );
+      return null;
+    }
   }
 }

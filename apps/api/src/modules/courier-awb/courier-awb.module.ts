@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ShipmentProvisionModule } from '../shipment-provision/shipment-provision.module';
 import { CourierDelhiveryModule } from '../courier-delhivery/courier-delhivery.module';
+import { CourierSharedModule } from '../courier-shared/courier-shared.module';
 import { OrderModule } from '../order/order.module';
 import { AwbSupersedeService } from './services/awb-supersede.service';
 import { AwbGenerationService } from './services/awb-generation.service';
@@ -26,7 +27,7 @@ import { AwbGenerationWorker } from './queue/awb-generation.worker';
  * (manifest CLOSED → enqueue).
  */
 @Module({
-  imports: [ShipmentProvisionModule, CourierDelhiveryModule, OrderModule],
+  imports: [ShipmentProvisionModule, CourierDelhiveryModule, CourierSharedModule, OrderModule],
   providers: [
     AwbSupersedeService,
     AwbGenerationService,
