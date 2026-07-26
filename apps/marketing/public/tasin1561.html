@@ -228,6 +228,19 @@
   .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   @media (max-width: 780px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
 
+  .breakdown { border: 1px solid var(--panel-edge); border-radius: 14px; background: var(--surface-2); overflow: hidden; }
+  .breakdown summary {
+    list-style: none; cursor: pointer; padding: 16px 20px; display: flex; align-items: center;
+    justify-content: space-between; gap: 12px; font-size: 0.95rem; color: var(--fg-strong); user-select: none;
+  }
+  .breakdown summary::-webkit-details-marker { display: none; }
+  .breakdown summary .chev { font-family: var(--font-mono); color: var(--sky); transition: transform 0.2s ease; }
+  .breakdown[open] summary .chev { transform: rotate(90deg); }
+  .breakdown summary:hover { background: var(--surface-3); }
+  .breakdown .bd-body { padding: 4px 20px 20px; border-top: 1px solid var(--panel-edge); }
+  .breakdown .bd-body .tbl-scroll { border: none; border-radius: 0; margin-top: 12px; }
+  @media (prefers-reduced-motion: reduce) { .breakdown summary .chev { transition: none; } }
+
   .panel h3 { font-size: 1.05rem; margin-bottom: 8px; display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
   .panel p { margin: 0 0 10px; font-size: 0.95rem; }
   .panel ul { margin: 8px 0 0; padding-left: 18px; font-size: 0.93rem; }
@@ -723,6 +736,27 @@
     <div class="panel" style="margin-top:16px;">
       <p style="margin:0;">We have already invested <strong>৳2,00,000</strong> to build and ship the production foundation described in this report. We are seeking <strong>৳6,00,000</strong> to complete the refined operating model over <strong>8–12 weeks</strong>. A team is already in place and working; funds release in <strong>3–4 milestone-based tranches</strong>, each tied to a delivered, verifiable phase — so capital is only drawn as value ships.</p>
     </div>
+
+    <details class="breakdown" style="margin-top:16px;">
+      <summary><span>Cost breakdown of the <strong>৳6,00,000</strong> ask <span class="tel" style="color:var(--fg-muted);">(tap to expand)</span></span><span class="chev">▶</span></summary>
+      <div class="bd-body">
+        <p class="tel" style="color:var(--fg-muted); margin:12px 0 0;">Figures converted at <strong>$1 = ৳130</strong>. "Last 3 months" lines are incurred cost being reimbursed into this raise; "next 12 weeks" lines are forward runway for the build window above.</p>
+        <div class="tbl-scroll">
+          <table>
+            <thead><tr><th>Category</th><th>Period</th><th>USD</th><th>BDT</th></tr></thead>
+            <tbody>
+              <tr><td>Development team</td><td>build to date</td><td><span class="mono">—</span></td><td><span class="mono">৳2,00,000</span></td></tr>
+              <tr><td>AI tooling (Claude) — dev &amp; ops</td><td>last 3 months</td><td><span class="mono">$900</span></td><td><span class="mono">৳1,17,000</span></td></tr>
+              <tr><td>AI tooling (Claude) — dev &amp; ops</td><td>next 12 weeks</td><td><span class="mono">$1,200</span></td><td><span class="mono">৳1,56,000</span></td></tr>
+              <tr><td>Cloudflare (DNS/CDN)</td><td>last 3 months</td><td><span class="mono">$60</span></td><td><span class="mono">৳7,800</span></td></tr>
+              <tr><td>Research, VPS hosting &amp; testing</td><td>last 3 months</td><td><span class="mono">$350</span></td><td><span class="mono">৳45,500</span></td></tr>
+              <tr><td>Miscellaneous — hosting, object storage &amp; Postgres</td><td>next 12 weeks</td><td><span class="mono">≈ $567</span></td><td><span class="mono">৳73,700</span></td></tr>
+              <tr><td><strong>Total</strong></td><td></td><td></td><td><strong><span class="mono">৳6,00,000</span></strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
 
     <!-- Disbursement -->
     <div class="tel" style="color:var(--sky); margin:26px 2px 12px;">02 · milestone disbursement</div>
