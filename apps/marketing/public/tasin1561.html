@@ -530,10 +530,94 @@
   </div>
 </section>
 
+<!-- 08 — BUDGET & FUNDING -->
+<section id="budget">
+  <div class="wrap">
+    <div class="sechead tel"><span class="idx">SEC 08</span><span class="bar"></span><span>Investment &amp; economics</span></div>
+    <h2>Budget &amp; funding</h2>
+    <p class="lead">This document is the proposed plan to complete the refined operating model. Below is the capital required to finish it, how it releases against milestones, and the true monthly cost of running the system at three order volumes.</p>
+
+    <!-- The ask -->
+    <div class="tel" style="color:var(--sky); margin:6px 2px 12px;">01 · the ask</div>
+    <div class="tiles">
+      <div class="tile"><div class="n"><em>৳6</em> lakh</div><div class="k tel">capital to complete</div></div>
+      <div class="tile"><div class="n">৳2 lakh</div><div class="k tel">already invested</div></div>
+      <div class="tile"><div class="n"><em>8–12</em></div><div class="k tel">weeks to complete</div></div>
+      <div class="tile"><div class="n">3–4</div><div class="k tel">milestone tranches</div></div>
+    </div>
+    <div class="panel" style="margin-top:16px;">
+      <p style="margin:0;">We have already invested <strong>৳2,00,000</strong> to build and ship the production foundation described in this report. We are seeking <strong>৳6,00,000</strong> to complete the refined operating model over <strong>8–12 weeks</strong>. A team is already in place and working; funds release in <strong>3–4 milestone-based tranches</strong>, each tied to a delivered, verifiable phase — so capital is only drawn as value ships.</p>
+    </div>
+
+    <!-- Disbursement -->
+    <div class="tel" style="color:var(--sky); margin:26px 2px 12px;">02 · milestone disbursement</div>
+    <div class="tbl-scroll">
+      <table>
+        <thead><tr><th>Tranche</th><th>Milestone (from the roadmap)</th><th>Share</th><th>Amount</th></tr></thead>
+        <tbody>
+          <tr><td>1 · Kickoff</td><td>Phase A — inventory integrity: serialized units, scan gates, per-seller settings framework</td><td>30%</td><td><span class="mono">৳1,80,000</span></td></tr>
+          <tr><td>2</td><td>Phase B — courier-first dispatch + multi-courier fallback panel</td><td>25%</td><td><span class="mono">৳1,50,000</span></td></tr>
+          <tr><td>3</td><td>Phase C — multi-warehouse network + cross-warehouse RTO routing</td><td>25%</td><td><span class="mono">৳1,50,000</span></td></tr>
+          <tr><td>4 · Launch</td><td>Phase D — scrap/exception tooling + virtual booking, hardening &amp; launch</td><td>20%</td><td><span class="mono">৳1,20,000</span></td></tr>
+          <tr><td><strong>Total</strong></td><td></td><td><strong>100%</strong></td><td><strong><span class="mono">৳6,00,000</span></strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Running cost -->
+    <div class="tel" style="color:var(--sky); margin:26px 2px 12px;">03 · monthly running cost by volume</div>
+    <div class="tbl-scroll">
+      <table>
+        <thead><tr><th>Cost category</th><th>10K orders/mo</th><th>30K orders/mo</th><th>100K orders/mo</th></tr></thead>
+        <tbody>
+          <tr><td>Compute — API + workers</td><td><span class="mono">$25</span></td><td><span class="mono">$55</span></td><td><span class="mono">$160</span></td></tr>
+          <tr><td>Managed PostgreSQL</td><td><span class="mono">$30</span></td><td><span class="mono">$70</span></td><td><span class="mono">$210</span></td></tr>
+          <tr><td>Redis / cache</td><td><span class="mono">in-node</span></td><td><span class="mono">$15</span></td><td><span class="mono">$40</span></td></tr>
+          <tr><td>Object storage (Spaces)</td><td><span class="mono">$5</span></td><td><span class="mono">$12</span></td><td><span class="mono">$30</span></td></tr>
+          <tr><td>CDN / DNS (Cloudflare)</td><td><span class="mono">free</span></td><td><span class="mono">$20</span></td><td><span class="mono">$20</span></td></tr>
+          <tr><td>Email (transactional)</td><td><span class="mono">$20</span></td><td><span class="mono">$35</span></td><td><span class="mono">$85</span></td></tr>
+          <tr><td>SMS (transactional, DLT)</td><td><span class="mono">$30</span></td><td><span class="mono">$80</span></td><td><span class="mono">$250</span></td></tr>
+          <tr><td>Claude — AI dev/ops tooling</td><td><span class="mono">$100</span></td><td><span class="mono">$100</span></td><td><span class="mono">$100</span></td></tr>
+          <tr><td>Maintenance retainer</td><td><span class="mono">$200</span></td><td><span class="mono">$200</span></td><td><span class="mono">$200</span></td></tr>
+          <tr><td><strong>Total / month (USD)</strong></td><td><strong><span class="mono">≈ $410</span></strong></td><td><strong><span class="mono">≈ $590</span></strong></td><td><strong><span class="mono">≈ $1,100</span></strong></td></tr>
+          <tr><td><strong>Total / month (BDT)</strong></td><td><strong><span class="mono">≈ ৳49,000</span></strong></td><td><strong><span class="mono">≈ ৳71,000</span></strong></td><td><strong><span class="mono">≈ ৳1,32,000</span></strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="tel" style="margin:12px 2px 0; color:var(--fg-muted);">Estimates. Excludes courier freight &amp; payment-gateway fees — those are pass-through, billed to sellers by the pricing engine. USD→BDT at ৳120.</p>
+
+    <div class="callout"><strong>Operating leverage:</strong> infrastructure + tooling cost per order falls from roughly <strong>৳5</strong> at 10K/month to about <strong>৳1.3</strong> at 100K/month. The platform gets cheaper to run per order as it scales — margins widen with volume.</div>
+
+    <!-- Coverage -->
+    <div class="tel" style="color:var(--sky); margin:26px 2px 12px;">04 · ongoing coverage</div>
+    <div class="grid2">
+      <div class="panel">
+        <h3>Maintenance &amp; development <span class="pill sky">from $200/mo</span></h3>
+        <p>A database-driven, transactional system is a living system — ongoing maintenance is mandatory, not optional.</p>
+        <ul>
+          <li>Backups, migrations, index/vacuum &amp; connection-pool health</li>
+          <li>Security &amp; dependency patching, monitoring and alerting</li>
+          <li>Bug resolution across the full stack</li>
+          <li>New integrations &amp; feature development — scoped and quoted on top of the base retainer</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>Tooling &amp; guarantees</h3>
+        <p><strong>Claude — $100/mo</strong> is a development &amp; operations <em>tool</em> (a force-multiplier for building, maintaining and debugging the system), not a runtime dependency of the product.</p>
+        <ul>
+          <li><strong>99% uptime</strong> target on the production platform</li>
+          <li>Security hardening — encrypted secrets, audited access</li>
+          <li>Bugs resolved across the stack as part of the retainer</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
 <footer>
   <div class="wrap row">
-    <span class="tel">Skydrop · BD → IN cross-border commerce · operating model &amp; system report</span>
-    <span class="tel">Foundation shipped · refinement in build · pre-launch</span>
+    <span class="tel">Skydrop · BD → IN cross-border commerce · operating model, roadmap &amp; budget</span>
+    <span class="tel">Foundation shipped · ৳6 lakh to complete · 8–12 weeks</span>
   </div>
 </footer>
 
