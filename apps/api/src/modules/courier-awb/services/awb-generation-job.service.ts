@@ -9,6 +9,7 @@ import {
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
+import { CourierFeeAccrualService } from '../../seller-wallet-accrual/services/courier-fee-accrual.service';
 import { AwbGenerationService } from './awb-generation.service';
 import { AwbSupersedeService } from './awb-supersede.service';
 
@@ -80,6 +81,7 @@ export class AwbGenerationJobService {
     private readonly orderWrite: OrderWriteService,
     private readonly generation: AwbGenerationService,
     private readonly supersede: AwbSupersedeService,
+    private readonly courierFeeAccrual: CourierFeeAccrualService,
   ) {}
 
   async processManifest(manifestId: string): Promise<AwbJobResult> {
@@ -146,6 +148,13 @@ export class AwbGenerationJobService {
             result: 'GENERATED',
             awbNumber: gen.awbNumber,
           });
+          // R1c: best-effort AT_AWB early charge accrual — a no-op for
+          // AT_DELIVERY-tier sellers (the default). Never blocks or
+          // fails this loop; a failure here is caught by the
+          // DELIVERED-time debit later (shared idempotent gate).
+          if (orderId !== null) {
+            await this.courierFeeAccrual.tryEarlyAccrual(orderId);
+          }
           continue;
         }
         if (gen.status === 'GENERATED_AWB_LABEL_PENDING') {
@@ -162,6 +171,12 @@ export class AwbGenerationJobService {
             awbNumber: gen.awbNumber,
             error: gen.errorMessage,
           });
+          // The AWB is durably persisted (source-of-truth) even though
+          // the label leg is still pending — the charge is legitimately
+          // incurred at this point, same as the GENERATED branch.
+          if (orderId !== null) {
+            await this.courierFeeAccrual.tryEarlyAccrual(orderId);
+          }
           continue;
         }
         // gen.status === 'FAILED' — route to manual placement, supersede.

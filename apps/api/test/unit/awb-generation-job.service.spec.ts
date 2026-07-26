@@ -6,6 +6,7 @@ import type { AuditLogService } from '../../src/modules/auth-common/services/aud
 import type { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import type { AwbGenerationService } from '../../src/modules/courier-awb/services/awb-generation.service';
 import type { AwbSupersedeService } from '../../src/modules/courier-awb/services/awb-supersede.service';
+import type { CourierFeeAccrualService } from '../../src/modules/seller-wallet-accrual/services/courier-fee-accrual.service';
 
 type AnyArgs = Record<string, unknown>;
 const MAN = 'man-1';
@@ -103,14 +104,18 @@ function makeService(
   }));
   const supersedeSvc = { supersede };
 
+  const tryEarlyAccrual = jest.fn(async () => undefined);
+  const courierFeeAccrual = { tryEarlyAccrual };
+
   const svc = new AwbGenerationJobService(
     { client } as unknown as PrismaService,
     audit as unknown as AuditLogService,
     orderWrite as unknown as OrderWriteService,
     generation as unknown as AwbGenerationService,
     supersedeSvc as unknown as AwbSupersedeService,
+    courierFeeAccrual as unknown as CourierFeeAccrualService,
   );
-  return { svc, manifestUpdate, auditLog, transitionStatus, generateForShipment, supersede };
+  return { svc, manifestUpdate, auditLog, transitionStatus, generateForShipment, supersede, tryEarlyAccrual };
 }
 
 describe('AwbGenerationJobService.processManifest', () => {
@@ -136,6 +141,35 @@ describe('AwbGenerationJobService.processManifest', () => {
         }),
       }),
     );
+  });
+
+  it('R1c: calls tryEarlyAccrual for each GENERATED shipment\'s order', async () => {
+    const { svc, tryEarlyAccrual } = makeService({
+      shipments: [
+        { id: 's1', orderId: 'o1', plan: { kind: 'ok' } },
+        { id: 's2', orderId: 'o2', plan: { kind: 'ok' } },
+      ],
+    });
+    await svc.processManifest(MAN);
+    expect(tryEarlyAccrual).toHaveBeenCalledTimes(2);
+    expect(tryEarlyAccrual).toHaveBeenCalledWith('o1');
+    expect(tryEarlyAccrual).toHaveBeenCalledWith('o2');
+  });
+
+  it('R1c: also calls tryEarlyAccrual for a GENERATED_AWB_LABEL_PENDING shipment (AWB is durably persisted)', async () => {
+    const { svc, tryEarlyAccrual } = makeService({
+      shipments: [{ id: 's1', orderId: 'o1', plan: { kind: 'label_pending' } }],
+    });
+    await expect(svc.processManifest(MAN)).rejects.toThrow();
+    expect(tryEarlyAccrual).toHaveBeenCalledWith('o1');
+  });
+
+  it('R1c: does NOT call tryEarlyAccrual for a FAILED (superseded) shipment', async () => {
+    const { svc, tryEarlyAccrual } = makeService({
+      shipments: [{ id: 's1', orderId: 'o1', plan: { kind: 'fail', serviceable: false } }],
+    });
+    await svc.processManifest(MAN);
+    expect(tryEarlyAccrual).not.toHaveBeenCalled();
   });
 
   it('per-shipment failure isolation: 1 of 3 fails → 2 GENERATED + 1 SUPERSEDED, manifest CONFIRMED', async () => {

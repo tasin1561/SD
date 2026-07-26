@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import {
   ActorType,
-  ChargeType,
   Currency,
   OrderStatus,
   PaymentMode,
@@ -20,6 +19,7 @@ import {
   type OrderLifecycleEvent,
 } from '../../lifecycle-events/order-lifecycle-event-bus.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
+import { OrderChargesAccrualService } from './order-charges-accrual.service';
 
 /**
  * Phase 1B M22 — COD accrual on DELIVERED.
@@ -67,6 +67,7 @@ export class OrderDeliveredAccrualListener
     private readonly bus: OrderLifecycleEventBus,
     private readonly prisma: PrismaService,
     private readonly wallet: WalletService,
+    private readonly chargesAccrual: OrderChargesAccrualService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -109,41 +110,25 @@ export class OrderDeliveredAccrualListener
     }
   }
 
-  private async handle(event: OrderLifecycleEvent): Promise<void> {
+  /** Public — mirrors NotificationListener.handle: testable directly,
+   *  doubles as a manual re-trigger. */
+  async handle(event: OrderLifecycleEvent): Promise<void> {
     if (event.to !== OrderStatus.DELIVERED) return;
 
-    // Idempotency gate: at most one COD_COLLECTION (or ORDER_CHARGES) per order.
-    const already = await this.prisma.client.sellerWalletEntry.findFirst({
-      where: {
-        linkedOrderId: event.orderId,
-        direction: {
-          in: [
-            WalletEntryDirection.COD_COLLECTION,
-            WalletEntryDirection.ORDER_CHARGES,
-          ],
-        },
-      },
+    // R1c: COD_COLLECTION and ORDER_CHARGES are gated INDEPENDENTLY,
+    // not "either exists → skip both". A seller on the AT_AWB fee-
+    // timing tier already has an ORDER_CHARGES entry by the time
+    // DELIVERED fires (debited early by CourierFeeAccrualService) —
+    // that must NOT suppress the COD credit, which can only ever be
+    // known/collected at delivery regardless of fee-timing tier.
+    const codAlready = await this.prisma.client.sellerWalletEntry.findFirst({
+      where: { linkedOrderId: event.orderId, direction: WalletEntryDirection.COD_COLLECTION },
       select: { id: true },
     });
-    if (already) {
-      return;
-    }
 
     const order = await this.prisma.client.order.findUnique({
       where: { id: event.orderId },
-      select: {
-        id: true,
-        sellerId: true,
-        paymentMode: true,
-        codAmountInr: true,
-        charges: {
-          where: { deletedAt: null },
-          select: {
-            type: true,
-            amountInr: true,
-          },
-        },
-      },
+      select: { id: true, sellerId: true, paymentMode: true, codAmountInr: true },
     });
     if (!order) {
       this.logger.warn(
@@ -153,25 +138,13 @@ export class OrderDeliveredAccrualListener
       return;
     }
 
-    // Sum non-refund charges → DEBIT on the seller wallet.
-    let chargesTotal = new Prisma.Decimal(0);
-    for (const c of order.charges) {
-      if (c.type === ChargeType.REFUND) continue;
-      chargesTotal = chargesTotal.add(c.amountInr);
-    }
-
-    // Paired write — both in one tx so the ledger never has a half-
-    // delivered accrual.
+    // Same tx so the "normal" (nothing debited yet) case still pairs
+    // credit + debit atomically, exactly as before this refactor.
     await this.prisma.client.$transaction(async (tx) => {
-      let lastEntryId: string | null = null;
-
-      if (order.paymentMode === PaymentMode.COD) {
-        const codAmount =
-          order.codAmountInr === null
-            ? new Prisma.Decimal(0)
-            : order.codAmountInr;
+      if (!codAlready && order.paymentMode === PaymentMode.COD) {
+        const codAmount = order.codAmountInr ?? new Prisma.Decimal(0);
         if (codAmount.gt(0)) {
-          const credit = await this.wallet.applyEntry(tx, {
+          await this.wallet.applyEntry(tx, {
             sellerId: order.sellerId,
             currency: Currency.INR,
             direction: WalletEntryDirection.COD_COLLECTION,
@@ -179,32 +152,16 @@ export class OrderDeliveredAccrualListener
             linkedOrderId: order.id,
             actorType: ActorType.SYSTEM,
           });
-          lastEntryId = credit.id;
         }
       }
 
-      if (chargesTotal.gt(0)) {
-        const debit = await this.wallet.applyEntry(tx, {
-          sellerId: order.sellerId,
-          currency: Currency.INR,
-          direction: WalletEntryDirection.ORDER_CHARGES,
-          amount: chargesTotal,
-          linkedOrderId: order.id,
-          actorType: ActorType.SYSTEM,
-        });
-        lastEntryId = debit.id;
-      }
-
-      return { lastEntryId };
+      await this.chargesAccrual.debitIfNeeded(tx, order.id, order.sellerId);
     });
 
     // Post-commit: recompute the INR balance cache. Best-effort.
     await this.wallet.recomputeCacheAfterCommit(
       order.sellerId,
       Currency.INR,
-      // We don't propagate the precise lastEntryId out of the tx
-      // because recomputeCache only uses it as a denormalised hint;
-      // we re-read the ledger anyway.
       'post-commit-accrual',
     );
   }

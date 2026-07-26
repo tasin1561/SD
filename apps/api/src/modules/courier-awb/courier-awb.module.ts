@@ -3,6 +3,7 @@ import { ShipmentProvisionModule } from '../shipment-provision/shipment-provisio
 import { CourierDelhiveryModule } from '../courier-delhivery/courier-delhivery.module';
 import { CourierSharedModule } from '../courier-shared/courier-shared.module';
 import { OrderModule } from '../order/order.module';
+import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-wallet-accrual.module';
 import { AwbSupersedeService } from './services/awb-supersede.service';
 import { AwbGenerationService } from './services/awb-generation.service';
 import { AwbGenerationJobService } from './services/awb-generation-job.service';
@@ -27,7 +28,13 @@ import { AwbGenerationWorker } from './queue/awb-generation.worker';
  * (manifest CLOSED → enqueue).
  */
 @Module({
-  imports: [ShipmentProvisionModule, CourierDelhiveryModule, CourierSharedModule, OrderModule],
+  imports: [
+    ShipmentProvisionModule,
+    CourierDelhiveryModule,
+    CourierSharedModule,
+    OrderModule,
+    SellerWalletAccrualModule,
+  ],
   providers: [
     AwbSupersedeService,
     AwbGenerationService,

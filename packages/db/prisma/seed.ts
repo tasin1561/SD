@@ -392,6 +392,22 @@ const systemSettings: SystemSettingSeed[] = [
     description:
       'Numeric inbox id for the API channel that Skydrop sends customer order updates through. Visible at /app/accounts/<account_id>/settings/inboxes/<id>. Leave 0 in stub mode.',
   },
+  // R1c (revised-plan roadmap): per-seller courier-fee deduction
+  // timing. AT_DELIVERY (default) matches the existing behavior —
+  // ORDER_CHARGES debited when OrderDeliveredAccrualListener fires.
+  // AT_AWB debits as soon as the AWB is generated (CourierFeeAccrualService),
+  // well before delivery is known — a seller-opt-in tradeoff, not a
+  // system default.
+  {
+    key: 'wallet.courier_fee_deduction_timing',
+    category: 'wallet',
+    valueType: SettingValueType.STRING,
+    valueString: 'AT_DELIVERY',
+    displayName: 'Courier Fee Deduction Timing',
+    description:
+      "Default timing for debiting a seller's ORDER_CHARGES: 'AT_DELIVERY' (default — debited when the order is DELIVERED) or 'AT_AWB' (debited as soon as an AWB is generated, before delivery is known). Per-seller override via seller_setting_overrides.",
+    sellerOverridable: true,
+  },
 ];
 
 async function seedSystemSettings() {
