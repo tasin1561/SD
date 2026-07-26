@@ -82,6 +82,7 @@ model StaffUser {
   ticketsOpened              Ticket[]                      @relation("TicketOpenedByStaff")
   ticketsResolved            Ticket[]                      @relation("TicketResolvedByStaff")
   stockUnitsScanned          StockUnit[]                   @relation("StockUnitLastScanBy")
+  inboundFreightSettled      InboundFreightCharge[]        @relation("InboundFreightSettledBy")
 
   @@index([role])
   @@index([deletedAt])
@@ -162,6 +163,7 @@ model Seller {
   tickets                 Ticket[]
   earlyReservationReviews EarlyReservationReview[]
   stockUnits              StockUnit[]
+  inboundFreightCharges   InboundFreightCharge[]
   invoices                Invoice[]
   users                   SellerUser[]
   userInvitations         SellerUserInvitation[]
@@ -1249,11 +1251,13 @@ model GoodsReceipt {
   updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt         DateTime?          @map("deleted_at") @db.Timestamptz
 
-  seller       Seller             @relation(fields: [sellerId], references: [id])
-  warehouse    Warehouse          @relation(fields: [warehouseId], references: [id])
-  receivedBy   StaffUser?         @relation("GoodsReceiptReceivedBy", fields: [receivedById], references: [id])
-  lines        GoodsReceiptLine[]
-  stockBatches StockBatch[]
+  seller        Seller                @relation(fields: [sellerId], references: [id])
+  warehouse     Warehouse             @relation(fields: [warehouseId], references: [id])
+  receivedBy    StaffUser?            @relation("GoodsReceiptReceivedBy", fields: [receivedById], references: [id])
+  lines         GoodsReceiptLine[]
+  stockBatches  StockBatch[]
+  // R3 — the BD→India inbound freight bill for this consignment.
+  freightCharge InboundFreightCharge?
 
   @@index([sellerId])
   @@index([warehouseId])
@@ -1289,6 +1293,54 @@ model GoodsReceiptLine {
   @@index([batchId])
   @@index([putawayBinId])
   @@map("goods_receipt_lines")
+}
+
+/// R3 — the BD→India inbound freight bill for one consignment.
+///
+/// This is a DIFFERENT money flow from the outbound courier fee
+/// (`order_charges` / the `ORDER_CHARGES` wallet direction): that one is
+/// per-order and India-domestic, this one is per-consignment and
+/// cross-border. The founder described both, and keeping them separate is
+/// what makes "what did it cost to get this stock into India" answerable
+/// at all.
+///
+/// PAY_NOW settles against the wallet immediately. PAY_LATER leaves the
+/// row PENDING as a visible receivable — the seller keeps their cash now
+/// and optionally carries a service charge for the privilege.
+model InboundFreightCharge {
+  id                   String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId             String               @map("seller_id") @db.Uuid
+  /// One bill per consignment.
+  goodsReceiptId       String               @unique @map("goods_receipt_id") @db.Uuid
+  /// The freight invoice as recorded by ops, INR canonical.
+  amountInr            Decimal              @map("amount_inr") @db.Decimal(12, 2)
+  mode                 InboundFreightMode
+  /// Snapshotted at record time (NOT re-read at settlement): the seller
+  /// agreed to the rate that applied when the consignment landed.
+  serviceChargePercent Decimal?             @map("service_charge_percent") @db.Decimal(5, 2)
+  serviceChargeInr     Decimal?             @map("service_charge_inr") @db.Decimal(12, 2)
+  /// amountInr + serviceChargeInr — what the seller actually owes.
+  totalInr             Decimal              @map("total_inr") @db.Decimal(12, 2)
+  status               InboundFreightStatus @default(PENDING)
+  settledAt            DateTime?            @map("settled_at") @db.Timestamptz
+  settledByStaffId     String?              @map("settled_by_staff_id") @db.Uuid
+  /// The wallet DEBIT this bill produced. Set once, at settlement — it is
+  /// also the idempotency evidence that the seller was charged exactly
+  /// once.
+  walletEntryId        String?              @unique @map("wallet_entry_id") @db.Uuid
+  note                 String?              @db.Text
+  createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime             @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller       Seller             @relation(fields: [sellerId], references: [id])
+  goodsReceipt GoodsReceipt       @relation(fields: [goodsReceiptId], references: [id])
+  settledBy    StaffUser?         @relation("InboundFreightSettledBy", fields: [settledByStaffId], references: [id])
+  walletEntry  SellerWalletEntry? @relation(fields: [walletEntryId], references: [id])
+
+  @@index([sellerId, status])
+  @@index([status])
+  @@index([settledByStaffId])
+  @@map("inbound_freight_charges")
 }
 
 // Module 5 — low-stock alert state, one row per
@@ -3545,6 +3597,27 @@ enum OnboardingStepActor {
 // Currency. Cross-border remittance writes a paired (REMITTANCE_OUT debit
 // on INR, REMITTANCE_FX credit on BDT) so both ledgers conserve.
 
+/// R3 — who fronts the BD→India freight bill.
+enum InboundFreightMode {
+  /// Settled against the wallet the moment ops records the bill.
+  PAY_NOW   @map("pay_now")
+  /// Carried as a receivable the seller settles later, optionally with a
+  /// service charge.
+  PAY_LATER @map("pay_later")
+
+  @@map("inbound_freight_mode")
+}
+
+enum InboundFreightStatus {
+  PENDING @map("pending")
+  SETTLED @map("settled")
+  /// Ops forgave the bill (goodwill, our own error, a consignment we
+  /// mis-handled). Distinct from SETTLED so waivers stay countable.
+  WAIVED  @map("waived")
+
+  @@map("inbound_freight_status")
+}
+
 enum WalletEntryDirection {
   // M22 — COD collected from customer credits the seller wallet on
   // DELIVERED. Always CREDIT.
@@ -3573,6 +3646,14 @@ enum WalletEntryDirection {
   // ledger corrections indistinguishable from damage settlements in
   // every report. Registered in WalletService's CREDIT_DIRECTIONS.
   SCRAP_REFUND      @map("scrap_refund")
+  // R3 — the BD→India inbound freight bill for a goods receipt. Always a
+  // DEBIT, so it is deliberately ABSENT from WalletService's
+  // CREDIT_DIRECTIONS set (adding it there would pay sellers for their
+  // own freight). Distinct from ORDER_CHARGES: that is the outbound
+  // courier leg per order; this is the inbound leg per consignment, and
+  // conflating them would make the two cost bases unseparable in every
+  // report.
+  INBOUND_FREIGHT   @map("inbound_freight")
 
   @@map("wallet_entry_direction")
 }
@@ -3605,11 +3686,14 @@ model SellerWalletEntry {
   fxRateSnapshot      Decimal?             @map("fx_rate_snapshot") @db.Decimal(18, 6)
   createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz
 
-  seller      Seller              @relation(fields: [sellerId], references: [id])
-  linkedOrder Order?              @relation("WalletEntryOrder", fields: [linkedOrderId], references: [id])
-  linkedEntry SellerWalletEntry?  @relation("WalletEntryAdjustment", fields: [linkedEntryId], references: [id])
-  adjustments SellerWalletEntry[] @relation("WalletEntryAdjustment")
-  remittance  Remittance?         @relation(fields: [linkedRemittanceId], references: [id])
+  seller         Seller                @relation(fields: [sellerId], references: [id])
+  linkedOrder    Order?                @relation("WalletEntryOrder", fields: [linkedOrderId], references: [id])
+  linkedEntry    SellerWalletEntry?    @relation("WalletEntryAdjustment", fields: [linkedEntryId], references: [id])
+  adjustments    SellerWalletEntry[]   @relation("WalletEntryAdjustment")
+  remittance     Remittance?           @relation(fields: [linkedRemittanceId], references: [id])
+  // R3 — set when this entry is the settlement debit for an inbound
+  // freight bill (the FK lives on inbound_freight_charges).
+  inboundFreight InboundFreightCharge?
 
   @@index([sellerId, currency, createdAt])
   @@index([linkedOrderId])

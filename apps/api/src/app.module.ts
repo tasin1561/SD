@@ -67,6 +67,7 @@ import { EarlyReservationModule } from './modules/early-reservation/early-reserv
 import { SellerWebhookModule } from './modules/seller-webhook/seller-webhook.module';
 import { SellerWebhookDeliveryModule } from './modules/seller-webhook-delivery/seller-webhook-delivery.module';
 import { SellerWalletModule } from './modules/seller-wallet/seller-wallet.module';
+import { InboundFreightModule } from './modules/inbound-freight/inbound-freight.module';
 import { SellerWalletAccrualModule } from './modules/seller-wallet-accrual/seller-wallet-accrual.module';
 import { SellerWalletReadModule } from './modules/seller-wallet-read/seller-wallet-read.module';
 import { SellerWalletWithdrawalModule } from './modules/seller-wallet-withdrawal/seller-wallet-withdrawal.module';
@@ -168,6 +169,7 @@ import { envSchema } from './config/env.schema';
     SellerWebhookModule,
     SellerWebhookDeliveryModule,
     SellerWalletModule,
+    InboundFreightModule,
     SellerWalletAccrualModule,
     SellerWalletReadModule,
     SellerWalletWithdrawalModule,

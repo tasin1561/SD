@@ -252,6 +252,12 @@ function humanizeDirection(d: WalletEntryView['direction']): string {
     // R7 — a damage/loss ticket settled in the seller's favour.
     case 'SCRAP_REFUND':
       return 'Damage settlement';
+    // R3 — the BD→India inbound freight bill for a consignment. A DEBIT,
+    // so it stays OUT of CREDIT_DIRECTIONS above (that set is mirrored
+    // from the API's WalletService — adding it here would render a charge
+    // as a payment).
+    case 'INBOUND_FREIGHT':
+      return 'Inbound freight';
   }
 }
 

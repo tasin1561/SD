@@ -97,4 +97,7 @@ export {
   // R4 — strict-mode per-unit inventory
   InventoryMode,
   StockUnitStatus,
+  // R3 — BD→India inbound freight billing
+  InboundFreightMode,
+  InboundFreightStatus,
 } from '@prisma/client';

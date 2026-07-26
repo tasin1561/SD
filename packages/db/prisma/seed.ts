@@ -46,6 +46,11 @@ type SystemSettingSeed = {
   sellerOverridable?: boolean;
   overrideMinInt?: number;
   overrideMaxInt?: number;
+  // DECIMAL caps. The resolver already clamps against these columns; the
+  // seed simply never wrote them before R3, so a DECIMAL setting's caps
+  // silently did not exist.
+  overrideMinDecimal?: string;
+  overrideMaxDecimal?: string;
 };
 
 // 28 Indian States + 8 Union Territories (Module 6 address validation).
@@ -480,6 +485,33 @@ const systemSettings: SystemSettingSeed[] = [
     overrideMinInt: 1,
     overrideMaxInt: 336,
   },
+  // R3 — BD→India inbound freight billing. PAY_NOW default keeps the
+  // money flow simple (settled the moment ops records the bill); a
+  // seller who negotiates credit terms gets PAY_LATER, and the service
+  // charge defaults to 0 so nobody is charged for credit they were never
+  // quoted.
+  {
+    key: 'wallet.inbound_freight_mode',
+    category: 'wallet',
+    valueType: SettingValueType.STRING,
+    valueString: 'PAY_NOW',
+    displayName: 'Inbound Freight Payment Mode',
+    description:
+      "Who fronts the BD→India freight bill: 'PAY_NOW' (default — debited from the wallet when ops records it) or 'PAY_LATER' (carried as a receivable the seller settles later, optionally with a service charge). Per-seller override.",
+    sellerOverridable: true,
+  },
+  {
+    key: 'wallet.inbound_freight_service_charge_percent',
+    category: 'wallet',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '0.00',
+    displayName: 'Inbound Freight Pay-Later Service Charge (%)',
+    description:
+      'Percentage added to a PAY_LATER inbound freight bill. Ignored for PAY_NOW. Defaults to 0 — a seller is only charged for credit terms that were explicitly quoted to them. Per-seller override.',
+    sellerOverridable: true,
+    overrideMinDecimal: '0.00',
+    overrideMaxDecimal: '5.00',
+  },
   // R4 — STRICT-mode per-unit inventory. NORMAL default means nothing
   // changes for anyone on deploy; strict is opted into per seller (this
   // setting) or per SKU (product_variants.inventory_mode wins).
@@ -559,6 +591,8 @@ async function seedSystemSettings() {
         sellerOverridable: s.sellerOverridable ?? false,
         overrideMinInt: s.overrideMinInt ?? null,
         overrideMaxInt: s.overrideMaxInt ?? null,
+        overrideMinDecimal: s.overrideMinDecimal ?? null,
+        overrideMaxDecimal: s.overrideMaxDecimal ?? null,
       },
       update: {
         category: s.category,
@@ -568,6 +602,8 @@ async function seedSystemSettings() {
         sellerOverridable: s.sellerOverridable ?? false,
         overrideMinInt: s.overrideMinInt ?? null,
         overrideMaxInt: s.overrideMaxInt ?? null,
+        overrideMinDecimal: s.overrideMinDecimal ?? null,
+        overrideMaxDecimal: s.overrideMaxDecimal ?? null,
       },
     });
   }
