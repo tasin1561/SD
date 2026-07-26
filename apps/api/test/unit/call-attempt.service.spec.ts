@@ -32,6 +32,8 @@ function makeService(
     busyDelayHours?: number | null;
     transitionResult?: AnyArgs;
     transitionThrows?: boolean;
+    /** R5b — the seller's at-cap policy (default AUTO_RELEASE = pre-R5b). */
+    ndrPolicy?: 'AUTO_RELEASE' | 'MANUAL_REVIEW';
   } = {},
 ) {
   const defaultEntry = {
@@ -129,7 +131,13 @@ function makeService(
   // R5 — at-placement hold resolution at the NDR cap. Default mock says
   // the order had no early hold, i.e. today's behaviour.
   const handleNdrCap = jest.fn(async () => ({ kind: 'NO_EARLY_HOLD' as const }));
-  const earlyReservations = { handleNdrCap };
+  // R5b — the seller's at-cap policy. AUTO_RELEASE is the default, so the
+  // cap keeps landing on REJECTED_NDR exactly as it did pre-R5b; the
+  // MANUAL_REVIEW path is covered by its own test below.
+  const resolveNdrPolicy = jest.fn<Promise<'AUTO_RELEASE' | 'MANUAL_REVIEW'>, [string]>(
+    async () => opts.ndrPolicy ?? 'AUTO_RELEASE',
+  );
+  const earlyReservations = { handleNdrCap, resolveNdrPolicy };
 
   const svc = new CallAttemptService(
     { client } as unknown as PrismaService,
@@ -151,6 +159,8 @@ function makeService(
     enqueueAgain,
     histFindMany,
     histCount,
+    handleNdrCap,
+    resolveNdrPolicy,
   };
 }
 
@@ -297,6 +307,46 @@ describe('CallAttemptService.recordAttempt — outcome flows', () => {
       QueueClosureReason.MAX_ATTEMPTS_EXCEEDED,
     );
     expect(r).toMatchObject({ hitCap: true, requeued: false });
+  });
+
+  it('R5b MANUAL_REVIEW seller at cap → AWAITING_SELLER_DECISION, not rejected', async () => {
+    const { svc, transitionStatus, enqueueAgain, entryUpdate } = makeService({
+      priorCount: 2, // +1 = at the default cap of 3
+      ndrPolicy: 'MANUAL_REVIEW',
+    });
+    const r = await svc.recordAttempt({ ...BASE, outcome: CallOutcome.NO_ANSWER });
+    expect(transitionStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ to: OrderStatus.AWAITING_SELLER_DECISION }),
+    );
+    // Still out of the calling loop — the pause is not a re-queue.
+    expect(enqueueAgain).not.toHaveBeenCalled();
+    expect((entryUpdate.mock.calls[0]![0].data as AnyArgs).closureReason).toBe(
+      QueueClosureReason.MAX_ATTEMPTS_EXCEEDED,
+    );
+    expect(r).toMatchObject({ hitCap: true, requeued: false });
+  });
+
+  it('R5b the cap hook fires for the PAUSE too, not just for rejection', async () => {
+    const { svc, handleNdrCap } = makeService({
+      priorCount: 2,
+      ndrPolicy: 'MANUAL_REVIEW',
+    });
+    await svc.recordAttempt({ ...BASE, outcome: CallOutcome.NO_ANSWER });
+    // Keyed on hitCap: a MANUAL_REVIEW seller's held stock must still be
+    // accounted for (recorded on a review row) before the transition.
+    expect(handleNdrCap).toHaveBeenCalledTimes(1);
+  });
+
+  it('R5b below the cap, the policy is irrelevant — normal call flow continues', async () => {
+    const { svc, transitionStatus, enqueueAgain } = makeService({
+      priorCount: 0,
+      ndrPolicy: 'MANUAL_REVIEW',
+    });
+    await svc.recordAttempt({ ...BASE, outcome: CallOutcome.NO_ANSWER });
+    expect(transitionStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ to: OrderStatus.CALL_NO_RESPONSE }),
+    );
+    expect(enqueueAgain).toHaveBeenCalled();
   });
 
   it('NO_ANSWER below cap → CALL_NO_RESPONSE, requeue immediate (~now)', async () => {

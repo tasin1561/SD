@@ -211,6 +211,15 @@ export class CallAttemptService {
       );
     }
     const maxAttempts = await this.effectiveMaxAttempts(order.sellerId);
+    // R5b — what "at cap" means for THIS seller. Resolved here (it is a
+    // settings read) and handed to the mapping service, which still owns
+    // the resulting status so CC-2 keeps exactly one place that turns
+    // "at cap" into a transition.
+    const atCapPolicy =
+      (await this.earlyReservations.resolveNdrPolicy(order.sellerId)) ===
+      'MANUAL_REVIEW'
+        ? ('AWAIT_SELLER' as const)
+        : ('REJECT' as const);
 
     const endedAt = input.endedAt;
     const durationSeconds = endedAt
@@ -236,6 +245,7 @@ export class CallAttemptService {
         const r = this.mapping.resolve(input.outcome, {
           priorAttemptCount,
           maxAttempts,
+          atCapPolicy,
         });
 
         const attempt = await tx.callAttempt.create({
@@ -328,7 +338,11 @@ export class CallAttemptService {
     //     natively so, and the review row is unique per order, so a
     //     retry converges. A seller who never opted into at-placement
     //     booking has no such holds and this is a single cheap query.
-    if (resolved.targetStatus === OrderStatus.REJECTED_NDR) {
+    // R5b: keyed on hitCap, NOT on the target status — the cap now lands
+    // on either REJECTED_NDR or AWAITING_SELLER_DECISION depending on the
+    // seller's policy, and BOTH need the hold resolved (released, or
+    // recorded as still-held on a review row) before the transition.
+    if (resolved.hitCap) {
       try {
         const outcome = await this.earlyReservations.handleNdrCap(
           entry.orderId,

@@ -25,9 +25,22 @@ interface OutcomeRule {
 export interface ResolvedOutcome extends OutcomeRule {
   readonly outcome: CallOutcome;
   /** True when THIS attempt tripped the NDR cap (targetStatus was
-   *  overridden to REJECTED_NDR and requeue forced off). */
+   *  overridden to the at-cap target and requeue forced off). */
   readonly hitCap: boolean;
 }
+
+/**
+ * R5b — what the cap MEANS for this seller. The policy itself is resolved
+ * by the caller (it is a settings read, and this service stays
+ * Prisma-free); the mapping still owns the resulting transition, so CC-2
+ * is intact — there is exactly one place that turns "at cap" into a
+ * status.
+ *
+ *  - REJECT       : terminal REJECTED_NDR (the default, pre-R5b behaviour)
+ *  - AWAIT_SELLER : pause in AWAITING_SELLER_DECISION and ask the seller
+ *                   whether to keep trying
+ */
+export type AtCapPolicy = 'REJECT' | 'AWAIT_SELLER';
 
 /**
  * CC-2 — the SINGLE SOURCE OF TRUTH for CallOutcome → order transition.
@@ -118,18 +131,29 @@ export class CallOutcomeMappingService {
    */
   resolve(
     outcome: CallOutcome,
-    args: { priorAttemptCount: number; maxAttempts: number },
+    args: {
+      priorAttemptCount: number;
+      maxAttempts: number;
+      /** R5b — defaults to REJECT, i.e. the pre-R5b behaviour. */
+      atCapPolicy?: AtCapPolicy;
+    },
   ): ResolvedOutcome {
     const base = CallOutcomeMappingService.RULES[outcome];
     const effectiveCount = args.priorAttemptCount + (base.countsTowardCap ? 1 : 0);
     const atCap = base.countsTowardCap && effectiveCount >= args.maxAttempts;
 
-    // Only CALL_NO_RESPONSE-bound counting outcomes are NDR-rerouted.
+    // Only CALL_NO_RESPONSE-bound counting outcomes are cap-rerouted.
     if (atCap && base.targetStatus === OrderStatus.CALL_NO_RESPONSE) {
       return {
         outcome,
-        targetStatus: OrderStatus.REJECTED_NDR,
+        targetStatus:
+          args.atCapPolicy === 'AWAIT_SELLER'
+            ? OrderStatus.AWAITING_SELLER_DECISION
+            : OrderStatus.REJECTED_NDR,
         countsTowardCap: true,
+        // Either way this attempt does not re-queue: the order is out of
+        // the calling loop until something else moves it (the seller's
+        // answer, or nothing at all).
         requeue: false,
         reschedule: 'NONE',
         hitCap: true,

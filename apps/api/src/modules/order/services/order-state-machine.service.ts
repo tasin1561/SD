@@ -85,6 +85,10 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
     // Module 7 call-workflow terminals (pre-reservation → no release).
     { to: OrderStatus.REJECTED_BY_CUSTOMER, sideEffects: [] },
     { to: OrderStatus.REJECTED_NDR, sideEffects: [] },
+    // R5b — the at-cap PAUSE for MANUAL_REVIEW sellers (see the status'
+    // schema doc). Same inbound set as REJECTED_NDR because it lands at
+    // exactly the same moment; only the seller's policy differs.
+    { to: OrderStatus.AWAITING_SELLER_DECISION, sideEffects: [] },
   ]],
 
   [OrderStatus.CALL_NO_RESPONSE, [
@@ -100,6 +104,7 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
     { to: OrderStatus.REJECTED, sideEffects: [] },
     { to: OrderStatus.REJECTED_BY_CUSTOMER, sideEffects: [] },
     { to: OrderStatus.REJECTED_NDR, sideEffects: [] },
+    { to: OrderStatus.AWAITING_SELLER_DECISION, sideEffects: [] }, // R5b
   ]],
 
   [OrderStatus.CALL_RESCHEDULED, [
@@ -114,6 +119,19 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
     { to: OrderStatus.REJECTED, sideEffects: [] },
     { to: OrderStatus.REJECTED_BY_CUSTOMER, sideEffects: [] },
     { to: OrderStatus.REJECTED_NDR, sideEffects: [] },
+    { to: OrderStatus.AWAITING_SELLER_DECISION, sideEffects: [] }, // R5b
+  ]],
+
+  // R5b — the seller's answer resolves the pause. REQUEST_MORE_ATTEMPTS
+  // goes back to PENDING_CONFIRMATION, which re-enqueues the order for
+  // calling through the existing CC-6 post-commit hook (no new wiring).
+  // RELEASE — and the TTL sweep for a seller who never answers — lands
+  // the original terminal. Admin cancels stay available throughout.
+  [OrderStatus.AWAITING_SELLER_DECISION, [
+    { to: OrderStatus.PENDING_CONFIRMATION, sideEffects: [] },
+    { to: OrderStatus.REJECTED_NDR, sideEffects: [] },
+    { to: OrderStatus.CANCELLED, sideEffects: [] },
+    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [] },
   ]],
 
   [OrderStatus.OUT_OF_STOCK, [

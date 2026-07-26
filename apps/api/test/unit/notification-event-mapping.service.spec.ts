@@ -154,3 +154,27 @@ describe('NotificationEventMappingService (NOTIF-4)', () => {
     });
   });
 });
+
+// R5b — the one lifecycle status that REQUIRES the seller to act.
+describe('NotificationEventMappingService — R5b AWAITING_SELLER_DECISION', () => {
+  it('notifies the SELLER (and only the seller)', () => {
+    const svc = new NotificationEventMappingService();
+    const out = svc.resolveForOrderStatus(OrderStatus.AWAITING_SELLER_DECISION);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({
+      recipientType: NotificationRecipientType.SELLER,
+      templateCode: 'seller.order_awaiting_decision.email',
+      channel: NotificationChannel.EMAIL,
+    });
+  });
+
+  it('is NOT silent like the reject family — a seller who never hears loses money', () => {
+    const svc = new NotificationEventMappingService();
+    // The rejects are deliberately silent in Phase-1A; the pause is not,
+    // because the order is waiting on the seller and may hold their stock.
+    expect(svc.resolveForOrderStatus(OrderStatus.REJECTED_NDR)).toHaveLength(0);
+    expect(
+      svc.resolveForOrderStatus(OrderStatus.AWAITING_SELLER_DECISION).length,
+    ).toBeGreaterThan(0);
+  });
+});

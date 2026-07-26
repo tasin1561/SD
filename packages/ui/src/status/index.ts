@@ -102,6 +102,11 @@ export function orderStatusKind(status: OrderStatus): StatusKind {
     case OrderStatus.CANCELLED_BY_ADMIN:
       return 'cancelled';
 
+    // R5b — a PAUSE waiting on the seller, not a failure. 'pending' is the
+    // honest kind: the order is alive and needs someone to act.
+    case OrderStatus.AWAITING_SELLER_DECISION:
+      return 'pending';
+
     default: {
       const exhaustive: never = status;
       throw new Error(`Unhandled OrderStatus: ${String(exhaustive)}`);

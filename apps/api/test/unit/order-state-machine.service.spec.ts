@@ -19,9 +19,65 @@ const TERMINAL: OrderStatus[] = [
 describe('OrderStateMachineService', () => {
   const sm = new OrderStateMachineService();
 
-  it('covers all 28 OrderStatus values as graph keys', () => {
+  // ── R5b: the pause between the call cap and rejection ───────────────
+  describe('R5b AWAITING_SELLER_DECISION', () => {
+    it('is reachable from every state the call cap can land on', () => {
+      const sm = new OrderStateMachineService();
+      for (const from of [
+        OrderStatus.PENDING_CONFIRMATION,
+        OrderStatus.CALL_NO_RESPONSE,
+        OrderStatus.CALL_RESCHEDULED,
+      ]) {
+        expect(sm.isValidTransition(from, OrderStatus.AWAITING_SELLER_DECISION)).toBe(
+          true,
+        );
+      }
+    });
+
+    it('is NOT terminal — both seller answers have an edge out', () => {
+      const sm = new OrderStateMachineService();
+      // "keep trying" goes back into the call queue...
+      expect(
+        sm.isValidTransition(
+          OrderStatus.AWAITING_SELLER_DECISION,
+          OrderStatus.PENDING_CONFIRMATION,
+        ),
+      ).toBe(true);
+      // ...and "release" (or the TTL sweep) lands the original terminal.
+      expect(
+        sm.isValidTransition(
+          OrderStatus.AWAITING_SELLER_DECISION,
+          OrderStatus.REJECTED_NDR,
+        ),
+      ).toBe(true);
+    });
+
+    it('carries NO stock side-effects — the hold is managed by R5, not the matrix', () => {
+      const sm = new OrderStateMachineService();
+      for (const to of [
+        OrderStatus.PENDING_CONFIRMATION,
+        OrderStatus.REJECTED_NDR,
+      ]) {
+        expect(
+          sm.requiredSideEffects(OrderStatus.AWAITING_SELLER_DECISION, to),
+        ).toEqual([]);
+      }
+    });
+
+    it('an admin can still cancel a paused order', () => {
+      const sm = new OrderStateMachineService();
+      expect(
+        sm.isValidTransition(
+          OrderStatus.AWAITING_SELLER_DECISION,
+          OrderStatus.CANCELLED_BY_ADMIN,
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('covers all 29 OrderStatus values as graph keys', () => {
     const all = Object.values(OrderStatus);
-    expect(all).toHaveLength(28);
+    expect(all).toHaveLength(29);
     for (const s of all) {
       // never throws / never undefined for a real status
       expect(Array.isArray(sm.getAllowedTransitions(s))).toBe(true);

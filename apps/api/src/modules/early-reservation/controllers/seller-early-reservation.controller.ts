@@ -1,11 +1,8 @@
 import {
-  Body,
   Controller,
   Get,
   HttpCode,
   HttpStatus,
-  Param,
-  Patch,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -17,7 +14,6 @@ import { SellerRoles } from '../../../common/decorators/seller-roles.decorator';
 import { SellerJwtGuard } from '../../../common/guards/seller-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
-import { DecideReviewDto } from '../dto/early-reservation.dto';
 import {
   EarlyReservationReviewService,
   type ReviewView,
@@ -54,23 +50,9 @@ export class SellerEarlyReservationController {
     return this.reviews.listForSeller(seller.id, status);
   }
 
-  @Patch(':reviewId')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary:
-      'Decide: RELEASE gives the stock back; REQUEST_MORE_ATTEMPTS keeps the hold. Rejects REVIEW_ALREADY_RESOLVED on a double submit',
-  })
-  decide(
-    @CurrentSeller() seller: AuthenticatedSeller,
-    @Param('reviewId') reviewId: string,
-    @Body() body: DecideReviewDto,
-  ): Promise<ReviewView> {
-    return this.reviews.decide(
-      seller.id,
-      reviewId,
-      body.decision,
-      seller.userId,
-      body.note ?? null,
-    );
-  }
+  // R5b — the DECIDE endpoint moved to `early-reservation-decision`.
+  // Applying a decision has to move the ORDER too, and this module cannot
+  // import `order` (order already imports this one — a cycle). The leaf
+  // module composes both and serves PATCH on this same path, so the API
+  // shape is unchanged for callers.
 }

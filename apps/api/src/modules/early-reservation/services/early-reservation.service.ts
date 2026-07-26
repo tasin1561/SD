@@ -155,6 +155,30 @@ export class EarlyReservationService {
    * safe — release is natively idempotent and the review row is unique
    * per order.
    */
+  /**
+   * R5b — what the call cap MEANS for this seller: give the stock back
+   * ourselves, or pause and ask them. Read by `CallAttemptService` BEFORE
+   * it resolves the outcome, so the mapping service can own the resulting
+   * status (CC-2) while the policy input stays a settings read.
+   *
+   * Fails safe to AUTO_RELEASE: if settings are unreadable we free the
+   * stock rather than parking an order in a pause nobody asked for.
+   */
+  async resolveNdrPolicy(sellerId: string): Promise<'AUTO_RELEASE' | 'MANUAL_REVIEW'> {
+    try {
+      const action = await this.settings.resolve(sellerId, NDR_ACTION_KEY);
+      return String(action.value).toUpperCase() === MANUAL_REVIEW
+        ? 'MANUAL_REVIEW'
+        : 'AUTO_RELEASE';
+    } catch (err) {
+      this.logger.warn(
+        { sellerId, err: (err as Error).message },
+        'NDR cap policy unreadable; defaulting to AUTO_RELEASE',
+      );
+      return 'AUTO_RELEASE';
+    }
+  }
+
   async handleNdrCap(
     orderId: string,
     sellerId: string,
@@ -168,12 +192,17 @@ export class EarlyReservationService {
       },
       select: { id: true, qtyReserved: true },
     });
-    if (holds.length === 0) return { kind: 'NO_EARLY_HOLD' };
 
-    const action = await this.settings.resolve(sellerId, NDR_ACTION_KEY);
+    const policy = await this.resolveNdrPolicy(sellerId);
     const heldQty = holds.reduce((sum, h) => sum + h.qtyReserved, 0);
 
-    if (action.value === MANUAL_REVIEW) {
+    // R5b: a MANUAL_REVIEW seller is asked EVEN WHEN nothing was held.
+    // Pre-R5b this returned NO_EARLY_HOLD and silently rejected the
+    // order, which read the policy too narrowly: "consult me at the cap"
+    // is a question about whether to keep CALLING, and a seller who never
+    // opted into at-placement booking still gets to answer it. heldQty 0
+    // is then simply the honest number.
+    if (policy === 'MANUAL_REVIEW') {
       const review = await this.prisma.client.earlyReservationReview.upsert({
         where: { orderId },
         create: {
@@ -196,6 +225,8 @@ export class EarlyReservationService {
       });
       return { kind: 'MANUAL_REVIEW', reviewId: review.id, heldQty };
     }
+
+    if (holds.length === 0) return { kind: 'NO_EARLY_HOLD' };
 
     let releasedCount = 0;
     for (const hold of holds) {

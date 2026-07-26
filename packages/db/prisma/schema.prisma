@@ -3121,6 +3121,17 @@ enum OrderStatus {
   // pre-reservation → no stock release. See ORD-1 matrix + CC-2 mapping.
   REJECTED_BY_CUSTOMER     @map("rejected_by_customer")
   REJECTED_NDR             @map("rejected_ndr")
+  /// R5b — the call cap was reached on an order whose seller asked to be
+  /// consulted (`inventory.early_reservation_ndr_action = MANUAL_REVIEW`).
+  /// A PAUSE, not a terminal: the seller either asks for more attempts
+  /// (→ PENDING_CONFIRMATION, which re-queues via CC-6) or gives up
+  /// (→ REJECTED_NDR). A TTL sweep rejects it if they never answer, so
+  /// stock is never held indefinitely by an unanswered question.
+  ///
+  /// This exists instead of un-terminaling REJECTED_NDR: an order that
+  /// says "rejected" and is then un-rejected corrupts NDR reporting and
+  /// lies about its own history while the seller is still deciding.
+  AWAITING_SELLER_DECISION @map("awaiting_seller_decision")
   PENDING_PICK             @map("pending_pick")
   PICKED                   @map("picked")
   PACKED                   @map("packed")

@@ -512,6 +512,21 @@ const systemSettings: SystemSettingSeed[] = [
     overrideMinDecimal: '0.00',
     overrideMaxDecimal: '5.00',
   },
+  // R5b — how long an unanswered call-cap review may hold stock before
+  // the sweep releases it and rejects the order. Without a TTL,
+  // AWAITING_SELLER_DECISION would be a stock-holding black hole.
+  {
+    key: 'inventory.early_reservation_review_ttl_hours',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 72,
+    displayName: 'Call-Cap Review TTL (hours)',
+    description:
+      'How long an order may sit in AWAITING_SELLER_DECISION before the hourly sweep releases any held stock and rejects it (REJECTED_NDR). Only applies to sellers whose NDR action is MANUAL_REVIEW. Per-seller override.',
+    sellerOverridable: true,
+    overrideMinInt: 1,
+    overrideMaxInt: 720,
+  },
   // R4 — STRICT-mode per-unit inventory. NORMAL default means nothing
   // changes for anyone on deploy; strict is opted into per seller (this
   // setting) or per SKU (product_variants.inventory_mode wins).
@@ -1755,6 +1770,16 @@ const notificationTemplates: TemplateSeed[] = [
     subject: 'Order {{ order_number }} cancelled',
     bodyTemplate:
       'Hi {{ company_name }}, order {{ order_number }} for {{ recipient_name }} has been cancelled. Reason: {{ cancellation_reason }}. Any reserved stock has been released. View the order at {{ app_url }}.',
+  },
+  // R5b — the one lifecycle status that needs the seller to DO something.
+  {
+    code: 'seller.order_awaiting_decision.email',
+    name: 'Call attempts exhausted — awaiting seller decision (R5b)',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Action needed: order {{ order_number }} — we could not reach the customer',
+    bodyTemplate:
+      'Hi {{ company_name }}, we tried to confirm order {{ order_number }} for {{ recipient_name }} and could not reach them. We have STOPPED calling and are holding the order for your decision: ask us to keep trying, or release it. Any stock held for this order stays reserved until you decide. Decide at {{ app_url }}.',
   },
 ];
 

@@ -127,6 +127,21 @@ export class NotificationEventMappingService {
       case OrderStatus.REJECTED_NDR:
         return EMPTY;
 
+      // ─── R5b: the ONE status that REQUIRES the seller to act ───────
+      // Unlike the silent rejects above, this order is parked waiting for
+      // an answer and its stock may still be held — a seller who never
+      // hears about it loses money to a question they didn't know existed.
+      // Customer gets nothing: from their side nothing has happened yet.
+      case OrderStatus.AWAITING_SELLER_DECISION:
+        return [
+          {
+            recipientType: NotificationRecipientType.SELLER,
+            templateCode: 'seller.order_awaiting_decision.email',
+            locale: 'en',
+            channel: NotificationChannel.EMAIL,
+          },
+        ];
+
       // ─── Warehouse internal lifecycle (no outbound) ────────────────
       case OrderStatus.PENDING_PICK:
       case OrderStatus.PICKED:

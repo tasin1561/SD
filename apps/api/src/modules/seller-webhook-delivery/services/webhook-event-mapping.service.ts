@@ -44,6 +44,13 @@ export class WebhookEventMappingService {
         return 'order.rejected';
       case OrderStatus.REJECTED_NDR:
         return 'order.rejected_ndr';
+      // R5b — NOT a rejection: we stopped calling and are waiting for the
+      // seller to say whether to keep trying. A B2B integration needs its
+      // own code for this, because reacting to it (answer the review) is
+      // completely different from reacting to a rejection (write the
+      // order off).
+      case OrderStatus.AWAITING_SELLER_DECISION:
+        return 'order.awaiting_seller_decision';
 
       // Warehouse lifecycle
       case OrderStatus.PENDING_PICK:
