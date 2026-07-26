@@ -431,6 +431,32 @@ const systemSettings: SystemSettingSeed[] = [
     overrideMinInt: 1,
     overrideMaxInt: 20,
   },
+  // R2b — T_PLUS_N wallet-timing tier. INSTANT (default) preserves
+  // today's exact behavior (credit/debit immediately on DELIVERED);
+  // T_PLUS_N is a seller opt-in that defers accrual by
+  // accrual_delay_days via PendingAccrualSweepService.
+  {
+    key: 'wallet.accrual_timing_tier',
+    category: 'wallet',
+    valueType: SettingValueType.STRING,
+    valueString: 'INSTANT',
+    displayName: 'Wallet Accrual Timing Tier',
+    description:
+      "'INSTANT' (default — credited/debited immediately on DELIVERED, today's behavior) or 'T_PLUS_N' (deferred by accrual_delay_days, swept by a cron worker). Per-seller override via seller_setting_overrides.",
+    sellerOverridable: true,
+  },
+  {
+    key: 'wallet.accrual_delay_days',
+    category: 'wallet',
+    valueType: SettingValueType.INT,
+    valueInt: 2,
+    displayName: 'Accrual Delay (days)',
+    description:
+      "Days after DELIVERED before a T_PLUS_N-tier seller's wallet is credited/debited. Ignored for INSTANT-tier sellers. Per-seller override via seller_setting_overrides.",
+    sellerOverridable: true,
+    overrideMinInt: 1,
+    overrideMaxInt: 30,
+  },
 ];
 
 async function seedSystemSettings() {

@@ -155,6 +155,7 @@ model Seller {
   walletBalances          SellerWalletBalance[]
   remittances             Remittance[]
   withdrawalRequests      WithdrawalRequest[]
+  pendingAccruals         PendingAccrual[]
   invoices                Invoice[]
   users                   SellerUser[]
   userInvitations         SellerUserInvitation[]
@@ -1301,6 +1302,7 @@ model Order {
   notificationLogs NotificationLog[]
   walletEntries    SellerWalletEntry[] @relation("WalletEntryOrder")
   invoice          Invoice?
+  pendingAccrual   PendingAccrual?
 
   @@unique([sellerId, sellerOrderRef])
   @@index([sellerId, status])
@@ -3525,6 +3527,30 @@ model WithdrawalRequest {
   @@index([requestedByUserId])
   @@index([resolvedByStaffId])
   @@map("withdrawal_requests")
+}
+
+/// R2b (revised-plan roadmap) — the T_PLUS_N wallet-timing tier's
+/// scheduling record. One row per order (at most): created when
+/// `OrderDeliveredAccrualListener` sees a seller on the T_PLUS_N tier
+/// instead of crediting/debiting immediately. `PendingAccrualSweepService`
+/// sweeps `eligibleAt <= now AND processedAt IS NULL` rows and calls the
+/// EXACT same `AccrualExecutionService.executeAccrual()` the INSTANT
+/// (default) tier calls immediately — only the trigger timing differs;
+/// `WalletService.applyEntry` stays the sole ledger writer either way.
+model PendingAccrual {
+  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  orderId     String    @unique @map("order_id") @db.Uuid
+  sellerId    String    @map("seller_id") @db.Uuid
+  eligibleAt  DateTime  @map("eligible_at") @db.Timestamptz
+  processedAt DateTime? @map("processed_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  order  Order  @relation(fields: [orderId], references: [id])
+  seller Seller @relation(fields: [sellerId], references: [id])
+
+  @@index([eligibleAt, processedAt])
+  @@index([sellerId])
+  @@map("pending_accruals")
 }
 
 // ============================================================================

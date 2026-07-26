@@ -1,16 +1,10 @@
-import {
-  ActorType,
-  Currency,
-  OrderStatus,
-  PaymentMode,
-  Prisma,
-  WalletEntryDirection,
-} from '@skydrop/db';
+import { ActorType, OrderStatus } from '@skydrop/db';
 import { OrderDeliveredAccrualListener } from '../../src/modules/seller-wallet-accrual/services/order-delivered-accrual-listener.service';
-import { OrderChargesAccrualService } from '../../src/modules/seller-wallet-accrual/services/order-charges-accrual.service';
 import type { OrderLifecycleEvent, OrderLifecycleEventBus } from '../../src/modules/lifecycle-events/order-lifecycle-event-bus.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
-import type { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
+import type { AccrualExecutionService } from '../../src/modules/seller-wallet-accrual/services/accrual-execution.service';
+import type { PendingAccrualSchedulerService } from '../../src/modules/seller-wallet-accrual/services/pending-accrual-scheduler.service';
+import type { SettingsResolverService } from '../../src/modules/settings/services/settings-resolver.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -29,132 +23,70 @@ function lifecycleEvent(to: OrderStatus, orderId = 'order-1'): OrderLifecycleEve
 
 function makeService(
   opts: {
-    codEntryExists?: boolean;
     order?: AnyArgs | null;
-    charges?: AnyArgs[];
-    chargesEntryExists?: boolean;
+    tier?: string;
   } = {},
 ) {
-  const walletEntryFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async (args) => {
-      const direction = (args.where as { direction: WalletEntryDirection }).direction;
-      if (direction === WalletEntryDirection.COD_COLLECTION) {
-        return opts.codEntryExists ? { id: 'cod-existing' } : null;
-      }
-      if (direction === WalletEntryDirection.ORDER_CHARGES) {
-        return opts.chargesEntryExists ? { id: 'charges-existing' } : null;
-      }
-      return null;
-    },
-  );
-  const orderChargeFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
-    async () => opts.charges ?? [],
-  );
   const orderFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
-    opts.order === undefined
-      ? {
-          id: 'order-1',
-          sellerId: 'seller-1',
-          paymentMode: PaymentMode.COD,
-          codAmountInr: new Prisma.Decimal('500'),
-        }
-      : opts.order,
+    opts.order === undefined ? { id: 'order-1', sellerId: 'seller-1' } : opts.order,
   );
-
-  const tx = {
-    sellerWalletEntry: { findFirst: walletEntryFindFirst },
-    orderCharge: { findMany: orderChargeFindMany },
-  };
-  const $transaction = jest.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(tx));
-  const client = {
-    order: { findUnique: orderFindUnique },
-    sellerWalletEntry: { findFirst: walletEntryFindFirst },
-    $transaction,
-  };
+  const client = { order: { findUnique: orderFindUnique } };
   const prisma = { client } as unknown as PrismaService;
 
-  const applyEntry = jest.fn<Promise<AnyArgs>, [unknown, AnyArgs]>(async () => ({
-    id: 'entry-new',
-    runningBalanceAfter: new Prisma.Decimal(0),
-  }));
-  const recomputeCacheAfterCommit = jest.fn(async () => undefined);
-  const wallet = { applyEntry, recomputeCacheAfterCommit };
-
   const bus = { subscribe: jest.fn() } as unknown as OrderLifecycleEventBus;
-  const chargesAccrual = new OrderChargesAccrualService(wallet as unknown as WalletService);
+
+  const resolve = jest.fn(async () => ({
+    key: 'wallet.accrual_timing_tier',
+    valueType: 'STRING',
+    value: opts.tier ?? 'INSTANT',
+    source: 'SYSTEM_DEFAULT' as const,
+  }));
+  const settings = { resolve };
+
+  const executeAccrual = jest.fn(async () => undefined);
+  const execution = { executeAccrual };
+
+  const scheduleIfNeeded = jest.fn(async () => undefined);
+  const scheduler = { scheduleIfNeeded };
 
   const listener = new OrderDeliveredAccrualListener(
     bus,
     prisma,
-    wallet as unknown as WalletService,
-    chargesAccrual,
+    settings as unknown as SettingsResolverService,
+    execution as unknown as AccrualExecutionService,
+    scheduler as unknown as PendingAccrualSchedulerService,
   );
-  return { listener, applyEntry, recomputeCacheAfterCommit, orderFindUnique, orderChargeFindMany, walletEntryFindFirst };
+  return { listener, orderFindUnique, resolve, executeAccrual, scheduleIfNeeded };
 }
 
 describe('OrderDeliveredAccrualListener.handle', () => {
   it('ignores every transition except DELIVERED', async () => {
-    const { listener, applyEntry } = makeService();
+    const { listener, executeAccrual, scheduleIfNeeded } = makeService();
     await listener.handle(lifecycleEvent(OrderStatus.DISPATCHED));
     await listener.handle(lifecycleEvent(OrderStatus.OUT_FOR_DELIVERY));
-    expect(applyEntry).not.toHaveBeenCalled();
+    expect(executeAccrual).not.toHaveBeenCalled();
+    expect(scheduleIfNeeded).not.toHaveBeenCalled();
   });
 
-  it('COD DELIVERED, nothing debited yet: credits COD + debits charges in one tx', async () => {
-    const { listener, applyEntry, recomputeCacheAfterCommit } = makeService({
-      charges: [{ type: 'BASE_SHIPPING', amountInr: new Prisma.Decimal('80') }],
-    });
+  it('INSTANT tier (default): DELIVERED executes the accrual immediately', async () => {
+    const { listener, executeAccrual, scheduleIfNeeded, resolve } = makeService({ tier: 'INSTANT' });
     await listener.handle(lifecycleEvent(OrderStatus.DELIVERED));
-    expect(applyEntry).toHaveBeenCalledTimes(2);
-    const directions = applyEntry.mock.calls.map((c) => (c[1] as AnyArgs).direction);
-    expect(directions).toEqual(
-      expect.arrayContaining([WalletEntryDirection.COD_COLLECTION, WalletEntryDirection.ORDER_CHARGES]),
-    );
-    expect(recomputeCacheAfterCommit).toHaveBeenCalledWith('seller-1', Currency.INR, 'post-commit-accrual');
+    expect(resolve).toHaveBeenCalledWith('seller-1', 'wallet.accrual_timing_tier');
+    expect(executeAccrual).toHaveBeenCalledWith('order-1');
+    expect(scheduleIfNeeded).not.toHaveBeenCalled();
   });
 
-  it('R1c: charges already debited early (AT_AWB) — DELIVERED still credits COD, does NOT re-debit charges', async () => {
-    const { listener, applyEntry } = makeService({
-      chargesEntryExists: true,
-      charges: [{ type: 'BASE_SHIPPING', amountInr: new Prisma.Decimal('80') }],
-    });
+  it('T_PLUS_N tier: DELIVERED schedules a PendingAccrual instead of executing', async () => {
+    const { listener, executeAccrual, scheduleIfNeeded } = makeService({ tier: 'T_PLUS_N' });
     await listener.handle(lifecycleEvent(OrderStatus.DELIVERED));
-    expect(applyEntry).toHaveBeenCalledTimes(1);
-    expect((applyEntry.mock.calls[0]![1] as AnyArgs).direction).toBe(WalletEntryDirection.COD_COLLECTION);
-  });
-
-  it('fully processed already (both entries exist): no writes at all, still succeeds', async () => {
-    const { listener, applyEntry } = makeService({ codEntryExists: true, chargesEntryExists: true });
-    await listener.handle(lifecycleEvent(OrderStatus.DELIVERED));
-    expect(applyEntry).not.toHaveBeenCalled();
-  });
-
-  it('PREPAID order: no COD credit, charges still debited', async () => {
-    const { listener, applyEntry } = makeService({
-      order: {
-        id: 'order-1',
-        sellerId: 'seller-1',
-        paymentMode: PaymentMode.PREPAID,
-        codAmountInr: null,
-      },
-      charges: [{ type: 'BASE_SHIPPING', amountInr: new Prisma.Decimal('80') }],
-    });
-    await listener.handle(lifecycleEvent(OrderStatus.DELIVERED));
-    expect(applyEntry).toHaveBeenCalledTimes(1);
-    expect((applyEntry.mock.calls[0]![1] as AnyArgs).direction).toBe(WalletEntryDirection.ORDER_CHARGES);
+    expect(scheduleIfNeeded).toHaveBeenCalledWith('order-1', 'seller-1');
+    expect(executeAccrual).not.toHaveBeenCalled();
   });
 
   it('order vanished between emit and handle: logs + returns, no writes, no throw', async () => {
-    const { listener, applyEntry } = makeService({ order: null });
+    const { listener, executeAccrual, scheduleIfNeeded } = makeService({ order: null });
     await expect(listener.handle(lifecycleEvent(OrderStatus.DELIVERED))).resolves.toBeUndefined();
-    expect(applyEntry).not.toHaveBeenCalled();
-  });
-
-  it('zero COD amount: no COD credit written even though paymentMode is COD', async () => {
-    const { listener, applyEntry } = makeService({
-      order: { id: 'order-1', sellerId: 'seller-1', paymentMode: PaymentMode.COD, codAmountInr: new Prisma.Decimal('0') },
-    });
-    await listener.handle(lifecycleEvent(OrderStatus.DELIVERED));
-    expect(applyEntry).not.toHaveBeenCalled();
+    expect(executeAccrual).not.toHaveBeenCalled();
+    expect(scheduleIfNeeded).not.toHaveBeenCalled();
   });
 });

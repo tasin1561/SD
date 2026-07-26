@@ -4,34 +4,30 @@ import {
   type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from '@nestjs/common';
-import {
-  ActorType,
-  Currency,
-  OrderStatus,
-  PaymentMode,
-  Prisma,
-  WalletEntryDirection,
-} from '@skydrop/db';
+import { OrderStatus } from '@skydrop/db';
 import type { Subscription } from 'rxjs';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import {
   OrderLifecycleEventBus,
   type OrderLifecycleEvent,
 } from '../../lifecycle-events/order-lifecycle-event-bus.service';
-import { WalletService } from '../../seller-wallet/services/wallet.service';
-import { OrderChargesAccrualService } from './order-charges-accrual.service';
+import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
+import { AccrualExecutionService } from './accrual-execution.service';
+import { PendingAccrualSchedulerService } from './pending-accrual-scheduler.service';
+
+const ACCRUAL_TIMING_TIER_KEY = 'wallet.accrual_timing_tier';
+const T_PLUS_N = 'T_PLUS_N';
 
 /**
- * Phase 1B M22 — COD accrual on DELIVERED.
- *
- * The bus listener that translates a `(to === DELIVERED)` lifecycle
- * event into paired wallet entries:
- *   CREDIT codAmountInr (direction = COD_COLLECTION)
- *   DEBIT  sum(non-deleted, non-refund order charges) (direction = ORDER_CHARGES)
- *
- * Net effect: the seller's INR wallet gains (COD − charges) after
- * each delivered order. The Phase-1B remittance flow (M23) then
- * pays this out in BDT (with a paired REMITTANCE_OUT + REMITTANCE_FX).
+ * Phase 1B M22 — COD accrual on DELIVERED. R2b extended this to a
+ * per-seller TIMING TIER dispatcher:
+ *   INSTANT (default, today's exact behavior) → executes immediately
+ *     via `AccrualExecutionService.executeAccrual()`.
+ *   T_PLUS_N (seller opt-in) → schedules a `PendingAccrual` row
+ *     instead; `PendingAccrualSweepService` executes it later, via the
+ *     SAME `AccrualExecutionService`, once the seller's delay window
+ *     elapses. `WalletService.applyEntry` is the sole ledger writer
+ *     either way — this listener never touches it directly anymore.
  *
  * Discipline (mirrors M11 NotificationListener):
  *  - Subscribes on `OnApplicationBootstrap`; in-flight Promises
@@ -40,15 +36,6 @@ import { OrderChargesAccrualService } from './order-charges-accrual.service';
  *  - Per-event `handle()` runs in its own try/catch wrapper. A
  *    failure NEVER reaches back to the OrderLifecycleEventBus
  *    emitter (NOTIF-1 best-effort discipline).
- *  - Paired entries written in ONE prisma.$transaction so the
- *    ledger never has a credit-without-debit (or vice versa).
- *  - Post-commit, balance cache for the affected currency is
- *    recomputed (best-effort, swallowed).
- *
- * Idempotency: a re-fired event for the same `statusEventId` is
- * possible (bus replay, future Redis-pubsub upgrade). The dedup
- * gate is the COD_COLLECTION entry's `linkedOrderId` — at most ONE
- * COD_COLLECTION row per order. The handler checks before writing.
  *
  * PREPAID orders DO NOT accrue COD. They have charges, but those
  * charges were collected at checkout (or netted off the prepaid
@@ -66,8 +53,9 @@ export class OrderDeliveredAccrualListener
   constructor(
     private readonly bus: OrderLifecycleEventBus,
     private readonly prisma: PrismaService,
-    private readonly wallet: WalletService,
-    private readonly chargesAccrual: OrderChargesAccrualService,
+    private readonly settings: SettingsResolverService,
+    private readonly execution: AccrualExecutionService,
+    private readonly scheduler: PendingAccrualSchedulerService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -115,20 +103,9 @@ export class OrderDeliveredAccrualListener
   async handle(event: OrderLifecycleEvent): Promise<void> {
     if (event.to !== OrderStatus.DELIVERED) return;
 
-    // R1c: COD_COLLECTION and ORDER_CHARGES are gated INDEPENDENTLY,
-    // not "either exists → skip both". A seller on the AT_AWB fee-
-    // timing tier already has an ORDER_CHARGES entry by the time
-    // DELIVERED fires (debited early by CourierFeeAccrualService) —
-    // that must NOT suppress the COD credit, which can only ever be
-    // known/collected at delivery regardless of fee-timing tier.
-    const codAlready = await this.prisma.client.sellerWalletEntry.findFirst({
-      where: { linkedOrderId: event.orderId, direction: WalletEntryDirection.COD_COLLECTION },
-      select: { id: true },
-    });
-
     const order = await this.prisma.client.order.findUnique({
       where: { id: event.orderId },
-      select: { id: true, sellerId: true, paymentMode: true, codAmountInr: true },
+      select: { id: true, sellerId: true },
     });
     if (!order) {
       this.logger.warn(
@@ -138,31 +115,13 @@ export class OrderDeliveredAccrualListener
       return;
     }
 
-    // Same tx so the "normal" (nothing debited yet) case still pairs
-    // credit + debit atomically, exactly as before this refactor.
-    await this.prisma.client.$transaction(async (tx) => {
-      if (!codAlready && order.paymentMode === PaymentMode.COD) {
-        const codAmount = order.codAmountInr ?? new Prisma.Decimal(0);
-        if (codAmount.gt(0)) {
-          await this.wallet.applyEntry(tx, {
-            sellerId: order.sellerId,
-            currency: Currency.INR,
-            direction: WalletEntryDirection.COD_COLLECTION,
-            amount: codAmount,
-            linkedOrderId: order.id,
-            actorType: ActorType.SYSTEM,
-          });
-        }
-      }
+    const tier = await this.settings.resolve(order.sellerId, ACCRUAL_TIMING_TIER_KEY);
+    if (tier.value === T_PLUS_N) {
+      await this.scheduler.scheduleIfNeeded(order.id, order.sellerId);
+      return;
+    }
 
-      await this.chargesAccrual.debitIfNeeded(tx, order.id, order.sellerId);
-    });
-
-    // Post-commit: recompute the INR balance cache. Best-effort.
-    await this.wallet.recomputeCacheAfterCommit(
-      order.sellerId,
-      Currency.INR,
-      'post-commit-accrual',
-    );
+    // INSTANT (default) — execute immediately, exactly as before R2b.
+    await this.execution.executeAccrual(order.id);
   }
 }

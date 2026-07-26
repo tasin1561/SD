@@ -1,0 +1,66 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { ActorType, Currency, PaymentMode, Prisma, WalletEntryDirection } from '@skydrop/db';
+import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { WalletService } from '../../seller-wallet/services/wallet.service';
+import { OrderChargesAccrualService } from './order-charges-accrual.service';
+
+/**
+ * R2b (revised-plan roadmap) — the actual COD-credit + charges-debit
+ * execution, extracted verbatim from `OrderDeliveredAccrualListener`'s
+ * body (R1c shape) so it can be invoked from TWO different moments:
+ * immediately on DELIVERED for INSTANT-tier sellers (the default,
+ * unchanged behavior), or later by `PendingAccrualSweepService` for
+ * T_PLUS_N-tier sellers. `WalletService.applyEntry` stays the sole
+ * ledger writer either way — only the CALLER and its timing differ.
+ *
+ * Idempotent by construction (same gates as before the extraction): a
+ * pre-existing COD_COLLECTION entry skips the credit; ORDER_CHARGES is
+ * gated independently inside `OrderChargesAccrualService.debitIfNeeded`.
+ * Safe to call more than once for the same order.
+ */
+@Injectable()
+export class AccrualExecutionService {
+  private readonly logger = new Logger(AccrualExecutionService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly wallet: WalletService,
+    private readonly chargesAccrual: OrderChargesAccrualService,
+  ) {}
+
+  async executeAccrual(orderId: string): Promise<void> {
+    const codAlready = await this.prisma.client.sellerWalletEntry.findFirst({
+      where: { linkedOrderId: orderId, direction: WalletEntryDirection.COD_COLLECTION },
+      select: { id: true },
+    });
+
+    const order = await this.prisma.client.order.findUnique({
+      where: { id: orderId },
+      select: { id: true, sellerId: true, paymentMode: true, codAmountInr: true },
+    });
+    if (!order) {
+      this.logger.warn({ orderId }, 'Order vanished before accrual execution; skipping');
+      return;
+    }
+
+    await this.prisma.client.$transaction(async (tx) => {
+      if (!codAlready && order.paymentMode === PaymentMode.COD) {
+        const codAmount = order.codAmountInr ?? new Prisma.Decimal(0);
+        if (codAmount.gt(0)) {
+          await this.wallet.applyEntry(tx, {
+            sellerId: order.sellerId,
+            currency: Currency.INR,
+            direction: WalletEntryDirection.COD_COLLECTION,
+            amount: codAmount,
+            linkedOrderId: order.id,
+            actorType: ActorType.SYSTEM,
+          });
+        }
+      }
+
+      await this.chargesAccrual.debitIfNeeded(tx, order.id, order.sellerId);
+    });
+
+    await this.wallet.recomputeCacheAfterCommit(order.sellerId, Currency.INR, 'post-commit-accrual');
+  }
+}
