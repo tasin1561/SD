@@ -31,7 +31,7 @@ jobs:
           POSTGRES_PASSWORD: skydrop
           POSTGRES_DB: skydrop_test
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U skydrop -d skydrop_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
