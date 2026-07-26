@@ -9,6 +9,7 @@ import {
   SurchargeType,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { MarginCalculationService, type MarginResult } from './margin-calculation.service';
 import { ZoneResolverService, type ZoneResolution } from './zone-resolver.service';
 
 /**
@@ -101,6 +102,8 @@ export interface PricingComputeOutput {
   /** For persistence into OrderCharge.computationContext. */
   readonly computationContext: PricingComputationContext;
   readonly unresolved: readonly UnresolvedFallback[];
+  /** R1c — internal/admin-visible only; never surfaced to sellers, never touches the wallet. */
+  readonly margin: MarginResult;
 }
 
 export interface PricingComputationContext {
@@ -116,6 +119,8 @@ export interface PricingComputationContext {
   readonly sellerPricingId: string | null;
   readonly appliedRules: readonly { readonly type: string; readonly ruleId: string | null }[];
   readonly unresolved: readonly UnresolvedFallback[];
+  /** R1c — margin snapshot at compute time, persisted for the forensic trail. */
+  readonly margin: MarginResult;
 }
 
 const DEFAULT_SERVICE_TYPE = 'standard';
@@ -127,6 +132,7 @@ export class PricingEngineService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly zoneResolver: ZoneResolverService,
+    private readonly marginCalc: MarginCalculationService,
   ) {}
 
   async compute(input: PricingComputeInput): Promise<PricingComputeOutput> {
@@ -214,6 +220,13 @@ export class PricingEngineService {
     if (sellerDiscountPercent) {
       baseShipping = baseShipping.times(new Prisma.Decimal(1).minus(sellerDiscountPercent.dividedBy(100)));
     }
+
+    // 6b. Margin (R1c) — post-discount seller charge vs. real courier
+    // cost. Never surfaced to sellers; internal/admin figure only.
+    const margin = this.marginCalc.compute(
+      baseShipping,
+      baseRow?.costToSkydropInr ?? null,
+    );
 
     // 7. Surcharges.
     const surcharges: PricingChargeLine[] = [];
@@ -331,6 +344,7 @@ export class PricingEngineService {
       sellerPricingId: sellerPricing?.id ?? null,
       appliedRules,
       unresolved,
+      margin,
     };
 
     return {
@@ -350,6 +364,7 @@ export class PricingEngineService {
       totalInr,
       computationContext,
       unresolved,
+      margin,
     };
   }
 

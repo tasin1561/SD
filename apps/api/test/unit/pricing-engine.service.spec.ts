@@ -7,6 +7,7 @@ import {
   SurchargeComputationMethod,
   SurchargeType,
 } from '@skydrop/db';
+import { MarginCalculationService } from '../../src/modules/pricing/services/margin-calculation.service';
 import { PricingEngineService } from '../../src/modules/pricing/services/pricing-engine.service';
 import { ZoneResolverService } from '../../src/modules/pricing/services/zone-resolver.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
@@ -94,7 +95,7 @@ function makeSut(opts: SetupOpts = {}) {
   };
   const prisma = { client } as unknown as PrismaService;
   const zoneResolver = new ZoneResolverService(prisma);
-  return new PricingEngineService(prisma, zoneResolver);
+  return new PricingEngineService(prisma, zoneResolver, new MarginCalculationService());
 }
 
 describe('PricingEngineService.compute', () => {
@@ -176,6 +177,104 @@ describe('PricingEngineService.compute', () => {
     expect(out.gstAmountInr).toBe('16.20');
     // Total = 80 + 10 + 16.20 = 106.20
     expect(out.totalInr).toBe('106.20');
+    // R1c: no costToSkydropInr seeded on this rate card item → margin unknown, not zero.
+    expect(out.margin).toEqual({ baseChargeInr: '80.00', costToSkydropInr: null, marginInr: null });
+    expect(out.computationContext.margin).toEqual(out.margin);
+  });
+
+  it('R1c: computes a real margin when costToSkydropInr is seeded on the rate card item', async () => {
+    const svc = makeSut({
+      rateCard: { id: 'rc-1', code: 'default-2026' },
+      courier: { id: 'c-1', code: 'delhivery' },
+      pin: { pinCode: '110001', serviceArea: ServiceArea.METRO, zone: 'Z1' },
+      rateCardItem: {
+        id: 'rci-1',
+        baseChargeInr: new Prisma.Decimal('80'),
+        perKgChargeInr: null,
+        costToSkydropInr: new Prisma.Decimal('55'),
+        weightSlabFromGrams: 0,
+        weightSlabToGrams: 500,
+      },
+    });
+    const out = await svc.compute({
+      sellerId: 's-1',
+      recipientPostalCode: '110001',
+      paymentMode: PaymentMode.PREPAID,
+      codAmountInr: 0,
+      declaredValueInr: 500,
+      totalWeightGrams: 300,
+      courierCode: 'delhivery',
+    });
+    expect(out.margin).toEqual({ baseChargeInr: '80.00', costToSkydropInr: '55.00', marginInr: '25.00' });
+  });
+
+  it('R1c: margin reflects the POST-discount seller charge, not the rate-card sticker price', async () => {
+    const svc = makeSut({
+      rateCard: { id: 'rc-1', code: 'default-2026' },
+      courier: { id: 'c-1', code: 'delhivery' },
+      pin: { pinCode: '110001', serviceArea: ServiceArea.METRO, zone: 'Z1' },
+      sellerPricing: {
+        id: 'sp-1',
+        rateCardId: 'rc-1',
+        discountPercent: new Prisma.Decimal('25'),
+        codFeePercent: null,
+        courierId: null,
+      },
+      rateCardItem: {
+        id: 'rci-1',
+        baseChargeInr: new Prisma.Decimal('100'),
+        perKgChargeInr: null,
+        costToSkydropInr: new Prisma.Decimal('55'),
+        weightSlabFromGrams: 0,
+        weightSlabToGrams: 500,
+      },
+    });
+    const out = await svc.compute({
+      sellerId: 's-1',
+      recipientPostalCode: '110001',
+      paymentMode: PaymentMode.PREPAID,
+      codAmountInr: 0,
+      declaredValueInr: 500,
+      totalWeightGrams: 300,
+      courierCode: 'delhivery',
+    });
+    // 100 - 25% = 75 charged to the seller; margin = 75 - 55 = 20 (not 100-55=45).
+    expect(out.baseShippingInr).toBe('75.00');
+    expect(out.margin).toEqual({ baseChargeInr: '75.00', costToSkydropInr: '55.00', marginInr: '20.00' });
+  });
+
+  it('R1c: a deep discount can drive margin negative — surfaced, not clamped', async () => {
+    const svc = makeSut({
+      rateCard: { id: 'rc-1', code: 'default-2026' },
+      courier: { id: 'c-1', code: 'delhivery' },
+      pin: { pinCode: '110001', serviceArea: ServiceArea.METRO, zone: 'Z1' },
+      sellerPricing: {
+        id: 'sp-1',
+        rateCardId: 'rc-1',
+        discountPercent: new Prisma.Decimal('50'),
+        codFeePercent: null,
+        courierId: null,
+      },
+      rateCardItem: {
+        id: 'rci-1',
+        baseChargeInr: new Prisma.Decimal('100'),
+        perKgChargeInr: null,
+        costToSkydropInr: new Prisma.Decimal('55'),
+        weightSlabFromGrams: 0,
+        weightSlabToGrams: 500,
+      },
+    });
+    const out = await svc.compute({
+      sellerId: 's-1',
+      recipientPostalCode: '110001',
+      paymentMode: PaymentMode.PREPAID,
+      codAmountInr: 0,
+      declaredValueInr: 500,
+      totalWeightGrams: 300,
+      courierCode: 'delhivery',
+    });
+    // 100 - 50% = 50 charged; margin = 50 - 55 = -5.
+    expect(out.margin).toEqual({ baseChargeInr: '50.00', costToSkydropInr: '55.00', marginInr: '-5.00' });
   });
 
   it('applies SellerPricing.discountPercent to base shipping', async () => {
