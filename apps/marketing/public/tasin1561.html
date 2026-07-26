@@ -566,10 +566,15 @@
       </div>
       <div class="item">
         <h3>Phase D · Network, returns &amp; exceptions <span class="pill sky">designed</span></h3>
-        <p>Multi-warehouse routing + cross-warehouse RTO transfer; virtual booking with seller-decided unbook; scrap + damage tickets and a seller support-ticket panel; a warehouse scanner app; and an exception dashboard unifying missing/mismatch/damaged/failed-courier/unbook queues.</p>
+        <p>Multi-warehouse routing + cross-warehouse RTO transfer; virtual booking with seller-decided unbook; scrap + damage tickets and a seller support-ticket panel; a warehouse scanner app; and an exception dashboard unifying missing/mismatch/damaged/failed-courier/unbook queues. <strong>Launch ships on this foundation with deliberately minimal, functional UI/UX</strong> — the operating model proves itself before the interface is polished.</p>
       </div>
     </div>
     <div class="callout"><strong>Why this is low-risk:</strong> none of it is a rewrite. The wallet ledger + COD accrual are already built (awaiting go-live); reservations already model virtual holds; the warehouse already has bins, batches and quarantine/damaged bin types; the courier layer already has a fallback; and per-seller overrides already exist. Each phase generalizes a seam that is already in the codebase.</div>
+
+    <div class="panel" style="margin-top:16px;">
+      <h3>After launch <span class="pill plan">outside this ask</span></h3>
+      <p>Phases A–D are sequenced first because they carry the trust and differentiation — money, inventory integrity, courier network, returns. UI/UX at launch is intentionally minimal: functional, not polished. Once the model is live and proven, two follow-on workstreams open — a dedicated <strong>security hardening pass</strong> (access &amp; dependency audit, penetration testing) and a full <strong>UI/UX design pass</strong> across the admin and seller apps. Both are scoped and funded separately once the platform is live; neither draws on the ৳6,00,000 above.</p>
+    </div>
   </div>
 </section>
 
@@ -614,7 +619,7 @@
       </div>
     </div>
 
-    <div class="grid2" style="margin-top:18px;">
+    <div class="grid3" style="margin-top:18px;">
       <div class="panel">
         <h3>Comfortable today</h3>
         <ul>
@@ -633,7 +638,67 @@
           <li>None require re-architecture — they are the intended next steps, deferred because beta load doesn't need them</li>
         </ul>
       </div>
+      <div class="panel">
+        <h3>Scale target <span class="pill plan">roadmap</span></h3>
+        <p>Grow into a full year of live customer &amp; order history and sustain up to <strong>10 lakh (1,000,000) orders/month</strong> — via the TimescaleDB chunk + compression policy already running for tracking &amp; stock events, extended retention windows, Postgres read replicas, and the worker/API scale-out at left.</p>
+      </div>
     </div>
+  </div>
+</section>
+
+<!-- 09 — BEYOND LAUNCH -->
+<section id="future">
+  <div class="wrap">
+    <div class="sechead tel"><span class="idx">SEC 09</span><span class="bar"></span><span>Beyond launch</span></div>
+    <h2>The long-term platform</h2>
+    <p class="lead">Once the operating model is live, security-hardened and its interface polished, Skydrop grows from a fulfillment backbone into a full operating platform for cross-border sellers — scoped against real usage data and funded from the maintenance retainer and growth revenue, not this ask.</p>
+
+    <div class="grid3">
+      <div class="panel">
+        <h3>AI assistant for sellers <span class="pill plan">vision</span></h3>
+        <p>A conversational assistant inside the seller portal, grounded in the seller's own data — "why did my RTO spike this week," "which SKUs to restock," "draft a reply to this customer." Answers, not just dashboards.</p>
+      </div>
+      <div class="panel">
+        <h3>AI across operations <span class="pill plan">vision</span></h3>
+        <p>Demand forecasting for restock timing, RTO-risk scoring at order intake, smart retry-timing for unreachable buyers, and auto-drafted support responses — folded into the existing call-confirm, WMS and courier layers, not bolted on top.</p>
+      </div>
+      <div class="panel">
+        <h3>More automated workflows <span class="pill plan">vision</span></h3>
+        <p>A rules engine sellers and ops staff configure themselves — auto-escalate aged RTOs, auto-reassign stalled calls, auto-adjust reorder points — reducing manual supervision as order volume grows.</p>
+      </div>
+    </div>
+
+    <div class="grid3" style="margin-top:16px;">
+      <div class="panel">
+        <h3>Seller business analytics <span class="pill plan">vision</span></h3>
+        <p>Sales trends, SKU &amp; category performance, RTO/NDR patterns by city and courier, customer cohort &amp; repeat-rate views — the seller's own picture of their India business.</p>
+      </div>
+      <div class="panel">
+        <h3>Skydrop's own analytics &amp; P&amp;L <span class="pill plan">vision</span></h3>
+        <p>Internal margin-per-order tracking, seller-cohort profitability, courier scorecards, and a real profit &amp; loss view rolled up from the same double-entry ledger that settles sellers.</p>
+      </div>
+      <div class="panel">
+        <h3>HR &amp; employee performance <span class="pill plan">vision</span></h3>
+        <p>Staff onboarding, attendance and payroll integration for warehouse &amp; call-center employees, plus performance views seeded by data already captured — call-agent confirm-rate, picker/packer throughput, per-shift productivity.</p>
+      </div>
+    </div>
+
+    <div class="grid3" style="margin-top:16px;">
+      <div class="panel">
+        <h3>Outside e-commerce integrations <span class="pill plan">vision</span></h3>
+        <p>Direct connectors to Shopify, WooCommerce, Daraz and similar platforms, so a seller's existing storefront pushes orders into Skydrop automatically — no manual entry or CSV upload required.</p>
+      </div>
+      <div class="panel">
+        <h3>Hosted storefront subscription <span class="pill plan">vision</span></h3>
+        <p>A lightweight, hosted D2C storefront for sellers who don't have their own website yet — a paid add-on subscription plugging directly into the same catalog &amp; order pipeline.</p>
+      </div>
+      <div class="panel">
+        <h3>SEO <span class="pill plan">vision</span></h3>
+        <p>Storefront SEO for the hosted-store option above, and continued investment in skydrop.online's own organic reach — the acquisition channel for new sellers.</p>
+      </div>
+    </div>
+
+    <div class="callout"><strong>Funded by growth, not this raise:</strong> every item above is post-launch, post-hardening, post-polish — prioritized once Skydrop is live and generating usage data, and paid for from the maintenance retainer and growth revenue rather than the ৳6,00,000 completion budget above.</div>
   </div>
 </section>
 
@@ -643,7 +708,7 @@
 <!-- 08 — BUDGET & FUNDING -->
 <section id="budget">
   <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 09</span><span class="bar"></span><span>Investment &amp; economics</span></div>
+    <div class="sechead tel"><span class="idx">SEC 10</span><span class="bar"></span><span>Investment &amp; economics</span></div>
     <h2>Budget &amp; funding</h2>
     <p class="lead">This document is the proposed plan to complete the refined operating model. Below is the capital required to finish it, how it releases against milestones, and the true monthly cost of running the system at three order volumes.</p>
 
