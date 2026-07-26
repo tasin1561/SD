@@ -142,6 +142,17 @@
   }
   .theme-btn:hover { color: var(--fg-strong); border-color: var(--sky); }
 
+  .controls { display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+  .seg { display:inline-flex; border:1px solid var(--panel-edge-strong); border-radius:9px; overflow:hidden; }
+  .seg-btn { font-family: var(--font-mono); font-size:0.68rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--fg-muted); background:transparent; border:0; padding:7px 14px; cursor:pointer; transition: background .15s ease, color .15s ease; }
+  .seg-btn + .seg-btn { border-left:1px solid var(--panel-edge-strong); }
+  .seg-btn:hover { color: var(--fg-strong); }
+  .seg-btn.is-active { color: var(--surface); background: var(--sky); }
+  .view-budget { display: none; }
+  [data-view="budget"] .view-budget { display: block; }
+  [data-view="budget"] .view-plan { display: none; }
+  .view-budget > section:first-child { padding-top: 50px; }
+
   .hero { padding: 62px 0 34px; position: relative; }
   .hero::before {
     content: ''; position: absolute; top: -60px; left: 50%; transform: translateX(-50%);
@@ -283,10 +294,17 @@
       <span class="name">Skydrop</span>
       <span class="status tel"><span class="dot"></span>operating model · v2</span>
     </div>
-    <button class="theme-btn" id="themeToggle" type="button">Toggle theme</button>
+    <div class="controls">
+      <div class="seg" role="tablist" aria-label="View">
+        <button class="seg-btn is-active" id="viewPlan" type="button">Plan</button>
+        <button class="seg-btn" id="viewBudget" type="button">Budget</button>
+      </div>
+      <button class="theme-btn" id="themeToggle" type="button">Toggle theme</button>
+    </div>
   </div>
 </div>
 
+<div class="view-plan">
 <div class="hero">
   <div class="wrap">
     <div class="tel" style="margin-bottom:14px;">Target operating model · on a shipped, production-grade foundation</div>
@@ -530,6 +548,9 @@
   </div>
 </section>
 
+</div><!-- /view-plan -->
+
+<div class="view-budget">
 <!-- 08 — BUDGET & FUNDING -->
 <section id="budget">
   <div class="wrap">
@@ -613,6 +634,7 @@
     </div>
   </div>
 </section>
+</div><!-- /view-budget -->
 
 <footer>
   <div class="wrap row">
@@ -624,16 +646,33 @@
 <script>
   (function () {
     var root = document.documentElement;
-    var btn = document.getElementById('themeToggle');
-    function current() {
+
+    // Theme toggle
+    var themeBtn = document.getElementById('themeToggle');
+    function currentTheme() {
       var attr = root.getAttribute('data-theme');
       if (attr) return attr;
       return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
-    btn.addEventListener('click', function () {
-      var next = current() === 'dark' ? 'light' : 'dark';
-      root.setAttribute('data-theme', next);
+    themeBtn.addEventListener('click', function () {
+      root.setAttribute('data-theme', currentTheme() === 'dark' ? 'light' : 'dark');
     });
+
+    // View toggle — Plan / Budget (two "pages", one document)
+    var bPlan = document.getElementById('viewPlan');
+    var bBudget = document.getElementById('viewBudget');
+    function setView(v) {
+      root.setAttribute('data-view', v);
+      bPlan.classList.toggle('is-active', v === 'plan');
+      bBudget.classList.toggle('is-active', v === 'budget');
+      try {
+        history.replaceState(null, '', v === 'budget' ? '#budget' : location.pathname + location.search);
+      } catch (e) { /* ignore */ }
+      window.scrollTo(0, 0);
+    }
+    bPlan.addEventListener('click', function () { setView('plan'); });
+    bBudget.addEventListener('click', function () { setView('budget'); });
+    setView(location.hash === '#budget' ? 'budget' : 'plan');
   })();
 </script>
 
