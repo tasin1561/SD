@@ -21,7 +21,8 @@ const T_PLUS_N = 'T_PLUS_N';
 /**
  * Phase 1B M22 — COD accrual on DELIVERED. R2b extended this to a
  * per-seller TIMING TIER dispatcher:
- *   INSTANT (default, today's exact behavior) → executes immediately
+ *   INSTANT (a per-seller opt-in since 2026-07-26; was the default) →
+ *   executes immediately
  *     via `AccrualExecutionService.executeAccrual()`.
  *   T_PLUS_N (seller opt-in) → schedules a `PendingAccrual` row
  *     instead; `PendingAccrualSweepService` executes it later, via the
@@ -121,7 +122,10 @@ export class OrderDeliveredAccrualListener
       return;
     }
 
-    // INSTANT (default) — execute immediately, exactly as before R2b.
+    // INSTANT — execute immediately (pre-R2b behaviour). No longer the
+    // system default: crediting at DELIVERED means Skydrop fronts the
+    // money until the courier settles, so this is now an explicit
+    // per-seller choice.
     await this.execution.executeAccrual(order.id);
   }
 }

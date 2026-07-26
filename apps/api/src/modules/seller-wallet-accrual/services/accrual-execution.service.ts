@@ -8,7 +8,8 @@ import { OrderChargesAccrualService } from './order-charges-accrual.service';
  * R2b (revised-plan roadmap) — the actual COD-credit + charges-debit
  * execution, extracted verbatim from `OrderDeliveredAccrualListener`'s
  * body (R1c shape) so it can be invoked from TWO different moments:
- * immediately on DELIVERED for INSTANT-tier sellers (the default,
+ * immediately on DELIVERED for INSTANT-tier sellers (an opt-in since
+ * 2026-07-26;
  * unchanged behavior), or later by `PendingAccrualSweepService` for
  * T_PLUS_N-tier sellers. `WalletService.applyEntry` stays the sole
  * ledger writer either way — only the CALLER and its timing differ.

@@ -38,7 +38,8 @@ function makeService(
   const resolve = jest.fn(async () => ({
     key: 'wallet.accrual_timing_tier',
     valueType: 'STRING',
-    value: opts.tier ?? 'INSTANT',
+    // Mirrors the seeded system default (T_PLUS_N since 2026-07-26).
+    value: opts.tier ?? 'T_PLUS_N',
     source: 'SYSTEM_DEFAULT' as const,
   }));
   const settings = { resolve };
@@ -68,7 +69,7 @@ describe('OrderDeliveredAccrualListener.handle', () => {
     expect(scheduleIfNeeded).not.toHaveBeenCalled();
   });
 
-  it('INSTANT tier (default): DELIVERED executes the accrual immediately', async () => {
+  it('INSTANT tier (per-seller opt-in): DELIVERED executes the accrual immediately', async () => {
     const { listener, executeAccrual, scheduleIfNeeded, resolve } = makeService({ tier: 'INSTANT' });
     await listener.handle(lifecycleEvent(OrderStatus.DELIVERED));
     expect(resolve).toHaveBeenCalledWith('seller-1', 'wallet.accrual_timing_tier');

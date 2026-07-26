@@ -443,11 +443,17 @@ const systemSettings: SystemSettingSeed[] = [
   {
     key: 'wallet.accrual_timing_tier',
     category: 'wallet',
+    // Default flipped to T_PLUS_N (2026-07-26). Crediting at DELIVERED
+    // pays sellers 5-10 days BEFORE the courier settles with us, i.e.
+    // Skydrop floats the money and eats any short-payment. INSTANT stays
+    // available as a per-seller opt-in (and is the shape a paid
+    // instant-credit tier would take), but it is no longer what a new
+    // seller gets by default.
     valueType: SettingValueType.STRING,
-    valueString: 'INSTANT',
+    valueString: 'T_PLUS_N',
     displayName: 'Wallet Accrual Timing Tier',
     description:
-      "'INSTANT' (default — credited/debited immediately on DELIVERED, today's behavior) or 'T_PLUS_N' (deferred by accrual_delay_days, swept by a cron worker). Per-seller override via seller_setting_overrides.",
+      "'T_PLUS_N' (default — credited/debited accrual_delay_days after DELIVERED, once the courier has settled with us) or 'INSTANT' (credited the moment the parcel is delivered, which means Skydrop fronts the money until the courier pays). Per-seller override via seller_setting_overrides.",
     sellerOverridable: true,
   },
   // R5 — two-stage ("virtual") inventory booking. Defaults keep every
@@ -578,10 +584,14 @@ const systemSettings: SystemSettingSeed[] = [
     key: 'wallet.accrual_delay_days',
     category: 'wallet',
     valueType: SettingValueType.INT,
-    valueInt: 2,
+    // 7 days: Delhivery's stated settlement window is 5-10 days, so this
+    // covers the typical case. The R2c settlement ledger is what will
+    // tell you the REAL distribution — raise this if the reconciliation
+    // report shows payouts routinely landing later than 7 days.
+    valueInt: 7,
     displayName: 'Accrual Delay (days)',
     description:
-      "Days after DELIVERED before a T_PLUS_N-tier seller's wallet is credited/debited. Ignored for INSTANT-tier sellers. Per-seller override via seller_setting_overrides.",
+      "Days after DELIVERED before a T_PLUS_N-tier seller's wallet is credited/debited. Should be >= the courier's settlement window, so we are paying out money we already hold. Ignored for INSTANT-tier sellers. Per-seller override via seller_setting_overrides.",
     sellerOverridable: true,
     overrideMinInt: 1,
     overrideMaxInt: 30,
