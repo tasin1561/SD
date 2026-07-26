@@ -277,7 +277,17 @@ describe('Seller flow (e2e): invitation → register → login → api keys → 
       .expect(200);
   });
 
-  it('seller email verification round trip sets emailVerifiedAt', async () => {
+  // Registering through an emailed invitation link inherently proves the
+  // seller controls that address, so Phase-1B's `register/invite` stamps
+  // `SellerUser.emailVerifiedAt` immediately (seller-auth.service.ts —
+  // the OWNER row is created with `emailVerifiedAt: now`). Re-requesting
+  // verification is therefore a 409 ALREADY_VERIFIED, not a 200.
+  //
+  // This spec used to assert the pre-Phase-1B round trip (request → 200 →
+  // consume token → confirm). It had been failing since the seller_users
+  // migration and nobody saw it, because the e2e suite as a whole was
+  // wedged on a reset-chain FK violation AND CI never invoked `test:e2e`.
+  it('invite registration verifies the email up-front; re-requesting is ALREADY_VERIFIED', async () => {
     const created = await request(h.baseUrl)
       .post('/admin/seller-invitations')
       .set('Authorization', `Bearer ${staffAccess}`)
@@ -294,27 +304,19 @@ describe('Seller flow (e2e): invitation → register → login → api keys → 
       })
       .expect(201);
 
-    await request(h.baseUrl)
+    // The authenticating SellerUser is already verified at registration.
+    const owner = await h.prisma.sellerUser.findFirst({
+      where: { sellerId: reg.body.seller.id },
+      select: { emailVerifiedAt: true, role: true },
+    });
+    expect(owner?.role).toBe('OWNER');
+    expect(owner?.emailVerifiedAt).toBeInstanceOf(Date);
+
+    const res = await request(h.baseUrl)
       .post('/auth/seller/email-verification/request')
       .set('Authorization', `Bearer ${reg.body.accessToken}`)
-      .expect(200);
-
-    const log = await waitFor(
-      () =>
-        h.prisma.notificationLog.findFirst({
-          where: { templateCode: 'seller.email_verification.email' },
-        }),
-      { description: 'seller email-verification notification_log' },
-    );
-    const plaintext = /token=([A-Za-z0-9_-]+)/.exec(log.body)![1]!;
-
-    await request(h.baseUrl)
-      .post('/auth/seller/email-verification/confirm')
-      .send({ token: plaintext })
-      .expect(200);
-
-    const fresh = await h.prisma.seller.findUnique({ where: { id: reg.body.seller.id } });
-    expect(fresh!.emailVerifiedAt).toBeInstanceOf(Date);
+      .expect(409);
+    expect(res.body.code).toBe('ALREADY_VERIFIED');
   });
 
   // ─────────────────────────────────────────────────────────────────────

@@ -122,6 +122,12 @@ export async function resetAuthState(
   // resetCallCenterState; then stock rows FK orders/variants/sellers →
   // inventory; then Module-6 order/customer rows → resetOrderState;
   // then catalog (FK sellers); then the auth/seller wipe.
+  // Phase-1B + revised-plan (R0-R6) tables FIRST: several of them
+  // FK-RESTRICT `orders` (pending_accruals, invoices) and `sellers`
+  // (seller_users, wallet, remittances, settings overrides, courier
+  // links, withdrawal requests), so they must be gone before
+  // resetOrderState's orders truncate and before the seller wipe below.
+  await resetPhase1bState(prisma);
   await resetWarehouseState(prisma);
   await resetCallCenterState(prisma);
   await resetInventoryState(prisma);
@@ -148,6 +154,56 @@ export async function resetAuthState(
     prisma.seller.deleteMany({}),
     prisma.staffUser.deleteMany({}),
   ]);
+}
+
+/**
+ * Wipes the Phase-1B + revised-plan (R0-R6) tables that FK-RESTRICT
+ * `sellers` or `orders` (CLAUDE MUST #12).
+ *
+ * This helper is why the e2e suite runs at all: `seller_users` landed
+ * with seller-team RBAC and was never added to the reset chain, so
+ * `prisma.seller.deleteMany()` had been failing with a 23001 RESTRICT
+ * violation on EVERY suite. The gap survived because CI never invoked
+ * `test:e2e` — nothing was watching. Four more tables
+ * (seller_setting_overrides, seller_courier_account_links,
+ * withdrawal_requests, pending_accruals) were added on top of it during
+ * the R0-R2b work and inherited the same omission.
+ *
+ * TRUNCATE … CASCADE (same pattern as resetCatalogState) sidesteps the
+ * intra-group FK ordering entirely — withdrawal_requests→remittances,
+ * seller_wallet_entries→remittances, seller_user_invitations→
+ * seller_users — instead of hand-sequencing a dozen deleteMany calls
+ * whose correct order is easy to get subtly wrong.
+ *
+ * When you add ANY new table with a RESTRICT FK to `sellers`/`orders`,
+ * add it here. To find omissions, query the DB for
+ * `delete_rule NOT IN ('CASCADE','SET NULL')` FKs referencing sellers
+ * and diff against this list.
+ */
+export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
+  await prisma.$executeRawUnsafe(
+    'TRUNCATE TABLE ' +
+      [
+        // Wallet + payouts (M21-M24)
+        'withdrawal_requests',
+        'pending_accruals',
+        'seller_wallet_entries',
+        'seller_wallet_balances',
+        'remittances',
+        // GST invoices (M25)
+        'invoices',
+        // Seller-team RBAC
+        'seller_user_invitations',
+        'seller_users',
+        // Pricing + integrations
+        'seller_pricing',
+        'seller_webhook_endpoints',
+        // Revised-plan R0/R1
+        'seller_setting_overrides',
+        'seller_courier_account_links',
+      ].join(', ') +
+      ' RESTART IDENTITY CASCADE',
+  );
 }
 
 /**

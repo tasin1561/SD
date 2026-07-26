@@ -71,27 +71,22 @@ describe('Module 2 (e2e): onboarding flow + suspension + addresses + prefs', () 
       .set('Authorization', `Bearer ${reg.accessToken}`)
       .expect(200);
     expect(profile1.body.onboarding.isComplete).toBe(false);
+    // EMAIL_VERIFIED is ALREADY satisfied — registering through the
+    // emailed invitation link is itself proof of email ownership, so
+    // `register/invite` stamps SellerUser.emailVerifiedAt and marks the
+    // onboarding step in the same tx. Only the BD origin address is
+    // outstanding at this point.
     expect(profile1.body.onboarding.missingRequired).toEqual(
-      expect.arrayContaining(['EMAIL_VERIFIED', 'BD_ORIGIN_ADDRESS_ADDED']),
+      expect.arrayContaining(['BD_ORIGIN_ADDRESS_ADDED']),
     );
+    expect(profile1.body.onboarding.missingRequired).not.toContain('EMAIL_VERIFIED');
 
-    // Email verification: request + confirm via the captured token
-    await request(h.baseUrl)
+    // Re-requesting verification is a conflict, not a new round trip.
+    const reRequest = await request(h.baseUrl)
       .post('/auth/seller/email-verification/request')
       .set('Authorization', `Bearer ${reg.accessToken}`)
-      .expect(200);
-    const evLog = await waitFor(
-      () =>
-        h.prisma.notificationLog.findFirst({
-          where: { templateCode: 'seller.email_verification.email' },
-        }),
-      { description: 'email-verification log' },
-    );
-    const plaintext = /token=([A-Za-z0-9_-]+)/.exec(evLog.body)![1]!;
-    await request(h.baseUrl)
-      .post('/auth/seller/email-verification/confirm')
-      .send({ token: plaintext })
-      .expect(200);
+      .expect(409);
+    expect(reRequest.body.code).toBe('ALREADY_VERIFIED');
 
     // Still missing BD_ORIGIN
     const profile2 = await request(h.baseUrl)

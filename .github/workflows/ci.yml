@@ -121,6 +121,21 @@ jobs:
       - name: Unit tests — packages
         run: pnpm --filter './packages/*' --if-present test
 
+      # The e2e suite was previously NEVER run by CI — it only ran on a
+      # dev machine, and it had in fact been fully wedged for a while
+      # (a reset-chain FK violation) with nothing watching. Running it
+      # here is what makes the cross-lifecycle invariants (stock
+      # conservation through RTO, order lifecycle, seller RBAC on real
+      # requests) actually enforced rather than assumed.
+      #
+      # TEST_DB_DOCKER_CONTAINER='' switches the harness from
+      # `docker exec skydrop-postgres` (local dev) to a direct TCP psql
+      # against the service container above.
+      - name: E2E tests — API (jest, runInBand)
+        env:
+          TEST_DB_DOCKER_CONTAINER: ''
+        run: pnpm --filter @skydrop/api test:e2e
+
       - name: Build the four Next apps
         run: |
           pnpm --filter @skydrop/api build

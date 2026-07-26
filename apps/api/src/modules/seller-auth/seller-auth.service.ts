@@ -246,6 +246,28 @@ export class SellerAuthService {
       // so a rollback doesn't orphan onboarding rows.
       await this.onboarding.initializeProgress(createdSeller.id, tx);
 
+      // EMAIL_VERIFIED is satisfied by construction here: reaching this
+      // code required consuming a token that was emailed to this exact
+      // address, which is why the OWNER row above is created with
+      // `emailVerifiedAt: now`. Marking the onboarding step in the same
+      // breath keeps the two representations of "email is verified" in
+      // agreement.
+      //
+      // Without this, onboarding was UNCOMPLETABLE for every
+      // invite-registered seller: `confirmEmailVerification` is the only
+      // other place that marks this step, and the only way to obtain a
+      // confirmation token — `requestEmailVerification` — permanently
+      // 409s ALREADY_VERIFIED once `emailVerifiedAt` is set. So the step
+      // could never be reached and `onboarding.isComplete` could never
+      // become true.
+      await this.onboarding.markStepComplete(
+        createdSeller.id,
+        SellerOnboardingStep.EMAIL_VERIFIED,
+        OnboardingStepActor.SYSTEM,
+        { email: normalizedEmail, via: 'invitation-registration' },
+        tx,
+      );
+
       // Pre-seed the 7 notification-preference rows with Phase 1A defaults.
       await this.notificationPreferences.seedDefaults(createdSeller.id, tx);
 
