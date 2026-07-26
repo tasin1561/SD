@@ -339,7 +339,7 @@
   <div class="wrap">
     <div class="tel" style="margin-bottom:14px;">Target operating model · on a shipped, production-grade foundation</div>
     <h1>The operating system for cross&#8209;border commerce.</h1>
-    <p class="sub">Skydrop lets a Bangladeshi seller sell into India as if they had a full Indian operation — a scan-driven warehouse with unit-level inventory integrity, phone-confirmed COD, courier-first dispatch across multiple carriers, live tracking, structured returns and scrap resolution, and remittance home. One system, three operators, zero Indian entity required.</p>
+    <p class="sub">Skydrop lets a Bangladeshi seller sell into India as if they had a full Indian operation — a scan-driven warehouse with unit-level inventory integrity, phone-confirmed COD, courier-first dispatch across multiple carriers, live tracking, structured returns and scrap resolution, a double-entry wallet with advance payouts, and remittance home. One system, three operators, zero Indian entity required.</p>
     <div class="hero meta tel">
       <span><span class="dot" style="background:var(--sky)"></span>corridor BD → IN</span>
       <span>3 operator roles</span>
@@ -370,11 +370,11 @@
     <div class="grid3">
       <div class="panel">
         <h3>Seller <span class="tel" style="color:var(--fg-muted)">· Bangladesh</span></h3>
-        <p>A company account with many staff/agent logins under one roof — role-scoped (owner, ops, inventory, finance, viewer). Onboard, manage catalog &amp; stock, place or bulk-upload orders, watch shipments, resolve exceptions, and see money owed.</p>
+        <p>A company account with many staff/agent logins under one roof — role-scoped (owner, ops, inventory, finance, viewer). Onboard, manage catalog &amp; stock, place or bulk-upload orders, watch shipments, resolve exceptions, manage an INR wallet, and withdraw earnings.</p>
       </div>
       <div class="panel">
         <h3>Skydrop staff <span class="tel" style="color:var(--fg-muted)">· India</span></h3>
-        <p>The internal console — approve sellers, confirm orders by phone, receive &amp; label stock, pick/pack under scan discipline, book couriers, run returns and scrap tickets, and process remittance.</p>
+        <p>The internal console — approve sellers, confirm orders by phone, receive &amp; label stock, pick/pack under scan discipline, book couriers across multiple accounts, run returns, scrap &amp; support tickets, and settle payouts.</p>
       </div>
       <div class="panel">
         <h3>Customer <span class="tel" style="color:var(--fg-muted)">· India</span></h3>
@@ -428,24 +428,76 @@
   </div>
 </section>
 
-<!-- 03 — THE LIFECYCLE -->
+<!-- 03 — FINANCE & SETTLEMENT -->
+<section id="finance">
+  <div class="wrap">
+    <div class="sechead tel"><span class="idx">SEC 03</span><span class="bar"></span><span>The money engine</span></div>
+    <h2>Finance &amp; settlement, accurate to the rupee</h2>
+    <p class="lead">Money is the part that can never be wrong. Skydrop runs on INR as the canonical currency and a double-entry ledger where every rupee reconciles to zero — so a Bangladeshi seller is paid quickly and correctly for Indian COD sales, and we always know exactly how much cash we've fronted and are owed.</p>
+
+    <div class="panel">
+      <h3>The COD settlement waterfall <span class="pill sky">designed</span></h3>
+      <p>Every delivered order's collected cash runs through one deterministic, auditable sequence before the seller is paid:</p>
+      <div class="flow">
+        <div class="step"><div class="s-idx">in</div><div class="s-t">COD collected</div><div class="s-b">The full amount the courier collects from the customer.</div></div>
+        <div class="step" data-edge="seller bears"><div class="s-idx">− gst</div><div class="s-t">Less 18% GST</div><div class="s-b">Tax on the shipping/service charge, borne by the seller.</div></div>
+        <div class="step" data-edge="margin"><div class="s-idx">− courier</div><div class="s-t">Less courier fee</div><div class="s-b">Real per-parcel cost + our margin. The seller sees only the blended fee.</div></div>
+        <div class="step"><div class="s-idx">− dues</div><div class="s-t">Less freight / dues</div><div class="s-b">Pay-later inbound freight and any RTO / return charges owed.</div></div>
+        <div class="step refined" data-edge="advance"><div class="s-idx">= net</div><div class="s-t">Credited to wallet</div><div class="s-b">Net paid into the seller's INR wallet — in advance of the courier paying us.</div></div>
+      </div>
+    </div>
+
+    <div class="grid3" style="margin-top:16px;">
+      <div class="panel">
+        <h3>Wallet &amp; withdrawals <span class="pill live">foundation live</span></h3>
+        <p>The per-currency wallet ledger + live balance runs today. Adding self-service withdrawals (min threshold + daily count limit), auto-withdraw cycles, and instant credit-at-delivery as a paid priority add-on.</p>
+      </div>
+      <div class="panel">
+        <h3>Advance credit &amp; float <span class="pill sky">designed</span></h3>
+        <p>Couriers pay us 5–10 days after delivery; we credit the seller ~2 days after (per-seller). Every advanced rupee is tracked as float, with auto-clawback if a courier remittance doesn't reconcile.</p>
+      </div>
+      <div class="panel">
+        <h3>Margin, by design <span class="pill sky">designed</span></h3>
+        <p>We fetch the real per-parcel courier fee and book our margin; the seller only ever sees the blended charge. Per-seller fee (flat or %), admin-set, charged at courier-entry or at payout.</p>
+      </div>
+    </div>
+
+    <div class="grid3" style="margin-top:16px;">
+      <div class="panel">
+        <h3>Currency <span class="pill live">FX live</span></h3>
+        <p>INR canonical; BDT via a manual, audited INR↔BDT rate with full history. Sellers enter product cost in BDT or INR — stored as entered, converted live for display.</p>
+      </div>
+      <div class="panel">
+        <h3>Three price components <span class="pill sky">designed</span></h3>
+        <p>① Product cost (BDT/INR, record-only valuation) · ② inbound freight (BD → IN warehouse, may be 0) · ③ dues — pay-on-arrival or pay-later, deducted at payout (future 0.5–1% service charge).</p>
+      </div>
+      <div class="panel">
+        <h3>Reconciliation <span class="pill sky">designed</span></h3>
+        <p>Courier remittance files matched parcel-by-parcel against what we advanced; a daily close proves the books; per-seller exposure and global float on one dashboard.</p>
+      </div>
+    </div>
+    <div class="callout"><strong>Why double-entry:</strong> every rupee credited to a seller posts as a balanced debit to a Skydrop float / receivable account. The system can prove, at any instant, exactly how much cash it has fronted and is owed — nothing is booked twice, nothing goes missing. This is the discipline behind “never lose a rupee.”</div>
+  </div>
+</section>
+
+<!-- 04 — THE LIFECYCLE -->
 <section id="flow">
   <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 03</span><span class="bar"></span><span>The operational pipeline</span></div>
+    <div class="sechead tel"><span class="idx">SEC 04</span><span class="bar"></span><span>The operational pipeline</span></div>
     <h2>How an order flows, end-to-end</h2>
     <p class="lead">Every order travels one instrumented lifecycle, enforced by a state machine — no “any-to-any” jumps — with an append-only event log and stock conserved so it decrements exactly once, at dispatch. Amber stages are the refined operating model now in build.</p>
     <div class="flow">
       <div class="step refined" data-edge="scan"><div class="s-idx">01 · stock in</div><div class="s-t">Receive &amp; label</div><div class="s-b">Goods arrive; in strict mode Skydrop applies a per-unit barcode. Scanned into bins.</div></div>
       <div class="step refined" data-edge="virtual"><div class="s-idx">02 · order</div><div class="s-t">Order placed</div><div class="s-b">Single or CSV. Recipient + SKU snapshotted immutably; optional virtual booking holds stock now.</div></div>
       <div class="step" data-edge="RTO lever"><div class="s-idx">03 · confirm</div><div class="s-t">Call-confirm</div><div class="s-b">Round-robin queue rings the buyer. Unreachable → seller decides: keep trying or unbook.</div></div>
-      <div class="step refined" data-edge="before pack"><div class="s-idx">04 · courier</div><div class="s-t">Courier-first booking</div><div class="s-b">AWB booked via the seller's default courier the moment it's confirmed. Rejection → fallback panel → another carrier.</div></div>
+      <div class="step refined" data-edge="before pack"><div class="s-idx">04 · courier</div><div class="s-t">Courier-first booking</div><div class="s-b">AWB booked via the seller's dedicated courier account (one of several, split by ratio) the moment it's confirmed. Rejection → fallback panel → another account or carrier.</div></div>
       <div class="step refined" data-edge="scan"><div class="s-idx">05 · pick</div><div class="s-t">Scan-gated pick</div><div class="s-b">Only booked orders reach the floor. Picker scans each unit against the invoice.</div></div>
       <div class="step refined" data-edge="scan"><div class="s-idx">06 · pack</div><div class="s-t">Scan-gated pack</div><div class="s-b">Scan items, then scan the invoice to seal. Orders kept separate by courier.</div></div>
       <div class="step refined" data-edge="scan"><div class="s-idx">07 · hand-off</div><div class="s-t">Scan-gated handover</div><div class="s-b">Every parcel re-scanned before the courier takes custody. Nothing leaves unscanned.</div></div>
       <div class="step"><div class="s-idx">08 · track</div><div class="s-t">Track &amp; deliver</div><div class="s-b">Courier scans drive the timeline; public AWB lookup for the buyer, EN + हिन्दी.</div></div>
       <div class="step refined" data-edge="route"><div class="s-idx">09 · returns</div><div class="s-t">RTO intake</div><div class="s-b">Received at any warehouse, entered, and routed to the designated one; damaged labels recovered.</div></div>
       <div class="step refined" data-edge="ticket"><div class="s-idx">10 · resolve</div><div class="s-t">Scrap &amp; settle</div><div class="s-b">Healthy units restock; damaged units raise a scrap ticket, settled by money or return.</div></div>
-      <div class="step"><div class="s-idx">11 · money</div><div class="s-t">Remit to BD</div><div class="s-b">COD accrues to a wallet ledger; GST invoicing on our side; remittance back to Bangladesh.</div></div>
+      <div class="step refined" data-edge="advance"><div class="s-idx">11 · money</div><div class="s-t">Settle &amp; pay</div><div class="s-b">Collected COD runs the settlement waterfall; the net is credited to the seller's wallet in advance, withdrawable on request or auto-cycle.</div></div>
     </div>
     <div class="legend">
       <span><span class="sw a"></span>live today</span>
@@ -458,7 +510,7 @@
 <!-- 04 — FOUNDATION SHIPPED -->
 <section id="built">
   <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 04</span><span class="bar"></span><span>Proof it's real</span></div>
+    <div class="sechead tel"><span class="idx">SEC 05</span><span class="bar"></span><span>Proof it's real</span></div>
     <h2>The foundation is already shipped</h2>
     <p class="lead">The target model isn't drawn on a whiteboard — it sits on a production platform. All 18 Phase-1A modules, the 6-module Phase-1B money layer, four web apps, and the live Delhivery integration are running today, behind 1,100 automated tests.</p>
     <div class="tbl-scroll">
@@ -475,7 +527,7 @@
           <tr><td>Notifications</td><td>Lifecycle event bus + email fan-out (SMS channel scaffolded)</td><td><span class="pill live">Live</span></td></tr>
           <tr><td>Admin &amp; seller portals</td><td>Two frontends on a shared, identity-parameterized foundation — seller mgmt, orders, catalog, image upload, god-mode</td><td><span class="pill live">Live</span></td></tr>
           <tr><td>Pricing · FX · charges · settings</td><td>Charge calculator, INR↔BDT rates, cost breakdown, runtime config UI</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td><strong>Phase 1B — money layer</strong></td><td>Wallet + ledger, COD accrual, remittance, GST tax-invoice PDF, bank-account AES encryption</td><td><span class="pill live">Live</span></td></tr>
+          <tr><td><strong>Phase 1B — money layer</strong></td><td>Per-currency wallet ledger + balance, COD accrual on delivery, admin remittance/payout, FX (manual INR↔BDT + history), 18% GST tax-invoice PDF, bank-account AES encryption</td><td><span class="pill live">Live</span></td></tr>
           <tr><td>Marketing + tracking UI</td><td>skydrop.online + track.skydrop.online — brand, live corridor map, EN/HI, light/dark</td><td><span class="pill live">Live</span></td></tr>
         </tbody>
       </table>
@@ -486,38 +538,38 @@
 <!-- 05 — ROADMAP TO TARGET -->
 <section id="roadmap">
   <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 05</span><span class="bar"></span><span>The build ahead</span></div>
+    <div class="sechead tel"><span class="idx">SEC 06</span><span class="bar"></span><span>The build ahead</span></div>
     <h2>Roadmap to the target operating model</h2>
     <p class="lead">The refinement is additive — the schema was designed forward-compatible, and the reservation, warehouse, courier, and settings seams already exist. Four focused phases close the gap between the shipped foundation and the operating model above.</p>
     <div class="phase">
       <div class="rail"></div>
       <div>
         <div class="item" style="position:relative;"><span class="node"></span>
-          <h3>Phase A · Inventory integrity <span class="pill sky">designed</span></h3>
-          <p>Serialized per-unit model behind a per-seller normal/strict toggle; barcode label generation at receiving; mandatory scan gates at pick, pack and hand-off; a general per-seller settings-override framework (global defaults, seller overrides).</p>
+          <h3>Phase A · Finance core &amp; currency <span class="pill sky">designed</span></h3>
+          <p>Upgrade the wallet to a true double-entry ledger; advance-credit with per-seller exposure tracking + auto-clawback; self-service &amp; auto withdrawals plus an instant-credit add-on; real courier-fee capture with margin; per-seller courier fee (flat/%); the three price components; BDT/INR product-cost entry; and courier-remittance reconciliation.</p>
         </div>
         <div class="item" style="position:relative;"><span class="node"></span>
-          <h3>Phase B · Courier-first dispatch <span class="pill sky">designed</span></h3>
-          <p>Book the courier immediately after call-confirm; packing begins only once a carrier accepts. Per-seller default courier + a fallback panel to re-book a rejected order into another integrated carrier by API, or manually. Pack floor partitioned by courier.</p>
+          <h3>Phase B · Inventory integrity <span class="pill sky">designed</span></h3>
+          <p>Serialized per-unit model behind a per-seller normal/strict toggle; barcode labels at receiving; mandatory scan gates at pick, pack and hand-off; and a general per-seller settings framework — including call config (attempts, min interval, no-call mode) under an admin-enforced cap.</p>
         </div>
         <div class="item" style="position:relative;"><span class="node"></span>
-          <h3>Phase C · Multi-warehouse network <span class="pill sky">designed</span></h3>
-          <p>Product-to-warehouse assignment, order routing to the right location, and inter-warehouse transfer — including receiving an RTO at any warehouse and moving it to its designated home.</p>
+          <h3>Phase C · Courier network &amp; dispatch <span class="pill sky">designed</span></h3>
+          <p>Multi-account couriers with seller↔account linkage, per-seller split ratios and full parcel→account tracing; courier-first booking after call-confirm; and a fallback panel to re-book a rejected order into another account or carrier. Pack floor partitioned by courier.</p>
         </div>
         <div class="item" style="position:relative;"><span class="node"></span>
-          <h3>Phase D · Exceptions, scrap &amp; virtual booking <span class="pill sky">designed</span></h3>
-          <p>Virtual booking at placement with seller-decided unbook; scrap inventory + damage tickets settled by money-or-return with courier-claim tracking; a warehouse scanner app; and an exception dashboard unifying missing/mismatch/damaged/failed-courier/unbook queues.</p>
+          <h3>Phase D · Network, returns &amp; exceptions <span class="pill sky">designed</span></h3>
+          <p>Multi-warehouse routing + cross-warehouse RTO transfer; virtual booking with seller-decided unbook; scrap + damage tickets and a seller support-ticket panel; a warehouse scanner app; and an exception dashboard unifying missing/mismatch/damaged/failed-courier/unbook queues.</p>
         </div>
       </div>
     </div>
-    <div class="callout"><strong>Why this is low-risk:</strong> none of it is a rewrite. Reservations already model virtual holds; the warehouse already has bins, batches and quarantine/damaged bin types; the courier layer already has a manual-placement fallback; and per-seller overrides already exist for a handful of settings. Each phase generalizes a seam that is already load-bearing in production.</div>
+    <div class="callout"><strong>Why this is low-risk:</strong> none of it is a rewrite. The wallet ledger, COD accrual, FX and 18% GST engine already run in production; reservations already model virtual holds; the warehouse already has bins, batches and quarantine/damaged bin types; the courier layer already has a fallback; and per-seller overrides already exist. Each phase generalizes a seam that is already load-bearing in production.</div>
   </div>
 </section>
 
 <!-- 06 — TECH -->
 <section id="tech">
   <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 06</span><span class="bar"></span><span>The stack</span></div>
+    <div class="sechead tel"><span class="idx">SEC 07</span><span class="bar"></span><span>The stack</span></div>
     <h2>Technology &amp; architecture</h2>
     <p class="lead">A single TypeScript monorepo (Turborepo + pnpm), one language end-to-end, deployed to DigitalOcean in Singapore. One application droplet fronts everything; managed Postgres and object storage are the external stateful services.</p>
     <div class="tbl-scroll">
@@ -540,7 +592,7 @@
 <!-- 07 — CAPACITY -->
 <section id="capacity">
   <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 07</span><span class="bar"></span><span>Load &amp; scale</span></div>
+    <div class="sechead tel"><span class="idx">SEC 08</span><span class="bar"></span><span>Load &amp; scale</span></div>
     <h2>Capacity today, and the path to scale</h2>
     <p class="lead">The current deployment is sized for pre-launch beta and sits comfortably inside it — the droplet is near-idle at rest. The honest ceiling is set by two deliberate single-instance choices, not by the design.</p>
 
@@ -584,7 +636,7 @@
 <!-- 08 — BUDGET & FUNDING -->
 <section id="budget">
   <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 08</span><span class="bar"></span><span>Investment &amp; economics</span></div>
+    <div class="sechead tel"><span class="idx">SEC 09</span><span class="bar"></span><span>Investment &amp; economics</span></div>
     <h2>Budget &amp; funding</h2>
     <p class="lead">This document is the proposed plan to complete the refined operating model. Below is the capital required to finish it, how it releases against milestones, and the true monthly cost of running the system at three order volumes.</p>
 
@@ -606,10 +658,10 @@
       <table>
         <thead><tr><th>Tranche</th><th>Milestone (from the roadmap)</th><th>Share</th><th>Amount</th></tr></thead>
         <tbody>
-          <tr><td>1 · Kickoff</td><td>Phase A — inventory integrity: serialized units, scan gates, per-seller settings framework</td><td>30%</td><td><span class="mono">৳1,80,000</span></td></tr>
-          <tr><td>2</td><td>Phase B — courier-first dispatch + multi-courier fallback panel</td><td>25%</td><td><span class="mono">৳1,50,000</span></td></tr>
-          <tr><td>3</td><td>Phase C — multi-warehouse network + cross-warehouse RTO routing</td><td>25%</td><td><span class="mono">৳1,50,000</span></td></tr>
-          <tr><td>4 · Launch</td><td>Phase D — scrap/exception tooling + virtual booking, hardening &amp; launch</td><td>20%</td><td><span class="mono">৳1,20,000</span></td></tr>
+          <tr><td>1 · Kickoff</td><td>Phase A — finance core: double-entry ledger, advance-credit + withdrawals, courier-fee margin, price components &amp; currency</td><td>30%</td><td><span class="mono">৳1,80,000</span></td></tr>
+          <tr><td>2</td><td>Phase B — inventory integrity: serialized units, scan gates, per-seller settings + call config</td><td>25%</td><td><span class="mono">৳1,50,000</span></td></tr>
+          <tr><td>3</td><td>Phase C — courier network: multi-account routing, courier-first dispatch, fallback panel</td><td>25%</td><td><span class="mono">৳1,50,000</span></td></tr>
+          <tr><td>4 · Launch</td><td>Phase D — multi-warehouse, returns, scrap + support tickets, virtual booking; hardening &amp; launch</td><td>20%</td><td><span class="mono">৳1,20,000</span></td></tr>
           <tr><td><strong>Total</strong></td><td></td><td><strong>100%</strong></td><td><strong><span class="mono">৳6,00,000</span></strong></td></tr>
         </tbody>
       </table>
