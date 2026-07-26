@@ -30,7 +30,8 @@ export interface ReceiveRtoResult {
   rtoReceivedWarehouseId: string;
   /** R6 — true ⇒ received somewhere OTHER than where it shipped from.
    *  RESTOCK finalize is blocked in this state (see
-   *  RtoDispositionService: RTO_RESTOCK_WAREHOUSE_MISMATCH). */
+   *  RtoDispositionService restocks it into a lineage-preserving child
+   *  batch at THIS warehouse — R6b). */
   crossWarehouse: boolean;
   /** true ⇒ idempotent no-op (already RTO_RECEIVED + stamped). */
   alreadyReceived: boolean;

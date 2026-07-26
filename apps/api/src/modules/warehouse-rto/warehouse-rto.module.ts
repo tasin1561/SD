@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { OrderModule } from '../order/order.module';
 import { InventorySharedModule } from '../inventory-shared/inventory-shared.module';
 import { RtoReceiptService } from './services/rto-receipt.service';
+import { RtoRestockTargetService } from './services/rto-restock-target.service';
 import { RtoInspectionService } from './services/rto-inspection.service';
 import { RtoDispositionService } from './services/rto-disposition.service';
 import { RtoReadService } from './services/rto-read.service';
@@ -31,6 +32,7 @@ import { TicketModule } from '../ticket/ticket.module';
   controllers: [WarehouseRtoController],
   providers: [
     RtoReceiptService,
+    RtoRestockTargetService,
     RtoInspectionService,
     RtoDispositionService,
     RtoReadService,

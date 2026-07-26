@@ -17,6 +17,10 @@ import { OrderReadService } from '../../order/services/order-read.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
 import { StockMutationService } from '../../inventory-shared/stock-mutation.service';
 import { StockUnitService } from '../../inventory-shared/stock-unit.service';
+import {
+  RtoRestockTargetService,
+  type RestockTarget,
+} from './rto-restock-target.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
 export interface FinalizeRtoItemSummary {
@@ -107,6 +111,7 @@ export class RtoDispositionService {
     private readonly mutation: StockMutationService,
     private readonly audit: AuditLogService,
     private readonly units: StockUnitService,
+    private readonly restockTargets: RtoRestockTargetService,
   ) {}
 
   async finalize(
@@ -230,36 +235,33 @@ export class RtoDispositionService {
       });
     }
 
-    // ── R6: CROSS-WAREHOUSE RESTOCK GUARD (conservation-critical).
+    // ── R6/R6b: CROSS-WAREHOUSE RESTOCK.
     //
-    // The RETURN_RESTOCK target below is the item's ORIGINAL
-    // pickedBin/pickedBatch, which belong to `originWarehouseId`. If the
-    // parcel physically came back to a DIFFERENT warehouse, crediting
-    // that origin bin would book a unit into a warehouse that does not
-    // physically hold it — silent stock corruption (the pre-R6
-    // behavior, latent only because Phase 1A ran a single warehouse).
+    // The naive restock target is the item's ORIGINAL pickedBin/Batch,
+    // which belong to `originWarehouseId`. When the parcel physically came
+    // back somewhere else, crediting that origin bin would book a unit
+    // into a warehouse that does not hold it — silent corruption (the
+    // pre-R6 behaviour, latent only while Phase 1A ran one warehouse).
     //
-    // We refuse rather than guess. Restocking at the RECEIVING warehouse
-    // instead is not a drop-in fix: `stock_batches` is warehouse-scoped
-    // (schema), so the origin batch cannot be credited at another
-    // warehouse, and inventing/duplicating a batch there is a real
-    // policy decision (batchCode identity, expiry + unit-cost lineage,
-    // which bin) that belongs to ops, not to this guard. Tracked as R6b.
+    // R6 refused outright. R6b resolves a real target instead:
+    // `RtoRestockTargetService` finds-or-creates a CHILD batch at the
+    // RECEIVING warehouse that inherits expiry, unit cost and the
+    // receipt→freight chain from the original, plus an RTO_HOLD/STORAGE
+    // bin there. The goods become sellable where they actually are,
+    // without pretending they are somewhere else and without losing FEFO.
+    // It still refuses when that warehouse has no bin able to hold
+    // returns (RTO_RESTOCK_NO_TARGET_BIN) — that is a missing setup step,
+    // not something to guess at.
     //
-    // WRITE_OFF-only finalize is unaffected — it emits no movement, so a
-    // cross-warehouse write-off is always safe and still allowed.
+    // WRITE_OFF-only finalize never reaches this: it emits no movement.
     const restockWarehouseId =
       shipment.rtoReceivedWarehouseId ?? shipment.originWarehouseId;
-    if (restockItems.length > 0 && restockWarehouseId !== shipment.originWarehouseId) {
-      throw new ConflictException({
-        code: 'RTO_RESTOCK_WAREHOUSE_MISMATCH',
-        message:
-          `Parcel was received at warehouse ${restockWarehouseId} but shipped from ${shipment.originWarehouseId}; ` +
-          `restocking would credit stock to a warehouse that does not hold it. Either transfer the goods to ` +
-          `${shipment.originWarehouseId} and re-finalize, or re-inspect these ${restockItems.length} item(s) as WRITE_OFF.`,
-        cause: restockItems.map((i) => i.id),
-      });
-    }
+    const crossWarehouseRestock =
+      restockItems.length > 0 && restockWarehouseId !== shipment.originWarehouseId;
+
+    // Where each restocked line actually landed, so the unit ledger can
+    // follow the aggregate rather than assuming the original bin/batch.
+    const targetsByItem = new Map<string, RestockTarget>();
 
     // ── GATE 2: movement-level idempotency, RESTOCK only. RETURN_RESTOCK
     //    is the marker. stock_movements has no native unique constraint;
@@ -275,6 +277,8 @@ export class RtoDispositionService {
 
       if (!movementsAlreadyApplied) {
         const movementIds = await this.mutation.runWithRetry(async (tx) => {
+          // Cleared per attempt: runWithRetry may re-run the whole tx.
+          targetsByItem.clear();
           const ids: Array<{ shipmentItemId: string; movementId: string }> = [];
           for (const item of restockItems) {
             const binId = item.pickedBinId;
@@ -286,15 +290,26 @@ export class RtoDispositionService {
                 message: `item ${item.id} pick context vanished mid-finalize`,
               });
             }
+            // R6b: resolve the real target (same-warehouse ⇒ the picked
+            // bin/batch unchanged; cross-warehouse ⇒ a lineage-preserving
+            // child batch + a returns bin at the receiving warehouse).
+            const target = await this.restockTargets.resolve(tx, {
+              sellerId: item.orderItem.order.sellerId,
+              variantId: item.orderItem.variantId,
+              originWarehouseId: shipment.originWarehouseId,
+              receivedWarehouseId: restockWarehouseId,
+              pickedBinId: binId,
+              pickedBatchId: batchId,
+              quantity: item.quantity,
+              staffId,
+            });
+            targetsByItem.set(item.id, target);
             const result = await this.mutation.apply(tx, {
               sellerId: item.orderItem.order.sellerId,
               variantId: item.orderItem.variantId,
-              // R6: provably === originWarehouseId here — the
-              // cross-warehouse guard above rejects anything else before
-              // we reach the movement loop.
-              warehouseId: restockWarehouseId,
-              binId,
-              batchId,
+              warehouseId: target.warehouseId,
+              binId: target.binId,
+              batchId: target.batchId,
               qtyChange: item.quantity, // +qty — the unit returned (Model A)
               type: StockMovementType.RETURN_RESTOCK,
               actorType: ActorType.STAFF,
@@ -355,9 +370,9 @@ export class RtoDispositionService {
             gate: 'RTO_RESTOCK',
             actorType: ActorType.STAFF,
             actorId: staffId,
-            warehouseId: restockWarehouseId,
-            binId: item.pickedBinId,
-            batchId: item.pickedBatchId,
+            warehouseId: targetsByItem.get(item.id)?.warehouseId ?? restockWarehouseId,
+            binId: targetsByItem.get(item.id)?.binId ?? item.pickedBinId,
+            batchId: targetsByItem.get(item.id)?.batchId ?? item.pickedBatchId,
           }),
         );
       } catch (err) {
@@ -401,6 +416,11 @@ export class RtoDispositionService {
         restockedCount,
         writtenOffCount,
         movementsAlreadyApplied,
+        // R6b: a return restocked at a warehouse other than origin is
+        // worth seeing in the audit trail — the goods moved buildings.
+        crossWarehouseRestock,
+        restockWarehouseId,
+        originWarehouseId: shipment.originWarehouseId,
         ipAddress: ctx?.ipAddress ?? null,
         userAgent: ctx?.userAgent ?? null,
         requestId: ctx?.requestId ?? null,

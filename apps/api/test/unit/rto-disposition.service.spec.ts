@@ -13,6 +13,7 @@ import type { OrderWriteService } from '../../src/modules/order/services/order-w
 import type { StockMutationService } from '../../src/modules/inventory-shared/stock-mutation.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { StockUnitService } from '../../src/modules/inventory-shared/stock-unit.service';
+import type { RtoRestockTargetService } from '../../src/modules/warehouse-rto/services/rto-restock-target.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -106,6 +107,15 @@ function makeService(
   // R4: NORMAL-mode fixtures carry no serialized units, so the unit
   // ledger advance is a no-op (0 rows moved) in every case here.
   const unitLedger = { advanceUnitsForShipment: jest.fn(async () => 0) };
+  // R6b: same-warehouse fixtures resolve to the picked bin/batch, i.e.
+  // exactly the pre-R6b behaviour these assertions were written against.
+  const resolveTarget = jest.fn(async (_tx: unknown, i: AnyArgs) => ({
+    warehouseId: i['receivedWarehouseId'] as string,
+    binId: i['pickedBinId'] as string,
+    batchId: i['pickedBatchId'] as string,
+    crossWarehouse: i['receivedWarehouseId'] !== i['originWarehouseId'],
+  }));
+  const restockTargets = { resolve: resolveTarget };
   const svc = new RtoDispositionService(
     { client } as unknown as PrismaService,
     orders as unknown as OrderReadService,
@@ -113,8 +123,17 @@ function makeService(
     mutation as unknown as StockMutationService,
     audit as unknown as AuditLogService,
     unitLedger as unknown as StockUnitService,
+    restockTargets as unknown as RtoRestockTargetService,
   );
-  return { svc, stockMovementFindFirst, transitionStatus, apply, runWithRetry, auditLog };
+  return {
+    svc,
+    stockMovementFindFirst,
+    transitionStatus,
+    apply,
+    runWithRetry,
+    auditLog,
+    resolveTarget,
+  };
 }
 
 describe('RtoDispositionService.finalize — Model A retry-state matrix', () => {
@@ -336,18 +355,62 @@ describe('RtoDispositionService.finalize — guards', () => {
     );
   });
 
-  it('R6: RESTOCK at a DIFFERENT warehouse → RTO_RESTOCK_WAREHOUSE_MISMATCH, NO movement, NO transition', async () => {
-    const { svc, apply, transitionStatus } = makeService({
+  // R6b REPLACED R6's blanket refusal: a cross-warehouse return is now
+  // restocked WHERE IT LANDED, into a lineage-preserving child batch. The
+  // conservation property R6 protected still holds — the credit goes to
+  // the receiving warehouse, never to the origin bin that does not hold
+  // the goods.
+  it('R6b: RESTOCK at a DIFFERENT warehouse credits the RECEIVING warehouse, not origin', async () => {
+    const { svc, apply, transitionStatus, resolveTarget } = makeService({
       rtoReceivedWarehouseId: 'wh-other',
       items: [item('si-1', RtoDisposition.RESTOCK)],
     });
-    await expect(svc.finalize(SHIP, STAFF)).rejects.toMatchObject({
-      response: { code: 'RTO_RESTOCK_WAREHOUSE_MISMATCH' },
+    const r = await svc.finalize(SHIP, STAFF);
+    expect(r.restockedCount).toBe(1);
+    expect(transitionStatus).toHaveBeenCalled();
+
+    // The target resolver was asked, with both warehouses in hand.
+    expect(resolveTarget.mock.calls[0]![1]).toMatchObject({
+      originWarehouseId: WH,
+      receivedWarehouseId: 'wh-other',
     });
-    // Nothing was written — the whole point is to avoid crediting the
-    // wrong warehouse.
-    expect(apply).not.toHaveBeenCalled();
-    expect(transitionStatus).not.toHaveBeenCalled();
+    // ...and the movement landed at the receiving warehouse.
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply.mock.calls[0]![1]).toMatchObject({
+      warehouseId: 'wh-other',
+      type: 'RETURN_RESTOCK',
+    });
+  });
+
+  it('R6b: a cross-warehouse restock is audited as such', async () => {
+    const { svc, auditLog } = makeService({
+      rtoReceivedWarehouseId: 'wh-other',
+      items: [item('si-1', RtoDisposition.RESTOCK)],
+    });
+    await svc.finalize(SHIP, STAFF);
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'rto.finalized',
+        metadata: expect.objectContaining({
+          crossWarehouseRestock: true,
+          restockWarehouseId: 'wh-other',
+          originWarehouseId: WH,
+        }),
+      }),
+    );
+  });
+
+  it('R6b: a same-warehouse restock is NOT flagged as cross-warehouse', async () => {
+    const { svc, auditLog, apply } = makeService({
+      items: [item('si-1', RtoDisposition.RESTOCK)],
+    });
+    await svc.finalize(SHIP, STAFF);
+    expect(apply.mock.calls[0]![1]).toMatchObject({ warehouseId: WH });
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ crossWarehouseRestock: false }),
+      }),
+    );
   });
 
   it('R6: WRITE_OFF-only finalize is still allowed cross-warehouse (emits no movement)', async () => {
@@ -362,7 +425,7 @@ describe('RtoDispositionService.finalize — guards', () => {
     expect(transitionStatus).toHaveBeenCalled();
   });
 
-  it('R6: a MIXED cross-warehouse batch is rejected because of the RESTOCK lines', async () => {
+  it('R6b: a MIXED cross-warehouse batch restocks one line and writes off the other', async () => {
     const { svc, apply } = makeService({
       rtoReceivedWarehouseId: 'wh-other',
       items: [
@@ -370,9 +433,10 @@ describe('RtoDispositionService.finalize — guards', () => {
         item('si-2', RtoDisposition.RESTOCK),
       ],
     });
-    await expect(svc.finalize(SHIP, STAFF)).rejects.toMatchObject({
-      response: { code: 'RTO_RESTOCK_WAREHOUSE_MISMATCH' },
-    });
-    expect(apply).not.toHaveBeenCalled();
+    const r = await svc.finalize(SHIP, STAFF);
+    expect(r).toMatchObject({ restockedCount: 1, writtenOffCount: 1 });
+    // Only the RESTOCK line moves stock; the write-off's dispatch
+    // decrement stands (Model A).
+    expect(apply).toHaveBeenCalledTimes(1);
   });
 });

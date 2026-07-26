@@ -846,6 +846,13 @@ model StockBatch {
   receivedAt      DateTime    @map("received_at") @db.Timestamptz
   receivedById    String?     @map("received_by_id") @db.Uuid
   receivingNoteId String?     @map("receiving_note_id") @db.Uuid
+  /// R6b — set when this batch was created to hold RTO goods that came
+  /// back to a DIFFERENT warehouse than they shipped from. Points at the
+  /// batch the goods originally belonged to, so expiry/cost lineage (and
+  /// the receipt → freight-bill chain via `receivingNoteId`, which is
+  /// copied from the parent) survive the move. NULL for every normal
+  /// goods-receipt batch.
+  parentBatchId   String?     @map("parent_batch_id") @db.Uuid
   createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt       DateTime?   @map("deleted_at") @db.Timestamptz
@@ -855,6 +862,8 @@ model StockBatch {
   warehouse         Warehouse          @relation(fields: [warehouseId], references: [id])
   receivedBy        StaffUser?         @relation("StockBatchReceivedBy", fields: [receivedById], references: [id])
   receivingNote     GoodsReceipt?      @relation(fields: [receivingNoteId], references: [id])
+  parentBatch       StockBatch?        @relation("StockBatchRtoChild", fields: [parentBatchId], references: [id])
+  rtoChildBatches   StockBatch[]       @relation("StockBatchRtoChild")
   stockLevels       StockLevel[]
   stockMovements    StockMovement[]
   reservations      StockReservation[]
@@ -873,6 +882,7 @@ model StockBatch {
   @@index([deletedAt])
   @@index([receivedById])
   @@index([receivingNoteId])
+  @@index([parentBatchId])
   @@map("stock_batches")
 }
 
