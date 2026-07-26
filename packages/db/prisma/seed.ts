@@ -445,6 +445,41 @@ const systemSettings: SystemSettingSeed[] = [
       "'INSTANT' (default — credited/debited immediately on DELIVERED, today's behavior) or 'T_PLUS_N' (deferred by accrual_delay_days, swept by a cron worker). Per-seller override via seller_setting_overrides.",
     sellerOverridable: true,
   },
+  // R5 — two-stage ("virtual") inventory booking. Defaults keep every
+  // existing seller on today's behaviour: stock is claimed only at call
+  // confirmation, so opting in is a deliberate per-seller act.
+  {
+    key: 'inventory.early_reservation_enabled',
+    category: 'ops',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'Book Stock At Order Placement',
+    description:
+      'When true, stock is reserved the moment an order lands (before call confirmation) as well as at confirmation. Off by default — an at-placement hold ties up stock for orders that may never be confirmed. Per-seller override.',
+    sellerOverridable: true,
+  },
+  {
+    key: 'inventory.early_reservation_ndr_action',
+    category: 'ops',
+    valueType: SettingValueType.STRING,
+    valueString: 'AUTO_RELEASE',
+    displayName: 'Early-Hold Action At Call Cap',
+    description:
+      "What to do with an at-placement stock hold when call attempts are exhausted: 'AUTO_RELEASE' (give the stock back immediately) or 'MANUAL_REVIEW' (surface it on the seller dashboard so they choose release vs more attempts). Per-seller override.",
+    sellerOverridable: true,
+  },
+  {
+    key: 'inventory.early_reservation_ttl_hours',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 24,
+    displayName: 'Early-Hold TTL (hours)',
+    description:
+      'How long an at-placement hold survives before the reservation sweeper releases it. Deliberately shorter than the confirmed-order TTL, because these holds back orders nobody has spoken to yet. Per-seller override.',
+    sellerOverridable: true,
+    overrideMinInt: 1,
+    overrideMaxInt: 336,
+  },
   {
     key: 'wallet.accrual_delay_days',
     category: 'wallet',

@@ -3,6 +3,7 @@ import { CatalogReadModule } from '../catalog-read/catalog-read.module';
 import { InventoryStockModule } from '../inventory-stock/inventory-stock.module';
 import { CallQueueModule } from '../call-queue/call-queue.module';
 import { OrderChargesModule } from '../order-charges/order-charges.module';
+import { EarlyReservationModule } from '../early-reservation/early-reservation.module';
 import { OrderNumberingService } from './services/order-numbering.service';
 import { OrderStateMachineService } from './services/order-state-machine.service';
 import { OrderEventWriterService } from './services/order-event-writer.service';
@@ -40,8 +41,7 @@ import { OrderAdminOverrideService } from './services/order-admin-override.servi
     // M15→M6 auto-compute on order create. OrderService injects
     // OrderChargesService and fires a post-commit
     // persistForOrderSystem() — best-effort, never rolls back.
-    OrderChargesModule,
-  ],
+    OrderChargesModule, EarlyReservationModule],
   providers: [
     OrderNumberingService,
     OrderStateMachineService,

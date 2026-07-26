@@ -184,6 +184,8 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(
     'TRUNCATE TABLE ' +
       [
+        // R5 early-reservation reviews — FK-RESTRICT orders + sellers.
+        'early_reservation_reviews',
         // R7 tickets — FK-RESTRICT sellers; ticket_events cascades.
         'ticket_events',
         'tickets',

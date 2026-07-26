@@ -15,6 +15,7 @@ import { AgentSettingsController } from './controllers/agent-settings.controller
 import { AgentCallController } from './controllers/agent-call.controller';
 import { AdminCallQueueController } from './controllers/admin-call-queue.controller';
 import { AdminAgentController } from './controllers/admin-agent.controller';
+import { EarlyReservationModule } from '../early-reservation/early-reservation.module';
 
 /**
  * Module 7 — Call Center Workflow.
@@ -35,7 +36,7 @@ import { AdminAgentController } from './controllers/admin-agent.controller';
  * only for intra-module use by later call-center services.
  */
 @Module({
-  imports: [OrderModule, CallQueueModule],
+  imports: [OrderModule, CallQueueModule, EarlyReservationModule],
   controllers: [
     AgentSettingsController,
     AgentCallController,

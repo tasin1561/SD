@@ -91,4 +91,7 @@ export {
   // R7 — unified scrap/damage + seller-issue tickets
   TicketType,
   TicketStatus,
+  // R5 — two-stage inventory booking
+  ReservationBookingStage,
+  EarlyReservationReviewStatus,
 } from '@prisma/client';

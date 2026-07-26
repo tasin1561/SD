@@ -26,6 +26,7 @@ import { RecipientAddressCacheService } from './recipient-address-cache.service'
 import { AddressValidationService } from './address-validation.service';
 import { CallQueueService } from '../../call-queue/services/call-queue.service';
 import { OrderChargesService } from '../../order-charges/services/order-charges.service';
+import { EarlyReservationService } from '../../early-reservation/services/early-reservation.service';
 import type { CreateOrderDto } from '../dto/create-order.dto';
 import type { UpdateOrderDto } from '../dto/update-order.dto';
 import type { CancelOrderDto } from '../dto/cancel-order.dto';
@@ -183,6 +184,7 @@ export class OrderService {
     private readonly stateMachine: OrderStateMachineService,
     private readonly callQueue: CallQueueService,
     private readonly orderCharges: OrderChargesService,
+    private readonly earlyReservations: EarlyReservationService,
   ) {}
 
   /**
@@ -221,6 +223,51 @@ export class OrderService {
       this.logger.error(
         { orderId, err: (e as Error).message },
         'Post-commit call-queue enqueue failed; order persisted, needs re-enqueue',
+      );
+    }
+  }
+
+  /**
+   * R5 — at-placement ("virtual") stock booking. POST-COMMIT +
+   * best-effort, same discipline as enqueueForCall/computeChargesAsync:
+   * the order is already durably persisted, and a seller who has NOT
+   * opted in sees no behaviour change at all (the service no-ops on the
+   * setting). Marshals the lines as a DTO so `early-reservation` needs no
+   * Order dependency (R3 snapshot-DTO discipline).
+   */
+  private async reserveAtPlacementAsync(orderId: string): Promise<void> {
+    try {
+      const order = await this.prisma.client.order.findUnique({
+        where: { id: orderId },
+        select: {
+          id: true,
+          sellerId: true,
+          items: { select: { id: true, variantId: true, quantity: true } },
+        },
+      });
+      if (!order || order.items.length === 0) return;
+
+      const setting = await this.prisma.client.systemSetting.findUnique({
+        where: { key: 'ops.default_warehouse_id' },
+        select: { valueString: true },
+      });
+      const warehouseId = setting?.valueString?.trim();
+      if (!warehouseId) return;
+
+      await this.earlyReservations.reserveAtPlacement({
+        orderId: order.id,
+        sellerId: order.sellerId,
+        warehouseId,
+        lines: order.items.map((i) => ({
+          orderItemId: i.id,
+          variantId: i.variantId,
+          quantity: i.quantity,
+        })),
+      });
+    } catch (e) {
+      this.logger.error(
+        { orderId, err: (e as Error).message },
+        'At-placement reservation hook failed; order persisted and unaffected',
       );
     }
   }
@@ -407,6 +454,8 @@ export class OrderService {
     // path / manual submit-on-create) → join the call queue post-commit.
     if (initialStatus === OrderStatus.PENDING_CONFIRMATION) {
       await this.enqueueForCall(created.id, ctx);
+      // R5: stage 1 of two-stage booking (no-op unless the seller opted in).
+      await this.reserveAtPlacementAsync(created.id);
     }
     // M15→M6: auto-compute order charges post-commit (best-effort).
     await this.computeChargesAsync(created.id);
@@ -532,6 +581,9 @@ export class OrderService {
     // CC-6: DRAFT → PENDING_CONFIRMATION → join the call queue
     // (post-commit, idempotent, best-effort).
     await this.enqueueForCall(id, ctx);
+    // R5: a DRAFT only becomes a real order at submit, so this is the
+    // other at-placement entry point (no-op unless the seller opted in).
+    await this.reserveAtPlacementAsync(id);
     return updated;
   }
 

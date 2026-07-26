@@ -78,18 +78,33 @@ function makeService(
     orderItem: { deleteMany: orderItemDeleteMany, update: orderItemUpdate },
   };
 
+  // R5 — the at-placement hook reads the order + the default-warehouse
+  // setting post-commit. Returning null from findUnique makes it a clean
+  // early-return no-op here; the hook's own behaviour is covered in
+  // early-reservation.service.spec.ts.
+  const orderFindUnique = jest.fn(async () => null);
+  const systemSettingFindUnique = jest.fn(async () => null);
+
   const client = {} as {
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
     order: {
       findFirst: typeof orderFindFirst;
       findMany: typeof orderFindMany;
       count: typeof orderCount;
+      findUnique: typeof orderFindUnique;
     };
+    systemSetting: { findUnique: typeof systemSettingFindUnique };
   };
   // Attach $transaction AFTER the literal (CLAUDE testing note: avoids
   // TS7024 implicit-any from self-reference).
   client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient);
-  client.order = { findFirst: orderFindFirst, findMany: orderFindMany, count: orderCount };
+  client.order = {
+    findFirst: orderFindFirst,
+    findMany: orderFindMany,
+    count: orderCount,
+    findUnique: orderFindUnique,
+  };
+  client.systemSetting = { findUnique: systemSettingFindUnique };
 
   const numbering = { nextOrderNumber: jest.fn(async () => 'SD-2026-26-000001') };
   const customers = {
@@ -118,6 +133,11 @@ function makeService(
   const persistForOrderSystem = jest.fn(async () => ({ skipped: true, reason: 'TEST' }));
   const orderCharges = { persistForOrderSystem };
 
+  // R5 at-placement booking: another best-effort post-commit hook. Tests
+  // treat it as a no-op (the setting is off by default anyway).
+  const reserveAtPlacement = jest.fn(async () => ({ reserved: 0, skipped: 0, enabled: false }));
+  const earlyReservations = { reserveAtPlacement };
+
   const svc = new OrderService(
     { client } as unknown as PrismaService,
     numbering as never,
@@ -130,6 +150,7 @@ function makeService(
     stateMachine,
     callQueue as never,
     orderCharges as never,
+    earlyReservations as never,
   );
   return {
     svc,

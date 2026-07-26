@@ -18,6 +18,7 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderReadService } from '../../order/services/order-read.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
 import { CallQueueService } from '../../call-queue/services/call-queue.service';
+import { EarlyReservationService } from '../../early-reservation/services/early-reservation.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import {
   CallOutcomeMappingService,
@@ -118,6 +119,7 @@ export class CallAttemptService {
     private readonly orderWrites: OrderWriteService,
     private readonly queue: CallQueueService,
     private readonly mapping: CallOutcomeMappingService,
+    private readonly earlyReservations: EarlyReservationService,
   ) {
     this.countingOutcomes = (Object.values(CallOutcome) as CallOutcome[]).filter(
       (o) => mapping.countsTowardCap(o),
@@ -222,7 +224,7 @@ export class CallAttemptService {
     //    audit. (Count BEFORE the insert so it is exactly the resolver's
     //    `priorAttemptCount`; the resolver adds +1 itself for a counting
     //    outcome — CC-5.)
-    const { attemptId, resolved } = await this.prisma.client.$transaction(
+    const { attemptId, resolved, priorAttemptCount } = await this.prisma.client.$transaction(
       async (tx) => {
         const priorAttemptCount = await tx.callAttempt.count({
           where: {
@@ -313,9 +315,49 @@ export class CallAttemptService {
           tx,
         );
 
-        return { attemptId: attempt.id, resolved: r };
+        return { attemptId: attempt.id, resolved: r, priorAttemptCount };
       },
     );
+
+    // 3b. R5 — at-placement stock hold, BEFORE the NDR transition.
+    //     Ordering matters: the durable side-effect (either the release,
+    //     or the review row that records "we are still holding this")
+    //     lands FIRST, so a crash between here and the transition can
+    //     never leave a REJECTED_NDR order with silently-held stock. The
+    //     inverse order could. Best-effort + idempotent: release is
+    //     natively so, and the review row is unique per order, so a
+    //     retry converges. A seller who never opted into at-placement
+    //     booking has no such holds and this is a single cheap query.
+    if (resolved.targetStatus === OrderStatus.REJECTED_NDR) {
+      try {
+        const outcome = await this.earlyReservations.handleNdrCap(
+          entry.orderId,
+          order.sellerId,
+          priorAttemptCount + 1,
+        );
+        if (outcome.kind !== 'NO_EARLY_HOLD') {
+          this.logger.log(
+            { orderId: entry.orderId, outcome: outcome.kind },
+            'Resolved at-placement stock hold at the call-attempt cap',
+          );
+        }
+      } catch (e) {
+        this.logger.error(
+          { orderId: entry.orderId, attemptId, err: (e as Error).message },
+          'At-placement hold resolution failed at NDR cap; stock may still be held',
+        );
+        await this.audit.log({
+          actorType: ActorType.SYSTEM,
+          actorId: null,
+          sellerId: order.sellerId,
+          action: 'inventory.early_reservation.ndr_resolution_failed',
+          entityType: 'order',
+          entityId: entry.orderId,
+          severity: 'HIGH',
+          metadata: { attemptId, error: (e as Error).message },
+        });
+      }
+    }
 
     // 4. POST-COMMIT saga — drive the order transition. The attempt is
     //    the source of truth (CC-3): a failure is logged + audited HIGH

@@ -11,6 +11,7 @@ import type { AuditLogService } from '../../src/modules/auth-common/services/aud
 import type { OrderReadService } from '../../src/modules/order/services/order-read.service';
 import type { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import type { CallQueueService } from '../../src/modules/call-queue/services/call-queue.service';
+import type { EarlyReservationService } from '../../src/modules/early-reservation/services/early-reservation.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -125,6 +126,11 @@ function makeService(
 
   const mapping = new CallOutcomeMappingService();
 
+  // R5 — at-placement hold resolution at the NDR cap. Default mock says
+  // the order had no early hold, i.e. today's behaviour.
+  const handleNdrCap = jest.fn(async () => ({ kind: 'NO_EARLY_HOLD' as const }));
+  const earlyReservations = { handleNdrCap };
+
   const svc = new CallAttemptService(
     { client } as unknown as PrismaService,
     audit as unknown as AuditLogService,
@@ -132,6 +138,7 @@ function makeService(
     orderWrites as unknown as OrderWriteService,
     queue as unknown as CallQueueService,
     mapping,
+    earlyReservations as unknown as EarlyReservationService,
   );
   return {
     svc,

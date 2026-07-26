@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   ActorType,
+  ReservationBookingStage,
   ReservationReleaseReason,
   ReservationStatus,
 } from '@skydrop/db';
@@ -37,6 +38,13 @@ export interface ReserveInput {
    *  stock_reservations.orderId/orderItemId are NOT NULL FK columns. */
   orderId: string;
   orderItemId: string;
+  /** R5 — which booking stage is creating this hold. Omitted =
+   *  AT_CONFIRMATION, i.e. the pre-R5 behaviour. */
+  bookingStage?: ReservationBookingStage;
+  /** R5 — overrides the seller's normal reservation TTL. At-placement
+   *  holds use a shorter window, since they back orders nobody has
+   *  spoken to yet. */
+  ttlHoursOverride?: number;
   /** Test seam. */
   now?: Date;
 }
@@ -163,7 +171,8 @@ export class StockReservationService {
       throw new InsufficientStockError(qty, available);
     }
 
-    const ttlHours = await this.resolveTtlHours(input.sellerId);
+    const ttlHours =
+      input.ttlHoursOverride ?? (await this.resolveTtlHours(input.sellerId));
     const expiresAt = new Date(now.getTime() + ttlHours * 3_600_000);
 
     const row = await this.prisma.client.stockReservation.create({
@@ -177,6 +186,7 @@ export class StockReservationService {
         orderId: input.orderId,
         orderItemId: input.orderItemId,
         status: ReservationStatus.ACTIVE,
+        bookingStage: input.bookingStage ?? ReservationBookingStage.AT_CONFIRMATION,
         expiresAt,
       },
       select: RESERVATION_SELECT,

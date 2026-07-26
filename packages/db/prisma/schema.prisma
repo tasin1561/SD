@@ -159,6 +159,7 @@ model Seller {
   withdrawalRequests      WithdrawalRequest[]
   pendingAccruals         PendingAccrual[]
   tickets                 Ticket[]
+  earlyReservationReviews EarlyReservationReview[]
   invoices                Invoice[]
   users                   SellerUser[]
   userInvitations         SellerUserInvitation[]
@@ -957,6 +958,11 @@ model StockReservation {
   orderId       String                    @map("order_id") @db.Uuid
   orderItemId   String                    @map("order_item_id") @db.Uuid
   status        ReservationStatus         @default(ACTIVE)
+  // R5 — WHICH of the two booking stages created this hold. Distinct
+  // from the phase-1/phase-2 distinction (which is bin/batch being NULL
+  // vs populated): a hold can be AT_PLACEMENT *and* still phase-1.
+  // Defaults to AT_CONFIRMATION so every pre-R5 row keeps its meaning.
+  bookingStage  ReservationBookingStage   @default(AT_CONFIRMATION) @map("booking_stage")
   expiresAt     DateTime?                 @map("expires_at") @db.Timestamptz
   releasedAt    DateTime?                 @map("released_at") @db.Timestamptz
   fulfilledAt   DateTime?                 @map("fulfilled_at") @db.Timestamptz
@@ -977,6 +983,7 @@ model StockReservation {
   @@index([orderItemId])
   @@index([status, expiresAt])
   @@index([binId, batchId])
+  @@index([orderId, bookingStage, status])
   @@map("stock_reservations")
 }
 
@@ -1289,27 +1296,28 @@ model Order {
   updatedAt              DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt              DateTime?                @map("deleted_at") @db.Timestamptz
 
-  seller           Seller              @relation(fields: [sellerId], references: [id])
-  customer         Customer?           @relation(fields: [customerId], references: [id])
-  bulkUpload       BulkOrderUpload?    @relation(fields: [bulkUploadId], references: [id])
-  confirmedBy      StaffUser?          @relation("OrderConfirmedBy", fields: [confirmedById], references: [id])
-  cancelledBy      StaffUser?          @relation("OrderCancelledBy", fields: [cancelledById], references: [id])
-  items            OrderItem[]
-  events           OrderEvent[]
-  reservations     StockReservation[]
-  stockMovements   StockMovement[]
+  seller                 Seller                  @relation(fields: [sellerId], references: [id])
+  customer               Customer?               @relation(fields: [customerId], references: [id])
+  bulkUpload             BulkOrderUpload?        @relation(fields: [bulkUploadId], references: [id])
+  confirmedBy            StaffUser?              @relation("OrderConfirmedBy", fields: [confirmedById], references: [id])
+  cancelledBy            StaffUser?              @relation("OrderCancelledBy", fields: [cancelledById], references: [id])
+  items                  OrderItem[]
+  events                 OrderEvent[]
+  reservations           StockReservation[]
+  stockMovements         StockMovement[]
   // Module 7: 1:many — an order has many queue entries over its
   // lifecycle (new entry per re-attempt, locked decision #2); at most
   // one is OPEN at a time (partial unique call_queue_entries_open_order_uq).
-  callQueueEntries CallQueueEntry[]
-  callAttempts     CallAttempt[]
-  orderShipments   OrderShipment[]
-  charges          OrderCharge[]
-  notificationLogs NotificationLog[]
-  walletEntries    SellerWalletEntry[] @relation("WalletEntryOrder")
-  invoice          Invoice?
-  pendingAccrual   PendingAccrual?
-  tickets          Ticket[]
+  callQueueEntries       CallQueueEntry[]
+  callAttempts           CallAttempt[]
+  orderShipments         OrderShipment[]
+  charges                OrderCharge[]
+  notificationLogs       NotificationLog[]
+  walletEntries          SellerWalletEntry[]     @relation("WalletEntryOrder")
+  invoice                Invoice?
+  pendingAccrual         PendingAccrual?
+  tickets                Ticket[]
+  earlyReservationReview EarlyReservationReview?
 
   @@unique([sellerId, sellerOrderRef])
   @@index([sellerId, status])
@@ -2791,9 +2799,40 @@ enum ReservationReleaseReason {
   EXPIRED                   @map("expired")
   MANUAL_RELEASE            @map("manual_release")
   STOCK_REALLOCATED         @map("stock_reallocated")
+  // R5 — the call-attempt cap was reached on an order whose stock was
+  // held early (at placement). Distinct from CALL_CANCELLED (customer
+  // actively declined) and EXPIRED (TTL swept it) so the two unbook
+  // paths stay separable in reporting.
+  NDR_CAP_REACHED           @map("ndr_cap_reached")
+  // R5 — the seller looked at the review queue and chose to release.
+  SELLER_RELEASED           @map("seller_released")
   OTHER                     @map("other")
 
   @@map("reservation_release_reason")
+}
+
+/// R5 — which of the founder's two booking stages created a hold:
+/// AT_PLACEMENT (opt-in: stock claimed the moment the order lands, before
+/// anyone has spoken to the customer) or AT_CONFIRMATION (the default and
+/// pre-R5 behaviour: claimed only once the call centre confirms).
+enum ReservationBookingStage {
+  AT_PLACEMENT    @map("at_placement")
+  AT_CONFIRMATION @map("at_confirmation")
+
+  @@map("reservation_booking_stage")
+}
+
+enum EarlyReservationReviewStatus {
+  OPEN                           @map("open")
+  /// Seller chose to give the stock back.
+  SELLER_RELEASED                @map("seller_released")
+  /// Seller wants the call centre to keep trying; the hold stays.
+  SELLER_REQUESTED_MORE_ATTEMPTS @map("seller_requested_more_attempts")
+  /// Resolved without the seller acting (TTL sweep, admin release, or
+  /// the order moving on by another route).
+  AUTO_RELEASED                  @map("auto_released")
+
+  @@map("early_reservation_review_status")
 }
 
 enum AdjustmentType {
@@ -3690,6 +3729,42 @@ model TicketEvent {
   @@map("ticket_events")
 }
 
+/// R5 — the seller-facing decision surface for "call attempts are
+/// exhausted, but we are still holding your stock". Created only when the
+/// seller's `inventory.early_reservation_ndr_action` setting is
+/// MANUAL_REVIEW; the AUTO_RELEASE path releases immediately and creates
+/// nothing.
+///
+/// Exists as its own row rather than a new OrderStatus because
+/// REJECTED_NDR's existing meaning ("terminal, nothing was ever
+/// reserved") stays true for every seller who has NOT opted into
+/// at-placement booking — overloading the order status would change
+/// semantics for them too.
+model EarlyReservationReview {
+  id               String                       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  orderId          String                       @unique @map("order_id") @db.Uuid
+  sellerId         String                       @map("seller_id") @db.Uuid
+  status           EarlyReservationReviewStatus @default(OPEN)
+  /// How many attempt-counting outcomes had been logged when the cap hit.
+  attemptCount     Int                          @map("attempt_count")
+  /// Units still held across the order's ACTIVE at-placement holds, at
+  /// the moment the review was raised (display context for the seller).
+  heldQty          Int                          @map("held_qty")
+  resolvedAt       DateTime?                    @map("resolved_at") @db.Timestamptz
+  resolvedByUserId String?                      @map("resolved_by_user_id") @db.Uuid
+  note             String?                      @db.Text
+  createdAt        DateTime                     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime                     @updatedAt @map("updated_at") @db.Timestamptz
+
+  order          Order       @relation(fields: [orderId], references: [id])
+  seller         Seller      @relation(fields: [sellerId], references: [id])
+  resolvedByUser SellerUser? @relation("EarlyReservationReviewResolvedBy", fields: [resolvedByUserId], references: [id])
+
+  @@index([sellerId, status])
+  @@index([status, createdAt])
+  @@map("early_reservation_reviews")
+}
+
 // ============================================================================
 // Phase 1B — GST-compliant tax invoices
 // ============================================================================
@@ -3794,16 +3869,17 @@ model SellerUser {
   updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt       DateTime?      @map("deleted_at") @db.Timestamptz
 
-  seller                  Seller                         @relation(fields: [sellerId], references: [id])
-  invitedBy               SellerUser?                    @relation("SellerUserInvitedBy", fields: [invitedById], references: [id])
-  invitedUsers            SellerUser[]                   @relation("SellerUserInvitedBy")
-  invitationsAuthored     SellerUserInvitation[]         @relation("SellerUserInvitedByUser")
-  invitationsAccepted     SellerUserInvitation[]         @relation("SellerUserInvitationAccepted")
-  refreshTokens           SellerRefreshToken[]
-  passwordResetTokens     SellerPasswordResetToken[]
-  emailVerificationTokens SellerEmailVerificationToken[]
-  withdrawalRequestsMade  WithdrawalRequest[]
-  ticketsOpened           Ticket[]                       @relation("TicketOpenedBySellerUser")
+  seller                          Seller                         @relation(fields: [sellerId], references: [id])
+  invitedBy                       SellerUser?                    @relation("SellerUserInvitedBy", fields: [invitedById], references: [id])
+  invitedUsers                    SellerUser[]                   @relation("SellerUserInvitedBy")
+  invitationsAuthored             SellerUserInvitation[]         @relation("SellerUserInvitedByUser")
+  invitationsAccepted             SellerUserInvitation[]         @relation("SellerUserInvitationAccepted")
+  refreshTokens                   SellerRefreshToken[]
+  passwordResetTokens             SellerPasswordResetToken[]
+  emailVerificationTokens         SellerEmailVerificationToken[]
+  withdrawalRequestsMade          WithdrawalRequest[]
+  ticketsOpened                   Ticket[]                       @relation("TicketOpenedBySellerUser")
+  earlyReservationReviewsResolved EarlyReservationReview[]       @relation("EarlyReservationReviewResolvedBy")
 
   @@index([sellerId])
   @@index([sellerId, role])
