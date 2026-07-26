@@ -22,6 +22,7 @@ export interface PulledPack {
   shipmentId: string;
   shipmentNumber: string;
   orderId: string;
+  courierCode: string;
   pickCompletedAt: Date | null;
   items: PulledPackItem[];
   order: ResolvedOrder | null;
@@ -50,6 +51,12 @@ export interface PulledPack {
  * FIFO = `s.created_at ASC` (provisioning order). `FOR UPDATE OF s`
  * restricts row locking to `shipments` only (the orders join stays
  * read-only — no contention with OrderWriteService.transitionStatus).
+ *
+ * R0 (revised-plan roadmap): optional `courierCode` filter so a
+ * packer can segregate parcels by destination courier while packing
+ * (previously plain FIFO across all couriers). `courierCode` is
+ * user-supplied, so it's passed as a bound parameter to
+ * `$queryRawUnsafe`, never string-interpolated into the SQL text.
  */
 @Injectable()
 export class PackQueueService {
@@ -61,14 +68,18 @@ export class PackQueueService {
   ) {}
 
   /** Returns the next eligible parcel (informational, no claim), or
-   *  `null` (QUEUE_EMPTY). */
+   *  `null` (QUEUE_EMPTY). `courierCode` restricts the pull to that
+   *  courier only. */
   async pullNext(
     _staffId: string,
     _ctx?: ClientContext,
+    courierCode?: string,
   ): Promise<PulledPack | null> {
     const picked = await this.prisma.client.$transaction(async (tx) => {
-      // All literals are fixed enum values, never user input — safe for
-      // $queryRawUnsafe (same precedent as PickQueueService.pullNext).
+      // The WHERE clause's fixed literals are enum values, never user
+      // input. courierCode (when present) IS user-supplied — bound as
+      // $1 rather than interpolated, same discipline as any other
+      // caller-supplied value reaching raw SQL.
       const rows = await tx.$queryRawUnsafe<Array<{ id: string }>>(
         `SELECT s.id
            FROM shipments s
@@ -79,9 +90,11 @@ export class PackQueueService {
              AND s.deleted_at IS NULL
              AND o.deleted_at IS NULL
              AND o.status = 'picked'
+             ${courierCode === undefined ? '' : 'AND s.courier_code = $1'}
            ORDER BY s.created_at ASC
            FOR UPDATE OF s SKIP LOCKED
            LIMIT 1`,
+        ...(courierCode === undefined ? [] : [courierCode]),
       );
       const id = rows[0]?.id;
       if (id === undefined) return null;
@@ -91,6 +104,7 @@ export class PackQueueService {
         select: {
           id: true,
           shipmentNumber: true,
+          courierCode: true,
           pickCompletedAt: true,
           orderShipments: {
             select: { orderId: true },
@@ -117,6 +131,7 @@ export class PackQueueService {
         shipmentId: shipment.id,
         shipmentNumber: shipment.shipmentNumber,
         orderId: shipment.orderShipments[0]?.orderId ?? null,
+        courierCode: shipment.courierCode,
         pickCompletedAt: shipment.pickCompletedAt,
         items: shipment.items.map((i) => ({
           shipmentItemId: i.id,
@@ -143,6 +158,7 @@ export class PackQueueService {
         shipmentId: picked.shipmentId,
         shipmentNumber: picked.shipmentNumber,
         orderId: '',
+        courierCode: picked.courierCode,
         pickCompletedAt: picked.pickCompletedAt,
         items: picked.items,
         order: null,
@@ -159,6 +175,7 @@ export class PackQueueService {
       shipmentId: picked.shipmentId,
       shipmentNumber: picked.shipmentNumber,
       orderId: picked.orderId,
+      courierCode: picked.courierCode,
       pickCompletedAt: picked.pickCompletedAt,
       items: picked.items,
       order,

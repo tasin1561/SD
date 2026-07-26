@@ -5,6 +5,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -49,13 +50,14 @@ export class PackerController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Pull the next FIFO pack-eligible parcel (PICKED + CREATED + pack_completed_at NULL). 200 with pack, or pack:null when QUEUE_EMPTY',
+      'Pull the next FIFO pack-eligible parcel (PICKED + CREATED + pack_completed_at NULL), optionally restricted to one courier via ?courierCode=. 200 with pack, or pack:null when QUEUE_EMPTY',
   })
   async next(
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
+    @Query('courierCode') courierCode?: string,
   ): Promise<{ pack: PulledPack | null }> {
-    const pack = await this.queue.pullNext(staff.id, ctx);
+    const pack = await this.queue.pullNext(staff.id, ctx, courierCode);
     return { pack };
   }
 

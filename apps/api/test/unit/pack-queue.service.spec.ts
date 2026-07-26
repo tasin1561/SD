@@ -12,7 +12,7 @@ function makeService(
   } = {},
 ) {
   const queue = [...(opts.queue ?? [])];
-  const queryRawUnsafe = jest.fn<Promise<Array<{ id: string }>>, [string]>(
+  const queryRawUnsafe = jest.fn<Promise<Array<{ id: string }>>, [string, ...unknown[]]>(
     async () => {
       const id = queue.shift();
       return id === undefined ? [] : [{ id }];
@@ -27,6 +27,7 @@ function makeService(
       return {
         id,
         shipmentNumber: `SH-${id}`,
+        courierCode: 'delhivery',
         pickCompletedAt: new Date('2026-05-19T10:00:00Z'),
         orderShipments: oid === null ? [] : [{ orderId: oid }],
         items: [
@@ -121,5 +122,27 @@ describe('PackQueueService.pullNext', () => {
     const r = await svc.pullNext('staff-1');
     expect(getById).not.toHaveBeenCalled();
     expect(r).toMatchObject({ orderId: '', order: null });
+  });
+
+  it('includes courierCode in the pulled parcel', async () => {
+    const { svc } = makeService({ queue: ['s1'], orderIdForShipment: () => 'o1' });
+    const r = await svc.pullNext('staff-1');
+    expect(r).toMatchObject({ courierCode: 'delhivery' });
+  });
+
+  it('with no courierCode filter: SQL omits the courier clause and passes no extra params', async () => {
+    const { svc, queryRawUnsafe } = makeService({ queue: ['s1'], orderIdForShipment: () => 'o1' });
+    await svc.pullNext('staff-1');
+    const call = queryRawUnsafe.mock.calls[0]!;
+    expect(call[0]).not.toContain('s.courier_code');
+    expect(call.length).toBe(1);
+  });
+
+  it('with a courierCode filter: SQL includes the bound courier clause', async () => {
+    const { svc, queryRawUnsafe } = makeService({ queue: ['s1'], orderIdForShipment: () => 'o1' });
+    await svc.pullNext('staff-1', undefined, 'delhivery');
+    const call = queryRawUnsafe.mock.calls[0]!;
+    expect(call[0]).toContain('AND s.courier_code = $1');
+    expect(call.slice(1)).toEqual(['delhivery']);
   });
 });
