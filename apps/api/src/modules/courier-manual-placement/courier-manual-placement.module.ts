@@ -4,6 +4,7 @@ import { InventoryStockModule } from '../inventory-stock/inventory-stock.module'
 import { ManualPlacementService } from './services/manual-placement.service';
 import { ManualPlacementController } from './controllers/manual-placement.controller';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
+import { InventorySharedModule } from '../inventory-shared/inventory-shared.module';
 
 /**
  * Module 9 — courier-manual-placement (commit 14, CUR-8).
@@ -20,7 +21,7 @@ import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
  * LEAF consumer — nothing imports `courier-manual-placement`.
  */
 @Module({
-  imports: [OrderModule, InventoryStockModule],
+  imports: [OrderModule, InventoryStockModule, InventorySharedModule],
   controllers: [ManualPlacementController],
   providers: [ManualPlacementService, StaffJwtGuard],
   exports: [ManualPlacementService],

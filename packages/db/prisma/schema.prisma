@@ -81,6 +81,7 @@ model StaffUser {
   withdrawalRequestsResolved WithdrawalRequest[]           @relation("WithdrawalRequestResolvedBy")
   ticketsOpened              Ticket[]                      @relation("TicketOpenedByStaff")
   ticketsResolved            Ticket[]                      @relation("TicketResolvedByStaff")
+  stockUnitsScanned          StockUnit[]                   @relation("StockUnitLastScanBy")
 
   @@index([role])
   @@index([deletedAt])
@@ -160,6 +161,7 @@ model Seller {
   pendingAccruals         PendingAccrual[]
   tickets                 Ticket[]
   earlyReservationReviews EarlyReservationReview[]
+  stockUnits              StockUnit[]
   invoices                Invoice[]
   users                   SellerUser[]
   userInvitations         SellerUserInvitation[]
@@ -457,6 +459,7 @@ model Warehouse {
   shipmentsAsRtoReceived Shipment[]         @relation("ShipmentRtoReceivedWarehouse")
   stockAlertStates       StockAlertState[]
   manifests              Manifest[]
+  stockUnits             StockUnit[]
 
   @@index([status])
   @@map("warehouses")
@@ -508,6 +511,7 @@ model WarehouseBin {
   goodsReceiptLines  GoodsReceiptLine[]
   orderItems         OrderItem[]
   shipmentItems      ShipmentItem[]
+  stockUnits         StockUnit[]
 
   @@unique([warehouseId, code])
   @@index([warehouseId])
@@ -609,28 +613,36 @@ model Product {
 }
 
 model ProductVariant {
-  id                String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  productId         String        @map("product_id") @db.Uuid
-  sellerId          String        @map("seller_id") @db.Uuid
-  skuCode           String        @map("sku_code")
+  id                String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  productId         String         @map("product_id") @db.Uuid
+  sellerId          String         @map("seller_id") @db.Uuid
+  skuCode           String         @map("sku_code")
   attributes        Json?
-  variantLabel      String?       @map("variant_label")
-  weightGrams       Int?          @map("weight_grams")
-  lengthCm          Decimal?      @map("length_cm") @db.Decimal(6, 2)
-  widthCm           Decimal?      @map("width_cm") @db.Decimal(6, 2)
-  heightCm          Decimal?      @map("height_cm") @db.Decimal(6, 2)
-  declaredValueInr  Decimal?      @map("declared_value_inr") @db.Decimal(12, 2)
-  hsCode            String?       @map("hs_code")
-  gstRate           Decimal?      @map("gst_rate") @db.Decimal(5, 2)
+  variantLabel      String?        @map("variant_label")
+  weightGrams       Int?           @map("weight_grams")
+  lengthCm          Decimal?       @map("length_cm") @db.Decimal(6, 2)
+  widthCm           Decimal?       @map("width_cm") @db.Decimal(6, 2)
+  heightCm          Decimal?       @map("height_cm") @db.Decimal(6, 2)
+  declaredValueInr  Decimal?       @map("declared_value_inr") @db.Decimal(12, 2)
+  hsCode            String?        @map("hs_code")
+  gstRate           Decimal?       @map("gst_rate") @db.Decimal(5, 2)
   barcode           String?
-  externalSku       String?       @map("external_sku")
-  status            VariantStatus @default(ACTIVE)
+  externalSku       String?        @map("external_sku")
+  status            VariantStatus  @default(ACTIVE)
   // Module 5 — inventory: per-variant low-stock threshold. Wins over
   // sellers.defaultLowStockThreshold; null = fall back to seller default.
-  lowStockThreshold Int?          @map("low_stock_threshold")
-  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt         DateTime?     @map("deleted_at") @db.Timestamptz
+  lowStockThreshold Int?           @map("low_stock_threshold")
+  // R4 — inventory-owned column living on a catalog table for storage
+  // convenience (same sanctioned precedent as lowStockThreshold above,
+  // MUST #13 clarification): which inventory MODE this SKU runs in.
+  // NORMAL = today's aggregate-quantity model. STRICT = one serial per
+  // physical unit, scanned at every gate. null = fall back to the
+  // seller's `inventory.default_inventory_mode` setting. Written by the
+  // inventory domain; read via CatalogReadService as a raw passthrough.
+  inventoryMode     InventoryMode? @map("inventory_mode")
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt         DateTime?      @map("deleted_at") @db.Timestamptz
 
   product           Product            @relation(fields: [productId], references: [id])
   seller            Seller             @relation(fields: [sellerId], references: [id])
@@ -643,6 +655,7 @@ model ProductVariant {
   goodsReceiptLines GoodsReceiptLine[]
   orderItems        OrderItem[]
   stockAlertStates  StockAlertState[]
+  stockUnits        StockUnit[]
 
   @@unique([sellerId, skuCode])
   @@index([productId])
@@ -847,6 +860,7 @@ model StockBatch {
   goodsReceiptLines GoodsReceiptLine[]
   orderItems        OrderItem[]
   shipmentItems     ShipmentItem[]
+  stockUnits        StockUnit[]
 
   @@unique([sellerId, batchCode])
   @@index([sellerId, variantId])
@@ -887,6 +901,102 @@ model StockLevel {
   @@index([batchId])
   @@index([qtyOnHand])
   @@map("stock_levels")
+}
+
+/// R4 — STRICT-mode per-unit serialization: one row per PHYSICAL UNIT,
+/// carrying the serial the warehouse floor scans at every gate.
+///
+/// This is a SIDECAR, not a replacement. `stock_levels.qtyOnHand` stays
+/// the authoritative availability number for BOTH modes (INV-3 is
+/// untouched) — strict mode adds *enforcement* on top of the aggregate,
+/// it does not introduce a second source of truth. Deliberate, because
+/// making unit rows authoritative would rewrite INV-3/INV-4 and every
+/// downstream availability consumer. The intended invariant for a strict
+/// variant is `COUNT(units IN_STOCK at a warehouse) == qtyOnHand there`;
+/// divergence is a real-world floor event, so the discrepancy report
+/// SURFACES it rather than the code assuming it away.
+///
+/// There is intentionally NO `RESERVED` status: reservations are
+/// quantity-grained (phase-1 soft claim, phase-2 bin+batch) and never
+/// select individual units. A unit's first status change is at PICK,
+/// when a human actually scans it.
+model StockUnit {
+  id                 String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId           String          @map("seller_id") @db.Uuid
+  variantId          String          @map("variant_id") @db.Uuid
+  /// Unique per seller (NOT globally): two sellers may legitimately
+  /// receive units carrying the same supplier-printed barcode.
+  serialBarcode      String          @map("serial_barcode")
+  status             StockUnitStatus @default(IN_STOCK)
+  /// Where the unit physically is. warehouse is required from intake;
+  /// bin/batch are nullable so a unit survives a batch being retired.
+  warehouseId        String          @map("warehouse_id") @db.Uuid
+  binId              String?         @map("bin_id") @db.Uuid
+  batchId            String?         @map("batch_id") @db.Uuid
+  /// Provenance — the receipt line this unit was registered against.
+  goodsReceiptLineId String?         @map("goods_receipt_line_id") @db.Uuid
+  /// Set when the unit is scanned onto an outbound parcel line; kept
+  /// (not cleared) through RTO so the unit's history stays traceable.
+  shipmentItemId     String?         @map("shipment_item_id") @db.Uuid
+  /// true ⇒ Skydrop generated + printed this serial at receiving;
+  /// false ⇒ scanned off the supplier's own label.
+  isSystemGenerated  Boolean         @default(true) @map("is_system_generated")
+  lastScanAt         DateTime?       @map("last_scan_at") @db.Timestamptz
+  lastScanByStaffId  String?         @map("last_scan_by_staff_id") @db.Uuid
+  /// Why the unit left inventory permanently (WRITTEN_OFF / LOST).
+  writeOffReason     String?         @map("write_off_reason")
+  note               String?         @db.Text
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller           Seller            @relation(fields: [sellerId], references: [id])
+  variant          ProductVariant    @relation(fields: [variantId], references: [id])
+  warehouse        Warehouse         @relation(fields: [warehouseId], references: [id])
+  bin              WarehouseBin?     @relation(fields: [binId], references: [id])
+  batch            StockBatch?       @relation(fields: [batchId], references: [id])
+  goodsReceiptLine GoodsReceiptLine? @relation(fields: [goodsReceiptLineId], references: [id])
+  shipmentItem     ShipmentItem?     @relation(fields: [shipmentItemId], references: [id])
+  lastScanBy       StaffUser?        @relation("StockUnitLastScanBy", fields: [lastScanByStaffId], references: [id])
+  events           StockUnitEvent[]
+
+  @@unique([sellerId, serialBarcode])
+  @@index([sellerId, variantId, status])
+  @@index([warehouseId, status])
+  @@index([shipmentItemId])
+  @@index([batchId])
+  @@index([binId])
+  @@index([goodsReceiptLineId])
+  @@index([lastScanByStaffId])
+  /// Drives the discrepancy report: "units sitting in a mid-lifecycle
+  /// status longer than the SLA window".
+  @@index([status, updatedAt])
+  @@map("stock_units")
+}
+
+/// R4 — APPEND-ONLY scan log for a unit. Joins stock_movements /
+/// order_events / call_attempts / audit_logs / ticket_events on the
+/// never-modify-after-insert list: each row is the historical fact that
+/// a specific human scanned a specific unit at a specific gate.
+model StockUnitEvent {
+  id          String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  stockUnitId String           @map("stock_unit_id") @db.Uuid
+  fromStatus  StockUnitStatus? @map("from_status")
+  toStatus    StockUnitStatus  @map("to_status")
+  gate        String
+  actorType   ActorType        @map("actor_type")
+  actorId     String?          @map("actor_id") @db.Uuid
+  shipmentId  String?          @map("shipment_id") @db.Uuid
+  warehouseId String?          @map("warehouse_id") @db.Uuid
+  note        String?          @db.Text
+  metadata    Json?
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  stockUnit StockUnit @relation(fields: [stockUnitId], references: [id], onDelete: Cascade)
+
+  @@index([stockUnitId, createdAt])
+  @@index([toStatus])
+  @@index([shipmentId])
+  @@map("stock_unit_events")
 }
 
 // APPEND-ONLY LEDGER. TimescaleDB hypertable (post-migration SQL).
@@ -1172,6 +1282,7 @@ model GoodsReceiptLine {
   variant    ProductVariant @relation(fields: [variantId], references: [id])
   batch      StockBatch?    @relation(fields: [batchId], references: [id])
   putawayBin WarehouseBin?  @relation(fields: [putawayBinId], references: [id])
+  stockUnits StockUnit[]
 
   @@index([receiptId])
   @@index([variantId])
@@ -1729,6 +1840,7 @@ model ShipmentItem {
   pickedBin     WarehouseBin? @relation(fields: [pickedBinId], references: [id])
   rtoDisposedBy StaffUser?    @relation("ShipmentItemRtoDisposedBy", fields: [rtoDisposedByStaffId], references: [id])
   tickets       Ticket[]
+  stockUnits    StockUnit[]
 
   @@index([shipmentId])
   @@index([orderItemId])
@@ -2809,6 +2921,35 @@ enum ReservationReleaseReason {
   OTHER                     @map("other")
 
   @@map("reservation_release_reason")
+}
+
+/// R4 — how a SKU's inventory is tracked. NORMAL is the pre-R4
+/// behaviour (aggregate quantities only). STRICT adds a serial per
+/// physical unit that must be scanned at pick, pack and RTO receipt.
+enum InventoryMode {
+  NORMAL @map("normal")
+  STRICT @map("strict")
+
+  @@map("inventory_mode")
+}
+
+/// R4 — a serialized unit's physical lifecycle. Note the absent states:
+/// no RESERVED (reservations are quantity-grained, never unit-grained)
+/// and no DELIVERED (delivery is stock-neutral per TRK-7 and nothing in
+/// the codebase would drive that transition — a dispatched unit stays
+/// DISPATCHED until it either stays gone or comes back as an RTO, and
+/// the discrepancy report ages long-DISPATCHED units instead of
+/// pretending a delivery scan exists).
+enum StockUnitStatus {
+  IN_STOCK     @map("in_stock")
+  PICKED       @map("picked")
+  PACKED       @map("packed")
+  DISPATCHED   @map("dispatched")
+  RTO_RECEIVED @map("rto_received")
+  WRITTEN_OFF  @map("written_off")
+  LOST         @map("lost")
+
+  @@map("stock_unit_status")
 }
 
 /// R5 — which of the founder's two booking stages created a hold:

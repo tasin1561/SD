@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { GoodsReceiptStatus } from '@skydrop/db';
 import {
@@ -8,6 +8,7 @@ import {
   IsEnum,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsUUID,
   Max,
@@ -97,4 +98,22 @@ export class RecordReceiptLinesDto {
   @ValidateNested({ each: true })
   @Type(() => RecordReceiptLineDto)
   lines!: RecordReceiptLineDto[];
+}
+
+/**
+ * R4 — optional supplier serials captured at receiving, keyed by
+ * goods-receipt-line id. Only consulted for STRICT-mode SKUs; any line
+ * omitted (or short) gets Skydrop-generated serials to print, so intake
+ * is never blocked by a supplier that doesn't serialize.
+ */
+export class CompleteGoodsReceiptDto {
+  @ApiPropertyOptional({
+    description:
+      'Map of goodsReceiptLineId -> scanned unit serials. Strict-mode lines only.',
+    type: 'object',
+    additionalProperties: { type: 'array', items: { type: 'string' } },
+  })
+  @IsOptional()
+  @IsObject()
+  readonly serialsByLineId?: Record<string, string[]>;
 }

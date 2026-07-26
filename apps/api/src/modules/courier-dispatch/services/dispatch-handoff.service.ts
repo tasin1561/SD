@@ -4,10 +4,12 @@ import {
   ManifestStatus,
   OrderStatus,
   ShipmentStatus,
+  StockUnitStatus,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
+import { StockUnitService } from '../../inventory-shared/stock-unit.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
 export interface DispatchHandoffFailure {
@@ -59,6 +61,7 @@ export class DispatchHandoffService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
     private readonly orderWrite: OrderWriteService,
+    private readonly units: StockUnitService,
   ) {}
 
   async confirmHandoff(
@@ -142,6 +145,35 @@ export class DispatchHandoffService {
             pickedUpByCourierAt: now,
           },
         });
+        // R4 — the parcel left the building: walk its serialized units
+        // PACKED → DISPATCHED. Parcel-grained, not per-unit-scanned (at
+        // handoff the AWB label IS the scanned thing; the units were
+        // verified one-by-one at pack). Guarded on fromStatus, so a
+        // re-run of a partially-processed manifest moves nothing twice.
+        // Best-effort: the courier already has the box, so a unit-ledger
+        // hiccup must not undo a real-world handoff — it surfaces in the
+        // discrepancy report instead.
+        try {
+          await this.prisma.client.$transaction((tx) =>
+            this.units.advanceUnitsForShipment(tx, {
+              shipmentId: ship.id,
+              fromStatus: StockUnitStatus.PACKED,
+              toStatus: StockUnitStatus.DISPATCHED,
+              gate: 'DISPATCH',
+              actorType: ActorType.STAFF,
+              actorId: staffId,
+            }),
+          );
+        } catch (unitErr) {
+          this.logger.warn(
+            {
+              manifestId,
+              shipmentId: ship.id,
+              err: (unitErr as Error).message,
+            },
+            'Dispatch handoff: unit ledger advance failed — parcel IS dispatched; discrepancy report will surface the units',
+          );
+        }
         transitionedCount += 1;
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);

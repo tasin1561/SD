@@ -248,6 +248,11 @@ export async function resetInventoryState(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(
     'TRUNCATE TABLE ' +
       [
+        // R4 serialized units — FK-RESTRICT sellers/variants/warehouses;
+        // stock_unit_events cascades off stock_units, but truncating both
+        // explicitly keeps the intent readable (MUST #12).
+        'stock_unit_events',
+        'stock_units',
         'stock_alert_state',
         'stock_adjustment_lines',
         'stock_movements',

@@ -480,6 +480,53 @@ const systemSettings: SystemSettingSeed[] = [
     overrideMinInt: 1,
     overrideMaxInt: 336,
   },
+  // R4 — STRICT-mode per-unit inventory. NORMAL default means nothing
+  // changes for anyone on deploy; strict is opted into per seller (this
+  // setting) or per SKU (product_variants.inventory_mode wins).
+  {
+    key: 'inventory.default_inventory_mode',
+    category: 'ops',
+    valueType: SettingValueType.STRING,
+    valueString: 'NORMAL',
+    displayName: 'Default Inventory Mode',
+    description:
+      "Fallback tracking mode for a seller's SKUs that don't set their own: 'NORMAL' (aggregate quantities, today's behaviour) or 'STRICT' (one scanned serial per physical unit at pick/pack/RTO). A variant's own inventory_mode always wins. Per-seller override.",
+    sellerOverridable: true,
+  },
+  {
+    key: 'inventory.strict_unit_serial_prefix',
+    category: 'ops',
+    valueType: SettingValueType.STRING,
+    valueString: 'SDU',
+    displayName: 'Generated Unit Serial Prefix',
+    description:
+      'Prefix for serials Skydrop generates + prints at receiving when a strict-mode unit arrives without a usable supplier barcode. Purely cosmetic — uniqueness comes from the generated body.',
+    sellerOverridable: false,
+  },
+  {
+    key: 'inventory.unit_stuck_sla_hours',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 48,
+    displayName: 'Unit Stuck SLA (hours)',
+    description:
+      'How long a serialized unit may sit in a mid-lifecycle status (PICKED / PACKED) before the discrepancy report flags it as stuck — i.e. an expected scan that never happened.',
+    sellerOverridable: false,
+    overrideMinInt: 1,
+    overrideMaxInt: 2160,
+  },
+  {
+    key: 'inventory.unit_dispatched_unresolved_days',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 30,
+    displayName: 'Dispatched-Unresolved Window (days)',
+    description:
+      'How long a unit may stay DISPATCHED before the discrepancy report treats it as unresolved. Delivery is stock-neutral and produces no unit scan (TRK-7), so ageing is how a never-returned, never-confirmed unit surfaces.',
+    sellerOverridable: false,
+    overrideMinInt: 1,
+    overrideMaxInt: 365,
+  },
   {
     key: 'wallet.accrual_delay_days',
     category: 'wallet',

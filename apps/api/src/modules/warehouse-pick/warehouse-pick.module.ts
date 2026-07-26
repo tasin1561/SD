@@ -10,6 +10,7 @@ import { PickExpirationWorker } from './queue/pick-expiration.worker';
 import { PickerController } from './controllers/picker.controller';
 import { AdminPickController } from './controllers/admin-pick.controller';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
+import { InventorySharedModule } from '../inventory-shared/inventory-shared.module';
 
 /**
  * Module 8 — Warehouse Operations (pick). Checkpoint 1 = the full
@@ -30,7 +31,7 @@ import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
  * AuditLogService + RedisService are global.
  */
 @Module({
-  imports: [OrderModule, InventoryStockModule],
+  imports: [OrderModule, InventoryStockModule, InventorySharedModule],
   controllers: [PickerController, AdminPickController],
   providers: [
     PickQueueService,

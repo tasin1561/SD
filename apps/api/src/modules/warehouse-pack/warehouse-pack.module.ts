@@ -5,6 +5,7 @@ import { PackQueueService } from './services/pack-queue.service';
 import { PackService } from './services/pack.service';
 import { PackerController } from './controllers/packer.controller';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
+import { InventorySharedModule } from '../inventory-shared/inventory-shared.module';
 
 /**
  * Module 8 — warehouse-pack module. Commit 9 = service layer
@@ -24,7 +25,7 @@ import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
  * loser pulls again. Revisit if pack volume scales.
  */
 @Module({
-  imports: [OrderModule, WarehouseManifestModule],
+  imports: [OrderModule, WarehouseManifestModule, InventorySharedModule],
   controllers: [PackerController],
   providers: [PackQueueService, PackService, StaffJwtGuard],
 })

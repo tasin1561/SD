@@ -1,14 +1,22 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, OrderStatus, RtoDisposition, StockMovementType } from '@skydrop/db';
+import {
+  ActorType,
+  OrderStatus,
+  RtoDisposition,
+  StockMovementType,
+  StockUnitStatus,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderReadService } from '../../order/services/order-read.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
 import { StockMutationService } from '../../inventory-shared/stock-mutation.service';
+import { StockUnitService } from '../../inventory-shared/stock-unit.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
 export interface FinalizeRtoItemSummary {
@@ -90,12 +98,15 @@ export interface FinalizeRtoResult {
  */
 @Injectable()
 export class RtoDispositionService {
+  private readonly logger = new Logger(RtoDispositionService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly orders: OrderReadService,
     private readonly orderWrite: OrderWriteService,
     private readonly mutation: StockMutationService,
     private readonly audit: AuditLogService,
+    private readonly units: StockUnitService,
   ) {}
 
   async finalize(
@@ -322,6 +333,61 @@ export class RtoDispositionService {
 
     const restockedCount = restockItems.length;
     const writtenOffCount = writeOffItems.length;
+
+    // R4 — settle the serialized units per LINE, mirroring the aggregate
+    // decision that just committed: a RESTOCK line's units go back
+    // IN_STOCK at the bin+batch the aggregate was credited to; a
+    // WRITE_OFF line's units are retired WRITTEN_OFF carrying the
+    // inspection condition as the reason (the unit left at dispatch and
+    // the dispatch decrement stands — Model A, CUR-3).
+    // Best-effort + guarded on fromStatus: the aggregate movements and
+    // the order transition are the durable facts; a unit-ledger failure
+    // must not undo a finalize. Stragglers surface in the discrepancy
+    // report, and a re-run moves nothing twice.
+    for (const item of restockItems) {
+      try {
+        await this.prisma.client.$transaction((tx) =>
+          this.units.advanceUnitsForShipment(tx, {
+            shipmentId,
+            shipmentItemId: item.id,
+            fromStatus: StockUnitStatus.RTO_RECEIVED,
+            toStatus: StockUnitStatus.IN_STOCK,
+            gate: 'RTO_RESTOCK',
+            actorType: ActorType.STAFF,
+            actorId: staffId,
+            warehouseId: restockWarehouseId,
+            binId: item.pickedBinId,
+            batchId: item.pickedBatchId,
+          }),
+        );
+      } catch (err) {
+        this.logger.warn(
+          { shipmentId, shipmentItemId: item.id, err: (err as Error).message },
+          'RTO finalize: unit restock failed — aggregate restock IS applied; discrepancy report will surface the units',
+        );
+      }
+    }
+    for (const item of writeOffItems) {
+      try {
+        await this.prisma.client.$transaction((tx) =>
+          this.units.advanceUnitsForShipment(tx, {
+            shipmentId,
+            shipmentItemId: item.id,
+            fromStatus: StockUnitStatus.RTO_RECEIVED,
+            toStatus: StockUnitStatus.WRITTEN_OFF,
+            gate: 'RTO_WRITE_OFF',
+            actorType: ActorType.STAFF,
+            actorId: staffId,
+            writeOffReason: `RTO ${item.rtoCondition ?? 'UNKNOWN'}`,
+          }),
+        );
+      } catch (err) {
+        this.logger.warn(
+          { shipmentId, shipmentItemId: item.id, err: (err as Error).message },
+          'RTO finalize: unit write-off failed — order IS finalized; discrepancy report will surface the units',
+        );
+      }
+    }
 
     await this.audit.log({
       actorType: ActorType.STAFF,

@@ -3,6 +3,7 @@ import { OrderModule } from '../order/order.module';
 import { DispatchHandoffService } from './services/dispatch-handoff.service';
 import { DispatchController } from './controllers/dispatch.controller';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
+import { InventorySharedModule } from '../inventory-shared/inventory-shared.module';
 
 /**
  * Module 9 — courier-dispatch: per-manifest dispatch handoff (CP3).
@@ -19,7 +20,7 @@ import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
  * LEAF consumer — nothing imports `courier-dispatch`.
  */
 @Module({
-  imports: [OrderModule],
+  imports: [OrderModule, InventorySharedModule],
   controllers: [DispatchController],
   providers: [DispatchHandoffService, StaffJwtGuard],
   exports: [DispatchHandoffService],

@@ -98,6 +98,9 @@ export class PickerController {
         shipmentItemId: body.shipmentItemId,
         pickedBinId: body.pickedBinId,
         pickedBatchId: body.pickedBatchId,
+        ...(body.scannedSerials === undefined
+          ? {}
+          : { scannedSerials: body.scannedSerials }),
       },
       ctx,
     );

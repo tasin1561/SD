@@ -12,6 +12,7 @@ import type { OrderReadService } from '../../src/modules/order/services/order-re
 import type { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import type { StockMutationService } from '../../src/modules/inventory-shared/stock-mutation.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
+import type { StockUnitService } from '../../src/modules/inventory-shared/stock-unit.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -102,12 +103,16 @@ function makeService(
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs]>(async () => 'a');
   const audit = { log: auditLog };
 
+  // R4: NORMAL-mode fixtures carry no serialized units, so the unit
+  // ledger advance is a no-op (0 rows moved) in every case here.
+  const unitLedger = { advanceUnitsForShipment: jest.fn(async () => 0) };
   const svc = new RtoDispositionService(
     { client } as unknown as PrismaService,
     orders as unknown as OrderReadService,
     orderWrite as unknown as OrderWriteService,
     mutation as unknown as StockMutationService,
     audit as unknown as AuditLogService,
+    unitLedger as unknown as StockUnitService,
   );
   return { svc, stockMovementFindFirst, transitionStatus, apply, runWithRetry, auditLog };
 }

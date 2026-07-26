@@ -1,13 +1,21 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, OrderStatus, ShipmentStatus, WarehouseStatus } from '@skydrop/db';
+import {
+  ActorType,
+  OrderStatus,
+  ShipmentStatus,
+  StockUnitStatus,
+  WarehouseStatus,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderReadService } from '../../order/services/order-read.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
+import { StockUnitService } from '../../inventory-shared/stock-unit.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
 export interface ReceiveRtoResult {
@@ -43,11 +51,14 @@ export interface ReceiveRtoResult {
  */
 @Injectable()
 export class RtoReceiptService {
+  private readonly logger = new Logger(RtoReceiptService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly orders: OrderReadService,
     private readonly orderWrite: OrderWriteService,
     private readonly audit: AuditLogService,
+    private readonly units: StockUnitService,
   ) {}
 
   /**
@@ -212,6 +223,32 @@ export class RtoReceiptService {
         requestId: ctx?.requestId ?? null,
       },
     });
+
+    // R4 — the parcel is physically back: walk its serialized units
+    // DISPATCHED → RTO_RECEIVED at the warehouse that actually received
+    // them (which may differ from origin — R6). Parcel-grained; the AWB
+    // is the scanned thing at the returns bench. Best-effort + guarded on
+    // fromStatus: the order transition above is the durable fact, and a
+    // unit-ledger failure must not un-receive a parcel that is standing
+    // in the building. The discrepancy report surfaces stragglers.
+    try {
+      await this.prisma.client.$transaction((tx) =>
+        this.units.advanceUnitsForShipment(tx, {
+          shipmentId: shipment.id,
+          fromStatus: StockUnitStatus.DISPATCHED,
+          toStatus: StockUnitStatus.RTO_RECEIVED,
+          gate: 'RTO_RECEIVE',
+          actorType: ActorType.STAFF,
+          actorId: staffId,
+          warehouseId: effectiveWarehouseId,
+        }),
+      );
+    } catch (err) {
+      this.logger.warn(
+        { shipmentId: shipment.id, awbNumber, err: (err as Error).message },
+        'RTO receive: unit ledger advance failed — parcel IS received; discrepancy report will surface the units',
+      );
+    }
 
     return {
       shipmentId: shipment.id,

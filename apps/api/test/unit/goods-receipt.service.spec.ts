@@ -1,10 +1,13 @@
 import { GoodsReceiptStatus, VariantStatus } from '@skydrop/db';
+import type { InventoryMode } from '@skydrop/db';
 import { GoodsReceiptService } from '../../src/modules/inventory-receipt/services/goods-receipt.service';
 import { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { CatalogReadService } from '../../src/modules/catalog-read/services/catalog-read.service';
 import type { WarehouseResolverService } from '../../src/modules/inventory-shared/warehouse-resolver.service';
 import type { StockMutationService } from '../../src/modules/inventory-shared/stock-mutation.service';
+import type { StockUnitService } from '../../src/modules/inventory-shared/stock-unit.service';
+import type { InventoryModeService } from '../../src/modules/inventory-shared/inventory-mode.service';
 import type { StockAlertService } from '../../src/modules/inventory-shared/stock-alert.service';
 import type { StockCacheService } from '../../src/modules/inventory-shared/stock-cache.service';
 import type { EmailQueue } from '../../src/modules/email/queue/email.queue';
@@ -110,12 +113,25 @@ function makeSut(receipt: ReturnType<typeof makeReceipt>) {
   } as unknown as EmailQueue;
   const env = { sellerAppUrl: 'http://app', supportEmail: 'help@x.io' } as unknown as EnvService;
 
+  // R4: these fixtures cover NORMAL-mode SKUs, so no unit is ever
+  // registered — registerUnits being untouched IS part of the assertion
+  // that strict mode is opt-in.
+  const units = {
+    registerUnits: jest.fn(async () => []),
+  } as unknown as StockUnitService;
+  const modes = {
+    resolveForVariants: jest.fn(async () => new Map<string, InventoryMode>()),
+    serialPrefixFor: jest.fn(async () => 'SDU'),
+  } as unknown as InventoryModeService;
+
   const svc = new GoodsReceiptService(
     prisma,
     audit,
     catalog,
     warehouses,
     mutation,
+    units,
+    modes,
     alerts,
     cache,
     email,

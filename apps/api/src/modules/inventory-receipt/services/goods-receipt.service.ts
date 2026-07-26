@@ -2,12 +2,14 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
   ActorType,
   BinType,
   GoodsReceiptStatus,
+  InventoryMode,
   Prisma,
   VariantStatus,
 } from '@skydrop/db';
@@ -17,6 +19,8 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 import { WarehouseResolverService } from '../../inventory-shared/warehouse-resolver.service';
 import { StockMutationService } from '../../inventory-shared/stock-mutation.service';
+import { StockUnitService } from '../../inventory-shared/stock-unit.service';
+import { InventoryModeService } from '../../inventory-shared/inventory-mode.service';
 import { StockAlertService } from '../../inventory-shared/stock-alert.service';
 import { StockCacheService } from '../../inventory-shared/stock-cache.service';
 import { EmailQueue } from '../../email/queue/email.queue';
@@ -80,12 +84,16 @@ const MAX_RECEIPT_NUMBER_ATTEMPTS = 5;
  */
 @Injectable()
 export class GoodsReceiptService {
+  private readonly logger = new Logger(GoodsReceiptService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
     private readonly catalog: CatalogReadService,
     private readonly warehouses: WarehouseResolverService,
     private readonly mutation: StockMutationService,
+    private readonly units: StockUnitService,
+    private readonly modes: InventoryModeService,
     private readonly alerts: StockAlertService,
     private readonly cache: StockCacheService,
     private readonly email: EmailQueue,
@@ -404,6 +412,14 @@ export class GoodsReceiptService {
     staffId: string,
     id: string,
     ctx: ClientContext,
+    /**
+     * R4 — supplier-printed serials the receiver scanned, keyed by
+     * goods-receipt-line id. Only consulted for STRICT-mode SKUs. Any
+     * line left out (or short) gets Skydrop-generated serials to print,
+     * so a strict SKU is never blocked at intake by a supplier that
+     * doesn't serialize.
+     */
+    serialsByLineId?: Readonly<Record<string, readonly string[]>>,
   ): Promise<GoodsReceiptView> {
     const receipt = await this.getForAdmin(id);
     this.assertStatus(receipt.status, [GoodsReceiptStatus.ARRIVING], 'complete');
@@ -443,7 +459,7 @@ export class GoodsReceiptService {
       return updated;
     }
 
-    return this.writeStockAndComplete(staffId, id, null, ctx);
+    return this.writeStockAndComplete(staffId, id, null, ctx, serialsByLineId);
   }
 
   /** DISCREPANCY -> COMPLETED. CORRECT applies corrected actuals first;
@@ -562,9 +578,15 @@ export class GoodsReceiptService {
     id: string,
     completionNote: string | null,
     ctx: ClientContext,
+    serialsByLineId?: Readonly<Record<string, readonly string[]>>,
   ): Promise<GoodsReceiptView> {
     const now = new Date();
-    const { view, affectedVariantIds, sellerId, warehouseId } =
+    // R4: resolve the receipt's SKU modes + the serial prefix ONCE,
+    // outside the retryable tx (they're read-only settings/catalog reads,
+    // and re-reading them per attempt buys nothing).
+    const { modeByVariantId, serialPrefix } = await this.resolveUnitContext(id);
+
+    const { view, affectedVariantIds, sellerId, warehouseId, unitsRegistered } =
       await this.mutation.runWithRetry(async (tx) => {
         const receipt = await tx.goodsReceipt.findUniqueOrThrow({
           where: { id },
@@ -572,6 +594,7 @@ export class GoodsReceiptService {
         });
         const variantIds: string[] = [];
         let totalReceived = 0;
+        let unitCount = 0;
 
         for (const [i, line] of receipt.lines.entries()) {
           if (line.receivedQty <= 0) continue;
@@ -613,6 +636,30 @@ export class GoodsReceiptService {
             where: { id: line.id },
             data: { batchId: batch.id },
           });
+
+          // R4: a STRICT-mode SKU gets one stock_unit row per physical
+          // unit, registered in THIS tx alongside the aggregate RECEIVING
+          // movement — so units and qtyOnHand can never disagree because
+          // one of the two writes was lost.
+          if (modeByVariantId.get(line.variantId) === InventoryMode.STRICT) {
+            const supplied = serialsByLineId?.[line.id];
+            const registered = await this.units.registerUnits(tx, {
+              sellerId: receipt.sellerId,
+              variantId: line.variantId,
+              warehouseId: receipt.warehouseId,
+              binId: line.putawayBinId,
+              batchId: batch.id,
+              goodsReceiptLineId: line.id,
+              quantity: line.receivedQty,
+              ...(supplied === undefined ? {} : { serials: supplied }),
+              serialPrefix,
+              actorType: ActorType.STAFF,
+              actorId: staffId,
+              note: `Goods receipt ${receipt.receiptNumber}`,
+            });
+            unitCount += registered.length;
+          }
+
           variantIds.push(line.variantId);
           totalReceived += line.receivedQty;
         }
@@ -644,6 +691,7 @@ export class GoodsReceiptService {
             metadata: {
               totalReceived,
               lineCount: receipt.lines.length,
+              serializedUnits: unitCount,
               note: completionNote,
               ...this.ctxMeta(ctx),
             },
@@ -662,6 +710,7 @@ export class GoodsReceiptService {
           affectedVariantIds: [...new Set(variantIds)],
           sellerId: receipt.sellerId,
           warehouseId: receipt.warehouseId,
+          unitsRegistered: unitCount,
         };
       });
 
@@ -670,7 +719,35 @@ export class GoodsReceiptService {
     for (const variantId of affectedVariantIds) {
       await this.alerts.evaluate(sellerId, variantId, warehouseId);
     }
+    if (unitsRegistered > 0) {
+      this.logger.log(
+        { receiptId: id, unitsRegistered },
+        'R4: serialized units registered at receipt — labels ready to print',
+      );
+    }
     return view;
+  }
+
+  /**
+   * R4 — which of this receipt's SKUs are STRICT, plus the serial prefix
+   * to print. Read-only; resolved before the retryable stock tx opens.
+   */
+  private async resolveUnitContext(receiptId: string): Promise<{
+    modeByVariantId: Map<string, InventoryMode>;
+    serialPrefix: string;
+  }> {
+    const receipt = await this.prisma.client.goodsReceipt.findUniqueOrThrow({
+      where: { id: receiptId },
+      select: { sellerId: true, lines: { select: { variantId: true } } },
+    });
+    const [modeByVariantId, serialPrefix] = await Promise.all([
+      this.modes.resolveForVariants(
+        receipt.sellerId,
+        receipt.lines.map((l) => l.variantId),
+      ),
+      this.modes.serialPrefixFor(receipt.sellerId),
+    ]);
+    return { modeByVariantId, serialPrefix };
   }
 
   private detectDiscrepancies(receipt: GoodsReceiptView): Array<{

@@ -94,4 +94,7 @@ export {
   // R5 — two-stage inventory booking
   ReservationBookingStage,
   EarlyReservationReviewStatus,
+  // R4 — strict-mode per-unit inventory
+  InventoryMode,
+  StockUnitStatus,
 } from '@prisma/client';

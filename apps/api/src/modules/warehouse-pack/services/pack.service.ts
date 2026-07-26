@@ -4,12 +4,13 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, OrderStatus, ShipmentStatus } from '@skydrop/db';
+import { ActorType, OrderStatus, ShipmentStatus, StockUnitStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderReadService } from '../../order/services/order-read.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
 import { ManifestService } from '../../warehouse-manifest/services/manifest.service';
+import { StockUnitService } from '../../inventory-shared/stock-unit.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
 export interface CompletePackResult {
@@ -19,6 +20,9 @@ export interface CompletePackResult {
   packCompletedAt: Date;
   manifestId: string | null;
   manifestNumber: string | null;
+  /** R4 — serialized units moved PICKED → PACKED (0 for a parcel with no
+   *  strict-mode lines). */
+  unitsScanned: number;
   /** true ⇒ idempotent no-op (shipment already PACKED + stamped). */
   alreadyComplete: boolean;
 }
@@ -57,12 +61,20 @@ export class PackService {
     private readonly orders: OrderReadService,
     private readonly orderWrite: OrderWriteService,
     private readonly manifests: ManifestService,
+    private readonly units: StockUnitService,
   ) {}
 
   async complete(
     shipmentId: string,
     staffId: string,
     ctx?: ClientContext,
+    /**
+     * R4 — every serial in the box, re-scanned at the pack bench. Required
+     * when the parcel carries strict-mode units; the scanned set must
+     * match the parcel's PICKED units EXACTLY (a count check alone would
+     * pass a swapped unit). Ignored for an all-NORMAL parcel.
+     */
+    scannedSerials?: readonly string[],
   ): Promise<CompletePackResult> {
     const shipment = await this.prisma.client.shipment.findFirst({
       where: { id: shipmentId, deletedAt: null },
@@ -73,7 +85,7 @@ export class PackService {
         manifestId: true,
         manifest: { select: { manifestNumber: true } },
         orderShipments: {
-          select: { orderId: true },
+          select: { orderId: true, order: { select: { sellerId: true } } },
           orderBy: { shipmentSequence: 'asc' },
           take: 1,
         },
@@ -118,6 +130,7 @@ export class PackService {
         packCompletedAt: shipment.packCompletedAt,
         manifestId: shipment.manifestId,
         manifestNumber: shipment.manifest?.manifestNumber ?? null,
+        unitsScanned: 0,
         alreadyComplete: true,
       };
     }
@@ -126,6 +139,45 @@ export class PackService {
         code: 'ORDER_NOT_PACKABLE',
         message: `Order is ${order.status}; pack complete requires PICKED`,
       });
+    }
+
+    // R4 — the strict gate runs BEFORE the operational stamp, on purpose:
+    // a mis-scanned box must not consume the pack claim. Whether strict
+    // applies is decided by the parcel itself (does it carry PICKED
+    // units?), not by re-resolving modes — the pick gate already did that
+    // and the units are the durable evidence.
+    const pickedUnits = await this.units.countForShipment(
+      shipmentId,
+      StockUnitStatus.PICKED,
+    );
+    let unitsScanned = 0;
+    if (pickedUnits > 0) {
+      const sellerId = shipment.orderShipments[0]?.order.sellerId;
+      if (sellerId === undefined) {
+        throw new NotFoundException({
+          code: 'ORDER_SHIPMENT_MISSING',
+          message: `Shipment ${shipmentId} has no OrderShipment junction`,
+        });
+      }
+      const serials = (scannedSerials ?? []).filter((s) => s.trim().length > 0);
+      if (serials.length === 0) {
+        throw new ConflictException({
+          code: 'UNIT_SCAN_REQUIRED',
+          message: `This parcel carries ${pickedUnits} serialized unit(s); scan every one at pack`,
+        });
+      }
+      unitsScanned = await this.prisma.client.$transaction((tx) =>
+        this.units.scanUnitsForShipment(tx, {
+          sellerId,
+          shipmentId,
+          serials,
+          fromStatus: StockUnitStatus.PICKED,
+          toStatus: StockUnitStatus.PACKED,
+          gate: 'PACK',
+          actorType: ActorType.STAFF,
+          actorId: staffId,
+        }),
+      );
     }
 
     const now = new Date();
@@ -164,6 +216,7 @@ export class PackService {
       severity: 'LOW',
       metadata: {
         orderId,
+        unitsScanned,
         ipAddress: ctx?.ipAddress ?? null,
         userAgent: ctx?.userAgent ?? null,
         requestId: ctx?.requestId ?? null,
@@ -195,6 +248,7 @@ export class PackService {
       packCompletedAt: now,
       manifestId,
       manifestNumber,
+      unitsScanned,
       alreadyComplete: false,
     };
   }

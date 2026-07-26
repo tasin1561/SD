@@ -5,6 +5,7 @@ import type { PrismaService } from '../../src/infrastructure/prisma/prisma.servi
 import type { OrderReadService } from '../../src/modules/order/services/order-read.service';
 import type { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
+import type { StockUnitService } from '../../src/modules/inventory-shared/stock-unit.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -62,11 +63,21 @@ function makeService(
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs]>(async () => 'a');
   const audit = { log: auditLog };
 
+  // R4: NORMAL-mode fixtures — no serialized units exist, so the unit
+  // ledger is a no-op here. countForShipment returning 0 is what makes
+  // the strict gate skip; parcel-grained advances move nothing.
+  const unitLedger = {
+    countForShipment: jest.fn(async () => 0),
+    advanceUnitsForShipment: jest.fn(async () => 0),
+    scanUnits: jest.fn(async () => []),
+    scanUnitsForShipment: jest.fn(async () => 0),
+  };
   const svc = new RtoReceiptService(
     { client } as unknown as PrismaService,
     orders as unknown as OrderReadService,
     orderWrite as unknown as OrderWriteService,
     audit as unknown as AuditLogService,
+    unitLedger as unknown as StockUnitService,
   );
   return {
     svc,

@@ -3,7 +3,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { OrderStatus, ShipmentStatus } from '@skydrop/db';
+import { InventoryMode, OrderStatus, ShipmentStatus } from '@skydrop/db';
 import { PickExecutionService } from '../../src/modules/warehouse-pick/services/pick-execution.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { OrderReadService } from '../../src/modules/order/services/order-read.service';
@@ -12,6 +12,8 @@ import type { StockReservationService } from '../../src/modules/inventory-stock/
 import type { PickAllocationService } from '../../src/modules/warehouse-pick/services/pick-allocation.service';
 import type { AppliedAllocation } from '../../src/modules/inventory-stock/services/stock-pick-allocation.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
+import type { StockUnitService } from '../../src/modules/inventory-shared/stock-unit.service';
+import type { InventoryModeService } from '../../src/modules/inventory-shared/inventory-mode.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -43,6 +45,9 @@ function makeService(
     }>;
     findItem?: AnyArgs | null;
     stampCount?: number;
+    /** R4: flips the SKU into STRICT so the scan gate engages. */
+    inventoryMode?: InventoryMode;
+    scanUnitsImpl?: jest.Mock;
   } = {},
 ) {
   const defaultShipment = {
@@ -60,7 +65,14 @@ function makeService(
   const shipmentItemFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
     async () =>
       opts.findItem === undefined
-        ? { id: 'si-1', shipmentId: SHIP }
+        ? {
+            id: 'si-1',
+            shipmentId: SHIP,
+            quantity: 2,
+            // R4: recordItem resolves the line's SKU + owner to decide
+            // whether the strict scan gate applies.
+            orderItem: { variantId: 'v-1', order: { sellerId: 'seller-1' } },
+          }
         : opts.findItem,
   );
   const shipmentItemFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
@@ -75,7 +87,8 @@ function makeService(
   const shipmentUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(
     async () => ({ count: opts.stampCount ?? 1 }),
   );
-  const client = {
+  const client: AnyArgs = {
+    $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(client),
     shipment: { findFirst: shipmentFindFirst, updateMany: shipmentUpdateMany },
     shipmentItem: {
       findUnique: shipmentItemFindUnique,
@@ -103,6 +116,20 @@ function makeService(
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs]>(async () => 'a');
   const audit = { log: auditLog };
 
+  // R4: NORMAL-mode fixtures — no serialized units exist, so the unit
+  // ledger is a no-op here. countForShipment returning 0 is what makes
+  // the strict gate skip; parcel-grained advances move nothing.
+  const unitLedger = {
+    countForShipment: jest.fn(async () => 0),
+    advanceUnitsForShipment: jest.fn(async () => 0),
+    scanUnits: opts.scanUnitsImpl ?? jest.fn(async () => ['u-1', 'u-2']),
+    scanUnitsForShipment: jest.fn(async () => 0),
+  };
+  const modes = {
+    resolveForVariant: jest.fn(
+      async () => opts.inventoryMode ?? InventoryMode.NORMAL,
+    ),
+  };
   const svc = new PickExecutionService(
     { client } as unknown as PrismaService,
     orders as unknown as OrderReadService,
@@ -110,6 +137,8 @@ function makeService(
     reservations as unknown as StockReservationService,
     allocation as unknown as PickAllocationService,
     audit as unknown as AuditLogService,
+    modes as unknown as InventoryModeService,
+    unitLedger as unknown as StockUnitService,
   );
   return {
     svc,
@@ -123,6 +152,7 @@ function makeService(
     listActiveForOrder,
     allocateForPick,
     auditLog,
+    unitLedger,
   };
 }
 
@@ -259,6 +289,76 @@ describe('PickExecutionService.start', () => {
 });
 
 describe('PickExecutionService.recordItem', () => {
+  it('STRICT: rejects a scan count that does not match the line quantity, and records NOTHING', async () => {
+    const { svc, shipmentItemUpdate, unitLedger } = makeService({
+      orderStatus: OrderStatus.PENDING_PICK,
+      inventoryMode: InventoryMode.STRICT,
+    });
+    // The fixture line has quantity 2; one serial is not enough.
+    await expect(
+      svc.recordItem(SHIP, STAFF, {
+        shipmentItemId: 'si-1',
+        pickedBinId: 'bin-9',
+        pickedBatchId: 'bat-9',
+        scannedSerials: ['S1'],
+      }),
+    ).rejects.toMatchObject({ response: { code: 'UNIT_SCAN_COUNT_MISMATCH' } });
+    // A rejected scan must leave the line un-recorded, else `complete`
+    // would pass a parcel whose units were never accounted for.
+    expect(shipmentItemUpdate).not.toHaveBeenCalled();
+    expect(unitLedger.scanUnits).not.toHaveBeenCalled();
+  });
+
+  it('STRICT: a missing scannedSerials array is treated as zero scans, not as opt-out', async () => {
+    const { svc } = makeService({
+      orderStatus: OrderStatus.PENDING_PICK,
+      inventoryMode: InventoryMode.STRICT,
+    });
+    await expect(
+      svc.recordItem(SHIP, STAFF, {
+        shipmentItemId: 'si-1',
+        pickedBinId: 'bin-9',
+        pickedBatchId: 'bat-9',
+      }),
+    ).rejects.toMatchObject({ response: { code: 'UNIT_SCAN_COUNT_MISMATCH' } });
+  });
+
+  it('STRICT: an exact scan moves the units and records the hint in the same tx', async () => {
+    const { svc, shipmentItemUpdate, unitLedger } = makeService({
+      orderStatus: OrderStatus.PENDING_PICK,
+      inventoryMode: InventoryMode.STRICT,
+    });
+    const r = await svc.recordItem(SHIP, STAFF, {
+      shipmentItemId: 'si-1',
+      pickedBinId: 'bin-9',
+      pickedBatchId: 'bat-9',
+      scannedSerials: ['S1', 'S2'],
+    });
+    expect(r.unitsScanned).toBe(2);
+    expect(unitLedger.scanUnits).toHaveBeenCalledTimes(1);
+    expect(shipmentItemUpdate).toHaveBeenCalledTimes(1);
+    const scanArgs = unitLedger.scanUnits.mock.calls[0]?.[1] as AnyArgs;
+    expect(scanArgs).toMatchObject({
+      serials: ['S1', 'S2'],
+      shipmentItemId: 'si-1',
+      gate: 'PICK',
+    });
+  });
+
+  it('NORMAL: serials are ignored entirely — every pre-R4 caller keeps working', async () => {
+    const { svc, unitLedger } = makeService({
+      orderStatus: OrderStatus.PENDING_PICK,
+    });
+    const r = await svc.recordItem(SHIP, STAFF, {
+      shipmentItemId: 'si-1',
+      pickedBinId: 'bin-9',
+      pickedBatchId: 'bat-9',
+      scannedSerials: ['STRAY'],
+    });
+    expect(r.unitsScanned).toBe(0);
+    expect(unitLedger.scanUnits).not.toHaveBeenCalled();
+  });
+
   it('records the bin/batch hint + audits', async () => {
     const { svc, shipmentItemUpdate, auditLog } = makeService({
       orderStatus: OrderStatus.PENDING_PICK,
@@ -276,6 +376,7 @@ describe('PickExecutionService.recordItem', () => {
       shipmentItemId: 'si-1',
       pickedBinId: 'bin-9',
       pickedBatchId: 'bat-9',
+      unitsScanned: 0,
     });
     expect(auditLog).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'warehouse_pick.item_recorded' }),

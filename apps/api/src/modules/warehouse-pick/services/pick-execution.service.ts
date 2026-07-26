@@ -5,7 +5,13 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, OrderStatus, ShipmentStatus } from '@skydrop/db';
+import {
+  ActorType,
+  InventoryMode,
+  OrderStatus,
+  ShipmentStatus,
+  StockUnitStatus,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderReadService } from '../../order/services/order-read.service';
@@ -13,6 +19,8 @@ import { OrderWriteService } from '../../order/services/order-write.service';
 import { StockReservationService } from '../../inventory-stock/services/stock-reservation.service';
 import type { AppliedAllocation } from '../../inventory-stock/services/stock-pick-allocation.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
+import { InventoryModeService } from '../../inventory-shared/inventory-mode.service';
+import { StockUnitService } from '../../inventory-shared/stock-unit.service';
 import { PickAllocationService } from './pick-allocation.service';
 
 export interface PickAllocationSummary {
@@ -37,6 +45,9 @@ export interface RecordPickItemResult {
   shipmentItemId: string;
   pickedBinId: string;
   pickedBatchId: string;
+  /** R4 — how many serialized units this scan moved IN_STOCK → PICKED.
+   *  0 for a NORMAL-mode line (nothing to scan). */
+  unitsScanned: number;
 }
 
 export interface CompletePickResult {
@@ -101,6 +112,8 @@ export class PickExecutionService {
     private readonly reservations: StockReservationService,
     private readonly allocation: PickAllocationService,
     private readonly audit: AuditLogService,
+    private readonly modes: InventoryModeService,
+    private readonly units: StockUnitService,
   ) {}
 
   /**
@@ -244,10 +257,24 @@ export class PickExecutionService {
   async recordItem(
     shipmentId: string,
     staffId: string,
-    input: { shipmentItemId: string; pickedBinId: string; pickedBatchId: string },
+    input: {
+      shipmentItemId: string;
+      pickedBinId: string;
+      pickedBatchId: string;
+      /**
+       * R4 — the serials the picker scanned off the shelf. REQUIRED (and
+       * must be exactly `quantity` of them) for a STRICT-mode SKU;
+       * ignored entirely for a NORMAL-mode one, so every pre-R4 caller
+       * keeps working untouched.
+       */
+      scannedSerials?: readonly string[];
+    },
     ctx?: ClientContext,
   ): Promise<RecordPickItemResult> {
-    const { orderId } = await this.loadClaimedShipment(shipmentId, staffId);
+    const { orderId, originWarehouseId } = await this.loadClaimedShipment(
+      shipmentId,
+      staffId,
+    );
 
     const order = await this.orders.getById(orderId);
     if (!order || order.status !== OrderStatus.PENDING_PICK) {
@@ -259,7 +286,14 @@ export class PickExecutionService {
 
     const item = await this.prisma.client.shipmentItem.findUnique({
       where: { id: input.shipmentItemId },
-      select: { id: true, shipmentId: true },
+      select: {
+        id: true,
+        shipmentId: true,
+        quantity: true,
+        orderItem: {
+          select: { variantId: true, order: { select: { sellerId: true } } },
+        },
+      },
     });
     if (!item || item.shipmentId !== shipmentId) {
       throw new NotFoundException({
@@ -268,13 +302,55 @@ export class PickExecutionService {
       });
     }
 
-    await this.prisma.client.shipmentItem.update({
-      where: { id: input.shipmentItemId },
-      data: {
-        pickedBinId: input.pickedBinId,
-        pickedBatchId: input.pickedBatchId,
-      },
-    });
+    // R4 — STRICT-mode scan gate. The unit scan and the operational
+    // bin/batch hint land in ONE tx: a rejected serial must leave the
+    // line un-recorded, or `complete` would let a parcel through whose
+    // units were never accounted for.
+    const sellerId = item.orderItem.order.sellerId;
+    const variantId = item.orderItem.variantId;
+    const mode = await this.modes.resolveForVariant(sellerId, variantId);
+    let unitsScanned = 0;
+
+    if (mode === InventoryMode.STRICT) {
+      const serials = (input.scannedSerials ?? []).filter((s) => s.trim().length > 0);
+      if (serials.length !== item.quantity) {
+        throw new ConflictException({
+          code: 'UNIT_SCAN_COUNT_MISMATCH',
+          message: `This SKU is tracked per unit: scan exactly ${item.quantity} serial(s), got ${serials.length}`,
+        });
+      }
+      await this.prisma.client.$transaction(async (tx) => {
+        const ids = await this.units.scanUnits(tx, {
+          sellerId,
+          variantId,
+          serials,
+          fromStatus: StockUnitStatus.IN_STOCK,
+          toStatus: StockUnitStatus.PICKED,
+          gate: 'PICK',
+          actorType: ActorType.STAFF,
+          actorId: staffId,
+          warehouseId: originWarehouseId,
+          shipmentId,
+          shipmentItemId: item.id,
+        });
+        unitsScanned = ids.length;
+        await tx.shipmentItem.update({
+          where: { id: input.shipmentItemId },
+          data: {
+            pickedBinId: input.pickedBinId,
+            pickedBatchId: input.pickedBatchId,
+          },
+        });
+      });
+    } else {
+      await this.prisma.client.shipmentItem.update({
+        where: { id: input.shipmentItemId },
+        data: {
+          pickedBinId: input.pickedBinId,
+          pickedBatchId: input.pickedBatchId,
+        },
+      });
+    }
 
     await this.audit.log({
       actorType: ActorType.STAFF,
@@ -288,6 +364,8 @@ export class PickExecutionService {
         orderId,
         pickedBinId: input.pickedBinId,
         pickedBatchId: input.pickedBatchId,
+        inventoryMode: mode,
+        unitsScanned,
         ipAddress: ctx?.ipAddress ?? null,
         userAgent: ctx?.userAgent ?? null,
         requestId: ctx?.requestId ?? null,
@@ -298,6 +376,7 @@ export class PickExecutionService {
       shipmentItemId: input.shipmentItemId,
       pickedBinId: input.pickedBinId,
       pickedBatchId: input.pickedBatchId,
+      unitsScanned,
     };
   }
 
@@ -420,7 +499,11 @@ export class PickExecutionService {
     shipmentId: string,
     staffId: string,
     opts: { allowCompleted?: boolean } = {},
-  ): Promise<{ orderId: string; pickCompletedAt: Date | null }> {
+  ): Promise<{
+    orderId: string;
+    pickCompletedAt: Date | null;
+    originWarehouseId: string;
+  }> {
     const shipment = await this.prisma.client.shipment.findFirst({
       where: { id: shipmentId, deletedAt: null },
       select: {
@@ -429,6 +512,7 @@ export class PickExecutionService {
         pickStartedAt: true,
         pickStartedByStaffId: true,
         pickCompletedAt: true,
+        originWarehouseId: true,
         orderShipments: {
           select: { orderId: true },
           orderBy: { shipmentSequence: 'asc' },
@@ -473,7 +557,11 @@ export class PickExecutionService {
         message: `Shipment ${shipmentId} has no OrderShipment junction`,
       });
     }
-    return { orderId, pickCompletedAt: shipment.pickCompletedAt };
+    return {
+      orderId,
+      pickCompletedAt: shipment.pickCompletedAt,
+      originWarehouseId: shipment.originWarehouseId,
+    };
   }
 
   /** WMS-4 fail-route: PENDING_PICK → PENDING_MANUAL_PLACEMENT (no

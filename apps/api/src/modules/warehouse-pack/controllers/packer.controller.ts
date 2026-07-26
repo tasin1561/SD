@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   HttpCode,
   HttpStatus,
@@ -25,6 +26,7 @@ import {
   PackService,
   type CompletePackResult,
 } from '../services/pack.service';
+import { CompletePackDto } from '../dto/complete-pack.dto';
 
 /**
  * Packer workflow (pull → complete). Staff JWT only — packer role
@@ -72,7 +74,8 @@ export class PackerController {
     shipmentId: string,
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
+    @Body() body?: CompletePackDto,
   ): Promise<CompletePackResult> {
-    return this.pack.complete(shipmentId, staff.id, ctx);
+    return this.pack.complete(shipmentId, staff.id, ctx, body?.scannedSerials);
   }
 }

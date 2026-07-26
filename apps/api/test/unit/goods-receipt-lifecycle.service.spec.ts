@@ -5,6 +5,8 @@ import type { PrismaService } from '../../src/infrastructure/prisma/prisma.servi
 import type { CatalogReadService } from '../../src/modules/catalog-read/services/catalog-read.service';
 import type { WarehouseResolverService } from '../../src/modules/inventory-shared/warehouse-resolver.service';
 import type { StockMutationService } from '../../src/modules/inventory-shared/stock-mutation.service';
+import type { StockUnitService } from '../../src/modules/inventory-shared/stock-unit.service';
+import type { InventoryModeService } from '../../src/modules/inventory-shared/inventory-mode.service';
 import type { StockAlertService } from '../../src/modules/inventory-shared/stock-alert.service';
 import type { StockCacheService } from '../../src/modules/inventory-shared/stock-cache.service';
 import type { EmailQueue } from '../../src/modules/email/queue/email.queue';
@@ -65,6 +67,8 @@ function makeSut(opts: {
     catalog,
     warehouses,
     noop as StockMutationService,
+    noop as StockUnitService,
+    noop as InventoryModeService,
     noop as StockAlertService,
     noop as StockCacheService,
     noop as EmailQueue,

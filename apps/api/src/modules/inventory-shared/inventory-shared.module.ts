@@ -1,11 +1,14 @@
 import { Module } from '@nestjs/common';
 import { CatalogReadModule } from '../catalog-read/catalog-read.module';
 import { EmailModule } from '../email/email.module';
+import { SettingsModule } from '../settings/settings.module';
 import { WarehouseResolverService } from './warehouse-resolver.service';
 import { StockMutationService } from './stock-mutation.service';
 import { StockAvailabilityService } from './stock-availability.service';
 import { StockCacheService } from './stock-cache.service';
 import { StockAlertService } from './stock-alert.service';
+import { InventoryModeService } from './inventory-mode.service';
+import { StockUnitService } from './stock-unit.service';
 
 /**
  * Shared inventory primitives consumed by every inventory-* module.
@@ -26,18 +29,27 @@ import { StockAlertService } from './stock-alert.service';
  *    — which is what keeps inventory-shared free of an inventory-stock
  *    dependency (resolves Module 5 deviation #7).
  *
+ *  - InventoryModeService   — R4: resolves a SKU's NORMAL/STRICT mode
+ *    (variant column → seller setting → seeded default; fails OPEN to
+ *    NORMAL so a settings outage can never stop the pick floor).
+ *  - StockUnitService       — R4: the sole writer of stock_units /
+ *    stock_unit_events. WRAPS the aggregate layer inside the caller's tx;
+ *    stock_levels.qtyOnHand stays authoritative (INV-1/INV-3 untouched).
+ *
  * Imports CatalogReadModule + EmailModule solely for StockAlertService
  * (variant lookup + the low-stock email). Neither imports any inventory
  * module, so there is no cycle.
  */
 @Module({
-  imports: [CatalogReadModule, EmailModule],
+  imports: [CatalogReadModule, EmailModule, SettingsModule],
   providers: [
     WarehouseResolverService,
     StockMutationService,
     StockAvailabilityService,
     StockCacheService,
     StockAlertService,
+    InventoryModeService,
+    StockUnitService,
   ],
   exports: [
     WarehouseResolverService,
@@ -45,6 +57,8 @@ import { StockAlertService } from './stock-alert.service';
     StockAvailabilityService,
     StockCacheService,
     StockAlertService,
+    InventoryModeService,
+    StockUnitService,
   ],
 })
 export class InventorySharedModule {}

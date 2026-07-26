@@ -19,6 +19,7 @@ import type { AuthenticatedStaff } from '../../common/types/request';
 import {
   ListAdminGoodsReceiptsQueryDto,
   RecordReceiptLinesDto,
+  CompleteGoodsReceiptDto,
 } from './dto/admin-goods-receipt.dto';
 import { ResolveDiscrepancyDto } from './dto/resolve-discrepancy.dto';
 import {
@@ -85,8 +86,9 @@ export class AdminGoodsReceiptController {
     @Param('id', uuid()) id: string,
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
+    @Body() body?: CompleteGoodsReceiptDto,
   ): Promise<GoodsReceiptView> {
-    return this.svc.complete(staff.id, id, ctx);
+    return this.svc.complete(staff.id, id, ctx, body?.serialsByLineId);
   }
 
   @Post(':id/resolve-discrepancy')
