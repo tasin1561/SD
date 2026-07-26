@@ -301,12 +301,19 @@
   }
   .callout strong { color: var(--fg-strong); }
 
-  .phase { display:grid; grid-template-columns: auto 1fr; gap: 0 18px; }
-  .phase .rail { position: relative; width: 14px; }
-  .phase .rail::before { content:''; position:absolute; left:6px; top:6px; bottom:-6px; width:2px; background:var(--panel-edge-strong); }
-  .phase .node { position:absolute; left:0; top:4px; width:14px; height:14px; border-radius:50%; background:var(--surface); border:2px solid var(--sky); }
-  .phase .item { padding-bottom: 20px; }
+  .phase { position: relative; }
+  .phase .item { position: relative; padding: 0 0 22px 30px; }
   .phase .item:last-child { padding-bottom: 0; }
+  .phase .item::before {
+    content: ''; position: absolute; left: 0; top: 6px; z-index: 1;
+    width: 13px; height: 13px; border-radius: 50%;
+    background: var(--surface); border: 2px solid var(--sky);
+  }
+  .phase .item::after {
+    content: ''; position: absolute; left: 6px; top: 6px; bottom: -6px; width: 2px;
+    background: var(--panel-edge-strong);
+  }
+  .phase .item:last-child::after { display: none; }
   .phase .item h3 { font-size: 1.02rem; margin-bottom: 4px; display:flex; gap:9px; align-items:center; flex-wrap:wrap; }
   .phase .item p { margin: 0; font-size: 0.92rem; color: var(--fg-body); }
 
@@ -356,9 +363,9 @@
 <div class="wrap">
   <div class="tiles">
     <div class="tile"><div class="n"><em>18</em>/18</div><div class="k tel">Phase 1A modules live</div></div>
-    <div class="tile"><div class="n"><em>6</em></div><div class="k tel">Phase 1B (money) live</div></div>
-    <div class="tile"><div class="n">78</div><div class="k tel">data models</div></div>
-    <div class="tile"><div class="n">64</div><div class="k tel">API modules</div></div>
+    <div class="tile"><div class="n"><em>6</em></div><div class="k tel">Phase 1B money live</div></div>
+    <div class="tile"><div class="n"><em>2</em></div><div class="k tel">inventory modes · normal + strict</div></div>
+    <div class="tile"><div class="n"><em>4</em></div><div class="k tel">refinement phases</div></div>
     <div class="tile"><div class="n">1,100</div><div class="k tel">automated tests</div></div>
     <div class="tile"><div class="n">Live</div><div class="k tel">Delhivery real API</div></div>
   </div>
@@ -546,24 +553,21 @@
     <h2>Roadmap to the target operating model</h2>
     <p class="lead">The refinement is additive — the schema was designed forward-compatible, and the reservation, warehouse, courier, and settings seams already exist. Four focused phases close the gap between the shipped foundation and the operating model above.</p>
     <div class="phase">
-      <div class="rail"></div>
-      <div>
-        <div class="item" style="position:relative;"><span class="node"></span>
-          <h3>Phase A · Finance core &amp; currency <span class="pill sky">designed</span></h3>
-          <p>Upgrade the wallet to a true double-entry ledger; advance-credit with per-seller exposure tracking + auto-clawback; self-service &amp; auto withdrawals plus an instant-credit add-on; real courier-fee capture with margin; per-seller courier fee (flat/%); the three price components; BDT/INR product-cost entry; and courier-remittance reconciliation.</p>
-        </div>
-        <div class="item" style="position:relative;"><span class="node"></span>
-          <h3>Phase B · Inventory integrity <span class="pill sky">designed</span></h3>
-          <p>Serialized per-unit model behind a per-seller normal/strict toggle; barcode labels at receiving; mandatory scan gates at pick, pack and hand-off; and a general per-seller settings framework — including call config (attempts, min interval, no-call mode) under an admin-enforced cap.</p>
-        </div>
-        <div class="item" style="position:relative;"><span class="node"></span>
-          <h3>Phase C · Courier network &amp; dispatch <span class="pill sky">designed</span></h3>
-          <p>Multi-account couriers with seller↔account linkage, per-seller split ratios and full parcel→account tracing; courier-first booking after call-confirm; and a fallback panel to re-book a rejected order into another account or carrier. Pack floor partitioned by courier.</p>
-        </div>
-        <div class="item" style="position:relative;"><span class="node"></span>
-          <h3>Phase D · Network, returns &amp; exceptions <span class="pill sky">designed</span></h3>
-          <p>Multi-warehouse routing + cross-warehouse RTO transfer; virtual booking with seller-decided unbook; scrap + damage tickets and a seller support-ticket panel; a warehouse scanner app; and an exception dashboard unifying missing/mismatch/damaged/failed-courier/unbook queues.</p>
-        </div>
+      <div class="item">
+        <h3>Phase A · Finance core &amp; currency <span class="pill sky">designed</span></h3>
+        <p>Upgrade the wallet to a true double-entry ledger; advance-credit with per-seller exposure tracking + auto-clawback; self-service &amp; auto withdrawals plus an instant-credit add-on; real courier-fee capture with margin; per-seller courier fee (flat/%); the three price components; BDT/INR product-cost entry; and courier-remittance reconciliation.</p>
+      </div>
+      <div class="item">
+        <h3>Phase B · Inventory integrity <span class="pill sky">designed</span></h3>
+        <p>Serialized per-unit model behind a per-seller normal/strict toggle; barcode labels at receiving; mandatory scan gates at pick, pack and hand-off; and a general per-seller settings framework — including call config (attempts, min interval, no-call mode) under an admin-enforced cap.</p>
+      </div>
+      <div class="item">
+        <h3>Phase C · Courier network &amp; dispatch <span class="pill sky">designed</span></h3>
+        <p>Multi-account couriers with seller↔account linkage, per-seller split ratios and full parcel→account tracing; courier-first booking after call-confirm; and a fallback panel to re-book a rejected order into another account or carrier. Pack floor partitioned by courier.</p>
+      </div>
+      <div class="item">
+        <h3>Phase D · Network, returns &amp; exceptions <span class="pill sky">designed</span></h3>
+        <p>Multi-warehouse routing + cross-warehouse RTO transfer; virtual booking with seller-decided unbook; scrap + damage tickets and a seller support-ticket panel; a warehouse scanner app; and an exception dashboard unifying missing/mismatch/damaged/failed-courier/unbook queues.</p>
       </div>
     </div>
     <div class="callout"><strong>Why this is low-risk:</strong> none of it is a rewrite. The wallet ledger, COD accrual, FX and 18% GST engine already run in production; reservations already model virtual holds; the warehouse already has bins, batches and quarantine/damaged bin types; the courier layer already has a fallback; and per-seller overrides already exist. Each phase generalizes a seam that is already load-bearing in production.</div>
