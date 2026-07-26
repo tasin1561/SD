@@ -33,6 +33,8 @@ import {
   type OrderListItem,
   type OrderView,
 } from '../services/order.service';
+import { SellerUserRole } from '@skydrop/db';
+import { SellerRoles } from '../../../common/decorators/seller-roles.decorator';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -40,6 +42,7 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
+@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.OPS)
 @Controller('seller/orders')
 export class SellerOrderController {
   constructor(private readonly svc: OrderService) {}

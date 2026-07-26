@@ -24,11 +24,14 @@ import {
   type ImageView,
   type PresignResult,
 } from './services/catalog-image.service';
+import { SellerUserRole } from '@skydrop/db';
+import { SellerRoles } from '../../common/decorators/seller-roles.decorator';
 
 @ApiTags('seller-variant-images')
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
+@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.INVENTORY)
 @Controller('seller/variants/:variantId/images')
 export class SellerImageController {
   constructor(private readonly svc: CatalogImageService) {}

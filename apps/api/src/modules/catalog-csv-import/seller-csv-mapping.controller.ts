@@ -31,11 +31,14 @@ import {
   CsvMappingService,
   type CsvMappingView,
 } from './services/csv-mapping.service';
+import { SellerUserRole } from '@skydrop/db';
+import { SellerRoles } from '../../common/decorators/seller-roles.decorator';
 
 @ApiTags('seller-csv-mappings')
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
+@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.INVENTORY)
 @Controller('seller/csv-mappings')
 export class SellerCsvMappingController {
   constructor(private readonly svc: CsvMappingService) {}

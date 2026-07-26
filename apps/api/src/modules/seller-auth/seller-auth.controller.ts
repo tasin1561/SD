@@ -30,6 +30,10 @@ import {
 import { JwtService } from '../auth-common/services/jwt.service';
 import { RefreshTokenService } from '../auth-common/services/refresh-token.service';
 import { AuditLogService } from '../auth-common/services/audit-log.service';
+import {
+  SellerRoles,
+  SELLER_ROLES_ALL,
+} from '../../common/decorators/seller-roles.decorator';
 import { SellerLoginDto } from './dto/login.dto';
 import {
   SellerPasswordResetConfirmDto,
@@ -143,6 +147,8 @@ export class SellerAuthController {
 
   @UseGuards(SellerJwtGuard)
   @ApiBearerAuth('seller-jwt')
+  // Self-service: EVERY role must be able to end their own sessions.
+  @SellerRoles(...SELLER_ROLES_ALL)
   @Post('logout-all')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Revoke every active refresh session for the seller' })
@@ -188,6 +194,8 @@ export class SellerAuthController {
 
   @UseGuards(SellerJwtGuard)
   @ApiBearerAuth('seller-jwt')
+  // Self-service: EVERY role must be able to verify their own email.
+  @SellerRoles(...SELLER_ROLES_ALL)
   @Throttle({ default: { limit: 3, ttl: 60 * 60 * 1000 } })
   @ThrottleKey('auth-user')
   @Post('email-verification/request')

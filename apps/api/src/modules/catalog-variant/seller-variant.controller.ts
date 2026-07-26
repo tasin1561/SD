@@ -21,11 +21,14 @@ import type { AuthenticatedSeller } from '../../common/types/request';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
 import { CatalogVariantService, type VariantView } from './services/catalog-variant.service';
+import { SellerUserRole } from '@skydrop/db';
+import { SellerRoles } from '../../common/decorators/seller-roles.decorator';
 
 @ApiTags('seller-variants')
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
+@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.INVENTORY)
 @Controller('seller/products/:productId/variants')
 export class SellerVariantController {
   constructor(private readonly svc: CatalogVariantService) {}

@@ -32,11 +32,14 @@ import {
   type CsvPresignResult,
   type OrderCsvPreviewResult,
 } from './services/order-csv-import.service';
+import { SellerUserRole } from '@skydrop/db';
+import { SellerRoles } from '../../common/decorators/seller-roles.decorator';
 
 @ApiTags('seller-order-csv-import')
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
+@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.OPS)
 @Controller('seller/order-imports')
 export class SellerOrderCsvImportController {
   constructor(private readonly svc: OrderCsvImportService) {}

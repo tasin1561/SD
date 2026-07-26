@@ -23,11 +23,14 @@ import {
   SellerCategoryProposalService,
   type CategoryProposalView,
 } from './services/seller-category-proposal.service';
+import { SellerUserRole } from '@skydrop/db';
+import { SellerRoles } from '../../common/decorators/seller-roles.decorator';
 
 @ApiTags('seller-category-proposals')
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
+@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.INVENTORY)
 @Controller('seller/category-proposals')
 export class SellerCategoryProposalController {
   constructor(private readonly svc: SellerCategoryProposalService) {}

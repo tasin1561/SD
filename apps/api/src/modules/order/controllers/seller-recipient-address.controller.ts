@@ -20,6 +20,8 @@ import {
   RecipientAddressCacheService,
   type CachedAddressView,
 } from '../services/recipient-address-cache.service';
+import { SellerUserRole } from '@skydrop/db';
+import { SellerRoles } from '../../../common/decorators/seller-roles.decorator';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -27,6 +29,7 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
+@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.OPS)
 @Controller('seller/recipient-addresses')
 export class SellerRecipientAddressController {
   constructor(private readonly svc: RecipientAddressCacheService) {}

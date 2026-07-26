@@ -10,6 +10,8 @@ import {
   WithdrawalRequestService,
   type WithdrawalRequestView,
 } from '../services/withdrawal-request.service';
+import { SellerUserRole } from '@skydrop/db';
+import { SellerRoles } from '../../../common/decorators/seller-roles.decorator';
 
 /**
  * Seller-facing withdrawal-request endpoints (R2). Creating a request
@@ -22,6 +24,7 @@ import {
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
+@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.FINANCE)
 @Controller('seller/wallet/withdrawal-requests')
 export class SellerWithdrawalRequestController {
   constructor(private readonly svc: WithdrawalRequestService) {}

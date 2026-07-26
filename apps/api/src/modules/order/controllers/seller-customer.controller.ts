@@ -19,6 +19,8 @@ import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
 import { ListCustomersQueryDto, UpdateCustomerDto } from '../dto/customer.dto';
 import { CustomerService, type CustomerView } from '../services/customer.service';
+import { SellerUserRole } from '@skydrop/db';
+import { SellerRoles } from '../../../common/decorators/seller-roles.decorator';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -26,6 +28,7 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
+@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.OPS)
 @Controller('seller/customers')
 export class SellerCustomerController {
   constructor(private readonly svc: CustomerService) {}
