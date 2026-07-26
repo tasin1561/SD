@@ -55,7 +55,7 @@ function makeSvc(opts: {
           {
             id: SHIP,
             awbNumber: AWB,
-            status: opts.shipmentStatus ?? ShipmentStatus.DISPATCHED,
+            status: opts.shipmentStatus ?? ShipmentStatus.HANDED_TO_COURIER,
             orderShipments: [{ orderId: ORDER }],
           },
         ],
