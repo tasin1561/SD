@@ -438,18 +438,21 @@ model Warehouse {
   updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt   DateTime?       @map("deleted_at") @db.Timestamptz
 
-  zones             WarehouseZone[]
-  bins              WarehouseBin[]
-  stockBatches      StockBatch[]
-  stockLevels       StockLevel[]
-  stockMovements    StockMovement[]
-  stockReservations StockReservation[]
-  stockAdjustments  StockAdjustment[]
-  cycleCounts       CycleCount[]
-  goodsReceipts     GoodsReceipt[]
-  shipmentsAsOrigin Shipment[]
-  stockAlertStates  StockAlertState[]
-  manifests         Manifest[]
+  zones                  WarehouseZone[]
+  bins                   WarehouseBin[]
+  stockBatches           StockBatch[]
+  stockLevels            StockLevel[]
+  stockMovements         StockMovement[]
+  stockReservations      StockReservation[]
+  stockAdjustments       StockAdjustment[]
+  cycleCounts            CycleCount[]
+  goodsReceipts          GoodsReceipt[]
+  shipmentsAsOrigin      Shipment[]
+  // R6: RTO parcels physically RECEIVED here (may differ from the
+  // warehouse the shipment originally dispatched from).
+  shipmentsAsRtoReceived Shipment[]         @relation("ShipmentRtoReceivedWarehouse")
+  stockAlertStates       StockAlertState[]
+  manifests              Manifest[]
 
   @@index([status])
   @@map("warehouses")
@@ -1579,6 +1582,13 @@ model Shipment {
   deliveredAt            DateTime?        @map("delivered_at") @db.Timestamptz
   rtoInitiatedAt         DateTime?        @map("rto_initiated_at") @db.Timestamptz
   rtoReceivedAt          DateTime?        @map("rto_received_at") @db.Timestamptz
+  // R6 (revised-plan roadmap): WHERE the RTO parcel was physically
+  // received. Distinct from `originWarehouseId` (where it dispatched
+  // from) — a return can legitimately arrive at any warehouse. NULL =
+  // not received yet, or received at the origin (pre-R6 shipments), in
+  // which case every consumer falls back to `originWarehouseId` and
+  // behavior is identical to before R6.
+  rtoReceivedWarehouseId String?          @map("rto_received_warehouse_id") @db.Uuid
   expectedDeliveryAt     DateTime?        @map("expected_delivery_at") @db.Timestamptz
   isManualCourier        Boolean          @default(false) @map("is_manual_courier")
   // Module 9 — supersede chain (CUR-7). `supersedesShipmentId` points
@@ -1618,23 +1628,24 @@ model Shipment {
   updatedAt              DateTime         @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt              DateTime?        @map("deleted_at") @db.Timestamptz
 
-  courier          Courier           @relation(fields: [courierCode], references: [code])
-  courierAccount   CourierAccount?   @relation(fields: [courierAccountId], references: [id])
-  originWarehouse  Warehouse         @relation(fields: [originWarehouseId], references: [id])
-  supersedes       Shipment?         @relation("ShipmentSupersedes", fields: [supersedesShipmentId], references: [id])
-  supersededBy     Shipment[]        @relation("ShipmentSupersedes")
-  pickStartedBy    StaffUser?        @relation("ShipmentPickStartedBy", fields: [pickStartedByStaffId], references: [id])
-  packedBy         StaffUser?        @relation("ShipmentPackedBy", fields: [packedByStaffId], references: [id])
-  manifest         Manifest?         @relation(fields: [manifestId], references: [id])
-  orderShipments   OrderShipment[]
-  items            ShipmentItem[]
-  awbLabels        AwbLabel[]
-  trackingEvents   TrackingEvent[]
-  webhooks         CourierWebhook[]
-  deliveryAttempts DeliveryAttempt[]
-  stockMovements   StockMovement[]
-  charges          OrderCharge[]
-  notificationLogs NotificationLog[]
+  courier              Courier           @relation(fields: [courierCode], references: [code])
+  courierAccount       CourierAccount?   @relation(fields: [courierAccountId], references: [id])
+  originWarehouse      Warehouse         @relation(fields: [originWarehouseId], references: [id])
+  rtoReceivedWarehouse Warehouse?        @relation("ShipmentRtoReceivedWarehouse", fields: [rtoReceivedWarehouseId], references: [id])
+  supersedes           Shipment?         @relation("ShipmentSupersedes", fields: [supersedesShipmentId], references: [id])
+  supersededBy         Shipment[]        @relation("ShipmentSupersedes")
+  pickStartedBy        StaffUser?        @relation("ShipmentPickStartedBy", fields: [pickStartedByStaffId], references: [id])
+  packedBy             StaffUser?        @relation("ShipmentPackedBy", fields: [packedByStaffId], references: [id])
+  manifest             Manifest?         @relation(fields: [manifestId], references: [id])
+  orderShipments       OrderShipment[]
+  items                ShipmentItem[]
+  awbLabels            AwbLabel[]
+  trackingEvents       TrackingEvent[]
+  webhooks             CourierWebhook[]
+  deliveryAttempts     DeliveryAttempt[]
+  stockMovements       StockMovement[]
+  charges              OrderCharge[]
+  notificationLogs     NotificationLog[]
 
   @@index([courierCode, status])
   @@index([status, createdAt])
@@ -1653,6 +1664,7 @@ model Shipment {
   @@index([pickStartedByStaffId])
   @@index([packedByStaffId])
   @@index([courierAccountId])
+  @@index([rtoReceivedWarehouseId])
   @@map("shipments")
 }
 

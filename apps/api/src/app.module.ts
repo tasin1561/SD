@@ -33,6 +33,7 @@ import { InventoryMovementModule } from './modules/inventory-movement/inventory-
 import { InventoryReceiptModule } from './modules/inventory-receipt/inventory-receipt.module';
 import { InventoryAdjustmentModule } from './modules/inventory-adjustment/inventory-adjustment.module';
 import { InventoryCycleCountModule } from './modules/inventory-cycle-count/inventory-cycle-count.module';
+import { InventoryTransferModule } from './modules/inventory-transfer/inventory-transfer.module';
 import { OrderModule } from './modules/order/order.module';
 import { OrderCsvImportModule } from './modules/order-csv-import/order-csv-import.module';
 import { CallCenterModule } from './modules/call-center/call-center.module';
@@ -130,6 +131,7 @@ import { envSchema } from './config/env.schema';
     InventoryReceiptModule,
     InventoryAdjustmentModule,
     InventoryCycleCountModule,
+    InventoryTransferModule,
     OrderModule,
     OrderCsvImportModule,
     CallCenterModule,

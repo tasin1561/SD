@@ -57,12 +57,15 @@ function makeService(
     orderStatus?: OrderStatus | 'missing';
     items?: AnyArgs[];
     existingMovement?: AnyArgs | null;
+    /** R6 — where the parcel was physically received. null = origin. */
+    rtoReceivedWarehouseId?: string | null;
   } = {},
 ) {
   const defaultItems = opts.items ?? [item('si-1', RtoDisposition.RESTOCK)];
   const defaultShipment = {
     id: SHIP,
     originWarehouseId: WH,
+    rtoReceivedWarehouseId: opts.rtoReceivedWarehouseId ?? null,
     orderShipments: [{ orderId: ORDER }],
     items: defaultItems,
   };
@@ -314,5 +317,57 @@ describe('RtoDispositionService.finalize — guards', () => {
     await expect(svc.finalize(SHIP, STAFF)).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+
+  // ── R6: cross-warehouse restock guard (conservation-critical) ─────────
+
+  it('R6: rtoReceivedWarehouseId === origin behaves exactly as before (restock proceeds at origin)', async () => {
+    const { svc, apply } = makeService({ rtoReceivedWarehouseId: WH });
+    const r = await svc.finalize(SHIP, STAFF);
+    expect(r.restockedCount).toBe(1);
+    expect(apply).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ warehouseId: WH }),
+    );
+  });
+
+  it('R6: RESTOCK at a DIFFERENT warehouse → RTO_RESTOCK_WAREHOUSE_MISMATCH, NO movement, NO transition', async () => {
+    const { svc, apply, transitionStatus } = makeService({
+      rtoReceivedWarehouseId: 'wh-other',
+      items: [item('si-1', RtoDisposition.RESTOCK)],
+    });
+    await expect(svc.finalize(SHIP, STAFF)).rejects.toMatchObject({
+      response: { code: 'RTO_RESTOCK_WAREHOUSE_MISMATCH' },
+    });
+    // Nothing was written — the whole point is to avoid crediting the
+    // wrong warehouse.
+    expect(apply).not.toHaveBeenCalled();
+    expect(transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it('R6: WRITE_OFF-only finalize is still allowed cross-warehouse (emits no movement)', async () => {
+    const { svc, apply, transitionStatus } = makeService({
+      rtoReceivedWarehouseId: 'wh-other',
+      items: [item('si-1', RtoDisposition.WRITE_OFF)],
+    });
+    const r = await svc.finalize(SHIP, STAFF);
+    expect(r.writtenOffCount).toBe(1);
+    expect(r.restockedCount).toBe(0);
+    expect(apply).not.toHaveBeenCalled();
+    expect(transitionStatus).toHaveBeenCalled();
+  });
+
+  it('R6: a MIXED cross-warehouse batch is rejected because of the RESTOCK lines', async () => {
+    const { svc, apply } = makeService({
+      rtoReceivedWarehouseId: 'wh-other',
+      items: [
+        item('si-1', RtoDisposition.WRITE_OFF),
+        item('si-2', RtoDisposition.RESTOCK),
+      ],
+    });
+    await expect(svc.finalize(SHIP, STAFF)).rejects.toMatchObject({
+      response: { code: 'RTO_RESTOCK_WAREHOUSE_MISMATCH' },
+    });
+    expect(apply).not.toHaveBeenCalled();
   });
 });

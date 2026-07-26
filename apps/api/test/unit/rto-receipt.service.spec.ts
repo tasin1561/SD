@@ -1,5 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import { OrderStatus, ShipmentStatus } from '@skydrop/db';
+import { OrderStatus, ShipmentStatus, WarehouseStatus } from '@skydrop/db';
 import { RtoReceiptService } from '../../src/modules/warehouse-rto/services/rto-receipt.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { OrderReadService } from '../../src/modules/order/services/order-read.service';
@@ -12,12 +12,16 @@ const AWB = 'AWB-9999';
 const SHIP = 'ship-1';
 const ORDER = 'order-1';
 const STAFF = 'staff-1';
+const ORIGIN_WH = 'wh-origin';
+const OTHER_WH = 'wh-other';
 
 function makeService(
   opts: {
     shipment?: AnyArgs | null;
     orderStatus?: OrderStatus | 'missing';
     stampCount?: number;
+    /** R6 — warehouse row returned for a supplied receivedWarehouseId. */
+    warehouse?: AnyArgs | null;
   } = {},
 ) {
   const defaultShipment = {
@@ -25,6 +29,8 @@ function makeService(
     awbNumber: AWB,
     status: ShipmentStatus.RTO_IN_TRANSIT,
     rtoReceivedAt: null,
+    originWarehouseId: ORIGIN_WH,
+    rtoReceivedWarehouseId: null,
     orderShipments: [{ orderId: ORDER }],
   };
   const shipmentFindFirst = jest.fn(async () =>
@@ -33,8 +39,14 @@ function makeService(
   const shipmentUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(
     async () => ({ count: opts.stampCount ?? 1 }),
   );
+  const warehouseFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+    opts.warehouse === undefined
+      ? { id: OTHER_WH, status: WarehouseStatus.ACTIVE }
+      : opts.warehouse,
+  );
   const client = {
     shipment: { findFirst: shipmentFindFirst, updateMany: shipmentUpdateMany },
+    warehouse: { findFirst: warehouseFindFirst },
   };
   const getById = jest.fn(async () =>
     opts.orderStatus === 'missing'
@@ -60,6 +72,7 @@ function makeService(
     svc,
     shipmentFindFirst,
     shipmentUpdateMany,
+    warehouseFindFirst,
     getById,
     transitionStatus,
     auditLog,
@@ -119,6 +132,8 @@ describe('RtoReceiptService.receive', () => {
         awbNumber: AWB,
         status: ShipmentStatus.RTO_IN_TRANSIT,
         rtoReceivedAt: stampedAt,
+        originWarehouseId: ORIGIN_WH,
+        rtoReceivedWarehouseId: null,
         orderShipments: [{ orderId: ORDER }],
       },
     });
@@ -129,6 +144,9 @@ describe('RtoReceiptService.receive', () => {
       awbNumber: AWB,
       status: OrderStatus.RTO_RECEIVED,
       rtoReceivedAt: stampedAt,
+      // R6: no warehouse was ever recorded → falls back to origin.
+      rtoReceivedWarehouseId: ORIGIN_WH,
+      crossWarehouse: false,
       alreadyReceived: true,
     });
     expect(shipmentUpdateMany).not.toHaveBeenCalled();
@@ -166,11 +184,103 @@ describe('RtoReceiptService.receive', () => {
         awbNumber: AWB,
         status: ShipmentStatus.RTO_IN_TRANSIT,
         rtoReceivedAt: prior,
+        originWarehouseId: ORIGIN_WH,
+        rtoReceivedWarehouseId: null,
         orderShipments: [{ orderId: ORDER }],
       },
       orderStatus: OrderStatus.RTO_IN_TRANSIT,
     });
     const r = await svc.receive(AWB, STAFF);
     expect(r.rtoReceivedAt).toBe(prior); // preserves original timestamp on retry
+  });
+
+  // ── R6: receiving warehouse ──────────────────────────────────────────
+
+  it('R6: no warehouseId supplied → falls back to origin, no warehouse lookup, LOW audit', async () => {
+    const { svc, warehouseFindFirst, shipmentUpdateMany, auditLog } = makeService();
+    const r = await svc.receive(AWB, STAFF);
+    expect(warehouseFindFirst).not.toHaveBeenCalled();
+    // Does NOT write rtoReceivedWarehouseId when the caller didn't name one.
+    const data = shipmentUpdateMany.mock.calls[0]![0]!.data as AnyArgs;
+    expect('rtoReceivedWarehouseId' in data).toBe(false);
+    expect(r.rtoReceivedWarehouseId).toBe(ORIGIN_WH);
+    expect(r.crossWarehouse).toBe(false);
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'rto.received', severity: 'LOW' }),
+    );
+  });
+
+  it('R6: same-warehouse receipt records it but is NOT flagged cross-warehouse', async () => {
+    const { svc, shipmentUpdateMany, auditLog, warehouseFindFirst } = makeService({
+      warehouse: { id: ORIGIN_WH, status: WarehouseStatus.ACTIVE },
+    });
+    const r = await svc.receive(AWB, STAFF, undefined, ORIGIN_WH);
+    expect(warehouseFindFirst).toHaveBeenCalled();
+    const data = shipmentUpdateMany.mock.calls[0]![0]!.data as AnyArgs;
+    expect(data.rtoReceivedWarehouseId).toBe(ORIGIN_WH);
+    expect(r.crossWarehouse).toBe(false);
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'rto.received', severity: 'LOW' }),
+    );
+  });
+
+  it('R6: cross-warehouse receipt is recorded + audited MEDIUM with a distinct action', async () => {
+    const { svc, shipmentUpdateMany, auditLog } = makeService();
+    const r = await svc.receive(AWB, STAFF, undefined, OTHER_WH);
+    const data = shipmentUpdateMany.mock.calls[0]![0]!.data as AnyArgs;
+    expect(data.rtoReceivedWarehouseId).toBe(OTHER_WH);
+    expect(r.rtoReceivedWarehouseId).toBe(OTHER_WH);
+    expect(r.crossWarehouse).toBe(true);
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'rto.received_cross_warehouse',
+        severity: 'MEDIUM',
+        metadata: expect.objectContaining({
+          originWarehouseId: ORIGIN_WH,
+          rtoReceivedWarehouseId: OTHER_WH,
+          crossWarehouse: true,
+        }),
+      }),
+    );
+  });
+
+  it('R6: unknown warehouseId → 404 WAREHOUSE_NOT_FOUND, no stamp written', async () => {
+    const { svc, shipmentUpdateMany } = makeService({ warehouse: null });
+    await expect(svc.receive(AWB, STAFF, undefined, 'wh-nope')).rejects.toMatchObject({
+      response: { code: 'WAREHOUSE_NOT_FOUND' },
+    });
+    expect(shipmentUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it('R6: non-ACTIVE warehouse → 409 WAREHOUSE_NOT_ACTIVE, no stamp written', async () => {
+    const { svc, shipmentUpdateMany } = makeService({
+      warehouse: { id: OTHER_WH, status: WarehouseStatus.MAINTENANCE },
+    });
+    await expect(svc.receive(AWB, STAFF, undefined, OTHER_WH)).rejects.toMatchObject({
+      response: { code: 'WAREHOUSE_NOT_ACTIVE' },
+    });
+    expect(shipmentUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it('R6: a re-submit with a DIFFERENT warehouse does not rewrite the original record', async () => {
+    const stampedAt = new Date('2026-05-20T09:00:00Z');
+    const { svc, shipmentUpdateMany } = makeService({
+      orderStatus: OrderStatus.RTO_RECEIVED,
+      shipment: {
+        id: SHIP,
+        awbNumber: AWB,
+        status: ShipmentStatus.RTO_IN_TRANSIT,
+        rtoReceivedAt: stampedAt,
+        originWarehouseId: ORIGIN_WH,
+        rtoReceivedWarehouseId: OTHER_WH,
+        orderShipments: [{ orderId: ORDER }],
+      },
+      warehouse: { id: ORIGIN_WH, status: WarehouseStatus.ACTIVE },
+    });
+    const r = await svc.receive(AWB, STAFF, undefined, ORIGIN_WH);
+    expect(r.alreadyReceived).toBe(true);
+    expect(r.rtoReceivedWarehouseId).toBe(OTHER_WH); // original stands
+    expect(r.crossWarehouse).toBe(true);
+    expect(shipmentUpdateMany).not.toHaveBeenCalled();
   });
 });

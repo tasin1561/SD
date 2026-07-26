@@ -83,7 +83,7 @@ export class WarehouseRtoController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<ReceiveRtoResult> {
-    return this.receipt.receive(body.awbNumber, staff.id, ctx);
+    return this.receipt.receive(body.awbNumber, staff.id, ctx, body.warehouseId);
   }
 
   @Post('items/:shipmentItemId/inspect')

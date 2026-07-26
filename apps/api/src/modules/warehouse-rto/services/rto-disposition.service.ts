@@ -67,7 +67,11 @@ export interface FinalizeRtoResult {
  *   1. Pre-flight: gate 1 (order.status===RTO_RESTOCKED short-circuit),
  *      ORDER_NOT_RTO_READY, RTO_INSPECTION_INCOMPLETE,
  *      RTO_RESTOCK_MISSING_CONTEXT (RESTOCK lines need pickedBin/Batch —
- *      the RETURN_RESTOCK target), RTO_NO_ITEMS.
+ *      the RETURN_RESTOCK target), RTO_NO_ITEMS, and (R6)
+ *      RTO_RESTOCK_WAREHOUSE_MISMATCH when the parcel was physically
+ *      received at a warehouse other than the one it shipped from —
+ *      see the inline note at that guard for why we refuse instead of
+ *      restocking at the receiving warehouse.
  *   2. Gate 2 (movement idempotency, RESTOCK only): existence query on
  *      (shipmentId, type=RETURN_RESTOCK). Present ⇒ skip the movement
  *      loop (crash-after-movements recovery). stock_movements has no
@@ -104,6 +108,7 @@ export class RtoDispositionService {
       select: {
         id: true,
         originWarehouseId: true,
+        rtoReceivedWarehouseId: true,
         orderShipments: {
           select: { orderId: true },
           orderBy: { shipmentSequence: 'asc' },
@@ -214,6 +219,37 @@ export class RtoDispositionService {
       });
     }
 
+    // ── R6: CROSS-WAREHOUSE RESTOCK GUARD (conservation-critical).
+    //
+    // The RETURN_RESTOCK target below is the item's ORIGINAL
+    // pickedBin/pickedBatch, which belong to `originWarehouseId`. If the
+    // parcel physically came back to a DIFFERENT warehouse, crediting
+    // that origin bin would book a unit into a warehouse that does not
+    // physically hold it — silent stock corruption (the pre-R6
+    // behavior, latent only because Phase 1A ran a single warehouse).
+    //
+    // We refuse rather than guess. Restocking at the RECEIVING warehouse
+    // instead is not a drop-in fix: `stock_batches` is warehouse-scoped
+    // (schema), so the origin batch cannot be credited at another
+    // warehouse, and inventing/duplicating a batch there is a real
+    // policy decision (batchCode identity, expiry + unit-cost lineage,
+    // which bin) that belongs to ops, not to this guard. Tracked as R6b.
+    //
+    // WRITE_OFF-only finalize is unaffected — it emits no movement, so a
+    // cross-warehouse write-off is always safe and still allowed.
+    const restockWarehouseId =
+      shipment.rtoReceivedWarehouseId ?? shipment.originWarehouseId;
+    if (restockItems.length > 0 && restockWarehouseId !== shipment.originWarehouseId) {
+      throw new ConflictException({
+        code: 'RTO_RESTOCK_WAREHOUSE_MISMATCH',
+        message:
+          `Parcel was received at warehouse ${restockWarehouseId} but shipped from ${shipment.originWarehouseId}; ` +
+          `restocking would credit stock to a warehouse that does not hold it. Either transfer the goods to ` +
+          `${shipment.originWarehouseId} and re-finalize, or re-inspect these ${restockItems.length} item(s) as WRITE_OFF.`,
+        cause: restockItems.map((i) => i.id),
+      });
+    }
+
     // ── GATE 2: movement-level idempotency, RESTOCK only. RETURN_RESTOCK
     //    is the marker. stock_movements has no native unique constraint;
     //    the explicit existence query IS the gate.
@@ -242,7 +278,10 @@ export class RtoDispositionService {
             const result = await this.mutation.apply(tx, {
               sellerId: item.orderItem.order.sellerId,
               variantId: item.orderItem.variantId,
-              warehouseId: shipment.originWarehouseId,
+              // R6: provably === originWarehouseId here — the
+              // cross-warehouse guard above rejects anything else before
+              // we reach the movement loop.
+              warehouseId: restockWarehouseId,
               binId,
               batchId,
               qtyChange: item.quantity, // +qty — the unit returned (Model A)
