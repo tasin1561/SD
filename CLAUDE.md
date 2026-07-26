@@ -644,6 +644,7 @@ Plan doc: `~/.claude/plans/silly-bouncing-cloud.md` (gap analysis + per-phase de
 | R7 | Unified scrap/damage + seller-issue ticket system with wallet-linked refunds | ✅ DONE |
 | R5 | Two-stage ("virtual") inventory booking + seller unbook review | ✅ DONE (R5b deferred) |
 | R4 | STRICT-mode per-unit inventory (serials) + scan gates + discrepancy report | ✅ DONE |
+| R3 | Inbound BD→India freight billing (pay-now / pay-later + service charge) | ✅ DONE (R3b deferred) |
 
 **Key invariants added by the R-phases:**
 
@@ -665,11 +666,13 @@ Plan doc: `~/.claude/plans/silly-bouncing-cloud.md` (gap analysis + per-phase de
 
 9. **UNIT-2 (R4): scan gates are per-line at pick, set-equality at pack, parcel-grained after that.** Pick requires exactly `quantity` serials and commits the scan + the bin/batch hint in ONE tx. Pack requires the scanned SET to equal the parcel's PICKED units (a count check would pass a swap) and runs BEFORE the pack stamp. Dispatch handoff / RTO receive / RTO disposition move units parcel-grained, BEST-EFFORT and guarded on `fromStatus` — the physical event already happened, so a unit-ledger failure must never undo it. Mode resolution FAILS OPEN to NORMAL so a settings outage can't stop the floor.
 
+10. **FRT-1 (R3): inbound freight is a SEPARATE money flow from the outbound courier fee.** `INBOUND_FREIGHT` (per-consignment, cross-border) is never merged with `ORDER_CHARGES` (per-order, India-domestic) — the two cost bases must stay separable in reporting. It is always a DEBIT, so it is deliberately ABSENT from `CREDIT_DIRECTIONS` on BOTH sides (see WAL-1). One bill per goods receipt (UNIQUE `goods_receipt_id` IS the record idempotency gate); `settle` re-guards on `status=PENDING` inside the tx so two operators can't double-debit; the UNIQUE `wallet_entry_id` is the charged-exactly-once evidence. The pay-later service-charge percent is SNAPSHOTTED at record time, never re-resolved at settlement. WAIVED is distinct from SETTLED so forgiven money stays countable.
+
 **Deferred, awaiting a founder decision (documented in code where they bite):**
 - **R2c** — INSTANT_PRIORITY paid tier + the courier-settlement float ledger that would make "we can't lose 1 rupee" verifiable rather than asserted.
 - **R5b** — `REQUEST_MORE_ATTEMPTS` currently records intent + keeps the hold but does NOT re-open calling: the order is in terminal `REJECTED_NDR`. The honest fix is to suppress that transition for MANUAL_REVIEW sellers; it changes what "hit cap" means and touches the CC-6 dequeue.
 - **R6b** — cross-warehouse restock policy (batch identity / expiry lineage / target bin at the receiving warehouse).
-- **R3** (inbound BD→India freight billing, pay-now vs pay-later) — designed in the plan doc, not built.
+- **R3b** — PAY_LATER freight does not auto-pay-down from future delivery credits: which debt settles first when several are outstanding, whether partial settlement is allowed, and whether a credit may be consumed before the seller has seen it are all open. The receivable is visible and settled deliberately until then.
 
 ---
 
