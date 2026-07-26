@@ -63,8 +63,13 @@ export class CourierCredentialService {
 
   /**
    * Resolve + decrypt the ACTIVE credential for a courier + environment.
-   * Returns the plaintext field map (the row's `fieldNames` are the
-   * keys). Cache-first; a genuine decrypt is audited HIGH.
+   * Legacy/default-account path: resolves whichever credential
+   * `findFirst` returns for the (courier, environment) pair. Before R1
+   * this was necessarily the platform's ONE active credential for that
+   * pair; now that CourierAccount allows several, prefer
+   * `getCredentialForAccount` for any multi-account-aware caller — this
+   * method stays for stub-mode / single-account setups where no
+   * CourierAccount has been configured yet.
    */
   async getCredential(
     courierCode: string,
@@ -102,6 +107,70 @@ export class CourierCredentialService {
         message: `No active ${environment} credential for courier ${courierCode}`,
       });
     }
+    return this.resolveAndDecrypt(credential, courierCode, environment, actor);
+  }
+
+  /**
+   * Resolve + decrypt the credential belonging to a SPECIFIC
+   * CourierAccount (R1 — the multi-account-aware path). Used once a
+   * caller has already picked an account via
+   * `CourierAccountRoutingService.selectAccount`.
+   */
+  async getCredentialForAccount(
+    courierAccountId: string,
+    actor: CourierCredentialActor = { type: ActorType.SYSTEM },
+  ): Promise<Readonly<Record<string, string>>> {
+    const account = await this.prisma.client.courierAccount.findUnique({
+      where: { id: courierAccountId },
+      select: {
+        environment: true,
+        deletedAt: true,
+        isActive: true,
+        courier: { select: { code: true } },
+        credential: {
+          select: {
+            id: true,
+            encryptedPayload: true,
+            encryptionKeyVersion: true,
+            fieldNames: true,
+            expiresAt: true,
+          },
+        },
+      },
+    });
+    if (!account || account.deletedAt !== null || !account.isActive) {
+      throw new NotFoundException({
+        code: 'COURIER_ACCOUNT_NOT_FOUND',
+        message: `Courier account ${courierAccountId} not found or inactive`,
+      });
+    }
+    return this.resolveAndDecrypt(
+      account.credential,
+      account.courier.code,
+      account.environment,
+      actor,
+    );
+  }
+
+  /** Drop all cached plaintext — for credential rotation / tests. */
+  clearCache(): void {
+    this.cache.clear();
+  }
+
+  // ── internals ──
+
+  private async resolveAndDecrypt(
+    credential: {
+      id: string;
+      encryptedPayload: string;
+      encryptionKeyVersion: number;
+      fieldNames: string[];
+      expiresAt: Date | null;
+    },
+    courierCode: string,
+    environment: CredentialEnvironment,
+    actor: CourierCredentialActor,
+  ): Promise<Readonly<Record<string, string>>> {
     if (
       credential.expiresAt !== null &&
       credential.expiresAt.getTime() <= Date.now()
@@ -184,10 +253,5 @@ export class CourierCredentialService {
     const frozen = Object.freeze({ ...fields });
     this.cache.set(credential.id, { fields: frozen, cachedAt: Date.now() });
     return frozen;
-  }
-
-  /** Drop all cached plaintext — for credential rotation / tests. */
-  clearCache(): void {
-    this.cache.clear();
   }
 }

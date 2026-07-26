@@ -70,6 +70,8 @@ model StaffUser {
   notificationTemplatesEdit NotificationTemplate[]        @relation("NotificationTemplateEditedBy")
   systemSettingsEdited      SystemSetting[]               @relation("SystemSettingEditedBy")
   sellerSettingOverridesSet SellerSettingOverride[]       @relation("SellerSettingOverrideSetBy")
+  courierAccountsCreated    CourierAccount[]              @relation("CourierAccountCreatedBy")
+  sellerCourierLinksCreated SellerCourierAccountLink[]    @relation("SellerCourierAccountLinkCreatedBy")
   shipmentsPickStarted      Shipment[]                    @relation("ShipmentPickStartedBy")
   shipmentsPacked           Shipment[]                    @relation("ShipmentPackedBy")
   shipmentItemsRtoDisposed  ShipmentItem[]                @relation("ShipmentItemRtoDisposedBy")
@@ -155,6 +157,7 @@ model Seller {
   users                   SellerUser[]
   userInvitations         SellerUserInvitation[]
   settingOverrides        SellerSettingOverride[]
+  courierAccountLinks     SellerCourierAccountLink[]
 
   @@index([status])
   @@index([deletedAt])
@@ -1600,11 +1603,19 @@ model Shipment {
   packCompletedAt        DateTime?        @map("pack_completed_at") @db.Timestamptz
   packedByStaffId        String?          @map("packed_by_staff_id") @db.Uuid
   manifestId             String?          @map("manifest_id") @db.Uuid
+  // R1 (revised-plan roadmap): WHICH courier account this shipment was
+  // routed through — nullable (pre-R1 shipments and stub-mode/no-
+  // account-configured flows have none). Populated by
+  // CourierAccountRoutingService at AWB-generation time (not yet wired
+  // in this commit — see courier-shared's CourierAccountRoutingService
+  // doc comment).
+  courierAccountId       String?          @map("courier_account_id") @db.Uuid
   createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz
   updatedAt              DateTime         @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt              DateTime?        @map("deleted_at") @db.Timestamptz
 
   courier          Courier           @relation(fields: [courierCode], references: [code])
+  courierAccount   CourierAccount?   @relation(fields: [courierAccountId], references: [id])
   originWarehouse  Warehouse         @relation(fields: [originWarehouseId], references: [id])
   supersedes       Shipment?         @relation("ShipmentSupersedes", fields: [supersedesShipmentId], references: [id])
   supersededBy     Shipment[]        @relation("ShipmentSupersedes")
@@ -1637,6 +1648,7 @@ model Shipment {
   @@index([manifestId])
   @@index([pickStartedByStaffId])
   @@index([packedByStaffId])
+  @@index([courierAccountId])
   @@map("shipments")
 }
 
@@ -1921,6 +1933,7 @@ model Courier {
   deletedAt             DateTime?              @map("deleted_at") @db.Timestamptz
 
   credentials       CourierCredential[]
+  accounts          CourierAccount[]
   rateCardItems     RateCardItem[]
   sellerPricing     SellerPricing[]
   zoneMatrixEntries ZoneMatrixEntry[]
@@ -1952,16 +1965,87 @@ model CourierCredential {
   updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt            DateTime?             @map("deleted_at") @db.Timestamptz
 
-  courier        Courier    @relation(fields: [courierId], references: [id])
-  createdByStaff StaffUser? @relation("CourierCredentialCreatedBy", fields: [createdByStaffId], references: [id])
+  courier        Courier         @relation(fields: [courierId], references: [id])
+  createdByStaff StaffUser?      @relation("CourierCredentialCreatedBy", fields: [createdByStaffId], references: [id])
+  // R1 (revised-plan roadmap): a credential now belongs to at most one
+  // CourierAccount (the account owns the 1:1 FK via credentialId).
+  // The old @@unique([courierId, environment, isActive]) — "at most
+  // one active credential per courier+environment, platform-wide" — is
+  // DELIBERATELY REMOVED here: multiple simultaneously-active
+  // credentials per (courier, environment) is now the intended state,
+  // one per CourierAccount. "Exactly one DEFAULT account per
+  // (courier, environment)" is enforced on CourierAccount instead
+  // (partial unique index courier_accounts_default_uq, migration-only
+  // — same pattern as call_queue_entries_open_order_uq).
+  courierAccount CourierAccount?
 
-  @@unique([courierId, environment, isActive])
   @@index([courierId])
   @@index([environment])
   @@index([isActive])
   @@index([deletedAt])
   @@index([createdByStaffId])
   @@map("courier_credentials")
+}
+
+/// R1 (revised-plan roadmap) — a labeled courier account: Skydrop can
+/// hold multiple accounts with the same courier (e.g. three Delhivery
+/// accounts), each with its own credential. `SellerCourierAccountLink`
+/// assigns sellers to accounts with a distribution weight; sellers
+/// with no explicit link route to the courier+environment's DEFAULT
+/// account (today's single-account behavior, preserved unchanged).
+model CourierAccount {
+  id               String                @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courierId        String                @map("courier_id") @db.Uuid
+  environment      CredentialEnvironment
+  label            String
+  credentialId     String                @unique @map("credential_id") @db.Uuid
+  isDefault        Boolean               @default(false) @map("is_default")
+  isActive         Boolean               @default(true) @map("is_active")
+  createdByStaffId String?               @map("created_by_staff_id") @db.Uuid
+  notes            String?               @db.Text
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime              @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt        DateTime?             @map("deleted_at") @db.Timestamptz
+
+  courier        Courier                    @relation(fields: [courierId], references: [id])
+  credential     CourierCredential          @relation(fields: [credentialId], references: [id])
+  createdByStaff StaffUser?                 @relation("CourierAccountCreatedBy", fields: [createdByStaffId], references: [id])
+  sellerLinks    SellerCourierAccountLink[]
+  shipments      Shipment[]
+
+  // Exactly one DEFAULT active account per (courier_id, environment) —
+  // partial unique index courier_accounts_default_uq
+  // (WHERE is_default AND deleted_at IS NULL), migration-managed.
+  @@index([courierId, environment])
+  @@index([isActive])
+  @@index([deletedAt])
+  @@index([createdByStaffId])
+  @@map("courier_accounts")
+}
+
+/// R1 — assigns a seller to a CourierAccount with a distribution
+/// weight (a seller linked to two accounts with weights 70/30 gets
+/// ~70%/~30% of their parcels routed to each). A seller with NO
+/// active link for a given courier+environment routes to that
+/// courier+environment's DEFAULT CourierAccount.
+model SellerCourierAccountLink {
+  id                 String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId           String   @map("seller_id") @db.Uuid
+  courierAccountId   String   @map("courier_account_id") @db.Uuid
+  distributionWeight Int      @default(100) @map("distribution_weight")
+  isActive           Boolean  @default(true) @map("is_active")
+  createdByStaffId   String?  @map("created_by_staff_id") @db.Uuid
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller         Seller         @relation(fields: [sellerId], references: [id])
+  courierAccount CourierAccount @relation(fields: [courierAccountId], references: [id])
+  createdByStaff StaffUser?     @relation("SellerCourierAccountLinkCreatedBy", fields: [createdByStaffId], references: [id])
+
+  @@unique([sellerId, courierAccountId])
+  @@index([sellerId])
+  @@index([courierAccountId])
+  @@map("seller_courier_account_links")
 }
 
 model RateCard {

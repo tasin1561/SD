@@ -21,6 +21,7 @@ function makeService(
     courier?: AnyArgs | null;
     credential?: AnyArgs | null;
     keyV1?: string;
+    courierAccount?: AnyArgs | null;
   } = {},
 ) {
   const encryptedPayload = encryptCredential(JSON.stringify(FIELDS), KEY_V1);
@@ -38,12 +39,24 @@ function makeService(
     opts.credential === undefined ? defaultCredential : opts.credential,
   );
   const credentialUpdate = jest.fn(async () => ({}));
+  const courierAccountFindUnique = jest.fn(async () =>
+    opts.courierAccount === undefined
+      ? {
+          environment: CredentialEnvironment.PRODUCTION,
+          deletedAt: null,
+          isActive: true,
+          courier: { code: COURIER },
+          credential: defaultCredential,
+        }
+      : opts.courierAccount,
+  );
   const client = {
     courier: { findUnique: courierFindUnique },
     courierCredential: {
       findFirst: credentialFindFirst,
       update: credentialUpdate,
     },
+    courierAccount: { findUnique: courierAccountFindUnique },
   };
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs]>(async () => 'a');
   const audit = { log: auditLog };
@@ -56,7 +69,14 @@ function makeService(
     env,
     audit as unknown as AuditLogService,
   );
-  return { svc, courierFindUnique, credentialFindFirst, credentialUpdate, auditLog };
+  return {
+    svc,
+    courierFindUnique,
+    credentialFindFirst,
+    credentialUpdate,
+    courierAccountFindUnique,
+    auditLog,
+  };
 }
 
 describe('CourierCredentialService.getCredential', () => {
@@ -181,5 +201,80 @@ describe('CourierCredentialService.getCredential', () => {
     await expect(
       svc.getCredential(COURIER, CredentialEnvironment.PRODUCTION),
     ).rejects.toBeInstanceOf(InternalServerErrorException);
+  });
+});
+
+describe('CourierCredentialService.getCredentialForAccount', () => {
+  it('resolves the account-specific credential, decrypts, audits HIGH', async () => {
+    const { svc, auditLog, courierAccountFindUnique } = makeService();
+    const fields = await svc.getCredentialForAccount('acct-1', { type: ActorType.SYSTEM });
+    expect(fields).toEqual(FIELDS);
+    expect(courierAccountFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'acct-1' } }),
+    );
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'courier.credential.decrypted',
+        severity: 'HIGH',
+        metadata: expect.objectContaining({ courierCode: COURIER }),
+      }),
+    );
+  });
+
+  it('shares the same 5-minute cache as getCredential (keyed on credential id)', async () => {
+    const { svc, auditLog } = makeService();
+    await svc.getCredential(COURIER, CredentialEnvironment.PRODUCTION);
+    await svc.getCredentialForAccount('acct-1');
+    // Same underlying credential id ("cred-1") — second resolution is a cache hit.
+    expect(auditLog).toHaveBeenCalledTimes(1);
+  });
+
+  it('404 COURIER_ACCOUNT_NOT_FOUND when the account does not exist', async () => {
+    const { svc } = makeService({ courierAccount: null });
+    await expect(svc.getCredentialForAccount('missing')).rejects.toMatchObject({
+      response: { code: 'COURIER_ACCOUNT_NOT_FOUND' },
+    });
+  });
+
+  it('404 COURIER_ACCOUNT_NOT_FOUND when the account is soft-deleted', async () => {
+    const { svc } = makeService({
+      courierAccount: {
+        environment: CredentialEnvironment.PRODUCTION,
+        deletedAt: new Date(),
+        isActive: true,
+        courier: { code: COURIER },
+        credential: {
+          id: 'cred-1',
+          encryptedPayload: encryptCredential(JSON.stringify(FIELDS), KEY_V1),
+          encryptionKeyVersion: 1,
+          fieldNames: ['token'],
+          expiresAt: null,
+        },
+      },
+    });
+    await expect(svc.getCredentialForAccount('acct-1')).rejects.toMatchObject({
+      response: { code: 'COURIER_ACCOUNT_NOT_FOUND' },
+    });
+  });
+
+  it('404 COURIER_ACCOUNT_NOT_FOUND when the account is inactive', async () => {
+    const { svc } = makeService({
+      courierAccount: {
+        environment: CredentialEnvironment.PRODUCTION,
+        deletedAt: null,
+        isActive: false,
+        courier: { code: COURIER },
+        credential: {
+          id: 'cred-1',
+          encryptedPayload: encryptCredential(JSON.stringify(FIELDS), KEY_V1),
+          encryptionKeyVersion: 1,
+          fieldNames: ['token'],
+          expiresAt: null,
+        },
+      },
+    });
+    await expect(svc.getCredentialForAccount('acct-1')).rejects.toMatchObject({
+      response: { code: 'COURIER_ACCOUNT_NOT_FOUND' },
+    });
   });
 });
