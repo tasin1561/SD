@@ -40,7 +40,10 @@ export function SettingsIndex(): ReactElement {
       {list.isLoading ? (
         <LoadingState label="Loading settings…" />
       ) : list.isError ? (
-        <ErrorState message={list.error?.message ?? 'Failed to load settings.'} />
+        <ErrorState
+          message={list.error?.message ?? 'Failed to load settings.'}
+          retry={() => void list.refetch()}
+        />
       ) : !list.data || list.data.length === 0 ? (
         <EmptyState
           title="No settings"

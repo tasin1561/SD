@@ -68,18 +68,76 @@ export function Section({
   );
 }
 
-export function LoadingState({ label = 'Loading…' }: { readonly label?: string }): ReactElement {
+/**
+ * The loading placeholder.
+ *
+ * Renders skeleton rows rather than the word "Loading…": a skeleton
+ * reserves the space the content will occupy, so the page does not jump
+ * when data lands, and it communicates SHAPE — the reader starts
+ * parsing the layout before the numbers arrive. `label` is kept (every
+ * call site passes one) but is now announced to screen readers instead
+ * of being the entire visual, since "Loading orders…" is more useful
+ * spoken than seen.
+ *
+ * Where the real content is not a list, pass `<Skeleton/>` blocks
+ * shaped like it instead of using this.
+ */
+export function LoadingState({
+  label = 'Loading…',
+  rows = 4,
+}: {
+  readonly label?: string;
+  readonly rows?: number;
+}): ReactElement {
   return (
-    <div className="rounded-[7px] border border-border bg-surface px-4 py-8 text-center text-text-muted text-sm">
-      {label}
+    <div
+      role="status"
+      aria-live="polite"
+      aria-label={label}
+      className="rounded-[7px] border border-border bg-surface divide-border divide-y"
+    >
+      {Array.from({ length: rows }, (_, r) => (
+        <div key={r} className="flex items-center gap-3 px-4 py-3">
+          <div className="bg-surface-hover h-3.5 w-[28%] animate-pulse rounded-[var(--radius-1)]" />
+          <div className="bg-surface-hover h-3.5 w-[18%] animate-pulse rounded-[var(--radius-1)]" />
+          <div className="bg-surface-hover h-3.5 w-[22%] animate-pulse rounded-[var(--radius-1)]" />
+          <div className="bg-surface-hover h-3.5 w-[12%] animate-pulse rounded-[var(--radius-1)]" />
+        </div>
+      ))}
     </div>
   );
 }
 
-export function ErrorState({ message }: { readonly message: string }): ReactElement {
+/**
+ * A failed fetch, with a way out.
+ *
+ * `retry` is optional only because some call sites have nothing to
+ * retry; where there is a refetch available, pass it. An error with no
+ * next action forces a full page reload to recover from what may have
+ * been one flaky request.
+ */
+export function ErrorState({
+  message,
+  retry,
+}: {
+  readonly message: string;
+  readonly retry?: () => void;
+}): ReactElement {
   return (
-    <div className="rounded-[7px] border border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] px-4 py-3 text-critical text-sm">
-      {message}
+    <div
+      role="alert"
+      className="rounded-[7px] border border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] px-4 py-3 text-critical text-sm flex items-start justify-between gap-3"
+    >
+      <span>{message}</span>
+      {retry !== undefined && (
+        <button
+          type="button"
+          onClick={retry}
+          className="shrink-0 text-xs font-medium underline underline-offset-2"
+        >
+          Retry
+        </button>
+      )}
     </div>
   );
 }

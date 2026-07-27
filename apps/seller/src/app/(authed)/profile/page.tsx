@@ -53,7 +53,10 @@ export default function ProfilePage(): ReactElement {
     return (
       <>
         <PageHeader title="Profile" subtitle="Company info + bank details." />
-        <ErrorState message={detail.error?.message ?? 'Failed to load profile.'} />
+        <ErrorState
+          message={detail.error?.message ?? 'Failed to load profile.'}
+          retry={() => void detail.refetch()}
+        />
       </>
     );
   }

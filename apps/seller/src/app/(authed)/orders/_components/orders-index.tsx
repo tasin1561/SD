@@ -151,7 +151,10 @@ export function OrdersIndex(): ReactElement {
       {list.isLoading ? (
         <LoadingState label="Loading orders…" />
       ) : list.isError ? (
-        <ErrorState message={list.error?.message ?? 'Failed to load orders.'} />
+        <ErrorState
+          message={list.error?.message ?? 'Failed to load orders.'}
+          retry={() => void list.refetch()}
+        />
       ) : !list.data || list.data.items.length === 0 ? (
         <EmptyState
           title="No orders match"

@@ -262,7 +262,10 @@ export function CsvImportPanel({
           <CardBody>Loading…</CardBody>
         </Card>
       ) : list.isError ? (
-        <ErrorState message={list.error?.message ?? 'Failed to load uploads.'} />
+        <ErrorState
+          message={list.error?.message ?? 'Failed to load uploads.'}
+          retry={() => void list.refetch()}
+        />
       ) : !list.data || list.data.items.length === 0 ? (
         <EmptyState
           title="No imports yet"

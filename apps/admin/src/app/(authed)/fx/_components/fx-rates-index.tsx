@@ -34,7 +34,10 @@ export function FxRatesIndex(): ReactElement {
       {list.isLoading ? (
         <LoadingState label="Loading rates…" />
       ) : list.isError ? (
-        <ErrorState message={list.error?.message ?? 'Failed.'} />
+        <ErrorState
+          message={list.error?.message ?? 'Failed.'}
+          retry={() => void list.refetch()}
+        />
       ) : !list.data || list.data.length === 0 ? (
         <Card>
           <CardBody>

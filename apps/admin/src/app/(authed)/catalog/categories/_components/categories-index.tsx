@@ -84,6 +84,7 @@ export function CategoriesIndex(): ReactElement {
       ) : list.isError ? (
         <ErrorState
           message={list.error?.message ?? 'Failed to load categories.'}
+          retry={() => void list.refetch()}
         />
       ) : !list.data || list.data.length === 0 ? (
         <Card>

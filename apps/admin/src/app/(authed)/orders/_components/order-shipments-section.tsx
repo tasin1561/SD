@@ -30,6 +30,7 @@ export function OrderShipmentsSection({
     return (
       <ErrorState
         message={shipments.error?.message ?? 'Failed to load shipments.'}
+        retry={() => void shipments.refetch()}
       />
     );
   if (!shipments.data || shipments.data.length === 0)

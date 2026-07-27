@@ -284,3 +284,29 @@
   outline-offset: 2px;
   border-radius: var(--radius-1);
 }
+
+/* Touch targets.
+ *
+ * The dense 28px table-row button is right for a mouse and too small
+ * for a finger — and the warehouse floor runs this on tablets. Rather
+ * than inflating every control for everyone, coarse pointers get an
+ * invisible 44px-tall hit area centred on the visual button. The layout
+ * is untouched; only what counts as a tap changes.
+ *
+ * Applied by the Button primitive; available for hand-rolled icon
+ * buttons that need the same treatment. */
+@media (pointer: coarse) {
+  .skydrop-hit {
+    position: relative;
+  }
+  .skydrop-hit::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 44px;
+    min-width: 44px;
+    transform: translateY(-50%);
+  }
+}

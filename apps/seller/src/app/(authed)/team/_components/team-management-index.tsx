@@ -132,7 +132,10 @@ export function TeamManagementIndex(): ReactElement {
           {members.isLoading ? (
             <LoadingState label="Loading members…" />
           ) : members.isError ? (
-            <ErrorState message={members.error?.message ?? 'Failed.'} />
+            <ErrorState
+              message={members.error?.message ?? 'Failed.'}
+              retry={() => void members.refetch()}
+            />
           ) : !members.data || members.data.length === 0 ? (
             <CardBody>
               <p className="text-text-muted text-sm">No members yet.</p>
@@ -242,7 +245,10 @@ export function TeamManagementIndex(): ReactElement {
           {invitations.isLoading ? (
             <LoadingState label="Loading…" />
           ) : invitations.isError ? (
-            <ErrorState message={invitations.error?.message ?? 'Failed.'} />
+            <ErrorState
+              message={invitations.error?.message ?? 'Failed.'}
+              retry={() => void invitations.refetch()}
+            />
           ) : !invitations.data || invitations.data.items.length === 0 ? (
             <CardBody>
               <p className="text-text-muted text-sm">No invitations yet.</p>

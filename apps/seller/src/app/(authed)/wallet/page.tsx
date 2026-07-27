@@ -9,8 +9,10 @@ import {
   CardBody,
   CardHeader,
   ErrorState,
-  LoadingState,
+  Money,
   PageHeader,
+  Skeleton,
+  SkeletonRows,
 } from '@skydrop/ui/components';
 import { useInfiniteWalletEntries, useWalletBalances } from '@/lib/api-hooks';
 import { WithdrawalsCard } from './_components/withdrawals-card';
@@ -59,9 +61,15 @@ export default function WalletPage(): ReactElement {
 
       <div className="grid grid-cols-2 gap-3">
         {balances.isLoading ? (
-          <LoadingState label="Loading balances…" />
+          <>
+            <Skeleton className="h-[104px]" />
+            <Skeleton className="h-[104px]" />
+          </>
         ) : balances.isError ? (
-          <ErrorState message={balances.error?.message ?? 'Failed.'} />
+          <ErrorState
+            message={balances.error?.message ?? 'Failed.'}
+            retry={() => void balances.refetch()}
+          />
         ) : (
           (balances.data?.balances ?? []).map((b) => (
             <Card key={b.currency}>
@@ -69,8 +77,12 @@ export default function WalletPage(): ReactElement {
                 <div className="text-text-faint text-xs uppercase tracking-wide mb-1">
                   {b.currency}
                 </div>
-                <div className="text-text-bright text-2xl font-medium tracking-tight font-mono">
-                  {formatMoney(b.balance, b.currency)}
+                <div className="text-text-bright">
+                  <Money
+                    amount={b.balance}
+                    currency={b.currency === 'BDT' ? 'BDT' : 'INR'}
+                    size="lg"
+                  />
                 </div>
                 <div className="text-text-muted text-xs mt-1">
                   {Number(b.balance) === 0
@@ -122,9 +134,12 @@ export default function WalletPage(): ReactElement {
         />
         <CardBody>
           {entries.isLoading ? (
-            <LoadingState label="Loading ledger…" />
+            <SkeletonRows rows={6} cols={5} />
           ) : entries.isError ? (
-            <ErrorState message={entries.error?.message ?? 'Failed.'} />
+            <ErrorState
+              message={entries.error?.message ?? 'Failed.'}
+              retry={() => void entries.refetch()}
+            />
           ) : accumulated.length === 0 ? (
             <div className="text-text-muted text-sm py-4">
               No ledger entries yet. Once an order delivers (COD), your
@@ -196,8 +211,7 @@ const CREDIT_DIRECTIONS: ReadonlySet<WalletEntryView['direction']> = new Set([
 
 function LedgerRow({ entry }: { readonly entry: WalletEntryView }): ReactElement {
   const isCredit = CREDIT_DIRECTIONS.has(entry.direction);
-  const sign = isCredit ? '+' : '−';
-  const color = isCredit ? 'text-accent' : 'text-critical';
+  const currency = entry.currency === 'BDT' ? 'BDT' : 'INR';
   return (
     <tr>
       <td className="px-3 py-2 text-text-muted font-mono text-xs">
@@ -225,12 +239,15 @@ function LedgerRow({ entry }: { readonly entry: WalletEntryView }): ReactElement
           <span className="text-text-faint">—</span>
         )}
       </td>
-      <td className={`px-3 py-2 text-right font-mono ${color}`}>
-        {sign}
-        {formatMoney(entry.amount, entry.currency)}
+      <td className="px-3 py-2 text-right">
+        <Money
+          amount={entry.amount}
+          currency={currency}
+          direction={isCredit ? 'credit' : 'debit'}
+        />
       </td>
-      <td className="px-3 py-2 text-right text-text-body font-mono text-xs">
-        {formatMoney(entry.runningBalanceAfter, entry.currency)}
+      <td className="px-3 py-2 text-right text-text-body">
+        <Money amount={entry.runningBalanceAfter} currency={currency} />
       </td>
     </tr>
   );
@@ -312,12 +329,4 @@ function downloadCsv(items: ReadonlyArray<WalletEntryView>): void {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-}
-
-function formatMoney(value: string, currency: string): string {
-  const n = Number(value);
-  return `${currency === 'INR' ? '₹' : '৳'} ${n.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
 }

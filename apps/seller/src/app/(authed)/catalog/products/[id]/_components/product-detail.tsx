@@ -12,6 +12,7 @@ import {
   Card,
   CardBody,
   CardHeader,
+  EmptyState,
   ErrorState,
   FormActions,
   FormField,
@@ -21,7 +22,6 @@ import {
   Section,
   StatusBadge,
   Table,
-  TableEmpty,
   TBody,
   Td,
   Textarea,
@@ -58,7 +58,10 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
       {detail.isLoading ? (
         <LoadingState label="Loading product…" />
       ) : detail.isError ? (
-        <ErrorState message={detail.error?.message ?? 'Failed to load product.'} />
+        <ErrorState
+          message={detail.error?.message ?? 'Failed to load product.'}
+          retry={() => void detail.refetch()}
+        />
       ) : !detail.data ? (
         <ErrorState message="Product not found." />
       ) : (
@@ -113,13 +116,13 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
             ) : variants.isError ? (
               <ErrorState
                 message={variants.error?.message ?? 'Failed to load variants.'}
+                retry={() => void variants.refetch()}
               />
             ) : !variants.data || variants.data.length === 0 ? (
-              <Card>
-                <TableEmpty>
-                  No variants yet. Use the CSV import to bulk-add.
-                </TableEmpty>
-              </Card>
+              <EmptyState
+                title="No variants yet"
+                description="A product needs at least one variant before it can be ordered. Use the CSV import to add them in bulk."
+              />
             ) : (
               <Table>
                 <THead>

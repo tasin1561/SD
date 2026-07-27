@@ -46,7 +46,10 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
       {detail.isLoading ? (
         <LoadingState label="Loading order…" />
       ) : detail.isError ? (
-        <ErrorState message={detail.error?.message ?? 'Failed to load order.'} />
+        <ErrorState
+          message={detail.error?.message ?? 'Failed to load order.'}
+          retry={() => void detail.refetch()}
+        />
       ) : !detail.data ? (
         <ErrorState message="Order not found." />
       ) : (

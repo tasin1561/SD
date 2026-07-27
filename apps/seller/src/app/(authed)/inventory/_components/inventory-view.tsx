@@ -96,7 +96,10 @@ export function InventoryView(): ReactElement {
       {list.isLoading ? (
         <LoadingState label="Loading inventory…" />
       ) : list.isError ? (
-        <ErrorState message={list.error?.message ?? 'Failed to load inventory.'} />
+        <ErrorState
+          message={list.error?.message ?? 'Failed to load inventory.'}
+          retry={() => void list.refetch()}
+        />
       ) : !list.data || list.data.items.length === 0 ? (
         <EmptyState
           title="No stock yet"

@@ -8,7 +8,8 @@ import {
   CardBody,
   EmptyState,
   ErrorState,
-  LoadingState,
+  Money,
+  SkeletonRows,
 } from '@skydrop/ui/components';
 
 /**
@@ -25,7 +26,13 @@ import {
 export function OrderChargesSection({ orderId }: { orderId: string }): ReactElement {
   const charges = useOrderCharges(orderId);
 
-  if (charges.isLoading) return <LoadingState label="Loading charges…" />;
+  if (charges.isLoading) {
+    return (
+      <Card>
+        <SkeletonRows rows={4} cols={2} />
+      </Card>
+    );
+  }
   if (charges.isError) {
     return <ErrorState message={charges.error?.message ?? 'Failed to load charges.'} />;
   }
@@ -56,8 +63,8 @@ export function OrderChargesSection({ orderId }: { orderId: string }): ReactElem
             ))}
             <tr className="bg-surface-raised">
               <td className="px-4 py-2 text-text-bright font-medium">Total</td>
-              <td className="px-4 py-2 text-right text-text-bright font-mono font-medium">
-                {total.toFixed(2)}
+              <td className="px-4 py-2 text-right text-text-bright font-medium">
+                <Money amount={total} />
               </td>
             </tr>
           </tbody>
@@ -78,8 +85,8 @@ function ChargeRow({ charge }: { charge: OrderChargeView }): ReactElement {
           {charge.type.toLowerCase().replace(/_/g, ' ')} · {charge.status.toLowerCase()}
         </div>
       </td>
-      <td className="px-4 py-2 text-right text-text-body font-mono">
-        {charge.totalAmountInr}
+      <td className="px-4 py-2 text-right">
+        <Money amount={charge.totalAmountInr} />
       </td>
     </tr>
   );

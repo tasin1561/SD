@@ -58,7 +58,10 @@ export function VariantDetailView({
       {detail.isLoading ? (
         <LoadingState label="Loading variant…" />
       ) : detail.isError ? (
-        <ErrorState message={detail.error?.message ?? 'Failed to load variant.'} />
+        <ErrorState
+          message={detail.error?.message ?? 'Failed to load variant.'}
+          retry={() => void detail.refetch()}
+        />
       ) : !detail.data ? (
         <ErrorState message="Variant not found." />
       ) : (

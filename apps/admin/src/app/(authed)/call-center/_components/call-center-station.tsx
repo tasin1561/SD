@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
+import { useState, type ReactElement, type ReactNode } from 'react';
 import {
   Button,
   Card,
   CardBody,
   EmptyState,
+  Money,
   FormField,
   Input,
   Select,
@@ -286,9 +287,15 @@ function RecipientPanel({ order }: { readonly order: unknown }): ReactElement {
         <Field
           label="Payment"
           value={
-            o.paymentMode === 'COD' && o.codAmountInr != null
-              ? `COD ₹${o.codAmountInr}`
-              : o.paymentMode ?? '—'
+            o.paymentMode === 'COD' && o.codAmountInr != null ? (
+              // The agent reads this figure aloud to the customer, so it
+              // is grouped the way they expect to hear it: ₹12,34,567.
+              <span>
+                COD <Money amount={o.codAmountInr} />
+              </span>
+            ) : (
+              o.paymentMode ?? '—'
+            )
           }
         />
       </div>
@@ -319,7 +326,7 @@ function Field({
   value,
 }: {
   readonly label: string;
-  readonly value: string;
+  readonly value: ReactNode;
 }): ReactElement {
   return (
     <div>

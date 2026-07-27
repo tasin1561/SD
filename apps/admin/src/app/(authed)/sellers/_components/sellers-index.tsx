@@ -86,7 +86,10 @@ export function SellersIndex(): ReactElement {
       {list.isLoading ? (
         <LoadingState label="Loading sellers…" />
       ) : list.isError ? (
-        <ErrorState message={list.error?.message ?? 'Failed to load sellers.'} />
+        <ErrorState
+          message={list.error?.message ?? 'Failed to load sellers.'}
+          retry={() => void list.refetch()}
+        />
       ) : !list.data || list.data.items.length === 0 ? (
         <EmptyState
           title="No sellers match these filters"
@@ -131,7 +134,12 @@ export function SellersIndex(): ReactElement {
               </Tr>
             ))}
           </TBody>
-          {list.data.total === 0 && <TableEmpty>No sellers.</TableEmpty>}
+          {list.data.total === 0 && (
+            <TableEmpty colSpan={6}>
+              No sellers match this filter. Sellers appear here once they accept
+              an invitation.
+            </TableEmpty>
+          )}
           <tfoot>
             <tr>
               <td colSpan={6} className="p-0">

@@ -131,7 +131,10 @@ export function ApiKeysIndex(): ReactElement {
       {list.isLoading ? (
         <LoadingState label="Loading keys…" />
       ) : list.isError ? (
-        <ErrorState message={list.error?.message ?? 'Failed.'} />
+        <ErrorState
+          message={list.error?.message ?? 'Failed.'}
+          retry={() => void list.refetch()}
+        />
       ) : !list.data || list.data.length === 0 ? (
         <Card>
           <CardBody>

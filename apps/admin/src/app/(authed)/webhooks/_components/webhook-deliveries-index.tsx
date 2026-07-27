@@ -89,7 +89,10 @@ export function WebhookDeliveriesIndex(): ReactElement {
         {list.isLoading ? (
           <LoadingState label="Loading deliveries…" />
         ) : list.isError ? (
-          <ErrorState message={list.error?.message ?? 'Failed.'} />
+          <ErrorState
+            message={list.error?.message ?? 'Failed.'}
+            retry={() => void list.refetch()}
+          />
         ) : !list.data || list.data.items.length === 0 ? (
           <Card>
             <CardBody>

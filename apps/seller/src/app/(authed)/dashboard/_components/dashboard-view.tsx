@@ -123,6 +123,7 @@ export function DashboardView(): ReactElement {
         ) : recent.isError ? (
           <ErrorState
             message={recent.error?.message ?? 'Failed to load recent orders.'}
+            retry={() => void recent.refetch()}
           />
         ) : !recent.data || recent.data.items.length === 0 ? (
           <EmptyState

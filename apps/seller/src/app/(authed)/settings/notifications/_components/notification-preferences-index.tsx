@@ -79,7 +79,10 @@ export function NotificationPreferencesIndex(): ReactElement {
       {list.isLoading ? (
         <LoadingState label="Loading…" />
       ) : list.isError ? (
-        <ErrorState message={list.error?.message ?? 'Failed.'} />
+        <ErrorState
+          message={list.error?.message ?? 'Failed.'}
+          retry={() => void list.refetch()}
+        />
       ) : !list.data || list.data.length === 0 ? (
         <Card>
           <CardBody>

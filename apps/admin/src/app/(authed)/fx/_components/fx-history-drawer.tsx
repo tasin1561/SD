@@ -32,7 +32,10 @@ export function FxHistoryDrawer({
       {history.isLoading ? (
         <LoadingState label="Loading history…" />
       ) : history.isError ? (
-        <ErrorState message={history.error?.message ?? 'Failed.'} />
+        <ErrorState
+          message={history.error?.message ?? 'Failed.'}
+          retry={() => void history.refetch()}
+        />
       ) : !history.data || history.data.length === 0 ? (
         <div className="text-text-muted text-sm py-4">
           No history yet. The first change you make will record here.

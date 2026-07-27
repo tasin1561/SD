@@ -153,7 +153,10 @@ export function CatalogIndex(): ReactElement {
       {list.isLoading ? (
         <LoadingState label="Loading catalog…" />
       ) : list.isError ? (
-        <ErrorState message={list.error?.message ?? 'Failed to load catalog.'} />
+        <ErrorState
+          message={list.error?.message ?? 'Failed to load catalog.'}
+          retry={() => void list.refetch()}
+        />
       ) : !list.data || list.data.items.length === 0 ? (
         <EmptyState
           title="No products yet"

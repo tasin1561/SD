@@ -121,9 +121,31 @@ export function Td({
   );
 }
 
-export function TableEmpty({ children }: { children: ReactNode }): ReactElement {
+/**
+ * The "nothing to show" row.
+ *
+ * Renders as a real `<tbody><tr><td>` — the previous `<div>` was an
+ * invalid direct child of `<table>`, which browsers hoist out of the
+ * table entirely, so the message rendered in the wrong place.
+ *
+ * `colSpan` must match the header, otherwise the cell does not span and
+ * the message sits under the first column.
+ */
+export function TableEmpty({
+  children,
+  colSpan = 12,
+}: {
+  readonly children: ReactNode;
+  readonly colSpan?: number;
+}): ReactElement {
   return (
-    <div className="px-4 py-8 text-center text-text-muted text-sm">{children}</div>
+    <tbody>
+      <tr>
+        <td colSpan={colSpan} className="px-4 py-8 text-center text-text-muted text-sm">
+          {children}
+        </td>
+      </tr>
+    </tbody>
   );
 }
 

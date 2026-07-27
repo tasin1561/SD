@@ -26,7 +26,10 @@ export function OrderTimelineSection({
   if (events.isLoading) return <LoadingState label="Loading timeline…" />;
   if (events.isError)
     return (
-      <ErrorState message={events.error?.message ?? 'Failed to load timeline.'} />
+      <ErrorState
+        message={events.error?.message ?? 'Failed to load timeline.'}
+        retry={() => void events.refetch()}
+      />
     );
   if (!events.data || events.data.length === 0)
     return (

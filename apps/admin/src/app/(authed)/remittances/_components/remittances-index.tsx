@@ -5,10 +5,12 @@ import Link from 'next/link';
 import {
   Button,
   Card,
-  CardBody,
+  EmptyState,
   ErrorState,
-  LoadingState,
+  Ident,
+  Money,
   PageHeader,
+  SkeletonRows,
   useToast,
 } from '@skydrop/ui/components';
 import { useRemittancesList } from '@/lib/api-hooks';
@@ -36,28 +38,24 @@ export function RemittancesIndex(): ReactElement {
       />
 
       {list.isLoading ? (
-        <LoadingState label="Loading remittances…" />
-      ) : list.isError ? (
-        <ErrorState message={list.error?.message ?? 'Failed.'} />
-      ) : !list.data || list.data.items.length === 0 ? (
         <Card>
-          <CardBody>
-            <div className="text-text-bright text-sm mb-1">
-              No remittances yet.
-            </div>
-            <p className="text-text-muted text-xs mb-3">
-              Record one to debit a seller's wallet and reflect the bank
-              transfer in their ledger.
-            </p>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setCreating(true)}
-            >
+          <SkeletonRows rows={5} cols={6} />
+        </Card>
+      ) : list.isError ? (
+        <ErrorState
+          message={list.error?.message ?? 'Failed.'}
+          retry={() => void list.refetch()}
+        />
+      ) : !list.data || list.data.items.length === 0 ? (
+        <EmptyState
+          title="No remittances yet"
+          description="Record one to debit a seller's wallet and reflect the bank transfer in their ledger."
+          action={
+            <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
               Record remittance
             </Button>
-          </CardBody>
-        </Card>
+          }
+        />
       ) : (
         <Card>
           <table className="w-full text-sm">
@@ -85,16 +83,26 @@ export function RemittancesIndex(): ReactElement {
                       {r.sellerId.slice(0, 8)}…
                     </Link>
                   </td>
-                  <td className="px-3 py-2 text-right text-critical font-mono">
-                    {formatMoney(r.sourceAmount, r.sourceCurrency)}
+                  <td className="px-3 py-2 text-right">
+                    {/* The seller's wallet is debited by this leg — sign AND
+                        colour say so, never colour alone. */}
+                    <Money
+                      amount={r.sourceAmount}
+                      currency={r.sourceCurrency === 'BDT' ? 'BDT' : 'INR'}
+                      direction="debit"
+                    />
                   </td>
-                  <td className="px-3 py-2 text-right text-accent font-mono">
-                    {formatMoney(r.amount, r.currency)}
+                  <td className="px-3 py-2 text-right">
+                    <Money
+                      amount={r.amount}
+                      currency={r.currency === 'BDT' ? 'BDT' : 'INR'}
+                      direction="credit"
+                    />
                   </td>
-                  <td className="px-3 py-2 text-text-body font-mono text-xs">
-                    {r.bankReference}
+                  <td className="px-3 py-2">
+                    <Ident value={r.bankReference} />
                   </td>
-                  <td className="px-3 py-2 text-right text-text-muted font-mono text-xs">
+                  <td className="px-3 py-2 text-right text-text-muted skydrop-tabular text-xs">
                     {r.sourceCurrency === r.currency
                       ? '—'
                       : Number(r.fxRateSnapshot).toFixed(4)}
@@ -117,12 +125,4 @@ export function RemittancesIndex(): ReactElement {
       )}
     </div>
   );
-}
-
-function formatMoney(value: string, currency: string): string {
-  const n = Number(value);
-  return `${currency === 'INR' ? '₹' : '৳'} ${n.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
 }

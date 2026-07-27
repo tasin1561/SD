@@ -44,7 +44,10 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
       {detail.isLoading ? (
         <LoadingState label="Loading seller…" />
       ) : detail.isError ? (
-        <ErrorState message={detail.error?.message ?? 'Failed to load seller.'} />
+        <ErrorState
+          message={detail.error?.message ?? 'Failed to load seller.'}
+          retry={() => void detail.refetch()}
+        />
       ) : !detail.data ? (
         <ErrorState message="Seller not found." />
       ) : (

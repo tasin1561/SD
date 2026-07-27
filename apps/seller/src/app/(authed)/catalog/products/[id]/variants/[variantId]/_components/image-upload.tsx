@@ -246,6 +246,7 @@ export function VariantImageUpload({
           ) : images.isError ? (
             <ErrorState
               message={images.error?.message ?? 'Failed to load images.'}
+              retry={() => void images.refetch()}
             />
           ) : !images.data || images.data.length === 0 ? (
             <EmptyState

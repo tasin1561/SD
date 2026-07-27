@@ -60,7 +60,10 @@ export function ReceiveIndex(): ReactElement {
       {list.isLoading ? (
         <LoadingState label="Loading goods receipts…" />
       ) : list.isError ? (
-        <ErrorState message={list.error?.message ?? 'Failed to load.'} />
+        <ErrorState
+          message={list.error?.message ?? 'Failed to load.'}
+          retry={() => void list.refetch()}
+        />
       ) : !list.data || list.data.items.length === 0 ? (
         <EmptyState
           title="No goods receipts match"

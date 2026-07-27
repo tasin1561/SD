@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
+import { useState, type ReactElement, type ReactNode } from 'react';
 import {
   Card,
   CardBody,
   CardHeader,
   ErrorState,
-  LoadingState,
+  Money,
+  Skeleton,
   PageHeader,
 } from '@skydrop/ui/components';
 import type { ReportSummary } from '@skydrop/api-client';
@@ -63,9 +64,17 @@ export function ReportsDashboard(): ReactElement {
       </Card>
 
       {summary.isLoading ? (
-        <LoadingState label="Loading reports…" />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Skeleton className="h-56" />
+          <Skeleton className="h-56" />
+          <Skeleton className="h-56" />
+          <Skeleton className="h-56" />
+        </div>
       ) : summary.isError ? (
-        <ErrorState message={summary.error?.message ?? 'Failed.'} />
+        <ErrorState
+          message={summary.error?.message ?? 'Failed.'}
+          retry={() => void summary.refetch()}
+        />
       ) : !summary.data ? (
         <ErrorState message="No data." />
       ) : (
@@ -162,27 +171,26 @@ function WalletCard({
     <Card>
       <CardHeader title="Wallet flows (INR)" />
       <CardBody>
+        {/* Direction is the whole point of this card: money in, money
+            out, what is left. Money encodes it with a sign AND a colour,
+            and groups the figure the Indian way. */}
         <Stat
           label="COD collected"
-          value={`₹ ${Number(data.codCollected).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          tone="accent"
+          value={<Money amount={data.codCollected} direction="credit" />}
         />
         <Stat
           label="Charges debited"
-          value={`₹ ${Number(data.chargesDebited).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          tone="critical"
+          value={<Money amount={data.chargesDebited} direction="debit" />}
         />
         <Stat
           label="Remittances paid"
-          value={`₹ ${Number(data.remittancesPaid).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          tone="critical"
+          value={<Money amount={data.remittancesPaid} direction="debit" />}
         />
         <div className="border-t border-border my-3" />
         <Stat
           label="Net outstanding"
           hint="Owed to sellers across all wallets"
-          value={`₹ ${Number(data.netOutstanding).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          tone={Number(data.netOutstanding) >= 0 ? 'accent' : 'critical'}
+          value={<Money amount={data.netOutstanding} />}
         />
       </CardBody>
     </Card>
@@ -196,7 +204,7 @@ function Stat({
   tone = 'body',
 }: {
   readonly label: string;
-  readonly value: number | string;
+  readonly value: ReactNode;
   readonly hint?: string;
   readonly tone?: 'body' | 'accent' | 'pending' | 'critical';
 }): ReactElement {
@@ -214,7 +222,7 @@ function Stat({
         <div className="text-text-muted text-xs">{label}</div>
         {hint && <div className="text-text-faint text-[10px] mt-0.5">{hint}</div>}
       </div>
-      <div className={`font-mono ${colorClass}`}>{value}</div>
+      <div className={`skydrop-tabular ${colorClass}`}>{value}</div>
     </div>
   );
 }

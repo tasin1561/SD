@@ -133,7 +133,10 @@ export function StaffManagementIndex(): ReactElement {
           {users.isLoading ? (
             <LoadingState label="Loading staff…" />
           ) : users.isError ? (
-            <ErrorState message={users.error?.message ?? 'Failed.'} />
+            <ErrorState
+              message={users.error?.message ?? 'Failed.'}
+              retry={() => void users.refetch()}
+            />
           ) : !users.data || users.data.length === 0 ? (
             <CardBody>
               <p className="text-text-muted text-sm">No staff yet.</p>
@@ -229,7 +232,10 @@ export function StaffManagementIndex(): ReactElement {
           {invitations.isLoading ? (
             <LoadingState label="Loading…" />
           ) : invitations.isError ? (
-            <ErrorState message={invitations.error?.message ?? 'Failed.'} />
+            <ErrorState
+              message={invitations.error?.message ?? 'Failed.'}
+              retry={() => void invitations.refetch()}
+            />
           ) : !invitations.data || invitations.data.items.length === 0 ? (
             <CardBody>
               <p className="text-text-muted text-sm">No invitations yet.</p>

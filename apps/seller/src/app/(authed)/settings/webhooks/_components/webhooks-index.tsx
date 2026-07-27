@@ -91,7 +91,10 @@ export function WebhooksIndex(): ReactElement {
       {list.isLoading ? (
         <LoadingState label="Loading endpoints…" />
       ) : list.isError ? (
-        <ErrorState message={list.error?.message ?? 'Failed to load.'} />
+        <ErrorState
+          message={list.error?.message ?? 'Failed to load.'}
+          retry={() => void list.refetch()}
+        />
       ) : !list.data || list.data.length === 0 ? (
         <Card>
           <CardBody>
