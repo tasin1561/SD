@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
+import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { InventoryStockModule } from '../inventory-stock/inventory-stock.module';
 import { SettingsModule } from '../settings/settings.module';
 import { SellerEarlyReservationController } from './controllers/seller-early-reservation.controller';
+import { AdminEarlyReservationController } from './controllers/admin-early-reservation.controller';
 import { EarlyReservationReviewService } from './services/early-reservation-review.service';
 import { EarlyReservationService } from './services/early-reservation.service';
 
@@ -18,8 +20,13 @@ import { EarlyReservationService } from './services/early-reservation.service';
  */
 @Module({
   imports: [AuthCommonModule, InventoryStockModule, SettingsModule],
-  controllers: [SellerEarlyReservationController],
-  providers: [EarlyReservationService, EarlyReservationReviewService, SellerJwtGuard],
+  controllers: [SellerEarlyReservationController, AdminEarlyReservationController],
+  providers: [
+    EarlyReservationService,
+    EarlyReservationReviewService,
+    SellerJwtGuard,
+    StaffJwtGuard,
+  ],
   exports: [EarlyReservationService, EarlyReservationReviewService],
 })
 export class EarlyReservationModule {}

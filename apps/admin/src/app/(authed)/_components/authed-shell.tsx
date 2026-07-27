@@ -55,6 +55,8 @@ export function AuthedShell({
         { href: '/call-center', label: 'Call centre' },
         { href: '/warehouse', label: 'Warehouse' },
         { href: '/tickets', label: 'Tickets' },
+        { href: '/holds', label: 'Held stock' },
+        { href: '/inventory-units', label: 'Unit discrepancies' },
       ],
     },
     {

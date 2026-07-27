@@ -68,6 +68,39 @@ export class EarlyReservationReviewService {
   }
 
   /**
+   * Cross-seller list, for the admin queue.
+   *
+   * An operations person needs to see holds ageing across every seller —
+   * "who has not answered" is the question, and it cannot be asked one
+   * sellerId at a time. `sellerId` is an optional FILTER here rather than
+   * a scope.
+   *
+   * Read-only on purpose: there is no admin `decide`. Releasing another
+   * party's stock, or telling the call centre to keep trying on their
+   * behalf, is the SELLER's commercial decision (R5) — and an unanswered
+   * review does not hang either way, because the TTL sweep resolves it.
+   * An admin who genuinely must intervene has god mode, which is audited
+   * as the invariant-breaking act it is.
+   */
+  async listForAdmin(query: {
+    status?: EarlyReservationReviewStatus;
+    sellerId?: string;
+    limit?: number;
+  }): Promise<readonly (ReviewView & { sellerId: string })[]> {
+    const rows = await this.prisma.client.earlyReservationReview.findMany({
+      where: {
+        ...(query.status === undefined ? {} : { status: query.status }),
+        ...(query.sellerId === undefined ? {} : { sellerId: query.sellerId }),
+      },
+      // Oldest first: this is a queue, and the hold that has been sitting
+      // longest is the one costing the most.
+      orderBy: { createdAt: 'asc' },
+      take: Math.min(query.limit ?? 200, 500),
+    });
+    return rows.map((r) => ({ ...this.toView(r), sellerId: r.sellerId }));
+  }
+
+  /**
    * Applies the seller's decision. Idempotent-ish by guard: an
    * already-resolved review is a 409 rather than a silent second
    * release, so a double-click can't be mistaken for two decisions.

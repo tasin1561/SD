@@ -10,9 +10,11 @@ import {
 import { useApiClient } from '@skydrop/auth/client';
 import type {
   CredentialEnvironment,
+  EarlyReservationReviewStatus,
   Currency,
   InboundFreightMode,
   InboundFreightStatus,
+  StockUnitStatus,
   TicketStatus,
   TicketType,
   WithdrawalRequestedBy,
@@ -877,5 +879,108 @@ export function useMarginReport(limit: number, enabled: boolean): UseQueryResult
     enabled,
     staleTime: 15 * 60_000,
     queryFn: () => client.request<MarginReport>(`/admin/courier-ops/margin-report?limit=${limit}`),
+  });
+}
+
+// ───────── Serialized-unit discrepancies, admin side (R4) ─────────
+
+export interface SellerDiscrepancySummary {
+  readonly sellerId: string;
+  readonly companyName: string | null;
+  readonly stuckUnits: number;
+  readonly unresolvedDispatched: number;
+  readonly countMismatches: number;
+  readonly needsAttention: number;
+  readonly thresholds: {
+    readonly stuckSlaHours: number;
+    readonly dispatchedUnresolvedDays: number;
+  };
+}
+
+export interface DiscrepancyTriage {
+  readonly generatedAt: string;
+  readonly sellers: readonly SellerDiscrepancySummary[];
+  readonly totalNeedsAttention: number;
+  readonly truncated: boolean;
+  readonly examined: number;
+}
+
+export interface StuckUnitRow {
+  readonly stockUnitId: string;
+  readonly serialBarcode: string;
+  readonly variantId: string;
+  readonly skuCode: string | null;
+  readonly status: StockUnitStatus;
+  readonly warehouseId: string;
+  readonly hoursInStatus: number;
+  readonly lastScanAt: string | null;
+  readonly shipmentId: string | null;
+}
+
+export interface UnitCountMismatchRow {
+  readonly variantId: string;
+  readonly skuCode: string | null;
+  readonly warehouseId: string;
+  readonly unitsInStock: number;
+  readonly qtyOnHand: number;
+  readonly delta: number;
+}
+
+export interface UnitDiscrepancyReport {
+  readonly sellerId: string;
+  readonly generatedAt: string;
+  readonly thresholds: {
+    readonly stuckSlaHours: number;
+    readonly dispatchedUnresolvedDays: number;
+  };
+  readonly stuckUnits: readonly StuckUnitRow[];
+  readonly unresolvedDispatched: readonly StuckUnitRow[];
+  readonly retiredUnits: readonly StuckUnitRow[];
+  readonly countMismatches: readonly UnitCountMismatchRow[];
+}
+
+export function useUnitTriage(): UseQueryResult<DiscrepancyTriage> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-units', 'triage'],
+    queryFn: () => client.request<DiscrepancyTriage>('/admin/stock-units/triage'),
+  });
+}
+
+export function useSellerUnitReport(
+  sellerId: string | null,
+): UseQueryResult<UnitDiscrepancyReport> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-units', 'report', sellerId],
+    enabled: sellerId !== null,
+    queryFn: () =>
+      client.request<UnitDiscrepancyReport>(`/admin/stock-units/discrepancies/${sellerId ?? ''}`),
+  });
+}
+
+// ───────── Held-stock reviews, admin side (R5) ─────────
+
+export interface AdminReviewRow {
+  readonly id: string;
+  readonly sellerId: string;
+  readonly orderId: string;
+  readonly status: EarlyReservationReviewStatus;
+  readonly attemptCount: number;
+  readonly heldQty: number;
+  readonly note: string | null;
+  readonly resolvedAt: string | null;
+  readonly createdAt: string;
+}
+
+export function useAdminHoldReviews(query: {
+  status?: string;
+  sellerId?: string;
+}): UseQueryResult<readonly AdminReviewRow[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-hold-reviews', 'list', query],
+    queryFn: () =>
+      client.request<readonly AdminReviewRow[]>(`/admin/early-reservation-reviews${qs(query)}`),
   });
 }

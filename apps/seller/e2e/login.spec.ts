@@ -19,10 +19,15 @@ test.describe('seller login (M13 CP1.7 harness)', () => {
   test('login page renders the Skydrop Seller chrome', async ({ page }) => {
     await page.goto('/login');
     await expect(page.getByText('Skydrop', { exact: true })).toBeVisible();
-    await expect(page.getByText('Seller', { exact: true })).toBeVisible();
+    // The app is named by its strapline, not a bare word — the login
+    // chrome was restyled after these specs were written, and nothing
+    // ran them to notice.
+    await expect(page.getByText('seller portal', { exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
-    await expect(page.getByLabel('Email')).toBeVisible();
-    await expect(page.getByLabel('Password')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'email' })).toBeVisible();
+    // NOT getByLabel('Password'): the show/hide toggle carries
+    // aria-label="Show password", so that locator is ambiguous.
+    await expect(page.locator('#password')).toBeVisible();
   });
 
   test('unauthed /dashboard redirects to /login (FE-4 SSR gate)', async ({ page }) => {
@@ -32,8 +37,8 @@ test.describe('seller login (M13 CP1.7 harness)', () => {
 
   test('bad credentials surface the server verdict (FE-2)', async ({ page }) => {
     await page.goto('/login');
-    await page.getByLabel('Email').fill('nobody@example.com');
-    await page.getByLabel('Password').fill('wrong-password');
+    await page.getByRole('textbox', { name: 'email' }).fill('nobody@example.com');
+    await page.locator('#password').fill('wrong-password');
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page.getByText('Invalid email or password.')).toBeVisible();
     await expect(page).toHaveURL(/\/login$/);
