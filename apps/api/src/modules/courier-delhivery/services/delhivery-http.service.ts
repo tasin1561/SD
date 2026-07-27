@@ -53,14 +53,21 @@ export interface DelhiveryRequestOptions {
  * capability method checks first. Real mode (base URL set) is reached
  * only with provisioned credentials + a validated wire contract.
  *
- * ── TODO(delhivery-api) ────────────────────────────────────────────
- * Delhivery's exact endpoints, auth header format, request/response
- * JSON field names and error codes are NOT reliably known at build
- * time. Every such spot is marked `TODO(delhivery-api)`. The real-mode
- * `request()` body deliberately throws until the contract is validated
- * against Delhivery's sandbox — the orchestration above it
- * (saga / supersede / dispatch / conservation) is fully built + tested
- * in stub mode.
+ * ── CONTRACT STATUS (2026-07-27) ───────────────────────────────────
+ * Endpoints, auth and the response shapes are VERIFIED against the
+ * production API, not inferred: see docs/delhivery-integration.md, and
+ * the specs whose fixtures are verbatim production responses. Auth is
+ * `Authorization: Token <token>`, static per environment.
+ *
+ * Two house styles to keep in mind when adding a capability here:
+ *   1. Failure often arrives as HTTP **200** with the error in the body
+ *      (`{"Success": false, ...}`). `res.ok` is not the answer.
+ *   2. HTTP **403** is the AWS WAF rate block, not an auth failure, and
+ *      it applies to our whole egress IP — hence
+ *      DelhiveryRateLimitService, and the distinct error thrown below.
+ *
+ * This account has NO sandbox, so anything with a physical or billable
+ * effect additionally passes DelhiveryWriteGuardService.
  */
 @Injectable()
 export class DelhiveryHttpService {

@@ -15,6 +15,10 @@ import { DelhiveryShipmentEditService } from './services/delhivery-shipment-edit
 import { DelhiveryPickupService } from './services/delhivery-pickup.service';
 import { DelhiveryNdrService } from './services/delhivery-ndr.service';
 import { DelhiveryDocumentService } from './services/delhivery-document.service';
+import { DelhiveryEwaybillService } from './services/delhivery-ewaybill.service';
+import { DelhiveryMpsService } from './services/delhivery-mps.service';
+import { DelhiveryRvpQcService } from './services/delhivery-rvp-qc.service';
+import { DelhiveryMarginReconciliationService } from './services/delhivery-margin-reconciliation.service';
 import { WaybillRefillQueue } from './queue/waybill-refill.queue';
 import { WaybillRefillWorker } from './queue/waybill-refill.worker';
 import { DelhiveryTrackingService } from './services/delhivery-tracking.service';
@@ -59,6 +63,10 @@ import { DelhiveryTrackingFetchService } from './services/delhivery-tracking-fet
     DelhiveryPickupService,
     DelhiveryNdrService,
     DelhiveryDocumentService,
+    DelhiveryEwaybillService,
+    DelhiveryMpsService,
+    DelhiveryRvpQcService,
+    DelhiveryMarginReconciliationService,
     WaybillRefillQueue,
     WaybillRefillWorker,
     DelhiveryTrackingService,
@@ -79,6 +87,10 @@ import { DelhiveryTrackingFetchService } from './services/delhivery-tracking-fet
     DelhiveryPickupService,
     DelhiveryNdrService,
     DelhiveryDocumentService,
+    DelhiveryEwaybillService,
+    DelhiveryMpsService,
+    DelhiveryRvpQcService,
+    DelhiveryMarginReconciliationService,
     DelhiveryTrackingService,
     DelhiveryTrackingFetchService,
   ],

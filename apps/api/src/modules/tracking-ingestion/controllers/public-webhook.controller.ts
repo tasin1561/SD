@@ -40,9 +40,10 @@ interface AckResponse {
  *      processing is async — the BullMQ worker lands M10 commit 8).
  *
  * Signature header — Phase 1A reads `X-Skydrop-Signature`; the real
- * Delhivery header NAME is TODO(delhivery-api) (tracked in the M10
- * carry-overs alongside the HMAC scheme). Swapping to the real header
- * is a one-line change here when the sandbox is wired.
+ * The Delhivery header NAME is not something to discover — it is OURS
+ * to choose, in the Webhook Requirement Document we send them. Whatever
+ * is written there must match what is read here; the credential itself
+ * lives in env (CUR-1).
  *
  * Rate limit — `ip` strategy (the courier IP is the stable bucket;
  * a misbehaving / probing source IP gets throttled without locking

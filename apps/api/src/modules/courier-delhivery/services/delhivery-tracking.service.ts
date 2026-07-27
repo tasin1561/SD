@@ -36,12 +36,11 @@ import type {
  * Anything else → UNMAPPABLE — the processor still records the raw
  * scan on tracking_events (audit) but emits NO order transition.
  *
- * ── REAL MODE (TODO(delhivery-api)) ───────────────────────────────
- * Delhivery's real scan codes / status taxonomy is NOT reliably
- * known at build time. The real-mode path throws — the table above
- * is what every M10 test exercises. Validating the real table is a
- * separate sandbox task (alongside the M9 wire seams + the HMAC
- * scheme + the webhook header name from M10 commit 4/5).
+ * ── REAL MODE ─────────────────────────────────────────────────────
+ * Implemented against Delhivery's documented vocabulary: scans are
+ * mapped on the (StatusType, Status) PAIR, with an EOD-* NSL on a
+ * forward leg recognised as a failed delivery attempt. See the
+ * PAIR_TABLE doc below for why the pair is load-bearing.
  */
 @Injectable()
 export class DelhiveryTrackingService

@@ -65,7 +65,10 @@ export const envSchema = z.object({
   // (Phase 1A has one — Delhivery). Optional/empty so the app boots
   // without it; an unconfigured secret means inbound webhooks for that
   // courier 401 (fail-closed, TRK-1). Real-mode HMAC scheme + header
-  // name are TODO(delhivery-api).
+  // Delhivery does NOT sign webhooks: this holds the static credential
+  // WE nominate in their Webhook Requirement Document, which they then
+  // send back on every call (see tracking.webhook_auth_scheme.delhivery).
+  // The header NAME is likewise our choice, made in that document.
   TRACKING_WEBHOOK_SECRET_DELHIVERY: z.string().optional().default(''),
 
   // --- Module 18 — ChatWoot live chat ---------------------------------

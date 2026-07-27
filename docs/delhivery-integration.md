@@ -141,17 +141,23 @@ eligibility (below).
   forever.** There is no manual re-push. The Track API is the only recovery
   path for a missed scan.
 
-> ### ⚠️ This breaks an assumption in our M10 build
-> `TRK-1` implements webhook auth as **HMAC-SHA256 over the raw bytes** and
-> fails closed. Delhivery does not sign payloads — *we* nominate the
-> authorization in the requirement document, which in practice is a static
-> credential (header/token, optionally IP allow-listing). Against the real
-> Delhivery every webhook would 401.
+> ### ⚠️ This broke an assumption in the M10 build — FIXED in D5
+> `TRK-1` verified webhook auth as **HMAC-SHA256 over the raw bytes**, failing
+> closed. Delhivery does not sign payloads — *we* nominate the authorization in
+> the requirement document. Against the real Delhivery **every webhook would
+> have 401'd**, and silently: a rejected webhook is indistinguishable from one
+> that never arrived.
 >
-> The fix is to make the auth scheme **per-courier**: keep HMAC for couriers
-> that sign, add a static shared-secret header scheme for Delhivery, and keep
-> failing closed when neither is configured. Same for the missed-scan story:
-> the poller stops being a nice-to-have and becomes the correctness backstop.
+> Now: the scheme is per-courier (`tracking.webhook_auth_scheme[.<courier>]`),
+> SHARED_SECRET for Delhivery, HMAC still the default so a missing setting
+> cannot weaken auth, both still failing closed. And because a failed scan push
+> is dropped forever, the poller is no longer a nice-to-have — it is the
+> correctness backstop, so it now treats an in-body `Success: false` as the
+> failure it is.
+>
+> **Action required from us:** the authorization written in the requirement
+> document must match the value in `TRACKING_WEBHOOK_SECRET_DELHIVERY`, and
+> the header name must match what the public webhook controller reads.
 
 ## 6. NDR actions
 
@@ -185,30 +191,39 @@ real network it means knowingly manifesting parcels that will bounce, at our
 cost. Serviceability should become a **pre-flight check at order confirm**,
 with the reactive path kept as the fallback for races.
 
-## 8. Gap analysis — what exists vs what this needs
+## 8. Build status (D1–D7 complete, 2026-07-27)
 
-| Capability | Today | Work |
-|---|---|---|
-| Adapter + stub mode | ✅ `DelhiveryClient` w/ 18 `TODO(delhivery-api)` seams | Fill every seam |
-| AWB generation | ✅ orchestration (`courier-awb`), stub only | Real create + the `format=json&data=` body |
-| Label fetch + Spaces upload | ✅ orchestration | Real `packing_slip`, `pdf_size` choice |
-| Serviceability | ⚠️ exists, not on the critical path | Make it a pre-flight gate (§7) |
-| Tracking poll | ⚠️ module exists, stub | Real Track API, 50-AWB batching, 750/5min budget |
-| Webhook ingest | ⚠️ HMAC-only, would 401 (§5) | Per-courier auth scheme + real payload parser |
-| Scan → status mapping | ⚠️ stub codes (`DLV-IN-TRANSIT` …) | Map on the real `(StatusType, Status, NSLCode)` triple |
-| **Waybill pool** | ❌ | New: bulk pre-fetch, store, hand out at manifest (5 req/5min!) |
-| **Warehouse registration** | ❌ | New: register/update each Skydrop warehouse as a pickup location; name is case- and space-sensitive and must match the create payload exactly |
-| **Pickup requests** | ❌ | New: per warehouse per day, not per waybill; second request only after the first closes |
-| **Shipment edit** | ❌ | New: address/phone/payment-mode corrections pre-dispatch |
-| **Shipment cancel** | ❌ | New: real cancel, status-gated |
-| **NDR actions** | ❌ | New: NSL-gated RE-ATTEMPT / PICKUP_RESCHEDULE + UPL polling (§6) |
-| **E-waybill update** | ❌ | New: for consignments > ₹50 000 |
-| **Shipping cost** | ❌ | New: reconcile real courier cost vs our rate card (feeds R1 margin) |
-| **Expected TAT** | ❌ | New: promised delivery date for the customer + the tracking page |
-| **Document download** | ❌ | New: EPOD / signature / QC images — the proof for a delivery dispute |
-| **RVP QC 3.0** | ❌ | New: doorstep quality check for returns (question mapping is a BD-side setup) |
-| **MPS (multi-box)** | ❌ | New: one order across several waybills, master + children |
-| Rate limiting | ❌ | New: per-endpoint budget + 403 back-off |
+| Capability | State |
+|---|---|
+| Transport, auth, rate limiting | ✅ verified against production |
+| **Live-write guard** | ✅ `courier.delhivery_live_writes_enabled`, default OFF |
+| Serviceability | ✅ embargo + per-payment-mode + COD cap + ODA |
+| Expected TAT | ✅ verified (Delhi→Bangalore surface = 5 days) |
+| Shipping cost | ✅ verified (₹176.29 for 1500g COD on that lane) |
+| Tracking + poller | ✅ incl. the HTTP-200-with-`Success:false` trap |
+| Webhook auth | ✅ per-courier; SHARED_SECRET for Delhivery |
+| Scan mapping | ✅ keyed on the (StatusType, Status) pair + EOD-* NDR |
+| Waybill pool | ✅ bulk pre-fetch, settle delay, SKIP LOCKED claim |
+| Warehouse registration | ✅ create/edit, exact-name guard |
+| Shipment create | ✅ full documented payload, pooled waybill |
+| Shipment edit / cancel | ✅ with the conversion + status rules |
+| Label | ✅ 4R/A4 |
+| Pre-flight serviceability | ✅ replaces CUR-5's reactive posture |
+| Pickup requests | ✅ per warehouse per day |
+| NDR actions | ✅ NSL-gated, async UPL + status poll |
+| Document download | ✅ EPOD / signature / QC / seller-return |
+| E-waybill | ✅ + the ₹50k threshold predicate |
+| MPS multi-box | ✅ master/child planning |
+| RVP QC 3.0 | ✅ payload builder; refuses the silent-downgrade limits |
+| Real-cost margin check | ✅ margin vs what Delhivery actually charges |
+
+**Not yet wired into the order flow:** these are capabilities on the
+adapter. Deciding *when* the system calls pickup/NDR/e-waybill/MPS/QC —
+and surfacing them in the admin UI — is orchestration work on top.
+
+**Still genuinely unknown** (needs Delhivery, not code): the exact
+`failureReason` vocabulary behind NDR codes, and whatever custom payload
+shape they configure if we ask for one.
 
 ## 9. Open items that need Delhivery, not code
 

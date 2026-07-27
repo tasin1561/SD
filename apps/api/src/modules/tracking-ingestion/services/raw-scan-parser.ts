@@ -25,10 +25,9 @@ export interface ParsedScanPayload {
  * Stub-mode parser for the M10 webhook body. The CONTRACT here is what
  * the M10 tests + the stub `DelhiveryClient.normalizeScan` table
  * exercise — snake_case OR camelCase keys at the top level + a nested
- * `location` object. Real Delhivery's JSON shape is TODO(delhivery-api)
- * — when sandbox-validated, this parser is the single seam to update
- * (same discipline as the courier-delhivery wire seams + the HMAC
- * scheme + the webhook header name).
+ * `location` object — PLUS Delhivery's real `Shipment` envelope, which
+ * is now implemented from their documented payload (see the block below
+ * and docs/delhivery-integration.md §5).
  *
  * Tolerant by design: returns null when the required fields
  * (`awbNumber`, `rawStatus`, `eventAt`) are absent or non-string. The
