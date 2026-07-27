@@ -1064,7 +1064,10 @@ Also open from the same pass:
   first-parcel test — enable the guard, create exactly one shipment to
   an address you control, verify, disable — is what turns 7 remaining
   `TODO(delhivery-api)` seams from assumed to known.
-  **Pick up:** before any real seller traffic.
+  **Pick up:** before any real seller traffic. The procedure is written up
+  at `docs/delhivery-go-live-test.md` — it creates one real consignment to an
+  address you control and CANCELS it before anything moves, so the write path
+  is proven without a parcel actually shipping.
 
 - **NDR actions are operator-triggered only.** Delhivery advises firing
   them after 21:00 IST, once the day's failed parcels are physically
