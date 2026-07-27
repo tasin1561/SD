@@ -31,11 +31,15 @@ export function PageHeader({
 
 export function Section({
   title,
+  subtitle,
   action,
   children,
   className,
 }: {
   readonly title?: ReactNode;
+  /** One line saying what the section is FOR. Worth the space on any
+   *  panel whose meaning isn't obvious from its title alone. */
+  readonly subtitle?: ReactNode;
   readonly action?: ReactNode;
   readonly children: ReactNode;
   readonly className?: string;
@@ -45,9 +49,16 @@ export function Section({
       {(title || action) && (
         <div className="flex items-baseline justify-between gap-4 mb-2">
           {title && (
-            <h2 className="text-text-bright text-sm font-medium tracking-tight">
-              {title}
-            </h2>
+            <div className="min-w-0">
+              <h2 className="text-text-bright text-sm font-medium tracking-tight">
+                {title}
+              </h2>
+              {subtitle && (
+                <p className="text-text-muted mt-0.5 text-xs leading-relaxed">
+                  {subtitle}
+                </p>
+              )}
+            </div>
           )}
           {action && <div className="shrink-0">{action}</div>}
         </div>

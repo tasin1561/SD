@@ -19,10 +19,20 @@ import type {
 
 export function Table({
   className,
+  wrapperClassName,
   ...rest
-}: HTMLAttributes<HTMLTableElement>): ReactElement {
+}: HTMLAttributes<HTMLTableElement> & {
+  /** Styles the bordered wrapper, e.g. `rounded-t-none` when a
+   *  <Toolbar/> sits directly on top. */
+  readonly wrapperClassName?: string;
+}): ReactElement {
   return (
-    <div className="rounded-[7px] border border-border bg-surface overflow-hidden">
+    <div
+      className={clsx(
+        'rounded-[7px] border border-border bg-surface overflow-x-auto',
+        wrapperClassName,
+      )}
+    >
       <table
         className={clsx('w-full border-collapse text-sm', className)}
         {...rest}

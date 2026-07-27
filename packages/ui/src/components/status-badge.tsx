@@ -1,9 +1,22 @@
-import type { OrderStatus, ShipmentStatus } from '@skydrop/db';
+import type {
+  EarlyReservationReviewStatus,
+  InboundFreightStatus,
+  OrderStatus,
+  ShipmentStatus,
+  StockUnitStatus,
+  TicketStatus,
+  WithdrawalRequestStatus,
+} from '@skydrop/db';
 import {
+  earlyReviewStatusKind,
+  inboundFreightStatusKind,
   kindTokens,
   orderStatusKind,
   shipmentStatusKind,
   statusLabel,
+  stockUnitStatusKind,
+  ticketStatusKind,
+  withdrawalStatusKind,
   type StatusKind,
 } from '@skydrop/ui/status';
 import type { ReactElement } from 'react';
@@ -81,4 +94,57 @@ export function SellerStatusBadge({
           ? 'rto' // orange — needs attention but not failed
           : 'failed'; // REJECTED — red
   return <StatusBadge kind={kind} label={status.toLowerCase()} />;
+}
+
+/** R7 scrap/damage + seller-issue ticket. */
+export function TicketStatusBadge({
+  status,
+}: {
+  readonly status: TicketStatus;
+}): ReactElement {
+  return <StatusBadge kind={ticketStatusKind(status)} label={statusLabel(status)} />;
+}
+
+/** R3 inbound (BD→India) freight bill. */
+export function FreightStatusBadge({
+  status,
+}: {
+  readonly status: InboundFreightStatus;
+}): ReactElement {
+  return (
+    <StatusBadge kind={inboundFreightStatusKind(status)} label={statusLabel(status)} />
+  );
+}
+
+/** R2 seller withdrawal request. */
+export function WithdrawalStatusBadge({
+  status,
+}: {
+  readonly status: WithdrawalRequestStatus;
+}): ReactElement {
+  return (
+    <StatusBadge kind={withdrawalStatusKind(status)} label={statusLabel(status)} />
+  );
+}
+
+/** R5 early-reservation (at-placement hold) review. */
+export function EarlyReviewStatusBadge({
+  status,
+}: {
+  readonly status: EarlyReservationReviewStatus;
+}): ReactElement {
+  return (
+    <StatusBadge kind={earlyReviewStatusKind(status)} label={statusLabel(status)} />
+  );
+}
+
+/** R4 serialized stock unit. */
+export function StockUnitStatusBadge({
+  status,
+}: {
+  readonly status: StockUnitStatus;
+}): ReactElement {
+  return (
+    <StatusBadge kind={stockUnitStatusKind(status)} label={statusLabel(status)} />
+  );
 }

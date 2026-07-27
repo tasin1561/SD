@@ -23,6 +23,7 @@ import { WaybillRefillQueue } from './queue/waybill-refill.queue';
 import { WaybillRefillWorker } from './queue/waybill-refill.worker';
 import { DelhiveryTrackingService } from './services/delhivery-tracking.service';
 import { DelhiveryTrackingFetchService } from './services/delhivery-tracking-fetch.service';
+import { AdminDelhiveryOpsController } from './controllers/admin-delhivery-ops.controller';
 
 /**
  * Module 9 — courier-delhivery: the Delhivery adapter (CP1 complete).
@@ -48,6 +49,7 @@ import { DelhiveryTrackingFetchService } from './services/delhivery-tracking-fet
  */
 @Module({
   imports: [CourierSharedModule, AuthCommonModule],
+  controllers: [AdminDelhiveryOpsController],
   providers: [
     DelhiveryHttpService,
     DelhiveryRateLimitService,

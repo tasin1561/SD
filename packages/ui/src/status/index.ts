@@ -19,7 +19,15 @@
  * If a status renders the "wrong" color, you fix it HERE — one place,
  * every surface updates.
  */
-import { OrderStatus, ShipmentStatus } from '@skydrop/db';
+import {
+  EarlyReservationReviewStatus,
+  InboundFreightStatus,
+  OrderStatus,
+  ShipmentStatus,
+  StockUnitStatus,
+  TicketStatus,
+  WithdrawalRequestStatus,
+} from '@skydrop/db';
 
 export const STATUS_KINDS = [
   'draft',
@@ -160,13 +168,135 @@ export function shipmentStatusKind(status: ShipmentStatus): StatusKind {
 }
 
 /**
+ * R7 ticket lifecycle → kind.
+ *
+ * The three RESOLVED_* terminals deliberately do NOT share a colour:
+ * a refund moved money, a return moved goods, a write-off moved
+ * neither. An operator scanning the queue needs to see which without
+ * reading the label.
+ */
+export function ticketStatusKind(status: TicketStatus): StatusKind {
+  switch (status) {
+    case TicketStatus.OPEN:
+      return 'pending';
+    case TicketStatus.NEGOTIATING:
+      return 'in-transit';
+    case TicketStatus.RESOLVED_REFUND:
+      return 'delivered';
+    case TicketStatus.RESOLVED_RETURNED:
+      return 'rto';
+    case TicketStatus.RESOLVED_WRITE_OFF_ACCEPTED:
+      return 'cancelled';
+    case TicketStatus.REJECTED:
+      return 'failed';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled TicketStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/**
+ * R3 inbound-freight bill → kind.
+ *
+ * WAIVED is `cancelled`, not `delivered` — money we chose not to
+ * collect should never look like money we collected.
+ */
+export function inboundFreightStatusKind(status: InboundFreightStatus): StatusKind {
+  switch (status) {
+    case InboundFreightStatus.PENDING:
+      return 'pending';
+    case InboundFreightStatus.PARTIALLY_SETTLED:
+      return 'in-transit';
+    case InboundFreightStatus.SETTLED:
+      return 'delivered';
+    case InboundFreightStatus.WAIVED:
+      return 'cancelled';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled InboundFreightStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/** R2 seller withdrawal request → kind. */
+export function withdrawalStatusKind(status: WithdrawalRequestStatus): StatusKind {
+  switch (status) {
+    case WithdrawalRequestStatus.PENDING:
+      return 'pending';
+    case WithdrawalRequestStatus.APPROVED:
+      return 'confirmed';
+    case WithdrawalRequestStatus.PAID:
+      return 'delivered';
+    case WithdrawalRequestStatus.REJECTED:
+      return 'failed';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled WithdrawalRequestStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/** R5 early-reservation review → kind. */
+export function earlyReviewStatusKind(
+  status: EarlyReservationReviewStatus,
+): StatusKind {
+  switch (status) {
+    case EarlyReservationReviewStatus.OPEN:
+      return 'pending';
+    case EarlyReservationReviewStatus.SELLER_RELEASED:
+      return 'cancelled';
+    case EarlyReservationReviewStatus.SELLER_REQUESTED_MORE_ATTEMPTS:
+      return 'in-transit';
+    case EarlyReservationReviewStatus.AUTO_RELEASED:
+      return 'cancelled';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled EarlyReservationReviewStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/** R4 serialized unit → kind. */
+export function stockUnitStatusKind(status: StockUnitStatus): StatusKind {
+  switch (status) {
+    case StockUnitStatus.IN_STOCK:
+      return 'confirmed';
+    case StockUnitStatus.PICKED:
+    case StockUnitStatus.PACKED:
+      return 'pending';
+    case StockUnitStatus.DISPATCHED:
+      return 'in-transit';
+    case StockUnitStatus.RTO_RECEIVED:
+      return 'rto';
+    case StockUnitStatus.WRITTEN_OFF:
+      return 'cancelled';
+    case StockUnitStatus.LOST:
+      return 'failed';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled StockUnitStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/**
  * Short human label for a status. Defaults to the enum name with
  * underscores → spaces + title case; overrides for the few statuses
  * where the enum name reads awkwardly. UI calls this when it needs
  * a one-line display string; for richer copy the consumer composes
  * its own (we don't ship i18n in M12 — that's M16/i18n package).
  */
-export function statusLabel(status: OrderStatus | ShipmentStatus): string {
+export function statusLabel(
+  status:
+    | OrderStatus
+    | ShipmentStatus
+    | TicketStatus
+    | InboundFreightStatus
+    | WithdrawalRequestStatus
+    | EarlyReservationReviewStatus
+    | StockUnitStatus,
+): string {
   return String(status)
     .toLowerCase()
     .split('_')

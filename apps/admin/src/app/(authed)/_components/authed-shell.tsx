@@ -38,19 +38,53 @@ export function AuthedShell({
     }
   }
 
-  const navItems: { href: string; label: string }[] = [
-    { href: '/dashboard', label: 'Dashboard' },
-    { href: '/sellers', label: 'Sellers' },
-    { href: '/orders', label: 'Orders' },
-    { href: '/catalog/categories', label: 'Categories' },
-    { href: '/call-center', label: 'Call centre' },
-    { href: '/warehouse', label: 'Warehouse' },
-    { href: '/remittances', label: 'Remittances' },
-    { href: '/fx', label: 'FX rates' },
-    { href: '/reports', label: 'Reports' },
-    { href: '/webhooks', label: 'Webhooks' },
-    { href: '/staff', label: 'Staff' },
-    { href: '/settings', label: 'Settings' },
+  // Grouped rather than flat: the list crossed ~12 items when the R-phase
+  // and Delhivery surfaces landed, and a flat list that long stops being
+  // scannable — you read it linearly instead of jumping to the section
+  // you want. The groups match how the work actually splits: running the
+  // floor, moving money, configuring the network, administering the system.
+  const navGroups: {
+    heading: string;
+    items: { href: string; label: string }[];
+  }[] = [
+    {
+      heading: 'Operations',
+      items: [
+        { href: '/dashboard', label: 'Dashboard' },
+        { href: '/orders', label: 'Orders' },
+        { href: '/call-center', label: 'Call centre' },
+        { href: '/warehouse', label: 'Warehouse' },
+        { href: '/tickets', label: 'Tickets' },
+      ],
+    },
+    {
+      heading: 'Money',
+      items: [
+        { href: '/settlements', label: 'Settlements' },
+        { href: '/withdrawals', label: 'Withdrawals' },
+        { href: '/remittances', label: 'Remittances' },
+        { href: '/freight', label: 'Inbound freight' },
+        { href: '/fx', label: 'FX rates' },
+      ],
+    },
+    {
+      heading: 'Network',
+      items: [
+        { href: '/sellers', label: 'Sellers' },
+        { href: '/catalog/categories', label: 'Categories' },
+        { href: '/courier-accounts', label: 'Courier accounts' },
+        { href: '/delhivery', label: 'Delhivery' },
+      ],
+    },
+    {
+      heading: 'System',
+      items: [
+        { href: '/reports', label: 'Reports' },
+        { href: '/webhooks', label: 'Webhooks' },
+        { href: '/staff', label: 'Staff' },
+        { href: '/settings', label: 'Settings' },
+      ],
+    },
   ];
 
   return (
@@ -62,27 +96,35 @@ export function AuthedShell({
           <div className="text-text-bright font-semibold tracking-tight text-base">Skydrop</div>
           <div className="text-text-faint text-xs mt-0.5">Admin</div>
         </div>
-        <nav className="flex flex-col py-2">
-          {navItems.map((item) => {
-            const active = pathname?.startsWith(item.href) ?? false;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={
-                  'mx-2 my-0.5 px-3 py-1.5 rounded-[5px] text-sm transition-colors ' +
-                  (active
-                    ? 'bg-surface-hover text-text-bright'
-                    : 'text-text-muted hover:bg-surface-hover hover:text-text-body')
-                }
-              >
-                {item.label}
-              </Link>
-            );
-          })}
+        <nav className="flex flex-col overflow-y-auto py-2" aria-label="Main">
+          {navGroups.map((group) => (
+            <div key={group.heading} className="mb-1">
+              <div className="text-text-faint px-5 pt-2 pb-1 text-[10px] font-medium tracking-wider uppercase">
+                {group.heading}
+              </div>
+              {group.items.map((item) => {
+                const active = pathname === item.href || (pathname?.startsWith(`${item.href}/`) ?? false);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    aria-current={active ? 'page' : undefined}
+                    className={
+                      'mx-2 my-0.5 px-3 py-1.5 rounded-[5px] text-sm transition-colors block ' +
+                      (active
+                        ? 'bg-surface-hover text-text-bright'
+                        : 'text-text-muted hover:bg-surface-hover hover:text-text-body')
+                    }
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
         <div className="mt-auto px-4 py-3 border-t border-border text-xs text-text-faint">
-          Phase 1A · M12 CP1
+          Phase 1A
         </div>
       </aside>
 
