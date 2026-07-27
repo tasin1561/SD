@@ -32,6 +32,9 @@ function makeService(
     todayCount?: number;
     existingRequest?: AnyArgs | null;
     remittance?: AnyArgs | null;
+    /** Simulate another admin resolving the request first — the guarded
+     *  claim then matches 0 rows. */
+    claimLoses?: boolean;
   } = {},
 ) {
   const create = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (a) => makeRow(a.data as AnyArgs));
@@ -44,11 +47,30 @@ function makeService(
     ...makeRow(),
     ...(a.data as AnyArgs),
   }));
+  // The guarded claim: `count: 0` is Postgres reporting that the request
+  // was already resolved by someone else between our read and our write.
+  let lastClaimData: AnyArgs = {};
+  const updateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async (a) => {
+    lastClaimData = a.data as AnyArgs;
+    return { count: opts.claimLoses ? 0 : 1 };
+  });
+  const findUniqueOrThrow = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({
+    ...makeRow(),
+    ...lastClaimData,
+  }));
   const remittanceFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
     opts.remittance === undefined ? { id: 'rem-1', sellerId: 'seller-1' } : opts.remittance,
   );
   const client = {
-    withdrawalRequest: { create, findMany, count, findUnique, update },
+    withdrawalRequest: {
+      create,
+      findMany,
+      count,
+      findUnique,
+      update,
+      updateMany,
+      findUniqueOrThrow,
+    },
     remittance: { findUnique: remittanceFindUnique },
   };
   const prisma = { client } as unknown as PrismaService;
@@ -86,7 +108,18 @@ function makeService(
     wallet as unknown as WalletService,
     settings as unknown as SettingsResolverService,
   );
-  return { svc, create, findMany, count, findUnique, update, auditLog, balanceLive, resolve };
+  return {
+    svc,
+    create,
+    findMany,
+    count,
+    findUnique,
+    update,
+    claim: updateMany,
+    auditLog,
+    balanceLive,
+    resolve,
+  };
 }
 
 describe('WithdrawalRequestService.create', () => {
@@ -146,11 +179,15 @@ describe('WithdrawalRequestService.create', () => {
 
 describe('WithdrawalRequestService.markPaid', () => {
   it('links the remittance and marks PAID + audits', async () => {
-    const { svc, update, auditLog } = makeService();
+    const { svc, claim, auditLog } = makeService();
     const result = await svc.markPaid('wr-1', 'staff-1', 'rem-1');
     expect(result.status).toBe(WithdrawalRequestStatus.PAID);
-    expect(update).toHaveBeenCalledWith(
+    expect(claim).toHaveBeenCalledWith(
       expect.objectContaining({
+        // Guarded on "still unresolved" — this is what stops two admins
+        // both writing and the last one silently detaching the other's
+        // remittance from the request it paid.
+        where: expect.objectContaining({ status: expect.anything() }),
         data: expect.objectContaining({
           status: WithdrawalRequestStatus.PAID,
           linkedRemittanceId: 'rem-1',
@@ -169,13 +206,13 @@ describe('WithdrawalRequestService.markPaid', () => {
   });
 
   it('rejects WITHDRAWAL_REQUEST_ALREADY_RESOLVED when already PAID', async () => {
-    const { svc, update } = makeService({
+    const { svc, claim } = makeService({
       existingRequest: makeRow({ status: WithdrawalRequestStatus.PAID }),
     });
     await expect(svc.markPaid('wr-1', 'staff-1', 'rem-1')).rejects.toMatchObject({
       response: { code: 'WITHDRAWAL_REQUEST_ALREADY_RESOLVED' },
     });
-    expect(update).not.toHaveBeenCalled();
+    expect(claim).not.toHaveBeenCalled();
   });
 
   it('rejects WITHDRAWAL_REQUEST_ALREADY_RESOLVED when already REJECTED', async () => {
@@ -188,29 +225,30 @@ describe('WithdrawalRequestService.markPaid', () => {
   });
 
   it('404 REMITTANCE_NOT_FOUND when the linked remittance does not exist', async () => {
-    const { svc, update } = makeService({ remittance: null });
+    const { svc, claim } = makeService({ remittance: null });
     await expect(svc.markPaid('wr-1', 'staff-1', 'missing-rem')).rejects.toMatchObject({
       response: { code: 'REMITTANCE_NOT_FOUND' },
     });
-    expect(update).not.toHaveBeenCalled();
+    expect(claim).not.toHaveBeenCalled();
   });
 
   it('rejects REMITTANCE_SELLER_MISMATCH when the remittance belongs to a different seller', async () => {
-    const { svc, update } = makeService({ remittance: { id: 'rem-1', sellerId: 'seller-OTHER' } });
+    const { svc, claim } = makeService({ remittance: { id: 'rem-1', sellerId: 'seller-OTHER' } });
     await expect(svc.markPaid('wr-1', 'staff-1', 'rem-1')).rejects.toMatchObject({
       response: { code: 'REMITTANCE_SELLER_MISMATCH' },
     });
-    expect(update).not.toHaveBeenCalled();
+    expect(claim).not.toHaveBeenCalled();
   });
 });
 
 describe('WithdrawalRequestService.reject', () => {
   it('rejects the request + audits with the reason', async () => {
-    const { svc, update, auditLog } = makeService();
+    const { svc, claim, auditLog } = makeService();
     const result = await svc.reject('wr-1', 'staff-1', 'insufficient documentation');
     expect(result.status).toBe(WithdrawalRequestStatus.REJECTED);
-    expect(update).toHaveBeenCalledWith(
+    expect(claim).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({ status: expect.anything() }),
         data: expect.objectContaining({
           status: WithdrawalRequestStatus.REJECTED,
           rejectionReason: 'insufficient documentation',
@@ -218,6 +256,21 @@ describe('WithdrawalRequestService.reject', () => {
       }),
     );
     expect(auditLog.mock.calls[0]![0]!.action).toBe('staff.withdrawal_request.rejected');
+  });
+
+  /**
+   * The status check is a read outside any transaction. Without a guarded
+   * claim two admins resolving the same request would both write, and the
+   * last would win — quietly detaching the other's remittance from the
+   * request it actually paid. No money is duplicated (the remittance moves
+   * it, not this row), but a real bank transfer accounted to nothing is
+   * its own kind of wrong.
+   */
+  it('a concurrent second resolver is refused rather than overwriting the first', async () => {
+    const { svc } = makeService({ claimLoses: true });
+    await expect(svc.markPaid('wr-1', 'staff-2', 'rem-2')).rejects.toMatchObject({
+      response: { code: 'WITHDRAWAL_REQUEST_ALREADY_RESOLVED' },
+    });
   });
 
   it('404 when the request does not exist', async () => {
@@ -228,13 +281,13 @@ describe('WithdrawalRequestService.reject', () => {
   });
 
   it('rejects WITHDRAWAL_REQUEST_ALREADY_RESOLVED when already resolved', async () => {
-    const { svc, update } = makeService({
+    const { svc, claim } = makeService({
       existingRequest: makeRow({ status: WithdrawalRequestStatus.PAID }),
     });
     await expect(svc.reject('wr-1', 'staff-1', 'reason')).rejects.toMatchObject({
       response: { code: 'WITHDRAWAL_REQUEST_ALREADY_RESOLVED' },
     });
-    expect(update).not.toHaveBeenCalled();
+    expect(claim).not.toHaveBeenCalled();
   });
 });
 

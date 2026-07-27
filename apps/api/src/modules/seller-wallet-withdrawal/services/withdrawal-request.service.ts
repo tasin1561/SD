@@ -47,6 +47,13 @@ export interface CreateWithdrawalRequestInput {
  * seller-initiated direct debit" — the ledger is only ever touched by
  * `WalletService.applyEntry`.
  */
+/** A request in either of these has already been decided; the guarded
+ *  claims below refuse to move it again. */
+const RESOLVED_STATUSES: WithdrawalRequestStatus[] = [
+  WithdrawalRequestStatus.PAID,
+  WithdrawalRequestStatus.REJECTED,
+];
+
 @Injectable()
 export class WithdrawalRequestService {
   constructor(
@@ -208,14 +215,30 @@ export class WithdrawalRequestService {
       });
     }
 
-    const updated = await this.prisma.client.withdrawalRequest.update({
-      where: { id: requestId },
+    // Guarded on "still unresolved", not just `id`. The check above is a
+    // read outside any transaction; without this, two admins resolving the
+    // same request would both write and the last would win — silently
+    // detaching one of the two remittances from the request it paid, so a
+    // real bank transfer ends up accounted to nothing. No money is
+    // duplicated (the remittance moves it, not this row), but a payout
+    // that cannot be traced back to its request is its own problem.
+    const claimed = await this.prisma.client.withdrawalRequest.updateMany({
+      where: { id: requestId, status: { notIn: RESOLVED_STATUSES } },
       data: {
         status: WithdrawalRequestStatus.PAID,
         linkedRemittanceId,
         resolvedByStaffId: staffId,
         resolvedAt: new Date(),
       },
+    });
+    if (claimed.count === 0) {
+      throw new ConflictException({
+        code: 'WITHDRAWAL_REQUEST_ALREADY_RESOLVED',
+        message: `Withdrawal request ${requestId} was resolved by someone else first`,
+      });
+    }
+    const updated = await this.prisma.client.withdrawalRequest.findUniqueOrThrow({
+      where: { id: requestId },
     });
 
     await this.audit.log({
@@ -252,14 +275,23 @@ export class WithdrawalRequestService {
       });
     }
 
-    const updated = await this.prisma.client.withdrawalRequest.update({
-      where: { id: requestId },
+    const claimed = await this.prisma.client.withdrawalRequest.updateMany({
+      where: { id: requestId, status: { notIn: RESOLVED_STATUSES } },
       data: {
         status: WithdrawalRequestStatus.REJECTED,
         rejectionReason: reason,
         resolvedByStaffId: staffId,
         resolvedAt: new Date(),
       },
+    });
+    if (claimed.count === 0) {
+      throw new ConflictException({
+        code: 'WITHDRAWAL_REQUEST_ALREADY_RESOLVED',
+        message: `Withdrawal request ${requestId} was resolved by someone else first`,
+      });
+    }
+    const updated = await this.prisma.client.withdrawalRequest.findUniqueOrThrow({
+      where: { id: requestId },
     });
 
     await this.audit.log({
