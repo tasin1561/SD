@@ -29,6 +29,44 @@ export interface DelhiveryAwbRequest {
   /** null ⇒ prepaid; non-null ⇒ COD with this collectible amount. */
   codAmountInr: string | null;
   itemDescription: string;
+
+  // ── D4: the rest of the documented create payload. All optional, but
+  // Delhivery's docs say to send everything available — the fields are
+  // "good to have for optimal processing", and several of them decide
+  // how the parcel is handled rather than merely describing it.
+  /** A pooled AWB. Omit and Delhivery assigns one (and we lose the
+   *  pre-allocation the pool exists to provide). */
+  waybill?: string;
+  /** Pieces in the box; Delhivery defaults it to 1. */
+  quantity?: number;
+  /** 'Surface' (default, cheaper) or 'Express'. */
+  shippingMode?: 'Surface' | 'Express';
+  /** 'D' standard, 'F' next-day. Distinct from shippingMode. */
+  transportSpeed?: 'D' | 'F';
+  /** Physical dimensions, cm — used for volumetric weight (divisor 5000). */
+  lengthCm?: number;
+  widthCm?: number;
+  heightCm?: number;
+  fragile?: boolean;
+  dangerousGood?: boolean;
+  plasticPackaging?: boolean;
+  /** 'home' | 'office' — affects delivery attempt timing. */
+  addressType?: string;
+  /** The SELLER on whose behalf we ship; appears on the label. */
+  sellerName?: string;
+  sellerAddress?: string;
+  sellerInvoiceNumber?: string;
+  /** Required for consignments over ₹50 000 (Indian e-way bill rules). */
+  ewaybillNumber?: string;
+  hsnCode?: string;
+  /** Where a failed delivery returns to, if not the pickup location. */
+  returnName?: string;
+  returnAddress?: string;
+  returnCity?: string;
+  returnState?: string;
+  returnPin?: string;
+  returnPhone?: string;
+  returnCountry?: string;
 }
 
 export interface DelhiveryAwbSuccess {

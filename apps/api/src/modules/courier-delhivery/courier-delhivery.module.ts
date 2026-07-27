@@ -11,6 +11,7 @@ import { DelhiveryTatService } from './services/delhivery-tat.service';
 import { DelhiveryCostService } from './services/delhivery-cost.service';
 import { DelhiveryWaybillPoolService } from './services/delhivery-waybill-pool.service';
 import { DelhiveryWarehouseService } from './services/delhivery-warehouse.service';
+import { DelhiveryShipmentEditService } from './services/delhivery-shipment-edit.service';
 import { WaybillRefillQueue } from './queue/waybill-refill.queue';
 import { WaybillRefillWorker } from './queue/waybill-refill.worker';
 import { DelhiveryTrackingService } from './services/delhivery-tracking.service';
@@ -51,6 +52,7 @@ import { DelhiveryTrackingFetchService } from './services/delhivery-tracking-fet
     DelhiveryCostService,
     DelhiveryWaybillPoolService,
     DelhiveryWarehouseService,
+    DelhiveryShipmentEditService,
     WaybillRefillQueue,
     WaybillRefillWorker,
     DelhiveryTrackingService,
@@ -67,6 +69,7 @@ import { DelhiveryTrackingFetchService } from './services/delhivery-tracking-fet
     DelhiveryCostService,
     DelhiveryWaybillPoolService,
     DelhiveryWarehouseService,
+    DelhiveryShipmentEditService,
     DelhiveryTrackingService,
     DelhiveryTrackingFetchService,
   ],

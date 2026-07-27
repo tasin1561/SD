@@ -2,6 +2,7 @@ import { DelhiveryAwbService } from '../../src/modules/courier-delhivery/service
 import type { DelhiveryHttpService } from '../../src/modules/courier-delhivery/services/delhivery-http.service';
 import type { DelhiveryAwbRequest } from '../../src/modules/courier-delhivery/types/delhivery.types';
 import type { DelhiveryWriteGuardService } from '../../src/modules/courier-delhivery/services/delhivery-write-guard.service';
+import type { DelhiveryServiceabilityService } from '../../src/modules/courier-delhivery/services/delhivery-serviceability.service';
 
 function awbReq(over: Partial<DelhiveryAwbRequest> = {}): DelhiveryAwbRequest {
   return {
@@ -45,7 +46,17 @@ function makeService(opts: { stubMode?: boolean } = {}) {
     assertWritable: jest.fn(async () => undefined),
     liveWritesEnabled: jest.fn(async () => true),
   } as unknown as DelhiveryWriteGuardService;
-  const svc = new DelhiveryAwbService(http as unknown as DelhiveryHttpService, prisma as never, writeGuard);
+  // D4: pre-flight serviceability. These fixtures exercise the create
+  // path, so the pin is shippable unless a test says otherwise; the
+  // gate's own branches are covered in delhivery-read-apis.spec.
+  const serviceability = {
+    canShip: jest.fn(async () => ({
+      ok: true,
+      reason: null,
+      detail: { outOfDeliveryArea: false },
+    })),
+  } as unknown as DelhiveryServiceabilityService;
+  const svc = new DelhiveryAwbService(http as unknown as DelhiveryHttpService, prisma as never, writeGuard, serviceability);
   return { svc, isStubMode, authHeaders, request };
 }
 
@@ -184,6 +195,16 @@ function makeServiceWithPickup(name: string) {
     assertWritable: jest.fn(async () => undefined),
     liveWritesEnabled: jest.fn(async () => true),
   } as unknown as DelhiveryWriteGuardService;
-  const svc = new DelhiveryAwbService(http as unknown as DelhiveryHttpService, prisma as never, writeGuard);
+  // D4: pre-flight serviceability. These fixtures exercise the create
+  // path, so the pin is shippable unless a test says otherwise; the
+  // gate's own branches are covered in delhivery-read-apis.spec.
+  const serviceability = {
+    canShip: jest.fn(async () => ({
+      ok: true,
+      reason: null,
+      detail: { outOfDeliveryArea: false },
+    })),
+  } as unknown as DelhiveryServiceabilityService;
+  const svc = new DelhiveryAwbService(http as unknown as DelhiveryHttpService, prisma as never, writeGuard, serviceability);
   return { svc, request, prisma };
 }
