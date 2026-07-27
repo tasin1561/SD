@@ -32,7 +32,15 @@ function ticketRow(over: Partial<AnyArgs> = {}): AnyArgs {
   };
 }
 
-function makeService(opts: { existing?: AnyArgs | null; existingByItem?: AnyArgs | null } = {}) {
+function makeService(
+  opts: {
+    existing?: AnyArgs | null;
+    existingByItem?: AnyArgs | null;
+    /** Simulate another request winning the guarded claim first — the
+     *  guarded updateMany then matches 0 rows. */
+    claimLoses?: boolean;
+  } = {},
+) {
   const findUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async (args) => {
     // open() looks up by the composite (shipmentItemId, ticketType)
     if ((args.where as AnyArgs)['shipmentItemId_ticketType'] !== undefined) {
@@ -49,16 +57,22 @@ function makeService(opts: { existing?: AnyArgs | null; existingByItem?: AnyArgs
   );
   const findMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => [ticketRow()]);
   const count = jest.fn(async () => 1);
+  // The guarded claim. `count: 0` is how Postgres reports "the row is no
+  // longer in the status you validated against" — the second concurrent
+  // resolver.
+  const updateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async () => ({
+    count: opts.claimLoses ? 0 : 1,
+  }));
   const eventCreate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({ id: 'ev-1' }));
   const eventFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => []);
 
   const tx = {
-    ticket: { findUnique, create, update },
+    ticket: { findUnique, create, update, updateMany },
     ticketEvent: { create: eventCreate },
   };
   const $transaction = jest.fn(async (fn: (t: unknown) => Promise<unknown>) => fn(tx));
   const client = {
-    ticket: { findUnique, findFirst, create, update, findMany, count },
+    ticket: { findUnique, findFirst, create, update, updateMany, findMany, count },
     ticketEvent: { create: eventCreate, findMany: eventFindMany },
     $transaction,
   };
@@ -89,6 +103,7 @@ function makeService(opts: { existing?: AnyArgs | null; existingByItem?: AnyArgs
     recomputeCacheAfterCommit,
     auditLog,
     findMany,
+    claim: updateMany,
   };
 }
 
@@ -178,14 +193,18 @@ describe('TicketService.transition', () => {
   });
 
   it('OPEN → NEGOTIATING writes the status + an event, moves NO money', async () => {
-    const { svc, update, eventCreate, applyEntry } = makeService();
+    const { svc, claim, eventCreate, applyEntry } = makeService();
     await svc.transition(
       TICKET,
       { to: TicketStatus.NEGOTIATING, notes: 'asked courier for POD' },
       { type: ActorType.STAFF, staffId: STAFF },
     );
     expect(applyEntry).not.toHaveBeenCalled();
-    const data = update.mock.calls[0]![0]!.data as AnyArgs;
+    // The status transition rides on the guarded claim, which is what
+    // makes it safe against a concurrent second resolver.
+    const claimArgs = claim.mock.calls[0]![0]!;
+    expect((claimArgs.where as AnyArgs).status).toBe(TicketStatus.OPEN);
+    const data = claimArgs.data as AnyArgs;
     expect(data.status).toBe(TicketStatus.NEGOTIATING);
     // Non-terminal → not stamped resolved.
     expect('resolvedAt' in data).toBe(false);
@@ -194,7 +213,7 @@ describe('TicketService.transition', () => {
   });
 
   it('RESOLVED_REFUND credits the seller with SCRAP_REFUND and links the entry', async () => {
-    const { svc, update, applyEntry, recomputeCacheAfterCommit } = makeService();
+    const { svc, update, claim, applyEntry, recomputeCacheAfterCommit } = makeService();
     await svc.transition(
       TICKET,
       { to: TicketStatus.RESOLVED_REFUND, refundAmountInr: '250.50', notes: 'courier accepted' },
@@ -210,7 +229,7 @@ describe('TicketService.transition', () => {
     expect((entry.amount as Prisma.Decimal).toString()).toBe('250.5');
     const data = update.mock.calls[0]![0]!.data as AnyArgs;
     expect(data.resolutionWalletEntryId).toBe('wallet-entry-1');
-    expect(data.resolvedAt).toBeInstanceOf(Date);
+    expect((claim.mock.calls[0]![0]!.data as AnyArgs).resolvedAt).toBeInstanceOf(Date);
     expect(recomputeCacheAfterCommit).toHaveBeenCalled();
   });
 
@@ -253,15 +272,42 @@ describe('TicketService.transition', () => {
   });
 
   it('RESOLVED_WRITE_OFF_ACCEPTED terminates without moving money', async () => {
-    const { svc, update, applyEntry } = makeService();
+    const { svc, claim, applyEntry } = makeService();
     await svc.transition(
       TICKET,
       { to: TicketStatus.RESOLVED_WRITE_OFF_ACCEPTED },
       { type: ActorType.STAFF, staffId: STAFF },
     );
     expect(applyEntry).not.toHaveBeenCalled();
-    const data = update.mock.calls[0]![0]!.data as AnyArgs;
-    expect(data.resolvedAt).toBeInstanceOf(Date);
+    expect((claim.mock.calls[0]![0]!.data as AnyArgs).resolvedAt).toBeInstanceOf(Date);
+  });
+
+  /**
+   * The check was a read OUTSIDE the transaction and the write was
+   * unconditional, so two concurrent RESOLVED_REFUND requests — a
+   * double-clicked admin refund button is enough — both passed the
+   * state-machine check and both credited the wallet. The seller was paid
+   * twice and the ticket recorded only ONE entry id, so the duplicate was
+   * invisible in the ticket itself.
+   */
+  it('a concurrent second resolver is refused BEFORE any money moves', async () => {
+    const { svc, applyEntry, update, eventCreate } = makeService({ claimLoses: true });
+
+    await expect(
+      svc.transition(
+        TICKET,
+        { to: TicketStatus.RESOLVED_REFUND, refundAmountInr: '250.50' },
+        { type: ActorType.STAFF, staffId: STAFF },
+      ),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'TICKET_ALREADY_MOVED' }),
+    });
+
+    // The claim is taken BEFORE the credit precisely so that losing it
+    // costs nothing: no wallet entry, no follow-up write, no event.
+    expect(applyEntry).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+    expect(eventCreate).not.toHaveBeenCalled();
   });
 });
 

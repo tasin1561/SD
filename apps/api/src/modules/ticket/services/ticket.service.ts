@@ -214,6 +214,37 @@ export class TicketService {
     const terminal = this.stateMachine.isTerminal(input.to);
 
     const updated = await this.prisma.client.$transaction(async (tx) => {
+      // CLAIM THE TRANSITION FIRST, guarded on the status we validated
+      // against above. Without this the check is a read outside the
+      // transaction and the write is unconditional, so two concurrent
+      // RESOLVED_REFUND requests — an impatient double-click on the admin
+      // refund button is enough — both pass the state-machine check and
+      // both credit the wallet. The seller is paid twice and the ticket
+      // records only ONE resolutionWalletEntryId, so the duplicate is
+      // invisible in the ticket itself.
+      //
+      // The guarded UPDATE takes the row lock: the second transaction
+      // blocks, then re-evaluates its WHERE against the committed status,
+      // matches nothing, and rolls back before any money moves. Claiming
+      // BEFORE the credit is what makes that ordering work — a rollback
+      // then takes the credit with it.
+      const claimed = await tx.ticket.updateMany({
+        where: { id: ticketId, status: existing.status },
+        data: {
+          status: input.to,
+          resolutionNotes: input.notes ?? existing.resolutionNotes,
+          ...(terminal ? { resolvedAt: new Date(), resolvedByStaffId: actor.staffId ?? null } : {}),
+        },
+      });
+      if (claimed.count === 0) {
+        throw new ConflictException({
+          code: 'TICKET_ALREADY_MOVED',
+          message:
+            `Ticket ${ticketId} is no longer in ${existing.status} — someone else resolved it first. ` +
+            'Reload to see where it landed; no money moved for this request.',
+        });
+      }
+
       let walletEntryId: string | null = null;
       if (refundAmount) {
         const entry = await this.wallet.applyEntry(tx, {
@@ -229,14 +260,13 @@ export class TicketService {
         walletEntryId = entry.id;
       }
 
+      // Second write carries only what the wallet entry produced; the
+      // status transition itself was already claimed above.
       const row = await tx.ticket.update({
         where: { id: ticketId },
         data: {
-          status: input.to,
-          resolutionNotes: input.notes ?? existing.resolutionNotes,
           ...(refundAmount ? { resolutionAmountInr: refundAmount } : {}),
           ...(walletEntryId ? { resolutionWalletEntryId: walletEntryId } : {}),
-          ...(terminal ? { resolvedAt: new Date(), resolvedByStaffId: actor.staffId ?? null } : {}),
         },
       });
 

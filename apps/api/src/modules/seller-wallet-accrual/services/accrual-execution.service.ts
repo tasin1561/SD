@@ -32,11 +32,6 @@ export class AccrualExecutionService {
   ) {}
 
   async executeAccrual(orderId: string): Promise<void> {
-    const codAlready = await this.prisma.client.sellerWalletEntry.findFirst({
-      where: { linkedOrderId: orderId, direction: WalletEntryDirection.COD_COLLECTION },
-      select: { id: true },
-    });
-
     const order = await this.prisma.client.order.findUnique({
       where: { id: orderId },
       select: { id: true, sellerId: true, paymentMode: true, codAmountInr: true },
@@ -47,6 +42,20 @@ export class AccrualExecutionService {
     }
 
     await this.prisma.client.$transaction(async (tx) => {
+      // Read the already-credited guard INSIDE the transaction, matching
+      // the two sibling services that do the same job
+      // (OrderChargesAccrualService, InboundFreightAmortisationService).
+      // Outside it, the check and the credit are separate operations and
+      // two concurrent runs could each see "not yet credited" and each pay
+      // the seller. Not reachable today — the sweep worker is concurrency
+      // 1 and the INSTANT listener path is mutually exclusive with the
+      // T+N one — but a guard whose correctness rests on there only ever
+      // being one caller is a guard waiting to be wrong.
+      const codAlready = await tx.sellerWalletEntry.findFirst({
+        where: { linkedOrderId: orderId, direction: WalletEntryDirection.COD_COLLECTION },
+        select: { id: true },
+      });
+
       if (!codAlready && order.paymentMode === PaymentMode.COD) {
         const codAmount = order.codAmountInr ?? new Prisma.Decimal(0);
         if (codAmount.gt(0)) {
