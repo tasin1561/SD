@@ -142,3 +142,139 @@ jobs:
           pnpm --filter @skydrop/admin build
           pnpm --filter @skydrop/seller build
           pnpm --filter @skydrop/track build
+
+  # ── Browser specs ────────────────────────────────────────────────────
+  # Its own job, not a step in `checks`, for one concrete reason: the API
+  # e2e suite's global teardown DROPS the test database. Anything needing
+  # a live API afterwards would come up against nothing. Isolating it also
+  # means a browser failure is unambiguous rather than buried at the end
+  # of a twenty-minute job.
+  #
+  # These specs are thin (login round-trips) but they cover the seams
+  # nothing else can: the FE-3 same-origin proxy, the FE-4 SSR cookie
+  # gate, and FE-2 server-verdict-verbatim — all three only exist in a
+  # real browser talking to a real Next server.
+  browser:
+    name: browser specs (playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: timescale/timescaledb-ha:pg18
+        env:
+          POSTGRES_USER: skydrop
+          POSTGRES_PASSWORD: skydrop
+          POSTGRES_DB: skydrop_test
+        options: >-
+          --health-cmd "pg_isready -U skydrop -d skydrop_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 6379:6379
+
+    env:
+      DATABASE_URL: postgresql://skydrop:skydrop@localhost:5432/skydrop_test?schema=public
+      REDIS_URL: redis://localhost:6379/0
+      NODE_ENV: test
+      PORT: 4000
+      RESEND_API_KEY: ""
+      JWT_ACCESS_SECRET: ci-access-secret-not-prod
+      JWT_REFRESH_SECRET: ci-refresh-secret-not-prod
+      COURIER_CREDENTIALS_KEY_v1: ci-aes-gcm-32byte-key-padding-32x
+      TRACKING_WEBHOOK_SECRET_DELHIVERY: ci-tracking-webhook
+      SELLER_APP_URL: http://localhost:3003
+      ADMIN_APP_URL: http://localhost:3002
+      API_BASE_URL: http://localhost:4000
+      # What the Next route-handler proxy forwards to (FE-3).
+      API_ORIGIN: http://localhost:4000
+      DO_SPACES_ACCESS_KEY: ci-stub
+      DO_SPACES_SECRET_KEY: ci-stub
+      DO_SPACES_BUCKET: ci-stub
+      DO_SPACES_REGION: sgp1
+      DO_SPACES_ENDPOINT: https://sgp1.digitaloceanspaces.com
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.1
+          run_install: false
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the workspace packages
+        run: |
+          pnpm --filter @skydrop/db build
+          pnpm --filter @skydrop/api-client build
+          pnpm --filter @skydrop/ui build
+          pnpm --filter @skydrop/auth build
+
+      - name: Prisma migrate + seed
+        working-directory: packages/db
+        # Seeded because the API reads system_settings on boot; the login
+        # specs deliberately need no seeded USER (they assert on the
+        # server's generic 401 for an unknown email).
+        run: |
+          pnpm exec prisma migrate deploy
+          pnpm run seed
+
+      - name: Build the API and the two frontends
+        run: |
+          pnpm --filter @skydrop/api build
+          pnpm --filter @skydrop/admin build
+          pnpm --filter @skydrop/seller build
+
+      - name: Install Playwright chromium
+        # Only the browser the config uses, with its OS deps.
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Start the API
+        run: |
+          pnpm --filter @skydrop/api start > /tmp/api.log 2>&1 &
+          # Wait for readiness rather than sleeping — a fixed sleep is
+          # either too short on a slow runner or wasted on a fast one.
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:4000/health/ready > /dev/null 2>&1; then
+              echo "API ready after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "API did not become ready — last 80 log lines:"; tail -80 /tmp/api.log; exit 1
+
+      - name: Browser specs
+        # The admin + seller servers are auto-spawned by playwright's
+        # webServer config (built output in CI, not `dev`).
+        run: pnpm e2e:fe
+
+      - name: API log on failure
+        if: failure()
+        run: tail -200 /tmp/api.log
+
+      - name: Playwright traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore

@@ -16,21 +16,34 @@ import { defineConfig, devices } from '@playwright/test';
  * The admin + seller Next.js dev servers are auto-spawned via the
  * `webServer` array below.
  *
- * **NOT a CI gate in M13 CP1** — `pnpm e2e:fe` is the manual smoke
- * gate; promotion to CI happens in a later module once the spec
- * count grows (per the M13 design's deferred-CI tradeoff, mirroring
- * the M12 CP2 manual-smoke discipline).
+ * **This IS a CI gate** (2026-07-27) — the `browser` job in
+ * `.github/workflows/ci.yml` runs it. It gets its own job rather than
+ * riding along in `checks`, because the API e2e suite's teardown DROPS
+ * the test database; anything needing a live API afterwards would find
+ * nothing there.
+ *
+ * In CI the app servers run the BUILT output (`start`) rather than
+ * `dev`: it is what production actually serves, and a dev server
+ * compiling routes on first request makes the first navigation of every
+ * spec slow enough to look like a timeout.
  */
 
 const ADMIN_PORT = 3002;
 const SELLER_PORT = 3003;
+
+/** CI serves the built apps; a dev machine serves `dev` for hot reload. */
+const APP_COMMAND = (app: string): string =>
+  process.env.CI ? `pnpm --filter @skydrop/${app} start` : `pnpm --filter @skydrop/${app} dev`;
+
+/** The API the same-origin proxy forwards to (FE-3). CI runs it on 4000. */
+const API_ORIGIN = process.env.API_ORIGIN ?? 'http://localhost:3000';
 
 export default defineConfig({
   testDir: '.',
   testMatch: ['apps/admin/e2e/**/*.spec.ts', 'apps/seller/e2e/**/*.spec.ts'],
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: 0,
+  retries: process.env.CI ? 1 : 0,
   workers: 1,
   reporter: [['list']],
   use: {
@@ -58,22 +71,18 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'pnpm --filter @skydrop/admin dev',
+      command: APP_COMMAND('admin'),
       url: `http://localhost:${ADMIN_PORT}/login`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
-      env: {
-        API_ORIGIN: process.env.API_ORIGIN ?? 'http://localhost:3000',
-      },
+      env: { API_ORIGIN },
     },
     {
-      command: 'pnpm --filter @skydrop/seller dev',
+      command: APP_COMMAND('seller'),
       url: `http://localhost:${SELLER_PORT}/login`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
-      env: {
-        API_ORIGIN: process.env.API_ORIGIN ?? 'http://localhost:3000',
-      },
+      env: { API_ORIGIN },
     },
   ],
 });
