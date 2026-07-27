@@ -64,6 +64,7 @@ export function AuthedShell({
         { href: '/withdrawals', label: 'Withdrawals' },
         { href: '/remittances', label: 'Remittances' },
         { href: '/freight', label: 'Inbound freight' },
+        { href: '/margin', label: 'Lane margin' },
         { href: '/fx', label: 'FX rates' },
       ],
     },

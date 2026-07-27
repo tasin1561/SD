@@ -9,6 +9,7 @@ import {
   LoadingState,
 } from '@skydrop/ui/components';
 import { useAdminOrderShipments } from '@/lib/api-hooks';
+import { CourierOpsPanel } from './courier-ops-panel';
 
 const TRACK_URL = process.env.NEXT_PUBLIC_TRACK_URL ?? 'https://track.skydrop.online';
 
@@ -48,10 +49,8 @@ export function OrderShipmentsSection({
       <CardBody className="p-0">
         <ol className="divide-y divide-border">
           {shipments.data.map((s) => (
-            <li
-              key={s.id}
-              className="px-4 py-3 flex items-start justify-between gap-3"
-            >
+            <li key={s.id} className="px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-text-bright text-sm font-mono">
                   {s.shipmentNumber}
@@ -83,6 +82,14 @@ export function OrderShipmentsSection({
                   Public tracking <ExternalLink size={12} />
                 </a>
               )}
+              </div>
+              <div className="mt-2">
+                <CourierOpsPanel
+                  shipmentId={s.id}
+                  awbNumber={s.awbNumber ?? null}
+                  isManualCourier={s.isManualCourier}
+                />
+              </div>
             </li>
           ))}
         </ol>

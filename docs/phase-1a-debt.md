@@ -1014,3 +1014,61 @@ pick it up.
   recorded on the order. Full historical FX rate timeseries deferred to
   Phase 1B.
   **Pick up:** Phase 1B with the remittance/wallet work.
+
+## Delhivery capabilities without a workflow (D-phase → courier-ops)
+
+The D1–D7 work built eleven capability services against the Delhivery
+contract. The `courier-ops` module (2026-07-27) gave nine of them a
+caller. Two remain uncalled, and NOT because the wiring was skipped —
+the workflows they attach to do not exist. Building an admin endpoint
+that called them with hand-typed inputs would look like an integration
+and be a decoration.
+
+- **MPS (multi-piece shipments) — `DelhiveryMpsService.plan`.** One
+  order that physically travels as several boxes. Every box needs its
+  OWN pre-fetched waybill, one is nominated master, and `master_id` on
+  each is what makes them one consignment rather than three unrelated
+  parcels with three tracking identities.
+
+  Blocked on a data model, not on wiring: `shipments` is one parcel with
+  one AWB (`awbNumber` is UNIQUE and CUR-9 makes "exactly one AWB per
+  shipment" an invariant), and nothing anywhere models a box. Wiring
+  this needs (a) a `shipment_boxes` table with per-box weight and dims,
+  (b) the pack flow recording how many boxes a parcel actually became,
+  (c) the D3 pool claiming N waybills per consignment instead of one,
+  and (d) the AWB generation saga building an MPS create — which means
+  re-reading CUR-9, since "one AWB per shipment" stops being true.
+  `mps_amount` is the COD total for the WHOLE consignment; repeating it
+  per box would ask the customer to pay three times.
+  **Pick up:** when a seller ships something that genuinely does not fit
+  in one box. Until then the single-parcel path is correct.
+
+- **RVP QC — `DelhiveryRvpQcService.buildQcKeys`.** The quality-check
+  questions a reverse pickup carries, so the rider can verify the
+  returned item at the customer's door before accepting it.
+
+  Blocked on a flow that does not exist: there is no reverse-pickup
+  creation anywhere in the system. RTO today is entirely
+  courier-initiated — a delivery fails, the parcel comes back, and
+  `RtoReceiptService` handles the arrival. A seller- or
+  customer-initiated return pickup (the thing RVP QC exists to
+  accompany) has never been built.
+  **Pick up:** with a customer-returns feature. The QC key builder is
+  ready for it; the flow around it is the work.
+
+Also open from the same pass:
+
+- **The write path has never touched the real Delhivery server.** Every
+  production call verified so far was read-only. Nine capabilities now
+  have callers, all gated by the default-OFF write guard. The controlled
+  first-parcel test — enable the guard, create exactly one shipment to
+  an address you control, verify, disable — is what turns 7 remaining
+  `TODO(delhivery-api)` seams from assumed to known.
+  **Pick up:** before any real seller traffic.
+
+- **NDR actions are operator-triggered only.** Delhivery advises firing
+  them after 21:00 IST, once the day's failed parcels are physically
+  back at the facility, which makes a nightly sweep the better long-term
+  shape than a button. Deliberately not built yet: automating an
+  unproven wire call is worse than not automating it.
+  **Pick up:** after the first-parcel test proves the contract.

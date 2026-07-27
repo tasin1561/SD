@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { PageHeader, Card, CardBody } from '@skydrop/ui/components';
-import { PackageCheck, Layers, FileText, RotateCcw, Inbox } from 'lucide-react';
+import { PackageCheck, Layers, FileText, RotateCcw, Inbox, Truck } from 'lucide-react';
 
 /**
  * Warehouse hub — links to the four station workspaces.
@@ -12,7 +12,7 @@ export default function WarehouseHubPage(): ReactElement {
     <div className="max-w-4xl">
       <PageHeader
         title="Warehouse"
-        subtitle="Receive → Pick → Pack → Manifest → Dispatch. RTO handled separately."
+        subtitle="Receive → Pick → Pack → Manifest → Pickup → Dispatch. RTO handled separately."
       />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Tile
@@ -32,6 +32,12 @@ export default function WarehouseHubPage(): ReactElement {
           icon={<Layers size={20} />}
           title="Pack"
           subtitle="Pull next picked shipment, pack the parcel, mark complete."
+        />
+        <Tile
+          href="/warehouse/pickups"
+          icon={<Truck size={20} />}
+          title="Pickups"
+          subtitle="Ask the courier for a van. One request covers a warehouse's whole handover for the day — not one per parcel."
         />
         <Tile
           href="/warehouse/manifests"

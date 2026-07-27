@@ -596,3 +596,318 @@ export function useRefillWaybillPool(): UseMutationResult<
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-delhivery'] }),
   });
 }
+
+// ───────── Courier ops per shipment (D1–D7 → courier-ops) ─────────
+
+export interface ShipmentInsight {
+  readonly shipment: {
+    readonly shipmentId: string;
+    readonly shipmentNumber: string;
+    readonly awbNumber: string | null;
+    readonly courierCode: string;
+    readonly isManualCourier: boolean;
+    readonly originPin: string | null;
+    readonly destinationPin: string;
+    readonly chargeableWeightGrams: number;
+    readonly declaredValueInr: string;
+    readonly isCod: boolean;
+  };
+  readonly tat: {
+    readonly tatDays: number | null;
+    readonly mode: string;
+    readonly fromLiveApi: boolean;
+    readonly message: string | null;
+  } | null;
+  readonly cost: {
+    readonly totalInr: string;
+    readonly deliveryInr: string;
+    readonly codFeeInr: string;
+    readonly taxInr: string;
+    readonly zone: string | null;
+    readonly chargedWeightGrams: number;
+    readonly volumetricDivisor: number | null;
+    readonly fromLiveApi: boolean;
+    readonly components: Readonly<Record<string, string>>;
+  } | null;
+  readonly unavailable: readonly string[];
+}
+
+export interface NdrReadiness {
+  readonly eligible: boolean;
+  readonly reason: string | null;
+  readonly nslCode: string | null;
+  readonly attemptCount: number;
+}
+
+export interface ActionOutcome {
+  readonly success: boolean;
+  readonly awbNumber: string;
+  readonly message: string | null;
+}
+
+export interface NdrOutcome extends ActionOutcome {
+  readonly uplId: string | null;
+  readonly nslCode: string | null;
+  readonly attemptCount: number;
+}
+
+const opsBase = (shipmentId: string): string =>
+  `/admin/courier-ops/shipments/${shipmentId}`;
+
+export function useShipmentInsight(
+  shipmentId: string | null,
+): UseQueryResult<ShipmentInsight> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['courier-ops', 'insight', shipmentId],
+    enabled: shipmentId !== null,
+    // A live courier lookup per call; do not re-fire it on every focus.
+    staleTime: 5 * 60_000,
+    queryFn: () =>
+      client.request<ShipmentInsight>(`${opsBase(shipmentId ?? '')}/insight`),
+  });
+}
+
+export function useNdrReadiness(
+  shipmentId: string | null,
+  action: 'RE-ATTEMPT' | 'PICKUP_RESCHEDULE' = 'RE-ATTEMPT',
+): UseQueryResult<NdrReadiness> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['courier-ops', 'ndr-readiness', shipmentId, action],
+    enabled: shipmentId !== null,
+    queryFn: () =>
+      client.request<NdrReadiness>(
+        `${opsBase(shipmentId ?? '')}/ndr-readiness?action=${encodeURIComponent(action)}`,
+      ),
+  });
+}
+
+export function useFetchDocument(): UseMutationResult<
+  { url: string | null; message: string | null; docType: string },
+  Error,
+  { shipmentId: string; docType: string }
+> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: ({ shipmentId, docType }) =>
+      client.request<{ url: string | null; message: string | null; docType: string }>(
+        `${opsBase(shipmentId)}/document?docType=${encodeURIComponent(docType)}`,
+      ),
+  });
+}
+
+export function useEditShipment(): UseMutationResult<
+  ActionOutcome,
+  Error,
+  {
+    shipmentId: string;
+    name?: string;
+    phone?: string;
+    address?: string;
+    productsDesc?: string;
+  }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ shipmentId, ...body }) =>
+      client.request<ActionOutcome>(`${opsBase(shipmentId)}/edit`, {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-orders'] }),
+  });
+}
+
+export function useCancelWithCourier(): UseMutationResult<
+  ActionOutcome,
+  Error,
+  { shipmentId: string; reason: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ shipmentId, reason }) =>
+      client.request<ActionOutcome>(`${opsBase(shipmentId)}/cancel`, {
+        method: 'POST',
+        body: { reason },
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-orders'] }),
+  });
+}
+
+export function useAttachEwaybill(): UseMutationResult<
+  ActionOutcome,
+  Error,
+  { shipmentId: string; invoiceNumber: string; ewaybillNumber: string }
+> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: ({ shipmentId, ...body }) =>
+      client.request<ActionOutcome>(`${opsBase(shipmentId)}/ewaybill`, {
+        method: 'POST',
+        body,
+      }),
+  });
+}
+
+export function useNdrAction(): UseMutationResult<
+  NdrOutcome,
+  Error,
+  { shipmentId: string; action: 'RE-ATTEMPT' | 'PICKUP_RESCHEDULE' }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ shipmentId, action }) =>
+      client.request<NdrOutcome>(`${opsBase(shipmentId)}/ndr-action`, {
+        method: 'POST',
+        body: { action },
+      }),
+    onSuccess: () =>
+      void qc.invalidateQueries({ queryKey: ['courier-ops', 'ndr-readiness'] }),
+  });
+}
+
+// ───────── Pickup requests (D6) ─────────
+
+export interface PickupRequestView {
+  readonly id: string;
+  readonly courierCode: string;
+  readonly warehouseId: string;
+  readonly warehouseName: string | null;
+  readonly pickupLocationName: string;
+  readonly pickupDate: string;
+  readonly pickupTime: string;
+  readonly expectedPackageCount: number;
+  readonly status: 'REQUESTED' | 'FAILED' | 'CLOSED' | 'CANCELLED';
+  readonly courierPickupId: string | null;
+  readonly courierMessage: string | null;
+  readonly createdAt: string;
+}
+
+export function usePickupRequests(): UseQueryResult<readonly PickupRequestView[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['courier-pickups', 'list'],
+    queryFn: () =>
+      client.request<readonly PickupRequestView[]>('/admin/courier-ops/pickups'),
+  });
+}
+
+export function useRaisePickup(): UseMutationResult<
+  PickupRequestView,
+  Error,
+  {
+    warehouseId: string;
+    pickupDate: string;
+    pickupTime: string;
+    expectedPackageCount: number;
+  }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<PickupRequestView>('/admin/courier-ops/pickups', {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['courier-pickups'] }),
+  });
+}
+
+export function useClosePickup(): UseMutationResult<
+  PickupRequestView,
+  Error,
+  { requestId: string; status: 'CLOSED' | 'CANCELLED' | 'FAILED' }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requestId, status }) =>
+      client.request<PickupRequestView>(
+        `/admin/courier-ops/pickups/${requestId}`,
+        { method: 'PATCH', body: { status } },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['courier-pickups'] }),
+  });
+}
+
+export function useReleasePickupDay(): UseMutationResult<
+  { released: boolean },
+  Error,
+  { requestId: string; reason: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requestId, reason }) =>
+      client.request<{ released: boolean }>(
+        `/admin/courier-ops/pickups/${requestId}/release-day`,
+        { method: 'POST', body: { reason } },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['courier-pickups'] }),
+  });
+}
+
+export interface WarehouseOption {
+  readonly id: string;
+  readonly code: string;
+  readonly name: string;
+  readonly status: string;
+}
+
+export function useWarehouseOptions(): UseQueryResult<readonly WarehouseOption[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-warehouses', 'options'],
+    staleTime: 10 * 60_000,
+    queryFn: () => client.request<readonly WarehouseOption[]>('/admin/warehouses'),
+  });
+}
+
+// ───────── Margin report (real courier cost) ─────────
+
+export interface MarginRow {
+  readonly shipmentId: string;
+  readonly shipmentNumber: string;
+  readonly awbNumber: string | null;
+  readonly orderId: string | null;
+  readonly lane: string;
+  readonly billedToSellerInr: string;
+  readonly actualCourierCostInr: string;
+  readonly marginInr: string;
+  readonly marginPercent: string;
+  readonly lossMaking: boolean;
+  readonly assumedCostInr: string | null;
+  readonly assumptionDriftInr: string | null;
+}
+
+export interface MarginReport {
+  readonly generatedAt: string;
+  readonly sampledShipments: number;
+  readonly totalBilledInr: string;
+  readonly totalActualCostInr: string;
+  readonly totalMarginInr: string;
+  readonly lossMakingCount: number;
+  readonly rows: readonly MarginRow[];
+  readonly skipped: readonly { shipmentId: string; reason: string }[];
+}
+
+export function useMarginReport(
+  limit: number,
+  enabled: boolean,
+): UseQueryResult<MarginReport> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-margin', 'report', limit],
+    // Explicitly opt-in: every row is a live rate-limited courier call,
+    // so this must not fire just because a page mounted.
+    enabled,
+    staleTime: 15 * 60_000,
+    queryFn: () =>
+      client.request<MarginReport>(`/admin/courier-ops/margin-report?limit=${limit}`),
+  });
+}
