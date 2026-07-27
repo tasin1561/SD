@@ -46,6 +46,20 @@ export interface PoolStats {
  * Postgres-native pattern as the pick and pack queues (WMS-2). Two
  * concurrent manifests can never be handed the same AWB, which would put
  * two parcels on one tracking identity.
+ *
+ * ── NOTHING CALLS `claim()` YET ───────────────────────────────────────
+ * Worth stating plainly, because the reasoning above describes a system
+ * that is not switched on. `DelhiveryAwbService.generateAwb` sends an
+ * empty `waybill` and lets Delhivery assign a number inline on the create
+ * call, so the forward path never touches this pool. That works, and it
+ * sidesteps the five-per-five-minutes limit entirely by never doing a
+ * per-shipment fetch.
+ *
+ * The pool is here for MPS: a multi-box consignment needs a pre-fetched
+ * waybill PER BOX and Delhivery will not assign those. Until that lands,
+ * the scheduled refill is gated OFF
+ * (`courier.delhivery_waybill_pool_refill_enabled`) so a cron does not
+ * spend a real allocation filling a pool nobody drinks from.
  */
 @Injectable()
 export class DelhiveryWaybillPoolService {

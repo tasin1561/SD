@@ -387,6 +387,15 @@ const systemSettings: SystemSettingSeed[] = [
       'Delhivery does not sign webhooks; it returns the authorization we nominated in their Webhook Requirement Document. Leave as SHARED_SECRET unless Delhivery introduces signing. The credential itself lives in the env var named by tracking.webhook_secret_ref (CUR-1: secret in env, reference in the DB).',
   },
   {
+    key: 'courier.delhivery_waybill_pool_refill_enabled',
+    category: 'courier',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'Delhivery Waybill Pool Auto-Refill',
+    description:
+      "OFF by default because NOTHING CONSUMES THE POOL YET. AWB generation sends an empty waybill and lets Delhivery assign one inline, so the pooled numbers are never handed out. With this on and live writes enabled, the 15-minute cron would claim hundreds of real waybills from the account's allocation into a pool nothing drinks from. Turn it on when something actually consumes it — MPS needs a pre-fetched waybill per box, and that is the case the pool was built for. The manual refill button on the admin Delhivery console ignores this setting, so an operator can still fill the pool deliberately.",
+  },
+  {
     key: 'courier.delhivery_waybill_pool_low_water',
     category: 'courier',
     valueType: SettingValueType.INT,
