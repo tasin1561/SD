@@ -1,10 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  ActorType,
-  Prisma,
-  StockMovementReasonCode,
-  StockMovementType,
-} from '@skydrop/db';
+import { ActorType, Prisma, StockMovementReasonCode, StockMovementType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 import type {
@@ -105,9 +100,7 @@ export class InventoryMovementService {
 
   // ---------- internal ----------
 
-  private commonWhere(
-    q: ListSellerMovementsQueryDto,
-  ): Prisma.StockMovementWhereInput {
+  private commonWhere(q: ListSellerMovementsQueryDto): Prisma.StockMovementWhereInput {
     const where: Prisma.StockMovementWhereInput = {};
     if (q.variantId) where.variantId = q.variantId;
     if (q.warehouseId) where.warehouseId = q.warehouseId;

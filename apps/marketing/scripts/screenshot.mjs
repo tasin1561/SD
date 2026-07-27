@@ -25,7 +25,9 @@ for (const theme of themes) {
     const ctx = await browser.newContext({ viewport: { width: w, height: h } });
     const page = await ctx.newPage();
     await page.addInitScript((t) => {
-      try { localStorage.setItem('sd-theme', t); } catch {}
+      try {
+        localStorage.setItem('sd-theme', t);
+      } catch {}
     }, theme);
     await page.goto(url, { waitUntil: 'networkidle' });
     await page.waitForTimeout(2200);

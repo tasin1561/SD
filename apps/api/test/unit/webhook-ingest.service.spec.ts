@@ -112,18 +112,14 @@ describe('WebhookIngestService.ingest', () => {
 
   it('TRK-1 unknown courier → 401, NEVER stored', async () => {
     const { svc, webhookCreate, verify } = makeService({ courierExists: false });
-    await expect(svc.ingest(baseInput())).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    await expect(svc.ingest(baseInput())).rejects.toBeInstanceOf(UnauthorizedException);
     expect(webhookCreate).not.toHaveBeenCalled();
     expect(verify).not.toHaveBeenCalled(); // short-circuit before auth
   });
 
   it('TRK-1 soft-deleted courier → 401, NEVER stored', async () => {
     const { svc, webhookCreate } = makeService({ courierDeleted: true });
-    await expect(svc.ingest(baseInput())).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    await expect(svc.ingest(baseInput())).rejects.toBeInstanceOf(UnauthorizedException);
     expect(webhookCreate).not.toHaveBeenCalled();
   });
 
@@ -132,9 +128,7 @@ describe('WebhookIngestService.ingest', () => {
       authValid: false,
       authReason: 'SIGNATURE_MISMATCH',
     });
-    await expect(svc.ingest(baseInput())).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    await expect(svc.ingest(baseInput())).rejects.toBeInstanceOf(UnauthorizedException);
     expect(webhookCreate).not.toHaveBeenCalled();
     expect(enqueueWebhook).not.toHaveBeenCalled();
   });
@@ -186,9 +180,7 @@ describe('WebhookIngestService.ingest', () => {
     const { svc, webhookFindFirst } = makeService();
     const other = '{"awb":"DLV-999","status":"DLV-OFD"}';
     await svc.ingest(baseInput({ rawBody: other }));
-    const call = webhookFindFirst.mock.calls[0] as unknown as [
-      { where: { signature: string } },
-    ];
+    const call = webhookFindFirst.mock.calls[0] as unknown as [{ where: { signature: string } }];
     const key = call[0].where.signature;
     expect(key).toBe(createHash('sha256').update(other, 'utf8').digest('hex'));
     expect(key).not.toBe(createHash('sha256').update(BODY, 'utf8').digest('hex'));

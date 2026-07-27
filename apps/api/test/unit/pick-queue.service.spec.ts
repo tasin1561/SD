@@ -24,17 +24,13 @@ function makeService(
   } = {},
 ) {
   const queue = [...(opts.queue ?? [])];
-  const queryRawUnsafe = jest.fn<Promise<Array<{ id: string }>>, [string]>(
-    async () => {
-      const id = queue.shift();
-      return id === undefined ? [] : [{ id }];
-    },
-  );
+  const queryRawUnsafe = jest.fn<Promise<Array<{ id: string }>>, [string]>(async () => {
+    const id = queue.shift();
+    return id === undefined ? [] : [{ id }];
+  });
   const update = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (args) => {
     const id = (args.where as { id: string }).id;
-    const oid = opts.orderIdForShipment
-      ? opts.orderIdForShipment(id)
-      : `o-${id}`;
+    const oid = opts.orderIdForShipment ? opts.orderIdForShipment(id) : `o-${id}`;
     return {
       id,
       shipmentNumber: `SH-${id}`,
@@ -52,9 +48,8 @@ function makeService(
       ],
     };
   });
-  const systemSettingFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async () =>
-      opts.timeoutHours === undefined ? null : { valueInt: opts.timeoutHours },
+  const systemSettingFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+    opts.timeoutHours === undefined ? null : { valueInt: opts.timeoutHours },
   );
 
   const txClient = { $queryRawUnsafe: queryRawUnsafe, shipment: { update } };
@@ -64,20 +59,15 @@ function makeService(
     systemSetting: { findUnique: typeof systemSettingFindUnique };
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
   };
-  client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> =>
-    fn(txClient);
+  client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient);
 
   const getById = jest.fn(async () =>
     opts.order === undefined ? { orderId: 'resolved' } : opts.order,
   );
   const orders = { getById };
-  const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown]>(
-    async () => 'a1',
-  );
+  const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown]>(async () => 'a1');
   const audit = { log: auditLog };
-  const scheduleExpiration = jest.fn<Promise<void>, [string, Date, Date]>(
-    async () => {},
-  );
+  const scheduleExpiration = jest.fn<Promise<void>, [string, Date, Date]>(async () => {});
   const expiration = { scheduleExpiration };
 
   const svc = new PickQueueService(
@@ -110,12 +100,11 @@ describe('PickQueueService.pullNext', () => {
   });
 
   it('locks FIFO eligible parcels + claims (who/when/expiry) + enriches', async () => {
-    const { svc, queryRawUnsafe, update, getById, scheduleExpiration } =
-      makeService({
-        queue: ['s1'],
-        order: { orderId: 'o1', recipient: { name: 'Asha' } },
-        orderIdForShipment: () => 'o1',
-      });
+    const { svc, queryRawUnsafe, update, getById, scheduleExpiration } = makeService({
+      queue: ['s1'],
+      order: { orderId: 'o1', recipient: { name: 'Asha' } },
+      orderIdForShipment: () => 'o1',
+    });
     const r = await svc.pullNext('staff-7');
     expect(r).not.toBeNull();
 
@@ -137,11 +126,7 @@ describe('PickQueueService.pullNext', () => {
 
     expect(getById).toHaveBeenCalledWith('o1');
     // WMS-5: timeout sweep armed at claim, before enrichment.
-    expect(scheduleExpiration).toHaveBeenCalledWith(
-      's1',
-      expect.any(Date),
-      expect.any(Date),
-    );
+    expect(scheduleExpiration).toHaveBeenCalledWith('s1', expect.any(Date), expect.any(Date));
     expect(r).toMatchObject({
       pickId: 's1',
       shipmentId: 's1',
@@ -171,8 +156,7 @@ describe('PickQueueService.pullNext', () => {
       pickStartedAt: Date;
       pickExpiresAt: Date;
     };
-    const deltaMs =
-      data.pickExpiresAt.getTime() - data.pickStartedAt.getTime();
+    const deltaMs = data.pickExpiresAt.getTime() - data.pickStartedAt.getTime();
     expect(deltaMs).toBe(4 * 3_600_000);
     expect(data.pickStartedAt.getTime()).toBeGreaterThanOrEqual(before);
   });
@@ -191,9 +175,7 @@ describe('PickQueueService.pullNext', () => {
       pickStartedAt: Date;
       pickExpiresAt: Date;
     };
-    expect(
-      data.pickExpiresAt.getTime() - data.pickStartedAt.getTime(),
-    ).toBe(6 * 3_600_000);
+    expect(data.pickExpiresAt.getTime() - data.pickStartedAt.getTime()).toBe(6 * 3_600_000);
   });
 
   it('still claims + returns when the order resolves to null (logged anomaly)', async () => {
@@ -223,10 +205,7 @@ describe('PickQueueService.pullNext', () => {
 describe('PickQueueService.pullNext — concurrency (FOR UPDATE … SKIP LOCKED)', () => {
   it('two parallel pulls on a 1-parcel queue: one winner, one QUEUE_EMPTY', async () => {
     const { svc, update } = makeService({ queue: ['s1'] });
-    const [a, b] = await Promise.all([
-      svc.pullNext('staff-1'),
-      svc.pullNext('staff-2'),
-    ]);
+    const [a, b] = await Promise.all([svc.pullNext('staff-1'), svc.pullNext('staff-2')]);
     const got = [a, b].filter((r) => r !== null);
     const empty = [a, b].filter((r) => r === null);
     expect(got).toHaveLength(1); // exactly one winner
@@ -237,10 +216,7 @@ describe('PickQueueService.pullNext — concurrency (FOR UPDATE … SKIP LOCKED)
 
   it('two parallel pulls on a 2-parcel queue: distinct parcels (SKIP LOCKED)', async () => {
     const { svc, update } = makeService({ queue: ['s1', 's2'] });
-    const [a, b] = await Promise.all([
-      svc.pullNext('staff-1'),
-      svc.pullNext('staff-2'),
-    ]);
+    const [a, b] = await Promise.all([svc.pullNext('staff-1'), svc.pullNext('staff-2')]);
     expect(a).not.toBeNull();
     expect(b).not.toBeNull();
     const ids = [a?.shipmentId, b?.shipmentId].sort();

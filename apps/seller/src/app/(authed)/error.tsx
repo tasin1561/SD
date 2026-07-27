@@ -12,12 +12,7 @@ import type { ReactElement } from 'react';
  * that the layout handles via redirect. Only thrown errors land in
  * error.tsx.
  */
-export default function AuthedError({
-  reset,
-}: {
-  error: Error;
-  reset: () => void;
-}): ReactElement {
+export default function AuthedError({ reset }: { error: Error; reset: () => void }): ReactElement {
   return (
     <div className="min-h-screen grid place-items-center bg-bg text-text-body p-6">
       <div className="w-full max-w-sm text-center">
@@ -25,8 +20,7 @@ export default function AuthedError({
           Service unavailable
         </div>
         <p className="text-text-muted text-sm mb-5">
-          We couldn&apos;t reach the API. Your session is intact —
-          this is a temporary outage.
+          We couldn&apos;t reach the API. Your session is intact — this is a temporary outage.
         </p>
         <button
           type="button"

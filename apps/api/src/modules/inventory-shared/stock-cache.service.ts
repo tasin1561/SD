@@ -77,10 +77,7 @@ export class StockCacheService {
     return `${AGG_PREFIX}${sellerId}:${warehouseId}`;
   }
 
-  async getDetail(
-    sellerId: string,
-    warehouseId: string,
-  ): Promise<CachedStockDetail | null> {
+  async getDetail(sellerId: string, warehouseId: string): Promise<CachedStockDetail | null> {
     return this.safeGet<CachedStockDetail>(this.detailKey(sellerId, warehouseId));
   }
 
@@ -88,10 +85,7 @@ export class StockCacheService {
     await this.safeSet(this.detailKey(value.sellerId, value.warehouseId), value);
   }
 
-  async getAggregate(
-    sellerId: string,
-    warehouseId: string,
-  ): Promise<CachedStockAggregate | null> {
+  async getAggregate(sellerId: string, warehouseId: string): Promise<CachedStockAggregate | null> {
     return this.safeGet<CachedStockAggregate>(this.aggKey(sellerId, warehouseId));
   }
 
@@ -105,10 +99,7 @@ export class StockCacheService {
    * Best-effort: a failed DEL just means entries serve stale until TTL.
    */
   async invalidate(sellerId: string, warehouseId: string): Promise<void> {
-    const keys = [
-      this.detailKey(sellerId, warehouseId),
-      this.aggKey(sellerId, warehouseId),
-    ];
+    const keys = [this.detailKey(sellerId, warehouseId), this.aggKey(sellerId, warehouseId)];
     try {
       await this.redis.client.del(...keys);
     } catch (err) {

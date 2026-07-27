@@ -29,11 +29,7 @@ import { NotificationListener } from './services/notification-listener.service';
  */
 @Module({
   imports: [EmailModule, LifecycleEventsModule],
-  providers: [
-    NotificationEventMappingService,
-    NotificationLedgerService,
-    NotificationListener,
-  ],
+  providers: [NotificationEventMappingService, NotificationLedgerService, NotificationListener],
   exports: [],
 })
 export class NotificationsModule {}

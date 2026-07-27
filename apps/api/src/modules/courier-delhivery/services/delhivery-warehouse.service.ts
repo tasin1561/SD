@@ -58,9 +58,7 @@ export class DelhiveryWarehouseService {
     private readonly writeGuard: DelhiveryWriteGuardService,
   ) {}
 
-  async register(
-    input: DelhiveryWarehouseInput,
-  ): Promise<DelhiveryWarehouseResult> {
+  async register(input: DelhiveryWarehouseInput): Promise<DelhiveryWarehouseResult> {
     this.assertName(input.name);
     if (await this.http.isStubMode()) {
       return { success: true, name: input.name, message: 'stub', raw: null };
@@ -81,9 +79,7 @@ export class DelhiveryWarehouseService {
   }
 
   /** Update an existing location. The NAME is the key and is immutable. */
-  async update(
-    input: DelhiveryWarehouseInput,
-  ): Promise<DelhiveryWarehouseResult> {
+  async update(input: DelhiveryWarehouseInput): Promise<DelhiveryWarehouseResult> {
     this.assertName(input.name);
     if (await this.http.isStubMode()) {
       return { success: true, name: input.name, message: 'stub', raw: null };
@@ -147,13 +143,9 @@ export class DelhiveryWarehouseService {
    * failed registration as done and only surface it as a rejected
    * manifest later.
    */
-  private interpret(
-    name: string,
-    raw: Record<string, unknown>,
-  ): DelhiveryWarehouseResult {
+  private interpret(name: string, raw: Record<string, unknown>): DelhiveryWarehouseResult {
     const success =
-      raw['success'] === true ||
-      (raw['success'] === undefined && raw['error'] === undefined);
+      raw['success'] === true || (raw['success'] === undefined && raw['error'] === undefined);
     const message =
       (raw['error'] as string | undefined) ??
       (raw['message'] as string | undefined) ??

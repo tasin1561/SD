@@ -22,10 +22,7 @@ import {
   CompleteGoodsReceiptDto,
 } from './dto/admin-goods-receipt.dto';
 import { ResolveDiscrepancyDto } from './dto/resolve-discrepancy.dto';
-import {
-  GoodsReceiptService,
-  type GoodsReceiptView,
-} from './services/goods-receipt.service';
+import { GoodsReceiptService, type GoodsReceiptView } from './services/goods-receipt.service';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -81,7 +78,10 @@ export class AdminGoodsReceiptController {
 
   @Post(':id/complete')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Complete receiving: full match -> COMPLETED (stock written); mismatch -> DISCREPANCY (no stock)' })
+  @ApiOperation({
+    summary:
+      'Complete receiving: full match -> COMPLETED (stock written); mismatch -> DISCREPANCY (no stock)',
+  })
   complete(
     @Param('id', uuid()) id: string,
     @CurrentStaff() staff: AuthenticatedStaff,
@@ -93,7 +93,9 @@ export class AdminGoodsReceiptController {
 
   @Post(':id/resolve-discrepancy')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Resolve a DISCREPANCY receipt by correction or force-complete -> COMPLETED' })
+  @ApiOperation({
+    summary: 'Resolve a DISCREPANCY receipt by correction or force-complete -> COMPLETED',
+  })
   resolveDiscrepancy(
     @Param('id', uuid()) id: string,
     @Body() body: ResolveDiscrepancyDto,

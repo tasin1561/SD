@@ -100,7 +100,13 @@ function makeSut(receipt: ReturnType<typeof makeReceipt>) {
     runWithRetry: jest.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(client)),
     apply: jest.fn(async (_tx: unknown, input: Record<string, unknown>) => {
       applyCalls.push(input);
-      return { stockLevelId: 'L1', movementId: 'm1', qtyBefore: 0, qtyAfter: input.qtyChange, version: 0 };
+      return {
+        stockLevelId: 'L1',
+        movementId: 'm1',
+        qtyBefore: 0,
+        qtyAfter: input.qtyChange,
+        version: 0,
+      };
     }),
   } as unknown as StockMutationService;
   const alerts = { evaluate: jest.fn(async () => ({})) } as unknown as StockAlertService;
@@ -154,7 +160,11 @@ describe('GoodsReceiptService.complete', () => {
     expect(res.status).toBe(GoodsReceiptStatus.COMPLETED);
     expect(sut.batchCreates).toHaveLength(2);
     expect(sut.applyCalls.map((c) => c.qtyChange)).toEqual([10, 5]);
-    expect(sut.applyCalls[0]).toMatchObject({ type: 'RECEIVING', binId: 'bin1', batchId: 'batch-1' });
+    expect(sut.applyCalls[0]).toMatchObject({
+      type: 'RECEIVING',
+      binId: 'bin1',
+      batchId: 'batch-1',
+    });
     expect(sut.cache.invalidate).toHaveBeenCalledWith('s1', 'w1');
     expect(sut.alerts.evaluate).toHaveBeenCalledTimes(2);
     expect(sut.emails[0]?.templateCode).toBe('seller.goods_receipt_completed.email');

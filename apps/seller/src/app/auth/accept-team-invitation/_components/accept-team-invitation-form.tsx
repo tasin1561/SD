@@ -24,11 +24,7 @@ const INITIAL: FormState = {
   confirmPassword: '',
 };
 
-export function AcceptTeamInvitationForm({
-  token,
-}: {
-  readonly token: string;
-}): ReactElement {
+export function AcceptTeamInvitationForm({ token }: { readonly token: string }): ReactElement {
   const [form, setForm] = useState<FormState>(INITIAL);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -157,9 +153,7 @@ export function AcceptTeamInvitationForm({
             type="button"
             onClick={() => setShowConfirmPw((s) => !s)}
             tabIndex={-1}
-            aria-label={
-              showConfirmPw ? 'Hide confirm password' : 'Show confirm password'
-            }
+            aria-label={showConfirmPw ? 'Hide confirm password' : 'Show confirm password'}
             className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-body transition-colors p-1 rounded-[3px]"
           >
             {showConfirmPw ? <EyeOff size={14} /> : <Eye size={14} />}

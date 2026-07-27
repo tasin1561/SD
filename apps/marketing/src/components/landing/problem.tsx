@@ -92,14 +92,18 @@ export function Problem(): ReactElement {
                     {f.code}
                     {f.critical ? ' · critical' : ''}
                   </span>
-                  <span className="tilt-pop inline-flex"><Icon size={18} className="text-fg-muted group-hover:text-sky transition-colors" aria-hidden="true" /></span>
+                  <span className="tilt-pop inline-flex">
+                    <Icon
+                      size={18}
+                      className="text-fg-muted group-hover:text-sky transition-colors"
+                      aria-hidden="true"
+                    />
+                  </span>
                 </div>
                 <h3 className="mt-5 font-display text-lg font-semibold text-fg-strong">
                   {f.title}
                 </h3>
-                <p className="mt-2 text-[15px] text-fg-body leading-relaxed">
-                  {f.body}
-                </p>
+                <p className="mt-2 text-[15px] text-fg-body leading-relaxed">{f.body}</p>
               </Reveal>
             );
           })}
@@ -109,8 +113,8 @@ export function Problem(): ReactElement {
           <span className="telemetry text-fg-muted shrink-0">diagnosis</span>
           <p className="text-fg-strong text-base sm:text-lg m-0">
             Solo build: <span className="font-mono">6+ months</span>,{' '}
-            <span className="font-mono">₹50 lakh+</span>, an Indian company —
-            most sellers never try.
+            <span className="font-mono">₹50 lakh+</span>, an Indian company — most sellers never
+            try.
           </p>
         </Reveal>
       </div>

@@ -27,10 +27,7 @@ import { CallQueueService } from '../../call-queue/services/call-queue.service';
 import { ShipmentProvisionService } from '../../shipment-provision/services/shipment-provision.service';
 import { OrderLifecycleEventBus } from '../../lifecycle-events/order-lifecycle-event-bus.service';
 import { OrderEventWriterService, type EventActor } from './order-event-writer.service';
-import {
-  OrderSideEffect,
-  OrderStateMachineService,
-} from './order-state-machine.service';
+import { OrderSideEffect, OrderStateMachineService } from './order-state-machine.service';
 
 const DEFAULT_WAREHOUSE_SETTING_KEY = 'ops.default_warehouse_id';
 
@@ -82,12 +79,7 @@ interface ProvisionableOrder {
   }>;
 }
 
-export type ReservationOutcome =
-  | 'RESERVED'
-  | 'OUT_OF_STOCK'
-  | 'RELEASED'
-  | 'FULFILLED'
-  | null;
+export type ReservationOutcome = 'RESERVED' | 'OUT_OF_STOCK' | 'RELEASED' | 'FULFILLED' | null;
 
 export interface TransitionStatusInput {
   orderId: string;
@@ -234,9 +226,7 @@ export class OrderWriteService {
    * ONE sanctioned bypass of this engine and explicitly opts OUT of the
    * compensation guarantee.
    */
-  async transitionStatus(
-    input: TransitionStatusInput,
-  ): Promise<TransitionStatusResult> {
+  async transitionStatus(input: TransitionStatusInput): Promise<TransitionStatusResult> {
     const order = await this.prisma.client.order.findFirst({
       where: { id: input.orderId, deletedAt: null },
       select: {
@@ -368,15 +358,9 @@ export class OrderWriteService {
     // POST-COMMIT, best-effort, NEVER undoes the committed status
     // change — failures here surface as warnings, the next caller's
     // idempotent re-attempt (or out-of-band ops) reconciles.
-    if (
-      result.status === OrderStatus.CONFIRMED &&
-      from !== OrderStatus.CONFIRMED
-    ) {
+    if (result.status === OrderStatus.CONFIRMED && from !== OrderStatus.CONFIRMED) {
       await this.provisionShipmentForOrder(order, input.ctx);
-    } else if (
-      from !== result.status &&
-      VOIDABLE_TERMINAL_STATES.has(result.status)
-    ) {
+    } else if (from !== result.status && VOIDABLE_TERMINAL_STATES.has(result.status)) {
       await this.voidShipmentForOrder(order.id, result.status, input.ctx);
     }
 
@@ -444,10 +428,7 @@ export class OrderWriteService {
 
   /** M8 pack-eligibility hook — audit-only for Phase 1A. Best-effort:
    *  a failure here NEVER undoes the committed PICKED transition. */
-  private async signalPackEligible(
-    orderId: string,
-    ctx?: ClientContext,
-  ): Promise<void> {
+  private async signalPackEligible(orderId: string, ctx?: ClientContext): Promise<void> {
     try {
       await this.audit.log({
         actorType: ActorType.SYSTEM,
@@ -551,11 +532,7 @@ export class OrderWriteService {
     ctx?: ClientContext,
   ): Promise<void> {
     try {
-      await this.callQueue.dequeueOrder(
-        orderId,
-        this.closureReasonFor(landed),
-        ctx,
-      );
+      await this.callQueue.dequeueOrder(orderId, this.closureReasonFor(landed), ctx);
     } catch (e) {
       this.logger.error(
         { orderId, landed, err: (e as Error).message },
@@ -589,10 +566,7 @@ export class OrderWriteService {
 
   /** CC-6 post-commit call-queue enqueue (idempotent, best-effort —
    *  mirrors the saga's post-commit discipline). */
-  private async enqueueForCall(
-    orderId: string,
-    ctx?: ClientContext,
-  ): Promise<void> {
+  private async enqueueForCall(orderId: string, ctx?: ClientContext): Promise<void> {
     try {
       await this.callQueue.enqueueOrder(orderId, ctx);
     } catch (e) {
@@ -606,7 +580,12 @@ export class OrderWriteService {
   // ── RESERVE_STOCK: reserve PRE-tx, compensate on tx failure ──────────
 
   private async transitionWithReserve(
-    order: { id: string; sellerId: string; orderNumber: string; items: Array<{ id: string; variantId: string; quantity: number }> },
+    order: {
+      id: string;
+      sellerId: string;
+      orderNumber: string;
+      items: Array<{ id: string; variantId: string; quantity: number }>;
+    },
     from: OrderStatus,
     to: OrderStatus,
     input: TransitionStatusInput,
@@ -629,15 +608,25 @@ export class OrderWriteService {
     } catch (e) {
       if (e instanceof InsufficientStockError) {
         // Roll back the partial reservations from THIS attempt.
-        await this.bestEffortRelease(createdReservationIds, ReservationReleaseReason.OTHER, input.actor);
+        await this.bestEffortRelease(
+          createdReservationIds,
+          ReservationReleaseReason.OTHER,
+          input.actor,
+        );
         // Land OUT_OF_STOCK only if the matrix allows it from `from`;
         // otherwise leave the status untouched and surface the 409 (the
         // caller — Module 7 — owns retry/escalation).
         if (this.stateMachine.isValidTransition(from, OrderStatus.OUT_OF_STOCK)) {
-          const { statusEventId } = await this.writeStatusTx(order, from, OrderStatus.OUT_OF_STOCK, input, {
-            eventDescription: 'Reservation failed at confirm — out of stock',
-            auditAction: 'order.out_of_stock',
-          });
+          const { statusEventId } = await this.writeStatusTx(
+            order,
+            from,
+            OrderStatus.OUT_OF_STOCK,
+            input,
+            {
+              eventDescription: 'Reservation failed at confirm — out of stock',
+              auditAction: 'order.out_of_stock',
+            },
+          );
           return {
             orderId: order.id,
             fromStatus: from,
@@ -663,7 +652,11 @@ export class OrderWriteService {
         { orderId: order.id, reservationIds: createdReservationIds, err: (e as Error).message },
         'Status tx failed after reserve; compensating with release',
       );
-      await this.bestEffortRelease(createdReservationIds, ReservationReleaseReason.OTHER, input.actor);
+      await this.bestEffortRelease(
+        createdReservationIds,
+        ReservationReleaseReason.OTHER,
+        input.actor,
+      );
       throw e;
     }
 
@@ -717,7 +710,13 @@ export class OrderWriteService {
     }
     if (active.length === 0) outcome = null;
 
-    return { orderId: order.id, fromStatus: from, status: to, reservationOutcome: outcome, statusEventId };
+    return {
+      orderId: order.id,
+      fromStatus: from,
+      status: to,
+      reservationOutcome: outcome,
+      statusEventId,
+    };
   }
 
   // ── DISPATCH_STOCK (Module 9, Model A — the bug-1 fix): the ONE
@@ -756,10 +755,7 @@ export class OrderWriteService {
         orderId: order.id,
         shipment: {
           status: {
-            notIn: [
-              ShipmentStatus.CANCELLED,
-              ShipmentStatus.FAILED_AT_CREATION,
-            ],
+            notIn: [ShipmentStatus.CANCELLED, ShipmentStatus.FAILED_AT_CREATION],
           },
           deletedAt: null,
         },
@@ -787,12 +783,8 @@ export class OrderWriteService {
     const movementsAlreadyApplied = existingDispatch !== null;
 
     // 2. PRE-TX — DISPATCH movements per phase-2 reservation.
-    const locations = await this.reservations.listActiveForOrderWithLocations(
-      order.id,
-    );
-    const phase2 = locations.filter(
-      (r) => r.binId !== null && r.batchId !== null,
-    );
+    const locations = await this.reservations.listActiveForOrderWithLocations(order.id);
+    const phase2 = locations.filter((r) => r.binId !== null && r.batchId !== null);
     if (!movementsAlreadyApplied && phase2.length > 0) {
       await this.mutation.runWithRetry(async (tx) => {
         for (const r of phase2) {
@@ -861,7 +853,13 @@ export class OrderWriteService {
       eventDescription: input.reason ?? `Status ${from} → ${to}`,
       auditAction: 'order.status_changed',
     });
-    return { orderId: order.id, fromStatus: from, status: to, reservationOutcome: null, statusEventId };
+    return {
+      orderId: order.id,
+      fromStatus: from,
+      status: to,
+      reservationOutcome: null,
+      statusEventId,
+    };
   }
 
   // ── the atomic order DB unit (status + events + audit) ───────────────
@@ -887,16 +885,14 @@ export class OrderWriteService {
     // occurrences fan out as distinct notification rounds).
     let capturedStatusEventId: string | null = null;
     await this.prisma.client.$transaction(async (tx) => {
-      const staffConnect =
-        isStaff && input.actor.id ? { connect: { id: input.actor.id } } : null;
+      const staffConnect = isStaff && input.actor.id ? { connect: { id: input.actor.id } } : null;
       const data: Prisma.OrderUpdateInput = { status: to };
       if (to === OrderStatus.CONFIRMED) {
         data.confirmedAt = now;
         if (staffConnect) data.confirmedBy = staffConnect;
       }
       if (CANCEL_FAMILY.has(to)) {
-        data.cancellationReason =
-          input.cancellationReason ?? OrderCancellationReason.OTHER;
+        data.cancellationReason = input.cancellationReason ?? OrderCancellationReason.OTHER;
         data.cancelledAt = now;
         if (staffConnect) data.cancelledBy = staffConnect;
       }

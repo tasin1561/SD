@@ -213,10 +213,7 @@ export class OrderService {
    * persisted; an admin re-enqueue / reconciler recovers a missed
    * enqueue). Mirrors the saga's post-commit discipline.
    */
-  private async enqueueForCall(
-    orderId: string,
-    ctx: ClientContext,
-  ): Promise<void> {
+  private async enqueueForCall(orderId: string, ctx: ClientContext): Promise<void> {
     try {
       await this.callQueue.enqueueOrder(orderId, ctx);
     } catch (e) {
@@ -281,10 +278,7 @@ export class OrderService {
   ): Promise<OrderView> {
     const source = options.source ?? OrderSource.MANUAL;
     const initialStatus = options.initialStatus ?? OrderStatus.DRAFT;
-    if (
-      initialStatus !== OrderStatus.DRAFT &&
-      initialStatus !== OrderStatus.PENDING_CONFIRMATION
-    ) {
+    if (initialStatus !== OrderStatus.DRAFT && initialStatus !== OrderStatus.PENDING_CONFIRMATION) {
       throw new BadRequestException({
         code: 'INVALID_INITIAL_STATUS',
         message: 'initialStatus must be DRAFT or PENDING_CONFIRMATION',
@@ -309,8 +303,7 @@ export class OrderService {
       input.declaredValueInr !== undefined
         ? new Prisma.Decimal(input.declaredValueInr)
         : lines.reduce(
-            (sum, l) =>
-              sum.add((l.unitDeclaredValueInr ?? new Prisma.Decimal(0)).mul(l.quantity)),
+            (sum, l) => sum.add((l.unitDeclaredValueInr ?? new Prisma.Decimal(0)).mul(l.quantity)),
             new Prisma.Decimal(0),
           );
 
@@ -438,10 +431,7 @@ export class OrderService {
       });
     } catch (e) {
       // (sellerId, sellerOrderRef) is @@unique — surface a clean 409.
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === 'P2002'
-      ) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         throw new ConflictException({
           code: 'DUPLICATE_SELLER_ORDER_REF',
           message: `An order with sellerOrderRef "${input.sellerOrderRef}" already exists for this seller`,
@@ -608,13 +598,10 @@ export class OrderService {
         message: `An order in ${order.status} cannot be cancelled here`,
       });
     }
-    if (
-      this.stateMachine.requiredSideEffects(order.status, OrderStatus.CANCELLED).length > 0
-    ) {
+    if (this.stateMachine.requiredSideEffects(order.status, OrderStatus.CANCELLED).length > 0) {
       throw new ConflictException({
         code: 'CANCEL_NEEDS_STOCK_RELEASE',
-        message:
-          `Cancelling a ${order.status} order releases reserved stock; use the ops cancel path`,
+        message: `Cancelling a ${order.status} order releases reserved stock; use the ops cancel path`,
       });
     }
 
@@ -722,14 +709,10 @@ export class OrderService {
 
     if (touchedRecipient) {
       const merged = {
-        recipientPhoneE164:
-          input.recipientPhoneE164?.trim() ?? order.recipientPhoneE164,
-        recipientAltPhoneE164:
-          input.recipientAltPhoneE164 ?? order.recipientAltPhoneE164,
-        recipientPostalCode:
-          input.recipientPostalCode?.trim() ?? order.recipientPostalCode,
-        recipientStateProvince:
-          input.recipientStateProvince ?? order.recipientStateProvince,
+        recipientPhoneE164: input.recipientPhoneE164?.trim() ?? order.recipientPhoneE164,
+        recipientAltPhoneE164: input.recipientAltPhoneE164 ?? order.recipientAltPhoneE164,
+        recipientPostalCode: input.recipientPostalCode?.trim() ?? order.recipientPostalCode,
+        recipientStateProvince: input.recipientStateProvince ?? order.recipientStateProvince,
         recipientCountryCode: order.recipientCountryCode,
       };
       const canonicalState = await this.addressValidation.assertValid(merged);
@@ -847,8 +830,7 @@ export class OrderService {
     // Re-resolve the per-seller customer when the phone is corrected
     // (ORD-7: a new phone is a different customer identity).
     const newPhone = input.recipientPhoneE164?.trim();
-    const phoneChanged =
-      newPhone !== undefined && newPhone !== order.recipientPhoneE164;
+    const phoneChanged = newPhone !== undefined && newPhone !== order.recipientPhoneE164;
 
     if (changed.length === 0) {
       throw new BadRequestException({
@@ -1173,10 +1155,7 @@ export class OrderService {
       },
     });
     if (!order) throw new NotFoundException(`Order ${orderId} not found`);
-    if (
-      order.status !== OrderStatus.DRAFT &&
-      order.status !== OrderStatus.PENDING_CONFIRMATION
-    ) {
+    if (order.status !== OrderStatus.DRAFT && order.status !== OrderStatus.PENDING_CONFIRMATION) {
       throw new ConflictException({
         code: 'BULK_PATCH_NOT_ALLOWED',
         message: `Order in ${order.status} is not CSV-patchable`,

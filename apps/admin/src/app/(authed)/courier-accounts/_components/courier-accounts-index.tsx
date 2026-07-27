@@ -57,9 +57,9 @@ export function CourierAccountsIndex(): ReactElement {
       <p className="text-text-muted border-border bg-surface-raised mb-4 flex items-start gap-2 rounded-[var(--radius-2)] border px-3 py-2 text-xs leading-relaxed">
         <ShieldCheck size={14} className="mt-0.5 shrink-0" aria-hidden />
         <span>
-          API credentials are encrypted at rest with a key held in the environment,
-          never in the database. They are never returned by any endpoint — to change
-          one, add a new account and deactivate the old.
+          API credentials are encrypted at rest with a key held in the environment, never in the
+          database. They are never returned by any endpoint — to change one, add a new account and
+          deactivate the old.
         </span>
       </p>
 
@@ -106,11 +106,7 @@ export function CourierAccountsIndex(): ReactElement {
   );
 }
 
-function AccountRow({
-  account,
-}: {
-  readonly account: CourierAccountView;
-}): ReactElement {
+function AccountRow({ account }: { readonly account: CourierAccountView }): ReactElement {
   const toast = useToast();
   const update = useUpdateCourierAccount();
 
@@ -160,9 +156,7 @@ function AccountRow({
               variant="ghost"
               size="sm"
               disabled={update.isPending}
-              onClick={() =>
-                void run({ isDefault: true }, `${account.label} is now the default.`)
-              }
+              onClick={() => void run({ isDefault: true }, `${account.label} is now the default.`)}
             >
               Make default
             </Button>

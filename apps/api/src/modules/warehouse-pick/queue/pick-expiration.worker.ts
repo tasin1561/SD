@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  type OnModuleDestroy,
-  type OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Worker, type Job } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { PickExpirationService } from '../services/pick-expiration.service';
@@ -35,16 +30,10 @@ export class PickExpirationWorker implements OnModuleInit, OnModuleDestroy {
       PICK_EXPIRATION_QUEUE_NAME,
       async (job: Job<ExpirePickJob>): Promise<void> => {
         if (job.name === JOB_EXPIRE_PICK) {
-          await this.service.expire(
-            job.data.shipmentId,
-            job.data.pickStartedAtIso,
-          );
+          await this.service.expire(job.data.shipmentId, job.data.pickStartedAtIso);
           return;
         }
-        this.logger.warn(
-          { name: job.name },
-          'Unknown pick-expiration job; ignoring',
-        );
+        this.logger.warn({ name: job.name }, 'Unknown pick-expiration job; ignoring');
       },
       { connection: this.redis.createConnection(), concurrency: 1 },
     );
@@ -56,14 +45,9 @@ export class PickExpirationWorker implements OnModuleInit, OnModuleDestroy {
       );
     });
     this.worker.on('error', (err) => {
-      this.logger.error(
-        { err: err.message },
-        'Pick-expiration worker error',
-      );
+      this.logger.error({ err: err.message }, 'Pick-expiration worker error');
     });
-    this.logger.log(
-      `Pick-expiration worker ready (queue=${PICK_EXPIRATION_QUEUE_NAME})`,
-    );
+    this.logger.log(`Pick-expiration worker ready (queue=${PICK_EXPIRATION_QUEUE_NAME})`);
   }
 
   async onModuleDestroy(): Promise<void> {

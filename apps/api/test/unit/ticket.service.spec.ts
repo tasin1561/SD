@@ -40,12 +40,10 @@ function makeService(opts: { existing?: AnyArgs | null; existingByItem?: AnyArgs
     }
     return opts.existing === undefined ? ticketRow() : opts.existing;
   });
-  const findFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async () => (opts.existing === undefined ? ticketRow() : opts.existing),
+  const findFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+    opts.existing === undefined ? ticketRow() : opts.existing,
   );
-  const create = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (a) =>
-    ticketRow(a.data as AnyArgs),
-  );
+  const create = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (a) => ticketRow(a.data as AnyArgs));
   const update = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (a) =>
     ticketRow({ ...(a.data as AnyArgs) }),
   );
@@ -82,7 +80,16 @@ function makeService(opts: { existing?: AnyArgs | null; existingByItem?: AnyArgs
     wallet as unknown as WalletService,
     new TicketStateMachineService(),
   );
-  return { svc, create, update, eventCreate, applyEntry, recomputeCacheAfterCommit, auditLog, findMany };
+  return {
+    svc,
+    create,
+    update,
+    eventCreate,
+    applyEntry,
+    recomputeCacheAfterCommit,
+    auditLog,
+    findMany,
+  };
 }
 
 describe('TicketStateMachineService', () => {
@@ -162,7 +169,11 @@ describe('TicketService.transition', () => {
   it('404 for an unknown ticket', async () => {
     const { svc } = makeService({ existing: null });
     await expect(
-      svc.transition('nope', { to: TicketStatus.NEGOTIATING }, { type: ActorType.STAFF, staffId: STAFF }),
+      svc.transition(
+        'nope',
+        { to: TicketStatus.NEGOTIATING },
+        { type: ActorType.STAFF, staffId: STAFF },
+      ),
     ).rejects.toMatchObject({ response: { code: 'TICKET_NOT_FOUND' } });
   });
 
@@ -206,7 +217,11 @@ describe('TicketService.transition', () => {
   it('RESOLVED_REFUND without an amount is rejected before any write', async () => {
     const { svc, update, applyEntry } = makeService();
     await expect(
-      svc.transition(TICKET, { to: TicketStatus.RESOLVED_REFUND }, { type: ActorType.STAFF, staffId: STAFF }),
+      svc.transition(
+        TICKET,
+        { to: TicketStatus.RESOLVED_REFUND },
+        { type: ActorType.STAFF, staffId: STAFF },
+      ),
     ).rejects.toMatchObject({ response: { code: 'REFUND_AMOUNT_REQUIRED' } });
     expect(applyEntry).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
@@ -254,12 +269,10 @@ describe('TicketService seller scoping', () => {
   it('listForSeller filters by sellerId', async () => {
     const { svc, findMany } = makeService();
     await svc.listForSeller(SELLER);
-    expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { sellerId: SELLER } }),
-    );
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { sellerId: SELLER } }));
   });
 
-  it('getForSeller 404s rather than leaking another seller\'s ticket', async () => {
+  it("getForSeller 404s rather than leaking another seller's ticket", async () => {
     const { svc } = makeService({ existing: null });
     await expect(svc.getForSeller(SELLER, TICKET)).rejects.toMatchObject({
       response: { code: 'TICKET_NOT_FOUND' },

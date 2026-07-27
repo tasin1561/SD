@@ -39,7 +39,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
     res.status(status).json(body);
   }
 
-  private normalize(exception: unknown, requestId: string | null): {
+  private normalize(
+    exception: unknown,
+    requestId: string | null,
+  ): {
     status: number;
     body: StructuredError;
   } {

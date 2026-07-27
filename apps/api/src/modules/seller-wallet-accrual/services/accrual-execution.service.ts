@@ -69,13 +69,13 @@ export class AccrualExecutionService {
       // rest of the consignment still owes. No-op for orders whose goods
       // came from a PAY_NOW consignment or from no billed consignment at
       // all.
-      await this.freightAmortisation.debitForDeliveredOrder(
-        tx,
-        order.id,
-        order.sellerId,
-      );
+      await this.freightAmortisation.debitForDeliveredOrder(tx, order.id, order.sellerId);
     });
 
-    await this.wallet.recomputeCacheAfterCommit(order.sellerId, Currency.INR, 'post-commit-accrual');
+    await this.wallet.recomputeCacheAfterCommit(
+      order.sellerId,
+      Currency.INR,
+      'post-commit-accrual',
+    );
   }
 }

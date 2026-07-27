@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ActorType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -153,8 +149,6 @@ export class SellerThresholdService {
       where: { deletedAt: null },
       select: { id: true },
     });
-    await Promise.all(
-      warehouses.map((w) => this.cache.invalidate(sellerId, w.id)),
-    );
+    await Promise.all(warehouses.map((w) => this.cache.invalidate(sellerId, w.id)));
   }
 }

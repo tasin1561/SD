@@ -21,7 +21,12 @@ describe('VariantAttributeValidatorService', () => {
 
   it('accepts a fully valid attribute map', () => {
     const eff = [
-      def({ attributeKey: 'color', valueType: AttributeValueType.ENUM, allowedValues: ['Red', 'Blue'], isRequired: true }),
+      def({
+        attributeKey: 'color',
+        valueType: AttributeValueType.ENUM,
+        allowedValues: ['Red', 'Blue'],
+        isRequired: true,
+      }),
       def({ attributeKey: 'count', valueType: AttributeValueType.NUMBER }),
       def({ attributeKey: 'gift', valueType: AttributeValueType.BOOLEAN }),
     ];
@@ -30,7 +35,9 @@ describe('VariantAttributeValidatorService', () => {
   });
 
   it('flags a missing required attribute', () => {
-    const eff = [def({ attributeKey: 'size', valueType: AttributeValueType.STRING, isRequired: true })];
+    const eff = [
+      def({ attributeKey: 'size', valueType: AttributeValueType.STRING, isRequired: true }),
+    ];
     const errs = svc.collect(eff, {});
     expect(errs.some((e) => /Missing required attribute 'size'/.test(e))).toBe(true);
   });
@@ -42,8 +49,12 @@ describe('VariantAttributeValidatorService', () => {
   });
 
   it('enforces ENUM allowedValues', () => {
-    const eff = [def({ attributeKey: 'color', valueType: AttributeValueType.ENUM, allowedValues: ['Red'] })];
-    expect(svc.collect(eff, { color: 'Green' }).some((e) => /must be one of: Red/.test(e))).toBe(true);
+    const eff = [
+      def({ attributeKey: 'color', valueType: AttributeValueType.ENUM, allowedValues: ['Red'] }),
+    ];
+    expect(svc.collect(eff, { color: 'Green' }).some((e) => /must be one of: Red/.test(e))).toBe(
+      true,
+    );
     expect(svc.collect(eff, { color: 'Red' })).toEqual([]);
   });
 
@@ -68,7 +79,9 @@ describe('VariantAttributeValidatorService', () => {
   });
 
   it('validate() throws BadRequestException carrying the collected errors', () => {
-    const eff = [def({ attributeKey: 'size', valueType: AttributeValueType.STRING, isRequired: true })];
+    const eff = [
+      def({ attributeKey: 'size', valueType: AttributeValueType.STRING, isRequired: true }),
+    ];
     let thrown: unknown;
     try {
       svc.validate(eff, { unknown: 1 });

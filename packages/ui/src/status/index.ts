@@ -238,9 +238,7 @@ export function withdrawalStatusKind(status: WithdrawalRequestStatus): StatusKin
 }
 
 /** R5 early-reservation review → kind. */
-export function earlyReviewStatusKind(
-  status: EarlyReservationReviewStatus,
-): StatusKind {
+export function earlyReviewStatusKind(status: EarlyReservationReviewStatus): StatusKind {
   switch (status) {
     case EarlyReservationReviewStatus.OPEN:
       return 'pending';

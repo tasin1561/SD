@@ -1,9 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import {
-  OrderStatus,
-  RtoDisposition,
-  RtoItemCondition,
-} from '@skydrop/db';
+import { OrderStatus, RtoDisposition, RtoItemCondition } from '@skydrop/db';
 import { RtoInspectionService } from '../../src/modules/warehouse-rto/services/rto-inspection.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { OrderReadService } from '../../src/modules/order/services/order-read.service';
@@ -17,9 +13,7 @@ const SHIP = 'ship-1';
 const ORDER = 'order-1';
 const STAFF = 'staff-1';
 
-function makeService(
-  opts: { item?: AnyArgs | null; orderStatus?: OrderStatus | 'missing' } = {},
-) {
+function makeService(opts: { item?: AnyArgs | null; orderStatus?: OrderStatus | 'missing' } = {}) {
   const defaultItem = {
     id: ITEM,
     shipmentId: SHIP,

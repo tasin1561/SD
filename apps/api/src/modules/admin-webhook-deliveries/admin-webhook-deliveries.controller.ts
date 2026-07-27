@@ -14,10 +14,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ActorType, WebhookDeliveryStatus } from '@skydrop/db';
 import { CurrentStaff } from '../../common/decorators/current-staff.decorator';
-import {
-  ClientInfo,
-  type ClientInfoPayload,
-} from '../../common/decorators/client-info.decorator';
+import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/client-info.decorator';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../common/types/request';
@@ -179,17 +176,14 @@ export class AdminWebhookDeliveriesController {
     if (!row.endpoint.isActive || row.endpoint.autoDisabledAt !== null) {
       throw new NotFoundException({
         code: 'ENDPOINT_DISABLED',
-        message:
-          'Endpoint is disabled or auto-disabled; re-enable it before retrying',
+        message: 'Endpoint is disabled or auto-disabled; re-enable it before retrying',
       });
     }
 
     // Re-sign with the CURRENT endpoint secret — rotation since the
     // original fire is now honoured.
     const body = JSON.stringify(row.payload);
-    const signature = createHmac('sha256', row.endpoint.secretKey)
-      .update(body)
-      .digest('hex');
+    const signature = createHmac('sha256', row.endpoint.secretKey).update(body).digest('hex');
 
     const jobId = await this.queue.enqueue({
       endpointId: row.endpointId,

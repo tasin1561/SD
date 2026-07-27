@@ -240,22 +240,24 @@ export class RefreshTokenService {
     tx: DbClient,
     subject: SubjectKind,
     tokenHash: string,
-  ): Promise<
-    | {
-        id: string;
-        userId: string;
-        expiresAt: Date;
-        revokedAt: Date | null;
-      }
-    | null
-  > {
+  ): Promise<{
+    id: string;
+    userId: string;
+    expiresAt: Date;
+    revokedAt: Date | null;
+  } | null> {
     if (subject === 'staff') {
       const row = await tx.staffRefreshToken.findFirst({
         where: { tokenHash },
         select: { id: true, staffUserId: true, expiresAt: true, revokedAt: true },
       });
       return row
-        ? { id: row.id, userId: row.staffUserId, expiresAt: row.expiresAt, revokedAt: row.revokedAt }
+        ? {
+            id: row.id,
+            userId: row.staffUserId,
+            expiresAt: row.expiresAt,
+            revokedAt: row.revokedAt,
+          }
         : null;
     }
     const row = await tx.sellerRefreshToken.findFirst({

@@ -113,10 +113,7 @@ export class InvoicePdfService {
     if (p.buyer.gstin) doc.text(`GSTIN: ${p.buyer.gstin}`);
     doc.moveDown(0.6);
 
-    doc
-      .font('Helvetica-Oblique')
-      .fontSize(8)
-      .text(`Place of supply: ${p.placeOfSupplyState}`);
+    doc.font('Helvetica-Oblique').fontSize(8).text(`Place of supply: ${p.placeOfSupplyState}`);
     doc.moveDown(0.4);
 
     // Items table

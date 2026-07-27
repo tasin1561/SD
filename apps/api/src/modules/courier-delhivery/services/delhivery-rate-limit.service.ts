@@ -121,8 +121,7 @@ export class DelhiveryRateLimitService {
     }
 
     if (used > budget) {
-      const retryAfter =
-        (window + 1) * WINDOW_SECONDS - Math.floor(Date.now() / 1000);
+      const retryAfter = (window + 1) * WINDOW_SECONDS - Math.floor(Date.now() / 1000);
       this.logger.warn(
         { endpoint, used, budget, retryAfter },
         'Delhivery rate budget exhausted — refusing the call locally rather than earning a WAF 403',

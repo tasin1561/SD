@@ -26,11 +26,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
-import {
-  ApiClient,
-  AccessTokenStore,
-  type IdentityKind,
-} from '@skydrop/api-client';
+import { ApiClient, AccessTokenStore, type IdentityKind } from '@skydrop/api-client';
 
 export interface AuthContextValue<Identity> {
   readonly client: ApiClient;

@@ -14,9 +14,9 @@ type AnyArgs = Record<string, unknown>;
  */
 describe('PickExpirationQueue.enqueueExpiration jobId', () => {
   function make() {
-    const add = jest.fn<Promise<{ id: string }>, [string, AnyArgs, AnyArgs]>(
-      async () => ({ id: 'job-1' }),
-    );
+    const add = jest.fn<Promise<{ id: string }>, [string, AnyArgs, AnyArgs]>(async () => ({
+      id: 'job-1',
+    }));
     const q = new PickExpirationQueue({} as unknown as RedisService);
     (q as unknown as { queue: { add: typeof add } }).queue = { add };
     return { q, add };
@@ -33,9 +33,7 @@ describe('PickExpirationQueue.enqueueExpiration jobId', () => {
     expect(name).toBe(JOB_EXPIRE_PICK);
     const jobId = (opts as AnyArgs).jobId as string;
     expect(jobId).not.toContain(':');
-    expect(jobId).toBe(
-      `aaaaaaaa-bbbb-7ccc-8ddd-eeeeeeeeeeee_${Date.parse(iso)}`,
-    );
+    expect(jobId).toBe(`aaaaaaaa-bbbb-7ccc-8ddd-eeeeeeeeeeee_${Date.parse(iso)}`);
     expect((opts as AnyArgs).delay).toBe(4 * 3_600_000);
   });
 

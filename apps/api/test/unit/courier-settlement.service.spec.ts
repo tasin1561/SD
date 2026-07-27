@@ -28,8 +28,7 @@ function makeSut(
   const settlementCreate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (args) => {
     const data = args['data'] as AnyArgs;
     created.push(data);
-    const lines = ((data['lines'] as AnyArgs | undefined)?.['create'] ??
-      []) as AnyArgs[];
+    const lines = ((data['lines'] as AnyArgs | undefined)?.['create'] ?? []) as AnyArgs[];
     return {
       id: 'stl-1',
       courierAccountId: data['courierAccountId'],
@@ -257,9 +256,7 @@ describe('CourierSettlementService.reconciliation', () => {
 
   it('a fully settled order is not float at all', async () => {
     const sut = makeSut({
-      delivered: [
-        deliveredOrder({ courierSettlementLines: [{ settledInr: D('1000.00') }] }),
-      ],
+      delivered: [deliveredOrder({ courierSettlementLines: [{ settledInr: D('1000.00') }] })],
     });
     const r = await sut.svc.reconciliation();
     expect(r.outstandingFloatInr).toBe('0');
@@ -269,9 +266,7 @@ describe('CourierSettlementService.reconciliation', () => {
 
   it('a PART-paid order is flagged as short-paid, with only the gap counted', async () => {
     const sut = makeSut({
-      delivered: [
-        deliveredOrder({ courierSettlementLines: [{ settledInr: D('700.00') }] }),
-      ],
+      delivered: [deliveredOrder({ courierSettlementLines: [{ settledInr: D('700.00') }] })],
     });
     const r = await sut.svc.reconciliation();
     expect(r.outstandingFloatInr).toBe('300');

@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  resolveStaffSsrIdentity,
-  resolveSellerSsrIdentity,
-} from '../server/identity';
+import { resolveStaffSsrIdentity, resolveSellerSsrIdentity } from '../server/identity';
 
 function jsonResponse(status: number, body: unknown = null): Response {
   return new Response(body === null ? '' : JSON.stringify(body), {
@@ -12,7 +9,7 @@ function jsonResponse(status: number, body: unknown = null): Response {
 }
 
 describe('resolveStaffSsrIdentity', () => {
-  it("forwards the __Host- cookie to /auth/staff/me — does NOT call /refresh", async () => {
+  it('forwards the __Host- cookie to /auth/staff/me — does NOT call /refresh', async () => {
     const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
       const u = String(url);
       // The single sanctioned API call: GET /auth/staff/me on the

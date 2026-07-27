@@ -22,11 +22,7 @@ import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../common/types/request';
 import { ListSellersQueryDto } from './dto/list-sellers.dto';
 import { UpdateSellerStatusDto } from './dto/update-status.dto';
-import {
-  CreateSellerNoteDto,
-  ListSellerNotesQueryDto,
-  UpdateSellerNoteDto,
-} from './dto/note.dto';
+import { CreateSellerNoteDto, ListSellerNotesQueryDto, UpdateSellerNoteDto } from './dto/note.dto';
 import { OnboardingStepOverrideDto } from './dto/onboarding-override.dto';
 import {
   AdminSellerService,
@@ -92,12 +88,7 @@ export class AdminSellerController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<{ accountNumber: string | null }> {
-    return this.svc.revealBankAccount(
-      id,
-      { staffId: staff.id },
-      ctx,
-      body?.reason,
-    );
+    return this.svc.revealBankAccount(id, { staffId: staff.id }, ctx, body?.reason);
   }
 
   @Get(':id/notes')

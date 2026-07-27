@@ -28,10 +28,7 @@ import {
   type ManifestListRow,
   type MoveShipmentResult,
 } from '../services/manifest.service';
-import {
-  ListManifestsQueryDto,
-  MoveShipmentDto,
-} from '../dto/admin-manifest.dto';
+import { ListManifestsQueryDto, MoveShipmentDto } from '../dto/admin-manifest.dto';
 
 /**
  * Module 8 — supervisor + admin manifest endpoints (commit 13).
@@ -61,20 +58,13 @@ export class AdminManifestController {
     page: number;
     pageSize: number;
   }> {
-    requireStaffRoles(staff, [
-      StaffRole.WAREHOUSE_SUPERVISOR,
-      StaffRole.SUPER_ADMIN,
-    ]);
+    requireStaffRoles(staff, [StaffRole.WAREHOUSE_SUPERVISOR, StaffRole.SUPER_ADMIN]);
     return this.svc.listManifests({
       page: query.page ?? 1,
       pageSize: query.pageSize ?? 20,
       ...(query.status !== undefined ? { status: query.status } : {}),
-      ...(query.courierCode !== undefined
-        ? { courierCode: query.courierCode }
-        : {}),
-      ...(query.warehouseId !== undefined
-        ? { warehouseId: query.warehouseId }
-        : {}),
+      ...(query.courierCode !== undefined ? { courierCode: query.courierCode } : {}),
+      ...(query.warehouseId !== undefined ? { warehouseId: query.warehouseId } : {}),
     });
   }
 
@@ -85,10 +75,7 @@ export class AdminManifestController {
     manifestId: string,
     @CurrentStaff() staff: AuthenticatedStaff,
   ): Promise<ManifestDetail> {
-    requireStaffRoles(staff, [
-      StaffRole.WAREHOUSE_SUPERVISOR,
-      StaffRole.SUPER_ADMIN,
-    ]);
+    requireStaffRoles(staff, [StaffRole.WAREHOUSE_SUPERVISOR, StaffRole.SUPER_ADMIN]);
     return this.svc.getById(manifestId);
   }
 
@@ -104,10 +91,7 @@ export class AdminManifestController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<CloseManifestResult> {
-    requireStaffRoles(staff, [
-      StaffRole.WAREHOUSE_SUPERVISOR,
-      StaffRole.SUPER_ADMIN,
-    ]);
+    requireStaffRoles(staff, [StaffRole.WAREHOUSE_SUPERVISOR, StaffRole.SUPER_ADMIN]);
     return this.svc.close(manifestId, staff.id, ctx);
   }
 
@@ -124,10 +108,7 @@ export class AdminManifestController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<MoveShipmentResult> {
-    requireStaffRoles(staff, [
-      StaffRole.WAREHOUSE_SUPERVISOR,
-      StaffRole.SUPER_ADMIN,
-    ]);
+    requireStaffRoles(staff, [StaffRole.WAREHOUSE_SUPERVISOR, StaffRole.SUPER_ADMIN]);
     return this.svc.moveShipment(
       shipmentId,
       body.targetManifestId,

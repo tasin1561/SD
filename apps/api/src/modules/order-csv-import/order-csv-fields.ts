@@ -53,9 +53,7 @@ export const ORDER_CSV_REQUIRED_FIELDS: OrderCsvField[] = [
   'externalRef',
 ];
 
-export const ORDER_CSV_TARGET_FIELDS = Object.keys(
-  ORDER_CSV_ALIAS_MAP,
-) as OrderCsvField[];
+export const ORDER_CSV_TARGET_FIELDS = Object.keys(ORDER_CSV_ALIAS_MAP) as OrderCsvField[];
 
 export function normalizeHeader(raw: string): string {
   return raw

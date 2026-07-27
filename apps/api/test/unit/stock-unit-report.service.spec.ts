@@ -23,20 +23,20 @@ function unit(over: AnyArgs = {}): AnyArgs {
   };
 }
 
-function makeSut(opts: {
-  findManyResults?: AnyArgs[][];
-  grouped?: Array<{ variantId: string; warehouseId: string; _count: { _all: number } }>;
-  qtyOnHand?: number;
-  settingsThrows?: boolean;
-} = {}) {
+function makeSut(
+  opts: {
+    findManyResults?: AnyArgs[][];
+    grouped?: Array<{ variantId: string; warehouseId: string; _count: { _all: number } }>;
+    qtyOnHand?: number;
+    settingsThrows?: boolean;
+  } = {},
+) {
   const queue = [...(opts.findManyResults ?? [[], [], []])];
-  const unitFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
-    async () => queue.shift() ?? [],
-  );
+  const unitFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => queue.shift() ?? []);
   const groupBy = jest.fn(async () => opts.grouped ?? []);
-  const aggregate = jest.fn<Promise<{ _sum: { qtyOnHand: number } }>, [AnyArgs]>(
-    async () => ({ _sum: { qtyOnHand: opts.qtyOnHand ?? 0 } }),
-  );
+  const aggregate = jest.fn<Promise<{ _sum: { qtyOnHand: number } }>, [AnyArgs]>(async () => ({
+    _sum: { qtyOnHand: opts.qtyOnHand ?? 0 },
+  }));
   const variantFindMany = jest.fn(async () => [{ id: 'v-1', skuCode: 'SKU-1' }]);
 
   const prisma = {

@@ -30,9 +30,7 @@ export default function WalletPage(): ReactElement {
   const [filter, setFilter] = useState<'all' | 'INR' | 'BDT'>('all');
   const [exporting, setExporting] = useState(false);
   const balances = useWalletBalances();
-  const entries = useInfiniteWalletEntries(
-    filter === 'all' ? undefined : filter,
-  );
+  const entries = useInfiniteWalletEntries(filter === 'all' ? undefined : filter);
   const accumulated = entries.data?.pages.flatMap((p) => p.items) ?? [];
 
   async function exportAll(): Promise<void> {
@@ -126,8 +124,7 @@ export default function WalletPage(): ReactElement {
                 disabled={accumulated.length === 0 || exporting}
                 onClick={() => void exportAll()}
               >
-                <Download size={12} />{' '}
-                {exporting ? 'Loading all…' : 'Export CSV'}
+                <Download size={12} /> {exporting ? 'Loading all…' : 'Export CSV'}
               </Button>
             </div>
           }
@@ -142,8 +139,8 @@ export default function WalletPage(): ReactElement {
             />
           ) : accumulated.length === 0 ? (
             <div className="text-text-muted text-sm py-4">
-              No ledger entries yet. Once an order delivers (COD), your
-              wallet will accrue (COD amount − shipping + GST).
+              No ledger entries yet. Once an order delivers (COD), your wallet will accrue (COD
+              amount − shipping + GST).
             </div>
           ) : (
             <table className="w-full text-sm">
@@ -182,8 +179,7 @@ export default function WalletPage(): ReactElement {
       <WithdrawalsCard />
 
       <div className="text-text-faint text-xs">
-        Remittances are paid to the bank account on your profile. Update
-        your bank details on{' '}
+        Remittances are paid to the bank account on your profile. Update your bank details on{' '}
         <Link href="/profile" className="text-accent hover:underline">
           /profile
         </Link>{' '}
@@ -220,9 +216,7 @@ function LedgerRow({ entry }: { readonly entry: WalletEntryView }): ReactElement
       <td className="px-3 py-2 text-text-body text-xs">
         {humanizeDirection(entry.direction)}
         {entry.note && (
-          <div className="text-text-faint text-[11px] mt-0.5 italic">
-            {entry.note}
-          </div>
+          <div className="text-text-faint text-[11px] mt-0.5 italic">{entry.note}</div>
         )}
       </td>
       <td className="px-3 py-2 text-text-body text-xs">

@@ -97,10 +97,7 @@ export class PickExpirationService {
    * it then gives the M5 phase-2 holds back (releaseAllocation per
    * ACTIVE reservation), best-effort.
    */
-  async expire(
-    shipmentId: string,
-    pickStartedAtIso: string,
-  ): Promise<PickExpireResult> {
+  async expire(shipmentId: string, pickStartedAtIso: string): Promise<PickExpireResult> {
     const shipment = await this.prisma.client.shipment.findFirst({
       where: { id: shipmentId, deletedAt: null },
       select: {

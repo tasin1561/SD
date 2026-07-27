@@ -11,11 +11,7 @@ import './login-console.css';
  * re-declares the @skydrop/ui tokens inside that class only) so the
  * admin shell keeps its own palette untouched.
  */
-export default function LoginLayout({
-  children,
-}: {
-  children: ReactNode;
-}): ReactElement {
+export default function LoginLayout({ children }: { children: ReactNode }): ReactElement {
   return (
     <div className="mc-login relative min-h-screen grid place-items-center bg-bg text-text-body p-6 overflow-hidden">
       <div aria-hidden className="console-grid absolute inset-0" />

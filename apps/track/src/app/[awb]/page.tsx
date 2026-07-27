@@ -16,9 +16,7 @@ import { type Locale, statusKey, t } from '@/lib/i18n';
  * returns one generic 404 body for every miss (TRK-8) so the page
  * shows a single "not found" regardless.
  */
-async function fetchTracking(
-  awb: string,
-): Promise<PublicTrackingResponse | null> {
+async function fetchTracking(awb: string): Promise<PublicTrackingResponse | null> {
   const url = `${apiOrigin()}/public/tracking/${encodeURIComponent(awb)}`;
   try {
     const res = await fetch(url, {
@@ -142,51 +140,47 @@ export default async function AwbPage({
 
         {/* Status instrument */}
         <TiltPanel max={2.5} className="boot-rise mb-5">
-        <div className="panel ticks relative overflow-hidden p-6 sm:p-7">
-          <div className="flex items-baseline justify-between gap-3 mb-4">
-            <span className="telemetry text-fg-muted">{data.courierDisplayName}</span>
-            <span className="telemetry text-sky">{data.awbNumber}</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span
-              aria-hidden
-              className={`status-dot relative inline-block h-2.5 w-2.5 rounded-full shrink-0${
-                data.currentStatus === 'delivered' ? ' delivered-ring' : ''
-              }`}
-              style={{ background: tone }}
-            />
-            <h1
-              className="font-display text-2xl sm:text-3xl font-semibold tracking-tight"
-              style={{ color: tone }}
-            >
-              {humanizeStatus(data.currentStatus, locale)}
-            </h1>
-          </div>
-          <div className="telemetry text-fg-muted mt-2">
-            {t(locale, 'updated')}{' '}
-            {new Date(data.currentStatusAt).toLocaleString(localeBcp47(locale))}
-          </div>
-
-          <dl className="mt-5 pt-5 border-t border-line grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-            <div>
-              <dt className="telemetry text-fg-muted mb-1">{t(locale, 'destination')}</dt>
-              <dd className="text-fg-strong m-0">{data.destinationCity}</dd>
+          <div className="panel ticks relative overflow-hidden p-6 sm:p-7">
+            <div className="flex items-baseline justify-between gap-3 mb-4">
+              <span className="telemetry text-fg-muted">{data.courierDisplayName}</span>
+              <span className="telemetry text-sky">{data.awbNumber}</span>
             </div>
-            {data.estimatedDeliveryAt && (
+            <div className="flex items-center gap-3">
+              <span
+                aria-hidden
+                className={`status-dot relative inline-block h-2.5 w-2.5 rounded-full shrink-0${
+                  data.currentStatus === 'delivered' ? ' delivered-ring' : ''
+                }`}
+                style={{ background: tone }}
+              />
+              <h1
+                className="font-display text-2xl sm:text-3xl font-semibold tracking-tight"
+                style={{ color: tone }}
+              >
+                {humanizeStatus(data.currentStatus, locale)}
+              </h1>
+            </div>
+            <div className="telemetry text-fg-muted mt-2">
+              {t(locale, 'updated')}{' '}
+              {new Date(data.currentStatusAt).toLocaleString(localeBcp47(locale))}
+            </div>
+
+            <dl className="mt-5 pt-5 border-t border-line grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
               <div>
-                <dt className="telemetry text-fg-muted mb-1">
-                  {t(locale, 'estimatedDelivery')}
-                </dt>
-                <dd className="text-fg-strong m-0 font-mono">
-                  {new Date(data.estimatedDeliveryAt).toLocaleDateString(
-                    localeBcp47(locale),
-                  )}
-                </dd>
+                <dt className="telemetry text-fg-muted mb-1">{t(locale, 'destination')}</dt>
+                <dd className="text-fg-strong m-0">{data.destinationCity}</dd>
               </div>
-            )}
-          </dl>
-          <div aria-hidden className="glow-follow" />
-        </div>
+              {data.estimatedDeliveryAt && (
+                <div>
+                  <dt className="telemetry text-fg-muted mb-1">{t(locale, 'estimatedDelivery')}</dt>
+                  <dd className="text-fg-strong m-0 font-mono">
+                    {new Date(data.estimatedDeliveryAt).toLocaleDateString(localeBcp47(locale))}
+                  </dd>
+                </div>
+              )}
+            </dl>
+            <div aria-hidden className="glow-follow" />
+          </div>
         </TiltPanel>
 
         {/* Event log */}
@@ -200,10 +194,7 @@ export default async function AwbPage({
   );
 }
 
-function humanizeStatus(
-  s: PublicShipmentDisplayStatus,
-  locale: Locale,
-): string {
+function humanizeStatus(s: PublicShipmentDisplayStatus, locale: Locale): string {
   return t(locale, statusKey(s));
 }
 

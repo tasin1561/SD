@@ -2,18 +2,8 @@
 
 import { useState, type ReactElement } from 'react';
 import { ChevronDown, ChevronRight, RotateCw, Trash2 } from 'lucide-react';
-import {
-  useInvitationsList,
-  useResendInvitation,
-  useDeleteInvitation,
-} from '@/lib/api-hooks';
-import {
-  Button,
-  Card,
-  CardBody,
-  ConfirmDialog,
-  useToast,
-} from '@skydrop/ui/components';
+import { useInvitationsList, useResendInvitation, useDeleteInvitation } from '@/lib/api-hooks';
+import { Button, Card, CardBody, ConfirmDialog, useToast } from '@skydrop/ui/components';
 
 /**
  * Inline panel listing pending invitations on the sellers page. Most
@@ -28,8 +18,7 @@ export function InvitationsPanel(): ReactElement {
   const toast = useToast();
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
-  const pendingCount =
-    list.data?.items.filter((i) => i.status === 'pending').length ?? 0;
+  const pendingCount = list.data?.items.filter((i) => i.status === 'pending').length ?? 0;
 
   return (
     <Card className="mb-4">
@@ -51,9 +40,7 @@ export function InvitationsPanel(): ReactElement {
             )}
           </span>
         </div>
-        <span className="text-text-faint text-xs">
-          {expanded ? 'Hide' : 'Show'}
-        </span>
+        <span className="text-text-faint text-xs">{expanded ? 'Hide' : 'Show'}</span>
       </button>
 
       {expanded && (
@@ -70,9 +57,7 @@ export function InvitationsPanel(): ReactElement {
                   className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 rounded-[5px] hover:bg-surface-hover transition-colors"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="text-text-body text-sm font-mono truncate">
-                      {inv.email}
-                    </div>
+                    <div className="text-text-body text-sm font-mono truncate">{inv.email}</div>
                     <div className="text-text-faint text-xs">
                       <span className="uppercase tracking-wide">{inv.status}</span>
                       <span className="mx-1.5">·</span>
@@ -89,13 +74,10 @@ export function InvitationsPanel(): ReactElement {
                           resend.mutate(
                             { id: inv.id },
                             {
-                              onSuccess: () =>
-                                toast.success(`Invitation re-sent to ${inv.email}`),
+                              onSuccess: () => toast.success(`Invitation re-sent to ${inv.email}`),
                               onError: (e) =>
                                 toast.error(
-                                  e instanceof Error
-                                    ? e.message
-                                    : 'Failed to resend invitation.',
+                                  e instanceof Error ? e.message : 'Failed to resend invitation.',
                                 ),
                             },
                           )
@@ -135,9 +117,7 @@ export function InvitationsPanel(): ReactElement {
             await del.mutateAsync({ id: pendingDeleteId });
             toast.success('Invitation deleted.');
           } catch (e) {
-            toast.error(
-              e instanceof Error ? e.message : 'Failed to delete invitation.',
-            );
+            toast.error(e instanceof Error ? e.message : 'Failed to delete invitation.');
           }
           setPendingDeleteId(null);
         }}

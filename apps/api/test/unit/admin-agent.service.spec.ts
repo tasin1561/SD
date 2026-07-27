@@ -30,18 +30,12 @@ function makeService(
     currentAssigned?: number;
   } = {},
 ) {
-  const staffFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
-    async () => opts.agents ?? [],
-  );
+  const staffFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => opts.agents ?? []);
   const staffFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
     opts.staff === undefined ? { id: 'agent-1', email: 'a@x.io' } : opts.staff,
   );
-  const queueGroupBy = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
-    async () => opts.assignedGroup ?? [],
-  );
-  const queueCount = jest.fn<Promise<number>, [AnyArgs]>(
-    async () => opts.currentAssigned ?? 0,
-  );
+  const queueGroupBy = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => opts.assignedGroup ?? []);
+  const queueCount = jest.fn<Promise<number>, [AnyArgs]>(async () => opts.currentAssigned ?? 0);
   const attemptGroupBy = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
     async () => opts.outcomeGroup ?? [],
   );

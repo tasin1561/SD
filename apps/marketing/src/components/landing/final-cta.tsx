@@ -22,11 +22,21 @@ export function FinalCta(): ReactElement {
       <Reveal className="relative mx-auto max-w-2xl px-5 sm:px-8 text-center">
         <div className="telemetry text-fg-muted">sec 08 · clearance</div>
         <div aria-hidden className="runway mt-5 flex items-center justify-center gap-2.5">
-          <span /><span /><span /><span /><span /><span /><span />
+          <span />
+          <span />
+          <span />
+          <span />
+          <span />
+          <span />
+          <span />
         </div>
         <h2
           className="mt-4 font-display font-semibold text-fg-strong"
-          style={{ fontSize: 'clamp(2.1rem, 4.2vw, 3.2rem)', letterSpacing: '-0.025em', lineHeight: 1.06 }}
+          style={{
+            fontSize: 'clamp(2.1rem, 4.2vw, 3.2rem)',
+            letterSpacing: '-0.025em',
+            lineHeight: 1.06,
+          }}
         >
           Ready to ship into India?
         </h2>

@@ -47,7 +47,12 @@ export class AdminWithdrawalRequestController {
     @Query('status') status?: WithdrawalRequestStatus,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
-  ): Promise<{ items: readonly WithdrawalRequestView[]; total: number; page: number; pageSize: number }> {
+  ): Promise<{
+    items: readonly WithdrawalRequestView[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }> {
     return this.svc.listForAdmin({
       ...(sellerId === undefined ? {} : { sellerId }),
       ...(status === undefined ? {} : { status }),

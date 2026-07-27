@@ -78,7 +78,11 @@ export class TemplateRenderService {
     };
   }
 
-  async render(code: string, variables: EmailVariables = {}, language = 'en'): Promise<RenderedTemplate> {
+  async render(
+    code: string,
+    variables: EmailVariables = {},
+    language = 'en',
+  ): Promise<RenderedTemplate> {
     const tpl = await this.load(code, language);
     const ctx = normalizeVariables(variables);
     return {
@@ -92,7 +96,11 @@ export class TemplateRenderService {
   }
 
   /** Exposed for testing — renders an inline string without DB lookup. */
-  renderInline(source: string, variables: EmailVariables = {}, opts: { html?: boolean } = {}): string {
+  renderInline(
+    source: string,
+    variables: EmailVariables = {},
+    opts: { html?: boolean } = {},
+  ): string {
     const ctx = normalizeVariables(variables);
     return opts.html ? this.renderHtml(source, ctx) : this.renderText(source, ctx);
   }

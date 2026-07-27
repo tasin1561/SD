@@ -14,20 +14,13 @@ function makeService(
     creds?: Record<string, string>;
   } = {},
 ) {
-  const systemSettingFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async () =>
-      opts.baseUrl === null
-        ? null
-        : { valueString: opts.baseUrl ?? '' },
+  const systemSettingFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+    opts.baseUrl === null ? null : { valueString: opts.baseUrl ?? '' },
   );
   const client = { systemSetting: { findUnique: systemSettingFindUnique } };
-  const getCredential = jest.fn(async () =>
-    opts.creds ?? { apiToken: 'tok-123' },
-  );
+  const getCredential = jest.fn(async () => opts.creds ?? { apiToken: 'tok-123' });
   const credentials = { getCredential };
-  const env = makeTestEnv(
-    opts.isProduction ? { NODE_ENV: 'production' } : {},
-  );
+  const env = makeTestEnv(opts.isProduction ? { NODE_ENV: 'production' } : {});
 
   const rateLimit = {
     consume: jest.fn(async () => undefined),
@@ -37,7 +30,9 @@ function makeService(
   const svc = new DelhiveryHttpService(
     { client } as unknown as PrismaService,
     env,
-    credentials as unknown as CourierCredentialService, rateLimit);
+    credentials as unknown as CourierCredentialService,
+    rateLimit,
+  );
   return { svc, systemSettingFindUnique, getCredential };
 }
 
@@ -95,10 +90,7 @@ describe('DelhiveryHttpService.authHeaders', () => {
     const headers = await svc.authHeaders(CredentialEnvironment.SANDBOX);
     expect(headers.Authorization).toBe('Token secret-token');
     expect(headers['Content-Type']).toBe('application/json');
-    expect(getCredential).toHaveBeenCalledWith(
-      'delhivery',
-      CredentialEnvironment.SANDBOX,
-    );
+    expect(getCredential).toHaveBeenCalledWith('delhivery', CredentialEnvironment.SANDBOX);
   });
 
   it('throws when the credential lacks the apiToken field', async () => {

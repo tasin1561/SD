@@ -118,24 +118,45 @@
   opacity: 0.6;
   pointer-events: none;
 }
-.mc-login .ticks::before { top: 6px; left: 8px; }
-.mc-login .ticks::after { bottom: 6px; right: 8px; }
+.mc-login .ticks::before {
+  top: 6px;
+  left: 8px;
+}
+.mc-login .ticks::after {
+  bottom: 6px;
+  right: 8px;
+}
 
 @keyframes mcStatusPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
 }
-.mc-login .status-dot { animation: mcStatusPulse 2.4s ease-in-out infinite; }
+.mc-login .status-dot {
+  animation: mcStatusPulse 2.4s ease-in-out infinite;
+}
 
 @keyframes mcBootRise {
-  from { transform: translateY(14px); }
-  to { transform: none; }
+  from {
+    transform: translateY(14px);
+  }
+  to {
+    transform: none;
+  }
 }
 .mc-login .boot-rise {
   animation: mcBootRise 480ms cubic-bezier(0.22, 0.68, 0.34, 1) backwards;
 }
-.mc-login .boot-rise-2 { animation-delay: 90ms; }
-.mc-login .boot-rise-3 { animation-delay: 180ms; }
+.mc-login .boot-rise-2 {
+  animation-delay: 90ms;
+}
+.mc-login .boot-rise-3 {
+  animation-delay: 180ms;
+}
 
 .mc-login .glow-follow {
   position: absolute;
@@ -150,12 +171,16 @@
     transparent 70%
   );
 }
-.mc-login *:hover > .glow-follow { opacity: 1; }
+.mc-login *:hover > .glow-follow {
+  opacity: 1;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .mc-login .status-dot,
   .mc-login .boot-rise {
     animation: none;
   }
-  .mc-login .glow-follow { display: none; }
+  .mc-login .glow-follow {
+    display: none;
+  }
 }

@@ -5,12 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  ActorType,
-  OrderStatus,
-  Prisma,
-  ReservationReleaseReason,
-} from '@skydrop/db';
+import { ActorType, OrderStatus, Prisma, ReservationReleaseReason } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { StockReservationService } from '../../inventory-stock/services/stock-reservation.service';
@@ -115,8 +110,7 @@ export class OrderAdminOverrideService {
       });
     }
     const hasFieldChanges =
-      input.fieldChanges !== undefined &&
-      Object.keys(input.fieldChanges).length > 0;
+      input.fieldChanges !== undefined && Object.keys(input.fieldChanges).length > 0;
     if (!hasFieldChanges && input.targetStatus === undefined) {
       throw new BadRequestException({
         code: 'FORCE_MUTATION_NOOP',
@@ -214,9 +208,7 @@ export class OrderAdminOverrideService {
    * nothing extra. Audited HIGH; an order_event records the outcome.
    * Does NOT change order status.
    */
-  async releaseReservations(
-    input: ReleaseReservationsInput,
-  ): Promise<ReleaseReservationsResult> {
+  async releaseReservations(input: ReleaseReservationsInput): Promise<ReleaseReservationsResult> {
     const order = await this.prisma.client.order.findFirst({
       where: { id: input.orderId, deletedAt: null },
       select: { id: true, sellerId: true, orderNumber: true, status: true },
@@ -228,11 +220,10 @@ export class OrderAdminOverrideService {
     const active = await this.reservations.listActiveForOrder(order.id);
     const released: ReleaseReservationsResult['released'] = [];
     for (const r of active) {
-      const res = await this.reservations.release(
-        r.id,
-        ReservationReleaseReason.MANUAL_RELEASE,
-        { type: ActorType.STAFF, id: input.actorStaffId },
-      );
+      const res = await this.reservations.release(r.id, ReservationReleaseReason.MANUAL_RELEASE, {
+        type: ActorType.STAFF,
+        id: input.actorStaffId,
+      });
       released.push({
         reservationId: res.reservationId,
         qtyReleased: res.qtyReleased,

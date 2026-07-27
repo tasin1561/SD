@@ -14,10 +14,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SellerUserRole } from '@skydrop/db';
 import { CurrentSeller } from '../../common/decorators/current-seller.decorator';
-import {
-  ClientInfo,
-  type ClientInfoPayload,
-} from '../../common/decorators/client-info.decorator';
+import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/client-info.decorator';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { requireSellerRoles } from '../../common/auth/require-seller-roles';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';

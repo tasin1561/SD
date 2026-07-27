@@ -16,10 +16,7 @@ import {
 } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 import type { NotificationPreferenceView } from '@skydrop/api-client';
-import {
-  useNotificationPreferences,
-  useUpdateNotificationPreference,
-} from '@/lib/api-hooks';
+import { useNotificationPreferences, useUpdateNotificationPreference } from '@/lib/api-hooks';
 
 const CATEGORY_LABEL: Record<string, { title: string; description: string }> = {
   ORDER_UPDATES: {
@@ -79,10 +76,7 @@ export function NotificationPreferencesIndex(): ReactElement {
       {list.isLoading ? (
         <LoadingState label="Loading…" />
       ) : list.isError ? (
-        <ErrorState
-          message={list.error?.message ?? 'Failed.'}
-          retry={() => void list.refetch()}
-        />
+        <ErrorState message={list.error?.message ?? 'Failed.'} retry={() => void list.refetch()} />
       ) : !list.data || list.data.length === 0 ? (
         <Card>
           <CardBody>
@@ -147,9 +141,7 @@ function PreferenceRow({
   return (
     <Card>
       <CardBody>
-        <div className="text-text-bright text-sm font-medium mb-1">
-          {label.title}
-        </div>
+        <div className="text-text-bright text-sm font-medium mb-1">{label.title}</div>
         <p className="text-text-muted text-xs mb-3">{label.description}</p>
 
         <div className="grid grid-cols-4 gap-3 mb-3">
@@ -187,8 +179,7 @@ function PreferenceRow({
               onChange={(e) =>
                 void patch(
                   {
-                    frequency:
-                      e.target.value as (typeof FREQUENCIES)[number],
+                    frequency: e.target.value as (typeof FREQUENCIES)[number],
                   },
                   'Saved.',
                 )
@@ -209,8 +200,7 @@ function PreferenceRow({
               onBlur={(e) =>
                 void patch(
                   {
-                    quietHoursStart:
-                      e.target.value.trim() === '' ? null : e.target.value,
+                    quietHoursStart: e.target.value.trim() === '' ? null : e.target.value,
                   },
                   'Saved.',
                 )
@@ -225,8 +215,7 @@ function PreferenceRow({
               onBlur={(e) =>
                 void patch(
                   {
-                    quietHoursEnd:
-                      e.target.value.trim() === '' ? null : e.target.value,
+                    quietHoursEnd: e.target.value.trim() === '' ? null : e.target.value,
                   },
                   'Saved.',
                 )

@@ -1,9 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   ActorType,
   ReservationBookingStage,
@@ -171,8 +166,7 @@ export class StockReservationService {
       throw new InsufficientStockError(qty, available);
     }
 
-    const ttlHours =
-      input.ttlHoursOverride ?? (await this.resolveTtlHours(input.sellerId));
+    const ttlHours = input.ttlHoursOverride ?? (await this.resolveTtlHours(input.sellerId));
     const expiresAt = new Date(now.getTime() + ttlHours * 3_600_000);
 
     const row = await this.prisma.client.stockReservation.create({
@@ -192,7 +186,13 @@ export class StockReservationService {
       select: RESERVATION_SELECT,
     });
     this.logger.log(
-      { reservationId: row.id, sellerId: input.sellerId, variantId: input.variantId, qty, expiresAt },
+      {
+        reservationId: row.id,
+        sellerId: input.sellerId,
+        variantId: input.variantId,
+        qty,
+        expiresAt,
+      },
       'Phase-1 reservation created',
     );
     return row;
@@ -235,9 +235,7 @@ export class StockReservationService {
         select: { valueInt: true },
       }),
     ]);
-    return (
-      seller?.reservationTtlHoursOverride ?? setting?.valueInt ?? DEFAULT_TTL_HOURS
-    );
+    return seller?.reservationTtlHoursOverride ?? setting?.valueInt ?? DEFAULT_TTL_HOURS;
   }
 
   /**

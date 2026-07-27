@@ -32,8 +32,13 @@ function geo(id: string): readonly [number, number] {
 }
 
 const ORIGIN: NodeDef = {
-  id: 'DAC', x: geo('DAC')[0], y: geo('DAC')[1],
-  label: 'DAC', labelDx: 12, labelDy: -10, origin: true,
+  id: 'DAC',
+  x: geo('DAC')[0],
+  y: geo('DAC')[1],
+  label: 'DAC',
+  labelDx: 12,
+  labelDy: -10,
+  origin: true,
 };
 
 // Pan-India destination set — Delhivery covers all of these lanes.

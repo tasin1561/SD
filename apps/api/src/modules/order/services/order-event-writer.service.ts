@@ -87,10 +87,7 @@ export class OrderEventWriterService {
       orderId,
       type: OrderEventType.CREATED,
       toStatus,
-      description:
-        toStatus === OrderStatus.DRAFT
-          ? 'Order created'
-          : `Order created (${toStatus})`,
+      description: toStatus === OrderStatus.DRAFT ? 'Order created' : `Order created (${toStatus})`,
       data,
       actor,
       isVisibleToSeller: true,
@@ -191,7 +188,11 @@ export class OrderEventWriterService {
       fromStatus: args.from ?? null,
       toStatus: args.to ?? null,
       description: `[${args.action}] ${args.reason}`,
-      data: { action: args.action, reason: args.reason, ...(args.data ?? {}) } as Prisma.InputJsonValue,
+      data: {
+        action: args.action,
+        reason: args.reason,
+        ...(args.data ?? {}),
+      } as Prisma.InputJsonValue,
       actor: { type: ActorType.STAFF, id: args.actorId ?? null },
       isVisibleToSeller: false,
     });

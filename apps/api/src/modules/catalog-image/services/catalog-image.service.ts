@@ -88,11 +88,7 @@ export class CatalogImageService {
     await this.requireVariant(sellerId, variantId);
 
     const key = buildOriginalKey(sellerId, variantId, input.mimeType as AllowedImageMime);
-    const uploadUrl = await this.spaces.presignPutUrl(
-      key,
-      input.mimeType,
-      PRESIGN_TTL_SECONDS,
-    );
+    const uploadUrl = await this.spaces.presignPutUrl(key, input.mimeType, PRESIGN_TTL_SECONDS);
     return {
       spacesKey: key,
       uploadUrl,

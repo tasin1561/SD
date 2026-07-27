@@ -81,9 +81,7 @@ function toIsoWithIst(raw: string): string {
 }
 
 @Injectable()
-export class DelhiveryTrackingFetchService
-  implements Pick<DelhiveryClient, 'fetchTracking'>
-{
+export class DelhiveryTrackingFetchService implements Pick<DelhiveryClient, 'fetchTracking'> {
   private readonly logger = new Logger(DelhiveryTrackingFetchService.name);
 
   /** Delhivery caps a single tracking call at 50 waybills. */
@@ -91,9 +89,7 @@ export class DelhiveryTrackingFetchService
 
   constructor(private readonly http: DelhiveryHttpService) {}
 
-  async fetchTracking(
-    awbNumbers: string[],
-  ): Promise<CourierTrackingResult[]> {
+  async fetchTracking(awbNumbers: string[]): Promise<CourierTrackingResult[]> {
     const awbs = awbNumbers.map((a) => a.trim()).filter((a) => a !== '');
     if (awbs.length === 0) return [];
 

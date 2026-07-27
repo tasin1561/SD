@@ -100,7 +100,9 @@ describe('FE-2 boundary — god-mode force-mutation', () => {
     expect(cta).toBeDisabled(); // still no ack
 
     // Tick the risk-ack checkbox.
-    await user.click(screen.getByRole('checkbox', { name: /I acknowledge the data-integrity risk/i }));
+    await user.click(
+      screen.getByRole('checkbox', { name: /I acknowledge the data-integrity risk/i }),
+    );
     expect(cta).not.toBeDisabled(); // all three gates open
   });
 
@@ -199,9 +201,7 @@ describe('FE-2 boundary — god-mode force-mutation', () => {
     // The dialog returns to the edit step so the operator can revise.
     // The Continue → confirmation button is back.
     await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: /Continue → confirmation/i }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Continue → confirmation/i })).toBeInTheDocument();
     });
   });
 

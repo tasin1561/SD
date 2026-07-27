@@ -118,8 +118,7 @@ export class StockAlertService {
     if (!wasActive && belowThreshold) {
       nextActive = true;
       const cooldownMs = (await this.cooldownHours()) * 3_600_000;
-      const inCooldown =
-        lastSentAt !== null && lastSentAt.getTime() + cooldownMs > now.getTime();
+      const inCooldown = lastSentAt !== null && lastSentAt.getTime() + cooldownMs > now.getTime();
       if (inCooldown) {
         outcome = 'SUPPRESSED_COOLDOWN';
       } else {

@@ -186,14 +186,9 @@ export function CatalogIndex(): ReactElement {
                   </Link>
                 </Td>
                 <Td className="text-text-muted">{p.brand ?? '—'}</Td>
-                <Td className="text-text-muted font-mono text-xs">
-                  {p.externalRef ?? '—'}
-                </Td>
+                <Td className="text-text-muted font-mono text-xs">{p.externalRef ?? '—'}</Td>
                 <Td>
-                  <StatusBadge
-                    kind={productStatusKind(p.status)}
-                    label={p.status.toLowerCase()}
-                  />
+                  <StatusBadge kind={productStatusKind(p.status)} label={p.status.toLowerCase()} />
                 </Td>
                 <Td align="right" className="text-text-muted font-mono text-xs">
                   {p.defaultWeightGrams ?? '—'}

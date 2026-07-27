@@ -193,9 +193,7 @@ export class GoodsReceiptService {
     return this.prisma.client.$transaction(async (tx) => {
       const data: Prisma.GoodsReceiptUpdateInput = {};
       if (input.expectedArrivalAt !== undefined) {
-        data.expectedArrivalAt = input.expectedArrivalAt
-          ? new Date(input.expectedArrivalAt)
-          : null;
+        data.expectedArrivalAt = input.expectedArrivalAt ? new Date(input.expectedArrivalAt) : null;
       }
       if (input.sellerReference !== undefined) {
         data.sellerReference = input.sellerReference;
@@ -292,11 +290,7 @@ export class GoodsReceiptService {
   }
 
   /** PENDING -> ARRIVING; records who is receiving. */
-  async startReceiving(
-    staffId: string,
-    id: string,
-    ctx: ClientContext,
-  ): Promise<GoodsReceiptView> {
+  async startReceiving(staffId: string, id: string, ctx: ClientContext): Promise<GoodsReceiptView> {
     const existing = await this.getForAdmin(id);
     this.assertStatus(existing.status, [GoodsReceiptStatus.PENDING], 'start receiving');
     return this.prisma.client.$transaction(async (tx) => {
@@ -779,10 +773,7 @@ export class GoodsReceiptService {
       .join('; ');
   }
 
-  private async warehouseName(
-    tx: Prisma.TransactionClient,
-    warehouseId: string,
-  ): Promise<string> {
+  private async warehouseName(tx: Prisma.TransactionClient, warehouseId: string): Promise<string> {
     const wh = await tx.warehouse.findUnique({
       where: { id: warehouseId },
       select: { name: true },
@@ -815,11 +806,7 @@ export class GoodsReceiptService {
 
   // ---------------- shared internals (used by commits 17/18 too) ----------------
 
-  assertStatus(
-    actual: GoodsReceiptStatus,
-    allowed: GoodsReceiptStatus[],
-    action: string,
-  ): void {
+  assertStatus(actual: GoodsReceiptStatus, allowed: GoodsReceiptStatus[], action: string): void {
     if (!allowed.includes(actual)) {
       throw new ConflictException({
         code: 'INVALID_RECEIPT_STATUS',
@@ -838,10 +825,7 @@ export class GoodsReceiptService {
     };
   }
 
-  private async assertVariants(
-    sellerId: string,
-    lines: DeclareReceiptLineDto[],
-  ): Promise<void> {
+  private async assertVariants(sellerId: string, lines: DeclareReceiptLineDto[]): Promise<void> {
     const ids = [...new Set(lines.map((l) => l.variantId))];
     const map = await this.catalog.getVariantsByIds(ids);
     for (const id of ids) {

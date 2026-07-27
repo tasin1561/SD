@@ -30,11 +30,7 @@ export function TimelineView({
   readonly locale: Locale;
 }): ReactElement {
   if (events.length === 0) {
-    return (
-      <div className="panel p-5 text-fg-muted text-sm">
-        {t(locale, 'noScansYet')}
-      </div>
-    );
+    return <div className="panel p-5 text-fg-muted text-sm">{t(locale, 'noScansYet')}</div>;
   }
   const bcp = locale === 'hi' ? 'hi-IN' : 'en-IN';
   return (
@@ -68,9 +64,7 @@ export function TimelineView({
                   {new Date(e.eventAt).toLocaleString(bcp)}
                 </span>
               </div>
-              {e.description && (
-                <div className="text-fg-body text-xs mt-0.5">{e.description}</div>
-              )}
+              {e.description && <div className="text-fg-body text-xs mt-0.5">{e.description}</div>}
               {e.locationCity && (
                 <div className="telemetry text-fg-muted mt-1">{e.locationCity}</div>
               )}

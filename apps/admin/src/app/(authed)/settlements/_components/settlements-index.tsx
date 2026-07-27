@@ -259,17 +259,12 @@ function UnsettledTable({
         {rows.map((r) => (
           <Tr key={r.orderId}>
             <Td>
-              <Link
-                href={`/orders/${r.orderId}`}
-                className="text-accent hover:underline"
-              >
+              <Link href={`/orders/${r.orderId}`} className="text-accent hover:underline">
                 <Ident value={r.orderNumber} />
               </Link>
             </Td>
             <Td className="text-text-muted whitespace-nowrap">
-              {r.deliveredAt === null
-                ? '—'
-                : new Date(r.deliveredAt).toLocaleDateString()}
+              {r.deliveredAt === null ? '—' : new Date(r.deliveredAt).toLocaleDateString()}
             </Td>
             <Td align="right">
               <Num value={r.ageDays} suffix="d" />

@@ -4,11 +4,7 @@ import type { ReactElement } from 'react';
  * Status-bar footer — capability chips as system readouts.
  */
 
-const READOUTS = [
-  'delhivery api · integrated',
-  'wms · bin-level',
-  'tracking · webhook',
-];
+const READOUTS = ['delhivery api · integrated', 'wms · bin-level', 'tracking · webhook'];
 
 const LINKS = [
   { href: 'https://track.skydrop.online', label: 'Track a parcel', external: true },
@@ -25,7 +21,10 @@ export function SiteFooter(): ReactElement {
             <div className="flex items-baseline gap-3">
               <span className="font-display font-semibold text-fg-strong text-lg">Skydrop</span>
               <span className="telemetry inline-flex items-center gap-1.5 text-fg-muted">
-                <span aria-hidden className="status-dot inline-block h-1 w-1 rounded-full bg-green" />
+                <span
+                  aria-hidden
+                  className="status-dot inline-block h-1 w-1 rounded-full bg-green"
+                />
                 sys online
               </span>
             </div>

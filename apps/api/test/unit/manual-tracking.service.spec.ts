@@ -44,11 +44,13 @@ interface FakeAttempt {
   source: TrackingEventSource;
 }
 
-function makeSvc(opts: {
-  ship?: FakeShip | null;
-  order?: FakeOrder | null;
-  transitionThrows?: Error;
-} = {}) {
+function makeSvc(
+  opts: {
+    ship?: FakeShip | null;
+    order?: FakeOrder | null;
+    transitionThrows?: Error;
+  } = {},
+) {
   const ship = opts.ship ?? {
     id: SHIPMENT_ID,
     courierCode: COURIER,
@@ -87,8 +89,7 @@ function makeSvc(opts: {
       if (
         attempts.some(
           (a) =>
-            a.shipmentId === args.data.shipmentId &&
-            a.attemptNumber === args.data.attemptNumber,
+            a.shipmentId === args.data.shipmentId && a.attemptNumber === args.data.attemptNumber,
         )
       ) {
         const err: Error & { code?: string } = new Error('P2002');
@@ -117,39 +118,46 @@ function makeSvc(opts: {
   const mapping = new TrackingStatusMappingService();
 
   const fakeAppend = {
-    append: jest.fn(
-      async (input: AppendTrackingEventInput): Promise<TrackingEventRow> => {
-        appendCalls.push(input);
-        return {
-          id: `te-${teCounter++}`,
-          createdAt: new Date(),
-          eventAt: input.eventAt,
-          shipmentId: input.shipmentId,
-          eventType: input.eventType,
-          status: input.status,
-          source: input.source,
-          courierCode: input.courierCode ?? null,
-          rawCourierStatus: input.rawCourierStatus ?? null,
-          nslCode: input.nslCode ?? null,
-          description: input.description ?? null,
-          locationName: input.locationName ?? null,
-          locationCity: input.locationCity ?? null,
-          locationPincode: input.locationPincode ?? null,
-          webhookId: input.webhookId ?? null,
-          actorType: input.actorType ?? null,
-          actorId: input.actorId ?? null,
-          metadata: null,
-          isVisibleToCustomer: input.isVisibleToCustomer ?? true,
-        };
-      },
-    ),
+    append: jest.fn(async (input: AppendTrackingEventInput): Promise<TrackingEventRow> => {
+      appendCalls.push(input);
+      return {
+        id: `te-${teCounter++}`,
+        createdAt: new Date(),
+        eventAt: input.eventAt,
+        shipmentId: input.shipmentId,
+        eventType: input.eventType,
+        status: input.status,
+        source: input.source,
+        courierCode: input.courierCode ?? null,
+        rawCourierStatus: input.rawCourierStatus ?? null,
+        nslCode: input.nslCode ?? null,
+        description: input.description ?? null,
+        locationName: input.locationName ?? null,
+        locationCity: input.locationCity ?? null,
+        locationPincode: input.locationPincode ?? null,
+        webhookId: input.webhookId ?? null,
+        actorType: input.actorType ?? null,
+        actorId: input.actorId ?? null,
+        metadata: null,
+        isVisibleToCustomer: input.isVisibleToCustomer ?? true,
+      };
+    }),
   };
 
   let transitionThrow = opts.transitionThrows;
-  const transitionCalls: Array<{ orderId: string; to: OrderStatus; actor?: { type: ActorType; id?: string | null } }> = [];
+  const transitionCalls: Array<{
+    orderId: string;
+    to: OrderStatus;
+    actor?: { type: ActorType; id?: string | null };
+  }> = [];
   const orderWrite = {
     transitionStatus: jest.fn(
-      async (input: { orderId: string; to: OrderStatus; expectedFrom?: OrderStatus; actor: { type: ActorType; id?: string | null } }) => {
+      async (input: {
+        orderId: string;
+        to: OrderStatus;
+        expectedFrom?: OrderStatus;
+        actor: { type: ActorType; id?: string | null };
+      }) => {
         transitionCalls.push({ orderId: input.orderId, to: input.to, actor: input.actor });
         if (transitionThrow) {
           const e = transitionThrow;

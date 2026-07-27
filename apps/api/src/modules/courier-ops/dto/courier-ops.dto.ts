@@ -14,18 +14,12 @@ import {
   MinLength,
 } from 'class-validator';
 
-const DOC_TYPES = [
-  'EPOD',
-  'SIGNATURE_URL',
-  'RVP_QC_IMAGE',
-  'SELLER_RETURN_IMAGE',
-] as const;
+const DOC_TYPES = ['EPOD', 'SIGNATURE_URL', 'RVP_QC_IMAGE', 'SELLER_RETURN_IMAGE'] as const;
 
 export class ShipmentInsightQueryDto {
   @ApiPropertyOptional({
     enum: ['S', 'E', 'N'],
-    description:
-      'Transport mode for the TAT quote: S surface (default), E express, N none.',
+    description: 'Transport mode for the TAT quote: S surface (default), E express, N none.',
   })
   @IsOptional()
   @IsIn(['S', 'E', 'N'])

@@ -1,14 +1,5 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import {
-  ActorType,
-  CategoryProposalStatus,
-  NotificationRecipientType,
-  Prisma,
-} from '@skydrop/db';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { ActorType, CategoryProposalStatus, NotificationRecipientType, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { EnvService } from '../../../config/env.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';

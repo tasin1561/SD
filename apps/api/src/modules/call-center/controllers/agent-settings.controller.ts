@@ -1,12 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Patch,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Patch, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
 import {
@@ -17,10 +9,7 @@ import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import { UpdateAgentSettingsDto } from '../dto/update-agent-settings.dto';
-import {
-  AgentSettingsService,
-  type AgentSettingsView,
-} from '../services/agent-settings.service';
+import { AgentSettingsService, type AgentSettingsView } from '../services/agent-settings.service';
 
 /**
  * Agent self-service for their own call settings (locked decision 10c).
@@ -46,8 +35,7 @@ export class AgentSettingsController {
   @Patch()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary:
-      'Agent edits own advisory settings (admin-only fields → 403 FIELD_ADMIN_ONLY)',
+    summary: 'Agent edits own advisory settings (admin-only fields → 403 FIELD_ADMIN_ONLY)',
   })
   update(
     @Body() body: UpdateAgentSettingsDto,

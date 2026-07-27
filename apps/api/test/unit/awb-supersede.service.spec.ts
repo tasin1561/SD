@@ -42,9 +42,7 @@ function oldShipment(over: AnyArgs = {}): AnyArgs {
     pickCompletedAt: new Date('2026-05-22T08:30:00Z'),
     packCompletedAt: new Date('2026-05-22T09:00:00Z'),
     packedByStaffId: 'staff-2',
-    orderShipments: [
-      { orderId: ORDER, isFullOrder: true, shipmentSequence: 1 },
-    ],
+    orderShipments: [{ orderId: ORDER, isFullOrder: true, shipmentSequence: 1 }],
     items: [
       {
         orderItemId: 'oi-1',
@@ -70,9 +68,7 @@ function makeService(
   const shipmentFindUnique = jest.fn(async () =>
     opts.shipment === undefined ? oldShipment() : opts.shipment,
   );
-  const shipmentFindFirst = jest.fn(async () =>
-    opts.existingReplacement ?? null,
-  );
+  const shipmentFindFirst = jest.fn(async () => opts.existingReplacement ?? null);
   const txCreate = jest.fn(async (args: AnyArgs) => ({
     id: 'ship-new',
     shipmentNumber: 'SH-2026-05-000099',
@@ -89,12 +85,9 @@ function makeService(
     };
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
   };
-  client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> =>
-    fn(txClient);
+  client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient);
 
-  const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown]>(
-    async () => 'a',
-  );
+  const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown]>(async () => 'a');
   const audit = { log: auditLog };
   const nextShipmentNumber = jest.fn(async () => 'SH-2026-05-000099');
   const numbering = { nextShipmentNumber };
@@ -186,18 +179,18 @@ describe('AwbSupersedeService.supersede', () => {
 
   it('404 when the shipment is missing', async () => {
     const { svc } = makeService({ shipment: null });
-    await expect(
-      svc.supersede(OLD, SupersedeReason.AWB_REJECTED),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(svc.supersede(OLD, SupersedeReason.AWB_REJECTED)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('404 when the shipment has no OrderShipment junction', async () => {
     const { svc } = makeService({
       shipment: oldShipment({ orderShipments: [] }),
     });
-    await expect(
-      svc.supersede(OLD, SupersedeReason.AWB_REJECTED),
-    ).rejects.toMatchObject({ response: { code: 'ORDER_SHIPMENT_MISSING' } });
+    await expect(svc.supersede(OLD, SupersedeReason.AWB_REJECTED)).rejects.toMatchObject({
+      response: { code: 'ORDER_SHIPMENT_MISSING' },
+    });
   });
 
   it('carries the supersede reason through (NON_SERVICEABLE)', async () => {

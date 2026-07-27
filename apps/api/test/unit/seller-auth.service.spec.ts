@@ -170,46 +170,67 @@ function buildClient(): FakeClient {
                 if (want !== null && want !== undefined && r.deletedAt === null) return false;
                 continue;
               }
-              if (want !== undefined && (r as unknown as Record<string, unknown>)[k] !== want) return false;
+              if (want !== undefined && (r as unknown as Record<string, unknown>)[k] !== want)
+                return false;
             }
             return true;
           }) ?? null
         );
       }),
-      findUnique: jest.fn(async ({ where }: { where: { email?: string; id?: string } }) =>
-        tables.sellers.find((r) => (where.email ? r.email === where.email : r.id === where.id)) ?? null,
+      findUnique: jest.fn(
+        async ({ where }: { where: { email?: string; id?: string } }) =>
+          tables.sellers.find((r) => (where.email ? r.email === where.email : r.id === where.id)) ??
+          null,
       ),
-      create: jest.fn(async ({ data }: { data: Partial<SellerRow> & { email: string; emailDisplay: string; passwordHash: string; companyName: string; contactPersonName: string; phone: string; status: SellerStatus; displayCurrency: Currency; displayLanguage: string } }) => {
-        sellerSeq += 1;
-        const row: SellerRow = {
-          id: `seller-${sellerSeq}`,
-          email: data.email,
-          emailDisplay: data.emailDisplay,
-          passwordHash: data.passwordHash,
-          companyName: data.companyName,
-          contactPersonName: data.contactPersonName,
-          phone: data.phone,
-          whatsapp: data.whatsapp ?? null,
-          status: data.status,
-          approvedAt: data.approvedAt ?? null,
-          approvedById: data.approvedById ?? null,
-          displayCurrency: data.displayCurrency,
-          displayLanguage: data.displayLanguage,
-          countryCode: data.countryCode ?? 'BD',
-          emailVerifiedAt: data.emailVerifiedAt ?? null,
-          lastLoginAt: data.lastLoginAt ?? null,
-          createdAt: new Date(),
-          deletedAt: null,
-        };
-        tables.sellers.push(row);
-        return { id: row.id, email: row.email, status: row.status };
-      }),
-      update: jest.fn(async ({ where, data }: { where: { id: string }; data: Partial<SellerRow> }) => {
-        const row = tables.sellers.find((r) => r.id === where.id);
-        if (!row) throw new Error('seller not found');
-        Object.assign(row, data);
-        return row;
-      }),
+      create: jest.fn(
+        async ({
+          data,
+        }: {
+          data: Partial<SellerRow> & {
+            email: string;
+            emailDisplay: string;
+            passwordHash: string;
+            companyName: string;
+            contactPersonName: string;
+            phone: string;
+            status: SellerStatus;
+            displayCurrency: Currency;
+            displayLanguage: string;
+          };
+        }) => {
+          sellerSeq += 1;
+          const row: SellerRow = {
+            id: `seller-${sellerSeq}`,
+            email: data.email,
+            emailDisplay: data.emailDisplay,
+            passwordHash: data.passwordHash,
+            companyName: data.companyName,
+            contactPersonName: data.contactPersonName,
+            phone: data.phone,
+            whatsapp: data.whatsapp ?? null,
+            status: data.status,
+            approvedAt: data.approvedAt ?? null,
+            approvedById: data.approvedById ?? null,
+            displayCurrency: data.displayCurrency,
+            displayLanguage: data.displayLanguage,
+            countryCode: data.countryCode ?? 'BD',
+            emailVerifiedAt: data.emailVerifiedAt ?? null,
+            lastLoginAt: data.lastLoginAt ?? null,
+            createdAt: new Date(),
+            deletedAt: null,
+          };
+          tables.sellers.push(row);
+          return { id: row.id, email: row.email, status: row.status };
+        },
+      ),
+      update: jest.fn(
+        async ({ where, data }: { where: { id: string }; data: Partial<SellerRow> }) => {
+          const row = tables.sellers.find((r) => r.id === where.id);
+          if (!row) throw new Error('seller not found');
+          Object.assign(row, data);
+          return row;
+        },
+      ),
     },
     sellerUser: {
       findFirst: jest.fn(async ({ where }: { where: Record<string, unknown> }) => {
@@ -232,54 +253,76 @@ function buildClient(): FakeClient {
             : null,
         };
       }),
-      create: jest.fn(async ({ data }: { data: Partial<SellerUserRow> & { sellerId: string; email: string; emailDisplay: string; fullName: string; passwordHash: string; role: SellerUserRole } }) => {
-        sellerUserSeq += 1;
-        const row: SellerUserRow = {
-          id: `seller-user-${sellerUserSeq}`,
-          sellerId: data.sellerId,
-          email: data.email,
-          emailDisplay: data.emailDisplay,
-          fullName: data.fullName,
-          passwordHash: data.passwordHash,
-          role: data.role,
-          emailVerifiedAt: data.emailVerifiedAt ?? null,
-          lastLoginAt: data.lastLoginAt ?? null,
-          createdAt: new Date(),
-          deletedAt: null,
-        };
-        tables.sellerUsers.push(row);
-        return { id: row.id };
-      }),
-      update: jest.fn(async ({ where, data }: { where: { id: string }; data: Partial<SellerUserRow> }) => {
-        const row = tables.sellerUsers.find((r) => r.id === where.id);
-        if (!row) throw new Error('seller user not found');
-        Object.assign(row, data);
-        return row;
-      }),
+      create: jest.fn(
+        async ({
+          data,
+        }: {
+          data: Partial<SellerUserRow> & {
+            sellerId: string;
+            email: string;
+            emailDisplay: string;
+            fullName: string;
+            passwordHash: string;
+            role: SellerUserRole;
+          };
+        }) => {
+          sellerUserSeq += 1;
+          const row: SellerUserRow = {
+            id: `seller-user-${sellerUserSeq}`,
+            sellerId: data.sellerId,
+            email: data.email,
+            emailDisplay: data.emailDisplay,
+            fullName: data.fullName,
+            passwordHash: data.passwordHash,
+            role: data.role,
+            emailVerifiedAt: data.emailVerifiedAt ?? null,
+            lastLoginAt: data.lastLoginAt ?? null,
+            createdAt: new Date(),
+            deletedAt: null,
+          };
+          tables.sellerUsers.push(row);
+          return { id: row.id };
+        },
+      ),
+      update: jest.fn(
+        async ({ where, data }: { where: { id: string }; data: Partial<SellerUserRow> }) => {
+          const row = tables.sellerUsers.find((r) => r.id === where.id);
+          if (!row) throw new Error('seller user not found');
+          Object.assign(row, data);
+          return row;
+        },
+      ),
     },
     sellerInvitation: {
-      findUnique: jest.fn(async ({ where }: { where: { token?: string; id?: string } }) =>
-        tables.invitations.find((r) =>
-          where.token ? r.token === where.token : r.id === where.id,
-        ) ?? null,
+      findUnique: jest.fn(
+        async ({ where }: { where: { token?: string; id?: string } }) =>
+          tables.invitations.find((r) =>
+            where.token ? r.token === where.token : r.id === where.id,
+          ) ?? null,
       ),
-      findFirst: jest.fn(async ({ where }: { where: Record<string, unknown> }) =>
-        tables.invitations.find((r) => {
-          const emailFilter = where['email'] as undefined | { equals: string; mode: 'insensitive' };
-          if (emailFilter && r.email.toLowerCase() !== emailFilter.equals.toLowerCase()) return false;
-          if (where['usedAt'] === null && r.usedAt !== null) return false;
-          if (where['deletedAt'] === null && r.deletedAt !== null) return false;
-          const exp = where['expiresAt'] as undefined | { gt: Date };
-          if (exp && r.expiresAt.getTime() <= exp.gt.getTime()) return false;
-          return true;
-        }) ?? null,
+      findFirst: jest.fn(
+        async ({ where }: { where: Record<string, unknown> }) =>
+          tables.invitations.find((r) => {
+            const emailFilter = where['email'] as
+              | undefined
+              | { equals: string; mode: 'insensitive' };
+            if (emailFilter && r.email.toLowerCase() !== emailFilter.equals.toLowerCase())
+              return false;
+            if (where['usedAt'] === null && r.usedAt !== null) return false;
+            if (where['deletedAt'] === null && r.deletedAt !== null) return false;
+            const exp = where['expiresAt'] as undefined | { gt: Date };
+            if (exp && r.expiresAt.getTime() <= exp.gt.getTime()) return false;
+            return true;
+          }) ?? null,
       ),
-      update: jest.fn(async ({ where, data }: { where: { id: string }; data: Partial<InvitationRow> }) => {
-        const row = tables.invitations.find((r) => r.id === where.id);
-        if (!row) throw new Error('invitation not found');
-        Object.assign(row, data);
-        return row;
-      }),
+      update: jest.fn(
+        async ({ where, data }: { where: { id: string }; data: Partial<InvitationRow> }) => {
+          const row = tables.invitations.find((r) => r.id === where.id);
+          if (!row) throw new Error('invitation not found');
+          Object.assign(row, data);
+          return row;
+        },
+      ),
     },
     sellerPasswordResetToken: {
       create: jest.fn(async ({ data }: { data: Omit<PrtRow, 'id' | 'usedAt'> }) => {
@@ -299,9 +342,7 @@ function buildClient(): FakeClient {
             ? {
                 id: user.id,
                 deletedAt: user.deletedAt,
-                seller: seller
-                  ? { id: seller.id, deletedAt: seller.deletedAt }
-                  : null,
+                seller: seller ? { id: seller.id, deletedAt: seller.deletedAt } : null,
               }
             : null,
         };
@@ -332,9 +373,7 @@ function buildClient(): FakeClient {
                 id: user.id,
                 email: user.email,
                 deletedAt: user.deletedAt,
-                seller: seller
-                  ? { id: seller.id, deletedAt: seller.deletedAt }
-                  : null,
+                seller: seller ? { id: seller.id, deletedAt: seller.deletedAt } : null,
               }
             : null,
         };
@@ -356,7 +395,12 @@ function buildClient(): FakeClient {
       findFirst: jest.fn(async ({ where }: { where: { tokenHash: string } }) => {
         const row = tables.rts.find((r) => r.tokenHash === where.tokenHash);
         if (!row) return null;
-        return { id: row.id, sellerId: row.sellerId, expiresAt: row.expiresAt, revokedAt: row.revokedAt };
+        return {
+          id: row.id,
+          sellerId: row.sellerId,
+          expiresAt: row.expiresAt,
+          revokedAt: row.revokedAt,
+        };
       }),
       update: jest.fn(async ({ where, data }: { where: { id: string }; data: Partial<RtRow> }) => {
         const row = tables.rts.find((r) => r.id === where.id);
@@ -364,17 +408,25 @@ function buildClient(): FakeClient {
         Object.assign(row, data);
         return row;
       }),
-      updateMany: jest.fn(async ({ where, data }: { where: { sellerId?: string; tokenHash?: string; revokedAt: null }; data: { revokedAt: Date } }) => {
-        let count = 0;
-        for (const r of tables.rts) {
-          if (where.sellerId && r.sellerId !== where.sellerId) continue;
-          if (where.tokenHash && r.tokenHash !== where.tokenHash) continue;
-          if (r.revokedAt !== null) continue;
-          r.revokedAt = data.revokedAt;
-          count += 1;
-        }
-        return { count };
-      }),
+      updateMany: jest.fn(
+        async ({
+          where,
+          data,
+        }: {
+          where: { sellerId?: string; tokenHash?: string; revokedAt: null };
+          data: { revokedAt: Date };
+        }) => {
+          let count = 0;
+          for (const r of tables.rts) {
+            if (where.sellerId && r.sellerId !== where.sellerId) continue;
+            if (where.tokenHash && r.tokenHash !== where.tokenHash) continue;
+            if (r.revokedAt !== null) continue;
+            r.revokedAt = data.revokedAt;
+            count += 1;
+          }
+          return { count };
+        },
+      ),
     },
     staffRefreshToken: {
       create: jest.fn(),
@@ -413,9 +465,7 @@ function makeSut(): Sut {
   const email = { enqueue: enqueueMock } as unknown as EmailQueue;
   const onboarding = {
     initializeProgress: jest.fn().mockResolvedValue(undefined),
-    markStepComplete: jest
-      .fn()
-      .mockResolvedValue({ marked: true, onboardingCompleted: false }),
+    markStepComplete: jest.fn().mockResolvedValue({ marked: true, onboardingCompleted: false }),
   } as unknown as SellerOnboardingService;
   const notificationPreferences = {
     seedDefaults: jest.fn().mockResolvedValue(undefined),
@@ -526,10 +576,7 @@ describe('SellerAuthService — login', () => {
   it('APPROVED + correct password → tokens issued + audit success', async () => {
     const sut = makeSut();
     const seller = await seedSeller(sut);
-    const result = await sut.svc.login(
-      { email: seller.email, password: 'Seller-Secret-123' },
-      ctx,
-    );
+    const result = await sut.svc.login({ email: seller.email, password: 'Seller-Secret-123' }, ctx);
     expect(result.seller.id).toBe(seller.id);
     expect(result.accessToken.token).toContain('.');
     const audit = sut.client.auditLog.create.mock.calls.at(-1)?.[0].data;
@@ -540,10 +587,7 @@ describe('SellerAuthService — login', () => {
   it('SUSPENDED + correct password → tokens issued (read-only access) + audit success', async () => {
     const sut = makeSut();
     const seller = await seedSeller(sut, { status: SellerStatus.SUSPENDED });
-    const result = await sut.svc.login(
-      { email: seller.email, password: 'Seller-Secret-123' },
-      ctx,
-    );
+    const result = await sut.svc.login({ email: seller.email, password: 'Seller-Secret-123' }, ctx);
     expect(result.seller.status).toBe(SellerStatus.SUSPENDED);
     expect(result.accessToken.token).toContain('.');
     const audit = sut.client.auditLog.create.mock.calls.at(-1)?.[0].data;
@@ -717,10 +761,7 @@ describe('SellerAuthService — refresh', () => {
   it('refresh by a SUSPENDED seller succeeds (read-only access kept alive)', async () => {
     const sut = makeSut();
     const seller = await seedSeller(sut);
-    const login = await sut.svc.login(
-      { email: seller.email, password: 'Seller-Secret-123' },
-      ctx,
-    );
+    const login = await sut.svc.login({ email: seller.email, password: 'Seller-Secret-123' }, ctx);
     seller.status = SellerStatus.SUSPENDED;
 
     const result = await sut.svc.rotateRefresh({ plaintext: login.refresh.token }, ctx);

@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  type OnModuleDestroy,
-  type OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Worker, type Job } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -47,10 +42,7 @@ export class AwbGenerationWorker implements OnModuleInit, OnModuleDestroy {
           await this.jobService.processManifest(job.data.manifestId);
           return;
         }
-        this.logger.warn(
-          { name: job.name },
-          'Unknown AWB-generation job; ignoring',
-        );
+        this.logger.warn({ name: job.name }, 'Unknown AWB-generation job; ignoring');
       },
       {
         connection: this.redis.createConnection(),
@@ -59,10 +51,7 @@ export class AwbGenerationWorker implements OnModuleInit, OnModuleDestroy {
           // Custom per-attempt backoff: attemptsMade is 1-based after
           // the first failure; clamp to the last configured delay.
           backoffStrategy: (attemptsMade: number): number => {
-            const idx = Math.min(
-              Math.max(attemptsMade - 1, 0),
-              backoffMs.length - 1,
-            );
+            const idx = Math.min(Math.max(attemptsMade - 1, 0), backoffMs.length - 1);
             return backoffMs[idx] ?? 1000;
           },
         },

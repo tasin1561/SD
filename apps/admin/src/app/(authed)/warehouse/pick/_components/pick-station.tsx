@@ -12,12 +12,7 @@ import {
 } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 import type { PulledPick } from '@skydrop/api-client';
-import {
-  usePullNextPick,
-  useStartPick,
-  useRecordPickItem,
-  useCompletePick,
-} from '@/lib/api-hooks';
+import { usePullNextPick, useStartPick, useRecordPickItem, useCompletePick } from '@/lib/api-hooks';
 
 /**
  * Picker workspace — one parcel at a time. Flow:
@@ -188,9 +183,7 @@ export function PickStation(): ReactElement {
                 </div>
               </div>
               {started && (
-                <div className="text-accent text-xs uppercase tracking-wide">
-                  In progress
-                </div>
+                <div className="text-accent text-xs uppercase tracking-wide">In progress</div>
               )}
             </div>
 
@@ -261,9 +254,7 @@ export function PickStation(): ReactElement {
                         </Button>
                       </div>
                     )}
-                    {done && (
-                      <div className="text-accent text-xs">✓ Recorded</div>
-                    )}
+                    {done && <div className="text-accent text-xs">✓ Recorded</div>}
                   </div>
                 );
               })}

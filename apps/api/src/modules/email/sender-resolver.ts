@@ -14,7 +14,8 @@ import type { ResolvedSender } from './email.types';
  * Display names give recipient inboxes a sensible sender name without
  * needing a per-template config field.
  */
-const SECURITY_TEMPLATE_PATTERN = /\.(password_reset|email_verification|login_alert|security_alert)\./;
+const SECURITY_TEMPLATE_PATTERN =
+  /\.(password_reset|email_verification|login_alert|security_alert)\./;
 
 const SECURITY_FROM = 'Skydrop Security <security@skydrop.online>';
 const HELLO_FROM = 'Skydrop <hello@skydrop.online>';

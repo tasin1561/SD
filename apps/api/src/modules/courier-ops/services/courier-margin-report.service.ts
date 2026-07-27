@@ -82,11 +82,7 @@ export class CourierMarginReportService {
     private readonly reconciliation: DelhiveryMarginReconciliationService,
   ) {}
 
-  async report(input: {
-    from: Date;
-    to: Date;
-    limit: number;
-  }): Promise<MarginReport> {
+  async report(input: { from: Date; to: Date; limit: number }): Promise<MarginReport> {
     const originPin = await this.context.originPin();
     const skipped: { shipmentId: string; reason: string }[] = [];
 
@@ -157,9 +153,7 @@ export class CourierMarginReportService {
           originPin,
           destinationPin: s.destPostalCode,
           chargeableWeightGrams:
-            s.chargeableWeightGrams ??
-            s.declaredWeightGrams ??
-            s.totalWeightGrams,
+            s.chargeableWeightGrams ?? s.declaredWeightGrams ?? s.totalWeightGrams,
           isCod: s.codAmountInr !== null && s.codAmountInr.greaterThan(0),
           billedToSellerInr: billed.toString(),
         });
@@ -178,9 +172,7 @@ export class CourierMarginReportService {
           assumptionDriftInr: check.assumptionDriftInr,
         });
         totalBilled = totalBilled.add(billed);
-        totalActual = totalActual.add(
-          new Prisma.Decimal(check.actualCourierCostInr),
-        );
+        totalActual = totalActual.add(new Prisma.Decimal(check.actualCourierCostInr));
       } catch (err) {
         skipped.push({
           shipmentId: s.id,
@@ -218,9 +210,6 @@ export class CourierMarginReportService {
       select: { totalAmountInr: true },
     });
     if (charges.length === 0) return null;
-    return charges.reduce(
-      (sum, c) => sum.add(c.totalAmountInr),
-      new Prisma.Decimal(0),
-    );
+    return charges.reduce((sum, c) => sum.add(c.totalAmountInr), new Prisma.Decimal(0));
   }
 }

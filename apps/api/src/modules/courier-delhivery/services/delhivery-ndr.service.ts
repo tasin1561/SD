@@ -104,8 +104,7 @@ export class DelhiveryNdrService {
         reason: `Attempt count ${input.attemptCount} is outside Delhivery's allowed 1-${MAX_ATTEMPT_COUNT}`,
       };
     }
-    const allowed =
-      input.action === 'RE-ATTEMPT' ? REATTEMPT_NSL : RESCHEDULE_NSL;
+    const allowed = input.action === 'RE-ATTEMPT' ? REATTEMPT_NSL : RESCHEDULE_NSL;
     if (!allowed.has(nsl)) {
       return {
         eligible: false,
@@ -163,9 +162,7 @@ export class DelhiveryNdrService {
       (raw['UPL'] as string | undefined) ??
       null;
     const message =
-      (raw['error'] as string | undefined) ??
-      (raw['remark'] as string | undefined) ??
-      null;
+      (raw['error'] as string | undefined) ?? (raw['remark'] as string | undefined) ?? null;
 
     if (uplId === null) {
       this.logger.warn(
@@ -202,13 +199,10 @@ export class DelhiveryNdrService {
       path: `/api/cmu/get_bulk_upl/${encodeURIComponent(uplId)}?verbose=true`,
       endpoint: 'ndr',
     });
-    const status = String(
-      raw['status'] ?? raw['upl_status'] ?? '',
-    ).toUpperCase();
+    const status = String(raw['status'] ?? raw['upl_status'] ?? '').toUpperCase();
     // "Package action is being performed" is Delhivery's in-progress
     // signal — not a failure, just not finished.
-    const inProgress =
-      status.includes('PROGRESS') || status.includes('PERFORMED') || status === '';
+    const inProgress = status.includes('PROGRESS') || status.includes('PERFORMED') || status === '';
     return {
       complete: !inProgress,
       success: inProgress ? null : status.includes('SUCCESS') || status === 'DONE',

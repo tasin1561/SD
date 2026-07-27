@@ -1,10 +1,5 @@
 import request from 'supertest';
-import {
-  ActorType,
-  ManifestStatus,
-  OrderStatus,
-  ShipmentStatus,
-} from '@skydrop/db';
+import { ActorType, ManifestStatus, OrderStatus, ShipmentStatus } from '@skydrop/db';
 import { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import { ShipmentProvisionService } from '../../src/modules/shipment-provision/services/shipment-provision.service';
 import {
@@ -68,10 +63,7 @@ describe('Warehouse pack flow (e2e)', () => {
       .expect(201);
     sellerAuth = { Authorization: `Bearer ${reg.body.accessToken}` };
 
-    const whs = await request(h.baseUrl)
-      .get('/admin/warehouses')
-      .set(staffAuth)
-      .expect(200);
+    const whs = await request(h.baseUrl).get('/admin/warehouses').set(staffAuth).expect(200);
     warehouseId = (whs.body as Array<{ id: string; code: string }>).find(
       (w) => w.code === 'BLR-01',
     )!.id;
@@ -115,9 +107,7 @@ describe('Warehouse pack flow (e2e)', () => {
       .post(`/admin/goods-receipts/${gr.body.id}/lines`)
       .set(staffAuth)
       .send({
-        lines: [
-          { lineId: gr.body.lines[0].id, receivedQty: qty, putawayBinId: binId },
-        ],
+        lines: [{ lineId: gr.body.lines[0].id, receivedQty: qty, putawayBinId: binId }],
       })
       .expect(200);
     await request(h.baseUrl)
@@ -146,10 +136,7 @@ describe('Warehouse pack flow (e2e)', () => {
       })
       .expect(201);
     const orderId = created.body.id as string;
-    await request(h.baseUrl)
-      .post(`/seller/orders/${orderId}/submit`)
-      .set(sellerAuth)
-      .expect(200);
+    await request(h.baseUrl).post(`/seller/orders/${orderId}/submit`).set(sellerAuth).expect(200);
     await h.app.get(OrderWriteService).transitionStatus({
       orderId,
       to: OrderStatus.CONFIRMED,
@@ -180,10 +167,7 @@ describe('Warehouse pack flow (e2e)', () => {
     const shipmentId = prov.shipmentId;
 
     // Drive through pick.
-    await request(h.baseUrl)
-      .post('/warehouse/picks/next')
-      .set(staffAuth)
-      .expect(200);
+    await request(h.baseUrl).post('/warehouse/picks/next').set(staffAuth).expect(200);
     await request(h.baseUrl)
       .post(`/warehouse/picks/${shipmentId}/start`)
       .set(staffAuth)
@@ -216,10 +200,7 @@ describe('Warehouse pack flow (e2e)', () => {
     await receiveStock(10);
     const { orderId, shipmentId } = await makePickedShipment();
 
-    const next = await request(h.baseUrl)
-      .post('/warehouse/packs/next')
-      .set(staffAuth)
-      .expect(200);
+    const next = await request(h.baseUrl).post('/warehouse/packs/next').set(staffAuth).expect(200);
     expect(next.body.pack).not.toBeNull();
     expect(next.body.pack.shipmentId).toBe(shipmentId);
 
@@ -273,10 +254,7 @@ describe('Warehouse pack flow (e2e)', () => {
   });
 
   it('pullNext returns pack:null when no PICKED shipments are queued', async () => {
-    const next = await request(h.baseUrl)
-      .post('/warehouse/packs/next')
-      .set(staffAuth)
-      .expect(200);
+    const next = await request(h.baseUrl).post('/warehouse/packs/next').set(staffAuth).expect(200);
     expect(next.body.pack).toBeNull();
   });
 

@@ -321,7 +321,11 @@ export class TrackingPollService {
         // Concurrent change / already past target — the event is
         // recorded; not a failure (same as webhook/manual).
         this.logger.debug(
-          { shipmentId: shipment.id, orderId: shipment.orderId, target: decision.targetOrderStatus },
+          {
+            shipmentId: shipment.id,
+            orderId: shipment.orderId,
+            target: decision.targetOrderStatus,
+          },
           'Poll: transitionStatus 409 after guard — concurrent change; event recorded',
         );
         return false;

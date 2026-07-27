@@ -11,7 +11,9 @@ export class CreateWithdrawalRequestDto {
 
   @ApiProperty({ description: 'Decimal string, up to 2dp, e.g. "1500.00"' })
   @IsString()
-  @Matches(DECIMAL_PATTERN, { message: 'amount must be a decimal string with up to 2 decimal places' })
+  @Matches(DECIMAL_PATTERN, {
+    message: 'amount must be a decimal string with up to 2 decimal places',
+  })
   amount!: string;
 
   @ApiPropertyOptional()

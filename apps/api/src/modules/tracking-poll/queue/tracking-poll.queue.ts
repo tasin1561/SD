@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  type OnModuleDestroy,
-  type OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -57,9 +52,7 @@ export class TrackingPollQueue implements OnModuleInit, OnModuleDestroy {
         removeOnFail: { age: 7 * 24 * 60 * 60 },
       },
     );
-    this.logger.log(
-      `tracking-poll queue ready (name=${TRACKING_POLL_QUEUE_NAME}, cron=${cron})`,
-    );
+    this.logger.log(`tracking-poll queue ready (name=${TRACKING_POLL_QUEUE_NAME}, cron=${cron})`);
   }
 
   async onModuleDestroy(): Promise<void> {

@@ -17,10 +17,7 @@ import {
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
-import {
-  PickQueueService,
-  type PulledPick,
-} from '../services/pick-queue.service';
+import { PickQueueService, type PulledPick } from '../services/pick-queue.service';
 import {
   PickExecutionService,
   type StartPickResult,
@@ -98,9 +95,7 @@ export class PickerController {
         shipmentItemId: body.shipmentItemId,
         pickedBinId: body.pickedBinId,
         pickedBatchId: body.pickedBatchId,
-        ...(body.scannedSerials === undefined
-          ? {}
-          : { scannedSerials: body.scannedSerials }),
+        ...(body.scannedSerials === undefined ? {} : { scannedSerials: body.scannedSerials }),
       },
       ctx,
     );

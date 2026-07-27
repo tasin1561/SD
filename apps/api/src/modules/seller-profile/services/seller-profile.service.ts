@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import {
   ActorType,
   Currency,
@@ -170,7 +166,11 @@ export class SellerProfileService {
           // Cast: changes may include explicit null for cleared fields,
           // which Prisma's InputJsonValue type rejects but JSONB accepts.
           changes: changes as Prisma.InputJsonValue,
-          metadata: { ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, requestId: ctx.requestId },
+          metadata: {
+            ipAddress: ctx.ipAddress,
+            userAgent: ctx.userAgent,
+            requestId: ctx.requestId,
+          },
         },
         tx,
       );
@@ -221,66 +221,61 @@ export class SellerProfileService {
       return this.getProfile(sellerId);
     }
 
-    const allRequiredPresentAfterUpdate = await this.prisma.client.$transaction(
-      async (tx) => {
-        const existing = await tx.seller.findFirst({
-          where: { id: sellerId, deletedAt: null },
-          select: {
-            id: true,
-            bankName: true,
-            bankAccountName: true,
-            bankAccountNumber: true,
-          },
+    const allRequiredPresentAfterUpdate = await this.prisma.client.$transaction(async (tx) => {
+      const existing = await tx.seller.findFirst({
+        where: { id: sellerId, deletedAt: null },
+        select: {
+          id: true,
+          bankName: true,
+          bankAccountName: true,
+          bankAccountNumber: true,
+        },
+      });
+      if (!existing) {
+        throw new NotFoundException({
+          code: 'SELLER_NOT_FOUND',
+          message: 'Seller not found',
         });
-        if (!existing) {
-          throw new NotFoundException({
-            code: 'SELLER_NOT_FOUND',
-            message: 'Seller not found',
-          });
-        }
-        const updated = await tx.seller.update({
-          where: { id: sellerId },
-          data,
-          select: {
-            bankName: true,
-            bankAccountName: true,
-            bankAccountNumber: true,
+      }
+      const updated = await tx.seller.update({
+        where: { id: sellerId },
+        data,
+        select: {
+          bankName: true,
+          bankAccountName: true,
+          bankAccountNumber: true,
+        },
+      });
+      await this.audit.log(
+        {
+          actorType: ActorType.SELLER,
+          sellerId,
+          action: 'seller.bank_details.updated',
+          entityType: 'seller',
+          entityId: sellerId,
+          changes,
+          metadata: {
+            ipAddress: ctx.ipAddress,
+            userAgent: ctx.userAgent,
+            requestId: ctx.requestId,
           },
-        });
-        await this.audit.log(
-          {
-            actorType: ActorType.SELLER,
-            sellerId,
-            action: 'seller.bank_details.updated',
-            entityType: 'seller',
-            entityId: sellerId,
-            changes,
-            metadata: {
-              ipAddress: ctx.ipAddress,
-              userAgent: ctx.userAgent,
-              requestId: ctx.requestId,
-            },
-          },
+        },
+        tx,
+      );
+
+      const ready = !!updated.bankName && !!updated.bankAccountName && !!updated.bankAccountNumber;
+
+      if (ready) {
+        await this.onboarding.markStepComplete(
+          sellerId,
+          SellerOnboardingStep.BANK_DETAILS_ADDED,
+          OnboardingStepActor.SELLER,
+          undefined,
           tx,
         );
-
-        const ready =
-          !!updated.bankName &&
-          !!updated.bankAccountName &&
-          !!updated.bankAccountNumber;
-
-        if (ready) {
-          await this.onboarding.markStepComplete(
-            sellerId,
-            SellerOnboardingStep.BANK_DETAILS_ADDED,
-            OnboardingStepActor.SELLER,
-            undefined,
-            tx,
-          );
-        }
-        return ready;
-      },
-    );
+      }
+      return ready;
+    });
 
     // Mark onboarding metadata for future use; no-op for ready=false.
     void allRequiredPresentAfterUpdate;

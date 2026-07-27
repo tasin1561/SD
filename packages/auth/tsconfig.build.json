@@ -9,12 +9,5 @@
     "baseUrl": "src",
     "paths": {}
   },
-  "exclude": [
-    "node_modules",
-    "dist",
-    ".turbo",
-    "**/*.test.ts",
-    "**/*.test.tsx",
-    "src/tests/**"
-  ]
+  "exclude": ["node_modules", "dist", ".turbo", "**/*.test.ts", "**/*.test.tsx", "src/tests/**"]
 }

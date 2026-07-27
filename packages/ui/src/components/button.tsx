@@ -35,15 +35,13 @@ const sizeClasses: Record<Size, string> = {
 };
 
 const variantClasses: Record<Variant, string> = {
-  primary:
-    'bg-accent text-accent-fg hover:bg-accent-hover',
+  primary: 'bg-accent text-accent-fg hover:bg-accent-hover',
   secondary:
     'border border-border bg-surface text-text-body hover:border-border-strong hover:text-text-bright',
   ghost: 'text-text-muted hover:bg-surface-hover hover:text-text-body',
   destructive:
     'border border-[var(--color-critical-ring)] text-critical bg-[var(--color-critical-tint)] hover:bg-[color-mix(in_srgb,var(--color-critical-tint),transparent_50%)]',
-  override:
-    'bg-critical text-white border border-critical hover:opacity-90',
+  override: 'bg-critical text-white border border-critical hover:opacity-90',
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(

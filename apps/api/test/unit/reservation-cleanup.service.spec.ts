@@ -44,7 +44,12 @@ function makeSut(rows: Row[], raceTerminalIds: string[] = []) {
         };
       }
       row.status = ReservationStatus.RELEASED;
-      return { reservationId: id, qtyReleased: 5, status: ReservationStatus.RELEASED, alreadyInactive: false };
+      return {
+        reservationId: id,
+        qtyReleased: 5,
+        status: ReservationStatus.RELEASED,
+        alreadyInactive: false,
+      };
     },
   );
   const reservations = { release } as unknown as StockReservationService;

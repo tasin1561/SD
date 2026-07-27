@@ -35,12 +35,10 @@ function makeService(
     releaseAlreadyInactive?: boolean;
   } = {},
 ) {
-  const reservationFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async () => (opts.existingHold === undefined ? null : opts.existingHold),
+  const reservationFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+    opts.existingHold === undefined ? null : opts.existingHold,
   );
-  const reservationFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
-    async () => opts.holds ?? [],
-  );
+  const reservationFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => opts.holds ?? []);
   const reviewUpsert = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({
     id: 'review-1',
     status: EarlyReservationReviewStatus.OPEN,
@@ -64,13 +62,28 @@ function makeService(
   const resolve = jest.fn(async (_sellerId: string, key: string) => {
     if (opts.settingsThrows) throw new Error('settings down');
     if (key === 'inventory.early_reservation_enabled') {
-      return { key, valueType: 'BOOLEAN', value: opts.enabled ?? false, source: 'SYSTEM_DEFAULT' as const };
+      return {
+        key,
+        valueType: 'BOOLEAN',
+        value: opts.enabled ?? false,
+        source: 'SYSTEM_DEFAULT' as const,
+      };
     }
     if (key === 'inventory.early_reservation_ndr_action') {
-      return { key, valueType: 'STRING', value: opts.ndrAction ?? 'AUTO_RELEASE', source: 'SYSTEM_DEFAULT' as const };
+      return {
+        key,
+        valueType: 'STRING',
+        value: opts.ndrAction ?? 'AUTO_RELEASE',
+        source: 'SYSTEM_DEFAULT' as const,
+      };
     }
     if (key === 'inventory.early_reservation_ttl_hours') {
-      return { key, valueType: 'INT', value: opts.ttlHours ?? 24, source: 'SYSTEM_DEFAULT' as const };
+      return {
+        key,
+        valueType: 'INT',
+        value: opts.ttlHours ?? 24,
+        source: 'SYSTEM_DEFAULT' as const,
+      };
     }
     throw new Error(`unexpected key ${key}`);
   });
@@ -184,7 +197,12 @@ describe('EarlyReservationService.handleNdrCap', () => {
     expect(release).not.toHaveBeenCalled();
     const args = reviewUpsert.mock.calls[0]![0]!;
     expect(args).toMatchObject({ where: { orderId: ORDER } });
-    expect(args.create).toMatchObject({ orderId: ORDER, sellerId: SELLER, attemptCount: 4, heldQty: 5 });
+    expect(args.create).toMatchObject({
+      orderId: ORDER,
+      sellerId: SELLER,
+      attemptCount: 4,
+      heldQty: 5,
+    });
     // upsert with an empty update => re-running never overwrites the
     // original review.
     expect(args.update).toEqual({});

@@ -1,11 +1,5 @@
 import request from 'supertest';
-import {
-  ActorType,
-  ManifestStatus,
-  OrderStatus,
-  ShipmentStatus,
-  StaffRole,
-} from '@skydrop/db';
+import { ActorType, ManifestStatus, OrderStatus, ShipmentStatus, StaffRole } from '@skydrop/db';
 import { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import { ShipmentProvisionService } from '../../src/modules/shipment-provision/services/shipment-provision.service';
 import {
@@ -69,10 +63,7 @@ describe('Warehouse manifest flow (e2e)', () => {
       .expect(201);
     sellerAuth = { Authorization: `Bearer ${reg.body.accessToken}` };
 
-    const whs = await request(h.baseUrl)
-      .get('/admin/warehouses')
-      .set(staffAuth)
-      .expect(200);
+    const whs = await request(h.baseUrl).get('/admin/warehouses').set(staffAuth).expect(200);
     warehouseId = (whs.body as Array<{ id: string; code: string }>).find(
       (w) => w.code === 'BLR-01',
     )!.id;
@@ -116,9 +107,7 @@ describe('Warehouse manifest flow (e2e)', () => {
       .post(`/admin/goods-receipts/${gr.body.id}/lines`)
       .set(staffAuth)
       .send({
-        lines: [
-          { lineId: gr.body.lines[0].id, receivedQty: qty, putawayBinId: binId },
-        ],
+        lines: [{ lineId: gr.body.lines[0].id, receivedQty: qty, putawayBinId: binId }],
       })
       .expect(200);
     await request(h.baseUrl)
@@ -148,10 +137,7 @@ describe('Warehouse manifest flow (e2e)', () => {
       })
       .expect(201);
     const orderId = created.body.id as string;
-    await request(h.baseUrl)
-      .post(`/seller/orders/${orderId}/submit`)
-      .set(sellerAuth)
-      .expect(200);
+    await request(h.baseUrl).post(`/seller/orders/${orderId}/submit`).set(sellerAuth).expect(200);
     await h.app.get(OrderWriteService).transitionStatus({
       orderId,
       to: OrderStatus.CONFIRMED,
@@ -375,10 +361,7 @@ describe('Warehouse manifest flow (e2e)', () => {
     await receiveStock(5);
     const a = await makePackedShipment(1);
 
-    await request(h.baseUrl)
-      .get('/admin/warehouse/manifests')
-      .set(agentAuth)
-      .expect(403);
+    await request(h.baseUrl).get('/admin/warehouse/manifests').set(agentAuth).expect(403);
     await request(h.baseUrl)
       .get(`/admin/warehouse/manifests/${a.manifestId}`)
       .set(agentAuth)

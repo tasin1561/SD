@@ -24,7 +24,10 @@ export default async function Home(): Promise<ReactElement> {
       <div
         aria-hidden
         className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[700px] h-[480px] rounded-full"
-        style={{ background: 'radial-gradient(closest-side, var(--glow), transparent)', opacity: 0.45 }}
+        style={{
+          background: 'radial-gradient(closest-side, var(--glow), transparent)',
+          opacity: 0.45,
+        }}
       />
 
       {/* Controls — pinned to the viewport corner, clear of the map */}
@@ -56,9 +59,7 @@ export default async function Home(): Promise<ReactElement> {
             <h1 className="text-fg-strong text-lg font-semibold mb-1">
               {t(locale, 'landingTitle')}
             </h1>
-            <p className="text-fg-muted text-sm mb-6">
-              {t(locale, 'landingSubtitle')}
-            </p>
+            <p className="text-fg-muted text-sm mb-6">{t(locale, 'landingSubtitle')}</p>
             <SearchForm locale={locale} />
             <div aria-hidden className="glow-follow" />
           </div>

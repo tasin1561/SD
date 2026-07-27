@@ -19,13 +19,15 @@ interface LevelRow {
  * A failed attempt throws at updateMany BEFORE any movement is written
  * (mirrors the real code path), so no tx-rollback emulation is needed.
  */
-function makeSut(opts: {
-  initial?: LevelRow | null;
-  // Forces the first N updateMany calls to lose the version race (a phantom
-  // concurrent writer commits, advancing the row's version).
-  injectConflicts?: number;
-  createThrowsP2002Once?: boolean;
-} = {}) {
+function makeSut(
+  opts: {
+    initial?: LevelRow | null;
+    // Forces the first N updateMany calls to lose the version race (a phantom
+    // concurrent writer commits, advancing the row's version).
+    injectConflicts?: number;
+    createThrowsP2002Once?: boolean;
+  } = {},
+) {
   const store: { row: LevelRow | null } = { row: opts.initial ?? null };
   const movements: Array<Record<string, unknown>> = [];
   let conflictsLeft = opts.injectConflicts ?? 0;
@@ -68,10 +70,10 @@ function makeSut(opts: {
       create: async (args: { data: { qtyOnHand: number } }): Promise<{ id: string }> => {
         if (createP2002) {
           createP2002 = false;
-          throw new Prisma.PrismaClientKnownRequestError(
-            'Unique constraint failed',
-            { code: 'P2002', clientVersion: 'test' },
-          );
+          throw new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+            code: 'P2002',
+            clientVersion: 'test',
+          });
         }
         store.row = { id: 'L1', qtyOnHand: args.data.qtyOnHand, version: 0 };
         return { id: 'L1' };

@@ -15,11 +15,7 @@ import { CurrentSeller } from '../../common/decorators/current-seller.decorator'
 import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/client-info.decorator';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../common/types/request';
-import {
-  ApiKeyListItemDto,
-  CreateApiKeyDto,
-  CreatedApiKeyDto,
-} from './dto/create.dto';
+import { ApiKeyListItemDto, CreateApiKeyDto, CreatedApiKeyDto } from './dto/create.dto';
 import { SellerApiKeyService } from './seller-api-key.service';
 
 @ApiTags('seller-api-keys')

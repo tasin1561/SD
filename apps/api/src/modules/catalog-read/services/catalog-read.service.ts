@@ -136,10 +136,7 @@ export class CatalogReadService {
    * product_variants directly (CLAUDE MUST #13). Soft-deleted variant /
    * product → null.
    */
-  async getVariantBySku(
-    sellerId: string,
-    skuCode: string,
-  ): Promise<ResolvedVariant | null> {
+  async getVariantBySku(sellerId: string, skuCode: string): Promise<ResolvedVariant | null> {
     const [row, gstDefault] = await Promise.all([
       this.prisma.client.productVariant.findFirst({
         where: { sellerId, skuCode, deletedAt: null, product: { deletedAt: null } },
@@ -157,9 +154,7 @@ export class CatalogReadService {
    * (or variants whose product is soft-deleted) are simply absent from
    * the returned map.
    */
-  async getVariantsByIds(
-    variantIds: string[],
-  ): Promise<ReadonlyMap<string, ResolvedVariant>> {
+  async getVariantsByIds(variantIds: string[]): Promise<ReadonlyMap<string, ResolvedVariant>> {
     const ids = [...new Set(variantIds)];
     const out = new Map<string, ResolvedVariant>();
     if (ids.length === 0) return out;
@@ -183,9 +178,7 @@ export class CatalogReadService {
    * AttributeResolutionService Redis cache. Empty when the variant has no
    * category (or is missing) — attributes are then unconstrained.
    */
-  async getEffectiveAttributesForVariant(
-    variantId: string,
-  ): Promise<EffectiveAttribute[]> {
+  async getEffectiveAttributesForVariant(variantId: string): Promise<EffectiveAttribute[]> {
     const v = await this.prisma.client.productVariant.findFirst({
       where: { id: variantId, deletedAt: null, product: { deletedAt: null } },
       select: { product: { select: { categoryId: true } } },
@@ -195,16 +188,11 @@ export class CatalogReadService {
     return this.attributes.resolveEffectiveAttributes(categoryId);
   }
 
-  private resolve(
-    row: VariantWithChain,
-    gstDefault: Prisma.Decimal,
-  ): ResolvedVariant {
+  private resolve(row: VariantWithChain, gstDefault: Prisma.Decimal): ResolvedVariant {
     const product = row.product;
     // A soft-deleted category contributes nothing to inheritance.
     const category =
-      product.category && product.category.deletedAt === null
-        ? product.category
-        : null;
+      product.category && product.category.deletedAt === null ? product.category : null;
 
     return Object.freeze({
       variantId: row.id,
@@ -219,10 +207,8 @@ export class CatalogReadService {
       lengthCm: row.lengthCm ?? product.defaultLengthCm ?? null,
       widthCm: row.widthCm ?? product.defaultWidthCm ?? null,
       heightCm: row.heightCm ?? product.defaultHeightCm ?? null,
-      declaredValueInr:
-        row.declaredValueInr ?? product.defaultDeclaredValueInr ?? null,
-      hsCode:
-        row.hsCode ?? product.defaultHsCode ?? category?.defaultHsCode ?? null,
+      declaredValueInr: row.declaredValueInr ?? product.defaultDeclaredValueInr ?? null,
+      hsCode: row.hsCode ?? product.defaultHsCode ?? category?.defaultHsCode ?? null,
       gstRate: row.gstRate ?? category?.defaultGstRate ?? gstDefault,
       lowStockThreshold: row.lowStockThreshold ?? null,
       productName: product.name,
@@ -263,9 +249,7 @@ export class CatalogReadService {
     });
     if (row?.valueDecimal != null) return row.valueDecimal;
     if (row?.valueInt != null) return new Prisma.Decimal(row.valueInt);
-    this.logger.warn(
-      `${GST_SETTING_KEY} not set; falling back to ${GST_FALLBACK.toString()}%`,
-    );
+    this.logger.warn(`${GST_SETTING_KEY} not set; falling back to ${GST_FALLBACK.toString()}%`);
     return GST_FALLBACK;
   }
 }

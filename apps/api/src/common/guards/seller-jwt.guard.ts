@@ -23,10 +23,7 @@ const SAFE_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'OPTIONS']);
 /** Default allow-list for MUTATING methods when an endpoint declares no
  *  `@SellerRoles`. Deliberately the narrowest useful set — see the
  *  fail-closed note on the decorator. */
-const DEFAULT_WRITE_ROLES: readonly SellerUserRole[] = [
-  SellerUserRole.OWNER,
-  SellerUserRole.ADMIN,
-];
+const DEFAULT_WRITE_ROLES: readonly SellerUserRole[] = [SellerUserRole.OWNER, SellerUserRole.ADMIN];
 
 /**
  * Bearer-token auth for seller routes. Crucially, this guard re-checks
@@ -96,7 +93,10 @@ export class SellerJwtGuard implements CanActivate {
       },
     });
     if (!user || user.seller.deletedAt !== null) {
-      throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Seller session no longer valid' });
+      throw new UnauthorizedException({
+        code: 'UNAUTHORIZED',
+        message: 'Seller session no longer valid',
+      });
     }
     const seller = user.seller;
 
@@ -155,8 +155,7 @@ export class SellerJwtGuard implements CanActivate {
     // as "read-only access to everything visible to the company". A
     // domain controller therefore does NOT accidentally lock VIEWER out
     // of its GETs just by declaring who may mutate.
-    const allowedRoles =
-      handlerRoles ?? (isRead ? null : (classRoles ?? DEFAULT_WRITE_ROLES));
+    const allowedRoles = handlerRoles ?? (isRead ? null : (classRoles ?? DEFAULT_WRITE_ROLES));
 
     if (allowedRoles !== null && !allowedRoles.includes(user.role)) {
       await this.audit.log({

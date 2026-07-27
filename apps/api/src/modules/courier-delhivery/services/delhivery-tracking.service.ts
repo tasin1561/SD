@@ -1,10 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ShipmentStatus } from '@skydrop/db';
-import type {
-  DelhiveryClient,
-  DelhiveryRawScan,
-  NormalizedScan,
-} from '../types/delhivery.types';
+import type { DelhiveryClient, DelhiveryRawScan, NormalizedScan } from '../types/delhivery.types';
 
 /**
  * Module 10 — Delhivery scan normalization (commit 6, F8). Implements
@@ -43,27 +39,24 @@ import type {
  * PAIR_TABLE doc below for why the pair is load-bearing.
  */
 @Injectable()
-export class DelhiveryTrackingService
-  implements Pick<DelhiveryClient, 'normalizeScan'>
-{
+export class DelhiveryTrackingService implements Pick<DelhiveryClient, 'normalizeScan'> {
   private readonly logger = new Logger(DelhiveryTrackingService.name);
 
   /**
    * Stub raw-code → ShipmentStatus table (DLV- prefix; intentionally
    * distinguishable from real Delhivery codes so no collision).
    */
-  private static readonly STUB_TABLE: ReadonlyMap<string, ShipmentStatus> =
-    new Map([
-      ['DLV-IN-TRANSIT', ShipmentStatus.IN_TRANSIT],
-      ['DLV-OFD', ShipmentStatus.OUT_FOR_DELIVERY],
-      ['DLV-DELIVERED', ShipmentStatus.DELIVERED],
-      ['DLV-NDR', ShipmentStatus.DELIVERY_ATTEMPTED],
-      ['DLV-RTO-INIT', ShipmentStatus.RTO_INITIATED],
-      ['DLV-RTO-IT', ShipmentStatus.RTO_IN_TRANSIT],
-      ['DLV-RTO-DEL', ShipmentStatus.RTO_DELIVERED],
-      ['DLV-LOST', ShipmentStatus.LOST],
-      ['DLV-DAMAGED', ShipmentStatus.DAMAGED],
-    ]);
+  private static readonly STUB_TABLE: ReadonlyMap<string, ShipmentStatus> = new Map([
+    ['DLV-IN-TRANSIT', ShipmentStatus.IN_TRANSIT],
+    ['DLV-OFD', ShipmentStatus.OUT_FOR_DELIVERY],
+    ['DLV-DELIVERED', ShipmentStatus.DELIVERED],
+    ['DLV-NDR', ShipmentStatus.DELIVERY_ATTEMPTED],
+    ['DLV-RTO-INIT', ShipmentStatus.RTO_INITIATED],
+    ['DLV-RTO-IT', ShipmentStatus.RTO_IN_TRANSIT],
+    ['DLV-RTO-DEL', ShipmentStatus.RTO_DELIVERED],
+    ['DLV-LOST', ShipmentStatus.LOST],
+    ['DLV-DAMAGED', ShipmentStatus.DAMAGED],
+  ]);
 
   /**
    * Real-mode mapping, keyed on the (StatusType, Status) PAIR.
@@ -94,31 +87,30 @@ export class DelhiveryTrackingService
    * nothing: they are audited as tracking_events but must not fire a
    * lifecycle transition, because the parcel has not moved.
    */
-  private static readonly PAIR_TABLE: ReadonlyMap<string, ShipmentStatus> =
-    new Map([
-      // ── UD: forward leg ──────────────────────────────────────────
-      // "Manifested" / "Not Picked" → intentionally unmapped.
-      ['UD|IN TRANSIT', ShipmentStatus.IN_TRANSIT],
-      ['UD|PENDING', ShipmentStatus.IN_TRANSIT],
-      // Delhivery's "Dispatched" is our OUT_FOR_DELIVERY: the parcel is
-      // on a vehicle heading to the customer.
-      ['UD|DISPATCHED', ShipmentStatus.OUT_FOR_DELIVERY],
+  private static readonly PAIR_TABLE: ReadonlyMap<string, ShipmentStatus> = new Map([
+    // ── UD: forward leg ──────────────────────────────────────────
+    // "Manifested" / "Not Picked" → intentionally unmapped.
+    ['UD|IN TRANSIT', ShipmentStatus.IN_TRANSIT],
+    ['UD|PENDING', ShipmentStatus.IN_TRANSIT],
+    // Delhivery's "Dispatched" is our OUT_FOR_DELIVERY: the parcel is
+    // on a vehicle heading to the customer.
+    ['UD|DISPATCHED', ShipmentStatus.OUT_FOR_DELIVERY],
 
-      // ── DL: terminals ────────────────────────────────────────────
-      ['DL|DELIVERED', ShipmentStatus.DELIVERED],
-      ['DL|RTO', ShipmentStatus.RTO_DELIVERED],
-      ['DL|DTO', ShipmentStatus.RTO_DELIVERED],
+    // ── DL: terminals ────────────────────────────────────────────
+    ['DL|DELIVERED', ShipmentStatus.DELIVERED],
+    ['DL|RTO', ShipmentStatus.RTO_DELIVERED],
+    ['DL|DTO', ShipmentStatus.RTO_DELIVERED],
 
-      // ── RT: the return leg. NONE of these are forward movement. ──
-      ['RT|IN TRANSIT', ShipmentStatus.RTO_IN_TRANSIT],
-      ['RT|PENDING', ShipmentStatus.RTO_IN_TRANSIT],
-      ['RT|DISPATCHED', ShipmentStatus.RTO_IN_TRANSIT],
+    // ── RT: the return leg. NONE of these are forward movement. ──
+    ['RT|IN TRANSIT', ShipmentStatus.RTO_IN_TRANSIT],
+    ['RT|PENDING', ShipmentStatus.RTO_IN_TRANSIT],
+    ['RT|DISPATCHED', ShipmentStatus.RTO_IN_TRANSIT],
 
-      // ── PU: reverse pickup already collected, moving to us ───────
-      ['PU|IN TRANSIT', ShipmentStatus.RTO_IN_TRANSIT],
-      ['PU|PENDING', ShipmentStatus.RTO_IN_TRANSIT],
-      ['PU|DISPATCHED', ShipmentStatus.RTO_IN_TRANSIT],
-    ]);
+    // ── PU: reverse pickup already collected, moving to us ───────
+    ['PU|IN TRANSIT', ShipmentStatus.RTO_IN_TRANSIT],
+    ['PU|PENDING', ShipmentStatus.RTO_IN_TRANSIT],
+    ['PU|DISPATCHED', ShipmentStatus.RTO_IN_TRANSIT],
+  ]);
 
   /**
    * NSL prefixes that mark a failed delivery ATTEMPT.
@@ -144,20 +136,19 @@ export class DelhiveryTrackingService
    * order forward while the goods come back. Better to record the scan
    * as unmappable (it is still audited) than to guess the direction.
    */
-  private static readonly STATUS_ONLY_TABLE: ReadonlyMap<string, ShipmentStatus> =
-    new Map([
-      ['DELIVERED', ShipmentStatus.DELIVERED],
-      ['RTO', ShipmentStatus.RTO_DELIVERED],
-      ['DTO', ShipmentStatus.RTO_DELIVERED],
-      ['RTO INITIATED', ShipmentStatus.RTO_INITIATED],
-      ['RTO IN TRANSIT', ShipmentStatus.RTO_IN_TRANSIT],
-      ['RTO DELIVERED', ShipmentStatus.RTO_DELIVERED],
-      ['DTO DELIVERED', ShipmentStatus.RTO_DELIVERED],
-      ['UNDELIVERED', ShipmentStatus.DELIVERY_ATTEMPTED],
-      ['OUT FOR DELIVERY', ShipmentStatus.OUT_FOR_DELIVERY],
-      ['LOST', ShipmentStatus.LOST],
-      ['DAMAGED', ShipmentStatus.DAMAGED],
-    ]);
+  private static readonly STATUS_ONLY_TABLE: ReadonlyMap<string, ShipmentStatus> = new Map([
+    ['DELIVERED', ShipmentStatus.DELIVERED],
+    ['RTO', ShipmentStatus.RTO_DELIVERED],
+    ['DTO', ShipmentStatus.RTO_DELIVERED],
+    ['RTO INITIATED', ShipmentStatus.RTO_INITIATED],
+    ['RTO IN TRANSIT', ShipmentStatus.RTO_IN_TRANSIT],
+    ['RTO DELIVERED', ShipmentStatus.RTO_DELIVERED],
+    ['DTO DELIVERED', ShipmentStatus.RTO_DELIVERED],
+    ['UNDELIVERED', ShipmentStatus.DELIVERY_ATTEMPTED],
+    ['OUT FOR DELIVERY', ShipmentStatus.OUT_FOR_DELIVERY],
+    ['LOST', ShipmentStatus.LOST],
+    ['DAMAGED', ShipmentStatus.DAMAGED],
+  ]);
 
   normalizeScan(raw: DelhiveryRawScan): NormalizedScan {
     const code = raw.rawStatus.trim().toUpperCase();
@@ -173,10 +164,7 @@ export class DelhiveryTrackingService
     // An NDR is an EOD-* NSL on a forward leg. Checked BEFORE the pair
     // table, because the status itself is an unremarkable "Pending" and
     // would otherwise be recorded as ordinary transit.
-    if (
-      statusType === 'UD' &&
-      nsl.startsWith(DelhiveryTrackingService.NDR_NSL_PREFIX)
-    ) {
+    if (statusType === 'UD' && nsl.startsWith(DelhiveryTrackingService.NDR_NSL_PREFIX)) {
       return {
         kind: 'NORMALIZED',
         shipmentStatus: ShipmentStatus.DELIVERY_ATTEMPTED,
@@ -184,9 +172,7 @@ export class DelhiveryTrackingService
     }
 
     if (statusType !== '') {
-      const paired = DelhiveryTrackingService.PAIR_TABLE.get(
-        `${statusType}|${code}`,
-      );
+      const paired = DelhiveryTrackingService.PAIR_TABLE.get(`${statusType}|${code}`);
       if (paired !== undefined) {
         return { kind: 'NORMALIZED', shipmentStatus: paired };
       }

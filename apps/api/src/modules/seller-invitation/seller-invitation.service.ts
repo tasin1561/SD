@@ -11,9 +11,7 @@ import { TokenHashService } from '../auth-common/services/token-hash.service';
 import { AuditLogService } from '../auth-common/services/audit-log.service';
 import { EmailQueue } from '../email/queue/email.queue';
 import type { ClientContext } from '../staff-auth/staff-auth.service';
-import type {
-  CreatedInvitationDto,
-} from './dto/list.dto';
+import type { CreatedInvitationDto } from './dto/list.dto';
 import type {
   InvitationListItemDto,
   InvitationListResponseDto,
@@ -133,8 +131,10 @@ export class SellerInvitationService {
     if (query.email) {
       where.email = { contains: query.email, mode: 'insensitive' };
     }
-    if (query.createdAfter) where.createdAt = { ...(where.createdAt as object), gte: new Date(query.createdAfter) };
-    if (query.createdBefore) where.createdAt = { ...(where.createdAt as object), lte: new Date(query.createdBefore) };
+    if (query.createdAfter)
+      where.createdAt = { ...(where.createdAt as object), gte: new Date(query.createdAfter) };
+    if (query.createdBefore)
+      where.createdAt = { ...(where.createdAt as object), lte: new Date(query.createdBefore) };
 
     const now = new Date();
     switch (query.status) {

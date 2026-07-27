@@ -22,7 +22,9 @@ const browser = await chromium.launch();
   });
   const page = await ctx.newPage();
   await page.addInitScript(() => {
-    try { localStorage.setItem('sd-theme', 'dark'); } catch {}
+    try {
+      localStorage.setItem('sd-theme', 'dark');
+    } catch {}
   });
   await page.goto(url, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1200);
@@ -44,7 +46,9 @@ for (const w of [360, 768, 1440]) {
       overflows: doc.scrollWidth > doc.clientWidth,
     };
   });
-  console.log(`overflow@${w}: scrollW=${overflow.scrollW} clientW=${overflow.clientW} → ${overflow.overflows ? 'FAIL' : 'ok'}`);
+  console.log(
+    `overflow@${w}: scrollW=${overflow.scrollW} clientW=${overflow.clientW} → ${overflow.overflows ? 'FAIL' : 'ok'}`,
+  );
   await ctx.close();
 }
 

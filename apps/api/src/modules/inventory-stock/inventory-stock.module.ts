@@ -50,10 +50,6 @@ import { ReservationWorker } from './queue/reservation.worker';
   // StockMutationService (sole writer, INV-1), StockAvailabilityService
   // (INV-3 scalar), StockCacheService and StockAlertService all live in
   // inventory-shared and are NOT part of the Module 6/8 contract.
-  exports: [
-    StockReadService,
-    StockReservationService,
-    StockPickAllocationService,
-  ],
+  exports: [StockReadService, StockReservationService, StockPickAllocationService],
 })
 export class InventoryStockModule {}

@@ -44,9 +44,7 @@ const T_PLUS_N = 'T_PLUS_N';
  * DEBIT-only entry so the seller still owes us the shipping cost.
  */
 @Injectable()
-export class OrderDeliveredAccrualListener
-  implements OnApplicationBootstrap, OnModuleDestroy
-{
+export class OrderDeliveredAccrualListener implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(OrderDeliveredAccrualListener.name);
   private subscription: Subscription | null = null;
   private readonly inFlight = new Set<Promise<void>>();
@@ -77,9 +75,7 @@ export class OrderDeliveredAccrualListener
         });
       this.inFlight.add(p);
     });
-    this.logger.log(
-      'OrderDeliveredAccrualListener subscribed to OrderLifecycleEventBus',
-    );
+    this.logger.log('OrderDeliveredAccrualListener subscribed to OrderLifecycleEventBus');
   }
 
   async onModuleDestroy(): Promise<void> {

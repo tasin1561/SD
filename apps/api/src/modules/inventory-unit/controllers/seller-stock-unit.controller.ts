@@ -31,16 +31,12 @@ export class SellerStockUnitController {
     @CurrentSeller() seller: AuthenticatedSeller,
     @Query('warehouseId') warehouseId?: string,
   ): Promise<UnitDiscrepancyReport> {
-    return this.reports.forSeller(
-      seller.id,
-      warehouseId === undefined ? {} : { warehouseId },
-    );
+    return this.reports.forSeller(seller.id, warehouseId === undefined ? {} : { warehouseId });
   }
 
   @Get('trace/:serialBarcode')
   @ApiOperation({
-    summary:
-      "One unit's full scan history — every gate it passed, who scanned it and when.",
+    summary: "One unit's full scan history — every gate it passed, who scanned it and when.",
   })
   trace(
     @CurrentSeller() seller: AuthenticatedSeller,

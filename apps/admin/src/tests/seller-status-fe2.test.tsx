@@ -56,13 +56,8 @@ describe('FE-2 boundary — seller status action', () => {
 
     // (a) UI collects: SUSPEND button → modal → reason → confirm
     await user.click(screen.getByRole('button', { name: /suspend account/i }));
-    expect(
-      await screen.findByText(/Suspend this seller\?/i),
-    ).toBeInTheDocument();
-    await user.type(
-      screen.getByLabelText(/Reason \(optional/i),
-      'Customer-complaint-driven test',
-    );
+    expect(await screen.findByText(/Suspend this seller\?/i)).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/Reason \(optional/i), 'Customer-complaint-driven test');
     await user.click(screen.getByRole('button', { name: /^Suspend$/ }));
 
     // (b) The server's [code] + message render verbatim.
@@ -86,11 +81,7 @@ describe('FE-2 boundary — seller status action', () => {
 
   it('cosmetic RBAC: canChangeStatus=false → SUSPEND button is disabled (UX hide-not-gate) — but the SERVER is still the real boundary', async () => {
     renderWithProviders(
-      <StatusActionPanel
-        sellerId="seller-1"
-        currentStatus="APPROVED"
-        canChangeStatus={false}
-      />,
+      <StatusActionPanel sellerId="seller-1" currentStatus="APPROVED" canChangeStatus={false} />,
       {
         identity: makeStaff('CALL_AGENT' as StaffRole),
       },
@@ -117,11 +108,7 @@ describe('FE-2 boundary — seller status action', () => {
     ]);
 
     renderWithProviders(
-      <StatusActionPanel
-        sellerId="seller-1"
-        currentStatus="APPROVED"
-        canChangeStatus={true}
-      />,
+      <StatusActionPanel sellerId="seller-1" currentStatus="APPROVED" canChangeStatus={true} />,
       { fetchImpl },
     );
 
@@ -134,4 +121,3 @@ describe('FE-2 boundary — seller status action', () => {
     });
   });
 });
-

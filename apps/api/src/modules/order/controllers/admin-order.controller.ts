@@ -32,10 +32,7 @@ import {
   type OrderListItem,
   type OrderView,
 } from '../services/order.service';
-import {
-  OrderWriteService,
-  type TransitionStatusResult,
-} from '../services/order-write.service';
+import { OrderWriteService, type TransitionStatusResult } from '../services/order-write.service';
 import {
   OrderAdminOverrideService,
   type ForceMutateResult,
@@ -84,8 +81,7 @@ export class AdminOrderController {
   @Get(':id/events')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary:
-      'Admin order timeline — every event (incl. internal-only), oldest first',
+    summary: 'Admin order timeline — every event (incl. internal-only), oldest first',
   })
   events(@Param('id', uuid()) id: string): Promise<OrderEventView[]> {
     return this.orders.listEventsForAdmin(id);
@@ -94,12 +90,9 @@ export class AdminOrderController {
   @Get(':id/shipments')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary:
-      'Shipments associated with an order — newest first, includes superseded entries',
+    summary: 'Shipments associated with an order — newest first, includes superseded entries',
   })
-  shipments(
-    @Param('id', uuid()) id: string,
-  ): ReturnType<OrderService['listShipmentsForAdmin']> {
+  shipments(@Param('id', uuid()) id: string): ReturnType<OrderService['listShipmentsForAdmin']> {
     return this.orders.listShipmentsForAdmin(id);
   }
 
@@ -127,8 +120,7 @@ export class AdminOrderController {
   @Post(':id/force-mutation')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary:
-      'GOD MODE (ORD-2): bypass the state machine / edit rules. Audited CRITICAL.',
+    summary: 'GOD MODE (ORD-2): bypass the state machine / edit rules. Audited CRITICAL.',
   })
   forceMutation(
     @CurrentStaff() staff: AuthenticatedStaff,
@@ -150,8 +142,7 @@ export class AdminOrderController {
   @Post(':id/release-reservations')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary:
-      "Manually release an order's ACTIVE reservations (god-mode cleanup; idempotent)",
+    summary: "Manually release an order's ACTIVE reservations (god-mode cleanup; idempotent)",
   })
   releaseReservations(
     @CurrentStaff() staff: AuthenticatedStaff,

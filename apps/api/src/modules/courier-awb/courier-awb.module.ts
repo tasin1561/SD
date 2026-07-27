@@ -42,11 +42,6 @@ import { AwbGenerationWorker } from './queue/awb-generation.worker';
     AwbGenerationQueue,
     AwbGenerationWorker,
   ],
-  exports: [
-    AwbSupersedeService,
-    AwbGenerationService,
-    AwbGenerationJobService,
-    AwbGenerationQueue,
-  ],
+  exports: [AwbSupersedeService, AwbGenerationService, AwbGenerationJobService, AwbGenerationQueue],
 })
 export class CourierAwbModule {}

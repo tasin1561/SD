@@ -25,14 +25,7 @@ import {
 import { InviteMemberModal } from './invite-member-modal';
 import { InviteLinkRevealCard } from './invite-link-reveal-card';
 
-const ROLES = [
-  'OWNER',
-  'ADMIN',
-  'OPS',
-  'INVENTORY',
-  'FINANCE',
-  'VIEWER',
-] as const;
+const ROLES = ['OWNER', 'ADMIN', 'OPS', 'INVENTORY', 'FINANCE', 'VIEWER'] as const;
 
 export function TeamManagementIndex(): ReactElement {
   const members = useTeamMembersList();
@@ -115,10 +108,7 @@ export function TeamManagementIndex(): ReactElement {
       />
 
       {revealed && (
-        <InviteLinkRevealCard
-          invitation={revealed}
-          onDismiss={() => setRevealed(null)}
-        />
+        <InviteLinkRevealCard invitation={revealed} onDismiss={() => setRevealed(null)} />
       )}
 
       {error && (
@@ -154,16 +144,11 @@ export function TeamManagementIndex(): ReactElement {
               </thead>
               <tbody className="divide-y divide-border">
                 {members.data.map((m) => (
-                  <tr
-                    key={m.id}
-                    className={m.deletedAt ? 'opacity-50' : undefined}
-                  >
+                  <tr key={m.id} className={m.deletedAt ? 'opacity-50' : undefined}>
                     <td className="px-3 py-2 text-text-body text-xs">
                       {m.fullName}
                       {m.isYou && (
-                        <span className="text-accent text-[10px] ml-2 uppercase">
-                          You
-                        </span>
+                        <span className="text-accent text-[10px] ml-2 uppercase">You</span>
                       )}
                       {m.deletedAt && (
                         <span className="text-critical text-[10px] ml-2 uppercase">
@@ -180,11 +165,7 @@ export function TeamManagementIndex(): ReactElement {
                         disabled={Boolean(m.deletedAt) || m.isYou}
                         onChange={(e) => void onRoleChange(m.id, e.target.value)}
                         className="px-2 py-1 rounded-[4px] bg-bg border border-border text-text-body text-xs font-mono"
-                        title={
-                          m.isYou
-                            ? 'You cannot change your own role.'
-                            : undefined
-                        }
+                        title={m.isYou ? 'You cannot change your own role.' : undefined}
                       >
                         {ROLES.map((r) => (
                           <option key={r} value={r}>
@@ -194,9 +175,7 @@ export function TeamManagementIndex(): ReactElement {
                       </select>
                     </td>
                     <td className="px-3 py-2 text-text-muted font-mono text-xs">
-                      {m.lastLoginAt
-                        ? new Date(m.lastLoginAt).toLocaleString()
-                        : '—'}
+                      {m.lastLoginAt ? new Date(m.lastLoginAt).toLocaleString() : '—'}
                     </td>
                     <td className="px-3 py-2 text-text-muted font-mono text-xs">
                       {new Date(m.createdAt).toLocaleDateString()}
@@ -213,20 +192,12 @@ export function TeamManagementIndex(): ReactElement {
                           >
                             Confirm
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setPendingDelete(null)}
-                          >
+                          <Button variant="ghost" size="sm" onClick={() => setPendingDelete(null)}>
                             Cancel
                           </Button>
                         </>
                       ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setPendingDelete(m.id)}
-                        >
+                        <Button variant="ghost" size="sm" onClick={() => setPendingDelete(m.id)}>
                           Deactivate
                         </Button>
                       )}
@@ -268,21 +239,12 @@ export function TeamManagementIndex(): ReactElement {
                 {invitations.data.items.map((inv) => {
                   const now = Date.now();
                   const isUsed = inv.usedAt !== null;
-                  const isExpired =
-                    !isUsed && new Date(inv.expiresAt).getTime() < now;
-                  const status = isUsed
-                    ? 'USED'
-                    : isExpired
-                      ? 'EXPIRED'
-                      : 'PENDING';
+                  const isExpired = !isUsed && new Date(inv.expiresAt).getTime() < now;
+                  const status = isUsed ? 'USED' : isExpired ? 'EXPIRED' : 'PENDING';
                   return (
                     <tr key={inv.id}>
-                      <td className="px-3 py-2 text-text-body font-mono text-xs">
-                        {inv.email}
-                      </td>
-                      <td className="px-3 py-2 text-text-body font-mono text-xs">
-                        {inv.role}
-                      </td>
+                      <td className="px-3 py-2 text-text-body font-mono text-xs">{inv.email}</td>
+                      <td className="px-3 py-2 text-text-body font-mono text-xs">{inv.role}</td>
                       <td className="px-3 py-2">
                         <span
                           className={
@@ -302,11 +264,7 @@ export function TeamManagementIndex(): ReactElement {
                       <td className="px-3 py-2 text-right">
                         {!isUsed && (
                           <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => void onResend(inv.id)}
-                            >
+                            <Button variant="ghost" size="sm" onClick={() => void onResend(inv.id)}>
                               Resend
                             </Button>
                             {pendingRevoke === inv.id ? (

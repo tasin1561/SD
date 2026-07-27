@@ -78,9 +78,7 @@ function ChargeRow({ charge }: { charge: OrderChargeView }): ReactElement {
   return (
     <tr>
       <td className="px-4 py-2 text-text-body">
-        <div className="text-sm">
-          {charge.description ?? humanizeType(charge.type)}
-        </div>
+        <div className="text-sm">{charge.description ?? humanizeType(charge.type)}</div>
         <div className="text-text-faint text-[11px] uppercase tracking-wide mt-0.5">
           {charge.type.toLowerCase().replace(/_/g, ' ')} · {charge.status.toLowerCase()}
         </div>

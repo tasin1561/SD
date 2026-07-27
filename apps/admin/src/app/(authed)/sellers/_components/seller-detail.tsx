@@ -71,9 +71,7 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
                   <dt className="text-text-muted">Contact name</dt>
                   <dd className="text-text-body">{detail.data.contactPersonName}</dd>
                   <dt className="text-text-muted">Phone</dt>
-                  <dd className="text-text-body font-mono text-xs">
-                    {detail.data.phone}
-                  </dd>
+                  <dd className="text-text-body font-mono text-xs">{detail.data.phone}</dd>
                   <dt className="text-text-muted">WhatsApp</dt>
                   <dd className="text-text-body font-mono text-xs">
                     {detail.data.whatsapp ?? '—'}
@@ -88,9 +86,7 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
                   <dd className="text-text-body">
                     {detail.data.emailVerifiedAt ? (
                       <span className="text-text-body">
-                        {new Date(detail.data.emailVerifiedAt)
-                          .toISOString()
-                          .slice(0, 10)}
+                        {new Date(detail.data.emailVerifiedAt).toISOString().slice(0, 10)}
                       </span>
                     ) : (
                       <span className="text-text-muted">Pending</span>
@@ -150,11 +146,7 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
  * shows in a one-shot input the operator can copy to clipboard.
  * Refreshing the page clears it. FE-2: server rejection verbatim.
  */
-function RevealBankAccountPanel({
-  sellerId,
-}: {
-  readonly sellerId: string;
-}): ReactElement {
+function RevealBankAccountPanel({ sellerId }: { readonly sellerId: string }): ReactElement {
   const [reason, setReason] = useState('');
   const [revealed, setRevealed] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -223,12 +215,7 @@ function RevealBankAccountPanel({
             onFocus={(e) => e.currentTarget.select()}
             className="flex-1 px-3 py-1.5 rounded-[5px] bg-bg border border-border text-text-bright text-sm font-mono focus:border-accent focus:outline-none"
           />
-          <Button
-            type="button"
-            variant="secondary"
-            size="md"
-            onClick={() => void onCopy()}
-          >
+          <Button type="button" variant="secondary" size="md" onClick={() => void onCopy()}>
             <Copy size={12} /> {copied ? 'Copied!' : 'Copy'}
           </Button>
         </div>

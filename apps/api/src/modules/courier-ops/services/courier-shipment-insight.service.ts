@@ -164,8 +164,7 @@ export class CourierShipmentInsightService {
     if (shipment.awbNumber === null) {
       throw new BadRequestException({
         code: 'SHIPMENT_HAS_NO_AWB',
-        message:
-          'This shipment has no AWB yet, so the courier holds no paperwork for it.',
+        message: 'This shipment has no AWB yet, so the courier holds no paperwork for it.',
       });
     }
     const result = await this.documents.fetch(shipment.awbNumber, docType);

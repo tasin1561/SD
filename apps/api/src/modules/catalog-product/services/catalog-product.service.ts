@@ -188,16 +188,19 @@ export class CatalogProductService {
     setStr('defaultHsCode', 'defaultHsCode');
     if (input.categoryId !== undefined) {
       data.category =
-        input.categoryId === null
-          ? { disconnect: true }
-          : { connect: { id: input.categoryId } };
+        input.categoryId === null ? { disconnect: true } : { connect: { id: input.categoryId } };
       changes['categoryId'] = input.categoryId;
     }
     if (input.defaultWeightGrams !== undefined) {
       data.defaultWeightGrams = input.defaultWeightGrams;
       changes['defaultWeightGrams'] = input.defaultWeightGrams;
     }
-    for (const k of ['defaultLengthCm', 'defaultWidthCm', 'defaultHeightCm', 'defaultDeclaredValueInr'] as const) {
+    for (const k of [
+      'defaultLengthCm',
+      'defaultWidthCm',
+      'defaultHeightCm',
+      'defaultDeclaredValueInr',
+    ] as const) {
       if (input[k] !== undefined) {
         (data as Record<string, unknown>)[k] = dec(input[k]);
         changes[k] = input[k] ?? null;
@@ -367,10 +370,7 @@ export class CatalogProductService {
   }
 
   private mapExternalRefConflict(err: unknown, externalRef: string | undefined): unknown {
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === 'P2002'
-    ) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
       return new ConflictException({
         code: 'EXTERNAL_REF_TAKEN',
         message: `You already have a product with externalRef "${externalRef ?? ''}"`,

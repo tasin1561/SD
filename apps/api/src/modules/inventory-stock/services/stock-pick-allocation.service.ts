@@ -1,15 +1,5 @@
-import {
-  ConflictException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
-import {
-  ActorType,
-  BatchStatus,
-  BinType,
-  ReservationStatus,
-} from '@skydrop/db';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ActorType, BatchStatus, BinType, ReservationStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 
@@ -25,11 +15,7 @@ class RetryablePickConflictError extends Error {
 const MAX_POPULATE_ATTEMPTS = 3;
 
 /** Bins whose stock is NOT pickable for customer orders. */
-const NON_PICKABLE_BIN_TYPES: BinType[] = [
-  BinType.RTO_HOLD,
-  BinType.DAMAGED,
-  BinType.QUARANTINE,
-];
+const NON_PICKABLE_BIN_TYPES: BinType[] = [BinType.RTO_HOLD, BinType.DAMAGED, BinType.QUARANTINE];
 
 export interface AllocationPick {
   binId: string;
@@ -180,16 +166,32 @@ export class StockPickAllocationService {
     qtyRequired: number;
   }): Promise<AllocationPlan> {
     const { sellerId, variantId, warehouseId, qtyRequired } = input;
-    const base: Omit<AllocationPlan, 'picks' | 'allocatedQty' | 'shortfall' | 'fullyAllocated' | 'strategy'> =
-      { sellerId, variantId, warehouseId, qtyRequired };
+    const base: Omit<
+      AllocationPlan,
+      'picks' | 'allocatedQty' | 'shortfall' | 'fullyAllocated' | 'strategy'
+    > = { sellerId, variantId, warehouseId, qtyRequired };
 
     if (!Number.isInteger(qtyRequired) || qtyRequired <= 0) {
-      return { ...base, picks: [], allocatedQty: 0, shortfall: qtyRequired, fullyAllocated: false, strategy: 'NONE' };
+      return {
+        ...base,
+        picks: [],
+        allocatedQty: 0,
+        shortfall: qtyRequired,
+        fullyAllocated: false,
+        strategy: 'NONE',
+      };
     }
 
     const batches = await this.loadEligibleBatches(sellerId, variantId, warehouseId);
     if (batches.length === 0) {
-      return { ...base, picks: [], allocatedQty: 0, shortfall: qtyRequired, fullyAllocated: false, strategy: 'NONE' };
+      return {
+        ...base,
+        picks: [],
+        allocatedQty: 0,
+        shortfall: qtyRequired,
+        fullyAllocated: false,
+        strategy: 'NONE',
+      };
     }
 
     // FEFO order.
@@ -355,9 +357,7 @@ export class StockPickAllocationService {
               },
             });
             if (upd.count !== 1) {
-              throw new RetryablePickConflictError(
-                `stock_level ${lvl.id} version moved`,
-              );
+              throw new RetryablePickConflictError(`stock_level ${lvl.id} version moved`);
             }
           }
 
@@ -512,13 +512,10 @@ export class StockPickAllocationService {
       orderBy: { createdAt: 'asc' },
     });
 
-    const phase2 = group.filter(
-      (r) => r.binId !== null && r.batchId !== null,
-    );
+    const phase2 = group.filter((r) => r.binId !== null && r.batchId !== null);
     // Survivor: the anchor if still in the group, else the FEFO-earliest
     // row — deterministic so concurrent callers converge.
-    const survivor =
-      group.find((r) => r.id === reservationId) ?? group[0];
+    const survivor = group.find((r) => r.id === reservationId) ?? group[0];
     if (!survivor) {
       // Group vanished between the two reads (released elsewhere) — no-op.
       return {
@@ -571,9 +568,7 @@ export class StockPickAllocationService {
         where: { id: survivor.id },
         data: { binId: null, batchId: null, qtyReserved: total },
       });
-      const toDelete = group
-        .filter((r) => r.id !== survivor.id)
-        .map((r) => r.id);
+      const toDelete = group.filter((r) => r.id !== survivor.id).map((r) => r.id);
       if (toDelete.length > 0) {
         await tx.stockReservation.deleteMany({
           where: { id: { in: toDelete } },

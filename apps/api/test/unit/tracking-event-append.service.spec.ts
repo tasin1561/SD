@@ -1,9 +1,4 @@
-import {
-  ActorType,
-  ShipmentStatus,
-  TrackingEventSource,
-  TrackingEventType,
-} from '@skydrop/db';
+import { ActorType, ShipmentStatus, TrackingEventSource, TrackingEventType } from '@skydrop/db';
 import { TrackingEventAppendService } from '../../src/modules/tracking-events/services/tracking-event-append.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 
@@ -39,10 +34,7 @@ function makeService(initial: FakeRow[] = []) {
 
   const trackingEvent = {
     create: jest.fn(
-      async (args: {
-        data: Partial<FakeRow>;
-        select: Record<string, true>;
-      }): Promise<FakeRow> => {
+      async (args: { data: Partial<FakeRow>; select: Record<string, true> }): Promise<FakeRow> => {
         const id = `te-${nextId++}`;
         const row: FakeRow = {
           id,
@@ -55,21 +47,16 @@ function makeService(initial: FakeRow[] = []) {
           status: args.data.status as ShipmentStatus,
           source: args.data.source as TrackingEventSource,
           courierCode: (args.data.courierCode ?? null) as string | null,
-          rawCourierStatus: (args.data.rawCourierStatus ?? null) as
-            | string
-            | null,
+          rawCourierStatus: (args.data.rawCourierStatus ?? null) as string | null,
           description: (args.data.description ?? null) as string | null,
           locationName: (args.data.locationName ?? null) as string | null,
           locationCity: (args.data.locationCity ?? null) as string | null,
-          locationPincode: (args.data.locationPincode ?? null) as
-            | string
-            | null,
+          locationPincode: (args.data.locationPincode ?? null) as string | null,
           webhookId: (args.data.webhookId ?? null) as string | null,
           actorType: (args.data.actorType ?? null) as ActorType | null,
           actorId: (args.data.actorId ?? null) as string | null,
           metadata: args.data.metadata ?? null,
-          isVisibleToCustomer:
-            (args.data.isVisibleToCustomer as boolean | undefined) ?? true,
+          isVisibleToCustomer: (args.data.isVisibleToCustomer as boolean | undefined) ?? true,
         };
         store.rows.push(row);
         return row;
@@ -81,23 +68,17 @@ function makeService(initial: FakeRow[] = []) {
         orderBy: { eventAt: 'desc' | 'asc' };
         select: Record<string, true>;
       }): Promise<FakeRow | null> => {
-        const candidates = store.rows.filter(
-          (r) => r.shipmentId === args.where.shipmentId,
-        );
+        const candidates = store.rows.filter((r) => r.shipmentId === args.where.shipmentId);
         if (candidates.length === 0) return null;
         const dir = args.orderBy.eventAt === 'desc' ? -1 : 1;
-        candidates.sort(
-          (a, b) => dir * (a.eventAt.getTime() - b.eventAt.getTime()),
-        );
+        candidates.sort((a, b) => dir * (a.eventAt.getTime() - b.eventAt.getTime()));
         return candidates[0] ?? null;
       },
     ),
   };
 
   const client = { trackingEvent };
-  const svc = new TrackingEventAppendService(
-    { client } as unknown as PrismaService,
-  );
+  const svc = new TrackingEventAppendService({ client } as unknown as PrismaService);
   return { svc, trackingEvent, store };
 }
 

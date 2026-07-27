@@ -24,9 +24,7 @@ import { InvoiceService } from './invoice.service';
  * duplicate invoices.
  */
 @Injectable()
-export class OrderDeliveredInvoiceListener
-  implements OnApplicationBootstrap, OnModuleDestroy
-{
+export class OrderDeliveredInvoiceListener implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(OrderDeliveredInvoiceListener.name);
   private subscription: Subscription | null = null;
   private readonly inFlight = new Set<Promise<void>>();
@@ -54,9 +52,7 @@ export class OrderDeliveredInvoiceListener
         });
       this.inFlight.add(p);
     });
-    this.logger.log(
-      'OrderDeliveredInvoiceListener subscribed to OrderLifecycleEventBus',
-    );
+    this.logger.log('OrderDeliveredInvoiceListener subscribed to OrderLifecycleEventBus');
   }
 
   async onModuleDestroy(): Promise<void> {

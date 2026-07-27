@@ -32,7 +32,7 @@ export function OrderChargesSection({ orderId }: { orderId: string }): ReactElem
     } catch (err) {
       if (err instanceof ApiError && typeof err.body === 'object' && err.body !== null) {
         const b = err.body as { code?: unknown; message?: unknown };
-        const code = typeof b.code === 'string' ? b.code : err.code ?? 'COMPUTE_FAILED';
+        const code = typeof b.code === 'string' ? b.code : (err.code ?? 'COMPUTE_FAILED');
         const msg = typeof b.message === 'string' ? b.message : err.message;
         setServerError(`[${code}] ${msg}`);
       } else {
@@ -52,8 +52,7 @@ export function OrderChargesSection({ orderId }: { orderId: string }): ReactElem
     return <ErrorState message={charges.error?.message ?? 'Failed to load charges.'} />;
   }
 
-  const total =
-    charges.data?.reduce((sum, c) => sum + Number(c.totalAmountInr), 0) ?? 0;
+  const total = charges.data?.reduce((sum, c) => sum + Number(c.totalAmountInr), 0) ?? 0;
 
   return (
     <Card>

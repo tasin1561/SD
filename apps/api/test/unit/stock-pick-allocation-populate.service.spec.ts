@@ -38,27 +38,42 @@ function makeSut(opts: {
           batch: { expiresAt: new Date(l.expiresAt), receivedAt: new Date('2026-01-01') },
         })),
       ),
-      findUnique: jest.fn(async (args: { where: { sellerId_variantId_warehouseId_binId_batchId: { binId: string; batchId: string } } }) => {
-        const k = args.where.sellerId_variantId_warehouseId_binId_batchId;
-        const l = levels.find((x) => x.binId === k.binId && x.batchId === k.batchId);
-        return l ? { id: l.id, qtyOnHand: l.qtyOnHand, qtyReserved: l.qtyReserved, version: l.version } : null;
-      }),
-      updateMany: jest.fn(async (args: { where: { id: string; version: number }; data: { qtyReserved: { increment: number }; version: { increment: number } } }) => {
-        if (conflictsLeft > 0) {
-          conflictsLeft -= 1;
-          const l = levels.find((x) => x.id === args.where.id);
-          if (l) l.version += 1; // phantom concurrent writer
-          return { count: 0 };
-        }
-        const l = levels.find((x) => x.id === args.where.id && x.version === args.where.version);
-        if (!l) return { count: 0 };
-        l.qtyReserved += args.data.qtyReserved.increment;
-        l.version += 1;
-        return { count: 1 };
-      }),
+      findUnique: jest.fn(
+        async (args: {
+          where: {
+            sellerId_variantId_warehouseId_binId_batchId: { binId: string; batchId: string };
+          };
+        }) => {
+          const k = args.where.sellerId_variantId_warehouseId_binId_batchId;
+          const l = levels.find((x) => x.binId === k.binId && x.batchId === k.batchId);
+          return l
+            ? { id: l.id, qtyOnHand: l.qtyOnHand, qtyReserved: l.qtyReserved, version: l.version }
+            : null;
+        },
+      ),
+      updateMany: jest.fn(
+        async (args: {
+          where: { id: string; version: number };
+          data: { qtyReserved: { increment: number }; version: { increment: number } };
+        }) => {
+          if (conflictsLeft > 0) {
+            conflictsLeft -= 1;
+            const l = levels.find((x) => x.id === args.where.id);
+            if (l) l.version += 1; // phantom concurrent writer
+            return { count: 0 };
+          }
+          const l = levels.find((x) => x.id === args.where.id && x.version === args.where.version);
+          if (!l) return { count: 0 };
+          l.qtyReserved += args.data.qtyReserved.increment;
+          l.version += 1;
+          return { count: 1 };
+        },
+      ),
     },
     stockReservation: {
-      findUnique: jest.fn(async (args: { where: { id: string } }) => reservations.get(args.where.id) ?? null),
+      findUnique: jest.fn(
+        async (args: { where: { id: string } }) => reservations.get(args.where.id) ?? null,
+      ),
       update: jest.fn(async (args: { where: { id: string }; data: Record<string, unknown> }) => {
         Object.assign(reservations.get(args.where.id)!, args.data);
         return {};
@@ -95,7 +110,17 @@ const phase1Resv = (qty: number) => ({
 describe('StockPickAllocationService.allocateAndPopulate', () => {
   it('single pick: original phase-1 row becomes phase-2, level qtyReserved += qty', async () => {
     const { svc, levels, reservations } = makeSut({
-      levels: [{ id: 'L1', binId: 'b1', batchId: 'B1', qtyOnHand: 10, qtyReserved: 0, version: 0, expiresAt: '2026-06-01' }],
+      levels: [
+        {
+          id: 'L1',
+          binId: 'b1',
+          batchId: 'B1',
+          qtyOnHand: 10,
+          qtyReserved: 0,
+          version: 0,
+          expiresAt: '2026-06-01',
+        },
+      ],
       reservation: phase1Resv(5),
     });
     const res = await svc.allocateAndPopulate('r1');
@@ -110,8 +135,24 @@ describe('StockPickAllocationService.allocateAndPopulate', () => {
   it('split: extra picks become new phase-2 rows; total reserved qty conserved', async () => {
     const { svc, levels, reservations } = makeSut({
       levels: [
-        { id: 'L1', binId: 'b1', batchId: 'B1', qtyOnHand: 5, qtyReserved: 0, version: 0, expiresAt: '2026-06-01' },
-        { id: 'L2', binId: 'b2', batchId: 'B2', qtyOnHand: 3, qtyReserved: 0, version: 0, expiresAt: '2026-07-01' },
+        {
+          id: 'L1',
+          binId: 'b1',
+          batchId: 'B1',
+          qtyOnHand: 5,
+          qtyReserved: 0,
+          version: 0,
+          expiresAt: '2026-06-01',
+        },
+        {
+          id: 'L2',
+          binId: 'b2',
+          batchId: 'B2',
+          qtyOnHand: 3,
+          qtyReserved: 0,
+          version: 0,
+          expiresAt: '2026-07-01',
+        },
       ],
       reservation: phase1Resv(7),
     });
@@ -130,7 +171,17 @@ describe('StockPickAllocationService.allocateAndPopulate', () => {
 
   it('partial: shortfall kept as residual phase-1 row (qty conserved)', async () => {
     const { svc, reservations } = makeSut({
-      levels: [{ id: 'L1', binId: 'b1', batchId: 'B1', qtyOnHand: 3, qtyReserved: 0, version: 0, expiresAt: '2026-06-01' }],
+      levels: [
+        {
+          id: 'L1',
+          binId: 'b1',
+          batchId: 'B1',
+          qtyOnHand: 3,
+          qtyReserved: 0,
+          version: 0,
+          expiresAt: '2026-06-01',
+        },
+      ],
       reservation: phase1Resv(10),
     });
     const res = await svc.allocateAndPopulate('r1');
@@ -144,7 +195,17 @@ describe('StockPickAllocationService.allocateAndPopulate', () => {
 
   it('idempotent: an already phase-2 reservation is returned untouched', async () => {
     const { svc, levels } = makeSut({
-      levels: [{ id: 'L1', binId: 'b1', batchId: 'B1', qtyOnHand: 10, qtyReserved: 0, version: 0, expiresAt: '2026-06-01' }],
+      levels: [
+        {
+          id: 'L1',
+          binId: 'b1',
+          batchId: 'B1',
+          qtyOnHand: 10,
+          qtyReserved: 0,
+          version: 0,
+          expiresAt: '2026-06-01',
+        },
+      ],
       reservation: { ...phase1Resv(5), binId: 'b1', batchId: 'B1' },
     });
     const res = await svc.allocateAndPopulate('r1');
@@ -172,7 +233,17 @@ describe('StockPickAllocationService.allocateAndPopulate', () => {
 
   it('retries the whole plan on a version conflict, then succeeds', async () => {
     const { svc, levels } = makeSut({
-      levels: [{ id: 'L1', binId: 'b1', batchId: 'B1', qtyOnHand: 10, qtyReserved: 0, version: 0, expiresAt: '2026-06-01' }],
+      levels: [
+        {
+          id: 'L1',
+          binId: 'b1',
+          batchId: 'B1',
+          qtyOnHand: 10,
+          qtyReserved: 0,
+          version: 0,
+          expiresAt: '2026-06-01',
+        },
+      ],
       reservation: phase1Resv(4),
       conflictUpdates: 1,
     });
@@ -183,7 +254,17 @@ describe('StockPickAllocationService.allocateAndPopulate', () => {
 
   it('throws PICK_ALLOCATION_CONFLICT after exhausting retries', async () => {
     const { svc } = makeSut({
-      levels: [{ id: 'L1', binId: 'b1', batchId: 'B1', qtyOnHand: 10, qtyReserved: 0, version: 0, expiresAt: '2026-06-01' }],
+      levels: [
+        {
+          id: 'L1',
+          binId: 'b1',
+          batchId: 'B1',
+          qtyOnHand: 10,
+          qtyReserved: 0,
+          version: 0,
+          expiresAt: '2026-06-01',
+        },
+      ],
       reservation: phase1Resv(4),
       conflictUpdates: 99,
     });

@@ -13,10 +13,7 @@ import {
   Select,
   useToast,
 } from '@skydrop/ui/components';
-import {
-  useRetryWebhookDelivery,
-  useWebhookDeliveriesList,
-} from '@/lib/api-hooks';
+import { useRetryWebhookDelivery, useWebhookDeliveriesList } from '@/lib/api-hooks';
 
 const STATUSES = [
   '',
@@ -70,10 +67,7 @@ export function WebhookDeliveriesIndex(): ReactElement {
           <div className="flex items-end gap-3">
             <div>
               <div className="text-text-muted text-xs mb-1">Status</div>
-              <Select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-              >
+              <Select value={status} onChange={(e) => setStatus(e.target.value)}>
                 {STATUSES.map((s) => (
                   <option key={s} value={s}>
                     {s === '' ? 'All' : s}
@@ -124,23 +118,20 @@ export function WebhookDeliveriesIndex(): ReactElement {
                       {new Date(d.createdAt).toLocaleString()}
                     </td>
                     <td className="px-3 py-2 text-text-body text-xs">
-                      <Link
-                        href={`/sellers/${d.sellerId}`}
-                        className="text-accent hover:underline"
-                      >
+                      <Link href={`/sellers/${d.sellerId}`} className="text-accent hover:underline">
                         {d.sellerCompany}
                       </Link>
                     </td>
-                    <td className="px-3 py-2 text-text-body font-mono text-xs">
-                      {d.eventType}
-                    </td>
+                    <td className="px-3 py-2 text-text-body font-mono text-xs">{d.eventType}</td>
                     <td className="px-3 py-2 text-text-muted font-mono text-[11px] max-w-[260px] truncate">
                       {d.endpointUrl}
                     </td>
                     <td className="px-3 py-2 text-right text-text-body font-mono text-xs">
                       {d.attemptNumber}/{d.maxAttempts}
                     </td>
-                    <td className={`px-3 py-2 text-xs uppercase tracking-wide ${statusColor(d.status)}`}>
+                    <td
+                      className={`px-3 py-2 text-xs uppercase tracking-wide ${statusColor(d.status)}`}
+                    >
                       {d.status}
                     </td>
                     <td className="px-3 py-2 text-right text-text-body font-mono text-xs">

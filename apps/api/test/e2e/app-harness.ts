@@ -88,9 +88,7 @@ export async function bootTestApp(): Promise<AppHarness> {
  * via AppModule → NotificationsModule, so this is always available
  * in e2e).
  */
-export async function drainNotificationListener(
-  app: NestExpressApplication,
-): Promise<void> {
+export async function drainNotificationListener(app: NestExpressApplication): Promise<void> {
   const listener = app.get(NotificationListener, { strict: false });
   await listener.drainInFlight();
 }
@@ -325,14 +323,10 @@ export async function resetOrderState(prisma: PrismaClient): Promise<void> {
  * too. call_attempts is append-only in the app (CC-1) — TRUNCATE here
  * is test teardown, not an app mutation path.
  */
-export async function resetCallCenterState(
-  prisma: PrismaClient,
-): Promise<void> {
+export async function resetCallCenterState(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(
     'TRUNCATE TABLE ' +
-      ['call_attempts', 'call_queue_entries', 'agent_call_settings'].join(
-        ', ',
-      ) +
+      ['call_attempts', 'call_queue_entries', 'agent_call_settings'].join(', ') +
       ' RESTART IDENTITY CASCADE',
   );
 }
@@ -364,9 +358,7 @@ export async function resetCallCenterState(
  * The single TRUNCATE … CASCADE statement handles cross-table FK
  * cascading; the order of the table list is documentary.
  */
-export async function resetWarehouseState(
-  prisma: PrismaClient,
-): Promise<void> {
+export async function resetWarehouseState(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(
     'TRUNCATE TABLE ' +
       [

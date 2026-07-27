@@ -26,16 +26,12 @@ export default function SettingsPage(): ReactElement {
       href: '/settings/api-keys',
       icon: <Key size={20} />,
       title: 'API keys',
-      description:
-        'Programmatic access to the Skydrop seller API. Create, label, and revoke keys.',
+      description: 'Programmatic access to the Skydrop seller API. Create, label, and revoke keys.',
     },
   ];
   return (
     <div className="max-w-4xl">
-      <PageHeader
-        title="Settings"
-        subtitle="Webhooks, notifications, API keys."
-      />
+      <PageHeader title="Settings" subtitle="Webhooks, notifications, API keys." />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {items.map((it) => (
           <Link key={it.href} href={it.href} className="block">
@@ -44,12 +40,8 @@ export default function SettingsPage(): ReactElement {
                 <div className="flex items-start gap-3">
                   <div className="text-accent">{it.icon}</div>
                   <div>
-                    <div className="text-text-bright font-medium text-sm">
-                      {it.title}
-                    </div>
-                    <div className="text-text-muted text-xs mt-0.5">
-                      {it.description}
-                    </div>
+                    <div className="text-text-bright font-medium text-sm">{it.title}</div>
+                    <div className="text-text-muted text-xs mt-0.5">{it.description}</div>
                   </div>
                 </div>
               </CardBody>

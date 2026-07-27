@@ -36,9 +36,9 @@ function makeService(
   const shipmentFindFirst = jest.fn(async () =>
     opts.shipment === undefined ? defaultShipment : opts.shipment,
   );
-  const shipmentUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(
-    async () => ({ count: opts.stampCount ?? 1 }),
-  );
+  const shipmentUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async () => ({
+    count: opts.stampCount ?? 1,
+  }));
   const client: AnyArgs = {
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(client),
     shipment: { findFirst: shipmentFindFirst, updateMany: shipmentUpdateMany },
@@ -101,8 +101,7 @@ function makeService(
 
 describe('PackService.complete', () => {
   it('happy path: stamp → PICKED→PACKED → attach to NEW DRAFT manifest', async () => {
-    const { svc, shipmentUpdateMany, transitionStatus, attachShipment } =
-      makeService();
+    const { svc, shipmentUpdateMany, transitionStatus, attachShipment } = makeService();
     const r = await svc.complete(SHIP, STAFF);
 
     // Stamp BEFORE transition (operational write first).
@@ -126,11 +125,7 @@ describe('PackService.complete', () => {
         expectedFrom: OrderStatus.PICKED,
       }),
     );
-    expect(attachShipment).toHaveBeenCalledWith(
-      SHIP,
-      expect.anything(),
-      undefined,
-    );
+    expect(attachShipment).toHaveBeenCalledWith(SHIP, expect.anything(), undefined);
     expect(r).toMatchObject({
       status: OrderStatus.PACKED,
       manifestId: 'man-1',
@@ -142,18 +137,17 @@ describe('PackService.complete', () => {
 
   it('idempotent: already PACKED + stamped → no-op (no transition, no attach)', async () => {
     const packedAt = new Date('2026-05-19T12:00:00Z');
-    const { svc, transitionStatus, attachShipment, shipmentUpdateMany } =
-      makeService({
-        orderStatus: OrderStatus.PACKED,
-        shipment: {
-          id: SHIP,
-          status: ShipmentStatus.CREATED,
-          packCompletedAt: packedAt,
-          manifestId: 'man-1',
-          manifest: { manifestNumber: 'MF-2026-05-000001' },
-          orderShipments: [{ orderId: ORDER, order: { sellerId: 'seller-1' } }],
-        },
-      });
+    const { svc, transitionStatus, attachShipment, shipmentUpdateMany } = makeService({
+      orderStatus: OrderStatus.PACKED,
+      shipment: {
+        id: SHIP,
+        status: ShipmentStatus.CREATED,
+        packCompletedAt: packedAt,
+        manifestId: 'man-1',
+        manifest: { manifestNumber: 'MF-2026-05-000001' },
+        orderShipments: [{ orderId: ORDER, order: { sellerId: 'seller-1' } }],
+      },
+    });
     const r = await svc.complete(SHIP, STAFF);
     expect(r).toEqual({
       shipmentId: SHIP,
@@ -250,15 +244,11 @@ describe('PackService.complete', () => {
 
   it('404 when shipment is missing', async () => {
     const { svc } = makeService({ shipment: null });
-    await expect(svc.complete(SHIP, STAFF)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(svc.complete(SHIP, STAFF)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('404 when order is missing', async () => {
     const { svc } = makeService({ orderStatus: 'missing' });
-    await expect(svc.complete(SHIP, STAFF)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(svc.complete(SHIP, STAFF)).rejects.toBeInstanceOf(NotFoundException);
   });
 });

@@ -10,9 +10,7 @@ const REVIEW = 'review-1';
 const ORDER = 'order-1';
 const USER = 'su-1';
 
-function makeSut(
-  opts: { decideThrows?: boolean; transitionThrows?: boolean } = {},
-) {
+function makeSut(opts: { decideThrows?: boolean; transitionThrows?: boolean } = {}) {
   const decide = jest.fn<Promise<AnyArgs>, [string, string, string, string, string | null]>(
     async (_s, _r, decision) => {
       if (opts.decideThrows) {
@@ -101,9 +99,9 @@ describe('EarlyReservationDecisionService.decide', () => {
 
   it('a rejected review (already resolved) never touches the order', async () => {
     const sut = makeSut({ decideThrows: true });
-    await expect(
-      sut.svc.decide(SELLER, REVIEW, 'RELEASE', USER),
-    ).rejects.toMatchObject({ response: { code: 'REVIEW_ALREADY_RESOLVED' } });
+    await expect(sut.svc.decide(SELLER, REVIEW, 'RELEASE', USER)).rejects.toMatchObject({
+      response: { code: 'REVIEW_ALREADY_RESOLVED' },
+    });
     expect(sut.transitionStatus).not.toHaveBeenCalled();
   });
 
@@ -121,9 +119,6 @@ describe('EarlyReservationDecisionService.decide', () => {
   it('listOpen asks only for OPEN reviews', async () => {
     const sut = makeSut();
     await sut.svc.listOpen(SELLER);
-    expect(sut.listForSeller).toHaveBeenCalledWith(
-      SELLER,
-      EarlyReservationReviewStatus.OPEN,
-    );
+    expect(sut.listForSeller).toHaveBeenCalledWith(SELLER, EarlyReservationReviewStatus.OPEN);
   });
 });

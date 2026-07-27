@@ -36,7 +36,9 @@ async function bootstrap(): Promise<void> {
 
   ctx.enableShutdownHooks();
 
-  console.info('[skydrop-workers] application context booted — BullMQ workers + lifecycle listener live');
+  console.info(
+    '[skydrop-workers] application context booted — BullMQ workers + lifecycle listener live',
+  );
 
   // Keep the process alive — Nest's createApplicationContext does NOT
   // start an HTTP server, but BullMQ workers + the rxjs Subject

@@ -55,8 +55,7 @@ export class SellerInvoiceController {
     if (!inv) {
       throw new NotFoundException({
         code: 'INVOICE_NOT_FOUND',
-        message:
-          'No invoice yet for this order — invoices are auto-generated on delivery.',
+        message: 'No invoice yet for this order — invoices are auto-generated on delivery.',
       });
     }
     return inv;

@@ -54,9 +54,7 @@ export class AdminCategoryController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Single category by id' })
-  getById(
-    @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
-  ): Promise<CategoryView> {
+  getById(@Param('id', new ParseUUIDPipe({ version: '7' })) id: string): Promise<CategoryView> {
     return this.svc.getById(id);
   }
 

@@ -1,12 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import {
-  useEffect,
-  useState,
-  type FormEvent,
-  type ReactElement,
-} from 'react';
+import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import {
   Button,
   Card,
@@ -50,13 +45,42 @@ import {
  */
 
 const INDIAN_STATES: ReadonlyArray<string> = [
-  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
-  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
-  'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram',
-  'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu',
-  'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
-  'Andaman and Nicobar Islands', 'Chandigarh', 'Dadra and Nagar Haveli and Daman and Diu',
-  'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry',
+  'Andhra Pradesh',
+  'Arunachal Pradesh',
+  'Assam',
+  'Bihar',
+  'Chhattisgarh',
+  'Goa',
+  'Gujarat',
+  'Haryana',
+  'Himachal Pradesh',
+  'Jharkhand',
+  'Karnataka',
+  'Kerala',
+  'Madhya Pradesh',
+  'Maharashtra',
+  'Manipur',
+  'Meghalaya',
+  'Mizoram',
+  'Nagaland',
+  'Odisha',
+  'Punjab',
+  'Rajasthan',
+  'Sikkim',
+  'Tamil Nadu',
+  'Telangana',
+  'Tripura',
+  'Uttar Pradesh',
+  'Uttarakhand',
+  'West Bengal',
+  'Andaman and Nicobar Islands',
+  'Chandigarh',
+  'Dadra and Nagar Haveli and Daman and Diu',
+  'Delhi',
+  'Jammu and Kashmir',
+  'Ladakh',
+  'Lakshadweep',
+  'Puducherry',
 ];
 
 interface FormState {
@@ -127,20 +151,12 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
     return (
       <Card>
         <CardBody>
-          <div className="text-text-bright text-sm mb-2">
-            This order is no longer editable.
-          </div>
+          <div className="text-text-bright text-sm mb-2">This order is no longer editable.</div>
           <p className="text-text-muted text-xs mb-4">
-            Status:{' '}
-            <span className="font-mono text-text-bright">{status}</span>. The
-            server allows edits only for DRAFT (full) and
-            PENDING_CONFIRMATION (recipient + notes).
+            Status: <span className="font-mono text-text-bright">{status}</span>. The server allows
+            edits only for DRAFT (full) and PENDING_CONFIRMATION (recipient + notes).
           </p>
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() => router.push(`/orders/${orderId}`)}
-          >
+          <Button variant="secondary" size="md" onClick={() => router.push(`/orders/${orderId}`)}>
             Back to order
           </Button>
         </CardBody>
@@ -168,18 +184,14 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
     };
     if (form.recipientAltPhoneE164.trim())
       body.recipientAltPhoneE164 = form.recipientAltPhoneE164.trim();
-    if (form.recipientEmail.trim())
-      body.recipientEmail = form.recipientEmail.trim();
+    if (form.recipientEmail.trim()) body.recipientEmail = form.recipientEmail.trim();
     if (form.recipientAddressLine2.trim())
       body.recipientAddressLine2 = form.recipientAddressLine2.trim();
-    if (form.recipientLandmark.trim())
-      body.recipientLandmark = form.recipientLandmark.trim();
+    if (form.recipientLandmark.trim()) body.recipientLandmark = form.recipientLandmark.trim();
     if (form.paymentMode === 'COD' && form.codAmountInr.trim())
       body.codAmountInr = Number(form.codAmountInr);
-    if (form.declaredValueInr.trim())
-      body.declaredValueInr = Number(form.declaredValueInr);
-    if (form.totalWeightGrams.trim())
-      body.totalWeightGrams = Number(form.totalWeightGrams);
+    if (form.declaredValueInr.trim()) body.declaredValueInr = Number(form.declaredValueInr);
+    if (form.totalWeightGrams.trim()) body.totalWeightGrams = Number(form.totalWeightGrams);
     if (form.sellerNotes !== (detail.data.sellerNotes ?? '')) {
       body.sellerNotes = form.sellerNotes;
     }
@@ -246,12 +258,8 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
   return (
     <form className="space-y-4" onSubmit={(e) => void onSave(e)}>
       <div className="text-text-muted text-xs">
-        Editing order{' '}
-        <span className="font-mono text-text-bright">
-          {detail.data.orderNumber}
-        </span>{' '}
-        · status{' '}
-        <span className="font-mono text-text-bright">{status}</span>
+        Editing order <span className="font-mono text-text-bright">{detail.data.orderNumber}</span>{' '}
+        · status <span className="font-mono text-text-bright">{status}</span>
         {economicsLocked && (
           <span className="ml-2 text-pending">
             (recipient + notes only — economics locked once submitted to call queue)
@@ -264,7 +272,10 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
         <Card>
           <CardBody>
             <h2 className="text-text-bright text-sm font-medium mb-2">
-              Item <span className="text-text-muted text-xs ml-2">(read-only — discard &amp; recreate to swap)</span>
+              Item{' '}
+              <span className="text-text-muted text-xs ml-2">
+                (read-only — discard &amp; recreate to swap)
+              </span>
             </h2>
             <div className="text-text-body text-sm">
               {firstItem.productName}
@@ -361,10 +372,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
               <Input
                 value={form.recipientPostalCode}
                 onChange={(e) =>
-                  set(
-                    'recipientPostalCode',
-                    e.target.value.replace(/\D/g, '').slice(0, 6),
-                  )
+                  set('recipientPostalCode', e.target.value.replace(/\D/g, '').slice(0, 6))
                 }
                 inputMode="numeric"
                 required
@@ -379,17 +387,13 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
         <CardBody>
           <h2 className="text-text-bright text-sm font-medium mb-3">
             Payment &amp; physical
-            {economicsLocked && (
-              <span className="text-text-muted text-xs ml-2">(read-only)</span>
-            )}
+            {economicsLocked && <span className="text-text-muted text-xs ml-2">(read-only)</span>}
           </h2>
           <div className="grid grid-cols-2 gap-3">
             <FormField label="Payment mode" required>
               <Select
                 value={form.paymentMode}
-                onChange={(e) =>
-                  set('paymentMode', e.target.value as 'COD' | 'PREPAID')
-                }
+                onChange={(e) => set('paymentMode', e.target.value as 'COD' | 'PREPAID')}
                 disabled={economicsLocked}
               >
                 <option value="PREPAID">Prepaid</option>
@@ -501,12 +505,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
           >
             Cancel
           </Button>
-          <Button
-            type="submit"
-            variant="secondary"
-            size="md"
-            disabled={busy !== null}
-          >
+          <Button type="submit" variant="secondary" size="md" disabled={busy !== null}>
             {busy === 'save' ? 'Saving…' : 'Save changes'}
           </Button>
           {isDraft && (

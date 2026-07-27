@@ -116,10 +116,7 @@ export function StaffManagementIndex(): ReactElement {
       />
 
       {revealed && (
-        <InviteLinkRevealCard
-          invitation={revealed}
-          onDismiss={() => setRevealed(null)}
-        />
+        <InviteLinkRevealCard invitation={revealed} onDismiss={() => setRevealed(null)} />
       )}
 
       {error && (
@@ -154,10 +151,7 @@ export function StaffManagementIndex(): ReactElement {
               </thead>
               <tbody className="divide-y divide-border">
                 {users.data.map((u) => (
-                  <tr
-                    key={u.id}
-                    className={u.deletedAt ? 'opacity-50' : undefined}
-                  >
+                  <tr key={u.id} className={u.deletedAt ? 'opacity-50' : undefined}>
                     <td className="px-3 py-2 text-text-body font-mono text-xs">
                       {u.emailDisplay}
                       {u.deletedAt && (
@@ -181,9 +175,7 @@ export function StaffManagementIndex(): ReactElement {
                       </select>
                     </td>
                     <td className="px-3 py-2 text-text-muted font-mono text-xs">
-                      {u.lastLoginAt
-                        ? new Date(u.lastLoginAt).toLocaleString()
-                        : '—'}
+                      {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : '—'}
                     </td>
                     <td className="px-3 py-2 text-text-muted font-mono text-xs">
                       {new Date(u.createdAt).toLocaleDateString()}
@@ -200,20 +192,12 @@ export function StaffManagementIndex(): ReactElement {
                           >
                             Confirm
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setPendingDelete(null)}
-                          >
+                          <Button variant="ghost" size="sm" onClick={() => setPendingDelete(null)}>
                             Cancel
                           </Button>
                         </>
                       ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setPendingDelete(u.id)}
-                        >
+                        <Button variant="ghost" size="sm" onClick={() => setPendingDelete(u.id)}>
                           Deactivate
                         </Button>
                       )}
@@ -255,21 +239,12 @@ export function StaffManagementIndex(): ReactElement {
                 {invitations.data.items.map((inv) => {
                   const now = Date.now();
                   const isUsed = inv.usedAt !== null;
-                  const isExpired =
-                    !isUsed && new Date(inv.expiresAt).getTime() < now;
-                  const status = isUsed
-                    ? 'USED'
-                    : isExpired
-                      ? 'EXPIRED'
-                      : 'PENDING';
+                  const isExpired = !isUsed && new Date(inv.expiresAt).getTime() < now;
+                  const status = isUsed ? 'USED' : isExpired ? 'EXPIRED' : 'PENDING';
                   return (
                     <tr key={inv.id}>
-                      <td className="px-3 py-2 text-text-body font-mono text-xs">
-                        {inv.email}
-                      </td>
-                      <td className="px-3 py-2 text-text-body font-mono text-xs">
-                        {inv.role}
-                      </td>
+                      <td className="px-3 py-2 text-text-body font-mono text-xs">{inv.email}</td>
+                      <td className="px-3 py-2 text-text-body font-mono text-xs">{inv.role}</td>
                       <td className="px-3 py-2">
                         <span
                           className={
@@ -289,11 +264,7 @@ export function StaffManagementIndex(): ReactElement {
                       <td className="px-3 py-2 text-right">
                         {!isUsed && (
                           <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => void onResend(inv.id)}
-                            >
+                            <Button variant="ghost" size="sm" onClick={() => void onResend(inv.id)}>
                               Resend
                             </Button>
                             {pendingRevoke === inv.id ? (

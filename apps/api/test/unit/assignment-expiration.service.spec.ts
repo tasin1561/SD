@@ -8,11 +8,13 @@ type AnyArgs = Record<string, unknown>;
 
 const ASSIGNED_AT = new Date('2026-05-18T10:00:00.000Z');
 
-function makeService(opts: {
-  timeoutValueInt?: number | null; // null → no settings row
-  entry?: AnyArgs | null; // findUnique result; undefined → a default ASSIGNED entry
-  updateCount?: number;
-} = {}) {
+function makeService(
+  opts: {
+    timeoutValueInt?: number | null; // null → no settings row
+    entry?: AnyArgs | null; // findUnique result; undefined → a default ASSIGNED entry
+    updateCount?: number;
+  } = {},
+) {
   const settingFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
     opts.timeoutValueInt === null || opts.timeoutValueInt === undefined
       ? null

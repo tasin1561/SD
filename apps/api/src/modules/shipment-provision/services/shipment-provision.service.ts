@@ -103,10 +103,7 @@ export class ShipmentProvisionService {
 
     const totalWeightGrams =
       input.totalWeightGrams ??
-      input.items.reduce(
-        (s, i) => s + (i.unitWeightGrams ?? 0) * i.quantity,
-        0,
-      );
+      input.items.reduce((s, i) => s + (i.unitWeightGrams ?? 0) * i.quantity, 0);
 
     const shipmentId = await this.prisma.client.$transaction(async (tx) => {
       const shipmentNumber = await this.numbering.nextShipmentNumber(tx);
@@ -126,10 +123,7 @@ export class ShipmentProvisionService {
           destCountryCode: input.recipient.countryCode ?? 'IN',
           totalWeightGrams,
           declaredValueInr: new Prisma.Decimal(input.declaredValueInr),
-          codAmountInr:
-            input.codAmountInr == null
-              ? null
-              : new Prisma.Decimal(input.codAmountInr),
+          codAmountInr: input.codAmountInr == null ? null : new Prisma.Decimal(input.codAmountInr),
           status: ShipmentStatus.CREATED,
           orderShipments: {
             create: {
@@ -147,14 +141,9 @@ export class ShipmentProvisionService {
               variantLabel: i.variantLabel ?? null,
               unitWeightGrams: i.unitWeightGrams ?? null,
               unitDeclaredValueInr:
-                i.unitDeclaredValueInr == null
-                  ? null
-                  : new Prisma.Decimal(i.unitDeclaredValueInr),
+                i.unitDeclaredValueInr == null ? null : new Prisma.Decimal(i.unitDeclaredValueInr),
               hsCode: i.hsCode ?? null,
-              unitPriceInr:
-                i.unitPriceInr == null
-                  ? null
-                  : new Prisma.Decimal(i.unitPriceInr),
+              unitPriceInr: i.unitPriceInr == null ? null : new Prisma.Decimal(i.unitPriceInr),
             })),
           },
         },

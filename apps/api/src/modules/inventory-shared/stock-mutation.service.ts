@@ -1,10 +1,5 @@
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
-import {
-  ActorType,
-  Prisma,
-  StockMovementReasonCode,
-  StockMovementType,
-} from '@skydrop/db';
+import { ActorType, Prisma, StockMovementReasonCode, StockMovementType } from '@skydrop/db';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 
 /* ============================================================================
@@ -170,14 +165,9 @@ export class StockMutationService {
         stockLevelId = created.id;
         newVersion = 0;
       } catch (err) {
-        if (
-          err instanceof Prisma.PrismaClientKnownRequestError &&
-          err.code === 'P2002'
-        ) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
           // Concurrent create of the same (seller,variant,wh,bin,batch).
-          throw new RetryableStockConflictError(
-            'concurrent stock_level create race',
-          );
+          throw new RetryableStockConflictError('concurrent stock_level create race');
         }
         throw err;
       }

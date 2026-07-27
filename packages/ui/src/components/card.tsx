@@ -15,9 +15,7 @@ export function Card({
     <div
       className={clsx(
         'rounded-[7px] border bg-surface',
-        tone === 'critical'
-          ? 'border-[var(--color-critical-ring)]'
-          : 'border-border',
+        tone === 'critical' ? 'border-[var(--color-critical-ring)]' : 'border-border',
         className,
       )}
       {...rest}
@@ -52,18 +50,13 @@ export function CardHeader({
         >
           {title}
         </div>
-        {subtitle && (
-          <div className="text-text-muted text-xs mt-0.5">{subtitle}</div>
-        )}
+        {subtitle && <div className="text-text-muted text-xs mt-0.5">{subtitle}</div>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>
   );
 }
 
-export function CardBody({
-  className,
-  ...rest
-}: HTMLAttributes<HTMLDivElement>): ReactElement {
+export function CardBody({ className, ...rest }: HTMLAttributes<HTMLDivElement>): ReactElement {
   return <div className={clsx('px-4 py-3', className)} {...rest} />;
 }

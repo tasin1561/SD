@@ -64,9 +64,7 @@ export class DelhiveryEwaybillService {
     });
 
     const message =
-      (raw['error'] as string | undefined) ??
-      (raw['rmk'] as string | undefined) ??
-      null;
+      (raw['error'] as string | undefined) ?? (raw['rmk'] as string | undefined) ?? null;
     const success = raw['error'] === undefined;
     if (!success) {
       this.logger.warn(

@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  InternalServerErrorException,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { WarehouseStatus } from '@skydrop/db';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 

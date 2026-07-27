@@ -26,7 +26,11 @@ export class UpdateSellerProfileDto {
   @MaxLength(120)
   contactPersonName?: string;
 
-  @ApiProperty({ required: false, example: '+8801712345678', description: 'E.164 format, must be BD (+880...)' })
+  @ApiProperty({
+    required: false,
+    example: '+8801712345678',
+    description: 'E.164 format, must be BD (+880...)',
+  })
   @IsOptional()
   @IsString()
   @Matches(E164_BD, { message: 'phone must be E.164 BD format (e.g., +8801712345678)' })

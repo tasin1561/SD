@@ -30,20 +30,17 @@ function makeService(
   const findFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
     opts.shipment === undefined ? defaultShipment : opts.shipment,
   );
-  const updateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(
-    async () => ({ count: opts.updateCount ?? 1 }),
-  );
+  const updateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async () => ({
+    count: opts.updateCount ?? 1,
+  }));
   const client = { shipment: { findFirst, updateMany } };
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs]>(async () => 'a');
   const audit = { log: auditLog };
-  const enqueueExpiration = jest.fn<Promise<string>, [AnyArgs, number]>(
-    async () => 'job-1',
-  );
+  const enqueueExpiration = jest.fn<Promise<string>, [AnyArgs, number]>(async () => 'job-1');
   const queue = { enqueueExpiration };
   const listActiveForOrder = jest.fn(async () => opts.active ?? []);
   const reservations = { listActiveForOrder };
-  const releaseAllocation =
-    opts.release ?? jest.fn(async () => ({ alreadyPhase1: false }));
+  const releaseAllocation = opts.release ?? jest.fn(async () => ({ alreadyPhase1: false }));
   const allocation = { releaseAllocation };
 
   const svc = new PickExpirationService(
@@ -78,11 +75,7 @@ describe('PickExpirationService.scheduleExpiration', () => {
 
   it('passes a non-negative delay even for a past deadline', async () => {
     const { svc, enqueueExpiration } = makeService();
-    await svc.scheduleExpiration(
-      'ship-1',
-      STARTED_AT,
-      new Date(Date.now() - 60_000),
-    );
+    await svc.scheduleExpiration('ship-1', STARTED_AT, new Date(Date.now() - 60_000));
     const delayMs = enqueueExpiration.mock.calls[0]?.[1] ?? -1;
     // enqueueExpiration itself clamps to >=0; the service may pass a
     // negative — assert the contract boundary is the queue's job.

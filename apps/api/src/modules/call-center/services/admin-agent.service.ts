@@ -1,10 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CallQueueStatus, StaffRole } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
-import {
-  AgentSettingsService,
-  type AgentSettingsView,
-} from './agent-settings.service';
+import { AgentSettingsService, type AgentSettingsView } from './agent-settings.service';
 
 export interface AgentListRow {
   agentId: string;
@@ -120,9 +117,7 @@ export class AdminAgentService {
 
   // ── internal ──────────────────────────────────────────────────────
 
-  private async requireAgent(
-    staffUserId: string,
-  ): Promise<{ id: string; email: string }> {
+  private async requireAgent(staffUserId: string): Promise<{ id: string; email: string }> {
     const staff = await this.prisma.client.staffUser.findFirst({
       where: { id: staffUserId, deletedAt: null },
       select: { id: true, email: true },

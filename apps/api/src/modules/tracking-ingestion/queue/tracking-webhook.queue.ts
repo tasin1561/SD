@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  type OnModuleDestroy,
-  type OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Queue, type JobsOptions } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -74,11 +69,7 @@ export class TrackingWebhookQueue implements OnModuleInit, OnModuleDestroy {
 
   /** Enqueue a stored webhook for processing. jobId = webhookId (dedup). */
   async enqueueWebhook(webhookId: string): Promise<string> {
-    const job = await this.queue.add(
-      JOB_PROCESS_WEBHOOK,
-      { webhookId },
-      { jobId: webhookId },
-    );
+    const job = await this.queue.add(JOB_PROCESS_WEBHOOK, { webhookId }, { jobId: webhookId });
     return String(job.id);
   }
 
@@ -99,11 +90,7 @@ export class TrackingWebhookQueue implements OnModuleInit, OnModuleDestroy {
       select: { valueJson: true },
     });
     const raw = row?.valueJson;
-    if (
-      Array.isArray(raw) &&
-      raw.length > 0 &&
-      raw.every((n) => typeof n === 'number' && n >= 0)
-    ) {
+    if (Array.isArray(raw) && raw.length > 0 && raw.every((n) => typeof n === 'number' && n >= 0)) {
       return raw as number[];
     }
     return [...DEFAULT_BACKOFF_MS];

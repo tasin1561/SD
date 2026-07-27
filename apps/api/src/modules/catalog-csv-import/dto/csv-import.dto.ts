@@ -1,12 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsObject,
-  IsOptional,
-  IsString,
-  IsUUID,
-  Matches,
-  MaxLength,
-} from 'class-validator';
+import { IsObject, IsOptional, IsString, IsUUID, Matches, MaxLength } from 'class-validator';
 
 export class PresignCsvDto {
   @ApiProperty({ example: 'my-catalog.csv' })

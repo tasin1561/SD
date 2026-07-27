@@ -7,18 +7,20 @@ import type { AuditLogService } from '../../src/modules/auth-common/services/aud
 
 type AnyArgs = Record<string, unknown>;
 
-function makeService(opts: {
-  activeCount?: number;
-  maxActive?: number | null; // null → no settings row
-  picked?: { id: string; orderId: string } | null;
-  order?: AnyArgs | null;
-  currentRows?: AnyArgs[];
-  releaseEntry?: AnyArgs | null; // findUnique for release(); undefined → default ASSIGNED owned
-  releaseUpdateCount?: number;
-  /** Simulate FOR UPDATE SKIP LOCKED: the pickable row is returned to
-   *  the FIRST locking SELECT only; concurrent SELECTs skip it (→ []). */
-  skipLockedOnce?: boolean;
-} = {}) {
+function makeService(
+  opts: {
+    activeCount?: number;
+    maxActive?: number | null; // null → no settings row
+    picked?: { id: string; orderId: string } | null;
+    order?: AnyArgs | null;
+    currentRows?: AnyArgs[];
+    releaseEntry?: AnyArgs | null; // findUnique for release(); undefined → default ASSIGNED owned
+    releaseUpdateCount?: number;
+    /** Simulate FOR UPDATE SKIP LOCKED: the pickable row is returned to
+     *  the FIRST locking SELECT only; concurrent SELECTs skip it (→ []). */
+    skipLockedOnce?: boolean;
+  } = {},
+) {
   const count = jest.fn<Promise<number>, [AnyArgs]>(async () => opts.activeCount ?? 0);
   const agentSettingsFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
     opts.maxActive === null || opts.maxActive === undefined
@@ -40,9 +42,7 @@ function makeService(opts: {
     assignedAt: new Date('2026-05-18T10:00:00Z'),
     scheduledAttempts: 1,
   }));
-  const findMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
-    async () => opts.currentRows ?? [],
-  );
+  const findMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => opts.currentRows ?? []);
   const defaultReleaseEntry = {
     id: 'q1',
     orderId: 'o1',
@@ -73,9 +73,7 @@ function makeService(opts: {
 
   const orders = {
     getById: jest.fn(async () => (opts.order === undefined ? { orderId: 'o1' } : opts.order)),
-    getManyByIds: jest.fn(
-      async () => new Map((opts.currentRows ?? []).map((r) => [r.orderId, r])),
-    ),
+    getManyByIds: jest.fn(async () => new Map((opts.currentRows ?? []).map((r) => [r.orderId, r]))),
   };
   const scheduleExpiration = jest.fn<Promise<void>, [string, Date]>(async () => {});
   const expiration = { scheduleExpiration };
@@ -117,10 +115,7 @@ describe('CallAssignmentService.pullNext', () => {
     });
     const r = await svc.pullNext('agent-1');
     expect(r).not.toBeNull();
-    expect(scheduleExpiration).toHaveBeenCalledWith(
-      'q1',
-      new Date('2026-05-18T10:00:00Z'),
-    );
+    expect(scheduleExpiration).toHaveBeenCalledWith('q1', new Date('2026-05-18T10:00:00Z'));
     const sql = queryRawUnsafe.mock.calls[0]![0];
     expect(sql).toContain('FOR UPDATE SKIP LOCKED');
     expect(sql).toContain('ORDER BY available_at ASC, created_at ASC');
@@ -251,10 +246,7 @@ describe('CallAssignmentService.pullNext — concurrency (FOR UPDATE SKIP LOCKED
       picked: { id: 'q1', orderId: 'o1' },
       skipLockedOnce: true, // the locked row is invisible to the loser's SELECT
     });
-    const [a, b] = await Promise.all([
-      svc.pullNext('agent-1'),
-      svc.pullNext('agent-2'),
-    ]);
+    const [a, b] = await Promise.all([svc.pullNext('agent-1'), svc.pullNext('agent-2')]);
     const got = [a, b].filter((r) => r !== null);
     const empty = [a, b].filter((r) => r === null);
     expect(got).toHaveLength(1); // exactly one winner

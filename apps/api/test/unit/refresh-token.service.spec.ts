@@ -85,7 +85,9 @@ class FakeTable {
       let match = true;
       for (const k of Object.keys(where)) {
         const expected = where[k];
-        const actual = (r as unknown as Record<string, unknown>)[k === this.userField ? 'userId' : k];
+        const actual = (r as unknown as Record<string, unknown>)[
+          k === this.userField ? 'userId' : k
+        ];
         if (k === 'revokedAt' && expected === null && r.revokedAt !== null) match = false;
         else if (k !== 'revokedAt' && expected !== actual) match = false;
       }
@@ -194,9 +196,9 @@ describe('RefreshTokenService', () => {
 
   it('rotate: rejects an unknown token', async () => {
     const { svc } = makeSut();
-    await expect(
-      svc.rotate({ subject: 'staff', presentedToken: 'not-issued' }),
-    ).rejects.toThrow(UnauthorizedException);
+    await expect(svc.rotate({ subject: 'staff', presentedToken: 'not-issued' })).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 
   it('rotate: rejects an expired token without raising the reuse alarm', async () => {

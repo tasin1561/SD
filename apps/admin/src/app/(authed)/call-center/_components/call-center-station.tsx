@@ -14,11 +14,7 @@ import {
 } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 import type { PulledAssignment } from '@skydrop/api-client';
-import {
-  usePullNextCall,
-  useRecordCallAttempt,
-  useReleaseCall,
-} from '@/lib/api-hooks';
+import { usePullNextCall, useRecordCallAttempt, useReleaseCall } from '@/lib/api-hooks';
 import { CallOutcome } from '@skydrop/db';
 
 const OUTCOME_OPTIONS: ReadonlyArray<{
@@ -26,15 +22,35 @@ const OUTCOME_OPTIONS: ReadonlyArray<{
   label: string;
   helper: string;
 }> = [
-  { value: 'CONFIRMED' as CallOutcome, label: 'Confirmed', helper: 'Customer agreed → reserves stock + advances order' },
-  { value: 'CUSTOMER_DECLINED' as CallOutcome, label: 'Declined', helper: 'Customer no longer wants the order' },
+  {
+    value: 'CONFIRMED' as CallOutcome,
+    label: 'Confirmed',
+    helper: 'Customer agreed → reserves stock + advances order',
+  },
+  {
+    value: 'CUSTOMER_DECLINED' as CallOutcome,
+    label: 'Declined',
+    helper: 'Customer no longer wants the order',
+  },
   { value: 'WRONG_NUMBER' as CallOutcome, label: 'Wrong number', helper: 'Reached someone else' },
   { value: 'NO_ANSWER' as CallOutcome, label: 'No answer', helper: 'Did not pick up' },
   { value: 'BUSY' as CallOutcome, label: 'Busy', helper: 'Line was busy' },
   { value: 'VOICEMAIL_LEFT' as CallOutcome, label: 'Voicemail', helper: 'Left a message' },
-  { value: 'CALLBACK_REQUESTED' as CallOutcome, label: 'Callback requested', helper: 'Customer asked to call back at a specific time' },
-  { value: 'TECHNICAL_FAILURE' as CallOutcome, label: 'Technical failure', helper: 'Line dropped, system fault — no order transition' },
-  { value: 'LANGUAGE_BARRIER' as CallOutcome, label: 'Language barrier', helper: 'Could not communicate — no order transition' },
+  {
+    value: 'CALLBACK_REQUESTED' as CallOutcome,
+    label: 'Callback requested',
+    helper: 'Customer asked to call back at a specific time',
+  },
+  {
+    value: 'TECHNICAL_FAILURE' as CallOutcome,
+    label: 'Technical failure',
+    helper: 'Line dropped, system fault — no order transition',
+  },
+  {
+    value: 'LANGUAGE_BARRIER' as CallOutcome,
+    label: 'Language barrier',
+    helper: 'Could not communicate — no order transition',
+  },
 ];
 
 export function CallCenterStation(): ReactElement {
@@ -108,9 +124,7 @@ export function CallCenterStation(): ReactElement {
     try {
       const r = await record.mutateAsync(payload);
       const tail =
-        r.finalOrderStatus !== null
-          ? `order → ${r.finalOrderStatus}`
-          : 'no order transition';
+        r.finalOrderStatus !== null ? `order → ${r.finalOrderStatus}` : 'no order transition';
       toast.success(`Recorded ${r.outcome} · ${tail}`);
       resetCall();
     } catch (err) {
@@ -261,9 +275,7 @@ function RecipientPanel({ order }: { readonly order: unknown }): ReactElement {
 
   return (
     <div className="rounded-[6px] border border-border p-3 text-sm">
-      <div className="text-text-bright font-medium mb-1">
-        {o.orderNumber ?? 'Order'}
-      </div>
+      <div className="text-text-bright font-medium mb-1">{o.orderNumber ?? 'Order'}</div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
         <Field label="Name" value={o.recipientName ?? '—'} />
         <Field
@@ -271,14 +283,16 @@ function RecipientPanel({ order }: { readonly order: unknown }): ReactElement {
           value={
             o.recipientAltPhoneE164
               ? `${o.recipientPhoneE164 ?? '—'} (alt ${o.recipientAltPhoneE164})`
-              : o.recipientPhoneE164 ?? '—'
+              : (o.recipientPhoneE164 ?? '—')
           }
         />
         <Field
           label="Address"
-          value={[o.recipientAddressLine1, o.recipientAddressLine2, o.recipientLandmark]
-            .filter(Boolean)
-            .join(', ') || '—'}
+          value={
+            [o.recipientAddressLine1, o.recipientAddressLine2, o.recipientLandmark]
+              .filter(Boolean)
+              .join(', ') || '—'
+          }
         />
         <Field
           label="City / state / PIN"
@@ -294,7 +308,7 @@ function RecipientPanel({ order }: { readonly order: unknown }): ReactElement {
                 COD <Money amount={o.codAmountInr} />
               </span>
             ) : (
-              o.paymentMode ?? '—'
+              (o.paymentMode ?? '—')
             )
           }
         />

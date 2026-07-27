@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PickupRequestStatus, Prisma, WarehouseStatus } from '@skydrop/db';
 import { CourierPickupService } from '../../src/modules/courier-ops/services/courier-pickup.service';
 
@@ -17,18 +13,20 @@ function p2002(): Prisma.PrismaClientKnownRequestError {
   });
 }
 
-function make(opts: {
-  warehouse?: { status?: WarehouseStatus } | null;
-  pickupLocation?: string;
-  createThrows?: unknown;
-  requestPickupResult?: {
-    success: boolean;
-    pickupId: string | null;
-    message: string | null;
-  };
-  requestPickupThrows?: Error;
-  existing?: Record<string, unknown> | null;
-} = {}) {
+function make(
+  opts: {
+    warehouse?: { status?: WarehouseStatus } | null;
+    pickupLocation?: string;
+    createThrows?: unknown;
+    requestPickupResult?: {
+      success: boolean;
+      pickupId: string | null;
+      message: string | null;
+    };
+    requestPickupThrows?: Error;
+    existing?: Record<string, unknown> | null;
+  } = {},
+) {
   const created = {
     id: REQUEST_ID,
     courierCode: 'delhivery',
@@ -127,9 +125,7 @@ describe('CourierPickupService.raise', () => {
     // The UNIQUE is the courier's one-per-day rule. Hitting it means
     // somebody already asked — which the operator needs told in words.
     const { svc, requestPickup } = make({ createThrows: p2002() });
-    await expect(svc.raise('staff-1', VALID, CLIENT)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    await expect(svc.raise('staff-1', VALID, CLIENT)).rejects.toBeInstanceOf(ConflictException);
     expect(requestPickup).not.toHaveBeenCalled();
   });
 
@@ -140,9 +136,7 @@ describe('CourierPickupService.raise', () => {
     const { svc, update } = make({
       requestPickupThrows: new Error('socket hang up'),
     });
-    await expect(svc.raise('staff-1', VALID, CLIENT)).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await expect(svc.raise('staff-1', VALID, CLIENT)).rejects.toBeInstanceOf(BadRequestException);
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: PickupRequestStatus.FAILED }),
@@ -165,18 +159,14 @@ describe('CourierPickupService.raise', () => {
 
   it('refuses an inactive warehouse — no van goes to a closed building', async () => {
     const { svc } = make({ warehouse: { status: WarehouseStatus.INACTIVE } });
-    await expect(svc.raise('staff-1', VALID, CLIENT)).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await expect(svc.raise('staff-1', VALID, CLIENT)).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('refuses when no pickup location is configured', async () => {
     // The name must match Delhivery's records exactly; guessing it
     // would fail at their end with a worse message.
     const { svc } = make({ pickupLocation: '   ' });
-    await expect(svc.raise('staff-1', VALID, CLIENT)).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await expect(svc.raise('staff-1', VALID, CLIENT)).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('rejects a malformed date instead of sending it', async () => {

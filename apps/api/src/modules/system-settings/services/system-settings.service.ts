@@ -172,8 +172,7 @@ export class SystemSettingsService {
             input.valueType === SettingValueType.DECIMAL
               ? new Prisma.Decimal(parsed as number | string)
               : null,
-          valueBoolean:
-            input.valueType === SettingValueType.BOOLEAN ? (parsed as boolean) : null,
+          valueBoolean: input.valueType === SettingValueType.BOOLEAN ? (parsed as boolean) : null,
           valueJson:
             input.valueType === SettingValueType.JSON
               ? (parsed as Prisma.InputJsonValue)

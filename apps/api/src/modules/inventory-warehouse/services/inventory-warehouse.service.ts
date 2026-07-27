@@ -149,14 +149,26 @@ export class InventoryWarehouseService {
           },
           select: WAREHOUSE_SELECT,
         });
-        await this.writeAudit(tx, staffId, 'inventory.warehouse.created', 'warehouse', row.id, ctx, {
-          code: row.code,
-          status: row.status,
-        });
+        await this.writeAudit(
+          tx,
+          staffId,
+          'inventory.warehouse.created',
+          'warehouse',
+          row.id,
+          ctx,
+          {
+            code: row.code,
+            status: row.status,
+          },
+        );
         return row;
       });
     } catch (err) {
-      throw this.mapCodeConflict(err, 'WAREHOUSE_CODE_TAKEN', `Warehouse code "${input.code}" is already in use`);
+      throw this.mapCodeConflict(
+        err,
+        'WAREHOUSE_CODE_TAKEN',
+        `Warehouse code "${input.code}" is already in use`,
+      );
     }
   }
 
@@ -189,7 +201,16 @@ export class InventoryWarehouseService {
 
     return this.prisma.client.$transaction(async (tx) => {
       const row = await tx.warehouse.update({ where: { id }, data, select: WAREHOUSE_SELECT });
-      await this.writeAudit(tx, staffId, 'inventory.warehouse.updated', 'warehouse', id, ctx, {}, changes);
+      await this.writeAudit(
+        tx,
+        staffId,
+        'inventory.warehouse.updated',
+        'warehouse',
+        id,
+        ctx,
+        {},
+        changes,
+      );
       return row;
     });
   }
@@ -224,14 +245,26 @@ export class InventoryWarehouseService {
           },
           select: ZONE_SELECT,
         });
-        await this.writeAudit(tx, staffId, 'inventory.zone.created', 'warehouse_zone', row.id, ctx, {
-          warehouseId,
-          code: row.code,
-        });
+        await this.writeAudit(
+          tx,
+          staffId,
+          'inventory.zone.created',
+          'warehouse_zone',
+          row.id,
+          ctx,
+          {
+            warehouseId,
+            code: row.code,
+          },
+        );
         return row;
       });
     } catch (err) {
-      throw this.mapCodeConflict(err, 'ZONE_CODE_TAKEN', `Zone code "${input.code}" already exists in this warehouse`);
+      throw this.mapCodeConflict(
+        err,
+        'ZONE_CODE_TAKEN',
+        `Zone code "${input.code}" already exists in this warehouse`,
+      );
     }
   }
 
@@ -260,8 +293,21 @@ export class InventoryWarehouseService {
     if (Object.keys(changes).length === 0) return this.requireZone(warehouseId, zoneId);
 
     return this.prisma.client.$transaction(async (tx) => {
-      const row = await tx.warehouseZone.update({ where: { id: zoneId }, data, select: ZONE_SELECT });
-      await this.writeAudit(tx, staffId, 'inventory.zone.updated', 'warehouse_zone', zoneId, ctx, {}, changes);
+      const row = await tx.warehouseZone.update({
+        where: { id: zoneId },
+        data,
+        select: ZONE_SELECT,
+      });
+      await this.writeAudit(
+        tx,
+        staffId,
+        'inventory.zone.updated',
+        'warehouse_zone',
+        zoneId,
+        ctx,
+        {},
+        changes,
+      );
       return row;
     });
   }
@@ -336,7 +382,11 @@ export class InventoryWarehouseService {
         return row;
       });
     } catch (err) {
-      throw this.mapCodeConflict(err, 'BIN_CODE_TAKEN', `Bin code "${input.code}" already exists in this warehouse`);
+      throw this.mapCodeConflict(
+        err,
+        'BIN_CODE_TAKEN',
+        `Bin code "${input.code}" already exists in this warehouse`,
+      );
     }
   }
 
@@ -380,7 +430,16 @@ export class InventoryWarehouseService {
 
     return this.prisma.client.$transaction(async (tx) => {
       const row = await tx.warehouseBin.update({ where: { id: binId }, data, select: BIN_SELECT });
-      await this.writeAudit(tx, staffId, 'inventory.bin.updated', 'warehouse_bin', binId, ctx, {}, changes);
+      await this.writeAudit(
+        tx,
+        staffId,
+        'inventory.bin.updated',
+        'warehouse_bin',
+        binId,
+        ctx,
+        {},
+        changes,
+      );
       return row;
     });
   }

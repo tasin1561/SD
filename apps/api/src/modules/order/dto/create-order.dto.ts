@@ -112,7 +112,10 @@ export class CreateOrderDto {
   @MaxLength(80)
   recipientCity!: string;
 
-  @ApiProperty({ maxLength: 80, description: 'Indian state/UT; validated soft against ops.allowed_indian_states.' })
+  @ApiProperty({
+    maxLength: 80,
+    description: 'Indian state/UT; validated soft against ops.allowed_indian_states.',
+  })
   @IsString()
   @MaxLength(80)
   recipientStateProvince!: string;

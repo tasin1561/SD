@@ -42,9 +42,7 @@ export default async function AcceptTeamInvitationPage({
     <div className="min-h-screen grid place-items-center bg-bg text-text-body p-6">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <div className="text-text-bright font-semibold text-lg tracking-tight">
-            Skydrop
-          </div>
+          <div className="text-text-bright font-semibold text-lg tracking-tight">Skydrop</div>
           <div className="text-text-faint text-xs mt-0.5">Seller</div>
         </div>
         <div className="rounded-[7px] border border-border bg-surface p-6">
@@ -54,17 +52,14 @@ export default async function AcceptTeamInvitationPage({
                 Invalid invitation link
               </h1>
               <p className="text-text-muted text-xs mb-4">
-                The link you used is missing the invitation token. Open the
-                email and click the button there, or paste the full URL
-                including the <span className="font-mono">?token=…</span>{' '}
-                parameter.
+                The link you used is missing the invitation token. Open the email and click the
+                button there, or paste the full URL including the{' '}
+                <span className="font-mono">?token=…</span> parameter.
               </p>
             </>
           ) : (
             <>
-              <h1 className="text-text-bright text-base font-semibold mb-1">
-                Join the team
-              </h1>
+              <h1 className="text-text-bright text-base font-semibold mb-1">Join the team</h1>
               <p className="text-text-muted text-xs mb-5">
                 Set your name and password to accept the invitation.
               </p>

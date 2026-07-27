@@ -71,8 +71,7 @@ const EN: Dict = {
   brand: 'Skydrop',
   tagline: 'Parcel tracking',
   landingTitle: 'Track your shipment',
-  landingSubtitle:
-    'Enter the AWB number from your shipping confirmation email or SMS.',
+  landingSubtitle: 'Enter the AWB number from your shipping confirmation email or SMS.',
   awbLabel: 'AWB number',
   awbPlaceholder: 'e.g. DL12345678',
   trackButton: 'Track',
@@ -85,8 +84,7 @@ const EN: Dict = {
   destination: 'Destination',
   estimatedDelivery: 'Estimated delivery',
   timelineHeading: 'Timeline',
-  noScansYet:
-    'No scans yet. Once the courier picks up the parcel, scan events will appear here.',
+  noScansYet: 'No scans yet. Once the courier picks up the parcel, scan events will appear here.',
   s_processing: 'Processing',
   s_dispatched: 'Dispatched',
   s_in_transit: 'In transit',
@@ -107,8 +105,7 @@ const HI: Dict = {
   brand: 'स्काईड्रॉप',
   tagline: 'पार्सल ट्रैकिंग',
   landingTitle: 'अपनी शिपमेंट ट्रैक करें',
-  landingSubtitle:
-    'अपनी कन्फर्मेशन ईमेल या SMS से AWB नंबर दर्ज करें।',
+  landingSubtitle: 'अपनी कन्फर्मेशन ईमेल या SMS से AWB नंबर दर्ज करें।',
   awbLabel: 'AWB नंबर',
   awbPlaceholder: 'उदा. DL12345678',
   trackButton: 'ट्रैक करें',
@@ -121,8 +118,7 @@ const HI: Dict = {
   destination: 'गंतव्य',
   estimatedDelivery: 'अनुमानित डिलीवरी',
   timelineHeading: 'टाइमलाइन',
-  noScansYet:
-    'अभी तक कोई स्कैन नहीं। कूरियर द्वारा पार्सल उठाते ही स्कैन इवेंट यहाँ दिखाई देंगे।',
+  noScansYet: 'अभी तक कोई स्कैन नहीं। कूरियर द्वारा पार्सल उठाते ही स्कैन इवेंट यहाँ दिखाई देंगे।',
   s_processing: 'प्रक्रियाधीन',
   s_dispatched: 'डिस्पैच',
   s_in_transit: 'रास्ते में',
@@ -145,8 +141,6 @@ export function t(locale: Locale, key: keyof Dict): string {
   return TABLE[locale][key];
 }
 
-export function statusKey(
-  s: PublicShipmentDisplayStatus,
-): keyof Dict {
+export function statusKey(s: PublicShipmentDisplayStatus): keyof Dict {
   return `s_${s}` as keyof Dict;
 }

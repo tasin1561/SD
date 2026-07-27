@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  type OnModuleDestroy,
-  type OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Worker, type Job } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { AssignmentExpirationService } from '../services/assignment-expiration.service';
@@ -20,9 +15,7 @@ import {
  * longer ASSIGNED-with-that-assignedAt is a safe no-op.
  */
 @Injectable()
-export class AssignmentExpirationWorker
-  implements OnModuleInit, OnModuleDestroy
-{
+export class AssignmentExpirationWorker implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AssignmentExpirationWorker.name);
   private worker!: Worker<ExpireAssignmentJob>;
 
@@ -36,16 +29,10 @@ export class AssignmentExpirationWorker
       ASSIGNMENT_EXPIRATION_QUEUE_NAME,
       async (job: Job<ExpireAssignmentJob>): Promise<void> => {
         if (job.name === JOB_EXPIRE_ASSIGNMENT) {
-          await this.service.expire(
-            job.data.assignmentId,
-            job.data.assignedAtIso,
-          );
+          await this.service.expire(job.data.assignmentId, job.data.assignedAtIso);
           return;
         }
-        this.logger.warn(
-          { name: job.name },
-          'Unknown assignment-expiration job; ignoring',
-        );
+        this.logger.warn({ name: job.name }, 'Unknown assignment-expiration job; ignoring');
       },
       { connection: this.redis.createConnection(), concurrency: 1 },
     );
@@ -57,10 +44,7 @@ export class AssignmentExpirationWorker
       );
     });
     this.worker.on('error', (err) => {
-      this.logger.error(
-        { err: err.message },
-        'Assignment-expiration worker error',
-      );
+      this.logger.error({ err: err.message }, 'Assignment-expiration worker error');
     });
     this.logger.log(
       `Assignment-expiration worker ready (queue=${ASSIGNMENT_EXPIRATION_QUEUE_NAME})`,

@@ -1,9 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   ActorType,
   OrderStatus,
@@ -138,10 +133,7 @@ export class RtoReceiptService {
     // Idempotent short-circuit: already RTO_RECEIVED + stamped. Reports
     // the ORIGINALLY-recorded receiving warehouse — a re-submit with a
     // different warehouse does NOT rewrite history.
-    if (
-      order.status === OrderStatus.RTO_RECEIVED &&
-      shipment.rtoReceivedAt !== null
-    ) {
+    if (order.status === OrderStatus.RTO_RECEIVED && shipment.rtoReceivedAt !== null) {
       const settled = shipment.rtoReceivedWarehouseId ?? shipment.originWarehouseId;
       return {
         shipmentId: shipment.id,
@@ -154,10 +146,7 @@ export class RtoReceiptService {
         alreadyReceived: true,
       };
     }
-    if (
-      order.status !== OrderStatus.RTO_INITIATED &&
-      order.status !== OrderStatus.RTO_IN_TRANSIT
-    ) {
+    if (order.status !== OrderStatus.RTO_INITIATED && order.status !== OrderStatus.RTO_IN_TRANSIT) {
       throw new ConflictException({
         code: 'ORDER_NOT_RTO_RECEIVABLE',
         message: `Order is ${order.status}; RTO receive requires RTO_INITIATED or RTO_IN_TRANSIT`,

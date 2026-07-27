@@ -7,9 +7,7 @@ function makeSvc(opts: { stub?: boolean; response?: unknown } = {}) {
     isStubMode: jest.fn(async () => opts.stub ?? false),
     request,
   };
-  const svc = new DelhiveryTrackingFetchService(
-    http as unknown as DelhiveryHttpService,
-  );
+  const svc = new DelhiveryTrackingFetchService(http as unknown as DelhiveryHttpService);
   return { svc, request, http };
 }
 

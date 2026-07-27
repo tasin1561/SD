@@ -1,9 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import {
-  AesGcmCipherError,
-  aesGcmDecrypt,
-  aesGcmEncrypt,
-} from '../../../common/crypto/aes-gcm';
+import { AesGcmCipherError, aesGcmDecrypt, aesGcmEncrypt } from '../../../common/crypto/aes-gcm';
 import { EnvService } from '../../../config/env.service';
 
 /**

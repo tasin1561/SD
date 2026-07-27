@@ -4,11 +4,7 @@ import Link from 'next/link';
 import { Check, Circle } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { useSellerIdentity } from '@skydrop/auth/client';
-import {
-  useOrdersList,
-  useProductsList,
-  useSellerProfile,
-} from '@/lib/api-hooks';
+import { useOrdersList, useProductsList, useSellerProfile } from '@/lib/api-hooks';
 import {
   Card,
   CardBody,
@@ -47,20 +43,19 @@ export function DashboardView(): ReactElement {
   // Onboarding checklist — show only when at least one step is unmet.
   const profileComplete = Boolean(
     profile.data &&
-      profile.data.companyName &&
-      profile.data.contactPersonName &&
-      profile.data.phone,
+    profile.data.companyName &&
+    profile.data.contactPersonName &&
+    profile.data.phone,
   );
   const bankDetailsComplete = Boolean(
     profile.data &&
-      profile.data.bankName &&
-      profile.data.bankAccountName &&
-      profile.data.bankAccountNumber,
+    profile.data.bankName &&
+    profile.data.bankAccountName &&
+    profile.data.bankAccountNumber,
   );
   const hasProduct = (products.data?.total ?? 0) > 0;
   const hasOrder = (recent.data?.total ?? 0) > 0;
-  const onboardingDone =
-    profileComplete && bankDetailsComplete && hasProduct && hasOrder;
+  const onboardingDone = profileComplete && bankDetailsComplete && hasProduct && hasOrder;
 
   return (
     <div className="max-w-5xl">
@@ -146,9 +141,7 @@ export function DashboardView(): ReactElement {
                   </Link>
                   <div className="text-text-body text-sm min-w-0 flex-1 truncate">
                     {o.recipientName}
-                    <span className="text-text-faint ml-1">
-                      · {o.recipientCity}
-                    </span>
+                    <span className="text-text-faint ml-1">· {o.recipientCity}</span>
                   </div>
                   <div className="shrink-0">
                     <OrderStatusBadge status={o.status} />
@@ -219,18 +212,13 @@ function ChecklistItem({
         <div className="flex items-baseline justify-between gap-2">
           <span
             className={
-              done
-                ? 'text-text-muted text-sm line-through'
-                : 'text-text-bright text-sm font-medium'
+              done ? 'text-text-muted text-sm line-through' : 'text-text-bright text-sm font-medium'
             }
           >
             {label}
           </span>
           {!done && (
-            <Link
-              href={href}
-              className="text-accent hover:underline text-xs shrink-0"
-            >
+            <Link href={href} className="text-accent hover:underline text-xs shrink-0">
               Go →
             </Link>
           )}

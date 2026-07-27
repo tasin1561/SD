@@ -2,15 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useMemo, useState, type FormEvent, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  FormField,
-  Input,
-  Select,
-  useToast,
-} from '@skydrop/ui/components';
+import { Button, Card, CardBody, FormField, Input, Select, useToast } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 import {
   useCreateOrder,
@@ -38,13 +30,42 @@ import {
  */
 
 const INDIAN_STATES: ReadonlyArray<string> = [
-  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
-  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
-  'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram',
-  'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu',
-  'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
-  'Andaman and Nicobar Islands', 'Chandigarh', 'Dadra and Nagar Haveli and Daman and Diu',
-  'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry',
+  'Andhra Pradesh',
+  'Arunachal Pradesh',
+  'Assam',
+  'Bihar',
+  'Chhattisgarh',
+  'Goa',
+  'Gujarat',
+  'Haryana',
+  'Himachal Pradesh',
+  'Jharkhand',
+  'Karnataka',
+  'Kerala',
+  'Madhya Pradesh',
+  'Maharashtra',
+  'Manipur',
+  'Meghalaya',
+  'Mizoram',
+  'Nagaland',
+  'Odisha',
+  'Punjab',
+  'Rajasthan',
+  'Sikkim',
+  'Tamil Nadu',
+  'Telangana',
+  'Tripura',
+  'Uttar Pradesh',
+  'Uttarakhand',
+  'West Bengal',
+  'Andaman and Nicobar Islands',
+  'Chandigarh',
+  'Dadra and Nagar Haveli and Daman and Diu',
+  'Delhi',
+  'Jammu and Kashmir',
+  'Ladakh',
+  'Lakshadweep',
+  'Puducherry',
 ];
 
 interface FormState {
@@ -127,7 +148,10 @@ export function NewOrderForm(): ReactElement {
     if (!form.recipientName.trim()) return 'Recipient name is required.';
     if (!/^\+[1-9]\d{6,14}$/.test(form.recipientPhoneE164.trim()))
       return 'Recipient phone must be E.164 (e.g. +919812345678).';
-    if (form.recipientAltPhoneE164.trim() && !/^\+[1-9]\d{6,14}$/.test(form.recipientAltPhoneE164.trim()))
+    if (
+      form.recipientAltPhoneE164.trim() &&
+      !/^\+[1-9]\d{6,14}$/.test(form.recipientAltPhoneE164.trim())
+    )
       return 'Alt phone must be E.164.';
     if (!form.recipientAddressLine1.trim()) return 'Address line 1 is required.';
     if (!form.recipientCity.trim()) return 'City is required.';
@@ -156,9 +180,7 @@ export function NewOrderForm(): ReactElement {
         {
           variantId: form.variantId,
           quantity: Number(form.quantity),
-          ...(form.unitPriceInr.trim()
-            ? { unitPriceInr: Number(form.unitPriceInr) }
-            : {}),
+          ...(form.unitPriceInr.trim() ? { unitPriceInr: Number(form.unitPriceInr) } : {}),
         },
       ],
       ...(form.recipientAltPhoneE164.trim()
@@ -172,12 +194,8 @@ export function NewOrderForm(): ReactElement {
         ? { recipientLandmark: form.recipientLandmark.trim() }
         : {}),
       ...(form.paymentMode === 'COD' ? { codAmountInr: Number(form.codAmountInr) } : {}),
-      ...(form.declaredValueInr.trim()
-        ? { declaredValueInr: Number(form.declaredValueInr) }
-        : {}),
-      ...(form.totalWeightGrams.trim()
-        ? { totalWeightGrams: Number(form.totalWeightGrams) }
-        : {}),
+      ...(form.declaredValueInr.trim() ? { declaredValueInr: Number(form.declaredValueInr) } : {}),
+      ...(form.totalWeightGrams.trim() ? { totalWeightGrams: Number(form.totalWeightGrams) } : {}),
       ...(form.sellerOrderRef.trim() ? { sellerOrderRef: form.sellerOrderRef.trim() } : {}),
       ...(form.sellerNotes.trim() ? { sellerNotes: form.sellerNotes.trim() } : {}),
     };
@@ -389,9 +407,7 @@ export function NewOrderForm(): ReactElement {
       {/* Payment + physical */}
       <Card>
         <CardBody>
-          <h2 className="text-text-bright text-sm font-medium mb-3">
-            Payment &amp; physical
-          </h2>
+          <h2 className="text-text-bright text-sm font-medium mb-3">Payment &amp; physical</h2>
           <div className="grid grid-cols-2 gap-3">
             <FormField label="Payment mode" required>
               <Select
@@ -486,12 +502,7 @@ export function NewOrderForm(): ReactElement {
         >
           {busy === 'draft' ? 'Saving…' : 'Save as draft'}
         </Button>
-        <Button
-          type="submit"
-          variant="primary"
-          size="md"
-          disabled={busy !== null}
-        >
+        <Button type="submit" variant="primary" size="md" disabled={busy !== null}>
           {busy === 'submit' ? 'Submitting…' : 'Submit for confirmation'}
         </Button>
       </div>

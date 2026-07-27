@@ -49,9 +49,7 @@ describe('DelhiveryLabelService.fetchLabel', () => {
 describe('DelhiveryServiceabilityService.checkServiceability', () => {
   it('stub mode: serviceable for a normal pincode, fromLiveApi false', async () => {
     const http = makeHttp({ stubMode: true });
-    const svc = new DelhiveryServiceabilityService(
-      http as unknown as DelhiveryHttpService,
-    );
+    const svc = new DelhiveryServiceabilityService(http as unknown as DelhiveryHttpService);
     expect(await svc.checkServiceability('560001')).toEqual({
       serviceable: true,
       fromLiveApi: false,
@@ -60,9 +58,7 @@ describe('DelhiveryServiceabilityService.checkServiceability', () => {
 
   it('stub mode: 000000 → not serviceable (consistent with the AWB stub)', async () => {
     const http = makeHttp({ stubMode: true });
-    const svc = new DelhiveryServiceabilityService(
-      http as unknown as DelhiveryHttpService,
-    );
+    const svc = new DelhiveryServiceabilityService(http as unknown as DelhiveryHttpService);
     expect(await svc.checkServiceability('000000')).toEqual({
       serviceable: false,
       fromLiveApi: false,
@@ -74,9 +70,7 @@ describe('DelhiveryServiceabilityService.checkServiceability', () => {
     http.request.mockResolvedValueOnce({
       delivery_codes: [{ postal_code: { pin: 560001 } }],
     });
-    const svc = new DelhiveryServiceabilityService(
-      http as unknown as DelhiveryHttpService,
-    );
+    const svc = new DelhiveryServiceabilityService(http as unknown as DelhiveryHttpService);
     const r = await svc.checkServiceability('560001');
     expect(r).toEqual({ serviceable: true, fromLiveApi: true });
     expect(http.request).toHaveBeenCalledWith(
@@ -90,9 +84,7 @@ describe('DelhiveryServiceabilityService.checkServiceability', () => {
   it('real mode: empty result → serviceable=false', async () => {
     const http = makeHttp({ stubMode: false });
     http.request.mockResolvedValueOnce({ delivery_codes: [] });
-    const svc = new DelhiveryServiceabilityService(
-      http as unknown as DelhiveryHttpService,
-    );
+    const svc = new DelhiveryServiceabilityService(http as unknown as DelhiveryHttpService);
     const r = await svc.checkServiceability('999999');
     expect(r).toEqual({ serviceable: false, fromLiveApi: true });
   });

@@ -19,7 +19,10 @@
       "default": "./dist/enums.js"
     }
   },
-  "files": ["dist", "prisma"],
+  "files": [
+    "dist",
+    "prisma"
+  ],
   "scripts": {
     "build": "prisma generate && tsc -p tsconfig.build.json",
     "generate": "prisma generate",

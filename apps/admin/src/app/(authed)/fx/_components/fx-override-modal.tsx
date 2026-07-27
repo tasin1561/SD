@@ -1,14 +1,7 @@
 'use client';
 
 import { useState, type FormEvent, type ReactElement } from 'react';
-import {
-  Button,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Textarea,
-} from '@skydrop/ui/components';
+import { Button, FormField, Input, Modal, ModalFooter, Textarea } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 import type { FxRateView } from '@skydrop/api-client';
 import { useSetFxRate } from '@/lib/api-hooks';
@@ -82,11 +75,7 @@ export function FxOverrideModal({
             required
           />
         </FormField>
-        <FormField
-          label="Reason (≥ 10 chars)"
-          required
-          hint="Goes into audit log + history row"
-        >
+        <FormField label="Reason (≥ 10 chars)" required hint="Goes into audit log + history row">
           <Textarea
             rows={3}
             value={reason}
@@ -102,13 +91,7 @@ export function FxOverrideModal({
           </div>
         )}
         <ModalFooter>
-          <Button
-            type="button"
-            variant="ghost"
-            size="md"
-            disabled={busy}
-            onClick={onClose}
-          >
+          <Button type="button" variant="ghost" size="md" disabled={busy} onClick={onClose}>
             Cancel
           </Button>
           <Button type="submit" variant="primary" size="md" disabled={busy}>

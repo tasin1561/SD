@@ -24,26 +24,32 @@ function buildClient() {
 
   const client = {
     sellerApiKey: {
-      create: jest.fn(async ({ data }: { data: Omit<KeyRow, 'id' | 'lastUsedAt' | 'revokedAt' | 'deletedAt' | 'createdAt'> }) => {
-        seq += 1;
-        const row: KeyRow = {
-          ...data,
-          id: `key-${seq}`,
-          lastUsedAt: null,
-          revokedAt: null,
-          deletedAt: null,
-          createdAt: new Date(),
-          expiresAt: data.expiresAt ?? null,
-        };
-        rows.push(row);
-        return {
-          id: row.id,
-          name: row.name,
-          keyPrefix: row.keyPrefix,
-          createdAt: row.createdAt,
-          expiresAt: row.expiresAt,
-        };
-      }),
+      create: jest.fn(
+        async ({
+          data,
+        }: {
+          data: Omit<KeyRow, 'id' | 'lastUsedAt' | 'revokedAt' | 'deletedAt' | 'createdAt'>;
+        }) => {
+          seq += 1;
+          const row: KeyRow = {
+            ...data,
+            id: `key-${seq}`,
+            lastUsedAt: null,
+            revokedAt: null,
+            deletedAt: null,
+            createdAt: new Date(),
+            expiresAt: data.expiresAt ?? null,
+          };
+          rows.push(row);
+          return {
+            id: row.id,
+            name: row.name,
+            keyPrefix: row.keyPrefix,
+            createdAt: row.createdAt,
+            expiresAt: row.expiresAt,
+          };
+        },
+      ),
       findMany: jest.fn(async ({ where }: { where: { sellerId: string; deletedAt: null } }) =>
         rows
           .filter((r) => r.sellerId === where.sellerId && r.deletedAt === null)
@@ -57,10 +63,11 @@ function buildClient() {
             revokedAt: r.revokedAt,
           })),
       ),
-      findFirst: jest.fn(async ({ where }: { where: { id: string; sellerId: string; deletedAt: null } }) =>
-        rows.find(
-          (r) => r.id === where.id && r.sellerId === where.sellerId && r.deletedAt === null,
-        ) ?? null,
+      findFirst: jest.fn(
+        async ({ where }: { where: { id: string; sellerId: string; deletedAt: null } }) =>
+          rows.find(
+            (r) => r.id === where.id && r.sellerId === where.sellerId && r.deletedAt === null,
+          ) ?? null,
       ),
       update: jest.fn(async ({ where, data }: { where: { id: string }; data: Partial<KeyRow> }) => {
         const row = rows.find((r) => r.id === where.id);

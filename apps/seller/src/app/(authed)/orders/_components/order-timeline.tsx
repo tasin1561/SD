@@ -43,9 +43,7 @@ export function OrderTimeline({
                   </div>
                 )}
                 {evt.description && (
-                  <div className="text-text-body text-sm flex-1 min-w-0">
-                    {evt.description}
-                  </div>
+                  <div className="text-text-body text-sm flex-1 min-w-0">{evt.description}</div>
                 )}
               </div>
             </li>

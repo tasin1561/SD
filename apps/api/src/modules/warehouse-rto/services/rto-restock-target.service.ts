@@ -83,10 +83,7 @@ export class RtoRestockTargetService {
 
   // ── internal ──────────────────────────────────────────────────────
 
-  private async resolveBin(
-    tx: Prisma.TransactionClient,
-    warehouseId: string,
-  ): Promise<string> {
+  private async resolveBin(tx: Prisma.TransactionClient, warehouseId: string): Promise<string> {
     for (const type of TARGET_BIN_TYPES) {
       const bin = await tx.warehouseBin.findFirst({
         where: { warehouseId, type, deletedAt: null },

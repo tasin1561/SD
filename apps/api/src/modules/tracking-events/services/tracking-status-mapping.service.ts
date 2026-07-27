@@ -55,9 +55,7 @@ export type ScanMappingDecision =
       kind: 'INFORMATIONAL';
       /** Why this scan does not drive a transition. Audited on
        *  tracking_events.metadata for ops visibility. */
-      reason:
-        | 'RTO_DELIVERED_IS_INFORMATIONAL_TRK6'
-        | 'DAMAGED_IS_INFORMATIONAL_TRK6';
+      reason: 'RTO_DELIVERED_IS_INFORMATIONAL_TRK6' | 'DAMAGED_IS_INFORMATIONAL_TRK6';
       trackingEventType: TrackingEventType;
     }
   | {
@@ -65,9 +63,7 @@ export type ScanMappingDecision =
       /** This ShipmentStatus cannot be a legitimate output of
        *  normalizeScan. The processor logs HIGH + still stores the raw
        *  scan as a tracking_event (audit) but emits no transition. */
-      reason:
-        | 'NOT_A_COURIER_SCAN_OUTCOME' // CREATED / AWB_* / FAILED_AT_CREATION / HANDED_TO_COURIER / AT_HUB / CANCELLED
-        ;
+      reason: 'NOT_A_COURIER_SCAN_OUTCOME'; // CREATED / AWB_* / FAILED_AT_CREATION / HANDED_TO_COURIER / AT_HUB / CANCELLED
     };
 
 /**
@@ -124,10 +120,7 @@ export class TrackingStatusMappingService {
         return {
           kind: 'TRANSITION',
           targetOrderStatus: OrderStatus.OUT_FOR_DELIVERY,
-          allowedFromOrderStatuses: [
-            OrderStatus.IN_TRANSIT,
-            OrderStatus.DELIVERY_FAILED,
-          ],
+          allowedFromOrderStatuses: [OrderStatus.IN_TRANSIT, OrderStatus.DELIVERY_FAILED],
           trackingEventType: TrackingEventType.OUT_FOR_DELIVERY,
         };
       case ShipmentStatus.DELIVERED:
@@ -161,10 +154,7 @@ export class TrackingStatusMappingService {
         return {
           kind: 'DELIVERY_ATTEMPT',
           targetOrderStatus: OrderStatus.DELIVERY_FAILED,
-          allowedFromOrderStatuses: [
-            OrderStatus.IN_TRANSIT,
-            OrderStatus.OUT_FOR_DELIVERY,
-          ],
+          allowedFromOrderStatuses: [OrderStatus.IN_TRANSIT, OrderStatus.OUT_FOR_DELIVERY],
           trackingEventType: TrackingEventType.DELIVERY_ATTEMPTED,
         };
 

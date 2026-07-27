@@ -45,17 +45,25 @@ function scan(
   };
 }
 
-function makeSvc(opts: {
-  stub?: boolean;
-  orderStatus?: OrderStatus;
-  shipmentStatus?: ShipmentStatus;
-  scans?: DelhiveryRawScan[];
-  watermark?: Date | null;
-  fetchThrows?: boolean;
-  noShipments?: boolean;
-} = {}) {
+function makeSvc(
+  opts: {
+    stub?: boolean;
+    orderStatus?: OrderStatus;
+    shipmentStatus?: ShipmentStatus;
+    scans?: DelhiveryRawScan[];
+    watermark?: Date | null;
+    fetchThrows?: boolean;
+    noShipments?: boolean;
+  } = {},
+) {
   const orderStatus = { value: opts.orderStatus ?? OrderStatus.DISPATCHED };
-  const attempts: Array<{ shipmentId: string; attemptedAt: Date; attemptNumber: number; source: TrackingEventSource; failureNotes?: string }> = [];
+  const attempts: Array<{
+    shipmentId: string;
+    attemptedAt: Date;
+    attemptNumber: number;
+    source: TrackingEventSource;
+    failureNotes?: string;
+  }> = [];
   const appendCalls: AppendTrackingEventInput[] = [];
   const transitionCalls: Array<{ to: OrderStatus }> = [];
   let teCounter = 1;
@@ -73,14 +81,29 @@ function makeSvc(opts: {
         ],
   );
   const orderFindUnique = jest.fn(async () => ({ status: orderStatus.value }));
-  const deliveryAttemptFindFirst = jest.fn(async (args: { where: { shipmentId: string; attemptedAt: Date } }) =>
-    attempts.find((a) => a.shipmentId === args.where.shipmentId && a.attemptedAt.getTime() === args.where.attemptedAt.getTime()) ?? null,
+  const deliveryAttemptFindFirst = jest.fn(
+    async (args: { where: { shipmentId: string; attemptedAt: Date } }) =>
+      attempts.find(
+        (a) =>
+          a.shipmentId === args.where.shipmentId &&
+          a.attemptedAt.getTime() === args.where.attemptedAt.getTime(),
+      ) ?? null,
   );
   const deliveryAttemptCount = jest.fn(async () => attempts.length);
-  const deliveryAttemptCreate = jest.fn(async (args: { data: { shipmentId: string; attemptedAt: Date; attemptNumber: number; source: TrackingEventSource; failureNotes?: string } }) => {
-    attempts.push(args.data);
-    return { id: `att-${attempts.length}` };
-  });
+  const deliveryAttemptCreate = jest.fn(
+    async (args: {
+      data: {
+        shipmentId: string;
+        attemptedAt: Date;
+        attemptNumber: number;
+        source: TrackingEventSource;
+        failureNotes?: string;
+      };
+    }) => {
+      attempts.push(args.data);
+      return { id: `att-${attempts.length}` };
+    },
+  );
 
   const client = {
     shipment: { findMany: shipmentFindMany },
@@ -104,10 +127,11 @@ function makeSvc(opts: {
   const mapping = new TrackingStatusMappingService();
 
   const append = {
-    latestForShipment: jest.fn(async (): Promise<TrackingEventRow | null> =>
-      opts.watermark
-        ? ({ id: 'te-0', eventAt: opts.watermark } as unknown as TrackingEventRow)
-        : null,
+    latestForShipment: jest.fn(
+      async (): Promise<TrackingEventRow | null> =>
+        opts.watermark
+          ? ({ id: 'te-0', eventAt: opts.watermark } as unknown as TrackingEventRow)
+          : null,
     ),
     append: jest.fn(async (input: AppendTrackingEventInput): Promise<TrackingEventRow> => {
       appendCalls.push(input);
@@ -239,7 +263,10 @@ describe('TrackingPollService.pollAll — DELIVERY_ATTEMPT saga (attempt FIRST)'
 
 describe('TrackingPollService.pollAll — resilience', () => {
   it('a fetch batch failure is swallowed; the cycle completes with 0 applied', async () => {
-    const { svc } = makeSvc({ fetchThrows: true, scans: [scan('In Transit', '2026-07-26T05:00:00+05:30')] });
+    const { svc } = makeSvc({
+      fetchThrows: true,
+      scans: [scan('In Transit', '2026-07-26T05:00:00+05:30')],
+    });
     const summary = await svc.pollAll();
     expect(summary.stubMode).toBe(false);
     expect(summary.scansApplied).toBe(0);

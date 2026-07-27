@@ -181,7 +181,9 @@ describe('Inventory flow (e2e)', () => {
     await receiveStock(5);
     const batches = await h.prisma.stockBatch.findMany({ where: { variantId } });
     expect(batches).toHaveLength(2);
-    const moves = await h.prisma.stockMovement.findMany({ where: { variantId, type: 'RECEIVING' } });
+    const moves = await h.prisma.stockMovement.findMany({
+      where: { variantId, type: 'RECEIVING' },
+    });
     expect(moves).toHaveLength(2);
     const onHand = await h.prisma.stockLevel.aggregate({
       where: { variantId },
@@ -205,7 +207,9 @@ describe('Inventory flow (e2e)', () => {
     // |−100 × 1000| = 100000 ≥ 50000 → PENDING
     expect(create.body.status).toBe('PENDING');
     expect(create.body.approverThresholdInr).toBeDefined();
-    expect(await h.prisma.stockMovement.count({ where: { variantId, type: 'ADJUSTMENT_DECREASE' } })).toBe(0);
+    expect(
+      await h.prisma.stockMovement.count({ where: { variantId, type: 'ADJUSTMENT_DECREASE' } }),
+    ).toBe(0);
 
     await request(h.baseUrl)
       .post(`/admin/stock-adjustments/${create.body.id}/approve`)
@@ -256,7 +260,9 @@ describe('Inventory flow (e2e)', () => {
     expect(adj.status).toBe('PENDING');
     expect(adj.lines).toHaveLength(1);
     expect(adj.lines[0]?.qtyChange).toBe(-3);
-    const item = await h.prisma.cycleCountItem.findFirstOrThrow({ where: { cycleCountId: cc.body.id } });
+    const item = await h.prisma.cycleCountItem.findFirstOrThrow({
+      where: { cycleCountId: cc.body.id },
+    });
     expect(item.adjustmentId).toBe(adj.id);
   });
 

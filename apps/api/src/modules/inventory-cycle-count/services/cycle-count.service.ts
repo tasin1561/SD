@@ -97,7 +97,12 @@ export class CycleCountService {
           action: 'inventory.cycle_count.scheduled',
           entityType: 'cycle_count',
           entityId: row.id,
-          metadata: { warehouseId, zoneId: input.zoneId, countType: input.countType, ...this.ctxMeta(ctx) },
+          metadata: {
+            warehouseId,
+            zoneId: input.zoneId,
+            countType: input.countType,
+            ...this.ctxMeta(ctx),
+          },
         },
         tx,
       );
@@ -177,7 +182,12 @@ export class CycleCountService {
 
     for (const it of items) {
       const batch = await this.prisma.client.stockBatch.findFirst({
-        where: { id: it.batchId, variantId: it.variantId, warehouseId: cc.warehouseId, deletedAt: null },
+        where: {
+          id: it.batchId,
+          variantId: it.variantId,
+          warehouseId: cc.warehouseId,
+          deletedAt: null,
+        },
         select: { sellerId: true },
       });
       if (!batch) {

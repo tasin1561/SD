@@ -22,15 +22,8 @@ import {
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
-import {
-  ClosePickupDto,
-  RaisePickupDto,
-  ReleasePickupDayDto,
-} from '../dto/courier-ops.dto';
-import {
-  CourierPickupService,
-  type PickupRequestView,
-} from '../services/courier-pickup.service';
+import { ClosePickupDto, RaisePickupDto, ReleasePickupDayDto } from '../dto/courier-ops.dto';
+import { CourierPickupService, type PickupRequestView } from '../services/courier-pickup.service';
 
 /**
  * Pickup requests — the van, not the parcel.
@@ -79,10 +72,7 @@ export class AdminPickupController {
     @Body() body: RaisePickupDto,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<PickupRequestView> {
-    requireStaffRoles(staff, [
-      StaffRole.WAREHOUSE_SUPERVISOR,
-      StaffRole.SUPER_ADMIN,
-    ]);
+    requireStaffRoles(staff, [StaffRole.WAREHOUSE_SUPERVISOR, StaffRole.SUPER_ADMIN]);
     return this.pickups.raise(
       staff.id,
       {
@@ -106,16 +96,8 @@ export class AdminPickupController {
     @Body() body: ClosePickupDto,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<PickupRequestView> {
-    requireStaffRoles(staff, [
-      StaffRole.WAREHOUSE_SUPERVISOR,
-      StaffRole.SUPER_ADMIN,
-    ]);
-    return this.pickups.close(
-      staff.id,
-      requestId,
-      PickupRequestStatus[body.status],
-      ctx,
-    );
+    requireStaffRoles(staff, [StaffRole.WAREHOUSE_SUPERVISOR, StaffRole.SUPER_ADMIN]);
+    return this.pickups.close(staff.id, requestId, PickupRequestStatus[body.status], ctx);
   }
 
   @Post(':requestId/release-day')
@@ -130,10 +112,7 @@ export class AdminPickupController {
     @Body() body: ReleasePickupDayDto,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<{ released: boolean }> {
-    requireStaffRoles(staff, [
-      StaffRole.WAREHOUSE_SUPERVISOR,
-      StaffRole.SUPER_ADMIN,
-    ]);
+    requireStaffRoles(staff, [StaffRole.WAREHOUSE_SUPERVISOR, StaffRole.SUPER_ADMIN]);
     return this.pickups.releaseDay(staff.id, requestId, body.reason, ctx);
   }
 }

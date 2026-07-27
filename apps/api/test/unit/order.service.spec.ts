@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { ActorType, OrderSource, OrderStatus, PaymentMode, Prisma } from '@skydrop/db';
 import { OrderService } from '../../src/modules/order/services/order.service';
 import { OrderStateMachineService } from '../../src/modules/order/services/order-state-machine.service';
@@ -53,9 +49,7 @@ function baseDto(over: Partial<CreateOrderDto> = {}): CreateOrderDto {
   } as CreateOrderDto;
 }
 
-function makeService(
-  opts: { variants?: Map<string, AnyArgs>; existing?: AnyArgs | null } = {},
-) {
+function makeService(opts: { variants?: Map<string, AnyArgs>; existing?: AnyArgs | null } = {}) {
   const orderCreate = jest.fn(async (args: { data: AnyArgs }) => ({
     id: 'o1',
     ...args.data,
@@ -67,9 +61,7 @@ function makeService(
     items: [],
   }));
   const orderFindFirst = jest.fn(async () => opts.existing ?? null);
-  const orderFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => [
-    { id: 'o1' },
-  ]);
+  const orderFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => [{ id: 'o1' }]);
   const orderCount = jest.fn<Promise<number>, [AnyArgs]>(async () => 1);
   const orderItemDeleteMany = jest.fn(async () => ({ count: 1 }));
   const orderItemUpdate = jest.fn(async () => ({ id: 'oi1' }));
@@ -174,8 +166,7 @@ function makeService(
 
 describe('OrderService.create', () => {
   it('creates a DRAFT order, tx-wrapped, with full snapshot and no reservation (ORD-10)', async () => {
-    const { svc, orderCreate, numbering, customers, events, addressCache, audit } =
-      makeService();
+    const { svc, orderCreate, numbering, customers, events, addressCache, audit } = makeService();
 
     await svc.create('s1', baseDto(), ACTOR, CTX);
 
@@ -238,7 +229,7 @@ describe('OrderService.create', () => {
     );
   });
 
-  it("rejects a variant owned by another seller", async () => {
+  it('rejects a variant owned by another seller', async () => {
     const { svc } = makeService({
       variants: new Map([['v1', resolvedVariant({ sellerId: 'other' })]]),
     });
@@ -284,10 +275,11 @@ describe('OrderService.create', () => {
   it('propagates address-validation failure before any write', async () => {
     const { svc, numbering } = makeService();
     // Re-wire the validator to throw.
-    (svc as unknown as { addressValidation: { assertValid: jest.Mock } }).addressValidation.assertValid =
-      jest.fn(async () => {
-        throw new BadRequestException('bad PIN');
-      });
+    (
+      svc as unknown as { addressValidation: { assertValid: jest.Mock } }
+    ).addressValidation.assertValid = jest.fn(async () => {
+      throw new BadRequestException('bad PIN');
+    });
     await expect(svc.create('s1', baseDto(), ACTOR, CTX)).rejects.toBeInstanceOf(
       BadRequestException,
     );
@@ -340,9 +332,7 @@ describe('OrderService.submit', () => {
 
   it('404s when the order is not owned / missing', async () => {
     const { svc } = makeService({ existing: null });
-    await expect(svc.submit('s1', 'o1', ACTOR, CTX)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(svc.submit('s1', 'o1', ACTOR, CTX)).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 
@@ -402,9 +392,9 @@ describe('OrderService.edit', () => {
     const { svc } = makeService({
       existing: existingOrder({ status: OrderStatus.PENDING_CONFIRMATION }),
     });
-    await expect(
-      svc.edit('s1', 'o1', { isUrgent: true }, ACTOR, CTX),
-    ).rejects.toMatchObject({ response: { code: 'EDIT_SCOPE_PENDING' } });
+    await expect(svc.edit('s1', 'o1', { isUrgent: true }, ACTOR, CTX)).rejects.toMatchObject({
+      response: { code: 'EDIT_SCOPE_PENDING' },
+    });
   });
 
   it('re-links the customer when the recipient phone is corrected', async () => {
@@ -431,9 +421,9 @@ describe('OrderService.edit', () => {
     const { svc } = makeService({
       existing: existingOrder({ status: OrderStatus.CONFIRMED }),
     });
-    await expect(
-      svc.edit('s1', 'o1', { sellerNotes: 'x' }, ACTOR, CTX),
-    ).rejects.toMatchObject({ response: { code: 'NOT_EDITABLE' } });
+    await expect(svc.edit('s1', 'o1', { sellerNotes: 'x' }, ACTOR, CTX)).rejects.toMatchObject({
+      response: { code: 'NOT_EDITABLE' },
+    });
   });
 
   it('rejects an empty edit', async () => {
@@ -581,23 +571,23 @@ describe('OrderService.applyBulkPatch — ORD-9 (commit 21 gap-fill)', () => {
     const { svc } = makeService({
       existing: patchableOrder({ status: OrderStatus.CONFIRMED }),
     });
-    await expect(
-      svc.applyBulkPatch('s1', 'o1', { ...PATCH }, ACTOR),
-    ).rejects.toMatchObject({ response: { code: 'BULK_PATCH_NOT_ALLOWED' } });
+    await expect(svc.applyBulkPatch('s1', 'o1', { ...PATCH }, ACTOR)).rejects.toMatchObject({
+      response: { code: 'BULK_PATCH_NOT_ALLOWED' },
+    });
   });
 
   it('404s a missing order', async () => {
     const { svc } = makeService({ existing: null });
-    await expect(
-      svc.applyBulkPatch('s1', 'gone', { ...PATCH }, ACTOR),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(svc.applyBulkPatch('s1', 'gone', { ...PATCH }, ACTOR)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('rejects an unresolvable SKU', async () => {
     const { svc, catalog } = makeService({ existing: patchableOrder() });
     (catalog.getVariantBySku as jest.Mock).mockResolvedValueOnce(null);
-    await expect(
-      svc.applyBulkPatch('s1', 'o1', { ...PATCH }, ACTOR),
-    ).rejects.toMatchObject({ response: { code: 'VARIANT_NOT_FOUND' } });
+    await expect(svc.applyBulkPatch('s1', 'o1', { ...PATCH }, ACTOR)).rejects.toMatchObject({
+      response: { code: 'VARIANT_NOT_FOUND' },
+    });
   });
 });

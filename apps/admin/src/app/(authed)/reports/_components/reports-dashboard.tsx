@@ -88,11 +88,7 @@ export function ReportsDashboard(): ReactElement {
   );
 }
 
-function OrdersCard({
-  data,
-}: {
-  readonly data: ReportSummary['orders'];
-}): ReactElement {
+function OrdersCard({ data }: { readonly data: ReportSummary['orders'] }): ReactElement {
   return (
     <Card>
       <CardHeader title="Orders" />
@@ -129,11 +125,7 @@ function OrdersCard({
   );
 }
 
-function ShipmentsCard({
-  data,
-}: {
-  readonly data: ReportSummary['shipments'];
-}): ReactElement {
+function ShipmentsCard({ data }: { readonly data: ReportSummary['shipments'] }): ReactElement {
   return (
     <Card>
       <CardHeader title="Shipments" />
@@ -162,11 +154,7 @@ function ShipmentsCard({
   );
 }
 
-function WalletCard({
-  data,
-}: {
-  readonly data: ReportSummary['wallet'];
-}): ReactElement {
+function WalletCard({ data }: { readonly data: ReportSummary['wallet'] }): ReactElement {
   return (
     <Card>
       <CardHeader title="Wallet flows (INR)" />

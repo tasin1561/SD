@@ -47,8 +47,7 @@ function makeService(
   });
   const client = { systemSetting: { findUnique } };
   const allocateAndPopulate =
-    opts.allocate ??
-    jest.fn<Promise<AppliedAllocation>, [string, AnyArgs]>(async () => APPLIED);
+    opts.allocate ?? jest.fn<Promise<AppliedAllocation>, [string, AnyArgs]>(async () => APPLIED);
   const alloc = { allocateAndPopulate };
 
   const svc = new PickAllocationService(
@@ -56,10 +55,7 @@ function makeService(
     alloc as unknown as StockPickAllocationService,
   );
   const delay = jest
-    .spyOn(
-      svc as unknown as { delay(ms: number): Promise<void> },
-      'delay',
-    )
+    .spyOn(svc as unknown as { delay(ms: number): Promise<void> }, 'delay')
     .mockResolvedValue(undefined);
   return { svc, allocateAndPopulate, findUnique, delay };
 }
@@ -99,9 +95,7 @@ describe('PickAllocationService.allocateForPick (WMS-3)', () => {
       throw new NotFoundException({ code: 'RESERVATION_NOT_FOUND' });
     });
     const { svc, delay } = makeService({ allocate });
-    await expect(svc.allocateForPick('r1')).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(svc.allocateForPick('r1')).rejects.toBeInstanceOf(NotFoundException);
     expect(allocate).toHaveBeenCalledTimes(1);
     expect(delay).not.toHaveBeenCalled();
   });

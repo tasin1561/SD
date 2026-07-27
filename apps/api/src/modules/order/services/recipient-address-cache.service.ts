@@ -62,11 +62,7 @@ export class RecipientAddressCacheService {
   /** Normalise then SHA-256. Stable across whitespace/case/punctuation. */
   static computeHash(parts: AddressParts): string {
     const norm = (s: string | null | undefined): string =>
-      (s ?? '')
-        .toLowerCase()
-        .replace(/[.,]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+      (s ?? '').toLowerCase().replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim();
     const canonical = [
       norm(parts.line1),
       norm(parts.line2),
@@ -120,10 +116,7 @@ export class RecipientAddressCacheService {
   }
 
   /** Autocomplete suggestions, most-used + most-recent first. */
-  async autocomplete(
-    sellerId: string,
-    query: AutocompleteQuery,
-  ): Promise<CachedAddressView[]> {
+  async autocomplete(sellerId: string, query: AutocompleteQuery): Promise<CachedAddressView[]> {
     const limit = Math.min(Math.max(query.limit ?? 10, 1), 50);
     const where: Prisma.OrderRecipientAddressCacheWhereInput = {
       // Seller scope enforced through the customer relation.

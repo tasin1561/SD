@@ -30,7 +30,11 @@ export class CreateCategoryDto {
   @Matches(SLUG, { message: 'slug must be lowercase alphanumeric with single hyphens' })
   slug!: string;
 
-  @ApiProperty({ required: false, nullable: true, description: 'Parent category id; omit/null = root' })
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description: 'Parent category id; omit/null = root',
+  })
   @IsOptional()
   @IsUUID('7')
   parentId?: string;
@@ -62,7 +66,12 @@ export class CreateCategoryDto {
   @MaxLength(16)
   defaultHsCode?: string;
 
-  @ApiProperty({ required: false, description: 'Percent, 0–100, up to 2dp', minimum: 0, maximum: 100 })
+  @ApiProperty({
+    required: false,
+    description: 'Percent, 0–100, up to 2dp',
+    minimum: 0,
+    maximum: 100,
+  })
   @IsOptional()
   @IsInt({ message: 'defaultGstRate must be an integer or omitted (whole-percent in Phase 1A)' })
   @Min(0)

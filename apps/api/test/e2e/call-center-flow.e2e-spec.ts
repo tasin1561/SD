@@ -76,10 +76,7 @@ describe('Call center flow (e2e)', () => {
     sellerId = reg.body.seller.id as string;
     sellerAuth = { Authorization: `Bearer ${reg.body.accessToken}` };
 
-    const whs = await request(h.baseUrl)
-      .get('/admin/warehouses')
-      .set(staffAuth)
-      .expect(200);
+    const whs = await request(h.baseUrl).get('/admin/warehouses').set(staffAuth).expect(200);
     warehouseId = (whs.body as Array<{ id: string; code: string }>).find(
       (w) => w.code === 'BLR-01',
     )!.id;
@@ -122,9 +119,7 @@ describe('Call center flow (e2e)', () => {
       .post(`/admin/goods-receipts/${gr.body.id}/lines`)
       .set(staffAuth)
       .send({
-        lines: [
-          { lineId: gr.body.lines[0].id, receivedQty: qty, putawayBinId: binId },
-        ],
+        lines: [{ lineId: gr.body.lines[0].id, receivedQty: qty, putawayBinId: binId }],
       })
       .expect(200);
     await request(h.baseUrl)
@@ -150,10 +145,7 @@ describe('Call center flow (e2e)', () => {
       })
       .expect(201);
     const id = created.body.id as string;
-    await request(h.baseUrl)
-      .post(`/seller/orders/${id}/submit`)
-      .set(sellerAuth)
-      .expect(200);
+    await request(h.baseUrl).post(`/seller/orders/${id}/submit`).set(sellerAuth).expect(200);
     return id;
   }
 
@@ -238,9 +230,7 @@ describe('Call center flow (e2e)', () => {
     expect(attempts).toHaveLength(1);
     expect(attempts[0]!.outcome).toBe(CallOutcome.CONFIRMED);
 
-    expect(
-      await h.prisma.stockReservation.count({ where: { orderId } }),
-    ).toBe(0);
+    expect(await h.prisma.stockReservation.count({ where: { orderId } })).toBe(0);
     const events = await h.prisma.orderEvent.findMany({
       where: { orderId, toStatus: OrderStatus.OUT_OF_STOCK },
     });
@@ -288,22 +278,18 @@ describe('Call center flow (e2e)', () => {
 
     for (let i = 1; i <= 2; i += 1) {
       const p = await pullNext(staffAuth).expect(200);
-      const r = await recordAttempt(
-        staffAuth,
-        p.body.assignment.assignmentId as string,
-        { outcome: CallOutcome.NO_ANSWER },
-      ).expect(200);
+      const r = await recordAttempt(staffAuth, p.body.assignment.assignmentId as string, {
+        outcome: CallOutcome.NO_ANSWER,
+      }).expect(200);
       expect(r.body.finalOrderStatus).toBe(OrderStatus.CALL_NO_RESPONSE);
       expect(r.body.requeued).toBe(true);
       expect(r.body.hitCap).toBe(false);
     }
 
     const p3 = await pullNext(staffAuth).expect(200);
-    const r3 = await recordAttempt(
-      staffAuth,
-      p3.body.assignment.assignmentId as string,
-      { outcome: CallOutcome.NO_ANSWER },
-    ).expect(200);
+    const r3 = await recordAttempt(staffAuth, p3.body.assignment.assignmentId as string, {
+      outcome: CallOutcome.NO_ANSWER,
+    }).expect(200);
     expect(r3.body.hitCap).toBe(true);
     expect(r3.body.finalOrderStatus).toBe(OrderStatus.REJECTED_NDR);
     expect(r3.body.requeued).toBe(false);
@@ -336,18 +322,11 @@ describe('Call center flow (e2e)', () => {
       .expect(200);
     const agent2Auth = { Authorization: `Bearer ${a2Login.body.accessToken}` };
 
-    const [a, b] = await Promise.all([
-      pullNext(staffAuth),
-      pullNext(agent2Auth),
-    ]);
+    const [a, b] = await Promise.all([pullNext(staffAuth), pullNext(agent2Auth)]);
     expect(a.status).toBe(200);
     expect(b.status).toBe(200);
-    const got = [a.body.assignment, b.body.assignment].filter(
-      (x) => x !== null,
-    );
-    const empty = [a.body.assignment, b.body.assignment].filter(
-      (x) => x === null,
-    );
+    const got = [a.body.assignment, b.body.assignment].filter((x) => x !== null);
+    const empty = [a.body.assignment, b.body.assignment].filter((x) => x === null);
     expect(got).toHaveLength(1); // SKIP LOCKED → exactly one winner
     expect(empty).toHaveLength(1);
   });
@@ -366,10 +345,7 @@ describe('Call center flow (e2e)', () => {
     // Fire the time-based expiry directly (the BullMQ worker delegates
     // to this same method — CC-7).
     const exp = h.app.get(AssignmentExpirationService);
-    const out = await exp.expire(
-      assignmentId,
-      assigned.assignedAt!.toISOString(),
-    );
+    const out = await exp.expire(assignmentId, assigned.assignedAt!.toISOString());
     expect(out.expired).toBe(true);
 
     const reverted = await h.prisma.callQueueEntry.findUniqueOrThrow({
@@ -388,10 +364,7 @@ describe('Call center flow (e2e)', () => {
     expect(audit).not.toBeNull();
 
     // A second delivery is a time-based idempotent no-op.
-    const again = await exp.expire(
-      assignmentId,
-      assigned.assignedAt!.toISOString(),
-    );
+    const again = await exp.expire(assignmentId, assigned.assignedAt!.toISOString());
     expect(again.expired).toBe(false);
   });
 

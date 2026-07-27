@@ -42,9 +42,7 @@ import type {
 
 // ───────── Admin sellers / invitations ─────────
 
-export function useSellersList(
-  query: ListSellersQuery,
-): UseQueryResult<SellerListResponse> {
+export function useSellersList(query: ListSellersQuery): UseQueryResult<SellerListResponse> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-sellers', 'list', query],
@@ -62,9 +60,7 @@ async function fetchSellers(
   if (query.page) sp.set('page', String(query.page));
   if (query.pageSize) sp.set('pageSize', String(query.pageSize));
   const qs = sp.toString();
-  return client.request<SellerListResponse>(
-    `/api/admin/sellers${qs ? `?${qs}` : ''}`,
-  );
+  return client.request<SellerListResponse>(`/api/admin/sellers${qs ? `?${qs}` : ''}`);
 }
 
 // The detail payload type from /admin/sellers/:id is broad (includes
@@ -105,10 +101,10 @@ export function useUpdateSellerStatus(
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<UpdateSellerStatusResponse>(
-        `/api/admin/sellers/${sellerId}/status`,
-        { method: 'PATCH', body },
-      ),
+      client.request<UpdateSellerStatusResponse>(`/api/admin/sellers/${sellerId}/status`, {
+        method: 'PATCH',
+        body,
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-sellers'] });
     },
@@ -158,10 +154,9 @@ export function useResendInvitation(): UseMutationResult<
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id }) =>
-      client.request<SellerInvitationListItem>(
-        `/api/admin/seller-invitations/${id}/resend`,
-        { method: 'POST' },
-      ),
+      client.request<SellerInvitationListItem>(`/api/admin/seller-invitations/${id}/resend`, {
+        method: 'POST',
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-invitations'] });
     },
@@ -192,10 +187,7 @@ export function useOrdersList(query: ListOrdersQuery): UseQueryResult<OrderListR
   });
 }
 
-async function fetchOrders(
-  client: ApiClient,
-  query: ListOrdersQuery,
-): Promise<OrderListResponse> {
+async function fetchOrders(client: ApiClient, query: ListOrdersQuery): Promise<OrderListResponse> {
   const sp = new URLSearchParams();
   if (query.status) sp.set('status', query.status);
   if (query.source) sp.set('source', query.source);
@@ -227,9 +219,7 @@ export function useAdminOrderEvents(
   return useQuery({
     queryKey: ['admin-orders', 'events', id],
     queryFn: () =>
-      client.request<ReadonlyArray<AdminOrderEventView>>(
-        `/api/admin/orders/${id}/events`,
-      ),
+      client.request<ReadonlyArray<AdminOrderEventView>>(`/api/admin/orders/${id}/events`),
     enabled: Boolean(id),
   });
 }
@@ -287,16 +277,12 @@ export function useReleaseReservations(
 
 // ───────── Admin system settings (Module 14) ─────────
 
-export function useSystemSettingsList(): UseQueryResult<
-  readonly SystemSettingsCategoryGroup[]
-> {
+export function useSystemSettingsList(): UseQueryResult<readonly SystemSettingsCategoryGroup[]> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-system-settings', 'list'],
     queryFn: () =>
-      client.request<readonly SystemSettingsCategoryGroup[]>(
-        '/api/admin/system-settings',
-      ),
+      client.request<readonly SystemSettingsCategoryGroup[]>('/api/admin/system-settings'),
   });
 }
 
@@ -305,9 +291,7 @@ export function useSystemSetting(key: string): UseQueryResult<SystemSettingFull>
   return useQuery({
     queryKey: ['admin-system-settings', 'detail', key],
     queryFn: () =>
-      client.request<SystemSettingFull>(
-        `/api/admin/system-settings/${encodeURIComponent(key)}`,
-      ),
+      client.request<SystemSettingFull>(`/api/admin/system-settings/${encodeURIComponent(key)}`),
     enabled: Boolean(key),
   });
 }
@@ -319,10 +303,10 @@ export function useUpdateSystemSetting(
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<SystemSettingFull>(
-        `/api/admin/system-settings/${encodeURIComponent(key)}`,
-        { method: 'PATCH', body },
-      ),
+      client.request<SystemSettingFull>(`/api/admin/system-settings/${encodeURIComponent(key)}`, {
+        method: 'PATCH',
+        body,
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-system-settings'] });
     },
@@ -331,16 +315,12 @@ export function useUpdateSystemSetting(
 
 // ───────── Admin order charges (Module 17) ─────────
 
-export function useOrderCharges(
-  orderId: string,
-): UseQueryResult<readonly OrderChargeView[]> {
+export function useOrderCharges(orderId: string): UseQueryResult<readonly OrderChargeView[]> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-order-charges', orderId],
     queryFn: () =>
-      client.request<readonly OrderChargeView[]>(
-        `/api/admin/orders/${orderId}/charges`,
-      ),
+      client.request<readonly OrderChargeView[]>(`/api/admin/orders/${orderId}/charges`),
     enabled: Boolean(orderId),
   });
 }
@@ -352,10 +332,10 @@ export function useComputeOrderCharges(
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () =>
-      client.request<ComputeOrderChargesResponse>(
-        `/api/admin/orders/${orderId}/charges/compute`,
-        { method: 'POST', body: {} },
-      ),
+      client.request<ComputeOrderChargesResponse>(`/api/admin/orders/${orderId}/charges/compute`, {
+        method: 'POST',
+        body: {},
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-order-charges', orderId] });
     },
@@ -391,11 +371,7 @@ import type {
 } from '@skydrop/api-client';
 
 // Pick
-export function usePullNextPick(): UseMutationResult<
-  { pick: PulledPick | null },
-  Error,
-  void
-> {
+export function usePullNextPick(): UseMutationResult<{ pick: PulledPick | null }, Error, void> {
   const client = useApiClient();
   return useMutation({
     mutationFn: () =>
@@ -429,7 +405,11 @@ export function useRecordPickItem(): UseMutationResult<
       }),
   });
 }
-export function useCompletePick(): UseMutationResult<CompletePickResult, Error, { shipmentId: string }> {
+export function useCompletePick(): UseMutationResult<
+  CompletePickResult,
+  Error,
+  { shipmentId: string }
+> {
   const client = useApiClient();
   return useMutation({
     mutationFn: ({ shipmentId }) =>
@@ -441,11 +421,7 @@ export function useCompletePick(): UseMutationResult<CompletePickResult, Error, 
 }
 
 // Pack
-export function usePullNextPack(): UseMutationResult<
-  { pack: PulledPack | null },
-  Error,
-  void
-> {
+export function usePullNextPack(): UseMutationResult<{ pack: PulledPack | null }, Error, void> {
   const client = useApiClient();
   return useMutation({
     mutationFn: () =>
@@ -455,7 +431,11 @@ export function usePullNextPack(): UseMutationResult<
       }),
   });
 }
-export function useCompletePack(): UseMutationResult<CompletePackResult, Error, { shipmentId: string }> {
+export function useCompletePack(): UseMutationResult<
+  CompletePackResult,
+  Error,
+  { shipmentId: string }
+> {
   const client = useApiClient();
   return useMutation({
     mutationFn: ({ shipmentId }) =>
@@ -489,20 +469,23 @@ export function useManifestDetail(id: string): UseQueryResult<ManifestDetail> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-manifests', 'detail', id],
-    queryFn: () =>
-      client.request<ManifestDetail>(`/api/admin/warehouse/manifests/${id}`),
+    queryFn: () => client.request<ManifestDetail>(`/api/admin/warehouse/manifests/${id}`),
     enabled: Boolean(id),
   });
 }
-export function useCloseManifest(): UseMutationResult<CloseManifestResult, Error, { manifestId: string }> {
+export function useCloseManifest(): UseMutationResult<
+  CloseManifestResult,
+  Error,
+  { manifestId: string }
+> {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ manifestId }) =>
-      client.request<CloseManifestResult>(
-        `/api/admin/warehouse/manifests/${manifestId}/close`,
-        { method: 'POST', body: {} },
-      ),
+      client.request<CloseManifestResult>(`/api/admin/warehouse/manifests/${manifestId}/close`, {
+        method: 'POST',
+        body: {},
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-manifests'] });
     },
@@ -570,10 +553,10 @@ export function useCancelManualPlacement(): UseMutationResult<
   const client = useApiClient();
   return useMutation({
     mutationFn: ({ shipmentId, ...body }) =>
-      client.request<void>(
-        `/api/admin/courier/manual-placement/shipments/${shipmentId}/cancel`,
-        { method: 'POST', body },
-      ),
+      client.request<void>(`/api/admin/courier/manual-placement/shipments/${shipmentId}/cancel`, {
+        method: 'POST',
+        body,
+      }),
   });
 }
 
@@ -596,20 +579,24 @@ export function useInspectRtoItem(): UseMutationResult<
   const client = useApiClient();
   return useMutation({
     mutationFn: ({ shipmentItemId, ...body }) =>
-      client.request<InspectRtoItemResult>(
-        `/api/warehouse/rto/items/${shipmentItemId}/inspect`,
-        { method: 'POST', body },
-      ),
+      client.request<InspectRtoItemResult>(`/api/warehouse/rto/items/${shipmentItemId}/inspect`, {
+        method: 'POST',
+        body,
+      }),
   });
 }
-export function useFinalizeRto(): UseMutationResult<FinalizeRtoResult, Error, { shipmentId: string }> {
+export function useFinalizeRto(): UseMutationResult<
+  FinalizeRtoResult,
+  Error,
+  { shipmentId: string }
+> {
   const client = useApiClient();
   return useMutation({
     mutationFn: ({ shipmentId }) =>
-      client.request<FinalizeRtoResult>(
-        `/api/warehouse/rto/shipments/${shipmentId}/finalize`,
-        { method: 'POST', body: {} },
-      ),
+      client.request<FinalizeRtoResult>(`/api/warehouse/rto/shipments/${shipmentId}/finalize`, {
+        method: 'POST',
+        body: {},
+      }),
   });
 }
 
@@ -617,8 +604,7 @@ export function useRtoShipmentDetail(shipmentId: string | null): UseQueryResult<
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-rto', 'shipment', shipmentId],
-    queryFn: () =>
-      client.request<RtoShipmentDetail>(`/api/warehouse/rto/shipments/${shipmentId}`),
+    queryFn: () => client.request<RtoShipmentDetail>(`/api/warehouse/rto/shipments/${shipmentId}`),
     enabled: Boolean(shipmentId),
   });
 }
@@ -653,9 +639,7 @@ export function useCurrentCalls(): UseQueryResult<{
   return useQuery({
     queryKey: ['agent-calls', 'current'],
     queryFn: () =>
-      client.request<{ assignments: ReadonlyArray<PulledAssignment> }>(
-        `/api/agent/calls/current`,
-      ),
+      client.request<{ assignments: ReadonlyArray<PulledAssignment> }>(`/api/agent/calls/current`),
   });
 }
 
@@ -668,10 +652,10 @@ export function useRecordCallAttempt(): UseMutationResult<
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ assignmentId, ...body }) =>
-      client.request<RecordAttemptResult>(
-        `/api/agent/calls/${assignmentId}/record-attempt`,
-        { method: 'POST', body },
-      ),
+      client.request<RecordAttemptResult>(`/api/agent/calls/${assignmentId}/record-attempt`, {
+        method: 'POST',
+        body,
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['agent-calls'] });
     },
@@ -687,10 +671,10 @@ export function useReleaseCall(): UseMutationResult<
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ assignmentId }) =>
-      client.request<{ released: boolean }>(
-        `/api/agent/calls/${assignmentId}/release`,
-        { method: 'POST', body: {} },
-      ),
+      client.request<{ released: boolean }>(`/api/agent/calls/${assignmentId}/release`, {
+        method: 'POST',
+        body: {},
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['agent-calls'] });
     },
@@ -715,9 +699,7 @@ export function useAdminOrderShipments(
   return useQuery({
     queryKey: ['admin-orders', 'shipments', id],
     queryFn: () =>
-      client.request<ReadonlyArray<AdminShipmentRow>>(
-        `/api/admin/orders/${id}/shipments`,
-      ),
+      client.request<ReadonlyArray<AdminShipmentRow>>(`/api/admin/orders/${id}/shipments`),
     enabled: Boolean(id),
   });
 }
@@ -752,31 +734,24 @@ export function useGoodsReceiptsList(
   });
 }
 
-export function useGoodsReceiptDetail(
-  id: string,
-): UseQueryResult<GoodsReceiptView> {
+export function useGoodsReceiptDetail(id: string): UseQueryResult<GoodsReceiptView> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-goods-receipts', 'detail', id],
-    queryFn: () =>
-      client.request<GoodsReceiptView>(`/api/admin/goods-receipts/${id}`),
+    queryFn: () => client.request<GoodsReceiptView>(`/api/admin/goods-receipts/${id}`),
     enabled: Boolean(id),
   });
 }
 
-export function useStartReceiving(): UseMutationResult<
-  GoodsReceiptView,
-  Error,
-  { id: string }
-> {
+export function useStartReceiving(): UseMutationResult<GoodsReceiptView, Error, { id: string }> {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id }) =>
-      client.request<GoodsReceiptView>(
-        `/api/admin/goods-receipts/${id}/start-receiving`,
-        { method: 'POST', body: {} },
-      ),
+      client.request<GoodsReceiptView>(`/api/admin/goods-receipts/${id}/start-receiving`, {
+        method: 'POST',
+        body: {},
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-goods-receipts'] });
     },
@@ -792,10 +767,10 @@ export function useRecordReceiptLines(): UseMutationResult<
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, lines }) =>
-      client.request<GoodsReceiptView>(
-        `/api/admin/goods-receipts/${id}/lines`,
-        { method: 'POST', body: { lines } },
-      ),
+      client.request<GoodsReceiptView>(`/api/admin/goods-receipts/${id}/lines`, {
+        method: 'POST',
+        body: { lines },
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-goods-receipts'] });
     },
@@ -811,10 +786,10 @@ export function useCompleteGoodsReceipt(): UseMutationResult<
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id }) =>
-      client.request<GoodsReceiptView>(
-        `/api/admin/goods-receipts/${id}/complete`,
-        { method: 'POST', body: {} },
-      ),
+      client.request<GoodsReceiptView>(`/api/admin/goods-receipts/${id}/complete`, {
+        method: 'POST',
+        body: {},
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-goods-receipts'] });
     },
@@ -834,9 +809,7 @@ export function useWarehouseBins(warehouseId: string): UseQueryResult<ReadonlyAr
   return useQuery({
     queryKey: ['admin-warehouses', 'bins', warehouseId],
     queryFn: () =>
-      client.request<ReadonlyArray<WarehouseBin>>(
-        `/api/admin/warehouses/${warehouseId}/bins`,
-      ),
+      client.request<ReadonlyArray<WarehouseBin>>(`/api/admin/warehouses/${warehouseId}/bins`),
     enabled: Boolean(warehouseId),
   });
 }
@@ -855,8 +828,7 @@ export function useCategoriesList(): UseQueryResult<ReadonlyArray<CategoryView>>
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-categories', 'list'],
-    queryFn: () =>
-      client.request<ReadonlyArray<CategoryView>>(`/api/admin/categories`),
+    queryFn: () => client.request<ReadonlyArray<CategoryView>>(`/api/admin/categories`),
   });
 }
 
@@ -864,18 +836,11 @@ export function useCategoryTree(): UseQueryResult<ReadonlyArray<CategoryTreeNode
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-categories', 'tree'],
-    queryFn: () =>
-      client.request<ReadonlyArray<CategoryTreeNode>>(
-        `/api/admin/categories/tree`,
-      ),
+    queryFn: () => client.request<ReadonlyArray<CategoryTreeNode>>(`/api/admin/categories/tree`),
   });
 }
 
-export function useCreateCategory(): UseMutationResult<
-  CategoryView,
-  Error,
-  CreateCategoryRequest
-> {
+export function useCreateCategory(): UseMutationResult<CategoryView, Error, CreateCategoryRequest> {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
@@ -945,10 +910,7 @@ export function useDeleteCategory(): UseMutationResult<void, Error, string> {
 
 // ───────── Admin: remittances (Phase 1B M23) ─────────
 
-import type {
-  RemittanceListResponse,
-  CreateRemittanceRequest,
-} from '@skydrop/api-client';
+import type { RemittanceListResponse, CreateRemittanceRequest } from '@skydrop/api-client';
 
 export function useRemittancesList(query?: {
   sellerId?: string;
@@ -964,9 +926,7 @@ export function useRemittancesList(query?: {
       if (query?.page) sp.set('page', String(query.page));
       if (query?.pageSize) sp.set('pageSize', String(query.pageSize));
       const qs = sp.toString();
-      return client.request<RemittanceListResponse>(
-        `/api/admin/remittances${qs ? `?${qs}` : ''}`,
-      );
+      return client.request<RemittanceListResponse>(`/api/admin/remittances${qs ? `?${qs}` : ''}`);
     },
   });
 }
@@ -1012,9 +972,7 @@ export function useReportSummary(query?: {
       if (query?.from) sp.set('from', query.from);
       if (query?.to) sp.set('to', query.to);
       const qs = sp.toString();
-      return client.request<ReportSummary>(
-        `/api/admin/reports/summary${qs ? `?${qs}` : ''}`,
-      );
+      return client.request<ReportSummary>(`/api/admin/reports/summary${qs ? `?${qs}` : ''}`);
     },
   });
 }
@@ -1065,10 +1023,10 @@ export function useRetryWebhookDelivery(): UseMutationResult<
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id }) =>
-      client.request<RetryWebhookDeliveryResponse>(
-        `/api/admin/webhook-deliveries/${id}/retry`,
-        { method: 'POST', body: {} },
-      ),
+      client.request<RetryWebhookDeliveryResponse>(`/api/admin/webhook-deliveries/${id}/retry`, {
+        method: 'POST',
+        body: {},
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ['admin-webhook-deliveries'],
@@ -1093,26 +1051,17 @@ export function useRevealBankAccount(
 
 // ───────── Admin: FX rates + history ─────────
 
-import type {
-  FxRateView,
-  SetFxRateRequest,
-  FxRateHistoryRow,
-} from '@skydrop/api-client';
+import type { FxRateView, SetFxRateRequest, FxRateHistoryRow } from '@skydrop/api-client';
 
 export function useFxRatesList(): UseQueryResult<ReadonlyArray<FxRateView>> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-fx', 'list'],
-    queryFn: () =>
-      client.request<ReadonlyArray<FxRateView>>('/api/admin/fx-rates'),
+    queryFn: () => client.request<ReadonlyArray<FxRateView>>('/api/admin/fx-rates'),
   });
 }
 
-export function useSetFxRate(): UseMutationResult<
-  FxRateView,
-  Error,
-  SetFxRateRequest
-> {
+export function useSetFxRate(): UseMutationResult<FxRateView, Error, SetFxRateRequest> {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
@@ -1135,9 +1084,7 @@ export function useFxRateHistory(
   return useQuery({
     queryKey: ['admin-fx', 'history', from, to],
     queryFn: () =>
-      client.request<ReadonlyArray<FxRateHistoryRow>>(
-        `/api/admin/fx-rates/history/${from}/${to}`,
-      ),
+      client.request<ReadonlyArray<FxRateHistoryRow>>(`/api/admin/fx-rates/history/${from}/${to}`),
     enabled: Boolean(from && to),
   });
 }
@@ -1209,21 +1156,17 @@ export function useResendStaffInvitation(): UseMutationResult<
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id }) =>
-      client.request<CreatedStaffInvitation>(
-        `/api/admin/staff/invitations/${id}/resend`,
-        { method: 'POST', body: {} },
-      ),
+      client.request<CreatedStaffInvitation>(`/api/admin/staff/invitations/${id}/resend`, {
+        method: 'POST',
+        body: {},
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-staff'] });
     },
   });
 }
 
-export function useRevokeStaffInvitation(): UseMutationResult<
-  void,
-  Error,
-  { id: string }
-> {
+export function useRevokeStaffInvitation(): UseMutationResult<void, Error, { id: string }> {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
@@ -1255,10 +1198,10 @@ export function useUpdateStaffRole(): UseMutationResult<
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, role }) =>
-      client.request<{ id: string; role: string }>(
-        `/api/admin/staff/users/${id}/role`,
-        { method: 'PATCH', body: { role } },
-      ),
+      client.request<{ id: string; role: string }>(`/api/admin/staff/users/${id}/role`, {
+        method: 'PATCH',
+        body: { role },
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-staff'] });
     },

@@ -46,9 +46,7 @@ export function CreateCourierAccountModal({
   const create = useCreateCourierAccount();
 
   const [courierCode, setCourierCode] = useState('delhivery');
-  const [environment, setEnvironment] = useState<string>(
-    CredentialEnvironment.PRODUCTION,
-  );
+  const [environment, setEnvironment] = useState<string>(CredentialEnvironment.PRODUCTION);
   const [label, setLabel] = useState('');
   const [notes, setNotes] = useState('');
   const [isDefault, setIsDefault] = useState(false);
@@ -76,9 +74,7 @@ export function CreateCourierAccountModal({
         courierCode: courierCode.trim(),
         environment,
         label: label.trim(),
-        credentialFields: Object.fromEntries(
-          filled.map((f) => [f.name.trim(), f.value]),
-        ),
+        credentialFields: Object.fromEntries(filled.map((f) => [f.name.trim(), f.value])),
         ...(isDefault ? { isDefault: true } : {}),
         ...(notes.trim() === '' ? {} : { notes: notes.trim() }),
       });
@@ -172,9 +168,7 @@ export function CreateCourierAccountModal({
                   value={f.name}
                   onChange={(e) =>
                     setFields((prev) =>
-                      prev.map((x) =>
-                        x.key === f.key ? { ...x, name: e.target.value } : x,
-                      ),
+                      prev.map((x) => (x.key === f.key ? { ...x, name: e.target.value } : x)),
                     )
                   }
                   placeholder="apiToken"
@@ -187,9 +181,7 @@ export function CreateCourierAccountModal({
                   value={f.value}
                   onChange={(e) =>
                     setFields((prev) =>
-                      prev.map((x) =>
-                        x.key === f.key ? { ...x, value: e.target.value } : x,
-                      ),
+                      prev.map((x) => (x.key === f.key ? { ...x, value: e.target.value } : x)),
                     )
                   }
                   placeholder="••••••••••••"

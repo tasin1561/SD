@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  type OnModuleDestroy,
-  type OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Worker, type Job } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -56,20 +51,14 @@ export class TrackingWebhookWorker implements OnModuleInit, OnModuleDestroy {
           await this.processor.process(job.data.webhookId);
           return;
         }
-        this.logger.warn(
-          { name: job.name },
-          'Unknown tracking-webhook job; ignoring',
-        );
+        this.logger.warn({ name: job.name }, 'Unknown tracking-webhook job; ignoring');
       },
       {
         connection: this.redis.createConnection(),
         concurrency: 1,
         settings: {
           backoffStrategy: (attemptsMade: number): number => {
-            const idx = Math.min(
-              Math.max(attemptsMade - 1, 0),
-              backoffMs.length - 1,
-            );
+            const idx = Math.min(Math.max(attemptsMade - 1, 0), backoffMs.length - 1);
             return backoffMs[idx] ?? 1000;
           },
         },

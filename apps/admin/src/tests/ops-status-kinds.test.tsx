@@ -72,9 +72,7 @@ describe('R-phase status kinds', () => {
     const { container } = render(
       <FreightStatusBadge status={InboundFreightStatus.PARTIALLY_SETTLED} />,
     );
-    expect(
-      container.querySelector('[data-status-kind="in-transit"]'),
-    ).toBeTruthy();
+    expect(container.querySelector('[data-status-kind="in-transit"]')).toBeTruthy();
   });
 });
 
@@ -105,9 +103,7 @@ describe('serverVerdict', () => {
   });
 
   it('falls back to the error message when the body carries no code', () => {
-    expect(serverVerdict(new Error('Network request failed'))).toBe(
-      'Network request failed',
-    );
+    expect(serverVerdict(new Error('Network request failed'))).toBe('Network request failed');
   });
 
   it('never renders "undefined" at the user', () => {

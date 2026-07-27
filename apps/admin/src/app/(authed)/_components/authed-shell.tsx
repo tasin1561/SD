@@ -90,69 +90,68 @@ export function AuthedShell({
 
   return (
     <Toaster>
-    <div className="grid min-h-screen grid-cols-[220px_1fr] bg-bg text-text-body">
-      {/* Sidebar */}
-      <aside className="border-r border-border bg-surface flex flex-col">
-        <div className="px-4 py-5 border-b border-border">
-          <div className="text-text-bright font-semibold tracking-tight text-base">Skydrop</div>
-          <div className="text-text-faint text-xs mt-0.5">Admin</div>
-        </div>
-        <nav className="flex flex-col overflow-y-auto py-2" aria-label="Main">
-          {navGroups.map((group) => (
-            <div key={group.heading} className="mb-1">
-              <div className="text-text-faint px-5 pt-2 pb-1 text-[10px] font-medium tracking-wider uppercase">
-                {group.heading}
+      <div className="grid min-h-screen grid-cols-[220px_1fr] bg-bg text-text-body">
+        {/* Sidebar */}
+        <aside className="border-r border-border bg-surface flex flex-col">
+          <div className="px-4 py-5 border-b border-border">
+            <div className="text-text-bright font-semibold tracking-tight text-base">Skydrop</div>
+            <div className="text-text-faint text-xs mt-0.5">Admin</div>
+          </div>
+          <nav className="flex flex-col overflow-y-auto py-2" aria-label="Main">
+            {navGroups.map((group) => (
+              <div key={group.heading} className="mb-1">
+                <div className="text-text-faint px-5 pt-2 pb-1 text-[10px] font-medium tracking-wider uppercase">
+                  {group.heading}
+                </div>
+                {group.items.map((item) => {
+                  const active =
+                    pathname === item.href || (pathname?.startsWith(`${item.href}/`) ?? false);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      aria-current={active ? 'page' : undefined}
+                      className={
+                        'mx-2 my-0.5 px-3 py-1.5 rounded-[5px] text-sm transition-colors block ' +
+                        (active
+                          ? 'bg-surface-hover text-text-bright'
+                          : 'text-text-muted hover:bg-surface-hover hover:text-text-body')
+                      }
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
               </div>
-              {group.items.map((item) => {
-                const active = pathname === item.href || (pathname?.startsWith(`${item.href}/`) ?? false);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    aria-current={active ? 'page' : undefined}
-                    className={
-                      'mx-2 my-0.5 px-3 py-1.5 rounded-[5px] text-sm transition-colors block ' +
-                      (active
-                        ? 'bg-surface-hover text-text-bright'
-                        : 'text-text-muted hover:bg-surface-hover hover:text-text-body')
-                    }
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
-        </nav>
-        <div className="mt-auto px-4 py-3 border-t border-border text-xs text-text-faint">
-          Phase 1A
-        </div>
-      </aside>
+            ))}
+          </nav>
+          <div className="mt-auto px-4 py-3 border-t border-border text-xs text-text-faint">
+            Phase 1A
+          </div>
+        </aside>
 
-      {/* Main column */}
-      <div className="flex flex-col min-w-0">
-        <header className="flex items-center justify-between gap-4 px-6 py-3 border-b border-border bg-surface">
-          <div className="text-text-muted text-xs uppercase tracking-wide">
-            Staff Dashboard
-          </div>
-          <div className="flex items-center gap-3 text-xs">
-            <div className="text-right leading-tight">
-              <div className="text-text-body">{identity.emailDisplay}</div>
-              <div className="text-text-faint">{identity.role}</div>
+        {/* Main column */}
+        <div className="flex flex-col min-w-0">
+          <header className="flex items-center justify-between gap-4 px-6 py-3 border-b border-border bg-surface">
+            <div className="text-text-muted text-xs uppercase tracking-wide">Staff Dashboard</div>
+            <div className="flex items-center gap-3 text-xs">
+              <div className="text-right leading-tight">
+                <div className="text-text-body">{identity.emailDisplay}</div>
+                <div className="text-text-faint">{identity.role}</div>
+              </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={loggingOut}
+                className="px-2.5 py-1 rounded-[5px] border border-border text-text-muted hover:border-border-strong hover:text-text-body disabled:opacity-50 transition-colors"
+              >
+                {loggingOut ? 'Signing out…' : 'Sign out'}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={handleLogout}
-              disabled={loggingOut}
-              className="px-2.5 py-1 rounded-[5px] border border-border text-text-muted hover:border-border-strong hover:text-text-body disabled:opacity-50 transition-colors"
-            >
-              {loggingOut ? 'Signing out…' : 'Sign out'}
-            </button>
-          </div>
-        </header>
-        <main className="flex-1 min-w-0 px-6 py-6 overflow-auto">{children}</main>
+          </header>
+          <main className="flex-1 min-w-0 px-6 py-6 overflow-auto">{children}</main>
+        </div>
       </div>
-    </div>
     </Toaster>
   );
 }

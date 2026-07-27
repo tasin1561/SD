@@ -18,7 +18,10 @@ export class CreateBinDto {
   @IsUUID('7')
   zoneId!: string;
 
-  @ApiProperty({ description: 'Full hierarchical bin code, unique within the warehouse, e.g. "A-1-2-03"', maxLength: 48 })
+  @ApiProperty({
+    description: 'Full hierarchical bin code, unique within the warehouse, e.g. "A-1-2-03"',
+    maxLength: 48,
+  })
   @IsString()
   @MinLength(1)
   @MaxLength(48)
@@ -57,7 +60,10 @@ export class CreateBinDto {
 }
 
 export class UpdateBinDto {
-  @ApiProperty({ required: false, description: 'Move the bin to a different zone in the same warehouse' })
+  @ApiProperty({
+    required: false,
+    description: 'Move the bin to a different zone in the same warehouse',
+  })
   @IsOptional()
   @IsUUID('7')
   zoneId?: string;

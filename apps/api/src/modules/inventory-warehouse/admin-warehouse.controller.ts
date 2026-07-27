@@ -132,10 +132,7 @@ export class AdminWarehouseController {
 
   @Get(':id/bins')
   @ApiOperation({ summary: 'List bins in a warehouse (filter by zone/type)' })
-  listBins(
-    @Param('id', uuid()) id: string,
-    @Query() query: ListBinsQueryDto,
-  ): Promise<BinView[]> {
+  listBins(@Param('id', uuid()) id: string, @Query() query: ListBinsQueryDto): Promise<BinView[]> {
     return this.svc.listBins(id, query);
   }
 

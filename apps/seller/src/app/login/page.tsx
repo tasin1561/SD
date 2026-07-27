@@ -29,9 +29,7 @@ export default async function LoginPage(): Promise<ReactElement> {
     <>
       <div className="boot-rise mb-6 text-center">
         <div className="flex items-baseline justify-center gap-3">
-          <span className="text-text-bright font-semibold text-2xl tracking-tight">
-            Skydrop
-          </span>
+          <span className="text-text-bright font-semibold text-2xl tracking-tight">Skydrop</span>
           <span className="telemetry inline-flex items-center gap-1.5 text-text-muted">
             <span
               aria-hidden

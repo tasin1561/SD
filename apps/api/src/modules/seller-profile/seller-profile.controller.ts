@@ -82,7 +82,8 @@ export class SellerProfileController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Update bank details (APPROVED sellers only)',
-    description: 'Phase 1B feature surface — captures the data; remittance and KYC checks land in 1B.',
+    description:
+      'Phase 1B feature surface — captures the data; remittance and KYC checks land in 1B.',
   })
   updateBankDetails(
     @Body() body: UpdateSellerBankDetailsDto,
@@ -96,12 +97,10 @@ export class SellerProfileController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Presign a PUT URL for uploading the company logo',
-    description: 'Returns storageKey + presigned PUT URL; client PUTs the file then POSTs /logo/register.',
+    description:
+      'Returns storageKey + presigned PUT URL; client PUTs the file then POSTs /logo/register.',
   })
-  presignLogo(
-    @Body() body: PresignLogoDto,
-    @CurrentSeller() seller: AuthenticatedSeller,
-  ) {
+  presignLogo(@Body() body: PresignLogoDto, @CurrentSeller() seller: AuthenticatedSeller) {
     return this.logoSvc.presign(seller.id, body.mimeType);
   }
 
@@ -121,10 +120,7 @@ export class SellerProfileController {
   @Delete('logo')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Remove the company logo' })
-  removeLogo(
-    @CurrentSeller() seller: AuthenticatedSeller,
-    @ClientInfo() ctx: ClientInfoPayload,
-  ) {
+  removeLogo(@CurrentSeller() seller: AuthenticatedSeller, @ClientInfo() ctx: ClientInfoPayload) {
     return this.logoSvc.remove(seller.id, ctx);
   }
 }

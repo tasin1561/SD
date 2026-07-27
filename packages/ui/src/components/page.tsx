@@ -20,9 +20,7 @@ export function PageHeader({
     <div className={clsx('flex items-start justify-between gap-4 mb-6', className)}>
       <div className="min-w-0">
         <h1 className="text-text-bright text-xl font-semibold tracking-tight">{title}</h1>
-        {subtitle && (
-          <p className="text-text-muted text-sm mt-1">{subtitle}</p>
-        )}
+        {subtitle && <p className="text-text-muted text-sm mt-1">{subtitle}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>
@@ -50,13 +48,9 @@ export function Section({
         <div className="flex items-baseline justify-between gap-4 mb-2">
           {title && (
             <div className="min-w-0">
-              <h2 className="text-text-bright text-sm font-medium tracking-tight">
-                {title}
-              </h2>
+              <h2 className="text-text-bright text-sm font-medium tracking-tight">{title}</h2>
               {subtitle && (
-                <p className="text-text-muted mt-0.5 text-xs leading-relaxed">
-                  {subtitle}
-                </p>
+                <p className="text-text-muted mt-0.5 text-xs leading-relaxed">{subtitle}</p>
               )}
             </div>
           )}

@@ -15,10 +15,7 @@ import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import { requireStaffRoles } from '../../../common/auth/require-staff-roles';
 import type { AuthenticatedStaff } from '../../../common/types/request';
-import {
-  ManualTrackingService,
-  type ManualScanOutcome,
-} from '../services/manual-tracking.service';
+import { ManualTrackingService, type ManualScanOutcome } from '../services/manual-tracking.service';
 import { RecordManualScanDto } from '../dto/record-manual-scan.dto';
 
 /**

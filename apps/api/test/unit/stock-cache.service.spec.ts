@@ -80,10 +80,7 @@ describe('StockCacheService', () => {
 
     await svc.invalidate('s1', 'w1');
 
-    expect(del).toHaveBeenCalledWith(
-      'inventory:stock:detail:s1:w1',
-      'inventory:stock:agg:s1:w1',
-    );
+    expect(del).toHaveBeenCalledWith('inventory:stock:detail:s1:w1', 'inventory:stock:agg:s1:w1');
     expect(await svc.getDetail('s1', 'w1')).toBeNull();
     expect(await svc.getAggregate('s1', 'w1')).toBeNull();
     // The other seller's snapshot is untouched.

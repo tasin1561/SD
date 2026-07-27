@@ -106,18 +106,12 @@ export function DelhiveryOpsIndex(): ReactElement {
                 </CardBody>
               </Card>
 
-              <Card
-                tone={status.data?.liveWritesEnabled === true ? 'critical' : 'default'}
-              >
+              <Card tone={status.data?.liveWritesEnabled === true ? 'critical' : 'default'}>
                 <CardBody>
                   <div className="mb-1.5 flex items-center gap-2">
                     {status.data?.liveWritesEnabled === true ? (
                       <>
-                        <Unlock
-                          size={14}
-                          className="text-[var(--color-critical)]"
-                          aria-hidden
-                        />
+                        <Unlock size={14} className="text-[var(--color-critical)]" aria-hidden />
                         <span className="text-[var(--color-critical)] text-sm font-medium">
                           Live writes ENABLED
                         </span>
@@ -180,8 +174,8 @@ export function DelhiveryOpsIndex(): ReactElement {
                   aria-hidden
                 />
                 <p className="text-[var(--color-critical)] text-xs leading-relaxed">
-                  No usable waybills. Manifest closure will fail until the pool is
-                  refilled. In live mode the refill itself needs the write guard on.
+                  No usable waybills. Manifest closure will fail until the pool is refilled. In live
+                  mode the refill itself needs the write guard on.
                 </p>
               </div>
             )}
@@ -203,14 +197,11 @@ export function DelhiveryOpsIndex(): ReactElement {
               </THead>
               <TBody>
                 {status.data?.rateBudgets.map((b) => {
-                  const pct =
-                    b.budget <= 0 ? 0 : Math.round((b.remaining / b.budget) * 100);
+                  const pct = b.budget <= 0 ? 0 : Math.round((b.remaining / b.budget) * 100);
                   return (
                     <Tr key={b.endpoint}>
                       <Td>
-                        <span className="text-text-body">
-                          {b.endpoint.replaceAll('_', ' ')}
-                        </span>
+                        <span className="text-text-body">{b.endpoint.replaceAll('_', ' ')}</span>
                         {b.endpoint === 'waybill_bulk' && (
                           <span className="text-text-faint ml-2 text-xs">
                             five per five minutes — the tight one
@@ -242,9 +233,7 @@ export function DelhiveryOpsIndex(): ReactElement {
                               }}
                             />
                           </div>
-                          <span className="text-text-muted skydrop-tabular text-xs">
-                            {pct}%
-                          </span>
+                          <span className="text-text-muted skydrop-tabular text-xs">{pct}%</span>
                         </div>
                       </Td>
                     </Tr>

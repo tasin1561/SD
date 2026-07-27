@@ -70,9 +70,7 @@ export class StockAvailabilityService {
    * requested variantId is present in the result Map (0 when it has no
    * stock/reservation footprint), so callers can index without a guard.
    */
-  async computeBulk(
-    input: ComputeBulkAvailabilityInput,
-  ): Promise<Map<string, number>> {
+  async computeBulk(input: ComputeBulkAvailabilityInput): Promise<Map<string, number>> {
     const db = input.tx ?? this.prisma.client;
     const { sellerId, variantIds, warehouseId } = input;
     const result = new Map<string, number>();

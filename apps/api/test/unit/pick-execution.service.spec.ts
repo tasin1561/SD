@@ -1,8 +1,4 @@
-import {
-  ConflictException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { InventoryMode, OrderStatus, ShipmentStatus } from '@skydrop/db';
 import { PickExecutionService } from '../../src/modules/warehouse-pick/services/pick-execution.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
@@ -58,35 +54,29 @@ function makeService(
     pickCompletedAt: null,
     orderShipments: [{ orderId: ORDER }],
   };
-  const shipmentFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async () =>
-      opts.shipment === undefined ? defaultShipment : opts.shipment,
+  const shipmentFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+    opts.shipment === undefined ? defaultShipment : opts.shipment,
   );
-  const shipmentItemFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async () =>
-      opts.findItem === undefined
-        ? {
-            id: 'si-1',
-            shipmentId: SHIP,
-            quantity: 2,
-            // R4: recordItem resolves the line's SKU + owner to decide
-            // whether the strict scan gate applies.
-            orderItem: { variantId: 'v-1', order: { sellerId: 'seller-1' } },
-          }
-        : opts.findItem,
+  const shipmentItemFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+    opts.findItem === undefined
+      ? {
+          id: 'si-1',
+          shipmentId: SHIP,
+          quantity: 2,
+          // R4: recordItem resolves the line's SKU + owner to decide
+          // whether the strict scan gate applies.
+          orderItem: { variantId: 'v-1', order: { sellerId: 'seller-1' } },
+        }
+      : opts.findItem,
   );
   const shipmentItemFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
     async () =>
-      opts.shipmentItems ?? [
-        { id: 'si-1', pickedBinId: 'bin-1', pickedBatchId: 'bat-1' },
-      ],
+      opts.shipmentItems ?? [{ id: 'si-1', pickedBinId: 'bin-1', pickedBatchId: 'bat-1' }],
   );
-  const shipmentItemUpdate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(
-    async () => ({}),
-  );
-  const shipmentUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(
-    async () => ({ count: opts.stampCount ?? 1 }),
-  );
+  const shipmentItemUpdate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({}));
+  const shipmentUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async () => ({
+    count: opts.stampCount ?? 1,
+  }));
   const client: AnyArgs = {
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(client),
     shipment: { findFirst: shipmentFindFirst, updateMany: shipmentUpdateMany },
@@ -110,8 +100,7 @@ function makeService(
   const orderWrite = { transitionStatus };
   const listActiveForOrder = jest.fn(async () => opts.active ?? []);
   const reservations = { listActiveForOrder };
-  const allocateForPick =
-    opts.allocate ?? jest.fn(async () => applied());
+  const allocateForPick = opts.allocate ?? jest.fn(async () => applied());
   const allocation = { allocateForPick };
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs]>(async () => 'a');
   const audit = { log: auditLog };
@@ -126,9 +115,7 @@ function makeService(
     scanUnitsForShipment: jest.fn(async () => 0),
   };
   const modes = {
-    resolveForVariant: jest.fn(
-      async () => opts.inventoryMode ?? InventoryMode.NORMAL,
-    ),
+    resolveForVariant: jest.fn(async () => opts.inventoryMode ?? InventoryMode.NORMAL),
   };
   const svc = new PickExecutionService(
     { client } as unknown as PrismaService,
@@ -259,9 +246,7 @@ describe('PickExecutionService.start', () => {
         orderShipments: [{ orderId: ORDER }],
       },
     });
-    await expect(svc.start(SHIP, STAFF)).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    await expect(svc.start(SHIP, STAFF)).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('guards: 409 PICK_NOT_CLAIMED when never pulled', async () => {
@@ -282,9 +267,7 @@ describe('PickExecutionService.start', () => {
 
   it('guards: 404 when the shipment is missing', async () => {
     const { svc } = makeService({ shipment: null });
-    await expect(svc.start(SHIP, STAFF)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(svc.start(SHIP, STAFF)).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 

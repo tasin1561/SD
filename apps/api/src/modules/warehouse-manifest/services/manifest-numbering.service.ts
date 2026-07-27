@@ -24,10 +24,7 @@ export class ManifestNumberingService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async nextManifestNumber(
-    tx?: Prisma.TransactionClient,
-    now: Date = new Date(),
-  ): Promise<string> {
+  async nextManifestNumber(tx?: Prisma.TransactionClient, now: Date = new Date()): Promise<string> {
     const year = now.getUTCFullYear();
     if (!Number.isInteger(year) || year < 2000 || year > 9999) {
       throw new Error(
@@ -38,9 +35,7 @@ export class ManifestNumberingService {
     const seq = `manifest_number_seq_${year}`;
     const value = tx
       ? await this.allocate(tx, year, seq)
-      : await this.prisma.client.$transaction((t) =>
-          this.allocate(t, year, seq),
-        );
+      : await this.prisma.client.$transaction((t) => this.allocate(t, year, seq));
 
     const mm = String(month).padStart(2, '0');
     const serial = String(value).padStart(6, '0');
@@ -65,9 +60,7 @@ export class ManifestNumberingService {
     const raw = rows[0]?.value;
     if (raw === undefined) {
       this.logger.error(`nextval returned no row for sequence ${seq}`);
-      throw new Error(
-        `ManifestNumberingService: nextval produced no value for ${seq}`,
-      );
+      throw new Error(`ManifestNumberingService: nextval produced no value for ${seq}`);
     }
     return Number(raw);
   }

@@ -1,8 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import type { CreateWebhookEndpointDto } from '../dto/create-webhook-endpoint.dto';
 import type { UpdateWebhookEndpointDto } from '../dto/update-webhook-endpoint.dto';
@@ -84,10 +81,7 @@ export class SellerWebhookService {
     });
   }
 
-  async getOwned(
-    sellerId: string,
-    id: string,
-  ): Promise<WebhookEndpointView> {
+  async getOwned(sellerId: string, id: string): Promise<WebhookEndpointView> {
     const row = await this.prisma.client.sellerWebhookEndpoint.findFirst({
       where: { id, sellerId, deletedAt: null },
       select: VIEW_SELECT,
@@ -131,8 +125,7 @@ export class SellerWebhookService {
     if (body.url !== undefined) data.url = body.url;
     if (body.name !== undefined) data.name = body.name;
     if (body.description !== undefined) data.description = body.description;
-    if (body.subscribedEvents !== undefined)
-      data.subscribedEvents = body.subscribedEvents;
+    if (body.subscribedEvents !== undefined) data.subscribedEvents = body.subscribedEvents;
     if (body.isActive !== undefined) data.isActive = body.isActive;
 
     return this.prisma.client.sellerWebhookEndpoint.update({
@@ -142,10 +135,7 @@ export class SellerWebhookService {
     });
   }
 
-  async rotateSecret(
-    sellerId: string,
-    id: string,
-  ): Promise<WebhookEndpointWithSecret> {
+  async rotateSecret(sellerId: string, id: string): Promise<WebhookEndpointWithSecret> {
     const owned = await this.prisma.client.sellerWebhookEndpoint.findFirst({
       where: { id, sellerId, deletedAt: null },
       select: { id: true, secretKey: true },

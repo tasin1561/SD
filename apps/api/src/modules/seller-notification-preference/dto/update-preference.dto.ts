@@ -1,13 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { NotificationFrequency } from '@skydrop/db';
-import {
-  IsBoolean,
-  IsEnum,
-  IsOptional,
-  IsString,
-  Matches,
-  MaxLength,
-} from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 
 const HH_MM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const IANA_TZ = /^[A-Za-z_]+\/[A-Za-z_+\-/]+$/;

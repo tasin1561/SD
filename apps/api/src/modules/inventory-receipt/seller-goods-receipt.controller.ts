@@ -23,10 +23,7 @@ import {
   ListGoodsReceiptsQueryDto,
   UpdateGoodsReceiptDto,
 } from './dto/goods-receipt.dto';
-import {
-  GoodsReceiptService,
-  type GoodsReceiptView,
-} from './services/goods-receipt.service';
+import { GoodsReceiptService, type GoodsReceiptView } from './services/goods-receipt.service';
 import { SellerUserRole } from '@skydrop/db';
 import { SellerRoles } from '../../common/decorators/seller-roles.decorator';
 

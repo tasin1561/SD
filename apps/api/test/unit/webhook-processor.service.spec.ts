@@ -158,10 +158,7 @@ function makeProcessor(setup: Setup = {}) {
     },
   );
   const courierWebhookUpdate = jest.fn(
-    async (args: {
-      where: { id: string };
-      data: Partial<FakeWebhook>;
-    }): Promise<FakeWebhook> => {
+    async (args: { where: { id: string }; data: Partial<FakeWebhook> }): Promise<FakeWebhook> => {
       const wh = webhooks.find((w) => w.id === args.where.id);
       if (!wh) throw new Error('webhook not found');
       Object.assign(wh, args.data);
@@ -173,9 +170,7 @@ function makeProcessor(setup: Setup = {}) {
       where: { id: string; status: WebhookStatus };
       data: Partial<FakeWebhook>;
     }): Promise<{ count: number }> => {
-      const wh = webhooks.find(
-        (w) => w.id === args.where.id && w.status === args.where.status,
-      );
+      const wh = webhooks.find((w) => w.id === args.where.id && w.status === args.where.status);
       if (!wh) return { count: 0 };
       Object.assign(wh, args.data);
       return { count: 1 };
@@ -197,25 +192,20 @@ function makeProcessor(setup: Setup = {}) {
       where: { webhookId: string; eventType: TrackingEventType };
     }): Promise<FakeTrackingEvent | null> => {
       const found = trackingEvents.find(
-        (t) =>
-          t.webhookId === args.where.webhookId &&
-          t.eventType === args.where.eventType,
+        (t) => t.webhookId === args.where.webhookId && t.eventType === args.where.eventType,
       );
       return found ?? null;
     },
   );
 
   const deliveryAttemptFindFirst = jest.fn(
-    async (args: {
-      where: { webhookId: string };
-    }): Promise<FakeDeliveryAttempt | null> => {
+    async (args: { where: { webhookId: string } }): Promise<FakeDeliveryAttempt | null> => {
       return attempts.find((a) => a.webhookId === args.where.webhookId) ?? null;
     },
   );
   const deliveryAttemptCount = jest.fn(
     async (args: { where: { shipmentId: string } }): Promise<number> => {
-      return attempts.filter((a) => a.shipmentId === args.where.shipmentId)
-        .length;
+      return attempts.filter((a) => a.shipmentId === args.where.shipmentId).length;
     },
   );
   const deliveryAttemptCreate = jest.fn(
@@ -233,8 +223,7 @@ function makeProcessor(setup: Setup = {}) {
       if (
         attempts.some(
           (a) =>
-            a.shipmentId === args.data.shipmentId &&
-            a.attemptNumber === args.data.attemptNumber,
+            a.shipmentId === args.data.shipmentId && a.attemptNumber === args.data.attemptNumber,
         )
       ) {
         throw new Error('Unique constraint failed: (shipmentId, attemptNumber)');
@@ -285,49 +274,47 @@ function makeProcessor(setup: Setup = {}) {
   // append delegates to a fake recording the input.
   const appendCalls: AppendTrackingEventInput[] = [];
   const fakeAppend = {
-    append: jest.fn(
-      async (input: AppendTrackingEventInput): Promise<TrackingEventRow> => {
-        appendCalls.push(input);
-        const row: FakeTrackingEvent = {
-          id: `te-${teId++}`,
-          webhookId: input.webhookId ?? null,
-          eventType: input.eventType,
-          shipmentId: input.shipmentId,
-          eventAt: input.eventAt,
-          status: input.status,
-          source: input.source,
-          metadata: input.metadata ?? null,
-          isVisibleToCustomer: input.isVisibleToCustomer ?? true,
-        };
-        trackingEvents.push(row);
-        // Map to the cross-module TrackingEventRow shape.
-        return {
-          id: row.id,
-          createdAt: new Date(),
-          eventAt: row.eventAt,
-          shipmentId: row.shipmentId,
-          eventType: row.eventType,
-          status: row.status,
-          source: row.source,
-          courierCode: input.courierCode ?? null,
-          rawCourierStatus: input.rawCourierStatus ?? null,
-          nslCode: input.nslCode ?? null,
-          description: input.description ?? null,
-          locationName: input.locationName ?? null,
-          locationCity: input.locationCity ?? null,
-          locationPincode: input.locationPincode ?? null,
-          webhookId: input.webhookId ?? null,
-          actorType: input.actorType ?? null,
-          actorId: input.actorId ?? null,
-          // The Prisma JsonValue / InputJsonValue split: InputJsonValue
-          // accepts class instances at the type level but JsonValue is
-          // structural. The test payload is plain JSON-compatible, so
-          // a structural cast is the right move here.
-          metadata: (input.metadata ?? null) as TrackingEventRow['metadata'],
-          isVisibleToCustomer: row.isVisibleToCustomer,
-        };
-      },
-    ),
+    append: jest.fn(async (input: AppendTrackingEventInput): Promise<TrackingEventRow> => {
+      appendCalls.push(input);
+      const row: FakeTrackingEvent = {
+        id: `te-${teId++}`,
+        webhookId: input.webhookId ?? null,
+        eventType: input.eventType,
+        shipmentId: input.shipmentId,
+        eventAt: input.eventAt,
+        status: input.status,
+        source: input.source,
+        metadata: input.metadata ?? null,
+        isVisibleToCustomer: input.isVisibleToCustomer ?? true,
+      };
+      trackingEvents.push(row);
+      // Map to the cross-module TrackingEventRow shape.
+      return {
+        id: row.id,
+        createdAt: new Date(),
+        eventAt: row.eventAt,
+        shipmentId: row.shipmentId,
+        eventType: row.eventType,
+        status: row.status,
+        source: row.source,
+        courierCode: input.courierCode ?? null,
+        rawCourierStatus: input.rawCourierStatus ?? null,
+        nslCode: input.nslCode ?? null,
+        description: input.description ?? null,
+        locationName: input.locationName ?? null,
+        locationCity: input.locationCity ?? null,
+        locationPincode: input.locationPincode ?? null,
+        webhookId: input.webhookId ?? null,
+        actorType: input.actorType ?? null,
+        actorId: input.actorId ?? null,
+        // The Prisma JsonValue / InputJsonValue split: InputJsonValue
+        // accepts class instances at the type level but JsonValue is
+        // structural. The test payload is plain JSON-compatible, so
+        // a structural cast is the right move here.
+        metadata: (input.metadata ?? null) as TrackingEventRow['metadata'],
+        isVisibleToCustomer: row.isVisibleToCustomer,
+      };
+    }),
   };
 
   const courierDelhivery = {
@@ -348,11 +335,7 @@ function makeProcessor(setup: Setup = {}) {
   let transitionThrow = setup.transitionThrows;
   const orderWrite = {
     transitionStatus: jest.fn(
-      async (input: {
-        orderId: string;
-        to: OrderStatus;
-        expectedFrom?: OrderStatus;
-      }) => {
+      async (input: { orderId: string; to: OrderStatus; expectedFrom?: OrderStatus }) => {
         transitionCalls.push(input);
         if (transitionThrow) {
           const err = transitionThrow;
@@ -434,9 +417,7 @@ describe('WebhookProcessorService.process — happy TRANSITION (saga: append the
     const out = await svc.process(WH_ID);
     expect(out.kind).toBe('TRANSITIONED');
     expect(state.trackingEvents).toHaveLength(1);
-    expect(state.trackingEvents[0]?.eventType).toBe(
-      TrackingEventType.IN_TRANSIT_UPDATE,
-    );
+    expect(state.trackingEvents[0]?.eventType).toBe(TrackingEventType.IN_TRANSIT_UPDATE);
     expect(state.trackingEvents[0]?.isVisibleToCustomer).toBe(true);
     expect(state.transitionCalls).toHaveLength(1);
     expect(state.transitionCalls[0]).toMatchObject({
@@ -446,8 +427,7 @@ describe('WebhookProcessorService.process — happy TRANSITION (saga: append the
     });
     // Append happens BEFORE transition (call order matters — visible-vs-silent).
     const appendCallOrder = mocks.fakeAppend.append.mock.invocationCallOrder[0]!;
-    const transitionCallOrder =
-      mocks.orderWrite.transitionStatus.mock.invocationCallOrder[0]!;
+    const transitionCallOrder = mocks.orderWrite.transitionStatus.mock.invocationCallOrder[0]!;
     expect(appendCallOrder).toBeLessThan(transitionCallOrder);
     expect(state.webhooks[0]?.status).toBe(WebhookStatus.PROCESSED);
     expect(state.webhooks[0]?.trackingEventId).toBe(state.trackingEvents[0]?.id);
@@ -484,17 +464,14 @@ describe('WebhookProcessorService.process — DELIVERY_ATTEMPT saga (delivery_at
       courierNslCode: 'EOD-74',
     });
     expect(state.trackingEvents).toHaveLength(1);
-    expect(state.trackingEvents[0]?.eventType).toBe(
-      TrackingEventType.DELIVERY_ATTEMPTED,
-    );
+    expect(state.trackingEvents[0]?.eventType).toBe(TrackingEventType.DELIVERY_ATTEMPTED);
     expect(state.transitionCalls).toHaveLength(1);
     expect(state.transitionCalls[0]?.to).toBe(OrderStatus.DELIVERY_FAILED);
 
     // Saga ordering: attempt → tracking_event → transition.
     const attemptOrder = mocks.deliveryAttemptCreate.mock.invocationCallOrder[0]!;
     const appendOrder = mocks.fakeAppend.append.mock.invocationCallOrder[0]!;
-    const transitionOrder =
-      mocks.orderWrite.transitionStatus.mock.invocationCallOrder[0]!;
+    const transitionOrder = mocks.orderWrite.transitionStatus.mock.invocationCallOrder[0]!;
     expect(attemptOrder).toBeLessThan(appendOrder);
     expect(appendOrder).toBeLessThan(transitionOrder);
   });
@@ -571,11 +548,7 @@ describe('WebhookProcessorService.process — DELIVERY_FAILED retry cycle (TRK-2
     // CRITICAL: each NDR records a NEW attempt row regardless of the skip.
     expect(state.attempts).toHaveLength(3);
     expect(state.attempts.map((a) => a.attemptNumber)).toEqual([1, 2, 3]);
-    expect(state.attempts.map((a) => a.webhookId)).toEqual([
-      'wh-NDR-1',
-      'wh-NDR-2',
-      'wh-NDR-3',
-    ]);
+    expect(state.attempts.map((a) => a.webhookId)).toEqual(['wh-NDR-1', 'wh-NDR-2', 'wh-NDR-3']);
 
     // Three tracking_events.
     expect(state.trackingEvents).toHaveLength(3);
@@ -678,9 +651,7 @@ describe('WebhookProcessorService.process — UNMAPPABLE + REJECT (no transition
     const out = await svc.process(WH_ID);
     expect(out.kind).toBe('UNMAPPABLE');
     expect(state.trackingEvents).toHaveLength(1);
-    expect(state.trackingEvents[0]?.eventType).toBe(
-      TrackingEventType.STATUS_SYNC,
-    );
+    expect(state.trackingEvents[0]?.eventType).toBe(TrackingEventType.STATUS_SYNC);
     expect(state.trackingEvents[0]?.isVisibleToCustomer).toBe(false);
     expect(state.trackingEvents[0]?.metadata).toMatchObject({
       unmappable: true,
@@ -725,9 +696,7 @@ describe('WebhookProcessorService.process — informational (RTO_DELIVERED, DAMA
     const out = await svc.process(WH_ID);
     expect(out.kind).toBe('INFORMATIONAL');
     expect(state.trackingEvents).toHaveLength(1);
-    expect(state.trackingEvents[0]?.eventType).toBe(
-      TrackingEventType.RTO_DELIVERED,
-    );
+    expect(state.trackingEvents[0]?.eventType).toBe(TrackingEventType.RTO_DELIVERED);
     expect(state.transitionCalls).toHaveLength(0);
     expect(state.webhooks[0]?.status).toBe(WebhookStatus.PROCESSED);
   });

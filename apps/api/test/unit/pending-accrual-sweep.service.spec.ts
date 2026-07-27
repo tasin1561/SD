@@ -19,7 +19,10 @@ function makeService(opts: { due?: AnyArgs[]; executeThrowsFor?: string[] } = {}
   });
   const execution = { executeAccrual };
 
-  const svc = new PendingAccrualSweepService(prisma, execution as unknown as AccrualExecutionService);
+  const svc = new PendingAccrualSweepService(
+    prisma,
+    execution as unknown as AccrualExecutionService,
+  );
   return { svc, findMany, update, executeAccrual };
 }
 

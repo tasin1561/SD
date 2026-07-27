@@ -74,14 +74,10 @@ export class DelhiveryMarginReconciliationService {
     const billed = new Prisma.Decimal(input.billedToSellerInr);
     const actualCost = new Prisma.Decimal(actual.totalInr);
     const margin = billed.sub(actualCost);
-    const marginPercent = billed.gt(0)
-      ? margin.mul(100).div(billed).toDecimalPlaces(2)
-      : ZERO;
+    const marginPercent = billed.gt(0) ? margin.mul(100).div(billed).toDecimalPlaces(2) : ZERO;
 
     const assumed =
-      input.assumedCostInr === undefined
-        ? null
-        : new Prisma.Decimal(input.assumedCostInr);
+      input.assumedCostInr === undefined ? null : new Prisma.Decimal(input.assumedCostInr);
     const drift = assumed === null ? null : actualCost.sub(assumed);
 
     const lane = `${input.originPin}→${input.destinationPin}`;

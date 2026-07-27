@@ -178,8 +178,7 @@ export class AttributeDefinitionService {
     }
 
     const effectiveType = input.valueType ?? existing.valueType;
-    const effectiveValues =
-      input.allowedValues ?? existing.allowedValues;
+    const effectiveValues = input.allowedValues ?? existing.allowedValues;
     this.assertEnumHasValues(effectiveType, effectiveValues);
 
     const data: Prisma.CategoryAttributeDefinitionUpdateInput = {};

@@ -16,10 +16,7 @@ import { CurrentStaff } from '../../../common/decorators/current-staff.decorator
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
-import {
-  CreateCourierAccountDto,
-  UpdateCourierAccountDto,
-} from '../dto/courier-account-admin.dto';
+import { CreateCourierAccountDto, UpdateCourierAccountDto } from '../dto/courier-account-admin.dto';
 import {
   CourierAccountAdminService,
   type CourierAccountView,

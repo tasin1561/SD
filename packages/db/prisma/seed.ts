@@ -55,14 +55,42 @@ type SystemSettingSeed = {
 
 // 28 Indian States + 8 Union Territories (Module 6 address validation).
 const ALLOWED_INDIAN_STATES: string[] = [
-  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
-  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
-  'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya',
-  'Mizoram', 'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim',
-  'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand',
-  'West Bengal', 'Andaman and Nicobar Islands', 'Chandigarh',
-  'Dadra and Nagar Haveli and Daman and Diu', 'Delhi', 'Jammu and Kashmir',
-  'Ladakh', 'Lakshadweep', 'Puducherry',
+  'Andhra Pradesh',
+  'Arunachal Pradesh',
+  'Assam',
+  'Bihar',
+  'Chhattisgarh',
+  'Goa',
+  'Gujarat',
+  'Haryana',
+  'Himachal Pradesh',
+  'Jharkhand',
+  'Karnataka',
+  'Kerala',
+  'Madhya Pradesh',
+  'Maharashtra',
+  'Manipur',
+  'Meghalaya',
+  'Mizoram',
+  'Nagaland',
+  'Odisha',
+  'Punjab',
+  'Rajasthan',
+  'Sikkim',
+  'Tamil Nadu',
+  'Telangana',
+  'Tripura',
+  'Uttar Pradesh',
+  'Uttarakhand',
+  'West Bengal',
+  'Andaman and Nicobar Islands',
+  'Chandigarh',
+  'Dadra and Nagar Haveli and Daman and Diu',
+  'Delhi',
+  'Jammu and Kashmir',
+  'Ladakh',
+  'Lakshadweep',
+  'Puducherry',
 ];
 
 const systemSettings: SystemSettingSeed[] = [
@@ -237,8 +265,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueType: SettingValueType.INT,
     valueInt: 1,
     displayName: 'Call Reschedule Min (hours)',
-    description:
-      'CALLBACK_REQUESTED scheduledFor must be at least this many hours in the future',
+    description: 'CALLBACK_REQUESTED scheduledFor must be at least this many hours in the future',
   },
   {
     key: 'ops.call_reschedule_max_days',
@@ -246,8 +273,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueType: SettingValueType.INT,
     valueInt: 7,
     displayName: 'Call Reschedule Max (days)',
-    description:
-      'CALLBACK_REQUESTED scheduledFor must be at most this many days in the future',
+    description: 'CALLBACK_REQUESTED scheduledFor must be at most this many days in the future',
   },
   {
     key: 'ops.call_busy_retry_delay_hours',
@@ -255,8 +281,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueType: SettingValueType.INT,
     valueInt: 1,
     displayName: 'Call Busy Retry Delay (hours)',
-    description:
-      'BUSY outcome re-queues the order with availableAt = now + this many hours',
+    description: 'BUSY outcome re-queues the order with availableAt = now + this many hours',
   },
   // Module 8 — Warehouse Operations.
   {
@@ -292,8 +317,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueType: SettingValueType.JSON,
     valueJson: [100, 250, 500],
     displayName: 'Pick Allocation Retry Backoff (ms)',
-    description:
-      'Per-attempt backoff delays for the WMS-3 pick allocation retry loop',
+    description: 'Per-attempt backoff delays for the WMS-3 pick allocation retry loop',
   },
   // Module 9 — Courier Integration.
   {
@@ -303,7 +327,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueString: '',
     displayName: 'Delhivery API Base URL',
     description:
-      "Delhivery REST API base URL. EMPTY = stub mode (deterministic mock responses, no network) — the default for dev/CI/e2e. Production is https://track.delhivery.com (staging would be https://staging-express.delhivery.com, but this account has no sandbox). Setting this alone only enables READS; physical-world writes additionally require courier.delhivery_live_writes_enabled.",
+      'Delhivery REST API base URL. EMPTY = stub mode (deterministic mock responses, no network) — the default for dev/CI/e2e. Production is https://track.delhivery.com (staging would be https://staging-express.delhivery.com, but this account has no sandbox). Setting this alone only enables READS; physical-world writes additionally require courier.delhivery_live_writes_enabled.',
   },
   // No Delhivery sandbox exists for this account, so the only environment
   // is production. Reads (serviceability, tracking, cost, TAT, EPOD) are
@@ -326,7 +350,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueString: '',
     displayName: 'Delhivery Pickup Location Name',
     description:
-      'Name of the warehouse pickup location pre-registered in Delhivery\'s partner portal. Required when real mode is enabled (DelhiveryAwbService passes it as pickup_location.name on create-shipment). Phase-1A is single-warehouse (BLR-01); a multi-warehouse setup adds one key per origin.',
+      "Name of the warehouse pickup location pre-registered in Delhivery's partner portal. Required when real mode is enabled (DelhiveryAwbService passes it as pickup_location.name on create-shipment). Phase-1A is single-warehouse (BLR-01); a multi-warehouse setup adds one key per origin.",
   },
   {
     key: 'courier.delhivery_origin_pincode',
@@ -415,8 +439,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueType: SettingValueType.JSON,
     valueJson: [1000, 5000, 15000],
     displayName: 'AWB Job Retry Backoff (ms)',
-    description:
-      'Per-attempt backoff delays for the AWB generation BullMQ job',
+    description: 'Per-attempt backoff delays for the AWB generation BullMQ job',
   },
   // Module 10 — Public Tracking.
   {
@@ -917,41 +940,221 @@ interface RateRow {
 
 const RATE_CARD_ROWS: ReadonlyArray<RateRow> = [
   // 0–500g
-  { zone: 'A', weightSlabFromGrams: 0, weightSlabToGrams: 500, baseChargeInr: '60.00', perKgChargeInr: null },
-  { zone: 'B', weightSlabFromGrams: 0, weightSlabToGrams: 500, baseChargeInr: '80.00', perKgChargeInr: null },
-  { zone: 'C', weightSlabFromGrams: 0, weightSlabToGrams: 500, baseChargeInr: '100.00', perKgChargeInr: null },
-  { zone: 'D', weightSlabFromGrams: 0, weightSlabToGrams: 500, baseChargeInr: '130.00', perKgChargeInr: null },
-  { zone: 'E', weightSlabFromGrams: 0, weightSlabToGrams: 500, baseChargeInr: '180.00', perKgChargeInr: null },
+  {
+    zone: 'A',
+    weightSlabFromGrams: 0,
+    weightSlabToGrams: 500,
+    baseChargeInr: '60.00',
+    perKgChargeInr: null,
+  },
+  {
+    zone: 'B',
+    weightSlabFromGrams: 0,
+    weightSlabToGrams: 500,
+    baseChargeInr: '80.00',
+    perKgChargeInr: null,
+  },
+  {
+    zone: 'C',
+    weightSlabFromGrams: 0,
+    weightSlabToGrams: 500,
+    baseChargeInr: '100.00',
+    perKgChargeInr: null,
+  },
+  {
+    zone: 'D',
+    weightSlabFromGrams: 0,
+    weightSlabToGrams: 500,
+    baseChargeInr: '130.00',
+    perKgChargeInr: null,
+  },
+  {
+    zone: 'E',
+    weightSlabFromGrams: 0,
+    weightSlabToGrams: 500,
+    baseChargeInr: '180.00',
+    perKgChargeInr: null,
+  },
   // 500g–1kg
-  { zone: 'A', weightSlabFromGrams: 500, weightSlabToGrams: 1000, baseChargeInr: '90.00', perKgChargeInr: null },
-  { zone: 'B', weightSlabFromGrams: 500, weightSlabToGrams: 1000, baseChargeInr: '120.00', perKgChargeInr: null },
-  { zone: 'C', weightSlabFromGrams: 500, weightSlabToGrams: 1000, baseChargeInr: '150.00', perKgChargeInr: null },
-  { zone: 'D', weightSlabFromGrams: 500, weightSlabToGrams: 1000, baseChargeInr: '190.00', perKgChargeInr: null },
-  { zone: 'E', weightSlabFromGrams: 500, weightSlabToGrams: 1000, baseChargeInr: '260.00', perKgChargeInr: null },
+  {
+    zone: 'A',
+    weightSlabFromGrams: 500,
+    weightSlabToGrams: 1000,
+    baseChargeInr: '90.00',
+    perKgChargeInr: null,
+  },
+  {
+    zone: 'B',
+    weightSlabFromGrams: 500,
+    weightSlabToGrams: 1000,
+    baseChargeInr: '120.00',
+    perKgChargeInr: null,
+  },
+  {
+    zone: 'C',
+    weightSlabFromGrams: 500,
+    weightSlabToGrams: 1000,
+    baseChargeInr: '150.00',
+    perKgChargeInr: null,
+  },
+  {
+    zone: 'D',
+    weightSlabFromGrams: 500,
+    weightSlabToGrams: 1000,
+    baseChargeInr: '190.00',
+    perKgChargeInr: null,
+  },
+  {
+    zone: 'E',
+    weightSlabFromGrams: 500,
+    weightSlabToGrams: 1000,
+    baseChargeInr: '260.00',
+    perKgChargeInr: null,
+  },
   // 1kg–2kg
-  { zone: 'A', weightSlabFromGrams: 1000, weightSlabToGrams: 2000, baseChargeInr: '130.00', perKgChargeInr: null },
-  { zone: 'B', weightSlabFromGrams: 1000, weightSlabToGrams: 2000, baseChargeInr: '170.00', perKgChargeInr: null },
-  { zone: 'C', weightSlabFromGrams: 1000, weightSlabToGrams: 2000, baseChargeInr: '215.00', perKgChargeInr: null },
-  { zone: 'D', weightSlabFromGrams: 1000, weightSlabToGrams: 2000, baseChargeInr: '280.00', perKgChargeInr: null },
-  { zone: 'E', weightSlabFromGrams: 1000, weightSlabToGrams: 2000, baseChargeInr: '380.00', perKgChargeInr: null },
+  {
+    zone: 'A',
+    weightSlabFromGrams: 1000,
+    weightSlabToGrams: 2000,
+    baseChargeInr: '130.00',
+    perKgChargeInr: null,
+  },
+  {
+    zone: 'B',
+    weightSlabFromGrams: 1000,
+    weightSlabToGrams: 2000,
+    baseChargeInr: '170.00',
+    perKgChargeInr: null,
+  },
+  {
+    zone: 'C',
+    weightSlabFromGrams: 1000,
+    weightSlabToGrams: 2000,
+    baseChargeInr: '215.00',
+    perKgChargeInr: null,
+  },
+  {
+    zone: 'D',
+    weightSlabFromGrams: 1000,
+    weightSlabToGrams: 2000,
+    baseChargeInr: '280.00',
+    perKgChargeInr: null,
+  },
+  {
+    zone: 'E',
+    weightSlabFromGrams: 1000,
+    weightSlabToGrams: 2000,
+    baseChargeInr: '380.00',
+    perKgChargeInr: null,
+  },
   // 2kg–5kg with per-kg overage above 2kg floor
-  { zone: 'A', weightSlabFromGrams: 2000, weightSlabToGrams: 5000, baseChargeInr: '180.00', perKgChargeInr: '40.00' },
-  { zone: 'B', weightSlabFromGrams: 2000, weightSlabToGrams: 5000, baseChargeInr: '240.00', perKgChargeInr: '55.00' },
-  { zone: 'C', weightSlabFromGrams: 2000, weightSlabToGrams: 5000, baseChargeInr: '300.00', perKgChargeInr: '70.00' },
-  { zone: 'D', weightSlabFromGrams: 2000, weightSlabToGrams: 5000, baseChargeInr: '400.00', perKgChargeInr: '95.00' },
-  { zone: 'E', weightSlabFromGrams: 2000, weightSlabToGrams: 5000, baseChargeInr: '540.00', perKgChargeInr: '130.00' },
+  {
+    zone: 'A',
+    weightSlabFromGrams: 2000,
+    weightSlabToGrams: 5000,
+    baseChargeInr: '180.00',
+    perKgChargeInr: '40.00',
+  },
+  {
+    zone: 'B',
+    weightSlabFromGrams: 2000,
+    weightSlabToGrams: 5000,
+    baseChargeInr: '240.00',
+    perKgChargeInr: '55.00',
+  },
+  {
+    zone: 'C',
+    weightSlabFromGrams: 2000,
+    weightSlabToGrams: 5000,
+    baseChargeInr: '300.00',
+    perKgChargeInr: '70.00',
+  },
+  {
+    zone: 'D',
+    weightSlabFromGrams: 2000,
+    weightSlabToGrams: 5000,
+    baseChargeInr: '400.00',
+    perKgChargeInr: '95.00',
+  },
+  {
+    zone: 'E',
+    weightSlabFromGrams: 2000,
+    weightSlabToGrams: 5000,
+    baseChargeInr: '540.00',
+    perKgChargeInr: '130.00',
+  },
   // 5kg–10kg per-kg only (base lifted)
-  { zone: 'A', weightSlabFromGrams: 5000, weightSlabToGrams: 10000, baseChargeInr: '300.00', perKgChargeInr: '40.00' },
-  { zone: 'B', weightSlabFromGrams: 5000, weightSlabToGrams: 10000, baseChargeInr: '405.00', perKgChargeInr: '55.00' },
-  { zone: 'C', weightSlabFromGrams: 5000, weightSlabToGrams: 10000, baseChargeInr: '510.00', perKgChargeInr: '70.00' },
-  { zone: 'D', weightSlabFromGrams: 5000, weightSlabToGrams: 10000, baseChargeInr: '685.00', perKgChargeInr: '95.00' },
-  { zone: 'E', weightSlabFromGrams: 5000, weightSlabToGrams: 10000, baseChargeInr: '930.00', perKgChargeInr: '130.00' },
+  {
+    zone: 'A',
+    weightSlabFromGrams: 5000,
+    weightSlabToGrams: 10000,
+    baseChargeInr: '300.00',
+    perKgChargeInr: '40.00',
+  },
+  {
+    zone: 'B',
+    weightSlabFromGrams: 5000,
+    weightSlabToGrams: 10000,
+    baseChargeInr: '405.00',
+    perKgChargeInr: '55.00',
+  },
+  {
+    zone: 'C',
+    weightSlabFromGrams: 5000,
+    weightSlabToGrams: 10000,
+    baseChargeInr: '510.00',
+    perKgChargeInr: '70.00',
+  },
+  {
+    zone: 'D',
+    weightSlabFromGrams: 5000,
+    weightSlabToGrams: 10000,
+    baseChargeInr: '685.00',
+    perKgChargeInr: '95.00',
+  },
+  {
+    zone: 'E',
+    weightSlabFromGrams: 5000,
+    weightSlabToGrams: 10000,
+    baseChargeInr: '930.00',
+    perKgChargeInr: '130.00',
+  },
   // 10kg–30kg
-  { zone: 'A', weightSlabFromGrams: 10000, weightSlabToGrams: 30000, baseChargeInr: '500.00', perKgChargeInr: '38.00' },
-  { zone: 'B', weightSlabFromGrams: 10000, weightSlabToGrams: 30000, baseChargeInr: '680.00', perKgChargeInr: '52.00' },
-  { zone: 'C', weightSlabFromGrams: 10000, weightSlabToGrams: 30000, baseChargeInr: '860.00', perKgChargeInr: '66.00' },
-  { zone: 'D', weightSlabFromGrams: 10000, weightSlabToGrams: 30000, baseChargeInr: '1160.00', perKgChargeInr: '90.00' },
-  { zone: 'E', weightSlabFromGrams: 10000, weightSlabToGrams: 30000, baseChargeInr: '1580.00', perKgChargeInr: '125.00' },
+  {
+    zone: 'A',
+    weightSlabFromGrams: 10000,
+    weightSlabToGrams: 30000,
+    baseChargeInr: '500.00',
+    perKgChargeInr: '38.00',
+  },
+  {
+    zone: 'B',
+    weightSlabFromGrams: 10000,
+    weightSlabToGrams: 30000,
+    baseChargeInr: '680.00',
+    perKgChargeInr: '52.00',
+  },
+  {
+    zone: 'C',
+    weightSlabFromGrams: 10000,
+    weightSlabToGrams: 30000,
+    baseChargeInr: '860.00',
+    perKgChargeInr: '66.00',
+  },
+  {
+    zone: 'D',
+    weightSlabFromGrams: 10000,
+    weightSlabToGrams: 30000,
+    baseChargeInr: '1160.00',
+    perKgChargeInr: '90.00',
+  },
+  {
+    zone: 'E',
+    weightSlabFromGrams: 10000,
+    weightSlabToGrams: 30000,
+    baseChargeInr: '1580.00',
+    perKgChargeInr: '125.00',
+  },
 ];
 
 async function seedRateCardItems() {
@@ -1318,12 +1521,17 @@ function autoHtmlFromText(subject: string, body: string): string {
       .replace(/_/g, ' ');
     cta = {
       label:
-        labelFromVar === 'invite' ? 'Accept invitation'
-        : labelFromVar === 'reset' ? 'Reset password'
-        : labelFromVar === 'verify' ? 'Verify email'
-        : labelFromVar === 'tracking' ? 'Track shipment'
-        : labelFromVar === 'app' ? 'Open Skydrop'
-        : 'Open',
+        labelFromVar === 'invite'
+          ? 'Accept invitation'
+          : labelFromVar === 'reset'
+            ? 'Reset password'
+            : labelFromVar === 'verify'
+              ? 'Verify email'
+              : labelFromVar === 'tracking'
+                ? 'Track shipment'
+                : labelFromVar === 'app'
+                  ? 'Open Skydrop'
+                  : 'Open',
       url,
     };
   }
@@ -1531,7 +1739,7 @@ const notificationTemplates: TemplateSeed[] = [
     recipientType: NotificationRecipientType.SELLER,
     subject: '{{ inviter_company }} invited you to join their Skydrop team',
     bodyTemplate: [
-      "{{ inviter_name }} has invited you to join the {{ inviter_company }} team on Skydrop.",
+      '{{ inviter_name }} has invited you to join the {{ inviter_company }} team on Skydrop.',
       '',
       'Role: {{ role }}',
       '',
@@ -1732,7 +1940,8 @@ const notificationTemplates: TemplateSeed[] = [
     name: 'Order confirmed — bilingual email to customer (M11)',
     channel: NotificationChannel.EMAIL,
     recipientType: NotificationRecipientType.CUSTOMER,
-    subject: 'Your order {{ order_number }} is confirmed / आपका ऑर्डर {{ order_number }} पुष्टि हुआ',
+    subject:
+      'Your order {{ order_number }} is confirmed / आपका ऑर्डर {{ order_number }} पुष्टि हुआ',
     bodyTemplate:
       'Hi {{ customer_name }}, your order {{ order_number }} has been confirmed and is being prepared for dispatch. We will notify you when it ships. Track it any time at {{ tracking_url }}.\n\n' +
       '---\n\n' +
@@ -1743,7 +1952,8 @@ const notificationTemplates: TemplateSeed[] = [
     name: 'Order delivered — bilingual email to customer (M11)',
     channel: NotificationChannel.EMAIL,
     recipientType: NotificationRecipientType.CUSTOMER,
-    subject: 'Your order {{ order_number }} was delivered / आपका ऑर्डर {{ order_number }} डिलीवर हो गया',
+    subject:
+      'Your order {{ order_number }} was delivered / आपका ऑर्डर {{ order_number }} डिलीवर हो गया',
     bodyTemplate:
       'Hi {{ customer_name }}, your order {{ order_number }} was delivered on {{ delivered_at }}. Thank you for shopping with {{ seller_company_name }}. Questions? Reply or visit {{ tracking_url }}.\n\n' +
       '---\n\n' +

@@ -26,7 +26,8 @@ export class ListSellersQueryDto {
     required: false,
     isArray: true,
     enum: SellerStatus,
-    description: 'Filter by one or more SellerStatus values (repeat ?status=APPROVED&status=SUSPENDED)',
+    description:
+      'Filter by one or more SellerStatus values (repeat ?status=APPROVED&status=SUSPENDED)',
   })
   @IsOptional()
   @IsArray()

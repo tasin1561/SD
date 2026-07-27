@@ -45,7 +45,10 @@ export interface MockResponseBody {
  * what was actually requested.
  */
 export function buildFetchMock(
-  routes: ReadonlyArray<{ readonly match: RegExp; readonly responses: ReadonlyArray<MockResponseBody> }>,
+  routes: ReadonlyArray<{
+    readonly match: RegExp;
+    readonly responses: ReadonlyArray<MockResponseBody>;
+  }>,
 ): ReturnType<typeof vi.fn> {
   const queues = new Map<RegExp, MockResponseBody[]>();
   for (const r of routes) queues.set(r.match, [...r.responses]);

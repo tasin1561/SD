@@ -129,9 +129,7 @@ describe('DelhiveryRvpQcService — doorstep checks on a return', () => {
 
   it('REFUSES more than 6 questions per item — same silent downgrade', () => {
     const seven = Array.from({ length: 7 }, (_, i) => question(`q${i}`));
-    expect(() => svc.buildQcKeys([item({ questions: seven })])).toThrow(
-      /at most 6 questions/,
-    );
+    expect(() => svc.buildQcKeys([item({ questions: seven })])).toThrow(/at most 6 questions/);
   });
 
   it('requires a reference image — the executive has nothing to compare against otherwise', () => {
@@ -140,16 +138,12 @@ describe('DelhiveryRvpQcService — doorstep checks on a return', () => {
 
   it('requires a correct answer, else the check can never fail', () => {
     expect(() =>
-      svc.buildQcKeys([
-        item({ questions: [{ ...question('q1'), correctValues: [] }] }),
-      ]),
+      svc.buildQcKeys([item({ questions: [{ ...question('q1'), correctValues: [] }] })]),
     ).toThrow(/no correct answer/);
   });
 
   it('carries `required: false` through — asked, but cannot fail the pickup', () => {
-    const keys = svc.buildQcKeys([
-      item({ questions: [{ ...question('q1'), required: false }] }),
-    ]);
+    const keys = svc.buildQcKeys([item({ questions: [{ ...question('q1'), required: false }] })]);
     const qc = keys['custom_qc'] as AnyArgs[];
     expect((qc[0]!['questions'] as AnyArgs[])[0]!['required']).toBe(false);
   });

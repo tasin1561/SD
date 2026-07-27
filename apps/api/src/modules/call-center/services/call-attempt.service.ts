@@ -121,14 +121,12 @@ export class CallAttemptService {
     private readonly mapping: CallOutcomeMappingService,
     private readonly earlyReservations: EarlyReservationService,
   ) {
-    this.countingOutcomes = (Object.values(CallOutcome) as CallOutcome[]).filter(
-      (o) => mapping.countsTowardCap(o),
+    this.countingOutcomes = (Object.values(CallOutcome) as CallOutcome[]).filter((o) =>
+      mapping.countsTowardCap(o),
     );
   }
 
-  async recordAttempt(
-    input: RecordAttemptInput,
-  ): Promise<RecordAttemptResult> {
+  async recordAttempt(input: RecordAttemptInput): Promise<RecordAttemptResult> {
     const now = new Date();
 
     // 1. Assignment must exist. Agent path: must be ASSIGNED + owned by
@@ -144,15 +142,10 @@ export class CallAttemptService {
       },
     });
     if (!entry) {
-      throw new NotFoundException(
-        `Assignment ${input.assignmentId} not found`,
-      );
+      throw new NotFoundException(`Assignment ${input.assignmentId} not found`);
     }
     if (input.forceByAdmin) {
-      const open: CallQueueStatus[] = [
-        CallQueueStatus.PENDING,
-        CallQueueStatus.ASSIGNED,
-      ];
+      const open: CallQueueStatus[] = [CallQueueStatus.PENDING, CallQueueStatus.ASSIGNED];
       if (!open.includes(entry.status)) {
         throw new ConflictException({
           code: 'ASSIGNMENT_NOT_ACTIVE',
@@ -206,9 +199,7 @@ export class CallAttemptService {
     // trust a client-supplied number for the attempt record.
     const order = await this.orders.getById(entry.orderId);
     if (!order) {
-      throw new NotFoundException(
-        `Order ${entry.orderId} not found for assignment`,
-      );
+      throw new NotFoundException(`Order ${entry.orderId} not found for assignment`);
     }
     const maxAttempts = await this.effectiveMaxAttempts(order.sellerId);
     // R5b — what "at cap" means for THIS seller. Resolved here (it is a
@@ -216,17 +207,13 @@ export class CallAttemptService {
     // the resulting status so CC-2 keeps exactly one place that turns
     // "at cap" into a transition.
     const atCapPolicy =
-      (await this.earlyReservations.resolveNdrPolicy(order.sellerId)) ===
-      'MANUAL_REVIEW'
+      (await this.earlyReservations.resolveNdrPolicy(order.sellerId)) === 'MANUAL_REVIEW'
         ? ('AWAIT_SELLER' as const)
         : ('REJECT' as const);
 
     const endedAt = input.endedAt;
     const durationSeconds = endedAt
-      ? Math.max(
-          0,
-          Math.round((endedAt.getTime() - input.startedAt.getTime()) / 1000),
-        )
+      ? Math.max(0, Math.round((endedAt.getTime() - input.startedAt.getTime()) / 1000))
       : undefined;
 
     // 3. ATOMIC: prior-count → resolve → append attempt → close entry →
@@ -258,30 +245,20 @@ export class CallAttemptService {
             ...(durationSeconds !== undefined ? { durationSeconds } : {}),
             phoneE164: order.recipient.phoneE164,
             outcome: input.outcome,
-            ...(input.outcomeNotes
-              ? { outcomeNotes: input.outcomeNotes }
-              : {}),
-            ...(input.customerSaidName
-              ? { customerSaidName: input.customerSaidName }
-              : {}),
+            ...(input.outcomeNotes ? { outcomeNotes: input.outcomeNotes } : {}),
+            ...(input.customerSaidName ? { customerSaidName: input.customerSaidName } : {}),
             ...(input.customerSaidAddress
               ? { customerSaidAddress: input.customerSaidAddress }
               : {}),
             ...(input.customerVerifiedItems !== undefined
               ? { customerVerifiedItems: input.customerVerifiedItems }
               : {}),
-            ...(agentScheduledFor
-              ? { rescheduledFor: agentScheduledFor }
-              : {}),
-            ...(input.rescheduledReason
-              ? { rescheduledReason: input.rescheduledReason }
-              : {}),
+            ...(agentScheduledFor ? { rescheduledFor: agentScheduledFor } : {}),
+            ...(input.rescheduledReason ? { rescheduledReason: input.rescheduledReason } : {}),
             ...(input.flaggedAsSuspicious !== undefined
               ? { flaggedAsSuspicious: input.flaggedAsSuspicious }
               : {}),
-            ...(input.suspicionReason
-              ? { suspicionReason: input.suspicionReason }
-              : {}),
+            ...(input.suspicionReason ? { suspicionReason: input.suspicionReason } : {}),
           },
           select: { id: true },
         });
@@ -566,11 +543,7 @@ export class CallAttemptService {
         select: { valueInt: true },
       }),
     ]);
-    return (
-      seller?.callMaxAttemptsBeforeNdrOverride ??
-      setting?.valueInt ??
-      DEFAULT_MAX_ATTEMPTS
-    );
+    return seller?.callMaxAttemptsBeforeNdrOverride ?? setting?.valueInt ?? DEFAULT_MAX_ATTEMPTS;
   }
 
   private async rescheduleBounds(): Promise<{

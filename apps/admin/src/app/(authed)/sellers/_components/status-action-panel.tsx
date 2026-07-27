@@ -3,13 +3,7 @@
 import { useState, type ReactElement } from 'react';
 import { useUpdateSellerStatus } from '@/lib/api-hooks';
 import { ApiError, type SellerStatusValue } from '@skydrop/api-client';
-import {
-  Button,
-  FormField,
-  Textarea,
-  Modal,
-  ModalFooter,
-} from '@skydrop/ui/components';
+import { Button, FormField, Textarea, Modal, ModalFooter } from '@skydrop/ui/components';
 
 /**
  * The well-built "action" of the seller list→detail→action→audit
@@ -128,9 +122,7 @@ export function StatusActionPanel({
             disabled={!canChangeStatus || mutate.isPending}
             onClick={() => open(a.target)}
             title={
-              !canChangeStatus
-                ? 'Requires SUPER_ADMIN or SELLER_APPROVAL_ADMIN role'
-                : undefined
+              !canChangeStatus ? 'Requires SUPER_ADMIN or SELLER_APPROVAL_ADMIN role' : undefined
             }
           >
             {a.label}
@@ -139,17 +131,14 @@ export function StatusActionPanel({
       </div>
       {!canChangeStatus && (
         <div className="text-text-faint text-xs mt-2">
-          Your role can&apos;t change seller status. Contact a super-admin if you
-          need this changed.
+          Your role can&apos;t change seller status. Contact a super-admin if you need this changed.
         </div>
       )}
 
       <Modal
         open={intent !== null}
         onOpenChange={(o) => !o && close()}
-        title={
-          intent === 'SUSPENDED' ? 'Suspend this seller?' : 'Reapprove this seller?'
-        }
+        title={intent === 'SUSPENDED' ? 'Suspend this seller?' : 'Reapprove this seller?'}
         description={
           intent === 'SUSPENDED'
             ? 'The seller will immediately lose portal access. Existing orders + shipments continue under our operations. A read-only profile view remains for ops.'
@@ -193,11 +182,7 @@ export function StatusActionPanel({
             }}
             disabled={mutate.isPending}
           >
-            {mutate.isPending
-              ? 'Working…'
-              : intent === 'SUSPENDED'
-                ? 'Suspend'
-                : 'Reapprove'}
+            {mutate.isPending ? 'Working…' : intent === 'SUSPENDED' ? 'Suspend' : 'Reapprove'}
           </Button>
         </ModalFooter>
       </Modal>

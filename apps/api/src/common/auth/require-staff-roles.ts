@@ -14,10 +14,7 @@ import type { AuthenticatedStaff } from '../types/request';
  * Example:
  *   requireStaffRoles(staff, [StaffRole.WAREHOUSE_SUPERVISOR, StaffRole.SUPER_ADMIN]);
  */
-export function requireStaffRoles(
-  staff: AuthenticatedStaff,
-  allowed: readonly StaffRole[],
-): void {
+export function requireStaffRoles(staff: AuthenticatedStaff, allowed: readonly StaffRole[]): void {
   if (!allowed.includes(staff.role)) {
     throw new ForbiddenException({
       code: 'INSUFFICIENT_ROLE',

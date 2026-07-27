@@ -15,8 +15,7 @@ describe('CsvParserService.parse — edge cases', () => {
   });
 
   it('handles quoted commas and quoted newlines', () => {
-    const csv =
-      'Name,SKU,Notes\n"Widget, deluxe",W-1,"line1\nline2"\n';
+    const csv = 'Name,SKU,Notes\n"Widget, deluxe",W-1,"line1\nline2"\n';
     const out = svc.parse(buf(csv));
     expect(out.rowCount).toBe(1);
     expect(out.rows[0]!.Name).toBe('Widget, deluxe');

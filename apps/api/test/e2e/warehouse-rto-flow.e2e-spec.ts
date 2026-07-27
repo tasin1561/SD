@@ -78,10 +78,7 @@ describe('Warehouse RTO flow (e2e)', () => {
       .expect(201);
     sellerAuth = { Authorization: `Bearer ${reg.body.accessToken}` };
 
-    const whs = await request(h.baseUrl)
-      .get('/admin/warehouses')
-      .set(staffAuth)
-      .expect(200);
+    const whs = await request(h.baseUrl).get('/admin/warehouses').set(staffAuth).expect(200);
     warehouseId = (whs.body as Array<{ id: string; code: string }>).find(
       (w) => w.code === 'BLR-01',
     )!.id;
@@ -125,9 +122,7 @@ describe('Warehouse RTO flow (e2e)', () => {
       .post(`/admin/goods-receipts/${gr.body.id}/lines`)
       .set(staffAuth)
       .send({
-        lines: [
-          { lineId: gr.body.lines[0].id, receivedQty: qty, putawayBinId: binId },
-        ],
+        lines: [{ lineId: gr.body.lines[0].id, receivedQty: qty, putawayBinId: binId }],
       })
       .expect(200);
     await request(h.baseUrl)
@@ -158,10 +153,7 @@ describe('Warehouse RTO flow (e2e)', () => {
       })
       .expect(201);
     const orderId = created.body.id as string;
-    await request(h.baseUrl)
-      .post(`/seller/orders/${orderId}/submit`)
-      .set(sellerAuth)
-      .expect(200);
+    await request(h.baseUrl).post(`/seller/orders/${orderId}/submit`).set(sellerAuth).expect(200);
     const ow = h.app.get(OrderWriteService);
     await ow.transitionStatus({
       orderId,
@@ -265,8 +257,7 @@ describe('Warehouse RTO flow (e2e)', () => {
 
   it('RESTOCK happy (Model A): RETURN_RESTOCK +qty re-adds — qtyOnHand 8 → 10', async () => {
     await receiveStock(10);
-    const { orderId, shipmentId, shipmentItemIds, awbNumber } =
-      await makeRtoInitiatedShipment(2);
+    const { orderId, shipmentId, shipmentItemIds, awbNumber } = await makeRtoInitiatedShipment(2);
 
     // Model A: the DISPATCH decrement already fired — qtyOnHand 8, the
     // phase-2 reservation FULFILLED (qtyReserved 0).
@@ -327,8 +318,7 @@ describe('Warehouse RTO flow (e2e)', () => {
 
   it('WRITE_OFF happy (Model A): NO movement — the dispatch decrement stands (qtyOnHand stays 8)', async () => {
     await receiveStock(10);
-    const { orderId, shipmentId, shipmentItemIds, awbNumber } =
-      await makeRtoInitiatedShipment(2);
+    const { orderId, shipmentId, shipmentItemIds, awbNumber } = await makeRtoInitiatedShipment(2);
 
     await request(h.baseUrl)
       .post('/warehouse/rto/receive')
@@ -376,8 +366,7 @@ describe('Warehouse RTO flow (e2e)', () => {
 
   it('gate-2 (RESTOCK): pre-existing RETURN_RESTOCK marker → skip re-apply, transition still runs', async () => {
     await receiveStock(10);
-    const { orderId, shipmentId, shipmentItemIds, awbNumber } =
-      await makeRtoInitiatedShipment(2);
+    const { orderId, shipmentId, shipmentItemIds, awbNumber } = await makeRtoInitiatedShipment(2);
 
     await request(h.baseUrl)
       .post('/warehouse/rto/receive')
@@ -433,8 +422,7 @@ describe('Warehouse RTO flow (e2e)', () => {
 
   it('gate-1 idempotency: re-finalize after success → alreadyFinalized, exactly one RETURN_RESTOCK', async () => {
     await receiveStock(10);
-    const { shipmentId, shipmentItemIds, awbNumber } =
-      await makeRtoInitiatedShipment(2);
+    const { shipmentId, shipmentItemIds, awbNumber } = await makeRtoInitiatedShipment(2);
 
     await request(h.baseUrl)
       .post('/warehouse/rto/receive')

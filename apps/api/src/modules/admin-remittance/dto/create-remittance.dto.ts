@@ -30,7 +30,10 @@ export class CreateRemittanceDto {
   @IsUUID('7')
   sellerId!: string;
 
-  @ApiProperty({ enum: Currency, description: 'Currency that hit the bank (matches seller bank account)' })
+  @ApiProperty({
+    enum: Currency,
+    description: 'Currency that hit the bank (matches seller bank account)',
+  })
   @IsEnum(Currency)
   currency!: Currency;
 
@@ -40,7 +43,10 @@ export class CreateRemittanceDto {
   @Min(0.01)
   amount!: number;
 
-  @ApiProperty({ enum: Currency, description: 'Currency the wallet is debited from (typically INR)' })
+  @ApiProperty({
+    enum: Currency,
+    description: 'Currency the wallet is debited from (typically INR)',
+  })
   @IsEnum(Currency)
   sourceCurrency!: Currency;
 
@@ -56,7 +62,11 @@ export class CreateRemittanceDto {
   @Min(0.000001)
   fxRateSnapshot!: number;
 
-  @ApiProperty({ minLength: 1, maxLength: 120, description: 'Bank reference / payout id from the operator' })
+  @ApiProperty({
+    minLength: 1,
+    maxLength: 120,
+    description: 'Bank reference / payout id from the operator',
+  })
   @IsString()
   @MinLength(1)
   @MaxLength(120)

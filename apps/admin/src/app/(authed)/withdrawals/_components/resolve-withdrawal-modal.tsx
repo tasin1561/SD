@@ -81,8 +81,7 @@ export function ResolveWithdrawalModal({
   }
 
   const busy = markPaid.isPending || reject.isPending;
-  const canSubmit =
-    mode === 'paid' ? remittanceId.trim() !== '' : reason.trim() !== '';
+  const canSubmit = mode === 'paid' ? remittanceId.trim() !== '' : reason.trim() !== '';
 
   return (
     <Modal
@@ -110,11 +109,7 @@ export function ResolveWithdrawalModal({
               {
                 label: 'Amount',
                 value: (
-                  <Money
-                    amount={request.amountRequested}
-                    currency={request.currency}
-                    size="md"
-                  />
+                  <Money amount={request.amountRequested} currency={request.currency} size="md" />
                 ),
               },
               {
@@ -131,9 +126,7 @@ export function ResolveWithdrawalModal({
               {
                 label: 'Source',
                 value:
-                  request.requestedBy === 'SYSTEM'
-                    ? 'Auto-withdraw cycle'
-                    : 'Seller-initiated',
+                  request.requestedBy === 'SYSTEM' ? 'Auto-withdraw cycle' : 'Seller-initiated',
               },
               {
                 label: 'Note',
@@ -159,9 +152,7 @@ export function ResolveWithdrawalModal({
                     checked={mode === m}
                     onChange={() => setMode(m)}
                   />
-                  <span className="text-text-body">
-                    {m === 'paid' ? 'Mark paid' : 'Reject'}
-                  </span>
+                  <span className="text-text-body">{m === 'paid' ? 'Mark paid' : 'Reject'}</span>
                 </label>
               ))}
             </div>

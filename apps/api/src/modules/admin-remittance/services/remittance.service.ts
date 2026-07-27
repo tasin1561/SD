@@ -1,14 +1,5 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import {
-  ActorType,
-  Currency,
-  Prisma,
-  WalletEntryDirection,
-} from '@skydrop/db';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { ActorType, Currency, Prisma, WalletEntryDirection } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
@@ -59,11 +50,7 @@ export class RemittanceService {
         message: 'Seller not found',
       });
     }
-    if (
-      !seller.bankAccountNumber ||
-      !seller.bankName ||
-      !seller.bankAccountName
-    ) {
+    if (!seller.bankAccountNumber || !seller.bankName || !seller.bankAccountName) {
       throw new BadRequestException({
         code: 'BANK_DETAILS_MISSING',
         message:
@@ -75,10 +62,7 @@ export class RemittanceService {
     const amount = new Prisma.Decimal(input.amount);
     const fxRate = new Prisma.Decimal(input.fxRateSnapshot);
 
-    if (
-      input.sourceCurrency === input.currency &&
-      !fxRate.eq(1)
-    ) {
+    if (input.sourceCurrency === input.currency && !fxRate.eq(1)) {
       throw new BadRequestException({
         code: 'INVALID_FX_RATE_SAME_CURRENCY',
         message: 'fxRateSnapshot must be 1 when sourceCurrency === currency',
@@ -94,11 +78,7 @@ export class RemittanceService {
     }
 
     const result = await this.prisma.client.$transaction(async (tx) => {
-      const balance = await this.wallet.balanceLive(
-        input.sellerId,
-        input.sourceCurrency,
-        tx,
-      );
+      const balance = await this.wallet.balanceLive(input.sellerId, input.sourceCurrency, tx);
       if (balance.lt(sourceAmount)) {
         throw new BadRequestException({
           code: 'INSUFFICIENT_WALLET_BALANCE',
@@ -196,11 +176,7 @@ export class RemittanceService {
     return { id: result.id };
   }
 
-  async list(query: {
-    sellerId?: string;
-    page?: number;
-    pageSize?: number;
-  }): Promise<{
+  async list(query: { sellerId?: string; page?: number; pageSize?: number }): Promise<{
     items: Array<{
       id: string;
       sellerId: string;

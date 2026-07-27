@@ -15,8 +15,8 @@ type AnyArgs = Record<string, unknown>;
  * deliberately turned it on.
  */
 function makeGuard(opts: { setting?: AnyArgs | null } = {}) {
-  const findUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async () => (opts.setting === undefined ? { valueBoolean: true } : opts.setting),
+  const findUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+    opts.setting === undefined ? { valueBoolean: true } : opts.setting,
   );
   const prisma = {
     client: { systemSetting: { findUnique } },
@@ -56,9 +56,7 @@ describe('DelhiveryWriteGuardService', () => {
 
   it('audits every blocked attempt at HIGH — a worker looping on a blocked write must be visible', async () => {
     const { svc, auditLog } = makeGuard({ setting: { valueBoolean: false } });
-    await expect(
-      svc.assertWritable('shipment.cancel', { awb: '123' }),
-    ).rejects.toBeDefined();
+    await expect(svc.assertWritable('shipment.cancel', { awb: '123' })).rejects.toBeDefined();
     expect(auditLog).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'courier.delhivery.live_write_blocked',
@@ -131,9 +129,7 @@ describe('DelhiveryRateLimitService', () => {
 
   it('refuses locally once the window is exhausted, with a retry hint', async () => {
     const { svc } = makeLimiter({ used: 4 }); // next incr → 5 > budget 4
-    await expect(svc.consume('waybill_bulk')).rejects.toBeInstanceOf(
-      DelhiveryRateLimitError,
-    );
+    await expect(svc.consume('waybill_bulk')).rejects.toBeInstanceOf(DelhiveryRateLimitError);
   });
 
   it('FAILS OPEN when Redis is down — a cache outage must not stop shipping', async () => {

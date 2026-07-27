@@ -1,14 +1,7 @@
 'use client';
 
 import { useState, type FormEvent, type ReactElement } from 'react';
-import {
-  Button,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Select,
-} from '@skydrop/ui/components';
+import { Button, FormField, Input, Modal, ModalFooter, Select } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 import type { CreatedStaffInvitation } from '@skydrop/api-client';
 import { useCreateStaffInvitation } from '@/lib/api-hooks';
@@ -87,9 +80,7 @@ export function InviteStaffModal({
         <FormField label="Role" required>
           <Select
             value={role}
-            onChange={(e) =>
-              setRole(e.target.value as (typeof ROLES)[number]['value'])
-            }
+            onChange={(e) => setRole(e.target.value as (typeof ROLES)[number]['value'])}
           >
             {ROLES.map((r) => (
               <option key={r.value} value={r.value}>
@@ -106,13 +97,7 @@ export function InviteStaffModal({
         )}
 
         <ModalFooter>
-          <Button
-            type="button"
-            variant="ghost"
-            size="md"
-            disabled={busy}
-            onClick={onClose}
-          >
+          <Button type="button" variant="ghost" size="md" disabled={busy} onClick={onClose}>
             Cancel
           </Button>
           <Button type="submit" variant="primary" size="md" disabled={busy}>

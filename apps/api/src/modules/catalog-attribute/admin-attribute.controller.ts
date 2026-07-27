@@ -54,7 +54,7 @@ export class AdminAttributeController {
 
   @Get('effective')
   @ApiOperation({
-    summary: "Effective (inherited + own) attribute set for the category",
+    summary: 'Effective (inherited + own) attribute set for the category',
   })
   effective(
     @Param('categoryId', new ParseUUIDPipe({ version: '7' })) categoryId: string,

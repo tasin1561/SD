@@ -18,7 +18,10 @@ export function Hero(): ReactElement {
       <div
         aria-hidden
         className="pointer-events-none absolute -top-48 left-1/2 -translate-x-1/2 w-[900px] h-[560px] rounded-full"
-        style={{ background: 'radial-gradient(closest-side, var(--glow), transparent)', opacity: 0.5 }}
+        style={{
+          background: 'radial-gradient(closest-side, var(--glow), transparent)',
+          opacity: 0.5,
+        }}
       />
 
       {/* Mobile-only: the corridor runs as the section background (the
@@ -41,7 +44,10 @@ export function Hero(): ReactElement {
           {/* Copy */}
           <div>
             <div className="boot-rise telemetry inline-flex items-center gap-2.5 rounded-full border border-line bg-surface-2 px-3.5 py-2 text-fg-muted">
-              <span aria-hidden className="status-dot inline-block h-1.5 w-1.5 rounded-full bg-green" />
+              <span
+                aria-hidden
+                className="status-dot inline-block h-1.5 w-1.5 rounded-full bg-green"
+              />
               <span>corridor online · BD → IN · invite-only beta</span>
             </div>
 
@@ -59,9 +65,8 @@ export function Hero(): ReactElement {
             </h1>
 
             <p className="boot-rise boot-rise-3 mt-6 text-fg-body text-base sm:text-lg max-w-[46ch]">
-              Skydrop holds your stock in India, confirms every COD buyer by
-              phone, and dispatches through Delhivery. You sell from
-              Bangladesh — this console is what we run for you.
+              Skydrop holds your stock in India, confirms every COD buyer by phone, and dispatches
+              through Delhivery. You sell from Bangladesh — this console is what we run for you.
             </p>
 
             <div className="boot-rise boot-rise-4 mt-8 flex flex-wrap gap-3">

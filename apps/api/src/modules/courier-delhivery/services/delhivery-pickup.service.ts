@@ -80,8 +80,7 @@ export class DelhiveryPickupService {
       },
     });
 
-    const pickupId =
-      (raw['pickup_id'] as string | number | undefined)?.toString() ?? null;
+    const pickupId = (raw['pickup_id'] as string | number | undefined)?.toString() ?? null;
     const message =
       (raw['error'] as string | undefined) ??
       (raw['prn'] as string | undefined) ??
@@ -96,29 +95,19 @@ export class DelhiveryPickupService {
         'Delhivery pickup request rejected — check the One panel before retrying (one open request per warehouse per day)',
       );
     } else {
-      this.logger.log(
-        { pickupId, ...input },
-        'Delhivery pickup requested',
-      );
+      this.logger.log({ pickupId, ...input }, 'Delhivery pickup requested');
     }
     return { success, pickupId, message, raw };
   }
 
   private validate(input: PickupRequestInput): void {
     if (!DATE_RE.test(input.pickupDate)) {
-      throw new Error(
-        `pickupDate must be YYYY-MM-DD, got '${input.pickupDate}'`,
-      );
+      throw new Error(`pickupDate must be YYYY-MM-DD, got '${input.pickupDate}'`);
     }
     if (!TIME_RE.test(input.pickupTime)) {
-      throw new Error(
-        `pickupTime must be HH:mm:ss, got '${input.pickupTime}'`,
-      );
+      throw new Error(`pickupTime must be HH:mm:ss, got '${input.pickupTime}'`);
     }
-    if (
-      !Number.isInteger(input.expectedPackageCount) ||
-      input.expectedPackageCount < 1
-    ) {
+    if (!Number.isInteger(input.expectedPackageCount) || input.expectedPackageCount < 1) {
       throw new Error(
         `expectedPackageCount must be a positive integer, got ${input.expectedPackageCount}`,
       );

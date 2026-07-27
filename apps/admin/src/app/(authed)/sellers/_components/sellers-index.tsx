@@ -111,10 +111,7 @@ export function SellersIndex(): ReactElement {
             {list.data.items.map((s) => (
               <Tr key={s.id} interactive>
                 <Td>
-                  <Link
-                    href={`/sellers/${s.id}`}
-                    className="text-text-bright hover:underline"
-                  >
+                  <Link href={`/sellers/${s.id}`} className="text-text-bright hover:underline">
                     {s.companyName}
                   </Link>
                 </Td>
@@ -124,9 +121,7 @@ export function SellersIndex(): ReactElement {
                   <SellerStatusBadge status={s.status} />
                 </Td>
                 <Td className="text-text-muted text-xs font-mono">
-                  {s.approvedAt
-                    ? new Date(s.approvedAt).toISOString().slice(0, 10)
-                    : '—'}
+                  {s.approvedAt ? new Date(s.approvedAt).toISOString().slice(0, 10) : '—'}
                 </Td>
                 <Td className="text-text-muted text-xs font-mono">
                   {new Date(s.createdAt).toISOString().slice(0, 10)}
@@ -136,8 +131,7 @@ export function SellersIndex(): ReactElement {
           </TBody>
           {list.data.total === 0 && (
             <TableEmpty colSpan={6}>
-              No sellers match this filter. Sellers appear here once they accept
-              an invitation.
+              No sellers match this filter. Sellers appear here once they accept an invitation.
             </TableEmpty>
           )}
           <tfoot>

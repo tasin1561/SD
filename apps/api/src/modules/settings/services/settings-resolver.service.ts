@@ -279,7 +279,10 @@ export class SettingsResolverService {
     key: string,
   ): string | number | boolean | Date | object {
     const reject = (reason: string): never => {
-      throw new BadRequestException({ code: 'INVALID_VALUE', message: `Setting '${key}': ${reason}` });
+      throw new BadRequestException({
+        code: 'INVALID_VALUE',
+        message: `Setting '${key}': ${reason}`,
+      });
     };
     const outOfBounds = (reason: string): never => {
       throw new BadRequestException({
@@ -323,7 +326,8 @@ export class SettingsResolverService {
         if (typeof input !== 'boolean') return reject('expected a boolean');
         return input;
       case SettingValueType.JSON:
-        if (input === null || typeof input !== 'object') return reject('expected a JSON object or array');
+        if (input === null || typeof input !== 'object')
+          return reject('expected a JSON object or array');
         return input as object;
       case SettingValueType.DATE: {
         if (input instanceof Date) return input;

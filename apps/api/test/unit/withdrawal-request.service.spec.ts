@@ -37,15 +37,15 @@ function makeService(
   const create = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (a) => makeRow(a.data as AnyArgs));
   const findMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => []);
   const count = jest.fn<Promise<number>, [AnyArgs]>(async () => opts.todayCount ?? 0);
-  const findUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async () => (opts.existingRequest === undefined ? makeRow() : opts.existingRequest),
+  const findUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+    opts.existingRequest === undefined ? makeRow() : opts.existingRequest,
   );
   const update = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (a) => ({
     ...makeRow(),
     ...(a.data as AnyArgs),
   }));
-  const remittanceFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async () => (opts.remittance === undefined ? { id: 'rem-1', sellerId: 'seller-1' } : opts.remittance),
+  const remittanceFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+    opts.remittance === undefined ? { id: 'rem-1', sellerId: 'seller-1' } : opts.remittance,
   );
   const client = {
     withdrawalRequest: { create, findMany, count, findUnique, update },
@@ -61,10 +61,20 @@ function makeService(
 
   const resolve = jest.fn(async (_sellerId: string, key: string) => {
     if (key === 'wallet.withdrawal_min_threshold_inr') {
-      return { key, valueType: 'DECIMAL', value: opts.minThreshold ?? '500.00', source: 'SYSTEM_DEFAULT' as const };
+      return {
+        key,
+        valueType: 'DECIMAL',
+        value: opts.minThreshold ?? '500.00',
+        source: 'SYSTEM_DEFAULT' as const,
+      };
     }
     if (key === 'wallet.withdrawal_max_per_day') {
-      return { key, valueType: 'INT', value: opts.maxPerDay ?? 1, source: 'SYSTEM_DEFAULT' as const };
+      return {
+        key,
+        valueType: 'INT',
+        value: opts.maxPerDay ?? 1,
+        source: 'SYSTEM_DEFAULT' as const,
+      };
     }
     throw new Error(`unexpected key ${key}`);
   });
@@ -82,7 +92,10 @@ function makeService(
 describe('WithdrawalRequestService.create', () => {
   it('creates a PENDING request + audits', async () => {
     const { svc, create, auditLog } = makeService();
-    const result = await svc.create('seller-1', 'user-1', { currency: Currency.INR, amount: '1000.00' });
+    const result = await svc.create('seller-1', 'user-1', {
+      currency: Currency.INR,
+      amount: '1000.00',
+    });
     expect(result.status).toBe(WithdrawalRequestStatus.PENDING);
     expect(create).toHaveBeenCalledTimes(1);
     expect(auditLog.mock.calls[0]![0]!.action).toBe('seller.withdrawal_request.created');
@@ -106,7 +119,10 @@ describe('WithdrawalRequestService.create', () => {
 
   it('skips the min-threshold check for BDT', async () => {
     const { svc, create } = makeService({ minThreshold: '500.00', balance: '5000' });
-    const result = await svc.create('seller-1', 'user-1', { currency: Currency.BDT, amount: '100.00' });
+    const result = await svc.create('seller-1', 'user-1', {
+      currency: Currency.BDT,
+      amount: '100.00',
+    });
     expect(result).toBeDefined();
     expect(create).toHaveBeenCalledTimes(1);
   });
@@ -153,7 +169,9 @@ describe('WithdrawalRequestService.markPaid', () => {
   });
 
   it('rejects WITHDRAWAL_REQUEST_ALREADY_RESOLVED when already PAID', async () => {
-    const { svc, update } = makeService({ existingRequest: makeRow({ status: WithdrawalRequestStatus.PAID }) });
+    const { svc, update } = makeService({
+      existingRequest: makeRow({ status: WithdrawalRequestStatus.PAID }),
+    });
     await expect(svc.markPaid('wr-1', 'staff-1', 'rem-1')).rejects.toMatchObject({
       response: { code: 'WITHDRAWAL_REQUEST_ALREADY_RESOLVED' },
     });
@@ -161,7 +179,9 @@ describe('WithdrawalRequestService.markPaid', () => {
   });
 
   it('rejects WITHDRAWAL_REQUEST_ALREADY_RESOLVED when already REJECTED', async () => {
-    const { svc } = makeService({ existingRequest: makeRow({ status: WithdrawalRequestStatus.REJECTED }) });
+    const { svc } = makeService({
+      existingRequest: makeRow({ status: WithdrawalRequestStatus.REJECTED }),
+    });
     await expect(svc.markPaid('wr-1', 'staff-1', 'rem-1')).rejects.toMatchObject({
       response: { code: 'WITHDRAWAL_REQUEST_ALREADY_RESOLVED' },
     });
@@ -208,7 +228,9 @@ describe('WithdrawalRequestService.reject', () => {
   });
 
   it('rejects WITHDRAWAL_REQUEST_ALREADY_RESOLVED when already resolved', async () => {
-    const { svc, update } = makeService({ existingRequest: makeRow({ status: WithdrawalRequestStatus.PAID }) });
+    const { svc, update } = makeService({
+      existingRequest: makeRow({ status: WithdrawalRequestStatus.PAID }),
+    });
     await expect(svc.reject('wr-1', 'staff-1', 'reason')).rejects.toMatchObject({
       response: { code: 'WITHDRAWAL_REQUEST_ALREADY_RESOLVED' },
     });
@@ -227,7 +249,12 @@ describe('WithdrawalRequestService.listForSeller / listForAdmin', () => {
 
   it('listForAdmin applies optional sellerId/status filters + pagination', async () => {
     const { svc, findMany, count } = makeService();
-    const result = await svc.listForAdmin({ sellerId: 'seller-1', status: WithdrawalRequestStatus.PENDING, page: 2, pageSize: 10 });
+    const result = await svc.listForAdmin({
+      sellerId: 'seller-1',
+      status: WithdrawalRequestStatus.PENDING,
+      page: 2,
+      pageSize: 10,
+    });
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { sellerId: 'seller-1', status: WithdrawalRequestStatus.PENDING },

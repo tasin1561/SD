@@ -52,9 +52,7 @@ function makeService(
     manifestNumber: 'MF-2026-05-000001',
   }));
   const shipmentUpdate = jest.fn(async () => ({}));
-  const executeRawUnsafe = jest.fn<Promise<number>, [string, ...unknown[]]>(
-    async () => 1,
-  );
+  const executeRawUnsafe = jest.fn<Promise<number>, [string, ...unknown[]]>(async () => 1);
 
   const txClient = {
     $executeRawUnsafe: executeRawUnsafe,
@@ -67,12 +65,9 @@ function makeService(
     shipment: { findFirst: typeof shipmentFindFirst };
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
   };
-  client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> =>
-    fn(txClient);
+  client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient);
 
-  const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown]>(
-    async () => 'a',
-  );
+  const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown]>(async () => 'a');
   const audit = { log: auditLog };
   const nextManifestNumber = jest.fn(async () => 'MF-2026-05-000001');
   const numbering = { nextManifestNumber };
@@ -101,8 +96,7 @@ function makeService(
 
 describe('ManifestService.attachShipment', () => {
   it('creates a new DRAFT manifest when none exists for (courier, warehouse)', async () => {
-    const { svc, manifestCreate, shipmentUpdate, auditLog, nextManifestNumber } =
-      makeService();
+    const { svc, manifestCreate, shipmentUpdate, auditLog, nextManifestNumber } = makeService();
     const r = await svc.attachShipment(SHIP, {
       type: ActorType.STAFF,
       id: 'staff-1',
@@ -127,10 +121,9 @@ describe('ManifestService.attachShipment', () => {
   });
 
   it('reuses an existing DRAFT manifest for the same (courier, warehouse)', async () => {
-    const { svc, manifestCreate, shipmentUpdate, nextManifestNumber } =
-      makeService({
-        existingDraft: { id: 'man-existing', manifestNumber: 'MF-2026-05-000099' },
-      });
+    const { svc, manifestCreate, shipmentUpdate, nextManifestNumber } = makeService({
+      existingDraft: { id: 'man-existing', manifestNumber: 'MF-2026-05-000099' },
+    });
     const r = await svc.attachShipment(SHIP);
     expect(r).toMatchObject({
       manifestId: 'man-existing',
@@ -144,24 +137,23 @@ describe('ManifestService.attachShipment', () => {
   });
 
   it('idempotent: shipment already attached to a matching DRAFT → no-op', async () => {
-    const { svc, manifestCreate, shipmentUpdate, manifestFindFirst } =
-      makeService({
-        shipment: {
-          id: SHIP,
-          status: ShipmentStatus.CREATED,
+    const { svc, manifestCreate, shipmentUpdate, manifestFindFirst } = makeService({
+      shipment: {
+        id: SHIP,
+        status: ShipmentStatus.CREATED,
+        courierCode: COURIER,
+        originWarehouseId: WAREHOUSE,
+        packCompletedAt: PACKED_AT,
+        manifestId: 'man-existing',
+        manifest: {
+          id: 'man-existing',
+          status: ManifestStatus.DRAFT,
           courierCode: COURIER,
           originWarehouseId: WAREHOUSE,
-          packCompletedAt: PACKED_AT,
-          manifestId: 'man-existing',
-          manifest: {
-            id: 'man-existing',
-            status: ManifestStatus.DRAFT,
-            courierCode: COURIER,
-            originWarehouseId: WAREHOUSE,
-            manifestNumber: 'MF-2026-05-000007',
-          },
+          manifestNumber: 'MF-2026-05-000007',
         },
-      });
+      },
+    });
     const r = await svc.attachShipment(SHIP);
     expect(r).toEqual({
       shipmentId: SHIP,
@@ -177,9 +169,7 @@ describe('ManifestService.attachShipment', () => {
 
   it('404 when shipment not found', async () => {
     const { svc } = makeService({ shipment: null });
-    await expect(svc.attachShipment(SHIP)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(svc.attachShipment(SHIP)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('409 SHIPMENT_NOT_ATTACHABLE when status past CREATED', async () => {
@@ -290,8 +280,7 @@ describe('ManifestService.moveShipment', () => {
       manifest: { findUnique: typeof manifestFindUnique };
       $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
     };
-    client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> =>
-      fn(txClient);
+    client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient);
     const auditLog = jest.fn(async () => 'a');
     const audit = { log: auditLog };
     const nextManifestNumber = jest.fn(async () => 'MF-2026-05-000099');
@@ -382,9 +371,7 @@ describe('ManifestService.moveShipment', () => {
 
   it('404 when target manifest is missing', async () => {
     const { svc } = makeMoveService({ target: null });
-    await expect(svc.moveShipment(SHIP, TGT)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(svc.moveShipment(SHIP, TGT)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('rejects COURIER_MISMATCH', async () => {
@@ -467,9 +454,9 @@ describe('ManifestService.close', () => {
     const manifestFindUnique = jest.fn(async () =>
       opts.manifest === undefined ? defaultManifest : opts.manifest,
     );
-    const manifestUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(
-      async () => ({ count: opts.updateCount ?? 1 }),
-    );
+    const manifestUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async () => ({
+      count: opts.updateCount ?? 1,
+    }));
     const txClient = { manifest: { updateMany: manifestUpdateMany } };
     const client = {
       manifest: { findUnique: manifestFindUnique },
@@ -477,12 +464,9 @@ describe('ManifestService.close', () => {
       manifest: { findUnique: typeof manifestFindUnique };
       $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
     };
-    client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> =>
-      fn(txClient);
+    client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient);
 
-    const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown?]>(
-      async () => 'a',
-    );
+    const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown?]>(async () => 'a');
     const audit = { log: auditLog };
     const nextManifestNumber = jest.fn(async () => 'MF-X');
     const numbering = { nextManifestNumber };
@@ -508,8 +492,7 @@ describe('ManifestService.close', () => {
   }
 
   it('happy: closes DRAFT + transitions each shipment + enqueues the AWB job', async () => {
-    const { svc, manifestUpdateMany, transitionStatus, enqueueManifest } =
-      makeCloseService();
+    const { svc, manifestUpdateMany, transitionStatus, enqueueManifest } = makeCloseService();
     const r = await svc.close(MAN, 'sup-1');
     expect(r.status).toBe(ManifestStatus.CLOSED);
     expect(r.alreadyClosed).toBe(false);
@@ -589,9 +572,7 @@ describe('ManifestService.close', () => {
 
   it('404 when manifest is missing', async () => {
     const { svc } = makeCloseService({ manifest: null });
-    await expect(svc.close(MAN, 'sup-1')).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(svc.close(MAN, 'sup-1')).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('partial transition failure: manifest still CLOSED, failures collected, AWB job still enqueued', async () => {
@@ -601,9 +582,7 @@ describe('ManifestService.close', () => {
     const r = await svc.close(MAN, 'sup-1');
     expect(r.status).toBe(ManifestStatus.CLOSED);
     expect(r.transitionedCount).toBe(1);
-    expect(r.failures).toEqual([
-      { shipmentId: 's2', orderId: 'o2', error: 'INVALID_TRANSITION' },
-    ]);
+    expect(r.failures).toEqual([{ shipmentId: 's2', orderId: 'o2', error: 'INVALID_TRANSITION' }]);
     // The AWB job is still enqueued — the manifest IS closed; a
     // per-shipment transition failure does not undo the closure.
     expect(enqueueManifest).toHaveBeenCalledWith(MAN);

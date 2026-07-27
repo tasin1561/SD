@@ -1,15 +1,5 @@
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import {
-  ActorType,
-  OrderStatus,
-  RtoDisposition,
-  RtoItemCondition,
-  TicketType,
-} from '@skydrop/db';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ActorType, OrderStatus, RtoDisposition, RtoItemCondition, TicketType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderReadService } from '../../order/services/order-read.service';
@@ -119,8 +109,7 @@ export class RtoInspectionService {
     // comes into existence, so recording the judgement without the
     // ticket would reintroduce the silent-write-off gap this closes.
     const damaged =
-      input.condition === RtoItemCondition.DAMAGED ||
-      input.condition === RtoItemCondition.MISSING;
+      input.condition === RtoItemCondition.DAMAGED || input.condition === RtoItemCondition.MISSING;
     await this.prisma.client.$transaction(async (tx) => {
       await tx.shipmentItem.update({
         where: { id: shipmentItemId },

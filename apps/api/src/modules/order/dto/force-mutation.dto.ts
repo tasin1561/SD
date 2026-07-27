@@ -35,19 +35,32 @@ export class ForceMutationFieldsDto {
   @ApiProperty({ required: false }) @IsOptional() @IsString() recipientCountryCode?: string;
 
   @ApiProperty({ required: false, enum: PaymentMode })
-  @IsOptional() @IsEnum(PaymentMode) paymentMode?: PaymentMode;
+  @IsOptional()
+  @IsEnum(PaymentMode)
+  paymentMode?: PaymentMode;
 
   @ApiProperty({ required: false })
-  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) codAmountInr?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  codAmountInr?: number;
 
   @ApiProperty({ required: false })
-  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) declaredValueInr?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  declaredValueInr?: number;
 
   @ApiProperty({ required: false })
-  @IsOptional() @Type(() => Number) @IsInt() totalWeightGrams?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  totalWeightGrams?: number;
 
   @ApiProperty({ required: false, enum: PackageType })
-  @IsOptional() @IsEnum(PackageType) packageType?: PackageType;
+  @IsOptional()
+  @IsEnum(PackageType)
+  packageType?: PackageType;
 
   @ApiProperty({ required: false }) @IsOptional() @IsBoolean() isUrgent?: boolean;
   @ApiProperty({ required: false }) @IsOptional() @IsBoolean() isHighRisk?: boolean;
@@ -57,7 +70,9 @@ export class ForceMutationFieldsDto {
   @ApiProperty({ required: false }) @IsOptional() @IsString() callNotes?: string;
 
   @ApiProperty({ required: false, enum: OrderCancellationReason })
-  @IsOptional() @IsEnum(OrderCancellationReason) cancellationReason?: OrderCancellationReason;
+  @IsOptional()
+  @IsEnum(OrderCancellationReason)
+  cancellationReason?: OrderCancellationReason;
 }
 
 /**

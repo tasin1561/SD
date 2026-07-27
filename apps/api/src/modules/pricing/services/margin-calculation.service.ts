@@ -31,10 +31,7 @@ export interface MarginResult {
  */
 @Injectable()
 export class MarginCalculationService {
-  compute(
-    baseChargeInr: Prisma.Decimal,
-    costToSkydropInr: Prisma.Decimal | null,
-  ): MarginResult {
+  compute(baseChargeInr: Prisma.Decimal, costToSkydropInr: Prisma.Decimal | null): MarginResult {
     if (costToSkydropInr === null) {
       return {
         baseChargeInr: baseChargeInr.toFixed(2),

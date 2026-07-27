@@ -91,11 +91,7 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
 
           <Section
             title="Details"
-            action={
-              !editing && (
-                <Button onClick={() => setEditing(true)}>Edit product</Button>
-              )
-            }
+            action={!editing && <Button onClick={() => setEditing(true)}>Edit product</Button>}
           >
             {editing ? (
               <ProductEditForm
@@ -108,9 +104,7 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
             )}
           </Section>
 
-          <Section
-            title={`Variants${variants.data ? ` (${variants.data.length})` : ''}`}
-          >
+          <Section title={`Variants${variants.data ? ` (${variants.data.length})` : ''}`}>
             {variants.isLoading ? (
               <LoadingState label="Loading variants…" />
             ) : variants.isError ? (
@@ -180,21 +174,15 @@ function ProductReadCard({ product }: { product: SellerProductView }): ReactElem
           {product.description && (
             <>
               <dt className="text-text-muted">Description</dt>
-              <dd className="text-text-body whitespace-pre-wrap">
-                {product.description}
-              </dd>
+              <dd className="text-text-body whitespace-pre-wrap">{product.description}</dd>
             </>
           )}
           <dt className="text-text-muted">Brand</dt>
           <dd className="text-text-body">{product.brand ?? '—'}</dd>
           <dt className="text-text-muted">External ref</dt>
-          <dd className="text-text-body font-mono text-xs">
-            {product.externalRef ?? '—'}
-          </dd>
+          <dd className="text-text-body font-mono text-xs">{product.externalRef ?? '—'}</dd>
           <dt className="text-text-muted">External SKU</dt>
-          <dd className="text-text-body font-mono text-xs">
-            {product.externalSku ?? '—'}
-          </dd>
+          <dd className="text-text-body font-mono text-xs">{product.externalSku ?? '—'}</dd>
           <dt className="text-text-muted">Default weight</dt>
           <dd className="text-text-body font-mono">
             {product.defaultWeightGrams ? `${product.defaultWeightGrams} g` : '—'}
@@ -206,13 +194,9 @@ function ProductReadCard({ product }: { product: SellerProductView }): ReactElem
               : '—'}
           </dd>
           <dt className="text-text-muted">Default declared (INR)</dt>
-          <dd className="text-text-body font-mono">
-            {product.defaultDeclaredValueInr ?? '—'}
-          </dd>
+          <dd className="text-text-body font-mono">{product.defaultDeclaredValueInr ?? '—'}</dd>
           <dt className="text-text-muted">Default HS code</dt>
-          <dd className="text-text-body font-mono text-xs">
-            {product.defaultHsCode ?? '—'}
-          </dd>
+          <dd className="text-text-body font-mono text-xs">{product.defaultHsCode ?? '—'}</dd>
         </dl>
       </CardBody>
     </Card>
@@ -235,9 +219,7 @@ function ProductEditForm({
   const [defaultWeight, setDefaultWeight] = useState(
     product.defaultWeightGrams === null ? '' : String(product.defaultWeightGrams),
   );
-  const [defaultDeclared, setDefaultDeclared] = useState(
-    product.defaultDeclaredValueInr ?? '',
-  );
+  const [defaultDeclared, setDefaultDeclared] = useState(product.defaultDeclaredValueInr ?? '');
   const [defaultHsCode, setDefaultHsCode] = useState(product.defaultHsCode ?? '');
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -253,8 +235,7 @@ function ProductEditForm({
         brand: brand.trim() === '' ? null : brand.trim(),
         externalRef: externalRef.trim() === '' ? null : externalRef.trim(),
         defaultWeightGrams: defaultWeight === '' ? null : Number(defaultWeight),
-        defaultDeclaredValueInr:
-          defaultDeclared === '' ? null : Number(defaultDeclared),
+        defaultDeclaredValueInr: defaultDeclared === '' ? null : Number(defaultDeclared),
         defaultHsCode: defaultHsCode.trim() === '' ? null : defaultHsCode.trim(),
       });
       onSaved();
@@ -346,18 +327,10 @@ function ProductEditForm({
             </div>
           )}
           <FormActions>
-            <Button
-              variant="ghost"
-              onClick={onCancel}
-              disabled={update.isPending}
-            >
+            <Button variant="ghost" onClick={onCancel} disabled={update.isPending}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={update.isPending}
-            >
+            <Button type="submit" variant="primary" disabled={update.isPending}>
               {update.isPending ? 'Saving…' : 'Save changes'}
             </Button>
           </FormActions>

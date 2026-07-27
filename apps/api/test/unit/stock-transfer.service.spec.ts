@@ -182,7 +182,12 @@ describe('StockTransferService.transfer', () => {
 
   it('rejects DEST_BATCH_WAREHOUSE_MISMATCH (batches are warehouse-scoped)', async () => {
     const { svc, apply } = makeService({
-      destBatch: { id: DST_BATCH, warehouseId: 'wh-somewhere-else', variantId: VARIANT, sellerId: SELLER },
+      destBatch: {
+        id: DST_BATCH,
+        warehouseId: 'wh-somewhere-else',
+        variantId: VARIANT,
+        sellerId: SELLER,
+      },
     });
     await expect(svc.transfer(baseInput(), STAFF)).rejects.toMatchObject({
       response: { code: 'DEST_BATCH_WAREHOUSE_MISMATCH' },
@@ -192,7 +197,12 @@ describe('StockTransferService.transfer', () => {
 
   it('rejects DEST_BATCH_OWNER_MISMATCH when the batch is another seller/variant', async () => {
     const { svc, apply } = makeService({
-      destBatch: { id: DST_BATCH, warehouseId: DST_WH, variantId: 'other-variant', sellerId: SELLER },
+      destBatch: {
+        id: DST_BATCH,
+        warehouseId: DST_WH,
+        variantId: 'other-variant',
+        sellerId: SELLER,
+      },
     });
     await expect(svc.transfer(baseInput(), STAFF)).rejects.toMatchObject({
       response: { code: 'DEST_BATCH_OWNER_MISMATCH' },

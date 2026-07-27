@@ -1,11 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  ArrayMaxSize,
-  IsArray,
-  IsOptional,
-  IsString,
-  IsUUID,
-} from 'class-validator';
+import { ArrayMaxSize, IsArray, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class RecordPickItemDto {
   @ApiProperty({ description: 'UUID v7 of the target shipment_item row' })

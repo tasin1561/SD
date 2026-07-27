@@ -1,9 +1,5 @@
 import { createHash } from 'node:crypto';
-import {
-  Injectable,
-  Logger,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { WebhookStatus } from '@skydrop/db';
 import type { Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -138,9 +134,7 @@ export class WebhookIngestService {
     // A content hash is correct under both schemes: it is exactly what
     // "byte-identical body" means, which is what TRK-2 was always
     // trying to express.
-    const signature = createHash('sha256')
-      .update(input.rawBody, 'utf8')
-      .digest('hex');
+    const signature = createHash('sha256').update(input.rawBody, 'utf8').digest('hex');
     const existing = await this.prisma.client.courierWebhook.findFirst({
       where: { courierCode: input.courierCode, signature },
       select: { id: true },

@@ -36,11 +36,13 @@ export class AppThrottlerGuard extends ThrottlerGuard {
 
     switch (strategy) {
       case 'email-ip': {
-        const email = typeof body['email'] === 'string' ? body['email'].toLowerCase().trim() : 'no-email';
+        const email =
+          typeof body['email'] === 'string' ? body['email'].toLowerCase().trim() : 'no-email';
         return `email-ip:${email}:${ip}`;
       }
       case 'email': {
-        const email = typeof body['email'] === 'string' ? body['email'].toLowerCase().trim() : 'no-email';
+        const email =
+          typeof body['email'] === 'string' ? body['email'].toLowerCase().trim() : 'no-email';
         return `email:${email}`;
       }
       case 'ip':

@@ -50,22 +50,25 @@ function makeSut(csvByKey: Record<string, string>) {
         const b = bulk.get(where.id);
         return b ? { ...b } : null;
       }),
-      update: jest.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
-        const b = bulk.get(where.id) ?? {};
-        Object.assign(b, data);
-        bulk.set(where.id, b);
-        return { ...b };
-      }),
+      update: jest.fn(
+        async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+          const b = bulk.get(where.id) ?? {};
+          Object.assign(b, data);
+          bulk.set(where.id, b);
+          return { ...b };
+        },
+      ),
     },
     category: { findFirst: jest.fn(async () => null) },
     product: {
-      findFirst: jest.fn(async ({ where }: { where: { sellerId: string; externalRef?: string } }) =>
-        products.find(
-          (p) =>
-            p.sellerId === where.sellerId &&
-            p.deletedAt === null &&
-            (where.externalRef === undefined || p.externalRef === where.externalRef),
-        ) ?? null,
+      findFirst: jest.fn(
+        async ({ where }: { where: { sellerId: string; externalRef?: string } }) =>
+          products.find(
+            (p) =>
+              p.sellerId === where.sellerId &&
+              p.deletedAt === null &&
+              (where.externalRef === undefined || p.externalRef === where.externalRef),
+          ) ?? null,
       ),
       findUniqueOrThrow: jest.fn(async ({ where }: { where: { id: string } }) => {
         const p = products.find((x) => x.id === where.id);
@@ -77,20 +80,21 @@ function makeSut(csvByKey: Record<string, string>) {
         products.push(row);
         return { id: row.id };
       }),
-      update: jest.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
-        const p = products.find((x) => x.id === where.id);
-        if (p) Object.assign(p, data);
-        return p;
-      }),
+      update: jest.fn(
+        async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+          const p = products.find((x) => x.id === where.id);
+          if (p) Object.assign(p, data);
+          return p;
+        },
+      ),
     },
     productVariant: {
-      findFirst: jest.fn(async ({ where }: { where: { sellerId: string; skuCode: string } }) =>
-        variants.find(
-          (v) =>
-            v.sellerId === where.sellerId &&
-            v.skuCode === where.skuCode &&
-            v.deletedAt === null,
-        ) ?? null,
+      findFirst: jest.fn(
+        async ({ where }: { where: { sellerId: string; skuCode: string } }) =>
+          variants.find(
+            (v) =>
+              v.sellerId === where.sellerId && v.skuCode === where.skuCode && v.deletedAt === null,
+          ) ?? null,
       ),
       findUniqueOrThrow: jest.fn(async ({ where }: { where: { id: string } }) => {
         const v = variants.find((x) => x.id === where.id);
@@ -102,11 +106,13 @@ function makeSut(csvByKey: Record<string, string>) {
         variants.push(row);
         return { id: row.id };
       }),
-      update: jest.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
-        const v = variants.find((x) => x.id === where.id);
-        if (v) Object.assign(v, data);
-        return v;
-      }),
+      update: jest.fn(
+        async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+          const v = variants.find((x) => x.id === where.id);
+          if (v) Object.assign(v, data);
+          return v;
+        },
+      ),
     },
     auditLog: { create: jest.fn(async () => ({ id: 'a-1' })) },
   };
@@ -186,7 +192,12 @@ describe('CsvImportProcessorService — idempotent re-upload', () => {
 
   it('a re-delivered job for an already-terminal upload is a no-op', async () => {
     const sut = makeSut({ [K1]: CSV });
-    sut.bulk.set('u1', { id: 'u1', sellerId: 'seller-1', spacesKey: K1, status: BulkUploadStatus.COMPLETED });
+    sut.bulk.set('u1', {
+      id: 'u1',
+      sellerId: 'seller-1',
+      spacesKey: K1,
+      status: BulkUploadStatus.COMPLETED,
+    });
     await sut.svc.process('u1', MAPPING);
     expect(sut.products).toHaveLength(0);
   });

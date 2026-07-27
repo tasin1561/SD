@@ -54,7 +54,10 @@ export const envSchema = z.object({
   // e2e + local dev. The decryption key is NEVER in the DB (MUST NOT #1).
   COURIER_CREDENTIALS_KEY_V1: z
     .string()
-    .regex(/^([0-9a-fA-F]{64})?$/, 'COURIER_CREDENTIALS_KEY_V1 must be 64 hex chars (32 bytes) or empty')
+    .regex(
+      /^([0-9a-fA-F]{64})?$/,
+      'COURIER_CREDENTIALS_KEY_V1 must be 64 hex chars (32 bytes) or empty',
+    )
     .optional()
     .default(''),
 
@@ -90,10 +93,7 @@ export const envSchema = z.object({
   // re-encrypt script, drop V1.
   BANK_ACCOUNTS_KEY_V1: z
     .string()
-    .regex(
-      /^([0-9a-fA-F]{64})?$/,
-      'BANK_ACCOUNTS_KEY_V1 must be 64 hex chars (32 bytes) or empty',
-    )
+    .regex(/^([0-9a-fA-F]{64})?$/, 'BANK_ACCOUNTS_KEY_V1 must be 64 hex chars (32 bytes) or empty')
     .optional()
     .default(''),
 });

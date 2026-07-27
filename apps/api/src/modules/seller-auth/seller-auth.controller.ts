@@ -30,10 +30,7 @@ import {
 import { JwtService } from '../auth-common/services/jwt.service';
 import { RefreshTokenService } from '../auth-common/services/refresh-token.service';
 import { AuditLogService } from '../auth-common/services/audit-log.service';
-import {
-  SellerRoles,
-  SELLER_ROLES_ALL,
-} from '../../common/decorators/seller-roles.decorator';
+import { SellerRoles, SELLER_ROLES_ALL } from '../../common/decorators/seller-roles.decorator';
 import { SellerLoginDto } from './dto/login.dto';
 import {
   SellerPasswordResetConfirmDto,
@@ -168,7 +165,9 @@ export class SellerAuthController {
   @ThrottleKey('email')
   @Post('password-reset/request')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Send a password reset email (generic 200 regardless of email existence)' })
+  @ApiOperation({
+    summary: 'Send a password reset email (generic 200 regardless of email existence)',
+  })
   async passwordResetRequest(
     @Body() body: SellerPasswordResetRequestDto,
     @ClientInfo() ctx: ClientInfoPayload,
@@ -316,7 +315,9 @@ export class SellerAuthController {
 }
 
 function readRefreshCookie(req: Request): string {
-  const raw = (req.cookies as Record<string, string | undefined> | undefined)?.[SELLER_REFRESH_COOKIE];
+  const raw = (req.cookies as Record<string, string | undefined> | undefined)?.[
+    SELLER_REFRESH_COOKIE
+  ];
   return typeof raw === 'string' ? raw : '';
 }
 

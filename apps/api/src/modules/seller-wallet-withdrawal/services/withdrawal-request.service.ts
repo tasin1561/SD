@@ -141,7 +141,12 @@ export class WithdrawalRequestService {
     status?: WithdrawalRequestStatus;
     page?: number;
     pageSize?: number;
-  }): Promise<{ items: readonly WithdrawalRequestView[]; total: number; page: number; pageSize: number }> {
+  }): Promise<{
+    items: readonly WithdrawalRequestView[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }> {
     const page = Math.max(1, filters.page ?? 1);
     const pageSize = Math.min(200, Math.max(1, filters.pageSize ?? 50));
     const where = {
@@ -177,7 +182,10 @@ export class WithdrawalRequestService {
         message: `Withdrawal request ${requestId} not found`,
       });
     }
-    if (existing.status === WithdrawalRequestStatus.PAID || existing.status === WithdrawalRequestStatus.REJECTED) {
+    if (
+      existing.status === WithdrawalRequestStatus.PAID ||
+      existing.status === WithdrawalRequestStatus.REJECTED
+    ) {
       throw new ConflictException({
         code: 'WITHDRAWAL_REQUEST_ALREADY_RESOLVED',
         message: `Withdrawal request ${requestId} is already ${existing.status}`,
@@ -234,7 +242,10 @@ export class WithdrawalRequestService {
         message: `Withdrawal request ${requestId} not found`,
       });
     }
-    if (existing.status === WithdrawalRequestStatus.PAID || existing.status === WithdrawalRequestStatus.REJECTED) {
+    if (
+      existing.status === WithdrawalRequestStatus.PAID ||
+      existing.status === WithdrawalRequestStatus.REJECTED
+    ) {
       throw new ConflictException({
         code: 'WITHDRAWAL_REQUEST_ALREADY_RESOLVED',
         message: `Withdrawal request ${requestId} is already ${existing.status}`,

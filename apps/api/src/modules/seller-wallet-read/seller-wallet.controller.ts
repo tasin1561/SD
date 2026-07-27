@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Currency, WalletEntryDirection } from '@skydrop/db';
 import { CurrentSeller } from '../../common/decorators/current-seller.decorator';
@@ -136,7 +129,7 @@ export class SellerWalletController {
     }));
     return {
       items,
-      nextCursor: hasMore ? items[items.length - 1]?.createdAt ?? null : null,
+      nextCursor: hasMore ? (items[items.length - 1]?.createdAt ?? null) : null,
     };
   }
 }

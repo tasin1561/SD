@@ -2,12 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { AlertTriangle, ShieldAlert } from 'lucide-react';
-import {
-  OrderCancellationReason,
-  OrderStatus,
-  PackageType,
-  PaymentMode,
-} from '@skydrop/db';
+import { OrderCancellationReason, OrderStatus, PackageType, PaymentMode } from '@skydrop/db';
 import {
   ApiError,
   type ForceMutationFields,
@@ -133,8 +128,8 @@ export function ForceMutationDialog({
   readonly order: OrderView;
   readonly onSuccess: (result: ForceMutationResult) => void;
 }): ReactElement {
-  const [fieldStates, setFieldStates] = useState<Record<FieldKey, FieldState>>(
-    () => initFieldStates(),
+  const [fieldStates, setFieldStates] = useState<Record<FieldKey, FieldState>>(() =>
+    initFieldStates(),
   );
   const [changeStatus, setChangeStatus] = useState(false);
   const [targetStatus, setTargetStatus] = useState<OrderStatus>(order.status);
@@ -285,9 +280,7 @@ export function ForceMutationDialog({
                 className="mt-1 accent-[var(--color-critical)]"
               />
               <div className="flex-1 min-w-0">
-                <div className="text-text-bright text-sm font-medium">
-                  Force order status
-                </div>
+                <div className="text-text-bright text-sm font-medium">Force order status</div>
                 <div className="text-text-muted text-xs mt-0.5 mb-2">
                   Bypasses the state-machine matrix. Currently:{' '}
                   <span className="font-mono">{order.status}</span>
@@ -318,8 +311,7 @@ export function ForceMutationDialog({
                 </span>
                 <span
                   className={
-                    'text-xs font-mono ' +
-                    (reasonOk ? 'text-delivered' : 'text-text-faint')
+                    'text-xs font-mono ' + (reasonOk ? 'text-delivered' : 'text-text-faint')
                   }
                 >
                   {reasonLen} / {MIN_REASON_LEN} min
@@ -348,16 +340,13 @@ export function ForceMutationDialog({
               className="mt-0.5 accent-[var(--color-critical)]"
             />
             <span className="text-sm text-text-body">
-              I acknowledge the data-integrity risk: this bypass opts OUT of the
-              saga&apos;s compensation guarantee. Stock side-effects on{' '}
-              <span className="font-mono">→ CONFIRMED</span> are attempted but
-              not enforced; transitioning away from{' '}
-              <span className="font-mono">CONFIRMED</span> leaves reservations
-              intact (cleanup is the separate{' '}
-              <span className="font-mono">release-reservations</span> action).
-              The order will carry{' '}
-              <span className="font-mono">hasAdminOverride: true</span>{' '}
-              permanently.
+              I acknowledge the data-integrity risk: this bypass opts OUT of the saga&apos;s
+              compensation guarantee. Stock side-effects on{' '}
+              <span className="font-mono">→ CONFIRMED</span> are attempted but not enforced;
+              transitioning away from <span className="font-mono">CONFIRMED</span> leaves
+              reservations intact (cleanup is the separate{' '}
+              <span className="font-mono">release-reservations</span> action). The order will carry{' '}
+              <span className="font-mono">hasAdminOverride: true</span> permanently.
             </span>
           </label>
 
@@ -437,10 +426,9 @@ function CriticalNotice(): ReactElement {
     >
       <AlertTriangle size={14} className="shrink-0 mt-0.5" />
       <div className="text-xs leading-snug">
-        <strong className="font-semibold">This is a deliberate bypass.</strong> The
-        order&apos;s state machine, edit rules, and saga compensation are all
-        opted out of. Use it only when normal flows can&apos;t reach the
-        required state — and document why.
+        <strong className="font-semibold">This is a deliberate bypass.</strong> The order&apos;s
+        state machine, edit rules, and saga compensation are all opted out of. Use it only when
+        normal flows can&apos;t reach the required state — and document why.
       </div>
     </div>
   );
@@ -472,12 +460,8 @@ function FieldGroupBlock({
   return (
     <div className="rounded-[5px] border border-border bg-bg">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-        <div className="text-text-bright text-xs font-medium uppercase tracking-wide">
-          {title}
-        </div>
-        {enabledCount > 0 && (
-          <span className="text-pending text-xs">{enabledCount} change(s)</span>
-        )}
+        <div className="text-text-bright text-xs font-medium uppercase tracking-wide">{title}</div>
+        {enabledCount > 0 && <span className="text-pending text-xs">{enabledCount} change(s)</span>}
       </div>
       <div className="divide-y divide-border">
         {fields.map((f) => {
@@ -549,11 +533,7 @@ function FieldInput({
   }
   if (kind === 'select') {
     return (
-      <Select
-        value={String(value)}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-      >
+      <Select value={String(value)} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
         {(options ?? []).map((o) => (
           <option key={o} value={o}>
             {o}
@@ -576,9 +556,7 @@ function FieldInput({
     <Input
       type={kind === 'number' ? 'number' : 'text'}
       value={String(value)}
-      onChange={(e) =>
-        onChange(kind === 'number' ? Number(e.target.value) : e.target.value)
-      }
+      onChange={(e) => onChange(kind === 'number' ? Number(e.target.value) : e.target.value)}
       disabled={disabled}
     />
   );
@@ -616,9 +594,7 @@ function TypedConfirmStep({
           fieldChangeCount > 0
             ? `Modify ${fieldChangeCount} field(s): ${changedFields.join(', ')}`
             : null,
-          statusChange
-            ? `Force status: ${statusChange.from} → ${statusChange.to}`
-            : null,
+          statusChange ? `Force status: ${statusChange.from} → ${statusChange.to}` : null,
         ].filter((r): r is string => r !== null)}
       />
 
@@ -659,12 +635,7 @@ function TypedConfirmStep({
         <Button variant="ghost" size="md" onClick={onBack} disabled={pending}>
           ← Back
         </Button>
-        <Button
-          variant="override"
-          size="md"
-          onClick={onConfirm}
-          disabled={!typedOk || pending}
-        >
+        <Button variant="override" size="md" onClick={onConfirm} disabled={!typedOk || pending}>
           {pending ? 'Submitting…' : 'Force-mutate this order'}
         </Button>
       </ModalFooter>
@@ -681,15 +652,10 @@ function Summary({
 }): ReactElement {
   return (
     <div className="rounded-[5px] border border-border px-3 py-2 bg-bg">
-      <div className="text-text-muted text-[11px] uppercase tracking-wide mb-1.5">
-        {title}
-      </div>
+      <div className="text-text-muted text-[11px] uppercase tracking-wide mb-1.5">{title}</div>
       <ul className="space-y-1">
         {rows.map((r, i) => (
-          <li
-            key={i}
-            className="text-text-body text-sm flex items-start gap-2"
-          >
+          <li key={i} className="text-text-body text-sm flex items-start gap-2">
             <span className="text-critical">▸</span>
             <span className="flex-1 min-w-0 font-mono text-xs leading-relaxed">{r}</span>
           </li>

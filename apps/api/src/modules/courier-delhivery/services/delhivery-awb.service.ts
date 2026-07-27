@@ -136,11 +136,8 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
     try {
       const check = await this.serviceability.canShip({
         pincode: req.postalCode,
-        paymentMode:
-          req.codAmountInr !== null ? PaymentMode.COD : PaymentMode.PREPAID,
-        ...(req.codAmountInr !== null
-          ? { codAmountInr: Number(req.codAmountInr) }
-          : {}),
+        paymentMode: req.codAmountInr !== null ? PaymentMode.COD : PaymentMode.PREPAID,
+        ...(req.codAmountInr !== null ? { codAmountInr: Number(req.codAmountInr) } : {}),
         weightGrams: req.totalWeightGrams,
       });
       if (check.ok) {
@@ -221,38 +218,26 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
       weight: String(req.totalWeightGrams),
       order_date: new Date().toISOString().slice(0, 10),
       shipping_mode: req.shippingMode ?? 'Surface',
-      ...(req.transportSpeed === undefined
-        ? {}
-        : { transport_speed: req.transportSpeed }),
+      ...(req.transportSpeed === undefined ? {} : { transport_speed: req.transportSpeed }),
       ...(req.addressType === undefined ? {} : { address_type: req.addressType }),
       ...(req.lengthCm === undefined ? {} : { shipment_length: req.lengthCm }),
       ...(req.widthCm === undefined ? {} : { shipment_width: req.widthCm }),
       ...(req.heightCm === undefined ? {} : { shipment_height: req.heightCm }),
       ...(req.fragile === undefined ? {} : { fragile_shipment: req.fragile }),
-      ...(req.dangerousGood === undefined
-        ? {}
-        : { dangerous_good: req.dangerousGood }),
-      ...(req.plasticPackaging === undefined
-        ? {}
-        : { plastic_packaging: req.plasticPackaging }),
+      ...(req.dangerousGood === undefined ? {} : { dangerous_good: req.dangerousGood }),
+      ...(req.plasticPackaging === undefined ? {} : { plastic_packaging: req.plasticPackaging }),
       ...(req.sellerName === undefined ? {} : { seller_name: req.sellerName }),
       ...(req.sellerAddress === undefined ? {} : { seller_add: req.sellerAddress }),
-      ...(req.sellerInvoiceNumber === undefined
-        ? {}
-        : { seller_inv: req.sellerInvoiceNumber }),
+      ...(req.sellerInvoiceNumber === undefined ? {} : { seller_inv: req.sellerInvoiceNumber }),
       ...(req.ewaybillNumber === undefined ? {} : { ewbn: req.ewaybillNumber }),
       ...(req.hsnCode === undefined ? {} : { hsn_code: req.hsnCode }),
       ...(req.returnName === undefined ? {} : { return_name: req.returnName }),
-      ...(req.returnAddress === undefined
-        ? {}
-        : { return_add: req.returnAddress }),
+      ...(req.returnAddress === undefined ? {} : { return_add: req.returnAddress }),
       ...(req.returnCity === undefined ? {} : { return_city: req.returnCity }),
       ...(req.returnState === undefined ? {} : { return_state: req.returnState }),
       ...(req.returnPin === undefined ? {} : { return_pin: req.returnPin }),
       ...(req.returnPhone === undefined ? {} : { return_phone: req.returnPhone }),
-      ...(req.returnCountry === undefined
-        ? {}
-        : { return_country: req.returnCountry }),
+      ...(req.returnCountry === undefined ? {} : { return_country: req.returnCountry }),
     };
   }
 
@@ -270,9 +255,7 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
     return name;
   }
 
-  private parseCreateResponse(
-    response: DelhiveryCreateResponse,
-  ): DelhiveryAwbResult {
+  private parseCreateResponse(response: DelhiveryCreateResponse): DelhiveryAwbResult {
     const pkg = response.packages?.[0];
     if (response.success === true && pkg && pkg.waybill) {
       return {
@@ -285,14 +268,13 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
     const rmk = (response.rmk ?? '').toString();
     const remarks = (pkg?.remarks ?? []).join(' | ');
     const message = rmk || remarks || 'Delhivery did not return a waybill';
-    const isNonServiceable =
-      /serviceab|non-?serviceab|service not avail|pincode.*not.*serv/i.test(message);
+    const isNonServiceable = /serviceab|non-?serviceab|service not avail|pincode.*not.*serv/i.test(
+      message,
+    );
     return {
       ok: false,
       serviceable: !isNonServiceable,
-      errorCode: isNonServiceable
-        ? 'DELHIVERY_NON_SERVICEABLE'
-        : 'DELHIVERY_CREATE_FAILED',
+      errorCode: isNonServiceable ? 'DELHIVERY_NON_SERVICEABLE' : 'DELHIVERY_CREATE_FAILED',
       errorMessage: message,
     };
   }

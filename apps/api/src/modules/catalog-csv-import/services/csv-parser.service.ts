@@ -90,9 +90,7 @@ export class CsvParserService {
       }
     }
 
-    const missingRequired = CSV_REQUIRED_FIELDS.filter(
-      (f) => mapping[f] === undefined,
-    );
+    const missingRequired = CSV_REQUIRED_FIELDS.filter((f) => mapping[f] === undefined);
     return { mapping, matchedHeaders, unmatchedHeaders, missingRequired };
   }
 
@@ -182,21 +180,13 @@ export class CsvParserService {
     if (trimmed.startsWith('{')) {
       try {
         const parsed: unknown = JSON.parse(trimmed);
-        if (
-          typeof parsed !== 'object' ||
-          parsed === null ||
-          Array.isArray(parsed)
-        ) {
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
           errors.push({ field: 'variantAttributes', reason: 'attributes JSON must be an object' });
           return undefined;
         }
         const out: Record<string, string | number | boolean> = {};
         for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
-          if (
-            typeof v === 'string' ||
-            typeof v === 'number' ||
-            typeof v === 'boolean'
-          ) {
+          if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
             out[k] = v;
           } else {
             errors.push({

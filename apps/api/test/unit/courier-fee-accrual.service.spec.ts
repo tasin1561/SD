@@ -54,7 +54,9 @@ function makeService(
 
 describe('CourierFeeAccrualService.tryEarlyAccrual', () => {
   it('no-ops for the default AT_DELIVERY setting — never debits', async () => {
-    const { svc, debitIfNeeded, recomputeCacheAfterCommit } = makeService({ settingValue: 'AT_DELIVERY' });
+    const { svc, debitIfNeeded, recomputeCacheAfterCommit } = makeService({
+      settingValue: 'AT_DELIVERY',
+    });
     await svc.tryEarlyAccrual('order-1');
     expect(debitIfNeeded).not.toHaveBeenCalled();
     expect(recomputeCacheAfterCommit).not.toHaveBeenCalled();
@@ -68,11 +70,18 @@ describe('CourierFeeAccrualService.tryEarlyAccrual', () => {
     await svc.tryEarlyAccrual('order-1');
     expect(resolve).toHaveBeenCalledWith('seller-1', 'wallet.courier_fee_deduction_timing');
     expect(debitIfNeeded).toHaveBeenCalledWith(expect.anything(), 'order-1', 'seller-1');
-    expect(recomputeCacheAfterCommit).toHaveBeenCalledWith('seller-1', Currency.INR, 'post-commit-awb-accrual');
+    expect(recomputeCacheAfterCommit).toHaveBeenCalledWith(
+      'seller-1',
+      Currency.INR,
+      'post-commit-awb-accrual',
+    );
   });
 
   it('AT_AWB but debitIfNeeded returns false (already debited): skips cache recompute', async () => {
-    const { svc, recomputeCacheAfterCommit } = makeService({ settingValue: 'AT_AWB', debitResult: false });
+    const { svc, recomputeCacheAfterCommit } = makeService({
+      settingValue: 'AT_AWB',
+      debitResult: false,
+    });
     await svc.tryEarlyAccrual('order-1');
     expect(recomputeCacheAfterCommit).not.toHaveBeenCalled();
   });

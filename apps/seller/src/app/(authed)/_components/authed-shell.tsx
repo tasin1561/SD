@@ -60,61 +60,59 @@ export function AuthedShell({
 
   return (
     <Toaster>
-    <div className="grid min-h-screen grid-cols-[220px_1fr] bg-bg text-text-body">
-      {/* Sidebar */}
-      <aside className="border-r border-border bg-surface flex flex-col">
-        <div className="px-4 py-5 border-b border-border">
-          <div className="text-text-bright font-semibold tracking-tight text-base">Skydrop</div>
-          <div className="text-text-faint text-xs mt-0.5">Seller</div>
-        </div>
-        <nav className="flex flex-col py-2">
-          {navItems.map((item) => {
-            const active = pathname?.startsWith(item.href) ?? false;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={
-                  'mx-2 my-0.5 px-3 py-1.5 rounded-[5px] text-sm transition-colors ' +
-                  (active
-                    ? 'bg-surface-hover text-text-bright'
-                    : 'text-text-muted hover:bg-surface-hover hover:text-text-body')
-                }
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="mt-auto px-4 py-3 border-t border-border text-xs text-text-faint">
-          Phase 1A · M13 CP1
-        </div>
-      </aside>
+      <div className="grid min-h-screen grid-cols-[220px_1fr] bg-bg text-text-body">
+        {/* Sidebar */}
+        <aside className="border-r border-border bg-surface flex flex-col">
+          <div className="px-4 py-5 border-b border-border">
+            <div className="text-text-bright font-semibold tracking-tight text-base">Skydrop</div>
+            <div className="text-text-faint text-xs mt-0.5">Seller</div>
+          </div>
+          <nav className="flex flex-col py-2">
+            {navItems.map((item) => {
+              const active = pathname?.startsWith(item.href) ?? false;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={
+                    'mx-2 my-0.5 px-3 py-1.5 rounded-[5px] text-sm transition-colors ' +
+                    (active
+                      ? 'bg-surface-hover text-text-bright'
+                      : 'text-text-muted hover:bg-surface-hover hover:text-text-body')
+                  }
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+          <div className="mt-auto px-4 py-3 border-t border-border text-xs text-text-faint">
+            Phase 1A · M13 CP1
+          </div>
+        </aside>
 
-      {/* Main column */}
-      <div className="flex flex-col min-w-0">
-        <header className="flex items-center justify-between gap-4 px-6 py-3 border-b border-border bg-surface">
-          <div className="text-text-muted text-xs uppercase tracking-wide">
-            Seller Portal
-          </div>
-          <div className="flex items-center gap-3 text-xs">
-            <div className="text-right leading-tight">
-              <div className="text-text-body">{identity.companyName}</div>
-              <div className="text-text-faint">{identity.emailDisplay}</div>
+        {/* Main column */}
+        <div className="flex flex-col min-w-0">
+          <header className="flex items-center justify-between gap-4 px-6 py-3 border-b border-border bg-surface">
+            <div className="text-text-muted text-xs uppercase tracking-wide">Seller Portal</div>
+            <div className="flex items-center gap-3 text-xs">
+              <div className="text-right leading-tight">
+                <div className="text-text-body">{identity.companyName}</div>
+                <div className="text-text-faint">{identity.emailDisplay}</div>
+              </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={loggingOut}
+                className="px-2.5 py-1 rounded-[5px] border border-border text-text-muted hover:border-border-strong hover:text-text-body disabled:opacity-50 transition-colors"
+              >
+                {loggingOut ? 'Signing out…' : 'Sign out'}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={handleLogout}
-              disabled={loggingOut}
-              className="px-2.5 py-1 rounded-[5px] border border-border text-text-muted hover:border-border-strong hover:text-text-body disabled:opacity-50 transition-colors"
-            >
-              {loggingOut ? 'Signing out…' : 'Sign out'}
-            </button>
-          </div>
-        </header>
-        <main className="flex-1 min-w-0 px-6 py-6 overflow-auto">{children}</main>
+          </header>
+          <main className="flex-1 min-w-0 px-6 py-6 overflow-auto">{children}</main>
+        </div>
       </div>
-    </div>
     </Toaster>
   );
 }

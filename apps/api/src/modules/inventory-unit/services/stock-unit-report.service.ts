@@ -45,10 +45,7 @@ export interface UnitDiscrepancyReport {
   readonly countMismatches: readonly UnitCountMismatchRow[];
 }
 
-const STUCK_STATUSES: readonly StockUnitStatus[] = [
-  StockUnitStatus.PICKED,
-  StockUnitStatus.PACKED,
-];
+const STUCK_STATUSES: readonly StockUnitStatus[] = [StockUnitStatus.PICKED, StockUnitStatus.PACKED];
 
 /**
  * R4 — the discovery tool. Read-only: it NEVER writes a unit, a movement
@@ -80,11 +77,8 @@ export class StockUnitReportService {
 
     const now = new Date();
     const stuckBefore = new Date(now.getTime() - stuckSlaHours * 3600_000);
-    const dispatchedBefore = new Date(
-      now.getTime() - dispatchedUnresolvedDays * 86_400_000,
-    );
-    const warehouseFilter =
-      opts.warehouseId === undefined ? {} : { warehouseId: opts.warehouseId };
+    const dispatchedBefore = new Date(now.getTime() - dispatchedUnresolvedDays * 86_400_000);
+    const warehouseFilter = opts.warehouseId === undefined ? {} : { warehouseId: opts.warehouseId };
 
     const [stuck, dispatched, retired] = await Promise.all([
       this.prisma.client.stockUnit.findMany({
@@ -254,8 +248,7 @@ export class StockUnitReportService {
       skuCode: u.variant?.skuCode ?? null,
       status: u.status,
       warehouseId: u.warehouseId,
-      hoursInStatus:
-        Math.round(((now.getTime() - u.updatedAt.getTime()) / 3600_000) * 10) / 10,
+      hoursInStatus: Math.round(((now.getTime() - u.updatedAt.getTime()) / 3600_000) * 10) / 10,
       lastScanAt: u.lastScanAt,
       shipmentId: u.shipmentItem?.shipmentId ?? null,
     };
@@ -269,11 +262,7 @@ export class StockUnitReportService {
     return new Map(variants.map((v) => [v.id, v.skuCode]));
   }
 
-  private async intSetting(
-    sellerId: string,
-    key: string,
-    fallback: number,
-  ): Promise<number> {
+  private async intSetting(sellerId: string, key: string, fallback: number): Promise<number> {
     try {
       const resolved = await this.settings.resolve(sellerId, key);
       const n = Number(resolved.value);

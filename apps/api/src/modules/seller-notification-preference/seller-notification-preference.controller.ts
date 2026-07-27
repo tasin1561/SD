@@ -43,10 +43,7 @@ export class SellerNotificationPreferenceController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Partial update of one preference row (APPROVED only)' })
   update(
-    @Param(
-      'category',
-      new ParseEnumPipe(SellerNotificationCategory),
-    )
+    @Param('category', new ParseEnumPipe(SellerNotificationCategory))
     category: SellerNotificationCategory,
     @Body() body: UpdateNotificationPreferenceDto,
     @CurrentSeller() seller: AuthenticatedSeller,

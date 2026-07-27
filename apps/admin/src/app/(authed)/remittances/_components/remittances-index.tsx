@@ -42,10 +42,7 @@ export function RemittancesIndex(): ReactElement {
           <SkeletonRows rows={5} cols={6} />
         </Card>
       ) : list.isError ? (
-        <ErrorState
-          message={list.error?.message ?? 'Failed.'}
-          retry={() => void list.refetch()}
-        />
+        <ErrorState message={list.error?.message ?? 'Failed.'} retry={() => void list.refetch()} />
       ) : !list.data || list.data.items.length === 0 ? (
         <EmptyState
           title="No remittances yet"
@@ -103,9 +100,7 @@ export function RemittancesIndex(): ReactElement {
                     <Ident value={r.bankReference} />
                   </td>
                   <td className="px-3 py-2 text-right text-text-muted skydrop-tabular text-xs">
-                    {r.sourceCurrency === r.currency
-                      ? '—'
-                      : Number(r.fxRateSnapshot).toFixed(4)}
+                    {r.sourceCurrency === r.currency ? '—' : Number(r.fxRateSnapshot).toFixed(4)}
                   </td>
                 </tr>
               ))}

@@ -9,7 +9,8 @@ type AnyArgs = Record<string, unknown>;
 
 const SELLER = 's1';
 const KEY = `sellers/${SELLER}/order-imports/tok-1.csv`;
-const HEADER = 'Product SKU,Quantity,Customer Name,Customer Phone,Address Line1,City,State,Pin Code,External Ref';
+const HEADER =
+  'Product SKU,Quantity,Customer Name,Customer Phone,Address Line1,City,State,Pin Code,External Ref';
 const GOOD_CSV = `${HEADER}\nSKU-1,2,Asha,+919876543210,12 MG Road,Bengaluru,Karnataka,560001,EXT-1\n`;
 
 function makeService(opts: { object?: string | null; upload?: AnyArgs | null } = {}) {
@@ -29,9 +30,7 @@ function makeService(opts: { object?: string | null; upload?: AnyArgs | null } =
     createdAt: new Date(),
   }));
   const bulkUpdate = jest.fn(async () => ({ id: 'u1' }));
-  const bulkFindFirst = jest.fn(async () =>
-    opts.upload === undefined ? null : opts.upload,
-  );
+  const bulkFindFirst = jest.fn(async () => (opts.upload === undefined ? null : opts.upload));
   const bulkFindMany = jest.fn(async () => [{ id: 'u1' }]);
   const bulkCount = jest.fn(async () => 1);
   const client = {
@@ -46,9 +45,7 @@ function makeService(opts: { object?: string | null; upload?: AnyArgs | null } =
 
   const spaces = {
     presignPutUrl: jest.fn(async () => 'https://signed/put'),
-    headObject: jest.fn(async () =>
-      opts.object === null ? null : { size: 123 },
-    ),
+    headObject: jest.fn(async () => (opts.object === null ? null : { size: 123 })),
     getObject: jest.fn(async () =>
       opts.object === null ? null : Buffer.from(opts.object ?? GOOD_CSV, 'utf8'),
     ),
@@ -102,7 +99,10 @@ describe('OrderCsvImportService', () => {
       { type: ActorType.SELLER, sellerId: SELLER },
     );
     expect(bulkCreate).toHaveBeenCalledTimes(1);
-    expect(queue.enqueueProcess).toHaveBeenCalledWith({ uploadId: 'u1', mapping: expect.any(Object) });
+    expect(queue.enqueueProcess).toHaveBeenCalledWith({
+      uploadId: 'u1',
+      mapping: expect.any(Object),
+    });
     expect(bulkUpdate).toHaveBeenCalledWith({ where: { id: 'u1' }, data: { jobId: 'job-1' } });
     expect(audit.log).toHaveBeenCalledTimes(1);
     expect(v.status).toBe(BulkUploadStatus.PENDING);
@@ -111,7 +111,11 @@ describe('OrderCsvImportService', () => {
   it('createAndEnqueue rejects when a required field is unmapped', async () => {
     const { svc } = makeService({ object: 'Product SKU,Quantity\nX,1\n' });
     await expect(
-      svc.createAndEnqueue(SELLER, { spacesKey: KEY, fileName: 'o.csv' }, { type: ActorType.SELLER }),
+      svc.createAndEnqueue(
+        SELLER,
+        { spacesKey: KEY, fileName: 'o.csv' },
+        { type: ActorType.SELLER },
+      ),
     ).rejects.toMatchObject({ response: { code: 'MISSING_REQUIRED_MAPPING' } });
   });
 
@@ -124,9 +128,9 @@ describe('OrderCsvImportService', () => {
 
   it('loadOwnedCsv rejects a malformed key', async () => {
     const { svc } = makeService();
-    await expect(
-      svc.preview(SELLER, { spacesKey: 'not/a/csv/key' }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(svc.preview(SELLER, { spacesKey: 'not/a/csv/key' })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 
   it('loadOwnedCsv 400s when the object is absent', async () => {

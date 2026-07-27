@@ -6,10 +6,7 @@ import { SellerJwtGuard } from '../../../common/guards/seller-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
 import { ListInboundFreightQueryDto } from '../dto/inbound-freight.dto';
-import {
-  InboundFreightService,
-  type FreightChargeView,
-} from '../services/inbound-freight.service';
+import { InboundFreightService, type FreightChargeView } from '../services/inbound-freight.service';
 
 /**
  * R3 seller surface — read-only. A seller can see what their inbound
@@ -28,16 +25,13 @@ export class SellerInboundFreightController {
   @Get()
   @SellerAuthAllowSuspended()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'This seller\'s inbound freight bills (BD→India), newest first' })
+  @ApiOperation({ summary: "This seller's inbound freight bills (BD→India), newest first" })
   async list(
     @CurrentSeller() seller: AuthenticatedSeller,
     @Query() query: ListInboundFreightQueryDto,
   ): Promise<{ items: readonly FreightChargeView[]; outstandingInr: string }> {
     const [items, outstandingInr] = await Promise.all([
-      this.svc.listForSeller(
-        seller.id,
-        query.status === undefined ? undefined : query.status,
-      ),
+      this.svc.listForSeller(seller.id, query.status === undefined ? undefined : query.status),
       this.svc.outstandingForSeller(seller.id),
     ]);
     return { items, outstandingInr };

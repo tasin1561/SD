@@ -125,9 +125,7 @@ describe('Catalog flow (e2e)', () => {
       .get(`/admin/categories/${categoryId}/attributes/effective`)
       .set(staffAuth)
       .expect(200);
-    const keys = (eff.body as Array<{ attributeKey: string }>)
-      .map((a) => a.attributeKey)
-      .sort();
+    const keys = (eff.body as Array<{ attributeKey: string }>).map((a) => a.attributeKey).sort();
     expect(keys).toEqual(['color', 'material']);
 
     // 5) Seller creates a product in the approved category.
@@ -221,7 +219,9 @@ describe('Catalog flow (e2e)', () => {
         const row = await h.prisma.bulkProductUpload.findUnique({
           where: { id: uploadId },
         });
-        return row && row.status !== BulkUploadStatus.PENDING && row.status !== BulkUploadStatus.PROCESSING
+        return row &&
+          row.status !== BulkUploadStatus.PENDING &&
+          row.status !== BulkUploadStatus.PROCESSING
           ? row
           : null;
       },

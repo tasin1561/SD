@@ -167,10 +167,7 @@ export class StockReadService {
     return { items, total, page, pageSize };
   }
 
-  async getSummaryForDisplay(
-    sellerId: string,
-    warehouseId: string,
-  ): Promise<CachedStockAggregate> {
+  async getSummaryForDisplay(sellerId: string, warehouseId: string): Promise<CachedStockAggregate> {
     const cached = await this.cache.getAggregate(sellerId, warehouseId);
     if (cached) return cached;
     const { aggregate } = await this.buildAndCache(sellerId, warehouseId);
@@ -217,9 +214,7 @@ export class StockReadService {
     const reservedByVariant = new Map<string, number>();
     for (const r of reservations) reservedByVariant.set(r.variantId, r._sum.qtyReserved ?? 0);
 
-    const variantIds = [
-      ...new Set([...onHandByVariant.keys(), ...reservedByVariant.keys()]),
-    ];
+    const variantIds = [...new Set([...onHandByVariant.keys(), ...reservedByVariant.keys()])];
     const resolved = await this.catalog.getVariantsByIds(variantIds);
 
     const variants: CachedVariantStock[] = [];
@@ -257,10 +252,7 @@ export class StockReadService {
       totalQtyAvailable: variants.reduce((s, v) => s + v.qtyAvailable, 0),
       lowStockSkus: variants.filter((v) => v.isLowStock).length,
     };
-    await Promise.all([
-      this.cache.setDetail(detail),
-      this.cache.setAggregate(aggregate),
-    ]);
+    await Promise.all([this.cache.setDetail(detail), this.cache.setAggregate(aggregate)]);
     return { detail, aggregate };
   }
 

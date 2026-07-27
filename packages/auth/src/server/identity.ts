@@ -78,9 +78,7 @@ export async function resolveSellerSsrIdentity(
   return resolveSsrIdentity<SellerMe>(req);
 }
 
-async function resolveSsrIdentity<T>(
-  req: SsrIdentityRequest,
-): Promise<SsrIdentityResult<T>> {
+async function resolveSsrIdentity<T>(req: SsrIdentityRequest): Promise<SsrIdentityResult<T>> {
   if (!req.cookieValue) return { state: 'not-authenticated' };
   const cookieName = COOKIE_BY_KIND[req.identityKind];
   const fetchImpl = req.fetchImpl ?? globalThis.fetch.bind(globalThis);

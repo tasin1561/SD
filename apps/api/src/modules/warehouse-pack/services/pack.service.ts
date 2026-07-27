@@ -1,9 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ActorType, OrderStatus, ShipmentStatus, StockUnitStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -119,10 +114,7 @@ export class PackService {
     }
 
     // Idempotent short-circuit: already PACKED + stamped.
-    if (
-      order.status === OrderStatus.PACKED &&
-      shipment.packCompletedAt !== null
-    ) {
+    if (order.status === OrderStatus.PACKED && shipment.packCompletedAt !== null) {
       return {
         shipmentId,
         orderId,
@@ -146,10 +138,7 @@ export class PackService {
     // applies is decided by the parcel itself (does it carry PICKED
     // units?), not by re-resolving modes — the pick gate already did that
     // and the units are the durable evidence.
-    const pickedUnits = await this.units.countForShipment(
-      shipmentId,
-      StockUnitStatus.PICKED,
-    );
+    const pickedUnits = await this.units.countForShipment(shipmentId, StockUnitStatus.PICKED);
     let unitsScanned = 0;
     if (pickedUnits > 0) {
       const sellerId = shipment.orderShipments[0]?.order.sellerId;

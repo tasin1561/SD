@@ -7,9 +7,9 @@ function makeService() {
   const customer = {
     upsert: jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (a) => ({ id: 'c1', ...a })),
     update: jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({ id: 'c1' })),
-    findUnique: jest.fn<Promise<{ firstOrderAt: Date | null } | null>, [AnyArgs]>(
-      async () => ({ firstOrderAt: null }),
-    ),
+    findUnique: jest.fn<Promise<{ firstOrderAt: Date | null } | null>, [AnyArgs]>(async () => ({
+      firstOrderAt: null,
+    })),
     findFirst: jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () => ({
       id: 'c1',
       sellerId: 's1',

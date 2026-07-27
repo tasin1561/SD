@@ -1,10 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import {
-  ActorType,
-  Currency,
-  Prisma,
-  WalletEntryDirection,
-} from '@skydrop/db';
+import { ActorType, Currency, Prisma, WalletEntryDirection } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 
 /**
@@ -101,9 +96,7 @@ export class WalletService {
         input.direction === WalletEntryDirection.ADJUSTMENT_DEBIT) &&
       !input.reasonCode
     ) {
-      throw new Error(
-        `WALLET_REASON_REQUIRED: reasonCode required on ADJUSTMENT_*`,
-      );
+      throw new Error(`WALLET_REASON_REQUIRED: reasonCode required on ADJUSTMENT_*`);
     }
 
     // Compute current balance from the ledger (authoritative — INV-3
@@ -113,9 +106,7 @@ export class WalletService {
     // running-sum materialised view.
     const current = await this.balanceLive(input.sellerId, input.currency, tx);
 
-    const signedDelta = isCredit(input.direction)
-      ? input.amount
-      : input.amount.neg();
+    const signedDelta = isCredit(input.direction) ? input.amount : input.amount.neg();
     const next = current.add(signedDelta);
 
     const created = await tx.sellerWalletEntry.create({
@@ -145,11 +136,7 @@ export class WalletService {
    * Accepts an optional tx so callers inside a Prisma.$transaction
    * see in-tx writes.
    */
-  async balanceLive(
-    sellerId: string,
-    currency: Currency,
-    tx?: TxClient,
-  ): Promise<Prisma.Decimal> {
+  async balanceLive(sellerId: string, currency: Currency, tx?: TxClient): Promise<Prisma.Decimal> {
     const client = tx ?? this.prisma.client;
     const rows = await client.sellerWalletEntry.findMany({
       where: { sellerId, currency },
@@ -166,10 +153,7 @@ export class WalletService {
    * Cached balance for display paths. Falls back to live if the cache
    * row doesn't exist yet (new wallet).
    */
-  async balanceCached(
-    sellerId: string,
-    currency: Currency,
-  ): Promise<Prisma.Decimal> {
+  async balanceCached(sellerId: string, currency: Currency): Promise<Prisma.Decimal> {
     const cached = await this.prisma.client.sellerWalletBalance.findUnique({
       where: { sellerId_currency: { sellerId, currency } },
       select: { balance: true },

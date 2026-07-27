@@ -1,9 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import {
-  ActorType,
-  EarlyReservationReviewStatus,
-  OrderStatus,
-} from '@skydrop/db';
+import { ActorType, EarlyReservationReviewStatus, OrderStatus } from '@skydrop/db';
 import { OrderWriteService } from '../../order/services/order-write.service';
 import {
   EarlyReservationReviewService,
@@ -112,9 +108,6 @@ export class EarlyReservationDecisionService {
 
   /** Reviews the seller has not answered yet. */
   async listOpen(sellerId: string): Promise<readonly ReviewView[]> {
-    return this.reviews.listForSeller(
-      sellerId,
-      EarlyReservationReviewStatus.OPEN,
-    );
+    return this.reviews.listForSeller(sellerId, EarlyReservationReviewStatus.OPEN);
   }
 }

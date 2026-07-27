@@ -161,8 +161,7 @@ export class OutboundWebhookDispatchService {
       });
       if (
         updated.autoDisabledAt === null &&
-        updated.consecutiveFailureCount >=
-          OutboundWebhookDispatchService.AUTO_DISABLE_THRESHOLD
+        updated.consecutiveFailureCount >= OutboundWebhookDispatchService.AUTO_DISABLE_THRESHOLD
       ) {
         await this.prisma.client.sellerWebhookEndpoint.update({
           where: { id: input.endpointId },
@@ -173,7 +172,10 @@ export class OutboundWebhookDispatchService {
           },
         });
         this.logger.warn(
-          { endpointId: input.endpointId, threshold: OutboundWebhookDispatchService.AUTO_DISABLE_THRESHOLD },
+          {
+            endpointId: input.endpointId,
+            threshold: OutboundWebhookDispatchService.AUTO_DISABLE_THRESHOLD,
+          },
           'Webhook endpoint auto-disabled after consecutive-failure threshold reached',
         );
       }

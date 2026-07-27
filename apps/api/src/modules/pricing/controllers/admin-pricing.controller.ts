@@ -19,8 +19,7 @@ export class AdminPricingController {
   @Post('preview')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary:
-      'Preview the pricing breakdown for a hypothetical order (no persistence).',
+    summary: 'Preview the pricing breakdown for a hypothetical order (no persistence).',
   })
   preview(@Body() body: PreviewPricingDto): Promise<PricingComputeOutput> {
     return this.engine.compute(body);

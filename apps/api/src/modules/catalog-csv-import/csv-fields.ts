@@ -61,10 +61,7 @@ export function normalizeHeader(raw: string): string {
 // Reverse index: normalized alias -> target field (built once).
 const ALIAS_INDEX: Map<string, CsvTargetField> = (() => {
   const idx = new Map<string, CsvTargetField>();
-  for (const [field, aliases] of Object.entries(CSV_ALIAS_MAP) as [
-    CsvTargetField,
-    string[],
-  ][]) {
+  for (const [field, aliases] of Object.entries(CSV_ALIAS_MAP) as [CsvTargetField, string[]][]) {
     for (const a of aliases) idx.set(normalizeHeader(a), field);
   }
   return idx;
@@ -82,10 +79,7 @@ export function lookupFieldForHeader(header: string): CsvTargetField | null {
 export function suggestFieldForHeader(header: string): CsvTargetField | null {
   const tokens = new Set(normalizeHeader(header).split(' ').filter(Boolean));
   if (tokens.size === 0) return null;
-  for (const [field, aliases] of Object.entries(CSV_ALIAS_MAP) as [
-    CsvTargetField,
-    string[],
-  ][]) {
+  for (const [field, aliases] of Object.entries(CSV_ALIAS_MAP) as [CsvTargetField, string[]][]) {
     for (const alias of aliases) {
       const aliasTokens = normalizeHeader(alias).split(' ').filter(Boolean);
       if (aliasTokens.some((t) => tokens.has(t))) return field;

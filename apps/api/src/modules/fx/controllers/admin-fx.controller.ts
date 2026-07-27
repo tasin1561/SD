@@ -1,4 +1,15 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseEnumPipe, Patch, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseEnumPipe,
+  Patch,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Currency } from '@skydrop/db';
 import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
@@ -6,10 +17,7 @@ import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import { SetFxRateDto } from '../dto/set-fx-rate.dto';
-import {
-  FxRateService,
-  type FxRateView,
-} from '../services/fx-rate.service';
+import { FxRateService, type FxRateView } from '../services/fx-rate.service';
 
 @ApiTags('admin-fx')
 @ApiBearerAuth('staff-jwt')
@@ -48,8 +56,7 @@ export class AdminFxController {
   @Get('history/:from/:to')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary:
-      'Historical timeseries for a (from,to) pair (most recent first; max 200)',
+    summary: 'Historical timeseries for a (from,to) pair (most recent first; max 200)',
   })
   history(
     @Param('from', new ParseEnumPipe(Currency)) from: Currency,

@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ActorType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
@@ -47,29 +43,21 @@ export class SellerLogoService {
     private readonly audit: AuditLogService,
   ) {}
 
-  async presign(
-    sellerId: string,
-    mimeType: string,
-  ): Promise<PresignResult> {
+  async presign(sellerId: string, mimeType: string): Promise<PresignResult> {
     if (!ALLOWED.has(mimeType)) {
       throw new BadRequestException({
         code: 'UNSUPPORTED_MIME',
         message: 'mimeType must be image/jpeg, image/png, or image/webp',
       });
     }
-    const ext =
-      mimeType === 'image/jpeg' ? 'jpg' : mimeType === 'image/png' ? 'png' : 'webp';
+    const ext = mimeType === 'image/jpeg' ? 'jpg' : mimeType === 'image/png' ? 'png' : 'webp';
     // Use a per-seller deterministic key so a re-upload overwrites the
     // old object cleanly; CDN-cached old version will still serve via
     // the URL until purged. We bust the cache by including the upload
     // timestamp as a token.
     const token = Date.now().toString(36);
     const storageKey = `sellers/${sellerId}/logo/${token}.${ext}`;
-    const uploadUrl = await this.spaces.presignPutUrl(
-      storageKey,
-      mimeType,
-      300,
-    );
+    const uploadUrl = await this.spaces.presignPutUrl(storageKey, mimeType, 300);
     return {
       storageKey,
       uploadUrl,

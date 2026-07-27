@@ -42,9 +42,9 @@ function makeSut(
   const reviewFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
     async () => opts.reviews ?? [review()],
   );
-  const reviewUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(
-    async () => ({ count: opts.claimCount ?? 1 }),
-  );
+  const reviewUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async () => ({
+    count: opts.claimCount ?? 1,
+  }));
   const reservationFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
     async () => opts.holds ?? [{ id: 'r1' }],
   );
@@ -63,9 +63,10 @@ function makeSut(
     },
   } as unknown as PrismaService;
 
-  const release = jest.fn<Promise<{ alreadyInactive: boolean }>, [string, ReservationReleaseReason, AnyArgs?]>(
-    async () => ({ alreadyInactive: opts.releaseAlreadyInactive ?? false }),
-  );
+  const release = jest.fn<
+    Promise<{ alreadyInactive: boolean }>,
+    [string, ReservationReleaseReason, AnyArgs?]
+  >(async () => ({ alreadyInactive: opts.releaseAlreadyInactive ?? false }));
   const reservations = { release } as unknown as StockReservationService;
 
   const transitionStatus = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => {

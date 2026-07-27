@@ -2,7 +2,10 @@ import { ForbiddenException, UnauthorizedException, type ExecutionContext } from
 import type { Reflector } from '@nestjs/core';
 import { SellerStatus, SellerUserRole } from '@skydrop/db';
 import { SellerJwtGuard } from '../../src/common/guards/seller-jwt.guard';
-import { SELLER_ROLES_KEY, SELLER_ROLES_ALL } from '../../src/common/decorators/seller-roles.decorator';
+import {
+  SELLER_ROLES_KEY,
+  SELLER_ROLES_ALL,
+} from '../../src/common/decorators/seller-roles.decorator';
 import { IS_PUBLIC_KEY } from '../../src/common/decorators/public.decorator';
 import { SELLER_AUTH_ALLOW_SUSPENDED_KEY } from '../../src/common/decorators/seller-auth-allow-suspended.decorator';
 import type { JwtService } from '../../src/modules/auth-common/services/jwt.service';
@@ -125,13 +128,10 @@ describe('SellerJwtGuard — RBAC policy', () => {
     },
   );
 
-  it.each(['PATCH', 'PUT', 'DELETE'])(
-    'default: VIEWER is BLOCKED from a %s',
-    async (method) => {
-      const { guard, ctx } = makeGuard({ role: SellerUserRole.VIEWER, method });
-      await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(ForbiddenException);
-    },
-  );
+  it.each(['PATCH', 'PUT', 'DELETE'])('default: VIEWER is BLOCKED from a %s', async (method) => {
+    const { guard, ctx } = makeGuard({ role: SellerUserRole.VIEWER, method });
+    await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(ForbiddenException);
+  });
 
   it('audits a role denial at LOW with role/allowed/path/method', async () => {
     const { guard, ctx, auditLog } = makeGuard({ role: SellerUserRole.VIEWER, method: 'POST' });
@@ -172,7 +172,7 @@ describe('SellerJwtGuard — RBAC policy', () => {
     });
   });
 
-  it('class-level roles do NOT lock VIEWER out of that controller\'s reads', async () => {
+  it("class-level roles do NOT lock VIEWER out of that controller's reads", async () => {
     const { guard, ctx } = makeGuard({
       role: SellerUserRole.VIEWER,
       method: 'GET',

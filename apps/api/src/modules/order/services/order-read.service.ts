@@ -1,10 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import {
-  OrderSource,
-  OrderStatus,
-  PaymentMode,
-  Prisma,
-} from '@skydrop/db';
+import { OrderSource, OrderStatus, PaymentMode, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 
 export interface ResolvedOrderItem {
@@ -167,9 +162,7 @@ export class OrderReadService {
 
   /** Batch resolve — one query, no N+1. Missing/soft-deleted ids are
    *  simply absent from the returned map. */
-  async getManyByIds(
-    orderIds: string[],
-  ): Promise<ReadonlyMap<string, ResolvedOrder>> {
+  async getManyByIds(orderIds: string[]): Promise<ReadonlyMap<string, ResolvedOrder>> {
     const ids = [...new Set(orderIds)];
     const out = new Map<string, ResolvedOrder>();
     if (ids.length === 0) return out;

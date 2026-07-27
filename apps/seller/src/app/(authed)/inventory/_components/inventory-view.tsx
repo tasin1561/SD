@@ -82,10 +82,7 @@ export function InventoryView(): ReactElement {
         title="Inventory"
         subtitle="Stock available for orders. Receiving happens at the warehouse — speak to ops to add inventory."
         action={
-          <Link
-            href="/inventory/units"
-            className="text-accent text-sm hover:underline"
-          >
+          <Link href="/inventory/units" className="text-accent text-sm hover:underline">
             Unit discrepancies →
           </Link>
         }
@@ -128,26 +125,20 @@ export function InventoryView(): ReactElement {
                     {row.skuCode}
                   </Link>
                 </Td>
-                <Td className="text-text-muted text-xs">
-                  {row.variantLabel ?? '—'}
-                </Td>
+                <Td className="text-text-muted text-xs">{row.variantLabel ?? '—'}</Td>
                 <Td className="text-right font-mono">{row.qtyOnHand.toLocaleString()}</Td>
                 <Td className="text-right font-mono text-text-muted">
                   {row.qtyReserved.toLocaleString()}
                 </Td>
                 <Td className="text-right font-mono">
                   <span
-                    className={
-                      row.isLowStock ? 'text-critical font-medium' : 'text-text-bright'
-                    }
+                    className={row.isLowStock ? 'text-critical font-medium' : 'text-text-bright'}
                   >
                     {row.qtyAvailable.toLocaleString()}
                   </span>
                 </Td>
                 <Td className="text-right text-text-muted text-xs">
-                  {row.lowStockThreshold !== null
-                    ? row.lowStockThreshold.toLocaleString()
-                    : '—'}
+                  {row.lowStockThreshold !== null ? row.lowStockThreshold.toLocaleString() : '—'}
                 </Td>
               </Tr>
             ))}
@@ -184,9 +175,7 @@ function SummaryCard({
   return (
     <Card>
       <CardBody className="py-3">
-        <div className="text-text-faint text-xs uppercase tracking-wide">
-          {label}
-        </div>
+        <div className="text-text-faint text-xs uppercase tracking-wide">{label}</div>
         <div
           className={
             'text-xl font-semibold tracking-tight mt-0.5 ' +
@@ -195,9 +184,7 @@ function SummaryCard({
         >
           {value}
         </div>
-        {hint && (
-          <div className="text-text-faint text-xs mt-0.5">{hint}</div>
-        )}
+        {hint && <div className="text-text-faint text-xs mt-0.5">{hint}</div>}
       </CardBody>
     </Card>
   );

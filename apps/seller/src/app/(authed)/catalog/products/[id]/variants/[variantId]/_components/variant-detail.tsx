@@ -85,11 +85,7 @@ export function VariantDetailView({
 
           <Section
             title="Details"
-            action={
-              !editing && (
-                <Button onClick={() => setEditing(true)}>Edit variant</Button>
-              )
-            }
+            action={!editing && <Button onClick={() => setEditing(true)}>Edit variant</Button>}
           >
             {editing ? (
               <VariantEditForm
@@ -112,11 +108,7 @@ export function VariantDetailView({
   );
 }
 
-function VariantReadCard({
-  variant,
-}: {
-  variant: SellerVariantView;
-}): ReactElement {
+function VariantReadCard({ variant }: { variant: SellerVariantView }): ReactElement {
   return (
     <Card>
       <CardBody>
@@ -136,23 +128,15 @@ function VariantReadCard({
               : '—'}
           </dd>
           <dt className="text-text-muted">Declared (INR)</dt>
-          <dd className="text-text-body font-mono">
-            {variant.declaredValueInr ?? '—'}
-          </dd>
+          <dd className="text-text-body font-mono">{variant.declaredValueInr ?? '—'}</dd>
           <dt className="text-text-muted">HS code</dt>
-          <dd className="text-text-body font-mono text-xs">
-            {variant.hsCode ?? '—'}
-          </dd>
+          <dd className="text-text-body font-mono text-xs">{variant.hsCode ?? '—'}</dd>
           <dt className="text-text-muted">GST rate (%)</dt>
           <dd className="text-text-body font-mono">{variant.gstRate ?? '—'}</dd>
           <dt className="text-text-muted">Barcode</dt>
-          <dd className="text-text-body font-mono text-xs">
-            {variant.barcode ?? '—'}
-          </dd>
+          <dd className="text-text-body font-mono text-xs">{variant.barcode ?? '—'}</dd>
           <dt className="text-text-muted">External SKU</dt>
-          <dd className="text-text-body font-mono text-xs">
-            {variant.externalSku ?? '—'}
-          </dd>
+          <dd className="text-text-body font-mono text-xs">{variant.externalSku ?? '—'}</dd>
         </dl>
       </CardBody>
     </Card>
@@ -174,9 +158,7 @@ function VariantEditForm({
   const [weightGrams, setWeightGrams] = useState(
     variant.weightGrams === null ? '' : String(variant.weightGrams),
   );
-  const [declaredValueInr, setDeclaredValueInr] = useState(
-    variant.declaredValueInr ?? '',
-  );
+  const [declaredValueInr, setDeclaredValueInr] = useState(variant.declaredValueInr ?? '');
   const [hsCode, setHsCode] = useState(variant.hsCode ?? '');
   const [gstRate, setGstRate] = useState(variant.gstRate ?? '');
   const [barcode, setBarcode] = useState(variant.barcode ?? '');
@@ -192,8 +174,7 @@ function VariantEditForm({
       await update.mutateAsync({
         variantLabel: variantLabel.trim() === '' ? null : variantLabel.trim(),
         weightGrams: weightGrams === '' ? null : Number(weightGrams),
-        declaredValueInr:
-          declaredValueInr === '' ? null : Number(declaredValueInr),
+        declaredValueInr: declaredValueInr === '' ? null : Number(declaredValueInr),
         hsCode: hsCode.trim() === '' ? null : hsCode.trim(),
         gstRate: gstRate === '' ? null : Number(gstRate),
         barcode: barcode.trim() === '' ? null : barcode.trim(),
@@ -216,12 +197,7 @@ function VariantEditForm({
         <form onSubmit={handleSave} className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <FormField label="SKU" htmlFor="sku" hint="Immutable">
-              <Input
-                id="sku"
-                value={variant.skuCode}
-                disabled
-                className="font-mono text-xs"
-              />
+              <Input id="sku" value={variant.skuCode} disabled className="font-mono text-xs" />
             </FormField>
             <FormField label="Label" htmlFor="variantLabel">
               <Input
@@ -292,18 +268,10 @@ function VariantEditForm({
             </div>
           )}
           <FormActions>
-            <Button
-              variant="ghost"
-              onClick={onCancel}
-              disabled={update.isPending}
-            >
+            <Button variant="ghost" onClick={onCancel} disabled={update.isPending}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={update.isPending}
-            >
+            <Button type="submit" variant="primary" disabled={update.isPending}>
               {update.isPending ? 'Saving…' : 'Save changes'}
             </Button>
           </FormActions>

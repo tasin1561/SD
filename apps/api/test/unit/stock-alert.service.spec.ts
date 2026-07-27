@@ -25,8 +25,18 @@ function makeSut(opts: {
     seller: {
       findUnique: jest.fn(async () =>
         opts.foreignVariant
-          ? { id: 's1', email: 'a@b.c', companyName: 'Acme', defaultLowStockThreshold: opts.sellerDefault ?? null }
-          : { id: 's1', email: 'a@b.c', companyName: 'Acme', defaultLowStockThreshold: opts.sellerDefault ?? null },
+          ? {
+              id: 's1',
+              email: 'a@b.c',
+              companyName: 'Acme',
+              defaultLowStockThreshold: opts.sellerDefault ?? null,
+            }
+          : {
+              id: 's1',
+              email: 'a@b.c',
+              companyName: 'Acme',
+              defaultLowStockThreshold: opts.sellerDefault ?? null,
+            },
       ),
     },
     stockAlertState: {
@@ -46,8 +56,26 @@ function makeSut(opts: {
   const catalog = {
     getVariantById: jest.fn(async () =>
       opts.foreignVariant
-        ? { variantId: 'v1', sellerId: 'OTHER', skuCode: 'SKU', variantLabel: null, productId: 'p1', categoryId: null, status: VariantStatus.ACTIVE, lowStockThreshold: opts.variantThreshold ?? null }
-        : { variantId: 'v1', sellerId: 's1', skuCode: 'SKU', variantLabel: null, productId: 'p1', categoryId: null, status: VariantStatus.ACTIVE, lowStockThreshold: opts.variantThreshold ?? null },
+        ? {
+            variantId: 'v1',
+            sellerId: 'OTHER',
+            skuCode: 'SKU',
+            variantLabel: null,
+            productId: 'p1',
+            categoryId: null,
+            status: VariantStatus.ACTIVE,
+            lowStockThreshold: opts.variantThreshold ?? null,
+          }
+        : {
+            variantId: 'v1',
+            sellerId: 's1',
+            skuCode: 'SKU',
+            variantLabel: null,
+            productId: 'p1',
+            categoryId: null,
+            status: VariantStatus.ACTIVE,
+            lowStockThreshold: opts.variantThreshold ?? null,
+          },
     ),
   } as unknown as CatalogReadService;
   const enqueue = jest.fn(async () => 'job1');

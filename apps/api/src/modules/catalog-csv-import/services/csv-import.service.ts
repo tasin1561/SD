@@ -10,18 +10,11 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CsvParserService } from './csv-parser.service';
-import {
-  CSV_REQUIRED_FIELDS,
-  type CsvTargetField,
-} from '../csv-fields';
+import { CSV_REQUIRED_FIELDS, type CsvTargetField } from '../csv-fields';
 import { buildCsvKey, parseCsvKey } from '../csv-import-key';
 import { CsvImportQueue } from '../queue/csv-import.queue';
 import { CsvMappingService } from './csv-mapping.service';
-import type {
-  PresignCsvDto,
-  PreviewCsvDto,
-  ProcessCsvDto,
-} from '../dto/csv-import.dto';
+import type { PresignCsvDto, PreviewCsvDto, ProcessCsvDto } from '../dto/csv-import.dto';
 
 const CSV_PRESIGN_CONTENT_TYPE = 'text/csv';
 
@@ -136,27 +129,18 @@ export class CsvImportService {
   /** A ready-to-fill CSV with canonical headers + one example row. */
   buildTemplate(): string {
     const headers = TEMPLATE_COLUMNS.map(([h]) => h).join(',');
-    const example = TEMPLATE_COLUMNS.map(([, v]) =>
-      v.includes(',') ? `"${v}"` : v,
-    ).join(',');
+    const example = TEMPLATE_COLUMNS.map(([, v]) => (v.includes(',') ? `"${v}"` : v)).join(',');
     return `${headers}\n${example}\n`;
   }
 
   async presign(sellerId: string, _input: PresignCsvDto): Promise<CsvPresignResult> {
     const key = buildCsvKey(sellerId);
     const ttl = this.env.csvPresignTtlSeconds;
-    const uploadUrl = await this.spaces.presignPutUrl(
-      key,
-      CSV_PRESIGN_CONTENT_TYPE,
-      ttl,
-    );
+    const uploadUrl = await this.spaces.presignPutUrl(key, CSV_PRESIGN_CONTENT_TYPE, ttl);
     return { spacesKey: key, uploadUrl, expiresInSeconds: ttl };
   }
 
-  async preview(
-    sellerId: string,
-    input: PreviewCsvDto,
-  ): Promise<CsvPreviewResult> {
+  async preview(sellerId: string, input: PreviewCsvDto): Promise<CsvPreviewResult> {
     const buffer = await this.loadOwnedCsv(sellerId, input.spacesKey);
     const parsed = this.parser.parse(buffer);
     const detected = this.parser.detectMapping(parsed.headers);
@@ -168,9 +152,7 @@ export class CsvImportService {
       input.mappingId,
       input.mappingOverride,
     );
-    const missingRequired = CSV_REQUIRED_FIELDS.filter(
-      (f) => mapping[f] === undefined,
-    );
+    const missingRequired = CSV_REQUIRED_FIELDS.filter((f) => mapping[f] === undefined);
 
     return {
       rowCount: parsed.rowCount,
@@ -191,10 +173,7 @@ export class CsvImportService {
    * (productName, variantSkuCode) are unmapped or the row count exceeds
    * the limit — no point queuing a doomed job.
    */
-  async createAndEnqueue(
-    sellerId: string,
-    input: ProcessCsvDto,
-  ): Promise<BulkUploadView> {
+  async createAndEnqueue(sellerId: string, input: ProcessCsvDto): Promise<BulkUploadView> {
     const buffer = await this.loadOwnedCsv(sellerId, input.spacesKey);
     const head = await this.spaces.headObject(input.spacesKey);
     const parsed = this.parser.parse(buffer);
@@ -207,9 +186,7 @@ export class CsvImportService {
       input.mappingId,
       input.mappingOverride,
     );
-    const missingRequired = CSV_REQUIRED_FIELDS.filter(
-      (f) => mapping[f] === undefined,
-    );
+    const missingRequired = CSV_REQUIRED_FIELDS.filter((f) => mapping[f] === undefined);
     if (missingRequired.length > 0) {
       throw new BadRequestException({
         code: 'MISSING_REQUIRED_MAPPING',

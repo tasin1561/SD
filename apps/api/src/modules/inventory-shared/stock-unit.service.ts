@@ -139,10 +139,7 @@ export class StockUnitService {
         // A supplier serial we have already seen for this seller is a
         // hard error, not something to silently renumber: it means two
         // physical units claim the same identity.
-        if (
-          err instanceof Prisma.PrismaClientKnownRequestError &&
-          err.code === 'P2002'
-        ) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
           throw new ConflictException({
             code: 'UNIT_SERIAL_ALREADY_REGISTERED',
             message: `Serial '${serial}' is already registered for this seller`,
@@ -179,10 +176,7 @@ export class StockUnitService {
    * and logs the scan. ALL-OR-NOTHING within the caller's tx: the first
    * bad serial throws, so a parcel is never half-scanned.
    */
-  async scanUnits(
-    tx: Prisma.TransactionClient,
-    input: ScanUnitsInput,
-  ): Promise<readonly string[]> {
+  async scanUnits(tx: Prisma.TransactionClient, input: ScanUnitsInput): Promise<readonly string[]> {
     const serials = input.serials.map((s) => s.trim()).filter((s) => s.length > 0);
     if (serials.length === 0) {
       throw new BadRequestException({
@@ -252,9 +246,7 @@ export class StockUnitService {
           ...(input.actorType === ActorType.STAFF && input.actorId
             ? { lastScanByStaffId: input.actorId }
             : {}),
-          ...(input.shipmentItemId === undefined
-            ? {}
-            : { shipmentItemId: input.shipmentItemId }),
+          ...(input.shipmentItemId === undefined ? {} : { shipmentItemId: input.shipmentItemId }),
           ...(input.warehouseId === undefined || input.warehouseId === null
             ? {}
             : { warehouseId: input.warehouseId }),
@@ -350,10 +342,7 @@ export class StockUnitService {
   /** How many units are attached to a shipment in a given status. Lets a
    *  gate decide whether strict enforcement applies to THIS parcel
    *  without duplicating the unit query. */
-  async countForShipment(
-    shipmentId: string,
-    status: StockUnitStatus,
-  ): Promise<number> {
+  async countForShipment(shipmentId: string, status: StockUnitStatus): Promise<number> {
     return this.prisma.client.stockUnit.count({
       where: { status, shipmentItem: { shipmentId } },
     });
@@ -433,11 +422,7 @@ export class StockUnitService {
 
   /** How many units of this SKU sit IN_STOCK at a warehouse. Used to
    *  reconcile against the aggregate, never to replace it. */
-  async countInStock(
-    sellerId: string,
-    variantId: string,
-    warehouseId: string,
-  ): Promise<number> {
+  async countInStock(sellerId: string, variantId: string, warehouseId: string): Promise<number> {
     return this.prisma.client.stockUnit.count({
       where: { sellerId, variantId, warehouseId, status: StockUnitStatus.IN_STOCK },
     });

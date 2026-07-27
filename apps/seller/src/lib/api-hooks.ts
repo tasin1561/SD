@@ -44,9 +44,7 @@ import type {
 
 // ───────── Seller orders ─────────
 
-export function useOrdersList(
-  query: ListSellerOrdersQuery,
-): UseQueryResult<OrderListResponse> {
+export function useOrdersList(query: ListSellerOrdersQuery): UseQueryResult<OrderListResponse> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['seller-orders', 'list', query],
@@ -64,9 +62,7 @@ async function fetchOrders(
   if (query.page) sp.set('page', String(query.page));
   if (query.pageSize) sp.set('pageSize', String(query.pageSize));
   const qs = sp.toString();
-  return client.request<OrderListResponse>(
-    `/api/seller/orders${qs ? `?${qs}` : ''}`,
-  );
+  return client.request<OrderListResponse>(`/api/seller/orders${qs ? `?${qs}` : ''}`);
 }
 
 export function useOrderDetail(id: string): UseQueryResult<OrderView> {
@@ -78,30 +74,21 @@ export function useOrderDetail(id: string): UseQueryResult<OrderView> {
   });
 }
 
-export function useOrderEvents(
-  id: string,
-): UseQueryResult<readonly SellerOrderEventView[]> {
+export function useOrderEvents(id: string): UseQueryResult<readonly SellerOrderEventView[]> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['seller-orders', 'events', id],
     queryFn: () =>
-      client.request<readonly SellerOrderEventView[]>(
-        `/api/seller/orders/${id}/events`,
-      ),
+      client.request<readonly SellerOrderEventView[]>(`/api/seller/orders/${id}/events`),
     enabled: Boolean(id),
   });
 }
 
-export function useOrderCharges(
-  id: string,
-): UseQueryResult<readonly OrderChargeView[]> {
+export function useOrderCharges(id: string): UseQueryResult<readonly OrderChargeView[]> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['seller-orders', 'charges', id],
-    queryFn: () =>
-      client.request<readonly OrderChargeView[]>(
-        `/api/seller/orders/${id}/charges`,
-      ),
+    queryFn: () => client.request<readonly OrderChargeView[]>(`/api/seller/orders/${id}/charges`),
     enabled: Boolean(id),
   });
 }
@@ -140,11 +127,7 @@ export interface CreateOrderInput {
   readonly items: readonly CreateOrderItemInput[];
 }
 
-export function useCreateOrder(): UseMutationResult<
-  OrderView,
-  Error,
-  CreateOrderInput
-> {
+export function useCreateOrder(): UseMutationResult<OrderView, Error, CreateOrderInput> {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
@@ -159,11 +142,7 @@ export function useCreateOrder(): UseMutationResult<
   });
 }
 
-export function useSubmitOrder(): UseMutationResult<
-  OrderView,
-  Error,
-  { id: string }
-> {
+export function useSubmitOrder(): UseMutationResult<OrderView, Error, { id: string }> {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
@@ -207,9 +186,7 @@ export function useUpdateOrder(
 }
 
 /** DELETE /seller/orders/:id — DRAFT-only soft-delete. */
-export function useDiscardDraftOrder(
-  orderId: string,
-): UseMutationResult<void, Error, void> {
+export function useDiscardDraftOrder(orderId: string): UseMutationResult<void, Error, void> {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
@@ -267,9 +244,7 @@ async function fetchProducts(
   if (query.page) sp.set('page', String(query.page));
   if (query.pageSize) sp.set('pageSize', String(query.pageSize));
   const qs = sp.toString();
-  return client.request<SellerProductListResponse>(
-    `/api/seller/products${qs ? `?${qs}` : ''}`,
-  );
+  return client.request<SellerProductListResponse>(`/api/seller/products${qs ? `?${qs}` : ''}`);
 }
 
 export function useProductDetail(id: string): UseQueryResult<SellerProductView> {
@@ -305,9 +280,7 @@ export function useProductVariants(
   return useQuery({
     queryKey: ['seller-catalog', 'variants', 'list', productId],
     queryFn: () =>
-      client.request<readonly SellerVariantView[]>(
-        `/api/seller/products/${productId}/variants`,
-      ),
+      client.request<readonly SellerVariantView[]>(`/api/seller/products/${productId}/variants`),
     enabled: Boolean(productId),
   });
 }
@@ -320,9 +293,7 @@ export function useVariantDetail(
   return useQuery({
     queryKey: ['seller-catalog', 'variants', 'detail', productId, variantId],
     queryFn: () =>
-      client.request<SellerVariantView>(
-        `/api/seller/products/${productId}/variants/${variantId}`,
-      ),
+      client.request<SellerVariantView>(`/api/seller/products/${productId}/variants/${variantId}`),
     enabled: Boolean(productId && variantId),
   });
 }
@@ -335,10 +306,10 @@ export function useUpdateVariant(
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<SellerVariantView>(
-        `/api/seller/products/${productId}/variants/${variantId}`,
-        { method: 'PATCH', body },
-      ),
+      client.request<SellerVariantView>(`/api/seller/products/${productId}/variants/${variantId}`, {
+        method: 'PATCH',
+        body,
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['seller-catalog'] });
     },
@@ -409,9 +380,7 @@ export function useDeleteImage(): UseMutationResult<void, Error, string> {
 
 // ───────── Seller stock (read-only, cross-warehouse aggregate) ─────────
 
-export function useStockList(
-  query: ListSellerStockQuery,
-): UseQueryResult<SellerStockListResponse> {
+export function useStockList(query: ListSellerStockQuery): UseQueryResult<SellerStockListResponse> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['seller-stock', 'list', query],
@@ -422,9 +391,7 @@ export function useStockList(
       if (query.page) sp.set('page', String(query.page));
       if (query.pageSize) sp.set('pageSize', String(query.pageSize));
       const qs = sp.toString();
-      return client.request<SellerStockListResponse>(
-        `/api/seller/stock${qs ? `?${qs}` : ''}`,
-      );
+      return client.request<SellerStockListResponse>(`/api/seller/stock${qs ? `?${qs}` : ''}`);
     },
   });
 }
@@ -446,29 +413,20 @@ import type {
   UpdateWebhookEndpointRequest,
 } from '@skydrop/api-client';
 
-export function useWebhookEndpointsList(): UseQueryResult<
-  ReadonlyArray<WebhookEndpointView>
-> {
+export function useWebhookEndpointsList(): UseQueryResult<ReadonlyArray<WebhookEndpointView>> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['seller-webhooks', 'list'],
     queryFn: () =>
-      client.request<ReadonlyArray<WebhookEndpointView>>(
-        `/api/seller/webhook-endpoints`,
-      ),
+      client.request<ReadonlyArray<WebhookEndpointView>>(`/api/seller/webhook-endpoints`),
   });
 }
 
-export function useWebhookEndpointDetail(
-  id: string,
-): UseQueryResult<WebhookEndpointView> {
+export function useWebhookEndpointDetail(id: string): UseQueryResult<WebhookEndpointView> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['seller-webhooks', 'detail', id],
-    queryFn: () =>
-      client.request<WebhookEndpointView>(
-        `/api/seller/webhook-endpoints/${id}`,
-      ),
+    queryFn: () => client.request<WebhookEndpointView>(`/api/seller/webhook-endpoints/${id}`),
     enabled: Boolean(id),
   });
 }
@@ -482,10 +440,10 @@ export function useCreateWebhookEndpoint(): UseMutationResult<
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<WebhookEndpointWithSecret>(
-        `/api/seller/webhook-endpoints`,
-        { method: 'POST', body },
-      ),
+      client.request<WebhookEndpointWithSecret>(`/api/seller/webhook-endpoints`, {
+        method: 'POST',
+        body,
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['seller-webhooks'] });
     },
@@ -499,10 +457,10 @@ export function useUpdateWebhookEndpoint(
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<WebhookEndpointView>(
-        `/api/seller/webhook-endpoints/${id}`,
-        { method: 'PATCH', body },
-      ),
+      client.request<WebhookEndpointView>(`/api/seller/webhook-endpoints/${id}`, {
+        method: 'PATCH',
+        body,
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['seller-webhooks'] });
     },
@@ -526,11 +484,7 @@ export function useRotateWebhookSecret(
   });
 }
 
-export function useDeleteWebhookEndpoint(): UseMutationResult<
-  void,
-  Error,
-  string
-> {
+export function useDeleteWebhookEndpoint(): UseMutationResult<void, Error, string> {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
@@ -601,10 +555,7 @@ export function useUpdateSellerBankDetails(): UseMutationResult<
 
 // ───────── Seller wallet (M21 ledger reads) ─────────
 
-import type {
-  WalletBalancesResponse,
-  WalletEntriesPage,
-} from '@skydrop/api-client';
+import type { WalletBalancesResponse, WalletEntriesPage } from '@skydrop/api-client';
 
 export function useWalletBalances(): UseQueryResult<WalletBalancesResponse> {
   const client = useApiClient();
@@ -614,9 +565,7 @@ export function useWalletBalances(): UseQueryResult<WalletBalancesResponse> {
   });
 }
 
-export function useWalletEntries(
-  currency?: 'INR' | 'BDT',
-): UseQueryResult<WalletEntriesPage> {
+export function useWalletEntries(currency?: 'INR' | 'BDT'): UseQueryResult<WalletEntriesPage> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['seller-wallet', 'entries', currency ?? 'all'],
@@ -633,16 +582,20 @@ export function useInfiniteWalletEntries(
   currency?: 'INR' | 'BDT',
 ): UseInfiniteQueryResult<InfiniteData<WalletEntriesPage>, Error> {
   const client = useApiClient();
-  return useInfiniteQuery<WalletEntriesPage, Error, InfiniteData<WalletEntriesPage>, ReadonlyArray<unknown>, string | null>({
+  return useInfiniteQuery<
+    WalletEntriesPage,
+    Error,
+    InfiniteData<WalletEntriesPage>,
+    ReadonlyArray<unknown>,
+    string | null
+  >({
     queryKey: ['seller-wallet', 'entries-infinite', currency ?? 'all'],
     queryFn: ({ pageParam }) => {
       const sp = new URLSearchParams();
       if (currency) sp.set('currency', currency);
       if (pageParam) sp.set('cursor', pageParam);
       const qs = sp.toString();
-      return client.request<WalletEntriesPage>(
-        `/api/seller/wallet/entries${qs ? `?${qs}` : ''}`,
-      );
+      return client.request<WalletEntriesPage>(`/api/seller/wallet/entries${qs ? `?${qs}` : ''}`);
     },
     initialPageParam: null,
     getNextPageParam: (last) => last.nextCursor,
@@ -673,11 +626,7 @@ export function usePresignLogo(): UseMutationResult<
   });
 }
 
-export function useRegisterLogo(): UseMutationResult<
-  LogoView,
-  Error,
-  RegisterLogoRequest
-> {
+export function useRegisterLogo(): UseMutationResult<LogoView, Error, RegisterLogoRequest> {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
@@ -708,10 +657,7 @@ export function useRemoveLogo(): UseMutationResult<LogoView, Error, void> {
 
 // ───────── Seller invoices (Phase 1B GST PDF) ─────────
 
-import type {
-  SellerInvoiceView,
-  GenerateInvoiceResponse,
-} from '@skydrop/api-client';
+import type { SellerInvoiceView, GenerateInvoiceResponse } from '@skydrop/api-client';
 
 export function useOrderInvoice(orderId: string): UseQueryResult<SellerInvoiceView | null> {
   const client = useApiClient();
@@ -719,9 +665,7 @@ export function useOrderInvoice(orderId: string): UseQueryResult<SellerInvoiceVi
     queryKey: ['seller-invoice', orderId],
     queryFn: async () => {
       try {
-        return await client.request<SellerInvoiceView>(
-          `/api/seller/orders/${orderId}/invoice`,
-        );
+        return await client.request<SellerInvoiceView>(`/api/seller/orders/${orderId}/invoice`);
       } catch (e) {
         // 404 is the "no invoice yet" path — return null instead of
         // surfacing as a query error.
@@ -743,10 +687,10 @@ export function useGenerateInvoice(
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () =>
-      client.request<GenerateInvoiceResponse>(
-        `/api/seller/orders/${orderId}/invoice`,
-        { method: 'POST', body: {} },
-      ),
+      client.request<GenerateInvoiceResponse>(`/api/seller/orders/${orderId}/invoice`, {
+        method: 'POST',
+        body: {},
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['seller-invoice', orderId] });
     },
@@ -760,16 +704,12 @@ import type {
   UpdateNotificationPreferenceRequest,
 } from '@skydrop/api-client';
 
-export function useNotificationPreferences(): UseQueryResult<
-  NotificationPreferenceView[]
-> {
+export function useNotificationPreferences(): UseQueryResult<NotificationPreferenceView[]> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['seller-notification-preferences'],
     queryFn: () =>
-      client.request<NotificationPreferenceView[]>(
-        '/api/seller/notification-preferences',
-      ),
+      client.request<NotificationPreferenceView[]>('/api/seller/notification-preferences'),
   });
 }
 
@@ -896,21 +836,17 @@ export function useResendTeamInvitation(): UseMutationResult<
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id }) =>
-      client.request<CreatedTeamInvitation>(
-        `/api/seller/team/invitations/${id}/resend`,
-        { method: 'POST', body: {} },
-      ),
+      client.request<CreatedTeamInvitation>(`/api/seller/team/invitations/${id}/resend`, {
+        method: 'POST',
+        body: {},
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['seller-team'] });
     },
   });
 }
 
-export function useRevokeTeamInvitation(): UseMutationResult<
-  void,
-  Error,
-  { id: string }
-> {
+export function useRevokeTeamInvitation(): UseMutationResult<void, Error, { id: string }> {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
@@ -942,21 +878,17 @@ export function useUpdateTeamMemberRole(): UseMutationResult<
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, role }) =>
-      client.request<{ id: string; role: string }>(
-        `/api/seller/team/members/${id}/role`,
-        { method: 'PATCH', body: { role } },
-      ),
+      client.request<{ id: string; role: string }>(`/api/seller/team/members/${id}/role`, {
+        method: 'PATCH',
+        body: { role },
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['seller-team'] });
     },
   });
 }
 
-export function useDeactivateTeamMember(): UseMutationResult<
-  void,
-  Error,
-  { id: string }
-> {
+export function useDeactivateTeamMember(): UseMutationResult<void, Error, { id: string }> {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({

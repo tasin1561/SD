@@ -104,10 +104,7 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
       .expect(201);
     sellerAuth = { Authorization: `Bearer ${reg.body.accessToken}` };
 
-    const whs = await request(h.baseUrl)
-      .get('/admin/warehouses')
-      .set(staffAuth)
-      .expect(200);
+    const whs = await request(h.baseUrl).get('/admin/warehouses').set(staffAuth).expect(200);
     warehouseId = (whs.body as Array<{ id: string; code: string }>).find(
       (w) => w.code === 'BLR-01',
     )!.id;
@@ -154,9 +151,7 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
       .post(`/admin/goods-receipts/${gr.body.id}/lines`)
       .set(staffAuth)
       .send({
-        lines: [
-          { lineId: gr.body.lines[0].id, receivedQty: qty, putawayBinId: binId },
-        ],
+        lines: [{ lineId: gr.body.lines[0].id, receivedQty: qty, putawayBinId: binId }],
       })
       .expect(200);
     await request(h.baseUrl)
@@ -191,10 +186,7 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
       })
       .expect(201);
     const orderId = created.body.id as string;
-    await request(h.baseUrl)
-      .post(`/seller/orders/${orderId}/submit`)
-      .set(sellerAuth)
-      .expect(200);
+    await request(h.baseUrl).post(`/seller/orders/${orderId}/submit`).set(sellerAuth).expect(200);
     return orderId;
   }
 
@@ -324,12 +316,8 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
         r.templateCode === 'customer.order_dispatched.email',
     );
     expect(dispatched).toHaveLength(2);
-    const seller = dispatched.find(
-      (r) => r.recipientType === NotificationRecipientType.SELLER,
-    );
-    const customer = dispatched.find(
-      (r) => r.recipientType === NotificationRecipientType.CUSTOMER,
-    );
+    const seller = dispatched.find((r) => r.recipientType === NotificationRecipientType.SELLER);
+    const customer = dispatched.find((r) => r.recipientType === NotificationRecipientType.CUSTOMER);
     expect(seller).toBeDefined();
     expect(customer).toBeDefined();
 
@@ -439,13 +427,11 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
     // returns FAILED. The fan-out for DISPATCHED is the only fan-out
     // that fires after this point.
     const resend = h.app.get(ResendService);
-    const sendSpy = jest
-      .spyOn(resend, 'send')
-      .mockImplementation(async () => ({
-        ok: false,
-        code: 'INJECTED_TEST_FAILURE',
-        message: 'forced failure for NOTIF-1 proof',
-      }));
+    const sendSpy = jest.spyOn(resend, 'send').mockImplementation(async () => ({
+      ok: false,
+      code: 'INJECTED_TEST_FAILURE',
+      message: 'forced failure for NOTIF-1 proof',
+    }));
 
     try {
       // The load-bearing line: drive the final transition with the
@@ -461,9 +447,7 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
       // DISPATCHED produces 2 notifications, both should land FAILED.
       const failed = await waitForLogCount(orderId, 2, NotificationStatus.FAILED);
       expect(failed.every((r) => r.failureCode === 'INJECTED_TEST_FAILURE')).toBe(true);
-      expect(
-        new Set(failed.map((r) => r.templateCode)),
-      ).toEqual(
+      expect(new Set(failed.map((r) => r.templateCode))).toEqual(
         new Set(['seller.order_dispatched.email', 'customer.order_dispatched.email']),
       );
 
@@ -611,9 +595,7 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
     for (const eid of ndrEventIds) {
       const matching = ndrRows.filter((r) => r.eventId === eid);
       expect(matching).toHaveLength(2);
-      expect(
-        new Set(matching.map((r) => r.recipientType)),
-      ).toEqual(
+      expect(new Set(matching.map((r) => r.recipientType))).toEqual(
         new Set([NotificationRecipientType.SELLER, NotificationRecipientType.CUSTOMER]),
       );
     }
@@ -622,7 +604,11 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
     // 2 distinct STATUS_CHANGED rows for each re-entered status, and
     // the mapping's per-occurrence eventIds correspond.
     const dfEvents = await h.prisma.orderEvent.findMany({
-      where: { orderId, type: OrderEventType.STATUS_CHANGED, toStatus: OrderStatus.DELIVERY_FAILED },
+      where: {
+        orderId,
+        type: OrderEventType.STATUS_CHANGED,
+        toStatus: OrderStatus.DELIVERY_FAILED,
+      },
       select: { id: true },
     });
     expect(dfEvents).toHaveLength(2);

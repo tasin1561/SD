@@ -63,9 +63,7 @@ export class ReportsService {
     };
   }
 
-  private async ordersBlock(
-    range: DateRange,
-  ): Promise<ReportSummary['orders']> {
+  private async ordersBlock(range: DateRange): Promise<ReportSummary['orders']> {
     // Count by current status at end of window. For confirmRate we
     // want "of orders created in this window, how many reached
     // CONFIRMED at some point" — using current status as a proxy
@@ -133,22 +131,16 @@ export class ReportsService {
       confirmed: postConfirmation,
       delivered,
       rtoInitiated,
-      cancelled:
-        get(OrderStatus.CANCELLED) + get(OrderStatus.CANCELLED_BY_ADMIN),
+      cancelled: get(OrderStatus.CANCELLED) + get(OrderStatus.CANCELLED_BY_ADMIN),
       rejectedNdr: get(OrderStatus.REJECTED_NDR),
       confirmRate: created > 0 ? postConfirmation / created : 0,
-      ndrRate:
-        postConfirmation > 0
-          ? get(OrderStatus.REJECTED_NDR) / postConfirmation
-          : 0,
+      ndrRate: postConfirmation > 0 ? get(OrderStatus.REJECTED_NDR) / postConfirmation : 0,
       rtoRate: dispatched > 0 ? rtoInitiated / dispatched : 0,
       deliveryRate: dispatched > 0 ? delivered / dispatched : 0,
     };
   }
 
-  private async shipmentsBlock(
-    range: DateRange,
-  ): Promise<ReportSummary['shipments']> {
+  private async shipmentsBlock(range: DateRange): Promise<ReportSummary['shipments']> {
     // Dispatch count + average dispatch / delivery times via raw SQL
     // — the AVG(EXTRACT EPOCH FROM ...) is cleaner as SQL than a
     // groupBy. Phase 1A volume keeps this fast.
@@ -181,19 +173,13 @@ export class ReportsService {
     return {
       dispatched: Number(row.dispatched),
       avgDispatchHoursFromConfirm:
-        row.avg_dispatch_hours === null
-          ? null
-          : Number(row.avg_dispatch_hours.toFixed(1)),
+        row.avg_dispatch_hours === null ? null : Number(row.avg_dispatch_hours.toFixed(1)),
       avgDeliveryDaysFromDispatch:
-        row.avg_delivery_days === null
-          ? null
-          : Number(row.avg_delivery_days.toFixed(1)),
+        row.avg_delivery_days === null ? null : Number(row.avg_delivery_days.toFixed(1)),
     };
   }
 
-  private async walletBlock(
-    range: DateRange,
-  ): Promise<ReportSummary['wallet']> {
+  private async walletBlock(range: DateRange): Promise<ReportSummary['wallet']> {
     const entries = await this.prisma.client.sellerWalletEntry.groupBy({
       by: ['direction'],
       where: {

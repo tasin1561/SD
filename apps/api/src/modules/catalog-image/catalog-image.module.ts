@@ -8,13 +8,7 @@ import { ImageWorker } from './queue/image.worker';
 
 @Module({
   controllers: [SellerImageController],
-  providers: [
-    CatalogImageService,
-    OrphanCleanupService,
-    ImageQueue,
-    ImageWorker,
-    SellerJwtGuard,
-  ],
+  providers: [CatalogImageService, OrphanCleanupService, ImageQueue, ImageWorker, SellerJwtGuard],
   exports: [CatalogImageService, ImageQueue, OrphanCleanupService],
 })
 export class CatalogImageModule {}

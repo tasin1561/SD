@@ -167,10 +167,7 @@ export class NotificationLedgerService {
       // channel, template_code) WHERE event_id IS NOT NULL caught
       // a duplicate — the lifecycle event was already processed for
       // this target.
-      if (
-        err instanceof Prisma.PrismaClientKnownRequestError &&
-        err.code === 'P2002'
-      ) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         const existing = await this.findByDedupKey(input);
         if (existing) {
           this.logger.debug(
@@ -196,9 +193,7 @@ export class NotificationLedgerService {
    * Lookup by the composite dedup tuple. Used after a P2002 catch to
    * resolve the existing row's id.
    */
-  private async findByDedupKey(
-    input: NotificationLedgerInput,
-  ): Promise<{ id: string } | null> {
+  private async findByDedupKey(input: NotificationLedgerInput): Promise<{ id: string } | null> {
     return this.prisma.client.notificationLog.findFirst({
       where: {
         eventId: input.eventId,
@@ -215,9 +210,7 @@ export class NotificationLedgerService {
     });
   }
 
-  private async insertSkipped(
-    input: NotificationLedgerInput,
-  ): Promise<NotificationLedgerResult> {
+  private async insertSkipped(input: NotificationLedgerInput): Promise<NotificationLedgerResult> {
     const variablesPayload = (input.variables ?? Prisma.DbNull) as Prisma.InputJsonValue;
     try {
       const log = await this.prisma.client.notificationLog.create({
@@ -250,10 +243,7 @@ export class NotificationLedgerService {
       );
       return { kind: 'SKIPPED', notificationLogId: log.id, reason: 'NO_ADDRESS' };
     } catch (err) {
-      if (
-        err instanceof Prisma.PrismaClientKnownRequestError &&
-        err.code === 'P2002'
-      ) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         const existing = await this.findByDedupKey(input);
         if (existing) return { kind: 'DEDUPED', notificationLogId: existing.id };
       }

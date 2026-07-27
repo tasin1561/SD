@@ -109,11 +109,7 @@ describe('AgentSettingsService.updateAsAdmin', () => {
 
   it('admin may set any field incl. maxActiveCalls, MEDIUM audit', async () => {
     const { svc, upsert, auditLog } = makeService();
-    await svc.updateAsAdmin(
-      'agent-1',
-      { maxActiveCalls: 5, canHandleHighRisk: true },
-      'admin-1',
-    );
+    await svc.updateAsAdmin('agent-1', { maxActiveCalls: 5, canHandleHighRisk: true }, 'admin-1');
     expect(upsert.mock.calls[0]![0].update).toEqual({
       maxActiveCalls: 5,
       canHandleHighRisk: true,

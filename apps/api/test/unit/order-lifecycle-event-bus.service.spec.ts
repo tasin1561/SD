@@ -1,5 +1,8 @@
 import { ActorType, OrderStatus } from '@skydrop/db';
-import { OrderLifecycleEventBus, type OrderLifecycleEvent } from '../../src/modules/lifecycle-events/order-lifecycle-event-bus.service';
+import {
+  OrderLifecycleEventBus,
+  type OrderLifecycleEvent,
+} from '../../src/modules/lifecycle-events/order-lifecycle-event-bus.service';
 
 function evt(partial: Partial<OrderLifecycleEvent> = {}): OrderLifecycleEvent {
   return {

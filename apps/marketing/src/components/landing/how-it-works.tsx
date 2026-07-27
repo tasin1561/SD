@@ -45,7 +45,10 @@ const PHASES: Phase[] = [
 
 export function HowItWorks(): ReactElement {
   return (
-    <section id="how-it-works" className="relative bg-surface-2/40 py-20 lg:py-28 border-t border-line overflow-hidden">
+    <section
+      id="how-it-works"
+      className="relative bg-surface-2/40 py-20 lg:py-28 border-t border-line overflow-hidden"
+    >
       <div aria-hidden className="console-grid absolute inset-0 opacity-60" />
       <div className="relative max-w-7xl mx-auto px-5 sm:px-8">
         <SectionHeader
@@ -57,9 +60,15 @@ export function HowItWorks(): ReactElement {
 
         <Reveal className="mt-14 relative">
           {/* Mobile vertical rail */}
-          <div aria-hidden className="lg:hidden absolute left-[21px] top-1 bottom-1 w-px bg-line-strong" />
+          <div
+            aria-hidden
+            className="lg:hidden absolute left-[21px] top-1 bottom-1 w-px bg-line-strong"
+          />
           {/* Desktop horizontal rail — draws when parent reveals */}
-          <div aria-hidden className="hidden lg:block absolute top-[21px] left-0 right-0 h-px bg-line">
+          <div
+            aria-hidden
+            className="hidden lg:block absolute top-[21px] left-0 right-0 h-px bg-line"
+          >
             <div
               className="rail-draw h-full"
               style={{
@@ -88,9 +97,7 @@ export function HowItWorks(): ReactElement {
                   <h3 className="font-display text-lg lg:text-xl font-semibold text-fg-strong mb-2">
                     {p.title}
                   </h3>
-                  <p className="text-[15px] text-fg-body leading-relaxed max-w-[44ch]">
-                    {p.body}
-                  </p>
+                  <p className="text-[15px] text-fg-body leading-relaxed max-w-[44ch]">{p.body}</p>
                 </Reveal>
               );
             })}

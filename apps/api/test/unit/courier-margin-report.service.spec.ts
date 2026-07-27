@@ -20,12 +20,14 @@ function shipment(over: Record<string, unknown> = {}) {
   };
 }
 
-function makeReport(opts: {
-  originPin?: string | null;
-  shipments?: ReturnType<typeof shipment>[];
-  charges?: { type: ChargeType; totalAmountInr: Prisma.Decimal }[];
-  checkThrows?: Error;
-} = {}) {
+function makeReport(
+  opts: {
+    originPin?: string | null;
+    shipments?: ReturnType<typeof shipment>[];
+    charges?: { type: ChargeType; totalAmountInr: Prisma.Decimal }[];
+    checkThrows?: Error;
+  } = {},
+) {
   const chargeFindMany = jest.fn(async (args: { where: { type?: { in: ChargeType[] } } }) => {
     const all = opts.charges ?? [
       { type: ChargeType.BASE_SHIPPING, totalAmountInr: new Prisma.Decimal('100') },
@@ -55,15 +57,9 @@ function makeReport(opts: {
     },
   };
   const context = {
-    originPin: jest.fn(async () =>
-      opts.originPin === undefined ? '110042' : opts.originPin,
-    ),
+    originPin: jest.fn(async () => (opts.originPin === undefined ? '110042' : opts.originPin)),
   };
-  const svc = new CourierMarginReportService(
-    prisma as never,
-    context as never,
-    { check } as never,
-  );
+  const svc = new CourierMarginReportService(prisma as never, context as never, { check } as never);
   return { svc, check, chargeFindMany };
 }
 
@@ -76,9 +72,7 @@ const WINDOW = {
 describe('CourierMarginReportService', () => {
   it('compares billed against the courier cost and totals both', async () => {
     const { svc } = makeReport({
-      charges: [
-        { type: ChargeType.BASE_SHIPPING, totalAmountInr: new Prisma.Decimal('200') },
-      ],
+      charges: [{ type: ChargeType.BASE_SHIPPING, totalAmountInr: new Prisma.Decimal('200') }],
     });
     const r = await svc.report(WINDOW);
     expect(r.sampledShipments).toBe(1);
@@ -92,9 +86,7 @@ describe('CourierMarginReportService', () => {
     // The whole point of measuring against the real cost rather than a
     // typed-in one: a rate card written when fuel was cheaper.
     const { svc } = makeReport({
-      charges: [
-        { type: ChargeType.BASE_SHIPPING, totalAmountInr: new Prisma.Decimal('120') },
-      ],
+      charges: [{ type: ChargeType.BASE_SHIPPING, totalAmountInr: new Prisma.Decimal('120') }],
     });
     const r = await svc.report(WINDOW);
     expect(r.lossMakingCount).toBe(1);

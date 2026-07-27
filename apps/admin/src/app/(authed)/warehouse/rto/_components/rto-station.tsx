@@ -143,8 +143,8 @@ export function RtoStation(): ReactElement {
                   Shipment {detail.data.shipmentNumber}
                 </div>
                 <div className="text-text-faint text-xs mt-0.5">
-                  Order status: {detail.data.orderStatus ?? '—'} ·{' '}
-                  {detail.data.items.length} line(s)
+                  Order status: {detail.data.orderStatus ?? '—'} · {detail.data.items.length}{' '}
+                  line(s)
                 </div>
               </div>
             </div>
@@ -204,11 +204,7 @@ function RtoItemRow({
     readonly rtoDisposition: string | null;
     readonly rtoInspectionNotes: string | null;
   };
-  readonly onSave: (
-    condition: string,
-    disposition: string,
-    notes?: string,
-  ) => Promise<void>;
+  readonly onSave: (condition: string, disposition: string, notes?: string) => Promise<void>;
   readonly saving: boolean;
 }): ReactElement {
   const [condition, setCondition] = useState(item.rtoCondition ?? '');

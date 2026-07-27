@@ -93,17 +93,17 @@ describe('DelhiveryShipmentEditService', () => {
   it('refuses a Prepaid→COD conversion with no COD amount, before calling out', async () => {
     // Delhivery would reject this; failing locally says WHY.
     const sut = makeEdit();
-    await expect(
-      sut.svc.edit({ awbNumber: '123', paymentMode: 'COD' }),
-    ).rejects.toThrow(/requires codAmountInr/);
+    await expect(sut.svc.edit({ awbNumber: '123', paymentMode: 'COD' })).rejects.toThrow(
+      /requires codAmountInr/,
+    );
     expect(sut.request).not.toHaveBeenCalled();
   });
 
   it('allows COD→Prepaid without an amount', async () => {
     const sut = makeEdit();
-    await expect(
-      sut.svc.edit({ awbNumber: '123', paymentMode: 'Prepaid' }),
-    ).resolves.toMatchObject({ success: true });
+    await expect(sut.svc.edit({ awbNumber: '123', paymentMode: 'Prepaid' })).resolves.toMatchObject(
+      { success: true },
+    );
   });
 
   it('sends only the fields being changed', async () => {
@@ -137,16 +137,8 @@ describe('DelhiveryShipmentEditService', () => {
     const sut = makeEdit();
     await sut.svc.edit({ awbNumber: '123', name: 'X' });
     await sut.svc.cancel('123');
-    expect(sut.assertWritable).toHaveBeenNthCalledWith(
-      1,
-      'shipment.edit',
-      expect.anything(),
-    );
-    expect(sut.assertWritable).toHaveBeenNthCalledWith(
-      2,
-      'shipment.cancel',
-      expect.anything(),
-    );
+    expect(sut.assertWritable).toHaveBeenNthCalledWith(1, 'shipment.edit', expect.anything());
+    expect(sut.assertWritable).toHaveBeenNthCalledWith(2, 'shipment.cancel', expect.anything());
   });
 
   it('stub mode never touches the network', async () => {

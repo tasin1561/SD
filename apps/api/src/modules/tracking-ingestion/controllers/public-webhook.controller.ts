@@ -13,10 +13,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import type { Prisma } from '@skydrop/db';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
-import {
-  WebhookIngestService,
-  type IngestOutcome,
-} from '../services/webhook-ingest.service';
+import { WebhookIngestService, type IngestOutcome } from '../services/webhook-ingest.service';
 
 interface AckResponse {
   /** Stable identifier of the stored courier_webhooks row — useful for
@@ -78,10 +75,7 @@ export class PublicWebhookController {
     const rawBody = req.rawBody?.toString('utf8') ?? '';
 
     const headersJson: Prisma.InputJsonValue = Object.fromEntries(
-      Object.entries(req.headers).map(([k, v]) => [
-        k,
-        Array.isArray(v) ? v.join(',') : (v ?? ''),
-      ]),
+      Object.entries(req.headers).map(([k, v]) => [k, Array.isArray(v) ? v.join(',') : (v ?? '')]),
     );
 
     const parsedBodyJson: Prisma.InputJsonValue | null = isJsonValue(parsedBody)
@@ -113,9 +107,6 @@ function isJsonValue(value: unknown): boolean {
   if (value === null) return true;
   const t = typeof value;
   return (
-    t === 'string' ||
-    t === 'number' ||
-    t === 'boolean' ||
-    t === 'object' // arrays / plain objects (the parser only produces these)
+    t === 'string' || t === 'number' || t === 'boolean' || t === 'object' // arrays / plain objects (the parser only produces these)
   );
 }

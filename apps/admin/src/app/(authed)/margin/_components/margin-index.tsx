@@ -89,10 +89,7 @@ export function MarginIndex(): ReactElement {
           description="Each shipment in the sample costs one live call to Delhivery against a rate-limited endpoint, so this runs only when you ask. Pick a sample size and press Run."
         />
       ) : report.isError ? (
-        <ErrorNote
-          message={serverVerdict(report.error)}
-          retry={() => void report.refetch()}
-        />
+        <ErrorNote message={serverVerdict(report.error)} retry={() => void report.refetch()} />
       ) : report.isFetching || data === undefined ? (
         <Card>
           <SkeletonRows rows={6} cols={6} />
@@ -150,20 +147,13 @@ export function MarginIndex(): ReactElement {
                       {r.orderId === null ? (
                         <Ident value={r.shipmentNumber} />
                       ) : (
-                        <Link
-                          href={`/orders/${r.orderId}`}
-                          className="text-accent hover:underline"
-                        >
+                        <Link href={`/orders/${r.orderId}`} className="text-accent hover:underline">
                           <Ident value={r.shipmentNumber} />
                         </Link>
                       )}
-                      {r.lossMaking && (
-                        <StatusBadge kind="failed" label="loss" />
-                      )}
+                      {r.lossMaking && <StatusBadge kind="failed" label="loss" />}
                     </Td>
-                    <Td className="text-text-muted whitespace-nowrap text-xs">
-                      {r.lane}
-                    </Td>
+                    <Td className="text-text-muted whitespace-nowrap text-xs">{r.lane}</Td>
                     <Td align="right">
                       <Money amount={r.billedToSellerInr} />
                     </Td>
@@ -204,9 +194,7 @@ export function MarginIndex(): ReactElement {
                       </li>
                     ))}
                     {data.skipped.length > 20 && (
-                      <li className="text-text-faint">
-                        …and {data.skipped.length - 20} more.
-                      </li>
+                      <li className="text-text-faint">…and {data.skipped.length - 20} more.</li>
                     )}
                   </ul>
                 </CardBody>
@@ -215,9 +203,9 @@ export function MarginIndex(): ReactElement {
           )}
 
           <p className="text-text-faint mt-4 text-xs leading-relaxed">
-            Generated {new Date(data.generatedAt).toLocaleString()}. This report
-            never changes a rate card, a charge or a wallet — repricing off a
-            single lane&apos;s reading would be a bad decision.
+            Generated {new Date(data.generatedAt).toLocaleString()}. This report never changes a
+            rate card, a charge or a wallet — repricing off a single lane&apos;s reading would be a
+            bad decision.
           </p>
         </>
       )}

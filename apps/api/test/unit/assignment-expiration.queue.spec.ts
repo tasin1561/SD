@@ -13,9 +13,9 @@ type AnyArgs = Record<string, unknown>;
  */
 describe('AssignmentExpirationQueue.enqueueExpiration jobId', () => {
   function make() {
-    const add = jest.fn<Promise<{ id: string }>, [string, AnyArgs, AnyArgs]>(
-      async () => ({ id: 'job-1' }),
-    );
+    const add = jest.fn<Promise<{ id: string }>, [string, AnyArgs, AnyArgs]>(async () => ({
+      id: 'job-1',
+    }));
     const q = new AssignmentExpirationQueue({} as unknown as RedisService);
     (q as unknown as { queue: { add: typeof add } }).queue = { add };
     return { q, add };
@@ -32,9 +32,7 @@ describe('AssignmentExpirationQueue.enqueueExpiration jobId', () => {
     expect(name).toBe(JOB_EXPIRE_ASSIGNMENT);
     const jobId = opts.jobId as string;
     expect(jobId).not.toContain(':');
-    expect(jobId).toBe(
-      `aaaaaaaa-bbbb-7ccc-8ddd-eeeeeeeeeeee_${Date.parse(iso)}`,
-    );
+    expect(jobId).toBe(`aaaaaaaa-bbbb-7ccc-8ddd-eeeeeeeeeeee_${Date.parse(iso)}`);
     expect(opts.delay).toBe(30 * 60_000);
   });
 

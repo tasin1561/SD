@@ -116,8 +116,8 @@ describe('OrderNumberingService', () => {
 
   it('refuses to allocate for an implausible year', async () => {
     const { svc } = makeService();
-    await expect(
-      svc.nextOrderNumber(undefined, new Date(Date.UTC(1999, 0, 1))),
-    ).rejects.toThrow(/implausible year 1999/);
+    await expect(svc.nextOrderNumber(undefined, new Date(Date.UTC(1999, 0, 1)))).rejects.toThrow(
+      /implausible year 1999/,
+    );
   });
 });

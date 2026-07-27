@@ -68,9 +68,9 @@ function makeSut(
     created.push(data);
     return { ...chargeRow(), ...data, goodsReceipt: { receiptNumber: 'GR-2026-07-0001' } };
   });
-  const chargeUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(
-    async () => ({ count: opts.claimCount ?? 1 }),
-  );
+  const chargeUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async () => ({
+    count: opts.claimCount ?? 1,
+  }));
   const chargeUpdate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (args) => ({
     ...(opts.loaded ?? chargeRow()),
     ...((args['data'] as AnyArgs | undefined) ?? {}),
@@ -102,9 +102,10 @@ function makeSut(
   }
   const prisma = { client } as unknown as PrismaService;
 
-  const applyEntry = jest.fn<Promise<{ id: string; runningBalanceAfter: Prisma.Decimal }>, [unknown, AnyArgs]>(
-    async () => ({ id: 'we-1', runningBalanceAfter: new Prisma.Decimal('-4500.00') }),
-  );
+  const applyEntry = jest.fn<
+    Promise<{ id: string; runningBalanceAfter: Prisma.Decimal }>,
+    [unknown, AnyArgs]
+  >(async () => ({ id: 'we-1', runningBalanceAfter: new Prisma.Decimal('-4500.00') }));
   const wallet = { applyEntry } as unknown as WalletService;
 
   const resolve = jest.fn(async (_s: string, key: string) => {
@@ -148,13 +149,7 @@ function makeSut(
   const audit = { log: auditLog } as unknown as AuditLogService;
 
   return {
-    svc: new InboundFreightService(
-      prisma,
-      audit,
-      settings,
-      wallet,
-      amortisation,
-    ),
+    svc: new InboundFreightService(prisma, audit, settings, wallet, amortisation),
     applyEntry,
     auditLog,
     created,
@@ -236,9 +231,9 @@ describe('InboundFreightService.record', () => {
 
   it.each(['0', '-5', 'abc'])('rejects the invalid amount %s', async (amt) => {
     const sut = makeSut();
-    await expect(
-      sut.svc.record(STAFF, { ...input, amountInr: amt }),
-    ).rejects.toMatchObject({ response: { code: 'FREIGHT_AMOUNT_INVALID' } });
+    await expect(sut.svc.record(STAFF, { ...input, amountInr: amt })).rejects.toMatchObject({
+      response: { code: 'FREIGHT_AMOUNT_INVALID' },
+    });
   });
 
   it('unreadable settings degrade to PAY_NOW with NO service charge, never a surprise fee', async () => {

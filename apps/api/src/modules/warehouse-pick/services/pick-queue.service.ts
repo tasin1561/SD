@@ -2,10 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ActorType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
-import {
-  OrderReadService,
-  type ResolvedOrder,
-} from '../../order/services/order-read.service';
+import { OrderReadService, type ResolvedOrder } from '../../order/services/order-read.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { PickExpirationService } from './pick-expiration.service';
 
@@ -89,14 +86,9 @@ export class PickQueueService {
 
   /** Returns the claimed parcel (+ order snapshot), or `null` when no
    *  parcel is currently pickable (QUEUE_EMPTY). */
-  async pullNext(
-    staffId: string,
-    ctx?: ClientContext,
-  ): Promise<PulledPick | null> {
+  async pullNext(staffId: string, ctx?: ClientContext): Promise<PulledPick | null> {
     const now = new Date();
-    const pickExpiresAt = new Date(
-      now.getTime() + (await this.timeoutHours()) * 3_600_000,
-    );
+    const pickExpiresAt = new Date(now.getTime() + (await this.timeoutHours()) * 3_600_000);
 
     const picked = await this.prisma.client.$transaction(async (tx) => {
       // FIFO, eligible+unclaimed parcels only; FOR UPDATE OF s SKIP
@@ -194,11 +186,7 @@ export class PickQueueService {
     // WMS-5: arm the timeout sweep immediately (before enrichment) so a
     // slow/failing OrderReadService can't leave the claim un-expirable
     // (mirrors M7 CC-7 pullNext ordering).
-    await this.expiration.scheduleExpiration(
-      picked.shipmentId,
-      now,
-      pickExpiresAt,
-    );
+    await this.expiration.scheduleExpiration(picked.shipmentId, now, pickExpiresAt);
 
     if (picked.orderId === null) {
       // The parcel passed the orders-join filter but its OrderShipment

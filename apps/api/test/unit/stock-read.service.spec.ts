@@ -167,7 +167,13 @@ describe('StockReadService — display path (cache-backed)', () => {
     const catalog = new Map([['v9', resolved({ variantId: 'v9', sellerId: 's1', skuCode: 'Z' })]]);
     const { svc } = makeSut({ catalog, sellerDefault: 3 });
     const zero = await svc.getVariantStockForDisplay('s1', 'v9', 'w1');
-    expect(zero).toMatchObject({ variantId: 'v9', qtyOnHand: 0, qtyAvailable: 0, lowStockThreshold: 3, isLowStock: true });
+    expect(zero).toMatchObject({
+      variantId: 'v9',
+      qtyOnHand: 0,
+      qtyAvailable: 0,
+      lowStockThreshold: 3,
+      isLowStock: true,
+    });
 
     const foreign = await svc.getVariantStockForDisplay('s1', 'missing', 'w1');
     expect(foreign).toBeNull();

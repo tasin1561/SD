@@ -9,7 +9,9 @@ interface FakeResponse {
 
 /** Helper: builds a mock fetch that returns one of a sequence of responses
  *  keyed by URL path. Multiple entries for the same path return them in order. */
-function mockFetch(responses: Array<{ urlMatch: RegExp; res: FakeResponse }>): ReturnType<typeof vi.fn> {
+function mockFetch(
+  responses: Array<{ urlMatch: RegExp; res: FakeResponse }>,
+): ReturnType<typeof vi.fn> {
   const queues = new Map<RegExp, FakeResponse[]>();
   for (const entry of responses) {
     const arr = queues.get(entry.urlMatch) ?? [];

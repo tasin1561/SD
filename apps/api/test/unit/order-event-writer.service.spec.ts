@@ -20,9 +20,7 @@ const SELLER: { type: ActorType; id: string } = { type: ActorType.SELLER, id: 's
 describe('OrderEventWriterService', () => {
   it('is append-only — exposes no update/delete surface', () => {
     const svc = new OrderEventWriterService();
-    const names = new Set(
-      Object.getOwnPropertyNames(Object.getPrototypeOf(svc)),
-    );
+    const names = new Set(Object.getOwnPropertyNames(Object.getPrototypeOf(svc)));
     for (const forbidden of ['update', 'delete', 'remove', 'deleteMany', 'updateMany']) {
       expect(names.has(forbidden)).toBe(false);
     }
@@ -87,9 +85,7 @@ describe('OrderEventWriterService', () => {
     });
     const d = create.mock.calls[0]![0].data;
     expect(d.type).toBe(OrderEventType.STATUS_CHANGED);
-    expect(d.description).toBe(
-      `Status ${OrderStatus.CONFIRMED} → ${OrderStatus.CANCELLED}`,
-    );
+    expect(d.description).toBe(`Status ${OrderStatus.CONFIRMED} → ${OrderStatus.CANCELLED}`);
     expect(d.isVisibleToSeller).toBe(true);
   });
 

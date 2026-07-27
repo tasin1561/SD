@@ -52,7 +52,9 @@ function makeService(
     /** Configure delhiveryLabel.fetchLabel to throw on first call. */
     fetchLabelThrows?: Error;
     /** Configure courierAccountRouting.selectAccount's result/behavior. */
-    courierAccountResult?: { courierAccountId: string; source: 'SELLER_LINK' | 'DEFAULT_ACCOUNT' } | Error;
+    courierAccountResult?:
+      | { courierAccountId: string; source: 'SELLER_LINK' | 'DEFAULT_ACCOUNT' }
+      | Error;
     courierRow?: AnyArgs | null;
   } = {},
 ) {
@@ -71,9 +73,7 @@ function makeService(
   });
   const courierAccountRouting = { selectAccount };
   const awbLabelFindFirst = jest.fn(async () =>
-    opts.priorLabelVersion === undefined
-      ? null
-      : { version: opts.priorLabelVersion },
+    opts.priorLabelVersion === undefined ? null : { version: opts.priorLabelVersion },
   );
   const txShipmentUpdate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({}));
   const txAwbLabelCreate = jest.fn(async () => ({}));
@@ -92,18 +92,13 @@ function makeService(
     courier: { findUnique: typeof courierFindUnique };
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
   };
-  client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> =>
-    fn(txClient);
+  client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient);
 
-  const putObject = jest.fn<Promise<void>, [string, Buffer, string]>(
-    async () => {
-      if (opts.putObjectThrows) throw opts.putObjectThrows;
-    },
-  );
+  const putObject = jest.fn<Promise<void>, [string, Buffer, string]>(async () => {
+    if (opts.putObjectThrows) throw opts.putObjectThrows;
+  });
   const spaces = { putObject };
-  const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown]>(
-    async () => 'a',
-  );
+  const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown]>(async () => 'a');
   const audit = { log: auditLog };
   const generateAwb = jest.fn<Promise<DelhiveryAwbResult>, [unknown]>(
     async () =>
@@ -152,9 +147,7 @@ function auditCalls(
   log: jest.Mock<Promise<string | null>, [Record<string, unknown>, unknown]>,
   action: string,
 ): Array<[Record<string, unknown>, unknown]> {
-  return log.mock.calls.filter(
-    ([entry]) => (entry as { action?: string }).action === action,
-  );
+  return log.mock.calls.filter(([entry]) => (entry as { action?: string }).action === action);
 }
 
 describe('AwbGenerationService.generateForShipment', () => {
@@ -207,14 +200,13 @@ describe('AwbGenerationService.generateForShipment', () => {
   });
 
   it('CUR-9: a shipment with awbNumber AND a current awb_label is ALREADY_HAS_AWB (no Delhivery call, no upload, no DB write)', async () => {
-    const { svc, generateAwb, putObject, txShipmentUpdate, fetchLabel } =
-      makeService({
-        shipment: shipmentRow({
-          awbNumber: 'EXISTING-AWB',
-          courierShipmentId: 'EXISTING-CS',
-          awbLabels: [{ id: 'label-1' }],
-        }),
-      });
+    const { svc, generateAwb, putObject, txShipmentUpdate, fetchLabel } = makeService({
+      shipment: shipmentRow({
+        awbNumber: 'EXISTING-AWB',
+        courierShipmentId: 'EXISTING-CS',
+        awbLabels: [{ id: 'label-1' }],
+      }),
+    });
     const r = await svc.generateForShipment(SHIP);
     expect(r).toEqual({
       status: 'ALREADY_HAS_AWB',
@@ -228,16 +220,10 @@ describe('AwbGenerationService.generateForShipment', () => {
   });
 
   it('M10 commit 1 — GENERATED_AWB_LABEL_PENDING: tx1 commits then Spaces.putObject throws → AWB durably persisted, NO awb_labels row, only awb.generated audit', async () => {
-    const {
-      svc,
-      generateAwb,
-      txShipmentUpdate,
-      txAwbLabelCreate,
-      auditLog,
-      putObject,
-    } = makeService({
-      putObjectThrows: new Error('SpacesUnavailable'),
-    });
+    const { svc, generateAwb, txShipmentUpdate, txAwbLabelCreate, auditLog, putObject } =
+      makeService({
+        putObjectThrows: new Error('SpacesUnavailable'),
+      });
     const r = await svc.generateForShipment(SHIP);
     // The half-finished run is SELF-ANNOUNCING — the outcome carries
     // the AWB so the caller (job service) can throw to BullMQ.
@@ -403,9 +389,7 @@ describe('AwbGenerationService.generateForShipment', () => {
 
   it('404 when the shipment is missing', async () => {
     const { svc } = makeService({ shipment: null });
-    await expect(svc.generateForShipment(SHIP)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(svc.generateForShipment(SHIP)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('409 when the shipment is not CREATED (and has no awbNumber so the recovery path does not apply)', async () => {
@@ -415,8 +399,6 @@ describe('AwbGenerationService.generateForShipment', () => {
         status: ShipmentStatus.HANDED_TO_COURIER,
       }),
     });
-    await expect(svc.generateForShipment(SHIP)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    await expect(svc.generateForShipment(SHIP)).rejects.toBeInstanceOf(ConflictException);
   });
 });

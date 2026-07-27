@@ -32,21 +32,28 @@ function buildClient() {
       ),
     },
     sellerInvitation: {
-      create: jest.fn(async ({ data }: { data: Omit<InvRow, 'id' | 'sellerId' | 'usedAt' | 'deletedAt' | 'createdAt'> }) => {
-        seq += 1;
-        const row: InvRow = {
-          ...data,
-          id: `inv-${seq}`,
-          sellerId: null,
-          usedAt: null,
-          deletedAt: null,
-          createdAt: new Date(),
-        };
-        invitations.push(row);
-        return row;
-      }),
-      findUnique: jest.fn(async ({ where }: { where: { id: string } }) =>
-        invitations.find((r) => r.id === where.id) ?? null,
+      create: jest.fn(
+        async ({
+          data,
+        }: {
+          data: Omit<InvRow, 'id' | 'sellerId' | 'usedAt' | 'deletedAt' | 'createdAt'>;
+        }) => {
+          seq += 1;
+          const row: InvRow = {
+            ...data,
+            id: `inv-${seq}`,
+            sellerId: null,
+            usedAt: null,
+            deletedAt: null,
+            createdAt: new Date(),
+          };
+          invitations.push(row);
+          return row;
+        },
+      ),
+      findUnique: jest.fn(
+        async ({ where }: { where: { id: string } }) =>
+          invitations.find((r) => r.id === where.id) ?? null,
       ),
       findFirst: jest.fn(async ({ where }: { where: Record<string, unknown> }) => {
         return (
@@ -102,11 +109,7 @@ const ctx = { ipAddress: '1.2.3.4', userAgent: 'jest', requestId: 'req-1' };
 describe('SellerInvitationService', () => {
   it('create: stores hashed token, returns plaintext + invite URL, enqueues email, audits', async () => {
     const { svc, fixt, enqueueMock, hashes } = makeSut();
-    const result = await svc.create(
-      { email: 'NewSeller@brand.com' },
-      { staffId: 'staff-1' },
-      ctx,
-    );
+    const result = await svc.create({ email: 'NewSeller@brand.com' }, { staffId: 'staff-1' }, ctx);
 
     expect(result.token).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(result.inviteUrl).toContain(result.token);
@@ -178,9 +181,9 @@ describe('SellerInvitationService', () => {
     await svc.softDelete(fixt.invitations[0]!.id, { staffId: 'staff-1' }, ctx);
     expect(fixt.invitations[0]!.deletedAt).toBeInstanceOf(Date);
 
-    await expect(svc.softDelete(fixt.invitations[0]!.id, { staffId: 'staff-1' }, ctx)).rejects.toThrow(
-      NotFoundException,
-    );
+    await expect(
+      svc.softDelete(fixt.invitations[0]!.id, { staffId: 'staff-1' }, ctx),
+    ).rejects.toThrow(NotFoundException);
 
     // Used invitation cannot be deleted.
     await svc.create({ email: 'used2@brand.com' }, { staffId: 'staff-1' }, ctx);

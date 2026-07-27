@@ -45,9 +45,7 @@ const ToastCtx = createContext<ToastApi | null>(null);
 export function useToast(): ToastApi {
   const v = useContext(ToastCtx);
   if (v === null) {
-    throw new Error(
-      '@skydrop/ui: useToast called without <Toaster /> mounted in the layout.',
-    );
+    throw new Error('@skydrop/ui: useToast called without <Toaster /> mounted in the layout.');
   }
   return v;
 }
@@ -82,9 +80,7 @@ export function Toaster({ children }: { readonly children: ReactNode }): ReactEl
           <ToastRow
             key={t.id}
             item={t}
-            onDismiss={() =>
-              setItems((prev) => prev.filter((x) => x.id !== t.id))
-            }
+            onDismiss={() => setItems((prev) => prev.filter((x) => x.id !== t.id))}
           />
         ))}
       </div>
@@ -135,9 +131,7 @@ function ToastRow({ item, onDismiss }: ToastRowProps): ReactElement {
       }}
     >
       {tone.icon}
-      <div className="text-text-bright text-sm leading-snug flex-1">
-        {item.message}
-      </div>
+      <div className="text-text-bright text-sm leading-snug flex-1">{item.message}</div>
       <button
         type="button"
         onClick={onDismiss}

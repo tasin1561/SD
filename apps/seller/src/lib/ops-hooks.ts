@@ -155,17 +155,14 @@ export function useCreateTicket(): UseMutationResult<
   const client = useApiClient();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) =>
-      client.request<TicketView>('/seller/tickets', { method: 'POST', body }),
+    mutationFn: (body) => client.request<TicketView>('/seller/tickets', { method: 'POST', body }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-tickets'] }),
   });
 }
 
 // ───────── Inbound freight (R3) ─────────
 
-export function useSellerFreight(query: {
-  status?: string;
-}): UseQueryResult<{
+export function useSellerFreight(query: { status?: string }): UseQueryResult<{
   items: readonly FreightChargeView[];
   outstandingInr: string;
 }> {
@@ -184,16 +181,12 @@ export function useSellerFreight(query: {
 
 // ───────── Withdrawals (R2) ─────────
 
-export function useSellerWithdrawals(): UseQueryResult<
-  readonly WithdrawalRequestView[]
-> {
+export function useSellerWithdrawals(): UseQueryResult<readonly WithdrawalRequestView[]> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['seller-withdrawals', 'list'],
     queryFn: () =>
-      client.request<readonly WithdrawalRequestView[]>(
-        '/seller/wallet/withdrawal-requests',
-      ),
+      client.request<readonly WithdrawalRequestView[]>('/seller/wallet/withdrawal-requests'),
   });
 }
 
@@ -219,9 +212,7 @@ export function useRequestWithdrawal(): UseMutationResult<
 
 // ───────── At-placement hold reviews (R5) ─────────
 
-export function useHoldReviews(query: {
-  status?: string;
-}): UseQueryResult<readonly ReviewView[]> {
+export function useHoldReviews(query: { status?: string }): UseQueryResult<readonly ReviewView[]> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['seller-hold-reviews', 'list', query],
@@ -241,10 +232,10 @@ export function useDecideHoldReview(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ reviewId, ...body }) =>
-      client.request<DecisionResult>(
-        `/seller/early-reservation-reviews/${reviewId}`,
-        { method: 'PATCH', body },
-      ),
+      client.request<DecisionResult>(`/seller/early-reservation-reviews/${reviewId}`, {
+        method: 'PATCH',
+        body,
+      }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['seller-hold-reviews'] });
       // Releasing a hold changes available stock, and the decision may
@@ -257,18 +248,14 @@ export function useDecideHoldReview(): UseMutationResult<
 
 // ───────── Serialized units (R4) ─────────
 
-export function useUnitDiscrepancies(warehouseId?: string): UseQueryResult<
-  UnitDiscrepancyReport
-> {
+export function useUnitDiscrepancies(warehouseId?: string): UseQueryResult<UnitDiscrepancyReport> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['seller-units', 'discrepancies', warehouseId ?? null],
     queryFn: () =>
       client.request<UnitDiscrepancyReport>(
         `/seller/stock-units/discrepancies${
-          warehouseId === undefined || warehouseId === ''
-            ? ''
-            : `?warehouseId=${warehouseId}`
+          warehouseId === undefined || warehouseId === '' ? '' : `?warehouseId=${warehouseId}`
         }`,
       ),
   });

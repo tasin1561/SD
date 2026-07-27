@@ -125,13 +125,13 @@
   --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', monospace;
 
-  --text-xs: 11px;     /* table meta, timestamps */
-  --text-sm: 13px;     /* table body, labels — DEFAULT for dense */
-  --text-base: 14px;   /* body copy */
-  --text-md: 15px;     /* primary content */
-  --text-lg: 17px;     /* page heading */
-  --text-xl: 22px;     /* section title */
-  --text-2xl: 28px;    /* page title */
+  --text-xs: 11px; /* table meta, timestamps */
+  --text-sm: 13px; /* table body, labels — DEFAULT for dense */
+  --text-base: 14px; /* body copy */
+  --text-md: 15px; /* primary content */
+  --text-lg: 17px; /* page heading */
+  --text-xl: 22px; /* section title */
+  --text-2xl: 28px; /* page title */
 
   --leading-tight: 1.25;
   --leading-snug: 1.4;

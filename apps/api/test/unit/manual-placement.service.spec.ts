@@ -70,19 +70,13 @@ function makeService(
       : opts.shipment;
 
   const shipmentFindUnique = jest.fn(async () => shipmentRow);
-  const shipmentFindFirst = jest.fn(async () =>
-    opts.awbClash ? { id: 'other-ship' } : null,
-  );
+  const shipmentFindFirst = jest.fn(async () => (opts.awbClash ? { id: 'other-ship' } : null));
   const shipmentUpdate = jest.fn(async () => ({}));
-  const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown?]>(
-    async () => 'a',
-  );
+  const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown?]>(async () => 'a');
   const txClient = {
     shipment: { update: shipmentUpdate },
   };
-  const $transaction = jest.fn(async (fn: (tx: typeof txClient) => unknown) =>
-    fn(txClient),
-  );
+  const $transaction = jest.fn(async (fn: (tx: typeof txClient) => unknown) => fn(txClient));
   const client = {
     shipment: {
       findUnique: shipmentFindUnique,
@@ -97,9 +91,7 @@ function makeService(
     status: opts.transitionTo ?? OrderStatus.DISPATCHED,
     reservationOutcome: 'FULFILLED' as const,
   }));
-  const listActiveForOrderWithLocations = jest.fn(
-    async () => opts.reservations ?? [phase2('r1')],
-  );
+  const listActiveForOrderWithLocations = jest.fn(async () => opts.reservations ?? [phase2('r1')]);
 
   const svc = new ManualPlacementService(
     { client } as unknown as PrismaService,
@@ -121,11 +113,7 @@ function makeService(
 describe('ManualPlacementService.placeAwb', () => {
   it('stamps the manual AWB, dispatches the order, marks HANDED_TO_COURIER', async () => {
     const { svc, shipmentUpdate, transitionStatus } = makeService();
-    const r = await svc.placeAwb(
-      SHIP,
-      { awbNumber: 'BD-001', courierName: 'Bluedart' },
-      STAFF,
-    );
+    const r = await svc.placeAwb(SHIP, { awbNumber: 'BD-001', courierName: 'Bluedart' }, STAFF);
     expect(r).toMatchObject({
       shipmentId: SHIP,
       orderId: ORDER,
@@ -135,12 +123,8 @@ describe('ManualPlacementService.placeAwb', () => {
       alreadyPlaced: false,
     });
     // AWB stamp (status AWB_GENERATED) FIRST, transition LAST.
-    const calls = shipmentUpdate.mock.calls as unknown as Array<
-      [{ data: AnyArgs }]
-    >;
-    const stampCall = calls.find(
-      (c) => c[0].data.status === ShipmentStatus.AWB_GENERATED,
-    );
+    const calls = shipmentUpdate.mock.calls as unknown as Array<[{ data: AnyArgs }]>;
+    const stampCall = calls.find((c) => c[0].data.status === ShipmentStatus.AWB_GENERATED);
     expect(stampCall).toBeDefined();
     expect(stampCall![0].data).toMatchObject({
       awbNumber: 'BD-001',
@@ -197,9 +181,7 @@ describe('ManualPlacementService.placeAwb', () => {
     const { svc, transitionStatus } = makeService({
       reservations: [phase2('r1'), phase1('r2')],
     });
-    await expect(
-      svc.placeAwb(SHIP, { awbNumber: 'BD-002' }, STAFF),
-    ).rejects.toMatchObject({
+    await expect(svc.placeAwb(SHIP, { awbNumber: 'BD-002' }, STAFF)).rejects.toMatchObject({
       response: { code: 'MANUAL_PLACEMENT_NOT_ALLOCATED' },
     });
     expect(transitionStatus).not.toHaveBeenCalled();
@@ -207,18 +189,14 @@ describe('ManualPlacementService.placeAwb', () => {
 
   it('conservation guard: no active reservations → MANUAL_PLACEMENT_NO_RESERVATIONS', async () => {
     const { svc } = makeService({ reservations: [] });
-    await expect(
-      svc.placeAwb(SHIP, { awbNumber: 'BD-003' }, STAFF),
-    ).rejects.toMatchObject({
+    await expect(svc.placeAwb(SHIP, { awbNumber: 'BD-003' }, STAFF)).rejects.toMatchObject({
       response: { code: 'MANUAL_PLACEMENT_NO_RESERVATIONS' },
     });
   });
 
   it('rejects ORDER_NOT_MANUAL_PLACEMENT when the order is not PENDING_MANUAL_PLACEMENT', async () => {
     const { svc } = makeService({ orderStatus: OrderStatus.CONFIRMED });
-    await expect(
-      svc.placeAwb(SHIP, { awbNumber: 'BD-004' }, STAFF),
-    ).rejects.toMatchObject({
+    await expect(svc.placeAwb(SHIP, { awbNumber: 'BD-004' }, STAFF)).rejects.toMatchObject({
       response: { code: 'ORDER_NOT_MANUAL_PLACEMENT' },
     });
   });
@@ -227,18 +205,14 @@ describe('ManualPlacementService.placeAwb', () => {
     const { svc } = makeService({
       shipmentStatus: ShipmentStatus.FAILED_AT_CREATION,
     });
-    await expect(
-      svc.placeAwb(SHIP, { awbNumber: 'BD-005' }, STAFF),
-    ).rejects.toMatchObject({
+    await expect(svc.placeAwb(SHIP, { awbNumber: 'BD-005' }, STAFF)).rejects.toMatchObject({
       response: { code: 'SHIPMENT_NOT_MANUAL_ELIGIBLE' },
     });
   });
 
   it('rejects AWB_ALREADY_IN_USE when the AWB clashes with another shipment', async () => {
     const { svc } = makeService({ awbClash: true });
-    await expect(
-      svc.placeAwb(SHIP, { awbNumber: 'DUP-AWB' }, STAFF),
-    ).rejects.toMatchObject({
+    await expect(svc.placeAwb(SHIP, { awbNumber: 'DUP-AWB' }, STAFF)).rejects.toMatchObject({
       response: { code: 'AWB_ALREADY_IN_USE' },
     });
   });
@@ -248,18 +222,16 @@ describe('ManualPlacementService.placeAwb', () => {
       awbNumber: 'DLVSTUB123',
       isManualCourier: false,
     });
-    await expect(
-      svc.placeAwb(SHIP, { awbNumber: 'BD-006' }, STAFF),
-    ).rejects.toMatchObject({
+    await expect(svc.placeAwb(SHIP, { awbNumber: 'BD-006' }, STAFF)).rejects.toMatchObject({
       response: { code: 'SHIPMENT_ALREADY_HAS_AWB' },
     });
   });
 
   it('404 when the shipment is missing', async () => {
     const { svc } = makeService({ shipment: null });
-    await expect(
-      svc.placeAwb(SHIP, { awbNumber: 'BD-007' }, STAFF),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(svc.placeAwb(SHIP, { awbNumber: 'BD-007' }, STAFF)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 });
 
@@ -268,11 +240,7 @@ describe('ManualPlacementService.cancelUnfulfillable', () => {
     const { svc, transitionStatus } = makeService({
       transitionTo: OrderStatus.CANCELLED_BY_ADMIN,
     });
-    const r = await svc.cancelUnfulfillable(
-      SHIP,
-      'No courier serves this pincode',
-      STAFF,
-    );
+    const r = await svc.cancelUnfulfillable(SHIP, 'No courier serves this pincode', STAFF);
     expect(r).toMatchObject({
       orderId: ORDER,
       orderStatus: OrderStatus.CANCELLED_BY_ADMIN,
@@ -297,9 +265,7 @@ describe('ManualPlacementService.cancelUnfulfillable', () => {
 
   it('rejects ORDER_NOT_MANUAL_PLACEMENT when the order is elsewhere in the lifecycle', async () => {
     const { svc } = makeService({ orderStatus: OrderStatus.DISPATCHED });
-    await expect(
-      svc.cancelUnfulfillable(SHIP, 'wrong state', STAFF),
-    ).rejects.toMatchObject({
+    await expect(svc.cancelUnfulfillable(SHIP, 'wrong state', STAFF)).rejects.toMatchObject({
       response: { code: 'ORDER_NOT_MANUAL_PLACEMENT' },
     });
   });

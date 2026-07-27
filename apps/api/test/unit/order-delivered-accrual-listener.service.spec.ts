@@ -1,6 +1,9 @@
 import { ActorType, OrderStatus } from '@skydrop/db';
 import { OrderDeliveredAccrualListener } from '../../src/modules/seller-wallet-accrual/services/order-delivered-accrual-listener.service';
-import type { OrderLifecycleEvent, OrderLifecycleEventBus } from '../../src/modules/lifecycle-events/order-lifecycle-event-bus.service';
+import type {
+  OrderLifecycleEvent,
+  OrderLifecycleEventBus,
+} from '../../src/modules/lifecycle-events/order-lifecycle-event-bus.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { AccrualExecutionService } from '../../src/modules/seller-wallet-accrual/services/accrual-execution.service';
 import type { PendingAccrualSchedulerService } from '../../src/modules/seller-wallet-accrual/services/pending-accrual-scheduler.service';
@@ -70,7 +73,9 @@ describe('OrderDeliveredAccrualListener.handle', () => {
   });
 
   it('INSTANT tier (per-seller opt-in): DELIVERED executes the accrual immediately', async () => {
-    const { listener, executeAccrual, scheduleIfNeeded, resolve } = makeService({ tier: 'INSTANT' });
+    const { listener, executeAccrual, scheduleIfNeeded, resolve } = makeService({
+      tier: 'INSTANT',
+    });
     await listener.handle(lifecycleEvent(OrderStatus.DELIVERED));
     expect(resolve).toHaveBeenCalledWith('seller-1', 'wallet.accrual_timing_tier');
     expect(executeAccrual).toHaveBeenCalledWith('order-1');

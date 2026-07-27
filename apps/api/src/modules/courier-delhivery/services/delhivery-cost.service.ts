@@ -105,10 +105,7 @@ export class DelhiveryCostService {
     }
 
     const tax = row.tax_data ?? {};
-    const taxTotal = D(tax.SGST)
-      .add(D(tax.CGST))
-      .add(D(tax.IGST))
-      .add(D(tax.service_tax));
+    const taxTotal = D(tax.SGST).add(D(tax.CGST)).add(D(tax.IGST)).add(D(tax.service_tax));
 
     // Keep every non-zero component: when a bill is disputed, "which
     // surcharge moved" is the only useful question.

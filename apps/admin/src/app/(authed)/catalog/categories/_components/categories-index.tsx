@@ -12,10 +12,7 @@ import {
 } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 import type { CategoryView } from '@skydrop/api-client';
-import {
-  useCategoriesList,
-  useDeleteCategory,
-} from '@/lib/api-hooks';
+import { useCategoriesList, useDeleteCategory } from '@/lib/api-hooks';
 import { CategoryFormModal } from './category-form-modal';
 
 /**
@@ -63,11 +60,7 @@ export function CategoriesIndex(): ReactElement {
         title="Categories"
         subtitle="Global product taxonomy. Edit defaults to inherit into products and variants (HS, GST, package type, fragile/cold-chain flags)."
         action={
-          <Button
-            variant="primary"
-            size="md"
-            onClick={() => setCreating({ parentId: null })}
-          >
+          <Button variant="primary" size="md" onClick={() => setCreating({ parentId: null })}>
             New category
           </Button>
         }
@@ -93,11 +86,7 @@ export function CategoriesIndex(): ReactElement {
             <p className="text-text-muted text-xs mb-3">
               Create your first root category to get started.
             </p>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setCreating({ parentId: null })}
-            >
+            <Button variant="primary" size="sm" onClick={() => setCreating({ parentId: null })}>
               New category
             </Button>
           </CardBody>
@@ -122,24 +111,16 @@ export function CategoriesIndex(): ReactElement {
                     className="px-3 py-2 text-text-body"
                     style={{ paddingLeft: 12 + c.depth * 16 }}
                   >
-                    {c.depth > 0 && (
-                      <span className="text-text-faint mr-1">↳</span>
-                    )}
+                    {c.depth > 0 && <span className="text-text-faint mr-1">↳</span>}
                     {c.name}
                     {c.requiresFragile && (
-                      <span className="text-pending text-[10px] ml-2 uppercase">
-                        Fragile
-                      </span>
+                      <span className="text-pending text-[10px] ml-2 uppercase">Fragile</span>
                     )}
                     {c.requiresColdChain && (
-                      <span className="text-accent text-[10px] ml-2 uppercase">
-                        Cold-chain
-                      </span>
+                      <span className="text-accent text-[10px] ml-2 uppercase">Cold-chain</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs text-text-muted">
-                    {c.slug}
-                  </td>
+                  <td className="px-3 py-2 font-mono text-xs text-text-muted">{c.slug}</td>
                   <td className="px-3 py-2 text-text-body text-xs uppercase">
                     {c.defaultPackageType ?? '—'}
                   </td>
@@ -158,11 +139,7 @@ export function CategoriesIndex(): ReactElement {
                       >
                         + Child
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditing(c)}
-                      >
+                      <Button variant="ghost" size="sm" onClick={() => setEditing(c)}>
                         Edit
                       </Button>
                       {pendingDelete === c.id ? (
@@ -174,20 +151,12 @@ export function CategoriesIndex(): ReactElement {
                           >
                             Confirm
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setPendingDelete(null)}
-                          >
+                          <Button variant="ghost" size="sm" onClick={() => setPendingDelete(null)}>
                             Cancel
                           </Button>
                         </>
                       ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setPendingDelete(c.id)}
-                        >
+                        <Button variant="ghost" size="sm" onClick={() => setPendingDelete(c.id)}>
                           Delete
                         </Button>
                       )}

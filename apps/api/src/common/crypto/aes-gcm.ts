@@ -1,8 +1,4 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  randomBytes,
-} from 'node:crypto';
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
 /**
  * Generic AES-256-GCM cipher — extracted from M9 courier-credential
@@ -31,37 +27,24 @@ export class AesGcmCipherError extends Error {
 
 function keyBuffer(keyHex: string, domain: string): Buffer {
   if (!/^[0-9a-fA-F]{64}$/.test(keyHex)) {
-    throw new AesGcmCipherError(
-      `${domain} key must be 64 hex chars (32 bytes)`,
-    );
+    throw new AesGcmCipherError(`${domain} key must be 64 hex chars (32 bytes)`);
   }
   return Buffer.from(keyHex, 'hex');
 }
 
 /** Encrypt UTF-8 plaintext → base64 ciphertext blob. */
-export function aesGcmEncrypt(
-  plaintext: string,
-  keyHex: string,
-  domain = 'encryption',
-): string {
+export function aesGcmEncrypt(plaintext: string, keyHex: string, domain = 'encryption'): string {
   const key = keyBuffer(keyHex, domain);
   const iv = randomBytes(IV_BYTES);
   const cipher = createCipheriv('aes-256-gcm', key, iv);
-  const ciphertext = Buffer.concat([
-    cipher.update(plaintext, 'utf8'),
-    cipher.final(),
-  ]);
+  const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
   const authTag = cipher.getAuthTag();
   return Buffer.concat([iv, authTag, ciphertext]).toString('base64');
 }
 
 /** Decrypt base64 ciphertext blob → UTF-8 plaintext.
  *  Throws AesGcmCipherError on a bad key / tampered payload. */
-export function aesGcmDecrypt(
-  payload: string,
-  keyHex: string,
-  domain = 'encryption',
-): string {
+export function aesGcmDecrypt(payload: string, keyHex: string, domain = 'encryption'): string {
   const key = keyBuffer(keyHex, domain);
   let blob: Buffer;
   try {
@@ -78,10 +61,7 @@ export function aesGcmDecrypt(
   const decipher = createDecipheriv('aes-256-gcm', key, iv);
   decipher.setAuthTag(authTag);
   try {
-    return Buffer.concat([
-      decipher.update(ciphertext),
-      decipher.final(),
-    ]).toString('utf8');
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
   } catch {
     throw new AesGcmCipherError(
       `${domain} decryption failed (auth-tag mismatch — wrong key or tampered payload)`,

@@ -1,9 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   ActorType,
   DeliveryAttemptOutcome,
@@ -354,13 +349,7 @@ export class WebhookProcessorService {
 
     // §7.a — DELIVERY_ATTEMPT: write delivery_attempts FIRST (durable).
     if (decision.kind === 'DELIVERY_ATTEMPT') {
-      await this.writeAttemptIfNew(
-        wh.id,
-        ship.id,
-        parsed.failureReason,
-        eventAt,
-        parsed.nslCode,
-      );
+      await this.writeAttemptIfNew(wh.id, ship.id, parsed.failureReason, eventAt, parsed.nslCode);
     }
 
     // §7.b / §8 — append tracking_event (idempotent).
@@ -393,9 +382,7 @@ export class WebhookProcessorService {
       await this.markProcessed(webhookId, trackingEvent.id);
       return {
         kind:
-          decision.kind === 'DELIVERY_ATTEMPT'
-            ? 'DELIVERY_ATTEMPT_SKIPPED'
-            : 'TRANSITION_SKIPPED',
+          decision.kind === 'DELIVERY_ATTEMPT' ? 'DELIVERY_ATTEMPT_SKIPPED' : 'TRANSITION_SKIPPED',
         webhookId,
         trackingEventId: trackingEvent.id,
         reason: skipReason,
@@ -416,9 +403,7 @@ export class WebhookProcessorService {
       await this.markProcessed(webhookId, trackingEvent.id);
       return {
         kind:
-          decision.kind === 'DELIVERY_ATTEMPT'
-            ? 'DELIVERY_ATTEMPT_TRANSITIONED'
-            : 'TRANSITIONED',
+          decision.kind === 'DELIVERY_ATTEMPT' ? 'DELIVERY_ATTEMPT_TRANSITIONED' : 'TRANSITIONED',
         webhookId,
         trackingEventId: trackingEvent.id,
         fromStatus: result.fromStatus,
@@ -578,9 +563,7 @@ export class WebhookProcessorService {
           attemptedAt,
           outcome: DeliveryAttemptOutcome.FAILED,
           ...(mappedReason !== null ? { failureReason: mappedReason } : {}),
-          ...(rawFailureReason !== null
-            ? { failureNotes: rawFailureReason }
-            : {}),
+          ...(rawFailureReason !== null ? { failureNotes: rawFailureReason } : {}),
           ...(nslCode !== null ? { courierNslCode: nslCode } : {}),
           source: TrackingEventSource.COURIER_WEBHOOK,
           webhookId,
@@ -589,10 +572,7 @@ export class WebhookProcessorService {
     });
   }
 
-  private async markProcessed(
-    webhookId: string,
-    trackingEventId: string | null,
-  ): Promise<void> {
+  private async markProcessed(webhookId: string, trackingEventId: string | null): Promise<void> {
     // Guarded — already-processed retries are no-ops.
     await this.prisma.client.courierWebhook.updateMany({
       where: { id: webhookId, status: WebhookStatus.RECEIVED },

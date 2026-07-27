@@ -102,23 +102,14 @@ export class OrderCsvImportService {
 
   buildTemplate(): string {
     const headers = TEMPLATE_COLUMNS.map(([h]) => h).join(',');
-    const example = TEMPLATE_COLUMNS.map(([, v]) =>
-      v.includes(',') ? `"${v}"` : v,
-    ).join(',');
+    const example = TEMPLATE_COLUMNS.map(([, v]) => (v.includes(',') ? `"${v}"` : v)).join(',');
     return `${headers}\n${example}\n`;
   }
 
-  async presign(
-    sellerId: string,
-    _input: PresignOrderCsvDto,
-  ): Promise<CsvPresignResult> {
+  async presign(sellerId: string, _input: PresignOrderCsvDto): Promise<CsvPresignResult> {
     const key = buildOrderCsvKey(sellerId);
     const ttl = this.env.csvPresignTtlSeconds;
-    const uploadUrl = await this.spaces.presignPutUrl(
-      key,
-      CSV_PRESIGN_CONTENT_TYPE,
-      ttl,
-    );
+    const uploadUrl = await this.spaces.presignPutUrl(key, CSV_PRESIGN_CONTENT_TYPE, ttl);
     return { spacesKey: key, uploadUrl, expiresInSeconds: ttl };
   }
 
@@ -138,21 +129,12 @@ export class OrderCsvImportService {
     return mapping;
   }
 
-  async preview(
-    sellerId: string,
-    input: PreviewOrderCsvDto,
-  ): Promise<OrderCsvPreviewResult> {
+  async preview(sellerId: string, input: PreviewOrderCsvDto): Promise<OrderCsvPreviewResult> {
     const buffer = await this.loadOwnedCsv(sellerId, input.spacesKey);
     const parsed = this.parser.parse(buffer);
     const detected = this.parser.detectMapping(parsed.headers);
-    const mapping = this.resolveMapping(
-      parsed.headers,
-      detected.mapping,
-      input.mappingOverride,
-    );
-    const missingRequired = ORDER_CSV_REQUIRED_FIELDS.filter(
-      (f) => mapping[f] === undefined,
-    );
+    const mapping = this.resolveMapping(parsed.headers, detected.mapping, input.mappingOverride);
+    const missingRequired = ORDER_CSV_REQUIRED_FIELDS.filter((f) => mapping[f] === undefined);
     return {
       rowCount: parsed.rowCount,
       headers: parsed.headers,
@@ -179,15 +161,9 @@ export class OrderCsvImportService {
     const head = await this.spaces.headObject(input.spacesKey);
     const parsed = this.parser.parse(buffer);
     const detected = this.parser.detectMapping(parsed.headers);
-    const mapping = this.resolveMapping(
-      parsed.headers,
-      detected.mapping,
-      input.mappingOverride,
-    );
+    const mapping = this.resolveMapping(parsed.headers, detected.mapping, input.mappingOverride);
 
-    const missingRequired = ORDER_CSV_REQUIRED_FIELDS.filter(
-      (f) => mapping[f] === undefined,
-    );
+    const missingRequired = ORDER_CSV_REQUIRED_FIELDS.filter((f) => mapping[f] === undefined);
     if (missingRequired.length > 0) {
       throw new BadRequestException({
         code: 'MISSING_REQUIRED_MAPPING',

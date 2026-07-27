@@ -38,10 +38,12 @@ interface Deps {
   audit: jest.Mock;
 }
 
-function make(opts: {
-  context?: Partial<ShipmentCourierContext>;
-  latestAttempt?: { courierNslCode: string | null; attemptNumber: number } | null;
-} = {}): Deps {
+function make(
+  opts: {
+    context?: Partial<ShipmentCourierContext>;
+    latestAttempt?: { courierNslCode: string | null; attemptNumber: number } | null;
+  } = {},
+): Deps {
   const audit = jest.fn(async () => undefined);
   const edit = jest.fn(async () => ({
     success: true,
@@ -69,9 +71,7 @@ function make(opts: {
     raw: null,
   }));
 
-  const deliveryAttemptFindFirst = jest.fn(
-    async () => opts.latestAttempt ?? null,
-  );
+  const deliveryAttemptFindFirst = jest.fn(async () => opts.latestAttempt ?? null);
 
   const prisma = {
     client: { deliveryAttempt: { findFirst: deliveryAttemptFindFirst } },
@@ -80,10 +80,7 @@ function make(opts: {
 
   // The REAL eligibility logic — the whole point of the test is that the
   // NSL table is consulted, so mocking it would test nothing.
-  const realNdr = new DelhiveryNdrService(
-    {} as never,
-    {} as never,
-  );
+  const realNdr = new DelhiveryNdrService({} as never, {} as never);
   const ndr = {
     checkEligibility: realNdr.checkEligibility.bind(realNdr),
     takeAction: ndrTakeAction,
@@ -165,12 +162,7 @@ describe('CourierShipmentActionService — NDR action', () => {
     const { svc, ndrTakeAction } = make({
       latestAttempt: { courierNslCode: 'EOD-74', attemptNumber: 1 },
     });
-    const out = await svc.takeNdrAction(
-      'staff-1',
-      SHIPMENT_ID,
-      'RE-ATTEMPT',
-      CLIENT,
-    );
+    const out = await svc.takeNdrAction('staff-1', SHIPMENT_ID, 'RE-ATTEMPT', CLIENT);
     expect(out.uplId).toBe('upl-123');
     expect(out.nslCode).toBe('EOD-74');
     expect(ndrTakeAction).toHaveBeenCalledWith(
@@ -213,9 +205,9 @@ describe('CourierShipmentActionService — guards before the wire', () => {
 
   it('refuses an empty edit rather than sending a no-op to the courier', async () => {
     const { svc, edit } = make();
-    await expect(
-      svc.editDestination('staff-1', SHIPMENT_ID, {}, CLIENT),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(svc.editDestination('staff-1', SHIPMENT_ID, {}, CLIENT)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
     expect(edit).not.toHaveBeenCalled();
   });
 

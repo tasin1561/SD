@@ -96,7 +96,7 @@ describe('SystemSettingsService.updateValue', () => {
       'staff-1',
     );
     expect(update).toHaveBeenCalledTimes(1);
-    const data = (update.mock.calls[0]![0]!.data as AnyArgs);
+    const data = update.mock.calls[0]![0]!.data as AnyArgs;
     expect(data.valueInt).toBe(4);
     expect(data.valueString).toBeNull();
     expect(data.lastEditedByStaffId).toBe('staff-1');
@@ -157,7 +157,11 @@ describe('SystemSettingsService.updateValue', () => {
 
   it('DECIMAL: accepts a numeric string and a number, writes via Prisma.Decimal', async () => {
     const { svc, update } = makeService({
-      row: makeRow({ valueType: SettingValueType.DECIMAL, valueInt: null, valueDecimal: new Prisma.Decimal('18.00') }),
+      row: makeRow({
+        valueType: SettingValueType.DECIMAL,
+        valueInt: null,
+        valueDecimal: new Prisma.Decimal('18.00'),
+      }),
     });
     await svc.updateValue(
       'pricing.gst_rate',

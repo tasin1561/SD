@@ -10,8 +10,8 @@ function makeService(
     charges?: AnyArgs[];
   } = {},
 ) {
-  const findFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async () => (opts.existingEntry === undefined ? null : opts.existingEntry),
+  const findFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+    opts.existingEntry === undefined ? null : opts.existingEntry,
   );
   const orderChargeFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
     async () => opts.charges ?? [],
@@ -39,7 +39,11 @@ describe('OrderChargesAccrualService.debitIfNeeded', () => {
         { type: ChargeType.REFUND, amountInr: new Prisma.Decimal('50') },
       ],
     });
-    const result = await svc.debitIfNeeded(tx as unknown as Prisma.TransactionClient, 'order-1', 'seller-1');
+    const result = await svc.debitIfNeeded(
+      tx as unknown as Prisma.TransactionClient,
+      'order-1',
+      'seller-1',
+    );
     expect(result).toBe(true);
     expect(applyEntry).toHaveBeenCalledWith(
       tx,
@@ -58,7 +62,11 @@ describe('OrderChargesAccrualService.debitIfNeeded', () => {
     const { svc, tx, applyEntry, orderChargeFindMany } = makeService({
       existingEntry: { id: 'already-1' },
     });
-    const result = await svc.debitIfNeeded(tx as unknown as Prisma.TransactionClient, 'order-1', 'seller-1');
+    const result = await svc.debitIfNeeded(
+      tx as unknown as Prisma.TransactionClient,
+      'order-1',
+      'seller-1',
+    );
     expect(result).toBe(false);
     expect(applyEntry).not.toHaveBeenCalled();
     expect(orderChargeFindMany).not.toHaveBeenCalled();
@@ -66,7 +74,11 @@ describe('OrderChargesAccrualService.debitIfNeeded', () => {
 
   it('no-ops (no debit) when total charges are zero', async () => {
     const { svc, tx, applyEntry } = makeService({ charges: [] });
-    const result = await svc.debitIfNeeded(tx as unknown as Prisma.TransactionClient, 'order-1', 'seller-1');
+    const result = await svc.debitIfNeeded(
+      tx as unknown as Prisma.TransactionClient,
+      'order-1',
+      'seller-1',
+    );
     expect(result).toBe(false);
     expect(applyEntry).not.toHaveBeenCalled();
   });
@@ -75,7 +87,11 @@ describe('OrderChargesAccrualService.debitIfNeeded', () => {
     const { svc, tx, applyEntry } = makeService({
       charges: [{ type: ChargeType.REFUND, amountInr: new Prisma.Decimal('50') }],
     });
-    const result = await svc.debitIfNeeded(tx as unknown as Prisma.TransactionClient, 'order-1', 'seller-1');
+    const result = await svc.debitIfNeeded(
+      tx as unknown as Prisma.TransactionClient,
+      'order-1',
+      'seller-1',
+    );
     expect(result).toBe(false);
     expect(applyEntry).not.toHaveBeenCalled();
   });

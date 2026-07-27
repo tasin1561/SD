@@ -44,10 +44,7 @@ export function SellerTicketsIndex(): ReactElement {
   const open = rows.filter(
     (t) => t.status === TicketStatus.OPEN || t.status === TicketStatus.NEGOTIATING,
   ).length;
-  const refunded = rows.reduce(
-    (sum, t) => sum + Number(t.resolutionAmountInr ?? 0),
-    0,
-  );
+  const refunded = rows.reduce((sum, t) => sum + Number(t.resolutionAmountInr ?? 0), 0);
 
   return (
     <div className="max-w-5xl">
@@ -154,10 +151,7 @@ export function SellerTicketsIndex(): ReactElement {
                   {t.orderId === null ? (
                     <span className="text-text-faint">—</span>
                   ) : (
-                    <Link
-                      href={`/orders/${t.orderId}`}
-                      className="text-accent hover:underline"
-                    >
+                    <Link href={`/orders/${t.orderId}`} className="text-accent hover:underline">
                       <Ident value={`${t.orderId.slice(0, 8)}…`} />
                     </Link>
                   )}
@@ -184,9 +178,9 @@ export function SellerTicketsIndex(): ReactElement {
       <Card className="mt-4">
         <CardBody>
           <p className="text-text-muted text-xs leading-relaxed">
-            A ticket closes in one of four ways: we refund you, we return the goods,
-            you accept the write-off, or the claim is not upheld. Whichever it is, the
-            full discussion stays on the ticket — it is never edited after the fact.
+            A ticket closes in one of four ways: we refund you, we return the goods, you accept the
+            write-off, or the claim is not upheld. Whichever it is, the full discussion stays on the
+            ticket — it is never edited after the fact.
           </p>
         </CardBody>
       </Card>

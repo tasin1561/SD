@@ -251,10 +251,7 @@ export class CourierShipmentActionService {
    * the operator has to decode from a raw courier message is worse than
    * a button that explains why it is disabled.
    */
-  async ndrReadiness(
-    shipmentId: string,
-    action: NdrAction,
-  ): Promise<NdrReadiness> {
+  async ndrReadiness(shipmentId: string, action: NdrAction): Promise<NdrReadiness> {
     const shipment = await this.context.resolve(shipmentId);
     const { nslCode, attemptCount } = await this.latestAttempt(shipmentId);
 
@@ -351,8 +348,7 @@ export class CourierShipmentActionService {
     if (shipment.awbNumber === null) {
       throw new BadRequestException({
         code: 'SHIPMENT_HAS_NO_AWB',
-        message:
-          'This shipment has no AWB, so there is nothing at the courier to act on.',
+        message: 'This shipment has no AWB, so there is nothing at the courier to act on.',
       });
     }
     if (shipment.isManualCourier) {

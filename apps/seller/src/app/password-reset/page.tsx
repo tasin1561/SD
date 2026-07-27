@@ -16,18 +16,14 @@ export default function PasswordResetPage(): ReactElement {
     <div className="min-h-screen grid place-items-center bg-bg text-text-body p-6">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="text-text-bright font-semibold text-lg tracking-tight">
-            Skydrop
-          </div>
+          <div className="text-text-bright font-semibold text-lg tracking-tight">Skydrop</div>
           <div className="text-text-faint text-xs mt-0.5">Seller</div>
         </div>
         <div className="rounded-[7px] border border-border bg-surface p-6">
-          <h1 className="text-text-bright text-base font-semibold mb-1">
-            Reset your password
-          </h1>
+          <h1 className="text-text-bright text-base font-semibold mb-1">Reset your password</h1>
           <p className="text-text-muted text-xs mb-5">
-            Enter your seller account email. If we recognize it, you&apos;ll
-            get a reset link by email within a few minutes.
+            Enter your seller account email. If we recognize it, you&apos;ll get a reset link by
+            email within a few minutes.
           </p>
           <PasswordResetRequestForm />
         </div>

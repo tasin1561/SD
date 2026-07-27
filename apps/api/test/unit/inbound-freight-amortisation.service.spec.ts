@@ -37,9 +37,7 @@ function makeSut(
     chargeAfterUpdate?: { unitsSettled: number; totalUnits: number; status: InboundFreightStatus };
   } = {},
 ) {
-  const lineFindMany = jest.fn<Promise<LineSeed[]>, [AnyArgs]>(
-    async () => opts.lines ?? [],
-  );
+  const lineFindMany = jest.fn<Promise<LineSeed[]>, [AnyArgs]>(async () => opts.lines ?? []);
   const lineFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async (args) => {
     const batchId = ((args['where'] ?? {}) as AnyArgs)['batchId'] as string;
     const lineId = Object.entries(opts.batches ?? {}).find(
@@ -82,9 +80,7 @@ function makeSut(
   const walletFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
     opts.existingEntry ? { id: 'entry-old' } : null,
   );
-  const itemFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
-    async () => opts.items ?? [],
-  );
+  const itemFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => opts.items ?? []);
 
   const client = {
     goodsReceiptLine: { findMany: lineFindMany, findFirst: lineFindFirst },
@@ -140,10 +136,7 @@ describe('InboundFreightAmortisationService.planAllocation — the weight split'
     expect(kettle?.perUnitInr.toString()).toBe('360');
     expect(kase?.perUnitInr.toString()).toBe('9');
     // Sanity: the split adds back up to the bill.
-    const total = plan.lines.reduce(
-      (sum, l) => sum.add(l.perUnitInr.mul(l.units)),
-      D('0'),
-    );
+    const total = plan.lines.reduce((sum, l) => sum.add(l.perUnitInr.mul(l.units)), D('0'));
     expect(total.toString()).toBe('4500');
   });
 

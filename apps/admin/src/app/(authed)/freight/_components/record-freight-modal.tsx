@@ -114,18 +114,10 @@ export function RecordFreightModal({
           htmlFor="freight-mode"
           hint="Leave on the seller's default unless this consignment is an exception."
         >
-          <Select
-            id="freight-mode"
-            value={mode}
-            onChange={(e) => setMode(e.target.value)}
-          >
+          <Select id="freight-mode" value={mode} onChange={(e) => setMode(e.target.value)}>
             <option value="">Use the seller&apos;s configured mode</option>
-            <option value={InboundFreightMode.PAY_NOW}>
-              Pay now — debit the wallet on record
-            </option>
-            <option value={InboundFreightMode.PAY_LATER}>
-              Pay later — leave a receivable
-            </option>
+            <option value={InboundFreightMode.PAY_NOW}>Pay now — debit the wallet on record</option>
+            <option value={InboundFreightMode.PAY_LATER}>Pay later — leave a receivable</option>
           </Select>
         </FormField>
 
@@ -148,9 +140,7 @@ export function RecordFreightModal({
         <Button
           variant="primary"
           size="md"
-          disabled={
-            goodsReceiptId.trim() === '' || amountInr.trim() === '' || record.isPending
-          }
+          disabled={goodsReceiptId.trim() === '' || amountInr.trim() === '' || record.isPending}
           onClick={() => void submit()}
         >
           {record.isPending ? 'Recording…' : 'Record bill'}

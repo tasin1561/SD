@@ -29,16 +29,15 @@ function makeSut(opts: {
         adjustmentStore.row = {
           id: 'adj1',
           ...args.data,
-          lines: (args.data.lines as { create: Record<string, unknown>[] }).create.map(
-            (l, i) => ({ id: `al${i + 1}`, ...l }),
-          ),
+          lines: (args.data.lines as { create: Record<string, unknown>[] }).create.map((l, i) => ({
+            id: `al${i + 1}`,
+            ...l,
+          })),
         };
         return clone(adjustmentStore.row);
       }),
       findUniqueOrThrow: jest.fn(async () => clone(adjustmentStore.row)),
-      findFirst: jest.fn(async () =>
-        adjustmentStore.row ? clone(adjustmentStore.row) : null,
-      ),
+      findFirst: jest.fn(async () => (adjustmentStore.row ? clone(adjustmentStore.row) : null)),
       update: jest.fn(async (args: { data: Record<string, unknown> }) => {
         Object.assign(adjustmentStore.row!, args.data);
         return clone(adjustmentStore.row);
@@ -51,8 +50,7 @@ function makeSut(opts: {
     },
     stockBatch: {
       findFirst: jest.fn(async () => ({
-        unitCostInr:
-          opts.batchUnitCost == null ? null : new Prisma.Decimal(opts.batchUnitCost),
+        unitCostInr: opts.batchUnitCost == null ? null : new Prisma.Decimal(opts.batchUnitCost),
       })),
     },
     systemSetting: {

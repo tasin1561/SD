@@ -37,9 +37,9 @@ function makeService(
   const shipmentFindFirst = jest.fn(async () =>
     opts.shipment === undefined ? defaultShipment : opts.shipment,
   );
-  const shipmentUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(
-    async () => ({ count: opts.stampCount ?? 1 }),
-  );
+  const shipmentUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async () => ({
+    count: opts.stampCount ?? 1,
+  }));
   const warehouseFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
     opts.warehouse === undefined
       ? { id: OTHER_WH, status: WarehouseStatus.ACTIVE }
@@ -119,9 +119,7 @@ describe('RtoReceiptService.receive', () => {
       status: OrderStatus.RTO_RECEIVED,
       alreadyReceived: false,
     });
-    expect(auditLog).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'rto.received' }),
-    );
+    expect(auditLog).toHaveBeenCalledWith(expect.objectContaining({ action: 'rto.received' }));
   });
 
   it('happy from RTO_INITIATED: expectedFrom=RTO_INITIATED on the transition', async () => {
@@ -167,9 +165,7 @@ describe('RtoReceiptService.receive', () => {
 
   it('404 when AWB has no shipment', async () => {
     const { svc } = makeService({ shipment: null });
-    await expect(svc.receive(AWB, STAFF)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(svc.receive(AWB, STAFF)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('rejects ORDER_NOT_RTO_RECEIVABLE for a non-RTO status (e.g. DELIVERED)', async () => {
@@ -181,9 +177,7 @@ describe('RtoReceiptService.receive', () => {
 
   it('404 when order is missing', async () => {
     const { svc } = makeService({ orderStatus: 'missing' });
-    await expect(svc.receive(AWB, STAFF)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(svc.receive(AWB, STAFF)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('stamp idempotency: updateMany count=0 preserves prior rtoReceivedAt', async () => {

@@ -43,10 +43,7 @@ export function useHasAccessToken(): boolean {
  * never be the trust boundary. SUPER_ADMIN is NOT auto-allowed
  * (matches the API helper's discipline).
  */
-export function hasStaffRole(
-  identity: StaffMe | null,
-  allowed: readonly StaffRole[],
-): boolean {
+export function hasStaffRole(identity: StaffMe | null, allowed: readonly StaffRole[]): boolean {
   if (identity === null) return false;
   return allowed.includes(identity.role);
 }

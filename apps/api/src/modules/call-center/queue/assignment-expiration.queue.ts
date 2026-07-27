@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  type OnModuleDestroy,
-  type OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Queue, type JobsOptions } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 
@@ -37,16 +32,11 @@ export class AssignmentExpirationQueue implements OnModuleInit, OnModuleDestroy 
   constructor(private readonly redis: RedisService) {}
 
   onModuleInit(): void {
-    this.queue = new Queue<ExpireAssignmentJob>(
-      ASSIGNMENT_EXPIRATION_QUEUE_NAME,
-      {
-        connection: this.redis.createConnection(),
-        defaultJobOptions: DEFAULT_JOB_OPTIONS,
-      },
-    );
-    this.logger.log(
-      `Assignment-expiration queue ready (name=${ASSIGNMENT_EXPIRATION_QUEUE_NAME})`,
-    );
+    this.queue = new Queue<ExpireAssignmentJob>(ASSIGNMENT_EXPIRATION_QUEUE_NAME, {
+      connection: this.redis.createConnection(),
+      defaultJobOptions: DEFAULT_JOB_OPTIONS,
+    });
+    this.logger.log(`Assignment-expiration queue ready (name=${ASSIGNMENT_EXPIRATION_QUEUE_NAME})`);
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -59,10 +49,7 @@ export class AssignmentExpirationQueue implements OnModuleInit, OnModuleDestroy 
    *  the time-based check in the service). BullMQ forbids ':' in a
    *  custom jobId (its Redis key separator), so the ISO timestamp is
    *  encoded as epoch-ms and joined with '_'. */
-  async enqueueExpiration(
-    data: ExpireAssignmentJob,
-    delayMs: number,
-  ): Promise<string> {
+  async enqueueExpiration(data: ExpireAssignmentJob, delayMs: number): Promise<string> {
     const stamp = Date.parse(data.assignedAtIso);
     const jobId = `${data.assignmentId}_${Number.isNaN(stamp) ? data.assignedAtIso.replace(/[:.]/g, '-') : stamp}`;
     const job = await this.queue.add(JOB_EXPIRE_ASSIGNMENT, data, {

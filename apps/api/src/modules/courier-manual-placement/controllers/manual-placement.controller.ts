@@ -24,10 +24,7 @@ import {
   type ManualCancelResult,
   type ManualPlacementResult,
 } from '../services/manual-placement.service';
-import {
-  CancelUnfulfillableDto,
-  PlaceManualAwbDto,
-} from '../dto/manual-placement.dto';
+import { CancelUnfulfillableDto, PlaceManualAwbDto } from '../dto/manual-placement.dto';
 
 /**
  * Module 9 — manual courier placement endpoints (commit 14, CUR-8).
@@ -58,20 +55,13 @@ export class ManualPlacementController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<ManualPlacementResult> {
-    requireStaffRoles(staff, [
-      StaffRole.MANUAL_PLACEMENT_ADMIN,
-      StaffRole.SUPER_ADMIN,
-    ]);
+    requireStaffRoles(staff, [StaffRole.MANUAL_PLACEMENT_ADMIN, StaffRole.SUPER_ADMIN]);
     return this.svc.placeAwb(
       shipmentId,
       {
         awbNumber: body.awbNumber,
-        ...(body.courierName !== undefined
-          ? { courierName: body.courierName }
-          : {}),
-        ...(body.serviceType !== undefined
-          ? { serviceType: body.serviceType }
-          : {}),
+        ...(body.courierName !== undefined ? { courierName: body.courierName } : {}),
+        ...(body.serviceType !== undefined ? { serviceType: body.serviceType } : {}),
       },
       staff.id,
       ctx,
@@ -91,10 +81,7 @@ export class ManualPlacementController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<ManualCancelResult> {
-    requireStaffRoles(staff, [
-      StaffRole.MANUAL_PLACEMENT_ADMIN,
-      StaffRole.SUPER_ADMIN,
-    ]);
+    requireStaffRoles(staff, [StaffRole.MANUAL_PLACEMENT_ADMIN, StaffRole.SUPER_ADMIN]);
     return this.svc.cancelUnfulfillable(shipmentId, body.reason, staff.id, ctx);
   }
 }

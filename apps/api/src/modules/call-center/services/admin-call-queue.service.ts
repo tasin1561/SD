@@ -1,14 +1,5 @@
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import {
-  ActorType,
-  CallQueueStatus,
-  Prisma,
-  QueueClosureReason,
-} from '@skydrop/db';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ActorType, CallQueueStatus, Prisma, QueueClosureReason } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CallQueueService } from '../../call-queue/services/call-queue.service';
@@ -20,10 +11,7 @@ import {
 } from './call-attempt.service';
 import { AssignmentExpirationService } from './assignment-expiration.service';
 
-const OPEN_STATUSES: CallQueueStatus[] = [
-  CallQueueStatus.PENDING,
-  CallQueueStatus.ASSIGNED,
-];
+const OPEN_STATUSES: CallQueueStatus[] = [CallQueueStatus.PENDING, CallQueueStatus.ASSIGNED];
 
 export interface CallQueueAdminRow {
   id: string;
@@ -138,12 +126,9 @@ export class AdminCallQueueService {
     const byStatus: Record<string, number> = {};
     for (const row of byStatusRows) byStatus[row.status] = row._count._all;
     const openTotal =
-      (byStatus[CallQueueStatus.PENDING] ?? 0) +
-      (byStatus[CallQueueStatus.ASSIGNED] ?? 0);
+      (byStatus[CallQueueStatus.PENDING] ?? 0) + (byStatus[CallQueueStatus.ASSIGNED] ?? 0);
     const assignedByAgent = assignedRows
-      .filter((r): r is typeof r & { assignedAgentId: string } =>
-        Boolean(r.assignedAgentId),
-      )
+      .filter((r): r is typeof r & { assignedAgentId: string } => Boolean(r.assignedAgentId))
       .map((r) => ({ agentId: r.assignedAgentId, count: r._count._all }));
     return { byStatus, openTotal, assignedByAgent };
   }
@@ -243,11 +228,7 @@ export class AdminCallQueueService {
       distinct: ['orderId'],
     });
     for (const { orderId } of open) {
-      await this.queue.dequeueOrder(
-        orderId,
-        QueueClosureReason.ADMIN_CLOSED,
-        ctx,
-      );
+      await this.queue.dequeueOrder(orderId, QueueClosureReason.ADMIN_CLOSED, ctx);
     }
     await this.audit.log({
       actorType: ActorType.STAFF,

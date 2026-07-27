@@ -9,17 +9,20 @@ import type { StockAvailabilityService } from '../../src/modules/inventory-share
 
 const NOW = new Date('2026-05-16T12:00:00.000Z');
 
-function makeSut(opts: {
-  available?: number;
-  sellerTtlOverride?: number | null;
-  settingTtl?: number | null;
-  reservation?: Record<string, unknown> | null;
-  manyRows?: Array<Record<string, unknown>>;
-} = {}) {
+function makeSut(
+  opts: {
+    available?: number;
+    sellerTtlOverride?: number | null;
+    settingTtl?: number | null;
+    reservation?: Record<string, unknown> | null;
+    manyRows?: Array<Record<string, unknown>>;
+  } = {},
+) {
   const created: Array<Record<string, unknown>> = [];
   const updated: Array<{ where: unknown; data: Record<string, unknown> }> = [];
   const levelUpdates: Array<{ where: Record<string, unknown>; data: Record<string, unknown> }> = [];
-  const findManyCalls: Array<{ where: Record<string, unknown>; select: Record<string, unknown> }> = [];
+  const findManyCalls: Array<{ where: Record<string, unknown>; select: Record<string, unknown> }> =
+    [];
 
   const client = {
     $transaction: <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(client),
@@ -41,10 +44,12 @@ function makeSut(opts: {
       }),
     },
     stockLevel: {
-      updateMany: jest.fn(async (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
-        levelUpdates.push(args);
-        return { count: 1 };
-      }),
+      updateMany: jest.fn(
+        async (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+          levelUpdates.push(args);
+          return { count: 1 };
+        },
+      ),
     },
     seller: {
       findUnique: jest.fn(async () => ({
@@ -117,9 +122,15 @@ describe('StockReservationService.reserve (phase-1)', () => {
   });
 
   it('resolveTtlHours: override > setting > fallback', async () => {
-    expect(await makeSut({ sellerTtlOverride: 12, settingTtl: 48 }).svc.resolveTtlHours('s1')).toBe(12);
-    expect(await makeSut({ sellerTtlOverride: null, settingTtl: 48 }).svc.resolveTtlHours('s1')).toBe(48);
-    expect(await makeSut({ sellerTtlOverride: null, settingTtl: null }).svc.resolveTtlHours('s1')).toBe(48);
+    expect(await makeSut({ sellerTtlOverride: 12, settingTtl: 48 }).svc.resolveTtlHours('s1')).toBe(
+      12,
+    );
+    expect(
+      await makeSut({ sellerTtlOverride: null, settingTtl: 48 }).svc.resolveTtlHours('s1'),
+    ).toBe(48);
+    expect(
+      await makeSut({ sellerTtlOverride: null, settingTtl: null }).svc.resolveTtlHours('s1'),
+    ).toBe(48);
   });
 });
 
@@ -140,7 +151,11 @@ describe('StockReservationService.release / fulfill', () => {
     const res = await svc.release('r1', ReservationReleaseReason.ORDER_CANCELLED, {
       type: ActorType.SYSTEM,
     });
-    expect(res).toMatchObject({ qtyReleased: 4, status: ReservationStatus.RELEASED, alreadyInactive: false });
+    expect(res).toMatchObject({
+      qtyReleased: 4,
+      status: ReservationStatus.RELEASED,
+      alreadyInactive: false,
+    });
     expect(updated[0]?.data).toMatchObject({ status: ReservationStatus.RELEASED });
     expect(levelUpdates).toHaveLength(0); // phase-1: no qtyReserved change
   });
@@ -170,10 +185,20 @@ describe('StockReservationService.release / fulfill', () => {
 
   it('release is idempotent for an already-terminal reservation', async () => {
     const { svc, updated } = makeSut({
-      reservation: { id: 'r1', status: ReservationStatus.RELEASED, qtyReserved: 4, binId: null, batchId: null },
+      reservation: {
+        id: 'r1',
+        status: ReservationStatus.RELEASED,
+        qtyReserved: 4,
+        binId: null,
+        batchId: null,
+      },
     });
     const res = await svc.release('r1', ReservationReleaseReason.OTHER);
-    expect(res).toMatchObject({ qtyReleased: 0, alreadyInactive: true, status: ReservationStatus.RELEASED });
+    expect(res).toMatchObject({
+      qtyReleased: 0,
+      alreadyInactive: true,
+      status: ReservationStatus.RELEASED,
+    });
     expect(updated).toHaveLength(0);
   });
 

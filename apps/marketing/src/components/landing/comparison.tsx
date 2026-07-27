@@ -120,9 +120,7 @@ export function Comparison(): ReactElement {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-line">
-                  <th className="text-left px-6 py-5 telemetry text-fg-muted w-1/3">
-                    capability
-                  </th>
+                  <th className="text-left px-6 py-5 telemetry text-fg-muted w-1/3">capability</th>
                   <th
                     className="text-left px-6 py-5"
                     style={{

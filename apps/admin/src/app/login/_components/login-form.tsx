@@ -2,11 +2,7 @@
 
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
-import {
-  AccessTokenStore,
-  ApiClient,
-  ApiError,
-} from '@skydrop/api-client';
+import { AccessTokenStore, ApiClient, ApiError } from '@skydrop/api-client';
 
 /**
  * Login form. The login page isn't wrapped in an AuthProvider (the
@@ -98,7 +94,11 @@ export function LoginForm(): ReactElement {
             aria-label={showPw ? 'Hide password' : 'Show password'}
             className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-10 h-10 rounded-lg text-text-muted hover:text-text-bright transition-colors"
           >
-            {showPw ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+            {showPw ? (
+              <EyeOff size={16} aria-hidden="true" />
+            ) : (
+              <Eye size={16} aria-hidden="true" />
+            )}
           </button>
         </div>
       </div>

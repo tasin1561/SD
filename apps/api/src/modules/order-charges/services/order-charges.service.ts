@@ -1,15 +1,5 @@
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import {
-  ActorType,
-  ChargeType,
-  OrderChargeStatus,
-  PaymentMode,
-  Prisma,
-} from '@skydrop/db';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ActorType, ChargeType, OrderChargeStatus, PaymentMode, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import {
@@ -75,10 +65,7 @@ export class OrderChargesService {
    *  AND ownership-guarded against the seller. Throws NOT_FOUND if
    *  the order doesn't belong to the seller (matches the existing
    *  seller-orders 404 shape). */
-  async listForOrderSeller(
-    sellerId: string,
-    orderId: string,
-  ): Promise<readonly OrderChargeView[]> {
+  async listForOrderSeller(sellerId: string, orderId: string): Promise<readonly OrderChargeView[]> {
     const order = await this.prisma.client.order.findFirst({
       where: { id: orderId, sellerId, deletedAt: null },
       select: { id: true },
@@ -110,14 +97,13 @@ export class OrderChargesService {
    * operator; the post-commit hook should never noisily error
    * because of a benign duplicate).
    */
-  async persistForOrderSystem(orderId: string): Promise<PersistChargesResult | { skipped: true; reason: string }> {
+  async persistForOrderSystem(
+    orderId: string,
+  ): Promise<PersistChargesResult | { skipped: true; reason: string }> {
     try {
       return await this.persistForOrderInternal(orderId, { kind: 'system' });
     } catch (e) {
-      if (
-        e instanceof Error &&
-        e.message.includes('CHARGES_ALREADY_EXIST')
-      ) {
+      if (e instanceof Error && e.message.includes('CHARGES_ALREADY_EXIST')) {
         return { skipped: true, reason: 'CHARGES_ALREADY_EXIST' };
       }
       throw e;

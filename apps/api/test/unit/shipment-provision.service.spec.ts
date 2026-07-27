@@ -23,20 +23,18 @@ function makeService(
   const orderShipmentFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
     async () => opts.openForVoid ?? [],
   );
-  const systemSettingFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async (a) => {
-      const key = (a.where as AnyArgs).key as string;
-      const v = settings[key];
-      return v == null ? null : { valueString: v };
-    },
-  );
+  const systemSettingFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async (a) => {
+    const key = (a.where as AnyArgs).key as string;
+    const v = settings[key];
+    return v == null ? null : { valueString: v };
+  });
   const shipmentCreate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({
     id: 'sh1',
     shipmentNumber: 'SH-2026-05-000001',
   }));
-  const shipmentUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(
-    async () => ({ count: 1 }),
-  );
+  const shipmentUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async () => ({
+    count: 1,
+  }));
   const txClient = {
     shipment: { create: shipmentCreate, updateMany: shipmentUpdateMany },
   };
@@ -54,11 +52,8 @@ function makeService(
     systemSetting: { findUnique: typeof systemSettingFindUnique };
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
   };
-  client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> =>
-    fn(txClient);
-  const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown?]>(
-    async () => 'a1',
-  );
+  client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient);
+  const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown?]>(async () => 'a1');
   const audit = { log: auditLog };
   const nextShipmentNumber = jest.fn(async () => 'SH-2026-05-000001');
   const numbering = { nextShipmentNumber };
@@ -137,9 +132,7 @@ describe('ShipmentProvisionService.provisionFromSnapshot', () => {
   it('honors a supplied totalWeightGrams over the computed sum', async () => {
     const { svc, shipmentCreate } = makeService();
     await svc.provisionFromSnapshot({ ...SNAPSHOT, totalWeightGrams: 999 });
-    expect((shipmentCreate.mock.calls[0]![0].data as AnyArgs).totalWeightGrams).toBe(
-      999,
-    );
+    expect((shipmentCreate.mock.calls[0]![0].data as AnyArgs).totalWeightGrams).toBe(999);
   });
 
   it('throws SHIPMENT_PROVISION_SETTING_MISSING when default courier is unset', async () => {

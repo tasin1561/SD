@@ -1,9 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   ActorType,
   OrderStatus,
@@ -17,10 +12,7 @@ import { OrderReadService } from '../../order/services/order-read.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
 import { StockMutationService } from '../../inventory-shared/stock-mutation.service';
 import { StockUnitService } from '../../inventory-shared/stock-unit.service';
-import {
-  RtoRestockTargetService,
-  type RestockTarget,
-} from './rto-restock-target.service';
+import { RtoRestockTargetService, type RestockTarget } from './rto-restock-target.service';
 import { InboundFreightAmortisationService } from '../../inbound-freight/services/inbound-freight-amortisation.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
@@ -180,12 +172,8 @@ export class RtoDispositionService {
         shipmentId,
         orderId,
         status: OrderStatus.RTO_RESTOCKED,
-        restockedCount: summary.filter(
-          (s) => s.disposition === RtoDisposition.RESTOCK,
-        ).length,
-        writtenOffCount: summary.filter(
-          (s) => s.disposition === RtoDisposition.WRITE_OFF,
-        ).length,
+        restockedCount: summary.filter((s) => s.disposition === RtoDisposition.RESTOCK).length,
+        writtenOffCount: summary.filter((s) => s.disposition === RtoDisposition.WRITE_OFF).length,
         items: summary,
         movementsAlreadyApplied: true,
         alreadyFinalized: true,
@@ -216,9 +204,7 @@ export class RtoDispositionService {
       });
     }
 
-    const restockItems = shipment.items.filter(
-      (i) => i.rtoDisposition === RtoDisposition.RESTOCK,
-    );
+    const restockItems = shipment.items.filter((i) => i.rtoDisposition === RtoDisposition.RESTOCK);
     const writeOffItems = shipment.items.filter(
       (i) => i.rtoDisposition === RtoDisposition.WRITE_OFF,
     );
@@ -256,8 +242,7 @@ export class RtoDispositionService {
     // not something to guess at.
     //
     // WRITE_OFF-only finalize never reaches this: it emits no movement.
-    const restockWarehouseId =
-      shipment.rtoReceivedWarehouseId ?? shipment.originWarehouseId;
+    const restockWarehouseId = shipment.rtoReceivedWarehouseId ?? shipment.originWarehouseId;
     const crossWarehouseRestock =
       restockItems.length > 0 && restockWarehouseId !== shipment.originWarehouseId;
 

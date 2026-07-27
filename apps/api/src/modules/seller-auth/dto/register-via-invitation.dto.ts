@@ -1,12 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsIn,
-  IsOptional,
-  IsString,
-  Matches,
-  MaxLength,
-  MinLength,
-} from 'class-validator';
+import { IsIn, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 
 const E164 = /^\+[1-9]\d{6,14}$/;
 
@@ -34,7 +27,11 @@ export class SellerRegisterViaInvitationDto {
   @Matches(E164, { message: 'phone must be E.164 (e.g., +8801712345678)' })
   phone!: string;
 
-  @ApiProperty({ required: false, example: '+8801712345678', description: 'E.164 format, optional' })
+  @ApiProperty({
+    required: false,
+    example: '+8801712345678',
+    description: 'E.164 format, optional',
+  })
   @IsOptional()
   @IsString()
   @Matches(E164, { message: 'whatsapp must be E.164 (e.g., +8801712345678)' })

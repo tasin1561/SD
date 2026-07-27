@@ -15,22 +15,13 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CsvImportType } from '@skydrop/db';
 import { CurrentSeller } from '../../common/decorators/current-seller.decorator';
-import {
-  ClientInfo,
-  type ClientInfoPayload,
-} from '../../common/decorators/client-info.decorator';
+import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/client-info.decorator';
 import { SellerAuthAllowSuspended } from '../../common/decorators/seller-auth-allow-suspended.decorator';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../common/types/request';
-import {
-  CreateCsvMappingDto,
-  UpdateCsvMappingDto,
-} from './dto/csv-mapping.dto';
-import {
-  CsvMappingService,
-  type CsvMappingView,
-} from './services/csv-mapping.service';
+import { CreateCsvMappingDto, UpdateCsvMappingDto } from './dto/csv-mapping.dto';
+import { CsvMappingService, type CsvMappingView } from './services/csv-mapping.service';
 import { SellerUserRole } from '@skydrop/db';
 import { SellerRoles } from '../../common/decorators/seller-roles.decorator';
 

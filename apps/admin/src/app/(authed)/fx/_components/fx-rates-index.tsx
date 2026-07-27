@@ -34,10 +34,7 @@ export function FxRatesIndex(): ReactElement {
       {list.isLoading ? (
         <LoadingState label="Loading rates…" />
       ) : list.isError ? (
-        <ErrorState
-          message={list.error?.message ?? 'Failed.'}
-          retry={() => void list.refetch()}
-        />
+        <ErrorState message={list.error?.message ?? 'Failed.'} retry={() => void list.refetch()} />
       ) : !list.data || list.data.length === 0 ? (
         <Card>
           <CardBody>
@@ -71,9 +68,7 @@ export function FxRatesIndex(): ReactElement {
                   <td className="px-3 py-2 text-text-body text-xs">
                     {r.source}
                     {r.isManualOverride && (
-                      <span className="text-pending text-[10px] ml-2 uppercase">
-                        Manual
-                      </span>
+                      <span className="text-pending text-[10px] ml-2 uppercase">Manual</span>
                     )}
                   </td>
                   <td className="px-3 py-2 text-text-muted font-mono text-xs">
@@ -93,11 +88,7 @@ export function FxRatesIndex(): ReactElement {
                       >
                         Timeline
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditing(r)}
-                      >
+                      <Button variant="ghost" size="sm" onClick={() => setEditing(r)}>
                         Override
                       </Button>
                     </div>

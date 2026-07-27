@@ -13,10 +13,7 @@ import { SellerAuthAllowSuspended } from '../../../common/decorators/seller-auth
 import { SellerJwtGuard } from '../../../common/guards/seller-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
-import {
-  OrderChargesService,
-  type OrderChargeView,
-} from '../services/order-charges.service';
+import { OrderChargesService, type OrderChargeView } from '../services/order-charges.service';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 

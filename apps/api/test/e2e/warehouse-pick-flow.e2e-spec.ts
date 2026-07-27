@@ -62,10 +62,7 @@ describe('Warehouse pick flow (e2e)', () => {
       .expect(201);
     sellerAuth = { Authorization: `Bearer ${reg.body.accessToken}` };
 
-    const whs = await request(h.baseUrl)
-      .get('/admin/warehouses')
-      .set(staffAuth)
-      .expect(200);
+    const whs = await request(h.baseUrl).get('/admin/warehouses').set(staffAuth).expect(200);
     warehouseId = (whs.body as Array<{ id: string; code: string }>).find(
       (w) => w.code === 'BLR-01',
     )!.id;
@@ -109,9 +106,7 @@ describe('Warehouse pick flow (e2e)', () => {
       .post(`/admin/goods-receipts/${gr.body.id}/lines`)
       .set(staffAuth)
       .send({
-        lines: [
-          { lineId: gr.body.lines[0].id, receivedQty: qty, putawayBinId: binId },
-        ],
+        lines: [{ lineId: gr.body.lines[0].id, receivedQty: qty, putawayBinId: binId }],
       })
       .expect(200);
     await request(h.baseUrl)
@@ -137,10 +132,7 @@ describe('Warehouse pick flow (e2e)', () => {
       })
       .expect(201);
     const id = created.body.id as string;
-    await request(h.baseUrl)
-      .post(`/seller/orders/${id}/submit`)
-      .set(sellerAuth)
-      .expect(200);
+    await request(h.baseUrl).post(`/seller/orders/${id}/submit`).set(sellerAuth).expect(200);
     await h.app.get(OrderWriteService).transitionStatus({
       orderId: id,
       to: OrderStatus.CONFIRMED,
@@ -181,10 +173,7 @@ describe('Warehouse pick flow (e2e)', () => {
     const shipmentId = await provisionShipment(orderId);
 
     // pullNext claims the shipment
-    const next = await request(h.baseUrl)
-      .post('/warehouse/picks/next')
-      .set(staffAuth)
-      .expect(200);
+    const next = await request(h.baseUrl).post('/warehouse/picks/next').set(staffAuth).expect(200);
     expect(next.body.pick).not.toBeNull();
     expect(next.body.pick.shipmentId).toBe(shipmentId);
     expect(next.body.pick.items).toHaveLength(1);
@@ -245,10 +234,7 @@ describe('Warehouse pick flow (e2e)', () => {
   });
 
   it('pullNext returns pick:null when queue is empty', async () => {
-    const next = await request(h.baseUrl)
-      .post('/warehouse/picks/next')
-      .set(staffAuth)
-      .expect(200);
+    const next = await request(h.baseUrl).post('/warehouse/picks/next').set(staffAuth).expect(200);
     expect(next.body.pick).toBeNull();
   });
 
@@ -258,10 +244,7 @@ describe('Warehouse pick flow (e2e)', () => {
     const shipmentId = await provisionShipment(orderId);
 
     // Picker pulls and starts (so phase-2 holds exist on stock_levels).
-    await request(h.baseUrl)
-      .post('/warehouse/picks/next')
-      .set(staffAuth)
-      .expect(200);
+    await request(h.baseUrl).post('/warehouse/picks/next').set(staffAuth).expect(200);
     await request(h.baseUrl)
       .post(`/warehouse/picks/${shipmentId}/start`)
       .set(staffAuth)

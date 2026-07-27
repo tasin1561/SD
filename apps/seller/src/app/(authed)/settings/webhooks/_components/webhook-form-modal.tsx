@@ -1,14 +1,7 @@
 'use client';
 
 import { useState, type FormEvent, type ReactElement } from 'react';
-import {
-  Button,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Textarea,
-} from '@skydrop/ui/components';
+import { Button, FormField, Input, Modal, ModalFooter, Textarea } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 import type {
   CreateWebhookEndpointRequest,
@@ -16,10 +9,7 @@ import type {
   WebhookEndpointView,
   WebhookEndpointWithSecret,
 } from '@skydrop/api-client';
-import {
-  useCreateWebhookEndpoint,
-  useUpdateWebhookEndpoint,
-} from '@/lib/api-hooks';
+import { useCreateWebhookEndpoint, useUpdateWebhookEndpoint } from '@/lib/api-hooks';
 
 /**
  * Create / edit form. Events entered as comma-separated; the server
@@ -162,17 +152,17 @@ export function WebhookFormModal(
         )}
 
         <ModalFooter>
-          <Button
-            type="button"
-            variant="ghost"
-            size="md"
-            disabled={busy}
-            onClick={props.onClose}
-          >
+          <Button type="button" variant="ghost" size="md" disabled={busy} onClick={props.onClose}>
             Cancel
           </Button>
           <Button type="submit" variant="primary" size="md" disabled={busy}>
-            {busy ? (mode === 'create' ? 'Creating…' : 'Saving…') : mode === 'create' ? 'Create endpoint' : 'Save'}
+            {busy
+              ? mode === 'create'
+                ? 'Creating…'
+                : 'Saving…'
+              : mode === 'create'
+                ? 'Create endpoint'
+                : 'Save'}
           </Button>
         </ModalFooter>
       </form>

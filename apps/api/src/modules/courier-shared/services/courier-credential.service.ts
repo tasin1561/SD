@@ -8,10 +8,7 @@ import { ActorType, CredentialEnvironment } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { EnvService } from '../../../config/env.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
-import {
-  CourierCredentialCipherError,
-  decryptCredential,
-} from '../util/courier-credential-cipher';
+import { CourierCredentialCipherError, decryptCredential } from '../util/courier-credential-cipher';
 
 /** Plaintext credentials are NEVER cached longer than this (CUR-1 /
  *  credential rule #3). */
@@ -171,10 +168,7 @@ export class CourierCredentialService {
     environment: CredentialEnvironment,
     actor: CourierCredentialActor,
   ): Promise<Readonly<Record<string, string>>> {
-    if (
-      credential.expiresAt !== null &&
-      credential.expiresAt.getTime() <= Date.now()
-    ) {
+    if (credential.expiresAt !== null && credential.expiresAt.getTime() <= Date.now()) {
       throw new InternalServerErrorException({
         code: 'COURIER_CREDENTIAL_EXPIRED',
         message: `The active ${environment} credential for ${courierCode} has expired`,
@@ -200,14 +194,8 @@ export class CourierCredentialService {
     try {
       const plaintext = decryptCredential(credential.encryptedPayload, key);
       const parsed: unknown = JSON.parse(plaintext);
-      if (
-        typeof parsed !== 'object' ||
-        parsed === null ||
-        Array.isArray(parsed)
-      ) {
-        throw new CourierCredentialCipherError(
-          'decrypted credential payload is not a JSON object',
-        );
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        throw new CourierCredentialCipherError('decrypted credential payload is not a JSON object');
       }
       fields = {};
       for (const [k, v] of Object.entries(parsed)) {

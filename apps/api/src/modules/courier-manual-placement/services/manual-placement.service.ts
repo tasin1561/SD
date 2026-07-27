@@ -1,15 +1,5 @@
-import {
-  ConflictException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
-import {
-  ActorType,
-  OrderCancellationReason,
-  OrderStatus,
-  ShipmentStatus,
-} from '@skydrop/db';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ActorType, OrderCancellationReason, OrderStatus, ShipmentStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
@@ -99,8 +89,7 @@ export class ManualPlacementService {
     ctx?: ClientContext,
   ): Promise<ManualPlacementResult> {
     const awbNumber = input.awbNumber.trim();
-    const { shipment, orderId, orderStatus, sellerId } =
-      await this.loadShipmentContext(shipmentId);
+    const { shipment, orderId, orderStatus, sellerId } = await this.loadShipmentContext(shipmentId);
 
     // Idempotency / convergent recovery.
     if (shipment.awbNumber !== null) {
@@ -126,13 +115,7 @@ export class ManualPlacementService {
           { shipmentId, orderId },
           'Manual AWB already stamped but order still PENDING_MANUAL_PLACEMENT — re-running the dispatch transition',
         );
-        return this.dispatchAfterStamp(
-          shipmentId,
-          orderId,
-          shipment.awbNumber,
-          staffId,
-          ctx,
-        );
+        return this.dispatchAfterStamp(shipmentId, orderId, shipment.awbNumber, staffId, ctx);
       }
       throw new ConflictException({
         code: 'ORDER_NOT_MANUAL_PLACEMENT',
@@ -292,17 +275,14 @@ export class ManualPlacementService {
    *  allocated (a residual phase-1 reservation means the goods were
    *  never picked; dispatching would leak the reservation). */
   private async assertFullyAllocated(orderId: string): Promise<void> {
-    const active =
-      await this.reservations.listActiveForOrderWithLocations(orderId);
+    const active = await this.reservations.listActiveForOrderWithLocations(orderId);
     if (active.length === 0) {
       throw new ConflictException({
         code: 'MANUAL_PLACEMENT_NO_RESERVATIONS',
         message: `Order ${orderId} has no active reservations — cannot manually dispatch`,
       });
     }
-    const unallocated = active.some(
-      (r) => r.binId === null || r.batchId === null,
-    );
+    const unallocated = active.some((r) => r.binId === null || r.batchId === null);
     if (unallocated) {
       throw new ConflictException({
         code: 'MANUAL_PLACEMENT_NOT_ALLOCATED',

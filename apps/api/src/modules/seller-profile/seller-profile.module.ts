@@ -11,12 +11,7 @@ import { SellerProfileService } from './services/seller-profile.service';
 @Module({
   imports: [SellerOnboardingModule, SpacesModule, AuthCommonModule],
   controllers: [SellerProfileController],
-  providers: [
-    SellerProfileService,
-    BankAccountCipherService,
-    SellerLogoService,
-    SellerJwtGuard,
-  ],
+  providers: [SellerProfileService, BankAccountCipherService, SellerLogoService, SellerJwtGuard],
   exports: [SellerProfileService, BankAccountCipherService],
 })
 export class SellerProfileModule {}

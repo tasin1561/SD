@@ -42,7 +42,9 @@ export class AdminSellerCourierAccountController {
 
   @Post()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Link (or update the weight of) a seller-to-courier-account assignment' })
+  @ApiOperation({
+    summary: 'Link (or update the weight of) a seller-to-courier-account assignment',
+  })
   link(
     @Param('sellerId') sellerId: string,
     @Body() body: LinkSellerCourierAccountDto,
@@ -53,7 +55,7 @@ export class AdminSellerCourierAccountController {
 
   @Patch(':courierAccountId')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Update a link\'s distribution weight or active state' })
+  @ApiOperation({ summary: "Update a link's distribution weight or active state" })
   update(
     @Param('sellerId') sellerId: string,
     @Param('courierAccountId') courierAccountId: string,
@@ -65,7 +67,9 @@ export class AdminSellerCourierAccountController {
 
   @Delete(':courierAccountId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Remove a seller-to-courier-account link (reverts to the default account)' })
+  @ApiOperation({
+    summary: 'Remove a seller-to-courier-account link (reverts to the default account)',
+  })
   unlink(
     @Param('sellerId') sellerId: string,
     @Param('courierAccountId') courierAccountId: string,

@@ -7,11 +7,13 @@ type AnyArgs = Record<string, unknown>;
 
 const SELLER = 'seller-1';
 
-function makeSut(opts: {
-  variants?: Array<{ id: string; inventoryMode: InventoryMode | null }>;
-  sellerDefault?: string;
-  settingsThrows?: boolean;
-} = {}) {
+function makeSut(
+  opts: {
+    variants?: Array<{ id: string; inventoryMode: InventoryMode | null }>;
+    sellerDefault?: string;
+    settingsThrows?: boolean;
+  } = {},
+) {
   const findUnique = jest.fn(async (args: AnyArgs) => {
     const id = String((args['where'] as AnyArgs)['id']);
     return opts.variants?.find((v) => v.id === id) ?? null;
@@ -27,9 +29,7 @@ function makeSut(opts: {
       key,
       valueType: SettingValueType.STRING,
       value:
-        key === 'inventory.strict_unit_serial_prefix'
-          ? 'ACME'
-          : (opts.sellerDefault ?? 'NORMAL'),
+        key === 'inventory.strict_unit_serial_prefix' ? 'ACME' : (opts.sellerDefault ?? 'NORMAL'),
       source: 'SYSTEM_DEFAULT' as const,
     };
   });
@@ -44,9 +44,7 @@ describe('InventoryModeService.resolveForVariant', () => {
       variants: [{ id: 'v-1', inventoryMode: InventoryMode.STRICT }],
       sellerDefault: 'NORMAL',
     });
-    await expect(svc.resolveForVariant(SELLER, 'v-1')).resolves.toBe(
-      InventoryMode.STRICT,
-    );
+    await expect(svc.resolveForVariant(SELLER, 'v-1')).resolves.toBe(InventoryMode.STRICT);
   });
 
   it('a null variant mode falls back to the seller default', async () => {
@@ -54,23 +52,17 @@ describe('InventoryModeService.resolveForVariant', () => {
       variants: [{ id: 'v-1', inventoryMode: null }],
       sellerDefault: 'STRICT',
     });
-    await expect(svc.resolveForVariant(SELLER, 'v-1')).resolves.toBe(
-      InventoryMode.STRICT,
-    );
+    await expect(svc.resolveForVariant(SELLER, 'v-1')).resolves.toBe(InventoryMode.STRICT);
   });
 
   it('defaults to NORMAL — strict is opt-in, never inferred', async () => {
     const { svc } = makeSut({ variants: [{ id: 'v-1', inventoryMode: null }] });
-    await expect(svc.resolveForVariant(SELLER, 'v-1')).resolves.toBe(
-      InventoryMode.NORMAL,
-    );
+    await expect(svc.resolveForVariant(SELLER, 'v-1')).resolves.toBe(InventoryMode.NORMAL);
   });
 
   it('a missing variant still resolves (to the seller default) rather than throwing', async () => {
     const { svc } = makeSut({ sellerDefault: 'STRICT' });
-    await expect(svc.resolveForVariant(SELLER, 'ghost')).resolves.toBe(
-      InventoryMode.STRICT,
-    );
+    await expect(svc.resolveForVariant(SELLER, 'ghost')).resolves.toBe(InventoryMode.STRICT);
   });
 
   it('FAILS OPEN to NORMAL when settings are unreadable — a settings outage must never stop the pick floor', async () => {
@@ -78,9 +70,7 @@ describe('InventoryModeService.resolveForVariant', () => {
       variants: [{ id: 'v-1', inventoryMode: null }],
       settingsThrows: true,
     });
-    await expect(svc.resolveForVariant(SELLER, 'v-1')).resolves.toBe(
-      InventoryMode.NORMAL,
-    );
+    await expect(svc.resolveForVariant(SELLER, 'v-1')).resolves.toBe(InventoryMode.NORMAL);
   });
 });
 

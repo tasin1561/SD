@@ -1,20 +1,10 @@
-import {
-  Body,
-  Controller,
-  HttpCode,
-  HttpStatus,
-  Post,
-  Res,
-} from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IsString, MaxLength, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
-import {
-  ClientInfo,
-  type ClientInfoPayload,
-} from '../../common/decorators/client-info.decorator';
+import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/client-info.decorator';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import { setSellerRefreshCookie } from '../../common/cookies/auth-cookies';
 import { SellerAuthService } from '../seller-auth/seller-auth.service';
@@ -71,10 +61,7 @@ export class SellerTeamPublicController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<AccessTokenResponse> {
     const accepted = await this.svc.accept(body.token, body.password, body.fullName, ctx);
-    const result = await this.auth.login(
-      { email: accepted.email, password: body.password },
-      ctx,
-    );
+    const result = await this.auth.login({ email: accepted.email, password: body.password }, ctx);
     setSellerRefreshCookie(res, result.refresh.token, result.refresh.expiresAt);
     return {
       accessToken: result.accessToken.token,

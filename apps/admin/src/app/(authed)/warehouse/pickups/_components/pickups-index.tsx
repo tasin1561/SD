@@ -79,10 +79,7 @@ export function PickupsIndex(): ReactElement {
       />
 
       {list.isError ? (
-        <ErrorNote
-          message={serverVerdict(list.error)}
-          retry={() => void list.refetch()}
-        />
+        <ErrorNote message={serverVerdict(list.error)} retry={() => void list.refetch()} />
       ) : list.isLoading ? (
         <Card>
           <SkeletonRows rows={4} cols={6} />
@@ -120,10 +117,10 @@ export function PickupsIndex(): ReactElement {
       <Card className="mt-4">
         <CardBody>
           <p className="text-text-muted text-xs leading-relaxed">
-            The courier accepts only one open request per location per day. A
-            failed attempt keeps the day claimed on purpose — when a call fails
-            we cannot tell whether they registered it, and assuming they did not
-            is how two vans arrive. Free it only after checking their panel.
+            The courier accepts only one open request per location per day. A failed attempt keeps
+            the day claimed on purpose — when a call fails we cannot tell whether they registered
+            it, and assuming they did not is how two vans arrive. Free it only after checking their
+            panel.
           </p>
         </CardBody>
       </Card>
@@ -218,9 +215,7 @@ function PickupRow({ row }: { readonly row: PickupRequestView }): ReactElement {
               Free the day
             </Button>
           )}
-          {!openRequest && !releasable && (
-            <span className="text-text-faint text-xs">—</span>
-          )}
+          {!openRequest && !releasable && <span className="text-text-faint text-xs">—</span>}
         </div>
 
         <Modal
@@ -244,9 +239,8 @@ function PickupRow({ row }: { readonly row: PickupRequestView }): ReactElement {
               aria-hidden
             />
             <p className="text-[var(--color-critical)] text-xs leading-relaxed">
-              This attempt failed without the courier returning an id, so it
-              probably never registered — but &ldquo;probably&rdquo; is why this
-              is a deliberate act and audited.
+              This attempt failed without the courier returning an id, so it probably never
+              registered — but &ldquo;probably&rdquo; is why this is a deliberate act and audited.
             </p>
           </div>
           <FormField
@@ -271,9 +265,7 @@ function PickupRow({ row }: { readonly row: PickupRequestView }): ReactElement {
             <Button
               variant="destructive"
               size="md"
-              disabled={
-                reason.trim().length < MIN_RELEASE_REASON || release.isPending
-              }
+              disabled={reason.trim().length < MIN_RELEASE_REASON || release.isPending}
               onClick={() => void doRelease()}
             >
               {release.isPending ? 'Freeing…' : 'Free the day'}
@@ -297,9 +289,7 @@ function RaisePickupModal({
   const raise = useRaisePickup();
 
   const [warehouseId, setWarehouseId] = useState('');
-  const [pickupDate, setPickupDate] = useState(() =>
-    new Date().toISOString().slice(0, 10),
-  );
+  const [pickupDate, setPickupDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [pickupTime, setPickupTime] = useState('16:00:00');
   const [count, setCount] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -364,11 +354,7 @@ function RaisePickupModal({
               step={1}
               value={pickupTime}
               onChange={(e) =>
-                setPickupTime(
-                  e.target.value.length === 5
-                    ? `${e.target.value}:00`
-                    : e.target.value,
-                )
+                setPickupTime(e.target.value.length === 5 ? `${e.target.value}:00` : e.target.value)
               }
             />
           </FormField>
@@ -400,10 +386,7 @@ function RaisePickupModal({
           variant="primary"
           size="md"
           disabled={
-            warehouseId === '' ||
-            count.trim() === '' ||
-            Number(count) < 1 ||
-            raise.isPending
+            warehouseId === '' || count.trim() === '' || Number(count) < 1 || raise.isPending
           }
           onClick={() => void submit()}
         >

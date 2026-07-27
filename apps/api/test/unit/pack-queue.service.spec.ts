@@ -18,34 +18,30 @@ function makeService(
       return id === undefined ? [] : [{ id }];
     },
   );
-  const shipmentFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async (args) => {
-      const id = (args.where as { id: string }).id;
-      const oid = opts.orderIdForShipment
-        ? opts.orderIdForShipment(id)
-        : `o-${id}`;
-      return {
-        id,
-        shipmentNumber: `SH-${id}`,
-        courierCode: 'delhivery',
-        pickCompletedAt: new Date('2026-05-19T10:00:00Z'),
-        orderShipments: oid === null ? [] : [{ orderId: oid }],
-        items: [
-          {
-            id: `si-${id}`,
-            orderItemId: `oi-${id}`,
-            skuCode: 'SKU',
-            productName: 'P',
-            variantLabel: null,
-            quantity: 2,
-            unitWeightGrams: 100,
-            pickedBinId: 'bin-1',
-            pickedBatchId: 'bat-1',
-          },
-        ],
-      };
-    },
-  );
+  const shipmentFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async (args) => {
+    const id = (args.where as { id: string }).id;
+    const oid = opts.orderIdForShipment ? opts.orderIdForShipment(id) : `o-${id}`;
+    return {
+      id,
+      shipmentNumber: `SH-${id}`,
+      courierCode: 'delhivery',
+      pickCompletedAt: new Date('2026-05-19T10:00:00Z'),
+      orderShipments: oid === null ? [] : [{ orderId: oid }],
+      items: [
+        {
+          id: `si-${id}`,
+          orderItemId: `oi-${id}`,
+          skuCode: 'SKU',
+          productName: 'P',
+          variantLabel: null,
+          quantity: 2,
+          unitWeightGrams: 100,
+          pickedBinId: 'bin-1',
+          pickedBatchId: 'bat-1',
+        },
+      ],
+    };
+  });
   const txClient = {
     $queryRawUnsafe: queryRawUnsafe,
     shipment: { findUnique: shipmentFindUnique },
@@ -53,8 +49,7 @@ function makeService(
   const client = {} as {
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
   };
-  client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> =>
-    fn(txClient);
+  client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient);
 
   const getById = jest.fn(async () =>
     opts.order === undefined ? { orderId: 'resolved' } : opts.order,
@@ -106,10 +101,7 @@ describe('PackQueueService.pullNext', () => {
 
   it('concurrent pulls on a 2-parcel queue: distinct parcels (SKIP LOCKED)', async () => {
     const { svc } = makeService({ queue: ['s1', 's2'] });
-    const [a, b] = await Promise.all([
-      svc.pullNext('staff-1'),
-      svc.pullNext('staff-2'),
-    ]);
+    const [a, b] = await Promise.all([svc.pullNext('staff-1'), svc.pullNext('staff-2')]);
     const ids = [a?.shipmentId, b?.shipmentId].sort();
     expect(ids).toEqual(['s1', 's2']);
   });

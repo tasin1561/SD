@@ -26,10 +26,7 @@ import {
   RecordInboundFreightDto,
   WaiveInboundFreightDto,
 } from '../dto/inbound-freight.dto';
-import {
-  InboundFreightService,
-  type FreightChargeView,
-} from '../services/inbound-freight.service';
+import { InboundFreightService, type FreightChargeView } from '../services/inbound-freight.service';
 
 /**
  * R3 admin surface — recording and resolving the BD→India freight bill.
@@ -49,9 +46,7 @@ export class AdminInboundFreightController {
   @Get()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'List inbound freight bills (optionally by seller / status)' })
-  list(
-    @Query() query: ListInboundFreightQueryDto,
-  ): Promise<readonly FreightChargeView[]> {
+  list(@Query() query: ListInboundFreightQueryDto): Promise<readonly FreightChargeView[]> {
     return this.svc.listForAdmin({
       ...(query.sellerId === undefined ? {} : { sellerId: query.sellerId }),
       ...(query.status === undefined ? {} : { status: query.status }),

@@ -36,8 +36,12 @@ describe('RecipientAddressCacheService', () => {
 
     it('differs for a different address and for a different landmark', () => {
       const base = RecipientAddressCacheService.computeHash(BASE);
-      expect(RecipientAddressCacheService.computeHash({ ...BASE, postalCode: '560002' })).not.toBe(base);
-      expect(RecipientAddressCacheService.computeHash({ ...BASE, landmark: 'near park' })).not.toBe(base);
+      expect(RecipientAddressCacheService.computeHash({ ...BASE, postalCode: '560002' })).not.toBe(
+        base,
+      );
+      expect(RecipientAddressCacheService.computeHash({ ...BASE, landmark: 'near park' })).not.toBe(
+        base,
+      );
     });
   });
 
@@ -48,7 +52,9 @@ describe('RecipientAddressCacheService', () => {
       await svc.recordAddress(client, 'c1', BASE, now);
 
       const arg = cache.upsert.mock.calls[0]![0] as AnyArgs;
-      const where = arg.where as { customerId_addressHash: { customerId: string; addressHash: string } };
+      const where = arg.where as {
+        customerId_addressHash: { customerId: string; addressHash: string };
+      };
       expect(where.customerId_addressHash.customerId).toBe('c1');
       expect(where.customerId_addressHash.addressHash).toBe(
         RecipientAddressCacheService.computeHash(BASE),

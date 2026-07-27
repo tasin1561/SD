@@ -11,13 +11,7 @@
  * prefers-reduced-motion is NOT set. Touch devices get the plain panel.
  */
 
-import {
-  useEffect,
-  useRef,
-  type CSSProperties,
-  type ReactElement,
-  type ReactNode,
-} from 'react';
+import { useEffect, useRef, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 
 function interactive(): boolean {
   return (
@@ -65,8 +59,8 @@ export function TiltPanel({
 
     const onMove = (e: PointerEvent): void => {
       const r = el.getBoundingClientRect();
-      const nx = (e.clientX - r.left) / r.width;   // 0..1
-      const ny = (e.clientY - r.top) / r.height;   // 0..1
+      const nx = (e.clientX - r.left) / r.width; // 0..1
+      const ny = (e.clientY - r.top) / r.height; // 0..1
       targetRy = (nx - 0.5) * 2 * max;
       targetRx = -(ny - 0.5) * 2 * max;
       el.style.setProperty('--px', `${(nx * 100).toFixed(1)}%`);
@@ -137,7 +131,11 @@ export function Magnetic({
   }, [range]);
 
   return (
-    <div ref={ref} className={className} style={{ display: 'inline-flex', willChange: 'transform' }}>
+    <div
+      ref={ref}
+      className={className}
+      style={{ display: 'inline-flex', willChange: 'transform' }}
+    >
       {children}
     </div>
   );

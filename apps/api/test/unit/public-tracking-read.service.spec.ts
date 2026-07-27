@@ -24,10 +24,12 @@ type ShipRow = {
   };
 };
 
-function makeService(opts: {
-  ship?: ShipRow | null;
-  events?: EventRow[];
-} = {}) {
+function makeService(
+  opts: {
+    ship?: ShipRow | null;
+    events?: EventRow[];
+  } = {},
+) {
   const events: EventRow[] = opts.events ?? [];
   const shipFindUnique = jest.fn(async () => opts.ship ?? null);
   const trackingEventFindMany = jest.fn(
@@ -38,9 +40,7 @@ function makeService(opts: {
       // Mirror the service's isVisibleToCustomer=true filter; tests
       // pass only visible events (invisible ones don't reach here).
       void args;
-      const sorted = [...events].sort(
-        (a, b) => b.eventAt.getTime() - a.eventAt.getTime(),
-      );
+      const sorted = [...events].sort((a, b) => b.eventAt.getTime() - a.eventAt.getTime());
       return sorted;
     },
   );
@@ -48,9 +48,7 @@ function makeService(opts: {
     shipment: { findUnique: shipFindUnique },
     trackingEvent: { findMany: trackingEventFindMany },
   };
-  const svc = new PublicTrackingReadService(
-    { client } as unknown as PrismaService,
-  );
+  const svc = new PublicTrackingReadService({ client } as unknown as PrismaService);
   return { svc, shipFindUnique, trackingEventFindMany };
 }
 
@@ -222,17 +220,14 @@ describe('PublicTrackingReadService.findByAwb — projection collapses internal 
     [ShipmentStatus.LOST, 'lost'],
     [ShipmentStatus.DAMAGED, 'damaged'],
     [ShipmentStatus.CANCELLED, 'cancelled'],
-  ])(
-    'shipment.status = %s → public currentStatus = "%s"',
-    async (status, expected) => {
-      const { svc } = makeService({
-        ship: defaultShip({ status }),
-        events: [],
-      });
-      const r = await svc.findByAwb(AWB);
-      expect(r.currentStatus).toBe(expected);
-    },
-  );
+  ])('shipment.status = %s → public currentStatus = "%s"', async (status, expected) => {
+    const { svc } = makeService({
+      ship: defaultShip({ status }),
+      events: [],
+    });
+    const r = await svc.findByAwb(AWB);
+    expect(r.currentStatus).toBe(expected);
+  });
 });
 
 describe('PublicTrackingReadService.findByAwb — event filter contract', () => {

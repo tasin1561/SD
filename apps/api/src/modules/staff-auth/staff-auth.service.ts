@@ -10,7 +10,10 @@ import { EnvService } from '../../config/env.service';
 import { PasswordService } from '../auth-common/services/password.service';
 import { JwtService, type SignedAccessToken } from '../auth-common/services/jwt.service';
 import { TokenHashService } from '../auth-common/services/token-hash.service';
-import { RefreshTokenService, type IssuedRefresh } from '../auth-common/services/refresh-token.service';
+import {
+  RefreshTokenService,
+  type IssuedRefresh,
+} from '../auth-common/services/refresh-token.service';
 import { AuditLogService } from '../auth-common/services/audit-log.service';
 import { EmailQueue } from '../email/queue/email.queue';
 
@@ -57,7 +60,10 @@ export class StaffAuthService {
    * The HTTP layer always returns the same generic error. The audit log,
    * however, records the truth — which is the point of the dual surface.
    */
-  async login(input: { email: string; password: string }, ctx: ClientContext): Promise<StaffLoginResult> {
+  async login(
+    input: { email: string; password: string },
+    ctx: ClientContext,
+  ): Promise<StaffLoginResult> {
     const normalizedEmail = input.email.trim().toLowerCase();
 
     const staff = await this.prisma.client.staffUser.findFirst({
@@ -151,7 +157,10 @@ export class StaffAuthService {
 
   // ---------- REFRESH ----------
 
-  async rotateRefresh(input: { plaintext: string }, ctx: ClientContext): Promise<StaffRefreshResult> {
+  async rotateRefresh(
+    input: { plaintext: string },
+    ctx: ClientContext,
+  ): Promise<StaffRefreshResult> {
     if (!input.plaintext) throw this.invalidRefresh();
 
     const { userId, issued } = await this.refresh.rotate({
@@ -212,7 +221,10 @@ export class StaffAuthService {
    * Always returns the same generic 200 message regardless of whether the
    * email exists. Audit log captures the truth.
    */
-  async requestPasswordReset(input: { email: string }, ctx: ClientContext): Promise<{ message: string }> {
+  async requestPasswordReset(
+    input: { email: string },
+    ctx: ClientContext,
+  ): Promise<{ message: string }> {
     const normalizedEmail = input.email.trim().toLowerCase();
 
     const staff = await this.prisma.client.staffUser.findFirst({
@@ -266,7 +278,11 @@ export class StaffAuthService {
       action: 'staff.password_reset.requested',
       entityType: 'staff_user',
       entityId: staff.id,
-      metadata: { ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, expiresAt: expiresAt.toISOString() },
+      metadata: {
+        ipAddress: ctx.ipAddress,
+        userAgent: ctx.userAgent,
+        expiresAt: expiresAt.toISOString(),
+      },
     });
 
     return { message: GENERIC_PASSWORD_RESET_MESSAGE };
@@ -289,7 +305,13 @@ export class StaffAuthService {
       },
     });
 
-    if (!row || row.usedAt !== null || row.expiresAt.getTime() <= Date.now() || !row.staffUser || row.staffUser.deletedAt !== null) {
+    if (
+      !row ||
+      row.usedAt !== null ||
+      row.expiresAt.getTime() <= Date.now() ||
+      !row.staffUser ||
+      row.staffUser.deletedAt !== null
+    ) {
       throw new BadRequestException({
         code: 'INVALID_RESET_TOKEN',
         message: 'Reset link is invalid or has expired',
@@ -337,7 +359,10 @@ export class StaffAuthService {
       select: { id: true, email: true, emailDisplay: true, emailVerifiedAt: true },
     });
     if (!staff) {
-      throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Staff session no longer valid' });
+      throw new UnauthorizedException({
+        code: 'UNAUTHORIZED',
+        message: 'Staff session no longer valid',
+      });
     }
 
     if (staff.emailVerifiedAt !== null) {
@@ -383,7 +408,10 @@ export class StaffAuthService {
     return { ok: true };
   }
 
-  async confirmEmailVerification(input: { token: string }, ctx: ClientContext): Promise<{ ok: true }> {
+  async confirmEmailVerification(
+    input: { token: string },
+    ctx: ClientContext,
+  ): Promise<{ ok: true }> {
     const tokenHash = this.hashes.sha256Hex(input.token);
 
     const row = await this.prisma.client.staffEmailVerificationToken.findFirst({
@@ -461,7 +489,10 @@ export class StaffAuthService {
       },
     });
     if (!staff) {
-      throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Staff session no longer valid' });
+      throw new UnauthorizedException({
+        code: 'UNAUTHORIZED',
+        message: 'Staff session no longer valid',
+      });
     }
     return staff;
   }
@@ -469,9 +500,15 @@ export class StaffAuthService {
   // ---------- internal ----------
 
   private invalidCredentials(): UnauthorizedException {
-    return new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' });
+    return new UnauthorizedException({
+      code: 'INVALID_CREDENTIALS',
+      message: 'Invalid credentials',
+    });
   }
   private invalidRefresh(): UnauthorizedException {
-    return new UnauthorizedException({ code: 'INVALID_REFRESH', message: 'Invalid or expired refresh token' });
+    return new UnauthorizedException({
+      code: 'INVALID_REFRESH',
+      message: 'Invalid or expired refresh token',
+    });
   }
 }

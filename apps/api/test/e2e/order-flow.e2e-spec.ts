@@ -1,10 +1,5 @@
 import request from 'supertest';
-import {
-  ActorType,
-  BulkUploadStatus,
-  OrderStatus,
-  ReservationStatus,
-} from '@skydrop/db';
+import { ActorType, BulkUploadStatus, OrderStatus, ReservationStatus } from '@skydrop/db';
 import { SpacesService } from '../../src/infrastructure/spaces/spaces.service';
 import { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import {

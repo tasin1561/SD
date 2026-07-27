@@ -45,20 +45,22 @@ function makeOverrideRow(overrides: Partial<AnyArgs> = {}): AnyArgs {
   };
 }
 
-function makeService(opts: {
-  systemRow?: AnyArgs | null;
-  overrideRow?: AnyArgs | null;
-  overridableRows?: AnyArgs[];
-  overrideRows?: AnyArgs[];
-} = {}) {
-  const systemFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async () => (opts.systemRow === undefined ? makeSystemRow() : opts.systemRow),
+function makeService(
+  opts: {
+    systemRow?: AnyArgs | null;
+    overrideRow?: AnyArgs | null;
+    overridableRows?: AnyArgs[];
+    overrideRows?: AnyArgs[];
+  } = {},
+) {
+  const systemFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+    opts.systemRow === undefined ? makeSystemRow() : opts.systemRow,
   );
   const systemFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
     async () => opts.overridableRows ?? [],
   );
-  const overrideFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async () => (opts.overrideRow === undefined ? null : opts.overrideRow),
+  const overrideFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+    opts.overrideRow === undefined ? null : opts.overrideRow,
   );
   const overrideFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
     async () => opts.overrideRows ?? [],
@@ -312,15 +314,13 @@ describe('SettingsResolverService.clearOverride', () => {
 });
 
 describe('SettingsResolverService.listForSeller', () => {
-  it('merges overridable system settings with the seller\'s overrides', async () => {
+  it("merges overridable system settings with the seller's overrides", async () => {
     const { svc } = makeService({
       overridableRows: [
         makeSystemRow({ key: 'ops.call_max_attempts_before_ndr', valueInt: 3 }),
         makeSystemRow({ key: 'ops.other_flag', valueInt: 7 }),
       ],
-      overrideRows: [
-        makeOverrideRow({ key: 'ops.call_max_attempts_before_ndr', valueInt: 5 }),
-      ],
+      overrideRows: [makeOverrideRow({ key: 'ops.call_max_attempts_before_ndr', valueInt: 5 })],
     });
     const result = await svc.listForSeller('seller-1');
     expect(result).toHaveLength(2);

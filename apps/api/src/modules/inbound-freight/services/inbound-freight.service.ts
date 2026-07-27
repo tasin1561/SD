@@ -137,9 +137,7 @@ export class InboundFreightService {
         ? await this.resolveServiceChargePercent(receipt.sellerId)
         : null;
     const serviceCharge =
-      percent === null || percent.isZero()
-        ? null
-        : amount.mul(percent).div(100).toDecimalPlaces(2);
+      percent === null || percent.isZero() ? null : amount.mul(percent).div(100).toDecimalPlaces(2);
     const total = serviceCharge === null ? amount : amount.add(serviceCharge);
 
     // R3 amortisation: split the bill across the consignment's lines by
@@ -175,15 +173,9 @@ export class InboundFreightService {
           serviceChargeInr: serviceCharge,
           totalInr: total,
           totalUnits: plan.totalUnits,
-          ...(settleNow
-            ? { unitsSettled: plan.totalUnits, amountSettledInr: total }
-            : {}),
-          status: settleNow
-            ? InboundFreightStatus.SETTLED
-            : InboundFreightStatus.PENDING,
-          ...(settleNow
-            ? { settledAt: new Date(), settledByStaffId: staffId, walletEntryId }
-            : {}),
+          ...(settleNow ? { unitsSettled: plan.totalUnits, amountSettledInr: total } : {}),
+          status: settleNow ? InboundFreightStatus.SETTLED : InboundFreightStatus.PENDING,
+          ...(settleNow ? { settledAt: new Date(), settledByStaffId: staffId, walletEntryId } : {}),
           note: input.note ?? null,
         },
         include: { goodsReceipt: { select: { receiptNumber: true } } },
@@ -201,9 +193,7 @@ export class InboundFreightService {
             ...(settleNow
               ? {
                   unitsSettled: line.units,
-                  amountSettledInr: line.perUnitInr
-                    .mul(line.units)
-                    .toDecimalPlaces(2),
+                  amountSettledInr: line.perUnitInr.mul(line.units).toDecimalPlaces(2),
                 }
               : {}),
           },
@@ -278,10 +268,7 @@ export class InboundFreightService {
         where: {
           id: freightChargeId,
           status: {
-            in: [
-              InboundFreightStatus.PENDING,
-              InboundFreightStatus.PARTIALLY_SETTLED,
-            ],
+            in: [InboundFreightStatus.PENDING, InboundFreightStatus.PARTIALLY_SETTLED],
           },
         },
         data: {
@@ -374,10 +361,7 @@ export class InboundFreightService {
         where: {
           id: freightChargeId,
           status: {
-            in: [
-              InboundFreightStatus.PENDING,
-              InboundFreightStatus.PARTIALLY_SETTLED,
-            ],
+            in: [InboundFreightStatus.PENDING, InboundFreightStatus.PARTIALLY_SETTLED],
           },
         },
         data: {
@@ -457,19 +441,13 @@ export class InboundFreightService {
       where: {
         sellerId,
         status: {
-          in: [
-            InboundFreightStatus.PENDING,
-            InboundFreightStatus.PARTIALLY_SETTLED,
-          ],
+          in: [InboundFreightStatus.PENDING, InboundFreightStatus.PARTIALLY_SETTLED],
         },
       },
       select: { totalInr: true, amountSettledInr: true },
     });
     return rows
-      .reduce(
-        (sum, r) => sum.add(r.totalInr.sub(r.amountSettledInr)),
-        new Prisma.Decimal(0),
-      )
+      .reduce((sum, r) => sum.add(r.totalInr.sub(r.amountSettledInr)), new Prisma.Decimal(0))
       .toString();
   }
 
@@ -528,14 +506,9 @@ export class InboundFreightService {
    * Defaults to ZERO on any doubt: a seller must never be charged for
    * credit terms that were not explicitly quoted to them.
    */
-  private async resolveServiceChargePercent(
-    sellerId: string,
-  ): Promise<Prisma.Decimal> {
+  private async resolveServiceChargePercent(sellerId: string): Promise<Prisma.Decimal> {
     try {
-      const resolved = await this.settings.resolve(
-        sellerId,
-        SETTING_SERVICE_CHARGE,
-      );
+      const resolved = await this.settings.resolve(sellerId, SETTING_SERVICE_CHARGE);
       const pct = new Prisma.Decimal(String(resolved.value ?? '0'));
       return pct.isFinite() && pct.gt(0) ? pct : new Prisma.Decimal(0);
     } catch {

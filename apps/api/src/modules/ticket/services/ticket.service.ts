@@ -236,9 +236,7 @@ export class TicketService {
           resolutionNotes: input.notes ?? existing.resolutionNotes,
           ...(refundAmount ? { resolutionAmountInr: refundAmount } : {}),
           ...(walletEntryId ? { resolutionWalletEntryId: walletEntryId } : {}),
-          ...(terminal
-            ? { resolvedAt: new Date(), resolvedByStaffId: actor.staffId ?? null }
-            : {}),
+          ...(terminal ? { resolvedAt: new Date(), resolvedByStaffId: actor.staffId ?? null } : {}),
         },
       });
 
@@ -283,10 +281,7 @@ export class TicketService {
     return this.toView(updated);
   }
 
-  async listForSeller(
-    sellerId: string,
-    status?: TicketStatus,
-  ): Promise<readonly TicketView[]> {
+  async listForSeller(sellerId: string, status?: TicketStatus): Promise<readonly TicketView[]> {
     const rows = await this.prisma.client.ticket.findMany({
       where: { sellerId, ...(status === undefined ? {} : { status }) },
       orderBy: { createdAt: 'desc' },

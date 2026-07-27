@@ -40,9 +40,7 @@ function makeService(
   const systemSettingFindUnique = jest.fn(async () => ({ valueString: 'wh-1' }));
 
   const orderShipmentFindFirst = jest.fn(async () =>
-    opts.liveOrderShipment === undefined
-      ? { shipmentId: 'ship-1' }
-      : opts.liveOrderShipment,
+    opts.liveOrderShipment === undefined ? { shipmentId: 'ship-1' } : opts.liveOrderShipment,
   );
   const stockMovementFindFirst = jest.fn(async () =>
     opts.existingDispatchMovement ? { id: 'mv-prior' } : null,
@@ -77,9 +75,7 @@ function makeService(
   const release = jest.fn(async () => ({ alreadyInactive: false }));
   const fulfill = jest.fn(async () => ({ alreadyInactive: false }));
   const listActiveForOrder = jest.fn(async () => opts.active ?? []);
-  const listActiveForOrderWithLocations = jest.fn(
-    async () => opts.activeWithLocations ?? [],
-  );
+  const listActiveForOrderWithLocations = jest.fn(async () => opts.activeWithLocations ?? []);
   const reservations = {
     reserve,
     release,
@@ -89,9 +85,7 @@ function makeService(
   };
 
   const mutationApply = jest.fn(async () => ({ movementId: 'mv-1' }));
-  const runWithRetry = jest.fn(
-    async (fn: (tx: unknown) => Promise<unknown>) => fn({}),
-  );
+  const runWithRetry = jest.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({}));
   const mutation = { apply: mutationApply, runWithRetry };
 
   const enqueueOrder = jest.fn(async () => ({ entry: {}, created: true }));
@@ -170,9 +164,7 @@ describe('OrderWriteService.transitionStatus', () => {
     });
     expect(res.reservationOutcome).toBe('OUT_OF_STOCK');
     expect(res.status).toBe(OrderStatus.OUT_OF_STOCK);
-    expect((orderUpdate.mock.calls[0]![0].data as AnyArgs).status).toBe(
-      OrderStatus.OUT_OF_STOCK,
-    );
+    expect((orderUpdate.mock.calls[0]![0].data as AnyArgs).status).toBe(OrderStatus.OUT_OF_STOCK);
     // No reservation succeeded (threw on the first) → nothing to release.
     expect(release).not.toHaveBeenCalled();
   });
@@ -376,11 +368,7 @@ describe('OrderWriteService.transitionStatus', () => {
       actor: ACTOR,
     });
     expect(r.status).toBe(OrderStatus.CONFIRMED);
-    expect(dequeueOrder).toHaveBeenCalledWith(
-      'o1',
-      QueueClosureReason.ORDER_CONFIRMED,
-      undefined,
-    );
+    expect(dequeueOrder).toHaveBeenCalledWith('o1', QueueClosureReason.ORDER_CONFIRMED, undefined);
   });
 
   it('CC-6: PENDING_CONFIRMATION → REJECTED_NDR dequeues (MAX_ATTEMPTS_EXCEEDED)', async () => {
@@ -420,11 +408,7 @@ describe('OrderWriteService.transitionStatus', () => {
       to: OrderStatus.CANCELLED,
       actor: ACTOR,
     });
-    expect(dequeueOrder).toHaveBeenCalledWith(
-      'o1',
-      QueueClosureReason.ORDER_CANCELLED,
-      undefined,
-    );
+    expect(dequeueOrder).toHaveBeenCalledWith('o1', QueueClosureReason.ORDER_CANCELLED, undefined);
   });
 });
 
@@ -450,12 +434,11 @@ describe('OrderWriteService.transitionStatus — DISPATCH_STOCK (M9 bug-1 fix)',
   ];
 
   it('PENDING_DISPATCH → DISPATCHED: DISPATCH movement (−qty) then fulfill', async () => {
-    const { svc, mutationApply, runWithRetry, orderUpdate, fulfill } =
-      makeService({
-        order: dispatchOrder,
-        activeWithLocations: phase2,
-        active: [{ id: 'r1', orderItemId: 'oi1', qtyReserved: 2 }],
-      });
+    const { svc, mutationApply, runWithRetry, orderUpdate, fulfill } = makeService({
+      order: dispatchOrder,
+      activeWithLocations: phase2,
+      active: [{ id: 'r1', orderItemId: 'oi1', qtyReserved: 2 }],
+    });
     const res = await svc.transitionStatus({
       orderId: 'o1',
       to: OrderStatus.DISPATCHED,

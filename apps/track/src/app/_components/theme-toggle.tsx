@@ -8,9 +8,7 @@ type Theme = 'dark' | 'light';
 function resolveInitial(): Theme {
   const explicit = document.documentElement.getAttribute('data-theme');
   if (explicit === 'dark' || explicit === 'light') return explicit;
-  return window.matchMedia('(prefers-color-scheme: light)').matches
-    ? 'light'
-    : 'dark';
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 }
 
 /** Sun/moon toggle — persists to localStorage (`sd-theme`). */

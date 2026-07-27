@@ -1,7 +1,4 @@
-import {
-  InternalServerErrorException,
-  NotFoundException,
-} from '@nestjs/common';
+import { InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { ActorType, CredentialEnvironment } from '@skydrop/db';
 import { CourierCredentialService } from '../../src/modules/courier-shared/services/courier-credential.service';
 import { encryptCredential } from '../../src/modules/courier-shared/util/courier-credential-cipher';
@@ -84,11 +81,9 @@ describe('CourierCredentialService.getCredential', () => {
 
   it('decrypts, audits HIGH, stamps lastUsedAt, returns the field map', async () => {
     const { svc, auditLog, credentialUpdate } = makeService();
-    const fields = await svc.getCredential(
-      COURIER,
-      CredentialEnvironment.PRODUCTION,
-      { type: ActorType.SYSTEM },
-    );
+    const fields = await svc.getCredential(COURIER, CredentialEnvironment.PRODUCTION, {
+      type: ActorType.SYSTEM,
+    });
     expect(fields).toEqual(FIELDS);
     expect(auditLog).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -180,10 +175,7 @@ describe('CourierCredentialService.getCredential', () => {
     const { svc } = makeService({
       credential: {
         id: 'cred-1',
-        encryptedPayload: encryptCredential(
-          JSON.stringify(FIELDS),
-          'a'.repeat(64),
-        ),
+        encryptedPayload: encryptCredential(JSON.stringify(FIELDS), 'a'.repeat(64)),
         encryptionKeyVersion: 1,
         fieldNames: ['token'],
         expiresAt: null,

@@ -76,10 +76,7 @@ export class InventoryModeService {
    */
   async serialPrefixFor(sellerId: string): Promise<string> {
     try {
-      const resolved = await this.settings.resolve(
-        sellerId,
-        'inventory.strict_unit_serial_prefix',
-      );
+      const resolved = await this.settings.resolve(sellerId, 'inventory.strict_unit_serial_prefix');
       const value = String(resolved.value ?? '').trim();
       return value.length > 0 ? value : 'SDU';
     } catch {

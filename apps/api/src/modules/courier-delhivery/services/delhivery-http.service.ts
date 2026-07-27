@@ -3,10 +3,7 @@ import { CredentialEnvironment } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { EnvService } from '../../../config/env.service';
 import { CourierCredentialService } from '../../courier-shared/services/courier-credential.service';
-import {
-  DelhiveryRateLimitService,
-  type DelhiveryEndpoint,
-} from './delhivery-rate-limit.service';
+import { DelhiveryRateLimitService, type DelhiveryEndpoint } from './delhivery-rate-limit.service';
 
 const BASE_URL_SETTING = 'courier.delhivery_api_base_url';
 const COURIER_CODE = 'delhivery';
@@ -98,9 +95,7 @@ export class DelhiveryHttpService {
 
   /** The credential environment for the current runtime. */
   environment(): CredentialEnvironment {
-    return this.env.isProduction
-      ? CredentialEnvironment.PRODUCTION
-      : CredentialEnvironment.SANDBOX;
+    return this.env.isProduction ? CredentialEnvironment.PRODUCTION : CredentialEnvironment.SANDBOX;
   }
 
   /**
@@ -115,15 +110,10 @@ export class DelhiveryHttpService {
   async authHeaders(
     environment: CredentialEnvironment = this.environment(),
   ): Promise<Record<string, string>> {
-    const creds = await this.credentials.getCredential(
-      COURIER_CODE,
-      environment,
-    );
+    const creds = await this.credentials.getCredential(COURIER_CODE, environment);
     const token = creds[TOKEN_FIELD];
     if (token === undefined || token === '') {
-      throw new Error(
-        `Delhivery credential is missing the '${TOKEN_FIELD}' field`,
-      );
+      throw new Error(`Delhivery credential is missing the '${TOKEN_FIELD}' field`);
     }
     return {
       Authorization: `Token ${token}`,
@@ -157,9 +147,7 @@ export class DelhiveryHttpService {
     // blocks our whole egress IP and would take live traffic with it.
     await this.rateLimit.consume(opts.endpoint);
     const baseUrl = await this.getBaseUrl();
-    const headers = await this.authHeaders(
-      opts.environment ?? this.environment(),
-    );
+    const headers = await this.authHeaders(opts.environment ?? this.environment());
     const url = `${baseUrl.replace(/\/$/, '')}${opts.path}`;
 
     let body: string | undefined;
@@ -206,8 +194,7 @@ export class DelhiveryHttpService {
           status: res.status,
           path: opts.path,
           method: opts.method,
-          body:
-            typeof parsed === 'string' ? parsed.slice(0, 500) : parsed,
+          body: typeof parsed === 'string' ? parsed.slice(0, 500) : parsed,
         },
         'Delhivery non-2xx response',
       );
@@ -225,9 +212,7 @@ export class DelhiveryHttpService {
         (waf as Error & { status?: number; retryAfterSeconds?: number }).retryAfterSeconds = 30;
         throw waf;
       }
-      const e = new Error(
-        `Delhivery ${opts.method} ${opts.path} → HTTP ${res.status}`,
-      );
+      const e = new Error(`Delhivery ${opts.method} ${opts.path} → HTTP ${res.status}`);
       (e as Error & { status?: number; body?: unknown }).status = res.status;
       (e as Error & { status?: number; body?: unknown }).body = parsed;
       throw e;

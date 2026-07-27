@@ -37,18 +37,16 @@ export function SkeletonRows({
   readonly cols?: number;
 }): ReactElement {
   return (
-    <div
-      className="divide-border divide-y"
-      role="status"
-      aria-live="polite"
-      aria-label="Loading"
-    >
+    <div className="divide-border divide-y" role="status" aria-live="polite" aria-label="Loading">
       {Array.from({ length: rows }, (_, r) => (
         <div key={r} className="flex items-center gap-3 px-3 py-2.5">
           {Array.from({ length: cols }, (_, c) => (
             <Skeleton
               key={c}
-              className={clsx('h-3.5', c === 0 ? 'w-[22%]' : c === cols - 1 ? 'w-[12%]' : 'w-[16%]')}
+              className={clsx(
+                'h-3.5',
+                c === 0 ? 'w-[22%]' : c === cols - 1 ? 'w-[12%]' : 'w-[16%]',
+              )}
             />
           ))}
         </div>
@@ -127,9 +125,7 @@ export function Stat({
         className,
       )}
     >
-      <p className="text-text-muted text-xs font-medium tracking-wide uppercase">
-        {label}
-      </p>
+      <p className="text-text-muted text-xs font-medium tracking-wide uppercase">{label}</p>
       <div
         className={clsx(
           'mt-1.5 text-xl font-semibold',
@@ -141,9 +137,7 @@ export function Stat({
       >
         {value}
       </div>
-      {hint !== undefined && (
-        <p className="text-text-faint mt-1 text-xs leading-snug">{hint}</p>
-      )}
+      {hint !== undefined && <p className="text-text-faint mt-1 text-xs leading-snug">{hint}</p>}
     </div>
   );
 }
@@ -202,9 +196,7 @@ export function Toolbar({
       )}
     >
       <div className="flex flex-1 flex-wrap items-center gap-2">{children}</div>
-      {actions !== undefined && (
-        <div className="flex flex-wrap items-center gap-2">{actions}</div>
-      )}
+      {actions !== undefined && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }

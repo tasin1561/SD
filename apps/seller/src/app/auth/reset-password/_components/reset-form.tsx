@@ -14,11 +14,7 @@ import { AccessTokenStore, ApiClient, ApiError } from '@skydrop/api-client';
  * FE-2: server rejection ([INVALID_TOKEN], [TOKEN_EXPIRED], etc.)
  * surfaces verbatim.
  */
-export function ResetPasswordForm({
-  token,
-}: {
-  readonly token: string;
-}): ReactElement {
+export function ResetPasswordForm({ token }: { readonly token: string }): ReactElement {
   const [pw, setPw] = useState('');
   const [confirm, setConfirm] = useState('');
   const [submitting, setSubmitting] = useState(false);

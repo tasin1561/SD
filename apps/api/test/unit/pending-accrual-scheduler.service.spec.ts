@@ -5,10 +5,13 @@ import type { SettingsResolverService } from '../../src/modules/settings/service
 type AnyArgs = Record<string, unknown>;
 
 function makeService(opts: { existing?: AnyArgs | null; delayDays?: number } = {}) {
-  const findUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async () => (opts.existing === undefined ? null : opts.existing),
+  const findUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+    opts.existing === undefined ? null : opts.existing,
   );
-  const create = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (a) => ({ id: 'pa-1', ...(a.data as AnyArgs) }));
+  const create = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (a) => ({
+    id: 'pa-1',
+    ...(a.data as AnyArgs),
+  }));
   const client = { pendingAccrual: { findUnique, create } };
   const prisma = { client } as unknown as PrismaService;
 
@@ -20,7 +23,10 @@ function makeService(opts: { existing?: AnyArgs | null; delayDays?: number } = {
   }));
   const settings = { resolve };
 
-  const svc = new PendingAccrualSchedulerService(prisma, settings as unknown as SettingsResolverService);
+  const svc = new PendingAccrualSchedulerService(
+    prisma,
+    settings as unknown as SettingsResolverService,
+  );
   return { svc, findUnique, create, resolve };
 }
 
@@ -31,7 +37,11 @@ describe('PendingAccrualSchedulerService.scheduleIfNeeded', () => {
     await svc.scheduleIfNeeded('order-1', 'seller-1');
     expect(resolve).toHaveBeenCalledWith('seller-1', 'wallet.accrual_delay_days');
     expect(create).toHaveBeenCalledTimes(1);
-    const data = create.mock.calls[0]![0]!.data as { orderId: string; sellerId: string; eligibleAt: Date };
+    const data = create.mock.calls[0]![0]!.data as {
+      orderId: string;
+      sellerId: string;
+      eligibleAt: Date;
+    };
     expect(data.orderId).toBe('order-1');
     expect(data.sellerId).toBe('seller-1');
     const expectedMs = 3 * 24 * 60 * 60 * 1000;

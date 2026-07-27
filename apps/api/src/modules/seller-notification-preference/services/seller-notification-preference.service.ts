@@ -1,13 +1,5 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import {
-  ActorType,
-  NotificationFrequency,
-  Prisma,
-  SellerNotificationCategory,
-} from '@skydrop/db';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { ActorType, NotificationFrequency, Prisma, SellerNotificationCategory } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';

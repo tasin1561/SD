@@ -75,9 +75,7 @@ export class DelhiveryMpsService {
       );
     }
     if (!waybills.includes(input.masterWaybill.trim())) {
-      throw new Error(
-        `masterWaybill '${input.masterWaybill}' is not one of the boxes`,
-      );
+      throw new Error(`masterWaybill '${input.masterWaybill}' is not one of the boxes`);
     }
 
     const master = input.masterWaybill.trim();
@@ -99,10 +97,7 @@ export class DelhiveryMpsService {
       ...(box.heightCm === undefined ? {} : { shipment_height: box.heightCm }),
     }));
 
-    this.logger.log(
-      { master, boxes: input.boxes.length },
-      'Planned an MPS consignment',
-    );
+    this.logger.log({ master, boxes: input.boxes.length }, 'Planned an MPS consignment');
     return {
       masterWaybill: master,
       childCount: input.boxes.length,

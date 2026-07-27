@@ -43,7 +43,9 @@ export class AdminStockAdjustmentController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Initiate an adjustment; auto-executes if below the approval threshold' })
+  @ApiOperation({
+    summary: 'Initiate an adjustment; auto-executes if below the approval threshold',
+  })
   initiate(
     @Body() body: CreateStockAdjustmentDto,
     @CurrentStaff() staff: AuthenticatedStaff,

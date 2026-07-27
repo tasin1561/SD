@@ -18,11 +18,7 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import { TicketStatus } from '@skydrop/db';
-import {
-  useTicketEvents,
-  useTransitionTicket,
-  type TicketView,
-} from '@/lib/ops-hooks';
+import { useTicketEvents, useTransitionTicket, type TicketView } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /** Mirrors the server's TICKET_TRANSITIONS matrix. Cosmetic only (FE-2)
@@ -53,10 +49,8 @@ const OUTCOME_COPY: Readonly<Record<string, string>> = {
   [TicketStatus.NEGOTIATING]: 'Still being discussed. Nothing moves yet.',
   [TicketStatus.RESOLVED_REFUND]:
     "Credits the seller's wallet with the amount below, in the same transaction as the status change. This is real money — it cannot be undone from here.",
-  [TicketStatus.RESOLVED_RETURNED]:
-    'The goods went back to the seller. No money moves.',
-  [TicketStatus.RESOLVED_WRITE_OFF_ACCEPTED]:
-    'The seller accepted the loss. No money moves.',
+  [TicketStatus.RESOLVED_RETURNED]: 'The goods went back to the seller. No money moves.',
+  [TicketStatus.RESOLVED_WRITE_OFF_ACCEPTED]: 'The seller accepted the loss. No money moves.',
   [TicketStatus.REJECTED]: 'Not a valid claim. No money moves.',
 };
 
@@ -148,17 +142,11 @@ export function TicketDrawer({
               },
               {
                 label: 'Order',
-                value:
-                  ticket.orderId === null ? <Dash /> : <Ident value={ticket.orderId} />,
+                value: ticket.orderId === null ? <Dash /> : <Ident value={ticket.orderId} />,
               },
               {
                 label: 'Shipment',
-                value:
-                  ticket.shipmentId === null ? (
-                    <Dash />
-                  ) : (
-                    <Ident value={ticket.shipmentId} />
-                  ),
+                value: ticket.shipmentId === null ? <Dash /> : <Ident value={ticket.shipmentId} />,
               },
             ]}
           />
@@ -222,17 +210,12 @@ export function TicketDrawer({
           {/* ── resolution ── */}
           {terminal ? (
             <p className="text-text-faint text-xs">
-              This ticket is closed. Its history is append-only and cannot be
-              edited.
+              This ticket is closed. Its history is append-only and cannot be edited.
             </p>
           ) : (
             <section className="border-border space-y-3 border-t pt-4">
               <FormField label="Move to" htmlFor="ticket-to">
-                <Select
-                  id="ticket-to"
-                  value={to}
-                  onChange={(e) => setTo(e.target.value)}
-                >
+                <Select id="ticket-to" value={to} onChange={(e) => setTo(e.target.value)}>
                   <option value="">Choose an outcome…</option>
                   {NEXT_STATUSES[ticket.status].map((s) => (
                     <option key={s} value={s}>
@@ -270,7 +253,11 @@ export function TicketDrawer({
                 </FormField>
               )}
 
-              <FormField label="Notes" htmlFor="ticket-notes" hint="Optional. Appended to the ticket history.">
+              <FormField
+                label="Notes"
+                htmlFor="ticket-notes"
+                hint="Optional. Appended to the ticket history."
+              >
                 <Textarea
                   id="ticket-notes"
                   rows={2}
@@ -294,9 +281,7 @@ export function TicketDrawer({
             variant={to === TicketStatus.RESOLVED_REFUND ? 'destructive' : 'primary'}
             size="md"
             disabled={
-              to === '' ||
-              transition.isPending ||
-              (needsAmount && refundAmountInr.trim() === '')
+              to === '' || transition.isPending || (needsAmount && refundAmountInr.trim() === '')
             }
             onClick={() => void submit()}
           >

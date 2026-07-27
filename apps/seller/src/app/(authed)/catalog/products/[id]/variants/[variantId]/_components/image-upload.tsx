@@ -45,11 +45,7 @@ interface UploadItem {
   errorMessage: string | null;
 }
 
-export function VariantImageUpload({
-  variantId,
-}: {
-  variantId: string;
-}): ReactElement {
+export function VariantImageUpload({ variantId }: { variantId: string }): ReactElement {
   const images = useVariantImages(variantId);
   const presign = usePresignImage();
   const register = useRegisterImage();
@@ -83,9 +79,7 @@ export function VariantImageUpload({
 
   const uploadOne = useCallback(
     async (item: UploadItem): Promise<void> => {
-      setQueue((q) =>
-        q.map((it) => (it.id === item.id ? { ...it, status: 'uploading' } : it)),
-      );
+      setQueue((q) => q.map((it) => (it.id === item.id ? { ...it, status: 'uploading' } : it)));
       try {
         // 1. Presign.
         const presignResp = await presign.mutateAsync({
@@ -110,11 +104,7 @@ export function VariantImageUpload({
         }
 
         // 3. Register.
-        setQueue((q) =>
-          q.map((it) =>
-            it.id === item.id ? { ...it, status: 'registering' } : it,
-          ),
-        );
+        setQueue((q) => q.map((it) => (it.id === item.id ? { ...it, status: 'registering' } : it)));
         await register.mutateAsync({
           variantId,
           spacesKey: presignResp.spacesKey,
@@ -125,9 +115,7 @@ export function VariantImageUpload({
 
         setQueue((q) =>
           q.map((it) =>
-            it.id === item.id
-              ? { ...it, status: 'done', errorCode: null, errorMessage: null }
-              : it,
+            it.id === item.id ? { ...it, status: 'done', errorCode: null, errorMessage: null } : it,
           ),
         );
       } catch (err) {
@@ -198,9 +186,7 @@ export function VariantImageUpload({
           onClick={() => fileInputRef.current?.click()}
         >
           <Upload size={20} className="mx-auto text-text-muted mb-2" />
-          <div className="text-text-body text-sm">
-            Drop images here or click to browse
-          </div>
+          <div className="text-text-body text-sm">Drop images here or click to browse</div>
           <div className="text-text-faint text-xs mt-1">
             JPG / PNG / WEBP · up to {MAX_UPLOAD_BATCH} at once
           </div>
@@ -292,11 +278,7 @@ export function VariantImageUpload({
   );
 }
 
-function UploadStatusBadge({
-  status,
-}: {
-  status: UploadItem['status'];
-}): ReactElement {
+function UploadStatusBadge({ status }: { status: UploadItem['status'] }): ReactElement {
   const kind =
     status === 'done'
       ? ('delivered' as const)

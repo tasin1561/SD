@@ -45,11 +45,7 @@ interface StatusBadgeProps {
   readonly variant?: 'soft' | 'solid';
 }
 
-export function StatusBadge({
-  kind,
-  label,
-  variant = 'soft',
-}: StatusBadgeProps): ReactElement {
+export function StatusBadge({ kind, label, variant = 'soft' }: StatusBadgeProps): ReactElement {
   const tokens = kindTokens(kind);
   const baseStyle =
     variant === 'soft'
@@ -70,11 +66,7 @@ export function OrderStatusBadge({ status }: { status: OrderStatus }): ReactElem
   return <StatusBadge kind={orderStatusKind(status)} label={statusLabel(status)} />;
 }
 
-export function ShipmentStatusBadge({
-  status,
-}: {
-  status: ShipmentStatus;
-}): ReactElement {
+export function ShipmentStatusBadge({ status }: { status: ShipmentStatus }): ReactElement {
   return <StatusBadge kind={shipmentStatusKind(status)} label={statusLabel(status)} />;
 }
 
@@ -97,11 +89,7 @@ export function SellerStatusBadge({
 }
 
 /** R7 scrap/damage + seller-issue ticket. */
-export function TicketStatusBadge({
-  status,
-}: {
-  readonly status: TicketStatus;
-}): ReactElement {
+export function TicketStatusBadge({ status }: { readonly status: TicketStatus }): ReactElement {
   return <StatusBadge kind={ticketStatusKind(status)} label={statusLabel(status)} />;
 }
 
@@ -111,9 +99,7 @@ export function FreightStatusBadge({
 }: {
   readonly status: InboundFreightStatus;
 }): ReactElement {
-  return (
-    <StatusBadge kind={inboundFreightStatusKind(status)} label={statusLabel(status)} />
-  );
+  return <StatusBadge kind={inboundFreightStatusKind(status)} label={statusLabel(status)} />;
 }
 
 /** R2 seller withdrawal request. */
@@ -122,9 +108,7 @@ export function WithdrawalStatusBadge({
 }: {
   readonly status: WithdrawalRequestStatus;
 }): ReactElement {
-  return (
-    <StatusBadge kind={withdrawalStatusKind(status)} label={statusLabel(status)} />
-  );
+  return <StatusBadge kind={withdrawalStatusKind(status)} label={statusLabel(status)} />;
 }
 
 /** R5 early-reservation (at-placement hold) review. */
@@ -133,9 +117,7 @@ export function EarlyReviewStatusBadge({
 }: {
   readonly status: EarlyReservationReviewStatus;
 }): ReactElement {
-  return (
-    <StatusBadge kind={earlyReviewStatusKind(status)} label={statusLabel(status)} />
-  );
+  return <StatusBadge kind={earlyReviewStatusKind(status)} label={statusLabel(status)} />;
 }
 
 /** R4 serialized stock unit. */
@@ -144,7 +126,5 @@ export function StockUnitStatusBadge({
 }: {
   readonly status: StockUnitStatus;
 }): ReactElement {
-  return (
-    <StatusBadge kind={stockUnitStatusKind(status)} label={statusLabel(status)} />
-  );
+  return <StatusBadge kind={stockUnitStatusKind(status)} label={statusLabel(status)} />;
 }

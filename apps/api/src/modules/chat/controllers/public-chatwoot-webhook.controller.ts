@@ -82,10 +82,7 @@ export class PublicChatWootWebhookController {
     if (
       !/^[0-9a-f]+$/.test(supplied) ||
       supplied.length !== expected.length ||
-      !timingSafeEqual(
-        Buffer.from(expected, 'utf8'),
-        Buffer.from(supplied, 'utf8'),
-      )
+      !timingSafeEqual(Buffer.from(expected, 'utf8'), Buffer.from(supplied, 'utf8'))
     ) {
       throw new UnauthorizedException({
         code: 'CHATWOOT_SIGNATURE_MISMATCH',

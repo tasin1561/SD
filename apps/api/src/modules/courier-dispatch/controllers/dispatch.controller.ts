@@ -56,10 +56,7 @@ export class DispatchController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<DispatchHandoffResult> {
-    requireStaffRoles(staff, [
-      StaffRole.WAREHOUSE_SUPERVISOR,
-      StaffRole.SUPER_ADMIN,
-    ]);
+    requireStaffRoles(staff, [StaffRole.WAREHOUSE_SUPERVISOR, StaffRole.SUPER_ADMIN]);
     return this.handoff.confirmHandoff(manifestId, staff.id, ctx);
   }
 }

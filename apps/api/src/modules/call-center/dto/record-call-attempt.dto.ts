@@ -1,13 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { CallOutcome } from '@skydrop/db';
-import {
-  IsBoolean,
-  IsDateString,
-  IsEnum,
-  IsOptional,
-  IsString,
-  MaxLength,
-} from 'class-validator';
+import { IsBoolean, IsDateString, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 
 /**
  * Agent-logged call attempt (Phase 1A: manual logging — click-to-call /
@@ -56,8 +49,7 @@ export class RecordCallAttemptDto {
 
   @ApiProperty({
     required: false,
-    description:
-      'ISO 8601 callback time — required for CALLBACK_REQUESTED, rejected otherwise',
+    description: 'ISO 8601 callback time — required for CALLBACK_REQUESTED, rejected otherwise',
   })
   @IsOptional()
   @IsDateString()

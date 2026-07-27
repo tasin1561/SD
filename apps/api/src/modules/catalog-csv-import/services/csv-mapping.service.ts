@@ -1,17 +1,10 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ActorType, CsvImportType, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { isCsvTargetField, type CsvTargetField } from '../csv-fields';
-import type {
-  CreateCsvMappingDto,
-  UpdateCsvMappingDto,
-} from '../dto/csv-mapping.dto';
+import type { CreateCsvMappingDto, UpdateCsvMappingDto } from '../dto/csv-mapping.dto';
 
 export interface CsvMappingView {
   id: string;
@@ -58,9 +51,7 @@ export class CsvMappingService {
    * Rejects unknown target-field keys and non-string header values; an
    * empty map is rejected (a saved mapping with nothing mapped is useless).
    */
-  private sanitizeColumnMap(
-    raw: Record<string, unknown>,
-  ): Partial<Record<CsvTargetField, string>> {
+  private sanitizeColumnMap(raw: Record<string, unknown>): Partial<Record<CsvTargetField, string>> {
     const out: Partial<Record<CsvTargetField, string>> = {};
     for (const [key, value] of Object.entries(raw)) {
       if (!isCsvTargetField(key)) {
@@ -135,10 +126,7 @@ export class CsvMappingService {
     return this.toView(row);
   }
 
-  async list(
-    sellerId: string,
-    importType?: CsvImportType,
-  ): Promise<CsvMappingView[]> {
+  async list(sellerId: string, importType?: CsvImportType): Promise<CsvMappingView[]> {
     const where: Prisma.SellerCsvMappingWhereInput = {
       sellerId,
       deletedAt: null,
@@ -223,11 +211,7 @@ export class CsvMappingService {
     return this.toView(row);
   }
 
-  async softDelete(
-    sellerId: string,
-    id: string,
-    ctx: ClientContext,
-  ): Promise<void> {
+  async softDelete(sellerId: string, id: string, ctx: ClientContext): Promise<void> {
     await this.requireMapping(sellerId, id);
     await this.prisma.client.$transaction(async (tx) => {
       await tx.sellerCsvMapping.update({
@@ -274,10 +258,7 @@ export class CsvMappingService {
     });
   }
 
-  private async requireMapping(
-    sellerId: string,
-    id: string,
-  ): Promise<MappingRow> {
+  private async requireMapping(sellerId: string, id: string): Promise<MappingRow> {
     const row = await this.prisma.client.sellerCsvMapping.findFirst({
       where: { id, sellerId, deletedAt: null },
       select: VIEW_SELECT,
@@ -291,9 +272,7 @@ export class CsvMappingService {
     return row;
   }
 
-  private coerceColumnMap(
-    raw: Prisma.JsonValue,
-  ): Partial<Record<CsvTargetField, string>> {
+  private coerceColumnMap(raw: Prisma.JsonValue): Partial<Record<CsvTargetField, string>> {
     const out: Partial<Record<CsvTargetField, string>> = {};
     if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
       for (const [key, value] of Object.entries(raw)) {

@@ -128,16 +128,11 @@ export class DelhiveryShipmentEditService {
    * on tracking, and the edit endpoint follows the same house style. So
    * `res.ok` is not the answer; the body is.
    */
-  private interpret(
-    awbNumber: string,
-    raw: Record<string, unknown>,
-  ): DelhiveryEditResult {
+  private interpret(awbNumber: string, raw: Record<string, unknown>): DelhiveryEditResult {
     const success =
       raw['status'] === true ||
       raw['success'] === true ||
-      (raw['error'] === undefined &&
-        raw['status'] === undefined &&
-        raw['success'] === undefined);
+      (raw['error'] === undefined && raw['status'] === undefined && raw['success'] === undefined);
     const message =
       (raw['remark'] as string | undefined) ??
       (raw['rmk'] as string | undefined) ??

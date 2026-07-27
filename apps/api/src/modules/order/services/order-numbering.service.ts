@@ -50,10 +50,7 @@ export class OrderNumberingService {
    * existing transaction (recommended from OrderService.create so the
    * number and the order row are atomic); omit it to run standalone.
    */
-  async nextOrderNumber(
-    tx?: Prisma.TransactionClient,
-    now: Date = new Date(),
-  ): Promise<string> {
+  async nextOrderNumber(tx?: Prisma.TransactionClient, now: Date = new Date()): Promise<string> {
     const year = now.getUTCFullYear();
     // year is always a 4-digit integer from a Date; assert it so the
     // sequence identifier interpolation below is provably injection-free.

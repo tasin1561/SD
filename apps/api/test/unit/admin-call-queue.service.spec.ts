@@ -24,9 +24,7 @@ function makeService(
   );
   const count = jest.fn<Promise<number>, [AnyArgs]>(async () => opts.total ?? 0);
   const groupBy = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async (a) =>
-    (a.by as string[]).includes('status')
-      ? (opts.byStatus ?? [])
-      : (opts.assigned ?? []),
+    (a.by as string[]).includes('status') ? (opts.byStatus ?? []) : (opts.assigned ?? []),
   );
   const findUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
     opts.entry === undefined
@@ -170,7 +168,7 @@ describe('AdminCallQueueService.reassign', () => {
   it('reassigns, arms a fresh expiration timer, MEDIUM audit', async () => {
     const { svc, update, scheduleExpiration, auditLog } = makeService();
     const r = await svc.reassign('q1', 'agent-2', 'admin-1');
-    expect((update.mock.calls[0]![0].data as AnyArgs)).toMatchObject({
+    expect(update.mock.calls[0]![0].data as AnyArgs).toMatchObject({
       status: CallQueueStatus.ASSIGNED,
       assignedAgentId: 'agent-2',
     });
@@ -208,11 +206,7 @@ describe('AdminCallQueueService.bulkDequeue', () => {
     });
     const r = await svc.bulkDequeue('s1', 'seller suspended', 'admin-1');
     expect(dequeueOrder).toHaveBeenCalledTimes(2);
-    expect(dequeueOrder).toHaveBeenCalledWith(
-      'o1',
-      QueueClosureReason.ADMIN_CLOSED,
-      undefined,
-    );
+    expect(dequeueOrder).toHaveBeenCalledWith('o1', QueueClosureReason.ADMIN_CLOSED, undefined);
     expect(r).toEqual({ sellerId: 's1', dequeuedOrders: 2 });
     expect(auditLog.mock.calls[0]![0]).toMatchObject({
       action: 'call_queue.bulk_dequeued',

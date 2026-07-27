@@ -1,9 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  NotificationChannel,
-  NotificationRecipientType,
-  OrderStatus,
-} from '@skydrop/db';
+import { NotificationChannel, NotificationRecipientType, OrderStatus } from '@skydrop/db';
 
 /**
  * One fan-out target: a single ledger row to enqueue.

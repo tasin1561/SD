@@ -28,9 +28,7 @@ describe('OrderStateMachineService', () => {
         OrderStatus.CALL_NO_RESPONSE,
         OrderStatus.CALL_RESCHEDULED,
       ]) {
-        expect(sm.isValidTransition(from, OrderStatus.AWAITING_SELLER_DECISION)).toBe(
-          true,
-        );
+        expect(sm.isValidTransition(from, OrderStatus.AWAITING_SELLER_DECISION)).toBe(true);
       }
     });
 
@@ -45,32 +43,21 @@ describe('OrderStateMachineService', () => {
       ).toBe(true);
       // ...and "release" (or the TTL sweep) lands the original terminal.
       expect(
-        sm.isValidTransition(
-          OrderStatus.AWAITING_SELLER_DECISION,
-          OrderStatus.REJECTED_NDR,
-        ),
+        sm.isValidTransition(OrderStatus.AWAITING_SELLER_DECISION, OrderStatus.REJECTED_NDR),
       ).toBe(true);
     });
 
     it('carries NO stock side-effects — the hold is managed by R5, not the matrix', () => {
       const sm = new OrderStateMachineService();
-      for (const to of [
-        OrderStatus.PENDING_CONFIRMATION,
-        OrderStatus.REJECTED_NDR,
-      ]) {
-        expect(
-          sm.requiredSideEffects(OrderStatus.AWAITING_SELLER_DECISION, to),
-        ).toEqual([]);
+      for (const to of [OrderStatus.PENDING_CONFIRMATION, OrderStatus.REJECTED_NDR]) {
+        expect(sm.requiredSideEffects(OrderStatus.AWAITING_SELLER_DECISION, to)).toEqual([]);
       }
     });
 
     it('an admin can still cancel a paused order', () => {
       const sm = new OrderStateMachineService();
       expect(
-        sm.isValidTransition(
-          OrderStatus.AWAITING_SELLER_DECISION,
-          OrderStatus.CANCELLED_BY_ADMIN,
-        ),
+        sm.isValidTransition(OrderStatus.AWAITING_SELLER_DECISION, OrderStatus.CANCELLED_BY_ADMIN),
       ).toBe(true);
     });
   });
@@ -93,7 +80,9 @@ describe('OrderStateMachineService', () => {
   describe('valid transitions', () => {
     it('DRAFT → PENDING_CONFIRMATION (submit), no side-effects', () => {
       expect(sm.isValidTransition(OrderStatus.DRAFT, OrderStatus.PENDING_CONFIRMATION)).toBe(true);
-      expect(sm.requiredSideEffects(OrderStatus.DRAFT, OrderStatus.PENDING_CONFIRMATION)).toEqual([]);
+      expect(sm.requiredSideEffects(OrderStatus.DRAFT, OrderStatus.PENDING_CONFIRMATION)).toEqual(
+        [],
+      );
     });
 
     it('PENDING_CONFIRMATION → CONFIRMED reserves stock', () => {
@@ -102,18 +91,19 @@ describe('OrderStateMachineService', () => {
       ).toEqual([OrderSideEffect.RESERVE_STOCK]);
     });
 
-    it.each([
-      OrderStatus.CALL_NO_RESPONSE,
-      OrderStatus.CALL_RESCHEDULED,
-      OrderStatus.OUT_OF_STOCK,
-    ])('%s → CONFIRMED also reserves stock', (from) => {
-      expect(sm.requiredSideEffects(from, OrderStatus.CONFIRMED)).toEqual([
-        OrderSideEffect.RESERVE_STOCK,
-      ]);
-    });
+    it.each([OrderStatus.CALL_NO_RESPONSE, OrderStatus.CALL_RESCHEDULED, OrderStatus.OUT_OF_STOCK])(
+      '%s → CONFIRMED also reserves stock',
+      (from) => {
+        expect(sm.requiredSideEffects(from, OrderStatus.CONFIRMED)).toEqual([
+          OrderSideEffect.RESERVE_STOCK,
+        ]);
+      },
+    );
 
     it('PENDING_CONFIRMATION → OUT_OF_STOCK is valid with NO side-effects', () => {
-      expect(sm.isValidTransition(OrderStatus.PENDING_CONFIRMATION, OrderStatus.OUT_OF_STOCK)).toBe(true);
+      expect(sm.isValidTransition(OrderStatus.PENDING_CONFIRMATION, OrderStatus.OUT_OF_STOCK)).toBe(
+        true,
+      );
       expect(
         sm.requiredSideEffects(OrderStatus.PENDING_CONFIRMATION, OrderStatus.OUT_OF_STOCK),
       ).toEqual([]);
@@ -132,24 +122,21 @@ describe('OrderStateMachineService', () => {
     });
 
     it('PENDING_DISPATCH → DISPATCHED carries DISPATCH_STOCK (M9 Model A — the bug-1 fix)', () => {
-      expect(
-        sm.requiredSideEffects(
-          OrderStatus.PENDING_DISPATCH,
-          OrderStatus.DISPATCHED,
-        ),
-      ).toEqual([OrderSideEffect.DISPATCH_STOCK]);
+      expect(sm.requiredSideEffects(OrderStatus.PENDING_DISPATCH, OrderStatus.DISPATCHED)).toEqual([
+        OrderSideEffect.DISPATCH_STOCK,
+      ]);
     });
 
     it('OUT_FOR_DELIVERY → DELIVERED is STOCK-NEUTRAL (M9 Model A — qtyOnHand decremented + fulfilled at DISPATCH)', () => {
-      expect(
-        sm.requiredSideEffects(OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED),
-      ).toEqual([]);
+      expect(sm.requiredSideEffects(OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED)).toEqual(
+        [],
+      );
     });
 
     it('a downstream reserved state cancel still releases (PACKED → CANCELLED_BY_ADMIN)', () => {
-      expect(
-        sm.requiredSideEffects(OrderStatus.PACKED, OrderStatus.CANCELLED_BY_ADMIN),
-      ).toEqual([OrderSideEffect.RELEASE_STOCK]);
+      expect(sm.requiredSideEffects(OrderStatus.PACKED, OrderStatus.CANCELLED_BY_ADMIN)).toEqual([
+        OrderSideEffect.RELEASE_STOCK,
+      ]);
     });
   });
 
@@ -181,13 +168,10 @@ describe('OrderStateMachineService', () => {
       }
     });
 
-    it.each([OrderStatus.REJECTED_BY_CUSTOMER, OrderStatus.REJECTED_NDR])(
-      '%s is terminal',
-      (s) => {
-        expect(sm.isTerminal(s)).toBe(true);
-        expect(sm.getAllowedTransitions(s)).toEqual([]);
-      },
-    );
+    it.each([OrderStatus.REJECTED_BY_CUSTOMER, OrderStatus.REJECTED_NDR])('%s is terminal', (s) => {
+      expect(sm.isTerminal(s)).toBe(true);
+      expect(sm.getAllowedTransitions(s)).toEqual([]);
+    });
 
     it.each([OrderStatus.CALL_NO_RESPONSE, OrderStatus.CALL_RESCHEDULED])(
       '%s has an EXPLICIT self-loop (same state, attempt logged), no side-effects',
@@ -201,40 +185,25 @@ describe('OrderStateMachineService', () => {
   describe('Module 8 warehouse edges (WMS-4 pick shortfall)', () => {
     it('PENDING_PICK → PENDING_MANUAL_PLACEMENT is valid with NO side-effects (M5 conservation keeps the residual phase-1 reservation)', () => {
       expect(
-        sm.isValidTransition(
-          OrderStatus.PENDING_PICK,
-          OrderStatus.PENDING_MANUAL_PLACEMENT,
-        ),
+        sm.isValidTransition(OrderStatus.PENDING_PICK, OrderStatus.PENDING_MANUAL_PLACEMENT),
       ).toBe(true);
       expect(
-        sm.requiredSideEffects(
-          OrderStatus.PENDING_PICK,
-          OrderStatus.PENDING_MANUAL_PLACEMENT,
-        ),
+        sm.requiredSideEffects(OrderStatus.PENDING_PICK, OrderStatus.PENDING_MANUAL_PLACEMENT),
       ).toEqual([]);
     });
 
     it('the supervisor can route PENDING_MANUAL_PLACEMENT back to PENDING_PICK (re-pick)', () => {
       expect(
-        sm.isValidTransition(
-          OrderStatus.PENDING_MANUAL_PLACEMENT,
-          OrderStatus.PENDING_PICK,
-        ),
+        sm.isValidTransition(OrderStatus.PENDING_MANUAL_PLACEMENT, OrderStatus.PENDING_PICK),
       ).toBe(true);
     });
 
     it('PENDING_MANUAL_PLACEMENT → DISPATCHED is valid and carries DISPATCH_STOCK (M9 commit 14, CUR-8 — manual placement dispatches directly)', () => {
       expect(
-        sm.isValidTransition(
-          OrderStatus.PENDING_MANUAL_PLACEMENT,
-          OrderStatus.DISPATCHED,
-        ),
+        sm.isValidTransition(OrderStatus.PENDING_MANUAL_PLACEMENT, OrderStatus.DISPATCHED),
       ).toBe(true);
       expect(
-        sm.requiredSideEffects(
-          OrderStatus.PENDING_MANUAL_PLACEMENT,
-          OrderStatus.DISPATCHED,
-        ),
+        sm.requiredSideEffects(OrderStatus.PENDING_MANUAL_PLACEMENT, OrderStatus.DISPATCHED),
       ).toEqual([OrderSideEffect.DISPATCH_STOCK]);
     });
   });

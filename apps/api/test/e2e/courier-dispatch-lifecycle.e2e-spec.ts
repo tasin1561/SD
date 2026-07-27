@@ -77,10 +77,7 @@ describe('Courier dispatch lifecycle (e2e)', () => {
       .expect(201);
     sellerAuth = { Authorization: `Bearer ${reg.body.accessToken}` };
 
-    const whs = await request(h.baseUrl)
-      .get('/admin/warehouses')
-      .set(staffAuth)
-      .expect(200);
+    const whs = await request(h.baseUrl).get('/admin/warehouses').set(staffAuth).expect(200);
     warehouseId = (whs.body as Array<{ id: string; code: string }>).find(
       (w) => w.code === 'BLR-01',
     )!.id;
@@ -123,9 +120,7 @@ describe('Courier dispatch lifecycle (e2e)', () => {
       .post(`/admin/goods-receipts/${gr.body.id}/lines`)
       .set(staffAuth)
       .send({
-        lines: [
-          { lineId: gr.body.lines[0].id, receivedQty: qty, putawayBinId: binId },
-        ],
+        lines: [{ lineId: gr.body.lines[0].id, receivedQty: qty, putawayBinId: binId }],
       })
       .expect(200);
     await request(h.baseUrl)
@@ -155,10 +150,7 @@ describe('Courier dispatch lifecycle (e2e)', () => {
       })
       .expect(201);
     const orderId = created.body.id as string;
-    await request(h.baseUrl)
-      .post(`/seller/orders/${orderId}/submit`)
-      .set(sellerAuth)
-      .expect(200);
+    await request(h.baseUrl).post(`/seller/orders/${orderId}/submit`).set(sellerAuth).expect(200);
     await h.app.get(OrderWriteService).transitionStatus({
       orderId,
       to: OrderStatus.CONFIRMED,
@@ -171,10 +163,7 @@ describe('Courier dispatch lifecycle (e2e)', () => {
   }
 
   /** Pick + pack one shipment; returns the DRAFT manifest it attached to. */
-  async function pickAndPack(
-    orderId: string,
-    shipmentId: string,
-  ): Promise<string> {
+  async function pickAndPack(orderId: string, shipmentId: string): Promise<string> {
     await request(h.baseUrl).post('/warehouse/picks/next').set(staffAuth).expect(200);
     await request(h.baseUrl)
       .post(`/warehouse/picks/${shipmentId}/start`)
@@ -330,24 +319,20 @@ describe('Courier dispatch lifecycle (e2e)', () => {
       .expect(200);
     expect(handoff.body.transitionedCount).toBe(1);
     expect(handoff.body.dispatchedShipmentIds).toEqual([a.shipmentId]);
-    expect(
-      (await h.prisma.order.findUniqueOrThrow({ where: { id: a.orderId } }))
-        .status,
-    ).toBe(OrderStatus.DISPATCHED);
+    expect((await h.prisma.order.findUniqueOrThrow({ where: { id: a.orderId } })).status).toBe(
+      OrderStatus.DISPATCHED,
+    );
     expect(await stockOf()).toEqual({ qtyOnHand: 8, qtyReserved: 2 }); // A out
 
     // Recover order B via manual placement on its replacement shipment.
     await request(h.baseUrl)
-      .post(
-        `/admin/courier/manual-placement/shipments/${replacementB.id}/place-awb`,
-      )
+      .post(`/admin/courier/manual-placement/shipments/${replacementB.id}/place-awb`)
       .set(staffAuth)
       .send({ awbNumber: 'MANUAL-CDL-001', courierName: 'DTDC' })
       .expect(200);
-    expect(
-      (await h.prisma.order.findUniqueOrThrow({ where: { id: b.orderId } }))
-        .status,
-    ).toBe(OrderStatus.DISPATCHED);
+    expect((await h.prisma.order.findUniqueOrThrow({ where: { id: b.orderId } })).status).toBe(
+      OrderStatus.DISPATCHED,
+    );
 
     // Conservation: both orders dispatched — qtyOnHand 10 − 2 − 2 = 6.
     expect(await stockOf()).toEqual({ qtyOnHand: 6, qtyReserved: 0 });

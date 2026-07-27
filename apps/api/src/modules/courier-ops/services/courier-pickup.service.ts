@@ -4,12 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  ActorType,
-  PickupRequestStatus,
-  Prisma,
-  WarehouseStatus,
-} from '@skydrop/db';
+import { ActorType, PickupRequestStatus, Prisma, WarehouseStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { ClientInfoPayload } from '../../../common/decorators/client-info.decorator';
@@ -86,12 +81,8 @@ export class CourierPickupService {
   }): Promise<readonly PickupRequestView[]> {
     const rows = await this.prisma.client.courierPickupRequest.findMany({
       where: {
-        ...(query.warehouseId === undefined
-          ? {}
-          : { warehouseId: query.warehouseId }),
-        ...(query.fromDate === undefined
-          ? {}
-          : { pickupDate: { gte: new Date(query.fromDate) } }),
+        ...(query.warehouseId === undefined ? {} : { warehouseId: query.warehouseId }),
+        ...(query.fromDate === undefined ? {} : { pickupDate: { gte: new Date(query.fromDate) } }),
       },
       orderBy: [{ pickupDate: 'desc' }, { createdAt: 'desc' }],
       take: 100,
@@ -148,10 +139,7 @@ export class CourierPickupService {
         },
       });
     } catch (err) {
-      if (
-        err instanceof Prisma.PrismaClientKnownRequestError &&
-        err.code === 'P2002'
-      ) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         throw new ConflictException({
           code: 'PICKUP_ALREADY_REQUESTED',
           message:
@@ -188,21 +176,12 @@ export class CourierPickupService {
     const updated = await this.prisma.client.courierPickupRequest.update({
       where: { id: row.id },
       data: {
-        status: result.success
-          ? PickupRequestStatus.REQUESTED
-          : PickupRequestStatus.FAILED,
+        status: result.success ? PickupRequestStatus.REQUESTED : PickupRequestStatus.FAILED,
         courierPickupId: result.pickupId,
         courierMessage: result.message,
       },
     });
-    await this.auditRaise(
-      staffId,
-      row.id,
-      warehouse.id,
-      result.success,
-      result.message,
-      ctx,
-    );
+    await this.auditRaise(staffId, row.id, warehouse.id, result.success, result.message, ctx);
     return this.toView(updated, warehouse.name);
   }
 

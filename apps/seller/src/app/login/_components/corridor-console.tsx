@@ -32,8 +32,13 @@ function geo(id: string): readonly [number, number] {
 }
 
 const ORIGIN: NodeDef = {
-  id: 'DAC', x: geo('DAC')[0], y: geo('DAC')[1],
-  label: 'DAC', labelDx: 12, labelDy: -10, origin: true,
+  id: 'DAC',
+  x: geo('DAC')[0],
+  y: geo('DAC')[1],
+  label: 'DAC',
+  labelDx: 12,
+  labelDy: -10,
+  origin: true,
 };
 
 // Pan-India destination set — Delhivery covers all of these lanes.
@@ -127,16 +132,14 @@ export function CorridorConsole(): ReactElement {
     const readColors = (): void => {
       const cs = getComputedStyle(canvas);
       colors.saffron = cs.getPropertyValue('--saffron').trim() || colors.saffron;
-      colors.muted =
-        cs.getPropertyValue('--color-text-muted').trim() || colors.muted;
+      colors.muted = cs.getPropertyValue('--color-text-muted').trim() || colors.muted;
       colors.grid = cs.getPropertyValue('--grid').trim() || colors.grid;
       // Scoped skin has no color-scheme declaration; derive the mode
       // from the app's data-theme pin, else the OS preference.
       const pinned = document.documentElement.getAttribute('data-theme');
       const light =
         pinned === 'light' ||
-        (pinned !== 'dark' &&
-          window.matchMedia('(prefers-color-scheme: light)').matches);
+        (pinned !== 'dark' && window.matchMedia('(prefers-color-scheme: light)').matches);
       colors.land = light ? 'rgba(2,132,199,0.05)' : 'rgba(56,189,248,0.04)';
       colors.coast = light ? 'rgba(2,110,170,0.45)' : 'rgba(116,166,220,0.35)';
       colors.bdFill = light ? 'rgba(217,119,6,0.10)' : 'rgba(245,158,11,0.08)';

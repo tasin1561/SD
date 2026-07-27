@@ -99,9 +99,7 @@ export class AddressValidationService {
       if (canonical) {
         normalizedState = canonical;
       } else {
-        errors.push(
-          `"${input.recipientStateProvince}" is not an allowed Indian state/UT`,
-        );
+        errors.push(`"${input.recipientStateProvince}" is not an allowed Indian state/UT`);
       }
     } else {
       // List unavailable — accept the value as-is (soft).

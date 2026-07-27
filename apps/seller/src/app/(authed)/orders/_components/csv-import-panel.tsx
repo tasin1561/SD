@@ -1,11 +1,6 @@
 'use client';
 
-import {
-  useRef,
-  useState,
-  type ChangeEvent,
-  type ReactElement,
-} from 'react';
+import { useRef, useState, type ChangeEvent, type ReactElement } from 'react';
 import {
   Button,
   Card,
@@ -82,15 +77,11 @@ export function CsvImportPanel({
 
   const list = useQuery<UploadsResponse>({
     queryKey: ['seller-csv-uploads', kind],
-    queryFn: () =>
-      client.request<UploadsResponse>(`${endpointBase}?page=1&pageSize=10`),
+    queryFn: () => client.request<UploadsResponse>(`${endpointBase}?page=1&pageSize=10`),
     refetchInterval: (q) => {
       const items = q.state.data?.items ?? [];
       const stillRunning = items.some(
-        (it) =>
-          it.status === 'RUNNING' ||
-          it.status === 'QUEUED' ||
-          it.status === 'PENDING',
+        (it) => it.status === 'RUNNING' || it.status === 'QUEUED' || it.status === 'PENDING',
       );
       return stillRunning ? 5_000 : false;
     },
@@ -209,15 +200,11 @@ export function CsvImportPanel({
         <CardBody>
           <h2 className="text-text-bright text-sm font-medium mb-3">Upload</h2>
           <p className="text-text-muted text-xs mb-3">
-            Download the template, fill it in, then upload here. Each row is
-            a separate {kind === 'orders' ? 'order' : 'product / variant'}.
+            Download the template, fill it in, then upload here. Each row is a separate{' '}
+            {kind === 'orders' ? 'order' : 'product / variant'}.
           </p>
           <div className="flex items-center gap-2 mb-3">
-            <Button
-              variant="ghost"
-              size="md"
-              onClick={() => void downloadTemplate()}
-            >
+            <Button variant="ghost" size="md" onClick={() => void downloadTemplate()}>
               Download template
             </Button>
           </div>
@@ -287,8 +274,7 @@ export function CsvImportPanel({
           <TBody>
             {list.data.items.map((u) => {
               const created =
-                u.ordersCreated ??
-                (u.productsCreated ?? 0) + (u.variantsCreated ?? 0);
+                u.ordersCreated ?? (u.productsCreated ?? 0) + (u.variantsCreated ?? 0);
               return (
                 <Tr key={u.id}>
                   <Td className="text-text-bright text-xs font-mono truncate max-w-[160px]">
@@ -297,14 +283,9 @@ export function CsvImportPanel({
                   <Td className="text-text-muted text-xs uppercase">{u.status}</Td>
                   <Td className="text-right font-mono">{u.rowCount}</Td>
                   <Td className="text-right font-mono">{created}</Td>
-                  <Td className="text-right font-mono text-text-muted">
-                    {u.rowsFailed ?? 0}
-                  </Td>
+                  <Td className="text-right font-mono text-text-muted">{u.rowsFailed ?? 0}</Td>
                   <Td className="text-text-faint text-xs font-mono">
-                    {new Date(u.createdAt)
-                      .toISOString()
-                      .slice(0, 16)
-                      .replace('T', ' ')}
+                    {new Date(u.createdAt).toISOString().slice(0, 16).replace('T', ' ')}
                   </Td>
                   <Td>
                     {u.errorReportKey && (
@@ -326,4 +307,3 @@ export function CsvImportPanel({
     </div>
   );
 }
-

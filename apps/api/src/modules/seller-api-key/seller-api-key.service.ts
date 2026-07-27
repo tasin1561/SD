@@ -3,11 +3,7 @@ import { ActorType } from '@skydrop/db';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { TokenHashService } from '../auth-common/services/token-hash.service';
 import { AuditLogService } from '../auth-common/services/audit-log.service';
-import type {
-  ApiKeyListItemDto,
-  CreateApiKeyDto,
-  CreatedApiKeyDto,
-} from './dto/create.dto';
+import type { ApiKeyListItemDto, CreateApiKeyDto, CreatedApiKeyDto } from './dto/create.dto';
 import type { ClientContext } from '../staff-auth/staff-auth.service';
 
 @Injectable()

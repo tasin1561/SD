@@ -35,9 +35,7 @@ export interface ParsedScanPayload {
  * PARSE_FAILED — the raw body stays preserved on courier_webhooks for
  * ops investigation.
  */
-export function parseScanPayload(
-  parsedBody: unknown,
-): ParsedScanPayload | null {
+export function parseScanPayload(parsedBody: unknown): ParsedScanPayload | null {
   if (!isObject(parsedBody)) return null;
   const b = parsedBody as Record<string, unknown>;
 
@@ -50,9 +48,7 @@ export function parseScanPayload(
   // shape the M10 tests already use.
   if (isObject(b['Shipment'])) {
     const s = b['Shipment'] as Record<string, unknown>;
-    const status = isObject(s['Status'])
-      ? (s['Status'] as Record<string, unknown>)
-      : {};
+    const status = isObject(s['Status']) ? (s['Status'] as Record<string, unknown>) : {};
     const awbNumber = pickString(s, ['AWB', 'awb']);
     // `Status` is the STAGE and `StatusType` is the LEG — they are
     // different axes and both are needed. An earlier version put
@@ -65,13 +61,8 @@ export function parseScanPayload(
     const rawStatus = pickString(status, ['Status']);
     const statusType = pickString(status, ['StatusType']);
     // NSL sits on the Shipment, not inside Status.
-    const nslCode =
-      pickString(s, ['NSLCode', 'nsl_code']) ?? pickString(status, ['NSLCode']);
-    const eventAtIso = pickString(status, [
-      'StatusDateTime',
-      'StatusDate',
-      'EventDateTime',
-    ]);
+    const nslCode = pickString(s, ['NSLCode', 'nsl_code']) ?? pickString(status, ['NSLCode']);
+    const eventAtIso = pickString(status, ['StatusDateTime', 'StatusDate', 'EventDateTime']);
     if (
       awbNumber === null ||
       rawStatus === null ||
@@ -91,8 +82,7 @@ export function parseScanPayload(
       locationCity: location, // Delhivery doesn't split; reuse for both.
       locationPincode: null,
       description: pickString(status, ['Instructions', 'StatusRemarks']),
-      failureReason:
-        pickString(status, ['CancellationReason', 'FailureReason']) ?? null,
+      failureReason: pickString(status, ['CancellationReason', 'FailureReason']) ?? null,
     };
   }
 
@@ -109,9 +99,7 @@ export function parseScanPayload(
     return null;
   }
 
-  const loc = isObject(b['location'])
-    ? (b['location'] as Record<string, unknown>)
-    : null;
+  const loc = isObject(b['location']) ? (b['location'] as Record<string, unknown>) : null;
 
   return {
     awbNumber,
@@ -121,12 +109,8 @@ export function parseScanPayload(
     statusType: pickString(b, ['status_type', 'statusType', 'StatusType']),
     nslCode: pickString(b, ['nsl_code', 'nslCode', 'NSLCode']),
     eventAtIso,
-    locationName:
-      pickString(b, ['location_name']) ??
-      (loc ? pickString(loc, ['name']) : null),
-    locationCity:
-      pickString(b, ['location_city']) ??
-      (loc ? pickString(loc, ['city']) : null),
+    locationName: pickString(b, ['location_name']) ?? (loc ? pickString(loc, ['name']) : null),
+    locationCity: pickString(b, ['location_city']) ?? (loc ? pickString(loc, ['city']) : null),
     locationPincode:
       pickString(b, ['location_pincode']) ??
       (loc ? pickString(loc, ['pincode', 'postal_code']) : null),
@@ -144,14 +128,13 @@ export function parseScanPayload(
  * (TODO(delhivery-api) — Delhivery's reason vocabulary is not reliably
  * known at build time).
  */
-export function mapFailureReason(
-  raw: string | null,
-): DeliveryFailureReason | null {
+export function mapFailureReason(raw: string | null): DeliveryFailureReason | null {
   if (raw === null) return null;
-  const norm = raw.trim().toUpperCase().replace(/[\s-]+/g, '_');
-  const allowed: ReadonlySet<string> = new Set(
-    Object.values(DeliveryFailureReason),
-  );
+  const norm = raw
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, '_');
+  const allowed: ReadonlySet<string> = new Set(Object.values(DeliveryFailureReason));
   if (allowed.has(norm)) return norm as DeliveryFailureReason;
   return DeliveryFailureReason.OTHER;
 }
@@ -160,10 +143,7 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-function pickString(
-  src: Record<string, unknown>,
-  keys: readonly string[],
-): string | null {
+function pickString(src: Record<string, unknown>, keys: readonly string[]): string | null {
   for (const k of keys) {
     const v = src[k];
     if (typeof v === 'string' && v.length > 0) return v;

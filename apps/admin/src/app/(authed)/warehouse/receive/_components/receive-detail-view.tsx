@@ -66,8 +66,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
   }
 
   if (detail.isLoading) return <LoadingState label="Loading…" />;
-  if (detail.isError)
-    return <ErrorState message={detail.error?.message ?? 'Failed to load.'} />;
+  if (detail.isError) return <ErrorState message={detail.error?.message ?? 'Failed to load.'} />;
   if (!detail.data) return <ErrorState message="Goods receipt not found." />;
 
   const r = detail.data;
@@ -94,7 +93,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
     const lines: RecordReceiptLineInput[] = [];
     for (const l of r.lines) {
       const recv = received[l.id]?.trim() ?? '';
-      const dmg = (damaged[l.id]?.trim() ?? '0');
+      const dmg = damaged[l.id]?.trim() ?? '0';
       const bin = binByLine[l.id]?.trim() ?? '';
       if (recv === '') continue;
       const n = Number(recv);
@@ -168,9 +167,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
       </Link>
 
       <PageHeader
-        title={
-          <span className="font-mono">{r.receiptNumber}</span>
-        }
+        title={<span className="font-mono">{r.receiptNumber}</span>}
         subtitle={
           <span>
             {r.seller.companyName} · {r.lines.length} line(s) ·{' '}
@@ -222,33 +219,17 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
       <Card>
         <CardBody>
           <div className="grid grid-cols-2 gap-3 text-xs">
-            <Field
-              label="Declared"
-              value={new Date(r.createdAt).toLocaleString()}
-            />
+            <Field label="Declared" value={new Date(r.createdAt).toLocaleString()} />
             <Field
               label="Started"
-              value={
-                r.startedReceivingAt
-                  ? new Date(r.startedReceivingAt).toLocaleString()
-                  : '—'
-              }
+              value={r.startedReceivingAt ? new Date(r.startedReceivingAt).toLocaleString() : '—'}
             />
             <Field
               label="Completed"
-              value={
-                r.completedAt
-                  ? new Date(r.completedAt).toLocaleString()
-                  : '—'
-              }
+              value={r.completedAt ? new Date(r.completedAt).toLocaleString() : '—'}
             />
-            <Field
-              label="Seller ref"
-              value={r.sellerReference ?? '—'}
-            />
-            {r.discrepancyNotes && (
-              <Field label="Discrepancy notes" value={r.discrepancyNotes} />
-            )}
+            <Field label="Seller ref" value={r.sellerReference ?? '—'} />
+            {r.discrepancyNotes && <Field label="Discrepancy notes" value={r.discrepancyNotes} />}
           </div>
         </CardBody>
       </Card>
@@ -295,9 +276,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                     max={1_000_000}
                     inputMode="numeric"
                     value={received[line.id] ?? String(line.receivedQty ?? '')}
-                    onChange={(e) =>
-                      setReceived({ ...received, [line.id]: e.target.value })
-                    }
+                    onChange={(e) => setReceived({ ...received, [line.id]: e.target.value })}
                   />
                 </FormField>
                 <FormField label="Damaged">
@@ -306,17 +285,13 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                     min={0}
                     inputMode="numeric"
                     value={damaged[line.id] ?? String(line.damagedQty ?? '0')}
-                    onChange={(e) =>
-                      setDamaged({ ...damaged, [line.id]: e.target.value })
-                    }
+                    onChange={(e) => setDamaged({ ...damaged, [line.id]: e.target.value })}
                   />
                 </FormField>
                 <FormField label="Putaway bin">
                   <Select
                     value={binByLine[line.id] ?? line.putawayBinId ?? ''}
-                    onChange={(e) =>
-                      setBinByLine({ ...binByLine, [line.id]: e.target.value })
-                    }
+                    onChange={(e) => setBinByLine({ ...binByLine, [line.id]: e.target.value })}
                   >
                     <option value="">— select bin —</option>
                     {(bins.data ?? [])
@@ -343,13 +318,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
   );
 }
 
-function Field({
-  label,
-  value,
-}: {
-  readonly label: string;
-  readonly value: string;
-}): ReactElement {
+function Field({ label, value }: { readonly label: string; readonly value: string }): ReactElement {
   return (
     <div>
       <div className="text-text-faint text-xs uppercase tracking-wide">{label}</div>

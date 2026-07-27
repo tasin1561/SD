@@ -56,8 +56,7 @@ function makeSut(opts: { status: CycleCountStatus; items: Item[]; batchUnitCost?
     stockBatch: {
       findFirst: jest.fn(async () => ({
         sellerId: 's1',
-        unitCostInr:
-          opts.batchUnitCost == null ? null : new Prisma.Decimal(opts.batchUnitCost),
+        unitCostInr: opts.batchUnitCost == null ? null : new Prisma.Decimal(opts.batchUnitCost),
       })),
     },
     stockAdjustment: {

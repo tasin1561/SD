@@ -7,19 +7,7 @@ import { AuditLogService } from './services/audit-log.service';
 
 @Global()
 @Module({
-  providers: [
-    PasswordService,
-    JwtService,
-    TokenHashService,
-    RefreshTokenService,
-    AuditLogService,
-  ],
-  exports: [
-    PasswordService,
-    JwtService,
-    TokenHashService,
-    RefreshTokenService,
-    AuditLogService,
-  ],
+  providers: [PasswordService, JwtService, TokenHashService, RefreshTokenService, AuditLogService],
+  exports: [PasswordService, JwtService, TokenHashService, RefreshTokenService, AuditLogService],
 })
 export class AuthCommonModule {}

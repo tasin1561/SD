@@ -88,9 +88,7 @@ export function AcceptInvitationForm({
     <div className="min-h-screen grid place-items-center bg-bg text-text-body p-6">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="text-text-bright text-2xl font-semibold tracking-tight">
-            Skydrop
-          </div>
+          <div className="text-text-bright text-2xl font-semibold tracking-tight">Skydrop</div>
           <div className="text-text-faint text-xs mt-1">Admin</div>
         </div>
 
@@ -99,8 +97,7 @@ export function AcceptInvitationForm({
             Set up your staff account
           </h1>
           <p className="text-text-muted text-xs mb-5">
-            Choose a password (min 12 chars). After submit you&apos;ll be
-            signed in.
+            Choose a password (min 12 chars). After submit you&apos;ll be signed in.
           </p>
 
           <form onSubmit={(e) => void onSubmit(e)} className="space-y-3">
@@ -154,9 +151,7 @@ export function AcceptInvitationForm({
                   type="button"
                   onClick={() => setShowConfirmPw((s) => !s)}
                   tabIndex={-1}
-                  aria-label={
-                    showConfirmPw ? 'Hide confirm password' : 'Show confirm password'
-                  }
+                  aria-label={showConfirmPw ? 'Hide confirm password' : 'Show confirm password'}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-body p-1 rounded-[3px]"
                 >
                   {showConfirmPw ? <EyeOff size={14} /> : <Eye size={14} />}

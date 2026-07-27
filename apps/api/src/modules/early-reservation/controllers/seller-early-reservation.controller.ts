@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { type EarlyReservationReviewStatus, SellerUserRole } from '@skydrop/db';
 import { CurrentSeller } from '../../../common/decorators/current-seller.decorator';
@@ -41,7 +34,7 @@ export class SellerEarlyReservationController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Orders whose call attempts ran out while stock was still held at placement, awaiting the seller\'s release-or-retry decision',
+      "Orders whose call attempts ran out while stock was still held at placement, awaiting the seller's release-or-retry decision",
   })
   list(
     @CurrentSeller() seller: AuthenticatedSeller,

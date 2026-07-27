@@ -79,15 +79,14 @@ function variant(over: Partial<VariantShape> & Pick<VariantShape, 'id'>): Varian
   };
 }
 
-function makeSut(variants: VariantShape[], gst?: { valueDecimal?: Prisma.Decimal | null; valueInt?: number | null }) {
-  const findMany = jest.fn(
-    async ({ where }: { where: { id: { in: string[] } } }) =>
-      variants.filter(
-        (v) =>
-          where.id.in.includes(v.id) &&
-          v.deletedAt === null &&
-          v.product.deletedAt === null,
-      ),
+function makeSut(
+  variants: VariantShape[],
+  gst?: { valueDecimal?: Prisma.Decimal | null; valueInt?: number | null },
+) {
+  const findMany = jest.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
+    variants.filter(
+      (v) => where.id.in.includes(v.id) && v.deletedAt === null && v.product.deletedAt === null,
+    ),
   );
   const findUnique = jest.fn(async () => gst ?? { valueDecimal: dec('18.00'), valueInt: null });
   const findFirst = jest.fn(async ({ where }: { where: { id: string } }) => {

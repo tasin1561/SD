@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { StaffRole } from '@skydrop/db';
 import { requireStaffRoles } from '../../../common/auth/require-staff-roles';
@@ -86,31 +79,27 @@ export class AdminDelhiveryOpsController {
   @Get('status')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary:
-      'Waybill pool depth, live-write guard state, and remaining rate budget per endpoint.',
+    summary: 'Waybill pool depth, live-write guard state, and remaining rate budget per endpoint.',
   })
-  async status(
-    @CurrentStaff() staff: AuthenticatedStaff,
-  ): Promise<DelhiveryOpsStatusView> {
+  async status(@CurrentStaff() staff: AuthenticatedStaff): Promise<DelhiveryOpsStatusView> {
     requireStaffRoles(staff, [
       StaffRole.WAREHOUSE_SUPERVISOR,
       StaffRole.MANUAL_PLACEMENT_ADMIN,
       StaffRole.SUPER_ADMIN,
     ]);
 
-    const [stubMode, liveWritesEnabled, waybillPool, rateBudgets] =
-      await Promise.all([
-        this.http.isStubMode(),
-        this.writeGuard.liveWritesEnabled(),
-        this.pool.stats(),
-        Promise.all(
-          WATCHED_ENDPOINTS.map(async (endpoint) => ({
-            endpoint,
-            budget: this.rateLimit.budgetFor(endpoint),
-            remaining: await this.rateLimit.remaining(endpoint),
-          })),
-        ),
-      ]);
+    const [stubMode, liveWritesEnabled, waybillPool, rateBudgets] = await Promise.all([
+      this.http.isStubMode(),
+      this.writeGuard.liveWritesEnabled(),
+      this.pool.stats(),
+      Promise.all(
+        WATCHED_ENDPOINTS.map(async (endpoint) => ({
+          endpoint,
+          budget: this.rateLimit.budgetFor(endpoint),
+          remaining: await this.rateLimit.remaining(endpoint),
+        })),
+      ),
+    ]);
 
     return {
       liveMode: !stubMode,
@@ -131,10 +120,7 @@ export class AdminDelhiveryOpsController {
   ): Promise<{ fetched: number; poolAfter: number }> {
     // Narrower than the read: this one can spend the account's real AWB
     // allocation.
-    requireStaffRoles(staff, [
-      StaffRole.MANUAL_PLACEMENT_ADMIN,
-      StaffRole.SUPER_ADMIN,
-    ]);
+    requireStaffRoles(staff, [StaffRole.MANUAL_PLACEMENT_ADMIN, StaffRole.SUPER_ADMIN]);
     return this.pool.refillIfNeeded();
   }
 }

@@ -15,18 +15,16 @@ function makeService(
     chargesEntryExists?: boolean;
   } = {},
 ) {
-  const walletEntryFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async (args) => {
-      const direction = (args.where as { direction: WalletEntryDirection }).direction;
-      if (direction === WalletEntryDirection.COD_COLLECTION) {
-        return opts.codEntryExists ? { id: 'cod-existing' } : null;
-      }
-      if (direction === WalletEntryDirection.ORDER_CHARGES) {
-        return opts.chargesEntryExists ? { id: 'charges-existing' } : null;
-      }
-      return null;
-    },
-  );
+  const walletEntryFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async (args) => {
+    const direction = (args.where as { direction: WalletEntryDirection }).direction;
+    if (direction === WalletEntryDirection.COD_COLLECTION) {
+      return opts.codEntryExists ? { id: 'cod-existing' } : null;
+    }
+    if (direction === WalletEntryDirection.ORDER_CHARGES) {
+      return opts.chargesEntryExists ? { id: 'charges-existing' } : null;
+    }
+    return null;
+  });
   const orderChargeFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
     async () => opts.charges ?? [],
   );
@@ -99,9 +97,16 @@ describe('AccrualExecutionService.executeAccrual', () => {
     expect(applyEntry).toHaveBeenCalledTimes(2);
     const directions = applyEntry.mock.calls.map((c) => (c[1] as AnyArgs).direction);
     expect(directions).toEqual(
-      expect.arrayContaining([WalletEntryDirection.COD_COLLECTION, WalletEntryDirection.ORDER_CHARGES]),
+      expect.arrayContaining([
+        WalletEntryDirection.COD_COLLECTION,
+        WalletEntryDirection.ORDER_CHARGES,
+      ]),
     );
-    expect(recomputeCacheAfterCommit).toHaveBeenCalledWith('seller-1', Currency.INR, 'post-commit-accrual');
+    expect(recomputeCacheAfterCommit).toHaveBeenCalledWith(
+      'seller-1',
+      Currency.INR,
+      'post-commit-accrual',
+    );
   });
 
   it('R1c: charges already debited early (AT_AWB) — still credits COD, does NOT re-debit charges', async () => {
@@ -111,7 +116,9 @@ describe('AccrualExecutionService.executeAccrual', () => {
     });
     await svc.executeAccrual('order-1');
     expect(applyEntry).toHaveBeenCalledTimes(1);
-    expect((applyEntry.mock.calls[0]![1] as AnyArgs).direction).toBe(WalletEntryDirection.COD_COLLECTION);
+    expect((applyEntry.mock.calls[0]![1] as AnyArgs).direction).toBe(
+      WalletEntryDirection.COD_COLLECTION,
+    );
   });
 
   it('fully processed already (both entries exist): no writes at all, still succeeds', async () => {
@@ -132,7 +139,9 @@ describe('AccrualExecutionService.executeAccrual', () => {
     });
     await svc.executeAccrual('order-1');
     expect(applyEntry).toHaveBeenCalledTimes(1);
-    expect((applyEntry.mock.calls[0]![1] as AnyArgs).direction).toBe(WalletEntryDirection.ORDER_CHARGES);
+    expect((applyEntry.mock.calls[0]![1] as AnyArgs).direction).toBe(
+      WalletEntryDirection.ORDER_CHARGES,
+    );
   });
 
   it('order vanished before execution: logs + returns, no writes, no throw', async () => {
@@ -143,7 +152,12 @@ describe('AccrualExecutionService.executeAccrual', () => {
 
   it('zero COD amount: no COD credit written even though paymentMode is COD', async () => {
     const { svc, applyEntry } = makeService({
-      order: { id: 'order-1', sellerId: 'seller-1', paymentMode: PaymentMode.COD, codAmountInr: new Prisma.Decimal('0') },
+      order: {
+        id: 'order-1',
+        sellerId: 'seller-1',
+        paymentMode: PaymentMode.COD,
+        codAmountInr: new Prisma.Decimal('0'),
+      },
     });
     await svc.executeAccrual('order-1');
     expect(applyEntry).not.toHaveBeenCalled();
@@ -155,19 +169,29 @@ describe('AccrualExecutionService.executeAccrual', () => {
     const walletEntryFindFirst = jest.fn(async (args: AnyArgs) => {
       const direction = (args.where as { direction: WalletEntryDirection }).direction;
       if (direction === WalletEntryDirection.COD_COLLECTION) return codWritten ? { id: 'x' } : null;
-      if (direction === WalletEntryDirection.ORDER_CHARGES) return chargesWritten ? { id: 'y' } : null;
+      if (direction === WalletEntryDirection.ORDER_CHARGES)
+        return chargesWritten ? { id: 'y' } : null;
       return null;
     });
-    const orderChargeFindMany = jest.fn(async () => [{ type: 'BASE_SHIPPING', amountInr: new Prisma.Decimal('80') }]);
+    const orderChargeFindMany = jest.fn(async () => [
+      { type: 'BASE_SHIPPING', amountInr: new Prisma.Decimal('80') },
+    ]);
     const orderFindUnique = jest.fn(async () => ({
       id: 'order-1',
       sellerId: 'seller-1',
       paymentMode: PaymentMode.COD,
       codAmountInr: new Prisma.Decimal('500'),
     }));
-    const tx = { sellerWalletEntry: { findFirst: walletEntryFindFirst }, orderCharge: { findMany: orderChargeFindMany } };
+    const tx = {
+      sellerWalletEntry: { findFirst: walletEntryFindFirst },
+      orderCharge: { findMany: orderChargeFindMany },
+    };
     const $transaction = jest.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(tx));
-    const client = { order: { findUnique: orderFindUnique }, sellerWalletEntry: { findFirst: walletEntryFindFirst }, $transaction };
+    const client = {
+      order: { findUnique: orderFindUnique },
+      sellerWalletEntry: { findFirst: walletEntryFindFirst },
+      $transaction,
+    };
     const prisma = { client } as unknown as PrismaService;
     const applyEntry = jest.fn(async (_tx: unknown, input: AnyArgs) => {
       if (input.direction === WalletEntryDirection.COD_COLLECTION) codWritten = true;

@@ -68,186 +68,246 @@ const { RESERVE_STOCK, RELEASE_STOCK, DISPATCH_STOCK } = OrderSideEffect;
  *    queueing (Module 7 CC-3).
  */
 const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]]> = [
-  [OrderStatus.DRAFT, [
-    { to: OrderStatus.PENDING_CONFIRMATION, sideEffects: [] }, // submit
-    { to: OrderStatus.CANCELLED, sideEffects: [] }, // discard a draft
-    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [] },
-  ]],
+  [
+    OrderStatus.DRAFT,
+    [
+      { to: OrderStatus.PENDING_CONFIRMATION, sideEffects: [] }, // submit
+      { to: OrderStatus.CANCELLED, sideEffects: [] }, // discard a draft
+      { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [] },
+    ],
+  ],
 
-  [OrderStatus.PENDING_CONFIRMATION, [
-    { to: OrderStatus.CONFIRMED, sideEffects: [RESERVE_STOCK] }, // Module 7
-    { to: OrderStatus.OUT_OF_STOCK, sideEffects: [] }, // reserve() failed at confirm (ORD-10)
-    { to: OrderStatus.CALL_NO_RESPONSE, sideEffects: [] },
-    { to: OrderStatus.CALL_RESCHEDULED, sideEffects: [] },
-    { to: OrderStatus.CANCELLED, sideEffects: [] }, // no reservation yet
-    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [] },
-    { to: OrderStatus.REJECTED, sideEffects: [] },
-    // Module 7 call-workflow terminals (pre-reservation → no release).
-    { to: OrderStatus.REJECTED_BY_CUSTOMER, sideEffects: [] },
-    { to: OrderStatus.REJECTED_NDR, sideEffects: [] },
-    // R5b — the at-cap PAUSE for MANUAL_REVIEW sellers (see the status'
-    // schema doc). Same inbound set as REJECTED_NDR because it lands at
-    // exactly the same moment; only the seller's policy differs.
-    { to: OrderStatus.AWAITING_SELLER_DECISION, sideEffects: [] },
-  ]],
+  [
+    OrderStatus.PENDING_CONFIRMATION,
+    [
+      { to: OrderStatus.CONFIRMED, sideEffects: [RESERVE_STOCK] }, // Module 7
+      { to: OrderStatus.OUT_OF_STOCK, sideEffects: [] }, // reserve() failed at confirm (ORD-10)
+      { to: OrderStatus.CALL_NO_RESPONSE, sideEffects: [] },
+      { to: OrderStatus.CALL_RESCHEDULED, sideEffects: [] },
+      { to: OrderStatus.CANCELLED, sideEffects: [] }, // no reservation yet
+      { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [] },
+      { to: OrderStatus.REJECTED, sideEffects: [] },
+      // Module 7 call-workflow terminals (pre-reservation → no release).
+      { to: OrderStatus.REJECTED_BY_CUSTOMER, sideEffects: [] },
+      { to: OrderStatus.REJECTED_NDR, sideEffects: [] },
+      // R5b — the at-cap PAUSE for MANUAL_REVIEW sellers (see the status'
+      // schema doc). Same inbound set as REJECTED_NDR because it lands at
+      // exactly the same moment; only the seller's policy differs.
+      { to: OrderStatus.AWAITING_SELLER_DECISION, sideEffects: [] },
+    ],
+  ],
 
-  [OrderStatus.CALL_NO_RESPONSE, [
-    { to: OrderStatus.PENDING_CONFIRMATION, sideEffects: [] },
-    // Self-loop (Module 7): a repeat NO_ANSWER/BUSY/VOICEMAIL_LEFT while
-    // already CALL_NO_RESPONSE is "same state, attempt logged" — an
-    // EXPLICIT, valid transition (see class JSDoc on self-loops).
-    { to: OrderStatus.CALL_NO_RESPONSE, sideEffects: [] },
-    { to: OrderStatus.CALL_RESCHEDULED, sideEffects: [] },
-    { to: OrderStatus.CONFIRMED, sideEffects: [RESERVE_STOCK] },
-    { to: OrderStatus.CANCELLED, sideEffects: [] },
-    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [] },
-    { to: OrderStatus.REJECTED, sideEffects: [] },
-    { to: OrderStatus.REJECTED_BY_CUSTOMER, sideEffects: [] },
-    { to: OrderStatus.REJECTED_NDR, sideEffects: [] },
-    { to: OrderStatus.AWAITING_SELLER_DECISION, sideEffects: [] }, // R5b
-  ]],
+  [
+    OrderStatus.CALL_NO_RESPONSE,
+    [
+      { to: OrderStatus.PENDING_CONFIRMATION, sideEffects: [] },
+      // Self-loop (Module 7): a repeat NO_ANSWER/BUSY/VOICEMAIL_LEFT while
+      // already CALL_NO_RESPONSE is "same state, attempt logged" — an
+      // EXPLICIT, valid transition (see class JSDoc on self-loops).
+      { to: OrderStatus.CALL_NO_RESPONSE, sideEffects: [] },
+      { to: OrderStatus.CALL_RESCHEDULED, sideEffects: [] },
+      { to: OrderStatus.CONFIRMED, sideEffects: [RESERVE_STOCK] },
+      { to: OrderStatus.CANCELLED, sideEffects: [] },
+      { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [] },
+      { to: OrderStatus.REJECTED, sideEffects: [] },
+      { to: OrderStatus.REJECTED_BY_CUSTOMER, sideEffects: [] },
+      { to: OrderStatus.REJECTED_NDR, sideEffects: [] },
+      { to: OrderStatus.AWAITING_SELLER_DECISION, sideEffects: [] }, // R5b
+    ],
+  ],
 
-  [OrderStatus.CALL_RESCHEDULED, [
-    { to: OrderStatus.PENDING_CONFIRMATION, sideEffects: [] },
-    { to: OrderStatus.CALL_NO_RESPONSE, sideEffects: [] },
-    // Self-loop (Module 7): a repeat CALLBACK_REQUESTED re-schedules
-    // again — "same state, attempt logged".
-    { to: OrderStatus.CALL_RESCHEDULED, sideEffects: [] },
-    { to: OrderStatus.CONFIRMED, sideEffects: [RESERVE_STOCK] },
-    { to: OrderStatus.CANCELLED, sideEffects: [] },
-    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [] },
-    { to: OrderStatus.REJECTED, sideEffects: [] },
-    { to: OrderStatus.REJECTED_BY_CUSTOMER, sideEffects: [] },
-    { to: OrderStatus.REJECTED_NDR, sideEffects: [] },
-    { to: OrderStatus.AWAITING_SELLER_DECISION, sideEffects: [] }, // R5b
-  ]],
+  [
+    OrderStatus.CALL_RESCHEDULED,
+    [
+      { to: OrderStatus.PENDING_CONFIRMATION, sideEffects: [] },
+      { to: OrderStatus.CALL_NO_RESPONSE, sideEffects: [] },
+      // Self-loop (Module 7): a repeat CALLBACK_REQUESTED re-schedules
+      // again — "same state, attempt logged".
+      { to: OrderStatus.CALL_RESCHEDULED, sideEffects: [] },
+      { to: OrderStatus.CONFIRMED, sideEffects: [RESERVE_STOCK] },
+      { to: OrderStatus.CANCELLED, sideEffects: [] },
+      { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [] },
+      { to: OrderStatus.REJECTED, sideEffects: [] },
+      { to: OrderStatus.REJECTED_BY_CUSTOMER, sideEffects: [] },
+      { to: OrderStatus.REJECTED_NDR, sideEffects: [] },
+      { to: OrderStatus.AWAITING_SELLER_DECISION, sideEffects: [] }, // R5b
+    ],
+  ],
 
   // R5b — the seller's answer resolves the pause. REQUEST_MORE_ATTEMPTS
   // goes back to PENDING_CONFIRMATION, which re-enqueues the order for
   // calling through the existing CC-6 post-commit hook (no new wiring).
   // RELEASE — and the TTL sweep for a seller who never answers — lands
   // the original terminal. Admin cancels stay available throughout.
-  [OrderStatus.AWAITING_SELLER_DECISION, [
-    { to: OrderStatus.PENDING_CONFIRMATION, sideEffects: [] },
-    { to: OrderStatus.REJECTED_NDR, sideEffects: [] },
-    { to: OrderStatus.CANCELLED, sideEffects: [] },
-    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [] },
-  ]],
+  [
+    OrderStatus.AWAITING_SELLER_DECISION,
+    [
+      { to: OrderStatus.PENDING_CONFIRMATION, sideEffects: [] },
+      { to: OrderStatus.REJECTED_NDR, sideEffects: [] },
+      { to: OrderStatus.CANCELLED, sideEffects: [] },
+      { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [] },
+    ],
+  ],
 
-  [OrderStatus.OUT_OF_STOCK, [
-    { to: OrderStatus.CONFIRMED, sideEffects: [RESERVE_STOCK] }, // retry succeeded
-    { to: OrderStatus.PENDING_CONFIRMATION, sideEffects: [] }, // re-queue
-    { to: OrderStatus.CANCELLED, sideEffects: [] }, // give up — nothing reserved
-    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [] },
-  ]],
+  [
+    OrderStatus.OUT_OF_STOCK,
+    [
+      { to: OrderStatus.CONFIRMED, sideEffects: [RESERVE_STOCK] }, // retry succeeded
+      { to: OrderStatus.PENDING_CONFIRMATION, sideEffects: [] }, // re-queue
+      { to: OrderStatus.CANCELLED, sideEffects: [] }, // give up — nothing reserved
+      { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [] },
+    ],
+  ],
 
-  [OrderStatus.CONFIRMED, [
-    { to: OrderStatus.PENDING_PICK, sideEffects: [] }, // Module 8 begins
-    { to: OrderStatus.PENDING_MANUAL_PLACEMENT, sideEffects: [] },
-    { to: OrderStatus.CANCELLED, sideEffects: [RELEASE_STOCK] },
-    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
-    { to: OrderStatus.REJECTED, sideEffects: [RELEASE_STOCK] },
-  ]],
+  [
+    OrderStatus.CONFIRMED,
+    [
+      { to: OrderStatus.PENDING_PICK, sideEffects: [] }, // Module 8 begins
+      { to: OrderStatus.PENDING_MANUAL_PLACEMENT, sideEffects: [] },
+      { to: OrderStatus.CANCELLED, sideEffects: [RELEASE_STOCK] },
+      { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
+      { to: OrderStatus.REJECTED, sideEffects: [RELEASE_STOCK] },
+    ],
+  ],
 
-  [OrderStatus.PENDING_MANUAL_PLACEMENT, [
-    { to: OrderStatus.PENDING_PICK, sideEffects: [] },
-    // Module 9 (commit 14, CUR-8): a MANUAL_PLACEMENT_ADMIN records a
-    // manually-arranged courier AWB on the (already picked + packed)
-    // shipment and the order dispatches directly. DISPATCH_STOCK fires
-    // the Model-A qtyOnHand decrement + reservation fulfill — identical
-    // to the PENDING_DISPATCH → DISPATCHED edge. ManualPlacementService
-    // guards that the order is fully phase-2-allocated before allowing
-    // this (a pick-shortfall PENDING_MANUAL_PLACEMENT order must re-pick
-    // via → PENDING_PICK first; conservation cannot hold otherwise).
-    { to: OrderStatus.DISPATCHED, sideEffects: [DISPATCH_STOCK] },
-    { to: OrderStatus.CANCELLED, sideEffects: [RELEASE_STOCK] },
-    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
-  ]],
+  [
+    OrderStatus.PENDING_MANUAL_PLACEMENT,
+    [
+      { to: OrderStatus.PENDING_PICK, sideEffects: [] },
+      // Module 9 (commit 14, CUR-8): a MANUAL_PLACEMENT_ADMIN records a
+      // manually-arranged courier AWB on the (already picked + packed)
+      // shipment and the order dispatches directly. DISPATCH_STOCK fires
+      // the Model-A qtyOnHand decrement + reservation fulfill — identical
+      // to the PENDING_DISPATCH → DISPATCHED edge. ManualPlacementService
+      // guards that the order is fully phase-2-allocated before allowing
+      // this (a pick-shortfall PENDING_MANUAL_PLACEMENT order must re-pick
+      // via → PENDING_PICK first; conservation cannot hold otherwise).
+      { to: OrderStatus.DISPATCHED, sideEffects: [DISPATCH_STOCK] },
+      { to: OrderStatus.CANCELLED, sideEffects: [RELEASE_STOCK] },
+      { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
+    ],
+  ],
 
-  [OrderStatus.PENDING_PICK, [
-    { to: OrderStatus.PICKED, sideEffects: [] },
-    // Module 8 (WMS-4): a pick shortfall routes here. NO side-effect —
-    // the M5 conservation invariant keeps the residual phase-1
-    // reservation intact (allocateAndPopulate/releaseAllocation conserve
-    // total reserved qty); a supervisor resolves the manual placement.
-    { to: OrderStatus.PENDING_MANUAL_PLACEMENT, sideEffects: [] },
-    { to: OrderStatus.CANCELLED, sideEffects: [RELEASE_STOCK] },
-    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
-  ]],
+  [
+    OrderStatus.PENDING_PICK,
+    [
+      { to: OrderStatus.PICKED, sideEffects: [] },
+      // Module 8 (WMS-4): a pick shortfall routes here. NO side-effect —
+      // the M5 conservation invariant keeps the residual phase-1
+      // reservation intact (allocateAndPopulate/releaseAllocation conserve
+      // total reserved qty); a supervisor resolves the manual placement.
+      { to: OrderStatus.PENDING_MANUAL_PLACEMENT, sideEffects: [] },
+      { to: OrderStatus.CANCELLED, sideEffects: [RELEASE_STOCK] },
+      { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
+    ],
+  ],
 
-  [OrderStatus.PICKED, [
-    { to: OrderStatus.PACKED, sideEffects: [] },
-    { to: OrderStatus.PACK_FAILED, sideEffects: [] },
-    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
-  ]],
+  [
+    OrderStatus.PICKED,
+    [
+      { to: OrderStatus.PACKED, sideEffects: [] },
+      { to: OrderStatus.PACK_FAILED, sideEffects: [] },
+      { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
+    ],
+  ],
 
-  [OrderStatus.PACK_FAILED, [
-    { to: OrderStatus.PENDING_PICK, sideEffects: [] }, // re-pick
-    { to: OrderStatus.PICKED, sideEffects: [] },
-    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
-  ]],
+  [
+    OrderStatus.PACK_FAILED,
+    [
+      { to: OrderStatus.PENDING_PICK, sideEffects: [] }, // re-pick
+      { to: OrderStatus.PICKED, sideEffects: [] },
+      { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
+    ],
+  ],
 
-  [OrderStatus.PACKED, [
-    { to: OrderStatus.PENDING_DISPATCH, sideEffects: [] },
-    { to: OrderStatus.PACK_FAILED, sideEffects: [] }, // re-open
-    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
-  ]],
+  [
+    OrderStatus.PACKED,
+    [
+      { to: OrderStatus.PENDING_DISPATCH, sideEffects: [] },
+      { to: OrderStatus.PACK_FAILED, sideEffects: [] }, // re-open
+      { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
+    ],
+  ],
 
-  [OrderStatus.PENDING_DISPATCH, [
-    // Module 9 (Model A — the bug-1 fix): DISPATCH_STOCK decrements
-    // qtyOnHand (DISPATCH StockMovement) + fulfill()s the phase-2
-    // reservation. This is the ONE normal-lifecycle qtyOnHand decrement
-    // — qtyOnHand now tracks the physical shelf count.
-    { to: OrderStatus.DISPATCHED, sideEffects: [DISPATCH_STOCK] },
-    { to: OrderStatus.PENDING_MANUAL_PLACEMENT, sideEffects: [] }, // courier rejected
-    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
-  ]],
+  [
+    OrderStatus.PENDING_DISPATCH,
+    [
+      // Module 9 (Model A — the bug-1 fix): DISPATCH_STOCK decrements
+      // qtyOnHand (DISPATCH StockMovement) + fulfill()s the phase-2
+      // reservation. This is the ONE normal-lifecycle qtyOnHand decrement
+      // — qtyOnHand now tracks the physical shelf count.
+      { to: OrderStatus.DISPATCHED, sideEffects: [DISPATCH_STOCK] },
+      { to: OrderStatus.PENDING_MANUAL_PLACEMENT, sideEffects: [] }, // courier rejected
+      { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
+    ],
+  ],
 
-  [OrderStatus.DISPATCHED, [
-    { to: OrderStatus.IN_TRANSIT, sideEffects: [] },
-    { to: OrderStatus.RTO_INITIATED, sideEffects: [] },
-    { to: OrderStatus.LOST_IN_TRANSIT, sideEffects: [] },
-    { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
-  ]],
+  [
+    OrderStatus.DISPATCHED,
+    [
+      { to: OrderStatus.IN_TRANSIT, sideEffects: [] },
+      { to: OrderStatus.RTO_INITIATED, sideEffects: [] },
+      { to: OrderStatus.LOST_IN_TRANSIT, sideEffects: [] },
+      { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
+    ],
+  ],
 
-  [OrderStatus.IN_TRANSIT, [
-    { to: OrderStatus.OUT_FOR_DELIVERY, sideEffects: [] },
-    { to: OrderStatus.DELIVERY_FAILED, sideEffects: [] },
-    { to: OrderStatus.RTO_INITIATED, sideEffects: [] },
-    { to: OrderStatus.LOST_IN_TRANSIT, sideEffects: [] },
-  ]],
+  [
+    OrderStatus.IN_TRANSIT,
+    [
+      { to: OrderStatus.OUT_FOR_DELIVERY, sideEffects: [] },
+      { to: OrderStatus.DELIVERY_FAILED, sideEffects: [] },
+      { to: OrderStatus.RTO_INITIATED, sideEffects: [] },
+      { to: OrderStatus.LOST_IN_TRANSIT, sideEffects: [] },
+    ],
+  ],
 
-  [OrderStatus.OUT_FOR_DELIVERY, [
-    // Module 9 (Model A): DELIVERED is now STOCK-NEUTRAL — qtyOnHand was
-    // decremented + the reservation FULFILLED at DISPATCH (DISPATCH_STOCK).
-    // FULFILL_STOCK removed from this edge; M10 tracking webhooks never
-    // touch stock.
-    { to: OrderStatus.DELIVERED, sideEffects: [] },
-    { to: OrderStatus.DELIVERY_FAILED, sideEffects: [] },
-    { to: OrderStatus.RTO_INITIATED, sideEffects: [] },
-  ]],
+  [
+    OrderStatus.OUT_FOR_DELIVERY,
+    [
+      // Module 9 (Model A): DELIVERED is now STOCK-NEUTRAL — qtyOnHand was
+      // decremented + the reservation FULFILLED at DISPATCH (DISPATCH_STOCK).
+      // FULFILL_STOCK removed from this edge; M10 tracking webhooks never
+      // touch stock.
+      { to: OrderStatus.DELIVERED, sideEffects: [] },
+      { to: OrderStatus.DELIVERY_FAILED, sideEffects: [] },
+      { to: OrderStatus.RTO_INITIATED, sideEffects: [] },
+    ],
+  ],
 
-  [OrderStatus.DELIVERY_FAILED, [
-    { to: OrderStatus.OUT_FOR_DELIVERY, sideEffects: [] }, // retry
-    { to: OrderStatus.RTO_INITIATED, sideEffects: [] },
-    { to: OrderStatus.LOST_IN_TRANSIT, sideEffects: [] },
-  ]],
+  [
+    OrderStatus.DELIVERY_FAILED,
+    [
+      { to: OrderStatus.OUT_FOR_DELIVERY, sideEffects: [] }, // retry
+      { to: OrderStatus.RTO_INITIATED, sideEffects: [] },
+      { to: OrderStatus.LOST_IN_TRANSIT, sideEffects: [] },
+    ],
+  ],
 
-  [OrderStatus.RTO_INITIATED, [
-    { to: OrderStatus.RTO_IN_TRANSIT, sideEffects: [] },
-    { to: OrderStatus.RTO_RECEIVED, sideEffects: [] },
-    { to: OrderStatus.LOST_IN_TRANSIT, sideEffects: [] },
-  ]],
+  [
+    OrderStatus.RTO_INITIATED,
+    [
+      { to: OrderStatus.RTO_IN_TRANSIT, sideEffects: [] },
+      { to: OrderStatus.RTO_RECEIVED, sideEffects: [] },
+      { to: OrderStatus.LOST_IN_TRANSIT, sideEffects: [] },
+    ],
+  ],
 
-  [OrderStatus.RTO_IN_TRANSIT, [
-    { to: OrderStatus.RTO_RECEIVED, sideEffects: [] },
-    { to: OrderStatus.LOST_IN_TRANSIT, sideEffects: [] },
-  ]],
+  [
+    OrderStatus.RTO_IN_TRANSIT,
+    [
+      { to: OrderStatus.RTO_RECEIVED, sideEffects: [] },
+      { to: OrderStatus.LOST_IN_TRANSIT, sideEffects: [] },
+    ],
+  ],
 
-  [OrderStatus.RTO_RECEIVED, [
-    { to: OrderStatus.RTO_RESTOCKED, sideEffects: [] }, // physical restock = Module 8
-    { to: OrderStatus.RTO_DAMAGED, sideEffects: [] },
-  ]],
+  [
+    OrderStatus.RTO_RECEIVED,
+    [
+      { to: OrderStatus.RTO_RESTOCKED, sideEffects: [] }, // physical restock = Module 8
+      { to: OrderStatus.RTO_DAMAGED, sideEffects: [] },
+    ],
+  ],
 
   // Terminal states — no outgoing transitions in the normal machine.
   // (Admin god-mode bypasses this matrix entirely; LOST→found recovery
@@ -271,7 +331,10 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
 @Injectable()
 export class OrderStateMachineService {
   /** from → (to → side-effects). Built once; exhaustive over OrderStatus. */
-  private readonly graph: ReadonlyMap<OrderStatus, ReadonlyMap<OrderStatus, readonly OrderSideEffect[]>>;
+  private readonly graph: ReadonlyMap<
+    OrderStatus,
+    ReadonlyMap<OrderStatus, readonly OrderSideEffect[]>
+  >;
 
   constructor() {
     const graph = new Map<OrderStatus, Map<OrderStatus, readonly OrderSideEffect[]>>();

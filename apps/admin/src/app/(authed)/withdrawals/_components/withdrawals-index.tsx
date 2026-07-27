@@ -150,10 +150,7 @@ export function WithdrawalsIndex(): ReactElement {
                   {new Date(w.createdAt).toLocaleDateString()}
                 </Td>
                 <Td>
-                  <Link
-                    href={`/sellers/${w.sellerId}`}
-                    className="text-accent hover:underline"
-                  >
+                  <Link href={`/sellers/${w.sellerId}`} className="text-accent hover:underline">
                     <Ident value={`${w.sellerId.slice(0, 8)}…`} />
                   </Link>
                 </Td>
@@ -179,11 +176,7 @@ export function WithdrawalsIndex(): ReactElement {
                 <Td align="right">
                   {w.status === WithdrawalRequestStatus.PENDING ||
                   w.status === WithdrawalRequestStatus.APPROVED ? (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setSelected(w)}
-                    >
+                    <Button variant="secondary" size="sm" onClick={() => setSelected(w)}>
                       Resolve
                     </Button>
                   ) : w.linkedRemittanceId !== null ? (
@@ -212,10 +205,7 @@ export function WithdrawalsIndex(): ReactElement {
         </Table>
       )}
 
-      <ResolveWithdrawalModal
-        request={selected}
-        onClose={() => setSelected(null)}
-      />
+      <ResolveWithdrawalModal request={selected} onClose={() => setSelected(null)} />
     </div>
   );
 }

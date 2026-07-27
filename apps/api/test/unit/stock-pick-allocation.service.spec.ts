@@ -170,8 +170,26 @@ describe('StockPickAllocationService.allocateForOrderLine', () => {
 
   it('multi-bin batch draws by zone pickOrder then bin code', async () => {
     const { svc } = makeSut([
-      { binId: 'binA', batchId: 'B1', qtyOnHand: 3, qtyReserved: 0, pickOrder: 50, binCode: 'A', expiresAt: '2026-06-01', receivedAt: '2026-01-01T00:00:00Z' },
-      { binId: 'binB', batchId: 'B1', qtyOnHand: 10, qtyReserved: 0, pickOrder: 10, binCode: 'B', expiresAt: '2026-06-01', receivedAt: '2026-01-01T00:00:00Z' },
+      {
+        binId: 'binA',
+        batchId: 'B1',
+        qtyOnHand: 3,
+        qtyReserved: 0,
+        pickOrder: 50,
+        binCode: 'A',
+        expiresAt: '2026-06-01',
+        receivedAt: '2026-01-01T00:00:00Z',
+      },
+      {
+        binId: 'binB',
+        batchId: 'B1',
+        qtyOnHand: 10,
+        qtyReserved: 0,
+        pickOrder: 10,
+        binCode: 'B',
+        expiresAt: '2026-06-01',
+        receivedAt: '2026-01-01T00:00:00Z',
+      },
     ]);
     const plan = await svc.allocateForOrderLine(REQ(5));
     // Same batch B1 (avail 13 ≥ 5) -> single batch; bins ordered by
@@ -195,15 +213,13 @@ function makeReleaseSut(opts: { anchor?: RAnyArgs | null; group?: RAnyArgs[] } =
   const reservationFindMany = jest.fn<Promise<RAnyArgs[]>, [RAnyArgs]>(
     async () => opts.group ?? [],
   );
-  const stockLevelUpdateMany = jest.fn<Promise<{ count: number }>, [RAnyArgs]>(
-    async () => ({ count: 1 }),
-  );
-  const reservationUpdate = jest.fn<Promise<RAnyArgs>, [RAnyArgs]>(
-    async () => ({}),
-  );
-  const reservationDeleteMany = jest.fn<Promise<{ count: number }>, [RAnyArgs]>(
-    async () => ({ count: 0 }),
-  );
+  const stockLevelUpdateMany = jest.fn<Promise<{ count: number }>, [RAnyArgs]>(async () => ({
+    count: 1,
+  }));
+  const reservationUpdate = jest.fn<Promise<RAnyArgs>, [RAnyArgs]>(async () => ({}));
+  const reservationDeleteMany = jest.fn<Promise<{ count: number }>, [RAnyArgs]>(async () => ({
+    count: 0,
+  }));
   const txClient = {
     stockLevel: { updateMany: stockLevelUpdateMany },
     stockReservation: { update: reservationUpdate, deleteMany: reservationDeleteMany },
@@ -220,16 +236,10 @@ function makeReleaseSut(opts: { anchor?: RAnyArgs | null; group?: RAnyArgs[] } =
     };
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
   };
-  client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> =>
-    fn(txClient);
-  const auditLog = jest.fn<Promise<string | null>, [RAnyArgs, unknown?]>(
-    async () => 'a1',
-  );
+  client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient);
+  const auditLog = jest.fn<Promise<string | null>, [RAnyArgs, unknown?]>(async () => 'a1');
   const audit = { log: auditLog } as unknown as AuditLogService;
-  const svc = new StockPickAllocationService(
-    { client } as unknown as PrismaService,
-    audit,
-  );
+  const svc = new StockPickAllocationService({ client } as unknown as PrismaService, audit);
   return {
     svc,
     reservationFindUnique,

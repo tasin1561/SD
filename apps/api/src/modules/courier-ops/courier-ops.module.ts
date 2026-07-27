@@ -33,11 +33,7 @@ import { ShipmentCourierContextService } from './services/shipment-courier-conte
  */
 @Module({
   imports: [AuthCommonModule, CourierDelhiveryModule],
-  controllers: [
-    AdminCourierOpsController,
-    AdminPickupController,
-    AdminCourierNetworkController,
-  ],
+  controllers: [AdminCourierOpsController, AdminPickupController, AdminCourierNetworkController],
   providers: [
     ShipmentCourierContextService,
     CourierShipmentInsightService,

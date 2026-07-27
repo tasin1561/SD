@@ -55,9 +55,8 @@ export function PasswordResetRequestForm(): ReactElement {
   if (done) {
     return (
       <div className="rounded-[5px] bg-[var(--color-accent-tint)] border border-[var(--color-accent-ring)] px-3 py-2.5 text-xs text-text-bright">
-        If <span className="font-mono">{email}</span> matches a seller
-        account, a reset link is on its way. The link expires in 30
-        minutes.
+        If <span className="font-mono">{email}</span> matches a seller account, a reset link is on
+        its way. The link expires in 30 minutes.
       </div>
     );
   }

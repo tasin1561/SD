@@ -57,10 +57,7 @@ export class PickAllocationService {
     reservationId: string,
     actor: { type: ActorType; id?: string | null } = { type: ActorType.SYSTEM },
   ): Promise<AppliedAllocation> {
-    const [maxAttempts, backoff] = await Promise.all([
-      this.retryMax(),
-      this.retryBackoffMs(),
-    ]);
+    const [maxAttempts, backoff] = await Promise.all([this.retryMax(), this.retryBackoffMs()]);
 
     let lastErr: unknown;
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -119,11 +116,7 @@ export class PickAllocationService {
       select: { valueJson: true },
     });
     const raw = row?.valueJson;
-    if (
-      Array.isArray(raw) &&
-      raw.length > 0 &&
-      raw.every((n) => typeof n === 'number' && n >= 0)
-    ) {
+    if (Array.isArray(raw) && raw.length > 0 && raw.every((n) => typeof n === 'number' && n >= 0)) {
       return raw as number[];
     }
     return [...DEFAULT_BACKOFF_MS];

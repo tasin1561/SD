@@ -1,9 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ActorType, ManifestStatus, OrderStatus, ShipmentStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -141,7 +136,15 @@ export class ManifestService {
         originWarehouseId: true,
         packCompletedAt: true,
         manifestId: true,
-        manifest: { select: { id: true, status: true, courierCode: true, originWarehouseId: true, manifestNumber: true } },
+        manifest: {
+          select: {
+            id: true,
+            status: true,
+            courierCode: true,
+            originWarehouseId: true,
+            manifestNumber: true,
+          },
+        },
       },
     });
     if (!shipment) {
@@ -162,10 +165,7 @@ export class ManifestService {
         message: 'Shipment must be packed (packCompletedAt set) before attaching to a manifest',
       });
     }
-    if (
-      shipment.manifest &&
-      shipment.manifest.status === ManifestStatus.CLOSED
-    ) {
+    if (shipment.manifest && shipment.manifest.status === ManifestStatus.CLOSED) {
       throw new ConflictException({
         code: 'MANIFEST_CLOSED',
         message: `Shipment is already on CLOSED manifest ${shipment.manifest.manifestNumber}`,
@@ -190,9 +190,7 @@ export class ManifestService {
       // Serialize concurrent attaches for this (courier, warehouse).
       // Hash JS-side (FNV-1a 32-bit) so the SQL is parameter-clean and
       // doesn't depend on a server-side hash function.
-      const key = fnv1a32(
-        `${shipment.courierCode}|${shipment.originWarehouseId}`,
-      );
+      const key = fnv1a32(`${shipment.courierCode}|${shipment.originWarehouseId}`);
       await tx.$executeRawUnsafe(
         'SELECT pg_advisory_xact_lock($1::int, $2::int)',
         ATTACH_LOCK_NAMESPACE,
@@ -611,12 +609,8 @@ export class ManifestService {
   }> {
     const where = {
       ...(input.status !== undefined ? { status: input.status } : {}),
-      ...(input.courierCode !== undefined
-        ? { courierCode: input.courierCode }
-        : {}),
-      ...(input.warehouseId !== undefined
-        ? { originWarehouseId: input.warehouseId }
-        : {}),
+      ...(input.courierCode !== undefined ? { courierCode: input.courierCode } : {}),
+      ...(input.warehouseId !== undefined ? { originWarehouseId: input.warehouseId } : {}),
     };
     const [total, rows] = await Promise.all([
       this.prisma.client.manifest.count({ where }),

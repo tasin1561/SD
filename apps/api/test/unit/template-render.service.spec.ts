@@ -17,13 +17,16 @@ interface FakeTemplate {
 function makeSut(rows: FakeTemplate[]): TemplateRenderService {
   const client = {
     notificationTemplate: {
-      findUnique: jest.fn(async ({ where }: { where: { code_language: { code: string; language: string } } }) => {
-        return (
-          rows.find(
-            (r) => r.code === where.code_language.code && r.language === where.code_language.language,
-          ) ?? null
-        );
-      }),
+      findUnique: jest.fn(
+        async ({ where }: { where: { code_language: { code: string; language: string } } }) => {
+          return (
+            rows.find(
+              (r) =>
+                r.code === where.code_language.code && r.language === where.code_language.language,
+            ) ?? null
+          );
+        },
+      ),
     },
   };
   const prisma = { client } as unknown as PrismaService;

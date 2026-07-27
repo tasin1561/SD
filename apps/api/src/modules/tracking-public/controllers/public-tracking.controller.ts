@@ -49,9 +49,7 @@ export class PublicTrackingController {
     summary:
       'TRK-8 — open AWB tracking lookup. NO auth (the AWB is the access token). Customer-safe projection only: no internal IDs, no PII, no cross-order data. 404 message is identical for unknown / deleted / unissued AWBs (anti-enumeration). Per-IP rate limit applies.',
   })
-  async lookup(
-    @Param('awbNumber') awbNumber: string,
-  ): Promise<PublicTrackingResponse> {
+  async lookup(@Param('awbNumber') awbNumber: string): Promise<PublicTrackingResponse> {
     return this.read.findByAwb(awbNumber);
   }
 }

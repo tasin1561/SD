@@ -1,10 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import {
-  ChargeType,
-  NotificationRecipientType,
-  OrderStatus,
-  Prisma,
-} from '@skydrop/db';
+import { ChargeType, NotificationRecipientType, OrderStatus, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { EmailQueue } from '../../email/queue/email.queue';
@@ -71,9 +66,7 @@ export class InvoiceService {
    * bus listener (post-DELIVERED) OR the seller's "Download invoice"
    * button (manual trigger).
    */
-  async generateForOrder(
-    orderId: string,
-  ): Promise<{
+  async generateForOrder(orderId: string): Promise<{
     id: string;
     invoiceNumber: string;
     pdfUrl: string;
@@ -152,9 +145,7 @@ export class InvoiceService {
 
     // Compute totals from charges.
     const itemSubtotal = order.items.reduce((sum, it) => {
-      const price = it.unitPriceInr
-        ? new Prisma.Decimal(it.unitPriceInr)
-        : new Prisma.Decimal(0);
+      const price = it.unitPriceInr ? new Prisma.Decimal(it.unitPriceInr) : new Prisma.Decimal(0);
       return sum.add(price.mul(it.quantity));
     }, new Prisma.Decimal(0));
 
@@ -194,10 +185,7 @@ export class InvoiceService {
     // tiny window where row exists with pdfUrl=null; the listener's
     // BullMQ retry, or the seller's manual generate, completes it).
     const now = new Date();
-    const { invoiceNumber, fiscalYear } = await this.numbering.nextInvoiceNumber(
-      undefined,
-      now,
-    );
+    const { invoiceNumber, fiscalYear } = await this.numbering.nextInvoiceNumber(undefined, now);
 
     const payload: InvoicePayload = {
       invoiceNumber,
@@ -337,9 +325,7 @@ export class InvoiceService {
     return {
       companyName: map.get('invoice.company_name') ?? 'Skydrop Logistics Pvt Ltd',
       gstin: map.get('invoice.gstin') ?? null,
-      address:
-        map.get('invoice.address') ??
-        'Bengaluru, Karnataka, India',
+      address: map.get('invoice.address') ?? 'Bengaluru, Karnataka, India',
       state: map.get('invoice.state') ?? 'Karnataka',
     };
   }

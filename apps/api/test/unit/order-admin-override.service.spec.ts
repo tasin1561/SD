@@ -5,7 +5,8 @@ import type { PrismaService } from '../../src/infrastructure/prisma/prisma.servi
 
 type AnyArgs = Record<string, unknown>;
 
-const LONG_REASON = 'Customer escalation #4821 — courier lost the parcel, manual override agreed by ops lead';
+const LONG_REASON =
+  'Customer escalation #4821 — courier lost the parcel, manual override agreed by ops lead';
 
 function makeService(
   opts: {
@@ -158,9 +159,7 @@ describe('OrderAdminOverrideService.forceMutate — behaviour', () => {
       targetStatus: OrderStatus.CONFIRMED,
     });
     expect(reserve).toHaveBeenCalledTimes(1);
-    expect(res.reserveOutcomes).toEqual([
-      { orderItemId: 'oi1', ok: true, reservationId: 'r-oi1' },
-    ]);
+    expect(res.reserveOutcomes).toEqual([{ orderItemId: 'oi1', ok: true, reservationId: 'r-oi1' }]);
   });
 
   it('does NOT block when a god-mode reserve attempt fails', async () => {

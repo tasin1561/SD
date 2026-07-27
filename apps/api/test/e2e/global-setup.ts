@@ -20,8 +20,7 @@ export default async function globalSetup(): Promise<void> {
   // tests sign request bodies with this exact secret; an unset value
   // would 401 every webhook.
   process.env['TRACKING_WEBHOOK_SECRET_DELHIVERY'] =
-    process.env['TRACKING_WEBHOOK_SECRET_DELHIVERY'] ??
-    'test-tracking-webhook-secret-delhivery';
+    process.env['TRACKING_WEBHOOK_SECRET_DELHIVERY'] ?? 'test-tracking-webhook-secret-delhivery';
 
   // eslint-disable-next-line no-console
   console.log(`[e2e] preparing test DB at ${TEST_DATABASE_URL}`);

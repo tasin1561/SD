@@ -21,10 +21,7 @@ import {
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
-import {
-  RecordSettlementDto,
-  ReconciliationQueryDto,
-} from '../dto/courier-settlement.dto';
+import { RecordSettlementDto, ReconciliationQueryDto } from '../dto/courier-settlement.dto';
 import {
   CourierSettlementService,
   type ReconciliationReport,
@@ -100,9 +97,7 @@ export class AdminCourierSettlementController {
   ): Promise<ReconciliationReport> {
     requireStaffRoles(staff, [StaffRole.FINANCE, StaffRole.SUPER_ADMIN]);
     return this.svc.reconciliation(
-      query.overdueAfterDays === undefined
-        ? {}
-        : { overdueAfterDays: query.overdueAfterDays },
+      query.overdueAfterDays === undefined ? {} : { overdueAfterDays: query.overdueAfterDays },
     );
   }
 

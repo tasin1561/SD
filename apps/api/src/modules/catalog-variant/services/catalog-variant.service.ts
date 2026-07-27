@@ -133,11 +133,7 @@ export class CatalogVariantService {
     });
   }
 
-  async getById(
-    sellerId: string,
-    productId: string,
-    variantId: string,
-  ): Promise<VariantView> {
+  async getById(sellerId: string, productId: string, variantId: string): Promise<VariantView> {
     const row = await this.prisma.client.productVariant.findFirst({
       where: { id: variantId, productId, sellerId, deletedAt: null },
       select: VIEW_SELECT,
@@ -244,7 +240,13 @@ export class CatalogVariantService {
         message: 'Variant is already archived',
       });
     }
-    return this.setStatus(sellerId, variantId, VariantStatus.ARCHIVED, 'catalog.variant.archived', ctx);
+    return this.setStatus(
+      sellerId,
+      variantId,
+      VariantStatus.ARCHIVED,
+      'catalog.variant.archived',
+      ctx,
+    );
   }
 
   async unarchive(
@@ -260,7 +262,13 @@ export class CatalogVariantService {
         message: `Only ARCHIVED variants can be unarchived (current: ${v.status})`,
       });
     }
-    return this.setStatus(sellerId, variantId, VariantStatus.ACTIVE, 'catalog.variant.unarchived', ctx);
+    return this.setStatus(
+      sellerId,
+      variantId,
+      VariantStatus.ACTIVE,
+      'catalog.variant.unarchived',
+      ctx,
+    );
   }
 
   async softDelete(

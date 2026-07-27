@@ -103,10 +103,7 @@ export class WebhookAuthService {
     signatureHeader: string | undefined;
   }): Promise<WebhookAuthResult> {
     // (1) Resolve the env var name for this courier from system_settings.
-    const envKey = await this.settingFor(
-      SECRET_REF_SETTING_KEY,
-      input.courierCode,
-    );
+    const envKey = await this.settingFor(SECRET_REF_SETTING_KEY, input.courierCode);
     if (envKey === '') {
       // No ref configured — every webhook fails closed.
       this.logger.warn(
@@ -127,10 +124,7 @@ export class WebhookAuthService {
     }
 
     // (3) Signature header present?
-    if (
-      input.signatureHeader === undefined ||
-      input.signatureHeader.length === 0
-    ) {
+    if (input.signatureHeader === undefined || input.signatureHeader.length === 0) {
       return { valid: false, reason: 'SIGNATURE_MISSING' };
     }
 
@@ -140,9 +134,7 @@ export class WebhookAuthService {
       return this.verifySharedSecret(input.signatureHeader, secret, envKey);
     }
 
-    const expected = createHmac('sha256', secret)
-      .update(input.rawBody, 'utf8')
-      .digest('hex');
+    const expected = createHmac('sha256', secret).update(input.rawBody, 'utf8').digest('hex');
 
     // (5) Constant-time compare. Reject if lengths differ (the
     //     timingSafeEqual call below also requires it).
@@ -150,10 +142,7 @@ export class WebhookAuthService {
     if (!/^[0-9a-f]+$/.test(supplied) || supplied.length !== expected.length) {
       return { valid: false, reason: 'SIGNATURE_MALFORMED' };
     }
-    const ok = timingSafeEqual(
-      Buffer.from(expected, 'utf8'),
-      Buffer.from(supplied, 'utf8'),
-    );
+    const ok = timingSafeEqual(Buffer.from(expected, 'utf8'), Buffer.from(supplied, 'utf8'));
     if (!ok) return { valid: false, reason: 'SIGNATURE_MISMATCH' };
 
     return { valid: true, secretRefEnvKey: envKey };
@@ -168,11 +157,7 @@ export class WebhookAuthService {
    * `Token ` prefixes because WE dictate the header contents in the
    * requirement document and an operator may well write it either way.
    */
-  private verifySharedSecret(
-    header: string,
-    secret: string,
-    envKey: string,
-  ): WebhookAuthResult {
+  private verifySharedSecret(header: string, secret: string, envKey: string): WebhookAuthResult {
     const supplied = header.trim().replace(/^(Bearer|Token)\s+/i, '');
     if (supplied.length === 0) {
       return { valid: false, reason: 'SIGNATURE_MISSING' };
@@ -182,10 +167,7 @@ export class WebhookAuthService {
     if (supplied.length !== secret.length) {
       return { valid: false, reason: 'SIGNATURE_MISMATCH' };
     }
-    const ok = timingSafeEqual(
-      Buffer.from(secret, 'utf8'),
-      Buffer.from(supplied, 'utf8'),
-    );
+    const ok = timingSafeEqual(Buffer.from(secret, 'utf8'), Buffer.from(supplied, 'utf8'));
     return ok
       ? { valid: true, secretRefEnvKey: envKey }
       : { valid: false, reason: 'SIGNATURE_MISMATCH' };
@@ -194,9 +176,7 @@ export class WebhookAuthService {
   /** HMAC unless the courier is configured otherwise — the stricter
    *  scheme is the default, so a missing setting cannot weaken auth. */
   private async schemeFor(courierCode: string): Promise<WebhookAuthScheme> {
-    const raw = (
-      await this.settingFor(AUTH_SCHEME_SETTING_KEY, courierCode)
-    ).toUpperCase();
+    const raw = (await this.settingFor(AUTH_SCHEME_SETTING_KEY, courierCode)).toUpperCase();
     return raw === 'SHARED_SECRET' ? 'SHARED_SECRET' : 'HMAC_SHA256';
   }
 
@@ -206,9 +186,7 @@ export class WebhookAuthService {
       where: { key: { in: [`${key}.${courierCode.toLowerCase()}`, key] } },
       select: { key: true, valueString: true },
     });
-    const specific = rows.find(
-      (r) => r.key === `${key}.${courierCode.toLowerCase()}`,
-    );
+    const specific = rows.find((r) => r.key === `${key}.${courierCode.toLowerCase()}`);
     const global = rows.find((r) => r.key === key);
     return ((specific ?? global)?.valueString ?? '').trim();
   }

@@ -66,9 +66,7 @@ function makeSut(seed: UnitRow[] = []) {
       findUnique: jest.fn(async (args: AnyArgs) => {
         const where = args['where'] as AnyArgs;
         const key = where['sellerId_serialBarcode'] as AnyArgs | undefined;
-        const row = key
-          ? bySerial(String(key['serialBarcode']))
-          : units.get(String(where['id']));
+        const row = key ? bySerial(String(key['serialBarcode'])) : units.get(String(where['id']));
         return row === undefined ? null : { ...row };
       }),
       findMany: jest.fn(async (args: AnyArgs) => {
@@ -187,16 +185,28 @@ describe('StockUnitService.registerUnits', () => {
 
   it('rejects a non-positive quantity', async () => {
     const sut = makeSut();
-    await expect(
-      sut.svc.registerUnits(TX(sut), { ...INTAKE, quantity: 0 }),
-    ).rejects.toMatchObject({ response: { code: 'UNIT_QUANTITY_INVALID' } });
+    await expect(sut.svc.registerUnits(TX(sut), { ...INTAKE, quantity: 0 })).rejects.toMatchObject({
+      response: { code: 'UNIT_QUANTITY_INVALID' },
+    });
   });
 });
 
 describe('StockUnitService.scanUnits (the pick gate)', () => {
   const seed: UnitRow[] = [
-    { id: 'u-1', serialBarcode: 'S1', variantId: VARIANT, status: StockUnitStatus.IN_STOCK, warehouseId: WH },
-    { id: 'u-2', serialBarcode: 'S2', variantId: VARIANT, status: StockUnitStatus.IN_STOCK, warehouseId: WH },
+    {
+      id: 'u-1',
+      serialBarcode: 'S1',
+      variantId: VARIANT,
+      status: StockUnitStatus.IN_STOCK,
+      warehouseId: WH,
+    },
+    {
+      id: 'u-2',
+      serialBarcode: 'S2',
+      variantId: VARIANT,
+      status: StockUnitStatus.IN_STOCK,
+      warehouseId: WH,
+    },
   ];
   const base = {
     sellerId: SELLER,
@@ -232,14 +242,20 @@ describe('StockUnitService.scanUnits (the pick gate)', () => {
 
   it('rejects an unknown serial', async () => {
     const sut = makeSut(seed);
-    await expect(
-      sut.svc.scanUnits(TX(sut), { ...base, serials: ['NOPE'] }),
-    ).rejects.toMatchObject({ response: { code: 'UNIT_NOT_FOUND' } });
+    await expect(sut.svc.scanUnits(TX(sut), { ...base, serials: ['NOPE'] })).rejects.toMatchObject({
+      response: { code: 'UNIT_NOT_FOUND' },
+    });
   });
 
-  it("rejects a serial belonging to a different SKU — the swap that a count check would miss", async () => {
+  it('rejects a serial belonging to a different SKU — the swap that a count check would miss', async () => {
     const sut = makeSut([
-      { id: 'u-9', serialBarcode: 'OTHER', variantId: 'v-other', status: StockUnitStatus.IN_STOCK, warehouseId: WH },
+      {
+        id: 'u-9',
+        serialBarcode: 'OTHER',
+        variantId: 'v-other',
+        status: StockUnitStatus.IN_STOCK,
+        warehouseId: WH,
+      },
     ]);
     await expect(
       sut.svc.scanUnits(TX(sut), { ...base, serials: ['OTHER'] }),
@@ -251,16 +267,28 @@ describe('StockUnitService.scanUnits (the pick gate)', () => {
 
   it('rejects a unit in the wrong state (already picked onto another parcel)', async () => {
     const sut = makeSut([
-      { id: 'u-1', serialBarcode: 'S1', variantId: VARIANT, status: StockUnitStatus.PICKED, warehouseId: WH },
+      {
+        id: 'u-1',
+        serialBarcode: 'S1',
+        variantId: VARIANT,
+        status: StockUnitStatus.PICKED,
+        warehouseId: WH,
+      },
     ]);
-    await expect(
-      sut.svc.scanUnits(TX(sut), { ...base, serials: ['S1'] }),
-    ).rejects.toMatchObject({ response: { code: 'UNIT_WRONG_STATUS' } });
+    await expect(sut.svc.scanUnits(TX(sut), { ...base, serials: ['S1'] })).rejects.toMatchObject({
+      response: { code: 'UNIT_WRONG_STATUS' },
+    });
   });
 
   it('rejects a unit held at another warehouse', async () => {
     const sut = makeSut([
-      { id: 'u-1', serialBarcode: 'S1', variantId: VARIANT, status: StockUnitStatus.IN_STOCK, warehouseId: 'wh-other' },
+      {
+        id: 'u-1',
+        serialBarcode: 'S1',
+        variantId: VARIANT,
+        status: StockUnitStatus.IN_STOCK,
+        warehouseId: 'wh-other',
+      },
     ]);
     await expect(
       sut.svc.scanUnits(TX(sut), { ...base, serials: ['S1'], warehouseId: WH }),
@@ -276,16 +304,30 @@ describe('StockUnitService.scanUnits (the pick gate)', () => {
 
   it('rejects an empty scan', async () => {
     const sut = makeSut(seed);
-    await expect(
-      sut.svc.scanUnits(TX(sut), { ...base, serials: [] }),
-    ).rejects.toMatchObject({ response: { code: 'UNIT_SCAN_REQUIRED' } });
+    await expect(sut.svc.scanUnits(TX(sut), { ...base, serials: [] })).rejects.toMatchObject({
+      response: { code: 'UNIT_SCAN_REQUIRED' },
+    });
   });
 });
 
 describe('StockUnitService.scanUnitsForShipment (the pack gate)', () => {
   const seed: UnitRow[] = [
-    { id: 'u-1', serialBarcode: 'S1', variantId: VARIANT, status: StockUnitStatus.PICKED, warehouseId: WH, shipmentItemId: 'si-1' },
-    { id: 'u-2', serialBarcode: 'S2', variantId: VARIANT, status: StockUnitStatus.PICKED, warehouseId: WH, shipmentItemId: 'si-1' },
+    {
+      id: 'u-1',
+      serialBarcode: 'S1',
+      variantId: VARIANT,
+      status: StockUnitStatus.PICKED,
+      warehouseId: WH,
+      shipmentItemId: 'si-1',
+    },
+    {
+      id: 'u-2',
+      serialBarcode: 'S2',
+      variantId: VARIANT,
+      status: StockUnitStatus.PICKED,
+      warehouseId: WH,
+      shipmentItemId: 'si-1',
+    },
   ];
   const base = {
     sellerId: SELLER,
@@ -319,7 +361,7 @@ describe('StockUnitService.scanUnitsForShipment (the pack gate)', () => {
     expect([...sut.units.values()].every((u) => u.status === StockUnitStatus.PICKED)).toBe(true);
   });
 
-  it("rejects an extra unit — something from another parcel is in the box", async () => {
+  it('rejects an extra unit — something from another parcel is in the box', async () => {
     const sut = makeSut(seed);
     await expect(
       sut.svc.scanUnitsForShipment(TX(sut), {
@@ -335,8 +377,22 @@ describe('StockUnitService.scanUnitsForShipment (the pack gate)', () => {
 describe('StockUnitService.advanceUnitsForShipment (parcel-grained gates)', () => {
   it('moves only units in the expected fromStatus — a re-run is a no-op', async () => {
     const sut = makeSut([
-      { id: 'u-1', serialBarcode: 'S1', variantId: VARIANT, status: StockUnitStatus.PACKED, warehouseId: WH, shipmentItemId: 'si-1' },
-      { id: 'u-2', serialBarcode: 'S2', variantId: VARIANT, status: StockUnitStatus.DISPATCHED, warehouseId: WH, shipmentItemId: 'si-1' },
+      {
+        id: 'u-1',
+        serialBarcode: 'S1',
+        variantId: VARIANT,
+        status: StockUnitStatus.PACKED,
+        warehouseId: WH,
+        shipmentItemId: 'si-1',
+      },
+      {
+        id: 'u-2',
+        serialBarcode: 'S2',
+        variantId: VARIANT,
+        status: StockUnitStatus.DISPATCHED,
+        warehouseId: WH,
+        shipmentItemId: 'si-1',
+      },
     ]);
     const first = await sut.svc.advanceUnitsForShipment(TX(sut), {
       shipmentId: 'ship-1',

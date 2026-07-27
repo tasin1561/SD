@@ -14,12 +14,10 @@ function makeSut(opts: {
   levels?: Array<{ variantId: string; _sum: { qtyOnHand: number | null } }>;
   reservations?: Array<{ variantId: string; _sum: { qtyReserved: number | null } }>;
 }) {
-  const levelAgg = jest.fn(
-    async (_a: AggArgs) => ({ _sum: { qtyOnHand: opts.onHand ?? null } }),
-  );
-  const resvAgg = jest.fn(
-    async (_a: AggArgs) => ({ _sum: { qtyReserved: opts.reserved ?? null } }),
-  );
+  const levelAgg = jest.fn(async (_a: AggArgs) => ({ _sum: { qtyOnHand: opts.onHand ?? null } }));
+  const resvAgg = jest.fn(async (_a: AggArgs) => ({
+    _sum: { qtyReserved: opts.reserved ?? null },
+  }));
   const levelGroup = jest.fn(async (_a: GroupArgs) => opts.levels ?? []);
   const resvGroup = jest.fn(async (_a: GroupArgs) => opts.reservations ?? []);
   const client = {

@@ -160,9 +160,7 @@ export class ChatWootClientService {
       'GET',
       `/api/v1/accounts/${cfg.accountId}/contacts/search?q=${encodeURIComponent(input.phone)}`,
     );
-    const match = (search.payload ?? []).find(
-      (c) => c.phone_number === input.phone,
-    );
+    const match = (search.payload ?? []).find((c) => c.phone_number === input.phone);
     if (match) return { id: match.id };
 
     const created = await this.cw<{ payload?: { contact?: { id?: number } } }>(
@@ -190,11 +188,7 @@ export class ChatWootClientService {
   ): Promise<{ id: number }> {
     const list = await this.cw<{
       payload: Array<{ id: number; inbox_id?: number; status?: string }>;
-    }>(
-      cfg,
-      'GET',
-      `/api/v1/accounts/${cfg.accountId}/contacts/${input.contactId}/conversations`,
-    );
+    }>(cfg, 'GET', `/api/v1/accounts/${cfg.accountId}/contacts/${input.contactId}/conversations`);
     const existing = (list.payload ?? []).find(
       (c) => c.inbox_id === cfg.inboxId && (c.status === 'open' || c.status === 'pending'),
     );
@@ -243,11 +237,7 @@ export class ChatWootClientService {
     if (!contact) return null;
     const list = await this.cw<{
       payload: Array<{ id: number; inbox_id?: number }>;
-    }>(
-      cfg,
-      'GET',
-      `/api/v1/accounts/${cfg.accountId}/contacts/${contact.id}/conversations`,
-    );
+    }>(cfg, 'GET', `/api/v1/accounts/${cfg.accountId}/contacts/${contact.id}/conversations`);
     const conv = (list.payload ?? []).find((c) => c.inbox_id === cfg.inboxId);
     return conv ? { id: conv.id } : null;
   }
@@ -269,9 +259,7 @@ export class ChatWootClientService {
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      throw new Error(
-        `ChatWoot ${method} ${path} → HTTP ${res.status}: ${text.slice(0, 200)}`,
-      );
+      throw new Error(`ChatWoot ${method} ${path} → HTTP ${res.status}: ${text.slice(0, 200)}`);
     }
     return (await res.json()) as T;
   }

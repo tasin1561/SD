@@ -25,11 +25,7 @@ import {
   type CallQueueAdminRow,
   type CallQueueStats,
 } from '../services/admin-call-queue.service';
-import {
-  BulkDequeueDto,
-  ListCallQueueQueryDto,
-  ReassignDto,
-} from '../dto/admin-call-queue.dto';
+import { BulkDequeueDto, ListCallQueueQueryDto, ReassignDto } from '../dto/admin-call-queue.dto';
 import { RecordCallAttemptDto } from '../dto/record-call-attempt.dto';
 
 /**
@@ -100,15 +96,9 @@ export class AdminCallQueueController {
         startedAt: new Date(body.startedAt),
         ctx,
         ...(body.endedAt ? { endedAt: new Date(body.endedAt) } : {}),
-        ...(body.scheduledFor
-          ? { scheduledFor: new Date(body.scheduledFor) }
-          : {}),
-        ...(body.outcomeNotes !== undefined
-          ? { outcomeNotes: body.outcomeNotes }
-          : {}),
-        ...(body.customerSaidName !== undefined
-          ? { customerSaidName: body.customerSaidName }
-          : {}),
+        ...(body.scheduledFor ? { scheduledFor: new Date(body.scheduledFor) } : {}),
+        ...(body.outcomeNotes !== undefined ? { outcomeNotes: body.outcomeNotes } : {}),
+        ...(body.customerSaidName !== undefined ? { customerSaidName: body.customerSaidName } : {}),
         ...(body.customerSaidAddress !== undefined
           ? { customerSaidAddress: body.customerSaidAddress }
           : {}),
@@ -121,9 +111,7 @@ export class AdminCallQueueController {
         ...(body.flaggedAsSuspicious !== undefined
           ? { flaggedAsSuspicious: body.flaggedAsSuspicious }
           : {}),
-        ...(body.suspicionReason !== undefined
-          ? { suspicionReason: body.suspicionReason }
-          : {}),
+        ...(body.suspicionReason !== undefined ? { suspicionReason: body.suspicionReason } : {}),
       },
       staff.id,
     );

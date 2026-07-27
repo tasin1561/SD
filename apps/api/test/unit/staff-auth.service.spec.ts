@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common';
 import { ActorType, NotificationRecipientType } from '@skydrop/db';
 import { StaffAuthService } from '../../src/modules/staff-auth/staff-auth.service';
 import { PasswordService } from '../../src/modules/auth-common/services/password.service';
@@ -66,7 +62,10 @@ class FakeStaffUserTable {
   async findFirst({
     where,
     select: _s,
-  }: { where: Partial<StaffRow> & { deletedAt?: Date | null }; select?: unknown }): Promise<StaffRow | null> {
+  }: {
+    where: Partial<StaffRow> & { deletedAt?: Date | null };
+    select?: unknown;
+  }): Promise<StaffRow | null> {
     return (
       this.rows.find((r) => {
         for (const k of Object.keys(where) as (keyof StaffRow)[]) {
@@ -86,7 +85,10 @@ class FakeStaffUserTable {
   async update({
     where,
     data,
-  }: { where: { id: string }; data: Partial<StaffRow> }): Promise<StaffRow> {
+  }: {
+    where: { id: string };
+    data: Partial<StaffRow>;
+  }): Promise<StaffRow> {
     const row = this.rows.find((r) => r.id === where.id);
     if (!row) throw new Error(`staffUser not found: ${where.id}`);
     Object.assign(row, data);
@@ -99,7 +101,11 @@ class FakePrtTable {
   private seq = 0;
   constructor(private readonly staffTable: FakeStaffUserTable) {}
 
-  async create({ data }: { data: Omit<PrtRow, 'id' | 'createdAt' | 'usedAt'> & { ipAddress: string | null } }) {
+  async create({
+    data,
+  }: {
+    data: Omit<PrtRow, 'id' | 'createdAt' | 'usedAt'> & { ipAddress: string | null };
+  }) {
     this.seq += 1;
     const row: PrtRow = {
       ...data,
@@ -111,7 +117,13 @@ class FakePrtTable {
     return row;
   }
 
-  async findFirst({ where, select }: { where: { tokenHash: string }; select?: Record<string, unknown> }): Promise<unknown> {
+  async findFirst({
+    where,
+    select,
+  }: {
+    where: { tokenHash: string };
+    select?: Record<string, unknown>;
+  }): Promise<unknown> {
     const row = this.rows.find((r) => r.tokenHash === where.tokenHash);
     if (!row) return null;
     const hasStaffUserSelect = select && typeof select === 'object' && 'staffUser' in select;
@@ -123,10 +135,7 @@ class FakePrtTable {
     };
   }
 
-  async update({
-    where,
-    data,
-  }: { where: { id: string }; data: Partial<PrtRow> }): Promise<PrtRow> {
+  async update({ where, data }: { where: { id: string }; data: Partial<PrtRow> }): Promise<PrtRow> {
     const row = this.rows.find((r) => r.id === where.id);
     if (!row) throw new Error(`prt not found: ${where.id}`);
     Object.assign(row, data);
@@ -145,7 +154,13 @@ class FakeEvtTable {
     this.rows.push(row);
     return row;
   }
-  async findFirst({ where, select }: { where: { tokenHash: string }; select?: Record<string, unknown> }): Promise<unknown> {
+  async findFirst({
+    where,
+    select,
+  }: {
+    where: { tokenHash: string };
+    select?: Record<string, unknown>;
+  }): Promise<unknown> {
     const row = this.rows.find((r) => r.tokenHash === where.tokenHash);
     if (!row) return null;
     const hasStaffUserSelect = select && typeof select === 'object' && 'staffUser' in select;
@@ -176,7 +191,12 @@ class FakeRtTable {
   async findFirst({ where }: { where: { tokenHash: string }; select?: unknown }): Promise<unknown> {
     const row = this.rows.find((r) => r.tokenHash === where.tokenHash);
     if (!row) return null;
-    return { id: row.id, staffUserId: row.staffUserId, expiresAt: row.expiresAt, revokedAt: row.revokedAt };
+    return {
+      id: row.id,
+      staffUserId: row.staffUserId,
+      expiresAt: row.expiresAt,
+      revokedAt: row.revokedAt,
+    };
   }
   async update({ where, data }: { where: { id: string }; data: Partial<RtRow> }) {
     const row = this.rows.find((r) => r.id === where.id);
@@ -207,7 +227,12 @@ interface FakeClient {
   staffPasswordResetToken: FakePrtTable;
   staffEmailVerificationToken: FakeEvtTable;
   staffRefreshToken: FakeRtTable;
-  sellerRefreshToken: { create: jest.Mock; findFirst: jest.Mock; update: jest.Mock; updateMany: jest.Mock };
+  sellerRefreshToken: {
+    create: jest.Mock;
+    findFirst: jest.Mock;
+    update: jest.Mock;
+    updateMany: jest.Mock;
+  };
   auditLog: { create: jest.Mock };
   $transaction: <T>(cb: (tx: FakeClient) => Promise<T>) => Promise<T>;
 }
@@ -308,9 +333,9 @@ describe('StaffAuthService — login', () => {
   it('wrong password: returns generic error + audit with reason=wrong_password', async () => {
     const sut = makeSut();
     const staff = await seedStaff(sut);
-    await expect(
-      sut.svc.login({ email: staff.email, password: 'WRONG' }, ctx),
-    ).rejects.toThrow(UnauthorizedException);
+    await expect(sut.svc.login({ email: staff.email, password: 'WRONG' }, ctx)).rejects.toThrow(
+      UnauthorizedException,
+    );
     const data = sut.client.auditLog.create.mock.calls[0]![0].data;
     expect(data.action).toBe('staff.login.failure');
     expect(data.staffUserId).toBe(staff.id);
@@ -426,7 +451,10 @@ describe('StaffAuthService — password reset confirm', () => {
     const sut = makeSut();
     await seedStaff(sut);
     await expect(
-      sut.svc.confirmPasswordReset({ token: 'wrong-token', newPassword: 'Cstrong-Password!00' }, ctx),
+      sut.svc.confirmPasswordReset(
+        { token: 'wrong-token', newPassword: 'Cstrong-Password!00' },
+        ctx,
+      ),
     ).rejects.toThrow(BadRequestException);
   });
 
@@ -491,7 +519,9 @@ describe('StaffAuthService — email verification', () => {
   it('request: already-verified staff → 409 CONFLICT', async () => {
     const sut = makeSut();
     const staff = await seedStaff(sut, { emailVerifiedAt: new Date() });
-    await expect(sut.svc.requestEmailVerification(staff.id, ctx)).rejects.toThrow(ConflictException);
+    await expect(sut.svc.requestEmailVerification(staff.id, ctx)).rejects.toThrow(
+      ConflictException,
+    );
   });
 
   it('request: enqueues the verification email + audits', async () => {
@@ -588,7 +618,11 @@ describe('StaffAuthService — logout-all', () => {
 
     const result = await sut.svc.logoutAll(staff.id);
     expect(result.revokedCount).toBe(2);
-    expect(sut.client.staffRefreshToken.rows.filter((r) => r.staffUserId === staff.id).every((r) => r.revokedAt !== null)).toBe(true);
+    expect(
+      sut.client.staffRefreshToken.rows
+        .filter((r) => r.staffUserId === staff.id)
+        .every((r) => r.revokedAt !== null),
+    ).toBe(true);
     expect(sut.client.staffRefreshToken.rows.find((r) => r.id === 'rt-3')!.revokedAt).toBeNull();
 
     const audit = sut.client.auditLog.create.mock.calls.at(-1)?.[0].data;

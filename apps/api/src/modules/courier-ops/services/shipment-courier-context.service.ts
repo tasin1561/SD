@@ -92,9 +92,7 @@ export class ShipmentCourierContextService {
       originPin,
       destinationPin: shipment.destPostalCode,
       chargeableWeightGrams:
-        shipment.chargeableWeightGrams ??
-        shipment.declaredWeightGrams ??
-        shipment.totalWeightGrams,
+        shipment.chargeableWeightGrams ?? shipment.declaredWeightGrams ?? shipment.totalWeightGrams,
       declaredValueInr: shipment.declaredValueInr.toString(),
       codAmountInr: cod === null ? null : cod.toString(),
       isCod: cod !== null && cod.greaterThan(0),

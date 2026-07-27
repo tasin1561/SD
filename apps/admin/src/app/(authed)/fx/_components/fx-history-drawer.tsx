@@ -1,11 +1,7 @@
 'use client';
 
 import type { ReactElement } from 'react';
-import {
-  ErrorState,
-  LoadingState,
-  Modal,
-} from '@skydrop/ui/components';
+import { ErrorState, LoadingState, Modal } from '@skydrop/ui/components';
 import { useFxRateHistory } from '@/lib/api-hooks';
 
 export function FxHistoryDrawer({
@@ -54,9 +50,7 @@ export function FxHistoryDrawer({
           <tbody className="divide-y divide-border">
             {history.data.map((h) => {
               const change =
-                h.previousRate !== null
-                  ? Number(h.rate) - Number(h.previousRate)
-                  : null;
+                h.previousRate !== null ? Number(h.rate) - Number(h.previousRate) : null;
               return (
                 <tr key={h.id}>
                   <td className="px-3 py-2 text-text-body font-mono text-xs">
@@ -91,9 +85,7 @@ export function FxHistoryDrawer({
                   <td className="px-3 py-2 text-text-body text-xs">
                     {h.source}
                     {h.isManualOverride && (
-                      <span className="text-pending text-[10px] ml-2 uppercase">
-                        Manual
-                      </span>
+                      <span className="text-pending text-[10px] ml-2 uppercase">Manual</span>
                     )}
                   </td>
                   <td className="px-3 py-2 text-text-muted text-xs max-w-[280px] truncate">

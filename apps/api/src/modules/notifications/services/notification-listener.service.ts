@@ -329,10 +329,7 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
           where: {
             shipment: {
               status: {
-                notIn: [
-                  ShipmentStatus.CANCELLED,
-                  ShipmentStatus.FAILED_AT_CREATION,
-                ],
+                notIn: [ShipmentStatus.CANCELLED, ShipmentStatus.FAILED_AT_CREATION],
               },
               deletedAt: null,
             },
@@ -374,7 +371,7 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
     const latestAttempt = liveShipment?.deliveryAttempts?.[0] ?? null;
     const ndrReason: string | null = latestAttempt?.failureReason
       ? humanizeFailureReason(latestAttempt.failureReason)
-      : (latestAttempt?.failureNotes?.trim() || null);
+      : latestAttempt?.failureNotes?.trim() || null;
     return {
       orderId: order.id,
       orderNumber: order.orderNumber,

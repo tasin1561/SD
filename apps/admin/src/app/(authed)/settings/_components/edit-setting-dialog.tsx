@@ -74,9 +74,7 @@ export function EditSettingDialog({
       // Client-side parse failure on JSON is informational — the
       // server would also reject. Surface a friendly hint here while
       // still preserving the FE-2 contract for the server side.
-      setServerError(
-        `[CLIENT_PARSE] ${err instanceof Error ? err.message : 'invalid value'}`,
-      );
+      setServerError(`[CLIENT_PARSE] ${err instanceof Error ? err.message : 'invalid value'}`);
       return;
     }
     try {
@@ -85,7 +83,7 @@ export function EditSettingDialog({
     } catch (err) {
       if (err instanceof ApiError && typeof err.body === 'object' && err.body !== null) {
         const b = err.body as { code?: unknown; message?: unknown };
-        const code = typeof b.code === 'string' ? b.code : err.code ?? 'UPDATE_FAILED';
+        const code = typeof b.code === 'string' ? b.code : (err.code ?? 'UPDATE_FAILED');
         const msg = typeof b.message === 'string' ? b.message : err.message;
         setServerError(`[${code}] ${msg}`);
       } else {
@@ -138,10 +136,7 @@ export function EditSettingDialog({
               </label>
             </FormField>
           ) : detail.data.valueType === SettingValueType.JSON ? (
-            <FormField
-              label="Value (JSON)"
-              hint="Must parse as a JSON object or array."
-            >
+            <FormField label="Value (JSON)" hint="Must parse as a JSON object or array.">
               <Textarea
                 rows={8}
                 value={detail.data.isSensitive && !reveal ? '••••••••' : draft}
@@ -151,11 +146,7 @@ export function EditSettingDialog({
               />
             </FormField>
           ) : (
-            <FormField
-              label="Value"
-              hint={typeHint(detail.data.valueType)}
-              error={undefined}
-            >
+            <FormField label="Value" hint={typeHint(detail.data.valueType)} error={undefined}>
               <Input
                 type={inputTypeFor(detail.data.valueType)}
                 value={detail.data.isSensitive && !reveal ? '••••••••' : draft}
@@ -192,12 +183,7 @@ export function EditSettingDialog({
           )}
 
           <ModalFooter>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={onClose}
-              disabled={update.isPending}
-            >
+            <Button type="button" variant="ghost" onClick={onClose} disabled={update.isPending}>
               Cancel
             </Button>
             <Button type="submit" variant="primary" disabled={update.isPending}>
@@ -210,11 +196,7 @@ export function EditSettingDialog({
   );
 }
 
-function clientParse(
-  type: SettingValueType,
-  draft: string,
-  boolDraft: boolean,
-): unknown {
+function clientParse(type: SettingValueType, draft: string, boolDraft: boolean): unknown {
   switch (type) {
     case SettingValueType.STRING:
       return draft;

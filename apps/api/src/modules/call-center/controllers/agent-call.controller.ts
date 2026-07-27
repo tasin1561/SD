@@ -19,10 +19,7 @@ import {
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
-import {
-  CallAssignmentService,
-  type PulledAssignment,
-} from '../services/call-assignment.service';
+import { CallAssignmentService, type PulledAssignment } from '../services/call-assignment.service';
 import {
   CallAttemptService,
   type RecordAttemptInput,
@@ -65,8 +62,7 @@ export class AgentCallController {
   @Post(':assignmentId/record-attempt')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary:
-      'Record a call outcome (CC-1/CC-3/CC-4). Drives the post-commit M5/M6 saga + re-queue',
+    summary: 'Record a call outcome (CC-1/CC-3/CC-4). Drives the post-commit M5/M6 saga + re-queue',
   })
   recordAttempt(
     @Param('assignmentId', new ParseUUIDPipe({ version: '7' }))
@@ -82,15 +78,9 @@ export class AgentCallController {
       startedAt: new Date(body.startedAt),
       ctx,
       ...(body.endedAt ? { endedAt: new Date(body.endedAt) } : {}),
-      ...(body.scheduledFor
-        ? { scheduledFor: new Date(body.scheduledFor) }
-        : {}),
-      ...(body.outcomeNotes !== undefined
-        ? { outcomeNotes: body.outcomeNotes }
-        : {}),
-      ...(body.customerSaidName !== undefined
-        ? { customerSaidName: body.customerSaidName }
-        : {}),
+      ...(body.scheduledFor ? { scheduledFor: new Date(body.scheduledFor) } : {}),
+      ...(body.outcomeNotes !== undefined ? { outcomeNotes: body.outcomeNotes } : {}),
+      ...(body.customerSaidName !== undefined ? { customerSaidName: body.customerSaidName } : {}),
       ...(body.customerSaidAddress !== undefined
         ? { customerSaidAddress: body.customerSaidAddress }
         : {}),
@@ -103,9 +93,7 @@ export class AgentCallController {
       ...(body.flaggedAsSuspicious !== undefined
         ? { flaggedAsSuspicious: body.flaggedAsSuspicious }
         : {}),
-      ...(body.suspicionReason !== undefined
-        ? { suspicionReason: body.suspicionReason }
-        : {}),
+      ...(body.suspicionReason !== undefined ? { suspicionReason: body.suspicionReason } : {}),
     };
     return this.attempts.recordAttempt(input);
   }
@@ -124,18 +112,13 @@ export class AgentCallController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @Query() query: CallHistoryQueryDto,
   ): ReturnType<CallAttemptService['listHistory']> {
-    return this.attempts.listHistory(
-      staff.id,
-      query.page ?? 1,
-      query.pageSize ?? 20,
-    );
+    return this.attempts.listHistory(staff.id, query.page ?? 1, query.pageSize ?? 20);
   }
 
   @Post(':assignmentId/release')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary:
-      'Abandon an assignment without an attempt — entry returns to PENDING for FIFO re-pick',
+    summary: 'Abandon an assignment without an attempt — entry returns to PENDING for FIFO re-pick',
   })
   release(
     @Param('assignmentId', new ParseUUIDPipe({ version: '7' }))

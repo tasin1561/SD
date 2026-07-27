@@ -222,9 +222,7 @@ export class CategoryService {
           requiresColdChain: input.requiresColdChain ?? false,
           defaultHsCode: input.defaultHsCode ?? null,
           defaultGstRate:
-            input.defaultGstRate === undefined
-              ? null
-              : new Prisma.Decimal(input.defaultGstRate),
+            input.defaultGstRate === undefined ? null : new Prisma.Decimal(input.defaultGstRate),
         },
         select: VIEW_SELECT,
       });

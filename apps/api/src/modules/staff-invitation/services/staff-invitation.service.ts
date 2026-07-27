@@ -113,8 +113,7 @@ export class StaffInvitationService {
     const plaintext = this.hashes.generateInvitationToken();
     const tokenHash = this.hashes.sha256Hex(plaintext);
     const expiresAt = new Date(
-      Date.now() +
-        (input.expiresInDays ?? DEFAULT_EXPIRES_IN_DAYS) * 86_400_000,
+      Date.now() + (input.expiresInDays ?? DEFAULT_EXPIRES_IN_DAYS) * 86_400_000,
     );
 
     const row = await this.prisma.client.staffInvitation.create({

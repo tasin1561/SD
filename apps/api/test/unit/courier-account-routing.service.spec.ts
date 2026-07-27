@@ -7,9 +7,7 @@ type AnyArgs = Record<string, unknown>;
 type Link = { courierAccountId: string; distributionWeight: number };
 
 function makeService(opts: { links?: Link[]; defaultAccountId?: string | null } = {}) {
-  const linkFindMany = jest.fn<Promise<Link[]>, [AnyArgs]>(
-    async () => opts.links ?? [],
-  );
+  const linkFindMany = jest.fn<Promise<Link[]>, [AnyArgs]>(async () => opts.links ?? []);
   const accountFindFirst = jest.fn<Promise<{ id: string } | null>, [AnyArgs]>(async () =>
     opts.defaultAccountId === undefined
       ? { id: 'default-acct' }
@@ -31,7 +29,11 @@ describe('CourierAccountRoutingService.selectAccount', () => {
 
   it('falls back to the DEFAULT account when the seller has no active link', async () => {
     const { svc, accountFindFirst } = makeService({ links: [] });
-    const result = await svc.selectAccount('seller-1', 'courier-1', CredentialEnvironment.PRODUCTION);
+    const result = await svc.selectAccount(
+      'seller-1',
+      'courier-1',
+      CredentialEnvironment.PRODUCTION,
+    );
     expect(result).toEqual({ courierAccountId: 'default-acct', source: 'DEFAULT_ACCOUNT' });
     expect(accountFindFirst).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -64,7 +66,11 @@ describe('CourierAccountRoutingService.selectAccount', () => {
     const { svc } = makeService({
       links: [{ courierAccountId: 'acct-a', distributionWeight: 100 }],
     });
-    const result = await svc.selectAccount('seller-1', 'courier-1', CredentialEnvironment.PRODUCTION);
+    const result = await svc.selectAccount(
+      'seller-1',
+      'courier-1',
+      CredentialEnvironment.PRODUCTION,
+    );
     expect(result).toEqual({ courierAccountId: 'acct-a', source: 'SELLER_LINK' });
   });
 
@@ -76,13 +82,15 @@ describe('CourierAccountRoutingService.selectAccount', () => {
     randomSpy.mockReturnValueOnce(0.1); // 0.1 * 100 = 10 <= 70 → acct-a
     const { svc: svcLow } = makeService({ links });
     expect(
-      (await svcLow.selectAccount('seller-1', 'courier-1', CredentialEnvironment.PRODUCTION)).courierAccountId,
+      (await svcLow.selectAccount('seller-1', 'courier-1', CredentialEnvironment.PRODUCTION))
+        .courierAccountId,
     ).toBe('acct-a');
 
     randomSpy.mockReturnValueOnce(0.9); // 0.9 * 100 = 90 > 70 → falls into acct-b's remainder
     const { svc: svcHigh } = makeService({ links });
     expect(
-      (await svcHigh.selectAccount('seller-1', 'courier-1', CredentialEnvironment.PRODUCTION)).courierAccountId,
+      (await svcHigh.selectAccount('seller-1', 'courier-1', CredentialEnvironment.PRODUCTION))
+        .courierAccountId,
     ).toBe('acct-b');
   });
 
@@ -93,7 +101,11 @@ describe('CourierAccountRoutingService.selectAccount', () => {
         { courierAccountId: 'acct-b', distributionWeight: 0 },
       ],
     });
-    const result = await svc.selectAccount('seller-1', 'courier-1', CredentialEnvironment.PRODUCTION);
+    const result = await svc.selectAccount(
+      'seller-1',
+      'courier-1',
+      CredentialEnvironment.PRODUCTION,
+    );
     expect(result).toEqual({ courierAccountId: 'acct-a', source: 'SELLER_LINK' });
   });
 

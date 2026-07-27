@@ -54,8 +54,10 @@ function makeSut(opts: {
     })),
   } as unknown as TemplateRenderService;
 
-  const resendSendMock: jest.Mock<Promise<SendEmailResult | SendEmailFailure>, [SendEmailInput]> =
-    jest.fn(async (_input: SendEmailInput) => opts.resendResponse);
+  const resendSendMock: jest.Mock<
+    Promise<SendEmailResult | SendEmailFailure>,
+    [SendEmailInput]
+  > = jest.fn(async (_input: SendEmailInput) => opts.resendResponse);
   const resend = { send: resendSendMock } as unknown as ResendService;
 
   return {
@@ -200,9 +202,7 @@ describe('EmailDispatchService', () => {
 
       expect(res.status).toBe('SENT');
       // No CREATE — the ledger already inserted the PENDING row.
-      expect((prisma.client.notificationLog.create as jest.Mock).mock.calls).toHaveLength(
-        0,
-      );
+      expect((prisma.client.notificationLog.create as jest.Mock).mock.calls).toHaveLength(0);
       expect(captured).toHaveLength(0);
       // ONE update to the pre-created row id.
       expect(capturedUpdates).toHaveLength(1);

@@ -126,7 +126,8 @@ export class CourierSettlementService {
     if (reference.length === 0) {
       throw new BadRequestException({
         code: 'SETTLEMENT_REFERENCE_REQUIRED',
-        message: "The courier's payout reference is required — it is what makes recording idempotent",
+        message:
+          "The courier's payout reference is required — it is what makes recording idempotent",
       });
     }
 
@@ -250,9 +251,7 @@ export class CourierSettlementService {
   }): Promise<readonly SettlementView[]> {
     const rows = await this.prisma.client.courierSettlement.findMany({
       where:
-        query.courierAccountId === undefined
-          ? {}
-          : { courierAccountId: query.courierAccountId },
+        query.courierAccountId === undefined ? {} : { courierAccountId: query.courierAccountId },
       include: { lines: { include: { order: { select: { orderNumber: true } } } } },
       orderBy: { receivedAt: 'desc' },
       take: Math.min(query.limit ?? 50, 200),
@@ -283,9 +282,7 @@ export class CourierSettlementService {
    * conversation with the courier, not something to silently claw back
    * from a seller.
    */
-  async reconciliation(
-    opts: { overdueAfterDays?: number } = {},
-  ): Promise<ReconciliationReport> {
+  async reconciliation(opts: { overdueAfterDays?: number } = {}): Promise<ReconciliationReport> {
     const overdueAfterDays = opts.overdueAfterDays ?? 10;
     const now = new Date();
     const cutoff = new Date(now.getTime() - overdueAfterDays * 86_400_000);
@@ -315,10 +312,7 @@ export class CourierSettlementService {
 
     for (const order of delivered) {
       const expected = order.codAmountInr ?? ZERO;
-      const settled = order.courierSettlementLines.reduce(
-        (sum, l) => sum.add(l.settledInr),
-        ZERO,
-      );
+      const settled = order.courierSettlementLines.reduce((sum, l) => sum.add(l.settledInr), ZERO);
       const shortfall = expected.sub(settled);
       if (shortfall.lte(0)) continue;
 
@@ -327,9 +321,7 @@ export class CourierSettlementService {
       // report deliberately does not join (it would turn a finance report
       // into a hypertable scan).
       const deliveredAt = order.updatedAt;
-      const ageDays = Math.floor(
-        (now.getTime() - deliveredAt.getTime()) / 86_400_000,
-      );
+      const ageDays = Math.floor((now.getTime() - deliveredAt.getTime()) / 86_400_000);
       const row: UnsettledOrderRow = {
         orderId: order.id,
         orderNumber: order.orderNumber,

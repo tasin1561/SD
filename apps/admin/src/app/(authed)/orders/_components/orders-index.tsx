@@ -210,9 +210,7 @@ export function OrdersIndex(): ReactElement {
                   <span className="text-text-muted text-xs uppercase">{o.source}</span>
                 </Td>
                 <Td align="right">
-                  <span className="text-text-body font-mono text-xs">
-                    {o.codAmountInr ?? '—'}
-                  </span>
+                  <span className="text-text-body font-mono text-xs">{o.codAmountInr ?? '—'}</span>
                 </Td>
                 <Td className="text-text-muted text-xs font-mono">
                   {new Date(o.placedAt).toISOString().slice(0, 16).replace('T', ' ')}

@@ -43,11 +43,7 @@ export function TelemetryTicker(): ReactElement {
             <span
               aria-hidden
               className={`inline-block h-1.5 w-1.5 rounded-full ${
-                e.tone === 'green'
-                  ? 'bg-green'
-                  : e.tone === 'saffron'
-                    ? 'bg-saffron'
-                    : 'bg-sky/60'
+                e.tone === 'green' ? 'bg-green' : e.tone === 'saffron' ? 'bg-saffron' : 'bg-sky/60'
               }`}
             />
             <span className="text-fg-strong">{e.code}</span>

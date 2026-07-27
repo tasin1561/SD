@@ -33,7 +33,13 @@
  * (multiple browser tabs) or extend this script to call the
  * authenticated REST endpoints.
  */
-import { PrismaClient, OrderStatus, PaymentMode, WalletEntryDirection, Currency } from '@skydrop/db';
+import {
+  PrismaClient,
+  OrderStatus,
+  PaymentMode,
+  WalletEntryDirection,
+  Currency,
+} from '@skydrop/db';
 
 const SELLERS = Number(process.env.STRESS_SELLERS ?? 3);
 const ORDERS_PER_SELLER = Number(process.env.STRESS_ORDERS ?? 5);
@@ -49,7 +55,9 @@ interface SellerCtx {
 async function main(): Promise<void> {
   const prisma = new PrismaClient();
   const startedAt = Date.now();
-  console.info(`[stress] sellers=${SELLERS} orders/seller=${ORDERS_PER_SELLER} concurrent=${CONCURRENT}`);
+  console.info(
+    `[stress] sellers=${SELLERS} orders/seller=${ORDERS_PER_SELLER} concurrent=${CONCURRENT}`,
+  );
 
   try {
     // ── 1. PREP ───────────────────────────────────────────────────────
@@ -59,9 +67,7 @@ async function main(): Promise<void> {
       select: { id: true, companyName: true },
     });
     if (sellers.length < SELLERS) {
-      console.error(
-        `[stress] Need ${SELLERS} APPROVED sellers; only ${sellers.length} found.`,
-      );
+      console.error(`[stress] Need ${SELLERS} APPROVED sellers; only ${sellers.length} found.`);
       console.error(
         '[stress] Create test sellers via the invite flow first, or lower STRESS_SELLERS.',
       );

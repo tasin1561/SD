@@ -205,7 +205,11 @@ describe('PricingEngineService.compute', () => {
       totalWeightGrams: 300,
       courierCode: 'delhivery',
     });
-    expect(out.margin).toEqual({ baseChargeInr: '80.00', costToSkydropInr: '55.00', marginInr: '25.00' });
+    expect(out.margin).toEqual({
+      baseChargeInr: '80.00',
+      costToSkydropInr: '55.00',
+      marginInr: '25.00',
+    });
   });
 
   it('R1c: margin reflects the POST-discount seller charge, not the rate-card sticker price', async () => {
@@ -240,7 +244,11 @@ describe('PricingEngineService.compute', () => {
     });
     // 100 - 25% = 75 charged to the seller; margin = 75 - 55 = 20 (not 100-55=45).
     expect(out.baseShippingInr).toBe('75.00');
-    expect(out.margin).toEqual({ baseChargeInr: '75.00', costToSkydropInr: '55.00', marginInr: '20.00' });
+    expect(out.margin).toEqual({
+      baseChargeInr: '75.00',
+      costToSkydropInr: '55.00',
+      marginInr: '20.00',
+    });
   });
 
   it('R1c: a deep discount can drive margin negative — surfaced, not clamped', async () => {
@@ -274,7 +282,11 @@ describe('PricingEngineService.compute', () => {
       courierCode: 'delhivery',
     });
     // 100 - 50% = 50 charged; margin = 50 - 55 = -5.
-    expect(out.margin).toEqual({ baseChargeInr: '50.00', costToSkydropInr: '55.00', marginInr: '-5.00' });
+    expect(out.margin).toEqual({
+      baseChargeInr: '50.00',
+      costToSkydropInr: '55.00',
+      marginInr: '-5.00',
+    });
   });
 
   it('applies SellerPricing.discountPercent to base shipping', async () => {

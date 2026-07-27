@@ -72,11 +72,7 @@ export function UnitDiscrepanciesIndex(): ReactElement {
               label="Needs attention"
               value={totalIssues}
               tone={totalIssues > 0 ? 'warn' : 'good'}
-              hint={
-                totalIssues === 0
-                  ? 'Everything reconciles'
-                  : 'Across the three lists below'
-              }
+              hint={totalIssues === 0 ? 'Everything reconciles' : 'Across the three lists below'}
             />
             <Stat
               label="Stuck mid-lifecycle"
@@ -158,9 +154,7 @@ export function UnitDiscrepanciesIndex(): ReactElement {
                       <Td align="right">
                         <span
                           className={
-                            m.delta === 0
-                              ? 'text-text-faint'
-                              : 'text-[var(--color-critical)]'
+                            m.delta === 0 ? 'text-text-faint' : 'text-[var(--color-critical)]'
                           }
                         >
                           <Num value={m.delta > 0 ? `+${m.delta}` : m.delta} />
@@ -188,10 +182,8 @@ export function UnitDiscrepanciesIndex(): ReactElement {
             <CardBody>
               <p className="text-text-faint text-xs leading-relaxed">
                 Report generated{' '}
-                {data === undefined
-                  ? '—'
-                  : new Date(data.generatedAt).toLocaleString()}
-                . Only SKUs you have set to strict per-unit tracking appear here.
+                {data === undefined ? '—' : new Date(data.generatedAt).toLocaleString()}. Only SKUs
+                you have set to strict per-unit tracking appear here.
               </p>
             </CardBody>
           </Card>

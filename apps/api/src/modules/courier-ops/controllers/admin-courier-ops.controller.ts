@@ -93,10 +93,7 @@ export class AdminCourierOpsController {
     @Query() query: ShipmentInsightQueryDto,
   ): Promise<ShipmentInsight> {
     requireStaffRoles(staff, READ_ROLES);
-    return this.insight.insight(
-      shipmentId,
-      query.mode === undefined ? {} : { mode: query.mode },
-    );
+    return this.insight.insight(shipmentId, query.mode === undefined ? {} : { mode: query.mode });
   }
 
   @Get('document')

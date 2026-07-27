@@ -379,17 +379,16 @@ describe('Seller flow (e2e): invitation → register → login → api keys → 
       await request(h.baseUrl).get('/auth/seller/me').set('Cookie', cookieValue).expect(200);
       await request(h.baseUrl).get('/auth/seller/me').set('Cookie', cookieValue).expect(200);
 
-      const allRows = await h.prisma.sellerRefreshToken.findMany({ where: { sellerUser: { sellerId } } });
+      const allRows = await h.prisma.sellerRefreshToken.findMany({
+        where: { sellerUser: { sellerId } },
+      });
       expect(allRows).toHaveLength(1);
       expect(allRows[0]!.id).toBe(before!.id);
       expect(allRows[0]!.revokedAt).toBeNull();
 
       // The cookie still rotates successfully — confirms it was not
       // consumed by /me.
-      await request(h.baseUrl)
-        .post('/auth/seller/refresh')
-        .set('Cookie', cookieValue)
-        .expect(200);
+      await request(h.baseUrl).post('/auth/seller/refresh').set('Cookie', cookieValue).expect(200);
     });
 
     it('cookie path does NOT trip reuse-detection on a revoked cookie', async () => {

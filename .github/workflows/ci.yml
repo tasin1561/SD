@@ -53,7 +53,7 @@ jobs:
       REDIS_URL: redis://localhost:6379/0
       NODE_ENV: test
       # Email + S3 + courier are stub-mode in CI.
-      RESEND_API_KEY: ""
+      RESEND_API_KEY: ''
       JWT_ACCESS_SECRET: ci-access-secret-not-prod
       JWT_REFRESH_SECRET: ci-refresh-secret-not-prod
       COURIER_CREDENTIALS_KEY_v1: ci-aes-gcm-32byte-key-padding-32x
@@ -108,6 +108,14 @@ jobs:
 
       - name: Lint — all workspaces that have lint
         run: pnpm -r --if-present lint
+
+      # The repo has shipped a .prettierrc since M0 that nothing enforced,
+      # and ~600 files had drifted from it. Normalised 2026-07-27; this
+      # step is what stops it happening again. `.prettierignore` is the
+      # single source of what is excluded (notably *.md — prose keeps its
+      # author's formatting).
+      - name: Format check
+        run: pnpm format:check
 
       - name: Unit tests — API (jest)
         run: pnpm --filter @skydrop/api test
@@ -188,7 +196,7 @@ jobs:
       REDIS_URL: redis://localhost:6379/0
       NODE_ENV: test
       PORT: 4000
-      RESEND_API_KEY: ""
+      RESEND_API_KEY: ''
       JWT_ACCESS_SECRET: ci-access-secret-not-prod
       JWT_REFRESH_SECRET: ci-refresh-secret-not-prod
       COURIER_CREDENTIALS_KEY_v1: ci-aes-gcm-32byte-key-padding-32x

@@ -122,11 +122,7 @@ export class PickExecutionService {
    * holds (WMS-3). A shortfall fail-routes to PENDING_MANUAL_PLACEMENT
    * (WMS-4) — not an error.
    */
-  async start(
-    shipmentId: string,
-    staffId: string,
-    ctx?: ClientContext,
-  ): Promise<StartPickResult> {
+  async start(shipmentId: string, staffId: string, ctx?: ClientContext): Promise<StartPickResult> {
     const { orderId } = await this.loadClaimedShipment(shipmentId, staffId);
     const actor = { type: ActorType.STAFF, id: staffId };
 
@@ -181,9 +177,7 @@ export class PickExecutionService {
       try {
         const applied = await this.allocation.allocateForPick(resv.id, actor);
         const short =
-          applied.shortfall > 0 ||
-          applied.strategy === 'NONE' ||
-          applied.strategy === 'PARTIAL';
+          applied.shortfall > 0 || applied.strategy === 'NONE' || applied.strategy === 'PARTIAL';
         if (short) fullyAllocated = false;
         allocations.push({
           reservationId: resv.id,
@@ -271,10 +265,7 @@ export class PickExecutionService {
     },
     ctx?: ClientContext,
   ): Promise<RecordPickItemResult> {
-    const { orderId, originWarehouseId } = await this.loadClaimedShipment(
-      shipmentId,
-      staffId,
-    );
+    const { orderId, originWarehouseId } = await this.loadClaimedShipment(shipmentId, staffId);
 
     const order = await this.orders.getById(orderId);
     if (!order || order.status !== OrderStatus.PENDING_PICK) {
@@ -392,10 +383,13 @@ export class PickExecutionService {
     staffId: string,
     ctx?: ClientContext,
   ): Promise<CompletePickResult> {
-    const { orderId, pickCompletedAt: existing } =
-      await this.loadClaimedShipment(shipmentId, staffId, {
+    const { orderId, pickCompletedAt: existing } = await this.loadClaimedShipment(
+      shipmentId,
+      staffId,
+      {
         allowCompleted: true,
-      });
+      },
+    );
     const actor = { type: ActorType.STAFF, id: staffId };
 
     const order = await this.orders.getById(orderId);
@@ -428,9 +422,7 @@ export class PickExecutionService {
       where: { shipmentId },
       select: { id: true, pickedBinId: true, pickedBatchId: true },
     });
-    const unrecorded = items.filter(
-      (i) => i.pickedBinId === null || i.pickedBatchId === null,
-    );
+    const unrecorded = items.filter((i) => i.pickedBinId === null || i.pickedBatchId === null);
     if (items.length === 0 || unrecorded.length > 0) {
       throw new ConflictException({
         code: 'PICK_INCOMPLETE',
@@ -451,8 +443,7 @@ export class PickExecutionService {
       },
       data: { pickCompletedAt: now, pickExpiresAt: null },
     });
-    const pickCompletedAt =
-      stamped.count === 1 ? now : (existing ?? now);
+    const pickCompletedAt = stamped.count === 1 ? now : (existing ?? now);
 
     // Authoritative transition LAST (WMS-9). expectedFrom guards a race.
     await this.orderWrite.transitionStatus({

@@ -186,14 +186,8 @@ function FreightRow({ row }: { readonly row: FreightChargeView }): ReactElement 
         <Money amount={row.amountSettledInr} />
         {/* The bar carries the same fact as the number beside it — it
             is a scanning aid, not the only encoding. */}
-        <div
-          className="bg-surface-hover mt-1 h-1 w-full overflow-hidden rounded-full"
-          aria-hidden
-        >
-          <div
-            className="bg-[var(--status-delivered-fg)] h-full"
-            style={{ width: `${pct}%` }}
-          />
+        <div className="bg-surface-hover mt-1 h-1 w-full overflow-hidden rounded-full" aria-hidden>
+          <div className="bg-[var(--status-delivered-fg)] h-full" style={{ width: `${pct}%` }} />
         </div>
       </Td>
       <Td align="right">

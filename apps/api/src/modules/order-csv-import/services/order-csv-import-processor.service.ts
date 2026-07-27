@@ -6,10 +6,7 @@ import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { EnvService } from '../../../config/env.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
-import {
-  OrderService,
-  type BulkOrderPatchInput,
-} from '../../order/services/order.service';
+import { OrderService, type BulkOrderPatchInput } from '../../order/services/order.service';
 import type { CreateOrderDto } from '../../order/dto/create-order.dto';
 import { OrderCsvParserService, type CoercedOrderRow } from './order-csv-parser.service';
 import type { OrderCsvField } from '../order-csv-fields';
@@ -54,10 +51,7 @@ export class OrderCsvImportProcessorService {
     private readonly orders: OrderService,
   ) {}
 
-  async process(
-    uploadId: string,
-    mapping: Partial<Record<OrderCsvField, string>>,
-  ): Promise<void> {
+  async process(uploadId: string, mapping: Partial<Record<OrderCsvField, string>>): Promise<void> {
     const upload = await this.prisma.client.bulkOrderUpload.findUnique({
       where: { id: uploadId },
       select: { id: true, sellerId: true, spacesKey: true, status: true },
@@ -106,7 +100,12 @@ export class OrderCsvImportProcessorService {
       const { row, errors } = this.parser.coerceRow(raw, mapping);
       if (!row || errors.length > 0) {
         for (const e of errors) {
-          errorRows.push({ rowNumber, errorField: e.field ?? '', errorReason: e.reason, original: raw });
+          errorRows.push({
+            rowNumber,
+            errorField: e.field ?? '',
+            errorReason: e.reason,
+            original: raw,
+          });
         }
         counters.rowsFailed += 1;
         continue;

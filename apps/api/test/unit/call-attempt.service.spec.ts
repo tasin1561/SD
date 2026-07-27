@@ -1,9 +1,4 @@
-import {
-  CallOutcome,
-  CallQueueStatus,
-  OrderStatus,
-  QueueClosureReason,
-} from '@skydrop/db';
+import { CallOutcome, CallQueueStatus, OrderStatus, QueueClosureReason } from '@skydrop/db';
 import { CallAttemptService } from '../../src/modules/call-center/services/call-attempt.service';
 import { CallOutcomeMappingService } from '../../src/modules/call-center/services/call-outcome-mapping.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
@@ -45,9 +40,7 @@ function makeService(
   const entryFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
     opts.entry === undefined ? defaultEntry : opts.entry,
   );
-  const attemptCount = jest.fn<Promise<number>, [AnyArgs]>(
-    async () => opts.priorCount ?? 0,
-  );
+  const attemptCount = jest.fn<Promise<number>, [AnyArgs]>(async () => opts.priorCount ?? 0);
   const attemptCreate = jest.fn<Promise<{ id: string }>, [AnyArgs]>(async () => ({
     id: 'att-1',
   }));
@@ -55,24 +48,20 @@ function makeService(
   const sellerFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () => ({
     callMaxAttemptsBeforeNdrOverride: opts.sellerOverride ?? null,
   }));
-  const systemSettingFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async (a) => {
-      const key = (a.where as AnyArgs).key as string;
-      if (key === SETTING_KEYS.MAX) {
-        return opts.maxAttemptsSetting === null ||
-          opts.maxAttemptsSetting === undefined
-          ? null
-          : { valueInt: opts.maxAttemptsSetting };
-      }
-      if (key === SETTING_KEYS.BUSY_H) {
-        return opts.busyDelayHours === null ||
-          opts.busyDelayHours === undefined
-          ? null
-          : { valueInt: opts.busyDelayHours };
-      }
-      return null; // MIN_H / MAX_D → service defaults (1h / 7d)
-    },
-  );
+  const systemSettingFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async (a) => {
+    const key = (a.where as AnyArgs).key as string;
+    if (key === SETTING_KEYS.MAX) {
+      return opts.maxAttemptsSetting === null || opts.maxAttemptsSetting === undefined
+        ? null
+        : { valueInt: opts.maxAttemptsSetting };
+    }
+    if (key === SETTING_KEYS.BUSY_H) {
+      return opts.busyDelayHours === null || opts.busyDelayHours === undefined
+        ? null
+        : { valueInt: opts.busyDelayHours };
+    }
+    return null; // MIN_H / MAX_D → service defaults (1h / 7d)
+  });
 
   const txClient = {
     callAttempt: { count: attemptCount, create: attemptCreate },
@@ -92,12 +81,9 @@ function makeService(
     systemSetting: { findUnique: typeof systemSettingFindUnique };
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
   };
-  client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> =>
-    fn(txClient);
+  client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient);
 
-  const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown?]>(
-    async () => 'a1',
-  );
+  const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown?]>(async () => 'a1');
   const audit = { log: auditLog };
 
   const order =
@@ -120,10 +106,10 @@ function makeService(
   });
   const orderWrites = { transitionStatus };
 
-  const enqueueAgain = jest.fn<
-    Promise<AnyArgs>,
-    [string, Date, unknown?]
-  >(async () => ({ entry: {}, created: true }));
+  const enqueueAgain = jest.fn<Promise<AnyArgs>, [string, Date, unknown?]>(async () => ({
+    entry: {},
+    created: true,
+  }));
   const queue = { enqueueAgain };
 
   const mapping = new CallOutcomeMappingService();
@@ -181,7 +167,12 @@ describe('CallAttemptService.recordAttempt — assignment guards', () => {
 
   it('409 ASSIGNMENT_NOT_ACTIVE when not ASSIGNED', async () => {
     const { svc } = makeService({
-      entry: { id: 'q1', orderId: 'o1', status: CallQueueStatus.COMPLETED, assignedAgentId: 'agent-1' },
+      entry: {
+        id: 'q1',
+        orderId: 'o1',
+        status: CallQueueStatus.COMPLETED,
+        assignedAgentId: 'agent-1',
+      },
     });
     await expect(
       svc.recordAttempt({ ...BASE, outcome: CallOutcome.CONFIRMED }),
@@ -190,7 +181,12 @@ describe('CallAttemptService.recordAttempt — assignment guards', () => {
 
   it('403 ASSIGNMENT_NOT_OWNED when held by another agent', async () => {
     const { svc } = makeService({
-      entry: { id: 'q1', orderId: 'o1', status: CallQueueStatus.ASSIGNED, assignedAgentId: 'agent-2' },
+      entry: {
+        id: 'q1',
+        orderId: 'o1',
+        status: CallQueueStatus.ASSIGNED,
+        assignedAgentId: 'agent-2',
+      },
     });
     await expect(
       svc.recordAttempt({ ...BASE, outcome: CallOutcome.CONFIRMED }),
@@ -235,12 +231,8 @@ describe('CallAttemptService.recordAttempt — outcome flows', () => {
       makeService();
     const r = await svc.recordAttempt({ ...BASE, outcome: CallOutcome.CONFIRMED });
 
-    expect((attemptCreate.mock.calls[0]![0].data as AnyArgs).outcome).toBe(
-      CallOutcome.CONFIRMED,
-    );
-    expect((attemptCreate.mock.calls[0]![0].data as AnyArgs).phoneE164).toBe(
-      '+919876500000',
-    );
+    expect((attemptCreate.mock.calls[0]![0].data as AnyArgs).outcome).toBe(CallOutcome.CONFIRMED);
+    expect((attemptCreate.mock.calls[0]![0].data as AnyArgs).phoneE164).toBe('+919876500000');
     const upd = entryUpdate.mock.calls[0]![0].data as AnyArgs;
     expect(upd).toMatchObject({
       status: CallQueueStatus.COMPLETED,
@@ -274,9 +266,7 @@ describe('CallAttemptService.recordAttempt — outcome flows', () => {
       },
     });
     const r = await svc.recordAttempt({ ...BASE, outcome: CallOutcome.CONFIRMED });
-    expect((attemptCreate.mock.calls[0]![0].data as AnyArgs).outcome).toBe(
-      CallOutcome.CONFIRMED,
-    );
+    expect((attemptCreate.mock.calls[0]![0].data as AnyArgs).outcome).toBe(CallOutcome.CONFIRMED);
     expect(transitionStatus).toHaveBeenCalled();
     expect(r.finalOrderStatus).toBe(OrderStatus.OUT_OF_STOCK);
   });
@@ -398,9 +388,7 @@ describe('CallAttemptService.recordAttempt — outcome flows', () => {
     expect(r).toMatchObject({ targetStatus: null, finalOrderStatus: null, requeued: true });
     // priorCount query filtered to the 6 counting outcomes only
     const where = attemptCount.mock.calls[0]![0].where as AnyArgs;
-    expect((where.outcome as AnyArgs).in).not.toContain(
-      CallOutcome.TECHNICAL_FAILURE,
-    );
+    expect((where.outcome as AnyArgs).in).not.toContain(CallOutcome.TECHNICAL_FAILURE);
   });
 
   it('LANGUAGE_BARRIER: no transition, requeue immediate', async () => {

@@ -54,9 +54,7 @@ describe('BankAccountCipherService', () => {
   });
 
   it('encryption-disabled mode (empty key) stores plaintext + null version', () => {
-    const svc = new BankAccountCipherService(
-      makeTestEnv({ BANK_ACCOUNTS_KEY_V1: '' }),
-    );
+    const svc = new BankAccountCipherService(makeTestEnv({ BANK_ACCOUNTS_KEY_V1: '' }));
     const enc = svc.encrypt('1234567890');
     expect(enc.storedValue).toBe('1234567890');
     expect(enc.keyVersion).toBeNull();
@@ -64,18 +62,12 @@ describe('BankAccountCipherService', () => {
   });
 
   it('reveal passes plaintext through when keyVersion is null', () => {
-    const svc = new BankAccountCipherService(
-      makeTestEnv({ BANK_ACCOUNTS_KEY_V1: '' }),
-    );
-    expect(svc.reveal('legacy-plaintext-value', null)).toBe(
-      'legacy-plaintext-value',
-    );
+    const svc = new BankAccountCipherService(makeTestEnv({ BANK_ACCOUNTS_KEY_V1: '' }));
+    expect(svc.reveal('legacy-plaintext-value', null)).toBe('legacy-plaintext-value');
   });
 
   it('reveal throws when the key version is unconfigured', () => {
-    const svc = new BankAccountCipherService(
-      makeTestEnv({ BANK_ACCOUNTS_KEY_V1: '' }),
-    );
+    const svc = new BankAccountCipherService(makeTestEnv({ BANK_ACCOUNTS_KEY_V1: '' }));
     expect(() => svc.reveal('some-ciphertext', 1)).toThrow(
       /BANK_ACCOUNTS_KEY_V1 is not configured/,
     );

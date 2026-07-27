@@ -33,10 +33,7 @@ export function Table({
         wrapperClassName,
       )}
     >
-      <table
-        className={clsx('w-full border-collapse text-sm', className)}
-        {...rest}
-      />
+      <table className={clsx('w-full border-collapse text-sm', className)} {...rest} />
     </div>
   );
 }
@@ -221,8 +218,11 @@ export function TablePaginator({
   return (
     <div className="flex items-center justify-between px-3 py-2 border-t border-border bg-surface-raised text-text-muted text-xs">
       <div>
-        Showing <span className="text-text-body font-medium">{start}–{end}</span> of{' '}
-        <span className="text-text-body font-medium">{total}</span>
+        Showing{' '}
+        <span className="text-text-body font-medium">
+          {start}–{end}
+        </span>{' '}
+        of <span className="text-text-body font-medium">{total}</span>
       </div>
       <div className="flex items-center gap-2">
         <button

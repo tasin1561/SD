@@ -79,9 +79,7 @@ export function RecordSettlementModal({
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   }
 
-  const filled = lines.filter(
-    (l) => l.orderId.trim() !== '' && l.settledInr.trim() !== '',
-  );
+  const filled = lines.filter((l) => l.orderId.trim() !== '' && l.settledInr.trim() !== '');
 
   async function submit(): Promise<void> {
     setError(null);
@@ -208,9 +206,7 @@ export function RecordSettlementModal({
                   aria-label="Amount attributed to this order"
                   inputMode="decimal"
                   value={line.settledInr}
-                  onChange={(e) =>
-                    updateLine(line.key, { settledInr: e.target.value })
-                  }
+                  onChange={(e) => updateLine(line.key, { settledInr: e.target.value })}
                   placeholder="0.00"
                   className="w-32 text-right"
                 />
@@ -219,9 +215,7 @@ export function RecordSettlementModal({
                   aria-label="Remove this line"
                   onClick={() =>
                     setLines((prev) =>
-                      prev.length === 1
-                        ? prev
-                        : prev.filter((l) => l.key !== line.key),
+                      prev.length === 1 ? prev : prev.filter((l) => l.key !== line.key),
                     )
                   }
                   disabled={lines.length === 1}
@@ -236,13 +230,10 @@ export function RecordSettlementModal({
           {/* The reconciliation line. Reads as arithmetic, on purpose. */}
           <div className="border-border mt-3 flex items-center justify-between border-t pt-2 text-xs">
             <span className="text-text-muted">
-              Allocated <Money amount={allocated} /> of{' '}
-              <Money amount={received} /> received
+              Allocated <Money amount={allocated} /> of <Money amount={received} /> received
             </span>
             {Math.abs(remainder) < 0.005 ? (
-              <span className="text-[var(--status-delivered-fg)]">
-                Fully allocated
-              </span>
+              <span className="text-[var(--status-delivered-fg)]">Fully allocated</span>
             ) : (
               <span className="text-[var(--status-pending-fg)]">
                 {remainder > 0 ? 'Unexplained: ' : 'Over-allocated by: '}

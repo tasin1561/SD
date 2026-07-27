@@ -12,10 +12,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Currency, StaffRole } from '@skydrop/db';
 import { CurrentStaff } from '../../common/decorators/current-staff.decorator';
-import {
-  ClientInfo,
-  type ClientInfoPayload,
-} from '../../common/decorators/client-info.decorator';
+import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/client-info.decorator';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { requireStaffRoles } from '../../common/auth/require-staff-roles';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
@@ -69,8 +66,7 @@ export class AdminRemittanceController {
   @Get('seller/:sellerId/balance')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary:
-      'Wallet balances per currency for a seller (admin remittance form pre-fill)',
+    summary: 'Wallet balances per currency for a seller (admin remittance form pre-fill)',
   })
   async sellerBalances(
     @CurrentStaff() staff: AuthenticatedStaff,

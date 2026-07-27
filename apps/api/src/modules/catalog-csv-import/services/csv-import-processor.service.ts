@@ -1,9 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import {
-  ActorType,
-  BulkUploadStatus,
-  Prisma,
-} from '@skydrop/db';
+import { ActorType, BulkUploadStatus, Prisma } from '@skydrop/db';
 import Papa from 'papaparse';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
@@ -58,10 +54,7 @@ export class CsvImportProcessorService {
    * Each row commits in its own transaction so a failing row never
    * half-writes.
    */
-  async process(
-    uploadId: string,
-    mapping: Partial<Record<CsvTargetField, string>>,
-  ): Promise<void> {
+  async process(uploadId: string, mapping: Partial<Record<CsvTargetField, string>>): Promise<void> {
     const upload = await this.prisma.client.bulkProductUpload.findUnique({
       where: { id: uploadId },
       select: { id: true, sellerId: true, spacesKey: true, status: true },
@@ -159,7 +152,12 @@ export class CsvImportProcessorService {
       const attrErrors = this.validator.collect(effective, row.attributes ?? {});
       if (attrErrors.length > 0) {
         for (const reason of attrErrors) {
-          errorRows.push({ rowNumber, errorField: 'attributes', errorReason: reason, original: raw });
+          errorRows.push({
+            rowNumber,
+            errorField: 'attributes',
+            errorReason: reason,
+            original: raw,
+          });
         }
         counters.rowsFailed += 1;
         continue;
@@ -183,8 +181,7 @@ export class CsvImportProcessorService {
         errorRows.push({
           rowNumber,
           errorField: '',
-          errorReason:
-            err instanceof Error ? err.message : 'Unexpected error importing row',
+          errorReason: err instanceof Error ? err.message : 'Unexpected error importing row',
           original: raw,
         });
         counters.rowsFailed += 1;
@@ -269,7 +266,12 @@ export class CsvImportProcessorService {
       }
 
       if (existingVariant) {
-        variantUpdated = await this.patchVariant(tx, existingVariant.id, existingVariant.attributes, row);
+        variantUpdated = await this.patchVariant(
+          tx,
+          existingVariant.id,
+          existingVariant.attributes,
+          row,
+        );
       } else {
         await tx.productVariant.create({
           data: {

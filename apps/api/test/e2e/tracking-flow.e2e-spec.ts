@@ -55,8 +55,7 @@ import {
 
 const COURIER_CODE = 'delhivery';
 const WEBHOOK_SECRET =
-  process.env['TRACKING_WEBHOOK_SECRET_DELHIVERY'] ??
-  'test-tracking-webhook-secret-delhivery';
+  process.env['TRACKING_WEBHOOK_SECRET_DELHIVERY'] ?? 'test-tracking-webhook-secret-delhivery';
 
 /**
  * D5: Delhivery does NOT sign webhooks — it returns the static
@@ -145,10 +144,7 @@ describe('M10 Tracking — webhook lifecycle e2e (TRK-1..9)', () => {
       .expect(201);
     sellerAuth = { Authorization: `Bearer ${reg.body.accessToken}` };
 
-    const whs = await request(h.baseUrl)
-      .get('/admin/warehouses')
-      .set(staffAuth)
-      .expect(200);
+    const whs = await request(h.baseUrl).get('/admin/warehouses').set(staffAuth).expect(200);
     warehouseId = (whs.body as Array<{ id: string; code: string }>).find(
       (w) => w.code === 'BLR-01',
     )!.id;
@@ -193,9 +189,7 @@ describe('M10 Tracking — webhook lifecycle e2e (TRK-1..9)', () => {
       .post(`/admin/goods-receipts/${gr.body.id}/lines`)
       .set(staffAuth)
       .send({
-        lines: [
-          { lineId: gr.body.lines[0].id, receivedQty: qty, putawayBinId: binId },
-        ],
+        lines: [{ lineId: gr.body.lines[0].id, receivedQty: qty, putawayBinId: binId }],
       })
       .expect(200);
     await request(h.baseUrl)
@@ -228,10 +222,7 @@ describe('M10 Tracking — webhook lifecycle e2e (TRK-1..9)', () => {
       })
       .expect(201);
     const orderId = created.body.id as string;
-    await request(h.baseUrl)
-      .post(`/seller/orders/${orderId}/submit`)
-      .set(sellerAuth)
-      .expect(200);
+    await request(h.baseUrl).post(`/seller/orders/${orderId}/submit`).set(sellerAuth).expect(200);
     const ow = h.app.get(OrderWriteService);
     await ow.transitionStatus({
       orderId,
@@ -803,9 +794,7 @@ describe('M10 Tracking — webhook lifecycle e2e (TRK-1..9)', () => {
       }),
     );
 
-    const res = await request(h.baseUrl)
-      .get(`/public/tracking/${awbNumber}`)
-      .expect(200);
+    const res = await request(h.baseUrl).get(`/public/tracking/${awbNumber}`).expect(200);
     const body = res.body as Record<string, unknown>;
 
     // Top-level key set EXACTLY (regression guard against accidental

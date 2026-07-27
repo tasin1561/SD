@@ -147,8 +147,12 @@ export class DelhiveryWaybillPoolService {
     if (await this.http.isStubMode()) {
       // Stub mode mints local numbers so the whole manifest path can be
       // exercised without a network.
-      const stub = Array.from({ length: Math.min(batch, 25) }, () =>
-        `STUB${Math.floor(Math.random() * 1e12).toString().padStart(12, '0')}`,
+      const stub = Array.from(
+        { length: Math.min(batch, 25) },
+        () =>
+          `STUB${Math.floor(Math.random() * 1e12)
+            .toString()
+            .padStart(12, '0')}`,
       );
       const added = await this.store(stub, settleSeconds);
       return { fetched: added, poolAfter: available + added };
@@ -215,9 +219,7 @@ export class DelhiveryWaybillPoolService {
    */
   parseWaybillResponse(raw: string | string[]): string[] {
     const list = Array.isArray(raw) ? raw : String(raw).split(',');
-    return list
-      .map((w) => String(w).trim().replace(/^"|"$/g, ''))
-      .filter((w) => w.length > 0);
+    return list.map((w) => String(w).trim().replace(/^"|"$/g, '')).filter((w) => w.length > 0);
   }
 
   private async store(numbers: string[], settleSeconds: number): Promise<number> {

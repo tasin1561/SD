@@ -68,10 +68,7 @@ describe('Staff auth (e2e)', () => {
     expect(newCookie).not.toEqual(originalCookie);
 
     // Replay the original (now-revoked) cookie. Should fail AND burn the family.
-    await request(h.baseUrl)
-      .post('/auth/staff/refresh')
-      .set('Cookie', originalCookie)
-      .expect(401);
+    await request(h.baseUrl).post('/auth/staff/refresh').set('Cookie', originalCookie).expect(401);
 
     // Audit row from THIS replay attempt: severity HIGH, revokedCount 1
     // (the new cookie that was still active).
@@ -111,7 +108,9 @@ describe('Staff auth (e2e)', () => {
     const audit = await h.prisma.auditLog.findFirst({ where: { action: 'staff.login.failure' } });
     expect(audit).toBeTruthy();
     expect(audit!.entityId).toBeNull();
-    expect((audit!.metadata as { attemptedEmail: string }).attemptedEmail).toBe('ghost@example.com');
+    expect((audit!.metadata as { attemptedEmail: string }).attemptedEmail).toBe(
+      'ghost@example.com',
+    );
   });
 
   it('password reset request + confirm round trip; writes a notification_log row; revokes refresh sessions', async () => {

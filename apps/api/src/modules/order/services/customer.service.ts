@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CustomerRiskLevel, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 
@@ -75,10 +71,7 @@ const E164 = /^\+[1-9]\d{6,14}$/;
 export class CustomerService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findOrCreate(
-    client: TxOrClient,
-    input: FindOrCreateCustomerInput,
-  ): Promise<CustomerView> {
+  async findOrCreate(client: TxOrClient, input: FindOrCreateCustomerInput): Promise<CustomerView> {
     const phoneE164 = input.phoneE164.trim();
     if (!E164.test(phoneE164)) {
       throw new BadRequestException(
@@ -106,11 +99,7 @@ export class CustomerService {
    * Bump the per-seller order aggregates when a new order is attached.
    * Called inside OrderService.create's transaction.
    */
-  async recordNewOrder(
-    client: TxOrClient,
-    customerId: string,
-    now: Date,
-  ): Promise<void> {
+  async recordNewOrder(client: TxOrClient, customerId: string, now: Date): Promise<void> {
     const existing = await client.customer.findUnique({
       where: { id: customerId },
       select: { firstOrderAt: true },
@@ -169,11 +158,7 @@ export class CustomerService {
    * immutable by construction (ORD-7). sellerId is taken from the caller's
    * auth context, never the body, so the seller scope can't be moved.
    */
-  async update(
-    sellerId: string,
-    id: string,
-    input: UpdateCustomerInput,
-  ): Promise<CustomerView> {
+  async update(sellerId: string, id: string, input: UpdateCustomerInput): Promise<CustomerView> {
     // Existence + ownership check (also guards soft-deleted).
     await this.getById(sellerId, id);
     const data: Prisma.CustomerUpdateInput = {};

@@ -50,10 +50,7 @@ export class CourierAccountAdminService {
     private readonly audit: AuditLogService,
   ) {}
 
-  async createAccount(
-    dto: CreateCourierAccountDto,
-    staffId: string,
-  ): Promise<CourierAccountView> {
+  async createAccount(dto: CreateCourierAccountDto, staffId: string): Promise<CourierAccountView> {
     const key = this.env.courierCredentialsKey(CURRENT_KEY_VERSION);
     if (key === '') {
       throw new BadRequestException({
@@ -68,10 +65,7 @@ export class CourierAccountAdminService {
         message: 'credentialFields must contain at least one field',
       });
     }
-    const encryptedPayload = encryptCredential(
-      JSON.stringify(dto.credentialFields),
-      key,
-    );
+    const encryptedPayload = encryptCredential(JSON.stringify(dto.credentialFields), key);
 
     return this.prisma.client.$transaction(async (tx) => {
       const courier = await tx.courier.findUnique({
@@ -217,7 +211,10 @@ export class CourierAccountAdminService {
       }
       const seller = await tx.seller.findUnique({ where: { id: sellerId } });
       if (!seller) {
-        throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: `Seller ${sellerId} not found` });
+        throw new NotFoundException({
+          code: 'SELLER_NOT_FOUND',
+          message: `Seller ${sellerId} not found`,
+        });
       }
 
       const link = await tx.sellerCourierAccountLink.upsert({
@@ -241,7 +238,11 @@ export class CourierAccountAdminService {
           action: 'staff.seller_courier_account_link.set',
           entityType: 'seller_courier_account_link',
           entityId: link.id,
-          metadata: { sellerId, courierAccountId: dto.courierAccountId, distributionWeight: link.distributionWeight },
+          metadata: {
+            sellerId,
+            courierAccountId: dto.courierAccountId,
+            distributionWeight: link.distributionWeight,
+          },
           severity: 'MEDIUM',
         },
         tx,
@@ -278,7 +279,9 @@ export class CourierAccountAdminService {
       const updated = await tx.sellerCourierAccountLink.update({
         where: { sellerId_courierAccountId: { sellerId, courierAccountId } },
         data: {
-          ...(dto.distributionWeight === undefined ? {} : { distributionWeight: dto.distributionWeight }),
+          ...(dto.distributionWeight === undefined
+            ? {}
+            : { distributionWeight: dto.distributionWeight }),
           ...(dto.isActive === undefined ? {} : { isActive: dto.isActive }),
         },
       });

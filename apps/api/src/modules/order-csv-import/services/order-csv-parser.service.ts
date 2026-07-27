@@ -78,9 +78,7 @@ export class OrderCsvParserService {
         unmatchedHeaders.push({ header, suggestion: suggestFieldForHeader(header) });
       }
     }
-    const missingRequired = ORDER_CSV_REQUIRED_FIELDS.filter(
-      (f) => mapping[f] === undefined,
-    );
+    const missingRequired = ORDER_CSV_REQUIRED_FIELDS.filter((f) => mapping[f] === undefined);
     return { mapping, matchedHeaders, unmatchedHeaders, missingRequired };
   }
 
@@ -127,7 +125,10 @@ export class OrderCsvParserService {
     } else {
       const n = Number(qRaw);
       if (!Number.isInteger(n) || n <= 0) {
-        errors.push({ field: 'quantity', reason: `quantity must be a positive integer: "${qRaw}"` });
+        errors.push({
+          field: 'quantity',
+          reason: `quantity must be a positive integer: "${qRaw}"`,
+        });
       } else {
         quantity = n;
       }
@@ -138,7 +139,10 @@ export class OrderCsvParserService {
     if (codRaw !== undefined) {
       const n = Number(codRaw);
       if (!Number.isFinite(n) || n < 0) {
-        errors.push({ field: 'codAmount', reason: `codAmount must be a non-negative number: "${codRaw}"` });
+        errors.push({
+          field: 'codAmount',
+          reason: `codAmount must be a non-negative number: "${codRaw}"`,
+        });
       } else {
         codAmount = n;
       }

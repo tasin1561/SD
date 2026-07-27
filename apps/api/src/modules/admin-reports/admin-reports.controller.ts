@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentStaff } from '../../common/decorators/current-staff.decorator';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
@@ -33,15 +26,9 @@ export class AdminReportsController {
   ): Promise<ReportSummary> {
     const now = new Date();
     const defaultTo = new Date(
-      Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth(),
-        now.getUTCDate() + 1,
-      ),
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1),
     );
-    const defaultFrom = new Date(
-      defaultTo.getTime() - 30 * 24 * 60 * 60 * 1000,
-    );
+    const defaultFrom = new Date(defaultTo.getTime() - 30 * 24 * 60 * 60 * 1000);
     const parsedFrom = from ? new Date(from) : defaultFrom;
     const parsedTo = to ? new Date(to) : defaultTo;
     return this.svc.summary({

@@ -4,11 +4,13 @@ import type { PrismaService } from '../../src/infrastructure/prisma/prisma.servi
 
 type AnyArgs = Record<string, unknown>;
 
-function makeService(opts: {
-  open?: AnyArgs | null;
-  openMany?: AnyArgs[];
-  createThrowsP2002?: boolean;
-} = {}) {
+function makeService(
+  opts: {
+    open?: AnyArgs | null;
+    openMany?: AnyArgs[];
+    createThrowsP2002?: boolean;
+  } = {},
+) {
   const findFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
     opts.open === undefined ? null : opts.open,
   );
@@ -27,10 +29,7 @@ function makeService(opts: {
   }));
   const client = { callQueueEntry: { findFirst, findMany, create, updateMany } };
   const audit = { log: jest.fn<Promise<string>, [AnyArgs]>(async () => 'a1') };
-  const svc = new CallQueueService(
-    { client } as unknown as PrismaService,
-    audit as never,
-  );
+  const svc = new CallQueueService({ client } as unknown as PrismaService, audit as never);
   return { svc, findFirst, findMany, create, updateMany, audit };
 }
 
@@ -59,8 +58,9 @@ describe('CallQueueService.enqueueOrder / enqueueAgain', () => {
       .fn<Promise<AnyArgs | null>, [AnyArgs]>()
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ id: 'q-winner', orderId: 'o1' });
-    (svc as unknown as { prisma: { client: { callQueueEntry: { findFirst: unknown } } } })
-      .prisma.client.callQueueEntry.findFirst = ff;
+    (
+      svc as unknown as { prisma: { client: { callQueueEntry: { findFirst: unknown } } } }
+    ).prisma.client.callQueueEntry.findFirst = ff;
     const r = await svc.enqueueOrder('o1');
     expect(r.created).toBe(false);
     expect(r.entry).toMatchObject({ id: 'q-winner' });
@@ -98,9 +98,7 @@ describe('CallQueueService.dequeueOrder', () => {
 
   it('audits when an ASSIGNED entry is preempted', async () => {
     const { svc, audit } = makeService({
-      openMany: [
-        { id: 'q1', status: CallQueueStatus.ASSIGNED, assignedAgentId: 'agent-1' },
-      ],
+      openMany: [{ id: 'q1', status: CallQueueStatus.ASSIGNED, assignedAgentId: 'agent-1' }],
     });
     const r = await svc.dequeueOrder('o1', QueueClosureReason.ADMIN_CLOSED);
     expect(r.preemptedAssigned).toBe(true);

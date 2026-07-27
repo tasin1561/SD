@@ -44,10 +44,7 @@ export class DelhiveryDocumentService {
 
   constructor(private readonly http: DelhiveryHttpService) {}
 
-  async fetch(
-    awbNumber: string,
-    docType: DelhiveryDocumentType,
-  ): Promise<DelhiveryDocumentResult> {
+  async fetch(awbNumber: string, docType: DelhiveryDocumentType): Promise<DelhiveryDocumentResult> {
     if (await this.http.isStubMode()) {
       return {
         awbNumber,
@@ -74,9 +71,7 @@ export class DelhiveryDocumentService {
       (raw['data'] as string | undefined) ??
       null;
     const message =
-      (raw['error'] as string | undefined) ??
-      (raw['rmk'] as string | undefined) ??
-      null;
+      (raw['error'] as string | undefined) ?? (raw['rmk'] as string | undefined) ?? null;
 
     if (url === null) {
       this.logger.warn(

@@ -8,10 +8,7 @@ import {
 import { ActorType, CallQueueStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
-import {
-  OrderReadService,
-  type ResolvedOrder,
-} from '../../order/services/order-read.service';
+import { OrderReadService, type ResolvedOrder } from '../../order/services/order-read.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { AssignmentExpirationService } from './assignment-expiration.service';
 
@@ -60,10 +57,7 @@ export class CallAssignmentService {
   /** Returns the assigned entry (+ order snapshot), or `null` when no
    *  entry is currently pickable (QUEUE_EMPTY). Throws 409
    *  AGENT_AT_CAPACITY when the agent is already at their cap. */
-  async pullNext(
-    agentId: string,
-    _ctx?: ClientContext,
-  ): Promise<PulledAssignment | null> {
+  async pullNext(agentId: string, _ctx?: ClientContext): Promise<PulledAssignment | null> {
     const [activeCount, maxActive] = await Promise.all([
       this.prisma.client.callQueueEntry.count({
         where: { assignedAgentId: agentId, status: CallQueueStatus.ASSIGNED },
@@ -106,10 +100,7 @@ export class CallAssignmentService {
 
     // CC-7: arm the timeout sweep immediately (before enrichment) so a
     // slow/failing OrderReadService can't leave the entry un-expirable.
-    await this.expiration.scheduleExpiration(
-      picked.id,
-      picked.assignedAt ?? now,
-    );
+    await this.expiration.scheduleExpiration(picked.id, picked.assignedAt ?? now);
 
     const order = await this.orders.getById(picked.orderId);
     if (!order) {

@@ -96,8 +96,7 @@ export class StockAdjustmentService {
     ctx: ClientContext,
   ): Promise<StockAdjustmentView> {
     const warehouseId = await this.warehouses.resolveWarehouseId(input.warehouseId);
-    const adjType =
-      input.type === 'INCREASE' ? AdjustmentType.INCREASE : AdjustmentType.DECREASE;
+    const adjType = input.type === 'INCREASE' ? AdjustmentType.INCREASE : AdjustmentType.DECREASE;
 
     const resolved = await this.validateAndResolveLines(
       input.sellerId,
@@ -202,10 +201,7 @@ export class StockAdjustmentService {
             idempotent: true,
           };
         }
-        if (
-          adj.status !== AdjustmentStatus.PENDING &&
-          adj.status !== AdjustmentStatus.APPROVED
-        ) {
+        if (adj.status !== AdjustmentStatus.PENDING && adj.status !== AdjustmentStatus.APPROVED) {
           throw new BadRequestException({
             code: 'ADJUSTMENT_NOT_EXECUTABLE',
             message: `Adjustment is ${adj.status}; only PENDING/APPROVED execute`,
@@ -294,11 +290,7 @@ export class StockAdjustmentService {
    * never double-approved or approved-after-reject. The executor runs
    * asynchronously in its own tx (commit-20 worker).
    */
-  async approve(
-    staffId: string,
-    id: string,
-    ctx: ClientContext,
-  ): Promise<StockAdjustmentView> {
+  async approve(staffId: string, id: string, ctx: ClientContext): Promise<StockAdjustmentView> {
     const existing = await this.get(id);
     const { count } = await this.prisma.client.stockAdjustment.updateMany({
       where: { id, status: AdjustmentStatus.PENDING },
@@ -481,10 +473,7 @@ export class StockAdjustmentService {
     return DEFAULT_THRESHOLD;
   }
 
-  private async warehouseName(
-    tx: Prisma.TransactionClient,
-    warehouseId: string,
-  ): Promise<string> {
+  private async warehouseName(tx: Prisma.TransactionClient, warehouseId: string): Promise<string> {
     const wh = await tx.warehouse.findUnique({
       where: { id: warehouseId },
       select: { name: true },

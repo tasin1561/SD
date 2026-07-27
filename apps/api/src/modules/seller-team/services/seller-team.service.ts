@@ -4,11 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  ActorType,
-  NotificationRecipientType,
-  SellerUserRole,
-} from '@skydrop/db';
+import { ActorType, NotificationRecipientType, SellerUserRole } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { EnvService } from '../../../config/env.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -342,10 +338,7 @@ export class SellerTeamService {
 
   // ── Team members ───────────────────────────────────────────────────
 
-  async listMembers(
-    sellerId: string,
-    currentUserId: string,
-  ): Promise<TeamMemberView[]> {
+  async listMembers(sellerId: string, currentUserId: string): Promise<TeamMemberView[]> {
     const rows = await this.prisma.client.sellerUser.findMany({
       where: { sellerId },
       orderBy: [{ deletedAt: 'asc' }, { createdAt: 'asc' }],
@@ -413,8 +406,7 @@ export class SellerTeamService {
       if (otherOwners === 0) {
         throw new BadRequestException({
           code: 'LAST_OWNER',
-          message:
-            'Cannot demote the last OWNER. Promote another member to OWNER first.',
+          message: 'Cannot demote the last OWNER. Promote another member to OWNER first.',
         });
       }
     }
@@ -476,8 +468,7 @@ export class SellerTeamService {
       if (otherOwners === 0) {
         throw new BadRequestException({
           code: 'LAST_OWNER',
-          message:
-            'Cannot deactivate the last OWNER. Transfer ownership first.',
+          message: 'Cannot deactivate the last OWNER. Transfer ownership first.',
         });
       }
     }

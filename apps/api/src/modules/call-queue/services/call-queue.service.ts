@@ -1,18 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import {
-  ActorType,
-  CallQueueStatus,
-  Prisma,
-  QueueClosureReason,
-} from '@skydrop/db';
+import { ActorType, CallQueueStatus, Prisma, QueueClosureReason } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
-const OPEN_STATUSES: CallQueueStatus[] = [
-  CallQueueStatus.PENDING,
-  CallQueueStatus.ASSIGNED,
-];
+const OPEN_STATUSES: CallQueueStatus[] = [CallQueueStatus.PENDING, CallQueueStatus.ASSIGNED];
 
 const ENTRY_SELECT = {
   id: true,
@@ -74,10 +66,7 @@ export class CallQueueService {
 
   /** Enqueue on entry to PENDING_CONFIRMATION. Idempotent: an existing
    *  OPEN entry is returned unchanged (no second row). */
-  async enqueueOrder(
-    orderId: string,
-    _ctx?: ClientContext,
-  ): Promise<EnqueueResult> {
+  async enqueueOrder(orderId: string, _ctx?: ClientContext): Promise<EnqueueResult> {
     return this.createOpenEntry(orderId, new Date());
   }
 
@@ -151,10 +140,7 @@ export class CallQueueService {
 
   // ── internal ──────────────────────────────────────────────────────
 
-  private async createOpenEntry(
-    orderId: string,
-    availableAt: Date,
-  ): Promise<EnqueueResult> {
+  private async createOpenEntry(orderId: string, availableAt: Date): Promise<EnqueueResult> {
     const existing = await this.findOpen(orderId);
     if (existing) return { entry: existing, created: false };
     try {
@@ -166,10 +152,7 @@ export class CallQueueService {
     } catch (e) {
       // Lost the race to the partial unique — another concurrent
       // enqueue created the OPEN entry. Return it (idempotent).
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === 'P2002'
-      ) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         const won = await this.findOpen(orderId);
         if (won) return { entry: won, created: false };
       }

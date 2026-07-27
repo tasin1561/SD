@@ -61,8 +61,8 @@ export function WithdrawalsCard(): ReactElement {
           <SkeletonRows rows={3} cols={4} />
         ) : rows.length === 0 ? (
           <p className="text-text-muted py-2 text-sm">
-            No payout requests yet. Request one when you want your balance
-            transferred; we will pay it to the bank account on your profile.
+            No payout requests yet. Request one when you want your balance transferred; we will pay
+            it to the bank account on your profile.
           </p>
         ) : (
           <Table>
@@ -152,11 +152,7 @@ function RequestWithdrawalModal({
     >
       <div className="space-y-3">
         <FormField label="Currency" htmlFor="wd-currency" required>
-          <Select
-            id="wd-currency"
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
-          >
+          <Select id="wd-currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>
             <option value="INR">INR</option>
             <option value="BDT">BDT</option>
           </Select>
@@ -178,12 +174,7 @@ function RequestWithdrawalModal({
         </FormField>
 
         <FormField label="Note" htmlFor="wd-note" hint="Optional.">
-          <Textarea
-            id="wd-note"
-            rows={2}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
+          <Textarea id="wd-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
         </FormField>
 
         {error !== null && <ErrorNote message={error} />}

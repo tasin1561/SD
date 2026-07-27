@@ -20,11 +20,7 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
-import {
-  useCloseManifest,
-  useConfirmHandoff,
-  useManifestDetail,
-} from '@/lib/api-hooks';
+import { useCloseManifest, useConfirmHandoff, useManifestDetail } from '@/lib/api-hooks';
 
 /**
  * Manifest detail — shows the manifest header, the list of shipments
@@ -79,9 +75,7 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
           `Closed ${m.manifestNumber} — ${r.transitionedCount} shipment(s) queued for AWB.`,
         );
       } else {
-        toast.error(
-          `Closed with ${r.failures.length} failure(s). See manifest detail.`,
-        );
+        toast.error(`Closed with ${r.failures.length} failure(s). See manifest detail.`);
       }
     } catch (err) {
       setError(fmtError(err));
@@ -187,9 +181,7 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
                   )}
                 </Td>
                 <Td className="text-text-muted text-xs font-mono">
-                  {s.packCompletedAt
-                    ? new Date(s.packCompletedAt).toLocaleString()
-                    : '—'}
+                  {s.packCompletedAt ? new Date(s.packCompletedAt).toLocaleString() : '—'}
                 </Td>
               </Tr>
             ))}
@@ -221,13 +213,7 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
   );
 }
 
-function Field({
-  label,
-  value,
-}: {
-  readonly label: string;
-  readonly value: string;
-}): ReactElement {
+function Field({ label, value }: { readonly label: string; readonly value: string }): ReactElement {
   return (
     <div>
       <div className="text-text-faint text-xs uppercase tracking-wide">{label}</div>

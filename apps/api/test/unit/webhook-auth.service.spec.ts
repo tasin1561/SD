@@ -36,10 +36,7 @@ function makeService(
         });
       }
     }
-    if (
-      opts.authScheme !== undefined &&
-      keys.includes('tracking.webhook_auth_scheme')
-    ) {
+    if (opts.authScheme !== undefined && keys.includes('tracking.webhook_auth_scheme')) {
       rows.push({
         key: 'tracking.webhook_auth_scheme',
         valueString: opts.authScheme,
@@ -49,23 +46,15 @@ function makeService(
   });
   const client = { systemSetting: { findMany } };
   const env = makeTestEnv(
-    opts.secretEnv !== undefined
-      ? { TRACKING_WEBHOOK_SECRET_DELHIVERY: opts.secretEnv }
-      : {},
+    opts.secretEnv !== undefined ? { TRACKING_WEBHOOK_SECRET_DELHIVERY: opts.secretEnv } : {},
   );
-  return new WebhookAuthService(
-    { client } as unknown as PrismaService,
-    env,
-  );
+  return new WebhookAuthService({ client } as unknown as PrismaService, env);
 }
 
 describe('WebhookAuthService.verify', () => {
   it('valid: signature matches the configured secret → ok with secretRefEnvKey', async () => {
     const svc = makeService();
-    const sig = correctSignatureFor(
-      RAW_BODY,
-      'test-tracking-webhook-secret-delhivery',
-    );
+    const sig = correctSignatureFor(RAW_BODY, 'test-tracking-webhook-secret-delhivery');
     const r = await svc.verify({
       courierCode: COURIER,
       rawBody: RAW_BODY,
@@ -150,10 +139,7 @@ describe('WebhookAuthService.verify', () => {
 
   it('SIGNATURE_MISMATCH: well-formed hex of correct length but wrong value → 401', async () => {
     const svc = makeService();
-    const correct = correctSignatureFor(
-      RAW_BODY,
-      'test-tracking-webhook-secret-delhivery',
-    );
+    const correct = correctSignatureFor(RAW_BODY, 'test-tracking-webhook-secret-delhivery');
     // Same length, all-zeroes (will not match unless lucky collision).
     const wrong = '0'.repeat(correct.length);
     const r = await svc.verify({
@@ -182,10 +168,7 @@ describe('WebhookAuthService.verify', () => {
     const svc = makeService();
     const bodyA = '{"a":1}';
     const bodyB = '{ "a": 1 }'; // semantically equivalent JSON, different bytes
-    const sig = correctSignatureFor(
-      bodyA,
-      'test-tracking-webhook-secret-delhivery',
-    );
+    const sig = correctSignatureFor(bodyA, 'test-tracking-webhook-secret-delhivery');
     // Signature for bodyA must NOT validate bodyB.
     const r = await svc.verify({
       courierCode: COURIER,
@@ -294,4 +277,3 @@ describe('WebhookAuthService.verify — SHARED_SECRET (Delhivery)', () => {
     ).resolves.toMatchObject({ valid: false });
   });
 });
-

@@ -48,9 +48,7 @@ export function HoldReviewsIndex(): ReactElement {
   const list = useHoldReviews(status === '' ? {} : { status });
 
   const rows = list.data ?? [];
-  const openRows = rows.filter(
-    (r) => r.status === EarlyReservationReviewStatus.OPEN,
-  );
+  const openRows = rows.filter((r) => r.status === EarlyReservationReviewStatus.OPEN);
   const heldUnits = openRows.reduce((sum, r) => sum + r.heldQty, 0);
 
   return (
@@ -135,10 +133,7 @@ export function HoldReviewsIndex(): ReactElement {
             {rows.map((r) => (
               <Tr key={r.id}>
                 <Td>
-                  <Link
-                    href={`/orders/${r.orderId}`}
-                    className="text-accent hover:underline"
-                  >
+                  <Link href={`/orders/${r.orderId}`} className="text-accent hover:underline">
                     <Ident value={`${r.orderId.slice(0, 8)}…`} />
                   </Link>
                   <div className="text-text-faint mt-0.5 text-xs">
@@ -156,18 +151,12 @@ export function HoldReviewsIndex(): ReactElement {
                 </Td>
                 <Td align="right">
                   {r.status === EarlyReservationReviewStatus.OPEN ? (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setSelected(r)}
-                    >
+                    <Button variant="secondary" size="sm" onClick={() => setSelected(r)}>
                       Decide
                     </Button>
                   ) : (
                     <span className="text-text-faint text-xs">
-                      {r.resolvedAt === null
-                        ? '—'
-                        : new Date(r.resolvedAt).toLocaleDateString()}
+                      {r.resolvedAt === null ? '—' : new Date(r.resolvedAt).toLocaleDateString()}
                     </span>
                   )}
                 </Td>
@@ -191,9 +180,7 @@ function DecideModal({
 }): ReactElement {
   const toast = useToast();
   const decide = useDecideHoldReview();
-  const [decision, setDecision] = useState<'RELEASE' | 'REQUEST_MORE_ATTEMPTS'>(
-    'RELEASE',
-  );
+  const [decision, setDecision] = useState<'RELEASE' | 'REQUEST_MORE_ATTEMPTS'>('RELEASE');
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -235,8 +222,8 @@ function DecideModal({
         review === null ? undefined : (
           <>
             We held {review.heldQty} unit
-            {review.heldQty === 1 ? '' : 's'} when this order came in, and have tried
-            the customer {review.attemptCount} time
+            {review.heldQty === 1 ? '' : 's'} when this order came in, and have tried the customer{' '}
+            {review.attemptCount} time
             {review.attemptCount === 1 ? '' : 's'} without reaching them.
           </>
         )
@@ -257,8 +244,8 @@ function DecideModal({
               <span>
                 <span className="text-text-strong block text-sm">Release the stock</span>
                 <span className="text-text-muted block text-xs leading-relaxed">
-                  Returns the units to available stock so other orders can use them.
-                  This order stays closed.
+                  Returns the units to available stock so other orders can use them. This order
+                  stays closed.
                 </span>
               </span>
             </label>
@@ -274,8 +261,8 @@ function DecideModal({
               <span>
                 <span className="text-text-strong block text-sm">Keep trying</span>
                 <span className="text-text-muted block text-xs leading-relaxed">
-                  We keep the hold and put the order back in the call queue. The units
-                  stay unavailable to your other orders in the meantime.
+                  We keep the hold and put the order back in the call queue. The units stay
+                  unavailable to your other orders in the meantime.
                 </span>
               </span>
             </label>
@@ -304,11 +291,7 @@ function DecideModal({
           disabled={decide.isPending}
           onClick={() => void submit()}
         >
-          {decide.isPending
-            ? 'Saving…'
-            : decision === 'RELEASE'
-              ? 'Release stock'
-              : 'Keep trying'}
+          {decide.isPending ? 'Saving…' : decision === 'RELEASE' ? 'Release stock' : 'Keep trying'}
         </Button>
       </ModalFooter>
     </Modal>

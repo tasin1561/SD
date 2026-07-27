@@ -27,9 +27,7 @@ function makeService(opts: { stubMode?: boolean } = {}) {
   const isStubMode = jest.fn(async () => opts.stubMode ?? true);
   const authHeaders = jest.fn(async () => ({ Authorization: 'Token x' }));
   const request = jest.fn(async () => {
-    throw new Error(
-      'DelhiveryHttpService.request: real-mode ... TODO(delhivery-api)',
-    );
+    throw new Error('DelhiveryHttpService.request: real-mode ... TODO(delhivery-api)');
   });
   const http = { isStubMode, authHeaders, request };
   // PrismaService is needed for real-mode pickup-location lookup;
@@ -56,7 +54,12 @@ function makeService(opts: { stubMode?: boolean } = {}) {
       detail: { outOfDeliveryArea: false },
     })),
   } as unknown as DelhiveryServiceabilityService;
-  const svc = new DelhiveryAwbService(http as unknown as DelhiveryHttpService, prisma as never, writeGuard, serviceability);
+  const svc = new DelhiveryAwbService(
+    http as unknown as DelhiveryHttpService,
+    prisma as never,
+    writeGuard,
+    serviceability,
+  );
   return { svc, isStubMode, authHeaders, request };
 }
 
@@ -113,9 +116,7 @@ describe('DelhiveryAwbService.generateAwb — real mode', () => {
     const { svc } = makeService({ stubMode: false });
     // prisma.systemSetting.findUnique returns null by default in the
     // makeService mock — so the pickup-location lookup fails fast.
-    await expect(svc.generateAwb(awbReq())).rejects.toThrow(
-      /pickup location not configured/i,
-    );
+    await expect(svc.generateAwb(awbReq())).rejects.toThrow(/pickup location not configured/i);
   });
 
   it('marshals the wire envelope + parses a success response', async () => {
@@ -205,6 +206,11 @@ function makeServiceWithPickup(name: string) {
       detail: { outOfDeliveryArea: false },
     })),
   } as unknown as DelhiveryServiceabilityService;
-  const svc = new DelhiveryAwbService(http as unknown as DelhiveryHttpService, prisma as never, writeGuard, serviceability);
+  const svc = new DelhiveryAwbService(
+    http as unknown as DelhiveryHttpService,
+    prisma as never,
+    writeGuard,
+    serviceability,
+  );
   return { svc, request, prisma };
 }

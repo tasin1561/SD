@@ -29,16 +29,24 @@ export class AdjustmentLineDto {
   @IsUUID('7')
   binId!: string;
 
-  @ApiProperty({ description: 'Concrete batch the change applies to (required to locate the stock level)' })
+  @ApiProperty({
+    description: 'Concrete batch the change applies to (required to locate the stock level)',
+  })
   @IsUUID('7')
   batchId!: string;
 
-  @ApiProperty({ description: 'Signed delta; sign MUST match the adjustment type (INCREASE>0, DECREASE<0)' })
+  @ApiProperty({
+    description: 'Signed delta; sign MUST match the adjustment type (INCREASE>0, DECREASE<0)',
+  })
   @Type(() => Number)
   @IsInt()
   qtyChange!: number;
 
-  @ApiProperty({ required: false, minimum: 0, description: 'Overrides batch.unitCostInr for value impact' })
+  @ApiProperty({
+    required: false,
+    minimum: 0,
+    description: 'Overrides batch.unitCostInr for value impact',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })

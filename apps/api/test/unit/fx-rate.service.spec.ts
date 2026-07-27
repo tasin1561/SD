@@ -26,7 +26,9 @@ function makeRow(overrides: Partial<AnyArgs> = {}): AnyArgs {
 function makeSut(opts: { rows?: AnyArgs[]; existing?: AnyArgs | null } = {}) {
   const findMany = jest.fn(async () => opts.rows ?? []);
   const findUnique = jest.fn(async (a: AnyArgs) => {
-    const where = a.where as { fromCurrency_toCurrency: { fromCurrency: Currency; toCurrency: Currency } };
+    const where = a.where as {
+      fromCurrency_toCurrency: { fromCurrency: Currency; toCurrency: Currency };
+    };
     if (opts.existing === undefined) {
       return makeRow({
         fromCurrency: where.fromCurrency_toCurrency.fromCurrency,

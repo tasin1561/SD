@@ -25,20 +25,16 @@ export default async function ResetPasswordPage({
     <div className="min-h-screen grid place-items-center bg-bg text-text-body p-6">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="text-text-bright font-semibold text-lg tracking-tight">
-            Skydrop
-          </div>
+          <div className="text-text-bright font-semibold text-lg tracking-tight">Skydrop</div>
           <div className="text-text-faint text-xs mt-0.5">Seller</div>
         </div>
         <div className="rounded-[7px] border border-border bg-surface p-6">
           {token === '' ? (
             <>
-              <h1 className="text-text-bright text-base font-semibold mb-1">
-                Invalid reset link
-              </h1>
+              <h1 className="text-text-bright text-base font-semibold mb-1">Invalid reset link</h1>
               <p className="text-text-muted text-xs mb-4">
-                The link is missing the reset token. Open the reset email
-                again and click the button there, or request a new link.
+                The link is missing the reset token. Open the reset email again and click the button
+                there, or request a new link.
               </p>
               <a
                 href="/password-reset"
@@ -53,8 +49,7 @@ export default async function ResetPasswordPage({
                 Choose a new password
               </h1>
               <p className="text-text-muted text-xs mb-5">
-                Minimum 10 characters. After saving you&apos;ll need to sign
-                in again.
+                Minimum 10 characters. After saving you&apos;ll need to sign in again.
               </p>
               <ResetPasswordForm token={token} />
             </>

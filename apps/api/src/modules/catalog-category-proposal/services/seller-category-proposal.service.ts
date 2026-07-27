@@ -4,12 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  ActorType,
-  CategoryProposalStatus,
-  NotificationRecipientType,
-  Prisma,
-} from '@skydrop/db';
+import { ActorType, CategoryProposalStatus, NotificationRecipientType, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { EnvService } from '../../../config/env.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -202,11 +197,7 @@ export class SellerCategoryProposalService {
     return row;
   }
 
-  async withdraw(
-    sellerId: string,
-    id: string,
-    ctx: ClientContext,
-  ): Promise<CategoryProposalView> {
+  async withdraw(sellerId: string, id: string, ctx: ClientContext): Promise<CategoryProposalView> {
     const existing = await this.prisma.client.categoryProposal.findFirst({
       where: { id, sellerId, deletedAt: null },
       select: { id: true, status: true },

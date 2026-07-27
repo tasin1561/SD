@@ -1,7 +1,4 @@
-import {
-  OnboardingStepActor,
-  SellerOnboardingStep,
-} from '@skydrop/db';
+import { OnboardingStepActor, SellerOnboardingStep } from '@skydrop/db';
 import {
   SellerOnboardingService,
   OPTIONAL_STEPS,
@@ -58,33 +55,43 @@ function makeClient(): FakeClient {
         }
         return { count: args.data.length };
       }),
-      findUnique: jest.fn(async (args: { where: { sellerId_stepCode: { sellerId: string; stepCode: SellerOnboardingStep } } }) => {
-        const { sellerId, stepCode } = args.where.sellerId_stepCode;
-        const row = rows.find((r) => r.sellerId === sellerId && r.stepCode === stepCode);
-        return row ?? null;
-      }),
+      findUnique: jest.fn(
+        async (args: {
+          where: { sellerId_stepCode: { sellerId: string; stepCode: SellerOnboardingStep } };
+        }) => {
+          const { sellerId, stepCode } = args.where.sellerId_stepCode;
+          const row = rows.find((r) => r.sellerId === sellerId && r.stepCode === stepCode);
+          return row ?? null;
+        },
+      ),
       update: jest.fn(async (args: { where: { id: string }; data: Partial<ProgressRow> }) => {
         const row = rows.find((r) => r.id === args.where.id);
         if (!row) throw new Error('row not found');
         Object.assign(row, args.data);
         return row;
       }),
-      findMany: jest.fn(async (args: { where: { sellerId: string; isRequired?: boolean; completedAt?: null } }) => {
-        return rows.filter((r) => {
-          if (r.sellerId !== args.where.sellerId) return false;
-          if (args.where.isRequired !== undefined && r.isRequired !== args.where.isRequired) return false;
-          if (args.where.completedAt === null && r.completedAt !== null) return false;
-          return true;
-        });
-      }),
-      count: jest.fn(async (args: { where: { sellerId: string; isRequired?: boolean; completedAt?: null } }) => {
-        return rows.filter((r) => {
-          if (r.sellerId !== args.where.sellerId) return false;
-          if (args.where.isRequired !== undefined && r.isRequired !== args.where.isRequired) return false;
-          if (args.where.completedAt === null && r.completedAt !== null) return false;
-          return true;
-        }).length;
-      }),
+      findMany: jest.fn(
+        async (args: { where: { sellerId: string; isRequired?: boolean; completedAt?: null } }) => {
+          return rows.filter((r) => {
+            if (r.sellerId !== args.where.sellerId) return false;
+            if (args.where.isRequired !== undefined && r.isRequired !== args.where.isRequired)
+              return false;
+            if (args.where.completedAt === null && r.completedAt !== null) return false;
+            return true;
+          });
+        },
+      ),
+      count: jest.fn(
+        async (args: { where: { sellerId: string; isRequired?: boolean; completedAt?: null } }) => {
+          return rows.filter((r) => {
+            if (r.sellerId !== args.where.sellerId) return false;
+            if (args.where.isRequired !== undefined && r.isRequired !== args.where.isRequired)
+              return false;
+            if (args.where.completedAt === null && r.completedAt !== null) return false;
+            return true;
+          }).length;
+        },
+      ),
     },
     notificationLog: {
       findFirst: jest.fn(async (args: { where: { recipientId: string; templateCode: string } }) => {
@@ -121,8 +128,12 @@ describe('SellerOnboardingService — initializeProgress', () => {
     const tx = sut.client as unknown as Parameters<typeof sut.svc.initializeProgress>[1];
     await sut.svc.initializeProgress('seller-1', tx);
     expect(sut.client.rows).toHaveLength(8);
-    const reg = sut.client.rows.find((r) => r.stepCode === SellerOnboardingStep.REGISTRATION_COMPLETED);
-    const company = sut.client.rows.find((r) => r.stepCode === SellerOnboardingStep.COMPANY_INFO_FILLED);
+    const reg = sut.client.rows.find(
+      (r) => r.stepCode === SellerOnboardingStep.REGISTRATION_COMPLETED,
+    );
+    const company = sut.client.rows.find(
+      (r) => r.stepCode === SellerOnboardingStep.COMPANY_INFO_FILLED,
+    );
     const emailV = sut.client.rows.find((r) => r.stepCode === SellerOnboardingStep.EMAIL_VERIFIED);
     expect(reg?.completedAt).not.toBeNull();
     expect(reg?.completedBy).toBe(OnboardingStepActor.SYSTEM);

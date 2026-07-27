@@ -1,870 +1,2098 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Skydrop — Operating Model &amp; System Report</title>
-<meta name="description" content="Skydrop — the operating system for BD → IN cross-border commerce. Target operating model (serialized inventory, virtual booking, courier-first dispatch, multi-warehouse, scrap resolution) on a shipped, production-grade foundation.">
-<meta name="robots" content="noindex">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --sky: #38bdf8;
-    --sky-deep: #0284c7;
-    --saffron: #f59e0b;
-    --green: #34d399;
-    --red: #f87171;
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Skydrop — Operating Model &amp; System Report</title>
+    <meta
+      name="description"
+      content="Skydrop — the operating system for BD → IN cross-border commerce. Target operating model (serialized inventory, virtual booking, courier-first dispatch, multi-warehouse, scrap resolution) on a shipped, production-grade foundation."
+    />
+    <meta name="robots" content="noindex" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --sky: #38bdf8;
+        --sky-deep: #0284c7;
+        --saffron: #f59e0b;
+        --green: #34d399;
+        --red: #f87171;
 
-    --surface: #060b16;
-    --surface-2: #0c1424;
-    --surface-3: rgba(56, 189, 248, 0.05);
-    --panel-edge: rgba(148, 178, 255, 0.10);
-    --panel-edge-strong: rgba(148, 178, 255, 0.22);
-    --grid: rgba(56, 189, 248, 0.045);
+        --surface: #060b16;
+        --surface-2: #0c1424;
+        --surface-3: rgba(56, 189, 248, 0.05);
+        --panel-edge: rgba(148, 178, 255, 0.1);
+        --panel-edge-strong: rgba(148, 178, 255, 0.22);
+        --grid: rgba(56, 189, 248, 0.045);
 
-    --fg-strong: #f3f7fc;
-    --fg-body: #c3d0e0;
-    --fg-muted: #8296ae;
+        --fg-strong: #f3f7fc;
+        --fg-body: #c3d0e0;
+        --fg-muted: #8296ae;
 
-    --glow: rgba(56, 189, 248, 0.30);
+        --glow: rgba(56, 189, 248, 0.3);
 
-    --font-display: 'Space Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-    --font-body: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-    --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+        --font-display:
+          'Space Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        --font-body:
+          'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 
-    --maxw: 1140px;
-    color-scheme: dark;
-  }
+        --maxw: 1140px;
+        color-scheme: dark;
+      }
 
-  @media (prefers-color-scheme: light) {
-    :root:not([data-theme='dark']) {
-      --sky: #0284c7;
-      --sky-deep: #075985;
-      --surface: #eef2f8;
-      --surface-2: #ffffff;
-      --surface-3: rgba(2, 132, 199, 0.045);
-      --panel-edge: rgba(15, 42, 78, 0.12);
-      --panel-edge-strong: rgba(15, 42, 78, 0.24);
-      --grid: rgba(2, 132, 199, 0.06);
-      --fg-strong: #0b1523;
-      --fg-body: #31435a;
-      --fg-muted: #5b6b7f;
-      --glow: rgba(2, 132, 199, 0.16);
-      color-scheme: light;
-    }
-  }
-  :root[data-theme='light'] {
-    --sky: #0284c7;
-    --sky-deep: #075985;
-    --surface: #eef2f8;
-    --surface-2: #ffffff;
-    --surface-3: rgba(2, 132, 199, 0.045);
-    --panel-edge: rgba(15, 42, 78, 0.12);
-    --panel-edge-strong: rgba(15, 42, 78, 0.24);
-    --grid: rgba(2, 132, 199, 0.06);
-    --fg-strong: #0b1523;
-    --fg-body: #31435a;
-    --fg-muted: #5b6b7f;
-    --glow: rgba(2, 132, 199, 0.16);
-    color-scheme: light;
-  }
-  :root[data-theme='dark'] {
-    --sky: #38bdf8;
-    --sky-deep: #0284c7;
-    --surface: #060b16;
-    --surface-2: #0c1424;
-    --surface-3: rgba(56, 189, 248, 0.05);
-    --panel-edge: rgba(148, 178, 255, 0.10);
-    --panel-edge-strong: rgba(148, 178, 255, 0.22);
-    --grid: rgba(56, 189, 248, 0.045);
-    --fg-strong: #f3f7fc;
-    --fg-body: #c3d0e0;
-    --fg-muted: #8296ae;
-    --glow: rgba(56, 189, 248, 0.30);
-    color-scheme: dark;
-  }
+      @media (prefers-color-scheme: light) {
+        :root:not([data-theme='dark']) {
+          --sky: #0284c7;
+          --sky-deep: #075985;
+          --surface: #eef2f8;
+          --surface-2: #ffffff;
+          --surface-3: rgba(2, 132, 199, 0.045);
+          --panel-edge: rgba(15, 42, 78, 0.12);
+          --panel-edge-strong: rgba(15, 42, 78, 0.24);
+          --grid: rgba(2, 132, 199, 0.06);
+          --fg-strong: #0b1523;
+          --fg-body: #31435a;
+          --fg-muted: #5b6b7f;
+          --glow: rgba(2, 132, 199, 0.16);
+          color-scheme: light;
+        }
+      }
+      :root[data-theme='light'] {
+        --sky: #0284c7;
+        --sky-deep: #075985;
+        --surface: #eef2f8;
+        --surface-2: #ffffff;
+        --surface-3: rgba(2, 132, 199, 0.045);
+        --panel-edge: rgba(15, 42, 78, 0.12);
+        --panel-edge-strong: rgba(15, 42, 78, 0.24);
+        --grid: rgba(2, 132, 199, 0.06);
+        --fg-strong: #0b1523;
+        --fg-body: #31435a;
+        --fg-muted: #5b6b7f;
+        --glow: rgba(2, 132, 199, 0.16);
+        color-scheme: light;
+      }
+      :root[data-theme='dark'] {
+        --sky: #38bdf8;
+        --sky-deep: #0284c7;
+        --surface: #060b16;
+        --surface-2: #0c1424;
+        --surface-3: rgba(56, 189, 248, 0.05);
+        --panel-edge: rgba(148, 178, 255, 0.1);
+        --panel-edge-strong: rgba(148, 178, 255, 0.22);
+        --grid: rgba(56, 189, 248, 0.045);
+        --fg-strong: #f3f7fc;
+        --fg-body: #c3d0e0;
+        --fg-muted: #8296ae;
+        --glow: rgba(56, 189, 248, 0.3);
+        color-scheme: dark;
+      }
 
-  * { box-sizing: border-box; }
+      * {
+        box-sizing: border-box;
+      }
 
-  body {
-    margin: 0;
-    background: var(--surface);
-    color: var(--fg-body);
-    font-family: var(--font-body);
-    font-size: 16px;
-    line-height: 1.62;
-    -webkit-font-smoothing: antialiased;
-    background-image:
-      linear-gradient(var(--grid) 1px, transparent 1px),
-      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-    background-size: 46px 46px;
-  }
+      body {
+        margin: 0;
+        background: var(--surface);
+        color: var(--fg-body);
+        font-family: var(--font-body);
+        font-size: 16px;
+        line-height: 1.62;
+        -webkit-font-smoothing: antialiased;
+        background-image:
+          linear-gradient(var(--grid) 1px, transparent 1px),
+          linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+        background-size: 46px 46px;
+      }
 
-  img { max-width: 100%; }
+      img {
+        max-width: 100%;
+      }
 
-  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 22px; }
+      .wrap {
+        max-width: var(--maxw);
+        margin: 0 auto;
+        padding: 0 22px;
+      }
 
-  h1, h2, h3 { font-family: var(--font-display); color: var(--fg-strong); letter-spacing: -0.02em; line-height: 1.1; text-wrap: balance; margin: 0; }
+      h1,
+      h2,
+      h3 {
+        font-family: var(--font-display);
+        color: var(--fg-strong);
+        letter-spacing: -0.02em;
+        line-height: 1.1;
+        text-wrap: balance;
+        margin: 0;
+      }
 
-  a { color: var(--sky); text-decoration: none; }
-  a:hover { text-decoration: underline; }
+      a {
+        color: var(--sky);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
 
-  .mono { font-family: var(--font-mono); }
-  .tel {
-    font-family: var(--font-mono);
-    font-size: 0.68rem;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-    color: var(--fg-muted);
-  }
+      .mono {
+        font-family: var(--font-mono);
+      }
+      .tel {
+        font-family: var(--font-mono);
+        font-size: 0.68rem;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: var(--fg-muted);
+      }
 
-  .topbar {
-    position: sticky; top: 0; z-index: 20;
-    backdrop-filter: blur(10px);
-    background: color-mix(in oklab, var(--surface) 82%, transparent);
-    border-bottom: 1px solid var(--panel-edge);
-  }
-  .topbar .row {
-    max-width: var(--maxw); margin: 0 auto; padding: 12px 22px;
-    display: flex; align-items: center; gap: 14px; justify-content: space-between;
-  }
-  .brand { display: flex; align-items: baseline; gap: 12px; }
-  .brand .name { font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; color: var(--fg-strong); letter-spacing: -0.02em; }
-  .status { display: inline-flex; align-items: center; gap: 7px; }
-  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2.4s ease-in-out infinite; }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
-  .theme-btn {
-    font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase;
-    color: var(--fg-muted); background: transparent; border: 1px solid var(--panel-edge-strong);
-    border-radius: 8px; padding: 6px 11px; cursor: pointer;
-  }
-  .theme-btn:hover { color: var(--fg-strong); border-color: var(--sky); }
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        backdrop-filter: blur(10px);
+        background: color-mix(in oklab, var(--surface) 82%, transparent);
+        border-bottom: 1px solid var(--panel-edge);
+      }
+      .topbar .row {
+        max-width: var(--maxw);
+        margin: 0 auto;
+        padding: 12px 22px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        justify-content: space-between;
+      }
+      .brand {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+      }
+      .brand .name {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 1.15rem;
+        color: var(--fg-strong);
+        letter-spacing: -0.02em;
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--green);
+        animation: pulse 2.4s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.35;
+        }
+      }
+      .theme-btn {
+        font-family: var(--font-mono);
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--fg-muted);
+        background: transparent;
+        border: 1px solid var(--panel-edge-strong);
+        border-radius: 8px;
+        padding: 6px 11px;
+        cursor: pointer;
+      }
+      .theme-btn:hover {
+        color: var(--fg-strong);
+        border-color: var(--sky);
+      }
 
-  .controls { display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
-  .seg { display:inline-flex; border:1px solid color-mix(in oklab, var(--sky) 32%, var(--panel-edge-strong)); border-radius:9px; overflow:hidden; box-shadow: 0 0 0 3px color-mix(in oklab, var(--sky) 8%, transparent); }
-  .seg-btn { font-family: var(--font-mono); font-size:0.68rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--fg-muted); background:transparent; border:0; padding:7px 14px; cursor:pointer; transition: background .15s ease, color .15s ease; }
-  .seg-btn + .seg-btn { border-left:1px solid var(--panel-edge-strong); }
-  .seg-btn:hover { color: var(--fg-strong); }
-  .seg-btn.is-active { color: var(--surface); background: var(--sky); }
-  .view-budget { display: none; }
-  [data-view="budget"] .view-budget { display: block; }
-  [data-view="budget"] .view-plan { display: none; }
-  .view-budget > section:first-child { padding-top: 50px; }
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid color-mix(in oklab, var(--sky) 32%, var(--panel-edge-strong));
+        border-radius: 9px;
+        overflow: hidden;
+        box-shadow: 0 0 0 3px color-mix(in oklab, var(--sky) 8%, transparent);
+      }
+      .seg-btn {
+        font-family: var(--font-mono);
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--fg-muted);
+        background: transparent;
+        border: 0;
+        padding: 7px 14px;
+        cursor: pointer;
+        transition:
+          background 0.15s ease,
+          color 0.15s ease;
+      }
+      .seg-btn + .seg-btn {
+        border-left: 1px solid var(--panel-edge-strong);
+      }
+      .seg-btn:hover {
+        color: var(--fg-strong);
+      }
+      .seg-btn.is-active {
+        color: var(--surface);
+        background: var(--sky);
+      }
+      .view-budget {
+        display: none;
+      }
+      [data-view='budget'] .view-budget {
+        display: block;
+      }
+      [data-view='budget'] .view-plan {
+        display: none;
+      }
+      .view-budget > section:first-child {
+        padding-top: 50px;
+      }
 
-  /* Budget attention nudge */
-  #viewBudget:not(.is-active) { animation: budgetGlow 2.4s ease-in-out infinite; }
-  [data-seen-budget] #viewBudget { animation: none; }
-  @keyframes budgetGlow { 0%,100% { color: var(--fg-muted); } 50% { color: var(--sky); } }
-  .theme-btn { display: none; }
-  .seg-wrap { position: relative; }
-  .budget-hint {
-    position: absolute; z-index: 40; top: calc(100% + 12px); right: 0;
-    display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
-    font-family: var(--font-mono); font-size: 0.64rem; letter-spacing: 0.06em; text-transform: uppercase;
-    color: var(--surface); background: var(--sky); border: 0;
-    padding: 8px 13px; border-radius: 999px; cursor: pointer;
-    box-shadow: 0 10px 26px var(--glow), 0 0 0 4px color-mix(in oklab, var(--sky) 18%, transparent);
-    animation: hintFloat 2.6s ease-in-out infinite;
-  }
-  .budget-hint::before {
-    content: ''; position: absolute; top: -6px; right: 26px;
-    border-left: 6px solid transparent; border-right: 6px solid transparent;
-    border-bottom: 6px solid var(--sky);
-  }
-  @keyframes hintFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
-  [data-view="budget"] .budget-hint, [data-seen-budget] .budget-hint { display: none; }
-  @media (max-width: 640px) {
-    .budget-hint { font-size: 0.56rem; padding: 6px 10px; }
-    .budget-hint::before { right: 22px; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .budget-hint { animation: none; }
-    #viewBudget { animation: none !important; }
-  }
+      /* Budget attention nudge */
+      #viewBudget:not(.is-active) {
+        animation: budgetGlow 2.4s ease-in-out infinite;
+      }
+      [data-seen-budget] #viewBudget {
+        animation: none;
+      }
+      @keyframes budgetGlow {
+        0%,
+        100% {
+          color: var(--fg-muted);
+        }
+        50% {
+          color: var(--sky);
+        }
+      }
+      .theme-btn {
+        display: none;
+      }
+      .seg-wrap {
+        position: relative;
+      }
+      .budget-hint {
+        position: absolute;
+        z-index: 40;
+        top: calc(100% + 12px);
+        right: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        white-space: nowrap;
+        font-family: var(--font-mono);
+        font-size: 0.64rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--surface);
+        background: var(--sky);
+        border: 0;
+        padding: 8px 13px;
+        border-radius: 999px;
+        cursor: pointer;
+        box-shadow:
+          0 10px 26px var(--glow),
+          0 0 0 4px color-mix(in oklab, var(--sky) 18%, transparent);
+        animation: hintFloat 2.6s ease-in-out infinite;
+      }
+      .budget-hint::before {
+        content: '';
+        position: absolute;
+        top: -6px;
+        right: 26px;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-bottom: 6px solid var(--sky);
+      }
+      @keyframes hintFloat {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-5px);
+        }
+      }
+      [data-view='budget'] .budget-hint,
+      [data-seen-budget] .budget-hint {
+        display: none;
+      }
+      @media (max-width: 640px) {
+        .budget-hint {
+          font-size: 0.56rem;
+          padding: 6px 10px;
+        }
+        .budget-hint::before {
+          right: 22px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .budget-hint {
+          animation: none;
+        }
+        #viewBudget {
+          animation: none !important;
+        }
+      }
 
-  .hero { padding: 62px 0 34px; position: relative; }
-  .hero::before {
-    content: ''; position: absolute; top: -60px; left: 50%; transform: translateX(-50%);
-    width: 720px; height: 380px; max-width: 100%;
-    background: radial-gradient(closest-side, var(--glow), transparent); opacity: 0.7; pointer-events: none;
-  }
-  .hero h1 { font-size: clamp(2.1rem, 5vw, 3.4rem); font-weight: 600; position: relative; }
-  .hero .sub { color: var(--fg-body); max-width: 62ch; margin-top: 16px; font-size: 1.06rem; position: relative; }
-  .hero .meta { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 20px; position: relative; }
-  .hero .meta span { display: inline-flex; align-items: center; gap: 7px; }
+      .hero {
+        padding: 62px 0 34px;
+        position: relative;
+      }
+      .hero::before {
+        content: '';
+        position: absolute;
+        top: -60px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 720px;
+        height: 380px;
+        max-width: 100%;
+        background: radial-gradient(closest-side, var(--glow), transparent);
+        opacity: 0.7;
+        pointer-events: none;
+      }
+      .hero h1 {
+        font-size: clamp(2.1rem, 5vw, 3.4rem);
+        font-weight: 600;
+        position: relative;
+      }
+      .hero .sub {
+        color: var(--fg-body);
+        max-width: 62ch;
+        margin-top: 16px;
+        font-size: 1.06rem;
+        position: relative;
+      }
+      .hero .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 20px;
+        margin-top: 20px;
+        position: relative;
+      }
+      .hero .meta span {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+      }
 
-  .tiles {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1px; background: var(--panel-edge);
-    border: 1px solid var(--panel-edge); border-radius: 14px; overflow: hidden;
-    margin: 30px 0 8px;
-  }
-  .tile { background: var(--surface-2); padding: 18px 18px 16px; }
-  .tile .n { font-family: var(--font-mono); font-size: 1.7rem; color: var(--fg-strong); line-height: 1; font-variant-numeric: tabular-nums; }
-  .tile .n em { font-style: normal; color: var(--sky); }
-  .tile .k { margin-top: 8px; }
+      .tiles {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1px;
+        background: var(--panel-edge);
+        border: 1px solid var(--panel-edge);
+        border-radius: 14px;
+        overflow: hidden;
+        margin: 30px 0 8px;
+      }
+      .tile {
+        background: var(--surface-2);
+        padding: 18px 18px 16px;
+      }
+      .tile .n {
+        font-family: var(--font-mono);
+        font-size: 1.7rem;
+        color: var(--fg-strong);
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+      .tile .n em {
+        font-style: normal;
+        color: var(--sky);
+      }
+      .tile .k {
+        margin-top: 8px;
+      }
 
-  section { padding: 34px 0; }
-  .sechead { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
-  .sechead .idx { color: var(--sky); }
-  .sechead .bar { flex: 0 0 34px; height: 1px; background: var(--panel-edge-strong); }
-  section > .wrap > h2 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 600; margin-bottom: 6px; }
-  section > .wrap > .lead { color: var(--fg-body); max-width: 70ch; margin: 8px 0 22px; }
+      section {
+        padding: 34px 0;
+      }
+      .sechead {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 6px;
+      }
+      .sechead .idx {
+        color: var(--sky);
+      }
+      .sechead .bar {
+        flex: 0 0 34px;
+        height: 1px;
+        background: var(--panel-edge-strong);
+      }
+      section > .wrap > h2 {
+        font-size: clamp(1.5rem, 3vw, 2rem);
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+      section > .wrap > .lead {
+        color: var(--fg-body);
+        max-width: 70ch;
+        margin: 8px 0 22px;
+      }
 
-  .panel {
-    position: relative; background: var(--surface-2);
-    border: 1px solid var(--panel-edge); border-radius: 14px; padding: 22px 22px;
-  }
-  .panel::before, .panel::after {
-    content: '+'; position: absolute; font-family: var(--font-mono); font-size: 12px; line-height: 1;
-    color: var(--fg-muted); opacity: 0.55;
-  }
-  .panel::before { top: 8px; left: 10px; }
-  .panel::after { bottom: 8px; right: 10px; }
+      .panel {
+        position: relative;
+        background: var(--surface-2);
+        border: 1px solid var(--panel-edge);
+        border-radius: 14px;
+        padding: 22px 22px;
+      }
+      .panel::before,
+      .panel::after {
+        content: '+';
+        position: absolute;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        line-height: 1;
+        color: var(--fg-muted);
+        opacity: 0.55;
+      }
+      .panel::before {
+        top: 8px;
+        left: 10px;
+      }
+      .panel::after {
+        bottom: 8px;
+        right: 10px;
+      }
 
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-  @media (max-width: 780px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+      .grid2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .grid3 {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+      }
+      @media (max-width: 780px) {
+        .grid2,
+        .grid3 {
+          grid-template-columns: 1fr;
+        }
+      }
 
-  .breakdown { border: 1px solid var(--panel-edge); border-radius: 14px; background: var(--surface-2); overflow: hidden; }
-  .breakdown summary {
-    list-style: none; cursor: pointer; padding: 16px 20px; display: flex; align-items: center;
-    justify-content: space-between; gap: 12px; font-size: 0.95rem; color: var(--fg-strong); user-select: none;
-  }
-  .breakdown summary::-webkit-details-marker { display: none; }
-  .breakdown summary .chev { font-family: var(--font-mono); color: var(--sky); transition: transform 0.2s ease; }
-  .breakdown[open] summary .chev { transform: rotate(90deg); }
-  .breakdown summary:hover { background: var(--surface-3); }
-  .breakdown .bd-body { padding: 4px 20px 20px; border-top: 1px solid var(--panel-edge); }
-  .breakdown .bd-body .tbl-scroll { border: none; border-radius: 0; margin-top: 12px; }
-  @media (prefers-reduced-motion: reduce) { .breakdown summary .chev { transition: none; } }
+      .breakdown {
+        border: 1px solid var(--panel-edge);
+        border-radius: 14px;
+        background: var(--surface-2);
+        overflow: hidden;
+      }
+      .breakdown summary {
+        list-style: none;
+        cursor: pointer;
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 0.95rem;
+        color: var(--fg-strong);
+        user-select: none;
+      }
+      .breakdown summary::-webkit-details-marker {
+        display: none;
+      }
+      .breakdown summary .chev {
+        font-family: var(--font-mono);
+        color: var(--sky);
+        transition: transform 0.2s ease;
+      }
+      .breakdown[open] summary .chev {
+        transform: rotate(90deg);
+      }
+      .breakdown summary:hover {
+        background: var(--surface-3);
+      }
+      .breakdown .bd-body {
+        padding: 4px 20px 20px;
+        border-top: 1px solid var(--panel-edge);
+      }
+      .breakdown .bd-body .tbl-scroll {
+        border: none;
+        border-radius: 0;
+        margin-top: 12px;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .breakdown summary .chev {
+          transition: none;
+        }
+      }
 
-  .panel h3 { font-size: 1.05rem; margin-bottom: 8px; display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
-  .panel p { margin: 0 0 10px; font-size: 0.95rem; }
-  .panel ul { margin: 8px 0 0; padding-left: 18px; font-size: 0.93rem; }
-  .panel li { margin: 4px 0; }
-  .panel li::marker { color: var(--sky); }
+      .panel h3 {
+        font-size: 1.05rem;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        flex-wrap: wrap;
+      }
+      .panel p {
+        margin: 0 0 10px;
+        font-size: 0.95rem;
+      }
+      .panel ul {
+        margin: 8px 0 0;
+        padding-left: 18px;
+        font-size: 0.93rem;
+      }
+      .panel li {
+        margin: 4px 0;
+      }
+      .panel li::marker {
+        color: var(--sky);
+      }
 
-  .tbl-scroll { overflow-x: auto; border: 1px solid var(--panel-edge); border-radius: 14px; }
-  table { width: 100%; border-collapse: collapse; font-size: 0.92rem; min-width: 560px; }
-  thead th {
-    text-align: left; padding: 13px 16px; font-family: var(--font-mono); font-size: 0.66rem;
-    letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-muted);
-    background: var(--surface-3); border-bottom: 1px solid var(--panel-edge);
-  }
-  tbody td { padding: 12px 16px; border-bottom: 1px solid var(--panel-edge); color: var(--fg-body); vertical-align: top; }
-  tbody tr:last-child td { border-bottom: none; }
-  tbody td:first-child { color: var(--fg-strong); font-weight: 500; }
-  td .mono, th .mono { font-variant-numeric: tabular-nums; }
+      .tbl-scroll {
+        overflow-x: auto;
+        border: 1px solid var(--panel-edge);
+        border-radius: 14px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.92rem;
+        min-width: 560px;
+      }
+      thead th {
+        text-align: left;
+        padding: 13px 16px;
+        font-family: var(--font-mono);
+        font-size: 0.66rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--fg-muted);
+        background: var(--surface-3);
+        border-bottom: 1px solid var(--panel-edge);
+      }
+      tbody td {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--panel-edge);
+        color: var(--fg-body);
+        vertical-align: top;
+      }
+      tbody tr:last-child td {
+        border-bottom: none;
+      }
+      tbody td:first-child {
+        color: var(--fg-strong);
+        font-weight: 500;
+      }
+      td .mono,
+      th .mono {
+        font-variant-numeric: tabular-nums;
+      }
 
-  .pill {
-    display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono);
-    font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase;
-    padding: 3px 9px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap; vertical-align: middle;
-  }
-  .pill.live { color: var(--green); border-color: color-mix(in oklab, var(--green) 40%, transparent); background: color-mix(in oklab, var(--green) 10%, transparent); }
-  .pill.stub { color: var(--saffron); border-color: color-mix(in oklab, var(--saffron) 40%, transparent); background: color-mix(in oklab, var(--saffron) 10%, transparent); }
-  .pill.plan { color: var(--fg-muted); border-color: var(--panel-edge-strong); }
-  .pill.sky { color: var(--sky); border-color: color-mix(in oklab, var(--sky) 40%, transparent); background: color-mix(in oklab, var(--sky) 8%, transparent); }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--font-mono);
+        font-size: 0.62rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        padding: 3px 9px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        white-space: nowrap;
+        vertical-align: middle;
+      }
+      .pill.live {
+        color: var(--green);
+        border-color: color-mix(in oklab, var(--green) 40%, transparent);
+        background: color-mix(in oklab, var(--green) 10%, transparent);
+      }
+      .pill.stub {
+        color: var(--saffron);
+        border-color: color-mix(in oklab, var(--saffron) 40%, transparent);
+        background: color-mix(in oklab, var(--saffron) 10%, transparent);
+      }
+      .pill.plan {
+        color: var(--fg-muted);
+        border-color: var(--panel-edge-strong);
+      }
+      .pill.sky {
+        color: var(--sky);
+        border-color: color-mix(in oklab, var(--sky) 40%, transparent);
+        background: color-mix(in oklab, var(--sky) 8%, transparent);
+      }
 
-  .flow { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
-  .flow .step {
-    flex: 1 1 155px; min-width: 155px; background: var(--surface-2);
-    border: 1px solid var(--panel-edge); border-radius: 12px; padding: 14px 14px 12px; position: relative;
-  }
-  .flow .step.refined { border-color: color-mix(in oklab, var(--saffron) 40%, var(--panel-edge)); background: color-mix(in oklab, var(--saffron) 5%, var(--surface-2)); }
-  .flow .step .s-idx { font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.08em; color: var(--sky); text-transform: uppercase; }
-  .flow .step.refined .s-idx { color: var(--saffron); }
-  .flow .step .s-t { font-family: var(--font-display); color: var(--fg-strong); font-weight: 600; font-size: 0.98rem; margin: 5px 0 4px; }
-  .flow .step .s-b { font-size: 0.82rem; color: var(--fg-muted); line-height: 1.5; }
-  .flow .step[data-edge]::after {
-    content: attr(data-edge); position: absolute; top: 12px; right: 12px;
-    font-family: var(--font-mono); font-size: 0.56rem; letter-spacing: 0.05em; color: var(--saffron); text-transform: uppercase;
-  }
+      .flow {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: stretch;
+      }
+      .flow .step {
+        flex: 1 1 155px;
+        min-width: 155px;
+        background: var(--surface-2);
+        border: 1px solid var(--panel-edge);
+        border-radius: 12px;
+        padding: 14px 14px 12px;
+        position: relative;
+      }
+      .flow .step.refined {
+        border-color: color-mix(in oklab, var(--saffron) 40%, var(--panel-edge));
+        background: color-mix(in oklab, var(--saffron) 5%, var(--surface-2));
+      }
+      .flow .step .s-idx {
+        font-family: var(--font-mono);
+        font-size: 0.62rem;
+        letter-spacing: 0.08em;
+        color: var(--sky);
+        text-transform: uppercase;
+      }
+      .flow .step.refined .s-idx {
+        color: var(--saffron);
+      }
+      .flow .step .s-t {
+        font-family: var(--font-display);
+        color: var(--fg-strong);
+        font-weight: 600;
+        font-size: 0.98rem;
+        margin: 5px 0 4px;
+      }
+      .flow .step .s-b {
+        font-size: 0.82rem;
+        color: var(--fg-muted);
+        line-height: 1.5;
+      }
+      .flow .step[data-edge]::after {
+        content: attr(data-edge);
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        font-family: var(--font-mono);
+        font-size: 0.56rem;
+        letter-spacing: 0.05em;
+        color: var(--saffron);
+        text-transform: uppercase;
+      }
 
-  .legend { display:flex; flex-wrap:wrap; gap:8px 18px; margin: 14px 0 0; }
-  .legend span { display:inline-flex; align-items:center; gap:7px; font-family:var(--font-mono); font-size:0.64rem; letter-spacing:0.05em; text-transform:uppercase; color:var(--fg-muted); }
-  .sw { width:22px; height:10px; border-radius:3px; display:inline-block; }
-  .sw.a { background: var(--surface-2); border:1px solid var(--panel-edge); }
-  .sw.b { background: color-mix(in oklab, var(--saffron) 22%, var(--surface-2)); border:1px solid color-mix(in oklab, var(--saffron) 40%, transparent); }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 18px;
+        margin: 14px 0 0;
+      }
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-family: var(--font-mono);
+        font-size: 0.64rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--fg-muted);
+      }
+      .sw {
+        width: 22px;
+        height: 10px;
+        border-radius: 3px;
+        display: inline-block;
+      }
+      .sw.a {
+        background: var(--surface-2);
+        border: 1px solid var(--panel-edge);
+      }
+      .sw.b {
+        background: color-mix(in oklab, var(--saffron) 22%, var(--surface-2));
+        border: 1px solid color-mix(in oklab, var(--saffron) 40%, transparent);
+      }
 
-  .gauge { margin-top: 6px; }
-  .gauge .track {
-    position: relative; height: 40px; border-radius: 10px; overflow: hidden;
-    border: 1px solid var(--panel-edge);
-    background: linear-gradient(90deg,
-      color-mix(in oklab, var(--green) 22%, var(--surface-2)) 0%,
-      color-mix(in oklab, var(--green) 22%, var(--surface-2)) 42%,
-      color-mix(in oklab, var(--saffron) 24%, var(--surface-2)) 68%,
-      color-mix(in oklab, var(--red) 26%, var(--surface-2)) 100%);
-  }
-  .gauge .now { position: absolute; top: -6px; bottom: -6px; width: 2px; background: var(--fg-strong); left: 14%; }
-  .gauge .now::after {
-    content: 'current load · beta'; position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
-    font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-strong); white-space: nowrap;
-  }
-  .gauge .labels { display: flex; justify-content: space-between; margin-top: 8px; }
-  .gauge .labels span { font-family: var(--font-mono); font-size: 0.64rem; color: var(--fg-muted); }
+      .gauge {
+        margin-top: 6px;
+      }
+      .gauge .track {
+        position: relative;
+        height: 40px;
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid var(--panel-edge);
+        background: linear-gradient(
+          90deg,
+          color-mix(in oklab, var(--green) 22%, var(--surface-2)) 0%,
+          color-mix(in oklab, var(--green) 22%, var(--surface-2)) 42%,
+          color-mix(in oklab, var(--saffron) 24%, var(--surface-2)) 68%,
+          color-mix(in oklab, var(--red) 26%, var(--surface-2)) 100%
+        );
+      }
+      .gauge .now {
+        position: absolute;
+        top: -6px;
+        bottom: -6px;
+        width: 2px;
+        background: var(--fg-strong);
+        left: 14%;
+      }
+      .gauge .now::after {
+        content: 'current load · beta';
+        position: absolute;
+        top: -20px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-family: var(--font-mono);
+        font-size: 0.6rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--fg-strong);
+        white-space: nowrap;
+      }
+      .gauge .labels {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 8px;
+      }
+      .gauge .labels span {
+        font-family: var(--font-mono);
+        font-size: 0.64rem;
+        color: var(--fg-muted);
+      }
 
-  .callout {
-    border-left: 2px solid var(--sky); background: var(--surface-3);
-    padding: 14px 18px; border-radius: 0 10px 10px 0; margin: 16px 0; font-size: 0.95rem;
-  }
-  .callout strong { color: var(--fg-strong); }
+      .callout {
+        border-left: 2px solid var(--sky);
+        background: var(--surface-3);
+        padding: 14px 18px;
+        border-radius: 0 10px 10px 0;
+        margin: 16px 0;
+        font-size: 0.95rem;
+      }
+      .callout strong {
+        color: var(--fg-strong);
+      }
 
-  .phase { position: relative; }
-  .phase .item { position: relative; padding: 0 0 22px 30px; }
-  .phase .item:last-child { padding-bottom: 0; }
-  .phase .item::before {
-    content: ''; position: absolute; left: 0; top: 6px; z-index: 1;
-    width: 13px; height: 13px; border-radius: 50%;
-    background: var(--surface); border: 2px solid var(--sky);
-  }
-  .phase .item::after {
-    content: ''; position: absolute; left: 6px; top: 6px; bottom: -6px; width: 2px;
-    background: var(--panel-edge-strong);
-  }
-  .phase .item:last-child::after { display: none; }
-  .phase .item h3 { font-size: 1.02rem; margin-bottom: 4px; display:flex; gap:9px; align-items:center; flex-wrap:wrap; }
-  .phase .item p { margin: 0; font-size: 0.92rem; color: var(--fg-body); }
+      .phase {
+        position: relative;
+      }
+      .phase .item {
+        position: relative;
+        padding: 0 0 22px 30px;
+      }
+      .phase .item:last-child {
+        padding-bottom: 0;
+      }
+      .phase .item::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 6px;
+        z-index: 1;
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        background: var(--surface);
+        border: 2px solid var(--sky);
+      }
+      .phase .item::after {
+        content: '';
+        position: absolute;
+        left: 6px;
+        top: 6px;
+        bottom: -6px;
+        width: 2px;
+        background: var(--panel-edge-strong);
+      }
+      .phase .item:last-child::after {
+        display: none;
+      }
+      .phase .item h3 {
+        font-size: 1.02rem;
+        margin-bottom: 4px;
+        display: flex;
+        gap: 9px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .phase .item p {
+        margin: 0;
+        font-size: 0.92rem;
+        color: var(--fg-body);
+      }
 
-  footer { border-top: 1px solid var(--panel-edge); padding: 26px 0 44px; margin-top: 20px; }
-  footer .row { display: flex; flex-wrap: wrap; gap: 10px 22px; justify-content: space-between; align-items: center; }
+      footer {
+        border-top: 1px solid var(--panel-edge);
+        padding: 26px 0 44px;
+        margin-top: 20px;
+      }
+      footer .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 22px;
+        justify-content: space-between;
+        align-items: center;
+      }
 
-  ::selection { background: var(--sky); color: #051018; }
-  @media (prefers-reduced-motion: reduce) { .dot { animation: none; } }
-</style>
-</head>
-<body>
-
-<div class="topbar">
-  <div class="row">
-    <div class="brand">
-      <span class="name">Skydrop</span>
-      <span class="status tel"><span class="dot"></span>operating model · v2</span>
-    </div>
-    <div class="controls">
-      <div class="seg-wrap">
-        <div class="seg" role="tablist" aria-label="View">
-          <button class="seg-btn is-active" id="viewPlan" type="button">Plan</button>
-          <button class="seg-btn" id="viewBudget" type="button">Budget</button>
+      ::selection {
+        background: var(--sky);
+        color: #051018;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .dot {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <div class="row">
+        <div class="brand">
+          <span class="name">Skydrop</span>
+          <span class="status tel"><span class="dot"></span>operating model · v2</span>
         </div>
-        <button class="budget-hint" id="budgetHint" type="button" aria-label="Open budget and funding">💰&nbsp;Budget here</button>
-      </div>
-      <button class="theme-btn" id="themeToggle" type="button">Toggle theme</button>
-    </div>
-  </div>
-</div>
-
-<div class="view-plan">
-<div class="hero">
-  <div class="wrap">
-    <div class="tel" style="margin-bottom:14px;">Target operating model · on a shipped, production-grade foundation</div>
-    <h1>The operating system for cross&#8209;border commerce.</h1>
-    <p class="sub">Skydrop lets a Bangladeshi seller sell into India as if they had a full Indian operation — a scan-driven warehouse with unit-level inventory integrity, phone-confirmed COD, courier-first dispatch across multiple carriers, live tracking, structured returns and scrap resolution, a double-entry wallet with advance payouts, and remittance home. One system, three operators, zero Indian entity required.</p>
-    <div class="hero meta tel">
-      <span><span class="dot" style="background:var(--sky)"></span>corridor BD → IN</span>
-      <span>3 operator roles</span>
-      <span>unit-level inventory</span>
-      <span>multi-warehouse · multi-courier</span>
-    </div>
-  </div>
-</div>
-
-<div class="wrap">
-  <div class="tiles">
-    <div class="tile"><div class="n"><em>18</em>/18</div><div class="k tel">Phase 1A modules live</div></div>
-    <div class="tile"><div class="n"><em>6</em></div><div class="k tel">Phase 1B money · in build</div></div>
-    <div class="tile"><div class="n"><em>2</em></div><div class="k tel">inventory modes · normal + strict</div></div>
-    <div class="tile"><div class="n"><em>4</em></div><div class="k tel">refinement phases</div></div>
-    <div class="tile"><div class="n">1,100</div><div class="k tel">automated tests</div></div>
-    <div class="tile"><div class="n">Live</div><div class="k tel">Delhivery real API</div></div>
-  </div>
-  <p class="tel" style="margin:12px 2px 0; color:var(--fg-muted);">This report leads with the <span style="color:var(--saffron)">target operating model</span> and marks every capability by build status: <span class="pill live">live</span> shipped &amp; running · <span class="pill sky">designed</span> architecture locked, in build · <span class="pill plan">next</span> planned.</p>
-</div>
-
-<!-- 01 — THE OPERATING MODEL -->
-<section id="model">
-  <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 01</span><span class="bar"></span><span>The wedge</span></div>
-    <h2>What Skydrop is</h2>
-    <p class="lead">Selling into India from Bangladesh fails on six fronts at once — no Indian warehouse, no courier contract, no COD call-confirmation, no warehouse operation, no money rail, no local support. Building all of it alone takes 6+ months, ₹50 lakh+, and an Indian company. Skydrop is the shared operating system that removes every one of those blockers, so the seller only sells.</p>
-    <div class="grid3">
-      <div class="panel">
-        <h3>Seller <span class="tel" style="color:var(--fg-muted)">· Bangladesh</span></h3>
-        <p>A company account with many staff/agent logins under one roof — role-scoped (owner, ops, inventory, finance, viewer). Onboard, manage catalog &amp; stock, place or bulk-upload orders, watch shipments, resolve exceptions, manage an INR wallet, and withdraw earnings.</p>
-      </div>
-      <div class="panel">
-        <h3>Skydrop staff <span class="tel" style="color:var(--fg-muted)">· India</span></h3>
-        <p>The internal console — approve sellers, confirm orders by phone, receive &amp; label stock, pick/pack under scan discipline, book couriers across multiple accounts, run returns, scrap &amp; support tickets, and settle payouts.</p>
-      </div>
-      <div class="panel">
-        <h3>Customer <span class="tel" style="color:var(--fg-muted)">· India</span></h3>
-        <p>An ordinary Indian delivery, phone-confirmed, with public parcel tracking in English and Hindi. They never see there's a border in the middle.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- 02 — INVENTORY INTEGRITY (the moat) -->
-<section id="inventory">
-  <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 02</span><span class="bar"></span><span>The differentiator</span></div>
-    <h2>Inventory integrity, down to the unit</h2>
-    <p class="lead">Cross-border trust lives or dies on inventory accuracy — the seller's stock is in someone else's country. Skydrop runs a real WMS where every movement is a scan, and offers two integrity modes per seller.</p>
-
-    <div class="grid2">
-      <div class="panel">
-        <h3>Normal mode <span class="pill live">foundation live</span></h3>
-        <p>One barcode per SKU. Ten identical bottles share one code, tracked as a quantity across bins and batches — fast, cheap, ideal for fungible goods.</p>
-        <ul>
-          <li>Bins, batches, FIFO/FEFO, append-only stock ledger</li>
-          <li>Low-stock alerts, cycle counts, receiving flows</li>
-        </ul>
-      </div>
-      <div class="panel">
-        <h3>Strict mode <span class="pill sky">designed</span></h3>
-        <p>One unique barcode per <em>physical unit</em>. Ten bottles carry ten codes, applied by Skydrop at receiving and followed individually — through pick, pack, dispatch, and all the way to RTO.</p>
-        <ul>
-          <li>Serialized unit ledger; each item auditable end-to-end</li>
-          <li>Damaged-label recovery on returns; missing-unit detection</li>
-        </ul>
-      </div>
-    </div>
-
-    <div class="grid3" style="margin-top:16px;">
-      <div class="panel">
-        <h3>Virtual vs physical <span class="pill sky">designed</span></h3>
-        <p><strong>Physical</strong> inventory is confirmed by scan at pack. <strong>Virtual</strong> inventory can be booked earlier — at order placement or at call-confirmation — as a per-seller option, with auto- or seller-decided release when a customer can't be reached.</p>
-      </div>
-      <div class="panel">
-        <h3>Scrap &amp; damage tickets <span class="pill sky">designed</span></h3>
-        <p>Any unit damaged in operations or on return moves to a scrap hold and raises a ticket — settled with the seller and courier by reimbursement or physical return, never silently written off.</p>
-      </div>
-      <div class="panel">
-        <h3>Multi-warehouse network <span class="pill sky">designed</span></h3>
-        <p>Stock lives across warehouses by product. Returns can be received at any location, entered, and routed to the item's designated warehouse — the network stays consistent.</p>
-      </div>
-    </div>
-    <div class="callout"><strong>Why it compounds:</strong> every gate — receive, pick, pack, hand-off, return — is a barcode scan tied to the order's invoice. That single discipline is what makes strict serialization, scrap accountability, and multi-warehouse routing trustworthy rather than aspirational.</div>
-  </div>
-</section>
-
-<!-- 03 — FINANCE & SETTLEMENT -->
-<section id="finance">
-  <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 03</span><span class="bar"></span><span>The money engine</span></div>
-    <h2>Finance &amp; settlement, accurate to the rupee</h2>
-    <p class="lead">Money is the part that can never be wrong. Skydrop runs on INR as the canonical currency and a double-entry ledger where every rupee reconciles to zero — so a Bangladeshi seller is paid quickly and correctly for Indian COD sales, and we always know exactly how much cash we've fronted and are owed.</p>
-
-    <div class="panel">
-      <h3>The COD settlement waterfall <span class="pill sky">designed</span></h3>
-      <p>Every delivered order's collected cash runs through one deterministic, auditable sequence before the seller is paid:</p>
-      <div class="flow">
-        <div class="step"><div class="s-idx">in</div><div class="s-t">COD collected</div><div class="s-b">The full amount the courier collects from the customer.</div></div>
-        <div class="step" data-edge="seller bears"><div class="s-idx">− gst</div><div class="s-t">Less 18% GST</div><div class="s-b">Tax on the shipping/service charge, borne by the seller.</div></div>
-        <div class="step" data-edge="margin"><div class="s-idx">− courier</div><div class="s-t">Less courier fee</div><div class="s-b">Real per-parcel cost + our margin. The seller sees only the blended fee.</div></div>
-        <div class="step"><div class="s-idx">− dues</div><div class="s-t">Less freight / dues</div><div class="s-b">Pay-later inbound freight and any RTO / return charges owed.</div></div>
-        <div class="step refined" data-edge="advance"><div class="s-idx">= net</div><div class="s-t">Credited to wallet</div><div class="s-b">Net paid into the seller's INR wallet — in advance of the courier paying us.</div></div>
-      </div>
-    </div>
-
-    <div class="grid3" style="margin-top:16px;">
-      <div class="panel">
-        <h3>Wallet &amp; withdrawals <span class="pill sky">built · not live</span></h3>
-        <p>The per-currency wallet ledger + balance is built but not yet live. Phase A brings it live with self-service withdrawals (min threshold + daily count limit), auto-withdraw cycles, and instant credit-at-delivery as a paid priority add-on.</p>
-      </div>
-      <div class="panel">
-        <h3>Advance credit &amp; float <span class="pill sky">designed</span></h3>
-        <p>Couriers pay us 5–10 days after delivery; we credit the seller ~2 days after (per-seller). Every advanced rupee is tracked as float, with auto-clawback if a courier remittance doesn't reconcile.</p>
-      </div>
-      <div class="panel">
-        <h3>Margin, by design <span class="pill sky">designed</span></h3>
-        <p>We fetch the real per-parcel courier fee and book our margin; the seller only ever sees the blended charge. Per-seller fee (flat or %), admin-set, charged at courier-entry or at payout.</p>
-      </div>
-    </div>
-
-    <div class="grid3" style="margin-top:16px;">
-      <div class="panel">
-        <h3>Currency <span class="pill live">FX live</span></h3>
-        <p>INR canonical; BDT via a manual, audited INR↔BDT rate with full history. Sellers enter product cost in BDT or INR — stored as entered, converted live for display.</p>
-      </div>
-      <div class="panel">
-        <h3>Three price components <span class="pill sky">designed</span></h3>
-        <p>① Product cost (BDT/INR, record-only valuation) · ② inbound freight (BD → IN warehouse, may be 0) · ③ dues — pay-on-arrival or pay-later, deducted at payout (future 0.5–1% service charge).</p>
-      </div>
-      <div class="panel">
-        <h3>Reconciliation <span class="pill sky">designed</span></h3>
-        <p>Courier remittance files matched parcel-by-parcel against what we advanced; a daily close proves the books; per-seller exposure and global float on one dashboard.</p>
-      </div>
-    </div>
-    <div class="callout"><strong>Why double-entry:</strong> every rupee credited to a seller posts as a balanced debit to a Skydrop float / receivable account. The system can prove, at any instant, exactly how much cash it has fronted and is owed — nothing is booked twice, nothing goes missing. This is the discipline behind “never lose a rupee.”</div>
-  </div>
-</section>
-
-<!-- 04 — THE LIFECYCLE -->
-<section id="flow">
-  <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 04</span><span class="bar"></span><span>The operational pipeline</span></div>
-    <h2>How an order flows, end-to-end</h2>
-    <p class="lead">Every order travels one instrumented lifecycle, enforced by a state machine — no “any-to-any” jumps — with an append-only event log and stock conserved so it decrements exactly once, at dispatch. Amber stages are the refined operating model now in build.</p>
-    <div class="flow">
-      <div class="step refined" data-edge="scan"><div class="s-idx">01 · stock in</div><div class="s-t">Receive &amp; label</div><div class="s-b">Goods arrive; in strict mode Skydrop applies a per-unit barcode. Scanned into bins.</div></div>
-      <div class="step refined" data-edge="virtual"><div class="s-idx">02 · order</div><div class="s-t">Order placed</div><div class="s-b">Single or CSV. Recipient + SKU snapshotted immutably; optional virtual booking holds stock now.</div></div>
-      <div class="step" data-edge="RTO lever"><div class="s-idx">03 · confirm</div><div class="s-t">Call-confirm</div><div class="s-b">Round-robin queue rings the buyer. Unreachable → seller decides: keep trying or unbook.</div></div>
-      <div class="step refined" data-edge="before pack"><div class="s-idx">04 · courier</div><div class="s-t">Courier-first booking</div><div class="s-b">AWB booked via the seller's dedicated courier account (one of several, split by ratio) the moment it's confirmed. Rejection → fallback panel → another account or carrier.</div></div>
-      <div class="step refined" data-edge="scan"><div class="s-idx">05 · pick</div><div class="s-t">Scan-gated pick</div><div class="s-b">Only booked orders reach the floor. Picker scans each unit against the invoice.</div></div>
-      <div class="step refined" data-edge="scan"><div class="s-idx">06 · pack</div><div class="s-t">Scan-gated pack</div><div class="s-b">Scan items, then scan the invoice to seal. Orders kept separate by courier.</div></div>
-      <div class="step refined" data-edge="scan"><div class="s-idx">07 · hand-off</div><div class="s-t">Scan-gated handover</div><div class="s-b">Every parcel re-scanned before the courier takes custody. Nothing leaves unscanned.</div></div>
-      <div class="step"><div class="s-idx">08 · track</div><div class="s-t">Track &amp; deliver</div><div class="s-b">Courier scans drive the timeline; public AWB lookup for the buyer, EN + हिन्दी.</div></div>
-      <div class="step refined" data-edge="route"><div class="s-idx">09 · returns</div><div class="s-t">RTO intake</div><div class="s-b">Received at any warehouse, entered, and routed to the designated one; damaged labels recovered.</div></div>
-      <div class="step refined" data-edge="ticket"><div class="s-idx">10 · resolve</div><div class="s-t">Scrap &amp; settle</div><div class="s-b">Healthy units restock; damaged units raise a scrap ticket, settled by money or return.</div></div>
-      <div class="step refined" data-edge="advance"><div class="s-idx">11 · money</div><div class="s-t">Settle &amp; pay</div><div class="s-b">Collected COD runs the settlement waterfall; the net is credited to the seller's wallet in advance, withdrawable on request or auto-cycle.</div></div>
-    </div>
-    <div class="legend">
-      <span><span class="sw a"></span>live today</span>
-      <span><span class="sw b"></span>refined model · in build</span>
-    </div>
-    <div class="callout"><strong>The engineering discipline that holds it together:</strong> a saga pattern (“visible-vs-silent failure ordering”) across every cross-module step, so a crash mid-flow always leaves a self-announcing, recoverable state; single-source mapping services for call-outcome, tracking-scan, and notification fan-out; and a permanent stock-conservation regression test proving inventory is never inflated or leaked.</div>
-  </div>
-</section>
-
-<!-- 04 — FOUNDATION SHIPPED -->
-<section id="built">
-  <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 05</span><span class="bar"></span><span>Proof it's real</span></div>
-    <h2>The foundation is already shipped</h2>
-    <p class="lead">The target model isn't drawn on a whiteboard — it sits on a production platform. All 18 Phase-1A modules, the 6-module Phase-1B money layer, four web apps, and the live Delhivery integration are running today, behind 1,100 automated tests.</p>
-    <div class="tbl-scroll">
-      <table>
-        <thead><tr><th>Capability</th><th>What's running</th><th>Status</th></tr></thead>
-        <tbody>
-          <tr><td>Auth &amp; multi-seat sellers</td><td>Staff + seller, JWT + refresh rotation with reuse-detection, API keys, 6-role seller RBAC + team invitations</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Seller onboarding</td><td>Invite-only registration, approval workflow, profile, encrypted bank details, logo</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Catalog &amp; WMS</td><td>Categories/products/variants, images, CSV import; warehouses, bins, batches, append-only ledger, reservations, receiving, cycle counts, alerts</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Orders &amp; call center</td><td>28-status state machine, snapshots, CSV bulk import, god-mode override; round-robin queue, attempt logging, outcome mapping</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Warehouse ops</td><td>Pick / pack / manifest / dispatch / RTO with race-safe queues</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Courier integration</td><td>Delhivery real API — AWB creation validated end-to-end, poll-based tracking, supersede chain, manual placement</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Public tracking</td><td>Webhook + poll ingestion, processor, customer-safe AWB lookup (EN + हिन्दी), manual scan entry</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Notifications</td><td>Lifecycle event bus + email fan-out (SMS channel scaffolded)</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Admin &amp; seller portals</td><td>Two frontends on a shared, identity-parameterized foundation — seller mgmt, orders, catalog, image upload, god-mode</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Pricing · FX · charges · settings</td><td>Charge calculator, INR↔BDT rates, cost breakdown, runtime config UI</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td>Marketing + tracking UI</td><td>skydrop.online + track.skydrop.online — brand, live corridor map, EN/HI, light/dark</td><td><span class="pill live">Live</span></td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</section>
-
-<!-- 05 — ROADMAP TO TARGET -->
-<section id="roadmap">
-  <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 06</span><span class="bar"></span><span>The build ahead</span></div>
-    <h2>Roadmap to the target operating model</h2>
-    <p class="lead">The refinement is additive — the schema was designed forward-compatible, and the reservation, warehouse, courier, and settings seams already exist. Four focused phases close the gap between the shipped foundation and the operating model above.</p>
-    <div class="phase">
-      <div class="item">
-        <h3>Phase A · Finance core &amp; currency <span class="pill sky">designed</span></h3>
-        <p>Upgrade the wallet to a true double-entry ledger; advance-credit with per-seller exposure tracking + auto-clawback; self-service &amp; auto withdrawals plus an instant-credit add-on; real courier-fee capture with margin; per-seller courier fee (flat/%); the three price components; BDT/INR product-cost entry; and courier-remittance reconciliation.</p>
-      </div>
-      <div class="item">
-        <h3>Phase B · Inventory integrity <span class="pill sky">designed</span></h3>
-        <p>Serialized per-unit model behind a per-seller normal/strict toggle; barcode labels at receiving; mandatory scan gates at pick, pack and hand-off; and a general per-seller settings framework — including call config (attempts, min interval, no-call mode) under an admin-enforced cap.</p>
-      </div>
-      <div class="item">
-        <h3>Phase C · Courier network &amp; dispatch <span class="pill sky">designed</span></h3>
-        <p>Multi-account couriers with seller↔account linkage, per-seller split ratios and full parcel→account tracing; courier-first booking after call-confirm; and a fallback panel to re-book a rejected order into another account or carrier. Pack floor partitioned by courier.</p>
-      </div>
-      <div class="item">
-        <h3>Phase D · Network, returns &amp; exceptions <span class="pill sky">designed</span></h3>
-        <p>Multi-warehouse routing + cross-warehouse RTO transfer; virtual booking with seller-decided unbook; scrap + damage tickets and a seller support-ticket panel; a warehouse scanner app; and an exception dashboard unifying missing/mismatch/damaged/failed-courier/unbook queues. <strong>Launch ships on this foundation with deliberately minimal, functional UI/UX</strong> — the operating model proves itself before the interface is polished.</p>
-      </div>
-    </div>
-    <div class="callout"><strong>Why this is low-risk:</strong> none of it is a rewrite. The wallet ledger + COD accrual are already built (awaiting go-live); reservations already model virtual holds; the warehouse already has bins, batches and quarantine/damaged bin types; the courier layer already has a fallback; and per-seller overrides already exist. Each phase generalizes a seam that is already in the codebase.</div>
-
-    <div class="panel" style="margin-top:16px;">
-      <h3>After launch <span class="pill plan">outside this ask</span></h3>
-      <p>Phases A–D are sequenced first because they carry the trust and differentiation — money, inventory integrity, courier network, returns. UI/UX at launch is intentionally minimal: functional, not polished. Once the model is live and proven, two follow-on workstreams open — a dedicated <strong>security hardening pass</strong> (access &amp; dependency audit, penetration testing) and a full <strong>UI/UX design pass</strong> across the admin and seller apps. Both are scoped and funded separately once the platform is live; neither draws on the ৳6,00,000 above.</p>
-    </div>
-  </div>
-</section>
-
-<!-- 06 — TECH -->
-<section id="tech">
-  <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 07</span><span class="bar"></span><span>The stack</span></div>
-    <h2>Technology &amp; architecture</h2>
-    <p class="lead">A single TypeScript monorepo (Turborepo + pnpm), one language end-to-end, deployed to DigitalOcean in Singapore. One application droplet fronts everything; managed Postgres and object storage are the external stateful services.</p>
-    <div class="tbl-scroll">
-      <table>
-        <thead><tr><th>Layer</th><th>Choice</th><th>Notes</th></tr></thead>
-        <tbody>
-          <tr><td>Frontend</td><td>Next.js 15 (App Router) · TypeScript · Tailwind v4</td><td>4 apps: admin, seller, tracking, marketing</td></tr>
-          <tr><td>Backend</td><td>NestJS · Prisma 6.x · REST/OpenAPI</td><td>64 feature modules, Swagger docs</td></tr>
-          <tr><td>Database</td><td>PostgreSQL 18 + TimescaleDB</td><td>78 models · hypertables for tracking &amp; stock movements</td></tr>
-          <tr><td>Queue / cache</td><td>BullMQ on Redis · Redis cache</td><td>13 in-process background workers</td></tr>
-          <tr><td>Object storage</td><td>DigitalOcean Spaces (S3-compatible)</td><td>Images, logos, AWB labels, invoices</td></tr>
-          <tr><td>Auth &amp; security</td><td>Passport.js + JWT, HttpOnly refresh cookies</td><td>Access token in memory only; AES-256-GCM for all secrets, keys in env never the DB</td></tr>
-          <tr><td>Edge / delivery</td><td>Caddy reverse proxy · Cloudflare DNS · Resend email</td><td>Automatic TLS; push-to-main → build → migrate → restart</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</section>
-
-<!-- 07 — CAPACITY -->
-<section id="capacity">
-  <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 08</span><span class="bar"></span><span>Load &amp; scale</span></div>
-    <h2>Capacity today, and the path to scale</h2>
-    <p class="lead">The current deployment is sized for pre-launch beta and sits comfortably inside it — the droplet is near-idle at rest. The honest ceiling is set by two deliberate single-instance choices, not by the design.</p>
-
-    <div class="gauge panel" style="padding:26px 22px 20px;">
-      <div class="tel" style="margin-bottom:22px;">throughput headroom · single-instance topology</div>
-      <div class="track"><div class="now"></div></div>
-      <div class="labels">
-        <span>beta · comfortable</span>
-        <span>steady early traffic</span>
-        <span>first bottleneck</span>
-        <span>needs scale-out</span>
-      </div>
-    </div>
-
-    <div class="grid3" style="margin-top:18px;">
-      <div class="panel">
-        <h3>Comfortable today</h3>
-        <ul>
-          <li>Tens of active sellers and hundreds to low-thousands of orders/day</li>
-          <li>Concurrent call-center agents and warehouse staff on the queues</li>
-          <li>Light reads served in low single-digit milliseconds; idle at rest</li>
-          <li>Public tracking is per-IP rate-limited and cheap — the highest-volume anonymous surface</li>
-        </ul>
-      </div>
-      <div class="panel">
-        <h3>The scaling path <span class="pill plan">designed-for</span></h3>
-        <ul>
-          <li>Move the 13 background workers into the dedicated worker process</li>
-          <li>Run the API in cluster mode / behind a load balancer (rate-limiting already supports a shared Redis store)</li>
-          <li>Upgrade managed Postgres + add read replicas; promote Redis to managed</li>
-          <li>None require re-architecture — they are the intended next steps, deferred because beta load doesn't need them</li>
-        </ul>
-      </div>
-      <div class="panel">
-        <h3>Scale target <span class="pill plan">roadmap</span></h3>
-        <p>Grow into a full year of live customer &amp; order history and sustain up to <strong>10 lakh (1,000,000) orders/month</strong> — via the TimescaleDB chunk + compression policy already running for tracking &amp; stock events, extended retention windows, Postgres read replicas, and the worker/API scale-out at left.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- 09 — BEYOND LAUNCH -->
-<section id="future">
-  <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 09</span><span class="bar"></span><span>Beyond launch</span></div>
-    <h2>The long-term platform</h2>
-    <p class="lead">Once the operating model is live, security-hardened and its interface polished, Skydrop grows from a fulfillment backbone into a full operating platform for cross-border sellers — scoped against real usage data and funded from the maintenance retainer and growth revenue, not this ask.</p>
-
-    <div class="grid3">
-      <div class="panel">
-        <h3>AI assistant for sellers <span class="pill plan">vision</span></h3>
-        <p>A conversational assistant inside the seller portal, grounded in the seller's own data — "why did my RTO spike this week," "which SKUs to restock," "draft a reply to this customer." Answers, not just dashboards.</p>
-      </div>
-      <div class="panel">
-        <h3>AI across operations <span class="pill plan">vision</span></h3>
-        <p>Demand forecasting for restock timing, RTO-risk scoring at order intake, smart retry-timing for unreachable buyers, and auto-drafted support responses — folded into the existing call-confirm, WMS and courier layers, not bolted on top.</p>
-      </div>
-      <div class="panel">
-        <h3>More automated workflows <span class="pill plan">vision</span></h3>
-        <p>A rules engine sellers and ops staff configure themselves — auto-escalate aged RTOs, auto-reassign stalled calls, auto-adjust reorder points — reducing manual supervision as order volume grows.</p>
-      </div>
-    </div>
-
-    <div class="grid3" style="margin-top:16px;">
-      <div class="panel">
-        <h3>Seller business analytics <span class="pill plan">vision</span></h3>
-        <p>Sales trends, SKU &amp; category performance, RTO/NDR patterns by city and courier, customer cohort &amp; repeat-rate views — the seller's own picture of their India business.</p>
-      </div>
-      <div class="panel">
-        <h3>Skydrop's own analytics &amp; P&amp;L <span class="pill plan">vision</span></h3>
-        <p>Internal margin-per-order tracking, seller-cohort profitability, courier scorecards, and a real profit &amp; loss view rolled up from the same double-entry ledger that settles sellers.</p>
-      </div>
-      <div class="panel">
-        <h3>HR &amp; employee performance <span class="pill plan">vision</span></h3>
-        <p>Staff onboarding, attendance and payroll integration for warehouse &amp; call-center employees, plus performance views seeded by data already captured — call-agent confirm-rate, picker/packer throughput, per-shift productivity.</p>
-      </div>
-    </div>
-
-    <div class="grid3" style="margin-top:16px;">
-      <div class="panel">
-        <h3>Outside e-commerce integrations <span class="pill plan">vision</span></h3>
-        <p>Direct connectors to Shopify, WooCommerce, Daraz and similar platforms, so a seller's existing storefront pushes orders into Skydrop automatically — no manual entry or CSV upload required.</p>
-      </div>
-      <div class="panel">
-        <h3>Hosted storefront subscription <span class="pill plan">vision</span></h3>
-        <p>A lightweight, hosted D2C storefront for sellers who don't have their own website yet — a paid add-on subscription plugging directly into the same catalog &amp; order pipeline.</p>
-      </div>
-      <div class="panel">
-        <h3>SEO <span class="pill plan">vision</span></h3>
-        <p>Storefront SEO for the hosted-store option above, and continued investment in skydrop.online's own organic reach — the acquisition channel for new sellers.</p>
-      </div>
-    </div>
-
-    <div class="callout"><strong>Funded by growth, not this raise:</strong> every item above is post-launch, post-hardening, post-polish — prioritized once Skydrop is live and generating usage data, and paid for from the maintenance retainer and growth revenue rather than the ৳6,00,000 completion budget above.</div>
-  </div>
-</section>
-
-</div><!-- /view-plan -->
-
-<div class="view-budget">
-<!-- 08 — BUDGET & FUNDING -->
-<section id="budget">
-  <div class="wrap">
-    <div class="sechead tel"><span class="idx">SEC 10</span><span class="bar"></span><span>Investment &amp; economics</span></div>
-    <h2>Budget &amp; funding</h2>
-    <p class="lead">This document is the proposed plan to complete the refined operating model. Below is the capital required to finish it, how it releases against milestones, and the true monthly cost of running the system at three order volumes.</p>
-
-    <!-- The ask -->
-    <div class="tel" style="color:var(--sky); margin:6px 2px 12px;">01 · the ask</div>
-    <div class="tiles">
-      <div class="tile"><div class="n"><em>৳6</em> lakh</div><div class="k tel">capital to complete</div></div>
-      <div class="tile"><div class="n">৳2 lakh</div><div class="k tel">already invested</div></div>
-      <div class="tile"><div class="n"><em>8–12</em></div><div class="k tel">weeks to complete</div></div>
-      <div class="tile"><div class="n">3–4</div><div class="k tel">milestone tranches</div></div>
-    </div>
-    <div class="panel" style="margin-top:16px;">
-      <p style="margin:0;">We have already invested <strong>৳2,00,000</strong> to build and ship the production foundation described in this report. We are seeking <strong>৳6,00,000</strong> to complete the refined operating model over <strong>8–12 weeks</strong>. A team is already in place and working; funds release in <strong>3–4 milestone-based tranches</strong>, each tied to a delivered, verifiable phase — so capital is only drawn as value ships.</p>
-    </div>
-
-    <details class="breakdown" style="margin-top:16px;">
-      <summary><span>Cost breakdown of the <strong>৳6,00,000</strong> ask <span class="tel" style="color:var(--fg-muted);">(tap to expand)</span></span><span class="chev">▶</span></summary>
-      <div class="bd-body">
-        <p class="tel" style="color:var(--fg-muted); margin:12px 0 0;">Figures converted at <strong>$1 = ৳130</strong>. "Last 3 months" lines are incurred cost being reimbursed into this raise; "next 12 weeks" lines are forward runway for the build window above.</p>
-        <div class="tbl-scroll">
-          <table>
-            <thead><tr><th>Category</th><th>Period</th><th>USD</th><th>BDT</th></tr></thead>
-            <tbody>
-              <tr><td>Development team</td><td>build to date</td><td><span class="mono">—</span></td><td><span class="mono">৳2,20,000</span></td></tr>
-              <tr><td>Software &amp; dev tooling</td><td>last 3 months</td><td><span class="mono">$900</span></td><td><span class="mono">৳1,17,000</span></td></tr>
-              <tr><td>Software &amp; dev tooling</td><td>next 12 weeks</td><td><span class="mono">$1,200</span></td><td><span class="mono">৳1,56,000</span></td></tr>
-              <tr><td>Cloudflare (DNS/CDN)</td><td>last 3 months</td><td><span class="mono">$60</span></td><td><span class="mono">৳7,800</span></td></tr>
-              <tr><td>Research, VPS hosting &amp; testing</td><td>last 3 months</td><td><span class="mono">$350</span></td><td><span class="mono">৳45,500</span></td></tr>
-              <tr><td>Miscellaneous — hosting, object storage &amp; Postgres</td><td>next 12 weeks</td><td><span class="mono">≈ $413</span></td><td><span class="mono">৳53,700</span></td></tr>
-              <tr><td><strong>Total</strong></td><td></td><td></td><td><strong><span class="mono">৳6,00,000</span></strong></td></tr>
-            </tbody>
-          </table>
+        <div class="controls">
+          <div class="seg-wrap">
+            <div class="seg" role="tablist" aria-label="View">
+              <button class="seg-btn is-active" id="viewPlan" type="button">Plan</button>
+              <button class="seg-btn" id="viewBudget" type="button">Budget</button>
+            </div>
+            <button
+              class="budget-hint"
+              id="budgetHint"
+              type="button"
+              aria-label="Open budget and funding"
+            >
+              💰&nbsp;Budget here
+            </button>
+          </div>
+          <button class="theme-btn" id="themeToggle" type="button">Toggle theme</button>
         </div>
-        <p class="tel" style="color:var(--fg-muted); margin:10px 0 0;">Development team covers backend engineering, frontend engineering, database engineering, UI/UX design, DevOps &amp; infrastructure, courier/API integrations, QA &amp; testing, and project management.</p>
-      </div>
-    </details>
-
-    <!-- Disbursement -->
-    <div class="tel" style="color:var(--sky); margin:26px 2px 12px;">02 · milestone disbursement</div>
-    <div class="tbl-scroll">
-      <table>
-        <thead><tr><th>Tranche</th><th>Milestone (from the roadmap)</th><th>Share</th><th>Amount</th></tr></thead>
-        <tbody>
-          <tr><td>1 · Kickoff</td><td>Phase A — finance core: double-entry ledger, advance-credit + withdrawals, courier-fee margin, price components &amp; currency</td><td>30%</td><td><span class="mono">৳1,80,000</span></td></tr>
-          <tr><td>2</td><td>Phase B — inventory integrity: serialized units, scan gates, per-seller settings + call config</td><td>25%</td><td><span class="mono">৳1,50,000</span></td></tr>
-          <tr><td>3</td><td>Phase C — courier network: multi-account routing, courier-first dispatch, fallback panel</td><td>25%</td><td><span class="mono">৳1,50,000</span></td></tr>
-          <tr><td>4 · Launch</td><td>Phase D — multi-warehouse, returns, scrap + support tickets, virtual booking; hardening &amp; launch</td><td>20%</td><td><span class="mono">৳1,20,000</span></td></tr>
-          <tr><td><strong>Total</strong></td><td></td><td><strong>100%</strong></td><td><strong><span class="mono">৳6,00,000</span></strong></td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Running cost -->
-    <div class="tel" style="color:var(--sky); margin:26px 2px 12px;">03 · monthly running cost by volume</div>
-    <div class="tbl-scroll">
-      <table>
-        <thead><tr><th>Cost category</th><th>10K orders/mo</th><th>30K orders/mo</th><th>100K orders/mo</th></tr></thead>
-        <tbody>
-          <tr><td>Compute — API + workers</td><td><span class="mono">$25</span></td><td><span class="mono">$55</span></td><td><span class="mono">$160</span></td></tr>
-          <tr><td>Managed PostgreSQL</td><td><span class="mono">$30</span></td><td><span class="mono">$70</span></td><td><span class="mono">$210</span></td></tr>
-          <tr><td>Redis / cache</td><td><span class="mono">in-node</span></td><td><span class="mono">$15</span></td><td><span class="mono">$40</span></td></tr>
-          <tr><td>Object storage (Spaces)</td><td><span class="mono">$5</span></td><td><span class="mono">$12</span></td><td><span class="mono">$30</span></td></tr>
-          <tr><td>CDN / DNS (Cloudflare)</td><td><span class="mono">free</span></td><td><span class="mono">$20</span></td><td><span class="mono">$20</span></td></tr>
-          <tr><td>Email (transactional)</td><td><span class="mono">$20</span></td><td><span class="mono">$35</span></td><td><span class="mono">$85</span></td></tr>
-          <tr><td>DevOps &amp; dev tooling</td><td><span class="mono">$40–100</span></td><td><span class="mono">$40–100</span></td><td><span class="mono">$40–100</span></td></tr>
-          <tr><td>Maintenance retainer</td><td><span class="mono">$120–200</span></td><td><span class="mono">$120–200</span></td><td><span class="mono">$120–200</span></td></tr>
-          <tr><td><strong>Total / month (USD)</strong></td><td><strong><span class="mono">≈ $240–380</span></strong></td><td><strong><span class="mono">≈ $370–510</span></strong></td><td><strong><span class="mono">≈ $700–850</span></strong></td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="tel" style="margin:12px 2px 0; color:var(--fg-muted);">All monthly figures are approximate and can change at any time — up or down — with system load and demand. Excludes courier freight &amp; payment-gateway fees, which are pass-through, billed to sellers by the pricing engine.</p>
-
-    <div class="callout"><strong>Operating leverage:</strong> infrastructure + tooling cost per order falls from roughly <strong>৳3–5</strong> at 10K orders/month to <strong>under ৳1</strong> at 100K orders/month (≈ ৳120 = $1). The platform gets cheaper to run per order as it scales — margins widen with volume.</div>
-
-    <!-- Coverage -->
-    <div class="tel" style="color:var(--sky); margin:26px 2px 12px;">04 · ongoing coverage</div>
-    <div class="grid2">
-      <div class="panel">
-        <h3>Maintenance &amp; development <span class="pill sky">monthly retainer</span></h3>
-        <p>A database-driven, transactional system is a living system — ongoing maintenance is mandatory, not optional.</p>
-        <ul>
-          <li>Backups, migrations, index/vacuum &amp; connection-pool health</li>
-          <li>Security &amp; dependency patching, monitoring and alerting</li>
-          <li>Bug resolution across the full stack</li>
-          <li>New integrations &amp; feature development — scoped and quoted on top of the base retainer</li>
-        </ul>
-      </div>
-      <div class="panel">
-        <h3>DevOps &amp; tooling <span class="pill sky">force-multiplier</span></h3>
-        <p>A modern DevOps &amp; development toolchain — CI/CD pipelines, automated deploys, infrastructure-as-code — is a force-multiplier for building, maintaining and debugging the system, not a runtime dependency of the product.</p>
-        <ul>
-          <li><strong>99% uptime</strong> target on the production platform</li>
-          <li>Security hardening — encrypted secrets, audited access</li>
-          <li>Bugs resolved across the stack as part of the retainer</li>
-        </ul>
       </div>
     </div>
-  </div>
-</section>
-</div><!-- /view-budget -->
 
-<footer>
-  <div class="wrap row">
-    <span class="tel">Skydrop · BD → IN cross-border commerce · operating model, roadmap &amp; budget</span>
-    <span class="tel">Foundation shipped · ৳6 lakh to complete · 8–12 weeks</span>
-  </div>
-</footer>
+    <div class="view-plan">
+      <div class="hero">
+        <div class="wrap">
+          <div class="tel" style="margin-bottom: 14px">
+            Target operating model · on a shipped, production-grade foundation
+          </div>
+          <h1>The operating system for cross&#8209;border commerce.</h1>
+          <p class="sub">
+            Skydrop lets a Bangladeshi seller sell into India as if they had a full Indian operation
+            — a scan-driven warehouse with unit-level inventory integrity, phone-confirmed COD,
+            courier-first dispatch across multiple carriers, live tracking, structured returns and
+            scrap resolution, a double-entry wallet with advance payouts, and remittance home. One
+            system, three operators, zero Indian entity required.
+          </p>
+          <div class="hero meta tel">
+            <span><span class="dot" style="background: var(--sky)"></span>corridor BD → IN</span>
+            <span>3 operator roles</span>
+            <span>unit-level inventory</span>
+            <span>multi-warehouse · multi-courier</span>
+          </div>
+        </div>
+      </div>
 
-<script>
-  (function () {
-    var root = document.documentElement;
+      <div class="wrap">
+        <div class="tiles">
+          <div class="tile">
+            <div class="n"><em>18</em>/18</div>
+            <div class="k tel">Phase 1A modules live</div>
+          </div>
+          <div class="tile">
+            <div class="n"><em>6</em></div>
+            <div class="k tel">Phase 1B money · in build</div>
+          </div>
+          <div class="tile">
+            <div class="n"><em>2</em></div>
+            <div class="k tel">inventory modes · normal + strict</div>
+          </div>
+          <div class="tile">
+            <div class="n"><em>4</em></div>
+            <div class="k tel">refinement phases</div>
+          </div>
+          <div class="tile">
+            <div class="n">1,100</div>
+            <div class="k tel">automated tests</div>
+          </div>
+          <div class="tile">
+            <div class="n">Live</div>
+            <div class="k tel">Delhivery real API</div>
+          </div>
+        </div>
+        <p class="tel" style="margin: 12px 2px 0; color: var(--fg-muted)">
+          This report leads with the
+          <span style="color: var(--saffron)">target operating model</span> and marks every
+          capability by build status: <span class="pill live">live</span> shipped &amp; running ·
+          <span class="pill sky">designed</span> architecture locked, in build ·
+          <span class="pill plan">next</span> planned.
+        </p>
+      </div>
 
-    // Theme toggle
-    var themeBtn = document.getElementById('themeToggle');
-    function currentTheme() {
-      var attr = root.getAttribute('data-theme');
-      if (attr) return attr;
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    }
-    themeBtn.addEventListener('click', function () {
-      root.setAttribute('data-theme', currentTheme() === 'dark' ? 'light' : 'dark');
-    });
+      <!-- 01 — THE OPERATING MODEL -->
+      <section id="model">
+        <div class="wrap">
+          <div class="sechead tel">
+            <span class="idx">SEC 01</span><span class="bar"></span><span>The wedge</span>
+          </div>
+          <h2>What Skydrop is</h2>
+          <p class="lead">
+            Selling into India from Bangladesh fails on six fronts at once — no Indian warehouse, no
+            courier contract, no COD call-confirmation, no warehouse operation, no money rail, no
+            local support. Building all of it alone takes 6+ months, ₹50 lakh+, and an Indian
+            company. Skydrop is the shared operating system that removes every one of those
+            blockers, so the seller only sells.
+          </p>
+          <div class="grid3">
+            <div class="panel">
+              <h3>Seller <span class="tel" style="color: var(--fg-muted)">· Bangladesh</span></h3>
+              <p>
+                A company account with many staff/agent logins under one roof — role-scoped (owner,
+                ops, inventory, finance, viewer). Onboard, manage catalog &amp; stock, place or
+                bulk-upload orders, watch shipments, resolve exceptions, manage an INR wallet, and
+                withdraw earnings.
+              </p>
+            </div>
+            <div class="panel">
+              <h3>Skydrop staff <span class="tel" style="color: var(--fg-muted)">· India</span></h3>
+              <p>
+                The internal console — approve sellers, confirm orders by phone, receive &amp; label
+                stock, pick/pack under scan discipline, book couriers across multiple accounts, run
+                returns, scrap &amp; support tickets, and settle payouts.
+              </p>
+            </div>
+            <div class="panel">
+              <h3>Customer <span class="tel" style="color: var(--fg-muted)">· India</span></h3>
+              <p>
+                An ordinary Indian delivery, phone-confirmed, with public parcel tracking in English
+                and Hindi. They never see there's a border in the middle.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
 
-    // View toggle — Plan / Budget (two "pages", one document)
-    var bPlan = document.getElementById('viewPlan');
-    var bBudget = document.getElementById('viewBudget');
-    function setView(v) {
-      root.setAttribute('data-view', v);
-      if (v === 'budget') root.setAttribute('data-seen-budget', '1');
-      bPlan.classList.toggle('is-active', v === 'plan');
-      bBudget.classList.toggle('is-active', v === 'budget');
-      try {
-        history.replaceState(null, '', v === 'budget' ? '#budget' : location.pathname + location.search);
-      } catch (e) { /* ignore */ }
-      window.scrollTo(0, 0);
-    }
-    bPlan.addEventListener('click', function () { setView('plan'); });
-    bBudget.addEventListener('click', function () { setView('budget'); });
-    var budgetHint = document.getElementById('budgetHint');
-    if (budgetHint) budgetHint.addEventListener('click', function () { setView('budget'); });
-    setView(location.hash === '#budget' ? 'budget' : 'plan');
-  })();
-</script>
+      <!-- 02 — INVENTORY INTEGRITY (the moat) -->
+      <section id="inventory">
+        <div class="wrap">
+          <div class="sechead tel">
+            <span class="idx">SEC 02</span><span class="bar"></span><span>The differentiator</span>
+          </div>
+          <h2>Inventory integrity, down to the unit</h2>
+          <p class="lead">
+            Cross-border trust lives or dies on inventory accuracy — the seller's stock is in
+            someone else's country. Skydrop runs a real WMS where every movement is a scan, and
+            offers two integrity modes per seller.
+          </p>
 
-</body>
+          <div class="grid2">
+            <div class="panel">
+              <h3>Normal mode <span class="pill live">foundation live</span></h3>
+              <p>
+                One barcode per SKU. Ten identical bottles share one code, tracked as a quantity
+                across bins and batches — fast, cheap, ideal for fungible goods.
+              </p>
+              <ul>
+                <li>Bins, batches, FIFO/FEFO, append-only stock ledger</li>
+                <li>Low-stock alerts, cycle counts, receiving flows</li>
+              </ul>
+            </div>
+            <div class="panel">
+              <h3>Strict mode <span class="pill sky">designed</span></h3>
+              <p>
+                One unique barcode per <em>physical unit</em>. Ten bottles carry ten codes, applied
+                by Skydrop at receiving and followed individually — through pick, pack, dispatch,
+                and all the way to RTO.
+              </p>
+              <ul>
+                <li>Serialized unit ledger; each item auditable end-to-end</li>
+                <li>Damaged-label recovery on returns; missing-unit detection</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="grid3" style="margin-top: 16px">
+            <div class="panel">
+              <h3>Virtual vs physical <span class="pill sky">designed</span></h3>
+              <p>
+                <strong>Physical</strong> inventory is confirmed by scan at pack.
+                <strong>Virtual</strong> inventory can be booked earlier — at order placement or at
+                call-confirmation — as a per-seller option, with auto- or seller-decided release
+                when a customer can't be reached.
+              </p>
+            </div>
+            <div class="panel">
+              <h3>Scrap &amp; damage tickets <span class="pill sky">designed</span></h3>
+              <p>
+                Any unit damaged in operations or on return moves to a scrap hold and raises a
+                ticket — settled with the seller and courier by reimbursement or physical return,
+                never silently written off.
+              </p>
+            </div>
+            <div class="panel">
+              <h3>Multi-warehouse network <span class="pill sky">designed</span></h3>
+              <p>
+                Stock lives across warehouses by product. Returns can be received at any location,
+                entered, and routed to the item's designated warehouse — the network stays
+                consistent.
+              </p>
+            </div>
+          </div>
+          <div class="callout">
+            <strong>Why it compounds:</strong> every gate — receive, pick, pack, hand-off, return —
+            is a barcode scan tied to the order's invoice. That single discipline is what makes
+            strict serialization, scrap accountability, and multi-warehouse routing trustworthy
+            rather than aspirational.
+          </div>
+        </div>
+      </section>
+
+      <!-- 03 — FINANCE & SETTLEMENT -->
+      <section id="finance">
+        <div class="wrap">
+          <div class="sechead tel">
+            <span class="idx">SEC 03</span><span class="bar"></span><span>The money engine</span>
+          </div>
+          <h2>Finance &amp; settlement, accurate to the rupee</h2>
+          <p class="lead">
+            Money is the part that can never be wrong. Skydrop runs on INR as the canonical currency
+            and a double-entry ledger where every rupee reconciles to zero — so a Bangladeshi seller
+            is paid quickly and correctly for Indian COD sales, and we always know exactly how much
+            cash we've fronted and are owed.
+          </p>
+
+          <div class="panel">
+            <h3>The COD settlement waterfall <span class="pill sky">designed</span></h3>
+            <p>
+              Every delivered order's collected cash runs through one deterministic, auditable
+              sequence before the seller is paid:
+            </p>
+            <div class="flow">
+              <div class="step">
+                <div class="s-idx">in</div>
+                <div class="s-t">COD collected</div>
+                <div class="s-b">The full amount the courier collects from the customer.</div>
+              </div>
+              <div class="step" data-edge="seller bears">
+                <div class="s-idx">− gst</div>
+                <div class="s-t">Less 18% GST</div>
+                <div class="s-b">Tax on the shipping/service charge, borne by the seller.</div>
+              </div>
+              <div class="step" data-edge="margin">
+                <div class="s-idx">− courier</div>
+                <div class="s-t">Less courier fee</div>
+                <div class="s-b">
+                  Real per-parcel cost + our margin. The seller sees only the blended fee.
+                </div>
+              </div>
+              <div class="step">
+                <div class="s-idx">− dues</div>
+                <div class="s-t">Less freight / dues</div>
+                <div class="s-b">Pay-later inbound freight and any RTO / return charges owed.</div>
+              </div>
+              <div class="step refined" data-edge="advance">
+                <div class="s-idx">= net</div>
+                <div class="s-t">Credited to wallet</div>
+                <div class="s-b">
+                  Net paid into the seller's INR wallet — in advance of the courier paying us.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid3" style="margin-top: 16px">
+            <div class="panel">
+              <h3>Wallet &amp; withdrawals <span class="pill sky">built · not live</span></h3>
+              <p>
+                The per-currency wallet ledger + balance is built but not yet live. Phase A brings
+                it live with self-service withdrawals (min threshold + daily count limit),
+                auto-withdraw cycles, and instant credit-at-delivery as a paid priority add-on.
+              </p>
+            </div>
+            <div class="panel">
+              <h3>Advance credit &amp; float <span class="pill sky">designed</span></h3>
+              <p>
+                Couriers pay us 5–10 days after delivery; we credit the seller ~2 days after
+                (per-seller). Every advanced rupee is tracked as float, with auto-clawback if a
+                courier remittance doesn't reconcile.
+              </p>
+            </div>
+            <div class="panel">
+              <h3>Margin, by design <span class="pill sky">designed</span></h3>
+              <p>
+                We fetch the real per-parcel courier fee and book our margin; the seller only ever
+                sees the blended charge. Per-seller fee (flat or %), admin-set, charged at
+                courier-entry or at payout.
+              </p>
+            </div>
+          </div>
+
+          <div class="grid3" style="margin-top: 16px">
+            <div class="panel">
+              <h3>Currency <span class="pill live">FX live</span></h3>
+              <p>
+                INR canonical; BDT via a manual, audited INR↔BDT rate with full history. Sellers
+                enter product cost in BDT or INR — stored as entered, converted live for display.
+              </p>
+            </div>
+            <div class="panel">
+              <h3>Three price components <span class="pill sky">designed</span></h3>
+              <p>
+                ① Product cost (BDT/INR, record-only valuation) · ② inbound freight (BD → IN
+                warehouse, may be 0) · ③ dues — pay-on-arrival or pay-later, deducted at payout
+                (future 0.5–1% service charge).
+              </p>
+            </div>
+            <div class="panel">
+              <h3>Reconciliation <span class="pill sky">designed</span></h3>
+              <p>
+                Courier remittance files matched parcel-by-parcel against what we advanced; a daily
+                close proves the books; per-seller exposure and global float on one dashboard.
+              </p>
+            </div>
+          </div>
+          <div class="callout">
+            <strong>Why double-entry:</strong> every rupee credited to a seller posts as a balanced
+            debit to a Skydrop float / receivable account. The system can prove, at any instant,
+            exactly how much cash it has fronted and is owed — nothing is booked twice, nothing goes
+            missing. This is the discipline behind “never lose a rupee.”
+          </div>
+        </div>
+      </section>
+
+      <!-- 04 — THE LIFECYCLE -->
+      <section id="flow">
+        <div class="wrap">
+          <div class="sechead tel">
+            <span class="idx">SEC 04</span><span class="bar"></span
+            ><span>The operational pipeline</span>
+          </div>
+          <h2>How an order flows, end-to-end</h2>
+          <p class="lead">
+            Every order travels one instrumented lifecycle, enforced by a state machine — no
+            “any-to-any” jumps — with an append-only event log and stock conserved so it decrements
+            exactly once, at dispatch. Amber stages are the refined operating model now in build.
+          </p>
+          <div class="flow">
+            <div class="step refined" data-edge="scan">
+              <div class="s-idx">01 · stock in</div>
+              <div class="s-t">Receive &amp; label</div>
+              <div class="s-b">
+                Goods arrive; in strict mode Skydrop applies a per-unit barcode. Scanned into bins.
+              </div>
+            </div>
+            <div class="step refined" data-edge="virtual">
+              <div class="s-idx">02 · order</div>
+              <div class="s-t">Order placed</div>
+              <div class="s-b">
+                Single or CSV. Recipient + SKU snapshotted immutably; optional virtual booking holds
+                stock now.
+              </div>
+            </div>
+            <div class="step" data-edge="RTO lever">
+              <div class="s-idx">03 · confirm</div>
+              <div class="s-t">Call-confirm</div>
+              <div class="s-b">
+                Round-robin queue rings the buyer. Unreachable → seller decides: keep trying or
+                unbook.
+              </div>
+            </div>
+            <div class="step refined" data-edge="before pack">
+              <div class="s-idx">04 · courier</div>
+              <div class="s-t">Courier-first booking</div>
+              <div class="s-b">
+                AWB booked via the seller's dedicated courier account (one of several, split by
+                ratio) the moment it's confirmed. Rejection → fallback panel → another account or
+                carrier.
+              </div>
+            </div>
+            <div class="step refined" data-edge="scan">
+              <div class="s-idx">05 · pick</div>
+              <div class="s-t">Scan-gated pick</div>
+              <div class="s-b">
+                Only booked orders reach the floor. Picker scans each unit against the invoice.
+              </div>
+            </div>
+            <div class="step refined" data-edge="scan">
+              <div class="s-idx">06 · pack</div>
+              <div class="s-t">Scan-gated pack</div>
+              <div class="s-b">
+                Scan items, then scan the invoice to seal. Orders kept separate by courier.
+              </div>
+            </div>
+            <div class="step refined" data-edge="scan">
+              <div class="s-idx">07 · hand-off</div>
+              <div class="s-t">Scan-gated handover</div>
+              <div class="s-b">
+                Every parcel re-scanned before the courier takes custody. Nothing leaves unscanned.
+              </div>
+            </div>
+            <div class="step">
+              <div class="s-idx">08 · track</div>
+              <div class="s-t">Track &amp; deliver</div>
+              <div class="s-b">
+                Courier scans drive the timeline; public AWB lookup for the buyer, EN + हिन्दी.
+              </div>
+            </div>
+            <div class="step refined" data-edge="route">
+              <div class="s-idx">09 · returns</div>
+              <div class="s-t">RTO intake</div>
+              <div class="s-b">
+                Received at any warehouse, entered, and routed to the designated one; damaged labels
+                recovered.
+              </div>
+            </div>
+            <div class="step refined" data-edge="ticket">
+              <div class="s-idx">10 · resolve</div>
+              <div class="s-t">Scrap &amp; settle</div>
+              <div class="s-b">
+                Healthy units restock; damaged units raise a scrap ticket, settled by money or
+                return.
+              </div>
+            </div>
+            <div class="step refined" data-edge="advance">
+              <div class="s-idx">11 · money</div>
+              <div class="s-t">Settle &amp; pay</div>
+              <div class="s-b">
+                Collected COD runs the settlement waterfall; the net is credited to the seller's
+                wallet in advance, withdrawable on request or auto-cycle.
+              </div>
+            </div>
+          </div>
+          <div class="legend">
+            <span><span class="sw a"></span>live today</span>
+            <span><span class="sw b"></span>refined model · in build</span>
+          </div>
+          <div class="callout">
+            <strong>The engineering discipline that holds it together:</strong> a saga pattern
+            (“visible-vs-silent failure ordering”) across every cross-module step, so a crash
+            mid-flow always leaves a self-announcing, recoverable state; single-source mapping
+            services for call-outcome, tracking-scan, and notification fan-out; and a permanent
+            stock-conservation regression test proving inventory is never inflated or leaked.
+          </div>
+        </div>
+      </section>
+
+      <!-- 04 — FOUNDATION SHIPPED -->
+      <section id="built">
+        <div class="wrap">
+          <div class="sechead tel">
+            <span class="idx">SEC 05</span><span class="bar"></span><span>Proof it's real</span>
+          </div>
+          <h2>The foundation is already shipped</h2>
+          <p class="lead">
+            The target model isn't drawn on a whiteboard — it sits on a production platform. All 18
+            Phase-1A modules, the 6-module Phase-1B money layer, four web apps, and the live
+            Delhivery integration are running today, behind 1,100 automated tests.
+          </p>
+          <div class="tbl-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Capability</th>
+                  <th>What's running</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Auth &amp; multi-seat sellers</td>
+                  <td>
+                    Staff + seller, JWT + refresh rotation with reuse-detection, API keys, 6-role
+                    seller RBAC + team invitations
+                  </td>
+                  <td><span class="pill live">Live</span></td>
+                </tr>
+                <tr>
+                  <td>Seller onboarding</td>
+                  <td>
+                    Invite-only registration, approval workflow, profile, encrypted bank details,
+                    logo
+                  </td>
+                  <td><span class="pill live">Live</span></td>
+                </tr>
+                <tr>
+                  <td>Catalog &amp; WMS</td>
+                  <td>
+                    Categories/products/variants, images, CSV import; warehouses, bins, batches,
+                    append-only ledger, reservations, receiving, cycle counts, alerts
+                  </td>
+                  <td><span class="pill live">Live</span></td>
+                </tr>
+                <tr>
+                  <td>Orders &amp; call center</td>
+                  <td>
+                    28-status state machine, snapshots, CSV bulk import, god-mode override;
+                    round-robin queue, attempt logging, outcome mapping
+                  </td>
+                  <td><span class="pill live">Live</span></td>
+                </tr>
+                <tr>
+                  <td>Warehouse ops</td>
+                  <td>Pick / pack / manifest / dispatch / RTO with race-safe queues</td>
+                  <td><span class="pill live">Live</span></td>
+                </tr>
+                <tr>
+                  <td>Courier integration</td>
+                  <td>
+                    Delhivery real API — AWB creation validated end-to-end, poll-based tracking,
+                    supersede chain, manual placement
+                  </td>
+                  <td><span class="pill live">Live</span></td>
+                </tr>
+                <tr>
+                  <td>Public tracking</td>
+                  <td>
+                    Webhook + poll ingestion, processor, customer-safe AWB lookup (EN + हिन्दी),
+                    manual scan entry
+                  </td>
+                  <td><span class="pill live">Live</span></td>
+                </tr>
+                <tr>
+                  <td>Notifications</td>
+                  <td>Lifecycle event bus + email fan-out (SMS channel scaffolded)</td>
+                  <td><span class="pill live">Live</span></td>
+                </tr>
+                <tr>
+                  <td>Admin &amp; seller portals</td>
+                  <td>
+                    Two frontends on a shared, identity-parameterized foundation — seller mgmt,
+                    orders, catalog, image upload, god-mode
+                  </td>
+                  <td><span class="pill live">Live</span></td>
+                </tr>
+                <tr>
+                  <td>Pricing · FX · charges · settings</td>
+                  <td>Charge calculator, INR↔BDT rates, cost breakdown, runtime config UI</td>
+                  <td><span class="pill live">Live</span></td>
+                </tr>
+                <tr>
+                  <td>Marketing + tracking UI</td>
+                  <td>
+                    skydrop.online + track.skydrop.online — brand, live corridor map, EN/HI,
+                    light/dark
+                  </td>
+                  <td><span class="pill live">Live</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 05 — ROADMAP TO TARGET -->
+      <section id="roadmap">
+        <div class="wrap">
+          <div class="sechead tel">
+            <span class="idx">SEC 06</span><span class="bar"></span><span>The build ahead</span>
+          </div>
+          <h2>Roadmap to the target operating model</h2>
+          <p class="lead">
+            The refinement is additive — the schema was designed forward-compatible, and the
+            reservation, warehouse, courier, and settings seams already exist. Four focused phases
+            close the gap between the shipped foundation and the operating model above.
+          </p>
+          <div class="phase">
+            <div class="item">
+              <h3>Phase A · Finance core &amp; currency <span class="pill sky">designed</span></h3>
+              <p>
+                Upgrade the wallet to a true double-entry ledger; advance-credit with per-seller
+                exposure tracking + auto-clawback; self-service &amp; auto withdrawals plus an
+                instant-credit add-on; real courier-fee capture with margin; per-seller courier fee
+                (flat/%); the three price components; BDT/INR product-cost entry; and
+                courier-remittance reconciliation.
+              </p>
+            </div>
+            <div class="item">
+              <h3>Phase B · Inventory integrity <span class="pill sky">designed</span></h3>
+              <p>
+                Serialized per-unit model behind a per-seller normal/strict toggle; barcode labels
+                at receiving; mandatory scan gates at pick, pack and hand-off; and a general
+                per-seller settings framework — including call config (attempts, min interval,
+                no-call mode) under an admin-enforced cap.
+              </p>
+            </div>
+            <div class="item">
+              <h3>
+                Phase C · Courier network &amp; dispatch <span class="pill sky">designed</span>
+              </h3>
+              <p>
+                Multi-account couriers with seller↔account linkage, per-seller split ratios and full
+                parcel→account tracing; courier-first booking after call-confirm; and a fallback
+                panel to re-book a rejected order into another account or carrier. Pack floor
+                partitioned by courier.
+              </p>
+            </div>
+            <div class="item">
+              <h3>
+                Phase D · Network, returns &amp; exceptions <span class="pill sky">designed</span>
+              </h3>
+              <p>
+                Multi-warehouse routing + cross-warehouse RTO transfer; virtual booking with
+                seller-decided unbook; scrap + damage tickets and a seller support-ticket panel; a
+                warehouse scanner app; and an exception dashboard unifying
+                missing/mismatch/damaged/failed-courier/unbook queues.
+                <strong
+                  >Launch ships on this foundation with deliberately minimal, functional
+                  UI/UX</strong
+                >
+                — the operating model proves itself before the interface is polished.
+              </p>
+            </div>
+          </div>
+          <div class="callout">
+            <strong>Why this is low-risk:</strong> none of it is a rewrite. The wallet ledger + COD
+            accrual are already built (awaiting go-live); reservations already model virtual holds;
+            the warehouse already has bins, batches and quarantine/damaged bin types; the courier
+            layer already has a fallback; and per-seller overrides already exist. Each phase
+            generalizes a seam that is already in the codebase.
+          </div>
+
+          <div class="panel" style="margin-top: 16px">
+            <h3>After launch <span class="pill plan">outside this ask</span></h3>
+            <p>
+              Phases A–D are sequenced first because they carry the trust and differentiation —
+              money, inventory integrity, courier network, returns. UI/UX at launch is intentionally
+              minimal: functional, not polished. Once the model is live and proven, two follow-on
+              workstreams open — a dedicated <strong>security hardening pass</strong> (access &amp;
+              dependency audit, penetration testing) and a full
+              <strong>UI/UX design pass</strong> across the admin and seller apps. Both are scoped
+              and funded separately once the platform is live; neither draws on the ৳6,00,000 above.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 06 — TECH -->
+      <section id="tech">
+        <div class="wrap">
+          <div class="sechead tel">
+            <span class="idx">SEC 07</span><span class="bar"></span><span>The stack</span>
+          </div>
+          <h2>Technology &amp; architecture</h2>
+          <p class="lead">
+            A single TypeScript monorepo (Turborepo + pnpm), one language end-to-end, deployed to
+            DigitalOcean in Singapore. One application droplet fronts everything; managed Postgres
+            and object storage are the external stateful services.
+          </p>
+          <div class="tbl-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Layer</th>
+                  <th>Choice</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Frontend</td>
+                  <td>Next.js 15 (App Router) · TypeScript · Tailwind v4</td>
+                  <td>4 apps: admin, seller, tracking, marketing</td>
+                </tr>
+                <tr>
+                  <td>Backend</td>
+                  <td>NestJS · Prisma 6.x · REST/OpenAPI</td>
+                  <td>64 feature modules, Swagger docs</td>
+                </tr>
+                <tr>
+                  <td>Database</td>
+                  <td>PostgreSQL 18 + TimescaleDB</td>
+                  <td>78 models · hypertables for tracking &amp; stock movements</td>
+                </tr>
+                <tr>
+                  <td>Queue / cache</td>
+                  <td>BullMQ on Redis · Redis cache</td>
+                  <td>13 in-process background workers</td>
+                </tr>
+                <tr>
+                  <td>Object storage</td>
+                  <td>DigitalOcean Spaces (S3-compatible)</td>
+                  <td>Images, logos, AWB labels, invoices</td>
+                </tr>
+                <tr>
+                  <td>Auth &amp; security</td>
+                  <td>Passport.js + JWT, HttpOnly refresh cookies</td>
+                  <td>
+                    Access token in memory only; AES-256-GCM for all secrets, keys in env never the
+                    DB
+                  </td>
+                </tr>
+                <tr>
+                  <td>Edge / delivery</td>
+                  <td>Caddy reverse proxy · Cloudflare DNS · Resend email</td>
+                  <td>Automatic TLS; push-to-main → build → migrate → restart</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 07 — CAPACITY -->
+      <section id="capacity">
+        <div class="wrap">
+          <div class="sechead tel">
+            <span class="idx">SEC 08</span><span class="bar"></span><span>Load &amp; scale</span>
+          </div>
+          <h2>Capacity today, and the path to scale</h2>
+          <p class="lead">
+            The current deployment is sized for pre-launch beta and sits comfortably inside it — the
+            droplet is near-idle at rest. The honest ceiling is set by two deliberate
+            single-instance choices, not by the design.
+          </p>
+
+          <div class="gauge panel" style="padding: 26px 22px 20px">
+            <div class="tel" style="margin-bottom: 22px">
+              throughput headroom · single-instance topology
+            </div>
+            <div class="track"><div class="now"></div></div>
+            <div class="labels">
+              <span>beta · comfortable</span>
+              <span>steady early traffic</span>
+              <span>first bottleneck</span>
+              <span>needs scale-out</span>
+            </div>
+          </div>
+
+          <div class="grid3" style="margin-top: 18px">
+            <div class="panel">
+              <h3>Comfortable today</h3>
+              <ul>
+                <li>Tens of active sellers and hundreds to low-thousands of orders/day</li>
+                <li>Concurrent call-center agents and warehouse staff on the queues</li>
+                <li>Light reads served in low single-digit milliseconds; idle at rest</li>
+                <li>
+                  Public tracking is per-IP rate-limited and cheap — the highest-volume anonymous
+                  surface
+                </li>
+              </ul>
+            </div>
+            <div class="panel">
+              <h3>The scaling path <span class="pill plan">designed-for</span></h3>
+              <ul>
+                <li>Move the 13 background workers into the dedicated worker process</li>
+                <li>
+                  Run the API in cluster mode / behind a load balancer (rate-limiting already
+                  supports a shared Redis store)
+                </li>
+                <li>Upgrade managed Postgres + add read replicas; promote Redis to managed</li>
+                <li>
+                  None require re-architecture — they are the intended next steps, deferred because
+                  beta load doesn't need them
+                </li>
+              </ul>
+            </div>
+            <div class="panel">
+              <h3>Scale target <span class="pill plan">roadmap</span></h3>
+              <p>
+                Grow into a full year of live customer &amp; order history and sustain up to
+                <strong>10 lakh (1,000,000) orders/month</strong> — via the TimescaleDB chunk +
+                compression policy already running for tracking &amp; stock events, extended
+                retention windows, Postgres read replicas, and the worker/API scale-out at left.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 09 — BEYOND LAUNCH -->
+      <section id="future">
+        <div class="wrap">
+          <div class="sechead tel">
+            <span class="idx">SEC 09</span><span class="bar"></span><span>Beyond launch</span>
+          </div>
+          <h2>The long-term platform</h2>
+          <p class="lead">
+            Once the operating model is live, security-hardened and its interface polished, Skydrop
+            grows from a fulfillment backbone into a full operating platform for cross-border
+            sellers — scoped against real usage data and funded from the maintenance retainer and
+            growth revenue, not this ask.
+          </p>
+
+          <div class="grid3">
+            <div class="panel">
+              <h3>AI assistant for sellers <span class="pill plan">vision</span></h3>
+              <p>
+                A conversational assistant inside the seller portal, grounded in the seller's own
+                data — "why did my RTO spike this week," "which SKUs to restock," "draft a reply to
+                this customer." Answers, not just dashboards.
+              </p>
+            </div>
+            <div class="panel">
+              <h3>AI across operations <span class="pill plan">vision</span></h3>
+              <p>
+                Demand forecasting for restock timing, RTO-risk scoring at order intake, smart
+                retry-timing for unreachable buyers, and auto-drafted support responses — folded
+                into the existing call-confirm, WMS and courier layers, not bolted on top.
+              </p>
+            </div>
+            <div class="panel">
+              <h3>More automated workflows <span class="pill plan">vision</span></h3>
+              <p>
+                A rules engine sellers and ops staff configure themselves — auto-escalate aged RTOs,
+                auto-reassign stalled calls, auto-adjust reorder points — reducing manual
+                supervision as order volume grows.
+              </p>
+            </div>
+          </div>
+
+          <div class="grid3" style="margin-top: 16px">
+            <div class="panel">
+              <h3>Seller business analytics <span class="pill plan">vision</span></h3>
+              <p>
+                Sales trends, SKU &amp; category performance, RTO/NDR patterns by city and courier,
+                customer cohort &amp; repeat-rate views — the seller's own picture of their India
+                business.
+              </p>
+            </div>
+            <div class="panel">
+              <h3>Skydrop's own analytics &amp; P&amp;L <span class="pill plan">vision</span></h3>
+              <p>
+                Internal margin-per-order tracking, seller-cohort profitability, courier scorecards,
+                and a real profit &amp; loss view rolled up from the same double-entry ledger that
+                settles sellers.
+              </p>
+            </div>
+            <div class="panel">
+              <h3>HR &amp; employee performance <span class="pill plan">vision</span></h3>
+              <p>
+                Staff onboarding, attendance and payroll integration for warehouse &amp; call-center
+                employees, plus performance views seeded by data already captured — call-agent
+                confirm-rate, picker/packer throughput, per-shift productivity.
+              </p>
+            </div>
+          </div>
+
+          <div class="grid3" style="margin-top: 16px">
+            <div class="panel">
+              <h3>Outside e-commerce integrations <span class="pill plan">vision</span></h3>
+              <p>
+                Direct connectors to Shopify, WooCommerce, Daraz and similar platforms, so a
+                seller's existing storefront pushes orders into Skydrop automatically — no manual
+                entry or CSV upload required.
+              </p>
+            </div>
+            <div class="panel">
+              <h3>Hosted storefront subscription <span class="pill plan">vision</span></h3>
+              <p>
+                A lightweight, hosted D2C storefront for sellers who don't have their own website
+                yet — a paid add-on subscription plugging directly into the same catalog &amp; order
+                pipeline.
+              </p>
+            </div>
+            <div class="panel">
+              <h3>SEO <span class="pill plan">vision</span></h3>
+              <p>
+                Storefront SEO for the hosted-store option above, and continued investment in
+                skydrop.online's own organic reach — the acquisition channel for new sellers.
+              </p>
+            </div>
+          </div>
+
+          <div class="callout">
+            <strong>Funded by growth, not this raise:</strong> every item above is post-launch,
+            post-hardening, post-polish — prioritized once Skydrop is live and generating usage
+            data, and paid for from the maintenance retainer and growth revenue rather than the
+            ৳6,00,000 completion budget above.
+          </div>
+        </div>
+      </section>
+    </div>
+    <!-- /view-plan -->
+
+    <div class="view-budget">
+      <!-- 08 — BUDGET & FUNDING -->
+      <section id="budget">
+        <div class="wrap">
+          <div class="sechead tel">
+            <span class="idx">SEC 10</span><span class="bar"></span
+            ><span>Investment &amp; economics</span>
+          </div>
+          <h2>Budget &amp; funding</h2>
+          <p class="lead">
+            This document is the proposed plan to complete the refined operating model. Below is the
+            capital required to finish it, how it releases against milestones, and the true monthly
+            cost of running the system at three order volumes.
+          </p>
+
+          <!-- The ask -->
+          <div class="tel" style="color: var(--sky); margin: 6px 2px 12px">01 · the ask</div>
+          <div class="tiles">
+            <div class="tile">
+              <div class="n"><em>৳6</em> lakh</div>
+              <div class="k tel">capital to complete</div>
+            </div>
+            <div class="tile">
+              <div class="n">৳2 lakh</div>
+              <div class="k tel">already invested</div>
+            </div>
+            <div class="tile">
+              <div class="n"><em>8–12</em></div>
+              <div class="k tel">weeks to complete</div>
+            </div>
+            <div class="tile">
+              <div class="n">3–4</div>
+              <div class="k tel">milestone tranches</div>
+            </div>
+          </div>
+          <div class="panel" style="margin-top: 16px">
+            <p style="margin: 0">
+              We have already invested <strong>৳2,00,000</strong> to build and ship the production
+              foundation described in this report. We are seeking <strong>৳6,00,000</strong> to
+              complete the refined operating model over <strong>8–12 weeks</strong>. A team is
+              already in place and working; funds release in
+              <strong>3–4 milestone-based tranches</strong>, each tied to a delivered, verifiable
+              phase — so capital is only drawn as value ships.
+            </p>
+          </div>
+
+          <details class="breakdown" style="margin-top: 16px">
+            <summary>
+              <span
+                >Cost breakdown of the <strong>৳6,00,000</strong> ask
+                <span class="tel" style="color: var(--fg-muted)">(tap to expand)</span></span
+              ><span class="chev">▶</span>
+            </summary>
+            <div class="bd-body">
+              <p class="tel" style="color: var(--fg-muted); margin: 12px 0 0">
+                Figures converted at <strong>$1 = ৳130</strong>. "Last 3 months" lines are incurred
+                cost being reimbursed into this raise; "next 12 weeks" lines are forward runway for
+                the build window above.
+              </p>
+              <div class="tbl-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Category</th>
+                      <th>Period</th>
+                      <th>USD</th>
+                      <th>BDT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Development team</td>
+                      <td>build to date</td>
+                      <td><span class="mono">—</span></td>
+                      <td><span class="mono">৳2,20,000</span></td>
+                    </tr>
+                    <tr>
+                      <td>Software &amp; dev tooling</td>
+                      <td>last 3 months</td>
+                      <td><span class="mono">$900</span></td>
+                      <td><span class="mono">৳1,17,000</span></td>
+                    </tr>
+                    <tr>
+                      <td>Software &amp; dev tooling</td>
+                      <td>next 12 weeks</td>
+                      <td><span class="mono">$1,200</span></td>
+                      <td><span class="mono">৳1,56,000</span></td>
+                    </tr>
+                    <tr>
+                      <td>Cloudflare (DNS/CDN)</td>
+                      <td>last 3 months</td>
+                      <td><span class="mono">$60</span></td>
+                      <td><span class="mono">৳7,800</span></td>
+                    </tr>
+                    <tr>
+                      <td>Research, VPS hosting &amp; testing</td>
+                      <td>last 3 months</td>
+                      <td><span class="mono">$350</span></td>
+                      <td><span class="mono">৳45,500</span></td>
+                    </tr>
+                    <tr>
+                      <td>Miscellaneous — hosting, object storage &amp; Postgres</td>
+                      <td>next 12 weeks</td>
+                      <td><span class="mono">≈ $413</span></td>
+                      <td><span class="mono">৳53,700</span></td>
+                    </tr>
+                    <tr>
+                      <td><strong>Total</strong></td>
+                      <td></td>
+                      <td></td>
+                      <td>
+                        <strong><span class="mono">৳6,00,000</span></strong>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="tel" style="color: var(--fg-muted); margin: 10px 0 0">
+                Development team covers backend engineering, frontend engineering, database
+                engineering, UI/UX design, DevOps &amp; infrastructure, courier/API integrations, QA
+                &amp; testing, and project management.
+              </p>
+            </div>
+          </details>
+
+          <!-- Disbursement -->
+          <div class="tel" style="color: var(--sky); margin: 26px 2px 12px">
+            02 · milestone disbursement
+          </div>
+          <div class="tbl-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Tranche</th>
+                  <th>Milestone (from the roadmap)</th>
+                  <th>Share</th>
+                  <th>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>1 · Kickoff</td>
+                  <td>
+                    Phase A — finance core: double-entry ledger, advance-credit + withdrawals,
+                    courier-fee margin, price components &amp; currency
+                  </td>
+                  <td>30%</td>
+                  <td><span class="mono">৳1,80,000</span></td>
+                </tr>
+                <tr>
+                  <td>2</td>
+                  <td>
+                    Phase B — inventory integrity: serialized units, scan gates, per-seller settings
+                    + call config
+                  </td>
+                  <td>25%</td>
+                  <td><span class="mono">৳1,50,000</span></td>
+                </tr>
+                <tr>
+                  <td>3</td>
+                  <td>
+                    Phase C — courier network: multi-account routing, courier-first dispatch,
+                    fallback panel
+                  </td>
+                  <td>25%</td>
+                  <td><span class="mono">৳1,50,000</span></td>
+                </tr>
+                <tr>
+                  <td>4 · Launch</td>
+                  <td>
+                    Phase D — multi-warehouse, returns, scrap + support tickets, virtual booking;
+                    hardening &amp; launch
+                  </td>
+                  <td>20%</td>
+                  <td><span class="mono">৳1,20,000</span></td>
+                </tr>
+                <tr>
+                  <td><strong>Total</strong></td>
+                  <td></td>
+                  <td><strong>100%</strong></td>
+                  <td>
+                    <strong><span class="mono">৳6,00,000</span></strong>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Running cost -->
+          <div class="tel" style="color: var(--sky); margin: 26px 2px 12px">
+            03 · monthly running cost by volume
+          </div>
+          <div class="tbl-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Cost category</th>
+                  <th>10K orders/mo</th>
+                  <th>30K orders/mo</th>
+                  <th>100K orders/mo</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Compute — API + workers</td>
+                  <td><span class="mono">$25</span></td>
+                  <td><span class="mono">$55</span></td>
+                  <td><span class="mono">$160</span></td>
+                </tr>
+                <tr>
+                  <td>Managed PostgreSQL</td>
+                  <td><span class="mono">$30</span></td>
+                  <td><span class="mono">$70</span></td>
+                  <td><span class="mono">$210</span></td>
+                </tr>
+                <tr>
+                  <td>Redis / cache</td>
+                  <td><span class="mono">in-node</span></td>
+                  <td><span class="mono">$15</span></td>
+                  <td><span class="mono">$40</span></td>
+                </tr>
+                <tr>
+                  <td>Object storage (Spaces)</td>
+                  <td><span class="mono">$5</span></td>
+                  <td><span class="mono">$12</span></td>
+                  <td><span class="mono">$30</span></td>
+                </tr>
+                <tr>
+                  <td>CDN / DNS (Cloudflare)</td>
+                  <td><span class="mono">free</span></td>
+                  <td><span class="mono">$20</span></td>
+                  <td><span class="mono">$20</span></td>
+                </tr>
+                <tr>
+                  <td>Email (transactional)</td>
+                  <td><span class="mono">$20</span></td>
+                  <td><span class="mono">$35</span></td>
+                  <td><span class="mono">$85</span></td>
+                </tr>
+                <tr>
+                  <td>DevOps &amp; dev tooling</td>
+                  <td><span class="mono">$40–100</span></td>
+                  <td><span class="mono">$40–100</span></td>
+                  <td><span class="mono">$40–100</span></td>
+                </tr>
+                <tr>
+                  <td>Maintenance retainer</td>
+                  <td><span class="mono">$120–200</span></td>
+                  <td><span class="mono">$120–200</span></td>
+                  <td><span class="mono">$120–200</span></td>
+                </tr>
+                <tr>
+                  <td><strong>Total / month (USD)</strong></td>
+                  <td>
+                    <strong><span class="mono">≈ $240–380</span></strong>
+                  </td>
+                  <td>
+                    <strong><span class="mono">≈ $370–510</span></strong>
+                  </td>
+                  <td>
+                    <strong><span class="mono">≈ $700–850</span></strong>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="tel" style="margin: 12px 2px 0; color: var(--fg-muted)">
+            All monthly figures are approximate and can change at any time — up or down — with
+            system load and demand. Excludes courier freight &amp; payment-gateway fees, which are
+            pass-through, billed to sellers by the pricing engine.
+          </p>
+
+          <div class="callout">
+            <strong>Operating leverage:</strong> infrastructure + tooling cost per order falls from
+            roughly <strong>৳3–5</strong> at 10K orders/month to <strong>under ৳1</strong> at 100K
+            orders/month (≈ ৳120 = $1). The platform gets cheaper to run per order as it scales —
+            margins widen with volume.
+          </div>
+
+          <!-- Coverage -->
+          <div class="tel" style="color: var(--sky); margin: 26px 2px 12px">
+            04 · ongoing coverage
+          </div>
+          <div class="grid2">
+            <div class="panel">
+              <h3>Maintenance &amp; development <span class="pill sky">monthly retainer</span></h3>
+              <p>
+                A database-driven, transactional system is a living system — ongoing maintenance is
+                mandatory, not optional.
+              </p>
+              <ul>
+                <li>Backups, migrations, index/vacuum &amp; connection-pool health</li>
+                <li>Security &amp; dependency patching, monitoring and alerting</li>
+                <li>Bug resolution across the full stack</li>
+                <li>
+                  New integrations &amp; feature development — scoped and quoted on top of the base
+                  retainer
+                </li>
+              </ul>
+            </div>
+            <div class="panel">
+              <h3>DevOps &amp; tooling <span class="pill sky">force-multiplier</span></h3>
+              <p>
+                A modern DevOps &amp; development toolchain — CI/CD pipelines, automated deploys,
+                infrastructure-as-code — is a force-multiplier for building, maintaining and
+                debugging the system, not a runtime dependency of the product.
+              </p>
+              <ul>
+                <li><strong>99% uptime</strong> target on the production platform</li>
+                <li>Security hardening — encrypted secrets, audited access</li>
+                <li>Bugs resolved across the stack as part of the retainer</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+    <!-- /view-budget -->
+
+    <footer>
+      <div class="wrap row">
+        <span class="tel"
+          >Skydrop · BD → IN cross-border commerce · operating model, roadmap &amp; budget</span
+        >
+        <span class="tel">Foundation shipped · ৳6 lakh to complete · 8–12 weeks</span>
+      </div>
+    </footer>
+
+    <script>
+      (function () {
+        var root = document.documentElement;
+
+        // Theme toggle
+        var themeBtn = document.getElementById('themeToggle');
+        function currentTheme() {
+          var attr = root.getAttribute('data-theme');
+          if (attr) return attr;
+          return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        themeBtn.addEventListener('click', function () {
+          root.setAttribute('data-theme', currentTheme() === 'dark' ? 'light' : 'dark');
+        });
+
+        // View toggle — Plan / Budget (two "pages", one document)
+        var bPlan = document.getElementById('viewPlan');
+        var bBudget = document.getElementById('viewBudget');
+        function setView(v) {
+          root.setAttribute('data-view', v);
+          if (v === 'budget') root.setAttribute('data-seen-budget', '1');
+          bPlan.classList.toggle('is-active', v === 'plan');
+          bBudget.classList.toggle('is-active', v === 'budget');
+          try {
+            history.replaceState(
+              null,
+              '',
+              v === 'budget' ? '#budget' : location.pathname + location.search,
+            );
+          } catch (e) {
+            /* ignore */
+          }
+          window.scrollTo(0, 0);
+        }
+        bPlan.addEventListener('click', function () {
+          setView('plan');
+        });
+        bBudget.addEventListener('click', function () {
+          setView('budget');
+        });
+        var budgetHint = document.getElementById('budgetHint');
+        if (budgetHint)
+          budgetHint.addEventListener('click', function () {
+            setView('budget');
+          });
+        setView(location.hash === '#budget' ? 'budget' : 'plan');
+      })();
+    </script>
+  </body>
 </html>

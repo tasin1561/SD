@@ -60,8 +60,7 @@ export function CourierOpsPanel({
   if (isManualCourier) {
     return (
       <p className="text-text-faint text-xs">
-        Placed manually with a non-integrated courier — arrange any change
-        directly with them.
+        Placed manually with a non-integrated courier — arrange any change directly with them.
       </p>
     );
   }
@@ -150,19 +149,14 @@ function CourierOpsBody({
     <Card className="mt-2">
       <CardBody className="space-y-3">
         <div className="flex items-center justify-between">
-          <h4 className="text-text-muted text-xs font-medium tracking-wide uppercase">
-            Courier
-          </h4>
+          <h4 className="text-text-muted text-xs font-medium tracking-wide uppercase">Courier</h4>
           <Button variant="ghost" size="sm" onClick={onClose}>
             Hide
           </Button>
         </div>
 
         {insight.isError ? (
-          <ErrorNote
-            message={serverVerdict(insight.error)}
-            retry={() => void insight.refetch()}
-          />
+          <ErrorNote message={serverVerdict(insight.error)} retry={() => void insight.refetch()} />
         ) : insight.isLoading ? (
           <div className="space-y-2">
             <Skeleton className="h-4 w-3/4" />
@@ -193,9 +187,7 @@ function CourierOpsBody({
                 },
                 {
                   label: 'Their zone',
-                  value: insight.data?.cost?.zone ?? (
-                    <span className="text-text-faint">—</span>
-                  ),
+                  value: insight.data?.cost?.zone ?? <span className="text-text-faint">—</span>,
                 },
               ]}
             />
@@ -276,46 +268,30 @@ function CourierOpsBody({
           <Button variant="ghost" size="sm" onClick={() => setEwaybilling(true)}>
             Attach e-way bill
           </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => setConfirmCancel(true)}
-          >
+          <Button variant="destructive" size="sm" onClick={() => setConfirmCancel(true)}>
             Cancel with courier
           </Button>
         </div>
       </CardBody>
 
-      <EditRecipientModal
-        shipmentId={shipmentId}
-        open={editing}
-        onOpenChange={setEditing}
-      />
-      <EwaybillModal
-        shipmentId={shipmentId}
-        open={ewaybilling}
-        onOpenChange={setEwaybilling}
-      />
+      <EditRecipientModal shipmentId={shipmentId} open={editing} onOpenChange={setEditing} />
+      <EwaybillModal shipmentId={shipmentId} open={ewaybilling} onOpenChange={setEwaybilling} />
       <ConfirmDialog
         open={confirmCancel}
         onOpenChange={setConfirmCancel}
         title="Cancel this parcel with the courier?"
         confirmVariant="destructive"
         confirmLabel={cancel.isPending ? 'Cancelling…' : 'Cancel parcel'}
-        disabled={
-          cancel.isPending || cancelReason.trim().length < MIN_CANCEL_REASON
-        }
+        disabled={cancel.isPending || cancelReason.trim().length < MIN_CANCEL_REASON}
         onConfirm={() => void doCancel()}
         description={
           <div className="space-y-2">
             <p>
-              A parcel already in transit does not vanish — it becomes a return
-              and comes back to us, at the cost of a return leg. Only a
-              not-yet-collected parcel stops where it is.
+              A parcel already in transit does not vanish — it becomes a return and comes back to
+              us, at the cost of a return leg. Only a not-yet-collected parcel stops where it is.
             </p>
             <p className="text-text-faint">
-              The order is not moved by this action; the courier&apos;s own scans
-              will move it.
+              The order is not moved by this action; the courier&apos;s own scans will move it.
             </p>
             <Textarea
               rows={2}
@@ -346,8 +322,7 @@ function EditRecipientModal({
   const [address, setAddress] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const anything =
-    name.trim() !== '' || phone.trim() !== '' || address.trim() !== '';
+  const anything = name.trim() !== '' || phone.trim() !== '' || address.trim() !== '';
 
   async function submit(): Promise<void> {
     setError(null);
@@ -484,11 +459,7 @@ function EwaybillModal({
         <Button
           variant="primary"
           size="md"
-          disabled={
-            invoiceNumber.trim() === '' ||
-            ewaybillNumber.trim() === '' ||
-            attach.isPending
-          }
+          disabled={invoiceNumber.trim() === '' || ewaybillNumber.trim() === '' || attach.isPending}
           onClick={() => void submit()}
         >
           {attach.isPending ? 'Attaching…' : 'Attach'}

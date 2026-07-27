@@ -18,14 +18,8 @@ import {
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
-import {
-  PackQueueService,
-  type PulledPack,
-} from '../services/pack-queue.service';
-import {
-  PackService,
-  type CompletePackResult,
-} from '../services/pack.service';
+import { PackQueueService, type PulledPack } from '../services/pack-queue.service';
+import { PackService, type CompletePackResult } from '../services/pack.service';
 import { CompletePackDto } from '../dto/complete-pack.dto';
 
 /**

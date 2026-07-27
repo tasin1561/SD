@@ -27,8 +27,7 @@ function makeService(
           status: opts.manifestStatus ?? ManifestStatus.CONFIRMED,
           shipments: ships.map((s) => ({
             id: s.id,
-            orderShipments:
-              s.orderId === null ? [] : [{ orderId: s.orderId }],
+            orderShipments: s.orderId === null ? [] : [{ orderId: s.orderId }],
           })),
         }
       : opts.manifest,
@@ -69,13 +68,12 @@ function makeService(
 
 describe('DispatchHandoffService.confirmHandoff', () => {
   it('transitions every AWB-ready shipment + flips the manifest DISPATCHED', async () => {
-    const { svc, manifestUpdate, shipmentUpdate, transitionStatus } =
-      makeService({
-        shipments: [
-          { id: 's1', orderId: 'o1' },
-          { id: 's2', orderId: 'o2' },
-        ],
-      });
+    const { svc, manifestUpdate, shipmentUpdate, transitionStatus } = makeService({
+      shipments: [
+        { id: 's1', orderId: 'o1' },
+        { id: 's2', orderId: 'o2' },
+      ],
+    });
     const r = await svc.confirmHandoff(MAN, STAFF);
     expect(r).toMatchObject({
       status: ManifestStatus.DISPATCHED,
@@ -98,12 +96,8 @@ describe('DispatchHandoffService.confirmHandoff', () => {
       }),
     );
     // Manifest update LAST — after the per-shipment transitions.
-    const lastTransOrd = Math.max(
-      ...transitionStatus.mock.invocationCallOrder,
-    );
-    expect(manifestUpdate.mock.invocationCallOrder[0]).toBeGreaterThan(
-      lastTransOrd,
-    );
+    const lastTransOrd = Math.max(...transitionStatus.mock.invocationCallOrder);
+    expect(manifestUpdate.mock.invocationCallOrder[0]).toBeGreaterThan(lastTransOrd);
     expect(manifestUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -143,9 +137,7 @@ describe('DispatchHandoffService.confirmHandoff', () => {
     const r = await svc.confirmHandoff(MAN, STAFF);
     expect(transitionStatus).toHaveBeenCalledTimes(3); // all attempted
     expect(r.transitionedCount).toBe(2);
-    expect(r.failures).toEqual([
-      { shipmentId: 's2', orderId: 'o2', error: 'INVALID_TRANSITION' },
-    ]);
+    expect(r.failures).toEqual([{ shipmentId: 's2', orderId: 'o2', error: 'INVALID_TRANSITION' }]);
     // Manifest still flips DISPATCHED (handoff physically happened;
     // failures surfaced for ops).
     expect(r.status).toBe(ManifestStatus.DISPATCHED);
@@ -163,9 +155,7 @@ describe('DispatchHandoffService.confirmHandoff', () => {
 
   it('404 when the manifest is missing', async () => {
     const { svc } = makeService({ manifest: null });
-    await expect(svc.confirmHandoff(MAN, STAFF)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(svc.confirmHandoff(MAN, STAFF)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('audits HIGH when there are failures, MEDIUM when clean', async () => {

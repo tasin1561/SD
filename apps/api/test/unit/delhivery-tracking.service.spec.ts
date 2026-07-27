@@ -66,13 +66,12 @@ describe('DelhiveryTrackingService.normalizeScan (stub mode)', () => {
   });
 
   it('maps the (StatusType, Status) PAIR the real API sends', () => {
-    expect(
-      svc.normalizeScan(raw({ statusType: 'UD', rawStatus: 'In Transit' })),
-    ).toEqual({ kind: 'NORMALIZED', shipmentStatus: ShipmentStatus.IN_TRANSIT });
+    expect(svc.normalizeScan(raw({ statusType: 'UD', rawStatus: 'In Transit' }))).toEqual({
+      kind: 'NORMALIZED',
+      shipmentStatus: ShipmentStatus.IN_TRANSIT,
+    });
     // Delhivery's "Dispatched" on a forward leg is our OUT_FOR_DELIVERY.
-    expect(
-      svc.normalizeScan(raw({ statusType: 'UD', rawStatus: 'Dispatched' })),
-    ).toEqual({
+    expect(svc.normalizeScan(raw({ statusType: 'UD', rawStatus: 'Dispatched' }))).toEqual({
       kind: 'NORMALIZED',
       shipmentStatus: ShipmentStatus.OUT_FOR_DELIVERY,
     });
@@ -81,15 +80,11 @@ describe('DelhiveryTrackingService.normalizeScan (stub mode)', () => {
   it('THE DIRECTION BUG: the same status under RT is a RETURN, not forward progress', () => {
     // The failure this guards against is an order marching towards
     // DELIVERED while the parcel is physically coming back to us.
-    expect(
-      svc.normalizeScan(raw({ statusType: 'RT', rawStatus: 'In Transit' })),
-    ).toEqual({
+    expect(svc.normalizeScan(raw({ statusType: 'RT', rawStatus: 'In Transit' }))).toEqual({
       kind: 'NORMALIZED',
       shipmentStatus: ShipmentStatus.RTO_IN_TRANSIT,
     });
-    expect(
-      svc.normalizeScan(raw({ statusType: 'RT', rawStatus: 'Dispatched' })),
-    ).toEqual({
+    expect(svc.normalizeScan(raw({ statusType: 'RT', rawStatus: 'Dispatched' }))).toEqual({
       kind: 'NORMALIZED',
       shipmentStatus: ShipmentStatus.RTO_IN_TRANSIT,
     });
@@ -116,17 +111,16 @@ describe('DelhiveryTrackingService.normalizeScan (stub mode)', () => {
     // The status itself is an unremarkable "Pending" — the NSL is the
     // only thing that says a delivery was tried and failed.
     expect(
-      svc.normalizeScan(
-        raw({ statusType: 'UD', rawStatus: 'Pending', nslCode: 'EOD-74' }),
-      ),
+      svc.normalizeScan(raw({ statusType: 'UD', rawStatus: 'Pending', nslCode: 'EOD-74' })),
     ).toEqual({
       kind: 'NORMALIZED',
       shipmentStatus: ShipmentStatus.DELIVERY_ATTEMPTED,
     });
     // Without the NSL the same scan is ordinary transit.
-    expect(
-      svc.normalizeScan(raw({ statusType: 'UD', rawStatus: 'Pending' })),
-    ).toEqual({ kind: 'NORMALIZED', shipmentStatus: ShipmentStatus.IN_TRANSIT });
+    expect(svc.normalizeScan(raw({ statusType: 'UD', rawStatus: 'Pending' }))).toEqual({
+      kind: 'NORMALIZED',
+      shipmentStatus: ShipmentStatus.IN_TRANSIT,
+    });
   });
 
   it('empty or unknown non-prefixed code → UNMAPPABLE with UNKNOWN_COURIER_CODE reason', () => {

@@ -18,26 +18,14 @@ import {
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
-import {
-  RtoReceiptService,
-  type ReceiveRtoResult,
-} from '../services/rto-receipt.service';
+import { RtoReceiptService, type ReceiveRtoResult } from '../services/rto-receipt.service';
 import {
   RtoInspectionService,
   type InspectRtoItemResult,
 } from '../services/rto-inspection.service';
-import {
-  RtoDispositionService,
-  type FinalizeRtoResult,
-} from '../services/rto-disposition.service';
-import {
-  RtoReadService,
-  type RtoShipmentDetail,
-} from '../services/rto-read.service';
-import {
-  InspectRtoItemDto,
-  ReceiveRtoDto,
-} from '../dto/warehouse-rto.dto';
+import { RtoDispositionService, type FinalizeRtoResult } from '../services/rto-disposition.service';
+import { RtoReadService, type RtoShipmentDetail } from '../services/rto-read.service';
+import { InspectRtoItemDto, ReceiveRtoDto } from '../dto/warehouse-rto.dto';
 
 /**
  * Warehouse RTO operator workflow (receive → inspect[…] → finalize).

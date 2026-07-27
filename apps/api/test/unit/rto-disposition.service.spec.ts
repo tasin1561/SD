@@ -39,10 +39,7 @@ function item(
     id,
     orderItemId: `oi-${id}`,
     quantity: opts.quantity ?? 2,
-    rtoCondition:
-      opts.rtoCondition === undefined
-        ? RtoItemCondition.GOOD
-        : opts.rtoCondition,
+    rtoCondition: opts.rtoCondition === undefined ? RtoItemCondition.GOOD : opts.rtoCondition,
     rtoDisposition: disposition,
     pickedBinId: opts.pickedBin === undefined ? 'bin-1' : opts.pickedBin,
     pickedBatchId: opts.pickedBatch === undefined ? 'bat-1' : opts.pickedBatch,
@@ -98,9 +95,7 @@ function makeService(
     movementCounter += 1;
     return { movementId: `mv-${movementCounter}` };
   });
-  const runWithRetry = jest.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({}),
-  );
+  const runWithRetry = jest.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({}));
   const mutation = { apply, runWithRetry };
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs]>(async () => 'a');
   const audit = { log: auditLog };
@@ -150,10 +145,9 @@ function makeService(
 
 describe('RtoDispositionService.finalize — Model A retry-state matrix', () => {
   it('STATE 1 (neither done) RESTOCK: RETURN_RESTOCK +qty movement + transition', async () => {
-    const { svc, runWithRetry, apply, transitionStatus, auditLog } =
-      makeService({
-        items: [item('si-1', RtoDisposition.RESTOCK, { quantity: 3 })],
-      });
+    const { svc, runWithRetry, apply, transitionStatus, auditLog } = makeService({
+      items: [item('si-1', RtoDisposition.RESTOCK, { quantity: 3 })],
+    });
     const r = await svc.finalize(SHIP, STAFF);
 
     expect(runWithRetry).toHaveBeenCalledTimes(1);
@@ -190,9 +184,7 @@ describe('RtoDispositionService.finalize — Model A retry-state matrix', () => 
       alreadyFinalized: false,
     });
     expect(r.items[0]?.movementId).toBe('mv-1');
-    expect(auditLog).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'rto.finalized' }),
-    );
+    expect(auditLog).toHaveBeenCalledWith(expect.objectContaining({ action: 'rto.finalized' }));
   });
 
   it('STATE 1 (neither done) WRITE_OFF: NO movement (decrement stands from dispatch) + transition', async () => {
@@ -231,14 +223,10 @@ describe('RtoDispositionService.finalize — Model A retry-state matrix', () => 
   });
 
   it('STATE 3 (both done): alreadyFinalized short-circuit', async () => {
-    const { svc, stockMovementFindFirst, runWithRetry, transitionStatus } =
-      makeService({
-        orderStatus: OrderStatus.RTO_RESTOCKED,
-        items: [
-          item('si-1', RtoDisposition.RESTOCK),
-          item('si-2', RtoDisposition.WRITE_OFF),
-        ],
-      });
+    const { svc, stockMovementFindFirst, runWithRetry, transitionStatus } = makeService({
+      orderStatus: OrderStatus.RTO_RESTOCKED,
+      items: [item('si-1', RtoDisposition.RESTOCK), item('si-2', RtoDisposition.WRITE_OFF)],
+    });
     const r = await svc.finalize(SHIP, STAFF);
     expect(r).toMatchObject({
       status: OrderStatus.RTO_RESTOCKED,
@@ -256,10 +244,7 @@ describe('RtoDispositionService.finalize — Model A retry-state matrix', () => 
 describe('RtoDispositionService.finalize — disposition mixes (Model A)', () => {
   it('all-WRITE_OFF: no movements, transition runs', async () => {
     const { svc, runWithRetry, apply } = makeService({
-      items: [
-        item('si-1', RtoDisposition.WRITE_OFF),
-        item('si-2', RtoDisposition.WRITE_OFF),
-      ],
+      items: [item('si-1', RtoDisposition.WRITE_OFF), item('si-2', RtoDisposition.WRITE_OFF)],
     });
     const r = await svc.finalize(SHIP, STAFF);
     expect(runWithRetry).not.toHaveBeenCalled();
@@ -281,19 +266,14 @@ describe('RtoDispositionService.finalize — disposition mixes (Model A)', () =>
     expect(apply).toHaveBeenCalledTimes(2); // only the 2 RESTOCK items
     expect(r.restockedCount).toBe(2);
     expect(r.writtenOffCount).toBe(1);
-    expect(
-      r.items.find((i) => i.shipmentItemId === 'si-2')?.movementId,
-    ).toBeNull();
+    expect(r.items.find((i) => i.shipmentItemId === 'si-2')?.movementId).toBeNull();
   });
 });
 
 describe('RtoDispositionService.finalize — guards', () => {
   it('RTO_INSPECTION_INCOMPLETE when any item lacks inspection', async () => {
     const { svc, runWithRetry, transitionStatus } = makeService({
-      items: [
-        item('si-1', RtoDisposition.RESTOCK),
-        item('si-2', null, { rtoCondition: null }),
-      ],
+      items: [item('si-1', RtoDisposition.RESTOCK), item('si-2', null, { rtoCondition: null })],
     });
     await expect(svc.finalize(SHIP, STAFF)).rejects.toMatchObject({
       response: { code: 'RTO_INSPECTION_INCOMPLETE' },
@@ -343,16 +323,12 @@ describe('RtoDispositionService.finalize — guards', () => {
 
   it('404 when shipment is missing', async () => {
     const { svc } = makeService({ shipment: null });
-    await expect(svc.finalize(SHIP, STAFF)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(svc.finalize(SHIP, STAFF)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('404 when order is missing', async () => {
     const { svc } = makeService({ orderStatus: 'missing' });
-    await expect(svc.finalize(SHIP, STAFF)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(svc.finalize(SHIP, STAFF)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   // ── R6: cross-warehouse restock guard (conservation-critical) ─────────
@@ -440,10 +416,7 @@ describe('RtoDispositionService.finalize — guards', () => {
   it('R6b: a MIXED cross-warehouse batch restocks one line and writes off the other', async () => {
     const { svc, apply } = makeService({
       rtoReceivedWarehouseId: 'wh-other',
-      items: [
-        item('si-1', RtoDisposition.WRITE_OFF),
-        item('si-2', RtoDisposition.RESTOCK),
-      ],
+      items: [item('si-1', RtoDisposition.WRITE_OFF), item('si-2', RtoDisposition.RESTOCK)],
     });
     const r = await svc.finalize(SHIP, STAFF);
     expect(r).toMatchObject({ restockedCount: 1, writtenOffCount: 1 });

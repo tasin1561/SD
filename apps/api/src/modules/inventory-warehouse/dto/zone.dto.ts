@@ -13,7 +13,10 @@ import {
 } from 'class-validator';
 
 export class CreateZoneDto {
-  @ApiProperty({ description: 'Zone code, unique within the warehouse, e.g. "A" or "RTO"', maxLength: 32 })
+  @ApiProperty({
+    description: 'Zone code, unique within the warehouse, e.g. "A" or "RTO"',
+    maxLength: 32,
+  })
   @IsString()
   @MinLength(1)
   @MaxLength(32)
@@ -26,7 +29,13 @@ export class CreateZoneDto {
   @MaxLength(120)
   name!: string;
 
-  @ApiProperty({ required: false, default: 100, minimum: 0, maximum: 100000, description: 'Lower = picked first' })
+  @ApiProperty({
+    required: false,
+    default: 100,
+    minimum: 0,
+    maximum: 100000,
+    description: 'Lower = picked first',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()

@@ -1,14 +1,7 @@
 'use client';
 
 import { useState, type FormEvent, type ReactElement } from 'react';
-import {
-  Button,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Select,
-} from '@skydrop/ui/components';
+import { Button, FormField, Input, Modal, ModalFooter, Select } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 import type {
   CategoryView,
@@ -54,9 +47,7 @@ export function CategoryFormModal(
 
   const [name, setName] = useState(seed?.name ?? '');
   const [slug, setSlug] = useState(seed?.slug ?? '');
-  const [parentId, setParentId] = useState<string>(
-    seed?.parentId ?? seedParent ?? '',
-  );
+  const [parentId, setParentId] = useState<string>(seed?.parentId ?? seedParent ?? '');
   const [sortOrder, setSortOrder] = useState(
     seed?.sortOrder !== undefined ? String(seed.sortOrder) : '0',
   );
@@ -137,12 +128,7 @@ export function CategoryFormModal(
     >
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-3">
         <FormField label="Name" required>
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            maxLength={120}
-            required
-          />
+          <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required />
         </FormField>
 
         {mode === 'create' && (
@@ -157,10 +143,7 @@ export function CategoryFormModal(
               />
             </FormField>
             <FormField label="Parent">
-              <Select
-                value={parentId}
-                onChange={(e) => setParentId(e.target.value)}
-              >
+              <Select value={parentId} onChange={(e) => setParentId(e.target.value)}>
                 <option value="">— root —</option>
                 {props.categories.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -239,17 +222,17 @@ export function CategoryFormModal(
         )}
 
         <ModalFooter>
-          <Button
-            type="button"
-            variant="ghost"
-            size="md"
-            disabled={busy}
-            onClick={props.onClose}
-          >
+          <Button type="button" variant="ghost" size="md" disabled={busy} onClick={props.onClose}>
             Cancel
           </Button>
           <Button type="submit" variant="primary" size="md" disabled={busy}>
-            {busy ? (mode === 'create' ? 'Creating…' : 'Saving…') : mode === 'create' ? 'Create' : 'Save'}
+            {busy
+              ? mode === 'create'
+                ? 'Creating…'
+                : 'Saving…'
+              : mode === 'create'
+                ? 'Create'
+                : 'Save'}
           </Button>
         </ModalFooter>
       </form>

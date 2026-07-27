@@ -19,10 +19,7 @@ import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import { UpdateAgentSettingsDto } from '../dto/update-agent-settings.dto';
-import {
-  AgentSettingsService,
-  type AgentSettingsView,
-} from '../services/agent-settings.service';
+import { AgentSettingsService, type AgentSettingsView } from '../services/agent-settings.service';
 import {
   AdminAgentService,
   type AgentDetail,

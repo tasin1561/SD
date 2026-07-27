@@ -41,11 +41,7 @@ describe('FE-2 boundary — seller webhook create', () => {
     ]);
 
     renderWithProviders(
-      <WebhookFormModal
-        mode="create"
-        onClose={() => undefined}
-        onSuccess={() => undefined}
-      />,
+      <WebhookFormModal mode="create" onClose={() => undefined} onSuccess={() => undefined} />,
       { fetchImpl },
     );
 
@@ -55,9 +51,7 @@ describe('FE-2 boundary — seller webhook create', () => {
     // redeployed the client" — FE-2's whole point. The form submits
     // an http URL (the client wouldn't have flagged it pre-protocol
     // bump); the server rejects.
-    const urlInput = screen.getByPlaceholderText(
-      'https://example.com/skydrop/webhooks',
-    );
+    const urlInput = screen.getByPlaceholderText('https://example.com/skydrop/webhooks');
     await user.clear(urlInput);
     // browsers accept http://, but the server now demands https.
     await user.type(urlInput, 'http://example.com/skydrop');
@@ -120,9 +114,7 @@ describe('FE-2 boundary — seller webhook create', () => {
     // The form is pre-populated with sensible defaults (https://
     // placeholder + canonical event codes), so submitting as-is
     // works for the happy-path drive.
-    const urlInput = screen.getByPlaceholderText(
-      'https://example.com/skydrop/webhooks',
-    );
+    const urlInput = screen.getByPlaceholderText('https://example.com/skydrop/webhooks');
     await user.clear(urlInput);
     await user.type(urlInput, 'https://example.com/skydrop');
 

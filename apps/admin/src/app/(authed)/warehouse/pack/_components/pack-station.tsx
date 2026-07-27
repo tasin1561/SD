@@ -1,13 +1,7 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  EmptyState,
-  useToast,
-} from '@skydrop/ui/components';
+import { Button, Card, CardBody, EmptyState, useToast } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 import type { PulledPack } from '@skydrop/api-client';
 import { usePullNextPack, useCompletePack } from '@/lib/api-hooks';
@@ -60,9 +54,7 @@ export function PackStation(): ReactElement {
     setBusy(true);
     try {
       await complete.mutateAsync({ shipmentId: pack.shipmentId });
-      toast.success(
-        `Packed — shipment ${pack.shipmentNumber} attached to manifest.`,
-      );
+      toast.success(`Packed — shipment ${pack.shipmentNumber} attached to manifest.`);
       setPack(null);
     } catch (err) {
       setError(fmtError(err));
@@ -74,12 +66,7 @@ export function PackStation(): ReactElement {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <Button
-          variant="primary"
-          size="md"
-          onClick={() => void onPull()}
-          disabled={pull.isPending}
-        >
+        <Button variant="primary" size="md" onClick={() => void onPull()} disabled={pull.isPending}>
           {pull.isPending ? 'Pulling…' : pack ? 'Pull next (after complete)' : 'Pull next'}
         </Button>
       </div>
@@ -104,9 +91,7 @@ export function PackStation(): ReactElement {
               </div>
               <div className="text-text-faint text-xs mt-0.5">
                 Picked{' '}
-                {pack.pickCompletedAt
-                  ? new Date(pack.pickCompletedAt).toLocaleString()
-                  : '—'}
+                {pack.pickCompletedAt ? new Date(pack.pickCompletedAt).toLocaleString() : '—'}
               </div>
             </div>
 
@@ -135,12 +120,7 @@ export function PackStation(): ReactElement {
             </div>
 
             <div className="flex justify-end">
-              <Button
-                variant="primary"
-                size="md"
-                onClick={() => void onComplete()}
-                disabled={busy}
-              >
+              <Button variant="primary" size="md" onClick={() => void onComplete()} disabled={busy}>
                 {busy ? 'Completing…' : 'Mark packed'}
               </Button>
             </div>

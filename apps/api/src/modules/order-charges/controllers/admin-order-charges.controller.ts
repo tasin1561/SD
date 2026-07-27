@@ -31,7 +31,9 @@ export class AdminOrderChargesController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'List all OrderCharge rows for an order (admin view, all visibility levels)' })
+  @ApiOperation({
+    summary: 'List all OrderCharge rows for an order (admin view, all visibility levels)',
+  })
   list(@Param('orderId', uuid()) orderId: string): Promise<readonly OrderChargeView[]> {
     return this.svc.listForOrderAdmin(orderId);
   }

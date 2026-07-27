@@ -1,9 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   ActorType,
   CredentialEnvironment,
@@ -226,9 +221,7 @@ export class AwbGenerationService {
       totalWeightGrams: shipment.totalWeightGrams,
       declaredValueInr: shipment.declaredValueInr.toString(),
       codAmountInr: shipment.codAmountInr?.toString() ?? null,
-      itemDescription: shipment.items
-        .map((i) => `${i.productName} x${i.quantity}`)
-        .join('; '),
+      itemDescription: shipment.items.map((i) => `${i.productName} x${i.quantity}`).join('; '),
     };
 
     const awb = await this.delhiveryAwb.generateAwb(req);
@@ -287,12 +280,7 @@ export class AwbGenerationService {
     });
 
     // Phase D — label fetch + Spaces upload + tx2 (retryable follow-on).
-    return this.uploadAndPersistLabel(
-      shipmentId,
-      awb.awbNumber,
-      awb.courierShipmentId,
-      actor,
-    );
+    return this.uploadAndPersistLabel(shipmentId, awb.awbNumber, awb.courierShipmentId, actor);
   }
 
   /**
@@ -335,9 +323,7 @@ export class AwbGenerationService {
             mimeType: label.mimeType,
             generatedByStaffId: actor.id ?? null,
             generatedReason:
-              labelVersion > 1
-                ? LabelGenerationReason.AWB_REISSUED
-                : LabelGenerationReason.INITIAL,
+              labelVersion > 1 ? LabelGenerationReason.AWB_REISSUED : LabelGenerationReason.INITIAL,
           },
         });
         await this.audit.log(
@@ -425,7 +411,11 @@ export class AwbGenerationService {
       return selected.courierAccountId;
     } catch (err) {
       this.logger.debug(
-        { sellerId, courierCode: shipment.courierCode, err: err instanceof Error ? err.message : String(err) },
+        {
+          sellerId,
+          courierCode: shipment.courierCode,
+          err: err instanceof Error ? err.message : String(err),
+        },
         'No courier account resolved for this shipment (expected until accounts are configured) — courierAccountId left unset',
       );
       return null;

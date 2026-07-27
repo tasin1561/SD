@@ -1,16 +1,8 @@
-import {
-  Injectable,
-  Logger,
-  type OnModuleDestroy,
-  type OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Worker, type Job } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { TrackingPollService } from '../services/tracking-poll.service';
-import {
-  JOB_POLL_TRACKING,
-  TRACKING_POLL_QUEUE_NAME,
-} from './tracking-poll.queue';
+import { JOB_POLL_TRACKING, TRACKING_POLL_QUEUE_NAME } from './tracking-poll.queue';
 
 /**
  * Module 10 (poll) — in-process BullMQ worker for the Delhivery

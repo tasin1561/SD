@@ -14,10 +14,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { StaffRole } from '@skydrop/db';
 import { CurrentStaff } from '../../common/decorators/current-staff.decorator';
-import {
-  ClientInfo,
-  type ClientInfoPayload,
-} from '../../common/decorators/client-info.decorator';
+import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/client-info.decorator';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { requireStaffRoles } from '../../common/auth/require-staff-roles';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';

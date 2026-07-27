@@ -103,9 +103,7 @@ describe('DelhiveryServiceabilityService — against live response shapes', () =
 
   it('canShip rejects COD to a prepaid-only pin', async () => {
     const { http } = makeHttp({
-      delivery_codes: [
-        { postal_code: { remarks: '', cod: 'N', pre_paid: 'Y', is_oda: 'N' } },
-      ],
+      delivery_codes: [{ postal_code: { remarks: '', cod: 'N', pre_paid: 'Y', is_oda: 'N' } }],
     });
     const svc = new DelhiveryServiceabilityService(http);
     await expect(
@@ -149,9 +147,7 @@ describe('DelhiveryServiceabilityService — against live response shapes', () =
 
   it('ODA is surfaced but does NOT block — it is reachable, just dearer', async () => {
     const { http } = makeHttp({
-      delivery_codes: [
-        { postal_code: { remarks: '', cod: 'Y', pre_paid: 'Y', is_oda: 'Y' } },
-      ],
+      delivery_codes: [{ postal_code: { remarks: '', cod: 'Y', pre_paid: 'Y', is_oda: 'Y' } }],
     });
     const r = await new DelhiveryServiceabilityService(http).canShip({
       pincode: '190010',
@@ -261,8 +257,6 @@ describe('DelhiveryCostService — against the live response shape', () => {
       chargeableWeightGrams: 1500,
       paymentType: 'Pre-paid',
     });
-    expect(String((request.mock.calls[0]![0] as AnyArgs)['path'])).toContain(
-      'pt=Pre-paid',
-    );
+    expect(String((request.mock.calls[0]![0] as AnyArgs)['path'])).toContain('pt=Pre-paid');
   });
 });

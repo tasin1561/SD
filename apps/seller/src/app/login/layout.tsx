@@ -12,11 +12,7 @@ import './login-console.css';
  * authed shell keeps its own palette untouched. The live corridor runs
  * as an ambient background, matching skydrop.online and track.
  */
-export default function LoginLayout({
-  children,
-}: {
-  children: ReactNode;
-}): ReactElement {
+export default function LoginLayout({ children }: { children: ReactNode }): ReactElement {
   return (
     <div className="mc-login relative min-h-screen grid place-items-center bg-bg text-text-body p-6 overflow-hidden">
       <div aria-hidden className="console-grid absolute inset-0" />

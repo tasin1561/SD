@@ -64,7 +64,9 @@ export class SellerThresholdController {
 
   @Patch('seller/products/:productId/variants/:variantId/threshold')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Set/clear a variant low-stock threshold (wins over the seller default)' })
+  @ApiOperation({
+    summary: 'Set/clear a variant low-stock threshold (wins over the seller default)',
+  })
   setVariant(
     @CurrentSeller() seller: AuthenticatedSeller,
     @Param('productId', uuid()) productId: string,

@@ -56,10 +56,7 @@ export class StockTransferService {
     private readonly audit: AuditLogService,
   ) {}
 
-  async transfer(
-    input: StockTransferInput,
-    staffId: string,
-  ): Promise<StockTransferResult> {
+  async transfer(input: StockTransferInput, staffId: string): Promise<StockTransferResult> {
     if (!Number.isInteger(input.qty) || input.qty <= 0) {
       throw new BadRequestException({
         code: 'INVALID_TRANSFER_QTY',
@@ -74,7 +71,8 @@ export class StockTransferService {
     if (sameLocation) {
       throw new BadRequestException({
         code: 'TRANSFER_SOURCE_EQUALS_DEST',
-        message: 'Source and destination (warehouse, bin, batch) are identical — nothing to transfer',
+        message:
+          'Source and destination (warehouse, bin, batch) are identical — nothing to transfer',
       });
     }
 

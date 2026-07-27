@@ -1,7 +1,4 @@
-import {
-  NotificationFrequency,
-  SellerNotificationCategory,
-} from '@skydrop/db';
+import { NotificationFrequency, SellerNotificationCategory } from '@skydrop/db';
 import {
   DEFAULT_PREFERENCES,
   SellerNotificationPreferenceService,
@@ -43,22 +40,31 @@ function makeSut() {
         }
         return { count: args.data.length };
       }),
-      update: jest.fn(async (args: { where: { sellerId_category: { sellerId: string; category: SellerNotificationCategory } }; data: Partial<PrefRow> }) => {
-        const { sellerId, category } = args.where.sellerId_category;
-        const row = rows.find((r) => r.sellerId === sellerId && r.category === category);
-        if (row) Object.assign(row, args.data);
-        return row;
-      }),
+      update: jest.fn(
+        async (args: {
+          where: { sellerId_category: { sellerId: string; category: SellerNotificationCategory } };
+          data: Partial<PrefRow>;
+        }) => {
+          const { sellerId, category } = args.where.sellerId_category;
+          const row = rows.find((r) => r.sellerId === sellerId && r.category === category);
+          if (row) Object.assign(row, args.data);
+          return row;
+        },
+      ),
     },
     auditLog: { create: auditCreate },
   };
 
   const prismaClient = {
     sellerNotificationPreference: {
-      findUnique: jest.fn(async (args: { where: { sellerId_category: { sellerId: string; category: SellerNotificationCategory } } }) => {
-        const { sellerId, category } = args.where.sellerId_category;
-        return rows.find((r) => r.sellerId === sellerId && r.category === category) ?? null;
-      }),
+      findUnique: jest.fn(
+        async (args: {
+          where: { sellerId_category: { sellerId: string; category: SellerNotificationCategory } };
+        }) => {
+          const { sellerId, category } = args.where.sellerId_category;
+          return rows.find((r) => r.sellerId === sellerId && r.category === category) ?? null;
+        },
+      ),
       findMany: jest.fn(async (args: { where: { sellerId: string } }) => {
         return rows.filter((r) => r.sellerId === args.where.sellerId);
       }),

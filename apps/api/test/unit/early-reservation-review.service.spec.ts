@@ -42,8 +42,8 @@ function makeService(
     releaseAlreadyInactive?: boolean;
   } = {},
 ) {
-  const reviewFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async () => (opts.existing === undefined ? row() : opts.existing),
+  const reviewFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+    opts.existing === undefined ? row() : opts.existing,
   );
   const reviewFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
     async () => opts.listRows ?? [row()],
@@ -52,9 +52,7 @@ function makeService(
     ...row(),
     ...((args['data'] as AnyArgs | undefined) ?? {}),
   }));
-  const reservationFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
-    async () => opts.holds ?? [],
-  );
+  const reservationFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => opts.holds ?? []);
 
   const client = {
     earlyReservationReview: {
@@ -79,7 +77,15 @@ function makeService(
     reservations as unknown as StockReservationService,
     audit as unknown as AuditLogService,
   );
-  return { svc, release, reviewUpdate, reviewFindFirst, reviewFindMany, reservationFindMany, auditLog };
+  return {
+    svc,
+    release,
+    reviewUpdate,
+    reviewFindFirst,
+    reviewFindMany,
+    reservationFindMany,
+    auditLog,
+  };
 }
 
 describe('EarlyReservationReviewService.listForSeller', () => {

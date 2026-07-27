@@ -1,10 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PaymentMode } from '@skydrop/db';
 import { DelhiveryHttpService } from './delhivery-http.service';
-import type {
-  DelhiveryClient,
-  DelhiveryServiceabilityResult,
-} from '../types/delhivery.types';
+import type { DelhiveryClient, DelhiveryServiceabilityResult } from '../types/delhivery.types';
 
 /** The live pin record, as Delhivery actually returns it. */
 interface DelhiveryPostalCode {
@@ -47,8 +44,7 @@ export interface DelhiveryPinDetail {
   readonly fromLiveApi: boolean;
 }
 
-const YES = (v: string | undefined): boolean =>
-  (v ?? '').trim().toUpperCase() === 'Y';
+const YES = (v: string | undefined): boolean => (v ?? '').trim().toUpperCase() === 'Y';
 
 /**
  * Delhivery pincode serviceability — the real contract.
@@ -72,17 +68,16 @@ const YES = (v: string | undefined): boolean =>
  * signal — verified with PIN 999999.
  */
 @Injectable()
-export class DelhiveryServiceabilityService
-  implements Pick<DelhiveryClient, 'checkServiceability'>
-{
+export class DelhiveryServiceabilityService implements Pick<
+  DelhiveryClient,
+  'checkServiceability'
+> {
   private readonly logger = new Logger(DelhiveryServiceabilityService.name);
 
   constructor(private readonly http: DelhiveryHttpService) {}
 
   /** The adapter-interface slice: a plain boolean for existing callers. */
-  async checkServiceability(
-    pincode: string,
-  ): Promise<DelhiveryServiceabilityResult> {
+  async checkServiceability(pincode: string): Promise<DelhiveryServiceabilityResult> {
     const detail = await this.describePin(pincode);
     return { serviceable: detail.serviceable, fromLiveApi: detail.fromLiveApi };
   }
@@ -133,10 +128,7 @@ export class DelhiveryServiceabilityService
         detail,
       };
     }
-    if (
-      detail.maxWeightGrams > 0 &&
-      (input.weightGrams ?? 0) > detail.maxWeightGrams
-    ) {
+    if (detail.maxWeightGrams > 0 && (input.weightGrams ?? 0) > detail.maxWeightGrams) {
       return {
         ok: false,
         reason: `${input.weightGrams}g exceeds the ${detail.maxWeightGrams}g limit for ${input.pincode}`,

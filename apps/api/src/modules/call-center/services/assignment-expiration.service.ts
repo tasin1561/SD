@@ -57,10 +57,7 @@ export class AssignmentExpirationService {
 
   /** Schedule the delayed expiry sweep for a freshly-ASSIGNED entry.
    *  Called post-assignment by CallAssignmentService.pullNext. */
-  async scheduleExpiration(
-    assignmentId: string,
-    assignedAt: Date,
-  ): Promise<void> {
+  async scheduleExpiration(assignmentId: string, assignedAt: Date): Promise<void> {
     const minutes = await this.timeoutMinutes();
     await this.queue.enqueueExpiration(
       { assignmentId, assignedAtIso: assignedAt.toISOString() },
@@ -74,10 +71,7 @@ export class AssignmentExpirationService {
    * assignedAt this job was scheduled for; otherwise a no-op. Public so
    * it doubles as the manual trigger for tests / ops tooling.
    */
-  async expire(
-    assignmentId: string,
-    assignedAtIso: string,
-  ): Promise<ExpireResult> {
+  async expire(assignmentId: string, assignedAtIso: string): Promise<ExpireResult> {
     const entry = await this.prisma.client.callQueueEntry.findUnique({
       where: { id: assignmentId },
       select: {

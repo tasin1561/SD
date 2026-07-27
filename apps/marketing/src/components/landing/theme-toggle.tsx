@@ -10,9 +10,7 @@ function resolveInitial(): Theme {
   if (typeof document === 'undefined') return 'dark';
   const explicit = document.documentElement.getAttribute('data-theme');
   if (explicit === 'dark' || explicit === 'light') return explicit;
-  return window.matchMedia('(prefers-color-scheme: light)').matches
-    ? 'light'
-    : 'dark';
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 }
 
 /**
@@ -22,9 +20,7 @@ function resolveInitial(): Theme {
  * A11y: role=switch, aria-checked matches current mode. Icon indicates
  * the target theme (sun icon when currently dark = "click to lighten").
  */
-export function ThemeToggle({
-  className,
-}: { className?: string }): ReactElement | null {
+export function ThemeToggle({ className }: { className?: string }): ReactElement | null {
   const [theme, setTheme] = useState<Theme | null>(null);
 
   useEffect(() => {
@@ -48,7 +44,10 @@ export function ThemeToggle({
         type="button"
         aria-hidden
         tabIndex={-1}
-        className={cn('inline-flex items-center justify-center w-10 h-10 rounded-lg opacity-0', className)}
+        className={cn(
+          'inline-flex items-center justify-center w-10 h-10 rounded-lg opacity-0',
+          className,
+        )}
       >
         <Sun size={16} />
       </button>

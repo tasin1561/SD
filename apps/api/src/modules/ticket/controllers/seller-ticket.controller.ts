@@ -68,7 +68,7 @@ export class SellerTicketController {
   @Get(':ticketId')
   @SellerAuthAllowSuspended()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Ticket detail (404 for another seller\'s ticket)' })
+  @ApiOperation({ summary: "Ticket detail (404 for another seller's ticket)" })
   detail(
     @CurrentSeller() seller: AuthenticatedSeller,
     @Param('ticketId') ticketId: string,

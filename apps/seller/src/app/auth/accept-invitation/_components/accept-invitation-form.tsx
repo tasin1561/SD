@@ -32,11 +32,7 @@ const INITIAL: FormState = {
   confirmPassword: '',
 };
 
-export function AcceptInvitationForm({
-  token,
-}: {
-  readonly token: string;
-}): ReactElement {
+export function AcceptInvitationForm({ token }: { readonly token: string }): ReactElement {
   const [form, setForm] = useState<FormState>(INITIAL);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -169,8 +165,7 @@ export function AcceptInvitationForm({
       </div>
       <div>
         <label htmlFor="password" className={labelClass}>
-          Password{' '}
-          <span className="text-text-faint">(min 10 characters)</span>
+          Password <span className="text-text-faint">(min 10 characters)</span>
         </label>
         <div className="relative">
           <input

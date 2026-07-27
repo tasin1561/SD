@@ -1,8 +1,4 @@
-import {
-  NotificationChannel,
-  NotificationRecipientType,
-  OrderStatus,
-} from '@skydrop/db';
+import { NotificationChannel, NotificationRecipientType, OrderStatus } from '@skydrop/db';
 import { NotificationEventMappingService } from '../../src/modules/notifications/services/notification-event-mapping.service';
 
 const svc = new NotificationEventMappingService();
@@ -173,8 +169,8 @@ describe('NotificationEventMappingService — R5b AWAITING_SELLER_DECISION', () 
     // The rejects are deliberately silent in Phase-1A; the pause is not,
     // because the order is waiting on the seller and may hold their stock.
     expect(svc.resolveForOrderStatus(OrderStatus.REJECTED_NDR)).toHaveLength(0);
-    expect(
-      svc.resolveForOrderStatus(OrderStatus.AWAITING_SELLER_DECISION).length,
-    ).toBeGreaterThan(0);
+    expect(svc.resolveForOrderStatus(OrderStatus.AWAITING_SELLER_DECISION).length).toBeGreaterThan(
+      0,
+    );
   });
 });

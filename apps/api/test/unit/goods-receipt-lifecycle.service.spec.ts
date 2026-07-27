@@ -99,9 +99,9 @@ describe('GoodsReceiptService — declaration lifecycle', () => {
     const sut = makeSut({
       receipt: { id: 'gr1', sellerId: 's1', status: GoodsReceiptStatus.ARRIVING, lines: [] },
     });
-    await expect(
-      sut.svc.update('s1', 'gr1', { sellerReference: 'x' }, CTX),
-    ).rejects.toMatchObject({ response: { code: 'INVALID_RECEIPT_STATUS' } });
+    await expect(sut.svc.update('s1', 'gr1', { sellerReference: 'x' }, CTX)).rejects.toMatchObject({
+      response: { code: 'INVALID_RECEIPT_STATUS' },
+    });
   });
 
   it('cancel is rejected unless the receipt is PENDING', async () => {
@@ -117,7 +117,13 @@ describe('GoodsReceiptService — declaration lifecycle', () => {
 describe('GoodsReceiptService — admin recording lifecycle', () => {
   it('start-receiving requires PENDING', async () => {
     const sut = makeSut({
-      receipt: { id: 'gr1', sellerId: 's1', warehouseId: 'w1', status: GoodsReceiptStatus.ARRIVING, lines: [] },
+      receipt: {
+        id: 'gr1',
+        sellerId: 's1',
+        warehouseId: 'w1',
+        status: GoodsReceiptStatus.ARRIVING,
+        lines: [],
+      },
     });
     await expect(sut.svc.startReceiving('staff1', 'gr1', CTX)).rejects.toMatchObject({
       response: { code: 'INVALID_RECEIPT_STATUS' },

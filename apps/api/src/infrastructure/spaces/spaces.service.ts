@@ -44,9 +44,7 @@ export class SpacesService implements OnModuleInit {
 
   onModuleInit(): void {
     if (this.mock) {
-      this.logger.warn(
-        `SpacesService in MOCK mode — objects under ${MOCK_ROOT}/${this.bucket}`,
-      );
+      this.logger.warn(`SpacesService in MOCK mode — objects under ${MOCK_ROOT}/${this.bucket}`);
       return;
     }
     this.client = new S3Client({
@@ -64,18 +62,18 @@ export class SpacesService implements OnModuleInit {
   }
 
   /** Presigned PUT URL the client uses to upload directly to Spaces. */
-  async presignPutUrl(
-    key: string,
-    contentType: string,
-    ttlSeconds: number,
-  ): Promise<string> {
+  async presignPutUrl(key: string, contentType: string, ttlSeconds: number): Promise<string> {
     if (this.mock) return `mock://${this.bucket}/${key}?ct=${encodeURIComponent(contentType)}`;
     const cmd = new PutObjectCommand({
       Bucket: this.bucket,
       Key: key,
       ContentType: contentType,
     });
-    return getSignedUrl(this.requireClient() as unknown as Parameters<typeof getSignedUrl>[0], cmd, { expiresIn: ttlSeconds });
+    return getSignedUrl(
+      this.requireClient() as unknown as Parameters<typeof getSignedUrl>[0],
+      cmd,
+      { expiresIn: ttlSeconds },
+    );
   }
 
   async headObject(key: string): Promise<ObjectHead | null> {

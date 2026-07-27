@@ -44,9 +44,7 @@ import { OutboundWebhookQueue } from '../queue/outbound-webhook.queue';
  * leaking PII to whatever HTTPS endpoint they configured.
  */
 @Injectable()
-export class OutboundWebhookListener
-  implements OnApplicationBootstrap, OnModuleDestroy
-{
+export class OutboundWebhookListener implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(OutboundWebhookListener.name);
   private subscription: Subscription | null = null;
   private readonly inFlight = new Set<Promise<void>>();
@@ -132,9 +130,7 @@ export class OutboundWebhookListener
       // Per-endpoint try/catch — NOTIF-3 independence: one bad
       // endpoint never aborts the loop.
       try {
-        const signature = createHmac('sha256', ep.secretKey)
-          .update(body)
-          .digest('hex');
+        const signature = createHmac('sha256', ep.secretKey).update(body).digest('hex');
         await this.queue.enqueue({
           endpointId: ep.id,
           eventType: eventCode,

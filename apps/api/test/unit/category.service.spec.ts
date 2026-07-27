@@ -48,14 +48,12 @@ function makeSut(seed: Array<Partial<Cat> & Pick<Cat, 'id'>> = []) {
   }));
 
   const category = {
-    findUnique: jest.fn(
-      async ({ where }: { where: { slug?: string; id?: string } }) => {
-        if (where.slug !== undefined) {
-          return rows.find((r) => r.slug === where.slug) ?? null;
-        }
-        return rows.find((r) => r.id === where.id) ?? null;
-      },
-    ),
+    findUnique: jest.fn(async ({ where }: { where: { slug?: string; id?: string } }) => {
+      if (where.slug !== undefined) {
+        return rows.find((r) => r.slug === where.slug) ?? null;
+      }
+      return rows.find((r) => r.id === where.id) ?? null;
+    }),
     findFirst: jest.fn(
       async ({ where }: { where: { id: string; deletedAt?: null } }) =>
         rows.find((r) => r.id === where.id && r.deletedAt === null) ?? null,
@@ -84,8 +82,9 @@ function makeSut(seed: Array<Partial<Cat> & Pick<Cat, 'id'>> = []) {
         return r ? { ...r } : null;
       },
     ),
-    count: jest.fn(async ({ where }: { where: { parentId: string } }) =>
-      rows.filter((r) => r.parentId === where.parentId && r.deletedAt === null).length,
+    count: jest.fn(
+      async ({ where }: { where: { parentId: string } }) =>
+        rows.filter((r) => r.parentId === where.parentId && r.deletedAt === null).length,
     ),
   };
   const client = { category, product: { count: jest.fn(async () => 0) } };
@@ -132,9 +131,9 @@ describe('CategoryService — create computes depth + fullPath', () => {
         create: async () => ({}),
       },
     } as never;
-    await expect(
-      svc.createInTx(txSlugTaken, { name: 'X', slug: 'taken' }),
-    ).rejects.toThrow(ConflictException);
+    await expect(svc.createInTx(txSlugTaken, { name: 'X', slug: 'taken' })).rejects.toThrow(
+      ConflictException,
+    );
 
     const txNoParent = {
       category: {
@@ -200,9 +199,7 @@ describe('CategoryService — ancestor / descendant traversal', () => {
 
   it('getDescendantIds excludes the category itself and includes all nested', async () => {
     const { svc } = makeSut(tree);
-    expect((await svc.getDescendantIds('root')).sort()).toEqual(
-      ['leaf', 'leaf2', 'mid'].sort(),
-    );
+    expect((await svc.getDescendantIds('root')).sort()).toEqual(['leaf', 'leaf2', 'mid'].sort());
     expect(await svc.getDescendantIds('leaf')).toEqual([]);
   });
 });

@@ -25,9 +25,7 @@ describe('courier-credential-cipher (AES-256-GCM)', () => {
 
   it('decrypt with the wrong key fails (auth-tag mismatch)', () => {
     const encrypted = encryptCredential('secret', KEY_A);
-    expect(() => decryptCredential(encrypted, KEY_B)).toThrow(
-      CourierCredentialCipherError,
-    );
+    expect(() => decryptCredential(encrypted, KEY_B)).toThrow(CourierCredentialCipherError);
   });
 
   it('decrypt of a tampered payload fails', () => {
@@ -35,24 +33,18 @@ describe('courier-credential-cipher (AES-256-GCM)', () => {
     const blob = Buffer.from(encrypted, 'base64');
     const last = blob.length - 1;
     blob.writeUInt8(blob.readUInt8(last) ^ 0xff, last); // flip a ciphertext byte
-    expect(() =>
-      decryptCredential(blob.toString('base64'), KEY_A),
-    ).toThrow(CourierCredentialCipherError);
+    expect(() => decryptCredential(blob.toString('base64'), KEY_A)).toThrow(
+      CourierCredentialCipherError,
+    );
   });
 
   it('rejects a key that is not 64 hex chars', () => {
-    expect(() => encryptCredential('x', 'tooshort')).toThrow(
-      CourierCredentialCipherError,
-    );
-    expect(() => decryptCredential('AAAA', 'tooshort')).toThrow(
-      CourierCredentialCipherError,
-    );
+    expect(() => encryptCredential('x', 'tooshort')).toThrow(CourierCredentialCipherError);
+    expect(() => decryptCredential('AAAA', 'tooshort')).toThrow(CourierCredentialCipherError);
   });
 
   it('rejects a payload shorter than iv+authTag+1', () => {
     const tiny = Buffer.alloc(10).toString('base64');
-    expect(() => decryptCredential(tiny, KEY_A)).toThrow(
-      CourierCredentialCipherError,
-    );
+    expect(() => decryptCredential(tiny, KEY_A)).toThrow(CourierCredentialCipherError);
   });
 });

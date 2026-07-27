@@ -1,12 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsOptional,
-  IsString,
-  IsUUID,
-  Matches,
-  MaxLength,
-  MinLength,
-} from 'class-validator';
+import { IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -17,14 +10,21 @@ export class CreateCategoryProposalDto {
   @MaxLength(120)
   proposedName!: string;
 
-  @ApiProperty({ example: 'premium-apparel', description: 'Lowercase kebab; must be unique among categories' })
+  @ApiProperty({
+    example: 'premium-apparel',
+    description: 'Lowercase kebab; must be unique among categories',
+  })
   @IsString()
   @MinLength(1)
   @MaxLength(140)
   @Matches(SLUG, { message: 'proposedSlug must be lowercase alphanumeric with single hyphens' })
   proposedSlug!: string;
 
-  @ApiProperty({ required: false, nullable: true, description: 'Existing category to nest under; omit/null = root' })
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description: 'Existing category to nest under; omit/null = root',
+  })
   @IsOptional()
   @IsUUID('7')
   proposedParentId?: string;

@@ -30,8 +30,18 @@ export interface RecordManualScanInput {
 }
 
 export type ManualScanOutcome =
-  | { kind: 'TRANSITIONED' | 'DELIVERY_ATTEMPT_TRANSITIONED'; trackingEventId: string; fromStatus: OrderStatus; toStatus: OrderStatus }
-  | { kind: 'TRANSITION_SKIPPED' | 'DELIVERY_ATTEMPT_SKIPPED'; trackingEventId: string; reason: 'CURRENT_NOT_IN_ALLOWED_FROM' | 'ALREADY_AT_TARGET'; currentOrderStatus: OrderStatus }
+  | {
+      kind: 'TRANSITIONED' | 'DELIVERY_ATTEMPT_TRANSITIONED';
+      trackingEventId: string;
+      fromStatus: OrderStatus;
+      toStatus: OrderStatus;
+    }
+  | {
+      kind: 'TRANSITION_SKIPPED' | 'DELIVERY_ATTEMPT_SKIPPED';
+      trackingEventId: string;
+      reason: 'CURRENT_NOT_IN_ALLOWED_FROM' | 'ALREADY_AT_TARGET';
+      currentOrderStatus: OrderStatus;
+    }
   | { kind: 'INFORMATIONAL'; trackingEventId: string; reason: string };
 
 /**
@@ -179,9 +189,7 @@ export class ManualTrackingService {
       );
       return {
         kind:
-          decision.kind === 'DELIVERY_ATTEMPT'
-            ? 'DELIVERY_ATTEMPT_SKIPPED'
-            : 'TRANSITION_SKIPPED',
+          decision.kind === 'DELIVERY_ATTEMPT' ? 'DELIVERY_ATTEMPT_SKIPPED' : 'TRANSITION_SKIPPED',
         trackingEventId: trackingEvent.id,
         reason: skipReason,
         currentOrderStatus: order.status,
@@ -198,9 +206,7 @@ export class ManualTrackingService {
       });
       return {
         kind:
-          decision.kind === 'DELIVERY_ATTEMPT'
-            ? 'DELIVERY_ATTEMPT_TRANSITIONED'
-            : 'TRANSITIONED',
+          decision.kind === 'DELIVERY_ATTEMPT' ? 'DELIVERY_ATTEMPT_TRANSITIONED' : 'TRANSITIONED',
         trackingEventId: trackingEvent.id,
         fromStatus: result.fromStatus,
         toStatus: result.status,

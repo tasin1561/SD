@@ -60,7 +60,12 @@ export class RecordReceiptLineDto {
   @Max(1_000_000)
   receivedQty!: number;
 
-  @ApiProperty({ required: false, minimum: 0, default: 0, description: 'Units arrived damaged (not stocked in 1A)' })
+  @ApiProperty({
+    required: false,
+    minimum: 0,
+    default: 0,
+    description: 'Units arrived damaged (not stocked in 1A)',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -73,7 +78,10 @@ export class RecordReceiptLineDto {
   @IsUUID('7')
   putawayBinId?: string;
 
-  @ApiProperty({ required: false, description: 'Override declared manufacture date from physical goods' })
+  @ApiProperty({
+    required: false,
+    description: 'Override declared manufacture date from physical goods',
+  })
   @IsOptional()
   @IsDateString()
   manufacturedAt?: string;
@@ -108,8 +116,7 @@ export class RecordReceiptLinesDto {
  */
 export class CompleteGoodsReceiptDto {
   @ApiPropertyOptional({
-    description:
-      'Map of goodsReceiptLineId -> scanned unit serials. Strict-mode lines only.',
+    description: 'Map of goodsReceiptLineId -> scanned unit serials. Strict-mode lines only.',
     type: 'object',
     additionalProperties: { type: 'array', items: { type: 'string' } },
   })

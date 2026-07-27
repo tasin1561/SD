@@ -36,7 +36,11 @@ export class CreateProductDto {
   @MaxLength(120)
   brand?: string;
 
-  @ApiProperty({ required: false, maxLength: 120, description: "Seller's own product id; unique per seller" })
+  @ApiProperty({
+    required: false,
+    maxLength: 120,
+    description: "Seller's own product id; unique per seller",
+  })
   @IsOptional()
   @IsString()
   @MaxLength(120)

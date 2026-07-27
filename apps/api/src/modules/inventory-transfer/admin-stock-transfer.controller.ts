@@ -5,10 +5,7 @@ import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../common/types/request';
 import { CreateStockTransferDto } from './dto/stock-transfer.dto';
-import {
-  StockTransferService,
-  type StockTransferResult,
-} from './services/stock-transfer.service';
+import { StockTransferService, type StockTransferResult } from './services/stock-transfer.service';
 
 /**
  * R6 — admin stock transfer (inter-warehouse, or bin-to-bin within one

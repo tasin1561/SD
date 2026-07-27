@@ -77,9 +77,7 @@ export function TicketsIndex(): ReactElement {
           value={list.isLoading ? '—' : total}
           tone={status === TicketStatus.OPEN && total > 0 ? 'warn' : 'neutral'}
           hint={
-            status === TicketStatus.OPEN
-              ? 'Open tickets waiting on a decision'
-              : 'Across all pages'
+            status === TicketStatus.OPEN ? 'Open tickets waiting on a decision' : 'Across all pages'
           }
         />
         <Stat
@@ -150,9 +148,7 @@ export function TicketsIndex(): ReactElement {
           <EmptyState
             bare
             title={
-              status === TicketStatus.OPEN
-                ? 'No open tickets'
-                : 'No tickets match this filter'
+              status === TicketStatus.OPEN ? 'No open tickets' : 'No tickets match this filter'
             }
             description={
               status === TicketStatus.OPEN
@@ -177,9 +173,7 @@ export function TicketsIndex(): ReactElement {
             {items.map((t) => (
               <Tr key={t.id} interactive onClick={() => setSelected(t)}>
                 <Td className="text-text-muted whitespace-nowrap text-xs">
-                  {t.ticketType === TicketType.SCRAP_DAMAGE
-                    ? 'Scrap / damage'
-                    : 'Seller issue'}
+                  {t.ticketType === TicketType.SCRAP_DAMAGE ? 'Scrap / damage' : 'Seller issue'}
                 </Td>
                 <Td className="max-w-xs truncate">{t.subject}</Td>
                 <Td>

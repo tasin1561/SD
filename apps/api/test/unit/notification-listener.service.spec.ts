@@ -69,9 +69,7 @@ function makeSut(fixture: OrderFixture | null) {
                       courier: fixture.courierName
                         ? { name: fixture.courierName, code: 'delhivery' }
                         : null,
-                      deliveryAttempts: fixture.deliveryAttempt
-                        ? [fixture.deliveryAttempt]
-                        : [],
+                      deliveryAttempts: fixture.deliveryAttempt ? [fixture.deliveryAttempt] : [],
                     },
                   },
                 ]
@@ -308,9 +306,7 @@ describe('NotificationListener', () => {
       await listener.handle(lifecycleEvent(OrderStatus.DELIVERY_FAILED));
       for (const call of enqueueCalls) {
         // trimmed, raw notes — operator authored
-        expect(call.variables.ndr_reason).toBe(
-          'Customer requested redelivery tomorrow',
-        );
+        expect(call.variables.ndr_reason).toBe('Customer requested redelivery tomorrow');
       }
     });
 

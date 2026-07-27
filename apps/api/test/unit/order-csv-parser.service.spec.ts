@@ -80,12 +80,27 @@ describe('OrderCsvParserService', () => {
       fullMap,
     );
     expect(errors).toEqual([]);
-    expect(row).toMatchObject({ productSku: 'A-1', quantity: 3, codAmount: 999, externalRef: 'EXT-1' });
+    expect(row).toMatchObject({
+      productSku: 'A-1',
+      quantity: 3,
+      codAmount: 999,
+      externalRef: 'EXT-1',
+    });
   });
 
   it('rejects non-positive / non-integer quantity', () => {
     const { row, errors } = svc.coerceRow(
-      { SKU: 'A', Qty: '0', Name: 'x', Phone: 'p', Addr: 'a', City: 'c', State: 's', Pin: '1', Ref: 'r' },
+      {
+        SKU: 'A',
+        Qty: '0',
+        Name: 'x',
+        Phone: 'p',
+        Addr: 'a',
+        City: 'c',
+        State: 's',
+        Pin: '1',
+        Ref: 'r',
+      },
       fullMap,
     );
     expect(row).toBeNull();
@@ -103,8 +118,16 @@ describe('OrderCsvParserService', () => {
   it('rejects a negative codAmount', () => {
     const { errors } = svc.coerceRow(
       {
-        SKU: 'A', Qty: '1', Name: 'n', Phone: 'p', Addr: 'a',
-        City: 'c', State: 's', Pin: '1', Ref: 'r', COD: '-5',
+        SKU: 'A',
+        Qty: '1',
+        Name: 'n',
+        Phone: 'p',
+        Addr: 'a',
+        City: 'c',
+        State: 's',
+        Pin: '1',
+        Ref: 'r',
+        COD: '-5',
       },
       fullMap,
     );

@@ -21,9 +21,9 @@ function makePool(
   const count = jest.fn(async () => opts.available ?? 0);
   const update = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({}));
   const updateMany = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({ count: 1 }));
-  const createMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(
-    async (args) => ({ count: (args['data'] as unknown[]).length }),
-  );
+  const createMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async (args) => ({
+    count: (args['data'] as unknown[]).length,
+  }));
   const groupBy = jest.fn(async () => []);
   const settingFindUnique = jest.fn(async (args: AnyArgs) => {
     const key = (args['where'] as AnyArgs)['key'] as string;
@@ -39,9 +39,7 @@ function makePool(
     },
   } as unknown as PrismaService;
 
-  const request = jest.fn<Promise<unknown>, [AnyArgs]>(
-    async () => opts.apiResponse ?? '',
-  );
+  const request = jest.fn<Promise<unknown>, [AnyArgs]>(async () => opts.apiResponse ?? '');
   const http = {
     isStubMode: jest.fn(async () => opts.stub ?? false),
     request,
@@ -72,9 +70,11 @@ describe('DelhiveryWaybillPoolService — parsing the real response', () => {
     // Verified against production: count=3 returned
     // "38061110478273,38061110478284,38061110478295".
     const { svc } = makePool();
-    expect(
-      svc.parseWaybillResponse('38061110478273,38061110478284,38061110478295'),
-    ).toEqual(['38061110478273', '38061110478284', '38061110478295']);
+    expect(svc.parseWaybillResponse('38061110478273,38061110478284,38061110478295')).toEqual([
+      '38061110478273',
+      '38061110478284',
+      '38061110478295',
+    ]);
   });
 
   it('tolerates an array too, in case the shape changes under us', () => {
@@ -136,9 +136,7 @@ describe('DelhiveryWaybillPoolService.refillIfNeeded', () => {
     });
     const r = await sut.svc.refillIfNeeded();
     expect(r.fetched).toBe(3);
-    expect(String((sut.request.mock.calls[0]![0] as AnyArgs)['path'])).toContain(
-      'count=3',
-    );
+    expect(String((sut.request.mock.calls[0]![0] as AnyArgs)['path'])).toContain('count=3');
   });
 
   it('sets usableAfter in the FUTURE — a fresh waybill must settle first', async () => {
@@ -166,9 +164,7 @@ describe('DelhiveryWaybillPoolService.refillIfNeeded', () => {
       writesBlocked: true,
       settings: { 'courier.delhivery_waybill_pool_low_water': 10 },
     });
-    await expect(sut.svc.refillIfNeeded()).rejects.toThrow(
-      'DELHIVERY_LIVE_WRITES_DISABLED',
-    );
+    await expect(sut.svc.refillIfNeeded()).rejects.toThrow('DELHIVERY_LIVE_WRITES_DISABLED');
     expect(sut.request).not.toHaveBeenCalled();
   });
 

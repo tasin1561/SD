@@ -11,10 +11,7 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
-import type {
-  WebhookEndpointView,
-  WebhookEndpointWithSecret,
-} from '@skydrop/api-client';
+import type { WebhookEndpointView, WebhookEndpointWithSecret } from '@skydrop/api-client';
 import {
   useDeleteWebhookEndpoint,
   useRotateWebhookSecret,
@@ -76,10 +73,7 @@ export function WebhooksIndex(): ReactElement {
       />
 
       {newlyRevealed && (
-        <SecretRevealCard
-          endpoint={newlyRevealed}
-          onDismiss={() => setNewlyRevealed(null)}
-        />
+        <SecretRevealCard endpoint={newlyRevealed} onDismiss={() => setNewlyRevealed(null)} />
       )}
 
       {error && (
@@ -100,14 +94,10 @@ export function WebhooksIndex(): ReactElement {
           <CardBody>
             <div className="text-text-bright text-sm mb-1">No endpoints yet.</div>
             <p className="text-text-muted text-xs mb-3">
-              Add an HTTPS URL we should POST events to. Each endpoint gets a
-              unique HMAC secret you verify on receipt.
+              Add an HTTPS URL we should POST events to. Each endpoint gets a unique HMAC secret you
+              verify on receipt.
             </p>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setCreating(true)}
-            >
+            <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
               New endpoint
             </Button>
           </CardBody>
@@ -220,26 +210,16 @@ function EndpointRow({
             <div className="text-text-bright font-medium text-sm">
               {endpoint.name ?? 'Untitled endpoint'}{' '}
               {endpoint.autoDisabledAt ? (
-                <span className="text-critical text-[10px] uppercase ml-2">
-                  Auto-disabled
-                </span>
+                <span className="text-critical text-[10px] uppercase ml-2">Auto-disabled</span>
               ) : endpoint.isActive ? (
-                <span className="text-accent text-[10px] uppercase ml-2">
-                  Active
-                </span>
+                <span className="text-accent text-[10px] uppercase ml-2">Active</span>
               ) : (
-                <span className="text-text-muted text-[10px] uppercase ml-2">
-                  Disabled
-                </span>
+                <span className="text-text-muted text-[10px] uppercase ml-2">Disabled</span>
               )}
             </div>
-            <div className="text-text-muted font-mono text-xs mt-0.5 truncate">
-              {endpoint.url}
-            </div>
+            <div className="text-text-muted font-mono text-xs mt-0.5 truncate">{endpoint.url}</div>
             {endpoint.description && (
-              <div className="text-text-muted text-xs mt-1">
-                {endpoint.description}
-              </div>
+              <div className="text-text-muted text-xs mt-1">{endpoint.description}</div>
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
@@ -264,11 +244,7 @@ function EndpointRow({
             </Button>
             {pendingDelete ? (
               <>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={onDeleteConfirm}
-                >
+                <Button variant="destructive" size="sm" onClick={onDeleteConfirm}>
                   Confirm
                 </Button>
                 <Button variant="ghost" size="sm" onClick={onDeleteCancel}>
@@ -285,9 +261,7 @@ function EndpointRow({
 
         <div className="grid grid-cols-3 gap-3 mt-3 pt-3 border-t border-border text-xs">
           <div>
-            <div className="text-text-faint uppercase tracking-wide mb-1">
-              Subscribed events
-            </div>
+            <div className="text-text-faint uppercase tracking-wide mb-1">Subscribed events</div>
             <div className="text-text-body font-mono">
               {endpoint.subscribedEvents.length === 0 ? (
                 <span className="text-text-faint">none</span>
@@ -297,19 +271,13 @@ function EndpointRow({
             </div>
           </div>
           <div>
-            <div className="text-text-faint uppercase tracking-wide mb-1">
-              Last success
-            </div>
+            <div className="text-text-faint uppercase tracking-wide mb-1">Last success</div>
             <div className="text-text-body">
-              {endpoint.lastSuccessAt
-                ? new Date(endpoint.lastSuccessAt).toLocaleString()
-                : '—'}
+              {endpoint.lastSuccessAt ? new Date(endpoint.lastSuccessAt).toLocaleString() : '—'}
             </div>
           </div>
           <div>
-            <div className="text-text-faint uppercase tracking-wide mb-1">
-              Failures (consec.)
-            </div>
+            <div className="text-text-faint uppercase tracking-wide mb-1">Failures (consec.)</div>
             <div
               className={
                 endpoint.consecutiveFailureCount > 0

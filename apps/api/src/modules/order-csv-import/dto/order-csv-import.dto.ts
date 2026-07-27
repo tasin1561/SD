@@ -28,7 +28,8 @@ export class PreviewOrderCsvDto {
   @ApiProperty({
     required: false,
     additionalProperties: true,
-    description: 'Optional manual mapping override (order field → CSV header), merged over auto-detect.',
+    description:
+      'Optional manual mapping override (order field → CSV header), merged over auto-detect.',
   })
   @IsOptional()
   @IsObject()

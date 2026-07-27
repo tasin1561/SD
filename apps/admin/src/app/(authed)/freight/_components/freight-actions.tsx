@@ -13,11 +13,7 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import { InboundFreightStatus } from '@skydrop/db';
-import {
-  useSettleFreight,
-  useWaiveFreight,
-  type FreightChargeView,
-} from '@/lib/ops-hooks';
+import { useSettleFreight, useWaiveFreight, type FreightChargeView } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 
 const MIN_WAIVE_REASON = 10;
@@ -34,11 +30,7 @@ const MIN_WAIVE_REASON = 10;
  * server re-guards both (`settle` re-checks status inside the tx so
  * two operators cannot double-debit) and its verdict is shown as-is.
  */
-export function FreightActions({
-  row,
-}: {
-  readonly row: FreightChargeView;
-}): ReactElement {
+export function FreightActions({ row }: { readonly row: FreightChargeView }): ReactElement {
   const toast = useToast();
   const settle = useSettleFreight();
   const waive = useWaiveFreight();
@@ -104,9 +96,8 @@ export function FreightActions({
         title="Settle this freight bill?"
         description={
           <>
-            Debits the seller&apos;s wallet by the outstanding{' '}
-            <Money amount={row.outstandingInr} /> for receipt{' '}
-            {row.receiptNumber ?? row.goodsReceiptId.slice(0, 8)}. The ledger entry is
+            Debits the seller&apos;s wallet by the outstanding <Money amount={row.outstandingInr} />{' '}
+            for receipt {row.receiptNumber ?? row.goodsReceiptId.slice(0, 8)}. The ledger entry is
             permanent.
           </>
         }
@@ -126,9 +117,8 @@ export function FreightActions({
         title="Waive this freight bill"
         description={
           <>
-            Forgives <Money amount={row.outstandingInr} /> — no wallet movement, and
-            the bill stays countable as a waiver rather than disappearing. Audited at
-            HIGH severity.
+            Forgives <Money amount={row.outstandingInr} /> — no wallet movement, and the bill stays
+            countable as a waiver rather than disappearing. Audited at HIGH severity.
           </>
         }
       >

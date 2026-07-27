@@ -26,12 +26,7 @@ import { TrackingPollWorker } from './queue/tracking-poll.worker';
  * ops can trigger a manual cycle.
  */
 @Module({
-  imports: [
-    PrismaModule,
-    CourierDelhiveryModule,
-    TrackingEventsModule,
-    OrderModule,
-  ],
+  imports: [PrismaModule, CourierDelhiveryModule, TrackingEventsModule, OrderModule],
   providers: [TrackingPollService, TrackingPollQueue, TrackingPollWorker],
   exports: [],
 })

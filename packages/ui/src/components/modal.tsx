@@ -33,10 +33,8 @@ export function Modal({
   readonly tone?: 'default' | 'critical';
   readonly size?: 'sm' | 'md' | 'lg';
 }): ReactElement {
-  const widthClass =
-    size === 'sm' ? 'max-w-sm' : size === 'lg' ? 'max-w-2xl' : 'max-w-md';
-  const borderClass =
-    tone === 'critical' ? 'border-[var(--color-critical-ring)]' : 'border-border';
+  const widthClass = size === 'sm' ? 'max-w-sm' : size === 'lg' ? 'max-w-2xl' : 'max-w-md';
+  const borderClass = tone === 'critical' ? 'border-[var(--color-critical-ring)]' : 'border-border';
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -51,9 +49,7 @@ export function Modal({
           <div
             className={
               'flex items-start justify-between gap-4 px-4 py-3 border-b ' +
-              (tone === 'critical'
-                ? 'border-[var(--color-critical-ring)]'
-                : 'border-border')
+              (tone === 'critical' ? 'border-[var(--color-critical-ring)]' : 'border-border')
             }
           >
             <div className="min-w-0">
@@ -130,12 +126,7 @@ export function ConfirmDialog({
       size="sm"
     >
       <ModalFooter>
-        <Button
-          variant="ghost"
-          size="md"
-          onClick={() => onOpenChange(false)}
-          disabled={disabled}
-        >
+        <Button variant="ghost" size="md" onClick={() => onOpenChange(false)} disabled={disabled}>
           {cancelLabel}
         </Button>
         <Button

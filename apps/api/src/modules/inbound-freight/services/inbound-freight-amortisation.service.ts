@@ -89,9 +89,7 @@ export class InboundFreightAmortisationService {
       return { lines: [], totalUnits: 0 };
     }
 
-    const variants = await this.catalog.getVariantsByIds(
-      stocked.map((l) => l.variantId),
-    );
+    const variants = await this.catalog.getVariantsByIds(stocked.map((l) => l.variantId));
 
     // Weight basis per line. A line with no usable weight contributes
     // nothing to the weight pool and is handled by the count fallback.
@@ -129,9 +127,7 @@ export class InboundFreightAmortisationService {
       let perUnit: Prisma.Decimal;
       if (grams === null) {
         perUnit =
-          countPoolUnits === 0
-            ? ZERO
-            : countPoolShare.div(countPoolUnits).toDecimalPlaces(4);
+          countPoolUnits === 0 ? ZERO : countPoolShare.div(countPoolUnits).toDecimalPlaces(4);
       } else {
         const lineWeight = grams * line.receivedQty;
         perUnit =
@@ -374,14 +370,11 @@ export class InboundFreightAmortisationService {
     ) {
       return;
     }
-    const done =
-      updated.totalUnits > 0 && updated.unitsSettled >= updated.totalUnits;
+    const done = updated.totalUnits > 0 && updated.unitsSettled >= updated.totalUnits;
     await tx.inboundFreightCharge.update({
       where: { id: chargeId },
       data: {
-        status: done
-          ? InboundFreightStatus.SETTLED
-          : InboundFreightStatus.PARTIALLY_SETTLED,
+        status: done ? InboundFreightStatus.SETTLED : InboundFreightStatus.PARTIALLY_SETTLED,
         ...(done ? { settledAt: new Date() } : {}),
       },
     });

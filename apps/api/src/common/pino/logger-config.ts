@@ -38,7 +38,8 @@ export function pinoConfig(env: Env): Params {
       redact: { paths: REDACT_PATHS, censor: '[REDACTED]' },
       customProps: (req) => ({ requestId: (req as { requestId?: string }).requestId }),
       autoLogging: {
-        ignore: (req) => req.url === '/health' || req.url === '/health/live' || req.url === '/health/ready',
+        ignore: (req) =>
+          req.url === '/health' || req.url === '/health/live' || req.url === '/health/ready',
       },
       serializers: {
         req: (req: { id?: string; method?: string; url?: string; remoteAddress?: string }) => ({

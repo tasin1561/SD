@@ -77,10 +77,7 @@ describe('Manual courier placement (e2e)', () => {
       .expect(201);
     sellerAuth = { Authorization: `Bearer ${reg.body.accessToken}` };
 
-    const whs = await request(h.baseUrl)
-      .get('/admin/warehouses')
-      .set(staffAuth)
-      .expect(200);
+    const whs = await request(h.baseUrl).get('/admin/warehouses').set(staffAuth).expect(200);
     warehouseId = (whs.body as Array<{ id: string; code: string }>).find(
       (w) => w.code === 'BLR-01',
     )!.id;
@@ -123,9 +120,7 @@ describe('Manual courier placement (e2e)', () => {
       .post(`/admin/goods-receipts/${gr.body.id}/lines`)
       .set(staffAuth)
       .send({
-        lines: [
-          { lineId: gr.body.lines[0].id, receivedQty: qty, putawayBinId: binId },
-        ],
+        lines: [{ lineId: gr.body.lines[0].id, receivedQty: qty, putawayBinId: binId }],
       })
       .expect(200);
     await request(h.baseUrl)
@@ -159,10 +154,7 @@ describe('Manual courier placement (e2e)', () => {
       })
       .expect(201);
     const orderId = created.body.id as string;
-    await request(h.baseUrl)
-      .post(`/seller/orders/${orderId}/submit`)
-      .set(sellerAuth)
-      .expect(200);
+    await request(h.baseUrl).post(`/seller/orders/${orderId}/submit`).set(sellerAuth).expect(200);
     await h.app.get(OrderWriteService).transitionStatus({
       orderId,
       to: OrderStatus.CONFIRMED,
@@ -235,15 +227,12 @@ describe('Manual courier placement (e2e)', () => {
 
   it('place-awb: records the manual AWB, dispatches the order, decrements qtyOnHand 10→8', async () => {
     await receiveStock(10);
-    const { orderId, oldShipmentId, replacementShipmentId } =
-      await driveToManualPlacement(2);
+    const { orderId, oldShipmentId, replacementShipmentId } = await driveToManualPlacement(2);
 
     expect(await stockOf()).toEqual({ qtyOnHand: 10, qtyReserved: 2 });
 
     const res = await request(h.baseUrl)
-      .post(
-        `/admin/courier/manual-placement/shipments/${replacementShipmentId}/place-awb`,
-      )
+      .post(`/admin/courier/manual-placement/shipments/${replacementShipmentId}/place-awb`)
       .set(staffAuth)
       .send({ awbNumber: 'BLUEDART-AWB-001', courierName: 'Bluedart' })
       .expect(200);
@@ -290,16 +279,12 @@ describe('Manual courier placement (e2e)', () => {
     const { orderId, replacementShipmentId } = await driveToManualPlacement(2);
 
     await request(h.baseUrl)
-      .post(
-        `/admin/courier/manual-placement/shipments/${replacementShipmentId}/place-awb`,
-      )
+      .post(`/admin/courier/manual-placement/shipments/${replacementShipmentId}/place-awb`)
       .set(staffAuth)
       .send({ awbNumber: 'BLUEDART-AWB-002' })
       .expect(200);
     const second = await request(h.baseUrl)
-      .post(
-        `/admin/courier/manual-placement/shipments/${replacementShipmentId}/place-awb`,
-      )
+      .post(`/admin/courier/manual-placement/shipments/${replacementShipmentId}/place-awb`)
       .set(staffAuth)
       .send({ awbNumber: 'BLUEDART-AWB-002' })
       .expect(200);
@@ -317,9 +302,7 @@ describe('Manual courier placement (e2e)', () => {
     const { orderId, replacementShipmentId } = await driveToManualPlacement(2);
 
     const res = await request(h.baseUrl)
-      .post(
-        `/admin/courier/manual-placement/shipments/${replacementShipmentId}/cancel`,
-      )
+      .post(`/admin/courier/manual-placement/shipments/${replacementShipmentId}/cancel`)
       .set(staffAuth)
       .send({ reason: 'No courier serves this pincode at all' })
       .expect(200);
@@ -354,16 +337,12 @@ describe('Manual courier placement (e2e)', () => {
     const { replacementShipmentId } = await driveToManualPlacement(2);
 
     await request(h.baseUrl)
-      .post(
-        `/admin/courier/manual-placement/shipments/${replacementShipmentId}/cancel`,
-      )
+      .post(`/admin/courier/manual-placement/shipments/${replacementShipmentId}/cancel`)
       .set(staffAuth)
       .send({ reason: 'No courier serves this pincode at all' })
       .expect(200);
     const second = await request(h.baseUrl)
-      .post(
-        `/admin/courier/manual-placement/shipments/${replacementShipmentId}/cancel`,
-      )
+      .post(`/admin/courier/manual-placement/shipments/${replacementShipmentId}/cancel`)
       .set(staffAuth)
       .send({ reason: 'No courier serves this pincode at all' })
       .expect(200);
@@ -384,9 +363,7 @@ describe('Manual courier placement (e2e)', () => {
       .expect(200);
 
     await request(h.baseUrl)
-      .post(
-        `/admin/courier/manual-placement/shipments/${replacementShipmentId}/place-awb`,
-      )
+      .post(`/admin/courier/manual-placement/shipments/${replacementShipmentId}/place-awb`)
       .set({ Authorization: `Bearer ${aLogin.body.accessToken}` })
       .send({ awbNumber: 'BLUEDART-AWB-003' })
       .expect(403);
@@ -406,9 +383,7 @@ describe('Manual courier placement (e2e)', () => {
       .expect(200);
 
     await request(h.baseUrl)
-      .post(
-        `/admin/courier/manual-placement/shipments/${replacementShipmentId}/place-awb`,
-      )
+      .post(`/admin/courier/manual-placement/shipments/${replacementShipmentId}/place-awb`)
       .set({ Authorization: `Bearer ${mLogin.body.accessToken}` })
       .send({ awbNumber: 'BLUEDART-AWB-004' })
       .expect(200);

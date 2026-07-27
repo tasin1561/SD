@@ -17,25 +17,24 @@ function makeService(
     keyV1?: string;
   } = {},
 ) {
-  const courierFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async () => (opts.courier === undefined ? { id: 'courier-1' } : opts.courier),
+  const courierFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+    opts.courier === undefined ? { id: 'courier-1' } : opts.courier,
   );
   const credentialCreate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (a) => ({
     id: 'cred-new',
     ...(a.data as AnyArgs),
   }));
-  const accountFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async () =>
-      opts.existingAccount === undefined
-        ? {
-            id: 'acct-1',
-            courierId: 'courier-1',
-            environment: 'PRODUCTION',
-            isDefault: false,
-            deletedAt: null,
-            courier: { code: 'delhivery' },
-          }
-        : opts.existingAccount,
+  const accountFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+    opts.existingAccount === undefined
+      ? {
+          id: 'acct-1',
+          courierId: 'courier-1',
+          environment: 'PRODUCTION',
+          isDefault: false,
+          deletedAt: null,
+          courier: { code: 'delhivery' },
+        }
+      : opts.existingAccount,
   );
   const accountCreate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (a) => ({
     id: 'acct-new',
@@ -60,11 +59,11 @@ function makeService(
     ...(a.data as AnyArgs),
   }));
   const accountUpdateMany = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({ count: 1 }));
-  const sellerFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async () => (opts.existingSeller === undefined ? { id: 'seller-1' } : opts.existingSeller),
+  const sellerFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+    opts.existingSeller === undefined ? { id: 'seller-1' } : opts.existingSeller,
   );
-  const linkFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
-    async () => (opts.existingLink === undefined ? null : opts.existingLink),
+  const linkFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+    opts.existingLink === undefined ? null : opts.existingLink,
   );
   const linkUpsert = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (a) => ({
     id: 'link-1',
@@ -106,11 +105,16 @@ function makeService(
     },
   };
   const $transaction = jest.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(tx));
-  const client = { $transaction, courierAccount: { findMany: accountFindMany } } as unknown as PrismaService['client'];
+  const client = {
+    $transaction,
+    courierAccount: { findMany: accountFindMany },
+  } as unknown as PrismaService['client'];
 
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown?]>(async () => 'a1');
   const audit = { log: auditLog };
-  const env = makeTestEnv(opts.keyV1 === undefined ? {} : { COURIER_CREDENTIALS_KEY_V1: opts.keyV1 });
+  const env = makeTestEnv(
+    opts.keyV1 === undefined ? {} : { COURIER_CREDENTIALS_KEY_V1: opts.keyV1 },
+  );
 
   const svc = new CourierAccountAdminService(
     { client } as unknown as PrismaService,
@@ -165,7 +169,12 @@ describe('CourierAccountAdminService.createAccount', () => {
     const { svc, credentialCreate } = makeService();
     await expect(
       svc.createAccount(
-        { courierCode: 'delhivery', environment: 'PRODUCTION' as never, label: 'x', credentialFields: {} },
+        {
+          courierCode: 'delhivery',
+          environment: 'PRODUCTION' as never,
+          label: 'x',
+          credentialFields: {},
+        },
         'staff-1',
       ),
     ).rejects.toMatchObject({ response: { code: 'INVALID_CREDENTIAL_FIELDS' } });
@@ -176,7 +185,12 @@ describe('CourierAccountAdminService.createAccount', () => {
     const { svc, credentialCreate } = makeService({ keyV1: '' });
     await expect(
       svc.createAccount(
-        { courierCode: 'delhivery', environment: 'PRODUCTION' as never, label: 'x', credentialFields: { a: 'b' } },
+        {
+          courierCode: 'delhivery',
+          environment: 'PRODUCTION' as never,
+          label: 'x',
+          credentialFields: { a: 'b' },
+        },
         'staff-1',
       ),
     ).rejects.toMatchObject({ response: { code: 'COURIER_CREDENTIALS_UNAVAILABLE' } });
@@ -187,7 +201,12 @@ describe('CourierAccountAdminService.createAccount', () => {
     const { svc, credentialCreate } = makeService({ courier: null });
     await expect(
       svc.createAccount(
-        { courierCode: 'nope', environment: 'PRODUCTION' as never, label: 'x', credentialFields: { a: 'b' } },
+        {
+          courierCode: 'nope',
+          environment: 'PRODUCTION' as never,
+          label: 'x',
+          credentialFields: { a: 'b' },
+        },
         'staff-1',
       ),
     ).rejects.toMatchObject({ response: { code: 'COURIER_NOT_FOUND' } });
@@ -209,7 +228,11 @@ describe('CourierAccountAdminService.createAccount', () => {
     );
     expect(accountUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ courierId: 'courier-1', environment: 'PRODUCTION', isDefault: true }),
+        where: expect.objectContaining({
+          courierId: 'courier-1',
+          environment: 'PRODUCTION',
+          isDefault: true,
+        }),
         data: { isDefault: false },
       }),
     );
@@ -268,7 +291,11 @@ describe('CourierAccountAdminService.updateAccount', () => {
 describe('CourierAccountAdminService.linkSeller', () => {
   it('upserts the link and audits MEDIUM', async () => {
     const { svc, linkUpsert, auditLog } = makeService();
-    const result = await svc.linkSeller('seller-1', { courierAccountId: 'acct-1', distributionWeight: 60 }, 'staff-1');
+    const result = await svc.linkSeller(
+      'seller-1',
+      { courierAccountId: 'acct-1', distributionWeight: 60 },
+      'staff-1',
+    );
     expect(result.distributionWeight).toBe(60);
     expect(linkUpsert).toHaveBeenCalledTimes(1);
     expect(auditLog.mock.calls[0]![0]!.action).toBe('staff.seller_courier_account_link.set');
@@ -303,7 +330,12 @@ describe('CourierAccountAdminService.updateLink', () => {
     const { svc, linkUpdate, auditLog } = makeService({
       existingLink: { id: 'link-1', distributionWeight: 100, isActive: true },
     });
-    await svc.updateLink('seller-1', 'acct-1', { distributionWeight: 40, isActive: false }, 'staff-1');
+    await svc.updateLink(
+      'seller-1',
+      'acct-1',
+      { distributionWeight: 40, isActive: false },
+      'staff-1',
+    );
     expect(linkUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ data: { distributionWeight: 40, isActive: false } }),
     );

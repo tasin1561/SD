@@ -19,7 +19,10 @@ import { EnvService } from '../../config/env.service';
 import { PasswordService } from '../auth-common/services/password.service';
 import { JwtService, type SignedAccessToken } from '../auth-common/services/jwt.service';
 import { TokenHashService } from '../auth-common/services/token-hash.service';
-import { RefreshTokenService, type IssuedRefresh } from '../auth-common/services/refresh-token.service';
+import {
+  RefreshTokenService,
+  type IssuedRefresh,
+} from '../auth-common/services/refresh-token.service';
 import { AuditLogService } from '../auth-common/services/audit-log.service';
 import { EmailQueue } from '../email/queue/email.queue';
 import { SellerOnboardingService } from '../seller-onboarding/services/seller-onboarding.service';
@@ -297,7 +300,10 @@ export class SellerAuthService {
 
   // ---------- LOGIN ----------
 
-  async login(input: { email: string; password: string }, ctx: ClientContext): Promise<SellerLoginResult> {
+  async login(
+    input: { email: string; password: string },
+    ctx: ClientContext,
+  ): Promise<SellerLoginResult> {
     const normalizedEmail = input.email.trim().toLowerCase();
 
     // Phase 1B RBAC — look up the SellerUser; the parent Seller is
@@ -369,10 +375,7 @@ export class SellerAuthService {
     // is read-only — write endpoints gate further on the seller-jwt guard).
     // PENDING/REJECTED return a generic 403 (we DO disclose the "not active"
     // state — it's the desired UX, distinct from "invalid credentials").
-    if (
-      seller.status !== SellerStatus.APPROVED &&
-      seller.status !== SellerStatus.SUSPENDED
-    ) {
+    if (seller.status !== SellerStatus.APPROVED && seller.status !== SellerStatus.SUSPENDED) {
       await this.audit.log({
         actorType: ActorType.SELLER,
         sellerId: seller.id,
@@ -439,7 +442,10 @@ export class SellerAuthService {
 
   // ---------- REFRESH ----------
 
-  async rotateRefresh(input: { plaintext: string }, ctx: ClientContext): Promise<SellerRefreshResult> {
+  async rotateRefresh(
+    input: { plaintext: string },
+    ctx: ClientContext,
+  ): Promise<SellerRefreshResult> {
     if (!input.plaintext) throw this.invalidRefresh();
 
     const { userId, issued } = await this.refresh.rotate({
@@ -499,7 +505,10 @@ export class SellerAuthService {
   }
 
   async logoutAll(sellerId: string): Promise<{ revokedCount: number }> {
-    const revokedCount = await this.refresh.revokeAllForUser({ subject: 'seller', userId: sellerId });
+    const revokedCount = await this.refresh.revokeAllForUser({
+      subject: 'seller',
+      userId: sellerId,
+    });
     await this.audit.log({
       actorType: ActorType.SELLER,
       sellerId,
@@ -513,7 +522,10 @@ export class SellerAuthService {
 
   // ---------- PASSWORD RESET ----------
 
-  async requestPasswordReset(input: { email: string }, ctx: ClientContext): Promise<{ message: string }> {
+  async requestPasswordReset(
+    input: { email: string },
+    ctx: ClientContext,
+  ): Promise<{ message: string }> {
     const normalizedEmail = input.email.trim().toLowerCase();
 
     // Phase 1B — password reset is now keyed on the SellerUser (the
@@ -673,7 +685,10 @@ export class SellerAuthService {
       },
     });
     if (!user || user.seller.deletedAt !== null) {
-      throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Seller session no longer valid' });
+      throw new UnauthorizedException({
+        code: 'UNAUTHORIZED',
+        message: 'Seller session no longer valid',
+      });
     }
     if (user.emailVerifiedAt !== null) {
       throw new ConflictException({
@@ -718,7 +733,10 @@ export class SellerAuthService {
     return { ok: true };
   }
 
-  async confirmEmailVerification(input: { token: string }, ctx: ClientContext): Promise<{ ok: true }> {
+  async confirmEmailVerification(
+    input: { token: string },
+    ctx: ClientContext,
+  ): Promise<{ ok: true }> {
     const tokenHash = this.hashes.sha256Hex(input.token);
 
     const row = await this.prisma.client.sellerEmailVerificationToken.findFirst({
@@ -824,7 +842,10 @@ export class SellerAuthService {
       },
     });
     if (!user) {
-      throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Seller session no longer valid' });
+      throw new UnauthorizedException({
+        code: 'UNAUTHORIZED',
+        message: 'Seller session no longer valid',
+      });
     }
     return {
       id: user.seller.id,
@@ -850,9 +871,15 @@ export class SellerAuthService {
   // ---------- internal ----------
 
   private invalidCredentials(): UnauthorizedException {
-    return new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' });
+    return new UnauthorizedException({
+      code: 'INVALID_CREDENTIALS',
+      message: 'Invalid credentials',
+    });
   }
   private invalidRefresh(): UnauthorizedException {
-    return new UnauthorizedException({ code: 'INVALID_REFRESH', message: 'Invalid or expired refresh token' });
+    return new UnauthorizedException({
+      code: 'INVALID_REFRESH',
+      message: 'Invalid or expired refresh token',
+    });
   }
 }

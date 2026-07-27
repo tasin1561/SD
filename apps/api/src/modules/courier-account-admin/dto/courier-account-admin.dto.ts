@@ -23,7 +23,9 @@ export class CreateCourierAccountDto {
   @IsEnum(CredentialEnvironment)
   environment!: CredentialEnvironment;
 
-  @ApiProperty({ description: 'Human label distinguishing this account, e.g. "Delhivery — Account 2"' })
+  @ApiProperty({
+    description: 'Human label distinguishing this account, e.g. "Delhivery — Account 2"',
+  })
   @IsString()
   @MinLength(1)
   @MaxLength(200)
@@ -82,7 +84,9 @@ export class LinkSellerCourierAccountDto {
   @MinLength(1)
   courierAccountId!: string;
 
-  @ApiPropertyOptional({ description: 'Relative share of this seller\'s parcels routed here (default 100).' })
+  @ApiPropertyOptional({
+    description: "Relative share of this seller's parcels routed here (default 100).",
+  })
   @IsOptional()
   @IsInt()
   @Min(0)

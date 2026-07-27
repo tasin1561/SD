@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  type OnModuleDestroy,
-  type OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Queue, type JobsOptions } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import type { OutboundWebhookJobInput } from '../types';
@@ -39,9 +34,7 @@ export class OutboundWebhookQueue implements OnModuleInit, OnModuleDestroy {
       connection: this.redis.createConnection(),
       defaultJobOptions: DEFAULT_JOB_OPTIONS,
     });
-    this.logger.log(
-      `Outbound-webhook queue ready (name=${OUTBOUND_WEBHOOK_QUEUE_NAME})`,
-    );
+    this.logger.log(`Outbound-webhook queue ready (name=${OUTBOUND_WEBHOOK_QUEUE_NAME})`);
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -49,10 +42,7 @@ export class OutboundWebhookQueue implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Enqueues an outbound webhook send. Returns the BullMQ job id. */
-  async enqueue(
-    input: OutboundWebhookJobInput,
-    opts?: JobsOptions,
-  ): Promise<string> {
+  async enqueue(input: OutboundWebhookJobInput, opts?: JobsOptions): Promise<string> {
     const job = await this.queue.add(OUTBOUND_WEBHOOK_JOB_NAME, input, opts);
     return String(job.id);
   }

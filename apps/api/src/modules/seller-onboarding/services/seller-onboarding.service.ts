@@ -23,10 +23,7 @@ export const OPTIONAL_STEPS: ReadonlyArray<SellerOnboardingStep> = [
   SellerOnboardingStep.NOTIFICATION_PREFS_REVIEWED,
 ];
 
-const ALL_STEPS: ReadonlyArray<SellerOnboardingStep> = [
-  ...REQUIRED_STEPS,
-  ...OPTIONAL_STEPS,
-];
+const ALL_STEPS: ReadonlyArray<SellerOnboardingStep> = [...REQUIRED_STEPS, ...OPTIONAL_STEPS];
 
 const ONBOARDING_COMPLETE_TEMPLATE = 'seller.onboarding_complete.email';
 
@@ -65,26 +62,21 @@ export class SellerOnboardingService {
    * MUST be called inside the registration transaction so a registration
    * rollback doesn't leave orphan onboarding rows.
    */
-  async initializeProgress(
-    sellerId: string,
-    tx: Prisma.TransactionClient,
-  ): Promise<void> {
+  async initializeProgress(sellerId: string, tx: Prisma.TransactionClient): Promise<void> {
     const now = new Date();
-    const data: Prisma.SellerOnboardingProgressCreateManyInput[] = ALL_STEPS.map(
-      (stepCode) => {
-        const isRequired = REQUIRED_STEPS.includes(stepCode);
-        const completedNow =
-          stepCode === SellerOnboardingStep.REGISTRATION_COMPLETED ||
-          stepCode === SellerOnboardingStep.COMPANY_INFO_FILLED;
-        return {
-          sellerId,
-          stepCode,
-          isRequired,
-          completedAt: completedNow ? now : null,
-          completedBy: completedNow ? OnboardingStepActor.SYSTEM : null,
-        };
-      },
-    );
+    const data: Prisma.SellerOnboardingProgressCreateManyInput[] = ALL_STEPS.map((stepCode) => {
+      const isRequired = REQUIRED_STEPS.includes(stepCode);
+      const completedNow =
+        stepCode === SellerOnboardingStep.REGISTRATION_COMPLETED ||
+        stepCode === SellerOnboardingStep.COMPANY_INFO_FILLED;
+      return {
+        sellerId,
+        stepCode,
+        isRequired,
+        completedAt: completedNow ? now : null,
+        completedBy: completedNow ? OnboardingStepActor.SYSTEM : null,
+      };
+    });
     await tx.sellerOnboardingProgress.createMany({ data });
   }
 

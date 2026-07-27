@@ -204,17 +204,15 @@ describe('DelhiveryPickupService', () => {
     ['2026-07-28', '11:00'],
   ])('rejects a malformed date/time (%s %s) before calling out', async (d, t) => {
     const { s, request } = build();
-    await expect(
-      s.requestPickup({ ...VALID, pickupDate: d, pickupTime: t }),
-    ).rejects.toThrow();
+    await expect(s.requestPickup({ ...VALID, pickupDate: d, pickupTime: t })).rejects.toThrow();
     expect(request).not.toHaveBeenCalled();
   });
 
   it('rejects a pickup location with stray whitespace', async () => {
     const { s } = build();
-    await expect(
-      s.requestPickup({ ...VALID, pickupLocation: 'Skydrop ' }),
-    ).rejects.toThrow(/whitespace/);
+    await expect(s.requestPickup({ ...VALID, pickupLocation: 'Skydrop ' })).rejects.toThrow(
+      /whitespace/,
+    );
   });
 
   it('reads an in-body failure as failure despite HTTP 200', async () => {
@@ -226,9 +224,7 @@ describe('DelhiveryPickupService', () => {
 
   it('is gated — it dispatches a real van to a real building', async () => {
     const { s } = build({ pickup_id: 1 }, true);
-    await expect(s.requestPickup(VALID)).rejects.toThrow(
-      'DELHIVERY_LIVE_WRITES_DISABLED',
-    );
+    await expect(s.requestPickup(VALID)).rejects.toThrow('DELHIVERY_LIVE_WRITES_DISABLED');
   });
 });
 

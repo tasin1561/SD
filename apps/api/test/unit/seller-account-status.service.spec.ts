@@ -69,11 +69,21 @@ function makeSut(seeded: Partial<FakeSellerRow> = {}) {
       }),
     },
     sellerNote: {
-      create: jest.fn(async (args: { data: { sellerId: string; authorId: string; content: string; category: SellerNoteCategory; isPinned: boolean } }) => {
-        const id = `note-${nextNoteId++}`;
-        state.notes.push({ id, ...args.data });
-        return { id };
-      }),
+      create: jest.fn(
+        async (args: {
+          data: {
+            sellerId: string;
+            authorId: string;
+            content: string;
+            category: SellerNoteCategory;
+            isPinned: boolean;
+          };
+        }) => {
+          const id = `note-${nextNoteId++}`;
+          state.notes.push({ id, ...args.data });
+          return { id };
+        },
+      ),
     },
     auditLog: { create: state.auditCreate },
   };
@@ -114,7 +124,12 @@ describe('SellerAccountStatusService — suspend', () => {
   it('rejects suspending a non-APPROVED seller', async () => {
     const sut = makeSut({ status: SellerStatus.PENDING });
     await expect(
-      sut.svc.suspend({ sellerId: 'seller-1', staffActorId: 'staff-1', reasonNote: 'bad behavior', ctx }),
+      sut.svc.suspend({
+        sellerId: 'seller-1',
+        staffActorId: 'staff-1',
+        reasonNote: 'bad behavior',
+        ctx,
+      }),
     ).rejects.toMatchObject({ response: { code: 'INVALID_STATUS_TRANSITION' } });
   });
 
@@ -138,9 +153,7 @@ describe('SellerAccountStatusService — suspend', () => {
     expect(auditData.action).toBe('seller.suspended');
     expect(auditData.metadata.severity).toBe('HIGH');
     expect(sut.state.enqueue).toHaveBeenCalledTimes(1);
-    expect(sut.state.enqueue.mock.calls[0]![0].templateCode).toBe(
-      'seller.account_suspended.email',
-    );
+    expect(sut.state.enqueue.mock.calls[0]![0].templateCode).toBe('seller.account_suspended.email');
   });
 });
 

@@ -73,8 +73,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             subtitle={
               detail.data.sellerOrderRef ? (
                 <span>
-                  Your ref:{' '}
-                  <span className="font-mono">{detail.data.sellerOrderRef}</span>
+                  Your ref: <span className="font-mono">{detail.data.sellerOrderRef}</span>
                 </span>
               ) : undefined
             }
@@ -128,14 +127,9 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                       </div>
                     )}
                     <div className="mt-0.5">
-                      {detail.data.recipientCity},{' '}
-                      {detail.data.recipientStateProvince}{' '}
-                      <span className="font-mono">
-                        {detail.data.recipientPostalCode}
-                      </span>{' '}
-                      <span className="text-text-muted">
-                        {detail.data.recipientCountryCode}
-                      </span>
+                      {detail.data.recipientCity}, {detail.data.recipientStateProvince}{' '}
+                      <span className="font-mono">{detail.data.recipientPostalCode}</span>{' '}
+                      <span className="text-text-muted">{detail.data.recipientCountryCode}</span>
                     </div>
                   </dd>
                 </dl>
@@ -149,13 +143,9 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               <CardBody>
                 <dl className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1.5 text-sm">
                   <dt className="text-text-muted">Mode</dt>
-                  <dd className="text-text-body uppercase">
-                    {detail.data.paymentMode}
-                  </dd>
+                  <dd className="text-text-body uppercase">{detail.data.paymentMode}</dd>
                   <dt className="text-text-muted">COD (INR)</dt>
-                  <dd className="text-text-body font-mono">
-                    {detail.data.codAmountInr ?? '—'}
-                  </dd>
+                  <dd className="text-text-body font-mono">{detail.data.codAmountInr ?? '—'}</dd>
                   <dt className="text-text-muted">Declared (INR)</dt>
                   <dd className="text-text-body font-mono">
                     {detail.data.declaredValueInr ?? '—'}
@@ -172,15 +162,11 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                     {detail.data.totalWeightGrams ?? '—'}
                   </dd>
                   <dt className="text-text-muted">Package</dt>
-                  <dd className="text-text-body uppercase">
-                    {detail.data.packageType}
-                  </dd>
+                  <dd className="text-text-body uppercase">{detail.data.packageType}</dd>
                   <dt className="text-text-muted">Flags</dt>
                   <dd className="text-text-body">
                     {detail.data.isUrgent ? (
-                      <span className="text-pending text-xs uppercase tracking-wide">
-                        Urgent
-                      </span>
+                      <span className="text-pending text-xs uppercase tracking-wide">Urgent</span>
                     ) : (
                       <span className="text-text-muted">—</span>
                     )}
@@ -204,15 +190,11 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                 <tbody className="divide-y divide-border">
                   {detail.data.items.map((item) => (
                     <tr key={item.id}>
-                      <td className="px-3 py-2 font-mono text-xs text-text-body">
-                        {item.skuCode}
-                      </td>
+                      <td className="px-3 py-2 font-mono text-xs text-text-body">{item.skuCode}</td>
                       <td className="px-3 py-2 text-text-body">
                         {item.productName}
                         {item.variantLabel && (
-                          <span className="text-text-muted ml-1">
-                            · {item.variantLabel}
-                          </span>
+                          <span className="text-text-muted ml-1">· {item.variantLabel}</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-right text-text-body font-mono">
@@ -257,10 +239,8 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
           </Section>
 
           <div className="text-text-faint text-xs text-center mt-8">
-            Placed{' '}
-            {new Date(detail.data.placedAt).toISOString().replace('T', ' ').slice(0, 16)}{' '}
-            · Updated{' '}
-            {new Date(detail.data.updatedAt).toISOString().replace('T', ' ').slice(0, 16)}
+            Placed {new Date(detail.data.placedAt).toISOString().replace('T', ' ').slice(0, 16)} ·
+            Updated {new Date(detail.data.updatedAt).toISOString().replace('T', ' ').slice(0, 16)}
           </div>
         </>
       )}
@@ -278,15 +258,12 @@ function OrderTimelineSection({
   events: readonly SellerOrderEventView[] | null;
 }): ReactElement {
   if (loading) return <LoadingState label="Loading timeline…" />;
-  if (error)
-    return <ErrorState message={`Failed to load timeline: ${error}`} />;
+  if (error) return <ErrorState message={`Failed to load timeline: ${error}`} />;
   if (!events || events.length === 0) {
     return (
       <Card>
         <CardBody>
-          <p className="text-text-muted text-sm">
-            No seller-visible events yet.
-          </p>
+          <p className="text-text-muted text-sm">No seller-visible events yet.</p>
         </CardBody>
       </Card>
     );
@@ -322,9 +299,7 @@ function OrderInvoiceSection({
     setError(null);
     try {
       const res = await generate.mutateAsync();
-      toast.success(
-        res.alreadyExisted ? 'Invoice loaded.' : 'Invoice generated.',
-      );
+      toast.success(res.alreadyExisted ? 'Invoice loaded.' : 'Invoice generated.');
     } catch (e) {
       if (e instanceof ApiError) {
         const b = e.body as { code?: unknown; message?: unknown } | null;
@@ -357,9 +332,7 @@ function OrderInvoiceSection({
               {generate.isPending ? 'Generating…' : 'Generate now'}
             </Button>
           </div>
-          {error && (
-            <div className="text-critical text-xs mt-2">{error}</div>
-          )}
+          {error && <div className="text-critical text-xs mt-2">{error}</div>}
         </CardBody>
       </Card>
     );
@@ -370,12 +343,10 @@ function OrderInvoiceSection({
       <CardBody>
         <div className="flex items-baseline justify-between gap-3">
           <div>
-            <div className="text-text-bright text-sm font-mono">
-              {invoice.data.invoiceNumber}
-            </div>
+            <div className="text-text-bright text-sm font-mono">{invoice.data.invoiceNumber}</div>
             <div className="text-text-muted text-xs mt-0.5">
-              Issued {new Date(invoice.data.invoiceDate).toLocaleString()} ·
-              Total ₹ {invoice.data.totalInr}
+              Issued {new Date(invoice.data.invoiceDate).toLocaleString()} · Total ₹{' '}
+              {invoice.data.totalInr}
             </div>
           </div>
           {invoice.data.pdfUrl && (

@@ -1,7 +1,4 @@
-import type {
-  NotificationFrequency,
-  SellerNotificationCategory,
-} from '@skydrop/db';
+import type { NotificationFrequency, SellerNotificationCategory } from '@skydrop/db';
 
 export interface NotificationPreferenceView {
   readonly id: string;

@@ -60,7 +60,10 @@ export class StaffAuthController {
   @ApiOperation({ summary: 'Staff login with email + password' })
   @ApiBody({ type: StaffLoginDto })
   @ApiResponse({ status: 200, description: 'Access token issued; refresh cookie set' })
-  @ApiResponse({ status: 401, description: 'Invalid credentials (generic — does not disclose user existence)' })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid credentials (generic — does not disclose user existence)',
+  })
   async login(
     @Body() body: StaffLoginDto,
     @ClientInfo() ctx: ClientInfoPayload,
@@ -135,7 +138,9 @@ export class StaffAuthController {
   @ThrottleKey('email')
   @Post('password-reset/request')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Send a password reset email (generic 200 regardless of email existence)' })
+  @ApiOperation({
+    summary: 'Send a password reset email (generic 200 regardless of email existence)',
+  })
   async passwordResetRequest(
     @Body() body: StaffPasswordResetRequestDto,
     @ClientInfo() ctx: ClientInfoPayload,
@@ -261,7 +266,9 @@ export class StaffAuthController {
 }
 
 function readRefreshCookie(req: Request): string {
-  const raw = (req.cookies as Record<string, string | undefined> | undefined)?.[STAFF_REFRESH_COOKIE];
+  const raw = (req.cookies as Record<string, string | undefined> | undefined)?.[
+    STAFF_REFRESH_COOKIE
+  ];
   return typeof raw === 'string' ? raw : '';
 }
 

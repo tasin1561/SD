@@ -63,8 +63,7 @@ export function Money({
   const effective: MoneyDirection =
     direction !== 'neutral' ? direction : negative ? 'debit' : 'neutral';
 
-  const sign =
-    effective === 'credit' ? '+' : effective === 'debit' || negative ? '−' : '';
+  const sign = effective === 'credit' ? '+' : effective === 'debit' || negative ? '−' : '';
 
   return (
     <span

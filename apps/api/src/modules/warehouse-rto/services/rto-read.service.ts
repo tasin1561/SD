@@ -1,9 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import {
-  type OrderStatus,
-  type RtoDisposition,
-  type RtoItemCondition,
-} from '@skydrop/db';
+import { type OrderStatus, type RtoDisposition, type RtoItemCondition } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 
 /**

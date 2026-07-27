@@ -34,43 +34,47 @@ function makeSut(opts: { simulateUVOnSecondCreate?: boolean } = {}) {
   const prisma = {
     client: {
       notificationLog: {
-        create: jest.fn(async ({ data, select }: { data: CreatedRow['data']; select?: unknown }) => {
-          createCallCount += 1;
-          // Composite-key partial-unique simulation: a 2nd create on
-          // the same (eventId, recipientType, recipientId, channel,
-          // templateCode) tuple throws P2002 — exactly the partial-
-          // unique violation the production migration declares.
-          if (opts.simulateUVOnSecondCreate && createCallCount >= 2) {
-            const err = new Prisma.PrismaClientKnownRequestError(
-              'partial unique violation',
-              { code: 'P2002', clientVersion: 'test', meta: { target: 'notification_logs_event_dedup_uq' } },
+        create: jest.fn(
+          async ({ data, select }: { data: CreatedRow['data']; select?: unknown }) => {
+            createCallCount += 1;
+            // Composite-key partial-unique simulation: a 2nd create on
+            // the same (eventId, recipientType, recipientId, channel,
+            // templateCode) tuple throws P2002 — exactly the partial-
+            // unique violation the production migration declares.
+            if (opts.simulateUVOnSecondCreate && createCallCount >= 2) {
+              const err = new Prisma.PrismaClientKnownRequestError('partial unique violation', {
+                code: 'P2002',
+                clientVersion: 'test',
+                meta: { target: 'notification_logs_event_dedup_uq' },
+              });
+              throw err;
+            }
+            // The real partial-unique would also reject any composite-
+            // key dup; mimic that for explicit dup-detect tests too.
+            const existing = store.rows.find(
+              (r) =>
+                r.data.eventId === data.eventId &&
+                r.data.recipientType === data.recipientType &&
+                r.data.recipientId === data.recipientId &&
+                r.data.channel === data.channel &&
+                r.data.templateCode === data.templateCode,
             );
-            throw err;
-          }
-          // The real partial-unique would also reject any composite-
-          // key dup; mimic that for explicit dup-detect tests too.
-          const existing = store.rows.find(
-            (r) =>
-              r.data.eventId === data.eventId &&
-              r.data.recipientType === data.recipientType &&
-              r.data.recipientId === data.recipientId &&
-              r.data.channel === data.channel &&
-              r.data.templateCode === data.templateCode,
-          );
-          if (existing) {
-            const err = new Prisma.PrismaClientKnownRequestError(
-              'partial unique violation',
-              { code: 'P2002', clientVersion: 'test', meta: { target: 'notification_logs_event_dedup_uq' } },
-            );
-            throw err;
-          }
-          nextId += 1;
-          const row: CreatedRow = { id: `log-${nextId}`, data };
-          store.rows.push(row);
-          // The select shape is `{ id: true }` — return just the id.
-          void select;
-          return { id: row.id };
-        }),
+            if (existing) {
+              const err = new Prisma.PrismaClientKnownRequestError('partial unique violation', {
+                code: 'P2002',
+                clientVersion: 'test',
+                meta: { target: 'notification_logs_event_dedup_uq' },
+              });
+              throw err;
+            }
+            nextId += 1;
+            const row: CreatedRow = { id: `log-${nextId}`, data };
+            store.rows.push(row);
+            // The select shape is `{ id: true }` — return just the id.
+            void select;
+            return { id: row.id };
+          },
+        ),
         findFirst: jest.fn(async ({ where }: { where: Record<string, unknown> }) => {
           const row = store.rows.find(
             (r) =>

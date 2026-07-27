@@ -5,9 +5,7 @@ import type { EffectiveAttribute } from '../../catalog-attribute/services/attrib
 type Primitive = string | number | boolean;
 
 function isPrimitive(v: unknown): v is Primitive {
-  return (
-    typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean'
-  );
+  return typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean';
 }
 
 function describeType(v: unknown): string {
@@ -27,10 +25,7 @@ function describeType(v: unknown): string {
 @Injectable()
 export class VariantAttributeValidatorService {
   /** Throwing form for the HTTP path. */
-  validate(
-    effective: EffectiveAttribute[],
-    attributes: Record<string, unknown>,
-  ): void {
+  validate(effective: EffectiveAttribute[], attributes: Record<string, unknown>): void {
     const errors = this.collect(effective, attributes);
     if (errors.length > 0) {
       throw new BadRequestException({
@@ -42,10 +37,7 @@ export class VariantAttributeValidatorService {
   }
 
   /** Non-throwing form for batch paths (CSV import) — returns all errors. */
-  collect(
-    effective: EffectiveAttribute[],
-    attributes: Record<string, unknown>,
-  ): string[] {
+  collect(effective: EffectiveAttribute[], attributes: Record<string, unknown>): string[] {
     const errors: string[] = [];
     const defByKey = new Map(effective.map((d) => [d.attributeKey, d]));
     const allowedKeys = [...defByKey.keys()].sort();
@@ -63,10 +55,7 @@ export class VariantAttributeValidatorService {
 
     // 2) Per-defined-attribute checks.
     for (const def of effective) {
-      const present = Object.prototype.hasOwnProperty.call(
-        attributes,
-        def.attributeKey,
-      );
+      const present = Object.prototype.hasOwnProperty.call(attributes, def.attributeKey);
       if (!present) {
         if (def.isRequired) {
           errors.push(`Missing required attribute '${def.attributeKey}'`);

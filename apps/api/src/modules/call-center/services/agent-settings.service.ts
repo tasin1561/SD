@@ -1,8 +1,4 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ActorType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -39,11 +35,7 @@ const DEFAULTS: Omit<AgentSettingsView, 'agentId'> = {
 /** Fields a non-admin agent may NEVER set on their own settings (locked
  *  decision 10c). The capacity cap (10a) + high-risk/value capabilities
  *  are operational levers owned by admin. */
-const ADMIN_ONLY_FIELDS = [
-  'maxActiveCalls',
-  'canHandleHighRisk',
-  'canHandleHighValue',
-] as const;
+const ADMIN_ONLY_FIELDS = ['maxActiveCalls', 'canHandleHighRisk', 'canHandleHighValue'] as const;
 
 const SELECT = {
   agentId: true,
@@ -91,9 +83,7 @@ export class AgentSettingsService {
     dto: UpdateAgentSettingsDto,
     ctx?: ClientContext,
   ): Promise<AgentSettingsView> {
-    const offending = ADMIN_ONLY_FIELDS.filter(
-      (f) => dto[f] !== undefined,
-    );
+    const offending = ADMIN_ONLY_FIELDS.filter((f) => dto[f] !== undefined);
     if (offending.length > 0) {
       throw new ForbiddenException({
         code: 'FIELD_ADMIN_ONLY',
@@ -151,9 +141,7 @@ export class AgentSettingsService {
     await this.audit.log({
       actorType: ActorType.STAFF,
       actorId: opts.actorId,
-      action: opts.asAdmin
-        ? 'agent_call_settings.admin_override'
-        : 'agent_call_settings.updated',
+      action: opts.asAdmin ? 'agent_call_settings.admin_override' : 'agent_call_settings.updated',
       entityType: 'agent_call_settings',
       entityId: agentId,
       severity: opts.asAdmin ? 'MEDIUM' : 'LOW',

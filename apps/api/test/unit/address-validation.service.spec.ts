@@ -4,8 +4,8 @@ import type { PrismaService } from '../../src/infrastructure/prisma/prisma.servi
 type AnyArgs = Record<string, unknown>;
 
 function makeService(states: unknown = ['Karnataka', 'Maharashtra', 'Delhi']) {
-  const findUnique = jest.fn<Promise<{ valueJson: unknown } | null>, [AnyArgs]>(
-    async () => (states === null ? null : { valueJson: states }),
+  const findUnique = jest.fn<Promise<{ valueJson: unknown } | null>, [AnyArgs]>(async () =>
+    states === null ? null : { valueJson: states },
   );
   const client = { systemSetting: { findUnique } } as unknown as PrismaService['client'];
   const svc = new AddressValidationService({ client } as unknown as PrismaService);

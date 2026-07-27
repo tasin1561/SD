@@ -1,9 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DelhiveryHttpService } from './delhivery-http.service';
-import type {
-  DelhiveryClient,
-  DelhiveryLabelResult,
-} from '../types/delhivery.types';
+import type { DelhiveryClient, DelhiveryLabelResult } from '../types/delhivery.types';
 
 /**
  * Module 9 — Delhivery shipping-label fetch. Implements the
@@ -45,9 +42,7 @@ export class DelhiveryLabelService implements Pick<DelhiveryClient, 'fetchLabel'
 
     const link = meta.packages?.[0]?.pdf_download_link;
     if (!link) {
-      throw new Error(
-        `Delhivery did not return a pdf_download_link for AWB ${awbNumber}`,
-      );
+      throw new Error(`Delhivery did not return a pdf_download_link for AWB ${awbNumber}`);
     }
 
     // The pre-signed URL is fetched directly (no auth header — the URL
@@ -57,9 +52,7 @@ export class DelhiveryLabelService implements Pick<DelhiveryClient, 'fetchLabel'
       signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) {
-      throw new Error(
-        `Delhivery label download for ${awbNumber} → HTTP ${res.status}`,
-      );
+      throw new Error(`Delhivery label download for ${awbNumber} → HTTP ${res.status}`);
     }
     const arrayBuf = await res.arrayBuffer();
     const mime = res.headers.get('content-type') ?? 'application/pdf';

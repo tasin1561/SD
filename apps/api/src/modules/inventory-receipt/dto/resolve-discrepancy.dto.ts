@@ -1,13 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import {
-  IsArray,
-  IsIn,
-  IsOptional,
-  IsString,
-  MaxLength,
-  ValidateNested,
-} from 'class-validator';
+import { IsArray, IsIn, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
 import { RecordReceiptLineDto } from './admin-goods-receipt.dto';
 
 export type DiscrepancyResolutionMode = 'CORRECT' | 'FORCE_COMPLETE';
@@ -24,13 +17,21 @@ export class ResolveDiscrepancyDto {
   @IsIn(['CORRECT', 'FORCE_COMPLETE'])
   mode!: DiscrepancyResolutionMode;
 
-  @ApiProperty({ required: false, maxLength: 2000, description: 'Required for FORCE_COMPLETE; appended to discrepancyNotes' })
+  @ApiProperty({
+    required: false,
+    maxLength: 2000,
+    description: 'Required for FORCE_COMPLETE; appended to discrepancyNotes',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(2000)
   note?: string;
 
-  @ApiProperty({ required: false, type: [RecordReceiptLineDto], description: 'Corrected line actuals (CORRECT mode)' })
+  @ApiProperty({
+    required: false,
+    type: [RecordReceiptLineDto],
+    description: 'Corrected line actuals (CORRECT mode)',
+  })
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })

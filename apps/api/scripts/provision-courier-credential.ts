@@ -48,8 +48,7 @@ async function main(): Promise<void> {
     );
     process.exit(1);
   }
-  const environment =
-    CredentialEnvironment[environmentArg as keyof typeof CredentialEnvironment];
+  const environment = CredentialEnvironment[environmentArg as keyof typeof CredentialEnvironment];
   const courierCode = courierCodeArg.trim().toLowerCase();
   const keyVersion = keyVersionArg ? Number.parseInt(keyVersionArg, 10) : 1;
   if (!Number.isInteger(keyVersion) || keyVersion < 1) {

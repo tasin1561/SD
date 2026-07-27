@@ -12,11 +12,7 @@ import {
 } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 import type { CreateRemittanceRequest } from '@skydrop/api-client';
-import {
-  useCreateRemittance,
-  useSellersList,
-  useSellerWalletBalance,
-} from '@/lib/api-hooks';
+import { useCreateRemittance, useSellersList, useSellerWalletBalance } from '@/lib/api-hooks';
 
 /**
  * Record a remittance. Two-currency model:
@@ -64,8 +60,7 @@ export function RemittanceFormModal({
   const destAmount = useMemo(() => {
     const s = Number(sourceAmount);
     const f = Number(fxRate);
-    if (!Number.isFinite(s) || !Number.isFinite(f) || s <= 0 || f <= 0)
-      return '';
+    if (!Number.isFinite(s) || !Number.isFinite(f) || s <= 0 || f <= 0) return '';
     return (s * f).toFixed(2);
   }, [sourceAmount, fxRate]);
 
@@ -141,9 +136,7 @@ export function RemittanceFormModal({
             required
             disabled={sellers.isLoading || Boolean(initialSellerId)}
           >
-            <option value="">
-              {sellers.isLoading ? 'Loading sellers…' : 'Select a seller'}
-            </option>
+            <option value="">{sellers.isLoading ? 'Loading sellers…' : 'Select a seller'}</option>
             {sellers.data?.items.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.companyName} · {s.email}
@@ -175,14 +168,14 @@ export function RemittanceFormModal({
                           setSourceAmount(b.balance);
                         }}
                         disabled={amt <= 0}
-                        className={
-                          amt > 0
-                            ? 'text-accent hover:underline'
-                            : 'text-text-muted'
-                        }
+                        className={amt > 0 ? 'text-accent hover:underline' : 'text-text-muted'}
                         title={amt > 0 ? 'Click to fill source amount' : ''}
                       >
-                        {b.currency === 'INR' ? '₹' : '৳'} {amt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {b.currency === 'INR' ? '₹' : '৳'}{' '}
+                        {amt.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
                       </button>
                     </div>
                   );
@@ -196,19 +189,14 @@ export function RemittanceFormModal({
           <FormField label="Wallet currency (debit)" required>
             <Select
               value={sourceCurrency}
-              onChange={(e) =>
-                setSourceCurrency(e.target.value as 'INR' | 'BDT')
-              }
+              onChange={(e) => setSourceCurrency(e.target.value as 'INR' | 'BDT')}
             >
               <option value="INR">INR</option>
               <option value="BDT">BDT</option>
             </Select>
           </FormField>
           <FormField label="Bank currency (credit hit account)" required>
-            <Select
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value as 'INR' | 'BDT')}
-            >
+            <Select value={currency} onChange={(e) => setCurrency(e.target.value as 'INR' | 'BDT')}>
               <option value="INR">INR</option>
               <option value="BDT">BDT</option>
             </Select>
@@ -288,13 +276,7 @@ export function RemittanceFormModal({
         )}
 
         <ModalFooter>
-          <Button
-            type="button"
-            variant="ghost"
-            size="md"
-            disabled={busy}
-            onClick={onClose}
-          >
+          <Button type="button" variant="ghost" size="md" disabled={busy} onClick={onClose}>
             Cancel
           </Button>
           <Button type="submit" variant="primary" size="md" disabled={busy}>

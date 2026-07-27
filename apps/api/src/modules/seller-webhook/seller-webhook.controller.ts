@@ -45,9 +45,7 @@ export class SellerWebhookController {
   @Get()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'List the seller’s outbound webhook endpoints' })
-  list(
-    @CurrentSeller() seller: AuthenticatedSeller,
-  ): Promise<WebhookEndpointView[]> {
+  list(@CurrentSeller() seller: AuthenticatedSeller): Promise<WebhookEndpointView[]> {
     return this.svc.list(seller.id);
   }
 
@@ -63,7 +61,9 @@ export class SellerWebhookController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create endpoint (auto-generates HMAC secret; only revealed in this response)' })
+  @ApiOperation({
+    summary: 'Create endpoint (auto-generates HMAC secret; only revealed in this response)',
+  })
   create(
     @CurrentSeller() seller: AuthenticatedSeller,
     @Body() body: CreateWebhookEndpointDto,

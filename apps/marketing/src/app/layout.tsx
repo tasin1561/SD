@@ -46,7 +46,14 @@ export const metadata: Metadata = {
     siteName: 'Skydrop',
     type: 'website',
     locale: 'en_US',
-    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'Skydrop — BD → IN cross-border fulfillment' }],
+    images: [
+      {
+        url: '/og.png',
+        width: 1200,
+        height: 630,
+        alt: 'Skydrop — BD → IN cross-border fulfillment',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
@@ -70,11 +77,7 @@ const organizationJsonLd = {
   sameAs: [],
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: ReactNode;
-}): ReactElement {
+export default function RootLayout({ children }: { children: ReactNode }): ReactElement {
   return (
     <html
       lang="en"
@@ -89,7 +92,9 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <a href="#main" className="skip-to-content">Skip to content</a>
+        <a href="#main" className="skip-to-content">
+          Skip to content
+        </a>
         {children}
       </body>
     </html>

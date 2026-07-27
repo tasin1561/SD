@@ -27,7 +27,8 @@ export class StaffJwtGuard implements CanActivate {
 
     const req = ctx.switchToHttp().getRequest<Request>();
     const token = extractBearer(req.header('authorization'));
-    if (!token) throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Bearer token required' });
+    if (!token)
+      throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Bearer token required' });
 
     const claims = this.jwt.verifyStaffAccess(token);
 
@@ -36,7 +37,10 @@ export class StaffJwtGuard implements CanActivate {
       select: { id: true, email: true, role: true, emailVerifiedAt: true },
     });
     if (!staff) {
-      throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Staff session no longer valid' });
+      throw new UnauthorizedException({
+        code: 'UNAUTHORIZED',
+        message: 'Staff session no longer valid',
+      });
     }
 
     req.staff = {

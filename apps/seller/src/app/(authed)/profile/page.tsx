@@ -80,14 +80,9 @@ export default function ProfilePage(): ReactElement {
       <BankDetailsSection profile={detail.data} />
       <div className="text-text-faint text-xs">
         Account status:{' '}
-        <span className="uppercase tracking-wide text-text-body">
-          {detail.data.status}
-        </span>
+        <span className="uppercase tracking-wide text-text-body">{detail.data.status}</span>
         {detail.data.approvedAt && (
-          <>
-            {' '}· approved{' '}
-            {new Date(detail.data.approvedAt).toLocaleDateString()}
-          </>
+          <> · approved {new Date(detail.data.approvedAt).toLocaleDateString()}</>
         )}
       </div>
     </div>
@@ -104,11 +99,7 @@ function fmtError(e: unknown): string {
   return e instanceof Error ? e.message : 'Action failed';
 }
 
-function CompanyInfoSection({
-  profile,
-}: {
-  readonly profile: SellerProfileView;
-}): ReactElement {
+function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }): ReactElement {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -142,8 +133,7 @@ function CompanyInfoSection({
     setBusy(true);
     try {
       const body: Record<string, unknown> = {};
-      if (form.companyName !== profile.companyName)
-        body.companyName = form.companyName.trim();
+      if (form.companyName !== profile.companyName) body.companyName = form.companyName.trim();
       if (form.contactPersonName !== profile.contactPersonName)
         body.contactPersonName = form.contactPersonName.trim();
       if (form.phone !== profile.phone) body.phone = form.phone.trim();
@@ -195,32 +185,24 @@ function CompanyInfoSection({
             <dt className="text-text-muted">Contact person</dt>
             <dd className="text-text-body">{profile.contactPersonName}</dd>
             <dt className="text-text-muted">Email</dt>
-            <dd className="text-text-body font-mono text-xs">
-              {profile.emailDisplay}
-            </dd>
+            <dd className="text-text-body font-mono text-xs">{profile.emailDisplay}</dd>
             <dt className="text-text-muted">Phone</dt>
             <dd className="text-text-body font-mono text-xs">{profile.phone}</dd>
             <dt className="text-text-muted">WhatsApp</dt>
-            <dd className="text-text-body font-mono text-xs">
-              {profile.whatsapp ?? '—'}
-            </dd>
+            <dd className="text-text-body font-mono text-xs">{profile.whatsapp ?? '—'}</dd>
             <dt className="text-text-muted">Country</dt>
             <dd className="text-text-body">{profile.countryCode}</dd>
             <dt className="text-text-muted">Display currency</dt>
             <dd className="text-text-body">{profile.displayCurrency}</dd>
             <dt className="text-text-muted">Display language</dt>
-            <dd className="text-text-body uppercase">
-              {profile.displayLanguage}
-            </dd>
+            <dd className="text-text-body uppercase">{profile.displayLanguage}</dd>
           </dl>
         ) : (
           <form className="space-y-3" onSubmit={(e) => void onSubmit(e)}>
             <FormField label="Company name" required>
               <Input
                 value={form.companyName}
-                onChange={(e) =>
-                  setForm({ ...form, companyName: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, companyName: e.target.value })}
                 minLength={2}
                 maxLength={120}
                 required
@@ -229,9 +211,7 @@ function CompanyInfoSection({
             <FormField label="Contact person" required>
               <Input
                 value={form.contactPersonName}
-                onChange={(e) =>
-                  setForm({ ...form, contactPersonName: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, contactPersonName: e.target.value })}
                 minLength={2}
                 maxLength={120}
                 required
@@ -248,9 +228,7 @@ function CompanyInfoSection({
             <FormField label="WhatsApp" hint="Leave blank to remove">
               <Input
                 value={form.whatsapp}
-                onChange={(e) =>
-                  setForm({ ...form, whatsapp: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
                 placeholder="+8801712345678"
               />
             </FormField>
@@ -301,12 +279,7 @@ function CompanyInfoSection({
               >
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                size="md"
-                disabled={busy}
-              >
+              <Button type="submit" variant="primary" size="md" disabled={busy}>
                 {busy ? 'Saving…' : 'Save changes'}
               </Button>
             </div>
@@ -317,11 +290,7 @@ function CompanyInfoSection({
   );
 }
 
-function BankDetailsSection({
-  profile,
-}: {
-  readonly profile: SellerProfileView;
-}): ReactElement {
+function BankDetailsSection({ profile }: { readonly profile: SellerProfileView }): ReactElement {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -406,11 +375,10 @@ function BankDetailsSection({
       />
       <CardBody>
         {!editing ? (
-          profile.bankName === null &&
-          profile.bankAccountNumber === null ? (
+          profile.bankName === null && profile.bankAccountNumber === null ? (
             <div className="text-text-muted text-sm py-2">
-              No bank details captured yet. Remittance requires this; add them
-              before your first delivered order.
+              No bank details captured yet. Remittance requires this; add them before your first
+              delivered order.
             </div>
           ) : (
             <dl className="grid grid-cols-[180px_1fr] gap-x-6 gap-y-2 text-sm">
@@ -427,9 +395,7 @@ function BankDetailsSection({
                 {profile.bankRoutingNumber ?? '—'}
               </dd>
               <dt className="text-text-muted">SWIFT code</dt>
-              <dd className="text-text-body font-mono text-xs">
-                {profile.bankSwiftCode ?? '—'}
-              </dd>
+              <dd className="text-text-body font-mono text-xs">{profile.bankSwiftCode ?? '—'}</dd>
             </dl>
           )
         ) : (
@@ -448,9 +414,7 @@ function BankDetailsSection({
             <FormField label="Account holder name">
               <Input
                 value={form.bankAccountName}
-                onChange={(e) =>
-                  setForm({ ...form, bankAccountName: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, bankAccountName: e.target.value })}
                 maxLength={120}
                 placeholder="As it appears on the bank statement"
               />
@@ -458,9 +422,7 @@ function BankDetailsSection({
             <FormField label="Account number">
               <Input
                 value={form.bankAccountNumber}
-                onChange={(e) =>
-                  setForm({ ...form, bankAccountNumber: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, bankAccountNumber: e.target.value })}
                 maxLength={64}
                 placeholder="123-4567-890123"
               />
@@ -469,9 +431,7 @@ function BankDetailsSection({
               <FormField label="Routing number">
                 <Input
                   value={form.bankRoutingNumber}
-                  onChange={(e) =>
-                    setForm({ ...form, bankRoutingNumber: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, bankRoutingNumber: e.target.value })}
                   maxLength={32}
                   placeholder="9-digit routing"
                 />
@@ -479,9 +439,7 @@ function BankDetailsSection({
               <FormField label="SWIFT code">
                 <Input
                   value={form.bankSwiftCode}
-                  onChange={(e) =>
-                    setForm({ ...form, bankSwiftCode: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, bankSwiftCode: e.target.value })}
                   maxLength={16}
                   placeholder="DBBLBDDH"
                 />
@@ -504,12 +462,7 @@ function BankDetailsSection({
               >
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                size="md"
-                disabled={busy}
-              >
+              <Button type="submit" variant="primary" size="md" disabled={busy}>
                 {busy ? 'Saving…' : 'Save changes'}
               </Button>
             </div>
@@ -520,11 +473,7 @@ function BankDetailsSection({
   );
 }
 
-function LogoSection({
-  profile,
-}: {
-  readonly profile: SellerProfileView;
-}): ReactElement {
+function LogoSection({ profile }: { readonly profile: SellerProfileView }): ReactElement {
   const presign = usePresignLogo();
   const register = useRegisterLogo();
   const remove = useRemoveLogo();
@@ -602,11 +551,7 @@ function LogoSection({
           {profile.logoUrl ? (
             <div className="w-24 h-24 rounded-[6px] border border-border bg-bg overflow-hidden shrink-0">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={profile.logoUrl}
-                alt="Logo"
-                className="w-full h-full object-contain"
-              />
+              <img src={profile.logoUrl} alt="Logo" className="w-full h-full object-contain" />
             </div>
           ) : (
             <div className="w-24 h-24 rounded-[6px] border border-dashed border-border-strong bg-surface flex items-center justify-center text-text-faint text-xs shrink-0">
@@ -655,11 +600,7 @@ function LogoSection({
                   >
                     Confirm remove
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setConfirmRemove(false)}
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => setConfirmRemove(false)}>
                     Cancel
                   </Button>
                 </>

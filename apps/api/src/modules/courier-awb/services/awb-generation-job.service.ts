@@ -21,11 +21,7 @@ export interface AwbJobShipmentOutcome {
    *  shipment retired + replacement created + order routed to manual
    *  placement; ERROR — an unexpected exception (state uncertain, ops
    *  investigates). */
-  result:
-    | 'GENERATED'
-    | 'GENERATED_AWB_LABEL_PENDING'
-    | 'SUPERSEDED'
-    | 'ERROR';
+  result: 'GENERATED' | 'GENERATED_AWB_LABEL_PENDING' | 'SUPERSEDED' | 'ERROR';
   awbNumber?: string;
   newShipmentId?: string;
   error?: string;
@@ -238,8 +234,7 @@ export class AwbGenerationJobService {
     }
 
     // Manifest status: ≥1 AWB → CONFIRMED; zero → FAILED.
-    const manifestStatus =
-      generatedCount > 0 ? ManifestStatus.CONFIRMED : ManifestStatus.FAILED;
+    const manifestStatus = generatedCount > 0 ? ManifestStatus.CONFIRMED : ManifestStatus.FAILED;
     await this.prisma.client.manifest.update({
       where: { id: manifestId },
       data: { status: manifestStatus, awbJobCompletedAt: new Date() },
@@ -273,10 +268,7 @@ export class AwbGenerationJobService {
   /** Route a failed shipment's order PENDING_DISPATCH →
    *  PENDING_MANUAL_PLACEMENT. Idempotent on STALE (a mid-retry order
    *  already moved). */
-  private async routeOrderToManual(
-    orderId: string,
-    shipmentId: string,
-  ): Promise<void> {
+  private async routeOrderToManual(orderId: string, shipmentId: string): Promise<void> {
     try {
       await this.orderWrite.transitionStatus({
         orderId,

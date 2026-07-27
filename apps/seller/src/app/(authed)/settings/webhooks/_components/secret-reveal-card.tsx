@@ -43,9 +43,8 @@ export function SecretRevealCard({
                 {endpoint.name ?? endpoint.url}
               </div>
               <p className="text-text-muted text-xs mt-1">
-                This is the only time we&apos;ll show this value. The previous
-                secret (if any) remains valid for 24 hours so you can switch
-                without dropping events.
+                This is the only time we&apos;ll show this value. The previous secret (if any)
+                remains valid for 24 hours so you can switch without dropping events.
               </p>
             </div>
             <Button variant="ghost" size="sm" onClick={onDismiss}>
@@ -59,12 +58,7 @@ export function SecretRevealCard({
               onFocus={(e) => e.currentTarget.select()}
               className="flex-1 px-3 py-1.5 rounded-[5px] bg-bg border border-border text-text-bright text-sm font-mono focus:border-accent focus:outline-none"
             />
-            <Button
-              type="button"
-              variant="primary"
-              size="md"
-              onClick={() => void copy()}
-            >
+            <Button type="button" variant="primary" size="md" onClick={() => void copy()}>
               {copied ? 'Copied!' : 'Copy'}
             </Button>
           </div>

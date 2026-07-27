@@ -75,10 +75,11 @@ export class ApiClient {
   // ───────── Auth endpoints ─────────
 
   async login(req: LoginRequest): Promise<AccessTokenResponse> {
-    const res = await this.request<AccessTokenResponse>(
-      `/api/auth/${this.identityKind}/login`,
-      { method: 'POST', body: req, suppressRefresh: true },
-    );
+    const res = await this.request<AccessTokenResponse>(`/api/auth/${this.identityKind}/login`, {
+      method: 'POST',
+      body: req,
+      suppressRefresh: true,
+    });
     this.tokenStore.set(res.accessToken, this.toEpoch(res.expiresAt));
     return res;
   }

@@ -33,8 +33,9 @@ function makeSut() {
 
   const client = {
     sellerCsvMapping: {
-      findFirst: jest.fn(async ({ where }: { where: Record<string, unknown> }) =>
-        rows.find((r) => match(r, where)) ?? null,
+      findFirst: jest.fn(
+        async ({ where }: { where: Record<string, unknown> }) =>
+          rows.find((r) => match(r, where)) ?? null,
       ),
       findMany: jest.fn(async ({ where }: { where: Record<string, unknown> }) =>
         rows.filter((r) => match(r, where)),
@@ -60,7 +61,13 @@ function makeSut() {
         },
       ),
       updateMany: jest.fn(
-        async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        async ({
+          where,
+          data,
+        }: {
+          where: Record<string, unknown>;
+          data: Record<string, unknown>;
+        }) => {
           let count = 0;
           for (const r of rows) {
             if (match(r, where)) {
@@ -95,9 +102,9 @@ describe('CsvMappingService — sanitize columnMap', () => {
     await expect(
       svc.create('s1', { name: 'm', columnMap: { productName: '' } }, CTX),
     ).rejects.toThrow(/non-empty header/);
-    await expect(
-      svc.create('s1', { name: 'm', columnMap: {} }, CTX),
-    ).rejects.toThrow(/at least one field/);
+    await expect(svc.create('s1', { name: 'm', columnMap: {} }, CTX)).rejects.toThrow(
+      /at least one field/,
+    );
   });
 });
 
@@ -126,15 +133,13 @@ describe('CsvMappingService — single default per (seller, importType)', () => 
       { name: 'other', columnMap: { productName: 'P' }, isDefault: true },
       CTX,
     );
-    await svc.create(
-      's1',
-      { name: 'mine', columnMap: { productName: 'P' }, isDefault: true },
-      CTX,
-    );
-    expect(rows.filter((r) => r.isDefault).map((r) => r.sellerId).sort()).toEqual([
-      's1',
-      's2',
-    ]);
+    await svc.create('s1', { name: 'mine', columnMap: { productName: 'P' }, isDefault: true }, CTX);
+    expect(
+      rows
+        .filter((r) => r.isDefault)
+        .map((r) => r.sellerId)
+        .sort(),
+    ).toEqual(['s1', 's2']);
   });
 });
 

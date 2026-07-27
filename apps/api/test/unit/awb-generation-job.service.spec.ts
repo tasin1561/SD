@@ -28,9 +28,7 @@ function makeService(
     transitionThrows?: 'STALE' | 'OTHER';
   } = {},
 ) {
-  const ships = opts.shipments ?? [
-    { id: 's1', orderId: 'o1', plan: { kind: 'ok' } },
-  ];
+  const ships = opts.shipments ?? [{ id: 's1', orderId: 'o1', plan: { kind: 'ok' } }];
   const manifestFindUnique = jest.fn(async () =>
     opts.manifest === undefined
       ? {
@@ -115,7 +113,15 @@ function makeService(
     supersedeSvc as unknown as AwbSupersedeService,
     courierFeeAccrual as unknown as CourierFeeAccrualService,
   );
-  return { svc, manifestUpdate, auditLog, transitionStatus, generateForShipment, supersede, tryEarlyAccrual };
+  return {
+    svc,
+    manifestUpdate,
+    auditLog,
+    transitionStatus,
+    generateForShipment,
+    supersede,
+    tryEarlyAccrual,
+  };
 }
 
 describe('AwbGenerationJobService.processManifest', () => {
@@ -143,7 +149,7 @@ describe('AwbGenerationJobService.processManifest', () => {
     );
   });
 
-  it('R1c: calls tryEarlyAccrual for each GENERATED shipment\'s order', async () => {
+  it("R1c: calls tryEarlyAccrual for each GENERATED shipment's order", async () => {
     const { svc, tryEarlyAccrual } = makeService({
       shipments: [
         { id: 's1', orderId: 'o1', plan: { kind: 'ok' } },
@@ -204,9 +210,7 @@ describe('AwbGenerationJobService.processManifest', () => {
 
   it('serviceable:true failure → COURIER_FAILURE supersede reason', async () => {
     const { svc, supersede } = makeService({
-      shipments: [
-        { id: 's1', orderId: 'o1', plan: { kind: 'fail', serviceable: true } },
-      ],
+      shipments: [{ id: 's1', orderId: 'o1', plan: { kind: 'fail', serviceable: true } }],
     });
     await svc.processManifest(MAN);
     expect(supersede).toHaveBeenCalledWith(
@@ -247,9 +251,7 @@ describe('AwbGenerationJobService.processManifest', () => {
 
   it('routeOrderToManual: a STALE transition (mid-retry already-moved) is swallowed', async () => {
     const { svc, supersede } = makeService({
-      shipments: [
-        { id: 's1', orderId: 'o1', plan: { kind: 'fail', serviceable: false } },
-      ],
+      shipments: [{ id: 's1', orderId: 'o1', plan: { kind: 'fail', serviceable: false } }],
       transitionThrows: 'STALE',
     });
     const r = await svc.processManifest(MAN); // does not throw
@@ -273,9 +275,7 @@ describe('AwbGenerationJobService.processManifest', () => {
 
   it('404 when the manifest is missing', async () => {
     const { svc } = makeService({ manifest: null });
-    await expect(svc.processManifest(MAN)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(svc.processManifest(MAN)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('M10 commit 1 — label-pending outcome blocks the manifest flip and THROWS so BullMQ retries', async () => {
@@ -294,9 +294,7 @@ describe('AwbGenerationJobService.processManifest', () => {
     expect(manifestUpdate).not.toHaveBeenCalled();
     // The HIGH-severity pending audit is the visible breadcrumb.
     const pendingAudit = auditLog.mock.calls.find(
-      ([entry]) =>
-        (entry as { action?: string }).action ===
-        'manifest.awb_job_label_pending',
+      ([entry]) => (entry as { action?: string }).action === 'manifest.awb_job_label_pending',
     );
     expect(pendingAudit).toBeDefined();
     expect(pendingAudit?.[0]).toMatchObject({
@@ -309,8 +307,7 @@ describe('AwbGenerationJobService.processManifest', () => {
     });
     // The successful audit is NOT written (we threw before it).
     const completedAudit = auditLog.mock.calls.find(
-      ([entry]) =>
-        (entry as { action?: string }).action === 'manifest.awb_job_completed',
+      ([entry]) => (entry as { action?: string }).action === 'manifest.awb_job_completed',
     );
     expect(completedAudit).toBeUndefined();
   });

@@ -16,11 +16,7 @@ import {
 } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 import type { CreatedSellerApiKey } from '@skydrop/api-client';
-import {
-  useApiKeysList,
-  useCreateApiKey,
-  useRevokeApiKey,
-} from '@/lib/api-hooks';
+import { useApiKeysList, useCreateApiKey, useRevokeApiKey } from '@/lib/api-hooks';
 
 export function ApiKeysIndex(): ReactElement {
   const list = useApiKeysList();
@@ -84,12 +80,7 @@ export function ApiKeysIndex(): ReactElement {
         subtitle="Programmatic access. Plaintext is shown ONCE on create — copy it immediately."
       />
 
-      {revealed && (
-        <KeyRevealCard
-          created={revealed}
-          onDismiss={() => setRevealed(null)}
-        />
-      )}
+      {revealed && <KeyRevealCard created={revealed} onDismiss={() => setRevealed(null)} />}
 
       {error && (
         <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
@@ -131,10 +122,7 @@ export function ApiKeysIndex(): ReactElement {
       {list.isLoading ? (
         <LoadingState label="Loading keys…" />
       ) : list.isError ? (
-        <ErrorState
-          message={list.error?.message ?? 'Failed.'}
-          retry={() => void list.refetch()}
-        />
+        <ErrorState message={list.error?.message ?? 'Failed.'} retry={() => void list.refetch()} />
       ) : !list.data || list.data.length === 0 ? (
         <Card>
           <CardBody>
@@ -157,29 +145,18 @@ export function ApiKeysIndex(): ReactElement {
             <tbody className="divide-y divide-border">
               {list.data.map((k) => {
                 const expired =
-                  k.expiresAt !== null &&
-                  new Date(k.expiresAt).getTime() < Date.now();
+                  k.expiresAt !== null && new Date(k.expiresAt).getTime() < Date.now();
                 const revoked = k.revokedAt !== null;
-                const status = revoked
-                  ? 'REVOKED'
-                  : expired
-                    ? 'EXPIRED'
-                    : 'ACTIVE';
+                const status = revoked ? 'REVOKED' : expired ? 'EXPIRED' : 'ACTIVE';
                 return (
                   <tr key={k.id} className={revoked || expired ? 'opacity-50' : undefined}>
                     <td className="px-3 py-2 text-text-body">{k.name}</td>
-                    <td className="px-3 py-2 font-mono text-xs text-text-muted">
-                      {k.keyPrefix}…
+                    <td className="px-3 py-2 font-mono text-xs text-text-muted">{k.keyPrefix}…</td>
+                    <td className="px-3 py-2 text-text-muted font-mono text-xs">
+                      {k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleString() : '—'}
                     </td>
                     <td className="px-3 py-2 text-text-muted font-mono text-xs">
-                      {k.lastUsedAt
-                        ? new Date(k.lastUsedAt).toLocaleString()
-                        : '—'}
-                    </td>
-                    <td className="px-3 py-2 text-text-muted font-mono text-xs">
-                      {k.expiresAt
-                        ? new Date(k.expiresAt).toLocaleDateString()
-                        : 'No expiry'}
+                      {k.expiresAt ? new Date(k.expiresAt).toLocaleDateString() : 'No expiry'}
                     </td>
                     <td className="px-3 py-2 text-xs uppercase tracking-wide">
                       <span
@@ -195,8 +172,9 @@ export function ApiKeysIndex(): ReactElement {
                       </span>
                     </td>
                     <td className="px-3 py-2 text-right">
-                      {!revoked && !expired && (
-                        pendingRevoke === k.id ? (
+                      {!revoked &&
+                        !expired &&
+                        (pendingRevoke === k.id ? (
                           <>
                             <Button
                               variant="destructive"
@@ -214,15 +192,10 @@ export function ApiKeysIndex(): ReactElement {
                             </Button>
                           </>
                         ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setPendingRevoke(k.id)}
-                          >
+                          <Button variant="ghost" size="sm" onClick={() => setPendingRevoke(k.id)}>
                             Revoke
                           </Button>
-                        )
-                      )}
+                        ))}
                     </td>
                   </tr>
                 );
@@ -262,9 +235,7 @@ function KeyRevealCard({
             <div className="text-accent text-xs uppercase tracking-wide mb-1">
               New API key — copy it now
             </div>
-            <div className="text-text-bright text-sm font-medium">
-              {created.name}
-            </div>
+            <div className="text-text-bright text-sm font-medium">{created.name}</div>
             <p className="text-text-muted text-xs mt-1">
               This is the only time we&apos;ll show the plaintext.{' '}
               {created.expiresAt
@@ -283,12 +254,7 @@ function KeyRevealCard({
             onFocus={(e) => e.currentTarget.select()}
             className="flex-1 px-3 py-1.5 rounded-[5px] bg-bg border border-border text-text-bright text-sm font-mono focus:border-accent focus:outline-none"
           />
-          <Button
-            type="button"
-            variant="primary"
-            size="md"
-            onClick={() => void copy()}
-          >
+          <Button type="button" variant="primary" size="md" onClick={() => void copy()}>
             <Copy size={12} /> {copied ? 'Copied!' : 'Copy'}
           </Button>
         </div>

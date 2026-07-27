@@ -20,10 +20,7 @@ import {
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
-import {
-  MarginReportQueryDto,
-  RegisterCourierWarehouseDto,
-} from '../dto/courier-ops.dto';
+import { MarginReportQueryDto, RegisterCourierWarehouseDto } from '../dto/courier-ops.dto';
 import {
   CourierMarginReportService,
   type MarginReport,
@@ -59,7 +56,7 @@ export class AdminCourierNetworkController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      "What we billed versus what Delhivery actually charged. SAMPLED — each row is a live rate-limited call, so the report states how many it priced and lists what it skipped. Never adjusts anything.",
+      'What we billed versus what Delhivery actually charged. SAMPLED — each row is a live rate-limited call, so the report states how many it priced and lists what it skipped. Never adjusts anything.',
   })
   marginReport(
     @CurrentStaff() staff: AuthenticatedStaff,
@@ -106,10 +103,7 @@ export class AdminCourierNetworkController {
     @Body() body: RegisterCourierWarehouseDto,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<WarehouseRegistrationOutcome> {
-    requireStaffRoles(staff, [
-      StaffRole.SUPER_ADMIN,
-      StaffRole.WAREHOUSE_SUPERVISOR,
-    ]);
+    requireStaffRoles(staff, [StaffRole.SUPER_ADMIN, StaffRole.WAREHOUSE_SUPERVISOR]);
     return this.warehouses.update(staff.id, { ...body }, ctx);
   }
 }

@@ -93,9 +93,7 @@ export class DelhiveryRvpQcService {
       }
       for (const q of item.questions) {
         if (q.type === 'multi' && q.options.length === 0) {
-          throw new Error(
-            `Question '${q.questionId}' is multiple-choice but has no options`,
-          );
+          throw new Error(`Question '${q.questionId}' is multiple-choice but has no options`);
         }
         if (q.correctValues.length === 0) {
           throw new Error(`Question '${q.questionId}' has no correct answer`);
@@ -112,12 +110,8 @@ export class DelhiveryRvpQcService {
         quantity: item.quantity,
         ...(item.item === undefined ? {} : { item: item.item }),
         ...(item.brand === undefined ? {} : { brand: item.brand }),
-        ...(item.productCategory === undefined
-          ? {}
-          : { product_category: item.productCategory }),
-        ...(item.returnReason === undefined
-          ? {}
-          : { return_reason: item.returnReason }),
+        ...(item.productCategory === undefined ? {} : { product_category: item.productCategory }),
+        ...(item.returnReason === undefined ? {} : { return_reason: item.returnReason }),
         questions: item.questions.map((q) => ({
           questions_id: q.questionId,
           type: q.type,
@@ -126,9 +120,7 @@ export class DelhiveryRvpQcService {
           // the list as given but the caller should know only [0] counts.
           value: q.correctValues,
           required: q.required,
-          ...(q.questionImages === undefined
-            ? {}
-            : { ques_images: q.questionImages }),
+          ...(q.questionImages === undefined ? {} : { ques_images: q.questionImages }),
         })),
       })),
     };

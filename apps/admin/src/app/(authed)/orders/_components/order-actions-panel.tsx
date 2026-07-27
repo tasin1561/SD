@@ -60,18 +60,12 @@ const CANCELLATION_REASONS: ReadonlyArray<{
   { value: OrderCancellationReason.OTHER, label: 'Other' },
 ];
 
-export function OrderActionsPanel({
-  order,
-}: {
-  readonly order: OrderView;
-}): ReactElement {
+export function OrderActionsPanel({ order }: { readonly order: OrderView }): ReactElement {
   const staff = useStaffIdentity();
   const canOverride = hasStaffRole(staff, OVERRIDE_ROLES);
 
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [reason, setReason] = useState<OrderCancellationReason>(
-    OrderCancellationReason.OTHER,
-  );
+  const [reason, setReason] = useState<OrderCancellationReason>(OrderCancellationReason.OTHER);
   const [note, setNote] = useState('');
   const [serverError, setServerError] = useState<string | null>(null);
   const cancel = useCancelOrder(order.id);
@@ -141,9 +135,8 @@ export function OrderActionsPanel({
           </div>
           {inTerminalState && (
             <div className="text-text-faint text-xs mt-2">
-              This order is in a terminal state; further sane lifecycle actions
-              aren&apos;t available. God-mode override below is the
-              extraordinary-correction path.
+              This order is in a terminal state; further sane lifecycle actions aren&apos;t
+              available. God-mode override below is the extraordinary-correction path.
             </div>
           )}
         </div>
@@ -161,10 +154,9 @@ export function OrderActionsPanel({
           </div>
           <p className="text-text-body text-xs leading-snug">
             Bypass the state machine and edit rules. Audited{' '}
-            <span className="font-mono uppercase">CRITICAL</span>. The order
-            will be marked with{' '}
-            <span className="font-mono">hasAdminOverride</span> permanently —
-            a flag that is set once and never cleared.
+            <span className="font-mono uppercase">CRITICAL</span>. The order will be marked with{' '}
+            <span className="font-mono">hasAdminOverride</span> permanently — a flag that is set
+            once and never cleared.
           </p>
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <Button
@@ -192,23 +184,17 @@ export function OrderActionsPanel({
           </div>
           {!canOverride && (
             <div className="text-text-faint text-xs">
-              Your role can&apos;t use god-mode. Contact a super-admin if an
-              extraordinary correction is required.
+              Your role can&apos;t use god-mode. Contact a super-admin if an extraordinary
+              correction is required.
             </div>
           )}
         </div>
 
         {lastOverride && (
-          <OverrideResultPanel
-            result={lastOverride}
-            onDismiss={() => setLastOverride(null)}
-          />
+          <OverrideResultPanel result={lastOverride} onDismiss={() => setLastOverride(null)} />
         )}
         {lastRelease && (
-          <ReleaseResultPanel
-            result={lastRelease}
-            onDismiss={() => setLastRelease(null)}
-          />
+          <ReleaseResultPanel result={lastRelease} onDismiss={() => setLastRelease(null)} />
         )}
       </CardBody>
 
@@ -343,14 +329,10 @@ function OverrideResultPanel({
         </dd>
         <dt className="text-text-muted">Fields applied</dt>
         <dd className="text-text-body font-mono">
-          {result.fieldChangesApplied.length === 0
-            ? '—'
-            : result.fieldChangesApplied.join(', ')}
+          {result.fieldChangesApplied.length === 0 ? '—' : result.fieldChangesApplied.join(', ')}
         </dd>
         <dt className="text-text-muted">hasAdminOverride</dt>
-        <dd className="text-critical font-mono">
-          true (permanent)
-        </dd>
+        <dd className="text-critical font-mono">true (permanent)</dd>
       </dl>
 
       {result.reserveOutcomes && result.reserveOutcomes.length > 0 && (
@@ -360,10 +342,7 @@ function OverrideResultPanel({
           </div>
           <ul className="space-y-0.5">
             {result.reserveOutcomes.map((o) => (
-              <li
-                key={o.orderItemId}
-                className="text-xs font-mono flex items-start gap-2"
-              >
+              <li key={o.orderItemId} className="text-xs font-mono flex items-start gap-2">
                 <span className={o.ok ? 'text-delivered' : 'text-critical'}>
                   {o.ok ? '✓' : '✗'}
                 </span>
@@ -377,9 +356,8 @@ function OverrideResultPanel({
             ))}
           </ul>
           <div className="text-text-faint text-[11px] mt-1.5 leading-snug">
-            Some attempts may have failed (e.g., insufficient stock); the saga
-            did NOT block or compensate. Use the release-reservations action
-            above if cleanup is needed.
+            Some attempts may have failed (e.g., insufficient stock); the saga did NOT block or
+            compensate. Use the release-reservations action above if cleanup is needed.
           </div>
         </div>
       )}
@@ -409,8 +387,7 @@ function ReleaseResultPanel({
         </button>
       </div>
       <div className="text-text-body text-sm">
-        Released <span className="font-mono">{result.releasedCount}</span>{' '}
-        reservation(s).
+        Released <span className="font-mono">{result.releasedCount}</span> reservation(s).
       </div>
       {result.released.length > 0 && (
         <ul className="mt-1.5 space-y-0.5">

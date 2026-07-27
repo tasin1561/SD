@@ -50,16 +50,8 @@ export function FormField({
   );
 }
 
-export function Label({
-  className,
-  ...rest
-}: LabelHTMLAttributes<HTMLLabelElement>): ReactElement {
-  return (
-    <label
-      className={clsx('block text-text-muted text-xs', className)}
-      {...rest}
-    />
-  );
+export function Label({ className, ...rest }: LabelHTMLAttributes<HTMLLabelElement>): ReactElement {
+  return <label className={clsx('block text-text-muted text-xs', className)} {...rest} />;
 }
 
 const inputBase =

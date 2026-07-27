@@ -236,9 +236,7 @@ describe('mapFailureReason (M10 — courier-emitted failure-reason → enum)', (
     expect(mapFailureReason('CUSTOMER_UNAVAILABLE')).toBe(
       DeliveryFailureReason.CUSTOMER_UNAVAILABLE,
     );
-    expect(mapFailureReason('BAD_WEATHER')).toBe(
-      DeliveryFailureReason.BAD_WEATHER,
-    );
+    expect(mapFailureReason('BAD_WEATHER')).toBe(DeliveryFailureReason.BAD_WEATHER);
   });
 
   it('case-insensitive matching: lowercase, mixed-case, title-case', () => {
@@ -254,12 +252,8 @@ describe('mapFailureReason (M10 — courier-emitted failure-reason → enum)', (
     expect(mapFailureReason('customer unavailable')).toBe(
       DeliveryFailureReason.CUSTOMER_UNAVAILABLE,
     );
-    expect(mapFailureReason('bad-weather')).toBe(
-      DeliveryFailureReason.BAD_WEATHER,
-    );
-    expect(mapFailureReason('damaged-package')).toBe(
-      DeliveryFailureReason.DAMAGED_PACKAGE,
-    );
+    expect(mapFailureReason('bad-weather')).toBe(DeliveryFailureReason.BAD_WEATHER);
+    expect(mapFailureReason('damaged-package')).toBe(DeliveryFailureReason.DAMAGED_PACKAGE);
   });
 
   it('whitespace trimmed', () => {
@@ -328,7 +322,13 @@ describe('parseScanPayload — the real Delhivery Shipment envelope', () => {
 
   it('distinguishes a RETURN leg — the same stage, the opposite direction', () => {
     const p = parseScanPayload(
-      envelope({ Status: { Status: 'In Transit', StatusType: 'RT', StatusDateTime: '2019-01-09T17:10:42.767' } }),
+      envelope({
+        Status: {
+          Status: 'In Transit',
+          StatusType: 'RT',
+          StatusDateTime: '2019-01-09T17:10:42.767',
+        },
+      }),
     );
     expect(p).toMatchObject({ rawStatus: 'In Transit', statusType: 'RT' });
   });
@@ -337,4 +337,3 @@ describe('parseScanPayload — the real Delhivery Shipment envelope', () => {
     expect(parseScanPayload({ Shipment: { Status: { Status: 'In Transit' } } })).toBeNull();
   });
 });
-

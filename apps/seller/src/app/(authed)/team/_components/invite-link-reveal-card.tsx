@@ -37,8 +37,7 @@ export function InviteLinkRevealCard({
               Invitation link — copy + share
             </div>
             <div className="text-text-bright font-mono text-sm">
-              {invitation.email}{' '}
-              <span className="text-text-muted">· {invitation.role}</span>
+              {invitation.email} <span className="text-text-muted">· {invitation.role}</span>
             </div>
             <p className="text-text-muted text-xs mt-1">
               This is the only time we&apos;ll show this URL. Expires{' '}
@@ -56,12 +55,7 @@ export function InviteLinkRevealCard({
             onFocus={(e) => e.currentTarget.select()}
             className="flex-1 px-3 py-1.5 rounded-[5px] bg-bg border border-border text-text-bright text-sm font-mono focus:border-accent focus:outline-none"
           />
-          <Button
-            type="button"
-            variant="primary"
-            size="md"
-            onClick={() => void copy()}
-          >
+          <Button type="button" variant="primary" size="md" onClick={() => void copy()}>
             {copied ? 'Copied!' : 'Copy'}
           </Button>
         </div>

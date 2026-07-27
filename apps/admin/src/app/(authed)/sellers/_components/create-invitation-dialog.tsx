@@ -2,14 +2,7 @@
 
 import { useState, type ReactElement } from 'react';
 import { useCreateInvitation } from '@/lib/api-hooks';
-import {
-  Button,
-  FormActions,
-  FormField,
-  Input,
-  Modal,
-  useToast,
-} from '@skydrop/ui/components';
+import { Button, FormActions, FormField, Input, Modal, useToast } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 
 /**
@@ -72,12 +65,7 @@ export function CreateInvitationDialog({
         }}
         className="space-y-3"
       >
-        <FormField
-          label="Email address"
-          htmlFor="invite-email"
-          required
-          error={error ?? undefined}
-        >
+        <FormField label="Email address" htmlFor="invite-email" required error={error ?? undefined}>
           <Input
             id="invite-email"
             type="email"

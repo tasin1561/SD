@@ -1,17 +1,8 @@
-import {
-  Injectable,
-  Logger,
-  type OnModuleDestroy,
-  type OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Worker, type Job } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { CsvImportProcessorService } from '../services/csv-import-processor.service';
-import {
-  CSV_IMPORT_QUEUE_NAME,
-  JOB_PROCESS_CSV,
-  type ProcessCsvJob,
-} from './csv-import.queue';
+import { CSV_IMPORT_QUEUE_NAME, JOB_PROCESS_CSV, type ProcessCsvJob } from './csv-import.queue';
 
 /**
  * In-process CSV import worker (Phase 1A pattern). Delegates to

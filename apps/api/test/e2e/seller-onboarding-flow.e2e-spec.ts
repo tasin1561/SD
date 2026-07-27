@@ -243,9 +243,7 @@ describe('Module 2 (e2e): onboarding flow + suspension + addresses + prefs', () 
       .get('/seller/addresses')
       .set('Authorization', `Bearer ${reg.accessToken}`)
       .expect(200);
-    const firstReloaded = list.body.find(
-      (a: { id: string }) => a.id === first.body.id,
-    );
+    const firstReloaded = list.body.find((a: { id: string }) => a.id === first.body.id);
     expect(firstReloaded.isDefault).toBe(false);
   });
 
@@ -272,8 +270,6 @@ describe('Module 2 (e2e): onboarding flow + suspension + addresses + prefs', () 
       where: { action: 'staff.seller_onboarding.step_overridden' },
     });
     expect(audit).toBeTruthy();
-    expect((audit!.metadata as { stepCode: string }).stepCode).toBe(
-      'BANK_DETAILS_ADDED',
-    );
+    expect((audit!.metadata as { stepCode: string }).stepCode).toBe('BANK_DETAILS_ADDED');
   });
 });

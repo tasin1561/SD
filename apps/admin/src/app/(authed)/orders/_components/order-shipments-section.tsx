@@ -2,12 +2,7 @@
 
 import type { ReactElement } from 'react';
 import { ExternalLink } from 'lucide-react';
-import {
-  Card,
-  CardBody,
-  ErrorState,
-  LoadingState,
-} from '@skydrop/ui/components';
+import { Card, CardBody, ErrorState, LoadingState } from '@skydrop/ui/components';
 import { useAdminOrderShipments } from '@/lib/api-hooks';
 import { CourierOpsPanel } from './courier-ops-panel';
 
@@ -19,11 +14,7 @@ const TRACK_URL = process.env.NEXT_PUBLIC_TRACK_URL ?? 'https://track.skydrop.on
  * track.skydrop.online/<awb>. Useful when an operator wants to see
  * exactly what the customer sees.
  */
-export function OrderShipmentsSection({
-  orderId,
-}: {
-  readonly orderId: string;
-}): ReactElement {
+export function OrderShipmentsSection({ orderId }: { readonly orderId: string }): ReactElement {
   const shipments = useAdminOrderShipments(orderId);
 
   if (shipments.isLoading) return <LoadingState label="Loading shipments…" />;
@@ -38,8 +29,7 @@ export function OrderShipmentsSection({
     return (
       <Card>
         <CardBody className="text-text-muted text-sm">
-          No shipments yet. A shipment is provisioned when the order is
-          confirmed.
+          No shipments yet. A shipment is provisioned when the order is confirmed.
         </CardBody>
       </Card>
     );
@@ -51,37 +41,32 @@ export function OrderShipmentsSection({
           {shipments.data.map((s) => (
             <li key={s.id} className="px-4 py-3">
               <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-text-bright text-sm font-mono">
-                  {s.shipmentNumber}
-                </div>
-                <div className="text-text-faint text-xs mt-0.5">
-                  {s.status} · {s.courierCode}
-                  {s.isManualCourier ? ' (manual)' : ''} ·{' '}
-                  {new Date(s.createdAt)
-                    .toISOString()
-                    .slice(0, 16)
-                    .replace('T', ' ')}
-                  {s.supersedesShipmentId && (
-                    <span className="ml-1 text-text-muted">· supersede</span>
+                <div className="min-w-0">
+                  <div className="text-text-bright text-sm font-mono">{s.shipmentNumber}</div>
+                  <div className="text-text-faint text-xs mt-0.5">
+                    {s.status} · {s.courierCode}
+                    {s.isManualCourier ? ' (manual)' : ''} ·{' '}
+                    {new Date(s.createdAt).toISOString().slice(0, 16).replace('T', ' ')}
+                    {s.supersedesShipmentId && (
+                      <span className="ml-1 text-text-muted">· supersede</span>
+                    )}
+                  </div>
+                  {s.awbNumber && (
+                    <div className="text-text-muted text-xs mt-0.5 font-mono">
+                      AWB {s.awbNumber}
+                    </div>
                   )}
                 </div>
                 {s.awbNumber && (
-                  <div className="text-text-muted text-xs mt-0.5 font-mono">
-                    AWB {s.awbNumber}
-                  </div>
+                  <a
+                    href={`${TRACK_URL}/${encodeURIComponent(s.awbNumber)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-accent hover:text-accent-hover text-xs inline-flex items-center gap-1 shrink-0"
+                  >
+                    Public tracking <ExternalLink size={12} />
+                  </a>
                 )}
-              </div>
-              {s.awbNumber && (
-                <a
-                  href={`${TRACK_URL}/${encodeURIComponent(s.awbNumber)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-accent hover:text-accent-hover text-xs inline-flex items-center gap-1 shrink-0"
-                >
-                  Public tracking <ExternalLink size={12} />
-                </a>
-              )}
               </div>
               <div className="mt-2">
                 <CourierOpsPanel

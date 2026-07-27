@@ -1,9 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import {
-  AddressOwnerType,
-  AddressType,
-  SellerOnboardingStep,
-} from '@skydrop/db';
+import { AddressOwnerType, AddressType, SellerOnboardingStep } from '@skydrop/db';
 import { SellerAddressService } from '../../src/modules/seller-address/services/seller-address.service';
 import type { SellerOnboardingService } from '../../src/modules/seller-onboarding/services/seller-onboarding.service';
 import { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
@@ -33,28 +29,32 @@ function makeSut() {
 
   const txClient = {
     address: {
-      findMany: jest.fn(async (args: { where: { type: AddressType; ownerId: string; deletedAt: null } }) => {
-        return rows.filter(
-          (r) =>
-            r.ownerType === AddressOwnerType.SELLER &&
-            r.ownerId === args.where.ownerId &&
-            r.type === args.where.type &&
-            r.deletedAt === null,
-        );
-      }),
-      updateMany: jest.fn(async (args: { where: { id?: { in: string[] } }; data: Partial<AddrRow> }) => {
-        if (args.where.id?.in) {
-          let count = 0;
-          for (const r of rows) {
-            if (args.where.id.in.includes(r.id)) {
-              Object.assign(r, args.data);
-              count++;
+      findMany: jest.fn(
+        async (args: { where: { type: AddressType; ownerId: string; deletedAt: null } }) => {
+          return rows.filter(
+            (r) =>
+              r.ownerType === AddressOwnerType.SELLER &&
+              r.ownerId === args.where.ownerId &&
+              r.type === args.where.type &&
+              r.deletedAt === null,
+          );
+        },
+      ),
+      updateMany: jest.fn(
+        async (args: { where: { id?: { in: string[] } }; data: Partial<AddrRow> }) => {
+          if (args.where.id?.in) {
+            let count = 0;
+            for (const r of rows) {
+              if (args.where.id.in.includes(r.id)) {
+                Object.assign(r, args.data);
+                count++;
+              }
             }
+            return { count };
           }
-          return { count };
-        }
-        return { count: 0 };
-      }),
+          return { count: 0 };
+        },
+      ),
       create: jest.fn(async (args: { data: Omit<AddrRow, 'id' | 'deletedAt'> }) => {
         const row: AddrRow = {
           id: `addr-${nextId++}`,
@@ -177,11 +177,7 @@ describe('SellerAddressService — default logic + onboarding integration', () =
   it('isDefault omitted on second-of-type keeps existing default intact', async () => {
     const sut = makeSut();
     const first = await sut.svc.create('seller-1', VALID_BD_ADDR, ctx);
-    const second = await sut.svc.create(
-      'seller-1',
-      { ...VALID_BD_ADDR, line1: 'Office' },
-      ctx,
-    );
+    const second = await sut.svc.create('seller-1', { ...VALID_BD_ADDR, line1: 'Office' }, ctx);
     expect(second.isDefault).toBe(false);
     const firstRow = sut.rows.find((r) => r.id === first.id)!;
     expect(firstRow.isDefault).toBe(true);

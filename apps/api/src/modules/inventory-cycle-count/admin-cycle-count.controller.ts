@@ -21,10 +21,7 @@ import {
   RecordCountItemsDto,
   ScheduleCycleCountDto,
 } from './dto/cycle-count.dto';
-import {
-  CycleCountService,
-  type CycleCountView,
-} from './services/cycle-count.service';
+import { CycleCountService, type CycleCountView } from './services/cycle-count.service';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -90,7 +87,9 @@ export class AdminCycleCountController {
 
   @Post(':id/complete')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'IN_PROGRESS -> COMPLETED; one PENDING CYCLE_COUNT adjustment per discrepancy' })
+  @ApiOperation({
+    summary: 'IN_PROGRESS -> COMPLETED; one PENDING CYCLE_COUNT adjustment per discrepancy',
+  })
   complete(
     @Param('id', uuid()) id: string,
     @CurrentStaff() staff: AuthenticatedStaff,

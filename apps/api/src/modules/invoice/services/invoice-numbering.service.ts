@@ -38,17 +38,13 @@ export class InvoiceNumberingService {
   ): Promise<{ invoiceNumber: string; fiscalYear: string }> {
     const { fy, startYear } = InvoiceNumberingService.fiscalYearFor(now);
     if (!Number.isInteger(startYear) || startYear < 2000 || startYear > 9999) {
-      throw new Error(
-        `InvoiceNumberingService: refusing to allocate for implausible FY ${fy}`,
-      );
+      throw new Error(`InvoiceNumberingService: refusing to allocate for implausible FY ${fy}`);
     }
 
     const seq = `invoice_number_seq_${startYear}`;
     const value = tx
       ? await this.allocate(tx, startYear, seq)
-      : await this.prisma.client.$transaction((t) =>
-          this.allocate(t, startYear, seq),
-        );
+      : await this.prisma.client.$transaction((t) => this.allocate(t, startYear, seq));
 
     const serial = String(value).padStart(6, '0');
     return { invoiceNumber: `SD/INV/${fy}/${serial}`, fiscalYear: fy };
@@ -71,9 +67,7 @@ export class InvoiceNumberingService {
     const raw = rows[0]?.value;
     if (raw === undefined) {
       this.logger.error(`nextval returned no row for sequence ${seq}`);
-      throw new Error(
-        `InvoiceNumberingService: nextval produced no value for ${seq}`,
-      );
+      throw new Error(`InvoiceNumberingService: nextval produced no value for ${seq}`);
     }
     return Number(raw);
   }

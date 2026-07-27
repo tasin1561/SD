@@ -14,10 +14,7 @@ import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import { requireStaffRoles } from '../../../common/auth/require-staff-roles';
-import {
-  PickExpirationService,
-  type PickExpireResult,
-} from '../services/pick-expiration.service';
+import { PickExpirationService, type PickExpireResult } from '../services/pick-expiration.service';
 
 /**
  * Supervisor pick-ops endpoints. Manual WMS-5 expiry trigger for stuck
@@ -43,10 +40,7 @@ export class AdminPickController {
     shipmentId: string,
     @CurrentStaff() staff: AuthenticatedStaff,
   ): Promise<PickExpireResult> {
-    requireStaffRoles(staff, [
-      StaffRole.WAREHOUSE_SUPERVISOR,
-      StaffRole.SUPER_ADMIN,
-    ]);
+    requireStaffRoles(staff, [StaffRole.WAREHOUSE_SUPERVISOR, StaffRole.SUPER_ADMIN]);
     return this.expiration.forceExpire(shipmentId);
   }
 }

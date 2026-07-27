@@ -22,10 +22,7 @@ describe('TrackingStatusMappingService.mapScan (TRK-5)', () => {
       // DELIVERY_FAILED is the second leg of the COD retry cycle —
       // omitting it would make the processor skip the legitimate
       // redelivery transition as a "stale-backward" scan.
-      allowedFromOrderStatuses: [
-        OrderStatus.IN_TRANSIT,
-        OrderStatus.DELIVERY_FAILED,
-      ],
+      allowedFromOrderStatuses: [OrderStatus.IN_TRANSIT, OrderStatus.DELIVERY_FAILED],
     });
   });
 
@@ -44,12 +41,7 @@ describe('TrackingStatusMappingService.mapScan (TRK-5)', () => {
     });
     // Defensive: no surprise sideEffects field crept in.
     expect(Object.keys(d).sort()).toEqual(
-      [
-        'allowedFromOrderStatuses',
-        'kind',
-        'targetOrderStatus',
-        'trackingEventType',
-      ].sort(),
+      ['allowedFromOrderStatuses', 'kind', 'targetOrderStatus', 'trackingEventType'].sort(),
     );
   });
 
@@ -58,10 +50,7 @@ describe('TrackingStatusMappingService.mapScan (TRK-5)', () => {
     expect(svc.mapScan(ShipmentStatus.DELIVERY_ATTEMPTED)).toEqual({
       kind: 'DELIVERY_ATTEMPT',
       targetOrderStatus: OrderStatus.DELIVERY_FAILED,
-      allowedFromOrderStatuses: [
-        OrderStatus.IN_TRANSIT,
-        OrderStatus.OUT_FOR_DELIVERY,
-      ],
+      allowedFromOrderStatuses: [OrderStatus.IN_TRANSIT, OrderStatus.OUT_FOR_DELIVERY],
       trackingEventType: TrackingEventType.DELIVERY_ATTEMPTED,
     });
   });
@@ -73,13 +62,14 @@ describe('TrackingStatusMappingService.mapScan (TRK-5)', () => {
       kind: 'TRANSITION',
       targetOrderStatus: OrderStatus.RTO_INITIATED,
     });
-    expect((m as unknown as { allowedFromOrderStatuses: OrderStatus[] }).allowedFromOrderStatuses)
-      .toEqual([
-        OrderStatus.DISPATCHED,
-        OrderStatus.IN_TRANSIT,
-        OrderStatus.OUT_FOR_DELIVERY,
-        OrderStatus.DELIVERY_FAILED,
-      ]);
+    expect(
+      (m as unknown as { allowedFromOrderStatuses: OrderStatus[] }).allowedFromOrderStatuses,
+    ).toEqual([
+      OrderStatus.DISPATCHED,
+      OrderStatus.IN_TRANSIT,
+      OrderStatus.OUT_FOR_DELIVERY,
+      OrderStatus.DELIVERY_FAILED,
+    ]);
   });
 
   it('RTO_IN_TRANSIT scan → TRANSITION from RTO_INITIATED only', () => {
@@ -105,14 +95,15 @@ describe('TrackingStatusMappingService.mapScan (TRK-5)', () => {
       kind: 'TRANSITION',
       targetOrderStatus: OrderStatus.LOST_IN_TRANSIT,
     });
-    expect((m as unknown as { allowedFromOrderStatuses: OrderStatus[] }).allowedFromOrderStatuses)
-      .toEqual([
-        OrderStatus.DISPATCHED,
-        OrderStatus.IN_TRANSIT,
-        OrderStatus.DELIVERY_FAILED,
-        OrderStatus.RTO_INITIATED,
-        OrderStatus.RTO_IN_TRANSIT,
-      ]);
+    expect(
+      (m as unknown as { allowedFromOrderStatuses: OrderStatus[] }).allowedFromOrderStatuses,
+    ).toEqual([
+      OrderStatus.DISPATCHED,
+      OrderStatus.IN_TRANSIT,
+      OrderStatus.DELIVERY_FAILED,
+      OrderStatus.RTO_INITIATED,
+      OrderStatus.RTO_IN_TRANSIT,
+    ]);
   });
 
   it('DAMAGED scan → INFORMATIONAL (RTO_DAMAGED is a warehouse-finalize disposition)', () => {
@@ -148,8 +139,9 @@ describe('TrackingStatusMappingService.mapScan (TRK-5)', () => {
     const allValues = Object.values(ShipmentStatus);
     for (const v of allValues) {
       const decision = svc.mapScan(v);
-      expect(['TRANSITION', 'DELIVERY_ATTEMPT', 'INFORMATIONAL', 'REJECT'])
-        .toContain(decision.kind);
+      expect(['TRANSITION', 'DELIVERY_ATTEMPT', 'INFORMATIONAL', 'REJECT']).toContain(
+        decision.kind,
+      );
     }
   });
 });
@@ -219,10 +211,7 @@ describe('TrackingStatusMappingService ↔ OrderStateMachineService matrix consi
   // ScanMappingDecision), but pin the matrix invariant here so an accidental
   // matrix change is caught at the M10 layer too.
   it('TRK-7: OUT_FOR_DELIVERY → DELIVERED matrix edge has empty side-effects (stock-neutral)', () => {
-    const effects = matrix.requiredSideEffects(
-      OrderStatus.OUT_FOR_DELIVERY,
-      OrderStatus.DELIVERED,
-    );
+    const effects = matrix.requiredSideEffects(OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED);
     expect(effects).toEqual([]);
   });
 
@@ -231,10 +220,7 @@ describe('TrackingStatusMappingService ↔ OrderStateMachineService matrix consi
   // lie about what's actually reachable.
   it('NDR retry cycle: DELIVERY_FAILED → OUT_FOR_DELIVERY is a matrix-valid edge', () => {
     expect(
-      matrix.isValidTransition(
-        OrderStatus.DELIVERY_FAILED,
-        OrderStatus.OUT_FOR_DELIVERY,
-      ),
+      matrix.isValidTransition(OrderStatus.DELIVERY_FAILED, OrderStatus.OUT_FOR_DELIVERY),
     ).toBe(true);
   });
 });

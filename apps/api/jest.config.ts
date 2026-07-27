@@ -12,7 +12,13 @@ const config: Config = {
   transform: {
     '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json' }],
   },
-  collectCoverageFrom: ['src/**/*.ts', '!src/main.ts', '!**/*.module.ts', '!**/dto/**', '!**/*.d.ts'],
+  collectCoverageFrom: [
+    'src/**/*.ts',
+    '!src/main.ts',
+    '!**/*.module.ts',
+    '!**/dto/**',
+    '!**/*.d.ts',
+  ],
   coverageDirectory: 'coverage',
 };
 

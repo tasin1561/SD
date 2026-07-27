@@ -87,9 +87,7 @@ export class AttributeResolutionService {
     }
 
     const result = [...resolved.values()].sort(
-      (a, b) =>
-        a.displayOrder - b.displayOrder ||
-        a.attributeKey.localeCompare(b.attributeKey),
+      (a, b) => a.displayOrder - b.displayOrder || a.attributeKey.localeCompare(b.attributeKey),
     );
 
     await this.safeCacheSet(cacheKey, result);

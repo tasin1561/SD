@@ -153,8 +153,7 @@ export class PricingEngineService {
         ? await this.prisma.client.rateCard.findFirst({
             where: { id: sellerPricing.rateCardId, deletedAt: null },
           })
-        : null) ??
-      (await this.findDefaultRateCard(asOf));
+        : null) ?? (await this.findDefaultRateCard(asOf));
     if (!rateCard) {
       unresolved.push({ reason: 'NO_RATE_CARD' });
     }
@@ -204,7 +203,9 @@ export class PricingEngineService {
     if (baseRow && baseRow.perKgChargeInr && chargeableWeightGrams > baseRow.weightSlabFromGrams) {
       const overweightGrams = chargeableWeightGrams - baseRow.weightSlabFromGrams;
       const overweightKg = new Prisma.Decimal(overweightGrams).dividedBy(1000);
-      baseShipping = baseShipping.plus(new Prisma.Decimal(baseRow.perKgChargeInr).times(overweightKg));
+      baseShipping = baseShipping.plus(
+        new Prisma.Decimal(baseRow.perKgChargeInr).times(overweightKg),
+      );
     }
     if (!baseRow && rateCard && courier) {
       unresolved.push({
@@ -218,15 +219,14 @@ export class PricingEngineService {
       ? new Prisma.Decimal(sellerPricing.discountPercent)
       : null;
     if (sellerDiscountPercent) {
-      baseShipping = baseShipping.times(new Prisma.Decimal(1).minus(sellerDiscountPercent.dividedBy(100)));
+      baseShipping = baseShipping.times(
+        new Prisma.Decimal(1).minus(sellerDiscountPercent.dividedBy(100)),
+      );
     }
 
     // 6b. Margin (R1c) — post-discount seller charge vs. real courier
     // cost. Never surfaced to sellers; internal/admin figure only.
-    const margin = this.marginCalc.compute(
-      baseShipping,
-      baseRow?.costToSkydropInr ?? null,
-    );
+    const margin = this.marginCalc.compute(baseShipping, baseRow?.costToSkydropInr ?? null);
 
     // 7. Surcharges.
     const surcharges: PricingChargeLine[] = [];
@@ -237,16 +237,12 @@ export class PricingEngineService {
         })
       : [];
     for (const rule of surchargeRules) {
-      if (
-        rule.appliesOnlyIfPaymentMode &&
-        rule.appliesOnlyIfPaymentMode !== input.paymentMode
-      ) {
+      if (rule.appliesOnlyIfPaymentMode && rule.appliesOnlyIfPaymentMode !== input.paymentMode) {
         continue;
       }
       if (
         rule.appliesOnlyForServiceAreas.length > 0 &&
-        (!zoneRes.serviceArea ||
-          !rule.appliesOnlyForServiceAreas.includes(zoneRes.serviceArea))
+        (!zoneRes.serviceArea || !rule.appliesOnlyForServiceAreas.includes(zoneRes.serviceArea))
       ) {
         continue;
       }
@@ -296,11 +292,7 @@ export class PricingEngineService {
     }
 
     // 7b. Seller-pricing COD fee (separate from rule-driven COD fees).
-    if (
-      sellerPricing?.codFeePercent &&
-      input.paymentMode === 'COD' &&
-      input.codAmountInr > 0
-    ) {
+    if (sellerPricing?.codFeePercent && input.paymentMode === 'COD' && input.codAmountInr > 0) {
       const cod = new Prisma.Decimal(input.codAmountInr);
       const codFee = cod.times(new Prisma.Decimal(sellerPricing.codFeePercent).dividedBy(100));
       if (codFee.greaterThan(0)) {
@@ -370,7 +362,10 @@ export class PricingEngineService {
 
   // ── internals ──
 
-  private async findSellerPricing(sellerId: string, asOf: Date): Promise<{
+  private async findSellerPricing(
+    sellerId: string,
+    asOf: Date,
+  ): Promise<{
     id: string;
     rateCardId: string;
     discountPercent: Prisma.Decimal | null;
