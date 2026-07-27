@@ -328,6 +328,15 @@ const systemSettings: SystemSettingSeed[] = [
     description:
       'Name of the warehouse pickup location pre-registered in Delhivery\'s partner portal. Required when real mode is enabled (DelhiveryAwbService passes it as pickup_location.name on create-shipment). Phase-1A is single-warehouse (BLR-01); a multi-warehouse setup adds one key per origin.',
   },
+  {
+    key: 'courier.delhivery_origin_pincode',
+    category: 'courier',
+    valueType: SettingValueType.STRING,
+    valueString: '',
+    displayName: 'Delhivery Origin Pincode',
+    description:
+      "The pincode goods dispatch FROM. Delhivery prices a lane and quotes a delivery time between two pincodes, so without this the expected-TAT and real-cost lookups cannot be asked at all — they are the origin half of every query. Sibling of courier.delhivery_pickup_location (that one is the registered warehouse NAME, which must match Delhivery's records exactly; this is the PIN). Phase-1A is single-origin; a multi-warehouse setup puts the address on the warehouse row instead of here.",
+  },
   // D3 — the AWB pool. Delhivery allows only FIVE bulk fetches per five
   // minutes and warns that a freshly-minted waybill may error if used
   // immediately, so numbers are pulled ahead of time and left to settle.

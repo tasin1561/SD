@@ -48,6 +48,7 @@ import { CourierDelhiveryModule } from './modules/courier-delhivery/courier-delh
 import { CourierAwbModule } from './modules/courier-awb/courier-awb.module';
 import { CourierDispatchModule } from './modules/courier-dispatch/courier-dispatch.module';
 import { CourierManualPlacementModule } from './modules/courier-manual-placement/courier-manual-placement.module';
+import { CourierOpsModule } from './modules/courier-ops/courier-ops.module';
 import { CourierAccountAdminModule } from './modules/courier-account-admin/courier-account-admin.module';
 import { CourierSettlementModule } from './modules/courier-settlement/courier-settlement.module';
 import { TrackingIngestionModule } from './modules/tracking-ingestion/tracking-ingestion.module';
@@ -152,6 +153,7 @@ import { envSchema } from './config/env.schema';
     CourierAwbModule,
     CourierDispatchModule,
     CourierManualPlacementModule,
+    CourierOpsModule,
     CourierAccountAdminModule,
     CourierSettlementModule,
     TrackingIngestionModule,
