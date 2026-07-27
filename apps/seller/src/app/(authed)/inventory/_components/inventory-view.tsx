@@ -81,6 +81,14 @@ export function InventoryView(): ReactElement {
       <PageHeader
         title="Inventory"
         subtitle="Stock available for orders. Receiving happens at the warehouse — speak to ops to add inventory."
+        action={
+          <Link
+            href="/inventory/units"
+            className="text-accent text-sm hover:underline"
+          >
+            Unit discrepancies →
+          </Link>
+        }
       />
 
       {cards}

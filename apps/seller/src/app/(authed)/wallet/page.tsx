@@ -13,6 +13,7 @@ import {
   PageHeader,
 } from '@skydrop/ui/components';
 import { useInfiniteWalletEntries, useWalletBalances } from '@/lib/api-hooks';
+import { WithdrawalsCard } from './_components/withdrawals-card';
 import type { WalletEntryView } from '@skydrop/api-client';
 
 /**
@@ -162,6 +163,8 @@ export default function WalletPage(): ReactElement {
           )}
         </CardBody>
       </Card>
+
+      <WithdrawalsCard />
 
       <div className="text-text-faint text-xs">
         Remittances are paid to the bank account on your profile. Update
