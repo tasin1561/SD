@@ -20,10 +20,22 @@ const SHIP = 'ship-POLL-1';
 const AWB = '38061110478225';
 const ORDER = 'ord-POLL-1';
 
-function scan(rawStatus: string, iso: string, failureReason?: string): DelhiveryRawScan {
+/**
+ * A poll scan. `statusType` defaults to 'UD' (the forward leg) because
+ * the real API always sends one, and D5 made the ambiguous statuses
+ * ("In Transit", "Pending", "Dispatched") require it — they mean
+ * opposite directions under UD and RT.
+ */
+function scan(
+  rawStatus: string,
+  iso: string,
+  failureReason?: string,
+  statusType: string = 'UD',
+): DelhiveryRawScan {
   return {
     awbNumber: AWB,
     rawStatus,
+    statusType,
     eventAtIso: iso,
     locationName: 'Kolkata_Hub',
     locationCity: 'Kolkata',

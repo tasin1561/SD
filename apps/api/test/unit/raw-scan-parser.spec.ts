@@ -17,6 +17,8 @@ describe('parseScanPayload (M10 — webhook body shape)', () => {
       expect(r).toEqual({
         awbNumber: 'DLV-AWB-1',
         rawStatus: 'DLV-IN-TRANSIT',
+        statusType: null,
+        nslCode: null,
         eventAtIso: '2026-05-20T10:00:00.000Z',
         locationName: null,
         locationCity: null,
@@ -273,3 +275,66 @@ describe('mapFailureReason (M10 — courier-emitted failure-reason → enum)', (
     expect(mapFailureReason('!@#$%')).toBe(DeliveryFailureReason.OTHER);
   });
 });
+
+/**
+ * D5 — the REAL Delhivery webhook envelope, from their documentation
+ * (docs/delhivery-integration.md §5).
+ *
+ * The bug these guard against: an earlier version put `StatusType` into
+ * `rawStatus`, which handed the mapper "UD" (a direction) where it
+ * expected "In Transit" (a stage) — and threw the direction away in the
+ * process. Both axes now travel with the scan.
+ */
+describe('parseScanPayload — the real Delhivery Shipment envelope', () => {
+  const envelope = (over: Record<string, unknown> = {}) => ({
+    Shipment: {
+      Status: {
+        Status: 'In Transit',
+        StatusDateTime: '2019-01-09T17:10:42.767',
+        StatusType: 'UD',
+        StatusLocation: 'Chandigarh_Raiprkln_C (Chandigarh)',
+        Instructions: 'Manifest uploaded',
+      },
+      PickUpDate: '2019-01-09 17:10:42.543',
+      NSLCode: 'X-UCI',
+      Sortcode: 'IXC/MDP',
+      ReferenceNo: '28',
+      AWB: '38061110478262',
+      ...over,
+    },
+  });
+
+  it('takes Status as the stage and StatusType as the leg — not the other way round', () => {
+    const p = parseScanPayload(envelope());
+    expect(p).toMatchObject({
+      awbNumber: '38061110478262',
+      rawStatus: 'In Transit',
+      statusType: 'UD',
+      nslCode: 'X-UCI',
+    });
+  });
+
+  it('reads NSLCode from the Shipment level, where Delhivery puts it', () => {
+    const p = parseScanPayload(envelope({ NSLCode: 'EOD-74' }));
+    expect(p?.nslCode).toBe('EOD-74');
+  });
+
+  it('keeps the scan timestamp and location', () => {
+    const p = parseScanPayload(envelope());
+    expect(p?.eventAtIso).toBe('2019-01-09T17:10:42.767');
+    expect(p?.locationName).toBe('Chandigarh_Raiprkln_C (Chandigarh)');
+    expect(p?.description).toBe('Manifest uploaded');
+  });
+
+  it('distinguishes a RETURN leg — the same stage, the opposite direction', () => {
+    const p = parseScanPayload(
+      envelope({ Status: { Status: 'In Transit', StatusType: 'RT', StatusDateTime: '2019-01-09T17:10:42.767' } }),
+    );
+    expect(p).toMatchObject({ rawStatus: 'In Transit', statusType: 'RT' });
+  });
+
+  it('still returns null when the envelope lacks an AWB or a timestamp', () => {
+    expect(parseScanPayload({ Shipment: { Status: { Status: 'In Transit' } } })).toBeNull();
+  });
+});
+

@@ -18,19 +18,36 @@ function makeService(
     secretRefValue?: string | null;
     /** Override the TRACKING_WEBHOOK_SECRET_DELHIVERY env. */
     secretEnv?: string;
+    /** D5: 'SHARED_SECRET' for couriers that do not sign (Delhivery). */
+    authScheme?: 'HMAC_SHA256' | 'SHARED_SECRET';
   } = {},
 ) {
-  const findUnique = jest.fn(async (args: AnyArgs) => {
-    if (
-      (args.where as { key: string }).key === 'tracking.webhook_secret_ref'
-    ) {
+  // D5: settings are now resolved courier-first then global, so the
+  // service reads a SET of keys rather than one.
+  const findMany = jest.fn(async (args: AnyArgs) => {
+    const keys = ((args.where as AnyArgs).key as AnyArgs).in as string[];
+    const rows: Array<{ key: string; valueString: string | null }> = [];
+    if (keys.includes('tracking.webhook_secret_ref')) {
       const v = opts.secretRefValue;
-      if (v === null) return null;
-      return { valueString: v ?? 'TRACKING_WEBHOOK_SECRET_DELHIVERY' };
+      if (v !== null) {
+        rows.push({
+          key: 'tracking.webhook_secret_ref',
+          valueString: v ?? 'TRACKING_WEBHOOK_SECRET_DELHIVERY',
+        });
+      }
     }
-    return null;
+    if (
+      opts.authScheme !== undefined &&
+      keys.includes('tracking.webhook_auth_scheme')
+    ) {
+      rows.push({
+        key: 'tracking.webhook_auth_scheme',
+        valueString: opts.authScheme,
+      });
+    }
+    return rows;
   });
-  const client = { systemSetting: { findUnique } };
+  const client = { systemSetting: { findMany } };
   const env = makeTestEnv(
     opts.secretEnv !== undefined
       ? { TRACKING_WEBHOOK_SECRET_DELHIVERY: opts.secretEnv }
@@ -178,3 +195,103 @@ describe('WebhookAuthService.verify', () => {
     expect(r).toEqual({ valid: false, reason: 'SIGNATURE_MISMATCH' });
   });
 });
+
+/**
+ * D5 — the scheme that matters for the courier we actually use.
+ *
+ * Delhivery does not sign webhooks. You email them a requirement
+ * document nominating your endpoint and YOUR authorization details, and
+ * they send that credential back on every call. An HMAC-only verifier
+ * would therefore reject every real scan — and silently, since a
+ * rejected webhook is indistinguishable from one that never arrived.
+ */
+describe('WebhookAuthService.verify — SHARED_SECRET (Delhivery)', () => {
+  const SECRET = 'a-static-credential-we-nominated';
+
+  it('accepts the exact credential', async () => {
+    const svc = makeService({
+      authScheme: 'SHARED_SECRET',
+      secretEnv: SECRET,
+    });
+    await expect(
+      svc.verify({
+        courierCode: 'delhivery',
+        rawBody: '{"Shipment":{}}',
+        signatureHeader: SECRET,
+      }),
+    ).resolves.toMatchObject({ valid: true });
+  });
+
+  it('tolerates a Bearer/Token prefix — we dictate the header, an operator may write either', async () => {
+    const svc = makeService({ authScheme: 'SHARED_SECRET', secretEnv: SECRET });
+    for (const header of [`Bearer ${SECRET}`, `Token ${SECRET}`]) {
+      await expect(
+        svc.verify({
+          courierCode: 'delhivery',
+          rawBody: '{}',
+          signatureHeader: header,
+        }),
+      ).resolves.toMatchObject({ valid: true });
+    }
+  });
+
+  it('rejects a wrong credential', async () => {
+    const svc = makeService({ authScheme: 'SHARED_SECRET', secretEnv: SECRET });
+    await expect(
+      svc.verify({
+        courierCode: 'delhivery',
+        rawBody: '{}',
+        signatureHeader: 'not-the-secret-at-all-no',
+      }),
+    ).resolves.toMatchObject({ valid: false, reason: 'SIGNATURE_MISMATCH' });
+  });
+
+  it('rejects an absent credential', async () => {
+    const svc = makeService({ authScheme: 'SHARED_SECRET', secretEnv: SECRET });
+    await expect(
+      svc.verify({
+        courierCode: 'delhivery',
+        rawBody: '{}',
+        signatureHeader: undefined,
+      }),
+    ).resolves.toMatchObject({ valid: false, reason: 'SIGNATURE_MISSING' });
+  });
+
+  it('does NOT care about the body — that is the trade-off, and it is deliberate', async () => {
+    // A shared secret proves the caller knows a secret, not that the
+    // payload is untampered. Stated here so the weakening is explicit
+    // rather than discovered: the ingest path keeps IP throttling and
+    // the processor keeps its idempotency gates because of it.
+    const svc = makeService({ authScheme: 'SHARED_SECRET', secretEnv: SECRET });
+    await expect(
+      svc.verify({
+        courierCode: 'delhivery',
+        rawBody: 'anything at all',
+        signatureHeader: SECRET,
+      }),
+    ).resolves.toMatchObject({ valid: true });
+  });
+
+  it('still fails CLOSED when no secret is configured', async () => {
+    const svc = makeService({ authScheme: 'SHARED_SECRET', secretEnv: '' });
+    await expect(
+      svc.verify({
+        courierCode: 'delhivery',
+        rawBody: '{}',
+        signatureHeader: 'whatever',
+      }),
+    ).resolves.toMatchObject({ valid: false, reason: 'SECRET_NOT_CONFIGURED' });
+  });
+
+  it('defaults to HMAC when no scheme is set — a missing setting must not weaken auth', async () => {
+    const svc = makeService({ secretEnv: SECRET });
+    await expect(
+      svc.verify({
+        courierCode: 'delhivery',
+        rawBody: '{}',
+        signatureHeader: SECRET, // valid as a shared secret, not as an HMAC
+      }),
+    ).resolves.toMatchObject({ valid: false });
+  });
+});
+

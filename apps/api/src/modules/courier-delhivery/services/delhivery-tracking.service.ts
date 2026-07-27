@@ -67,77 +67,137 @@ export class DelhiveryTrackingService
     ]);
 
   /**
-   * Real-mode mapping — Delhivery's published "Status Push" taxonomy
-   * uses StatusType codes (two/three letters). Documented set as of
-   * 2025-Q4 docs:
+   * Real-mode mapping, keyed on the (StatusType, Status) PAIR.
    *
-   *   StatusType         Meaning                          → ShipmentStatus
-   *   ---------          -------                          ---------------
-   *   PU                 Manifested / pickup awaited      (informational; not mapped)
-   *   IT / UD            In transit / At hub              IN_TRANSIT
-   *   OFD                Out for delivery                 OUT_FOR_DELIVERY
-   *   DL / DLVD          Delivered                        DELIVERED
-   *   UD-EOD / UD-NDR    Undelivered / NDR                DELIVERY_ATTEMPTED
-   *   RT / DTO           RTO initiated                    RTO_INITIATED
-   *   RT-IT              RTO in transit                   RTO_IN_TRANSIT
-   *   RT-DLVD            RTO delivered to seller          RTO_DELIVERED
-   *   LT                 Lost in transit                  LOST
-   *   DG                 Damaged in transit               DAMAGED
+   * ── WHY A PAIR AND NOT A CODE ─────────────────────────────────────
+   * Delhivery reports two things: a StatusType (which leg of the journey
+   * this is) and a Status (which stage). The status alone is ambiguous
+   * and dangerously so — "In Transit" under `UD` means the parcel is
+   * moving TOWARD the customer, and under `RT` it means it is coming
+   * BACK to us. A code-only table maps both to IN_TRANSIT and walks the
+   * order forward while the goods return. Same trap with "Dispatched":
+   * out for delivery on a forward leg, heading back to our warehouse on
+   * a return one.
    *
-   * Any other code → UNMAPPABLE (still audited as a tracking_event).
-   * The list is best-effort against the public docs; the sandbox-smoke
-   * surfaces real codes that don't appear here as STUB-style audit
-   * entries the operator can review.
+   * The vocabulary below is Delhivery's own, from the package-lifecycle
+   * and webhook pages (docs/delhivery-integration.md §4).
+   *
+   *   UD  forward leg      Manifested / Not Picked / In Transit /
+   *                        Pending / Dispatched
+   *   DL  a terminal       Delivered / RTO / DTO
+   *   RT  return leg       In Transit / Pending / Dispatched
+   *   PP  reverse, pre-    Open / Scheduled / Dispatched
+   *       collection
+   *   PU  reverse, moving  In Transit / Pending / Dispatched
+   *   CN  cancellation     Canceled / Closed
+   *
+   * Pre-transit states (Manifested, Not Picked) deliberately map to
+   * nothing: they are audited as tracking_events but must not fire a
+   * lifecycle transition, because the parcel has not moved.
    */
-  private static readonly REAL_TABLE: ReadonlyMap<string, ShipmentStatus> =
+  private static readonly PAIR_TABLE: ReadonlyMap<string, ShipmentStatus> =
     new Map([
-      // ── StatusType / short-code keys (documented push taxonomy) ──
-      ['IT', ShipmentStatus.IN_TRANSIT],
-      ['UD', ShipmentStatus.IN_TRANSIT],
-      ['OFD', ShipmentStatus.OUT_FOR_DELIVERY],
-      ['DL', ShipmentStatus.DELIVERED],
-      ['DLVD', ShipmentStatus.DELIVERED],
-      ['UD-EOD', ShipmentStatus.DELIVERY_ATTEMPTED],
-      ['UD-NDR', ShipmentStatus.DELIVERY_ATTEMPTED],
-      ['NDR', ShipmentStatus.DELIVERY_ATTEMPTED],
-      ['RT', ShipmentStatus.RTO_INITIATED],
-      ['DTO', ShipmentStatus.RTO_INITIATED],
-      ['RT-IT', ShipmentStatus.RTO_IN_TRANSIT],
-      ['RT-DLVD', ShipmentStatus.RTO_DELIVERED],
-      ['LT', ShipmentStatus.LOST],
-      ['DG', ShipmentStatus.DAMAGED],
-      // ── Human `Scan` strings (what the poll fetch marshals into
-      //    rawStatus; live-observed + documented taxonomy, best-effort).
-      //    "Manifested" / "Not Picked" / "Pending" are intentionally
-      //    NOT mapped → UNMAPPABLE (audited, no transition): pre-transit
-      //    states must not fire a lifecycle move. Unmapped real codes
-      //    are logged for tuning. ────────────────────────────────────
-      ['IN TRANSIT', ShipmentStatus.IN_TRANSIT],
-      ['IN-TRANSIT', ShipmentStatus.IN_TRANSIT],
-      ['DISPATCHED', ShipmentStatus.OUT_FOR_DELIVERY],
-      ['OUT FOR DELIVERY', ShipmentStatus.OUT_FOR_DELIVERY],
+      // ── UD: forward leg ──────────────────────────────────────────
+      // "Manifested" / "Not Picked" → intentionally unmapped.
+      ['UD|IN TRANSIT', ShipmentStatus.IN_TRANSIT],
+      ['UD|PENDING', ShipmentStatus.IN_TRANSIT],
+      // Delhivery's "Dispatched" is our OUT_FOR_DELIVERY: the parcel is
+      // on a vehicle heading to the customer.
+      ['UD|DISPATCHED', ShipmentStatus.OUT_FOR_DELIVERY],
+
+      // ── DL: terminals ────────────────────────────────────────────
+      ['DL|DELIVERED', ShipmentStatus.DELIVERED],
+      ['DL|RTO', ShipmentStatus.RTO_DELIVERED],
+      ['DL|DTO', ShipmentStatus.RTO_DELIVERED],
+
+      // ── RT: the return leg. NONE of these are forward movement. ──
+      ['RT|IN TRANSIT', ShipmentStatus.RTO_IN_TRANSIT],
+      ['RT|PENDING', ShipmentStatus.RTO_IN_TRANSIT],
+      ['RT|DISPATCHED', ShipmentStatus.RTO_IN_TRANSIT],
+
+      // ── PU: reverse pickup already collected, moving to us ───────
+      ['PU|IN TRANSIT', ShipmentStatus.RTO_IN_TRANSIT],
+      ['PU|PENDING', ShipmentStatus.RTO_IN_TRANSIT],
+      ['PU|DISPATCHED', ShipmentStatus.RTO_IN_TRANSIT],
+    ]);
+
+  /**
+   * NSL prefixes that mark a failed delivery ATTEMPT.
+   *
+   * This is how an NDR actually presents: the status stays `UD|Pending`
+   * (the parcel is back at the DC) and the NSL carries the reason —
+   * `EOD-74`, `EOD-15`, and so on. Reading only the status would record
+   * a routine in-transit scan and lose the fact that a delivery was
+   * tried and failed, which is the event the customer and the NDR
+   * workflow both care about.
+   */
+  private static readonly NDR_NSL_PREFIX = 'EOD-';
+
+  /**
+   * Statuses whose meaning does NOT depend on the journey leg, so they
+   * can be mapped when a payload omits StatusType.
+   *
+   * The split is the whole point. "Delivered", "RTO" and "DTO" are
+   * terminals that say where the parcel ended up, and no leg can change
+   * that. "In Transit", "Pending" and "Dispatched" are deliberately
+   * ABSENT: they mean opposite directions under UD and RT, so mapping
+   * them without a leg is a coin flip — and getting it wrong walks an
+   * order forward while the goods come back. Better to record the scan
+   * as unmappable (it is still audited) than to guess the direction.
+   */
+  private static readonly STATUS_ONLY_TABLE: ReadonlyMap<string, ShipmentStatus> =
+    new Map([
       ['DELIVERED', ShipmentStatus.DELIVERED],
-      ['UNDELIVERED', ShipmentStatus.DELIVERY_ATTEMPTED],
-      ['RTO', ShipmentStatus.RTO_INITIATED],
+      ['RTO', ShipmentStatus.RTO_DELIVERED],
+      ['DTO', ShipmentStatus.RTO_DELIVERED],
       ['RTO INITIATED', ShipmentStatus.RTO_INITIATED],
       ['RTO IN TRANSIT', ShipmentStatus.RTO_IN_TRANSIT],
       ['RTO DELIVERED', ShipmentStatus.RTO_DELIVERED],
       ['DTO DELIVERED', ShipmentStatus.RTO_DELIVERED],
+      ['UNDELIVERED', ShipmentStatus.DELIVERY_ATTEMPTED],
+      ['OUT FOR DELIVERY', ShipmentStatus.OUT_FOR_DELIVERY],
       ['LOST', ShipmentStatus.LOST],
       ['DAMAGED', ShipmentStatus.DAMAGED],
     ]);
 
   normalizeScan(raw: DelhiveryRawScan): NormalizedScan {
     const code = raw.rawStatus.trim().toUpperCase();
-    // Try the stub table first (DLV- prefixed) for back-compat with
-    // existing e2e specs; then the real table.
+    // Stub table first (DLV- prefixed) so existing e2e paths keep working.
     const stub = DelhiveryTrackingService.STUB_TABLE.get(code);
     if (stub !== undefined) {
       return { kind: 'NORMALIZED', shipmentStatus: stub };
     }
-    const real = DelhiveryTrackingService.REAL_TABLE.get(code);
-    if (real !== undefined) {
-      return { kind: 'NORMALIZED', shipmentStatus: real };
+
+    const statusType = (raw.statusType ?? '').trim().toUpperCase();
+    const nsl = (raw.nslCode ?? '').trim().toUpperCase();
+
+    // An NDR is an EOD-* NSL on a forward leg. Checked BEFORE the pair
+    // table, because the status itself is an unremarkable "Pending" and
+    // would otherwise be recorded as ordinary transit.
+    if (
+      statusType === 'UD' &&
+      nsl.startsWith(DelhiveryTrackingService.NDR_NSL_PREFIX)
+    ) {
+      return {
+        kind: 'NORMALIZED',
+        shipmentStatus: ShipmentStatus.DELIVERY_ATTEMPTED,
+      };
+    }
+
+    if (statusType !== '') {
+      const paired = DelhiveryTrackingService.PAIR_TABLE.get(
+        `${statusType}|${code}`,
+      );
+      if (paired !== undefined) {
+        return { kind: 'NORMALIZED', shipmentStatus: paired };
+      }
+    }
+
+    // No leg supplied (or a leg we don't know): fall back to the statuses
+    // that cannot be misread without one.
+    const unambiguous = DelhiveryTrackingService.STATUS_ONLY_TABLE.get(code);
+    if (unambiguous !== undefined) {
+      return { kind: 'NORMALIZED', shipmentStatus: unambiguous };
     }
     this.logger.debug(
       { awbNumber: raw.awbNumber, rawStatus: raw.rawStatus },

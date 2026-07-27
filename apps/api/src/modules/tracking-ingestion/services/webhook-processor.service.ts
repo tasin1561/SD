@@ -199,6 +199,11 @@ export class WebhookProcessorService {
     const normalized = this.courierDelhivery.normalizeScan({
       awbNumber: parsed.awbNumber,
       rawStatus: parsed.rawStatus,
+      // The leg + NSL travel with the scan: without them "In Transit"
+      // cannot be told from a return leg, and an NDR looks like ordinary
+      // transit (D5).
+      statusType: parsed.statusType,
+      nslCode: parsed.nslCode,
       eventAtIso: parsed.eventAtIso,
       locationName: parsed.locationName,
       locationCity: parsed.locationCity,

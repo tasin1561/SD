@@ -122,6 +122,22 @@ export interface DelhiveryRawScan {
    *  tracking_events.event_at with this exact value (TRK-3 — scan
    *  time, not receive time). */
   eventAtIso: string;
+  /**
+   * Delhivery's StatusType — the JOURNEY LEG, and the half of the
+   * mapping that the status string alone cannot supply. `UD` forward,
+   * `RT` return-to-origin, `PP`/`PU` reverse pickup, `DL` a terminal,
+   * `CN` cancellation. "In Transit" under UD and under RT mean opposite
+   * directions, so a mapping that ignores this walks orders forward
+   * while the parcel is coming back.
+   */
+  statusType?: string | null;
+  /**
+   * NSL (Net Service Level) code, e.g. `X-UCI`, `EOD-74`. The
+   * fine-grained reason under a status. `EOD-*` on a forward leg is how
+   * a failed delivery attempt actually presents, and the specific code
+   * decides whether an NDR re-attempt is even permitted.
+   */
+  nslCode?: string | null;
   /** Optional location strings — passed through to tracking_events. */
   locationName?: string | null;
   locationCity?: string | null;

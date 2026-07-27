@@ -31,8 +31,10 @@ import type {
  *         Instructions } } ] } } ] }
  *
  * We marshal each `ScanDetail` into a `DelhiveryRawScan` with
- * `rawStatus = ScanDetail.Scan` (the human status string — the most
- * stable mapping key; see `DelhiveryTrackingService.REAL_TABLE`). Scan
+ * `rawStatus = ScanDetail.Scan` PLUS the StatusType and NSL — the
+ * status string alone is ambiguous ("In Transit" means opposite
+ * directions under UD and RT), so the mapping needs the pair; see
+ * `DelhiveryTrackingService.normalizeScan`. Scan
  * timestamps come back in IST with no offset (e.g.
  * `2026-07-25T19:32:50.228`); we normalise to `+05:30` so the stored
  * `tracking_events.eventAt` (TRK-3) lands at the correct instant.
@@ -40,11 +42,17 @@ import type {
 
 interface DelhiveryScanDetail {
   Scan?: string;
+  /** The journey leg: UD / DL / RT / PP / PU / CN. Delhivery uses both
+   *  `ScanType` and `StatusType` for this depending on the surface, so
+   *  both are read. */
   ScanType?: string;
+  StatusType?: string;
   ScanDateTime?: string;
   StatusDateTime?: string;
   ScannedLocation?: string;
   StatusCode?: string;
+  /** NSL — the fine-grained reason under the status (e.g. EOD-74). */
+  NSLCode?: string;
   Instructions?: string;
 }
 
@@ -55,6 +63,10 @@ interface DelhiveryShipment {
 
 interface DelhiveryTrackResponse {
   ShipmentData?: Array<{ Shipment?: DelhiveryShipment }>;
+  /** Present and false when the call failed — with HTTP 200. */
+  Success?: boolean;
+  Error?: string;
+  rmk?: string;
 }
 
 /** Delhivery scan timestamps are IST without a zone offset — the
@@ -102,6 +114,23 @@ export class DelhiveryTrackingFetchService
       endpoint: 'tracking',
     });
 
+    // Delhivery signals tracking failures IN THE BODY with HTTP 200 —
+    // verified against production, where an unknown AWB returns
+    // `{"Success": false, "Error": "Data does not exists for provided
+    // Waybill(s)"}`. `res.ok` is therefore not the answer: without this
+    // check the poller reads a failure as "no new scans" and goes quiet
+    // on exactly the shipments that need attention. And since a failed
+    // webhook push is retried once and then dropped FOREVER, the poller
+    // is the only backstop there is.
+    if (response.Success === false) {
+      const message = response.Error ?? response.rmk ?? 'unknown tracking error';
+      this.logger.warn(
+        { awbs: awbs.length, message },
+        'Delhivery tracking returned an in-body failure (HTTP 200)',
+      );
+      throw new Error(`Delhivery tracking failed: ${message}`);
+    }
+
     const results: CourierTrackingResult[] = [];
     for (const entry of response.ShipmentData ?? []) {
       const shipment = entry.Shipment;
@@ -119,6 +148,10 @@ export class DelhiveryTrackingFetchService
         scans.push({
           awbNumber,
           rawStatus,
+          // The journey leg and the NSL are what make the scan
+          // unambiguous — see DelhiveryTrackingService.normalizeScan.
+          statusType: d.StatusType ?? d.ScanType ?? null,
+          nslCode: d.NSLCode ?? null,
           eventAtIso: toIsoWithIst(when),
           locationName: d.ScannedLocation ?? null,
           locationCity: d.ScannedLocation ?? null,

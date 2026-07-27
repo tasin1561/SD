@@ -15,12 +15,26 @@ export type WebhookAuthResult =
       valid: false;
       /** Coarse-grained, no secret material; safe to log + audit. */
       reason:
-        | 'SECRET_REF_NOT_CONFIGURED' // tracking.webhook_secret_ref missing/empty
+        | 'SECRET_REF_NOT_CONFIGURED' // secret-ref setting missing/empty
         | 'SECRET_NOT_CONFIGURED' // env var pointed to by the ref is empty
-        | 'SIGNATURE_MISSING' // request omitted the signature header
+        | 'SIGNATURE_MISSING' // request omitted the credential header
         | 'SIGNATURE_MALFORMED' // not lowercase hex / wrong length
-        | 'SIGNATURE_MISMATCH'; // HMAC computed but did not equal supplied
+        | 'SIGNATURE_MISMATCH'; // computed/compared and did not match
     };
+
+/**
+ * How a given courier authenticates ITS webhooks to US.
+ *
+ *  - `HMAC_SHA256` — the courier signs the raw body with a shared secret
+ *    and sends the hex digest. Strong: the payload itself is
+ *    tamper-evident.
+ *  - `SHARED_SECRET` — the courier sends a static credential in a header
+ *    and nothing is signed. Weaker (it proves the caller knows a secret,
+ *    not that the body is untouched), but it is what several couriers
+ *    including **Delhivery** actually do, and rejecting it means
+ *    rejecting all their scans.
+ */
+export type WebhookAuthScheme = 'HMAC_SHA256' | 'SHARED_SECRET';
 
 /**
  * Per-courier system-setting key holding the env var name of the HMAC
@@ -29,6 +43,7 @@ export type WebhookAuthResult =
  * CUR-1 discipline — secret in env, ref in DB).
  */
 const SECRET_REF_SETTING_KEY = 'tracking.webhook_secret_ref';
+const AUTH_SCHEME_SETTING_KEY = 'tracking.webhook_auth_scheme';
 
 /**
  * Module 10 (TRK-1) — inbound webhook authentication. Verifies the
@@ -46,17 +61,29 @@ const SECRET_REF_SETTING_KEY = 'tracking.webhook_secret_ref';
  * empty secret means fail-closed — every authenticated path returns
  * 401 until the env is configured.
  *
- * ── REAL MODE (TODO(delhivery-api)) ────────────────────────────────
- * Delhivery's real webhook signature scheme is NOT reliably known at
- * build time and is NOT hallucinated. Validate against Delhivery's
- * webhook spec before flipping to real mode. Open seams:
- *   - HMAC algorithm (SHA256 / SHA1 / other)
- *   - Signature encoding (hex / base64 / prefixed)
- *   - Header NAME (X-Delhivery-Signature? Authorization?)
- *   - Inclusion of a timestamp / nonce + a replay-protection window
- *   - Body normalization (raw bytes vs canonicalized JSON)
- * Until validated, the stub scheme above is what tests exercise; this
- * service is the single point a real-mode swap touches.
+ * ── WHY THE SCHEME IS PER-COURIER (D5) ─────────────────────────────
+ * The original build assumed every courier signs its payloads. Reading
+ * Delhivery's actual webhook documentation says otherwise: webhooks are
+ * enabled by emailing them a "Webhook Requirement Document" carrying our
+ * endpoint URL and **our chosen authorization details**. They do not
+ * sign anything. So against the real Delhivery, an HMAC-only verifier
+ * would 401 every single scan — silently, because a rejected webhook
+ * looks identical to one that never arrived.
+ *
+ * Hence `tracking.webhook_auth_scheme[.<courier>]`:
+ *   HMAC_SHA256   — verify a signature over the raw body (unchanged)
+ *   SHARED_SECRET — constant-time compare a static credential header
+ *
+ * Both still fail CLOSED, and both still refuse to store an
+ * unauthenticated payload (TRK-1). A shared secret is weaker than a
+ * signature — it proves the caller knows a secret, not that the body is
+ * untampered — which is why the ingest path keeps IP-throttling and the
+ * processor keeps its idempotency gates.
+ *
+ * Settings resolve courier-first then global, so one courier moving to a
+ * different scheme never disturbs another:
+ *   tracking.webhook_auth_scheme.delhivery → tracking.webhook_auth_scheme
+ *   tracking.webhook_secret_ref.delhivery  → tracking.webhook_secret_ref
  */
 @Injectable()
 export class WebhookAuthService {
@@ -76,11 +103,10 @@ export class WebhookAuthService {
     signatureHeader: string | undefined;
   }): Promise<WebhookAuthResult> {
     // (1) Resolve the env var name for this courier from system_settings.
-    const setting = await this.prisma.client.systemSetting.findUnique({
-      where: { key: SECRET_REF_SETTING_KEY },
-      select: { valueString: true },
-    });
-    const envKey = (setting?.valueString ?? '').trim();
+    const envKey = await this.settingFor(
+      SECRET_REF_SETTING_KEY,
+      input.courierCode,
+    );
     if (envKey === '') {
       // No ref configured — every webhook fails closed.
       this.logger.warn(
@@ -108,8 +134,12 @@ export class WebhookAuthService {
       return { valid: false, reason: 'SIGNATURE_MISSING' };
     }
 
-    // (4) Compute expected HMAC-SHA256 over the RAW body
-    //     (TODO(delhivery-api): real-mode algorithm/encoding).
+    // (4) Verify per the courier's scheme.
+    const scheme = await this.schemeFor(input.courierCode);
+    if (scheme === 'SHARED_SECRET') {
+      return this.verifySharedSecret(input.signatureHeader, secret, envKey);
+    }
+
     const expected = createHmac('sha256', secret)
       .update(input.rawBody, 'utf8')
       .digest('hex');
@@ -127,5 +157,59 @@ export class WebhookAuthService {
     if (!ok) return { valid: false, reason: 'SIGNATURE_MISMATCH' };
 
     return { valid: true, secretRefEnvKey: envKey };
+  }
+
+  // ── internal ──────────────────────────────────────────────────────
+
+  /**
+   * A static credential in a header — what Delhivery actually sends.
+   *
+   * Compared in constant time, and tolerant of the usual `Bearer ` /
+   * `Token ` prefixes because WE dictate the header contents in the
+   * requirement document and an operator may well write it either way.
+   */
+  private verifySharedSecret(
+    header: string,
+    secret: string,
+    envKey: string,
+  ): WebhookAuthResult {
+    const supplied = header.trim().replace(/^(Bearer|Token)\s+/i, '');
+    if (supplied.length === 0) {
+      return { valid: false, reason: 'SIGNATURE_MISSING' };
+    }
+    // Length is compared first because timingSafeEqual throws on a
+    // mismatch. This leaks only the length of the credential.
+    if (supplied.length !== secret.length) {
+      return { valid: false, reason: 'SIGNATURE_MISMATCH' };
+    }
+    const ok = timingSafeEqual(
+      Buffer.from(secret, 'utf8'),
+      Buffer.from(supplied, 'utf8'),
+    );
+    return ok
+      ? { valid: true, secretRefEnvKey: envKey }
+      : { valid: false, reason: 'SIGNATURE_MISMATCH' };
+  }
+
+  /** HMAC unless the courier is configured otherwise — the stricter
+   *  scheme is the default, so a missing setting cannot weaken auth. */
+  private async schemeFor(courierCode: string): Promise<WebhookAuthScheme> {
+    const raw = (
+      await this.settingFor(AUTH_SCHEME_SETTING_KEY, courierCode)
+    ).toUpperCase();
+    return raw === 'SHARED_SECRET' ? 'SHARED_SECRET' : 'HMAC_SHA256';
+  }
+
+  /** `<key>.<courier>` if present, else `<key>`, else ''. */
+  private async settingFor(key: string, courierCode: string): Promise<string> {
+    const rows = await this.prisma.client.systemSetting.findMany({
+      where: { key: { in: [`${key}.${courierCode.toLowerCase()}`, key] } },
+      select: { key: true, valueString: true },
+    });
+    const specific = rows.find(
+      (r) => r.key === `${key}.${courierCode.toLowerCase()}`,
+    );
+    const global = rows.find((r) => r.key === key);
+    return ((specific ?? global)?.valueString ?? '').trim();
   }
 }

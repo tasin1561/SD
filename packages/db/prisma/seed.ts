@@ -331,6 +331,28 @@ const systemSettings: SystemSettingSeed[] = [
   // D3 — the AWB pool. Delhivery allows only FIVE bulk fetches per five
   // minutes and warns that a freshly-minted waybill may error if used
   // immediately, so numbers are pulled ahead of time and left to settle.
+  // D5 — how each courier authenticates ITS webhooks to US. Delhivery
+  // does not sign payloads: you email them a requirement document
+  // nominating your endpoint and your authorization, and they send that
+  // credential back. An HMAC-only verifier would 401 every real scan.
+  {
+    key: 'tracking.webhook_auth_scheme',
+    category: 'tracking',
+    valueType: SettingValueType.STRING,
+    valueString: 'HMAC_SHA256',
+    displayName: 'Webhook Auth Scheme (default)',
+    description:
+      "How inbound courier webhooks are authenticated when a courier-specific key is absent: 'HMAC_SHA256' (the courier signs the raw body — stronger, and the safe default) or 'SHARED_SECRET' (a static credential in a header). Override per courier with tracking.webhook_auth_scheme.<courierCode>.",
+  },
+  {
+    key: 'tracking.webhook_auth_scheme.delhivery',
+    category: 'tracking',
+    valueType: SettingValueType.STRING,
+    valueString: 'SHARED_SECRET',
+    displayName: 'Webhook Auth Scheme — Delhivery',
+    description:
+      'Delhivery does not sign webhooks; it returns the authorization we nominated in their Webhook Requirement Document. Leave as SHARED_SECRET unless Delhivery introduces signing. The credential itself lives in the env var named by tracking.webhook_secret_ref (CUR-1: secret in env, reference in the DB).',
+  },
   {
     key: 'courier.delhivery_waybill_pool_low_water',
     category: 'courier',

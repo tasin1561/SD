@@ -8,6 +8,10 @@ import { DeliveryFailureReason } from '@skydrop/db';
 export interface ParsedScanPayload {
   awbNumber: string;
   rawStatus: string;
+  /** Delhivery's journey leg (UD/DL/RT/PP/PU/CN) — half the mapping. */
+  statusType: string | null;
+  /** NSL code (e.g. EOD-74) — how a failed delivery attempt presents. */
+  nslCode: string | null;
   eventAtIso: string;
   locationName: string | null;
   locationCity: string | null;
@@ -51,11 +55,19 @@ export function parseScanPayload(
       ? (s['Status'] as Record<string, unknown>)
       : {};
     const awbNumber = pickString(s, ['AWB', 'awb']);
-    // Prefer StatusType (terse machine code IT/OFD/DL/etc — what
-    // normalizeScan keys off); fall back to Status (verbose label).
-    const rawStatus =
-      pickString(status, ['StatusType', 'NSLCode']) ??
-      pickString(status, ['Status']);
+    // `Status` is the STAGE and `StatusType` is the LEG — they are
+    // different axes and both are needed. An earlier version put
+    // StatusType into rawStatus, which fed the mapper "UD" (a direction)
+    // where it expected "In Transit" (a stage), and lost the direction
+    // entirely. Verified payload:
+    //   Shipment.Status = { Status, StatusType, StatusDateTime,
+    //                       StatusLocation, Instructions }
+    //   Shipment.NSLCode, Shipment.ReferenceNo, Shipment.AWB
+    const rawStatus = pickString(status, ['Status']);
+    const statusType = pickString(status, ['StatusType']);
+    // NSL sits on the Shipment, not inside Status.
+    const nslCode =
+      pickString(s, ['NSLCode', 'nsl_code']) ?? pickString(status, ['NSLCode']);
     const eventAtIso = pickString(status, [
       'StatusDateTime',
       'StatusDate',
@@ -73,6 +85,8 @@ export function parseScanPayload(
     return {
       awbNumber,
       rawStatus,
+      statusType,
+      nslCode,
       eventAtIso,
       locationName: location,
       locationCity: location, // Delhivery doesn't split; reuse for both.
@@ -103,6 +117,10 @@ export function parseScanPayload(
   return {
     awbNumber,
     rawStatus,
+    // Flat/stub payloads may carry the leg and NSL too; absent is fine —
+    // normalizeScan falls back to the unambiguous statuses.
+    statusType: pickString(b, ['status_type', 'statusType', 'StatusType']),
+    nslCode: pickString(b, ['nsl_code', 'nslCode', 'NSLCode']),
     eventAtIso,
     locationName:
       pickString(b, ['location_name']) ??
