@@ -20,6 +20,32 @@ const REDACT_PATHS = [
   '*.key_hash',
   '*.signingKey',
   '*.JWT_SIGNING_KEY',
+  // Outbound webhook signing key. A leaked one lets anyone forge a
+  // payload a seller's system will trust as ours — the whole point of
+  // the HMAC.
+  '*.secretKey',
+  '*.secret_key',
+  '*.webhookSecret',
+  '*.webhook_secret',
+  // Courier API credentials. `credentialFields` is the RAW object POSTed
+  // to /admin/courier-accounts before it is encrypted (CUR-1 says field
+  // NAMES may be audited, values never); `encryptedPayload` is the
+  // ciphertext, redacted because logging it hands an attacker the thing
+  // the key is protecting.
+  '*.credentialFields',
+  '*.credential_fields',
+  '*.encryptedPayload',
+  '*.encrypted_payload',
+  // Seller bank details. Encrypted at rest, but the plaintext passes
+  // through DTOs on the way in.
+  '*.bankAccountNumber',
+  '*.bank_account_number',
+  // Generic catch-alls for anything added later that follows the
+  // obvious naming. Cheap, and the failure mode of missing one is a
+  // credential in a log file that outlives the incident.
+  '*.secret',
+  '*.privateKey',
+  '*.private_key',
 ];
 
 export function pinoConfig(env: Env): Params {
