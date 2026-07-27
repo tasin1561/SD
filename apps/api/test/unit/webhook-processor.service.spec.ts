@@ -71,6 +71,7 @@ interface FakeDeliveryAttempt {
   attemptNumber: number;
   outcome: DeliveryAttemptOutcome;
   attemptedAt: Date;
+  courierNslCode: string | null;
 }
 
 interface Setup {
@@ -92,13 +93,17 @@ function defaultScanBody() {
   };
 }
 
-function ndrBody(eventAtIso: string) {
+function ndrBody(eventAtIso: string, nslCode = 'EOD-74') {
   return {
     awb_number: AWB,
     raw_status: 'DLV-NDR',
     event_at: eventAtIso,
     description: 'Customer unavailable',
     failure_reason: 'CUSTOMER_UNAVAILABLE',
+    // The reason code UNDER the status. EOD-74 is "customer unavailable",
+    // and it is the ONLY thing Delhivery consults when deciding whether a
+    // re-attempt may be requested.
+    nsl_code: nslCode,
   };
 }
 
@@ -221,6 +226,7 @@ function makeProcessor(setup: Setup = {}) {
         attemptedAt: Date;
         outcome: DeliveryAttemptOutcome;
         webhookId: string;
+        courierNslCode?: string;
       };
     }): Promise<FakeDeliveryAttempt> => {
       // Enforce the @@unique([shipmentId, attemptNumber]).
@@ -240,6 +246,7 @@ function makeProcessor(setup: Setup = {}) {
         attemptNumber: args.data.attemptNumber,
         outcome: args.data.outcome,
         attemptedAt: args.data.attemptedAt,
+        courierNslCode: args.data.courierNslCode ?? null,
       };
       attempts.push(row);
       return row;
@@ -304,6 +311,7 @@ function makeProcessor(setup: Setup = {}) {
           source: row.source,
           courierCode: input.courierCode ?? null,
           rawCourierStatus: input.rawCourierStatus ?? null,
+          nslCode: input.nslCode ?? null,
           description: input.description ?? null,
           locationName: input.locationName ?? null,
           locationCity: input.locationCity ?? null,
@@ -470,6 +478,10 @@ describe('WebhookProcessorService.process — DELIVERY_ATTEMPT saga (delivery_at
       shipmentId: SHIPMENT_ID,
       attemptNumber: 1,
       outcome: DeliveryAttemptOutcome.FAILED,
+      // The courier's own reason code is KEPT. Without it the re-attempt
+      // call can only be made blind, and Delhivery refuses a blind one —
+      // the parser extracted this and discarded it until now.
+      courierNslCode: 'EOD-74',
     });
     expect(state.trackingEvents).toHaveLength(1);
     expect(state.trackingEvents[0]?.eventType).toBe(
@@ -629,6 +641,7 @@ describe('WebhookProcessorService.process — webhook reprocess dedup (BullMQ re
       attemptNumber: 1,
       outcome: DeliveryAttemptOutcome.FAILED,
       attemptedAt: new Date('2026-05-20T10:00:00.000Z'),
+      courierNslCode: 'EOD-74',
     });
     state.trackingEvents.push({
       id: 'te-pre',

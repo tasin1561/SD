@@ -130,6 +130,7 @@ function makeSvc(opts: {
           source: input.source,
           courierCode: input.courierCode ?? null,
           rawCourierStatus: input.rawCourierStatus ?? null,
+          nslCode: input.nslCode ?? null,
           description: input.description ?? null,
           locationName: input.locationName ?? null,
           locationCity: input.locationCity ?? null,

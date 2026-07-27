@@ -260,6 +260,7 @@ export class WebhookProcessorService {
         status: ship.status,
         courierCode: wh.courierCode,
         rawCourierStatus: parsed.rawStatus,
+        nslCode: parsed.nslCode,
         description: parsed.description,
         locationName: parsed.locationName,
         locationCity: parsed.locationCity,
@@ -291,6 +292,7 @@ export class WebhookProcessorService {
         status: ship.status,
         courierCode: wh.courierCode,
         rawCourierStatus: parsed.rawStatus,
+        nslCode: parsed.nslCode,
         description: parsed.description,
         locationName: parsed.locationName,
         locationCity: parsed.locationCity,
@@ -331,6 +333,7 @@ export class WebhookProcessorService {
         status: normalized.shipmentStatus,
         courierCode: wh.courierCode,
         rawCourierStatus: parsed.rawStatus,
+        nslCode: parsed.nslCode,
         description: parsed.description,
         locationName: parsed.locationName,
         locationCity: parsed.locationCity,
@@ -351,7 +354,13 @@ export class WebhookProcessorService {
 
     // §7.a — DELIVERY_ATTEMPT: write delivery_attempts FIRST (durable).
     if (decision.kind === 'DELIVERY_ATTEMPT') {
-      await this.writeAttemptIfNew(wh.id, ship.id, parsed.failureReason, eventAt);
+      await this.writeAttemptIfNew(
+        wh.id,
+        ship.id,
+        parsed.failureReason,
+        eventAt,
+        parsed.nslCode,
+      );
     }
 
     // §7.b / §8 — append tracking_event (idempotent).
@@ -361,6 +370,7 @@ export class WebhookProcessorService {
       status: normalized.shipmentStatus,
       courierCode: wh.courierCode,
       rawCourierStatus: parsed.rawStatus,
+      nslCode: parsed.nslCode,
       description: parsed.description,
       locationName: parsed.locationName,
       locationCity: parsed.locationCity,
@@ -492,6 +502,7 @@ export class WebhookProcessorService {
       status: ShipmentStatus;
       courierCode: string;
       rawCourierStatus: string;
+      nslCode: string | null;
       description: string | null;
       locationName: string | null;
       locationCity: string | null;
@@ -514,6 +525,7 @@ export class WebhookProcessorService {
       source: TrackingEventSource.COURIER_WEBHOOK,
       courierCode: opts.courierCode,
       rawCourierStatus: opts.rawCourierStatus,
+      nslCode: opts.nslCode,
       description: opts.description,
       locationName: opts.locationName,
       locationCity: opts.locationCity,
@@ -538,6 +550,10 @@ export class WebhookProcessorService {
     shipmentId: string,
     rawFailureReason: string | null,
     attemptedAt: Date,
+    // The courier's own reason code. Kept because Delhivery decides
+    // re-attempt eligibility from it and nothing else — see the NDR
+    // service. Historically parsed and discarded.
+    nslCode: string | null,
   ): Promise<void> {
     await this.prisma.client.$transaction(async (tx) => {
       const dedupExisting = await tx.deliveryAttempt.findFirst({
@@ -565,6 +581,7 @@ export class WebhookProcessorService {
           ...(rawFailureReason !== null
             ? { failureNotes: rawFailureReason }
             : {}),
+          ...(nslCode !== null ? { courierNslCode: nslCode } : {}),
           source: TrackingEventSource.COURIER_WEBHOOK,
           webhookId,
         },
@@ -609,6 +626,7 @@ const ROW_SELECT = {
   source: true,
   courierCode: true,
   rawCourierStatus: true,
+  nslCode: true,
   description: true,
   locationName: true,
   locationCity: true,

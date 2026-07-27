@@ -27,6 +27,11 @@ export interface AppendTrackingEventInput {
   source: TrackingEventSource;
   courierCode?: string | null;
   rawCourierStatus?: string | null;
+  /** The courier's fine-grained reason code under the status (Delhivery
+   *  NSL, e.g. `EOD-74`). The status alone does not say WHY, and for a
+   *  failed delivery the why is what decides whether a re-attempt is
+   *  even permitted. */
+  nslCode?: string | null;
   description?: string | null;
   locationName?: string | null;
   locationCity?: string | null;
@@ -56,6 +61,7 @@ export interface TrackingEventRow {
   source: TrackingEventSource;
   courierCode: string | null;
   rawCourierStatus: string | null;
+  nslCode: string | null;
   description: string | null;
   locationName: string | null;
   locationCity: string | null;
@@ -114,6 +120,7 @@ export class TrackingEventAppendService {
         isVisibleToCustomer: input.isVisibleToCustomer ?? true,
         courierCode: input.courierCode ?? null,
         rawCourierStatus: input.rawCourierStatus ?? null,
+        nslCode: input.nslCode ?? null,
         description: input.description ?? null,
         locationName: input.locationName ?? null,
         locationCity: input.locationCity ?? null,
@@ -154,6 +161,7 @@ const ROW_SELECT = {
   source: true,
   courierCode: true,
   rawCourierStatus: true,
+  nslCode: true,
   description: true,
   locationName: true,
   locationCity: true,

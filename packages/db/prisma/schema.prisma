@@ -2186,6 +2186,12 @@ model TrackingEvent {
   source              TrackingEventSource
   courierCode         String?             @map("courier_code")
   rawCourierStatus    String?             @map("raw_courier_status")
+  /// Delhivery's NSL (Net Service Level) code for this scan, e.g. EOD-74
+  /// ("customer unavailable"). The fine-grained reason UNDER the status:
+  /// "Pending" tells you nothing, the NSL tells you why. Delhivery decides
+  /// NDR re-attempt eligibility from it, so acting on a failed delivery is
+  /// impossible without having kept it.
+  nslCode             String?             @map("nsl_code")
   webhookId           String?             @map("webhook_id") @db.Uuid
   actorType           ActorType?          @map("actor_type")
   actorId             String?             @map("actor_id") @db.Uuid
@@ -2260,6 +2266,14 @@ model DeliveryAttempt {
   outcome                DeliveryAttemptOutcome
   failureReason          DeliveryFailureReason? @map("failure_reason")
   failureNotes           String?                @map("failure_notes") @db.Text
+  /// The courier's own reason code for THIS attempt (Delhivery NSL, e.g.
+  /// EOD-74). `failureReason` is our normalized enum; this is the raw code
+  /// the courier will accept back when we ask for a re-attempt. Keeping
+  /// both means our normalization can change without losing what they said.
+  /// Queried by the NDR flow via a migration-only PARTIAL index
+  /// (delivery_attempts_courier_nsl_code_idx, WHERE courier_nsl_code IS NOT
+  /// NULL) — most attempts have no code and are never the answer.
+  courierNslCode         String?                @map("courier_nsl_code")
   contactedCustomer      Boolean                @default(false) @map("contacted_customer")
   customerResponse       String?                @map("customer_response") @db.Text
   nextAttemptScheduledAt DateTime?              @map("next_attempt_scheduled_at") @db.Timestamptz
