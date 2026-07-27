@@ -1489,8 +1489,14 @@ model CourierPickupRequest {
   warehouse        Warehouse  @relation(fields: [warehouseId], references: [id])
   requestedByStaff StaffUser? @relation(fields: [requestedByStaffId], references: [id])
 
-  /// The one-open-per-warehouse-per-day rule, in the schema.
-  @@unique([courierCode, warehouseId, pickupDate])
+  /// The one-OPEN-per-warehouse-per-day rule lives in a migration-only
+  /// PARTIAL unique (courier_pickup_requests_open_day_uq, WHERE status IN
+  /// ('requested','failed')) — Prisma cannot express a partial unique, and
+  /// an unconditional one would be wrong: Delhivery accepts a second
+  /// request "only when the existing pickup request is closed", so a
+  /// CLOSED morning collection must not block an afternoon van. FAILED
+  /// still occupies the day on purpose (we cannot tell a lost response
+  /// from a never-sent one); `releaseDay` is the audited way out.
   @@index([status])
   @@index([pickupDate])
   @@map("courier_pickup_requests")

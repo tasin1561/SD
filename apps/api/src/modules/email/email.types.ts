@@ -48,7 +48,9 @@ export interface ResolvedSender {
 }
 
 export interface EmailSendResult {
-  notificationLogId: string;
+  /** Null only when the send SUCCEEDED but the ledger write did not — see
+   *  EmailDispatchService for why that is not a retry. */
+  notificationLogId: string | null;
   status: 'SENT' | 'FAILED';
   providerMessageId: string | null;
   failureCode: string | null;

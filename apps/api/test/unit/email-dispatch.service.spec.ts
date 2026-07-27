@@ -20,6 +20,9 @@ function makeSut(opts: {
   /** Pass null to explicitly produce a template with no subject. Omit to use
    *  the default "Reset your password". */
   templateSubject?: string | null;
+  /** Make the notification_logs write throw, to exercise the
+   *  already-sent-but-unrecorded path. */
+  ledgerWriteFails?: boolean;
 }) {
   const captured: CapturedCreate[] = [];
   let nextId = 0;
@@ -29,11 +32,13 @@ function makeSut(opts: {
     client: {
       notificationLog: {
         create: jest.fn(async (args: CapturedCreate) => {
+          if (opts.ledgerWriteFails) throw new Error('connection terminated unexpectedly');
           nextId += 1;
           captured.push(args);
           return { id: `log-${nextId}` };
         }),
         update: jest.fn(async (args: { where: { id: string }; data: Record<string, unknown> }) => {
+          if (opts.ledgerWriteFails) throw new Error('No record was found for an update');
           capturedUpdates.push(args);
           return { id: args.where.id };
         }),
@@ -246,6 +251,64 @@ describe('EmailDispatchService', () => {
       // Legacy fire-once path unchanged: CREATE one row, no UPDATE.
       expect(captured).toHaveLength(1);
       expect(capturedUpdates).toHaveLength(0);
+    });
+  });
+
+  /**
+   * The send is irreversible; the ledger row is a reflection of it. Letting a
+   * ledger failure propagate marks the BullMQ job failed, and the retry
+   * re-enters send() and calls the provider AGAIN — up to five copies of
+   * "your order has been dispatched" in a real inbox, caused by a database
+   * hiccup unrelated to the email.
+   */
+  describe('a ledger failure must never cause a re-send', () => {
+    it('reports SENT when the row write fails AFTER the provider accepted', async () => {
+      const { svc } = makeSut({
+        resendResponse: { ok: true, providerMessageId: 'msg-sent-for-real' },
+        ledgerWriteFails: true,
+      });
+
+      const result = await svc.send({
+        templateCode: 'customer.order_dispatched.email',
+        recipient: { type: NotificationRecipientType.CUSTOMER, email: 'buyer@x.io' },
+      });
+
+      // SENT, not a throw — a throw is what triggers the duplicate.
+      expect(result.status).toBe('SENT');
+      // No row, and the result says so honestly rather than inventing an id.
+      expect(result.notificationLogId).toBeNull();
+      // The provider id is the only surviving record of the send.
+      expect(result.providerMessageId).toBe('msg-sent-for-real');
+    });
+
+    it('does the same on the M11 update path', async () => {
+      const { svc } = makeSut({
+        resendResponse: { ok: true, providerMessageId: 'msg-2' },
+        ledgerWriteFails: true,
+      });
+      const result = await svc.send({
+        templateCode: 'customer.order_dispatched.email',
+        recipient: { type: NotificationRecipientType.CUSTOMER, email: 'buyer@x.io' },
+        existingNotificationLogId: 'pre-created-row',
+      });
+      expect(result.status).toBe('SENT');
+      expect(result.notificationLogId).toBeNull();
+    });
+
+    it('STILL throws when the send failed too — nothing left the building, so retry', async () => {
+      // The inverse case matters as much: if no email went out, a retry is
+      // correct and swallowing the error would lose the message entirely.
+      const { svc } = makeSut({
+        resendResponse: { ok: false, code: 'RESEND_ERROR', message: 'rate limited' },
+        ledgerWriteFails: true,
+      });
+
+      await expect(
+        svc.send({
+          templateCode: 'customer.order_dispatched.email',
+          recipient: { type: NotificationRecipientType.CUSTOMER, email: 'buyer@x.io' },
+        }),
+      ).rejects.toThrow();
     });
   });
 });

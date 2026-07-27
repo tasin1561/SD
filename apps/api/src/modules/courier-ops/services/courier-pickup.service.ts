@@ -50,9 +50,17 @@ export interface RaisePickupInput {
  * Delhivery accepts only one OPEN request per location per day. Without
  * a record we cannot tell "already asked" from "never asked", so a retry
  * after a network timeout either books a second van or earns a
- * rejection nobody can interpret later. The UNIQUE on
- * (courier, warehouse, date) makes the courier's rule a database fact:
- * two supervisors clicking at once cannot both succeed.
+ * rejection nobody can interpret later. A PARTIAL unique on
+ * (courier, warehouse, date) WHERE status IN ('requested','failed')
+ * makes the courier's rule a database fact: two supervisors clicking at
+ * once cannot both succeed.
+ *
+ * The partial matters. Delhivery permits a second request "only when the
+ * existing pickup request is closed", so a CLOSED morning collection must
+ * NOT block an afternoon van — a warehouse that gets more parcels ready
+ * after the first van leaves is an ordinary day, not an edge case. An
+ * unconditional unique enforced something stricter than the courier
+ * does, which is its own kind of wrong.
  *
  * A FAILED attempt still occupies the day, deliberately. When the call
  * failed we do NOT know whether Delhivery registered it — the timeout
@@ -143,7 +151,7 @@ export class CourierPickupService {
         throw new ConflictException({
           code: 'PICKUP_ALREADY_REQUESTED',
           message:
-            'A pickup has already been raised for this warehouse on this date. Delhivery accepts only one open request per location per day — close the existing one in their panel first, or release the day here if it was never registered.',
+            'An OPEN pickup already exists for this warehouse on this date. Delhivery accepts only one at a time — mark the existing one collected or called off once it is resolved, and a second can then be raised for the same day. If it failed and was never registered with them, release the day instead.',
         });
       }
       throw err;
