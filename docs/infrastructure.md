@@ -48,7 +48,7 @@ All infrastructure runs on **DigitalOcean** with **Cloudflare** at the edge. Del
 
 ### Edge / Network
 - **Cloudflare** — DNS, CDN, DDoS protection, SSL termination
-- **Nginx** — reverse proxy on the droplet (routes subdomains to internal Node apps)
+- **Caddy** — reverse proxy on the droplet (routes subdomains to internal Node apps; also file-serves the static marketing export from `/var/www/skydrop-marketing`). Config: `/etc/caddy/Caddyfile`. Automatic HTTPS. NOT Nginx — this doc said Nginx until 2026-07-27 and the droplet never ran it.
 
 ### Communications
 - **Email:** Resend or Postmark (TBD — decided before notifications module)
@@ -82,7 +82,7 @@ All infrastructure runs on **DigitalOcean** with **Cloudflare** at the edge. Del
 | `track.skydrop.online` | Branded public tracking (Indian customers) | `apps/track` |
 | `api.skydrop.online` | Backend API (consumed by all front-ends + B2B clients) | `apps/api` |
 
-All five subdomains terminate at Cloudflare → forwarded to Nginx on the droplet → routed to the appropriate Node process on internal port.
+All five subdomains terminate at Cloudflare → forwarded to Caddy on the droplet → routed to the appropriate Node process on internal port.
 
 ---
 
@@ -97,7 +97,7 @@ All five subdomains terminate at Cloudflare → forwarded to Nginx on the drople
                 │  Droplet       │
                 │  (Bangalore)   │
                 │  ┌──────────┐  │
-                │  │  Nginx   │  │
+                │  │  Caddy   │  │
                 │  └────┬─────┘  │
                 │       │        │
                 │  ┌────▼─────────────────┐   ┌──────────────────┐

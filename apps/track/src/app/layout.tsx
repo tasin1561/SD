@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import { Space_Grotesk, Inter, JetBrains_Mono } from 'next/font/google';
 import { getActiveLocale } from '@/lib/locale';
 import { themeInitScript } from '@/lib/theme-init';
@@ -38,6 +39,12 @@ export default async function RootLayout({
   children: React.ReactNode;
 }): Promise<React.ReactElement> {
   const locale = await getActiveLocale();
+  // The no-flash theme script has to be inline — it must run before first
+  // paint, and an external file would be a round-trip of white screen. Under
+  // the nonce CSP that means it needs the nonce, which middleware forwards on
+  // the request as `x-nonce`. Next stamps its OWN scripts automatically; a
+  // hand-written one like this is on us.
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
   return (
     <html
       lang={locale}
@@ -45,7 +52,7 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body>{children}</body>
     </html>

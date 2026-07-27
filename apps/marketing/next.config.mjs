@@ -18,8 +18,8 @@ const nextConfig = {
   // them, so Next never gets a chance to set a response header. The
   // other three apps set theirs in `packages/config/security-headers.mjs`
   // plus a nonce CSP in middleware; this one's headers have to come from
-  // whatever serves the files. The Nginx snippet is checked in at
-  // `docs/nginx-security-headers.conf`.
+  // whatever serves the files — Caddy, in production. The block to paste
+  // into the Caddyfile is `docs/caddy-security-headers.md`.
 };
 
 export default nextConfig;
