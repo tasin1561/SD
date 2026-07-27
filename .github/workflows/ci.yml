@@ -191,26 +191,29 @@ jobs:
         ports:
           - 6379:6379
 
+    # Exactly what apps/api/src/config/env.schema.ts declares REQUIRED,
+    # plus the proxy target. Deliberately NOT a copy of the `checks` env:
+    # that block carries several names the app never reads (the test
+    # harness does), and copying it is how this job's first run failed —
+    # JWT_ACCESS_SECRET is not JWT_SIGNING_KEY, so the boot died on a
+    # missing variable that looked present.
+    #
+    # NODE_ENV and PORT are scoped to the API step instead of set here:
+    # `next start` chooses its own, and a job-wide NODE_ENV=test would
+    # reach two frontends that were built for production.
     env:
       DATABASE_URL: postgresql://skydrop:skydrop@localhost:5432/skydrop_test?schema=public
       REDIS_URL: redis://localhost:6379/0
-      NODE_ENV: test
-      PORT: 4000
-      RESEND_API_KEY: ''
-      JWT_ACCESS_SECRET: ci-access-secret-not-prod
-      JWT_REFRESH_SECRET: ci-refresh-secret-not-prod
-      COURIER_CREDENTIALS_KEY_v1: ci-aes-gcm-32byte-key-padding-32x
-      TRACKING_WEBHOOK_SECRET_DELHIVERY: ci-tracking-webhook
+      # min 32 chars, enforced by the schema.
+      JWT_SIGNING_KEY: ci-jwt-signing-key-not-prod-32-chars-min
       SELLER_APP_URL: http://localhost:3003
       ADMIN_APP_URL: http://localhost:3002
-      API_BASE_URL: http://localhost:4000
       # What the Next route-handler proxy forwards to (FE-3).
       API_ORIGIN: http://localhost:4000
-      DO_SPACES_ACCESS_KEY: ci-stub
-      DO_SPACES_SECRET_KEY: ci-stub
-      DO_SPACES_BUCKET: ci-stub
-      DO_SPACES_REGION: sgp1
-      DO_SPACES_ENDPOINT: https://sgp1.digitaloceanspaces.com
+      # Empty key = the NOTIF-6 dev stub; no mail leaves CI.
+      RESEND_API_KEY: ''
+      # No real object storage in CI.
+      DEV_MOCK_SPACES: 'true'
 
     steps:
       - uses: actions/checkout@v4
@@ -257,6 +260,9 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Start the API
+        env:
+          NODE_ENV: test
+          PORT: 4000
         run: |
           pnpm --filter @skydrop/api start > /tmp/api.log 2>&1 &
           # Wait for readiness rather than sleeping — a fixed sleep is
