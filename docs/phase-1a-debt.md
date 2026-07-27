@@ -1075,3 +1075,50 @@ Also open from the same pass:
   shape than a button. Deliberately not built yet: automating an
   unproven wire call is worse than not automating it.
   **Pick up:** after the first-parcel test proves the contract.
+
+
+## Concurrency audit (2026-07-27)
+
+Docker came back, so the system could finally be driven over real HTTP
+against a real database rather than reasoned about. Five bugs, four
+fixed, one recorded. Recording the shape here because the same shape
+will recur.
+
+**The shape:** an irreversible or money-moving act, guarded by a check
+that reads OUTSIDE the transaction that does the writing. The check and
+the write are then two separate operations, and anything that repeats
+the caller — a BullMQ retry, a double-clicked button, a second operator
+— slips between them.
+
+Fixed:
+
+1. **A closed pickup blocked the whole day.** An unconditional unique on
+   (courier, warehouse, date) enforced something stricter than Delhivery
+   does. Now partial, `WHERE status IN ('requested','failed')`.
+   Invisible to unit tests by construction — a mocked Prisma has no
+   index to violate.
+2. **A DB hiccup could email a customer five times.** The provider was
+   called, THEN the ledger row written; a write failure propagated,
+   failed the job, and the retry re-sent. Once the provider accepts, a
+   ledger failure is now logged and reported SENT.
+3. **The waybill cron spent a real allocation on nobody.** Nothing
+   consumes the pool — AWB generation lets Delhivery assign inline.
+   Gated off until something drinks.
+4. **A double-clicked refund paid the seller twice.** `TicketService`
+   read the ticket outside the tx and updated on `where: { id }` alone.
+   Now claims the transition first, guarded on the validated status.
+   Same guard added to `WithdrawalRequestService` (lower severity — that
+   row does not move money, but it can detach a remittance from the
+   request it paid).
+
+**Recorded, not fixed — the AWB persist window.** If the transaction
+that stamps `awbNumber` fails AFTER Delhivery issued a real number, the
+CUR-9 gate sees null on retry and `generateAwb` is called again: a
+second real AWB and a second charge. The window is small (one short
+local transaction) and the label-upload case it descends from was
+already fixed in M10. The proper fix is to claim a pooled waybill BEFORE
+the create call, which makes the number durable ahead of the
+irreversible act — and would give the D3 pool the consumer it lacks. Not
+done now because changing the live AWB path immediately before the
+first-parcel test is the wrong trade.
+**Pick up:** with MPS, which needs the pool anyway.
