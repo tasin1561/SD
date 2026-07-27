@@ -7,6 +7,8 @@ import { DelhiveryWriteGuardService } from './services/delhivery-write-guard.ser
 import { DelhiveryAwbService } from './services/delhivery-awb.service';
 import { DelhiveryLabelService } from './services/delhivery-label.service';
 import { DelhiveryServiceabilityService } from './services/delhivery-serviceability.service';
+import { DelhiveryTatService } from './services/delhivery-tat.service';
+import { DelhiveryCostService } from './services/delhivery-cost.service';
 import { DelhiveryTrackingService } from './services/delhivery-tracking.service';
 import { DelhiveryTrackingFetchService } from './services/delhivery-tracking-fetch.service';
 
@@ -41,6 +43,8 @@ import { DelhiveryTrackingFetchService } from './services/delhivery-tracking-fet
     DelhiveryAwbService,
     DelhiveryLabelService,
     DelhiveryServiceabilityService,
+    DelhiveryTatService,
+    DelhiveryCostService,
     DelhiveryTrackingService,
     DelhiveryTrackingFetchService,
   ],
@@ -51,6 +55,8 @@ import { DelhiveryTrackingFetchService } from './services/delhivery-tracking-fet
     DelhiveryAwbService,
     DelhiveryLabelService,
     DelhiveryServiceabilityService,
+    DelhiveryTatService,
+    DelhiveryCostService,
     DelhiveryTrackingService,
     DelhiveryTrackingFetchService,
   ],
