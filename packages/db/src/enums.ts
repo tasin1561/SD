@@ -100,4 +100,6 @@ export {
   // R3 — BD→India inbound freight billing
   InboundFreightMode,
   InboundFreightStatus,
+  // D3 — pre-fetched courier AWB pool
+  CourierWaybillStatus,
 } from '@prisma/client';

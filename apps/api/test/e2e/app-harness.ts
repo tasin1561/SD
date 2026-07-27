@@ -184,6 +184,10 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(
     'TRUNCATE TABLE ' +
       [
+        // D3 waybill pool — no FK to sellers/orders (shipment_id is a soft
+        // ref by design: an AWB outlives a superseded shipment), but it
+        // must be wiped so pool state cannot leak across suites.
+        'courier_waybills',
         // R2c courier settlements — settlement LINES FK-RESTRICT orders,
         // so both must go before resetOrderState's orders truncate.
         'courier_settlement_lines',

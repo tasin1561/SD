@@ -328,6 +328,38 @@ const systemSettings: SystemSettingSeed[] = [
     description:
       'Name of the warehouse pickup location pre-registered in Delhivery\'s partner portal. Required when real mode is enabled (DelhiveryAwbService passes it as pickup_location.name on create-shipment). Phase-1A is single-warehouse (BLR-01); a multi-warehouse setup adds one key per origin.',
   },
+  // D3 — the AWB pool. Delhivery allows only FIVE bulk fetches per five
+  // minutes and warns that a freshly-minted waybill may error if used
+  // immediately, so numbers are pulled ahead of time and left to settle.
+  {
+    key: 'courier.delhivery_waybill_pool_low_water',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 200,
+    displayName: 'Waybill Pool Low-Water Mark',
+    description:
+      'Refill the AWB pool when fewer than this many unassigned waybills remain. Set it above a comfortable day of volume: the pool cannot be topped up inline (5 bulk fetches per 5 minutes), so running dry stalls manifesting until the cron next runs.',
+  },
+  {
+    key: 'courier.delhivery_waybill_pool_refill_batch',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 500,
+    displayName: 'Waybill Pool Refill Batch',
+    description:
+      'How many waybills to fetch per refill (Delhivery allows up to 10 000 per request, 50 000 per 5 minutes). Bigger batches mean fewer requests against a very small budget.',
+    overrideMinInt: 1,
+    overrideMaxInt: 10000,
+  },
+  {
+    key: 'courier.delhivery_waybill_settle_seconds',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 120,
+    displayName: 'Waybill Settle Delay (seconds)',
+    description:
+      "How long a freshly-fetched waybill must rest before it may be assigned. Delhivery mints numbers in batches of 25 behind the scenes and warns that using one immediately 'may occasionally result in errors'.",
+  },
   {
     key: 'courier.delhivery_awb_batch_size',
     category: 'courier',

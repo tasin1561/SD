@@ -1407,6 +1407,58 @@ model InboundFreightAllocation {
   @@map("inbound_freight_allocations")
 }
 
+/// D3 — a pool of AWB numbers pre-fetched from the courier.
+///
+/// Delhivery's bulk waybill endpoint allows only FIVE requests per five
+/// minutes, and their own docs warn that a waybill used immediately after
+/// being fetched "may occasionally result in errors" because numbers are
+/// generated in batches of 25 behind the scenes. Fetching one per
+/// shipment at manifest time would therefore be both rate-limited and
+/// flaky. So we pull them in bulk ahead of time, let them settle, and
+/// hand them out locally.
+///
+/// Verified against production 2026-07-27: the endpoint returns a bare
+/// JSON string — `"38061110478262"` for one, and
+/// `"38061110478273,38061110478284,38061110478295"` for several — not an
+/// array.
+model CourierWaybill {
+  id          String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courierCode String               @map("courier_code")
+  /// The AWB itself. Globally unique — a number handed out twice would
+  /// put two parcels on one tracking identity.
+  awbNumber   String               @unique @map("awb_number")
+  status      CourierWaybillStatus @default(AVAILABLE)
+  fetchedAt   DateTime             @default(now()) @map("fetched_at") @db.Timestamptz
+  /// Not claimable before this instant — honours the "let it settle"
+  /// warning above.
+  usableAfter DateTime             @map("usable_after") @db.Timestamptz
+  assignedAt  DateTime?            @map("assigned_at") @db.Timestamptz
+  /// The shipment that consumed it (soft ref: the AWB outlives a
+  /// superseded shipment, and the number can never be reused anyway).
+  shipmentId  String?              @map("shipment_id") @db.Uuid
+  voidedAt    DateTime?            @map("voided_at") @db.Timestamptz
+  voidReason  String?              @map("void_reason")
+  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime             @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([courierCode, status, usableAfter])
+  @@index([shipmentId])
+  @@map("courier_waybills")
+}
+
+enum CourierWaybillStatus {
+  /// Fetched and (once usableAfter passes) ready to hand out.
+  AVAILABLE @map("available")
+  /// Claimed by a shipment; not yet confirmed manifested.
+  ASSIGNED  @map("assigned")
+  /// Confirmed on a manifested shipment.
+  USED      @map("used")
+  /// Rejected by the courier or otherwise unusable. Never re-issued.
+  VOID      @map("void")
+
+  @@map("courier_waybill_status")
+}
+
 /// R2c — money the COURIER paid US.
 ///
 /// This is the missing half of the COD loop. Delhivery collects cash from

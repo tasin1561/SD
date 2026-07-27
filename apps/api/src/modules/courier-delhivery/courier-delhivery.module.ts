@@ -9,6 +9,10 @@ import { DelhiveryLabelService } from './services/delhivery-label.service';
 import { DelhiveryServiceabilityService } from './services/delhivery-serviceability.service';
 import { DelhiveryTatService } from './services/delhivery-tat.service';
 import { DelhiveryCostService } from './services/delhivery-cost.service';
+import { DelhiveryWaybillPoolService } from './services/delhivery-waybill-pool.service';
+import { DelhiveryWarehouseService } from './services/delhivery-warehouse.service';
+import { WaybillRefillQueue } from './queue/waybill-refill.queue';
+import { WaybillRefillWorker } from './queue/waybill-refill.worker';
 import { DelhiveryTrackingService } from './services/delhivery-tracking.service';
 import { DelhiveryTrackingFetchService } from './services/delhivery-tracking-fetch.service';
 
@@ -45,6 +49,10 @@ import { DelhiveryTrackingFetchService } from './services/delhivery-tracking-fet
     DelhiveryServiceabilityService,
     DelhiveryTatService,
     DelhiveryCostService,
+    DelhiveryWaybillPoolService,
+    DelhiveryWarehouseService,
+    WaybillRefillQueue,
+    WaybillRefillWorker,
     DelhiveryTrackingService,
     DelhiveryTrackingFetchService,
   ],
@@ -57,6 +65,8 @@ import { DelhiveryTrackingFetchService } from './services/delhivery-tracking-fet
     DelhiveryServiceabilityService,
     DelhiveryTatService,
     DelhiveryCostService,
+    DelhiveryWaybillPoolService,
+    DelhiveryWarehouseService,
     DelhiveryTrackingService,
     DelhiveryTrackingFetchService,
   ],
