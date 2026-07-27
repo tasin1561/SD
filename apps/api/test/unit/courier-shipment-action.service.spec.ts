@@ -101,7 +101,7 @@ function make(opts: {
   return { svc, edit, cancel, ndrTakeAction, ewaybillUpdate, audit };
 }
 
-const CLIENT = { ipAddress: '1.2.3.4', userAgent: 'jest' };
+const CLIENT = { ipAddress: '1.2.3.4', userAgent: 'jest', requestId: 'req-1' };
 
 /**
  * The NDR gate is the reason the NSL code is now persisted. Delhivery
@@ -186,7 +186,7 @@ describe('CourierShipmentActionService — NDR action', () => {
     expect(audit).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'courier.shipment.ndr_action',
-        actorId: 'staff-1',
+        staffUserId: 'staff-1',
         entityId: SHIPMENT_ID,
         metadata: expect.objectContaining({ nslCode: 'EOD-74', uplId: 'upl-123' }),
       }),

@@ -102,4 +102,5 @@ export {
   InboundFreightStatus,
   // D3 — pre-fetched courier AWB pool
   CourierWaybillStatus,
+  PickupRequestStatus,
 } from '@prisma/client';

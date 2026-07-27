@@ -188,6 +188,11 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         // ref by design: an AWB outlives a superseded shipment), but it
         // must be wiped so pool state cannot leak across suites.
         'courier_waybills',
+        // D6 pickup requests — FK-RESTRICT warehouses, and the UNIQUE on
+        // (courier, warehouse, date) makes leaked rows actively hostile:
+        // a later suite raising a pickup for the same day would 409 on a
+        // row it never created (MUST #12).
+        'courier_pickup_requests',
         // R2c courier settlements — settlement LINES FK-RESTRICT orders,
         // so both must go before resetOrderState's orders truncate.
         'courier_settlement_lines',

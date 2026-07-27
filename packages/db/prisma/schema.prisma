@@ -68,6 +68,7 @@ model StaffUser {
   fxRatesOverridden          FxRate[]                      @relation("FxRateOverrideBy")
   fxRateHistoryChanges       FxRateHistory[]               @relation("FxRateHistoryChangedBy")
   notificationTemplatesEdit  NotificationTemplate[]        @relation("NotificationTemplateEditedBy")
+  courierPickupRequests      CourierPickupRequest[]
   systemSettingsEdited       SystemSetting[]               @relation("SystemSettingEditedBy")
   sellerSettingOverridesSet  SellerSettingOverride[]       @relation("SellerSettingOverrideSetBy")
   courierAccountsCreated     CourierAccount[]              @relation("CourierAccountCreatedBy")
@@ -459,10 +460,11 @@ model Warehouse {
   shipmentsAsOrigin      Shipment[]
   // R6: RTO parcels physically RECEIVED here (may differ from the
   // warehouse the shipment originally dispatched from).
-  shipmentsAsRtoReceived Shipment[]         @relation("ShipmentRtoReceivedWarehouse")
+  shipmentsAsRtoReceived Shipment[]             @relation("ShipmentRtoReceivedWarehouse")
   stockAlertStates       StockAlertState[]
   manifests              Manifest[]
   stockUnits             StockUnit[]
+  pickupRequests         CourierPickupRequest[]
 
   @@index([status])
   @@map("warehouses")
@@ -1444,6 +1446,68 @@ model CourierWaybill {
   @@index([courierCode, status, usableAfter])
   @@index([shipmentId])
   @@map("courier_waybills")
+}
+
+/// D6 — a request for Delhivery to send a van to one of our warehouses.
+///
+/// The grain is the thing to get right: a pickup is raised against a
+/// WAREHOUSE, not a waybill. Twenty parcels leaving the same building
+/// need ONE request; asking per parcel would summon a fleet.
+///
+/// Delhivery permits only one OPEN request per pickup location per day —
+/// a second is accepted "only when the existing pickup request is
+/// closed". The UNIQUE below IS that rule, enforced by Postgres rather
+/// than by remembering: two supervisors clicking at once cannot both
+/// raise one, and a retry after a timeout cannot quietly book a second
+/// van. A blind retry is exactly the failure mode the courier's docs
+/// warn about, and "check the One panel" is not something a UNIQUE
+/// constraint can say for us — but a 409 is.
+model CourierPickupRequest {
+  id                   String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courierCode          String              @map("courier_code")
+  warehouseId          String              @map("warehouse_id") @db.Uuid
+  /// The registered pickup-location NAME sent to Delhivery. Snapshotted
+  /// because it must match their records EXACTLY and the setting behind
+  /// it can be edited later — the request should record what was
+  /// actually sent, not what the setting says today.
+  pickupLocationName   String              @map("pickup_location_name")
+  /// Local date (Asia/Kolkata) the van is wanted. Date, not timestamp:
+  /// the courier's one-per-day rule is about the calendar day.
+  pickupDate           DateTime            @map("pickup_date") @db.Date
+  pickupTime           String              @map("pickup_time")
+  expectedPackageCount Int                 @map("expected_package_count")
+  status               PickupRequestStatus @default(REQUESTED)
+  /// Delhivery's own id for the request, when they returned one.
+  courierPickupId      String?             @map("courier_pickup_id")
+  /// Their verbatim response message — kept because a refusal usually
+  /// explains itself better than any code we would map it to.
+  courierMessage       String?             @map("courier_message") @db.Text
+  requestedByStaffId   String?             @map("requested_by_staff_id") @db.Uuid
+  createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+
+  warehouse        Warehouse  @relation(fields: [warehouseId], references: [id])
+  requestedByStaff StaffUser? @relation(fields: [requestedByStaffId], references: [id])
+
+  /// The one-open-per-warehouse-per-day rule, in the schema.
+  @@unique([courierCode, warehouseId, pickupDate])
+  @@index([status])
+  @@index([pickupDate])
+  @@map("courier_pickup_requests")
+}
+
+enum PickupRequestStatus {
+  /// Sent to the courier and accepted.
+  REQUESTED @map("requested")
+  /// The courier refused it, or the call failed. Kept rather than
+  /// deleted so the day is not silently free to retry into.
+  FAILED    @map("failed")
+  /// The van came, or the operator closed it out.
+  CLOSED    @map("closed")
+  /// Called off before the van arrived.
+  CANCELLED @map("cancelled")
+
+  @@map("pickup_request_status")
 }
 
 enum CourierWaybillStatus {

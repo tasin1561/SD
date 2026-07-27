@@ -1,9 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   IsIn,
+  IsInt,
   IsOptional,
   IsString,
+  IsUUID,
+  Matches,
+  Max,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 
@@ -95,4 +101,50 @@ export class NdrActionDto {
   })
   @IsIn(['RE-ATTEMPT', 'PICKUP_RESCHEDULE'])
   readonly action!: 'RE-ATTEMPT' | 'PICKUP_RESCHEDULE';
+}
+
+export class RaisePickupDto {
+  @ApiProperty({ description: 'Warehouse the van should come to.' })
+  @IsUUID('7')
+  readonly warehouseId!: string;
+
+  @ApiProperty({
+    description:
+      'YYYY-MM-DD. Delhivery accepts one open request per location per day, so this is the slot being claimed.',
+  })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'pickupDate must be YYYY-MM-DD' })
+  readonly pickupDate!: string;
+
+  @ApiProperty({ description: 'HH:mm:ss, local to the warehouse.' })
+  @Matches(/^\d{2}:\d{2}:\d{2}$/, { message: 'pickupTime must be HH:mm:ss' })
+  readonly pickupTime!: string;
+
+  @ApiProperty({
+    minimum: 1,
+    description:
+      'How many parcels will be handed over. One request covers the whole handover — do not raise one per parcel.',
+  })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(10_000)
+  readonly expectedPackageCount!: number;
+}
+
+export class ClosePickupDto {
+  @ApiProperty({ enum: ['CLOSED', 'CANCELLED', 'FAILED'] })
+  @IsIn(['CLOSED', 'CANCELLED', 'FAILED'])
+  readonly status!: 'CLOSED' | 'CANCELLED' | 'FAILED';
+}
+
+export class ReleasePickupDayDto {
+  @ApiProperty({
+    minLength: 10,
+    description:
+      'Why the day is being freed. Only do this after confirming in the courier panel that no request exists — otherwise a second van is booked.',
+  })
+  @IsString()
+  @MinLength(10)
+  @MaxLength(1000)
+  readonly reason!: string;
 }

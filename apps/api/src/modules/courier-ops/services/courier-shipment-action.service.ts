@@ -106,7 +106,7 @@ export class CourierShipmentActionService {
 
     await this.audit.log({
       actorType: ActorType.STAFF,
-      actorId: staffId,
+      staffUserId: staffId,
       action: 'courier.shipment.edited',
       entityType: 'shipment',
       entityId: shipment.shipmentId,
@@ -120,9 +120,10 @@ export class CourierShipmentActionService {
         ),
         success: result.success,
         courierMessage: result.message,
+        ipAddress: ctx.ipAddress ?? null,
+        userAgent: ctx.userAgent ?? null,
+        requestId: ctx.requestId ?? null,
       },
-      ...(ctx.ipAddress === undefined ? {} : { ipAddress: ctx.ipAddress }),
-      ...(ctx.userAgent === undefined ? {} : { userAgent: ctx.userAgent }),
     });
 
     return {
@@ -153,7 +154,7 @@ export class CourierShipmentActionService {
 
     await this.audit.log({
       actorType: ActorType.STAFF,
-      actorId: staffId,
+      staffUserId: staffId,
       action: 'courier.shipment.cancelled',
       entityType: 'shipment',
       entityId: shipment.shipmentId,
@@ -165,9 +166,10 @@ export class CourierShipmentActionService {
         reason,
         success: result.success,
         courierMessage: result.message,
+        ipAddress: ctx.ipAddress ?? null,
+        userAgent: ctx.userAgent ?? null,
+        requestId: ctx.requestId ?? null,
       },
-      ...(ctx.ipAddress === undefined ? {} : { ipAddress: ctx.ipAddress }),
-      ...(ctx.userAgent === undefined ? {} : { userAgent: ctx.userAgent }),
     });
 
     return {
@@ -215,7 +217,7 @@ export class CourierShipmentActionService {
 
     await this.audit.log({
       actorType: ActorType.STAFF,
-      actorId: staffId,
+      staffUserId: staffId,
       action: 'courier.shipment.ewaybill_attached',
       entityType: 'shipment',
       entityId: shipment.shipmentId,
@@ -227,9 +229,10 @@ export class CourierShipmentActionService {
         declaredValueInr: shipment.declaredValueInr,
         success: result.success,
         courierMessage: result.message,
+        ipAddress: ctx.ipAddress ?? null,
+        userAgent: ctx.userAgent ?? null,
+        requestId: ctx.requestId ?? null,
       },
-      ...(ctx.ipAddress === undefined ? {} : { ipAddress: ctx.ipAddress }),
-      ...(ctx.userAgent === undefined ? {} : { userAgent: ctx.userAgent }),
     });
 
     return {
@@ -305,7 +308,7 @@ export class CourierShipmentActionService {
 
     await this.audit.log({
       actorType: ActorType.STAFF,
-      actorId: staffId,
+      staffUserId: staffId,
       action: 'courier.shipment.ndr_action',
       entityType: 'shipment',
       entityId: shipment.shipmentId,
@@ -318,9 +321,10 @@ export class CourierShipmentActionService {
         uplId: result.uplId,
         success: result.success,
         courierMessage: result.message,
+        ipAddress: ctx.ipAddress ?? null,
+        userAgent: ctx.userAgent ?? null,
+        requestId: ctx.requestId ?? null,
       },
-      ...(ctx.ipAddress === undefined ? {} : { ipAddress: ctx.ipAddress }),
-      ...(ctx.userAgent === undefined ? {} : { userAgent: ctx.userAgent }),
     });
 
     return {

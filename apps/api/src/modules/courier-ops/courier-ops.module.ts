@@ -3,6 +3,8 @@ import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { CourierDelhiveryModule } from '../courier-delhivery/courier-delhivery.module';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { AdminCourierOpsController } from './controllers/admin-courier-ops.controller';
+import { AdminPickupController } from './controllers/admin-pickup.controller';
+import { CourierPickupService } from './services/courier-pickup.service';
 import { CourierShipmentActionService } from './services/courier-shipment-action.service';
 import { CourierShipmentInsightService } from './services/courier-shipment-insight.service';
 import { ShipmentCourierContextService } from './services/shipment-courier-context.service';
@@ -21,17 +23,18 @@ import { ShipmentCourierContextService } from './services/shipment-courier-conte
  * A LEAF module: nothing imports it, it exports nothing. Same shape as
  * `courier-dispatch` and `courier-manual-placement`.
  *
- * NOT here, on purpose: pickups (raised per WAREHOUSE per day, not per
- * shipment — a different grain with its own idempotency record) and
- * warehouse registration (an account-setup act, not a parcel one).
+ * Two controllers because there are two grains: per-shipment actions,
+ * and pickups — which are raised per WAREHOUSE per day, not per parcel,
+ * and carry their own idempotency record.
  */
 @Module({
   imports: [AuthCommonModule, CourierDelhiveryModule],
-  controllers: [AdminCourierOpsController],
+  controllers: [AdminCourierOpsController, AdminPickupController],
   providers: [
     ShipmentCourierContextService,
     CourierShipmentInsightService,
     CourierShipmentActionService,
+    CourierPickupService,
     StaffJwtGuard,
   ],
 })
