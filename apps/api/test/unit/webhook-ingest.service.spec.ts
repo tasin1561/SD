@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { UnauthorizedException } from '@nestjs/common';
 import { WebhookStatus } from '@skydrop/db';
 import { WebhookIngestService } from '../../src/modules/tracking-ingestion/services/webhook-ingest.service';
@@ -89,7 +90,8 @@ describe('WebhookIngestService.ingest', () => {
         data: expect.objectContaining({
           courierCode: COURIER,
           rawBody: BODY,
-          signature: SIG.toLowerCase(),
+          // D5: the dedup key is a hash of the BODY, not the auth header.
+          signature: createHash('sha256').update(BODY, 'utf8').digest('hex'),
           signatureValid: true,
           status: WebhookStatus.RECEIVED,
         }),
@@ -158,15 +160,37 @@ describe('WebhookIngestService.ingest', () => {
     expect(webhookCreate).toHaveBeenCalled();
   });
 
-  it('signature normalized lowercase in dedup key (uppercase request → same dedup bucket)', async () => {
+  /**
+   * D5 — the dedup key is a hash of the BODY, not the auth header.
+   *
+   * It used to be the header, which worked only while every courier was
+   * assumed to sign (an HMAC varies with the body). Delhivery sends a
+   * STATIC credential, so header-keyed dedup would have matched every
+   * scan against the first one and silently discarded the rest — one
+   * tracking update, ever, with nothing logged.
+   */
+  it('dedups on the body hash — the SAME body with a DIFFERENT header is still a duplicate', async () => {
     const { svc, webhookFindFirst } = makeService();
-    await svc.ingest(baseInput({ signatureHeader: SIG.toUpperCase() }));
-    // The findFirst was called with the lowercased signature so the
-    // dedup is case-insensitive.
+    await svc.ingest(baseInput({ signatureHeader: 'totally-different-header' }));
     expect(webhookFindFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ signature: SIG.toLowerCase() }),
+        where: expect.objectContaining({
+          signature: createHash('sha256').update(BODY, 'utf8').digest('hex'),
+        }),
       }),
     );
+  });
+
+  it('a DIFFERENT body gets a different key, even with an identical header', async () => {
+    // The regression that would have broken Delhivery tracking entirely.
+    const { svc, webhookFindFirst } = makeService();
+    const other = '{"awb":"DLV-999","status":"DLV-OFD"}';
+    await svc.ingest(baseInput({ rawBody: other }));
+    const call = webhookFindFirst.mock.calls[0] as unknown as [
+      { where: { signature: string } },
+    ];
+    const key = call[0].where.signature;
+    expect(key).toBe(createHash('sha256').update(other, 'utf8').digest('hex'));
+    expect(key).not.toBe(createHash('sha256').update(BODY, 'utf8').digest('hex'));
   });
 });

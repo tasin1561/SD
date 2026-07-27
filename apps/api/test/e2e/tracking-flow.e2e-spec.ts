@@ -58,7 +58,23 @@ const WEBHOOK_SECRET =
   process.env['TRACKING_WEBHOOK_SECRET_DELHIVERY'] ??
   'test-tracking-webhook-secret-delhivery';
 
-function signBody(body: string): string {
+/**
+ * D5: Delhivery does NOT sign webhooks — it returns the static
+ * credential we nominated in their Webhook Requirement Document. The
+ * seeded `tracking.webhook_auth_scheme.delhivery` is SHARED_SECRET, so
+ * this suite sends what the real courier sends. HMAC remains the default
+ * for couriers that DO sign, and is covered in the unit suite.
+ */
+function authHeaderFor(_body: string): string {
+  return WEBHOOK_SECRET;
+}
+
+/**
+ * An HMAC of the body — what a SIGNING courier would send. Used below to
+ * prove Delhivery's shared-secret scheme rejects it, so a future change
+ * that silently accepted both would fail here.
+ */
+function hmacOf(body: string): string {
   return createHmac('sha256', WEBHOOK_SECRET).update(body, 'utf8').digest('hex');
 }
 
@@ -293,7 +309,7 @@ describe('M10 Tracking — webhook lifecycle e2e (TRK-1..9)', () => {
       processedAt: Date | null;
     };
   }> {
-    const sig = signBody(body);
+    const sig = authHeaderFor(body);
     const res = await request(h.baseUrl)
       .post(`/public/tracking/webhooks/${COURIER_CODE}`)
       .set('content-type', 'application/json')
@@ -391,6 +407,57 @@ describe('M10 Tracking — webhook lifecycle e2e (TRK-1..9)', () => {
     expect(order.status).toBe(OrderStatus.DELIVERED);
   });
 
+  // ── D5 regressions: the shared-secret scheme ────────────────────────
+
+  it('D5: a DIFFERENT body is NOT a duplicate, even though the auth header is identical', async () => {
+    // The bug this guards: Delhivery sends the same static credential on
+    // every call. Deduping on that header would store the first scan and
+    // silently discard every one after it — one tracking update, ever,
+    // with no error to notice.
+    await receiveStock(10);
+    const { awbNumber } = await driveToDispatched(2);
+    const first = await sendWebhookAndWait(
+      makeScanBody({
+        awbNumber,
+        rawStatus: 'DLV-IN-TRANSIT',
+        eventAtIso: '2026-05-20T10:00:00.000Z',
+      }),
+    );
+    const second = await sendWebhookAndWait(
+      makeScanBody({
+        awbNumber,
+        rawStatus: 'DLV-OFD',
+        eventAtIso: '2026-05-21T10:00:00.000Z',
+      }),
+    );
+    expect(first.result).toBe('stored');
+    expect(second.result).toBe('stored');
+    expect(second.webhookId).not.toBe(first.webhookId);
+  });
+
+  it('D5: an HMAC signature is REJECTED for a shared-secret courier', async () => {
+    // Accepting both schemes would defeat the point of configuring one.
+    await receiveStock(10);
+    const { awbNumber } = await driveToDispatched(2);
+    const body = makeScanBody({
+      awbNumber,
+      rawStatus: 'DLV-IN-TRANSIT',
+      eventAtIso: '2026-05-22T10:00:00.000Z',
+    });
+    const res = await request(h.baseUrl)
+      .post(`/public/tracking/webhooks/${COURIER_CODE}`)
+      .set('content-type', 'application/json')
+      .set('x-skydrop-signature', hmacOf(body))
+      .send(body);
+    expect(res.status).toBe(401);
+
+    // TRK-1: an unauthenticated payload is never stored.
+    const rows = await h.prisma.courierWebhook.count({
+      where: { courierCode: COURIER_CODE, rawBody: body },
+    });
+    expect(rows).toBe(0);
+  });
+
   // ── Scenario 2: TRK-2 DUPLICATE ─────────────────────────────────────
 
   it('TRK-2 DUPLICATE: same signed body → second ingest returns "duplicate" + the original webhookId; NO double tracking_event', async () => {
@@ -404,7 +471,10 @@ describe('M10 Tracking — webhook lifecycle e2e (TRK-1..9)', () => {
     const r1 = await sendWebhookAndWait(body);
     expect(r1.result).toBe('stored');
 
-    // Replay the EXACT same body — same signature → dedup hit.
+    // Replay the EXACT same body → dedup hit (the key is a hash of the
+    // BODY, not the auth header — under Delhivery's shared-secret scheme
+    // the header is constant, so header-keyed dedup would treat EVERY
+    // scan as a duplicate of the first and silently drop the rest).
     const r2 = await sendWebhookAndWait(body);
     expect(r2.result).toBe('duplicate');
     expect(r2.webhookId).toBe(r1.webhookId);
