@@ -3,8 +3,11 @@ import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { CourierDelhiveryModule } from '../courier-delhivery/courier-delhivery.module';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { AdminCourierOpsController } from './controllers/admin-courier-ops.controller';
+import { AdminCourierNetworkController } from './controllers/admin-courier-network.controller';
 import { AdminPickupController } from './controllers/admin-pickup.controller';
+import { CourierMarginReportService } from './services/courier-margin-report.service';
 import { CourierPickupService } from './services/courier-pickup.service';
+import { CourierWarehouseRegistrationService } from './services/courier-warehouse-registration.service';
 import { CourierShipmentActionService } from './services/courier-shipment-action.service';
 import { CourierShipmentInsightService } from './services/courier-shipment-insight.service';
 import { ShipmentCourierContextService } from './services/shipment-courier-context.service';
@@ -23,18 +26,25 @@ import { ShipmentCourierContextService } from './services/shipment-courier-conte
  * A LEAF module: nothing imports it, it exports nothing. Same shape as
  * `courier-dispatch` and `courier-manual-placement`.
  *
- * Two controllers because there are two grains: per-shipment actions,
- * and pickups — which are raised per WAREHOUSE per day, not per parcel,
- * and carry their own idempotency record.
+ * Three controllers because there are three grains: per-SHIPMENT
+ * actions; per-WAREHOUSE-per-DAY pickups (a van, not a parcel, with its
+ * own idempotency record); and per-ACCOUNT things you do once or
+ * periodically — registering a pickup location, reading real margin.
  */
 @Module({
   imports: [AuthCommonModule, CourierDelhiveryModule],
-  controllers: [AdminCourierOpsController, AdminPickupController],
+  controllers: [
+    AdminCourierOpsController,
+    AdminPickupController,
+    AdminCourierNetworkController,
+  ],
   providers: [
     ShipmentCourierContextService,
     CourierShipmentInsightService,
     CourierShipmentActionService,
     CourierPickupService,
+    CourierMarginReportService,
+    CourierWarehouseRegistrationService,
     StaffJwtGuard,
   ],
 })

@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  IsDateString,
   IsIn,
   IsInt,
   IsOptional,
@@ -147,4 +148,97 @@ export class ReleasePickupDayDto {
   @MinLength(10)
   @MaxLength(1000)
   readonly reason!: string;
+}
+
+export class MarginReportQueryDto {
+  @ApiPropertyOptional({ description: 'ISO date. Defaults to 30 days ago.' })
+  @IsOptional()
+  @IsDateString()
+  readonly from?: string;
+
+  @ApiPropertyOptional({ description: 'ISO date. Defaults to now.' })
+  @IsOptional()
+  @IsDateString()
+  readonly to?: string;
+
+  @ApiPropertyOptional({
+    minimum: 1,
+    maximum: 100,
+    description:
+      'How many shipments to price. Each costs one live courier call against a rate-limited endpoint, so this is capped — the report reports what it skipped.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  readonly limit?: number;
+}
+
+export class RegisterCourierWarehouseDto {
+  @ApiProperty({
+    description:
+      'THE load-bearing string. Matched exactly (case and spaces) on every shipment create, and immutable once registered.',
+  })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  readonly name!: string;
+
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(30)
+  readonly phone!: string;
+
+  @ApiProperty()
+  @Matches(/^\d{6}$/, { message: 'pin must be 6 digits' })
+  readonly pin!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  readonly address?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  readonly city?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  readonly email?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  readonly registeredName?: string;
+
+  @ApiProperty({ description: 'Where undelivered parcels come back to.' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(500)
+  readonly returnAddress!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  readonly returnCity?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Matches(/^\d{6}$/, { message: 'returnPin must be 6 digits' })
+  readonly returnPin?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  readonly returnState?: string;
 }

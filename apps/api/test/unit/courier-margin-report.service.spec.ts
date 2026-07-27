@@ -1,0 +1,250 @@
+import { BadRequestException } from '@nestjs/common';
+import { ChargeType, Prisma } from '@skydrop/db';
+import { CourierMarginReportService } from '../../src/modules/courier-ops/services/courier-margin-report.service';
+import { CourierWarehouseRegistrationService } from '../../src/modules/courier-ops/services/courier-warehouse-registration.service';
+
+const CLIENT = { ipAddress: '1.2.3.4', userAgent: 'jest', requestId: 'req-1' };
+
+function shipment(over: Record<string, unknown> = {}) {
+  return {
+    id: 'ship-1',
+    shipmentNumber: 'SH-1',
+    awbNumber: '38061110478262',
+    destPostalCode: '560001',
+    totalWeightGrams: 1500,
+    declaredWeightGrams: null,
+    chargeableWeightGrams: null,
+    codAmountInr: new Prisma.Decimal('2400'),
+    orderShipments: [{ orderId: 'order-1' }],
+    ...over,
+  };
+}
+
+function makeReport(opts: {
+  originPin?: string | null;
+  shipments?: ReturnType<typeof shipment>[];
+  charges?: { type: ChargeType; totalAmountInr: Prisma.Decimal }[];
+  checkThrows?: Error;
+} = {}) {
+  const chargeFindMany = jest.fn(async (args: { where: { type?: { in: ChargeType[] } } }) => {
+    const all = opts.charges ?? [
+      { type: ChargeType.BASE_SHIPPING, totalAmountInr: new Prisma.Decimal('100') },
+    ];
+    const allowed = args.where.type?.in;
+    return allowed === undefined ? all : all.filter((c) => allowed.includes(c.type));
+  });
+
+  const check = jest.fn(async (input: { billedToSellerInr: string }) => ({
+    lane: '110042→560001',
+    billedToSellerInr: input.billedToSellerInr,
+    actualCourierCostInr: '176.29',
+    marginInr: new Prisma.Decimal(input.billedToSellerInr).sub('176.29').toFixed(2),
+    marginPercent: '0.00',
+    lossMaking: new Prisma.Decimal(input.billedToSellerInr).lt('176.29'),
+    assumedCostInr: null,
+    assumptionDriftInr: null,
+  }));
+  if (opts.checkThrows !== undefined) {
+    check.mockRejectedValue(opts.checkThrows);
+  }
+
+  const prisma = {
+    client: {
+      shipment: { findMany: jest.fn(async () => opts.shipments ?? [shipment()]) },
+      orderCharge: { findMany: chargeFindMany },
+    },
+  };
+  const context = {
+    originPin: jest.fn(async () =>
+      opts.originPin === undefined ? '110042' : opts.originPin,
+    ),
+  };
+  const svc = new CourierMarginReportService(
+    prisma as never,
+    context as never,
+    { check } as never,
+  );
+  return { svc, check, chargeFindMany };
+}
+
+const WINDOW = {
+  from: new Date('2026-07-01T00:00:00.000Z'),
+  to: new Date('2026-07-31T00:00:00.000Z'),
+  limit: 25,
+};
+
+describe('CourierMarginReportService', () => {
+  it('compares billed against the courier cost and totals both', async () => {
+    const { svc } = makeReport({
+      charges: [
+        { type: ChargeType.BASE_SHIPPING, totalAmountInr: new Prisma.Decimal('200') },
+      ],
+    });
+    const r = await svc.report(WINDOW);
+    expect(r.sampledShipments).toBe(1);
+    expect(r.totalBilledInr).toBe('200.00');
+    expect(r.totalActualCostInr).toBe('176.29');
+    expect(r.totalMarginInr).toBe('23.71');
+    expect(r.lossMakingCount).toBe(0);
+  });
+
+  it('flags a loss-making lane', async () => {
+    // The whole point of measuring against the real cost rather than a
+    // typed-in one: a rate card written when fuel was cheaper.
+    const { svc } = makeReport({
+      charges: [
+        { type: ChargeType.BASE_SHIPPING, totalAmountInr: new Prisma.Decimal('120') },
+      ],
+    });
+    const r = await svc.report(WINDOW);
+    expect(r.lossMakingCount).toBe(1);
+    expect(r.rows[0]?.lossMaking).toBe(true);
+  });
+
+  it('EXCLUDES GST from the billed figure', async () => {
+    // The courier's cost figure is pre-tax. Including our GST would
+    // inflate every margin by 18% and make loss-making lanes look fine.
+    const { svc } = makeReport({
+      charges: [
+        { type: ChargeType.BASE_SHIPPING, totalAmountInr: new Prisma.Decimal('200') },
+        { type: ChargeType.GST, totalAmountInr: new Prisma.Decimal('36') },
+      ],
+    });
+    const r = await svc.report(WINDOW);
+    expect(r.totalBilledInr).toBe('200.00');
+  });
+
+  it('EXCLUDES RTO and reshipment fees — they price a SECOND movement', async () => {
+    // Folding a return leg into the forward margin would make a
+    // returned parcel look like the profitable kind.
+    const { svc } = makeReport({
+      charges: [
+        { type: ChargeType.BASE_SHIPPING, totalAmountInr: new Prisma.Decimal('200') },
+        { type: ChargeType.RTO_FEE, totalAmountInr: new Prisma.Decimal('150') },
+        { type: ChargeType.RESHIPMENT_FEE, totalAmountInr: new Prisma.Decimal('90') },
+      ],
+    });
+    const r = await svc.report(WINDOW);
+    expect(r.totalBilledInr).toBe('200.00');
+  });
+
+  it('INCLUDES the COD fee and fuel surcharge — both are the price of this carriage', async () => {
+    const { svc } = makeReport({
+      charges: [
+        { type: ChargeType.BASE_SHIPPING, totalAmountInr: new Prisma.Decimal('200') },
+        { type: ChargeType.COD_FEE, totalAmountInr: new Prisma.Decimal('25') },
+        { type: ChargeType.FUEL_SURCHARGE, totalAmountInr: new Prisma.Decimal('15') },
+      ],
+    });
+    const r = await svc.report(WINDOW);
+    expect(r.totalBilledInr).toBe('240.00');
+  });
+
+  it('lists what it skipped rather than silently shrinking the sample', async () => {
+    // A report that quietly covered 1 of 2 shipments reads as complete.
+    const { svc } = makeReport({
+      shipments: [shipment(), shipment({ id: 'ship-2', orderShipments: [] })],
+    });
+    const r = await svc.report(WINDOW);
+    expect(r.sampledShipments).toBe(1);
+    expect(r.skipped).toHaveLength(1);
+    expect(r.skipped[0]?.reason).toMatch(/no linked order/i);
+  });
+
+  it('skips an order with no persisted charges instead of scoring it zero', async () => {
+    const { svc } = makeReport({ charges: [] });
+    const r = await svc.report(WINDOW);
+    expect(r.sampledShipments).toBe(0);
+    expect(r.skipped[0]?.reason).toMatch(/no shipping charges/i);
+  });
+
+  it('survives a failed cost lookup, keeping the rest of the sample', async () => {
+    const { svc } = makeReport({ checkThrows: new Error('rate budget exhausted') });
+    const r = await svc.report(WINDOW);
+    expect(r.sampledShipments).toBe(0);
+    expect(r.skipped[0]?.reason).toContain('rate budget exhausted');
+  });
+
+  it('explains itself when the origin pincode is unconfigured', async () => {
+    const { svc, check } = makeReport({ originPin: null });
+    const r = await svc.report(WINDOW);
+    expect(r.rows).toHaveLength(0);
+    expect(r.skipped[0]?.reason).toMatch(/origin pincode is not configured/i);
+    expect(check).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The pickup-location name is matched character-for-character on every
+ * shipment create and CANNOT be changed after registration. A trailing
+ * space would permanently break manifesting, so it is refused before it
+ * can reach the wire.
+ */
+describe('CourierWarehouseRegistrationService — the exact-name guard', () => {
+  function make() {
+    const audit = jest.fn(async () => undefined);
+    const register = jest.fn(async () => ({
+      success: true,
+      name: 'Skydrop',
+      message: null,
+      raw: null,
+    }));
+    const svc = new CourierWarehouseRegistrationService(
+      { log: audit } as never,
+      { register, update: register } as never,
+    );
+    return { svc, register, audit };
+  }
+
+  const BASE = {
+    name: 'Skydrop',
+    phone: '+919812345678',
+    pin: '110042',
+    returnAddress: '1 Warehouse Road',
+  };
+
+  it('accepts an exact name', async () => {
+    const { svc, register } = make();
+    const out = await svc.register('staff-1', BASE, CLIENT);
+    expect(out.success).toBe(true);
+    expect(register).toHaveBeenCalled();
+  });
+
+  it('refuses a trailing space BEFORE anything reaches the courier', async () => {
+    const { svc, register } = make();
+    await expect(
+      svc.register('staff-1', { ...BASE, name: 'Skydrop ' }, CLIENT),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it('refuses a leading space too', async () => {
+    const { svc, register } = make();
+    await expect(
+      svc.register('staff-1', { ...BASE, name: ' Skydrop' }, CLIENT),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it('audits registration at HIGH — the name becomes permanent', async () => {
+    const { svc, audit } = make();
+    await svc.register('staff-1', BASE, CLIENT);
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'courier.warehouse.registered',
+        severity: 'HIGH',
+      }),
+    );
+  });
+
+  it('audits an update at MEDIUM — everything but the name can change', async () => {
+    const { svc, audit } = make();
+    await svc.update('staff-1', BASE, CLIENT);
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'courier.warehouse.updated',
+        severity: 'MEDIUM',
+      }),
+    );
+  });
+});
