@@ -73,20 +73,44 @@ export function ErrorState({ message }: { readonly message: string }): ReactElem
   );
 }
 
+/**
+ * The empty state.
+ *
+ * "No results" is a dead end. An empty table in an ops console is one
+ * of three things — nothing exists yet, a filter hid everything, or a
+ * fetch failed — and each wants a different next move, so `description`
+ * should say which and `action` should offer the way out.
+ *
+ * `bare` drops the card chrome for use INSIDE an existing bordered
+ * table, where a second border reads as a rendering bug.
+ */
 export function EmptyState({
   title,
   description,
   action,
+  icon,
+  bare = false,
 }: {
   readonly title: ReactNode;
   readonly description?: ReactNode;
   readonly action?: ReactNode;
+  readonly icon?: ReactNode;
+  readonly bare?: boolean;
 }): ReactElement {
   return (
-    <div className="rounded-[7px] border border-border bg-surface px-4 py-10 text-center">
+    <div
+      className={
+        bare
+          ? 'px-4 py-10 text-center'
+          : 'rounded-[7px] border border-border bg-surface px-4 py-10 text-center'
+      }
+    >
+      {icon && <div className="text-text-faint mb-2 flex justify-center">{icon}</div>}
       <div className="text-text-body text-sm font-medium">{title}</div>
       {description && (
-        <div className="text-text-muted text-xs mt-1 max-w-md mx-auto">{description}</div>
+        <div className="text-text-muted text-xs mt-1 max-w-md mx-auto leading-relaxed">
+          {description}
+        </div>
       )}
       {action && <div className="mt-4">{action}</div>}
     </div>

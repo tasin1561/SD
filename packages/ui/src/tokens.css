@@ -160,6 +160,21 @@
   --duration-fast: 80ms;
   --duration-base: 140ms;
   --easing-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ───────── Money / data alignment ─────────
+     TABULAR figures for anything that sits in a column and changes:
+     amounts, quantities, counts, AWBs, timers. Proportional digits
+     have different widths, so a ledger's numbers shift horizontally
+     as values change and the decimal points stop lining up — which
+     is exactly the column a reader scans down. This is the single
+     highest-value typographic fix in a product this full of money. */
+  --numeric-tabular: tabular-nums;
+
+  /* Ledger direction — a credit and a debit must differ by more than
+     a minus sign (colour alone fails colour-blind readers, so the
+     Money component pairs these with an explicit +/− glyph). */
+  --color-credit: #4ade80;
+  --color-debit: #f0a4a4;
 }
 
 [data-theme='light'] {
@@ -184,6 +199,10 @@
   --color-critical: #d93838;
   --color-critical-tint: rgba(217, 56, 56, 0.1);
   --color-critical-ring: rgba(217, 56, 56, 0.4);
+
+  /* Deeper on white to hold 4.5:1 — dark-theme values would fail. */
+  --color-credit: #15803d;
+  --color-debit: #b91c1c;
 
   /* Light-theme status: same hues, deeper/less-transparent
      foreground to maintain contrast on white. */
@@ -233,4 +252,35 @@
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Tabular figures. Applied by the Money/Num primitives and available
+   directly for any hand-rolled numeric column. */
+.skydrop-tabular {
+  font-variant-numeric: var(--numeric-tabular);
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Reduced motion is honoured globally rather than per-component, so a
+   new component cannot forget it. Transitions collapse to
+   near-instant instead of being removed outright — an abrupt state
+   change with no transition at all reads as a glitch. */
+@media (prefers-reduced-motion: reduce) {
+  .skydrop-baseline *,
+  .skydrop-baseline *::before,
+  .skydrop-baseline *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* A visible focus ring on every keyboard-focused control. :focus-visible
+   (not :focus) so a mouse click does not leave a ring behind, and never
+   removed — losing the ring makes the product unusable by keyboard. */
+.skydrop-baseline :focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-1);
 }

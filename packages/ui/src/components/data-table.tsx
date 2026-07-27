@@ -117,6 +117,61 @@ export function TableEmpty({ children }: { children: ReactNode }): ReactElement 
   );
 }
 
+export type SortDirection = 'asc' | 'desc';
+
+/**
+ * A sortable column header.
+ *
+ * `aria-sort` is the part that is easy to skip and shouldn't be: it is
+ * how a screen-reader user learns the table is sorted at all, and by
+ * which column. The arrow glyph alone conveys that to sighted users
+ * only.
+ *
+ * The whole header is the button (not a small icon), so the touch
+ * target is the full cell rather than a 12px chevron.
+ */
+export function SortableTh({
+  label,
+  columnKey,
+  activeKey,
+  direction,
+  onSort,
+  align = 'left',
+  className,
+}: {
+  readonly label: string;
+  readonly columnKey: string;
+  readonly activeKey: string | null;
+  readonly direction: SortDirection;
+  readonly onSort: (key: string) => void;
+  readonly align?: 'left' | 'right' | 'center';
+  readonly className?: string;
+}): ReactElement {
+  const active = activeKey === columnKey;
+  return (
+    <th
+      aria-sort={active ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+      className={clsx('p-0 font-medium', className)}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(columnKey)}
+        className={clsx(
+          'hover:text-text-strong flex w-full items-center gap-1 px-3 py-2 transition-colors',
+          align === 'right' && 'justify-end',
+          align === 'center' && 'justify-center',
+          active ? 'text-text-strong' : 'text-text-muted',
+        )}
+      >
+        <span>{label}</span>
+        <span aria-hidden className={clsx('text-[10px]', !active && 'opacity-0')}>
+          {direction === 'asc' ? '▲' : '▼'}
+        </span>
+      </button>
+    </th>
+  );
+}
+
 export function TablePaginator({
   page,
   pageSize,
