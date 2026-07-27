@@ -12,6 +12,14 @@ const nextConfig = {
   },
   // Strip Next.js "powered by" header in the static HTML.
   poweredByHeader: false,
+
+  // NOTE — no `headers()` here, and adding one would do nothing.
+  // `output: 'export'` produces files with no Node process in front of
+  // them, so Next never gets a chance to set a response header. The
+  // other three apps set theirs in `packages/config/security-headers.mjs`
+  // plus a nonce CSP in middleware; this one's headers have to come from
+  // whatever serves the files. The Nginx snippet is checked in at
+  // `docs/nginx-security-headers.conf`.
 };
 
 export default nextConfig;

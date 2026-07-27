@@ -1,4 +1,4 @@
-import { sellerSecurityHeaders, allRoutes } from '../../packages/config/security-headers.mjs';
+import { staticSecurityHeaders, allRoutes } from '../../packages/config/security-headers.mjs';
 
 /**
  * Next.js 15 config — apps/seller.
@@ -19,7 +19,7 @@ const nextConfig = {
   // is shaped the way it is — in particular why connect-src is the
   // load-bearing directive when the access token lives in JS memory.
   async headers() {
-    return allRoutes(sellerSecurityHeaders);
+    return allRoutes(staticSecurityHeaders);
   },
   // Do not advertise the framework.
   poweredByHeader: false,
