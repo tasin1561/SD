@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { DelhiveryHttpService } from './delhivery-http.service';
+import { DelhiveryWriteGuardService } from './delhivery-write-guard.service';
 import type {
   DelhiveryAwbRequest,
   DelhiveryAwbResult,
@@ -59,6 +60,7 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
   constructor(
     private readonly http: DelhiveryHttpService,
     private readonly prisma: PrismaService,
+    private readonly writeGuard: DelhiveryWriteGuardService,
   ) {}
 
   async generateAwb(req: DelhiveryAwbRequest): Promise<DelhiveryAwbResult> {
@@ -91,10 +93,20 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
       pickup_location: { name: pickupLocationName },
     };
 
+    // No sandbox exists for this account, so this call manifests a REAL
+    // parcel that Delhivery will come to collect. The guard makes that a
+    // deliberate act rather than something a retrying worker can do by
+    // accident (see DelhiveryWriteGuardService).
+    await this.writeGuard.assertWritable('shipment.create', {
+      shipmentNumber: req.shipmentNumber,
+      destinationPin: req.postalCode,
+    });
+
     try {
       const response = await this.http.request<DelhiveryCreateResponse>({
         method: 'POST',
         path: '/api/cmu/create.json',
+        endpoint: 'create',
         body: envelope,
         encoding: 'form-data-key',
       });

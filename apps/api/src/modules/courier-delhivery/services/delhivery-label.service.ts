@@ -39,7 +39,8 @@ export class DelhiveryLabelService implements Pick<DelhiveryClient, 'fetchLabel'
       packages?: Array<{ waybill?: string; pdf_download_link?: string }>;
     }>({
       method: 'GET',
-      path: `/api/p/packing_slip?wbns=${encodeURIComponent(awbNumber)}&pdf=true`,
+      path: `/api/p/packing_slip?wbns=${encodeURIComponent(awbNumber)}&pdf=true&pdf_size=4R`,
+      endpoint: 'label',
     });
 
     const link = meta.packages?.[0]?.pdf_download_link;

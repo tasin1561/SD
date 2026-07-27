@@ -42,6 +42,7 @@ export class DelhiveryServiceabilityService
     }>({
       method: 'GET',
       path: `/c/api/pin-codes/json/?filter_codes=${encodeURIComponent(pincode)}`,
+      endpoint: 'serviceability',
     });
     const serviceable = (result.delivery_codes ?? []).length > 0;
     return { serviceable, fromLiveApi: true };

@@ -303,7 +303,21 @@ const systemSettings: SystemSettingSeed[] = [
     valueString: '',
     displayName: 'Delhivery API Base URL',
     description:
-      'Delhivery REST API base URL. EMPTY = stub mode (DelhiveryClient returns deterministic mock responses; no network). Set to the sandbox/production URL once the real wire contract is validated against Delhivery credentials — TODO(delhivery-api)',
+      "Delhivery REST API base URL. EMPTY = stub mode (deterministic mock responses, no network) — the default for dev/CI/e2e. Production is https://track.delhivery.com (staging would be https://staging-express.delhivery.com, but this account has no sandbox). Setting this alone only enables READS; physical-world writes additionally require courier.delhivery_live_writes_enabled.",
+  },
+  // No Delhivery sandbox exists for this account, so the only environment
+  // is production. Reads (serviceability, tracking, cost, TAT, EPOD) are
+  // free and side-effect-free; writes manifest real parcels, dispatch real
+  // vans and cancel real customers' orders. Hence a second, explicit gate
+  // that defaults OFF and is checked by DelhiveryWriteGuardService.
+  {
+    key: 'courier.delhivery_live_writes_enabled',
+    category: 'courier',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'Delhivery LIVE Writes Enabled',
+    description:
+      'When OFF (default) Skydrop refuses any Delhivery call with a physical or billable effect — manifest a shipment, edit/cancel one, request a pickup, take an NDR action, register a warehouse, consume waybills — while still allowing reads. There is no sandbox for this account: every write here is a real parcel, a real van or a real cancellation. Turn it on deliberately for live operations (or for a controlled single-parcel test), and expect a HIGH audit row for every blocked attempt while it is off.',
   },
   {
     key: 'courier.delhivery_pickup_location',

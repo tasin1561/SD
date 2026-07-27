@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { CourierSharedModule } from '../courier-shared/courier-shared.module';
+import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { DelhiveryHttpService } from './services/delhivery-http.service';
+import { DelhiveryRateLimitService } from './services/delhivery-rate-limit.service';
+import { DelhiveryWriteGuardService } from './services/delhivery-write-guard.service';
 import { DelhiveryAwbService } from './services/delhivery-awb.service';
 import { DelhiveryLabelService } from './services/delhivery-label.service';
 import { DelhiveryServiceabilityService } from './services/delhivery-serviceability.service';
@@ -15,6 +18,12 @@ import { DelhiveryTrackingFetchService } from './services/delhivery-tracking-fet
  *   - DelhiveryLabelService — fetchLabel
  *   - DelhiveryServiceabilityService — checkServiceability (advisory)
  *   - DelhiveryTrackingService — normalizeScan (M10 commit 6)
+ *   - DelhiveryRateLimitService — the documented per-endpoint WAF
+ *     budgets (a 403 blocks our whole egress IP, so this is a
+ *     production-safety control, not an optimisation)
+ *   - DelhiveryWriteGuardService — Skydrop has NO Delhivery sandbox, so
+ *     physical-world writes (manifest, pickup, cancel, NDR) are gated on
+ *     an explicit, audited, default-OFF setting
  *
  * Together the four capability services realise the `DelhiveryClient`
  * adapter interface. Imports CourierSharedModule for
@@ -24,9 +33,11 @@ import { DelhiveryTrackingFetchService } from './services/delhivery-tracking-fet
  * hit in the suite.
  */
 @Module({
-  imports: [CourierSharedModule],
+  imports: [CourierSharedModule, AuthCommonModule],
   providers: [
     DelhiveryHttpService,
+    DelhiveryRateLimitService,
+    DelhiveryWriteGuardService,
     DelhiveryAwbService,
     DelhiveryLabelService,
     DelhiveryServiceabilityService,
@@ -35,6 +46,8 @@ import { DelhiveryTrackingFetchService } from './services/delhivery-tracking-fet
   ],
   exports: [
     DelhiveryHttpService,
+    DelhiveryRateLimitService,
+    DelhiveryWriteGuardService,
     DelhiveryAwbService,
     DelhiveryLabelService,
     DelhiveryServiceabilityService,

@@ -1,6 +1,7 @@
 import { DelhiveryAwbService } from '../../src/modules/courier-delhivery/services/delhivery-awb.service';
 import type { DelhiveryHttpService } from '../../src/modules/courier-delhivery/services/delhivery-http.service';
 import type { DelhiveryAwbRequest } from '../../src/modules/courier-delhivery/types/delhivery.types';
+import type { DelhiveryWriteGuardService } from '../../src/modules/courier-delhivery/services/delhivery-write-guard.service';
 
 function awbReq(over: Partial<DelhiveryAwbRequest> = {}): DelhiveryAwbRequest {
   return {
@@ -37,10 +38,14 @@ function makeService(opts: { stubMode?: boolean } = {}) {
       systemSetting: { findUnique: jest.fn(async () => null) },
     },
   };
-  const svc = new DelhiveryAwbService(
-    http as unknown as DelhiveryHttpService,
-    prisma as never,
-  );
+  // No sandbox exists, so real-mode create is gated. These fixtures
+  // exercise the wire contract, so the guard is open here; the guard's
+  // own behaviour has its own spec.
+  const writeGuard = {
+    assertWritable: jest.fn(async () => undefined),
+    liveWritesEnabled: jest.fn(async () => true),
+  } as unknown as DelhiveryWriteGuardService;
+  const svc = new DelhiveryAwbService(http as unknown as DelhiveryHttpService, prisma as never, writeGuard);
   return { svc, isStubMode, authHeaders, request };
 }
 
@@ -172,9 +177,13 @@ function makeServiceWithPickup(name: string) {
       },
     },
   };
-  const svc = new DelhiveryAwbService(
-    http as unknown as DelhiveryHttpService,
-    prisma as never,
-  );
+  // No sandbox exists, so real-mode create is gated. These fixtures
+  // exercise the wire contract, so the guard is open here; the guard's
+  // own behaviour has its own spec.
+  const writeGuard = {
+    assertWritable: jest.fn(async () => undefined),
+    liveWritesEnabled: jest.fn(async () => true),
+  } as unknown as DelhiveryWriteGuardService;
+  const svc = new DelhiveryAwbService(http as unknown as DelhiveryHttpService, prisma as never, writeGuard);
   return { svc, request, prisma };
 }

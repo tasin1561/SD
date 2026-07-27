@@ -99,6 +99,7 @@ export class DelhiveryTrackingFetchService
     const response = await this.http.request<DelhiveryTrackResponse>({
       method: 'GET',
       path: `/api/v1/packages/json/?waybill=${encodeURIComponent(awbs.join(','))}`,
+      endpoint: 'tracking',
     });
 
     const results: CourierTrackingResult[] = [];

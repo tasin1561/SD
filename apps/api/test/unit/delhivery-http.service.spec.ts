@@ -3,6 +3,7 @@ import { DelhiveryHttpService } from '../../src/modules/courier-delhivery/servic
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { CourierCredentialService } from '../../src/modules/courier-shared/services/courier-credential.service';
 import { makeTestEnv } from '../helpers/env';
+import type { DelhiveryRateLimitService } from '../../src/modules/courier-delhivery/services/delhivery-rate-limit.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -28,11 +29,15 @@ function makeService(
     opts.isProduction ? { NODE_ENV: 'production' } : {},
   );
 
+  const rateLimit = {
+    consume: jest.fn(async () => undefined),
+    budgetFor: jest.fn(() => 1000),
+    remaining: jest.fn(async () => 1000),
+  } as unknown as DelhiveryRateLimitService;
   const svc = new DelhiveryHttpService(
     { client } as unknown as PrismaService,
     env,
-    credentials as unknown as CourierCredentialService,
-  );
+    credentials as unknown as CourierCredentialService, rateLimit);
   return { svc, systemSettingFindUnique, getCredential };
 }
 
@@ -109,7 +114,7 @@ describe('DelhiveryHttpService.request (real mode)', () => {
     // and fail. That's the assertion: it WENT through fetch (not the
     // old TODO throw). The error type confirms real-mode path is wired.
     await expect(
-      svc.request({ method: 'GET', path: '/x' }),
+      svc.request({ method: 'GET', endpoint: 'tracking', path: '/x' }),
     ).rejects.toThrow();
   });
 });
