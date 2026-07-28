@@ -96,7 +96,9 @@ export class SellerLogoService {
     }
 
     const previousKey = seller.logoStorageKey;
-    const url = this.spaces.publicUrl(storageKey);
+    // Pointer, not a link — logo objects are private like everything
+    // else in the bucket. Readers presign from `logoStorageKey`.
+    const url = this.spaces.canonicalObjectUrl(storageKey);
 
     await this.prisma.client.seller.update({
       where: { id: sellerId },
@@ -124,7 +126,10 @@ export class SellerLogoService {
       this.spaces.deleteObjects([previousKey]).catch(() => undefined);
     }
 
-    return { logoUrl: url, logoMimeType: mimeType };
+    return {
+      logoUrl: await this.spaces.presignGetUrl(storageKey),
+      logoMimeType: mimeType,
+    };
   }
 
   async remove(sellerId: string, ctx: ClientContext): Promise<LogoView> {

@@ -111,7 +111,10 @@ export class ImageWorker implements OnModuleInit, OnModuleDestroy {
     await this.prisma.client.productImage.update({
       where: { id: row.id },
       data: {
-        thumbnailUrl: this.spaces.publicUrl(thumbKey),
+        // A pointer, and the "thumbnail exists" marker the gate above
+        // reads. Not fetchable — CatalogImageService.toView() presigns
+        // the real URL for a caller that owns the variant.
+        thumbnailUrl: this.spaces.canonicalObjectUrl(thumbKey),
         widthPx: typeof meta.width === 'number' ? meta.width : null,
         heightPx: typeof meta.height === 'number' ? meta.height : null,
       },

@@ -72,8 +72,10 @@ async function bootstrap(): Promise<void> {
 
   app.enableShutdownHooks();
 
-  await app.listen(env.port);
-  console.info(`[skydrop-api] listening on http://0.0.0.0:${env.port} (${env.nodeEnv})`);
+  // Loopback by default — see BIND_HOST in env.schema.ts. Caddy and the
+  // Next proxies are the only callers, and they are on this host.
+  await app.listen(env.port, env.bindHost);
+  console.info(`[skydrop-api] listening on http://${env.bindHost}:${env.port} (${env.nodeEnv})`);
 }
 
 void bootstrap();

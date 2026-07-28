@@ -5,6 +5,16 @@ import { z } from 'zod';
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
+  /**
+   * Interface to bind. Defaults to loopback: the API is reached only by
+   * Caddy and by the Next proxies, all on the same host, so there is no
+   * reason to answer on any other interface. It used to bind 0.0.0.0,
+   * which left the whole unauthenticated API listening on the droplet's
+   * DigitalOcean VPC address with one ufw rule as the only thing in
+   * front of it. Set to 0.0.0.0 if the API is ever containerised and
+   * must answer from outside its namespace.
+   */
+  BIND_HOST: z.string().default('127.0.0.1'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 
   DATABASE_URL: z.string().url(),

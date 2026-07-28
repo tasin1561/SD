@@ -4,6 +4,7 @@ import type { Env } from '../../src/config/env.schema';
 const BASE_ENV: Env = {
   NODE_ENV: 'test',
   PORT: 4000,
+  BIND_HOST: '127.0.0.1',
   LOG_LEVEL: 'info',
   DATABASE_URL: 'postgresql://x:y@localhost:5432/x',
   REDIS_URL: 'redis://localhost:6379',

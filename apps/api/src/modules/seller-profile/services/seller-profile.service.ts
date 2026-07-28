@@ -8,6 +8,7 @@ import {
   SellerStatus,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import {
   SellerOnboardingService,
@@ -74,6 +75,9 @@ const PROFILE_SELECT = {
   bankRoutingNumber: true,
   bankSwiftCode: true,
   logoUrl: true,
+  // Needed to presign a readable URL — the stored logoUrl is a pointer
+  // to a private object, not a fetchable link.
+  logoStorageKey: true,
   logoMimeType: true,
   createdAt: true,
 } as const;
@@ -85,6 +89,7 @@ export class SellerProfileService {
     private readonly audit: AuditLogService,
     private readonly onboarding: SellerOnboardingService,
     private readonly bankCipher: BankAccountCipherService,
+    private readonly spaces: SpacesService,
   ) {}
 
   async getProfile(sellerId: string): Promise<SellerProfileView> {
@@ -102,9 +107,12 @@ export class SellerProfileService {
     // Surface the masked field as `bankAccountNumber` in the API view.
     // The ENCRYPTED column is intentionally unreachable from the read
     // path; only the cipher service can decrypt it.
-    const { bankAccountNumberMasked, ...rest } = seller;
+    const { bankAccountNumberMasked, logoStorageKey, ...rest } = seller;
     return {
       ...rest,
+      // Minted per request for the authenticated owner of this profile;
+      // the column holds a pointer to a private object.
+      logoUrl: logoStorageKey ? await this.spaces.presignGetUrl(logoStorageKey) : null,
       bankAccountNumber: bankAccountNumberMasked,
       onboarding,
     };

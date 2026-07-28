@@ -168,7 +168,8 @@ export class CatalogImageService {
           variantId,
           spacesKey: input.spacesKey,
           spacesBucket: this.env.spacesBucket,
-          url: this.spaces.publicUrl(input.spacesKey),
+          // A pointer to the object, not a working link — see toView().
+          url: this.spaces.canonicalObjectUrl(input.spacesKey),
           mimeType: input.mimeType,
           sizeBytes: input.sizeBytes,
           altText: input.altText ?? null,
@@ -200,16 +201,40 @@ export class CatalogImageService {
     });
 
     await this.queue.enqueueThumbnail({ imageId: created.id });
-    return created;
+    return this.toView(created);
+  }
+
+  /**
+   * Swap the stored object pointers for short-lived presigned URLs.
+   *
+   * The `url` / `thumbnailUrl` COLUMNS record where the object lives;
+   * they are not fetchable, because every object in the bucket is
+   * private. Only a caller who got past `requireVariant` — i.e. owns the
+   * variant — reaches this, so this is the point at which a readable URL
+   * may legitimately be minted.
+   *
+   * This also fixes a live bug: originals are uploaded by the browser
+   * through a presigned PUT, which does not make them public, so the
+   * stored `url` has never actually resolved. Only the thumbnail
+   * rendered.
+   */
+  private async toView(row: ImageView): Promise<ImageView> {
+    const thumbKey = row.thumbnailUrl ? deriveThumbnailKey(row.spacesKey) : null;
+    return {
+      ...row,
+      url: await this.spaces.presignGetUrl(row.spacesKey),
+      thumbnailUrl: thumbKey ? await this.spaces.presignGetUrl(thumbKey) : null,
+    };
   }
 
   async listForVariant(sellerId: string, variantId: string): Promise<ImageView[]> {
     await this.requireVariant(sellerId, variantId);
-    return this.prisma.client.productImage.findMany({
+    const rows = await this.prisma.client.productImage.findMany({
       where: { variantId, deletedAt: null },
       orderBy: [{ isPrimary: 'desc' }, { displayOrder: 'asc' }, { createdAt: 'asc' }],
       select: VIEW_SELECT,
     });
+    return Promise.all(rows.map((r) => this.toView(r)));
   }
 
   async delete(

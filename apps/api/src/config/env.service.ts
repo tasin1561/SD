@@ -21,6 +21,10 @@ export class EnvService {
     return this.env.PORT;
   }
 
+  get bindHost(): string {
+    return this.env.BIND_HOST;
+  }
+
   get logLevel(): Env['LOG_LEVEL'] {
     return this.env.LOG_LEVEL;
   }

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ChargeType, NotificationRecipientType, OrderStatus, Prisma } from '@skydrop/db';
+import { EnvService } from '../../../config/env.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { EmailQueue } from '../../email/queue/email.queue';
@@ -16,8 +17,10 @@ import { InvoicePdfService, type InvoicePayload } from './invoice-pdf.service';
  *      settings (Skydrop GSTIN etc.), composes the InvoicePayload,
  *      renders to a PDF buffer.
  *   3. Upload: PUTs the buffer to Spaces under
- *      `invoices/<sellerId>/<invoiceNumber>.pdf` and stores the
- *      payload snapshot + public URL.
+ *      `invoices/<sellerId>/<invoiceNumber>.pdf` — PRIVATE — and stores
+ *      the payload snapshot + the object's canonical location. The
+ *      `pdfUrl` handed back to a caller is presigned per request and
+ *      short-lived; it is never the stored value.
  *
  * Eligibility: only DELIVERED orders. The bus listener fires on
  * the DELIVERED transition; manual regeneration via the seller
@@ -31,6 +34,7 @@ export class InvoiceService {
     private readonly numbering: InvoiceNumberingService,
     private readonly pdf: InvoicePdfService,
     private readonly email: EmailQueue,
+    private readonly env: EnvService,
   ) {}
 
   private async sendInvoiceEmail(
@@ -75,13 +79,14 @@ export class InvoiceService {
     // Idempotency gate.
     const existing = await this.prisma.client.invoice.findUnique({
       where: { orderId },
-      select: { id: true, invoiceNumber: true, pdfUrl: true },
+      select: { id: true, invoiceNumber: true, pdfUrl: true, pdfStorageKey: true },
     });
     if (existing && existing.pdfUrl) {
       return {
         id: existing.id,
         invoiceNumber: existing.invoiceNumber,
-        pdfUrl: existing.pdfUrl,
+        // Freshly minted every call — never the stored pointer.
+        pdfUrl: await this.spaces.presignGetUrl(existing.pdfStorageKey),
         alreadyExisted: true,
       };
     }
@@ -231,7 +236,12 @@ export class InvoiceService {
     const safeNumber = invoiceNumber.replace(/[^A-Za-z0-9.-]+/g, '_');
     const storageKey = `invoices/${order.sellerId}/${safeNumber}.pdf`;
     await this.spaces.putObject(storageKey, pdfBuffer, 'application/pdf');
-    const pdfUrl = this.spaces.publicUrl(storageKey);
+    // The stored value is a POINTER, not a link — the object is private.
+    // A GST invoice carries the seller's GSTIN and the buyer's name and
+    // address, and the key is `invoices/<sellerId>/<sequential number>`,
+    // so a durable anonymous URL would have been enumerable per seller.
+    // Callers get a short-lived presigned URL instead; see `presignedPdfUrl`.
+    const pdfUrl = this.spaces.canonicalObjectUrl(storageKey);
 
     const created = await this.prisma.client.invoice.upsert({
       where: { orderId: order.id },
@@ -262,17 +272,24 @@ export class InvoiceService {
 
     // Best-effort email to the seller. Failure logged + swallowed
     // (mirrors notification listener discipline).
+    //
+    // The link goes to the DASHBOARD, not to the object. A presigned URL
+    // would expire long before most people open the mail, and a durable
+    // anonymous one would put the buyer's name and address behind a link
+    // that outlives the inbox it was sent to — forwarded, archived,
+    // indexed by whatever scans the mailbox. The dashboard page mints a
+    // fresh URL for whoever is actually signed in.
     await this.sendInvoiceEmail(order.seller.email, order.seller.companyName, {
       invoiceNumber: created.invoiceNumber,
       orderNumber: order.orderNumber,
       totalInr: totalInr.toFixed(2),
-      pdfUrl: created.pdfUrl ?? pdfUrl,
+      pdfUrl: `${this.env.sellerAppUrl.replace(/\/$/, '')}/orders/${order.id}`,
     });
 
     return {
       id: created.id,
       invoiceNumber: created.invoiceNumber,
-      pdfUrl: created.pdfUrl ?? pdfUrl,
+      pdfUrl: await this.spaces.presignGetUrl(storageKey),
       alreadyExisted: false,
     };
   }

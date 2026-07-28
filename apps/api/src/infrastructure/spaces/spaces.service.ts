@@ -19,6 +19,14 @@ export interface ObjectHead {
 const MOCK_ROOT = '/tmp/skydrop-spaces-mock';
 
 /**
+ * How long a presigned GET stays valid. Long enough for a browser to
+ * follow a download and for a product-image grid to finish rendering;
+ * short enough that a URL copied out of a log or a Referer is dead
+ * before it is useful.
+ */
+const DEFAULT_GET_TTL_SECONDS = 15 * 60;
+
+/**
  * Thin S3-compatible storage wrapper over DigitalOcean Spaces.
  *
  * Two modes, chosen at module init from DEV_MOCK_SPACES:
@@ -29,6 +37,22 @@ const MOCK_ROOT = '/tmp/skydrop-spaces-mock';
  *    dev run with no DO credentials.
  *
  * Keys are always the canonical Spaces key (no leading slash).
+ *
+ * ── EVERY OBJECT IS PRIVATE (2026-07-27) ─────────────────────────────
+ * `putObject` used to set `ACL: 'public-read'` unconditionally, which
+ * made every object it wrote world-readable at a stable URL. Four of its
+ * five callers write things that must never be: GST invoices (seller
+ * GSTIN, buyer name and address, amounts), AWB labels (recipient name,
+ * full address, phone), and the two CSV error reports (the seller's own
+ * order and catalog rows). Nothing had leaked — production had zero of
+ * them — but the first invoice generated would have been readable by
+ * anyone holding the URL, with no auth and no expiry.
+ *
+ * So there is no public-write path here at all any more. Reads go
+ * through `presignGetUrl`, minted per request with a short TTL by an
+ * endpoint that has already checked ownership. Deleting `publicUrl()`
+ * rather than leaving it unused is deliberate: it was the thing that
+ * made "just hand the caller a URL" the easy option.
  */
 @Injectable()
 export class SpacesService implements OnModuleInit {
@@ -111,8 +135,28 @@ export class SpacesService implements OnModuleInit {
         Key: key,
         Body: body,
         ContentType: contentType,
-        ACL: 'public-read',
+        // No ACL — the bucket default is private, and that is the point.
+        // See the class comment: this line used to read `public-read`.
       }),
+    );
+  }
+
+  /**
+   * Short-lived GET URL for a private object.
+   *
+   * Mint one per request from a handler that has ALREADY established the
+   * caller may see this object; the URL itself carries no identity, so
+   * the TTL is the only thing limiting it once handed out. Never persist
+   * the result — a stored presigned URL is either expired or a
+   * long-lived public link, and both are wrong.
+   */
+  async presignGetUrl(key: string, ttlSeconds = DEFAULT_GET_TTL_SECONDS): Promise<string> {
+    if (this.mock) return `mock://${this.bucket}/${key}`;
+    const { GetObjectCommand } = await import('@aws-sdk/client-s3');
+    return getSignedUrl(
+      this.requireClient() as unknown as Parameters<typeof getSignedUrl>[0],
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+      { expiresIn: ttlSeconds },
     );
   }
 
@@ -251,8 +295,17 @@ export class SpacesService implements OnModuleInit {
     return out;
   }
 
-  /** Public (CDN) URL for a stored object. */
-  publicUrl(key: string): string {
+  /**
+   * Where an object lives, as a URL — for records and audit trails ONLY.
+   *
+   * NOT a working link: every object is private, so fetching this
+   * anonymously returns AccessDenied. It exists because some rows want a
+   * durable, human-readable pointer to the object they describe, and
+   * because a column that stores this is honest in a way one storing a
+   * presigned URL never is. To actually READ the object, call
+   * `presignGetUrl` at request time.
+   */
+  canonicalObjectUrl(key: string): string {
     const cdn = this.env.spacesCdnUrl;
     if (cdn) return `${cdn.replace(/\/$/, '')}/${key}`;
     if (this.mock) return `mock://${this.bucket}/${key}`;

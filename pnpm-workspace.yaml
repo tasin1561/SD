@@ -29,3 +29,30 @@ overrides:
   form-data: ^4.0.6
   postcss: ^8.5.18
   multer: ^2.2.0
+  # Reviewed again 2026-07-28. These four reach production or process
+  # untrusted input, which is why they are here and the vite/vitest/turbo
+  # advisories from the same audit are not — those are build-time only,
+  # and pinning them across a major is how CI breaks for no security gain.
+  #
+  # sharp: apps/api runs it over SELLER-UPLOADED images to make
+  # thumbnails, so a libvips bug is reachable by anyone with an account.
+  # Next bundles an older copy; this drags both onto the patched line.
+  sharp: ^0.35.3
+  # qs + body-parser: express's request parsers, i.e. the first code to
+  # touch every unauthenticated request. Both advisories are remotely
+  # triggerable DoS.
+  qs: ^6.15.3
+  body-parser: ^2.3.0
+  # happy-dom: test-only (vitest DOM), but the advisory is a VM context
+  # escape and the cost of being current is nil.
+  happy-dom: ^20.11.1
+#
+# LEFT OPEN, deliberately — 8 advisories remain, all build/test tooling
+# whose vulnerable code path we do not run:
+#   vitest / vite / esbuild — the dev server and `vitest --ui`. We run
+#     neither: Next serves the frontends and tests run headless. The fix
+#     is vitest 4.x, two majors up, on the runner that gates every commit
+#     — a migration, not a patch, and not one to start in a security pass.
+#   turbo — was a login-callback CSRF; upgraded 2.3 → 2.10 above, fixed.
+#   @babel/core, brace-expansion via eslintrc — lint/test only.
+# Re-check when vitest is upgraded on its own merits.
