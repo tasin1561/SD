@@ -21,6 +21,7 @@ import {
   SellerStatusBadge,
 } from '@skydrop/ui/components';
 import { StatusActionPanel } from './status-action-panel';
+import { SellerSettingsSection } from './seller-settings-section';
 
 const STATUS_ROLES: readonly StaffRole[] = [
   'SUPER_ADMIN' as StaffRole,
@@ -134,6 +135,11 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
               </CardBody>
             </Card>
           </Section>
+
+          {/* SET-1 per-seller overrides. Lives here rather than on its own
+              page because "what is this seller on" is a question you ask
+              while looking at the seller. */}
+          <SellerSettingsSection sellerId={detail.data.id} />
         </>
       )}
     </div>

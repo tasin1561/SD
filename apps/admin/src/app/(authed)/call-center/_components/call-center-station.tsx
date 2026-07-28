@@ -16,6 +16,7 @@ import { ApiError } from '@skydrop/api-client';
 import type { PulledAssignment } from '@skydrop/api-client';
 import { usePullNextCall, useRecordCallAttempt, useReleaseCall } from '@/lib/api-hooks';
 import { CallOutcome } from '@skydrop/db';
+import { MyAvailability } from './my-availability';
 
 const OUTCOME_OPTIONS: ReadonlyArray<{
   value: CallOutcome;
@@ -146,6 +147,10 @@ export function CallCenterStation(): ReactElement {
 
   return (
     <div className="space-y-4">
+      {/* First, because it is the thing an agent changes most often and
+          the thing that costs most when it is left wrong. */}
+      <MyAvailability />
+
       <div className="flex items-center gap-2">
         <Button
           variant="primary"
