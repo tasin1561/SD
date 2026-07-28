@@ -47,7 +47,7 @@ All infrastructure runs on **DigitalOcean** with **Cloudflare** at the edge. Del
 - **DigitalOcean Spaces** (S3-compatible) — proof-of-delivery photos, AWB label PDFs, customs/invoice documents, seller product images, bulk CSV upload files
 
 ### Edge / Network
-- **Cloudflare** — DNS, CDN, DDoS protection, SSL termination
+- **Cloudflare** — DNS ONLY, as actually configured (verified 2026-07-28). The records are unproxied A-records pointing straight at the droplet, so there is NO CDN, NO WAF, NO DDoS absorption in front of the origin, and the origin IP is public in DNS. TLS is terminated by Caddy on the droplet with Let's Encrypt, not by Cloudflare. This line used to claim CDN + DDoS + SSL termination; it never did any of them. Turning the proxy on is a real decision (upload size caps, websocket behaviour, and a second CSP-capable layer) and has not been taken.
 - **Caddy** — reverse proxy on the droplet (routes subdomains to internal Node apps; also file-serves the static marketing export from `/var/www/skydrop-marketing`). Config: `/etc/caddy/Caddyfile`. Automatic HTTPS. NOT Nginx — this doc said Nginx until 2026-07-27 and the droplet never ran it.
 
 ### Communications
