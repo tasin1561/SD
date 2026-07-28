@@ -5,6 +5,7 @@ import { ExternalLink } from 'lucide-react';
 import { Card, CardBody, ErrorState, LoadingState } from '@skydrop/ui/components';
 import { useAdminOrderShipments } from '@/lib/api-hooks';
 import { CourierOpsPanel } from './courier-ops-panel';
+import { ManualScanPanel } from './manual-scan-panel';
 
 const TRACK_URL = process.env.NEXT_PUBLIC_TRACK_URL ?? 'https://track.skydrop.online';
 
@@ -68,12 +69,14 @@ export function OrderShipmentsSection({ orderId }: { readonly orderId: string })
                   </a>
                 )}
               </div>
-              <div className="mt-2">
+              <div className="mt-2 space-y-2">
                 <CourierOpsPanel
                   shipmentId={s.id}
                   awbNumber={s.awbNumber ?? null}
                   isManualCourier={s.isManualCourier}
                 />
+                {/* The recovery path when a courier webhook never arrived. */}
+                <ManualScanPanel shipmentId={s.id} />
               </div>
             </li>
           ))}
