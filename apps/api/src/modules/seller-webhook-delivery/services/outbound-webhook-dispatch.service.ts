@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { assertPublicHttpsUrl, SsrfBlockedError } from '../../../common/net/ssrf-guard';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import type { OutboundWebhookJobInput, WebhookSendResult } from '../types';
 
@@ -82,11 +83,19 @@ export class OutboundWebhookDispatchService {
       OutboundWebhookDispatchService.HTTP_TIMEOUT_MS,
     );
     try {
+      // Re-check at DISPATCH, not just at registration: DNS can change
+      // between the two, and this is the moment the socket opens.
+      await assertPublicHttpsUrl(input.requestUrl);
       const res = await fetch(input.requestUrl, {
         method: 'POST',
         headers,
         body,
         signal: controller.signal,
+        // A seller-controlled endpoint answering `302 Location:
+        // http://169.254.169.254/...` is how the https-only rule above
+        // gets bypassed and the droplet's metadata ends up in
+        // `responseBody`. No legitimate webhook receiver redirects.
+        redirect: 'error',
       });
       const responseTimeMs = Date.now() - startedAt;
       const responseBody = await res.text().catch(() => '');
@@ -113,11 +122,15 @@ export class OutboundWebhookDispatchService {
     } catch (e) {
       const responseTimeMs = Date.now() - startedAt;
       const isAbort = (e as Error).name === 'AbortError';
+      const blocked = e instanceof SsrfBlockedError;
       result = {
         status: 'FAILED',
         httpStatus: null,
         responseTimeMs,
-        errorCode: isAbort ? 'TIMEOUT' : 'NETWORK_ERROR',
+        // A blocked destination is its own outcome, not a network
+        // blip — it should be obvious in the delivery log why this
+        // endpoint will never succeed.
+        errorCode: blocked ? 'DESTINATION_BLOCKED' : isAbort ? 'TIMEOUT' : 'NETWORK_ERROR',
         errorMessage: (e as Error).message,
         responseBody: null,
       };

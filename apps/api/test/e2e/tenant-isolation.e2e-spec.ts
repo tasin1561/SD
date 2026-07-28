@@ -162,7 +162,10 @@ describe('cross-tenant isolation (e2e)', () => {
       .post('/seller/webhook-endpoints')
       .set(alpha.auth)
       .send({
-        url: 'https://alpha.example.com/hook',
+        // Must be a hostname that actually RESOLVES and is public: the
+        // SSRF guard rejects an endpoint it cannot establish is safe.
+        // `alpha.example.com` was used here and does not exist.
+        url: 'https://example.com/alpha-hook',
         subscribedEvents: ['order.created'],
       })
       .expect(201);

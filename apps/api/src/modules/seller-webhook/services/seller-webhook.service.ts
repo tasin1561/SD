@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { assertPublicHttpsUrl, SsrfBlockedError } from '../../../common/net/ssrf-guard';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import type { CreateWebhookEndpointDto } from '../dto/create-webhook-endpoint.dto';
 import type { UpdateWebhookEndpointDto } from '../dto/update-webhook-endpoint.dto';
@@ -90,10 +91,34 @@ export class SellerWebhookService {
     return row;
   }
 
+  /**
+   * Refuse an endpoint that points inside our own network.
+   *
+   * This is the FAST-FAIL copy — the control that actually protects the
+   * fetch lives in `OutboundWebhookDispatchService`, because DNS can
+   * change between saving an endpoint and delivering to it. Rejecting
+   * here as well means a seller finds out while they are looking at the
+   * form, instead of from a delivery that quietly never succeeds.
+   */
+  private async assertDeliverableUrl(url: string): Promise<void> {
+    try {
+      await assertPublicHttpsUrl(url);
+    } catch (e) {
+      if (e instanceof SsrfBlockedError) {
+        throw new BadRequestException({
+          code: 'WEBHOOK_URL_NOT_DELIVERABLE',
+          message: `Webhook URL rejected: ${e.reason}. It must be a public https endpoint.`,
+        });
+      }
+      throw e;
+    }
+  }
+
   async create(
     sellerId: string,
     body: CreateWebhookEndpointDto,
   ): Promise<WebhookEndpointWithSecret> {
+    await this.assertDeliverableUrl(body.url);
     const secret = generateSecret();
     const row = await this.prisma.client.sellerWebhookEndpoint.create({
       data: {
@@ -122,7 +147,10 @@ export class SellerWebhookService {
     if (!owned) throw new NotFoundException('Webhook endpoint not found.');
 
     const data: Record<string, unknown> = {};
-    if (body.url !== undefined) data.url = body.url;
+    if (body.url !== undefined) {
+      await this.assertDeliverableUrl(body.url);
+      data.url = body.url;
+    }
     if (body.name !== undefined) data.name = body.name;
     if (body.description !== undefined) data.description = body.description;
     if (body.subscribedEvents !== undefined) data.subscribedEvents = body.subscribedEvents;
