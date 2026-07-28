@@ -79,6 +79,7 @@ export function AuthedShell({
       items: [
         { href: '/sellers', label: 'Sellers' },
         { href: '/catalog/categories', label: 'Categories' },
+        { href: '/catalog/proposals', label: 'Category proposals' },
         { href: '/courier-accounts', label: 'Courier accounts' },
         { href: '/delhivery', label: 'Delhivery' },
       ],

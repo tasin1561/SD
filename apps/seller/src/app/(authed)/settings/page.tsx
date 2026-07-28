@@ -1,13 +1,20 @@
 import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { Card, CardBody, PageHeader } from '@skydrop/ui/components';
-import { Webhook, Bell, Key } from 'lucide-react';
+import { Webhook, Bell, Key, MapPin } from 'lucide-react';
 
 /**
  * Settings hub — links into each settings sub-area.
  */
 export default function SettingsPage(): ReactElement {
   const items = [
+    {
+      href: '/settings/addresses',
+      icon: <MapPin size={20} />,
+      title: 'Your addresses',
+      description:
+        'Where your stock ships from and where you can be reached. A consignment is booked against your Bangladesh origin address.',
+    },
     {
       href: '/settings/webhooks',
       icon: <Webhook size={20} />,
@@ -31,7 +38,7 @@ export default function SettingsPage(): ReactElement {
   ];
   return (
     <div className="max-w-4xl">
-      <PageHeader title="Settings" subtitle="Webhooks, notifications, API keys." />
+      <PageHeader title="Settings" subtitle="Addresses, webhooks, notifications, API keys." />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {items.map((it) => (
           <Link key={it.href} href={it.href} className="block">

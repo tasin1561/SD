@@ -96,11 +96,18 @@ export function CatalogIndex(): ReactElement {
         title="Catalog"
         subtitle="Products, variants, images. Click a product to edit or manage its variants."
         action={
-          <Link href="/catalog/import">
-            <Button variant="ghost" size="md">
-              CSV import
-            </Button>
-          </Link>
+          <span className="flex gap-2">
+            <Link href="/catalog/proposals">
+              <Button variant="ghost" size="md">
+                Category requests
+              </Button>
+            </Link>
+            <Link href="/catalog/import">
+              <Button variant="ghost" size="md">
+                CSV import
+              </Button>
+            </Link>
+          </span>
         }
       />
 
