@@ -107,9 +107,7 @@ describe('ssrf-guard', () => {
       expect(await reason('https://127.0.0.1:4000/admin/orders')).toBe(
         'URL resolves to a non-public address',
       );
-      expect(await reason('https://10.104.0.2:4000/')).toBe(
-        'URL resolves to a non-public address',
-      );
+      expect(await reason('https://10.104.0.2:4000/')).toBe('URL resolves to a non-public address');
       expect(await reason('https://[::1]/')).toBe('URL resolves to a non-public address');
     });
 
