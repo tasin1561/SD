@@ -72,7 +72,7 @@ function useRecordManualScan(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ shipmentId, body }) =>
-      client.request<ManualScanOutcome>(`/admin/tracking/shipments/${shipmentId}/manual-scan`, {
+      client.request<ManualScanOutcome>(`/api/admin/tracking/shipments/${shipmentId}/manual-scan`, {
         method: 'POST',
         body,
       }),

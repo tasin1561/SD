@@ -191,7 +191,7 @@ export function useTicketsList(query: {
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-tickets', 'list', query],
-    queryFn: () => client.request<Paginated<TicketView>>(`/admin/tickets${qs(query)}`),
+    queryFn: () => client.request<Paginated<TicketView>>(`/api/admin/tickets${qs(query)}`),
   });
 }
 
@@ -203,7 +203,7 @@ export function useTicketEvents(
     queryKey: ['admin-tickets', 'events', ticketId],
     enabled: ticketId !== null,
     queryFn: () =>
-      client.request<readonly TicketEventView[]>(`/admin/tickets/${ticketId ?? ''}/events`),
+      client.request<readonly TicketEventView[]>(`/api/admin/tickets/${ticketId ?? ''}/events`),
   });
 }
 
@@ -216,7 +216,7 @@ export function useTransitionTicket(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ ticketId, ...body }) =>
-      client.request<TicketView>(`/admin/tickets/${ticketId}`, {
+      client.request<TicketView>(`/api/admin/tickets/${ticketId}`, {
         method: 'PATCH',
         body,
       }),
@@ -239,7 +239,7 @@ export function useFreightList(query: {
   return useQuery({
     queryKey: ['admin-freight', 'list', query],
     queryFn: () =>
-      client.request<readonly FreightChargeView[]>(`/admin/inbound-freight${qs(query)}`),
+      client.request<readonly FreightChargeView[]>(`/api/admin/inbound-freight${qs(query)}`),
   });
 }
 
@@ -252,7 +252,7 @@ export function useRecordFreight(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<FreightChargeView>('/admin/inbound-freight', {
+      client.request<FreightChargeView>('/api/admin/inbound-freight', {
         method: 'POST',
         body,
       }),
@@ -269,7 +269,7 @@ export function useSettleFreight(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ freightChargeId }) =>
-      client.request<FreightChargeView>(`/admin/inbound-freight/${freightChargeId}/settle`, {
+      client.request<FreightChargeView>(`/api/admin/inbound-freight/${freightChargeId}/settle`, {
         method: 'POST',
       }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-freight'] }),
@@ -285,7 +285,7 @@ export function useWaiveFreight(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ freightChargeId, reason }) =>
-      client.request<FreightChargeView>(`/admin/inbound-freight/${freightChargeId}/waive`, {
+      client.request<FreightChargeView>(`/api/admin/inbound-freight/${freightChargeId}/waive`, {
         method: 'POST',
         body: { reason },
       }),
@@ -303,7 +303,7 @@ export function useSettlementsList(query: {
   return useQuery({
     queryKey: ['admin-settlements', 'list', query],
     queryFn: () =>
-      client.request<readonly SettlementView[]>(`/admin/courier-settlements${qs(query)}`),
+      client.request<readonly SettlementView[]>(`/api/admin/courier-settlements${qs(query)}`),
   });
 }
 
@@ -313,7 +313,7 @@ export function useReconciliation(overdueAfterDays?: number): UseQueryResult<Rec
     queryKey: ['admin-settlements', 'reconciliation', overdueAfterDays],
     queryFn: () =>
       client.request<ReconciliationReport>(
-        `/admin/courier-settlements/reconciliation${qs({ overdueAfterDays })}`,
+        `/api/admin/courier-settlements/reconciliation${qs({ overdueAfterDays })}`,
       ),
   });
 }
@@ -334,7 +334,7 @@ export function useRecordSettlement(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<SettlementView>('/admin/courier-settlements', {
+      client.request<SettlementView>('/api/admin/courier-settlements', {
         method: 'POST',
         body,
       }),
@@ -354,7 +354,9 @@ export function useWithdrawalsList(query: {
   return useQuery({
     queryKey: ['admin-withdrawals', 'list', query],
     queryFn: () =>
-      client.request<Paginated<WithdrawalRequestView>>(`/admin/withdrawal-requests${qs(query)}`),
+      client.request<Paginated<WithdrawalRequestView>>(
+        `/api/admin/withdrawal-requests${qs(query)}`,
+      ),
   });
 }
 
@@ -367,7 +369,7 @@ export function useRejectWithdrawal(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ requestId, reason }) =>
-      client.request<WithdrawalRequestView>(`/admin/withdrawal-requests/${requestId}/reject`, {
+      client.request<WithdrawalRequestView>(`/api/admin/withdrawal-requests/${requestId}/reject`, {
         method: 'PATCH',
         body: { reason },
       }),
@@ -384,7 +386,7 @@ export function useMarkWithdrawalPaid(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ requestId, linkedRemittanceId }) =>
-      client.request<WithdrawalRequestView>(`/admin/withdrawal-requests/${requestId}/paid`, {
+      client.request<WithdrawalRequestView>(`/api/admin/withdrawal-requests/${requestId}/paid`, {
         method: 'PATCH',
         body: { linkedRemittanceId },
       }),
@@ -405,7 +407,9 @@ export function useCourierAccounts(query?: {
   return useQuery({
     queryKey: ['admin-courier-accounts', 'list', query ?? {}],
     queryFn: () =>
-      client.request<readonly CourierAccountView[]>(`/admin/courier-accounts${qs(query ?? {})}`),
+      client.request<readonly CourierAccountView[]>(
+        `/api/admin/courier-accounts${qs(query ?? {})}`,
+      ),
   });
 }
 
@@ -428,7 +432,7 @@ export function useCreateCourierAccount(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<CourierAccountView>('/admin/courier-accounts', {
+      client.request<CourierAccountView>('/api/admin/courier-accounts', {
         method: 'POST',
         body,
       }),
@@ -451,7 +455,7 @@ export function useUpdateCourierAccount(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ accountId, ...body }) =>
-      client.request<CourierAccountView>(`/admin/courier-accounts/${accountId}`, {
+      client.request<CourierAccountView>(`/api/admin/courier-accounts/${accountId}`, {
         method: 'PATCH',
         body,
       }),
@@ -468,10 +472,13 @@ export function useLinkSellerCourierAccount(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ sellerId, ...body }) =>
-      client.request<SellerCourierAccountLinkView>(`/admin/sellers/${sellerId}/courier-accounts`, {
-        method: 'POST',
-        body,
-      }),
+      client.request<SellerCourierAccountLinkView>(
+        `/api/admin/sellers/${sellerId}/courier-accounts`,
+        {
+          method: 'POST',
+          body,
+        },
+      ),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-courier-accounts'] }),
   });
 }
@@ -491,7 +498,7 @@ export function useUpdateSellerCourierLink(): UseMutationResult<
   return useMutation({
     mutationFn: ({ sellerId, courierAccountId, ...body }) =>
       client.request<SellerCourierAccountLinkView>(
-        `/admin/sellers/${sellerId}/courier-accounts/${courierAccountId}`,
+        `/api/admin/sellers/${sellerId}/courier-accounts/${courierAccountId}`,
         { method: 'PATCH', body },
       ),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-courier-accounts'] }),
@@ -507,7 +514,7 @@ export function useUnlinkSellerCourierAccount(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ sellerId, courierAccountId }) =>
-      client.request<void>(`/admin/sellers/${sellerId}/courier-accounts/${courierAccountId}`, {
+      client.request<void>(`/api/admin/sellers/${sellerId}/courier-accounts/${courierAccountId}`, {
         method: 'DELETE',
       }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-courier-accounts'] }),
@@ -523,7 +530,7 @@ export function useSellerCourierLinks(
     enabled: sellerId !== null,
     queryFn: () =>
       client.request<readonly SellerCourierAccountLinkView[]>(
-        `/admin/sellers/${sellerId ?? ''}/courier-accounts`,
+        `/api/admin/sellers/${sellerId ?? ''}/courier-accounts`,
       ),
   });
 }
@@ -553,7 +560,7 @@ export function useDelhiveryStatus(): UseQueryResult<DelhiveryOpsStatusView> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-delhivery', 'status'],
-    queryFn: () => client.request<DelhiveryOpsStatusView>('/admin/delhivery/status'),
+    queryFn: () => client.request<DelhiveryOpsStatusView>('/api/admin/delhivery/status'),
     // Pool depth and rate budget are live operational numbers; a stale
     // reading is worse than none when you are deciding whether to refill.
     refetchInterval: 30_000,
@@ -570,7 +577,7 @@ export function useRefillWaybillPool(): UseMutationResult<
   return useMutation({
     mutationFn: () =>
       client.request<{ fetched: number; poolAfter: number }>(
-        '/admin/delhivery/waybill-pool/refill',
+        '/api/admin/delhivery/waybill-pool/refill',
         { method: 'POST' },
       ),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-delhivery'] }),
@@ -766,7 +773,7 @@ export function usePickupRequests(): UseQueryResult<readonly PickupRequestView[]
   const client = useApiClient();
   return useQuery({
     queryKey: ['courier-pickups', 'list'],
-    queryFn: () => client.request<readonly PickupRequestView[]>('/admin/courier-ops/pickups'),
+    queryFn: () => client.request<readonly PickupRequestView[]>('/api/admin/courier-ops/pickups'),
   });
 }
 
@@ -784,7 +791,7 @@ export function useRaisePickup(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<PickupRequestView>('/admin/courier-ops/pickups', {
+      client.request<PickupRequestView>('/api/admin/courier-ops/pickups', {
         method: 'POST',
         body,
       }),
@@ -801,7 +808,7 @@ export function useClosePickup(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ requestId, status }) =>
-      client.request<PickupRequestView>(`/admin/courier-ops/pickups/${requestId}`, {
+      client.request<PickupRequestView>(`/api/admin/courier-ops/pickups/${requestId}`, {
         method: 'PATCH',
         body: { status },
       }),
@@ -818,10 +825,13 @@ export function useReleasePickupDay(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ requestId, reason }) =>
-      client.request<{ released: boolean }>(`/admin/courier-ops/pickups/${requestId}/release-day`, {
-        method: 'POST',
-        body: { reason },
-      }),
+      client.request<{ released: boolean }>(
+        `/api/admin/courier-ops/pickups/${requestId}/release-day`,
+        {
+          method: 'POST',
+          body: { reason },
+        },
+      ),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['courier-pickups'] }),
   });
 }
@@ -838,7 +848,7 @@ export function useWarehouseOptions(): UseQueryResult<readonly WarehouseOption[]
   return useQuery({
     queryKey: ['admin-warehouses', 'options'],
     staleTime: 10 * 60_000,
-    queryFn: () => client.request<readonly WarehouseOption[]>('/admin/warehouses'),
+    queryFn: () => client.request<readonly WarehouseOption[]>('/api/admin/warehouses'),
   });
 }
 
@@ -878,7 +888,8 @@ export function useMarginReport(limit: number, enabled: boolean): UseQueryResult
     // so this must not fire just because a page mounted.
     enabled,
     staleTime: 15 * 60_000,
-    queryFn: () => client.request<MarginReport>(`/admin/courier-ops/margin-report?limit=${limit}`),
+    queryFn: () =>
+      client.request<MarginReport>(`/api/admin/courier-ops/margin-report?limit=${limit}`),
   });
 }
 
@@ -943,7 +954,7 @@ export function useUnitTriage(): UseQueryResult<DiscrepancyTriage> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-units', 'triage'],
-    queryFn: () => client.request<DiscrepancyTriage>('/admin/stock-units/triage'),
+    queryFn: () => client.request<DiscrepancyTriage>('/api/admin/stock-units/triage'),
   });
 }
 
@@ -955,7 +966,9 @@ export function useSellerUnitReport(
     queryKey: ['admin-units', 'report', sellerId],
     enabled: sellerId !== null,
     queryFn: () =>
-      client.request<UnitDiscrepancyReport>(`/admin/stock-units/discrepancies/${sellerId ?? ''}`),
+      client.request<UnitDiscrepancyReport>(
+        `/api/admin/stock-units/discrepancies/${sellerId ?? ''}`,
+      ),
   });
 }
 
@@ -981,6 +994,6 @@ export function useAdminHoldReviews(query: {
   return useQuery({
     queryKey: ['admin-hold-reviews', 'list', query],
     queryFn: () =>
-      client.request<readonly AdminReviewRow[]>(`/admin/early-reservation-reviews${qs(query)}`),
+      client.request<readonly AdminReviewRow[]>(`/api/admin/early-reservation-reviews${qs(query)}`),
   });
 }

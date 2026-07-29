@@ -70,7 +70,7 @@ export function useAddresses(): UseQueryResult<readonly AddressView[]> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['seller-addresses'],
-    queryFn: () => client.request<readonly AddressView[]>('/seller/addresses'),
+    queryFn: () => client.request<readonly AddressView[]>('/api/seller/addresses'),
   });
 }
 
@@ -79,7 +79,7 @@ export function useCreateAddress(): UseMutationResult<AddressView, Error, Addres
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<AddressView>('/seller/addresses', { method: 'POST', body }),
+      client.request<AddressView>('/api/seller/addresses', { method: 'POST', body }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-addresses'] }),
   });
 }
@@ -93,7 +93,7 @@ export function useUpdateAddress(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, body }) =>
-      client.request<AddressView>(`/seller/addresses/${id}`, { method: 'PATCH', body }),
+      client.request<AddressView>(`/api/seller/addresses/${id}`, { method: 'PATCH', body }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-addresses'] }),
   });
 }
@@ -103,7 +103,7 @@ export function useDeleteAddress(): UseMutationResult<unknown, Error, { id: stri
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id }) =>
-      client.request<unknown>(`/seller/addresses/${id}`, { method: 'DELETE' }),
+      client.request<unknown>(`/api/seller/addresses/${id}`, { method: 'DELETE' }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-addresses'] }),
   });
 }
@@ -113,7 +113,7 @@ export function useSetDefaultAddress(): UseMutationResult<AddressView, Error, { 
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id }) =>
-      client.request<AddressView>(`/seller/addresses/${id}/set-default`, {
+      client.request<AddressView>(`/api/seller/addresses/${id}/set-default`, {
         method: 'POST',
         body: {},
       }),
@@ -147,7 +147,7 @@ export function useCustomers(query: {
   const client = useApiClient();
   return useQuery({
     queryKey: ['seller-customers', query],
-    queryFn: () => client.request<Paginated<CustomerView>>(`/seller/customers${qs(query)}`),
+    queryFn: () => client.request<Paginated<CustomerView>>(`/api/seller/customers${qs(query)}`),
   });
 }
 
@@ -176,7 +176,7 @@ export function useGoodsReceipts(query: {
   return useQuery({
     queryKey: ['seller-goods-receipts', query],
     queryFn: () =>
-      client.request<Paginated<GoodsReceiptView>>(`/seller/goods-receipts${qs(query)}`),
+      client.request<Paginated<GoodsReceiptView>>(`/api/seller/goods-receipts${qs(query)}`),
   });
 }
 
@@ -202,7 +202,7 @@ export function useCreateGoodsReceipt(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<GoodsReceiptView>('/seller/goods-receipts', { method: 'POST', body }),
+      client.request<GoodsReceiptView>('/api/seller/goods-receipts', { method: 'POST', body }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-goods-receipts'] }),
   });
 }
@@ -216,7 +216,7 @@ export function useCancelGoodsReceipt(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id }) =>
-      client.request<GoodsReceiptView>(`/seller/goods-receipts/${id}/cancel`, {
+      client.request<GoodsReceiptView>(`/api/seller/goods-receipts/${id}/cancel`, {
         method: 'POST',
         body: {},
       }),
@@ -248,7 +248,7 @@ export function useProposals(query: {
   return useQuery({
     queryKey: ['seller-proposals', query],
     queryFn: () =>
-      client.request<Paginated<ProposalView>>(`/seller/category-proposals${qs(query)}`),
+      client.request<Paginated<ProposalView>>(`/api/seller/category-proposals${qs(query)}`),
   });
 }
 
@@ -261,7 +261,7 @@ export function useCreateProposal(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<ProposalView>('/seller/category-proposals', { method: 'POST', body }),
+      client.request<ProposalView>('/api/seller/category-proposals', { method: 'POST', body }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-proposals'] }),
   });
 }
@@ -271,7 +271,7 @@ export function useWithdrawProposal(): UseMutationResult<ProposalView, Error, { 
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id }) =>
-      client.request<ProposalView>(`/seller/category-proposals/${id}/withdraw`, {
+      client.request<ProposalView>(`/api/seller/category-proposals/${id}/withdraw`, {
         method: 'POST',
         body: {},
       }),
@@ -298,7 +298,7 @@ export function useCategoryTree(): UseQueryResult<readonly CategoryNode[]> {
     queryKey: ['seller-categories', 'tree'],
     // The tree is near-static and shared by every seller.
     staleTime: 10 * 60_000,
-    queryFn: () => client.request<readonly CategoryNode[]>('/seller/categories/tree'),
+    queryFn: () => client.request<readonly CategoryNode[]>('/api/seller/categories/tree'),
   });
 }
 
@@ -318,7 +318,7 @@ export function useCsvMappings(): UseQueryResult<readonly CsvMappingView[]> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['seller-csv-mappings'],
-    queryFn: () => client.request<readonly CsvMappingView[]>('/seller/csv-mappings'),
+    queryFn: () => client.request<readonly CsvMappingView[]>('/api/seller/csv-mappings'),
   });
 }
 
@@ -331,7 +331,7 @@ export function useCreateCsvMapping(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<CsvMappingView>('/seller/csv-mappings', { method: 'POST', body }),
+      client.request<CsvMappingView>('/api/seller/csv-mappings', { method: 'POST', body }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-csv-mappings'] }),
   });
 }
@@ -345,7 +345,7 @@ export function useUpdateCsvMapping(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, body }) =>
-      client.request<CsvMappingView>(`/seller/csv-mappings/${id}`, { method: 'PATCH', body }),
+      client.request<CsvMappingView>(`/api/seller/csv-mappings/${id}`, { method: 'PATCH', body }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-csv-mappings'] }),
   });
 }
@@ -355,7 +355,7 @@ export function useDeleteCsvMapping(): UseMutationResult<unknown, Error, { id: s
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id }) =>
-      client.request<unknown>(`/seller/csv-mappings/${id}`, { method: 'DELETE' }),
+      client.request<unknown>(`/api/seller/csv-mappings/${id}`, { method: 'DELETE' }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-csv-mappings'] }),
   });
 }
@@ -386,7 +386,7 @@ export function useRecipientAddresses(query: {
     queryKey: ['seller-recipient-addresses', query],
     enabled: query.customerId !== undefined && query.customerId !== '',
     queryFn: () =>
-      client.request<readonly CachedAddressView[]>(`/seller/recipient-addresses${qs(query)}`),
+      client.request<readonly CachedAddressView[]>(`/api/seller/recipient-addresses${qs(query)}`),
   });
 }
 
@@ -418,7 +418,7 @@ export function useCategoryAttributes(
     staleTime: 5 * 60_000,
     queryFn: () =>
       client.request<readonly EffectiveAttribute[]>(
-        `/seller/categories/${categoryId ?? ''}/attributes`,
+        `/api/seller/categories/${categoryId ?? ''}/attributes`,
       ),
   });
 }

@@ -83,7 +83,7 @@ export function useAdjustmentsList(query: {
   return useQuery({
     queryKey: ['admin-adjustments', 'list', query],
     queryFn: () =>
-      client.request<Paginated<StockAdjustmentView>>(`/admin/stock-adjustments${qs(query)}`),
+      client.request<Paginated<StockAdjustmentView>>(`/api/admin/stock-adjustments${qs(query)}`),
   });
 }
 
@@ -92,7 +92,7 @@ export function useAdjustment(id: string | null): UseQueryResult<StockAdjustment
   return useQuery({
     queryKey: ['admin-adjustments', 'detail', id],
     enabled: id !== null,
-    queryFn: () => client.request<StockAdjustmentView>(`/admin/stock-adjustments/${id ?? ''}`),
+    queryFn: () => client.request<StockAdjustmentView>(`/api/admin/stock-adjustments/${id ?? ''}`),
   });
 }
 
@@ -105,7 +105,7 @@ export function useApproveAdjustment(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id }) =>
-      client.request<StockAdjustmentView>(`/admin/stock-adjustments/${id}/approve`, {
+      client.request<StockAdjustmentView>(`/api/admin/stock-adjustments/${id}/approve`, {
         method: 'POST',
         body: {},
       }),
@@ -127,7 +127,7 @@ export function useRejectAdjustment(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, reason }) =>
-      client.request<StockAdjustmentView>(`/admin/stock-adjustments/${id}/reject`, {
+      client.request<StockAdjustmentView>(`/api/admin/stock-adjustments/${id}/reject`, {
         method: 'POST',
         body: { reason },
       }),
@@ -173,7 +173,7 @@ export function useCycleCountsList(query: {
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-cycle-counts', 'list', query],
-    queryFn: () => client.request<Paginated<CycleCountView>>(`/admin/cycle-counts${qs(query)}`),
+    queryFn: () => client.request<Paginated<CycleCountView>>(`/api/admin/cycle-counts${qs(query)}`),
   });
 }
 
@@ -182,7 +182,7 @@ export function useCycleCount(id: string | null): UseQueryResult<CycleCountView>
   return useQuery({
     queryKey: ['admin-cycle-counts', 'detail', id],
     enabled: id !== null,
-    queryFn: () => client.request<CycleCountView>(`/admin/cycle-counts/${id ?? ''}`),
+    queryFn: () => client.request<CycleCountView>(`/api/admin/cycle-counts/${id ?? ''}`),
   });
 }
 
@@ -195,7 +195,7 @@ export function useCreateCycleCount(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<CycleCountView>('/admin/cycle-counts', { method: 'POST', body }),
+      client.request<CycleCountView>('/api/admin/cycle-counts', { method: 'POST', body }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-cycle-counts'] }),
   });
 }
@@ -205,7 +205,7 @@ export function useStartCycleCount(): UseMutationResult<CycleCountView, Error, {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id }) =>
-      client.request<CycleCountView>(`/admin/cycle-counts/${id}/start`, {
+      client.request<CycleCountView>(`/api/admin/cycle-counts/${id}/start`, {
         method: 'POST',
         body: {},
       }),
@@ -231,7 +231,7 @@ export function useRecordCycleCountItems(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, items }) =>
-      client.request<CycleCountView>(`/admin/cycle-counts/${id}/items`, {
+      client.request<CycleCountView>(`/api/admin/cycle-counts/${id}/items`, {
         method: 'POST',
         body: { items },
       }),
@@ -244,7 +244,7 @@ export function useCompleteCycleCount(): UseMutationResult<CycleCountView, Error
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id }) =>
-      client.request<CycleCountView>(`/admin/cycle-counts/${id}/complete`, {
+      client.request<CycleCountView>(`/api/admin/cycle-counts/${id}/complete`, {
         method: 'POST',
         body: {},
       }),
@@ -290,7 +290,7 @@ export function useMovementsList(query: {
   return useQuery({
     queryKey: ['admin-movements', 'list', query],
     queryFn: () =>
-      client.request<Paginated<StockMovementView>>(`/admin/stock-movements${qs(query)}`),
+      client.request<Paginated<StockMovementView>>(`/api/admin/stock-movements${qs(query)}`),
   });
 }
 
@@ -316,7 +316,7 @@ export function useCreateTransfer(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<unknown>('/admin/stock-transfers', { method: 'POST', body }),
+      client.request<unknown>('/api/admin/stock-transfers', { method: 'POST', body }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-movements'] }),
   });
 }

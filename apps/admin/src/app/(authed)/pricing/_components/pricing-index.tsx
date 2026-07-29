@@ -88,7 +88,7 @@ function usePricingPreview(): UseMutationResult<PricingResult, Error, PreviewBod
   const client = useApiClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<PricingResult>('/admin/pricing/preview', { method: 'POST', body }),
+      client.request<PricingResult>('/api/admin/pricing/preview', { method: 'POST', body }),
   });
 }
 

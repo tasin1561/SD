@@ -61,7 +61,7 @@ export function useCategoryAttributes(
     enabled: categoryId !== null,
     queryFn: () =>
       client.request<readonly AttributeDefinition[]>(
-        `/admin/categories/${categoryId ?? ''}/attributes`,
+        `/api/admin/categories/${categoryId ?? ''}/attributes`,
       ),
   });
 }
@@ -75,7 +75,7 @@ export function useEffectiveAttributes(
     enabled: categoryId !== null,
     queryFn: () =>
       client.request<readonly EffectiveAttribute[]>(
-        `/admin/categories/${categoryId ?? ''}/attributes/effective`,
+        `/api/admin/categories/${categoryId ?? ''}/attributes/effective`,
       ),
   });
 }
@@ -89,7 +89,7 @@ export function useCreateAttribute(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ categoryId, body }) =>
-      client.request<AttributeDefinition>(`/admin/categories/${categoryId}/attributes`, {
+      client.request<AttributeDefinition>(`/api/admin/categories/${categoryId}/attributes`, {
         method: 'POST',
         body,
       }),
@@ -107,7 +107,7 @@ export function useUpdateAttribute(): UseMutationResult<
   return useMutation({
     mutationFn: ({ categoryId, attributeId, body }) =>
       client.request<AttributeDefinition>(
-        `/admin/categories/${categoryId}/attributes/${attributeId}`,
+        `/api/admin/categories/${categoryId}/attributes/${attributeId}`,
         { method: 'PATCH', body },
       ),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-attributes'] }),
@@ -123,7 +123,7 @@ export function useDeleteAttribute(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ categoryId, attributeId }) =>
-      client.request<unknown>(`/admin/categories/${categoryId}/attributes/${attributeId}`, {
+      client.request<unknown>(`/api/admin/categories/${categoryId}/attributes/${attributeId}`, {
         method: 'DELETE',
       }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-attributes'] }),

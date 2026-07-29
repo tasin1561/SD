@@ -63,7 +63,7 @@ function useSellerSettings(sellerId: string): UseQueryResult<readonly ResolvedSe
   return useQuery({
     queryKey: ['admin-seller-settings', sellerId],
     queryFn: () =>
-      client.request<readonly ResolvedSetting[]>(`/admin/sellers/${sellerId}/settings`),
+      client.request<readonly ResolvedSetting[]>(`/api/admin/sellers/${sellerId}/settings`),
   });
 }
 
@@ -78,7 +78,7 @@ function useSetOverride(
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ key, ...body }) =>
-      client.request<unknown>(`/admin/sellers/${sellerId}/settings/${key}`, {
+      client.request<unknown>(`/api/admin/sellers/${sellerId}/settings/${key}`, {
         method: 'PATCH',
         body,
       }),
@@ -91,7 +91,9 @@ function useClearOverride(sellerId: string): UseMutationResult<unknown, Error, {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ key }) =>
-      client.request<unknown>(`/admin/sellers/${sellerId}/settings/${key}`, { method: 'DELETE' }),
+      client.request<unknown>(`/api/admin/sellers/${sellerId}/settings/${key}`, {
+        method: 'DELETE',
+      }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-seller-settings', sellerId] }),
   });
 }

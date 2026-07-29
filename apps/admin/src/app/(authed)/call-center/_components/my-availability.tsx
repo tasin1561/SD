@@ -39,7 +39,7 @@ function useMySettings(): UseQueryResult<AgentSettings> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['agent-settings', 'me'],
-    queryFn: () => client.request<AgentSettings>('/agent/settings'),
+    queryFn: () => client.request<AgentSettings>('/api/agent/settings'),
   });
 }
 
@@ -48,7 +48,7 @@ function useSetMyAvailability(): UseMutationResult<AgentSettings, Error, { isAva
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<AgentSettings>('/agent/settings', { method: 'PATCH', body }),
+      client.request<AgentSettings>('/api/agent/settings', { method: 'PATCH', body }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['agent-settings'] });
       // A supervisor may be looking at the roster right now.

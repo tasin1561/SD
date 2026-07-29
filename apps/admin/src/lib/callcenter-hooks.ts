@@ -66,7 +66,7 @@ export function useCallQueue(query: {
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-call-queue', 'list', query],
-    queryFn: () => client.request<Paginated<CallQueueRow>>(`/admin/call-queue${qs(query)}`),
+    queryFn: () => client.request<Paginated<CallQueueRow>>(`/api/admin/call-queue${qs(query)}`),
   });
 }
 
@@ -74,7 +74,7 @@ export function useCallQueueStats(): UseQueryResult<CallQueueStats> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-call-queue', 'stats'],
-    queryFn: () => client.request<CallQueueStats>('/admin/call-queue/stats'),
+    queryFn: () => client.request<CallQueueStats>('/api/admin/call-queue/stats'),
   });
 }
 
@@ -88,7 +88,7 @@ export function useReassignQueueEntry(): UseMutationResult<
   return useMutation({
     mutationFn: ({ entryId, toAgentId }) =>
       client.request<{ id: string; assignedAgentId: string; status: string }>(
-        `/admin/call-queue/${entryId}/reassign`,
+        `/api/admin/call-queue/${entryId}/reassign`,
         { method: 'POST', body: { toAgentId } },
       ),
     onSuccess: () => {
@@ -108,7 +108,7 @@ export function useBulkDequeue(): UseMutationResult<
   return useMutation({
     mutationFn: (body) =>
       client.request<{ sellerId: string; dequeuedOrders: number }>(
-        '/admin/call-queue/bulk-dequeue',
+        '/api/admin/call-queue/bulk-dequeue',
         { method: 'POST', body },
       ),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-call-queue'] }),
@@ -149,7 +149,7 @@ export function useAgents(): UseQueryResult<readonly AgentListRow[]> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-agents', 'list'],
-    queryFn: () => client.request<readonly AgentListRow[]>('/admin/agents'),
+    queryFn: () => client.request<readonly AgentListRow[]>('/api/admin/agents'),
   });
 }
 
@@ -158,7 +158,7 @@ export function useAgentMetrics(agentId: string | null): UseQueryResult<AgentMet
   return useQuery({
     queryKey: ['admin-agents', 'metrics', agentId],
     enabled: agentId !== null,
-    queryFn: () => client.request<AgentMetrics>(`/admin/agents/${agentId ?? ''}/metrics`),
+    queryFn: () => client.request<AgentMetrics>(`/api/admin/agents/${agentId ?? ''}/metrics`),
   });
 }
 
@@ -171,7 +171,7 @@ export function useUpdateAgentSettings(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ agentId, body }) =>
-      client.request<AgentSettingsView>(`/admin/agents/${agentId}/settings`, {
+      client.request<AgentSettingsView>(`/api/admin/agents/${agentId}/settings`, {
         method: 'PATCH',
         body,
       }),

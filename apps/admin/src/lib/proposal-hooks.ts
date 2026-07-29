@@ -69,7 +69,7 @@ export function useProposalsList(query: {
   return useQuery({
     queryKey: ['admin-proposals', 'list', query],
     queryFn: () =>
-      client.request<Paginated<CategoryProposalView>>(`/admin/category-proposals${qs(query)}`),
+      client.request<Paginated<CategoryProposalView>>(`/api/admin/category-proposals${qs(query)}`),
   });
 }
 
@@ -82,7 +82,7 @@ export function useApproveProposal(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, body }) =>
-      client.request<CategoryProposalView>(`/admin/category-proposals/${id}/approve`, {
+      client.request<CategoryProposalView>(`/api/admin/category-proposals/${id}/approve`, {
         method: 'POST',
         body,
       }),
@@ -103,7 +103,7 @@ export function useRejectProposal(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, decisionNote }) =>
-      client.request<CategoryProposalView>(`/admin/category-proposals/${id}/reject`, {
+      client.request<CategoryProposalView>(`/api/admin/category-proposals/${id}/reject`, {
         method: 'POST',
         body: { decisionNote },
       }),

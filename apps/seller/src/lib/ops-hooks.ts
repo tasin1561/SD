@@ -142,7 +142,7 @@ export function useSellerTickets(query: {
     queryKey: ['seller-tickets', 'list', query],
     queryFn: () =>
       client.request<readonly TicketView[]>(
-        `/seller/tickets${query.status === undefined || query.status === '' ? '' : `?status=${query.status}`}`,
+        `/api/seller/tickets${query.status === undefined || query.status === '' ? '' : `?status=${query.status}`}`,
       ),
   });
 }
@@ -155,7 +155,8 @@ export function useCreateTicket(): UseMutationResult<
   const client = useApiClient();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => client.request<TicketView>('/seller/tickets', { method: 'POST', body }),
+    mutationFn: (body) =>
+      client.request<TicketView>('/api/seller/tickets', { method: 'POST', body }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-tickets'] }),
   });
 }
@@ -174,7 +175,7 @@ export function useSellerFreight(query: { status?: string }): UseQueryResult<{
         items: readonly FreightChargeView[];
         outstandingInr: string;
       }>(
-        `/seller/inbound-freight${query.status === undefined || query.status === '' ? '' : `?status=${query.status}`}`,
+        `/api/seller/inbound-freight${query.status === undefined || query.status === '' ? '' : `?status=${query.status}`}`,
       ),
   });
 }
@@ -186,7 +187,7 @@ export function useSellerWithdrawals(): UseQueryResult<readonly WithdrawalReques
   return useQuery({
     queryKey: ['seller-withdrawals', 'list'],
     queryFn: () =>
-      client.request<readonly WithdrawalRequestView[]>('/seller/wallet/withdrawal-requests'),
+      client.request<readonly WithdrawalRequestView[]>('/api/seller/wallet/withdrawal-requests'),
   });
 }
 
@@ -199,7 +200,7 @@ export function useRequestWithdrawal(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<WithdrawalRequestView>('/seller/wallet/withdrawal-requests', {
+      client.request<WithdrawalRequestView>('/api/seller/wallet/withdrawal-requests', {
         method: 'POST',
         body,
       }),
@@ -218,7 +219,7 @@ export function useHoldReviews(query: { status?: string }): UseQueryResult<reado
     queryKey: ['seller-hold-reviews', 'list', query],
     queryFn: () =>
       client.request<readonly ReviewView[]>(
-        `/seller/early-reservation-reviews${query.status === undefined || query.status === '' ? '' : `?status=${query.status}`}`,
+        `/api/seller/early-reservation-reviews${query.status === undefined || query.status === '' ? '' : `?status=${query.status}`}`,
       ),
   });
 }
@@ -232,7 +233,7 @@ export function useDecideHoldReview(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ reviewId, ...body }) =>
-      client.request<DecisionResult>(`/seller/early-reservation-reviews/${reviewId}`, {
+      client.request<DecisionResult>(`/api/seller/early-reservation-reviews/${reviewId}`, {
         method: 'PATCH',
         body,
       }),
@@ -254,7 +255,7 @@ export function useUnitDiscrepancies(warehouseId?: string): UseQueryResult<UnitD
     queryKey: ['seller-units', 'discrepancies', warehouseId ?? null],
     queryFn: () =>
       client.request<UnitDiscrepancyReport>(
-        `/seller/stock-units/discrepancies${
+        `/api/seller/stock-units/discrepancies${
           warehouseId === undefined || warehouseId === '' ? '' : `?warehouseId=${warehouseId}`
         }`,
       ),
