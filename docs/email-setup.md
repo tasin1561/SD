@@ -63,18 +63,38 @@ row in `notification_logs`.
 
 ### 2. Set the key on the droplet
 
-```
-RESEND_API_KEY=re_...
-```
-
-in the droplet's `apps/api/.env`, then:
+The file is **`/home/skydrop/app/.env`** — the repo-root one. There is no
+`apps/api/.env` on the droplet; creating one would be read by nothing.
 
 ```
-pm2 restart skydrop-api --update-env
+ssh skydrop
+nano /home/skydrop/app/.env      # set RESEND_API_KEY=re_...
 ```
 
-`--update-env` matters — pm2 will otherwise keep the old (empty) value and
-the app will stay in stub mode while looking configured.
+Then reload through the **ecosystem file**, not by restarting the process:
+
+```
+cd /home/skydrop/app
+pm2 reload ecosystem.config.cjs --update-env
+pm2 save
+```
+
+**`pm2 restart skydrop-api --update-env` does NOT work here** — verified by
+experiment on 2026-07-29, not assumed. `--update-env` re-reads the *shell's*
+environment; it does not re-parse `ecosystem.config.cjs`, and that file is
+what reads `.env` (at parse time, with `fs.readFileSync`). A restart
+therefore keeps the old empty value and leaves the app in stub mode while
+looking configured — which is the exact failure this section exists to
+prevent.
+
+`pm2 save` afterwards matters too: without it a reboot resurrects from
+`~/.pm2/dump.pm2`, which still holds the pre-change environment.
+
+One quirk worth knowing for the rollback below: `pm2 reload` MERGES
+environments rather than replacing them, so *deleting* a line from `.env`
+does not remove the variable from the running process. Setting it to empty
+does work. To truly remove one, `pm2 delete skydrop-api && pm2 start
+ecosystem.config.cjs --only skydrop-api`.
 
 ### 3. Confirm it actually switched
 
@@ -105,7 +125,9 @@ verbatim from Resend, which is usually specific enough to act on
 
 ### Rolling back
 
-Empty `RESEND_API_KEY` and restart with `--update-env`. The system returns
+Set `RESEND_API_KEY=` to empty (do not delete the line — see the merge
+quirk above) and `pm2 reload ecosystem.config.cjs --update-env`. The system
+returns
 to the dev stub — every notification is still rendered and still recorded,
 just not delivered. Nothing else changes.
 
