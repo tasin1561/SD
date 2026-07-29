@@ -934,7 +934,7 @@
           </div>
           <div class="tile">
             <div class="n">Built</div>
-              <div class="k">Delhivery API · write test pending</div>
+            <div class="k">Delhivery API · write test pending</div>
           </div>
         </div>
         <p class="tel" style="margin: 12px 2px 0; color: var(--fg-muted)">
@@ -1299,10 +1299,10 @@
           <h2>The foundation is already shipped</h2>
           <p class="lead">
             The target model isn't drawn on a whiteboard — it sits on a production platform. All 18
-            Phase-1A modules, the Phase-1B money layer, the full R0–R7 refinement, and four web
-            apps are deployed and running today, behind 1,720 automated tests — 1,514 unit, 127
-            integration against a real database, 64 component, and 15 browser tests that gate
-            every commit.
+            Phase-1A modules, the Phase-1B money layer, the full R0–R7 refinement, and four web apps
+            are deployed and running today, behind 1,720 automated tests — 1,514 unit, 127
+            integration against a real database, 64 component, and 15 browser tests that gate every
+            commit.
           </p>
           <div class="tbl-scroll">
             <table>
@@ -1370,7 +1370,10 @@
                 </tr>
                 <tr>
                   <td>Notifications</td>
-                  <td>Lifecycle event bus + email fan-out — 39 templates verified delivered end-to-end (SMS channel scaffolded)</td>
+                  <td>
+                    Lifecycle event bus + email fan-out — 39 templates verified delivered end-to-end
+                    (SMS channel scaffolded)
+                  </td>
                   <td><span class="pill live">Live</span></td>
                 </tr>
                 <tr>
@@ -1418,24 +1421,24 @@
             <div class="item">
               <h3>Phase A · Finance core &amp; currency <span class="pill live">shipped</span></h3>
               <p>
-                Wallet accrual moved to a T+N tier so a seller is credited after the courier
-                settles rather than at delivery — the float is now both mitigated and, via the
-                courier-settlement ledger, <em>measurable</em>. Seller-initiated withdrawal
-                requests (admin remains the sole executor of money movement); real margin measured
-                against what the courier actually charged rather than a typed-in cost; and
-                inbound BD→India freight billed per unit as stock sells. Instant credit remains a
-                priced add-on, deliberately unpriced until the float data justifies a number.
+                Wallet accrual moved to a T+N tier so a seller is credited after the courier settles
+                rather than at delivery — the float is now both mitigated and, via the
+                courier-settlement ledger, <em>measurable</em>. Seller-initiated withdrawal requests
+                (admin remains the sole executor of money movement); real margin measured against
+                what the courier actually charged rather than a typed-in cost; and inbound BD→India
+                freight billed per unit as stock sells. Instant credit remains a priced add-on,
+                deliberately unpriced until the float data justifies a number.
               </p>
             </div>
             <div class="item">
               <h3>Phase B · Inventory integrity <span class="pill live">shipped</span></h3>
               <p>
-                Serialized per-unit stock behind a per-seller normal/strict toggle, with scan
-                gates at pick, pack, dispatch and RTO — set-equality at pack, because a count check
-                passes a swap. The unit ledger is a sidecar: aggregate quantities remain
-                authoritative, and where the two disagree a discrepancy report surfaces it rather
-                than auto-correcting, because auto-correction destroys the evidence. The general
-                per-seller settings framework landed with it, clamped server-side at write time.
+                Serialized per-unit stock behind a per-seller normal/strict toggle, with scan gates
+                at pick, pack, dispatch and RTO — set-equality at pack, because a count check passes
+                a swap. The unit ledger is a sidecar: aggregate quantities remain authoritative, and
+                where the two disagree a discrepancy report surfaces it rather than auto-correcting,
+                because auto-correction destroys the evidence. The general per-seller settings
+                framework landed with it, clamped server-side at write time.
               </p>
             </div>
             <div class="item">
@@ -1464,11 +1467,11 @@
             </div>
           </div>
           <div class="callout">
-            <strong>This was the risk, and it is now retired.</strong> None of it turned out to be
-            a rewrite: each phase generalized a seam already in the codebase, exactly as scoped.
-            Every admin and seller workflow has a screen — verified by auditing every API
-            controller against every page route, not by reading the roadmap. What is left before
-            first revenue is configuration and one controlled test, both listed below.
+            <strong>This was the risk, and it is now retired.</strong> None of it turned out to be a
+            rewrite: each phase generalized a seam already in the codebase, exactly as scoped. Every
+            admin and seller workflow has a screen — verified by auditing every API controller
+            against every page route, not by reading the roadmap. What is left before first revenue
+            is configuration and one controlled test, both listed below.
           </div>
 
           <div class="panel" style="margin-top: 16px">
@@ -1492,12 +1495,13 @@
               Four things, none of them a build. <strong>One controlled Delhivery parcel</strong> —
               the adapter is written against the real API and every read path is exercised, but no
               live write has been made, so the write contract is an assumption until one real
-              consignment is booked and cancelled before it moves. <strong>Warehouse setup</strong>
-              — bin locations and an opening category tree, which is data entry against real
-              shelving. <strong>Pincode coverage</strong> — 27 of roughly 19,000 Indian pincodes are
-              loaded, so zone-based pricing currently falls back to a default rate and quotes are
-              approximate. And <strong>two commercial calls</strong>: what instant credit costs, and
-              how long an unsold consignment's freight may age before it is called in.
+              consignment is booked and cancelled before it moves.
+              <strong>Warehouse setup</strong> — bin locations and an opening category tree, which
+              is data entry against real shelving. <strong>Pincode coverage</strong> — 27 of roughly
+              19,000 Indian pincodes are loaded, so zone-based pricing currently falls back to a
+              default rate and quotes are approximate. And <strong>two commercial calls</strong>:
+              what instant credit costs, and how long an unsold consignment's freight may age before
+              it is called in.
             </p>
           </div>
         </div>
