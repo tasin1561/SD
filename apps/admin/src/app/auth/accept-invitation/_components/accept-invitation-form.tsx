@@ -3,6 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
+import { AuthConsoleHeader } from '@/components/auth-console/console-shell';
+import { TiltPanel } from '@/lib/tilt';
 import { ApiError } from '@skydrop/api-client';
 
 const labelClass = 'block text-text-muted text-xs mb-1';
@@ -85,19 +87,19 @@ export function AcceptInvitationForm({
   }
 
   return (
-    <div className="min-h-screen grid place-items-center bg-bg text-text-body p-6">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="text-text-bright text-2xl font-semibold tracking-tight">Skydrop</div>
-          <div className="text-text-faint text-xs mt-1">Admin</div>
-        </div>
-
-        <div className="rounded-[7px] border border-border bg-surface p-6">
-          <h1 className="text-text-bright text-base font-semibold mb-1">
-            Set up your staff account
-          </h1>
-          <p className="text-text-muted text-xs mb-5">
-            Choose a password (min 12 chars). After submit you&apos;ll be signed in.
+    <>
+      <AuthConsoleHeader label="operations console" />
+      <TiltPanel max={3} className="boot-rise boot-rise-2">
+        <div className="relative overflow-hidden rounded-xl border border-border bg-surface ticks p-6 sm:p-7">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="telemetry" style={{ color: 'var(--sky)' }}>
+              new account
+            </span>
+            <span className="telemetry text-text-muted">by invitation</span>
+          </div>
+          <h1 className="text-text-bright text-lg font-semibold mb-1">Set up your staff account</h1>
+          <p className="text-text-muted text-sm mb-6">
+            Choose a password of at least 12 characters. You will be signed in straight after.
           </p>
 
           <form onSubmit={(e) => void onSubmit(e)} className="space-y-3">
@@ -173,8 +175,9 @@ export function AcceptInvitationForm({
               {submitting ? 'Creating account…' : 'Create account + sign in'}
             </button>
           </form>
+          <div aria-hidden className="glow-follow" />
         </div>
-      </div>
-    </div>
+      </TiltPanel>
+    </>
   );
 }
