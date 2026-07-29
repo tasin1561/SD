@@ -926,23 +926,23 @@
           </div>
           <div class="tile">
             <div class="n"><em>4</em></div>
-            <div class="k tel">refinement phases</div>
+            <div class="k tel">refinement phases shipped</div>
           </div>
           <div class="tile">
-            <div class="n">1,100</div>
+            <div class="n">1,720</div>
             <div class="k tel">automated tests</div>
           </div>
           <div class="tile">
-            <div class="n">Live</div>
-            <div class="k tel">Delhivery real API</div>
+            <div class="n">Built</div>
+              <div class="k">Delhivery API · write test pending</div>
           </div>
         </div>
         <p class="tel" style="margin: 12px 2px 0; color: var(--fg-muted)">
           This report leads with the
           <span style="color: var(--saffron)">target operating model</span> and marks every
-          capability by build status: <span class="pill live">live</span> shipped &amp; running ·
-          <span class="pill sky">designed</span> architecture locked, in build ·
-          <span class="pill plan">next</span> planned.
+          capability by build status: <span class="pill live">live</span> shipped, deployed and
+          running · <span class="pill sky">built · unproven</span> code complete but not yet
+          exercised against the real world · <span class="pill plan">next</span> planned.
         </p>
       </div>
 
@@ -1015,7 +1015,7 @@
               </ul>
             </div>
             <div class="panel">
-              <h3>Strict mode <span class="pill sky">designed</span></h3>
+              <h3>Strict mode <span class="pill live">shipped</span></h3>
               <p>
                 One unique barcode per <em>physical unit</em>. Ten bottles carry ten codes, applied
                 by Skydrop at receiving and followed individually — through pick, pack, dispatch,
@@ -1030,7 +1030,7 @@
 
           <div class="grid3" style="margin-top: 16px">
             <div class="panel">
-              <h3>Virtual vs physical <span class="pill sky">designed</span></h3>
+              <h3>Virtual vs physical <span class="pill live">shipped</span></h3>
               <p>
                 <strong>Physical</strong> inventory is confirmed by scan at pack.
                 <strong>Virtual</strong> inventory can be booked earlier — at order placement or at
@@ -1039,7 +1039,7 @@
               </p>
             </div>
             <div class="panel">
-              <h3>Scrap &amp; damage tickets <span class="pill sky">designed</span></h3>
+              <h3>Scrap &amp; damage tickets <span class="pill live">shipped</span></h3>
               <p>
                 Any unit damaged in operations or on return moves to a scrap hold and raises a
                 ticket — settled with the seller and courier by reimbursement or physical return,
@@ -1047,7 +1047,7 @@
               </p>
             </div>
             <div class="panel">
-              <h3>Multi-warehouse network <span class="pill sky">designed</span></h3>
+              <h3>Multi-warehouse network <span class="pill live">shipped</span></h3>
               <p>
                 Stock lives across warehouses by product. Returns can be received at any location,
                 entered, and routed to the item's designated warehouse — the network stays
@@ -1079,7 +1079,7 @@
           </p>
 
           <div class="panel">
-            <h3>The COD settlement waterfall <span class="pill sky">designed</span></h3>
+            <h3>The COD settlement waterfall <span class="pill live">shipped</span></h3>
             <p>
               Every delivered order's collected cash runs through one deterministic, auditable
               sequence before the seller is paid:
@@ -1127,7 +1127,7 @@
               </p>
             </div>
             <div class="panel">
-              <h3>Advance credit &amp; float <span class="pill sky">designed</span></h3>
+              <h3>Advance credit &amp; float <span class="pill live">shipped</span></h3>
               <p>
                 Couriers pay us 5–10 days after delivery; we credit the seller ~2 days after
                 (per-seller). Every advanced rupee is tracked as float, with auto-clawback if a
@@ -1135,7 +1135,7 @@
               </p>
             </div>
             <div class="panel">
-              <h3>Margin, by design <span class="pill sky">designed</span></h3>
+              <h3>Margin, by design <span class="pill live">shipped</span></h3>
               <p>
                 We fetch the real per-parcel courier fee and book our margin; the seller only ever
                 sees the blended charge. Per-seller fee (flat or %), admin-set, charged at
@@ -1153,7 +1153,7 @@
               </p>
             </div>
             <div class="panel">
-              <h3>Three price components <span class="pill sky">designed</span></h3>
+              <h3>Three price components <span class="pill live">shipped</span></h3>
               <p>
                 ① Product cost (BDT/INR, record-only valuation) · ② inbound freight (BD → IN
                 warehouse, may be 0) · ③ dues — pay-on-arrival or pay-later, deducted at payout
@@ -1161,7 +1161,7 @@
               </p>
             </div>
             <div class="panel">
-              <h3>Reconciliation <span class="pill sky">designed</span></h3>
+              <h3>Reconciliation <span class="pill live">shipped</span></h3>
               <p>
                 Courier remittance files matched parcel-by-parcel against what we advanced; a daily
                 close proves the books; per-seller exposure and global float on one dashboard.
@@ -1299,8 +1299,10 @@
           <h2>The foundation is already shipped</h2>
           <p class="lead">
             The target model isn't drawn on a whiteboard — it sits on a production platform. All 18
-            Phase-1A modules, the 6-module Phase-1B money layer, four web apps, and the live
-            Delhivery integration are running today, behind 1,100 automated tests.
+            Phase-1A modules, the Phase-1B money layer, the full R0–R7 refinement, and four web
+            apps are deployed and running today, behind 1,720 automated tests — 1,514 unit, 127
+            integration against a real database, 64 component, and 15 browser tests that gate
+            every commit.
           </p>
           <div class="tbl-scroll">
             <table>
@@ -1339,7 +1341,7 @@
                 <tr>
                   <td>Orders &amp; call center</td>
                   <td>
-                    28-status state machine, snapshots, CSV bulk import, god-mode override;
+                    29-status state machine, snapshots, CSV bulk import, god-mode override;
                     round-robin queue, attempt logging, outcome mapping
                   </td>
                   <td><span class="pill live">Live</span></td>
@@ -1352,10 +1354,11 @@
                 <tr>
                   <td>Courier integration</td>
                   <td>
-                    Delhivery real API — AWB creation validated end-to-end, poll-based tracking,
-                    supersede chain, manual placement
+                    Delhivery adapter built against the real API — AWB, labels, serviceability,
+                    pickups, NDR, e-way bill; webhook tracking ingestion; supersede chain; manual
+                    placement. Live writes are guarded OFF until the first controlled parcel test
                   </td>
-                  <td><span class="pill live">Live</span></td>
+                  <td><span class="pill sky">Built · unproven</span></td>
                 </tr>
                 <tr>
                   <td>Public tracking</td>
@@ -1367,7 +1370,7 @@
                 </tr>
                 <tr>
                   <td>Notifications</td>
-                  <td>Lifecycle event bus + email fan-out (SMS channel scaffolded)</td>
+                  <td>Lifecycle event bus + email fan-out — 39 templates verified delivered end-to-end (SMS channel scaffolded)</td>
                   <td><span class="pill live">Live</span></td>
                 </tr>
                 <tr>
@@ -1403,78 +1406,98 @@
           <div class="sechead tel">
             <span class="idx">SEC 06</span><span class="bar"></span><span>The build ahead</span>
           </div>
-          <h2>Roadmap to the target operating model</h2>
+          <h2>The roadmap, and where it now stands</h2>
           <p class="lead">
-            The refinement is additive — the schema was designed forward-compatible, and the
-            reservation, warehouse, courier, and settings seams already exist. Four focused phases
-            close the gap between the shipped foundation and the operating model above.
+            The four phases below were the gap between the shipped foundation and the target
+            operating model. <strong>All four have since been built and deployed.</strong> The
+            refinement was additive, as designed — no rewrite, each phase generalizing a seam that
+            already existed in the codebase. What remains before first revenue is operational, not
+            architectural, and is listed underneath.
           </p>
           <div class="phase">
             <div class="item">
-              <h3>Phase A · Finance core &amp; currency <span class="pill sky">designed</span></h3>
+              <h3>Phase A · Finance core &amp; currency <span class="pill live">shipped</span></h3>
               <p>
-                Upgrade the wallet to a true double-entry ledger; advance-credit with per-seller
-                exposure tracking + auto-clawback; self-service &amp; auto withdrawals plus an
-                instant-credit add-on; real courier-fee capture with margin; per-seller courier fee
-                (flat/%); the three price components; BDT/INR product-cost entry; and
-                courier-remittance reconciliation.
+                Wallet accrual moved to a T+N tier so a seller is credited after the courier
+                settles rather than at delivery — the float is now both mitigated and, via the
+                courier-settlement ledger, <em>measurable</em>. Seller-initiated withdrawal
+                requests (admin remains the sole executor of money movement); real margin measured
+                against what the courier actually charged rather than a typed-in cost; and
+                inbound BD→India freight billed per unit as stock sells. Instant credit remains a
+                priced add-on, deliberately unpriced until the float data justifies a number.
               </p>
             </div>
             <div class="item">
-              <h3>Phase B · Inventory integrity <span class="pill sky">designed</span></h3>
+              <h3>Phase B · Inventory integrity <span class="pill live">shipped</span></h3>
               <p>
-                Serialized per-unit model behind a per-seller normal/strict toggle; barcode labels
-                at receiving; mandatory scan gates at pick, pack and hand-off; and a general
-                per-seller settings framework — including call config (attempts, min interval,
-                no-call mode) under an admin-enforced cap.
+                Serialized per-unit stock behind a per-seller normal/strict toggle, with scan
+                gates at pick, pack, dispatch and RTO — set-equality at pack, because a count check
+                passes a swap. The unit ledger is a sidecar: aggregate quantities remain
+                authoritative, and where the two disagree a discrepancy report surfaces it rather
+                than auto-correcting, because auto-correction destroys the evidence. The general
+                per-seller settings framework landed with it, clamped server-side at write time.
               </p>
             </div>
             <div class="item">
               <h3>
-                Phase C · Courier network &amp; dispatch <span class="pill sky">designed</span>
+                Phase C · Courier network &amp; dispatch <span class="pill live">shipped</span>
               </h3>
               <p>
-                Multi-account couriers with seller↔account linkage, per-seller split ratios and full
-                parcel→account tracing; courier-first booking after call-confirm; and a fallback
-                panel to re-book a rejected order into another account or carrier. Pack floor
+                Multi-account couriers with seller↔account linkage, weighted split ratios and
+                per-parcel account tracing on every shipment. A rejected AWB retires its shipment
+                and raises a replacement rather than mutating it, routing the order to manual
+                placement — so a courier refusal is a recorded event, not a lost order. Pack floor
                 partitioned by courier.
               </p>
             </div>
             <div class="item">
               <h3>
-                Phase D · Network, returns &amp; exceptions <span class="pill sky">designed</span>
+                Phase D · Network, returns &amp; exceptions <span class="pill live">shipped</span>
               </h3>
               <p>
-                Multi-warehouse routing + cross-warehouse RTO transfer; virtual booking with
-                seller-decided unbook; scrap + damage tickets and a seller support-ticket panel; a
-                warehouse scanner app; and an exception dashboard unifying
-                missing/mismatch/damaged/failed-courier/unbook queues.
-                <strong
-                  >Launch ships on this foundation with deliberately minimal, functional
-                  UI/UX</strong
-                >
-                — the operating model proves itself before the interface is polished.
+                A return can now be received at any active warehouse and restocked there — into a
+                child batch that inherits expiry, cost and its goods-receipt lineage, so FEFO stays
+                correct and margin stays honest. Virtual booking holds stock at placement with an
+                explicit seller decision at the call cap. Scrap and damage tickets are raised
+                automatically inside the inspection transaction and settle to the wallet.
               </p>
             </div>
           </div>
           <div class="callout">
-            <strong>Why this is low-risk:</strong> none of it is a rewrite. The wallet ledger + COD
-            accrual are already built (awaiting go-live); reservations already model virtual holds;
-            the warehouse already has bins, batches and quarantine/damaged bin types; the courier
-            layer already has a fallback; and per-seller overrides already exist. Each phase
-            generalizes a seam that is already in the codebase.
+            <strong>This was the risk, and it is now retired.</strong> None of it turned out to be
+            a rewrite: each phase generalized a seam already in the codebase, exactly as scoped.
+            Every admin and seller workflow has a screen — verified by auditing every API
+            controller against every page route, not by reading the roadmap. What is left before
+            first revenue is configuration and one controlled test, both listed below.
           </div>
 
           <div class="panel" style="margin-top: 16px">
-            <h3>After launch <span class="pill plan">outside this ask</span></h3>
+            <h3>Also done, ahead of schedule <span class="pill live">shipped</span></h3>
             <p>
-              Phases A–D are sequenced first because they carry the trust and differentiation —
-              money, inventory integrity, courier network, returns. UI/UX at launch is intentionally
-              minimal: functional, not polished. Once the model is live and proven, two follow-on
-              workstreams open — a dedicated <strong>security hardening pass</strong> (access &amp;
-              dependency audit, penetration testing) and a full
-              <strong>UI/UX design pass</strong> across the admin and seller apps. Both are scoped
-              and funded separately once the platform is live; neither draws on the ৳6,00,000 above.
+              Two workstreams were scoped as post-launch and separately funded. Both have since been
+              completed and drew nothing additional. The <strong>security pass</strong> ran three
+              adversarial rounds across the platform: cross-tenant isolation proven by two real
+              sellers reaching for each other's data, injection and brute-force checked, a
+              per-request nonce content-security-policy on every frontend, dependency advisories
+              cleared to build-tooling only, and every stored document — invoices, shipping labels —
+              moved behind short-lived signed URLs. The <strong>UI/UX pass</strong> covered both
+              portals: shared design tokens, tabular money that groups the Indian way, skeleton
+              loading, empty states that offer a next step, and server refusals surfaced verbatim
+              rather than second-guessed by the browser.
+            </p>
+            <h3 style="margin-top: 18px">
+              What genuinely remains <span class="pill sky">before first revenue</span>
+            </h3>
+            <p>
+              Four things, none of them a build. <strong>One controlled Delhivery parcel</strong> —
+              the adapter is written against the real API and every read path is exercised, but no
+              live write has been made, so the write contract is an assumption until one real
+              consignment is booked and cancelled before it moves. <strong>Warehouse setup</strong>
+              — bin locations and an opening category tree, which is data entry against real
+              shelving. <strong>Pincode coverage</strong> — 27 of roughly 19,000 Indian pincodes are
+              loaded, so zone-based pricing currently falls back to a default rate and quotes are
+              approximate. And <strong>two commercial calls</strong>: what instant credit costs, and
+              how long an unsold consignment's freight may age before it is called in.
             </p>
           </div>
         </div>
