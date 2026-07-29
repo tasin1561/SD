@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
+import { Fragment, useState, type ReactElement } from 'react';
 import {
+  Button,
   Card,
   EmptyState,
   ErrorNote,
@@ -21,6 +22,7 @@ import {
   Tr,
 } from '@skydrop/ui/components';
 import { useCustomers } from '@/lib/account-hooks';
+import { AddressHistory } from './address-history';
 import { serverVerdict } from '@/lib/server-verdict';
 
 const PAGE_SIZE = 25;
@@ -41,6 +43,9 @@ const PAGE_SIZE = 25;
 export function CustomersIndex(): ReactElement {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  // Expanded inline rather than in a modal: you are comparing this
+  // customer's addresses against their totals in the row above.
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const list = useCustomers({
     ...(search.trim() === '' ? {} : { search: search.trim() }),
@@ -111,51 +116,70 @@ export function CustomersIndex(): ReactElement {
                   <Th align="right">Refused</Th>
                   <Th>Risk</Th>
                   <Th>Last order</Th>
+                  <Th align="right" />
                 </Tr>
               </THead>
               <TBody>
                 {items.map((c) => (
-                  <Tr key={c.id}>
-                    <Td>
-                      <span className="font-mono text-xs">{c.phoneE164}</span>
-                    </Td>
-                    <Td>{c.name ?? '—'}</Td>
-                    <Td align="right">
-                      <Num value={c.totalOrdersCount} />
-                    </Td>
-                    <Td align="right">
-                      <Num value={c.successfulOrdersCount} />
-                    </Td>
-                    <Td align="right">
-                      {c.rtoCount === 0 ? (
-                        <span className="text-text-faint">0</span>
-                      ) : (
-                        <span className="text-[var(--color-bad)]">{c.rtoCount}</span>
-                      )}
-                    </Td>
-                    <Td align="right">
-                      {c.refusedCount === 0 ? (
-                        <span className="text-text-faint">0</span>
-                      ) : (
-                        <span className="text-[var(--color-bad)]">{c.refusedCount}</span>
-                      )}
-                    </Td>
-                    <Td>
-                      {c.riskLevel === null ? (
-                        <span className="text-text-faint">—</span>
-                      ) : (
-                        <StatusBadge
-                          kind={riskKind(c.riskLevel)}
-                          label={c.riskLevel.toLowerCase()}
-                        />
-                      )}
-                    </Td>
-                    <Td>
-                      {c.lastOrderAt === null
-                        ? '—'
-                        : new Date(c.lastOrderAt).toLocaleDateString('en-IN')}
-                    </Td>
-                  </Tr>
+                  <Fragment key={c.id}>
+                    <Tr>
+                      <Td>
+                        <span className="font-mono text-xs">{c.phoneE164}</span>
+                      </Td>
+                      <Td>{c.name ?? '—'}</Td>
+                      <Td align="right">
+                        <Num value={c.totalOrdersCount} />
+                      </Td>
+                      <Td align="right">
+                        <Num value={c.successfulOrdersCount} />
+                      </Td>
+                      <Td align="right">
+                        {c.rtoCount === 0 ? (
+                          <span className="text-text-faint">0</span>
+                        ) : (
+                          <span className="text-[var(--color-bad)]">{c.rtoCount}</span>
+                        )}
+                      </Td>
+                      <Td align="right">
+                        {c.refusedCount === 0 ? (
+                          <span className="text-text-faint">0</span>
+                        ) : (
+                          <span className="text-[var(--color-bad)]">{c.refusedCount}</span>
+                        )}
+                      </Td>
+                      <Td>
+                        {c.riskLevel === null ? (
+                          <span className="text-text-faint">—</span>
+                        ) : (
+                          <StatusBadge
+                            kind={riskKind(c.riskLevel)}
+                            label={c.riskLevel.toLowerCase()}
+                          />
+                        )}
+                      </Td>
+                      <Td>
+                        {c.lastOrderAt === null
+                          ? '—'
+                          : new Date(c.lastOrderAt).toLocaleDateString('en-IN')}
+                      </Td>
+                      <Td align="right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setExpanded(expanded === c.id ? null : c.id)}
+                        >
+                          {expanded === c.id ? 'Hide addresses' : 'Addresses'}
+                        </Button>
+                      </Td>
+                    </Tr>
+                    {expanded === c.id && (
+                      <Tr>
+                        <Td colSpan={9}>
+                          <AddressHistory customerId={c.id} />
+                        </Td>
+                      </Tr>
+                    )}
+                  </Fragment>
                 ))}
               </TBody>
             </Table>

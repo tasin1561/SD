@@ -108,26 +108,27 @@ export interface UpdateSellerVariantRequest {
 
 /** Image presign request — the FE asks the API for an S3 presigned
  *  URL keyed to the seller's variant. */
+/**
+ * Presign body. `variantId` is a PATH segment, not a field — the API
+ * runs `forbidNonWhitelisted`, so sending it in the body is a 400.
+ */
 export interface PresignVariantImageRequest {
-  readonly variantId: string;
-  readonly filename: string;
-  readonly contentType: string;
-  readonly sizeBytes: number;
+  readonly mimeType: string;
 }
 
 export interface PresignVariantImageResponse {
   readonly uploadUrl: string;
   readonly spacesKey: string;
-  readonly expiresAt: string;
+  readonly expiresInSeconds: number;
 }
 
 export interface RegisterVariantImageRequest {
-  readonly variantId: string;
   readonly spacesKey: string;
-  readonly filename: string;
-  readonly contentType: string;
+  readonly mimeType: string;
   readonly sizeBytes: number;
   readonly altText?: string;
+  readonly isPrimary?: boolean;
+  readonly displayOrder?: number;
 }
 
 export interface SellerVariantImageView {

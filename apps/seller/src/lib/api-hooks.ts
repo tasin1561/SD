@@ -317,6 +317,13 @@ export function useUpdateVariant(
 }
 
 // ── Images ──
+//
+// These four hooks all pointed at `/api/seller/images*`, which does not
+// exist — the controller is `seller/variants/:variantId/images`. Every
+// call 404'd, so listing, uploading and deleting a variant image had
+// never worked. The bodies were wrong too: `variantId`, `filename` and
+// `contentType` are not fields the API accepts, and it runs
+// `forbidNonWhitelisted`, so even against the right URL they were 400s.
 
 export function useVariantImages(
   variantId: string,
@@ -325,9 +332,7 @@ export function useVariantImages(
   return useQuery({
     queryKey: ['seller-catalog', 'images', 'list', variantId],
     queryFn: () =>
-      client.request<readonly SellerVariantImageView[]>(
-        `/api/seller/images?variantId=${variantId}`,
-      ),
+      client.request<readonly SellerVariantImageView[]>(`/api/seller/variants/${variantId}/images`),
     enabled: Boolean(variantId),
   });
 }
@@ -335,28 +340,28 @@ export function useVariantImages(
 export function usePresignImage(): UseMutationResult<
   PresignVariantImageResponse,
   Error,
-  PresignVariantImageRequest
+  { variantId: string; body: PresignVariantImageRequest }
 > {
   const client = useApiClient();
   return useMutation({
-    mutationFn: (body) =>
-      client.request<PresignVariantImageResponse>(`/api/seller/images/presign`, {
-        method: 'POST',
-        body,
-      }),
+    mutationFn: ({ variantId, body }) =>
+      client.request<PresignVariantImageResponse>(
+        `/api/seller/variants/${variantId}/images/presign`,
+        { method: 'POST', body },
+      ),
   });
 }
 
 export function useRegisterImage(): UseMutationResult<
   SellerVariantImageView,
   Error,
-  RegisterVariantImageRequest
+  { variantId: string; body: RegisterVariantImageRequest }
 > {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body) =>
-      client.request<SellerVariantImageView>(`/api/seller/images`, {
+    mutationFn: ({ variantId, body }) =>
+      client.request<SellerVariantImageView>(`/api/seller/variants/${variantId}/images`, {
         method: 'POST',
         body,
       }),
@@ -366,12 +371,18 @@ export function useRegisterImage(): UseMutationResult<
   });
 }
 
-export function useDeleteImage(): UseMutationResult<void, Error, string> {
+export function useDeleteImage(): UseMutationResult<
+  void,
+  Error,
+  { variantId: string; imageId: string }
+> {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (imageId) =>
-      client.request<void>(`/api/seller/images/${imageId}`, { method: 'DELETE' }),
+    mutationFn: ({ variantId, imageId }) =>
+      client.request<void>(`/api/seller/variants/${variantId}/images/${imageId}`, {
+        method: 'DELETE',
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['seller-catalog', 'images'] });
     },

@@ -14,6 +14,7 @@ import { ApiError } from '@skydrop/api-client';
 import type { CategoryView } from '@skydrop/api-client';
 import { useCategoriesList, useDeleteCategory } from '@/lib/api-hooks';
 import { CategoryFormModal } from './category-form-modal';
+import { AttributesDrawer } from './attributes-drawer';
 
 /**
  * Flat list view + inline edit modal + create modal.
@@ -32,6 +33,7 @@ export function CategoriesIndex(): ReactElement {
   const toast = useToast();
 
   const [editing, setEditing] = useState<CategoryView | null>(null);
+  const [attributesFor, setAttributesFor] = useState<{ id: string; name: string } | null>(null);
   const [creating, setCreating] = useState<{ parentId: string | null } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -142,6 +144,13 @@ export function CategoriesIndex(): ReactElement {
                       <Button variant="ghost" size="sm" onClick={() => setEditing(c)}>
                         Edit
                       </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setAttributesFor({ id: c.id, name: c.name })}
+                      >
+                        Attributes
+                      </Button>
                       {pendingDelete === c.id ? (
                         <>
                           <Button
@@ -194,6 +203,12 @@ export function CategoriesIndex(): ReactElement {
           }}
         />
       )}
+
+      <AttributesDrawer
+        categoryId={attributesFor?.id ?? null}
+        categoryName={attributesFor?.name ?? ''}
+        onClose={() => setAttributesFor(null)}
+      />
     </div>
   );
 }

@@ -13,6 +13,7 @@ import {
 import { ApiError } from '@skydrop/api-client';
 import type { PulledPick } from '@skydrop/api-client';
 import { usePullNextPick, useStartPick, useRecordPickItem, useCompletePick } from '@/lib/api-hooks';
+import { ForceExpirePick } from './force-expire';
 
 /**
  * Picker workspace — one parcel at a time. Flow:
@@ -275,6 +276,9 @@ export function PickStation(): ReactElement {
           </CardBody>
         </Card>
       )}
+
+      {/* Supervisor escape hatch when a claim outlives the picker. */}
+      <ForceExpirePick />
     </div>
   );
 }

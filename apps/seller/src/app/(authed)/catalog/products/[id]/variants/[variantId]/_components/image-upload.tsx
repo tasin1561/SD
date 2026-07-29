@@ -82,11 +82,11 @@ export function VariantImageUpload({ variantId }: { variantId: string }): ReactE
       setQueue((q) => q.map((it) => (it.id === item.id ? { ...it, status: 'uploading' } : it)));
       try {
         // 1. Presign.
+        // The API takes the variant on the path and only the mime type
+        // in the body — it whitelists fields, so anything else is a 400.
         const presignResp = await presign.mutateAsync({
           variantId,
-          filename: item.file.name,
-          contentType: item.file.type,
-          sizeBytes: item.file.size,
+          body: { mimeType: item.file.type },
         });
 
         // 2. PUT to S3. The presigned URL hits Spaces directly (NOT
@@ -107,10 +107,11 @@ export function VariantImageUpload({ variantId }: { variantId: string }): ReactE
         setQueue((q) => q.map((it) => (it.id === item.id ? { ...it, status: 'registering' } : it)));
         await register.mutateAsync({
           variantId,
-          spacesKey: presignResp.spacesKey,
-          filename: item.file.name,
-          contentType: item.file.type,
-          sizeBytes: item.file.size,
+          body: {
+            spacesKey: presignResp.spacesKey,
+            mimeType: item.file.type,
+            sizeBytes: item.file.size,
+          },
         });
 
         setQueue((q) =>
@@ -261,7 +262,7 @@ export function VariantImageUpload({ variantId }: { variantId: string }): ReactE
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => void deleteImg.mutateAsync(img.id)}
+                      onClick={() => void deleteImg.mutateAsync({ variantId, imageId: img.id })}
                       disabled={deleteImg.isPending}
                       title="Delete image"
                     >

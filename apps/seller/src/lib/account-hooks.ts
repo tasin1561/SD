@@ -278,3 +278,147 @@ export function useWithdrawProposal(): UseMutationResult<ProposalView, Error, { 
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-proposals'] }),
   });
 }
+
+// ───────── Category browse (read-only) ─────────
+
+export interface CategoryNode {
+  id: string;
+  name: string;
+  slug: string;
+  parentId: string | null;
+  status: string;
+  defaultGstRate: number | null;
+  defaultHsCode: string | null;
+  children?: readonly CategoryNode[];
+}
+
+export function useCategoryTree(): UseQueryResult<readonly CategoryNode[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-categories', 'tree'],
+    // The tree is near-static and shared by every seller.
+    staleTime: 10 * 60_000,
+    queryFn: () => client.request<readonly CategoryNode[]>('/seller/categories/tree'),
+  });
+}
+
+// ───────── Saved CSV column mappings ─────────
+
+export interface CsvMappingView {
+  id: string;
+  name: string;
+  importType: string;
+  columnMap: Record<string, string>;
+  isDefault: boolean;
+  lastUsedAt: string | null;
+  createdAt: string;
+}
+
+export function useCsvMappings(): UseQueryResult<readonly CsvMappingView[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-csv-mappings'],
+    queryFn: () => client.request<readonly CsvMappingView[]>('/seller/csv-mappings'),
+  });
+}
+
+export function useCreateCsvMapping(): UseMutationResult<
+  CsvMappingView,
+  Error,
+  { name: string; columnMap: Record<string, string>; isDefault?: boolean }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<CsvMappingView>('/seller/csv-mappings', { method: 'POST', body }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-csv-mappings'] }),
+  });
+}
+
+export function useUpdateCsvMapping(): UseMutationResult<
+  CsvMappingView,
+  Error,
+  { id: string; body: { name?: string; columnMap?: Record<string, string>; isDefault?: boolean } }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }) =>
+      client.request<CsvMappingView>(`/seller/csv-mappings/${id}`, { method: 'PATCH', body }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-csv-mappings'] }),
+  });
+}
+
+export function useDeleteCsvMapping(): UseMutationResult<unknown, Error, { id: string }> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }) =>
+      client.request<unknown>(`/seller/csv-mappings/${id}`, { method: 'DELETE' }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-csv-mappings'] }),
+  });
+}
+
+// ───────── Delivery history per address ─────────
+
+export interface CachedAddressView {
+  id: string;
+  customerId: string;
+  line1: string;
+  line2: string | null;
+  landmark: string | null;
+  city: string;
+  stateProvince: string;
+  postalCode: string;
+  seenCount: number;
+  rtoCountAtAddress: number;
+  successfulCountAtAddress: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+export function useRecipientAddresses(query: {
+  customerId?: string;
+}): UseQueryResult<readonly CachedAddressView[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-recipient-addresses', query],
+    enabled: query.customerId !== undefined && query.customerId !== '',
+    queryFn: () =>
+      client.request<readonly CachedAddressView[]>(`/seller/recipient-addresses${qs(query)}`),
+  });
+}
+
+// ───────── What a category will require of your variants ─────────
+
+export interface EffectiveAttribute {
+  attributeKey: string;
+  displayLabel: string;
+  valueType: string;
+  allowedValues: readonly string[];
+  isRequired: boolean;
+  displayOrder: number;
+  sourceCategoryId: string;
+}
+
+/**
+ * The RESOLVED set — this category's own definitions plus everything
+ * inherited from its ancestors. That is the set a variant is actually
+ * validated against, which is why the seller-facing endpoint returns
+ * only the effective view and not the raw per-category rows.
+ */
+export function useCategoryAttributes(
+  categoryId: string | null,
+): UseQueryResult<readonly EffectiveAttribute[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-categories', 'attributes', categoryId],
+    enabled: categoryId !== null,
+    staleTime: 5 * 60_000,
+    queryFn: () =>
+      client.request<readonly EffectiveAttribute[]>(
+        `/seller/categories/${categoryId ?? ''}/attributes`,
+      ),
+  });
+}

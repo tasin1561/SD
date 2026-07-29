@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { PageHeader } from '@skydrop/ui/components';
 import { CsvImportPanel } from '../../orders/_components/csv-import-panel';
+import { SavedMappings } from './_components/saved-mappings';
 
 /**
  * Bulk import products + variants from a CSV. Same flow as the order
@@ -19,6 +20,8 @@ export default function CatalogImportPage(): ReactElement {
         templateFileName="skydrop-catalog-import-template.csv"
         previewSampleSize={5}
       />
+
+      <SavedMappings />
     </div>
   );
 }
