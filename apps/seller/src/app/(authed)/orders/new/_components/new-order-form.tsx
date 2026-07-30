@@ -126,7 +126,11 @@ export function NewOrderForm(): ReactElement {
 
   // Load a large-enough product page for picker UX. Sellers with
   // >200 products will need search; for Phase 1A 200 is plenty.
-  const products = useProductsList({ status: 'ACTIVE', page: 1, pageSize: 200 });
+  // 100 is the endpoint's maximum; asking for 200 is a 400, which left
+  // the product picker empty with no explanation. A seller with more
+  // than 100 active products needs a search-as-you-type picker rather
+  // than a bigger page — noted rather than papered over.
+  const products = useProductsList({ status: 'ACTIVE', page: 1, pageSize: 100 });
   const variants = useProductVariants(form.productId);
 
   // Auto-pick the first variant when the product changes

@@ -122,7 +122,10 @@ export function useInvitationsList(): UseQueryResult<{
       client.request<{
         items: SellerInvitationListItem[];
         total: number;
-      }>(`/api/admin/seller-invitations?status=PENDING`),
+        // Lowercase: the DTO's @IsIn list is ['pending','used','expired',
+        // 'deleted'] — these are derived lifecycle names, not the enum
+        // values they look like, and 'PENDING' is a 400.
+      }>(`/api/admin/seller-invitations?status=pending`),
   });
 }
 
