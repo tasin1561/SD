@@ -117,6 +117,12 @@ jobs:
       - name: Format check
         run: pnpm format:check
 
+      # The seam between the two halves. Each side's own tests pass while
+      # the path joining them is wrong — three bugs in one day were this
+      # exact shape, and none of them were caught by a unit test.
+      - name: Frontend calls resolve to real API routes
+        run: python3 scripts/check-frontend-routes.py
+
       - name: Unit tests — API (jest)
         run: pnpm --filter @skydrop/api test
 
