@@ -26,7 +26,7 @@ cache-control matchers already there.
 	# Security headers. This site is static (output: 'export'), so Next
 	# never gets a chance to set them — see docs/caddy-security-headers.md.
 	header {
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
 		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
@@ -37,6 +37,18 @@ cache-control matchers already there.
 		-Server
 	}
 ```
+
+## Why Google Fonts is allowed here and nowhere else
+
+`style-src` and `font-src` name `fonts.googleapis.com` and
+`fonts.gstatic.com` because the marketing pages load their typefaces from
+there. The first version of this file omitted them, which did not break the
+pages — it silently dropped them to system fallbacks, which is worse than a
+visible failure because nobody notices for weeks.
+
+The three app CSPs deliberately do NOT allow this: those pages self-host
+their fonts through `next/font`, so an external font origin there would be
+permission nobody needs.
 
 ## Why `'unsafe-inline'` here when the other apps refuse it
 

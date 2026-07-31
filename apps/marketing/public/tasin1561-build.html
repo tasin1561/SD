@@ -1,0 +1,1201 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Skydrop — What Is Built</title>
+    <meta
+      name="description"
+      content="Skydrop build report — every feature, workflow stage, setting and guarantee actually running in production, written against the live database."
+    />
+    <meta name="robots" content="noindex" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* Tokens are the same as the operating-model report — the two are
+         siblings and should read that way. */
+      :root {
+        --sky: #38bdf8;
+        --sky-deep: #0284c7;
+        --saffron: #f59e0b;
+        --green: #34d399;
+        --red: #f87171;
+        --surface: #060b16;
+        --surface-2: #0c1424;
+        --surface-3: rgba(56, 189, 248, 0.05);
+        --panel-edge: rgba(148, 178, 255, 0.1);
+        --panel-edge-strong: rgba(148, 178, 255, 0.22);
+        --grid: rgba(56, 189, 248, 0.045);
+        --fg-strong: #f3f7fc;
+        --fg-body: #c3d0e0;
+        --fg-muted: #8296ae;
+        --glow: rgba(56, 189, 248, 0.3);
+        --font-display:
+          'Space Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        --font-body:
+          'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+        --maxw: 1140px;
+        color-scheme: dark;
+      }
+      @media (prefers-color-scheme: light) {
+        :root:not([data-theme='dark']) {
+          --sky: #0284c7;
+          --sky-deep: #075985;
+          --surface: #eef2f8;
+          --surface-2: #ffffff;
+          --surface-3: rgba(2, 132, 199, 0.045);
+          --panel-edge: rgba(15, 42, 78, 0.12);
+          --panel-edge-strong: rgba(15, 42, 78, 0.24);
+          --grid: rgba(2, 132, 199, 0.06);
+          --fg-strong: #0b1523;
+          --fg-body: #31435a;
+          --fg-muted: #5b6b7f;
+          --glow: rgba(2, 132, 199, 0.16);
+          --green: #047857;
+          --red: #b91c1c;
+          --saffron: #b45309;
+          color-scheme: light;
+        }
+      }
+      :root[data-theme='light'] {
+        --sky: #0284c7;
+        --sky-deep: #075985;
+        --surface: #eef2f8;
+        --surface-2: #ffffff;
+        --surface-3: rgba(2, 132, 199, 0.045);
+        --panel-edge: rgba(15, 42, 78, 0.12);
+        --panel-edge-strong: rgba(15, 42, 78, 0.24);
+        --grid: rgba(2, 132, 199, 0.06);
+        --fg-strong: #0b1523;
+        --fg-body: #31435a;
+        --fg-muted: #5b6b7f;
+        --glow: rgba(2, 132, 199, 0.16);
+        --green: #047857;
+        --red: #b91c1c;
+        --saffron: #b45309;
+        color-scheme: light;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        /* `clip` rather than `hidden`: hidden would make body a scroll
+           container and break the sticky top bar. */
+        overflow-x: clip;
+      }
+      body {
+        margin: 0;
+        background: var(--surface);
+        color: var(--fg-body);
+        font-family: var(--font-body);
+        font-size: 16px;
+        line-height: 1.62;
+        -webkit-font-smoothing: antialiased;
+        background-image:
+          linear-gradient(var(--grid) 1px, transparent 1px),
+          linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+        background-size: 64px 64px;
+      }
+      .wrap {
+        max-width: var(--maxw);
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      /* ── Top bar ─────────────────────────────────────────────────── */
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        backdrop-filter: blur(10px);
+        background: color-mix(in srgb, var(--surface) 86%, transparent);
+        border-bottom: 1px solid var(--panel-edge);
+      }
+      .topbar .wrap {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding-top: 12px;
+        padding-bottom: 12px;
+      }
+      .brand {
+        font-family: var(--font-display);
+        font-weight: 700;
+        color: var(--fg-strong);
+        letter-spacing: -0.02em;
+        font-size: 17px;
+      }
+      .theme-btn {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--fg-muted);
+        background: transparent;
+        border: 1px solid var(--panel-edge-strong);
+        border-radius: 6px;
+        padding: 6px 11px;
+        cursor: pointer;
+        min-height: 32px;
+      }
+      .theme-btn:hover {
+        color: var(--fg-strong);
+        border-color: var(--sky);
+      }
+      .theme-btn:focus-visible {
+        outline: 2px solid var(--sky);
+        outline-offset: 2px;
+      }
+
+      /* ── Type ────────────────────────────────────────────────────── */
+      .tel {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--fg-muted);
+      }
+      h1 {
+        font-family: var(--font-display);
+        font-size: clamp(2.1rem, 5vw, 3.4rem);
+        line-height: 1.04;
+        letter-spacing: -0.03em;
+        font-weight: 700;
+        color: var(--fg-strong);
+        margin: 14px 0 18px;
+        text-wrap: balance;
+      }
+      h2 {
+        font-family: var(--font-display);
+        font-size: clamp(1.4rem, 2.6vw, 1.9rem);
+        letter-spacing: -0.02em;
+        font-weight: 650;
+        color: var(--fg-strong);
+        margin: 0 0 8px;
+        text-wrap: balance;
+      }
+      h3 {
+        font-family: var(--font-display);
+        font-size: 1.05rem;
+        font-weight: 650;
+        color: var(--fg-strong);
+        margin: 30px 0 8px;
+      }
+      h4 {
+        font-family: var(--font-display);
+        font-size: 0.98rem;
+        font-weight: 650;
+        color: var(--fg-strong);
+        margin: 0 0 5px;
+      }
+      p {
+        max-width: 68ch;
+        margin: 0 0 14px;
+      }
+      .lead {
+        font-size: 1.06rem;
+        color: var(--fg-body);
+        max-width: 70ch;
+      }
+      .mono {
+        font-family: var(--font-mono);
+        font-size: 0.82em;
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 0.8em;
+        background: var(--surface-3);
+        border: 1px solid var(--panel-edge);
+        border-radius: 4px;
+        padding: 0.1em 0.36em;
+        white-space: nowrap;
+        color: var(--fg-strong);
+      }
+      a {
+        color: var(--sky);
+      }
+
+      /* ── Sections ────────────────────────────────────────────────── */
+      section {
+        padding: 62px 0;
+        border-top: 1px solid var(--panel-edge);
+      }
+      .sechead {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+      .sechead .idx {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--sky);
+        letter-spacing: 0.1em;
+      }
+      .sechead .bar {
+        height: 1px;
+        width: 34px;
+        background: var(--panel-edge-strong);
+      }
+      .sechead span:last-child {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--fg-muted);
+      }
+
+      /* ── Hero ────────────────────────────────────────────────────── */
+      .hero {
+        padding: 76px 0 20px;
+        position: relative;
+      }
+      .hero::before {
+        content: '';
+        position: absolute;
+        top: -160px;
+        left: 50%;
+        transform: translateX(-50%);
+        /* Capped to the viewport — a fixed 720px centred on a 360px phone
+           overflows 180px each side and scrolls the whole document. */
+        width: min(720px, 100%);
+        height: 460px;
+        background: radial-gradient(closest-side, var(--glow), transparent);
+        opacity: 0.5;
+        pointer-events: none;
+      }
+
+      /* ── Stat tiles ──────────────────────────────────────────────── */
+      .tiles {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(146px, 1fr));
+        gap: 1px;
+        background: var(--panel-edge);
+        border: 1px solid var(--panel-edge);
+        border-radius: 12px;
+        overflow: hidden;
+        margin: 30px 0 8px;
+      }
+      .tile {
+        background: var(--surface-2);
+        padding: 17px 18px;
+      }
+      .tile .n {
+        font-family: var(--font-mono);
+        font-size: 1.5rem;
+        font-weight: 500;
+        color: var(--fg-strong);
+        letter-spacing: -0.02em;
+        font-variant-numeric: tabular-nums;
+      }
+      .tile .k {
+        font-size: 11.5px;
+        color: var(--fg-muted);
+        margin-top: 3px;
+        line-height: 1.34;
+      }
+
+      /* ── Panels ──────────────────────────────────────────────────── */
+      .panel {
+        background: var(--surface-2);
+        border: 1px solid var(--panel-edge);
+        border-radius: 12px;
+        padding: 22px 24px;
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 14px;
+        margin-top: 18px;
+      }
+      .grid2 .panel p:last-child {
+        margin-bottom: 0;
+      }
+      .panel .tel {
+        display: block;
+        margin-bottom: 9px;
+      }
+      .panel p {
+        font-size: 0.94rem;
+        color: var(--fg-body);
+      }
+
+      /* ── Stage sequence ──────────────────────────────────────────── */
+      .flow {
+        display: flex;
+        flex-direction: column;
+        margin-top: 10px;
+      }
+      .step {
+        display: grid;
+        grid-template-columns: 46px minmax(0, 1fr);
+        gap: 18px;
+        padding: 19px 0;
+        border-bottom: 1px dashed var(--panel-edge);
+      }
+      .step:last-child {
+        border-bottom: 0;
+      }
+      .step .n {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--sky);
+        padding-top: 3px;
+        font-variant-numeric: tabular-nums;
+      }
+      .step p {
+        margin: 0;
+        font-size: 0.94rem;
+      }
+      .step .who {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--fg-muted);
+        margin-top: 8px;
+      }
+
+      /* ── Pills ───────────────────────────────────────────────────── */
+      .pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 9px 0 4px;
+      }
+      .pill {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        padding: 3px 9px;
+        border-radius: 5px;
+        border: 1px solid var(--panel-edge-strong);
+        color: var(--fg-muted);
+        background: var(--surface-2);
+      }
+      .pill.ok {
+        border-color: var(--green);
+        color: var(--green);
+      }
+      .pill.warn {
+        border-color: var(--saffron);
+        color: var(--saffron);
+      }
+      .pill.bad {
+        border-color: var(--red);
+        color: var(--red);
+      }
+      .glabel {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+        color: var(--fg-muted);
+        margin: 22px 0 3px;
+      }
+
+      /* ── Tables ──────────────────────────────────────────────────── */
+      .tbl-scroll {
+        overflow-x: auto;
+        margin: 16px 0 6px;
+        border: 1px solid var(--panel-edge);
+        border-radius: 10px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+        font-variant-numeric: tabular-nums;
+        background: var(--surface-2);
+      }
+      th {
+        text-align: left;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--fg-muted);
+        font-weight: 500;
+        padding: 11px 16px;
+        border-bottom: 1px solid var(--panel-edge-strong);
+        white-space: nowrap;
+      }
+      td {
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--panel-edge);
+        vertical-align: top;
+        color: var(--fg-body);
+      }
+      tbody tr:last-child td {
+        border-bottom: 0;
+      }
+      td.k {
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        color: var(--fg-strong);
+        white-space: nowrap;
+      }
+      td.v {
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        color: var(--sky);
+        white-space: nowrap;
+      }
+
+      /* ── Callout ─────────────────────────────────────────────────── */
+      .callout {
+        border: 1px solid var(--panel-edge-strong);
+        border-left: 3px solid var(--sky);
+        background: var(--surface-3);
+        border-radius: 0 10px 10px 0;
+        padding: 17px 21px;
+        margin: 22px 0;
+        max-width: 72ch;
+      }
+      .callout.warn {
+        border-left-color: var(--saffron);
+      }
+      .callout.bad {
+        border-left-color: var(--red);
+      }
+      .callout p {
+        margin: 0;
+        font-size: 0.94rem;
+      }
+      .callout p + p {
+        margin-top: 10px;
+      }
+
+      ul {
+        max-width: 70ch;
+        padding-left: 20px;
+      }
+      li {
+        margin: 7px 0;
+      }
+      li::marker {
+        color: var(--fg-muted);
+      }
+
+      footer {
+        border-top: 1px solid var(--panel-edge);
+        padding: 34px 0 70px;
+        color: var(--fg-muted);
+        font-size: 0.875rem;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <div class="wrap">
+        <span class="brand">Skydrop</span>
+        <button class="theme-btn" id="tt" type="button">theme</button>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <header class="hero">
+        <p class="tel">Build report · 31 July 2026</p>
+        <h1>Everything that has been built</h1>
+        <p class="lead">
+          The full inventory: every feature, every stage of the workflow, every setting
+          that controls it, and the things deliberately left undone. Written against the
+          running production database rather than the roadmap — where the two disagreed,
+          the database won.
+        </p>
+        <div class="tiles">
+          <div class="tile"><div class="n">27</div><div class="k">order statuses</div></div>
+          <div class="tile"><div class="n">310</div><div class="k">API endpoints</div></div>
+          <div class="tile"><div class="n">80</div><div class="k">screens</div></div>
+          <div class="tile"><div class="n">61</div><div class="k">settings</div></div>
+          <div class="tile"><div class="n">15</div><div class="k">background workers</div></div>
+          <div class="tile"><div class="n">1,720</div><div class="k">automated tests</div></div>
+        </div>
+      </header>
+
+      <!-- ══════════════════════════════════════════════════════════ -->
+      <section>
+        <div class="sechead">
+          <span class="idx">01</span><span class="bar"></span><span>The corridor</span>
+        </div>
+        <h2>One trade lane, and everything follows from it</h2>
+        <p class="lead">
+          A seller in Bangladesh ships stock to a warehouse in Bangalore. An Indian
+          customer orders. Skydrop phones the customer to confirm — in a cash-on-delivery
+          market an unconfirmed order is a coin flip — then picks, packs, dispatches
+          through Delhivery, tracks the parcel, handles the return when it fails, and
+          pays the seller.
+        </p>
+        <p>
+          The seller never sets foot in India. That is the product: warehouse, phone call,
+          courier and money movement, so a Bangladeshi merchant can sell into India
+          without Indian operations.
+        </p>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════ -->
+      <section>
+        <div class="sechead">
+          <span class="idx">02</span><span class="bar"></span><span>End to end</span>
+        </div>
+        <h2>Eleven stages</h2>
+        <p class="lead">
+          Genuinely a sequence — each stage needs something the one before it produced.
+        </p>
+
+        <div class="flow">
+          <div class="step">
+            <div class="n">01</div>
+            <div>
+              <h4>Seller onboarding</h4>
+              <p>
+                Invite-only. An admin issues an invitation; the seller registers against
+                that token, sets up profile, encrypted bank details, and the Bangladesh
+                origin address a consignment is booked against. Team members are invited
+                separately with their own role.
+              </p>
+              <div class="who">Admin → Seller</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="n">02</div>
+            <div>
+              <h4>Catalog</h4>
+              <p>
+                Products hang off a shared category tree, variants off products.
+                Categories carry the GST rate and HS code every variant inherits — which
+                is why a seller requests one rather than creating it. Images upload
+                straight to storage through a presigned URL. Bulk import by CSV, with
+                saved column mappings for your own spreadsheet headers.
+              </p>
+              <div class="who">Seller</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="n">03</div>
+            <div>
+              <h4>Inbound consignment</h4>
+              <p>
+                The seller declares what is coming. The warehouse receives it, counts it
+                into bins and batches, and any gap between declared and counted raises a
+                discrepancy. Freight for the BD→India leg is billed here — paid now, or
+                amortised per unit as the stock sells.
+              </p>
+              <div class="who">Seller → Warehouse</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="n">04</div>
+            <div>
+              <h4>Order placement</h4>
+              <p>
+                Manually, by CSV, or through the seller API. The recipient block and
+                per-line SKU details are snapshotted at creation and never re-resolved —
+                editing a product tomorrow cannot rewrite yesterday's order. No stock is
+                reserved yet.
+              </p>
+              <div class="who">Seller</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="n">05</div>
+            <div>
+              <h4>Call confirmation</h4>
+              <p>
+                The order joins a FIFO queue. An agent pulls the next one, phones the
+                customer, records one of nine outcomes. Six count toward the attempt cap;
+                three — callback requested, technical failure, language barrier — do not,
+                because they are not the customer's answer. At the cap the order is
+                rejected, or paused for the seller to decide if they are on manual review.
+              </p>
+              <div class="who">Call agent</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="n">06</div>
+            <div>
+              <h4>Stock reservation</h4>
+              <p>
+                Only on confirmation — a soft quantity claim, no bin or batch yet. Sellers
+                who opt in can hold stock earlier, at placement, with an explicit release
+                decision if the calls run out. Insufficient stock lands the order in
+                <code>OUT_OF_STOCK</code> rather than failing outright.
+              </p>
+              <div class="who">Automatic</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="n">07</div>
+            <div>
+              <h4>Pick and pack</h4>
+              <p>
+                A picker claims the next shipment; the claim expires if abandoned, so work
+                cannot be stuck on someone who went home. Allocation resolves the soft
+                claim to real bins and batches, first-to-expire first out. Short stock
+                escalates to manual placement rather than erroring. Packing resolves races
+                at completion — two packers can pull the same parcel, only one finishes it.
+              </p>
+              <div class="who">Warehouse</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="n">08</div>
+            <div>
+              <h4>Manifest and AWB</h4>
+              <p>
+                Packed parcels auto-attach to a draft manifest, one per courier and
+                warehouse. A supervisor closes it, which requests AWB numbers. One
+                parcel's failure never stops the others — a rejected shipment is retired
+                and replaced, its order routed to manual placement so a human can arrange
+                another carrier.
+              </p>
+              <div class="who">Warehouse supervisor</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="n">09</div>
+            <div>
+              <h4>Dispatch</h4>
+              <p>
+                Handing the manifest to the courier is what decrements physical stock —
+                once, here, and nowhere else in the normal lifecycle.
+              </p>
+              <div class="who">Warehouse supervisor</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="n">10</div>
+            <div>
+              <h4>Tracking, delivery or return</h4>
+              <p>
+                Courier scans arrive as signed webhooks, stored before processing, driving
+                the order forward and never backward. A failed delivery records its reason
+                and can be retried; repeated failure becomes a return, which travels back
+                to be received, inspected, and either restocked or written off. Customers
+                track by AWB on a public page that reveals no internal identifiers.
+              </p>
+              <div class="who">Automatic · public tracking</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="n">11</div>
+            <div>
+              <h4>Money</h4>
+              <p>
+                Delivery accrues the COD amount and debits the shipping charges, but the
+                credit lands after a delay — seven days by default, once the courier has
+                settled. The seller requests a withdrawal; an admin executes it as a
+                remittance. Courier payouts reconcile line-by-line against what each order
+                should have paid.
+              </p>
+              <div class="who">Automatic → Seller → Finance</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════ -->
+      <section>
+        <div class="sechead">
+          <span class="idx">03</span><span class="bar"></span><span>Feature inventory</span>
+        </div>
+        <h2>What each area does</h2>
+
+        <div class="grid2">
+          <div class="panel">
+            <span class="tel">Identity</span>
+            <p>
+              Staff and seller sessions are separate, each with JWT access tokens and
+              rotating refresh tokens. Re-using a spent refresh token burns the whole
+              family — the standard defence against a stolen session. API keys for
+              machine access. Eight staff roles, six seller-team roles, last-owner
+              protection.
+            </p>
+          </div>
+          <div class="panel">
+            <span class="tel">Catalog</span>
+            <p>
+              Category tree with inherited attributes, GST and HS codes. Products,
+              variants, images with automatic thumbnails. Seller-raised category
+              requests with an admin approve/reject queue. CSV import with reusable
+              column mappings.
+            </p>
+          </div>
+          <div class="panel">
+            <span class="tel">Inventory</span>
+            <p>
+              Multi-bin, multi-batch, FEFO picking. Append-only movement ledger. Two-phase
+              reservations. Goods receipts with discrepancy handling. Cycle counts.
+              Value-threshold adjustment approvals. Low-stock alerts with cooldown.
+              Inter-warehouse transfers that preserve batch lineage.
+            </p>
+          </div>
+          <div class="panel">
+            <span class="tel">Per-unit serials</span>
+            <p>
+              Optional strict mode: every physical unit carries a barcode, scanned at
+              pick, pack, dispatch and return. Set-equality at pack, because a count
+              check passes a swap. The unit ledger is a sidecar — aggregates stay
+              authoritative, and disagreements surface as a report rather than
+              auto-correcting.
+            </p>
+          </div>
+          <div class="panel">
+            <span class="tel">Orders</span>
+            <p>
+              27-status lifecycle behind one transition matrix. Immutable recipient and
+              SKU snapshots. Per-seller customer records with delivery history per
+              address. Manual entry, CSV import, and a seller API. A god-mode override
+              for the cases nothing else covers, with eight guardrails and a permanent
+              mark on the order.
+            </p>
+          </div>
+          <div class="panel">
+            <span class="tel">Call centre</span>
+            <p>
+              Strict FIFO queue with no double-assignment. Nine outcomes mapped centrally
+              to transitions. Attempt caps per seller. Time-based claim expiry.
+              Supervisor queue view with reassignment, plus agent rosters, per-agent
+              metrics and self-service availability.
+            </p>
+          </div>
+          <div class="panel">
+            <span class="tel">Warehouse</span>
+            <p>
+              Pick queue with expiring claims and short-stock escalation. Pack with
+              race resolution at completion. Manifests that find-or-create per courier
+              and warehouse. Dispatch handoff. Full RTO chain: receive at any warehouse,
+              inspect, restock into a lineage-preserving batch or write off.
+            </p>
+          </div>
+          <div class="panel">
+            <span class="tel">Courier</span>
+            <p>
+              Delhivery adapter covering AWB, labels, serviceability, pickups, NDR
+              actions, e-way bills and cancellation. Waybill pooling. Multi-account
+              routing with weighted splits and per-parcel account tracing. Manual
+              placement for anything the integration rejects. Real margin measured
+              against what the courier actually charged.
+            </p>
+          </div>
+          <div class="panel">
+            <span class="tel">Tracking</span>
+            <p>
+              HMAC-authenticated webhook ingestion, stored before processing, with
+              two-layer idempotency. A monotonic-forward guard so a late or duplicate
+              scan cannot move an order backward. Manual scan entry for when a webhook
+              never arrives. Public AWB lookup in English and Hindi.
+            </p>
+          </div>
+          <div class="panel">
+            <span class="tel">Money</span>
+            <p>
+              Append-only wallet ledger in INR and BDT. Delayed accrual after courier
+              settlement. Seller-requested withdrawals, admin-executed remittances.
+              Courier settlement reconciliation with per-order short-payment records.
+              Inbound freight billed per unit by weight. GST invoices as PDFs.
+            </p>
+          </div>
+          <div class="panel">
+            <span class="tel">Pricing</span>
+            <p>
+              Zone and weight-slab rate cards, per-seller discounts and COD fees,
+              surcharge rules, 18% GST applied after surcharges. Full computation context
+              stored with every charge, so a historical price can always be explained.
+              An admin preview that shows its own fallbacks rather than hiding them.
+            </p>
+          </div>
+          <div class="panel">
+            <span class="tel">Communications</span>
+            <p>
+              39 email templates across the whole lifecycle, both seller and customer,
+              English and Hindi. Store-then-send with per-event deduplication, so a
+              retry cannot double-send. Outbound signed webhooks to seller systems, with
+              retry and auto-disable. In-app notifications. Live chat scaffolded.
+            </p>
+          </div>
+          <div class="panel">
+            <span class="tel">Support</span>
+            <p>
+              One ticket system for two populations: damage and scrap raised
+              automatically inside the RTO inspection, and issues raised by sellers.
+              Shared lifecycle, append-only event log, and refunds that credit the
+              wallet inside the same transaction as the resolution.
+            </p>
+          </div>
+          <div class="panel">
+            <span class="tel">Configuration</span>
+            <p>
+              61 settings, typed and admin-editable, 13 of them overridable per seller
+              with server-side clamping. A generic mechanism rather than one column per
+              behaviour — so a seller on different terms is configuration, not code.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════ -->
+      <section>
+        <div class="sechead">
+          <span class="idx">04</span><span class="bar"></span><span>Lifecycle</span>
+        </div>
+        <h2>27 order statuses</h2>
+        <p class="lead">
+          One state machine, a declared transition matrix, no any-to-any moves, and
+          nothing writes the status column directly.
+        </p>
+
+        <div class="glabel">Before confirmation</div>
+        <div class="pills">
+          <span class="pill">DRAFT</span><span class="pill warn">PENDING_CONFIRMATION</span
+          ><span class="pill warn">CALL_NO_RESPONSE</span
+          ><span class="pill warn">CALL_RESCHEDULED</span
+          ><span class="pill warn">AWAITING_SELLER_DECISION</span>
+        </div>
+
+        <div class="glabel">Confirmed and in the warehouse</div>
+        <div class="pills">
+          <span class="pill ok">CONFIRMED</span><span class="pill">PENDING_PICK</span
+          ><span class="pill">PICKED</span><span class="pill">PACKED</span
+          ><span class="pill">PENDING_DISPATCH</span><span class="pill bad">PACK_FAILED</span
+          ><span class="pill warn">PENDING_MANUAL_PLACEMENT</span
+          ><span class="pill warn">OUT_OF_STOCK</span>
+        </div>
+
+        <div class="glabel">In the courier network</div>
+        <div class="pills">
+          <span class="pill ok">DISPATCHED</span><span class="pill ok">IN_TRANSIT</span
+          ><span class="pill ok">OUT_FOR_DELIVERY</span><span class="pill ok">DELIVERED</span
+          ><span class="pill bad">DELIVERY_FAILED</span>
+        </div>
+
+        <div class="glabel">Coming back</div>
+        <div class="pills">
+          <span class="pill warn">RTO_INITIATED</span><span class="pill warn">RTO_IN_TRANSIT</span
+          ><span class="pill warn">RTO_RECEIVED</span><span class="pill">RTO_RESTOCKED</span
+          ><span class="pill bad">RTO_DAMAGED</span>
+        </div>
+
+        <div class="glabel">Ended without shipping</div>
+        <div class="pills">
+          <span class="pill bad">CANCELLED</span><span class="pill bad">CANCELLED_BY_ADMIN</span
+          ><span class="pill bad">REJECTED</span
+          ><span class="pill bad">REJECTED_BY_CUSTOMER</span
+          ><span class="pill bad">REJECTED_NDR</span>
+        </div>
+
+        <h3>Where stock actually moves</h3>
+        <div class="tbl-scroll">
+          <table>
+            <thead>
+              <tr><th>Transition</th><th>Effect</th><th>Why there</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="k">→ CONFIRMED</td>
+                <td class="v">reserve</td>
+                <td>A soft claim on quantity. Late on purpose — an unconfirmed order should not hold stock.</td>
+              </tr>
+              <tr>
+                <td class="k">→ DISPATCHED</td>
+                <td class="v">decrement</td>
+                <td>The one physical decrement. Goods have left the building.</td>
+              </tr>
+              <tr>
+                <td class="k">→ cancel / reject</td>
+                <td class="v">release</td>
+                <td>Returns the claim. Pre-confirmation cancels release nothing — nothing was held.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout">
+          <p>
+            <strong>Delivery is stock-neutral.</strong> The decrement already happened at
+            dispatch. If a future change makes delivery touch stock again, every quantity
+            double-counts — there are tests pinning this specifically, because it was a
+            real bug once.
+          </p>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════ -->
+      <section>
+        <div class="sechead">
+          <span class="idx">05</span><span class="bar"></span><span>Money</span>
+        </div>
+        <h2>Four flows that never merge</h2>
+        <p class="lead">Different counterparties, so they stay separable in reporting.</p>
+
+        <div class="tbl-scroll">
+          <table>
+            <thead>
+              <tr><th>Flow</th><th>Direction</th><th>When</th><th>Controlled by</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>COD collected</strong></td>
+                <td>customer → courier → us → seller</td>
+                <td>Accrued at delivery, credited after the delay</td>
+                <td class="v">wallet.accrual_delay_days</td>
+              </tr>
+              <tr>
+                <td><strong>Order charges</strong></td>
+                <td>seller → us</td>
+                <td>Debited at delivery by default</td>
+                <td class="v">wallet.courier_fee_deduction_timing</td>
+              </tr>
+              <tr>
+                <td><strong>Inbound freight</strong></td>
+                <td>seller → us</td>
+                <td>At receipt, or per unit as stock sells</td>
+                <td class="v">wallet.inbound_freight_mode</td>
+              </tr>
+              <tr>
+                <td><strong>Withdrawal</strong></td>
+                <td>us → seller's bank</td>
+                <td>Seller requests, admin executes</td>
+                <td class="v">wallet.withdrawal_min_threshold_inr</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>What a parcel costs</h3>
+        <p>
+          Base shipping for the destination zone and weight slab, plus surcharges, plus
+          18% GST on the sum. Bangalore is a metro origin, so the destination's tier
+          decides the zone.
+        </p>
+        <div class="tbl-scroll">
+          <table>
+            <thead>
+              <tr><th>Destination</th><th>Zone</th><th>Base range</th><th>Decided by</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Metro</td><td class="v">A</td><td class="k">₹60 – 500</td><td>Explicit pincode row</td></tr>
+              <tr><td>Tier 1</td><td class="v">B</td><td class="k">₹80 – 680</td><td>Explicit pincode row</td></tr>
+              <tr><td>Tier 2</td><td class="v">C</td><td class="k">₹100 – 860</td><td>Explicit pincode row</td></tr>
+              <tr><td>Everywhere else</td><td class="v">D</td><td class="k">₹130 – 1,160</td><td>Fallback</td></tr>
+              <tr><td>North-East, J&amp;K, Ladakh</td><td class="v">E</td><td class="k">₹180 – 1,580</td><td>Pincode prefix</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Margin and float</h3>
+        <p>
+          Margin is what the seller was billed minus what the courier actually charged,
+          read from real invoices rather than a typed-in estimate. It never touches the
+          seller's wallet. Between delivering a parcel and the courier settling, Skydrop
+          is owed money it has not received — every payout is recorded against the orders
+          it covers, so the outstanding float and any short-payment are both countable. A
+          courier underpaying is a dispute with the courier, never a clawback from a
+          seller who was paid in good faith.
+        </p>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════ -->
+      <section>
+        <div class="sechead">
+          <span class="idx">06</span><span class="bar"></span><span>Configuration</span>
+        </div>
+        <h2>The settings that matter most</h2>
+        <p class="lead">
+          61 in total, all admin-editable. The 13 marked per-seller can be overridden for
+          an individual account, clamped server-side to a permitted range.
+        </p>
+
+        <div class="tbl-scroll">
+          <table>
+            <thead>
+              <tr><th>Setting</th><th>Default</th><th>Effect</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="k">ops.call_max_attempts_before_ndr</td><td class="v">3</td><td>Calls before an order is rejected — <strong>per-seller</strong></td></tr>
+              <tr><td class="k">ops.call_retry_interval_hours</td><td class="v">4</td><td>Gap between attempts</td></tr>
+              <tr><td class="k">ops.call_assignment_timeout_minutes</td><td class="v">30</td><td>An agent's claim expires</td></tr>
+              <tr><td class="k">ops.stock_reservation_ttl_hours</td><td class="v">48</td><td>How long an unconsumed claim survives</td></tr>
+              <tr><td class="k">ops.pick_task_timeout_hours</td><td class="v">4</td><td>An abandoned pick is released</td></tr>
+              <tr><td class="k">ops.stock_adjustment_approval_threshold_inr</td><td class="v">50,000</td><td>Above this, a correction needs a second person</td></tr>
+              <tr><td class="k">ops.csv_max_order_rows</td><td class="v">1,000</td><td>Bulk import ceiling</td></tr>
+              <tr><td class="k">ops.allowed_indian_states</td><td class="v">list</td><td>Delivery refused outside these</td></tr>
+              <tr><td class="k">inventory.default_inventory_mode</td><td class="v">NORMAL</td><td>Normal or per-unit strict — <strong>per-seller</strong></td></tr>
+              <tr><td class="k">inventory.early_reservation_enabled</td><td class="v">false</td><td>Hold stock at placement — <strong>per-seller</strong></td></tr>
+              <tr><td class="k">inventory.early_reservation_ndr_action</td><td class="v">AUTO_RELEASE</td><td>Release, or ask the seller — <strong>per-seller</strong></td></tr>
+              <tr><td class="k">wallet.accrual_timing_tier</td><td class="v">T_PLUS_N</td><td>Delayed credit or instant — <strong>per-seller</strong></td></tr>
+              <tr><td class="k">wallet.accrual_delay_days</td><td class="v">7</td><td>The delay — <strong>per-seller</strong></td></tr>
+              <tr><td class="k">wallet.courier_fee_deduction_timing</td><td class="v">AT_DELIVERY</td><td>Charge at delivery or at AWB — <strong>per-seller</strong></td></tr>
+              <tr><td class="k">wallet.inbound_freight_mode</td><td class="v">PAY_NOW</td><td>Freight now, or as stock sells — <strong>per-seller</strong></td></tr>
+              <tr><td class="k">wallet.withdrawal_min_threshold_inr</td><td class="v">500</td><td>Smallest payout — <strong>per-seller</strong></td></tr>
+              <tr><td class="k">wallet.withdrawal_max_per_day</td><td class="v">1</td><td>Requests per day — <strong>per-seller</strong></td></tr>
+              <tr><td class="k">pricing.gst_rate</td><td class="v">18</td><td>Applied after all surcharges</td></tr>
+              <tr><td class="k">courier.delhivery_live_writes_enabled</td><td class="v">false</td><td><strong>Master safety switch</strong> — no write reaches Delhivery while off</td></tr>
+              <tr><td class="k">courier.delhivery_pickup_location</td><td class="v">Skydrop</td><td>Must match their records byte for byte</td></tr>
+              <tr><td class="k">tracking.public_lookup_rate_limit_per_min</td><td class="v">30</td><td>Per IP on the public tracking page</td></tr>
+              <tr><td class="k">webhooks.auto_disable_after_consecutive_failures</td><td class="v">50</td><td>A dead seller endpoint is switched off</td></tr>
+              <tr><td class="k">invoice.gstin</td><td class="v">unset</td><td><strong>Needed before invoices are compliant</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════ -->
+      <section>
+        <div class="sechead">
+          <span class="idx">07</span><span class="bar"></span><span>People</span>
+        </div>
+        <h2>Roles and access</h2>
+
+        <div class="tbl-scroll">
+          <table>
+            <thead><tr><th>Staff role</th><th>Can do</th></tr></thead>
+            <tbody>
+              <tr><td class="k">SUPER_ADMIN</td><td>Everything, including the god-mode override</td></tr>
+              <tr><td class="k">SELLER_APPROVAL_ADMIN</td><td>Invite, approve and suspend sellers</td></tr>
+              <tr><td class="k">CALL_AGENT</td><td>Pull calls, log outcomes, set own availability</td></tr>
+              <tr><td class="k">WAREHOUSE_STAFF</td><td>Pick, pack, receive</td></tr>
+              <tr><td class="k">WAREHOUSE_SUPERVISOR</td><td>Close manifests, dispatch, book pickups, release stuck picks</td></tr>
+              <tr><td class="k">MANUAL_PLACEMENT_ADMIN</td><td>Record a manual AWB, enter scans by hand</td></tr>
+              <tr><td class="k">FINANCE</td><td>Settlements, withdrawals, remittances</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p style="margin-top: 18px">
+          Seller teams have six roles — owner, admin, ops, inventory, finance, viewer.
+          Reads are open to all; writes fail closed, so a new endpoint is protected by
+          default and must be deliberately widened.
+        </p>
+        <div class="callout">
+          <p>
+            <strong>Role gating in the interface is cosmetic.</strong> Hiding a control
+            someone cannot use is courtesy; the server rejects the request regardless of
+            what was shown. When it refuses, the screen shows its exact words rather than
+            guessing at a friendlier version.
+          </p>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════ -->
+      <section>
+        <div class="sechead">
+          <span class="idx">08</span><span class="bar"></span><span>Engineering</span>
+        </div>
+        <h2>Rules that hold it together</h2>
+        <p class="lead">
+          Seventeen families of invariant, enforced in code and pinned by tests. The ones
+          worth knowing before changing anything:
+        </p>
+        <ul>
+          <li><strong>One writer per thing.</strong> Stock moves through a single service; the wallet through a single service; tickets through a single service. Nothing writes those tables directly.</li>
+          <li><strong>Append-only records.</strong> Stock movements, tracking events, call attempts, order events and audit logs are never updated or deleted. They are what you read when a number looks wrong.</li>
+          <li><strong>Snapshots.</strong> An order keeps its own copy of the recipient and SKU details. Editing the catalog cannot rewrite history.</li>
+          <li><strong>Guard inside the write.</strong> Checking a status and then acting on it is not a guard — two people can both pass the check. The condition goes into the write itself.</li>
+          <li><strong>Fail visibly, not silently.</strong> Where a sequence cannot be one transaction, the durable step goes first, so a crash leaves a state that announces what happened and can be retried.</li>
+          <li><strong>Refuse rather than guess.</strong> A price that cannot be computed is not recorded as ₹0. A webhook that cannot be authenticated is not stored. A URL that cannot be shown to be safe is not fetched.</li>
+        </ul>
+
+        <h3>Security</h3>
+        <p>
+          Three adversarial review rounds. Cross-tenant isolation proven by two real
+          sellers reaching for each other's data. Argon2id password hashing at OWASP
+          parameters, brute-force throttling, injection checked. A per-request nonce
+          content-security-policy on every application. Every stored document — invoices,
+          shipping labels — behind short-lived signed URLs rather than public storage.
+          Credentials encrypted with the key held outside the database, and every
+          decryption audited.
+        </p>
+
+        <h3>Verification</h3>
+        <p>
+          1,720 automated tests gate every commit: 1,532 unit, 127 integration against a
+          real database, 68 component, and browser tests that exercise the login round
+          trip and the content-security-policy in a real browser. Plus a check that every
+          frontend call resolves to a real API route — the seam where three separate bugs
+          hid, each side passing its own tests while the path between them was wrong.
+        </p>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════ -->
+      <section>
+        <div class="sechead">
+          <span class="idx">09</span><span class="bar"></span><span>Honest list</span>
+        </div>
+        <h2>What is not done</h2>
+        <p class="lead">Nothing here is half-built and pretending otherwise.</p>
+
+        <div class="callout bad">
+          <p>
+            <strong>No write has ever reached Delhivery.</strong> The adapter is built
+            against their real API and every read path is exercised, but live writes are
+            switched off and no waybill has ever been fetched. Until one real consignment
+            is booked and cancelled, the write contract is an assumption. The procedure
+            is written and takes about forty minutes.
+          </p>
+        </div>
+
+        <ul>
+          <li><strong>Warehouse setup.</strong> The Bangalore warehouse is active but has no bins, and there is no category tree yet. Both are data entry against real shelving and a real catalog.</li>
+          <li><strong>City tiers.</strong> 22 cities are priced explicitly; everywhere else falls to zone D until the tier list is decided.</li>
+          <li><strong>GST number.</strong> Invoices generate but are not compliant until the GSTIN is set.</li>
+          <li><strong>Live chat.</strong> Scaffolded; needs the ChatWoot install.</li>
+          <li><strong>Edge protection.</strong> DNS points straight at the origin — no CDN, no web application firewall, no DDoS absorption. Turning the proxy on is a real decision, not a cleanup.</li>
+          <li><strong>Multi-box parcels and reverse-pickup inspection.</strong> Both need models that do not exist yet; neither is blocked on anything else.</li>
+          <li><strong>Two commercial calls.</strong> What instant credit should cost, and how long an unsold consignment's freight may age before it is called in.</li>
+        </ul>
+      </section>
+
+      <footer>
+        Written against the production database on 31 July 2026. Statuses, settings,
+        route and screen counts are what is deployed, not what was planned. Anything
+        described as a decision is genuinely open.
+      </footer>
+    </div>
+
+    <script>
+      // Theme toggle — mirrors the operating-model report so the pair behave
+      // identically. Persisted, and it must beat the OS preference in both
+      // directions, which is why it stamps data-theme rather than toggling a
+      // single class.
+      (function () {
+        var btn = document.getElementById('tt');
+        var saved = null;
+        try {
+          saved = localStorage.getItem('sd-report-theme');
+        } catch (e) {
+          /* storage can be blocked; the OS preference still applies */
+        }
+        if (saved === 'dark' || saved === 'light') {
+          document.documentElement.setAttribute('data-theme', saved);
+        }
+        btn.addEventListener('click', function () {
+          var cur = document.documentElement.getAttribute('data-theme');
+          if (!cur) {
+            cur = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          var next = cur === 'dark' ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', next);
+          try {
+            localStorage.setItem('sd-report-theme', next);
+          } catch (e) {
+            /* not fatal */
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>
