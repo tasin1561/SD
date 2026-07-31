@@ -268,7 +268,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
             </div>
 
             {isArriving && (
-              <div className="grid grid-cols-[1fr_1fr_2fr] gap-2 mt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_2fr] gap-2 mt-2">
                 <FormField label="Received qty">
                   <Input
                     type="number"

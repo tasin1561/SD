@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactElement } from 'react';
-import { ErrorState, LoadingState, Modal } from '@skydrop/ui/components';
+import { ErrorState, LoadingState, Modal, Table } from '@skydrop/ui/components';
 import { useFxRateHistory } from '@/lib/api-hooks';
 
 export function FxHistoryDrawer({
@@ -37,7 +37,7 @@ export function FxHistoryDrawer({
           No history yet. The first change you make will record here.
         </div>
       ) : (
-        <table className="w-full text-sm">
+        <Table wrapperClassName="rounded-none border-0 bg-transparent">
           <thead className="text-text-muted text-[11px] uppercase tracking-wide bg-surface-raised border-b border-border">
             <tr>
               <th className="text-left px-3 py-2 font-medium">When</th>
@@ -95,7 +95,7 @@ export function FxHistoryDrawer({
               );
             })}
           </tbody>
-        </table>
+        </Table>
       )}
     </Modal>
   );

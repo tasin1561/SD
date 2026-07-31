@@ -37,7 +37,11 @@ export function SearchForm({ locale }: { readonly locale: Locale }): ReactElemen
             value={awb}
             onChange={(e) => setAwb(e.target.value)}
             placeholder={t(locale, 'awbPlaceholder')}
-            className="w-full h-12 pl-12 pr-4 rounded-xl bg-surface border border-line text-fg-strong placeholder:text-fg-muted font-mono text-sm focus:border-sky focus:outline-none transition-colors"
+            // 16px on touch, not `text-sm`: mobile Safari zooms the
+            // page when a focused input is under 16px and does not zoom
+            // back out — on a public tracking page the first thing a
+            // customer does is tap this field.
+            className="bg-surface border-line text-fg-strong placeholder:text-fg-muted focus:border-sky h-12 w-full rounded-xl border pr-4 pl-12 font-mono text-base transition-colors focus:outline-none sm:text-sm"
           />
         </div>
       </div>

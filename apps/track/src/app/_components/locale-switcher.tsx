@@ -22,7 +22,7 @@ export function LocaleSwitcher({ active }: { readonly active: Locale }): ReactEl
         type="button"
         onClick={() => set('en')}
         className={
-          'px-2.5 py-1.5 transition-colors ' +
+          'inline-flex min-h-[36px] items-center px-3 transition-colors ' +
           (active === 'en'
             ? 'text-accent-fg bg-sky font-medium'
             : 'text-fg-muted hover:text-fg-strong hover:bg-surface-3')
@@ -35,7 +35,7 @@ export function LocaleSwitcher({ active }: { readonly active: Locale }): ReactEl
         type="button"
         onClick={() => set('hi')}
         className={
-          'px-2.5 py-1.5 transition-colors border-l border-line ' +
+          'inline-flex min-h-[36px] items-center border-l border-line px-3 transition-colors ' +
           (active === 'hi'
             ? 'text-accent-fg bg-sky font-medium'
             : 'text-fg-muted hover:text-fg-strong hover:bg-surface-3')

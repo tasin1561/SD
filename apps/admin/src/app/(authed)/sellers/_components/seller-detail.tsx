@@ -68,7 +68,7 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
           <Section title="Profile">
             <Card>
               <CardBody>
-                <dl className="grid grid-cols-[160px_1fr] gap-x-6 gap-y-1.5 text-sm">
+                <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[160px_1fr] gap-x-3 sm:gap-x-6 gap-y-1.5 text-sm">
                   <dt className="text-text-muted">Contact name</dt>
                   <dd className="text-text-body">{detail.data.contactPersonName}</dd>
                   <dt className="text-text-muted">Phone</dt>

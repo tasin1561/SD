@@ -5,16 +5,45 @@ import { usePathname } from 'next/navigation';
 import { useState, type ReactNode, type ReactElement } from 'react';
 import { useApiClient } from '@skydrop/auth/client';
 import type { StaffMe } from '@skydrop/api-client';
-import { Toaster } from '@skydrop/ui/components';
+import { AppShell, Toaster, type NavGroup } from '@skydrop/ui/components';
+import {
+  ArrowLeftRight,
+  Banknote,
+  BarChart3,
+  Boxes,
+  Building2,
+  ClipboardList,
+  Coins,
+  FolderTree,
+  Gauge,
+  Headphones,
+  LayoutDashboard,
+  LifeBuoy,
+  ListChecks,
+  Lock,
+  Package,
+  PhoneCall,
+  Receipt,
+  ScrollText,
+  Send,
+  Settings,
+  ShieldCheck,
+  Store,
+  Tags,
+  Truck,
+  Users,
+  Wallet,
+  Warehouse,
+  Webhook,
+} from 'lucide-react';
 
 /**
- * The dark-primary admin shell — fixed sidebar, slim topbar, dense
- * content area. CP1 ships only the nav skeleton (Dashboard) — the
- * CP2 feature pages (Sellers, Orders) slot in at commits 7-10.
+ * The admin shell.
  *
- * Lineage: Linear / Vercel dashboard — quiet chrome, the content is
- * the star. No grain, no animations, no celebration. The status
- * colors elsewhere do the talking.
+ * The chrome — sidebar, off-canvas drawer, top bar, safe areas — lives
+ * in `@skydrop/ui`'s AppShell so apps/admin and apps/seller cannot
+ * drift apart again. What stays here is what is genuinely admin: the
+ * nav, the brand line, and which two identity fields to show.
  */
 export function AuthedShell({
   identity,
@@ -42,126 +71,89 @@ export function AuthedShell({
   // and Delhivery surfaces landed, and a flat list that long stops being
   // scannable — you read it linearly instead of jumping to the section
   // you want. The groups match how the work actually splits: running the
-  // floor, moving money, configuring the network, administering the system.
-  const navGroups: {
-    heading: string;
-    items: { href: string; label: string }[];
-  }[] = [
+  // floor, moving money, configuring the network, administering the
+  // system.
+  //
+  // Icons earn their place in the mobile drawer, where the nav is the
+  // whole screen and a column of same-length labels is slow to scan.
+  const navGroups: NavGroup[] = [
     {
       heading: 'Operations',
       items: [
-        { href: '/dashboard', label: 'Dashboard' },
-        { href: '/orders', label: 'Orders' },
-        { href: '/call-center', label: 'Call centre' },
-        { href: '/call-center/queue', label: 'Call queue' },
-        { href: '/call-center/agents', label: 'Call agents' },
-        { href: '/warehouse', label: 'Warehouse' },
-        { href: '/tickets', label: 'Tickets' },
-        { href: '/holds', label: 'Held stock' },
-        { href: '/inventory/adjustments', label: 'Stock adjustments' },
-        { href: '/inventory/cycle-counts', label: 'Cycle counts' },
-        { href: '/inventory/movements', label: 'Stock ledger' },
-        { href: '/inventory/transfers', label: 'Transfers' },
-        { href: '/inventory-units', label: 'Unit discrepancies' },
+        { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={15} /> },
+        { href: '/orders', label: 'Orders', icon: <Package size={15} /> },
+        { href: '/call-center', label: 'Call centre', icon: <Headphones size={15} /> },
+        { href: '/call-center/queue', label: 'Call queue', icon: <PhoneCall size={15} /> },
+        { href: '/call-center/agents', label: 'Call agents', icon: <Users size={15} /> },
+        { href: '/warehouse', label: 'Warehouse', icon: <Warehouse size={15} /> },
+        { href: '/tickets', label: 'Tickets', icon: <LifeBuoy size={15} /> },
+        { href: '/holds', label: 'Held stock', icon: <Lock size={15} /> },
+        {
+          href: '/inventory/adjustments',
+          label: 'Stock adjustments',
+          icon: <ListChecks size={15} />,
+        },
+        {
+          href: '/inventory/cycle-counts',
+          label: 'Cycle counts',
+          icon: <ClipboardList size={15} />,
+        },
+        { href: '/inventory/movements', label: 'Stock ledger', icon: <ScrollText size={15} /> },
+        { href: '/inventory/transfers', label: 'Transfers', icon: <ArrowLeftRight size={15} /> },
+        { href: '/inventory-units', label: 'Unit discrepancies', icon: <Boxes size={15} /> },
       ],
     },
     {
       heading: 'Money',
       items: [
-        { href: '/settlements', label: 'Settlements' },
-        { href: '/withdrawals', label: 'Withdrawals' },
-        { href: '/remittances', label: 'Remittances' },
-        { href: '/freight', label: 'Inbound freight' },
-        { href: '/margin', label: 'Lane margin' },
-        { href: '/pricing', label: 'Pricing preview' },
-        { href: '/fx', label: 'FX rates' },
+        { href: '/settlements', label: 'Settlements', icon: <Banknote size={15} /> },
+        { href: '/withdrawals', label: 'Withdrawals', icon: <Wallet size={15} /> },
+        { href: '/remittances', label: 'Remittances', icon: <Send size={15} /> },
+        { href: '/freight', label: 'Inbound freight', icon: <Truck size={15} /> },
+        { href: '/margin', label: 'Lane margin', icon: <BarChart3 size={15} /> },
+        { href: '/pricing', label: 'Pricing preview', icon: <Receipt size={15} /> },
+        { href: '/fx', label: 'FX rates', icon: <Coins size={15} /> },
       ],
     },
     {
       heading: 'Network',
       items: [
-        { href: '/sellers', label: 'Sellers' },
-        { href: '/catalog/categories', label: 'Categories' },
-        { href: '/catalog/proposals', label: 'Category proposals' },
-        { href: '/courier-accounts', label: 'Courier accounts' },
-        { href: '/delhivery', label: 'Delhivery' },
+        { href: '/sellers', label: 'Sellers', icon: <Store size={15} /> },
+        { href: '/catalog/categories', label: 'Categories', icon: <FolderTree size={15} /> },
+        { href: '/catalog/proposals', label: 'Category proposals', icon: <Tags size={15} /> },
+        { href: '/courier-accounts', label: 'Courier accounts', icon: <Building2 size={15} /> },
+        { href: '/delhivery', label: 'Delhivery', icon: <Gauge size={15} /> },
       ],
     },
     {
       heading: 'System',
       items: [
-        { href: '/reports', label: 'Reports' },
-        { href: '/webhooks', label: 'Webhooks' },
-        { href: '/staff', label: 'Staff' },
-        { href: '/settings', label: 'Settings' },
+        { href: '/reports', label: 'Reports', icon: <BarChart3 size={15} /> },
+        { href: '/webhooks', label: 'Webhooks', icon: <Webhook size={15} /> },
+        { href: '/staff', label: 'Staff', icon: <ShieldCheck size={15} /> },
+        { href: '/settings', label: 'Settings', icon: <Settings size={15} /> },
       ],
     },
   ];
 
   return (
     <Toaster>
-      <div className="grid min-h-screen grid-cols-[220px_1fr] bg-bg text-text-body">
-        {/* Sidebar */}
-        <aside className="border-r border-border bg-surface flex flex-col">
-          <div className="px-4 py-5 border-b border-border">
-            <div className="text-text-bright font-semibold tracking-tight text-base">Skydrop</div>
-            <div className="text-text-faint text-xs mt-0.5">Admin</div>
-          </div>
-          <nav className="flex flex-col overflow-y-auto py-2" aria-label="Main">
-            {navGroups.map((group) => (
-              <div key={group.heading} className="mb-1">
-                <div className="text-text-faint px-5 pt-2 pb-1 text-[10px] font-medium tracking-wider uppercase">
-                  {group.heading}
-                </div>
-                {group.items.map((item) => {
-                  const active =
-                    pathname === item.href || (pathname?.startsWith(`${item.href}/`) ?? false);
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      aria-current={active ? 'page' : undefined}
-                      className={
-                        'mx-2 my-0.5 px-3 py-1.5 rounded-[5px] text-sm transition-colors block ' +
-                        (active
-                          ? 'bg-surface-hover text-text-bright'
-                          : 'text-text-muted hover:bg-surface-hover hover:text-text-body')
-                      }
-                    >
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </div>
-            ))}
-          </nav>
-          <div className="mt-auto px-4 py-3 border-t border-border text-xs text-text-faint">
-            Phase 1A
-          </div>
-        </aside>
-
-        {/* Main column */}
-        <div className="flex flex-col min-w-0">
-          <header className="flex items-center justify-between gap-4 px-6 py-3 border-b border-border bg-surface">
-            <div className="text-text-muted text-xs uppercase tracking-wide">Staff Dashboard</div>
-            <div className="flex items-center gap-3 text-xs">
-              <div className="text-right leading-tight">
-                <div className="text-text-body">{identity.emailDisplay}</div>
-                <div className="text-text-faint">{identity.role}</div>
-              </div>
-              <button
-                type="button"
-                onClick={handleLogout}
-                disabled={loggingOut}
-                className="px-2.5 py-1 rounded-[5px] border border-border text-text-muted hover:border-border-strong hover:text-text-body disabled:opacity-50 transition-colors"
-              >
-                {loggingOut ? 'Signing out…' : 'Sign out'}
-              </button>
-            </div>
-          </header>
-          <main className="flex-1 min-w-0 px-6 py-6 overflow-auto">{children}</main>
-        </div>
-      </div>
+      <AppShell
+        subtitle="Admin"
+        sectionLabel="Staff console"
+        navGroups={navGroups}
+        identityPrimary={identity.emailDisplay}
+        identitySecondary={identity.role}
+        footerNote="Phase 1A"
+        pathname={pathname}
+        Link={Link}
+        onSignOut={() => {
+          void handleLogout();
+        }}
+        signingOut={loggingOut}
+      >
+        {children}
+      </AppShell>
     </Toaster>
   );
 }

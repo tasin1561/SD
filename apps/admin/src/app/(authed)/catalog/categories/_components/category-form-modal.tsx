@@ -155,7 +155,7 @@ export function CategoryFormModal(
           </>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label="Sort order">
             <Input
               type="number"

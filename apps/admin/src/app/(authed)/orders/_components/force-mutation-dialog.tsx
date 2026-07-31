@@ -478,7 +478,7 @@ function FieldGroupBlock({
                   disabled={disabled}
                   className="mt-1 accent-[var(--color-critical)]"
                 />
-                <div className="flex-1 min-w-0 grid grid-cols-[140px_1fr] items-center gap-3">
+                <div className="flex-1 min-w-0 grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[140px_1fr] items-center gap-3">
                   <div>
                     <div className="text-text-body text-sm">{f.label}</div>
                     {currentValue !== null && currentValue !== undefined && (

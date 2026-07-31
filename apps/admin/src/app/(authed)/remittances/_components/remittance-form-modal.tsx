@@ -185,7 +185,7 @@ export function RemittanceFormModal({
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label="Wallet currency (debit)" required>
             <Select
               value={sourceCurrency}
@@ -203,7 +203,7 @@ export function RemittanceFormModal({
           </FormField>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label={`Source amount (${sourceCurrency})`} required>
             <Input
               type="number"
@@ -239,7 +239,7 @@ export function RemittanceFormModal({
           <Input value={destAmount} readOnly disabled />
         </FormField>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label="Bank reference" required>
             <Input
               value={bankReference}

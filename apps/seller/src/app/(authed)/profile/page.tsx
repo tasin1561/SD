@@ -179,7 +179,7 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
       />
       <CardBody>
         {!editing ? (
-          <dl className="grid grid-cols-[180px_1fr] gap-x-6 gap-y-2 text-sm">
+          <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[180px_1fr] gap-x-3 sm:gap-x-6 gap-y-2 text-sm">
             <dt className="text-text-muted">Company</dt>
             <dd className="text-text-body">{profile.companyName}</dd>
             <dt className="text-text-muted">Contact person</dt>
@@ -232,7 +232,7 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
                 placeholder="+8801712345678"
               />
             </FormField>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <FormField label="Display currency">
                 <Select
                   value={form.displayCurrency}
@@ -381,7 +381,7 @@ function BankDetailsSection({ profile }: { readonly profile: SellerProfileView }
               delivered order.
             </div>
           ) : (
-            <dl className="grid grid-cols-[180px_1fr] gap-x-6 gap-y-2 text-sm">
+            <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[180px_1fr] gap-x-3 sm:gap-x-6 gap-y-2 text-sm">
               <dt className="text-text-muted">Bank name</dt>
               <dd className="text-text-body">{profile.bankName ?? '—'}</dd>
               <dt className="text-text-muted">Account holder</dt>
@@ -427,7 +427,7 @@ function BankDetailsSection({ profile }: { readonly profile: SellerProfileView }
                 placeholder="123-4567-890123"
               />
             </FormField>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <FormField label="Routing number">
                 <Input
                   value={form.bankRoutingNumber}

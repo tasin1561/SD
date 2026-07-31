@@ -12,6 +12,7 @@ import {
   Input,
   LoadingState,
   PageHeader,
+  Table,
   useToast,
 } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
@@ -92,7 +93,7 @@ export function ApiKeysIndex(): ReactElement {
         <CardBody>
           <form
             onSubmit={(e) => void onCreate(e)}
-            className="grid grid-cols-[1fr_120px_auto] gap-3 items-end"
+            className="grid grid-cols-1 sm:grid-cols-[1fr_120px_auto] gap-3 items-end"
           >
             <FormField label="Key name" required>
               <Input
@@ -131,7 +132,7 @@ export function ApiKeysIndex(): ReactElement {
         </Card>
       ) : (
         <Card>
-          <table className="w-full text-sm">
+          <Table wrapperClassName="rounded-none border-0 bg-transparent">
             <thead className="text-text-muted text-[11px] uppercase tracking-wide bg-surface-raised border-b border-border">
               <tr>
                 <th className="text-left px-3 py-2 font-medium">Name</th>
@@ -201,7 +202,7 @@ export function ApiKeysIndex(): ReactElement {
                 );
               })}
             </tbody>
-          </table>
+          </Table>
         </Card>
       )}
     </div>

@@ -11,6 +11,7 @@ import {
   Money,
   PageHeader,
   SkeletonRows,
+  Table,
   useToast,
 } from '@skydrop/ui/components';
 import { useRemittancesList } from '@/lib/api-hooks';
@@ -55,7 +56,7 @@ export function RemittancesIndex(): ReactElement {
         />
       ) : (
         <Card>
-          <table className="w-full text-sm">
+          <Table wrapperClassName="rounded-none border-0 bg-transparent">
             <thead className="text-text-muted text-[11px] uppercase tracking-wide bg-surface-raised border-b border-border">
               <tr>
                 <th className="text-left px-3 py-2 font-medium">Paid at</th>
@@ -105,7 +106,7 @@ export function RemittancesIndex(): ReactElement {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </Table>
         </Card>
       )}
 

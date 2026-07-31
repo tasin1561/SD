@@ -39,16 +39,27 @@ export function Modal({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/60 z-40 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
+        {/*
+         * Below `sm` this is a bottom sheet pinned to the bottom edge,
+         * not a centred dialog. Two reasons: a centred box on a phone
+         * puts its actions under the reader's thumb-reach and its top
+         * under the notch, and a tall form inside a vertically-centred
+         * `-translate-y-1/2` box overflows BOTH edges with no way to
+         * scroll to either. `max-h` + `overflow-y-auto` on the body is
+         * what makes a long form usable at all here.
+         */}
         <Dialog.Content
           className={
-            `fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] ${widthClass} ` +
-            `z-50 rounded-[7px] border ${borderClass} bg-surface shadow-[var(--shadow-3)] ` +
-            'focus:outline-none'
+            'fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] flex-col rounded-t-[12px] ' +
+            `border ${borderClass} bg-surface shadow-[var(--shadow-3)] focus:outline-none ` +
+            `sm:inset-x-auto sm:bottom-auto sm:top-1/2 sm:left-1/2 sm:w-[calc(100vw-2rem)] ${widthClass} ` +
+            'sm:max-h-[calc(100dvh-4rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[7px]'
           }
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
           <div
             className={
-              'flex items-start justify-between gap-4 px-4 py-3 border-b ' +
+              'flex shrink-0 items-start justify-between gap-4 border-b px-4 py-3 ' +
               (tone === 'critical' ? 'border-[var(--color-critical-ring)]' : 'border-border')
             }
           >
@@ -70,14 +81,16 @@ export function Modal({
             <Dialog.Close asChild>
               <button
                 type="button"
-                className="text-text-muted hover:text-text-body shrink-0 -mr-1 -mt-1 p-1 rounded-[3px] hover:bg-surface-hover transition-colors"
+                className="text-text-muted hover:text-text-body hover:bg-surface-hover -mt-1.5 -mr-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[5px] transition-colors"
                 aria-label="Close"
               >
-                <X size={14} />
+                <X size={15} />
               </button>
             </Dialog.Close>
           </div>
-          <div className="px-4 py-3">{children}</div>
+          {/* The only scrolling region — the header stays pinned so the
+              close control never scrolls off a long form. */}
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">{children}</div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -86,7 +99,10 @@ export function Modal({
 
 export function ModalFooter({ children }: { children: ReactNode }): ReactElement {
   return (
-    <div className="flex items-center justify-end gap-2 pt-3 mt-3 border-t border-border">
+    // Stacked and full-width on a phone (confirm on top, where the
+    // thumb is), side-by-side from `sm`. `[&>*]:w-full` reaches the
+    // buttons without every call site having to pass a class.
+    <div className="border-border mt-3 flex flex-col-reverse gap-2 border-t pt-3 [&>*]:w-full sm:flex-row sm:items-center sm:justify-end sm:[&>*]:w-auto">
       {children}
     </div>
   );

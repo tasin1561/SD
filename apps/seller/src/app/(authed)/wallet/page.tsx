@@ -13,6 +13,7 @@ import {
   PageHeader,
   Skeleton,
   SkeletonRows,
+  Table,
 } from '@skydrop/ui/components';
 import { useInfiniteWalletEntries, useWalletBalances } from '@/lib/api-hooks';
 import { WithdrawalsCard } from './_components/withdrawals-card';
@@ -106,10 +107,13 @@ export default function WalletPage(): ReactElement {
                     key={f}
                     type="button"
                     onClick={() => setFilter(f)}
+                    aria-pressed={filter === f}
                     className={
-                      'px-2 py-0.5 rounded-[4px] transition-colors ' +
+                      // A segmented filter is a real control, not a
+                      // caption — it was 30×19px, well under a finger.
+                      'inline-flex min-h-[32px] items-center rounded-[4px] px-2.5 transition-colors ' +
                       (filter === f
-                        ? 'bg-surface border border-border text-text-bright'
+                        ? 'bg-surface border-border text-text-bright border'
                         : 'text-text-muted hover:text-text-body')
                     }
                   >
@@ -143,7 +147,7 @@ export default function WalletPage(): ReactElement {
               amount − shipping + GST).
             </div>
           ) : (
-            <table className="w-full text-sm">
+            <Table wrapperClassName="rounded-none border-0 bg-transparent">
               <thead className="text-text-muted text-[11px] uppercase tracking-wide bg-surface-raised border-b border-border">
                 <tr>
                   <th className="text-left px-3 py-2 font-medium">When</th>
@@ -158,7 +162,7 @@ export default function WalletPage(): ReactElement {
                   <LedgerRow key={e.id} entry={e} />
                 ))}
               </tbody>
-            </table>
+            </Table>
           )}
           {entries.hasNextPage && (
             <div className="flex justify-center mt-3">

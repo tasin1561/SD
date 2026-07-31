@@ -10,6 +10,7 @@ import {
   LoadingState,
   PageHeader,
   Section,
+  Table,
   useToast,
 } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
@@ -131,7 +132,7 @@ export function TeamManagementIndex(): ReactElement {
               <p className="text-text-muted text-sm">No members yet.</p>
             </CardBody>
           ) : (
-            <table className="w-full text-sm">
+            <Table wrapperClassName="rounded-none border-0 bg-transparent">
               <thead className="text-text-muted text-[11px] uppercase tracking-wide bg-surface-raised border-b border-border">
                 <tr>
                   <th className="text-left px-3 py-2 font-medium">Name</th>
@@ -205,7 +206,7 @@ export function TeamManagementIndex(): ReactElement {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           )}
         </Card>
       </Section>
@@ -225,7 +226,7 @@ export function TeamManagementIndex(): ReactElement {
               <p className="text-text-muted text-sm">No invitations yet.</p>
             </CardBody>
           ) : (
-            <table className="w-full text-sm">
+            <Table wrapperClassName="rounded-none border-0 bg-transparent">
               <thead className="text-text-muted text-[11px] uppercase tracking-wide bg-surface-raised border-b border-border">
                 <tr>
                   <th className="text-left px-3 py-2 font-medium">Email</th>
@@ -300,7 +301,7 @@ export function TeamManagementIndex(): ReactElement {
                   );
                 })}
               </tbody>
-            </table>
+            </Table>
           )}
         </Card>
       </Section>

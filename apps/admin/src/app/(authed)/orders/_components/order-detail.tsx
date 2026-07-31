@@ -11,9 +11,10 @@ import {
   ErrorState,
   HasOverrideBadge,
   LoadingState,
+  OrderStatusBadge,
   PageHeader,
   Section,
-  OrderStatusBadge,
+  Table,
 } from '@skydrop/ui/components';
 import { OrderActionsPanel } from './order-actions-panel';
 import { OrderChargesSection } from './order-charges';
@@ -74,7 +75,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
           <Section title="Recipient">
             <Card>
               <CardBody>
-                <dl className="grid grid-cols-[160px_1fr] gap-x-6 gap-y-1.5 text-sm">
+                <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[160px_1fr] gap-x-3 sm:gap-x-6 gap-y-1.5 text-sm">
                   <dt className="text-text-muted">Name</dt>
                   <dd className="text-text-body">{detail.data.recipientName}</dd>
                   <dt className="text-text-muted">Phone</dt>
@@ -120,7 +121,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             <Card>
               <CardHeader title="Payment" />
               <CardBody>
-                <dl className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1.5 text-sm">
+                <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[120px_1fr] gap-x-3 sm:gap-x-4 gap-y-1.5 text-sm">
                   <dt className="text-text-muted">Mode</dt>
                   <dd className="text-text-body uppercase">{detail.data.paymentMode}</dd>
                   <dt className="text-text-muted">COD (INR)</dt>
@@ -135,7 +136,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             <Card>
               <CardHeader title="Physical" />
               <CardBody>
-                <dl className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1.5 text-sm">
+                <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[120px_1fr] gap-x-3 sm:gap-x-4 gap-y-1.5 text-sm">
                   <dt className="text-text-muted">Weight (g)</dt>
                   <dd className="text-text-body font-mono">
                     {detail.data.totalWeightGrams ?? '—'}
@@ -168,7 +169,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
 
           <Section title={`Items (${detail.data.items.length})`}>
             <Card>
-              <table className="w-full text-sm">
+              <Table wrapperClassName="rounded-none border-0 bg-transparent">
                 <thead className="text-text-muted text-[11px] uppercase tracking-wide bg-surface-raised border-b border-border">
                   <tr>
                     <th className="text-left px-3 py-2 font-medium">SKU</th>
@@ -200,7 +201,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </Table>
             </Card>
           </Section>
 

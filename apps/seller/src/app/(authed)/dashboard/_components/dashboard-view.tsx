@@ -129,21 +129,25 @@ export function DashboardView(): ReactElement {
           <Card>
             <ol className="divide-y divide-border">
               {recent.data.items.map((o) => (
+                // Stacked on a phone. Side by side, the fixed 176px
+                // order number and a status badge as long as "Awaiting
+                // Seller Decision" (177px) cannot both fit in 320px,
+                // and neither is allowed to shrink.
                 <li
                   key={o.id}
-                  className="px-4 py-3 flex items-center gap-4 hover:bg-surface-hover transition-colors"
+                  className="hover:bg-surface-hover flex flex-col gap-1 px-4 py-2.5 transition-colors sm:flex-row sm:items-center sm:gap-4 sm:py-3"
                 >
                   <Link
                     href={`/orders/${o.id}`}
-                    className="font-mono text-xs text-text-bright hover:underline shrink-0 w-44"
+                    className="text-text-bright flex min-h-[30px] items-center font-mono text-xs hover:underline sm:min-h-0 sm:w-44 sm:shrink-0"
                   >
                     {o.orderNumber}
                   </Link>
-                  <div className="text-text-body text-sm min-w-0 flex-1 truncate">
+                  <div className="text-text-body min-w-0 flex-1 truncate text-sm">
                     {o.recipientName}
                     <span className="text-text-faint ml-1">· {o.recipientCity}</span>
                   </div>
-                  <div className="shrink-0">
+                  <div className="min-w-0 sm:shrink-0">
                     <OrderStatusBadge status={o.status} />
                   </div>
                 </li>

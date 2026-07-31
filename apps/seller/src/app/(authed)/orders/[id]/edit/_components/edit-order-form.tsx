@@ -295,7 +295,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
       <Card>
         <CardBody>
           <h2 className="text-text-bright text-sm font-medium mb-3">Recipient</h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <FormField label="Full name" required>
               <Input
                 value={form.recipientName}
@@ -389,7 +389,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
             Payment &amp; physical
             {economicsLocked && <span className="text-text-muted text-xs ml-2">(read-only)</span>}
           </h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <FormField label="Payment mode" required>
               <Select
                 value={form.paymentMode}

@@ -8,6 +8,7 @@ import {
   ErrorState,
   LoadingState,
   PageHeader,
+  Table,
   useToast,
 } from '@skydrop/ui/components';
 import type { FxRateView } from '@skydrop/api-client';
@@ -46,7 +47,7 @@ export function FxRatesIndex(): ReactElement {
         </Card>
       ) : (
         <Card>
-          <table className="w-full text-sm">
+          <Table wrapperClassName="rounded-none border-0 bg-transparent">
             <thead className="text-text-muted text-[11px] uppercase tracking-wide bg-surface-raised border-b border-border">
               <tr>
                 <th className="text-left px-3 py-2 font-medium">Pair</th>
@@ -96,7 +97,7 @@ export function FxRatesIndex(): ReactElement {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </Table>
         </Card>
       )}
 

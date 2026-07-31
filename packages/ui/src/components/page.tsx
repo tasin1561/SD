@@ -17,12 +17,24 @@ export function PageHeader({
   readonly className?: string;
 }): ReactElement {
   return (
-    <div className={clsx('flex items-start justify-between gap-4 mb-6', className)}>
+    // Stacked on a phone: `shrink-0` on the action slot means a wide
+    // action (a button group, a two-field filter) cannot give ground,
+    // so on a narrow screen it pushed the whole page sideways.
+    <div
+      className={clsx(
+        'mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-start sm:justify-between sm:gap-4',
+        className,
+      )}
+    >
       <div className="min-w-0">
-        <h1 className="text-text-bright text-xl font-semibold tracking-tight">{title}</h1>
-        {subtitle && <p className="text-text-muted text-sm mt-1">{subtitle}</p>}
+        <h1 className="text-text-bright text-lg font-semibold tracking-tight sm:text-xl">
+          {title}
+        </h1>
+        {subtitle && <p className="text-text-muted mt-1 text-sm">{subtitle}</p>}
       </div>
-      {action && <div className="shrink-0">{action}</div>}
+      {action && (
+        <div className="flex min-w-0 flex-wrap items-center gap-2 sm:shrink-0">{action}</div>
+      )}
     </div>
   );
 }

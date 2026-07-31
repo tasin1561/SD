@@ -11,6 +11,7 @@ import {
   LoadingState,
   PageHeader,
   Select,
+  Table,
   useToast,
 } from '@skydrop/ui/components';
 import { useRetryWebhookDelivery, useWebhookDeliveriesList } from '@/lib/api-hooks';
@@ -97,7 +98,7 @@ export function WebhookDeliveriesIndex(): ReactElement {
           </Card>
         ) : (
           <Card>
-            <table className="w-full text-sm">
+            <Table wrapperClassName="rounded-none border-0 bg-transparent">
               <thead className="text-text-muted text-[11px] uppercase tracking-wide bg-surface-raised border-b border-border">
                 <tr>
                   <th className="text-left px-3 py-2 font-medium">When</th>
@@ -157,7 +158,7 @@ export function WebhookDeliveriesIndex(): ReactElement {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </Card>
         )}
       </div>

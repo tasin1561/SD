@@ -112,7 +112,7 @@ function VariantReadCard({ variant }: { variant: SellerVariantView }): ReactElem
   return (
     <Card>
       <CardBody>
-        <dl className="grid grid-cols-[160px_1fr] gap-x-6 gap-y-1.5 text-sm">
+        <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[160px_1fr] gap-x-3 sm:gap-x-6 gap-y-1.5 text-sm">
           <dt className="text-text-muted">SKU</dt>
           <dd className="text-text-body font-mono text-xs">{variant.skuCode}</dd>
           <dt className="text-text-muted">Label</dt>

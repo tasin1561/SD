@@ -218,7 +218,7 @@ export function PickStation(): ReactElement {
                       </div>
                     </div>
                     {!done && (
-                      <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
+                      <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
                         <FormField label="Bin">
                           <Input
                             value={binByItem[it.shipmentItemId] ?? ''}

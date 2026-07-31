@@ -512,18 +512,35 @@
         <p class="tel">Build report · 31 July 2026</p>
         <h1>Everything that has been built</h1>
         <p class="lead">
-          The full inventory: every feature, every stage of the workflow, every setting
-          that controls it, and the things deliberately left undone. Written against the
-          running production database rather than the roadmap — where the two disagreed,
-          the database won.
+          The full inventory: every feature, every stage of the workflow, every setting that
+          controls it, and the things deliberately left undone. Written against the running
+          production database rather than the roadmap — where the two disagreed, the database won.
         </p>
         <div class="tiles">
-          <div class="tile"><div class="n">27</div><div class="k">order statuses</div></div>
-          <div class="tile"><div class="n">310</div><div class="k">API endpoints</div></div>
-          <div class="tile"><div class="n">80</div><div class="k">screens</div></div>
-          <div class="tile"><div class="n">61</div><div class="k">settings</div></div>
-          <div class="tile"><div class="n">15</div><div class="k">background workers</div></div>
-          <div class="tile"><div class="n">1,720</div><div class="k">automated tests</div></div>
+          <div class="tile">
+            <div class="n">27</div>
+            <div class="k">order statuses</div>
+          </div>
+          <div class="tile">
+            <div class="n">310</div>
+            <div class="k">API endpoints</div>
+          </div>
+          <div class="tile">
+            <div class="n">80</div>
+            <div class="k">screens</div>
+          </div>
+          <div class="tile">
+            <div class="n">61</div>
+            <div class="k">settings</div>
+          </div>
+          <div class="tile">
+            <div class="n">15</div>
+            <div class="k">background workers</div>
+          </div>
+          <div class="tile">
+            <div class="n">1,720</div>
+            <div class="k">automated tests</div>
+          </div>
         </div>
       </header>
 
@@ -534,16 +551,15 @@
         </div>
         <h2>One trade lane, and everything follows from it</h2>
         <p class="lead">
-          A seller in Bangladesh ships stock to a warehouse in Bangalore. An Indian
-          customer orders. Skydrop phones the customer to confirm — in a cash-on-delivery
-          market an unconfirmed order is a coin flip — then picks, packs, dispatches
-          through Delhivery, tracks the parcel, handles the return when it fails, and
-          pays the seller.
+          A seller in Bangladesh ships stock to a warehouse in Bangalore. An Indian customer orders.
+          Skydrop phones the customer to confirm — in a cash-on-delivery market an unconfirmed order
+          is a coin flip — then picks, packs, dispatches through Delhivery, tracks the parcel,
+          handles the return when it fails, and pays the seller.
         </p>
         <p>
-          The seller never sets foot in India. That is the product: warehouse, phone call,
-          courier and money movement, so a Bangladeshi merchant can sell into India
-          without Indian operations.
+          The seller never sets foot in India. That is the product: warehouse, phone call, courier
+          and money movement, so a Bangladeshi merchant can sell into India without Indian
+          operations.
         </p>
       </section>
 
@@ -563,10 +579,10 @@
             <div>
               <h4>Seller onboarding</h4>
               <p>
-                Invite-only. An admin issues an invitation; the seller registers against
-                that token, sets up profile, encrypted bank details, and the Bangladesh
-                origin address a consignment is booked against. Team members are invited
-                separately with their own role.
+                Invite-only. An admin issues an invitation; the seller registers against that token,
+                sets up profile, encrypted bank details, and the Bangladesh origin address a
+                consignment is booked against. Team members are invited separately with their own
+                role.
               </p>
               <div class="who">Admin → Seller</div>
             </div>
@@ -576,11 +592,10 @@
             <div>
               <h4>Catalog</h4>
               <p>
-                Products hang off a shared category tree, variants off products.
-                Categories carry the GST rate and HS code every variant inherits — which
-                is why a seller requests one rather than creating it. Images upload
-                straight to storage through a presigned URL. Bulk import by CSV, with
-                saved column mappings for your own spreadsheet headers.
+                Products hang off a shared category tree, variants off products. Categories carry
+                the GST rate and HS code every variant inherits — which is why a seller requests one
+                rather than creating it. Images upload straight to storage through a presigned URL.
+                Bulk import by CSV, with saved column mappings for your own spreadsheet headers.
               </p>
               <div class="who">Seller</div>
             </div>
@@ -590,10 +605,10 @@
             <div>
               <h4>Inbound consignment</h4>
               <p>
-                The seller declares what is coming. The warehouse receives it, counts it
-                into bins and batches, and any gap between declared and counted raises a
-                discrepancy. Freight for the BD→India leg is billed here — paid now, or
-                amortised per unit as the stock sells.
+                The seller declares what is coming. The warehouse receives it, counts it into bins
+                and batches, and any gap between declared and counted raises a discrepancy. Freight
+                for the BD→India leg is billed here — paid now, or amortised per unit as the stock
+                sells.
               </p>
               <div class="who">Seller → Warehouse</div>
             </div>
@@ -603,10 +618,9 @@
             <div>
               <h4>Order placement</h4>
               <p>
-                Manually, by CSV, or through the seller API. The recipient block and
-                per-line SKU details are snapshotted at creation and never re-resolved —
-                editing a product tomorrow cannot rewrite yesterday's order. No stock is
-                reserved yet.
+                Manually, by CSV, or through the seller API. The recipient block and per-line SKU
+                details are snapshotted at creation and never re-resolved — editing a product
+                tomorrow cannot rewrite yesterday's order. No stock is reserved yet.
               </p>
               <div class="who">Seller</div>
             </div>
@@ -616,11 +630,11 @@
             <div>
               <h4>Call confirmation</h4>
               <p>
-                The order joins a FIFO queue. An agent pulls the next one, phones the
-                customer, records one of nine outcomes. Six count toward the attempt cap;
-                three — callback requested, technical failure, language barrier — do not,
-                because they are not the customer's answer. At the cap the order is
-                rejected, or paused for the seller to decide if they are on manual review.
+                The order joins a FIFO queue. An agent pulls the next one, phones the customer,
+                records one of nine outcomes. Six count toward the attempt cap; three — callback
+                requested, technical failure, language barrier — do not, because they are not the
+                customer's answer. At the cap the order is rejected, or paused for the seller to
+                decide if they are on manual review.
               </p>
               <div class="who">Call agent</div>
             </div>
@@ -630,9 +644,9 @@
             <div>
               <h4>Stock reservation</h4>
               <p>
-                Only on confirmation — a soft quantity claim, no bin or batch yet. Sellers
-                who opt in can hold stock earlier, at placement, with an explicit release
-                decision if the calls run out. Insufficient stock lands the order in
+                Only on confirmation — a soft quantity claim, no bin or batch yet. Sellers who opt
+                in can hold stock earlier, at placement, with an explicit release decision if the
+                calls run out. Insufficient stock lands the order in
                 <code>OUT_OF_STOCK</code> rather than failing outright.
               </p>
               <div class="who">Automatic</div>
@@ -643,11 +657,11 @@
             <div>
               <h4>Pick and pack</h4>
               <p>
-                A picker claims the next shipment; the claim expires if abandoned, so work
-                cannot be stuck on someone who went home. Allocation resolves the soft
-                claim to real bins and batches, first-to-expire first out. Short stock
-                escalates to manual placement rather than erroring. Packing resolves races
-                at completion — two packers can pull the same parcel, only one finishes it.
+                A picker claims the next shipment; the claim expires if abandoned, so work cannot be
+                stuck on someone who went home. Allocation resolves the soft claim to real bins and
+                batches, first-to-expire first out. Short stock escalates to manual placement rather
+                than erroring. Packing resolves races at completion — two packers can pull the same
+                parcel, only one finishes it.
               </p>
               <div class="who">Warehouse</div>
             </div>
@@ -657,11 +671,10 @@
             <div>
               <h4>Manifest and AWB</h4>
               <p>
-                Packed parcels auto-attach to a draft manifest, one per courier and
-                warehouse. A supervisor closes it, which requests AWB numbers. One
-                parcel's failure never stops the others — a rejected shipment is retired
-                and replaced, its order routed to manual placement so a human can arrange
-                another carrier.
+                Packed parcels auto-attach to a draft manifest, one per courier and warehouse. A
+                supervisor closes it, which requests AWB numbers. One parcel's failure never stops
+                the others — a rejected shipment is retired and replaced, its order routed to manual
+                placement so a human can arrange another carrier.
               </p>
               <div class="who">Warehouse supervisor</div>
             </div>
@@ -671,8 +684,8 @@
             <div>
               <h4>Dispatch</h4>
               <p>
-                Handing the manifest to the courier is what decrements physical stock —
-                once, here, and nowhere else in the normal lifecycle.
+                Handing the manifest to the courier is what decrements physical stock — once, here,
+                and nowhere else in the normal lifecycle.
               </p>
               <div class="who">Warehouse supervisor</div>
             </div>
@@ -682,11 +695,11 @@
             <div>
               <h4>Tracking, delivery or return</h4>
               <p>
-                Courier scans arrive as signed webhooks, stored before processing, driving
-                the order forward and never backward. A failed delivery records its reason
-                and can be retried; repeated failure becomes a return, which travels back
-                to be received, inspected, and either restocked or written off. Customers
-                track by AWB on a public page that reveals no internal identifiers.
+                Courier scans arrive as signed webhooks, stored before processing, driving the order
+                forward and never backward. A failed delivery records its reason and can be retried;
+                repeated failure becomes a return, which travels back to be received, inspected, and
+                either restocked or written off. Customers track by AWB on a public page that
+                reveals no internal identifiers.
               </p>
               <div class="who">Automatic · public tracking</div>
             </div>
@@ -696,11 +709,10 @@
             <div>
               <h4>Money</h4>
               <p>
-                Delivery accrues the COD amount and debits the shipping charges, but the
-                credit lands after a delay — seven days by default, once the courier has
-                settled. The seller requests a withdrawal; an admin executes it as a
-                remittance. Courier payouts reconcile line-by-line against what each order
-                should have paid.
+                Delivery accrues the COD amount and debits the shipping charges, but the credit
+                lands after a delay — seven days by default, once the courier has settled. The
+                seller requests a withdrawal; an admin executes it as a remittance. Courier payouts
+                reconcile line-by-line against what each order should have paid.
               </p>
               <div class="who">Automatic → Seller → Finance</div>
             </div>
@@ -719,130 +731,124 @@
           <div class="panel">
             <span class="tel">Identity</span>
             <p>
-              Staff and seller sessions are separate, each with JWT access tokens and
-              rotating refresh tokens. Re-using a spent refresh token burns the whole
-              family — the standard defence against a stolen session. API keys for
-              machine access. Eight staff roles, six seller-team roles, last-owner
-              protection.
+              Staff and seller sessions are separate, each with JWT access tokens and rotating
+              refresh tokens. Re-using a spent refresh token burns the whole family — the standard
+              defence against a stolen session. API keys for machine access. Eight staff roles, six
+              seller-team roles, last-owner protection.
             </p>
           </div>
           <div class="panel">
             <span class="tel">Catalog</span>
             <p>
-              Category tree with inherited attributes, GST and HS codes. Products,
-              variants, images with automatic thumbnails. Seller-raised category
-              requests with an admin approve/reject queue. CSV import with reusable
-              column mappings.
+              Category tree with inherited attributes, GST and HS codes. Products, variants, images
+              with automatic thumbnails. Seller-raised category requests with an admin
+              approve/reject queue. CSV import with reusable column mappings.
             </p>
           </div>
           <div class="panel">
             <span class="tel">Inventory</span>
             <p>
               Multi-bin, multi-batch, FEFO picking. Append-only movement ledger. Two-phase
-              reservations. Goods receipts with discrepancy handling. Cycle counts.
-              Value-threshold adjustment approvals. Low-stock alerts with cooldown.
-              Inter-warehouse transfers that preserve batch lineage.
+              reservations. Goods receipts with discrepancy handling. Cycle counts. Value-threshold
+              adjustment approvals. Low-stock alerts with cooldown. Inter-warehouse transfers that
+              preserve batch lineage.
             </p>
           </div>
           <div class="panel">
             <span class="tel">Per-unit serials</span>
             <p>
-              Optional strict mode: every physical unit carries a barcode, scanned at
-              pick, pack, dispatch and return. Set-equality at pack, because a count
-              check passes a swap. The unit ledger is a sidecar — aggregates stay
-              authoritative, and disagreements surface as a report rather than
-              auto-correcting.
+              Optional strict mode: every physical unit carries a barcode, scanned at pick, pack,
+              dispatch and return. Set-equality at pack, because a count check passes a swap. The
+              unit ledger is a sidecar — aggregates stay authoritative, and disagreements surface as
+              a report rather than auto-correcting.
             </p>
           </div>
           <div class="panel">
             <span class="tel">Orders</span>
             <p>
-              27-status lifecycle behind one transition matrix. Immutable recipient and
-              SKU snapshots. Per-seller customer records with delivery history per
-              address. Manual entry, CSV import, and a seller API. A god-mode override
-              for the cases nothing else covers, with eight guardrails and a permanent
-              mark on the order.
+              27-status lifecycle behind one transition matrix. Immutable recipient and SKU
+              snapshots. Per-seller customer records with delivery history per address. Manual
+              entry, CSV import, and a seller API. A god-mode override for the cases nothing else
+              covers, with eight guardrails and a permanent mark on the order.
             </p>
           </div>
           <div class="panel">
             <span class="tel">Call centre</span>
             <p>
-              Strict FIFO queue with no double-assignment. Nine outcomes mapped centrally
-              to transitions. Attempt caps per seller. Time-based claim expiry.
-              Supervisor queue view with reassignment, plus agent rosters, per-agent
-              metrics and self-service availability.
+              Strict FIFO queue with no double-assignment. Nine outcomes mapped centrally to
+              transitions. Attempt caps per seller. Time-based claim expiry. Supervisor queue view
+              with reassignment, plus agent rosters, per-agent metrics and self-service
+              availability.
             </p>
           </div>
           <div class="panel">
             <span class="tel">Warehouse</span>
             <p>
-              Pick queue with expiring claims and short-stock escalation. Pack with
-              race resolution at completion. Manifests that find-or-create per courier
-              and warehouse. Dispatch handoff. Full RTO chain: receive at any warehouse,
-              inspect, restock into a lineage-preserving batch or write off.
+              Pick queue with expiring claims and short-stock escalation. Pack with race resolution
+              at completion. Manifests that find-or-create per courier and warehouse. Dispatch
+              handoff. Full RTO chain: receive at any warehouse, inspect, restock into a
+              lineage-preserving batch or write off.
             </p>
           </div>
           <div class="panel">
             <span class="tel">Courier</span>
             <p>
-              Delhivery adapter covering AWB, labels, serviceability, pickups, NDR
-              actions, e-way bills and cancellation. Waybill pooling. Multi-account
-              routing with weighted splits and per-parcel account tracing. Manual
-              placement for anything the integration rejects. Real margin measured
-              against what the courier actually charged.
+              Delhivery adapter covering AWB, labels, serviceability, pickups, NDR actions, e-way
+              bills and cancellation. Waybill pooling. Multi-account routing with weighted splits
+              and per-parcel account tracing. Manual placement for anything the integration rejects.
+              Real margin measured against what the courier actually charged.
             </p>
           </div>
           <div class="panel">
             <span class="tel">Tracking</span>
             <p>
-              HMAC-authenticated webhook ingestion, stored before processing, with
-              two-layer idempotency. A monotonic-forward guard so a late or duplicate
-              scan cannot move an order backward. Manual scan entry for when a webhook
-              never arrives. Public AWB lookup in English and Hindi.
+              HMAC-authenticated webhook ingestion, stored before processing, with two-layer
+              idempotency. A monotonic-forward guard so a late or duplicate scan cannot move an
+              order backward. Manual scan entry for when a webhook never arrives. Public AWB lookup
+              in English and Hindi.
             </p>
           </div>
           <div class="panel">
             <span class="tel">Money</span>
             <p>
-              Append-only wallet ledger in INR and BDT. Delayed accrual after courier
-              settlement. Seller-requested withdrawals, admin-executed remittances.
-              Courier settlement reconciliation with per-order short-payment records.
-              Inbound freight billed per unit by weight. GST invoices as PDFs.
+              Append-only wallet ledger in INR and BDT. Delayed accrual after courier settlement.
+              Seller-requested withdrawals, admin-executed remittances. Courier settlement
+              reconciliation with per-order short-payment records. Inbound freight billed per unit
+              by weight. GST invoices as PDFs.
             </p>
           </div>
           <div class="panel">
             <span class="tel">Pricing</span>
             <p>
-              Zone and weight-slab rate cards, per-seller discounts and COD fees,
-              surcharge rules, 18% GST applied after surcharges. Full computation context
-              stored with every charge, so a historical price can always be explained.
-              An admin preview that shows its own fallbacks rather than hiding them.
+              Zone and weight-slab rate cards, per-seller discounts and COD fees, surcharge rules,
+              18% GST applied after surcharges. Full computation context stored with every charge,
+              so a historical price can always be explained. An admin preview that shows its own
+              fallbacks rather than hiding them.
             </p>
           </div>
           <div class="panel">
             <span class="tel">Communications</span>
             <p>
-              39 email templates across the whole lifecycle, both seller and customer,
-              English and Hindi. Store-then-send with per-event deduplication, so a
-              retry cannot double-send. Outbound signed webhooks to seller systems, with
-              retry and auto-disable. In-app notifications. Live chat scaffolded.
+              39 email templates across the whole lifecycle, both seller and customer, English and
+              Hindi. Store-then-send with per-event deduplication, so a retry cannot double-send.
+              Outbound signed webhooks to seller systems, with retry and auto-disable. In-app
+              notifications. Live chat scaffolded.
             </p>
           </div>
           <div class="panel">
             <span class="tel">Support</span>
             <p>
-              One ticket system for two populations: damage and scrap raised
-              automatically inside the RTO inspection, and issues raised by sellers.
-              Shared lifecycle, append-only event log, and refunds that credit the
-              wallet inside the same transaction as the resolution.
+              One ticket system for two populations: damage and scrap raised automatically inside
+              the RTO inspection, and issues raised by sellers. Shared lifecycle, append-only event
+              log, and refunds that credit the wallet inside the same transaction as the resolution.
             </p>
           </div>
           <div class="panel">
             <span class="tel">Configuration</span>
             <p>
-              61 settings, typed and admin-editable, 13 of them overridable per seller
-              with server-side clamping. A generic mechanism rather than one column per
-              behaviour — so a seller on different terms is configuration, not code.
+              61 settings, typed and admin-editable, 13 of them overridable per seller with
+              server-side clamping. A generic mechanism rather than one column per behaviour — so a
+              seller on different terms is configuration, not code.
             </p>
           </div>
         </div>
@@ -855,8 +861,8 @@
         </div>
         <h2>27 order statuses</h2>
         <p class="lead">
-          One state machine, a declared transition matrix, no any-to-any moves, and
-          nothing writes the status column directly.
+          One state machine, a declared transition matrix, no any-to-any moves, and nothing writes
+          the status column directly.
         </p>
 
         <div class="glabel">Before confirmation</div>
@@ -893,8 +899,7 @@
         <div class="glabel">Ended without shipping</div>
         <div class="pills">
           <span class="pill bad">CANCELLED</span><span class="pill bad">CANCELLED_BY_ADMIN</span
-          ><span class="pill bad">REJECTED</span
-          ><span class="pill bad">REJECTED_BY_CUSTOMER</span
+          ><span class="pill bad">REJECTED</span><span class="pill bad">REJECTED_BY_CUSTOMER</span
           ><span class="pill bad">REJECTED_NDR</span>
         </div>
 
@@ -902,13 +907,20 @@
         <div class="tbl-scroll">
           <table>
             <thead>
-              <tr><th>Transition</th><th>Effect</th><th>Why there</th></tr>
+              <tr>
+                <th>Transition</th>
+                <th>Effect</th>
+                <th>Why there</th>
+              </tr>
             </thead>
             <tbody>
               <tr>
                 <td class="k">→ CONFIRMED</td>
                 <td class="v">reserve</td>
-                <td>A soft claim on quantity. Late on purpose — an unconfirmed order should not hold stock.</td>
+                <td>
+                  A soft claim on quantity. Late on purpose — an unconfirmed order should not hold
+                  stock.
+                </td>
               </tr>
               <tr>
                 <td class="k">→ DISPATCHED</td>
@@ -918,17 +930,18 @@
               <tr>
                 <td class="k">→ cancel / reject</td>
                 <td class="v">release</td>
-                <td>Returns the claim. Pre-confirmation cancels release nothing — nothing was held.</td>
+                <td>
+                  Returns the claim. Pre-confirmation cancels release nothing — nothing was held.
+                </td>
               </tr>
             </tbody>
           </table>
         </div>
         <div class="callout">
           <p>
-            <strong>Delivery is stock-neutral.</strong> The decrement already happened at
-            dispatch. If a future change makes delivery touch stock again, every quantity
-            double-counts — there are tests pinning this specifically, because it was a
-            real bug once.
+            <strong>Delivery is stock-neutral.</strong> The decrement already happened at dispatch.
+            If a future change makes delivery touch stock again, every quantity double-counts —
+            there are tests pinning this specifically, because it was a real bug once.
           </p>
         </div>
       </section>
@@ -944,7 +957,12 @@
         <div class="tbl-scroll">
           <table>
             <thead>
-              <tr><th>Flow</th><th>Direction</th><th>When</th><th>Controlled by</th></tr>
+              <tr>
+                <th>Flow</th>
+                <th>Direction</th>
+                <th>When</th>
+                <th>Controlled by</th>
+              </tr>
             </thead>
             <tbody>
               <tr>
@@ -977,34 +995,62 @@
 
         <h3>What a parcel costs</h3>
         <p>
-          Base shipping for the destination zone and weight slab, plus surcharges, plus
-          18% GST on the sum. Bangalore is a metro origin, so the destination's tier
-          decides the zone.
+          Base shipping for the destination zone and weight slab, plus surcharges, plus 18% GST on
+          the sum. Bangalore is a metro origin, so the destination's tier decides the zone.
         </p>
         <div class="tbl-scroll">
           <table>
             <thead>
-              <tr><th>Destination</th><th>Zone</th><th>Base range</th><th>Decided by</th></tr>
+              <tr>
+                <th>Destination</th>
+                <th>Zone</th>
+                <th>Base range</th>
+                <th>Decided by</th>
+              </tr>
             </thead>
             <tbody>
-              <tr><td>Metro</td><td class="v">A</td><td class="k">₹60 – 500</td><td>Explicit pincode row</td></tr>
-              <tr><td>Tier 1</td><td class="v">B</td><td class="k">₹80 – 680</td><td>Explicit pincode row</td></tr>
-              <tr><td>Tier 2</td><td class="v">C</td><td class="k">₹100 – 860</td><td>Explicit pincode row</td></tr>
-              <tr><td>Everywhere else</td><td class="v">D</td><td class="k">₹130 – 1,160</td><td>Fallback</td></tr>
-              <tr><td>North-East, J&amp;K, Ladakh</td><td class="v">E</td><td class="k">₹180 – 1,580</td><td>Pincode prefix</td></tr>
+              <tr>
+                <td>Metro</td>
+                <td class="v">A</td>
+                <td class="k">₹60 – 500</td>
+                <td>Explicit pincode row</td>
+              </tr>
+              <tr>
+                <td>Tier 1</td>
+                <td class="v">B</td>
+                <td class="k">₹80 – 680</td>
+                <td>Explicit pincode row</td>
+              </tr>
+              <tr>
+                <td>Tier 2</td>
+                <td class="v">C</td>
+                <td class="k">₹100 – 860</td>
+                <td>Explicit pincode row</td>
+              </tr>
+              <tr>
+                <td>Everywhere else</td>
+                <td class="v">D</td>
+                <td class="k">₹130 – 1,160</td>
+                <td>Fallback</td>
+              </tr>
+              <tr>
+                <td>North-East, J&amp;K, Ladakh</td>
+                <td class="v">E</td>
+                <td class="k">₹180 – 1,580</td>
+                <td>Pincode prefix</td>
+              </tr>
             </tbody>
           </table>
         </div>
 
         <h3>Margin and float</h3>
         <p>
-          Margin is what the seller was billed minus what the courier actually charged,
-          read from real invoices rather than a typed-in estimate. It never touches the
-          seller's wallet. Between delivering a parcel and the courier settling, Skydrop
-          is owed money it has not received — every payout is recorded against the orders
-          it covers, so the outstanding float and any short-payment are both countable. A
-          courier underpaying is a dispute with the courier, never a clawback from a
-          seller who was paid in good faith.
+          Margin is what the seller was billed minus what the courier actually charged, read from
+          real invoices rather than a typed-in estimate. It never touches the seller's wallet.
+          Between delivering a parcel and the courier settling, Skydrop is owed money it has not
+          received — every payout is recorded against the orders it covers, so the outstanding float
+          and any short-payment are both countable. A courier underpaying is a dispute with the
+          courier, never a clawback from a seller who was paid in good faith.
         </p>
       </section>
 
@@ -1015,39 +1061,137 @@
         </div>
         <h2>The settings that matter most</h2>
         <p class="lead">
-          61 in total, all admin-editable. The 13 marked per-seller can be overridden for
-          an individual account, clamped server-side to a permitted range.
+          61 in total, all admin-editable. The 13 marked per-seller can be overridden for an
+          individual account, clamped server-side to a permitted range.
         </p>
 
         <div class="tbl-scroll">
           <table>
             <thead>
-              <tr><th>Setting</th><th>Default</th><th>Effect</th></tr>
+              <tr>
+                <th>Setting</th>
+                <th>Default</th>
+                <th>Effect</th>
+              </tr>
             </thead>
             <tbody>
-              <tr><td class="k">ops.call_max_attempts_before_ndr</td><td class="v">3</td><td>Calls before an order is rejected — <strong>per-seller</strong></td></tr>
-              <tr><td class="k">ops.call_retry_interval_hours</td><td class="v">4</td><td>Gap between attempts</td></tr>
-              <tr><td class="k">ops.call_assignment_timeout_minutes</td><td class="v">30</td><td>An agent's claim expires</td></tr>
-              <tr><td class="k">ops.stock_reservation_ttl_hours</td><td class="v">48</td><td>How long an unconsumed claim survives</td></tr>
-              <tr><td class="k">ops.pick_task_timeout_hours</td><td class="v">4</td><td>An abandoned pick is released</td></tr>
-              <tr><td class="k">ops.stock_adjustment_approval_threshold_inr</td><td class="v">50,000</td><td>Above this, a correction needs a second person</td></tr>
-              <tr><td class="k">ops.csv_max_order_rows</td><td class="v">1,000</td><td>Bulk import ceiling</td></tr>
-              <tr><td class="k">ops.allowed_indian_states</td><td class="v">list</td><td>Delivery refused outside these</td></tr>
-              <tr><td class="k">inventory.default_inventory_mode</td><td class="v">NORMAL</td><td>Normal or per-unit strict — <strong>per-seller</strong></td></tr>
-              <tr><td class="k">inventory.early_reservation_enabled</td><td class="v">false</td><td>Hold stock at placement — <strong>per-seller</strong></td></tr>
-              <tr><td class="k">inventory.early_reservation_ndr_action</td><td class="v">AUTO_RELEASE</td><td>Release, or ask the seller — <strong>per-seller</strong></td></tr>
-              <tr><td class="k">wallet.accrual_timing_tier</td><td class="v">T_PLUS_N</td><td>Delayed credit or instant — <strong>per-seller</strong></td></tr>
-              <tr><td class="k">wallet.accrual_delay_days</td><td class="v">7</td><td>The delay — <strong>per-seller</strong></td></tr>
-              <tr><td class="k">wallet.courier_fee_deduction_timing</td><td class="v">AT_DELIVERY</td><td>Charge at delivery or at AWB — <strong>per-seller</strong></td></tr>
-              <tr><td class="k">wallet.inbound_freight_mode</td><td class="v">PAY_NOW</td><td>Freight now, or as stock sells — <strong>per-seller</strong></td></tr>
-              <tr><td class="k">wallet.withdrawal_min_threshold_inr</td><td class="v">500</td><td>Smallest payout — <strong>per-seller</strong></td></tr>
-              <tr><td class="k">wallet.withdrawal_max_per_day</td><td class="v">1</td><td>Requests per day — <strong>per-seller</strong></td></tr>
-              <tr><td class="k">pricing.gst_rate</td><td class="v">18</td><td>Applied after all surcharges</td></tr>
-              <tr><td class="k">courier.delhivery_live_writes_enabled</td><td class="v">false</td><td><strong>Master safety switch</strong> — no write reaches Delhivery while off</td></tr>
-              <tr><td class="k">courier.delhivery_pickup_location</td><td class="v">Skydrop</td><td>Must match their records byte for byte</td></tr>
-              <tr><td class="k">tracking.public_lookup_rate_limit_per_min</td><td class="v">30</td><td>Per IP on the public tracking page</td></tr>
-              <tr><td class="k">webhooks.auto_disable_after_consecutive_failures</td><td class="v">50</td><td>A dead seller endpoint is switched off</td></tr>
-              <tr><td class="k">invoice.gstin</td><td class="v">unset</td><td><strong>Needed before invoices are compliant</strong></td></tr>
+              <tr>
+                <td class="k">ops.call_max_attempts_before_ndr</td>
+                <td class="v">3</td>
+                <td>Calls before an order is rejected — <strong>per-seller</strong></td>
+              </tr>
+              <tr>
+                <td class="k">ops.call_retry_interval_hours</td>
+                <td class="v">4</td>
+                <td>Gap between attempts</td>
+              </tr>
+              <tr>
+                <td class="k">ops.call_assignment_timeout_minutes</td>
+                <td class="v">30</td>
+                <td>An agent's claim expires</td>
+              </tr>
+              <tr>
+                <td class="k">ops.stock_reservation_ttl_hours</td>
+                <td class="v">48</td>
+                <td>How long an unconsumed claim survives</td>
+              </tr>
+              <tr>
+                <td class="k">ops.pick_task_timeout_hours</td>
+                <td class="v">4</td>
+                <td>An abandoned pick is released</td>
+              </tr>
+              <tr>
+                <td class="k">ops.stock_adjustment_approval_threshold_inr</td>
+                <td class="v">50,000</td>
+                <td>Above this, a correction needs a second person</td>
+              </tr>
+              <tr>
+                <td class="k">ops.csv_max_order_rows</td>
+                <td class="v">1,000</td>
+                <td>Bulk import ceiling</td>
+              </tr>
+              <tr>
+                <td class="k">ops.allowed_indian_states</td>
+                <td class="v">list</td>
+                <td>Delivery refused outside these</td>
+              </tr>
+              <tr>
+                <td class="k">inventory.default_inventory_mode</td>
+                <td class="v">NORMAL</td>
+                <td>Normal or per-unit strict — <strong>per-seller</strong></td>
+              </tr>
+              <tr>
+                <td class="k">inventory.early_reservation_enabled</td>
+                <td class="v">false</td>
+                <td>Hold stock at placement — <strong>per-seller</strong></td>
+              </tr>
+              <tr>
+                <td class="k">inventory.early_reservation_ndr_action</td>
+                <td class="v">AUTO_RELEASE</td>
+                <td>Release, or ask the seller — <strong>per-seller</strong></td>
+              </tr>
+              <tr>
+                <td class="k">wallet.accrual_timing_tier</td>
+                <td class="v">T_PLUS_N</td>
+                <td>Delayed credit or instant — <strong>per-seller</strong></td>
+              </tr>
+              <tr>
+                <td class="k">wallet.accrual_delay_days</td>
+                <td class="v">7</td>
+                <td>The delay — <strong>per-seller</strong></td>
+              </tr>
+              <tr>
+                <td class="k">wallet.courier_fee_deduction_timing</td>
+                <td class="v">AT_DELIVERY</td>
+                <td>Charge at delivery or at AWB — <strong>per-seller</strong></td>
+              </tr>
+              <tr>
+                <td class="k">wallet.inbound_freight_mode</td>
+                <td class="v">PAY_NOW</td>
+                <td>Freight now, or as stock sells — <strong>per-seller</strong></td>
+              </tr>
+              <tr>
+                <td class="k">wallet.withdrawal_min_threshold_inr</td>
+                <td class="v">500</td>
+                <td>Smallest payout — <strong>per-seller</strong></td>
+              </tr>
+              <tr>
+                <td class="k">wallet.withdrawal_max_per_day</td>
+                <td class="v">1</td>
+                <td>Requests per day — <strong>per-seller</strong></td>
+              </tr>
+              <tr>
+                <td class="k">pricing.gst_rate</td>
+                <td class="v">18</td>
+                <td>Applied after all surcharges</td>
+              </tr>
+              <tr>
+                <td class="k">courier.delhivery_live_writes_enabled</td>
+                <td class="v">false</td>
+                <td>
+                  <strong>Master safety switch</strong> — no write reaches Delhivery while off
+                </td>
+              </tr>
+              <tr>
+                <td class="k">courier.delhivery_pickup_location</td>
+                <td class="v">Skydrop</td>
+                <td>Must match their records byte for byte</td>
+              </tr>
+              <tr>
+                <td class="k">tracking.public_lookup_rate_limit_per_min</td>
+                <td class="v">30</td>
+                <td>Per IP on the public tracking page</td>
+              </tr>
+              <tr>
+                <td class="k">webhooks.auto_disable_after_consecutive_failures</td>
+                <td class="v">50</td>
+                <td>A dead seller endpoint is switched off</td>
+              </tr>
+              <tr>
+                <td class="k">invoice.gstin</td>
+                <td class="v">unset</td>
+                <td><strong>Needed before invoices are compliant</strong></td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -1062,30 +1206,56 @@
 
         <div class="tbl-scroll">
           <table>
-            <thead><tr><th>Staff role</th><th>Can do</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Staff role</th>
+                <th>Can do</th>
+              </tr>
+            </thead>
             <tbody>
-              <tr><td class="k">SUPER_ADMIN</td><td>Everything, including the god-mode override</td></tr>
-              <tr><td class="k">SELLER_APPROVAL_ADMIN</td><td>Invite, approve and suspend sellers</td></tr>
-              <tr><td class="k">CALL_AGENT</td><td>Pull calls, log outcomes, set own availability</td></tr>
-              <tr><td class="k">WAREHOUSE_STAFF</td><td>Pick, pack, receive</td></tr>
-              <tr><td class="k">WAREHOUSE_SUPERVISOR</td><td>Close manifests, dispatch, book pickups, release stuck picks</td></tr>
-              <tr><td class="k">MANUAL_PLACEMENT_ADMIN</td><td>Record a manual AWB, enter scans by hand</td></tr>
-              <tr><td class="k">FINANCE</td><td>Settlements, withdrawals, remittances</td></tr>
+              <tr>
+                <td class="k">SUPER_ADMIN</td>
+                <td>Everything, including the god-mode override</td>
+              </tr>
+              <tr>
+                <td class="k">SELLER_APPROVAL_ADMIN</td>
+                <td>Invite, approve and suspend sellers</td>
+              </tr>
+              <tr>
+                <td class="k">CALL_AGENT</td>
+                <td>Pull calls, log outcomes, set own availability</td>
+              </tr>
+              <tr>
+                <td class="k">WAREHOUSE_STAFF</td>
+                <td>Pick, pack, receive</td>
+              </tr>
+              <tr>
+                <td class="k">WAREHOUSE_SUPERVISOR</td>
+                <td>Close manifests, dispatch, book pickups, release stuck picks</td>
+              </tr>
+              <tr>
+                <td class="k">MANUAL_PLACEMENT_ADMIN</td>
+                <td>Record a manual AWB, enter scans by hand</td>
+              </tr>
+              <tr>
+                <td class="k">FINANCE</td>
+                <td>Settlements, withdrawals, remittances</td>
+              </tr>
             </tbody>
           </table>
         </div>
 
         <p style="margin-top: 18px">
-          Seller teams have six roles — owner, admin, ops, inventory, finance, viewer.
-          Reads are open to all; writes fail closed, so a new endpoint is protected by
-          default and must be deliberately widened.
+          Seller teams have six roles — owner, admin, ops, inventory, finance, viewer. Reads are
+          open to all; writes fail closed, so a new endpoint is protected by default and must be
+          deliberately widened.
         </p>
         <div class="callout">
           <p>
-            <strong>Role gating in the interface is cosmetic.</strong> Hiding a control
-            someone cannot use is courtesy; the server rejects the request regardless of
-            what was shown. When it refuses, the screen shows its exact words rather than
-            guessing at a friendlier version.
+            <strong>Role gating in the interface is cosmetic.</strong> Hiding a control someone
+            cannot use is courtesy; the server rejects the request regardless of what was shown.
+            When it refuses, the screen shows its exact words rather than guessing at a friendlier
+            version.
           </p>
         </div>
       </section>
@@ -1097,36 +1267,57 @@
         </div>
         <h2>Rules that hold it together</h2>
         <p class="lead">
-          Seventeen families of invariant, enforced in code and pinned by tests. The ones
-          worth knowing before changing anything:
+          Seventeen families of invariant, enforced in code and pinned by tests. The ones worth
+          knowing before changing anything:
         </p>
         <ul>
-          <li><strong>One writer per thing.</strong> Stock moves through a single service; the wallet through a single service; tickets through a single service. Nothing writes those tables directly.</li>
-          <li><strong>Append-only records.</strong> Stock movements, tracking events, call attempts, order events and audit logs are never updated or deleted. They are what you read when a number looks wrong.</li>
-          <li><strong>Snapshots.</strong> An order keeps its own copy of the recipient and SKU details. Editing the catalog cannot rewrite history.</li>
-          <li><strong>Guard inside the write.</strong> Checking a status and then acting on it is not a guard — two people can both pass the check. The condition goes into the write itself.</li>
-          <li><strong>Fail visibly, not silently.</strong> Where a sequence cannot be one transaction, the durable step goes first, so a crash leaves a state that announces what happened and can be retried.</li>
-          <li><strong>Refuse rather than guess.</strong> A price that cannot be computed is not recorded as ₹0. A webhook that cannot be authenticated is not stored. A URL that cannot be shown to be safe is not fetched.</li>
+          <li>
+            <strong>One writer per thing.</strong> Stock moves through a single service; the wallet
+            through a single service; tickets through a single service. Nothing writes those tables
+            directly.
+          </li>
+          <li>
+            <strong>Append-only records.</strong> Stock movements, tracking events, call attempts,
+            order events and audit logs are never updated or deleted. They are what you read when a
+            number looks wrong.
+          </li>
+          <li>
+            <strong>Snapshots.</strong> An order keeps its own copy of the recipient and SKU
+            details. Editing the catalog cannot rewrite history.
+          </li>
+          <li>
+            <strong>Guard inside the write.</strong> Checking a status and then acting on it is not
+            a guard — two people can both pass the check. The condition goes into the write itself.
+          </li>
+          <li>
+            <strong>Fail visibly, not silently.</strong> Where a sequence cannot be one transaction,
+            the durable step goes first, so a crash leaves a state that announces what happened and
+            can be retried.
+          </li>
+          <li>
+            <strong>Refuse rather than guess.</strong> A price that cannot be computed is not
+            recorded as ₹0. A webhook that cannot be authenticated is not stored. A URL that cannot
+            be shown to be safe is not fetched.
+          </li>
         </ul>
 
         <h3>Security</h3>
         <p>
-          Three adversarial review rounds. Cross-tenant isolation proven by two real
-          sellers reaching for each other's data. Argon2id password hashing at OWASP
-          parameters, brute-force throttling, injection checked. A per-request nonce
-          content-security-policy on every application. Every stored document — invoices,
-          shipping labels — behind short-lived signed URLs rather than public storage.
-          Credentials encrypted with the key held outside the database, and every
-          decryption audited.
+          Three adversarial review rounds. Cross-tenant isolation proven by two real sellers
+          reaching for each other's data. Argon2id password hashing at OWASP parameters, brute-force
+          throttling, injection checked. A per-request nonce content-security-policy on every
+          application. Every stored document — invoices, shipping labels — behind short-lived signed
+          URLs rather than public storage. Credentials encrypted with the key held outside the
+          database, and every decryption audited.
         </p>
 
         <h3>Verification</h3>
         <p>
-          1,720 automated tests gate every commit: 1,532 unit, 127 integration against a
-          real database, 68 component, and browser tests that exercise the login round
-          trip and the content-security-policy in a real browser. Plus a check that every
-          frontend call resolves to a real API route — the seam where three separate bugs
-          hid, each side passing its own tests while the path between them was wrong.
+          1,720 automated tests gate every commit: 1,532 unit, 127 integration against a real
+          database, 68 component, and browser tests that exercise the login round trip and the
+          content-security-policy in a real browser. Plus a check that every frontend call resolves
+          to a real API route — the seam where three separate bugs hid, each side passing its own
+          tests while the path between them was wrong.
         </p>
       </section>
 
@@ -1140,29 +1331,48 @@
 
         <div class="callout bad">
           <p>
-            <strong>No write has ever reached Delhivery.</strong> The adapter is built
-            against their real API and every read path is exercised, but live writes are
-            switched off and no waybill has ever been fetched. Until one real consignment
-            is booked and cancelled, the write contract is an assumption. The procedure
-            is written and takes about forty minutes.
+            <strong>No write has ever reached Delhivery.</strong> The adapter is built against their
+            real API and every read path is exercised, but live writes are switched off and no
+            waybill has ever been fetched. Until one real consignment is booked and cancelled, the
+            write contract is an assumption. The procedure is written and takes about forty minutes.
           </p>
         </div>
 
         <ul>
-          <li><strong>Warehouse setup.</strong> The Bangalore warehouse is active but has no bins, and there is no category tree yet. Both are data entry against real shelving and a real catalog.</li>
-          <li><strong>City tiers.</strong> 22 cities are priced explicitly; everywhere else falls to zone D until the tier list is decided.</li>
-          <li><strong>GST number.</strong> Invoices generate but are not compliant until the GSTIN is set.</li>
+          <li>
+            <strong>Warehouse setup.</strong> The Bangalore warehouse is active but has no bins, and
+            there is no category tree yet. Both are data entry against real shelving and a real
+            catalog.
+          </li>
+          <li>
+            <strong>City tiers.</strong> 22 cities are priced explicitly; everywhere else falls to
+            zone D until the tier list is decided.
+          </li>
+          <li>
+            <strong>GST number.</strong> Invoices generate but are not compliant until the GSTIN is
+            set.
+          </li>
           <li><strong>Live chat.</strong> Scaffolded; needs the ChatWoot install.</li>
-          <li><strong>Edge protection.</strong> DNS points straight at the origin — no CDN, no web application firewall, no DDoS absorption. Turning the proxy on is a real decision, not a cleanup.</li>
-          <li><strong>Multi-box parcels and reverse-pickup inspection.</strong> Both need models that do not exist yet; neither is blocked on anything else.</li>
-          <li><strong>Two commercial calls.</strong> What instant credit should cost, and how long an unsold consignment's freight may age before it is called in.</li>
+          <li>
+            <strong>Edge protection.</strong> DNS points straight at the origin — no CDN, no web
+            application firewall, no DDoS absorption. Turning the proxy on is a real decision, not a
+            cleanup.
+          </li>
+          <li>
+            <strong>Multi-box parcels and reverse-pickup inspection.</strong> Both need models that
+            do not exist yet; neither is blocked on anything else.
+          </li>
+          <li>
+            <strong>Two commercial calls.</strong> What instant credit should cost, and how long an
+            unsold consignment's freight may age before it is called in.
+          </li>
         </ul>
       </section>
 
       <footer>
-        Written against the production database on 31 July 2026. Statuses, settings,
-        route and screen counts are what is deployed, not what was planned. Anything
-        described as a decision is genuinely open.
+        Written against the production database on 31 July 2026. Statuses, settings, route and
+        screen counts are what is deployed, not what was planned. Anything described as a decision
+        is genuinely open.
       </footer>
     </div>
 

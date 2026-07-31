@@ -11,6 +11,7 @@ import {
   ErrorState,
   Money,
   SkeletonRows,
+  Table,
 } from '@skydrop/ui/components';
 
 /**
@@ -78,7 +79,7 @@ export function OrderChargesSection({ orderId }: { orderId: string }): ReactElem
             description="Click 'Compute & persist charges' to evaluate via the M15 pricing engine."
           />
         ) : (
-          <table className="w-full text-sm">
+          <Table wrapperClassName="rounded-none border-0 bg-transparent">
             <thead className="text-text-muted text-[11px] uppercase tracking-wide bg-surface-raised border-b border-border">
               <tr>
                 <th className="text-left px-4 py-2 font-medium">Charge</th>
@@ -99,7 +100,7 @@ export function OrderChargesSection({ orderId }: { orderId: string }): ReactElem
                 </td>
               </tr>
             </tbody>
-          </table>
+          </Table>
         )}
       </CardBody>
     </Card>

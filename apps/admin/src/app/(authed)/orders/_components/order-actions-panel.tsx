@@ -320,7 +320,7 @@ function OverrideResultPanel({
           Dismiss
         </button>
       </div>
-      <dl className="grid grid-cols-[140px_1fr] gap-x-3 gap-y-1.5 text-xs">
+      <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[140px_1fr] gap-x-3 gap-y-1.5 text-xs">
         <dt className="text-text-muted">Status</dt>
         <dd className="text-text-body font-mono">
           {result.fromStatus !== result.status

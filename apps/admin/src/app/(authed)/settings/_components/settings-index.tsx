@@ -82,7 +82,12 @@ function SettingRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-text-bright text-sm font-medium">{setting.displayName}</span>
-          <span className="text-text-faint font-mono text-[11px]">{setting.key}</span>
+          {/* `flex-wrap` wraps between items, not inside one — and a key
+              like `courier.delhivery_pickup_location` is a single
+              unbreakable token wider than a phone. */}
+          <span className="text-text-faint max-w-full font-mono text-[11px] break-all">
+            {setting.key}
+          </span>
           <StatusBadge
             kind={valueTypeKind(setting.valueType)}
             label={setting.valueType.toLowerCase()}

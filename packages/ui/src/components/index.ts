@@ -13,6 +13,7 @@
  *   import { OrderStatusBadge } from '@skydrop/ui/components';
  *   import { kindTokens, orderStatusKind } from '@skydrop/ui/status';
  */
+export * from './app-shell';
 export * from './button';
 export * from './card';
 export * from './data-table';

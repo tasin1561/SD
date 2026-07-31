@@ -310,3 +310,238 @@
     transform: translateY(-50%);
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+ * Responsive data tables.
+ *
+ * A 10-column ops table is the right shape on a desktop and unusable on
+ * a phone: the admin tables ran 400–640px wide inside a 140px content
+ * column. Horizontal scrolling "works" but hides most of the row and
+ * makes you scrub sideways to read one order.
+ *
+ * Below `md` each row becomes a card and each cell becomes a
+ * label/value line. The label comes from the matching <th>, stamped
+ * onto the cell as `data-label` by the Table primitive at runtime — so
+ * this applies to all 40 existing tables without touching a call site.
+ *
+ * The <thead> is hidden visually but NOT removed: `display: none` would
+ * strip the column headers from the accessibility tree, and a screen
+ * reader would lose the association between value and column. It is
+ * clipped the same way a .sr-only utility would do it.
+ * ───────────────────────────────────────────────────────────────────── */
+@media (max-width: 767.98px) {
+  /* Positioned so the absolutely-placed <thead> below is contained by
+     the table rather than by some distant ancestor, where its full
+     un-collapsed width would widen the page. */
+  .sd-table-cards {
+    position: relative;
+  }
+
+  .sd-table-cards thead {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  .sd-table-cards,
+  .sd-table-cards tbody,
+  .sd-table-cards tr,
+  .sd-table-cards td {
+    display: block;
+    width: 100%;
+  }
+
+  /* Each row is a card. The divider borders Tailwind puts between rows
+     (`divide-y` on tbody) would otherwise draw a stray line across the
+     top of every card. */
+  .sd-table-cards tbody {
+    border: 0;
+  }
+
+  .sd-table-cards tbody > tr {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-3);
+    background: var(--color-surface);
+    margin-bottom: 0.5rem;
+    padding: 0.125rem 0;
+  }
+
+  .sd-table-cards tbody > tr:last-child {
+    margin-bottom: 0;
+  }
+
+  .sd-table-cards td {
+    display: flex;
+    /* Wraps so a value that cannot fit beside its label — a row of
+       four action buttons, a role <select>, a long status badge —
+       drops to its own line instead of pushing the page sideways.
+       These are unshrinkable by nature, so giving them a line is the
+       only thing that works. */
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.25rem 1rem;
+    padding: 0.4375rem 0.75rem;
+    border: 0;
+    text-align: right;
+  }
+
+  .sd-table-cards td > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* The column name, from the <th> above it. */
+  .sd-table-cards td[data-label]:not([data-label=''])::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    max-width: 45%;
+    text-align: left;
+    color: var(--color-text-muted);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.45;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  /* A cell with no matching header — an empty state, or a row whose
+     cells span columns — fills the card instead of pretending to be a
+     label/value pair. */
+  .sd-table-cards td:not([data-label]),
+  .sd-table-cards td[data-label=''] {
+    display: block;
+    text-align: left;
+  }
+
+  /* The wrapper's own border and rounding belong to a table, not to a
+     stack of cards. */
+  .sd-table-cards-wrap {
+    border: 0 !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* A toolbar sitting directly on top of the table keeps its own
+     border, but must not stay welded to a card stack. */
+  .sd-table-cards-wrap + *,
+  .sd-toolbar-attached {
+    border-radius: var(--radius-3) !important;
+    border-bottom-width: 1px !important;
+    margin-bottom: 0.5rem;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * Form controls on small screens.
+ *
+ * Filter bars across both apps pin their controls to desktop widths
+ * (`w-80`, `w-[220px]`, `w-[160px]`). On a phone that yields a ragged
+ * column of mismatched fields, and any control whose number exceeds the
+ * viewport overflows the page. Overriding here rather than at ~90 call
+ * sites keeps the desktop widths — which are correct — untouched.
+ * ───────────────────────────────────────────────────────────────────── */
+@media (max-width: 639.98px) {
+  .sd-field {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+}
+
+/* Mobile Safari zooms the page when a focused input's font-size is
+ * under 16px and never zooms back out. Our `text-sm` is 13px, which is
+ * exactly the trigger. Coarse pointer only, so the desktop density is
+ * unaffected. */
+@media (pointer: coarse) {
+  .sd-field {
+    font-size: 16px;
+  }
+}
+
+/* A definition-list value is a narrow column on a phone, and the things
+ * that land in one — an email, an AWB, a bin code, a URL — are long
+ * unbroken strings that would otherwise push the layout sideways.
+ * `break-word` only breaks when there is no other option, so ordinary
+ * prose still wraps at spaces. */
+dd {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * A floor for every form control on a touch device — including the
+ * hand-rolled ones.
+ *
+ * The `sd-field` rules above only reach controls built with the Input /
+ * Select / Textarea primitives. A number of pages predate those and
+ * style bare elements, which measured 26px tall with 13px text: under
+ * the 44px touch guidance, and under the 16px that stops mobile Safari
+ * zooming on focus. Rather than track down each one — and have the next
+ * hand-rolled control reintroduce it — the floor is set on the elements
+ * themselves.
+ *
+ * Checkbox, radio and range are excluded: a 38px minimum would stretch
+ * a checkbox into a rectangle. They get their own sizing below.
+ * ───────────────────────────────────────────────────────────────────── */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='hidden']),
+  select,
+  textarea {
+    min-height: 38px;
+    font-size: 16px;
+  }
+
+  /* A 13px checkbox is a hard target for a finger. */
+  input[type='checkbox'],
+  input[type='radio'] {
+    min-width: 18px;
+    min-height: 18px;
+  }
+}
+
+/* In the card layout a cell holds one value, and where that value is
+ * the row's link — the order number, the seller name — it is the
+ * primary action on the card. As inline text it was 15px tall. */
+@media (max-width: 767.98px) {
+  .sd-table-cards td a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * Standalone links and hand-rolled buttons on a touch device.
+ *
+ * `min-height` does not apply to a non-replaced INLINE box, so this
+ * rule lands on exactly the anchors that need it — the ones already
+ * laid out as block / inline-flex / flex, which are standalone
+ * affordances ("See all →", a breadcrumb, a card action) — and leaves
+ * a link inside a sentence alone. That is the same distinction WCAG
+ * 2.5.8 draws, expressed as a selector rather than a list of call
+ * sites to keep in sync.
+ *
+ * Buttons are excluded when they carry `.skydrop-hit`: the Button
+ * primitive is deliberately dense (28px) with a 44px hit area
+ * projected by a pseudo-element, and inflating it would undo that
+ * design. Everything else gets a real floor.
+ * ───────────────────────────────────────────────────────────────────── */
+@media (pointer: coarse) {
+  a {
+    min-height: 30px;
+  }
+
+  button:not(.skydrop-hit) {
+    min-height: 32px;
+  }
+}

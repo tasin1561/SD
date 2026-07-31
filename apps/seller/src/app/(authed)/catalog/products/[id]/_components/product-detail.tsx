@@ -170,7 +170,7 @@ function ProductReadCard({ product }: { product: SellerProductView }): ReactElem
   return (
     <Card>
       <CardBody>
-        <dl className="grid grid-cols-[160px_1fr] gap-x-6 gap-y-1.5 text-sm">
+        <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[160px_1fr] gap-x-3 sm:gap-x-6 gap-y-1.5 text-sm">
           {product.description && (
             <>
               <dt className="text-text-muted">Description</dt>

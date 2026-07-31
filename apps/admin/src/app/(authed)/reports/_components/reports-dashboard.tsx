@@ -39,23 +39,23 @@ export function ReportsDashboard(): ReactElement {
 
       <Card>
         <CardBody>
-          <div className="flex items-end gap-3">
-            <div>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-0 flex-1 sm:flex-none">
               <div className="text-text-muted text-xs mb-1">From</div>
               <input
                 type="date"
                 value={from}
                 onChange={(e) => setFrom(e.target.value)}
-                className="px-3 py-1.5 rounded-[5px] bg-bg border border-border text-text-bright text-sm focus:border-accent focus:outline-none transition-colors"
+                className="sd-field w-full rounded-[5px] border border-border bg-bg px-3 py-1.5 text-sm text-text-bright transition-colors focus:border-accent focus:outline-none"
               />
             </div>
-            <div>
+            <div className="min-w-0 flex-1 sm:flex-none">
               <div className="text-text-muted text-xs mb-1">To (exclusive)</div>
               <input
                 type="date"
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
-                className="px-3 py-1.5 rounded-[5px] bg-bg border border-border text-text-bright text-sm focus:border-accent focus:outline-none transition-colors"
+                className="sd-field w-full rounded-[5px] border border-border bg-bg px-3 py-1.5 text-sm text-text-bright transition-colors focus:border-accent focus:outline-none"
               />
             </div>
             <div className="text-text-faint text-xs ml-2">UTC</div>
