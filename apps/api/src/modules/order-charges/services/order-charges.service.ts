@@ -159,6 +159,38 @@ export class OrderChargesService {
       totalWeightGrams: order.totalWeightGrams ?? 0,
     });
 
+    // ── Refuse to record a price we could not compute ────────────────
+    //
+    // The engine ANSWERS even when the data behind it is missing: an
+    // unresolved destination falls back to the DEFAULT zone, no rate
+    // card item matches DEFAULT, and base shipping comes out ₹0. GST is
+    // a percentage of that, so the whole order prices at ₹0.00 — free
+    // shipping, silently, with only a flag in `unresolved` to say so.
+    //
+    // Persisting that writes ₹0 onto the order as its real price, and
+    // the seller is billed nothing for a parcel that cost us money to
+    // move. With 27 pincodes loaded against roughly 19,000 in India,
+    // that was the outcome for most real destinations.
+    //
+    // These two reasons specifically mean "no rate was found", as
+    // distinct from the softer flags (a GST-rate fallback is fine; a
+    // DEFAULT zone that DID match a rate card item is fine). A missing
+    // rate is an operator problem — load the pincode, or add the slab —
+    // and it should stop the flow loudly rather than bill nothing.
+    const unpriced = compute.unresolved.filter(
+      (u) => u.reason === 'NO_RATE_CARD' || u.reason === 'NO_RATE_CARD_ITEM',
+    );
+    if (unpriced.length > 0) {
+      throw new ConflictException({
+        code: 'PRICING_UNRESOLVED',
+        message:
+          `Cannot price order ${orderId}: ${unpriced.map((u) => u.reason).join(', ')}. ` +
+          `Destination ${order.recipientPostalCode} resolved to zone "${compute.zone}" and no ` +
+          `rate card item matched. Load the pincode or add the rate for that zone and weight ` +
+          `slab, then compute again — recording ₹0 would bill the seller nothing for this parcel.`,
+      });
+    }
+
     return this.prisma.client.$transaction(async (tx) => {
       let displayOrder = 0;
       let persistedCount = 0;
