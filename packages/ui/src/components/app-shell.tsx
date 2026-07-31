@@ -257,12 +257,19 @@ export function AppShell({
   }, [pathname]);
 
   return (
-    <div className="bg-bg text-text-body flex min-h-dvh">
+    // The horizontal safe-area insets live HERE rather than on <main>.
+    // As an inline style on <main> they REPLACED the `px-3` utility
+    // rather than adding to it, so on a phone with no inset the content
+    // had 12px of padding on the left and none on the right.
+    <div
+      className="bg-bg text-text-body flex min-h-dvh"
+      style={{
+        paddingLeft: 'env(safe-area-inset-left)',
+        paddingRight: 'env(safe-area-inset-right)',
+      }}
+    >
       {/* ── Desktop sidebar ───────────────────────────────────────── */}
-      <aside
-        className="border-border bg-surface hidden w-[236px] shrink-0 flex-col border-r lg:sticky lg:top-0 lg:flex lg:h-dvh"
-        style={{ paddingLeft: 'env(safe-area-inset-left)' }}
-      >
+      <aside className="border-border bg-surface hidden w-[236px] shrink-0 flex-col border-r lg:sticky lg:top-0 lg:flex lg:h-dvh">
         <BrandBlock
           brand={brand}
           subtitle={subtitle}
@@ -383,10 +390,10 @@ export function AppShell({
 
         <main
           className="min-w-0 flex-1 px-3 py-4 sm:px-5 sm:py-5 lg:px-6 lg:py-6"
-          style={{
-            paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.5rem)',
-            paddingRight: 'max(env(safe-area-inset-right), 0px)',
-          }}
+          // Only the BOTTOM inset is set inline, and it deliberately
+          // adds to rather than replaces the class padding — the gesture
+          // bar sits over the last row of a list otherwise.
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.5rem)' }}
         >
           {children}
         </main>
