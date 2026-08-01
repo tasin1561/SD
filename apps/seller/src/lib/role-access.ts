@@ -59,3 +59,16 @@ export function canAccess(role: SellerRole, pathname: string | null): boolean {
 export function seesEverything(role: SellerRole): boolean {
   return ALLOWED_PREFIXES[role] === '*';
 }
+
+/**
+ * Whether a role may see money — order charges, wallet figures.
+ *
+ * A SECTION rather than a route, so it does not fit the prefix table
+ * above. Without this the charges panel on an order renders the
+ * server's own refusal as a red error box: correct per FE-2, and
+ * exactly the wrong thing to show someone who was never meant to see
+ * the section at all. It reads as breakage rather than as policy.
+ */
+export function canSeeMoney(role: SellerRole): boolean {
+  return role !== 'VIEWER';
+}

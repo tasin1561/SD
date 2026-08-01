@@ -27,6 +27,8 @@ import {
 } from '@skydrop/ui/components';
 import { OrderTimeline } from './order-timeline';
 import { OrderChargesSection } from './order-charges';
+import { canSeeMoney } from '@/lib/role-access';
+import { useSellerIdentity } from '@skydrop/auth/client';
 
 /**
  * Seller order detail. Two fetches: the order body (with items) and
@@ -48,6 +50,7 @@ import { OrderChargesSection } from './order-charges';
 export function OrderDetailView({ orderId }: { orderId: string }): ReactElement {
   const detail = useOrderDetail(orderId);
   const events = useOrderEvents(orderId);
+  const identity = useSellerIdentity();
 
   return (
     <div className="max-w-5xl">
@@ -223,9 +226,15 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             </Section>
           )}
 
-          <Section title="Charges">
-            <OrderChargesSection orderId={orderId} />
-          </Section>
+          {/* Hidden rather than shown-and-refused for a VIEWER: the
+              server rejects /charges for that role, and rendering its
+              403 in a red box reads as a broken page rather than as
+              policy. Cosmetic — the server is still the boundary. */}
+          {identity !== null && canSeeMoney(identity.role) && (
+            <Section title="Charges">
+              <OrderChargesSection orderId={orderId} />
+            </Section>
+          )}
 
           <Section title="Invoice">
             <OrderInvoiceSection orderId={orderId} status={detail.data.status} />
