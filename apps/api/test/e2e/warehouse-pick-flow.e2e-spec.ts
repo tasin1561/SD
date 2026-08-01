@@ -4,6 +4,7 @@ import { OrderWriteService } from '../../src/modules/order/services/order-write.
 import { ShipmentProvisionService } from '../../src/modules/shipment-provision/services/shipment-provision.service';
 import {
   bootTestApp,
+  claimPick,
   pullPickFor,
   createTestStaff,
   flushTestRedis,
@@ -247,11 +248,10 @@ describe('Warehouse pick flow (e2e)', () => {
     const shipmentId = await provisionShipment(orderId);
 
     // Picker pulls and starts (so phase-2 holds exist on stock_levels).
-    await request(h.baseUrl).post('/warehouse/picks/next').set(staffAuth).expect(200);
-    await request(h.baseUrl)
-      .post(`/warehouse/picks/${shipmentId}/start`)
-      .set(staffAuth)
-      .expect(200);
+    // Pull until THIS parcel comes back: the AWB job (fired at
+    // confirmation) holds a row lock the pull's SKIP LOCKED steps
+    // over, so a single pull is timing-dependent. See claimPick.
+    await claimPick(h.baseUrl, staffAuth, shipmentId);
 
     const beforeLevel = await h.prisma.stockLevel.findFirstOrThrow({
       where: { variantId, binId },

@@ -342,11 +342,10 @@ describe('Dispatch handoff endpoint (e2e)', () => {
     const shipment = await h.prisma.shipment.findFirstOrThrow({
       where: { orderShipments: { some: { orderId } } },
     });
-    await request(h.baseUrl).post('/warehouse/picks/next').set(staffAuth).expect(200);
-    await request(h.baseUrl)
-      .post(`/warehouse/picks/${shipment.id}/start`)
-      .set(staffAuth)
-      .expect(200);
+    // Pull until THIS parcel comes back: the AWB job (fired at
+    // confirmation) holds a row lock the pull's SKIP LOCKED steps
+    // over, so a single pull is timing-dependent. See claimPick.
+    await claimPick(h.baseUrl, staffAuth, shipment.id);
     const resv = await h.prisma.stockReservation.findFirstOrThrow({
       where: { orderId, status: 'ACTIVE', NOT: { binId: null } },
     });
