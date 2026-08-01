@@ -3941,6 +3941,13 @@ enum WalletEntryDirection {
   // conflating them would make the two cost bases unseparable in every
   // report.
   INBOUND_FREIGHT   @map("inbound_freight")
+  // The flat return fee, charged when a parcel physically comes back —
+  // not when the courier says it is coming. Always a DEBIT, so it is
+  // deliberately ABSENT from WalletService's CREDIT_DIRECTIONS (adding
+  // it there would PAY sellers for their own returns). Distinct from
+  // ORDER_CHARGES so "what did returns cost us this month" stays a
+  // question the ledger can answer on its own.
+  RTO_FEE           @map("rto_fee")
 
   @@map("wallet_entry_direction")
 }

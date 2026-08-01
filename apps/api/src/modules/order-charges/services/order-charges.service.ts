@@ -159,35 +159,27 @@ export class OrderChargesService {
       totalWeightGrams: order.totalWeightGrams ?? 0,
     });
 
-    // ── Refuse to record a price we could not compute ────────────────
+    // ── Refuse to record a price we could not resolve ────────────────
     //
-    // The engine ANSWERS even when the data behind it is missing: an
-    // unresolved destination falls back to the DEFAULT zone, no rate
-    // card item matches DEFAULT, and base shipping comes out ₹0. GST is
-    // a percentage of that, so the whole order prices at ₹0.00 — free
-    // shipping, silently, with only a flag in `unresolved` to say so.
+    // The engine ANSWERS even when the fee behind it is missing — it
+    // returns ₹0.00 and a flag. Persisting that writes ₹0 onto the order
+    // as its real price, and the seller is billed nothing for a parcel
+    // that cost us money to move.
     //
-    // Persisting that writes ₹0 onto the order as its real price, and
-    // the seller is billed nothing for a parcel that cost us money to
-    // move. With 27 pincodes loaded against roughly 19,000 in India,
-    // that was the outcome for most real destinations.
-    //
-    // These two reasons specifically mean "no rate was found", as
-    // distinct from the softer flags (a GST-rate fallback is fine; a
-    // DEFAULT zone that DID match a rate card item is fine). A missing
-    // rate is an operator problem — load the pincode, or add the slab —
-    // and it should stop the flow loudly rather than bill nothing.
-    const unpriced = compute.unresolved.filter(
-      (u) => u.reason === 'NO_RATE_CARD' || u.reason === 'NO_RATE_CARD_ITEM',
-    );
+    // Under the old zone/slab engine this was the common case rather
+    // than the edge one: an unlisted pincode fell through to a "DEFAULT"
+    // zone no rate card item matched. Flat pricing removes that seam,
+    // but a deleted or zeroed setting can still get here, so the guard
+    // stays — a missing fee is an operator problem and should stop the
+    // flow loudly rather than bill nothing.
+    const unpriced = compute.unresolved.filter((u) => u.reason === 'NO_FLAT_DELIVERY_FEE');
     if (unpriced.length > 0) {
       throw new ConflictException({
         code: 'PRICING_UNRESOLVED',
         message:
-          `Cannot price order ${orderId}: ${unpriced.map((u) => u.reason).join(', ')}. ` +
-          `Destination ${order.recipientPostalCode} resolved to zone "${compute.zone}" and no ` +
-          `rate card item matched. Load the pincode or add the rate for that zone and weight ` +
-          `slab, then compute again — recording ₹0 would bill the seller nothing for this parcel.`,
+          `Cannot price order ${orderId}: the flat delivery fee resolved to ₹0.00. ` +
+          `Set pricing.flat_delivery_fee_inr (or this seller's override of it) and compute ` +
+          `again — recording ₹0 would bill the seller nothing for this parcel.`,
       });
     }
 

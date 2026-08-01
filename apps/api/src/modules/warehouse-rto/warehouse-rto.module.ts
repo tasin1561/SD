@@ -12,6 +12,7 @@ import { WarehouseRtoController } from './controllers/warehouse-rto.controller';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { TicketModule } from '../ticket/ticket.module';
 import { InboundFreightModule } from '../inbound-freight/inbound-freight.module';
+import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-wallet-accrual.module';
 
 /**
  * Module 8 warehouse-rto module — reverted to MODEL A by Module 9
@@ -46,6 +47,8 @@ import { InboundFreightModule } from '../inbound-freight/inbound-freight.module'
     // goes through the shared transfer service so the move lands in the
     // ledger as a paired OUT/IN like any other (INV-1).
     InventoryTransferModule,
+    // A returned parcel is charged delivery + RTO fee at receive.
+    SellerWalletAccrualModule,
   ],
   controllers: [WarehouseRtoController],
   providers: [

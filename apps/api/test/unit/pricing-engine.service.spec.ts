@@ -1,543 +1,144 @@
-import {
-  ChargeType,
-  PaymentMode,
-  Prisma,
-  ServiceArea,
-  SettingValueType,
-  SurchargeComputationMethod,
-  SurchargeType,
-} from '@skydrop/db';
-import { MarginCalculationService } from '../../src/modules/pricing/services/margin-calculation.service';
+import { Prisma } from '@skydrop/db';
 import { PricingEngineService } from '../../src/modules/pricing/services/pricing-engine.service';
-import { ZoneResolverService } from '../../src/modules/pricing/services/zone-resolver.service';
+import { MarginCalculationService } from '../../src/modules/pricing/services/margin-calculation.service';
+import type { SettingsResolverService } from '../../src/modules/settings/services/settings-resolver.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 
-type AnyArgs = Record<string, unknown>;
+/**
+ * Flat pricing: one fee per seller, anywhere in India.
+ *
+ * These tests are deliberately short, and that is the point — the
+ * previous engine needed five hundred lines of them because a price
+ * passed through a rate card, a courier, a service type, a postal zone,
+ * a weight slab and a stack of percentage surcharges before it became a
+ * number. Every join was somewhere it could come out wrong quietly, and
+ * one did: an unlisted pincode fell through to a "DEFAULT" zone nothing
+ * matched, and the order priced at ₹0.00.
+ *
+ * What is left worth testing is the resolution — whose number wins — and
+ * the guard that stops a missing setting being recorded as free
+ * shipping.
+ */
 
-interface SetupOpts {
-  readonly rateCard?: AnyArgs | null;
-  readonly sellerPricing?: AnyArgs | null;
-  readonly courier?: AnyArgs | null;
-  readonly pin?: AnyArgs | null;
-  readonly zoneMatrix?: AnyArgs | null;
-  readonly rateCardItem?: AnyArgs | null;
-  readonly surcharges?: AnyArgs[];
-  readonly gstRate?: string;
-  readonly defaultCourierCode?: string;
+const SELLER = '019fad84-7acd-754e-8ee4-43cf858fed82';
+
+function makeSut(opts: {
+  deliveryFee?: string | null;
+  rtoFee?: string | null;
+  source?: 'SELLER_OVERRIDE' | 'SYSTEM_DEFAULT';
+  gstPercent?: string;
+}): { svc: PricingEngineService } {
+  const resolve = jest.fn(async (_sellerId: string, key: string) => ({
+    key,
+    valueType: 'DECIMAL',
+    value: key.includes('rto') ? (opts.rtoFee ?? null) : (opts.deliveryFee ?? null),
+    source: opts.source ?? 'SYSTEM_DEFAULT',
+  }));
+  const settings = { resolve } as unknown as SettingsResolverService;
+
+  const findUnique = jest.fn(async () => ({
+    valueDecimal: new Prisma.Decimal(opts.gstPercent ?? '0'),
+  }));
+  const prisma = {
+    client: { systemSetting: { findUnique } },
+  } as unknown as PrismaService;
+
+  return {
+    svc: new PricingEngineService(prisma, settings, new MarginCalculationService()),
+  };
 }
 
-function makeSut(opts: SetupOpts = {}) {
-  const pinCode = {
-    findUnique: jest.fn(async () => opts.pin ?? null),
-  };
-  const zoneMatrixEntry = {
-    findUnique: jest.fn(async () => opts.zoneMatrix ?? null),
-  };
-  const rateCard = {
-    findFirst: jest.fn(async () => opts.rateCard ?? null),
-  };
-  const sellerPricing = {
-    findFirst: jest.fn(async () => opts.sellerPricing ?? null),
-  };
-  const courier = {
-    findUnique: jest.fn(async () => opts.courier ?? null),
-  };
-  const rateCardItem = {
-    findFirst: jest.fn(async () => opts.rateCardItem ?? null),
-  };
-  const surchargeRule = {
-    findMany: jest.fn(async () => opts.surcharges ?? []),
-  };
-  const systemSetting = {
-    findUnique: jest.fn(async (args: AnyArgs) => {
-      const where = args.where as { key: string };
-      if (where.key === 'pricing.gst_rate') {
-        return opts.gstRate
-          ? {
-              key: 'pricing.gst_rate',
-              valueType: SettingValueType.DECIMAL,
-              valueString: null,
-              valueInt: null,
-              valueDecimal: new Prisma.Decimal(opts.gstRate),
-              valueBoolean: null,
-              valueJson: null,
-              valueDate: null,
-            }
-          : null;
-      }
-      if (where.key === 'ops.default_courier_code') {
-        return opts.defaultCourierCode
-          ? {
-              key: 'ops.default_courier_code',
-              valueType: SettingValueType.STRING,
-              valueString: opts.defaultCourierCode,
-              valueInt: null,
-              valueDecimal: null,
-              valueBoolean: null,
-              valueJson: null,
-              valueDate: null,
-            }
-          : null;
-      }
-      return null;
-    }),
-  };
+const INPUT = {
+  sellerId: SELLER,
+  recipientPostalCode: '110001',
+  paymentMode: 'COD' as never,
+  codAmountInr: 1500,
+  declaredValueInr: 1500,
+  totalWeightGrams: 1000,
+};
 
-  const client = {
-    pinCode,
-    zoneMatrixEntry,
-    rateCard,
-    sellerPricing,
-    courier,
-    rateCardItem,
-    surchargeRule,
-    systemSetting,
-  };
-  const prisma = { client } as unknown as PrismaService;
-  const zoneResolver = new ZoneResolverService(prisma);
-  return new PricingEngineService(prisma, zoneResolver, new MarginCalculationService());
-}
+describe('PricingEngineService — flat fee', () => {
+  it('charges the flat fee, and nothing else', async () => {
+    const { svc } = makeSut({ deliveryFee: '200.00' });
+    const r = await svc.compute(INPUT);
 
-describe('PricingEngineService.compute', () => {
-  it('returns zero base + UNRESOLVED flags when no rate card item exists', async () => {
-    const svc = makeSut({
-      rateCard: { id: 'rc-1', code: 'default-2026' },
-      courier: { id: 'c-1', code: 'delhivery' },
-      pin: {
-        pinCode: '110001',
-        serviceArea: ServiceArea.METRO,
-        zone: 'Z1',
-      },
-    });
-    const out = await svc.compute({
-      sellerId: 's-1',
-      recipientPostalCode: '110001',
-      paymentMode: PaymentMode.PREPAID,
-      codAmountInr: 0,
-      declaredValueInr: 500,
-      totalWeightGrams: 300,
-      courierCode: 'delhivery',
-    });
-    expect(out.baseShippingInr).toBe('0.00');
-    expect(out.unresolved.some((u) => u.reason === 'NO_RATE_CARD_ITEM')).toBe(true);
-    expect(out.surcharges).toHaveLength(0);
-    expect(out.gstAmountInr).toBe('0.00');
+    expect(r.baseShippingInr).toBe('200.00');
+    // No COD fee on a ₹1,500 COD order, no fuel surcharge, no remote
+    // area fee. "Flat" means a seller can predict the number without
+    // knowing where the parcel is going.
+    expect(r.surcharges).toEqual([]);
+    expect(r.totalInr).toBe('200.00');
+    expect(r.unresolved).toEqual([]);
   });
 
-  it('computes base + flat surcharge + GST end-to-end', async () => {
-    const svc = makeSut({
-      rateCard: { id: 'rc-1', code: 'default-2026' },
-      courier: { id: 'c-1', code: 'delhivery' },
-      pin: {
-        pinCode: '110001',
-        serviceArea: ServiceArea.METRO,
-        zone: 'Z1',
-      },
-      rateCardItem: {
-        id: 'rci-1',
-        baseChargeInr: new Prisma.Decimal('80'),
-        perKgChargeInr: null,
-        weightSlabFromGrams: 0,
-        weightSlabToGrams: 500,
-      },
-      surcharges: [
-        {
-          id: 'sr-1',
-          type: SurchargeType.FUEL_SURCHARGE,
-          name: 'Fuel surcharge',
-          computationMethod: SurchargeComputationMethod.FLAT,
-          flatAmountInr: new Prisma.Decimal('10'),
-          percentage: null,
-          minAmountInr: null,
-          maxAmountInr: null,
-          baseField: null,
-          appliesOnlyIfPaymentMode: null,
-          appliesOnlyForServiceAreas: [],
-          isVisibleToSeller: true,
-          displayOrder: 0,
-          isActive: true,
-        },
-      ],
-      gstRate: '18',
+  it('is the same price regardless of destination or weight', async () => {
+    const { svc } = makeSut({ deliveryFee: '200.00' });
+    const delhi = await svc.compute(INPUT);
+    const remote = await svc.compute({
+      ...INPUT,
+      recipientPostalCode: '797112', // Nagaland — the old zone E, 2.6× Delhi
+      totalWeightGrams: 9000,
     });
-    const out = await svc.compute({
-      sellerId: 's-1',
-      recipientPostalCode: '110001',
-      paymentMode: PaymentMode.PREPAID,
-      codAmountInr: 0,
-      declaredValueInr: 500,
-      totalWeightGrams: 300,
-      courierCode: 'delhivery',
-    });
-    expect(out.baseShippingInr).toBe('80.00');
-    expect(out.surcharges).toHaveLength(1);
-    expect(out.surcharges[0]?.amountInr).toBe('10.00');
-    expect(out.surcharges[0]?.type).toBe(ChargeType.FUEL_SURCHARGE);
-    // GST = (80 + 10) * 0.18 = 16.20
-    expect(out.gstAmountInr).toBe('16.20');
-    // Total = 80 + 10 + 16.20 = 106.20
-    expect(out.totalInr).toBe('106.20');
-    // R1c: no costToSkydropInr seeded on this rate card item → margin unknown, not zero.
-    expect(out.margin).toEqual({ baseChargeInr: '80.00', costToSkydropInr: null, marginInr: null });
-    expect(out.computationContext.margin).toEqual(out.margin);
+    expect(remote.totalInr).toBe(delhi.totalInr);
   });
 
-  it('R1c: computes a real margin when costToSkydropInr is seeded on the rate card item', async () => {
-    const svc = makeSut({
-      rateCard: { id: 'rc-1', code: 'default-2026' },
-      courier: { id: 'c-1', code: 'delhivery' },
-      pin: { pinCode: '110001', serviceArea: ServiceArea.METRO, zone: 'Z1' },
-      rateCardItem: {
-        id: 'rci-1',
-        baseChargeInr: new Prisma.Decimal('80'),
-        perKgChargeInr: null,
-        costToSkydropInr: new Prisma.Decimal('55'),
-        weightSlabFromGrams: 0,
-        weightSlabToGrams: 500,
-      },
-    });
-    const out = await svc.compute({
-      sellerId: 's-1',
-      recipientPostalCode: '110001',
-      paymentMode: PaymentMode.PREPAID,
-      codAmountInr: 0,
-      declaredValueInr: 500,
-      totalWeightGrams: 300,
-      courierCode: 'delhivery',
-    });
-    expect(out.margin).toEqual({
-      baseChargeInr: '80.00',
-      costToSkydropInr: '55.00',
-      marginInr: '25.00',
+  it("a seller's override beats the global default — that is the whole point", async () => {
+    const { svc } = makeSut({ deliveryFee: '150.00', source: 'SELLER_OVERRIDE' });
+    const r = await svc.compute(INPUT);
+    expect(r.baseShippingInr).toBe('150.00');
+    // Recorded in the snapshot so a past order can say WHY it was priced
+    // that way, not merely what it cost.
+    expect(r.computationContext.flatFee).toMatchObject({
+      deliveryFeeInr: '150.00',
+      source: 'SELLER_OVERRIDE',
     });
   });
 
-  it('R1c: margin reflects the POST-discount seller charge, not the rate-card sticker price', async () => {
-    const svc = makeSut({
-      rateCard: { id: 'rc-1', code: 'default-2026' },
-      courier: { id: 'c-1', code: 'delhivery' },
-      pin: { pinCode: '110001', serviceArea: ServiceArea.METRO, zone: 'Z1' },
-      sellerPricing: {
-        id: 'sp-1',
-        rateCardId: 'rc-1',
-        discountPercent: new Prisma.Decimal('25'),
-        codFeePercent: null,
-        courierId: null,
-      },
-      rateCardItem: {
-        id: 'rci-1',
-        baseChargeInr: new Prisma.Decimal('100'),
-        perKgChargeInr: null,
-        costToSkydropInr: new Prisma.Decimal('55'),
-        weightSlabFromGrams: 0,
-        weightSlabToGrams: 500,
-      },
-    });
-    const out = await svc.compute({
-      sellerId: 's-1',
-      recipientPostalCode: '110001',
-      paymentMode: PaymentMode.PREPAID,
-      codAmountInr: 0,
-      declaredValueInr: 500,
-      totalWeightGrams: 300,
-      courierCode: 'delhivery',
-    });
-    // 100 - 25% = 75 charged to the seller; margin = 75 - 55 = 20 (not 100-55=45).
-    expect(out.baseShippingInr).toBe('75.00');
-    expect(out.margin).toEqual({
-      baseChargeInr: '75.00',
-      costToSkydropInr: '55.00',
-      marginInr: '20.00',
-    });
+  it('GST is zero by default, and the line is still written', async () => {
+    const { svc } = makeSut({ deliveryFee: '200.00' });
+    const r = await svc.compute(INPUT);
+    expect(r.gstRatePercent).toBe('0.00');
+    expect(r.gstAmountInr).toBe('0.00');
+    // An ABSENT gst figure reads as "we forgot"; an explicit zero reads
+    // as "none was charged". The invoice consumes this line.
+    expect(r.totalInr).toBe('200.00');
   });
 
-  it('R1c: a deep discount can drive margin negative — surfaced, not clamped', async () => {
-    const svc = makeSut({
-      rateCard: { id: 'rc-1', code: 'default-2026' },
-      courier: { id: 'c-1', code: 'delhivery' },
-      pin: { pinCode: '110001', serviceArea: ServiceArea.METRO, zone: 'Z1' },
-      sellerPricing: {
-        id: 'sp-1',
-        rateCardId: 'rc-1',
-        discountPercent: new Prisma.Decimal('50'),
-        codFeePercent: null,
-        courierId: null,
-      },
-      rateCardItem: {
-        id: 'rci-1',
-        baseChargeInr: new Prisma.Decimal('100'),
-        perKgChargeInr: null,
-        costToSkydropInr: new Prisma.Decimal('55'),
-        weightSlabFromGrams: 0,
-        weightSlabToGrams: 500,
-      },
-    });
-    const out = await svc.compute({
-      sellerId: 's-1',
-      recipientPostalCode: '110001',
-      paymentMode: PaymentMode.PREPAID,
-      codAmountInr: 0,
-      declaredValueInr: 500,
-      totalWeightGrams: 300,
-      courierCode: 'delhivery',
-    });
-    // 100 - 50% = 50 charged; margin = 50 - 55 = -5.
-    expect(out.margin).toEqual({
-      baseChargeInr: '50.00',
-      costToSkydropInr: '55.00',
-      marginInr: '-5.00',
-    });
+  it('adds GST on top once the setting says to', async () => {
+    // The whole reason the rate is a setting: switching it on later is a
+    // decision, not a deployment.
+    const { svc } = makeSut({ deliveryFee: '200.00', gstPercent: '18' });
+    const r = await svc.compute(INPUT);
+    expect(r.gstAmountInr).toBe('36.00');
+    expect(r.totalInr).toBe('236.00');
   });
 
-  it('applies SellerPricing.discountPercent to base shipping', async () => {
-    const svc = makeSut({
-      rateCard: { id: 'rc-1', code: 'default-2026' },
-      sellerPricing: {
-        id: 'sp-1',
-        rateCardId: 'rc-1',
-        discountPercent: new Prisma.Decimal('20'),
-        codFeePercent: null,
-      },
-      courier: { id: 'c-1', code: 'delhivery' },
-      pin: { pinCode: '110001', serviceArea: ServiceArea.METRO, zone: 'Z1' },
-      rateCardItem: {
-        baseChargeInr: new Prisma.Decimal('100'),
-        perKgChargeInr: null,
-        weightSlabFromGrams: 0,
-        weightSlabToGrams: 500,
-      },
-      gstRate: '18',
-    });
-    const out = await svc.compute({
-      sellerId: 's-1',
-      recipientPostalCode: '110001',
-      paymentMode: PaymentMode.PREPAID,
-      codAmountInr: 0,
-      declaredValueInr: 500,
-      totalWeightGrams: 300,
-      courierCode: 'delhivery',
-    });
-    // 100 * (1 - 0.20) = 80
-    expect(out.baseShippingInr).toBe('80.00');
-    expect(out.sellerDiscountPercent).toBe('20.00');
+  it('a missing setting is FLAGGED, not silently priced at zero', async () => {
+    const { svc } = makeSut({ deliveryFee: null });
+    const r = await svc.compute(INPUT);
+    expect(r.totalInr).toBe('0.00');
+    // OrderChargesService refuses to persist on this flag. Without it a
+    // deleted setting would ship every parcel free and nothing would
+    // fail — the exact shape of the bug the old engine had.
+    expect(r.unresolved.map((u) => u.reason)).toEqual(['NO_FLAT_DELIVERY_FEE']);
   });
 
-  it('honors SellerPricing.codFeePercent (COD-only)', async () => {
-    const svc = makeSut({
-      rateCard: { id: 'rc-1', code: 'default-2026' },
-      sellerPricing: {
-        id: 'sp-1',
-        rateCardId: 'rc-1',
-        discountPercent: null,
-        codFeePercent: new Prisma.Decimal('1.5'),
-      },
-      courier: { id: 'c-1', code: 'delhivery' },
-      pin: { pinCode: '110001', serviceArea: ServiceArea.METRO, zone: 'Z1' },
-      rateCardItem: {
-        baseChargeInr: new Prisma.Decimal('80'),
-        perKgChargeInr: null,
-        weightSlabFromGrams: 0,
-        weightSlabToGrams: 500,
-      },
-      gstRate: '18',
-    });
-    const out = await svc.compute({
-      sellerId: 's-1',
-      recipientPostalCode: '110001',
-      paymentMode: PaymentMode.COD,
-      codAmountInr: 1000,
-      declaredValueInr: 800,
-      totalWeightGrams: 300,
-      courierCode: 'delhivery',
-    });
-    // COD fee = 1000 * 0.015 = 15
-    const codLine = out.surcharges.find((l) => l.type === ChargeType.COD_FEE);
-    expect(codLine?.amountInr).toBe('15.00');
+  it('resolves the RTO fee separately and does not fold it into the order price', async () => {
+    const { svc } = makeSut({ deliveryFee: '200.00', rtoFee: '30.00' });
+    const r = await svc.compute(INPUT);
+    // The order costs 200. It only costs 230 if it comes back, and that
+    // is charged at RTO receive — predicting it here would bill every
+    // seller for a return that mostly does not happen.
+    expect(r.totalInr).toBe('200.00');
+
+    const rto = await svc.resolveRtoFee(SELLER);
+    expect(rto.amount.toFixed(2)).toBe('30.00');
   });
 
-  it('PERCENTAGE surcharge with DECLARED_VALUE base + min/max clamps', async () => {
-    const svc = makeSut({
-      rateCard: { id: 'rc-1', code: 'default-2026' },
-      courier: { id: 'c-1', code: 'delhivery' },
-      pin: { pinCode: '110001', serviceArea: ServiceArea.METRO, zone: 'Z1' },
-      rateCardItem: {
-        baseChargeInr: new Prisma.Decimal('80'),
-        perKgChargeInr: null,
-        weightSlabFromGrams: 0,
-        weightSlabToGrams: 500,
-      },
-      surcharges: [
-        {
-          id: 'sr-1',
-          type: SurchargeType.OTHER,
-          name: 'Insurance',
-          computationMethod: SurchargeComputationMethod.PERCENTAGE,
-          flatAmountInr: null,
-          percentage: new Prisma.Decimal('2'),
-          minAmountInr: new Prisma.Decimal('5'),
-          maxAmountInr: new Prisma.Decimal('25'),
-          baseField: 'DECLARED_VALUE',
-          appliesOnlyIfPaymentMode: null,
-          appliesOnlyForServiceAreas: [],
-          isVisibleToSeller: true,
-          displayOrder: 0,
-          isActive: true,
-        },
-      ],
-      gstRate: '18',
+  it('rejects a negative weight rather than pricing it', async () => {
+    const { svc } = makeSut({ deliveryFee: '200.00' });
+    await expect(svc.compute({ ...INPUT, totalWeightGrams: -1 })).rejects.toMatchObject({
+      response: { code: 'INVALID_WEIGHT' },
     });
-    // 2% of 1000 = 20 → no clamp needed
-    const out = await svc.compute({
-      sellerId: 's-1',
-      recipientPostalCode: '110001',
-      paymentMode: PaymentMode.PREPAID,
-      codAmountInr: 0,
-      declaredValueInr: 1000,
-      totalWeightGrams: 300,
-      courierCode: 'delhivery',
-    });
-    expect(out.surcharges[0]?.amountInr).toBe('20.00');
-
-    // 2% of 100 = 2 → clamped UP to min=5
-    const outLow = await svc.compute({
-      sellerId: 's-1',
-      recipientPostalCode: '110001',
-      paymentMode: PaymentMode.PREPAID,
-      codAmountInr: 0,
-      declaredValueInr: 100,
-      totalWeightGrams: 300,
-      courierCode: 'delhivery',
-    });
-    expect(outLow.surcharges[0]?.amountInr).toBe('5.00');
-
-    // 2% of 10000 = 200 → clamped DOWN to max=25
-    const outHigh = await svc.compute({
-      sellerId: 's-1',
-      recipientPostalCode: '110001',
-      paymentMode: PaymentMode.PREPAID,
-      codAmountInr: 0,
-      declaredValueInr: 10000,
-      totalWeightGrams: 300,
-      courierCode: 'delhivery',
-    });
-    expect(outHigh.surcharges[0]?.amountInr).toBe('25.00');
-  });
-
-  it('filters surcharges by paymentMode + serviceArea', async () => {
-    const svc = makeSut({
-      rateCard: { id: 'rc-1', code: 'default-2026' },
-      courier: { id: 'c-1', code: 'delhivery' },
-      pin: { pinCode: '110001', serviceArea: ServiceArea.METRO, zone: 'Z1' },
-      rateCardItem: {
-        baseChargeInr: new Prisma.Decimal('80'),
-        perKgChargeInr: null,
-        weightSlabFromGrams: 0,
-        weightSlabToGrams: 500,
-      },
-      surcharges: [
-        // COD-only — skipped on prepaid order.
-        {
-          id: 'sr-1',
-          type: SurchargeType.COD_FEE,
-          name: 'COD handling',
-          computationMethod: SurchargeComputationMethod.FLAT,
-          flatAmountInr: new Prisma.Decimal('30'),
-          percentage: null,
-          minAmountInr: null,
-          maxAmountInr: null,
-          baseField: null,
-          appliesOnlyIfPaymentMode: PaymentMode.COD,
-          appliesOnlyForServiceAreas: [],
-          isVisibleToSeller: true,
-          displayOrder: 0,
-          isActive: true,
-        },
-        // Special_NE only — skipped on METRO destination.
-        {
-          id: 'sr-2',
-          type: SurchargeType.REMOTE_AREA_FEE,
-          name: 'NE remote area',
-          computationMethod: SurchargeComputationMethod.FLAT,
-          flatAmountInr: new Prisma.Decimal('40'),
-          percentage: null,
-          minAmountInr: null,
-          maxAmountInr: null,
-          baseField: null,
-          appliesOnlyIfPaymentMode: null,
-          appliesOnlyForServiceAreas: [ServiceArea.SPECIAL_NE],
-          isVisibleToSeller: true,
-          displayOrder: 0,
-          isActive: true,
-        },
-      ],
-      gstRate: '18',
-    });
-    const out = await svc.compute({
-      sellerId: 's-1',
-      recipientPostalCode: '110001',
-      paymentMode: PaymentMode.PREPAID,
-      codAmountInr: 0,
-      declaredValueInr: 500,
-      totalWeightGrams: 300,
-      courierCode: 'delhivery',
-    });
-    expect(out.surcharges).toHaveLength(0);
-  });
-
-  it('applies perKgChargeInr above the slab floor', async () => {
-    const svc = makeSut({
-      rateCard: { id: 'rc-1', code: 'default-2026' },
-      courier: { id: 'c-1', code: 'delhivery' },
-      pin: { pinCode: '110001', serviceArea: ServiceArea.METRO, zone: 'Z1' },
-      rateCardItem: {
-        baseChargeInr: new Prisma.Decimal('80'),
-        perKgChargeInr: new Prisma.Decimal('20'),
-        weightSlabFromGrams: 500,
-        weightSlabToGrams: 5000,
-      },
-      gstRate: '18',
-    });
-    const out = await svc.compute({
-      sellerId: 's-1',
-      recipientPostalCode: '110001',
-      paymentMode: PaymentMode.PREPAID,
-      codAmountInr: 0,
-      declaredValueInr: 500,
-      totalWeightGrams: 1500,
-      courierCode: 'delhivery',
-    });
-    // 80 + ((1500 - 500) / 1000) * 20 = 80 + 20 = 100
-    expect(out.baseShippingInr).toBe('100.00');
-  });
-
-  it('NO_RATE_CARD + NO_COURIER unresolved when seeds are bare', async () => {
-    const svc = makeSut({});
-    const out = await svc.compute({
-      sellerId: 's-1',
-      recipientPostalCode: '110001',
-      paymentMode: PaymentMode.PREPAID,
-      codAmountInr: 0,
-      declaredValueInr: 500,
-      totalWeightGrams: 300,
-    });
-    const reasons = out.unresolved.map((u) => u.reason);
-    expect(reasons).toContain('NO_RATE_CARD');
-    expect(reasons).toContain('NO_COURIER');
-    expect(out.baseShippingInr).toBe('0.00');
-    expect(out.totalInr).toBe('0.00');
-  });
-
-  it('rejects negative weight with INVALID_WEIGHT', async () => {
-    const svc = makeSut({});
-    await expect(
-      svc.compute({
-        sellerId: 's-1',
-        recipientPostalCode: '110001',
-        paymentMode: PaymentMode.PREPAID,
-        codAmountInr: 0,
-        declaredValueInr: 500,
-        totalWeightGrams: -1,
-      }),
-    ).rejects.toMatchObject({ response: { code: 'INVALID_WEIGHT' } });
   });
 });

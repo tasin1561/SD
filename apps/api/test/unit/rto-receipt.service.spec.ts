@@ -1,5 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { OrderStatus, ShipmentStatus, WarehouseStatus } from '@skydrop/db';
+import type { RtoFeeAccrualService } from '../../src/modules/seller-wallet-accrual/services/rto-fee-accrual.service';
 import { RtoReceiptService } from '../../src/modules/warehouse-rto/services/rto-receipt.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { OrderReadService } from '../../src/modules/order/services/order-read.service';
@@ -72,12 +73,19 @@ function makeService(
     scanUnits: jest.fn(async () => []),
     scanUnitsForShipment: jest.fn(async () => 0),
   };
+  // The money side is exercised in rto-fee-accrual.service.spec.ts and
+  // end to end; here it is a stub so a wallet failure cannot be mistaken
+  // for a receive failure.
+  const rtoFees = {
+    chargeOnReceive: jest.fn(async () => ({ deliveryFeeSwept: false, rtoFeeInr: '30.00' })),
+  };
   const svc = new RtoReceiptService(
     { client } as unknown as PrismaService,
     orders as unknown as OrderReadService,
     orderWrite as unknown as OrderWriteService,
     audit as unknown as AuditLogService,
     unitLedger as unknown as StockUnitService,
+    rtoFees as unknown as RtoFeeAccrualService,
   );
   return {
     svc,

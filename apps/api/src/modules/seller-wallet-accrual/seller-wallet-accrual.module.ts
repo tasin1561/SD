@@ -7,9 +7,11 @@ import { PendingAccrualWorker } from './queue/pending-accrual.worker';
 import { AccrualExecutionService } from './services/accrual-execution.service';
 import { CourierFeeAccrualService } from './services/courier-fee-accrual.service';
 import { OrderChargesAccrualService } from './services/order-charges-accrual.service';
+import { RtoFeeAccrualService } from './services/rto-fee-accrual.service';
 import { OrderDeliveredAccrualListener } from './services/order-delivered-accrual-listener.service';
 import { PendingAccrualSchedulerService } from './services/pending-accrual-scheduler.service';
 import { PendingAccrualSweepService } from './services/pending-accrual-sweep.service';
+import { PricingModule } from '../pricing/pricing.module';
 import { InboundFreightModule } from '../inbound-freight/inbound-freight.module';
 
 /**
@@ -46,10 +48,14 @@ import { InboundFreightModule } from '../inbound-freight/inbound-freight.module'
     // R3 amortisation: the DELIVERED accrual also charges the delivered
     // units' share of the inbound freight bill.
     InboundFreightModule,
+    // The return fee is resolved per seller through the pricing engine
+    // (global default, seller override wins).
+    PricingModule,
   ],
   providers: [
     OrderDeliveredAccrualListener,
     OrderChargesAccrualService,
+    RtoFeeAccrualService,
     CourierFeeAccrualService,
     AccrualExecutionService,
     PendingAccrualSchedulerService,
@@ -57,6 +63,6 @@ import { InboundFreightModule } from '../inbound-freight/inbound-freight.module'
     PendingAccrualQueue,
     PendingAccrualWorker,
   ],
-  exports: [OrderChargesAccrualService, CourierFeeAccrualService],
+  exports: [OrderChargesAccrualService, CourierFeeAccrualService, RtoFeeAccrualService],
 })
 export class SellerWalletAccrualModule {}

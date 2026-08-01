@@ -10,6 +10,7 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderReadService } from '../../order/services/order-read.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
+import { RtoFeeAccrualService } from '../../seller-wallet-accrual/services/rto-fee-accrual.service';
 import { StockUnitService } from '../../inventory-shared/stock-unit.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
@@ -55,6 +56,7 @@ export class RtoReceiptService {
     private readonly orderWrite: OrderWriteService,
     private readonly audit: AuditLogService,
     private readonly units: StockUnitService,
+    private readonly rtoFees: RtoFeeAccrualService,
   ) {}
 
   /**
@@ -213,6 +215,25 @@ export class RtoReceiptService {
         requestId: ctx?.requestId ?? null,
       },
     });
+
+    // The money. A returned parcel costs the delivery fee PLUS the flat
+    // RTO fee (200 + 30 by default), and BOTH are charged here because
+    // this is the moment the return became a fact rather than a scan.
+    //
+    // Best-effort and post-transition, deliberately: the parcel IS in
+    // the building, and a wallet failure must not un-receive it. Both
+    // halves are idempotent, so a retry or a re-submitted receive
+    // converges rather than double-charging.
+    try {
+      await this.prisma.client.$transaction((tx) =>
+        this.rtoFees.chargeOnReceive(tx, orderId, order.sellerId),
+      );
+    } catch (err) {
+      this.logger.error(
+        { orderId, awbNumber, err: err instanceof Error ? err.message : String(err) },
+        'RTO fee charge failed after receive — the parcel is received; the debit is not',
+      );
+    }
 
     // R4 — the parcel is physically back: walk its serialized units
     // DISPATCHED → RTO_RECEIVED at the warehouse that actually received

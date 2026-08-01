@@ -128,6 +128,39 @@ const systemSettings: SystemSettingSeed[] = [
     description: 'State of supply for IGST/CGST/SGST determination',
   },
   {
+    key: 'pricing.flat_delivery_fee_inr',
+    category: 'pricing',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '200.00',
+    displayName: 'Delivery Fee (INR, flat)',
+    description:
+      'What a seller is charged to deliver one parcel, anywhere in India. Flat — no zone, no weight slab, no surcharges. Per-seller override via seller_setting_overrides, and the override is the one that counts.',
+    sellerOverridable: true,
+    overrideMinDecimal: '0',
+    overrideMaxDecimal: '100000',
+  },
+  {
+    key: 'pricing.flat_rto_fee_inr',
+    category: 'pricing',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '30.00',
+    displayName: 'RTO Return Fee (INR, flat)',
+    description:
+      'Charged ON TOP of the delivery fee when a parcel comes back, and only then — debited from the wallet at the moment the return is physically RECEIVED, not when the courier says it is coming. A returned parcel therefore costs delivery + RTO (default 200 + 30 = 230). Per-seller override via seller_setting_overrides.',
+    sellerOverridable: true,
+    overrideMinDecimal: '0',
+    overrideMaxDecimal: '100000',
+  },
+  {
+    key: 'pricing.flat_fee_gst_percent',
+    category: 'pricing',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '0.00',
+    displayName: 'GST on Delivery Fees (%)',
+    description:
+      'GST applied on top of the flat delivery and RTO fees. Seeded at 0 — the flat fees are currently what the seller pays, full stop. Set this to 18 to start charging GST on them; nothing in the code needs to change. Deliberately GLOBAL and not seller-overridable: a tax rate is set by law, not per customer. Distinct from pricing.gst_rate, which is the fallback GST on the GOODS for customs and invoicing.',
+  },
+  {
     key: 'pricing.gst_rate',
     category: 'pricing',
     valueType: SettingValueType.DECIMAL,

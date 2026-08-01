@@ -276,6 +276,11 @@ function humanizeDirection(d: WalletEntryView['direction']): string {
     // as a payment).
     case 'INBOUND_FREIGHT':
       return 'Inbound freight';
+    // The flat return fee, charged when a parcel physically comes back.
+    // A DEBIT, so it stays OUT of CREDIT_DIRECTIONS above for the same
+    // reason as inbound freight.
+    case 'RTO_FEE':
+      return 'Return fee';
   }
 }
 

@@ -43,6 +43,11 @@ export class OrderChargesAccrualService {
     let total = new Prisma.Decimal(0);
     for (const c of charges) {
       if (c.type === ChargeType.REFUND) continue;
+      // The return fee has its OWN wallet direction (RTO_FEE) and is
+      // taken separately at RTO receive. Summing it here too would
+      // charge it twice — and the second charge would be invisible,
+      // buried inside an ORDER_CHARGES total.
+      if (c.type === ChargeType.RTO_FEE) continue;
       total = total.add(c.amountInr);
     }
     if (total.lte(0)) return false;

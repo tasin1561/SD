@@ -260,6 +260,115 @@ describe('Warehouse RTO flow (e2e)', () => {
     };
   }
 
+  it('a returned parcel costs delivery + RTO (200 + 30), charged when it is RECEIVED', async () => {
+    await receiveStock(10);
+    const { orderId, shipmentItemIds, awbNumber } = await makeRtoInitiatedShipment(2);
+
+    // The order priced at the flat delivery fee — no zone, no weight
+    // slab, no COD fee. 110001 and a 1kg parcel would have been ₹150.10
+    // under the old engine; it is the same ₹200 as everywhere else now.
+    const charges = await h.prisma.orderCharge.findMany({
+      where: { orderId, deletedAt: null },
+      orderBy: { displayOrder: 'asc' },
+    });
+    const shipping = charges.find((c) => c.type === 'BASE_SHIPPING');
+    expect(shipping?.amountInr.toFixed(2)).toBe('200.00');
+    // GST is seeded at 0 on the flat fees, and the line is written
+    // anyway so the invoice can read it.
+    const gst = charges.find((c) => c.type === 'GST');
+    expect(gst?.amountInr.toFixed(2)).toBe('0.00');
+
+    const before = await h.prisma.sellerWalletEntry.findMany({ where: { linkedOrderId: orderId } });
+    expect(before.filter((e) => e.direction === 'RTO_FEE')).toHaveLength(0);
+
+    await request(h.baseUrl)
+      .post('/warehouse/rto/receive')
+      .set(staffAuth)
+      .send({ awbNumber })
+      .expect(200);
+
+    // RECEIVE is the moment. A courier scan saying a parcel is coming
+    // back is not the parcel coming back.
+    const after = await h.prisma.sellerWalletEntry.findMany({ where: { linkedOrderId: orderId } });
+    const rtoFee = after.filter((e) => e.direction === 'RTO_FEE');
+    expect(rtoFee).toHaveLength(1);
+    expect(rtoFee[0]!.amount.toFixed(2)).toBe('30.00');
+
+    // The delivery fee is charged too, even though this order never
+    // reached DELIVERED. The courier carried it out; that leg is owed.
+    const orderCharges = after.filter((e) => e.direction === 'ORDER_CHARGES');
+    expect(orderCharges).toHaveLength(1);
+    expect(orderCharges[0]!.amount.toFixed(2)).toBe('200.00');
+
+    // 200 + 30 = 230, and the RTO fee is NOT swept into ORDER_CHARGES —
+    // that would charge it twice, invisibly, inside someone else's total.
+    const total = after
+      .filter((e) => e.direction === 'ORDER_CHARGES' || e.direction === 'RTO_FEE')
+      .reduce((n, e) => n + Number(e.amount), 0);
+    expect(total).toBe(230);
+
+    // The seller can see WHY: a charge line accompanies the debit.
+    const rtoLine = await h.prisma.orderCharge.findFirst({
+      where: { orderId, type: 'RTO_FEE', deletedAt: null },
+    });
+    expect(rtoLine?.amountInr.toFixed(2)).toBe('30.00');
+    expect(rtoLine?.isVisibleToSeller).toBe(true);
+
+    // Re-receiving is idempotent on the money as well as the status.
+    await request(h.baseUrl)
+      .post('/warehouse/rto/receive')
+      .set(staffAuth)
+      .send({ awbNumber })
+      .expect(200);
+    const afterRetry = await h.prisma.sellerWalletEntry.findMany({
+      where: { linkedOrderId: orderId },
+    });
+    expect(afterRetry.filter((e) => e.direction === 'RTO_FEE')).toHaveLength(1);
+    expect(afterRetry.filter((e) => e.direction === 'ORDER_CHARGES')).toHaveLength(1);
+
+    void shipmentItemIds;
+  });
+
+  it("a seller's own rate wins over the global default", async () => {
+    // The setting exists globally so there is always an answer; the
+    // per-seller override exists because the rate is what was agreed
+    // with that seller, and that is the one that counts.
+    await request(h.baseUrl)
+      .patch(`/admin/sellers/${sellerId}/settings/pricing.flat_delivery_fee_inr`)
+      .set(staffAuth)
+      .send({ valueType: 'DECIMAL', value: '149.50', note: 'Negotiated launch rate' })
+      .expect(200);
+    await request(h.baseUrl)
+      .patch(`/admin/sellers/${sellerId}/settings/pricing.flat_rto_fee_inr`)
+      .set(staffAuth)
+      .send({ valueType: 'DECIMAL', value: '25.00', note: 'Negotiated launch rate' })
+      .expect(200);
+
+    await receiveStock(10);
+    const { orderId, awbNumber } = await makeRtoInitiatedShipment(2);
+
+    const shipping = await h.prisma.orderCharge.findFirst({
+      where: { orderId, type: 'BASE_SHIPPING', deletedAt: null },
+    });
+    expect(shipping?.amountInr.toFixed(2)).toBe('149.50');
+
+    await request(h.baseUrl)
+      .post('/warehouse/rto/receive')
+      .set(staffAuth)
+      .send({ awbNumber })
+      .expect(200);
+
+    const entries = await h.prisma.sellerWalletEntry.findMany({
+      where: { linkedOrderId: orderId },
+    });
+    const rto = entries.find((e) => e.direction === 'RTO_FEE');
+    expect(rto?.amount.toFixed(2)).toBe('25.00');
+    const total = entries
+      .filter((e) => e.direction === 'ORDER_CHARGES' || e.direction === 'RTO_FEE')
+      .reduce((n, e) => n + Number(e.amount), 0);
+    expect(total).toBe(174.5);
+  });
+
   it('a hold bin gates sellability: restock lands there, availability ignores it, putaway releases it', async () => {
     // The end-to-end proof of the INV-3 fix.
     //

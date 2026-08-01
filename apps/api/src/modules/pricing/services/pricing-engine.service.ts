@@ -1,53 +1,39 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import {
-  ChargeType,
-  type PaymentMode,
-  Prisma,
-  type ServiceArea,
-  SurchargeBaseField,
-  SurchargeComputationMethod,
-  SurchargeType,
-} from '@skydrop/db';
+import { type ChargeType, type PaymentMode, Prisma, type ServiceArea } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
 import { MarginCalculationService, type MarginResult } from './margin-calculation.service';
-import { ZoneResolverService, type ZoneResolution } from './zone-resolver.service';
 
 /**
- * Module 15 — Pricing Engine. Pure calculation; no persistence. The
- * input describes a (real or hypothetical) order; the output is a
- * structured breakdown that the caller can persist (M6 order create
- * fast-follow) or surface in an admin preview (M15.2).
+ * Pricing — a flat fee, per seller.
  *
- * **Algorithm** (per CLAUDE.md pricing rules):
- *   1. Resolve the rate card: priority SellerPricing → default RateCard.
- *   2. Resolve courier + service type (defaults via system_settings).
- *   3. Resolve zone: PIN → ServiceArea → ZoneMatrixEntry per courier.
- *      On miss, fall back to the literal zone string "DEFAULT".
- *   4. Resolve chargeable weight. Phase 1A uses ACTUAL weight only
- *      (volumetric calculation deferred — the courier's volumetric
- *      divisor lives on Courier.volumetricDivisor for a future bump).
- *   5. Look up RateCardItem (rateCard, courier, serviceType, zone,
- *      weight slab containing chargeableWeightGrams). On miss, the
- *      base shipping is 0 + an UNRESOLVED flag.
- *   6. Apply SellerPricing.discountPercent to the base if present.
- *   7. Apply applicable SurchargeRules (active + paymentMode-match +
- *      serviceArea-match). FLAT = flatAmountInr; PERCENTAGE = percent
- *      of baseField (clamped to min/max if set); TIERED → 0 + flag
- *      (deferred). COD_FEE additionally honors SellerPricing.
- *      codFeePercent on top of any matching rule, OR by itself when
- *      no rule is present (so a seller-specific COD rate works
- *      without an explicit rate-card rule).
- *   8. Compute GST: 18% (or pricing.gst_rate) of
- *      (baseShipping + sum(surcharges)). GST is its OWN line; the
- *      per-line `taxAmountInr` is NOT populated to avoid
- *      double-counting (the GST line IS the tax).
- *   9. Return a structured breakdown with the `computationContext`
- *      JSON suitable for `OrderCharge.computationContext`.
+ * One price to deliver a parcel anywhere in India. No zones, no weight
+ * slabs, no surcharges, no rate-card lookup. The number comes from
+ * `pricing.flat_delivery_fee_inr`, and a per-seller override of that key
+ * beats the global default — the override is the one that counts, since
+ * the rate is what was agreed with that particular seller.
  *
- * Historical accuracy: pass `asOf` to evaluate against the rate card
- * + seller pricing + surcharges that were effective then. Default is
- * `now`. Once persisted, charges are immutable per the CLAUDE.md
- * pricing rule.
+ * A returned parcel costs the delivery fee PLUS
+ * `pricing.flat_rto_fee_inr` (default 200 + 30 = 230). The RTO half is
+ * deliberately NOT computed here: it is charged when the return is
+ * physically received, which is a warehouse event rather than an
+ * order-create one. See `RtoFeeService`.
+ *
+ * ── Why this replaced the zone/slab engine ────────────────────────────
+ * The previous engine resolved a rate card, a courier, a service type, a
+ * postal zone and a weight slab, then layered percentage surcharges and
+ * GST on top. Every one of those was somewhere the price could come out
+ * wrong quietly — and one did: an unlisted pincode fell through to a
+ * "DEFAULT" zone that no rate card item matched, and the order priced at
+ * ₹0.00. A flat fee has no such seams. The rate-card, zone-matrix and
+ * surcharge tables still exist; nothing reads them any more.
+ *
+ * ── GST ───────────────────────────────────────────────────────────────
+ * `pricing.flat_fee_gst_percent` is seeded at **0**: today the flat fee
+ * is what the seller pays, full stop. It is a setting rather than a
+ * constant so switching it to 18 later is a decision, not a code change.
+ * The GST line is written even at zero — the invoice reads that line,
+ * and an absent one reads as "we forgot" rather than "none was charged".
  */
 
 export interface PricingComputeInput {
@@ -63,13 +49,16 @@ export interface PricingComputeInput {
   readonly asOf?: Date;
 }
 
-export type UnresolvedReason =
-  | 'NO_RATE_CARD'
-  | 'NO_RATE_CARD_ITEM'
-  | 'ZONE_FALLBACK_DEFAULT'
-  | 'TIERED_SURCHARGE_NOT_IMPLEMENTED'
-  | 'NO_COURIER'
-  | 'NO_GST_RATE';
+/**
+ * Reasons the engine could not resolve something it needed.
+ *
+ * Only one survives the move to flat pricing — the rest described
+ * rate-card machinery nothing consults now. Kept as a union rather than
+ * collapsed to a bare string because `OrderChargesService` filters on it
+ * to decide whether a price is safe to persist, and a one-member union
+ * invites that check quietly being dropped.
+ */
+export type UnresolvedReason = 'NO_FLAT_DELIVERY_FEE';
 
 export interface UnresolvedFallback {
   readonly reason: UnresolvedReason;
@@ -97,17 +86,17 @@ export interface PricingComputeOutput {
   readonly surcharges: readonly PricingChargeLine[];
   readonly gstRatePercent: string;
   readonly gstAmountInr: string;
-  /** Sum of base + surcharges + gst. */
+  /** base + surcharges + gst. */
   readonly totalInr: string;
   /** For persistence into OrderCharge.computationContext. */
   readonly computationContext: PricingComputationContext;
   readonly unresolved: readonly UnresolvedFallback[];
-  /** R1c — internal/admin-visible only; never surfaced to sellers, never touches the wallet. */
+  /** Internal/admin-visible only; never surfaced to sellers, never touches the wallet. */
   readonly margin: MarginResult;
 }
 
 export interface PricingComputationContext {
-  readonly engineVersion: 'm15-v1';
+  readonly engineVersion: 'flat-v1';
   readonly evaluatedAt: string;
   readonly sellerId: string;
   readonly rateCardId: string | null;
@@ -119,21 +108,63 @@ export interface PricingComputationContext {
   readonly sellerPricingId: string | null;
   readonly appliedRules: readonly { readonly type: string; readonly ruleId: string | null }[];
   readonly unresolved: readonly UnresolvedFallback[];
-  /** R1c — margin snapshot at compute time, persisted for the forensic trail. */
   readonly margin: MarginResult;
+  /** Which fee was used, and whether it came from the seller or the default. */
+  readonly flatFee: {
+    readonly deliveryFeeInr: string;
+    readonly source: 'SELLER_OVERRIDE' | 'SYSTEM_DEFAULT';
+    readonly gstPercent: string;
+  };
+}
+
+export const FLAT_DELIVERY_FEE_KEY = 'pricing.flat_delivery_fee_inr';
+export const FLAT_RTO_FEE_KEY = 'pricing.flat_rto_fee_inr';
+export const FLAT_FEE_GST_KEY = 'pricing.flat_fee_gst_percent';
+
+export interface ResolvedFee {
+  readonly amount: Prisma.Decimal;
+  readonly source: 'SELLER_OVERRIDE' | 'SYSTEM_DEFAULT';
 }
 
 const DEFAULT_SERVICE_TYPE = 'standard';
-const DEFAULT_ZONE = 'DEFAULT';
-const DEFAULT_GST_RATE = '18';
+/** Flat pricing has no zones; the field survives for the persisted shape. */
+const FLAT_ZONE = 'FLAT';
 
 @Injectable()
 export class PricingEngineService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly zoneResolver: ZoneResolverService,
+    private readonly settings: SettingsResolverService,
     private readonly marginCalc: MarginCalculationService,
   ) {}
+
+  /**
+   * The delivery fee for one seller, resolved through SET-1: their
+   * override if they have one, otherwise the global default.
+   */
+  async resolveDeliveryFee(sellerId: string): Promise<ResolvedFee> {
+    return this.resolveMoneySetting(sellerId, FLAT_DELIVERY_FEE_KEY);
+  }
+
+  /** The return fee, same resolution. Charged only when a parcel comes back. */
+  async resolveRtoFee(sellerId: string): Promise<ResolvedFee> {
+    return this.resolveMoneySetting(sellerId, FLAT_RTO_FEE_KEY);
+  }
+
+  /**
+   * GST on the flat fees. GLOBAL only — a tax rate is set by law, not
+   * negotiated per seller, so this deliberately does not go through the
+   * per-seller resolver.
+   */
+  async resolveFeeGstPercent(): Promise<Prisma.Decimal> {
+    const row = await this.prisma.client.systemSetting.findUnique({
+      where: { key: FLAT_FEE_GST_KEY },
+      select: { valueDecimal: true },
+    });
+    // Absent ⇒ zero, matching the seed. Defaulting to 18 here would
+    // start charging tax nobody configured.
+    return new Prisma.Decimal(row?.valueDecimal ?? 0);
+  }
 
   async compute(input: PricingComputeInput): Promise<PricingComputeOutput> {
     if (input.totalWeightGrams < 0) {
@@ -144,320 +175,84 @@ export class PricingEngineService {
     }
     const asOf = input.asOf ?? new Date();
     const unresolved: UnresolvedFallback[] = [];
-    const appliedRules: { type: string; ruleId: string | null }[] = [];
 
-    // 1-2. Rate card + seller pricing + courier.
-    const sellerPricing = await this.findSellerPricing(input.sellerId, asOf);
-    const rateCard =
-      (sellerPricing
-        ? await this.prisma.client.rateCard.findFirst({
-            where: { id: sellerPricing.rateCardId, deletedAt: null },
-          })
-        : null) ?? (await this.findDefaultRateCard(asOf));
-    if (!rateCard) {
-      unresolved.push({ reason: 'NO_RATE_CARD' });
-    }
-
-    const courierCode = input.courierCode ?? (await this.getOpsSetting('ops.default_courier_code'));
-    const courier = courierCode
-      ? await this.prisma.client.courier.findUnique({
-          where: { code: courierCode },
-        })
-      : null;
-    if (!courier) {
-      unresolved.push({ reason: 'NO_COURIER', detail: courierCode ?? 'no default' });
-    }
-
-    const serviceType = input.serviceType ?? DEFAULT_SERVICE_TYPE;
-
-    // 3. Zone resolution.
-    const zoneRes: ZoneResolution = await this.zoneResolver.resolve({
-      pinCode: input.recipientPostalCode,
-      countryCode: input.recipientCountryCode ?? 'IN',
-      courierId: courier?.id ?? null,
-    });
-    const zone = zoneRes.zone ?? DEFAULT_ZONE;
-    if (!zoneRes.zone) {
-      unresolved.push({ reason: 'ZONE_FALLBACK_DEFAULT' });
-    }
-
-    // 4. Chargeable weight (actual; volumetric deferred).
-    const chargeableWeightGrams = Math.max(0, Math.floor(input.totalWeightGrams));
-
-    // 5. Base shipping from RateCardItem.
-    const baseRow =
-      rateCard && courier
-        ? await this.prisma.client.rateCardItem.findFirst({
-            where: {
-              rateCardId: rateCard.id,
-              courierId: courier.id,
-              serviceType,
-              zone,
-              weightSlabFromGrams: { lte: chargeableWeightGrams },
-              weightSlabToGrams: { gte: chargeableWeightGrams },
-              isActive: true,
-            },
-          })
-        : null;
-    let baseShipping = baseRow ? new Prisma.Decimal(baseRow.baseChargeInr) : new Prisma.Decimal(0);
-    if (baseRow && baseRow.perKgChargeInr && chargeableWeightGrams > baseRow.weightSlabFromGrams) {
-      const overweightGrams = chargeableWeightGrams - baseRow.weightSlabFromGrams;
-      const overweightKg = new Prisma.Decimal(overweightGrams).dividedBy(1000);
-      baseShipping = baseShipping.plus(
-        new Prisma.Decimal(baseRow.perKgChargeInr).times(overweightKg),
-      );
-    }
-    if (!baseRow && rateCard && courier) {
+    const fee = await this.resolveDeliveryFee(input.sellerId);
+    if (fee.amount.lessThanOrEqualTo(0)) {
+      // Zero is almost always a missing setting rather than a decision to
+      // ship for free. Flagging it lets OrderChargesService refuse to
+      // record ₹0 as a real price — the exact failure the old engine had.
       unresolved.push({
-        reason: 'NO_RATE_CARD_ITEM',
-        detail: `${courier.code}/${serviceType}/${zone}/${chargeableWeightGrams}g`,
+        reason: 'NO_FLAT_DELIVERY_FEE',
+        detail: `${FLAT_DELIVERY_FEE_KEY} resolved to ${fee.amount.toFixed(2)}`,
       });
     }
 
-    // 6. Seller discount.
-    const sellerDiscountPercent = sellerPricing?.discountPercent
-      ? new Prisma.Decimal(sellerPricing.discountPercent)
-      : null;
-    if (sellerDiscountPercent) {
-      baseShipping = baseShipping.times(
-        new Prisma.Decimal(1).minus(sellerDiscountPercent.dividedBy(100)),
-      );
-    }
+    const gstPercent = await this.resolveFeeGstPercent();
+    const gstAmount = fee.amount.times(gstPercent).dividedBy(100);
+    const totalInr = fee.amount.plus(gstAmount);
 
-    // 6b. Margin (R1c) — post-discount seller charge vs. real courier
-    // cost. Never surfaced to sellers; internal/admin figure only.
-    const margin = this.marginCalc.compute(baseShipping, baseRow?.costToSkydropInr ?? null);
+    // Weight is recorded, not charged on. It still matters elsewhere —
+    // inbound freight is split by it — so the snapshot keeps it.
+    const chargeableWeightGrams = Math.max(0, Math.floor(input.totalWeightGrams));
 
-    // 7. Surcharges.
-    const surcharges: PricingChargeLine[] = [];
-    const surchargeRules = rateCard
-      ? await this.prisma.client.surchargeRule.findMany({
-          where: { rateCardId: rateCard.id, isActive: true, deletedAt: null },
-          orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }],
-        })
-      : [];
-    for (const rule of surchargeRules) {
-      if (rule.appliesOnlyIfPaymentMode && rule.appliesOnlyIfPaymentMode !== input.paymentMode) {
-        continue;
-      }
-      if (
-        rule.appliesOnlyForServiceAreas.length > 0 &&
-        (!zoneRes.serviceArea || !rule.appliesOnlyForServiceAreas.includes(zoneRes.serviceArea))
-      ) {
-        continue;
-      }
-      let amount = new Prisma.Decimal(0);
-      switch (rule.computationMethod) {
-        case SurchargeComputationMethod.FLAT:
-          amount = new Prisma.Decimal(rule.flatAmountInr ?? 0);
-          break;
-        case SurchargeComputationMethod.PERCENTAGE: {
-          const pct = new Prisma.Decimal(rule.percentage ?? 0).dividedBy(100);
-          const base = this.resolveSurchargeBase(rule.baseField, {
-            baseShipping,
-            codAmountInr: input.codAmountInr,
-            declaredValueInr: input.declaredValueInr,
-            chargeableWeightGrams,
-          });
-          amount = base.times(pct);
-          break;
-        }
-        case SurchargeComputationMethod.TIERED:
-          unresolved.push({
-            reason: 'TIERED_SURCHARGE_NOT_IMPLEMENTED',
-            detail: rule.id,
-          });
-          amount = new Prisma.Decimal(0);
-          break;
-        default: {
-          const exhaustive: never = rule.computationMethod;
-          throw new Error(`Unhandled SurchargeComputationMethod: ${String(exhaustive)}`);
-        }
-      }
-      if (rule.minAmountInr && amount.lessThan(rule.minAmountInr)) {
-        amount = new Prisma.Decimal(rule.minAmountInr);
-      }
-      if (rule.maxAmountInr && amount.greaterThan(rule.maxAmountInr)) {
-        amount = new Prisma.Decimal(rule.maxAmountInr);
-      }
-      if (amount.greaterThan(0)) {
-        surcharges.push({
-          type: this.surchargeTypeToChargeType(rule.type),
-          description: rule.name,
-          amountInr: amount.toFixed(2),
-          surchargeRuleId: rule.id,
-        });
-        appliedRules.push({ type: rule.type, ruleId: rule.id });
-      }
-    }
-
-    // 7b. Seller-pricing COD fee (separate from rule-driven COD fees).
-    if (sellerPricing?.codFeePercent && input.paymentMode === 'COD' && input.codAmountInr > 0) {
-      const cod = new Prisma.Decimal(input.codAmountInr);
-      const codFee = cod.times(new Prisma.Decimal(sellerPricing.codFeePercent).dividedBy(100));
-      if (codFee.greaterThan(0)) {
-        surcharges.push({
-          type: ChargeType.COD_FEE,
-          description: 'COD fee (seller pricing)',
-          amountInr: codFee.toFixed(2),
-          surchargeRuleId: null,
-        });
-        appliedRules.push({
-          type: 'SELLER_PRICING_COD_FEE',
-          ruleId: sellerPricing.id,
-        });
-      }
-    }
-
-    // 8. GST.
-    const gstRateRaw = await this.getOpsSetting('pricing.gst_rate');
-    const gstRate = gstRateRaw ?? DEFAULT_GST_RATE;
-    if (!gstRateRaw) {
-      unresolved.push({ reason: 'NO_GST_RATE', detail: `defaulted to ${DEFAULT_GST_RATE}` });
-    }
-    const taxableBase = surcharges.reduce(
-      (acc, l) => acc.plus(new Prisma.Decimal(l.amountInr)),
-      baseShipping,
-    );
-    const gstAmount = taxableBase.times(new Prisma.Decimal(gstRate).dividedBy(100));
-
-    const totalInr = taxableBase.plus(gstAmount).toFixed(2);
+    // Margin against a courier cost no longer read from a rate card. The
+    // honest figure comes from the courier's own invoice (the courier-ops
+    // margin report), so this stays null rather than pretending.
+    const margin = this.marginCalc.compute(fee.amount, null);
 
     const computationContext: PricingComputationContext = {
-      engineVersion: 'm15-v1',
+      engineVersion: 'flat-v1',
       evaluatedAt: asOf.toISOString(),
       sellerId: input.sellerId,
-      rateCardId: rateCard?.id ?? null,
-      courierId: courier?.id ?? null,
-      serviceType,
-      zone,
-      serviceArea: zoneRes.serviceArea ?? null,
+      rateCardId: null,
+      courierId: null,
+      serviceType: input.serviceType ?? DEFAULT_SERVICE_TYPE,
+      zone: FLAT_ZONE,
+      serviceArea: null,
       chargeableWeightGrams,
-      sellerPricingId: sellerPricing?.id ?? null,
-      appliedRules,
+      sellerPricingId: null,
+      appliedRules: [{ type: 'FLAT_DELIVERY_FEE', ruleId: null }],
       unresolved,
       margin,
+      flatFee: {
+        deliveryFeeInr: fee.amount.toFixed(2),
+        source: fee.source,
+        gstPercent: gstPercent.toFixed(2),
+      },
     };
 
     return {
-      rateCardId: rateCard?.id ?? null,
-      rateCardCode: rateCard?.code ?? null,
-      courierId: courier?.id ?? null,
-      courierCode: courier?.code ?? null,
-      serviceType,
-      zone,
-      serviceArea: zoneRes.serviceArea ?? null,
+      rateCardId: null,
+      rateCardCode: null,
+      courierId: null,
+      courierCode: input.courierCode ?? null,
+      serviceType: input.serviceType ?? DEFAULT_SERVICE_TYPE,
+      zone: FLAT_ZONE,
+      serviceArea: null,
       chargeableWeightGrams,
-      baseShippingInr: baseShipping.toFixed(2),
-      sellerDiscountPercent: sellerDiscountPercent?.toFixed(2) ?? null,
-      surcharges,
-      gstRatePercent: new Prisma.Decimal(gstRate).toFixed(2),
+      baseShippingInr: fee.amount.toFixed(2),
+      sellerDiscountPercent: null,
+      // Flat means flat. A returned parcel's extra fee is charged at RTO
+      // receive, not predicted here.
+      surcharges: [],
+      gstRatePercent: gstPercent.toFixed(2),
       gstAmountInr: gstAmount.toFixed(2),
-      totalInr,
+      totalInr: totalInr.toFixed(2),
       computationContext,
       unresolved,
       margin,
     };
   }
 
-  // ── internals ──
+  // ── internal ──────────────────────────────────────────────────────
 
-  private async findSellerPricing(
-    sellerId: string,
-    asOf: Date,
-  ): Promise<{
-    id: string;
-    rateCardId: string;
-    discountPercent: Prisma.Decimal | null;
-    codFeePercent: Prisma.Decimal | null;
-  } | null> {
-    const row = await this.prisma.client.sellerPricing.findFirst({
-      where: {
-        sellerId,
-        isActive: true,
-        deletedAt: null,
-        effectiveFrom: { lte: asOf },
-        OR: [{ effectiveTo: null }, { effectiveTo: { gte: asOf } }],
-      },
-      orderBy: { effectiveFrom: 'desc' },
-    });
-    return row;
-  }
-
-  private async findDefaultRateCard(asOf: Date): Promise<{
-    id: string;
-    code: string;
-  } | null> {
-    const row = await this.prisma.client.rateCard.findFirst({
-      where: {
-        isDefault: true,
-        isActive: true,
-        deletedAt: null,
-        effectiveFrom: { lte: asOf },
-        OR: [{ effectiveTo: null }, { effectiveTo: { gte: asOf } }],
-      },
-      orderBy: { effectiveFrom: 'desc' },
-    });
-    return row;
-  }
-
-  private async getOpsSetting(key: string): Promise<string | null> {
-    const row = await this.prisma.client.systemSetting.findUnique({ where: { key } });
-    if (!row) return null;
-    if (row.valueString !== null) return row.valueString;
-    if (row.valueDecimal !== null) return row.valueDecimal.toString();
-    if (row.valueInt !== null) return String(row.valueInt);
-    return null;
-  }
-
-  private resolveSurchargeBase(
-    field: SurchargeBaseField | null,
-    ctx: {
-      baseShipping: Prisma.Decimal;
-      codAmountInr: number;
-      declaredValueInr: number;
-      chargeableWeightGrams: number;
-    },
-  ): Prisma.Decimal {
-    if (!field) return ctx.baseShipping;
-    switch (field) {
-      case SurchargeBaseField.SHIPPING_CHARGE:
-        return ctx.baseShipping;
-      case SurchargeBaseField.COD_AMOUNT:
-        return new Prisma.Decimal(ctx.codAmountInr);
-      case SurchargeBaseField.DECLARED_VALUE:
-        return new Prisma.Decimal(ctx.declaredValueInr);
-      case SurchargeBaseField.CHARGEABLE_WEIGHT:
-        return new Prisma.Decimal(ctx.chargeableWeightGrams);
-      default: {
-        const exhaustive: never = field;
-        throw new Error(`Unhandled SurchargeBaseField: ${String(exhaustive)}`);
-      }
+  private async resolveMoneySetting(sellerId: string, key: string): Promise<ResolvedFee> {
+    const resolved = await this.settings.resolve(sellerId, key);
+    const raw = resolved.value;
+    if (raw === null || raw === undefined) {
+      return { amount: new Prisma.Decimal(0), source: resolved.source };
     }
-  }
-
-  private surchargeTypeToChargeType(t: SurchargeType): ChargeType {
-    switch (t) {
-      case SurchargeType.COD_FEE:
-        return ChargeType.COD_FEE;
-      case SurchargeType.FUEL_SURCHARGE:
-        return ChargeType.FUEL_SURCHARGE;
-      case SurchargeType.REMOTE_AREA_FEE:
-        return ChargeType.REMOTE_AREA_FEE;
-      case SurchargeType.RTO_FEE:
-        return ChargeType.RTO_FEE;
-      case SurchargeType.WEIGHT_DISPUTE_FEE:
-        return ChargeType.WEIGHT_DISPUTE_FEE;
-      case SurchargeType.RESHIPMENT_FEE:
-        return ChargeType.RESHIPMENT_FEE;
-      case SurchargeType.ADDRESS_CORRECTION_FEE:
-      case SurchargeType.OTHER:
-        return ChargeType.OTHER;
-      default: {
-        const exhaustive: never = t;
-        throw new Error(`Unhandled SurchargeType: ${String(exhaustive)}`);
-      }
-    }
+    return { amount: new Prisma.Decimal(String(raw)), source: resolved.source };
   }
 }
 
