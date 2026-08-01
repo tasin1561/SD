@@ -37,6 +37,15 @@ export interface AwbJobResult {
   alreadyProcessed: boolean;
 }
 
+export interface AwbOrderJobResult {
+  orderId: string;
+  shipmentId: string | null;
+  result: 'GENERATED' | 'ALREADY_HAS_AWB' | 'SUPERSEDED' | 'NO_LIVE_SHIPMENT' | 'ERROR';
+  awbNumber?: string | null;
+  newShipmentId?: string;
+  error?: string;
+}
+
 /**
  * Module 9 — per-manifest AWB generation job (commit 9, CUR-2 + CUR-9).
  *
@@ -181,7 +190,7 @@ export class AwbGenerationJobService {
           ? SupersedeReason.COURIER_FAILURE
           : SupersedeReason.NON_SERVICEABLE;
         if (orderId !== null) {
-          await this.routeOrderToManual(orderId, shipment.id);
+          await this.routeOrderToManual(orderId, shipment.id, OrderStatus.PENDING_DISPATCH);
         }
         const sup = await this.supersede.supersede(shipment.id, reason, {
           type: ActorType.SYSTEM,
@@ -265,16 +274,157 @@ export class AwbGenerationJobService {
     };
   }
 
-  /** Route a failed shipment's order PENDING_DISPATCH →
-   *  PENDING_MANUAL_PLACEMENT. Idempotent on STALE (a mid-retry order
-   *  already moved). */
-  private async routeOrderToManual(orderId: string, shipmentId: string): Promise<void> {
+  /**
+   * Generate the AWB for ONE order, at confirmation.
+   *
+   * ── WHY THIS EXISTS ────────────────────────────────────────────────
+   * The AWB used to be created when a supervisor closed the manifest,
+   * which is AFTER the parcel has been picked and packed. That left the
+   * pack bench with nothing meaningful to scan — no invoice (raised on
+   * delivery) and no AWB — and it meant an unserviceable pincode was
+   * discovered only once the goods had been picked, packed and boxed.
+   *
+   * Creating it at confirmation puts a real shipping label on the bench
+   * before picking starts, and turns a courier refusal into something
+   * caught before anyone touches stock.
+   *
+   * ── WHAT IT COSTS, HONESTLY ────────────────────────────────────────
+   * A waybill is consumed for every CONFIRMED order, including ones
+   * that never ship — a pick shortfall, a late cancellation. Each of
+   * those leaves a live AWB that needs cancelling with the courier
+   * (CUR-10: operator-triggered and audited, never automatic). Size the
+   * waybill pool against confirmed volume, not dispatched volume.
+   *
+   * ── IDEMPOTENCY ────────────────────────────────────────────────────
+   * CUR-9 is unchanged and does the work: `shipment.awbNumber !== null`
+   * is the gate, so a re-run — a BullMQ retry, a re-emit of the
+   * transition, or the manifest-close job later catching up — skips a
+   * shipment that already has one. It never doubles a real Delhivery
+   * call or a real charge.
+   */
+  async processOrder(orderId: string): Promise<AwbOrderJobResult> {
+    // The LIVE shipment: superseded ones carry `supersededAt` and are
+    // replaced by a CREATED successor (CUR-7), so filtering on status
+    // alone would pick up a retired parcel.
+    const link = await this.prisma.client.orderShipment.findFirst({
+      where: {
+        orderId,
+        shipment: { status: ShipmentStatus.CREATED, supersededAt: null, deletedAt: null },
+      },
+      orderBy: { shipmentSequence: 'desc' },
+      select: { shipmentId: true },
+    });
+
+    if (link === null) {
+      // Not an error: an order can reach CONFIRMED and have its
+      // shipment voided underneath (a cancel racing the hook), and a
+      // re-run after the parcel dispatched finds nothing CREATED.
+      return { orderId, shipmentId: null, result: 'NO_LIVE_SHIPMENT' };
+    }
+
+    const shipmentId = link.shipmentId;
+    try {
+      const gen = await this.generation.generateForShipment(shipmentId, { type: ActorType.SYSTEM });
+
+      if (gen.status === 'ALREADY_HAS_AWB') {
+        return { orderId, shipmentId, result: 'ALREADY_HAS_AWB', awbNumber: gen.awbNumber };
+      }
+      if (gen.status === 'GENERATED' || gen.status === 'GENERATED_AWB_LABEL_PENDING') {
+        // R1c early-accrual, same as the manifest path: a no-op for
+        // AT_DELIVERY sellers, and never allowed to fail the job.
+        await this.courierFeeAccrual.tryEarlyAccrual(orderId);
+        if (gen.status === 'GENERATED_AWB_LABEL_PENDING') {
+          // The AWB is durably persisted; only the label upload is
+          // outstanding. Throwing hands it back to BullMQ, whose retry
+          // re-enters on the CUR-9 gate and runs the label leg alone.
+          throw new Error(
+            `AWB persisted but label upload pending for shipment ${shipmentId}; BullMQ will retry`,
+          );
+        }
+        return { orderId, shipmentId, result: 'GENERATED', awbNumber: gen.awbNumber };
+      }
+
+      // FAILED. What happens next depends on WHY, and the distinction
+      // matters more here than it did at manifest close.
+      //
+      // At manifest close the parcel was already picked and packed, so
+      // any failure meant "a human must place this". At confirmation
+      // nothing has been touched yet, and the two failures are not
+      // alike:
+      //
+      //   NOT SERVICEABLE — the courier does not deliver to that
+      //     address. Permanent. Catching it now is the whole reason for
+      //     generating early: nobody picks or packs an order that was
+      //     never going to ship. Route it out and retire the shipment.
+      //
+      //   COURIER FAILURE — a timeout, a 500, a rate limit. Transient.
+      //     Derailing the order into manual placement over a hiccup
+      //     would be worse than useless: the goods are fine, and manual
+      //     placement would then REFUSE the order anyway, because CUR-8
+      //     requires phase-2 reservations that an unpicked order does
+      //     not have. So leave it CONFIRMED and let it flow. Manifest
+      //     close runs the same job again, and CUR-9's gate means the
+      //     retry is free if this attempt secretly succeeded.
+      if (gen.serviceable) {
+        this.logger.warn(
+          { orderId, shipmentId, error: gen.errorMessage },
+          'AWB generation failed transiently at confirmation — order continues; manifest close will retry',
+        );
+        return {
+          orderId,
+          shipmentId,
+          result: 'ERROR',
+          error: gen.errorMessage ?? 'transient courier failure',
+        };
+      }
+
+      // Non-serviceable. Route the order out FIRST (the durable "a human
+      // must place this" fact), then retire the shipment —
+      // visible-vs-silent, same ordering as the manifest job.
+      await this.routeOrderToManual(orderId, shipmentId, OrderStatus.CONFIRMED);
+      const sup = await this.supersede.supersede(shipmentId, SupersedeReason.NON_SERVICEABLE, {
+        type: ActorType.SYSTEM,
+      });
+
+      await this.audit.log({
+        actorType: ActorType.SYSTEM,
+        actorId: null,
+        action: 'order.awb_at_confirmation_non_serviceable',
+        entityType: 'order',
+        entityId: orderId,
+        severity: 'HIGH',
+        metadata: { shipmentId, newShipmentId: sup.newShipmentId, error: gen.errorMessage },
+      });
+
+      return { orderId, shipmentId, result: 'SUPERSEDED', newShipmentId: sup.newShipmentId };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        { orderId, shipmentId, err: message },
+        'AWB generation at confirmation failed',
+      );
+      throw err;
+    }
+  }
+
+  /** Route a failed shipment's order → PENDING_MANUAL_PLACEMENT.
+   *  Idempotent on STALE (a mid-retry order already moved).
+   *
+   *  `expectedFrom` is a parameter because the AWB is now generated at
+   *  order CONFIRMATION as well as at manifest close, so the order can
+   *  legitimately be sitting in either state when the courier refuses.
+   *  Both edges exist on the matrix with no side-effects. */
+  private async routeOrderToManual(
+    orderId: string,
+    shipmentId: string,
+    expectedFrom: OrderStatus,
+  ): Promise<void> {
     try {
       await this.orderWrite.transitionStatus({
         orderId,
         to: OrderStatus.PENDING_MANUAL_PLACEMENT,
         actor: { type: ActorType.SYSTEM, id: null },
-        expectedFrom: OrderStatus.PENDING_DISPATCH,
+        expectedFrom,
         reason: `AWB generation failed for shipment ${shipmentId}`,
       });
     } catch (err) {

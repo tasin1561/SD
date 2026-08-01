@@ -8,7 +8,10 @@ import {
   AWB_GENERATION_QUEUE_NAME,
   AwbGenerationQueue,
   JOB_GENERATE_MANIFEST_AWBS,
+  JOB_GENERATE_ORDER_AWB,
+  type AwbGenerationJob,
   type GenerateManifestAwbsJob,
+  type GenerateOrderAwbJob,
 } from './awb-generation.queue';
 
 /**
@@ -24,7 +27,7 @@ import {
 @Injectable()
 export class AwbGenerationWorker implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AwbGenerationWorker.name);
-  private worker!: Worker<GenerateManifestAwbsJob>;
+  private worker!: Worker<AwbGenerationJob>;
 
   constructor(
     private readonly redis: RedisService,
@@ -35,11 +38,15 @@ export class AwbGenerationWorker implements OnModuleInit, OnModuleDestroy {
   async onModuleInit(): Promise<void> {
     const backoffMs = await AwbGenerationQueue.resolveBackoffMs(this.prisma);
 
-    this.worker = new Worker<GenerateManifestAwbsJob>(
+    this.worker = new Worker<AwbGenerationJob>(
       AWB_GENERATION_QUEUE_NAME,
-      async (job: Job<GenerateManifestAwbsJob>): Promise<void> => {
+      async (job: Job<AwbGenerationJob>): Promise<void> => {
         if (job.name === JOB_GENERATE_MANIFEST_AWBS) {
-          await this.jobService.processManifest(job.data.manifestId);
+          await this.jobService.processManifest((job.data as GenerateManifestAwbsJob).manifestId);
+          return;
+        }
+        if (job.name === JOB_GENERATE_ORDER_AWB) {
+          await this.jobService.processOrder((job.data as GenerateOrderAwbJob).orderId);
           return;
         }
         this.logger.warn({ name: job.name }, 'Unknown AWB-generation job; ignoring');

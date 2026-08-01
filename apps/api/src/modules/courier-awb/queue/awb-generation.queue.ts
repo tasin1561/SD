@@ -5,11 +5,19 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 
 export const AWB_GENERATION_QUEUE_NAME = 'courier-awb-generation';
 export const JOB_GENERATE_MANIFEST_AWBS = 'generate-manifest-awbs';
+export const JOB_GENERATE_ORDER_AWB = 'generate-order-awb';
 export const AWB_BACKOFF_STRATEGY = 'awb-per-attempt';
 
 export interface GenerateManifestAwbsJob {
   manifestId: string;
 }
+
+export interface GenerateOrderAwbJob {
+  orderId: string;
+}
+
+/** Either job shape carried on this queue. */
+export type AwbGenerationJob = GenerateManifestAwbsJob | GenerateOrderAwbJob;
 
 /** Fallbacks when the courier.awb_job_retry_* settings are absent. */
 const DEFAULT_RETRY_MAX = 3;
@@ -33,7 +41,7 @@ const BACKOFF_KEY = 'courier.awb_job_retry_backoff_ms';
 @Injectable()
 export class AwbGenerationQueue implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AwbGenerationQueue.name);
-  private queue!: Queue<GenerateManifestAwbsJob>;
+  private queue!: Queue<AwbGenerationJob>;
 
   constructor(
     private readonly redis: RedisService,
@@ -48,7 +56,7 @@ export class AwbGenerationQueue implements OnModuleInit, OnModuleDestroy {
       removeOnComplete: { age: 24 * 60 * 60, count: 500 },
       removeOnFail: { age: 7 * 24 * 60 * 60, count: 2_000 },
     };
-    this.queue = new Queue<GenerateManifestAwbsJob>(AWB_GENERATION_QUEUE_NAME, {
+    this.queue = new Queue<AwbGenerationJob>(AWB_GENERATION_QUEUE_NAME, {
       connection: this.redis.createConnection(),
       defaultJobOptions,
     });
@@ -67,6 +75,25 @@ export class AwbGenerationQueue implements OnModuleInit, OnModuleDestroy {
       JOB_GENERATE_MANIFEST_AWBS,
       { manifestId },
       { jobId: manifestId },
+    );
+    return String(job.id);
+  }
+
+  /**
+   * Enqueue the per-ORDER AWB job, fired when an order reaches
+   * CONFIRMED so the shipping label exists before picking starts.
+   *
+   * jobId is prefixed because manifest ids and order ids share this
+   * queue and a bare uuid could collide across the two. The prefix uses
+   * a DASH, not a colon: colons are Redis key separators and BullMQ
+   * builds its keys from the jobId (the same rule the M7 assignment and
+   * M8 pick-expiry jobs follow).
+   */
+  async enqueueOrder(orderId: string): Promise<string> {
+    const job = await this.queue.add(
+      JOB_GENERATE_ORDER_AWB,
+      { orderId },
+      { jobId: `order-${orderId}` },
     );
     return String(job.id);
   }

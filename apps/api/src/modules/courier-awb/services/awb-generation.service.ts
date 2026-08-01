@@ -258,7 +258,19 @@ export class AwbGenerationService {
           awbNumber: awb.awbNumber,
           courierShipmentId: awb.courierShipmentId,
           awbGeneratedAt: generatedAt,
-          status: ShipmentStatus.AWB_GENERATED,
+          // The status is deliberately NOT advanced here.
+          //
+          // Since the AWB is generated at order CONFIRMATION, the parcel
+          // still has to be picked and packed — and both queues select
+          // on `status = 'created'` (WMS-2). Marking it AWB_GENERATED
+          // took the shipment straight out of the warehouse flow: the
+          // pick 409'd and the box could never be packed.
+          //
+          // `awbNumber` is the authoritative "this has an AWB" fact
+          // (CUR-9), not the status, so nothing is lost. ShipmentStatus
+          // tracks where the parcel physically IS; a label existing does
+          // not move it. It advances to HANDED_TO_COURIER when the
+          // parcel is actually handed over.
           ...(courierAccountId === null ? {} : { courierAccountId }),
         },
       });

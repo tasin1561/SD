@@ -13,6 +13,8 @@ import {
   flushTestRedis,
   resetAuthState,
   waitFor,
+  claimPick,
+  settleAwb,
   type AppHarness,
 } from './app-harness';
 
@@ -164,11 +166,11 @@ describe('Courier dispatch lifecycle (e2e)', () => {
 
   /** Pick + pack one shipment; returns the DRAFT manifest it attached to. */
   async function pickAndPack(orderId: string, shipmentId: string): Promise<string> {
-    await request(h.baseUrl).post('/warehouse/picks/next').set(staffAuth).expect(200);
-    await request(h.baseUrl)
-      .post(`/warehouse/picks/${shipmentId}/start`)
-      .set(staffAuth)
-      .expect(200);
+    // The AWB is generated at confirmation on a BullMQ job, and while it
+    // runs it holds a row lock the pick's SKIP LOCKED pull would skip
+    // past. Settle first — see settleAwb.
+    await settleAwb(h.prisma, shipmentId);
+    await claimPick(h.baseUrl, staffAuth, shipmentId);
     const resv = await h.prisma.stockReservation.findFirstOrThrow({
       where: { orderId, status: 'ACTIVE', NOT: { binId: null } },
     });
@@ -309,7 +311,13 @@ describe('Courier dispatch lifecycle (e2e)', () => {
     const shipB = await h.prisma.shipment.findUniqueOrThrow({
       where: { id: b.shipmentId },
     });
-    expect(shipA.status).toBe(ShipmentStatus.AWB_GENERATED);
+    // The AWB does NOT advance the shipment's status — it is generated
+    // at order confirmation now, and both warehouse queues select on
+    // `status = 'created'`, so moving it here took the parcel out of
+    // the pick and pack flow. `awbNumber` is the authoritative fact
+    // (CUR-9); the status says where the parcel physically is.
+    expect(shipA.status).toBe(ShipmentStatus.CREATED);
+    expect(shipA.awbNumber).not.toBeNull();
     expect(shipB.status).toBe(ShipmentStatus.FAILED_AT_CREATION);
 
     // confirm-handoff: only order A is AWB-ready in the manifest.

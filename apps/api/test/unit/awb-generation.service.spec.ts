@@ -176,10 +176,18 @@ describe('AwbGenerationService.generateForShipment', () => {
         data: expect.objectContaining({
           awbNumber: 'DLVSTUB202605000042',
           courierShipmentId: 'DLVSHP202605000042',
-          status: ShipmentStatus.AWB_GENERATED,
         }),
       }),
     );
+    // …and deliberately did NOT touch the status. The AWB is generated
+    // at order confirmation now, and both warehouse queues select on
+    // `status = 'created'` — advancing it here took the parcel out of
+    // the pick and pack flow entirely. `awbNumber` is the authoritative
+    // "has an AWB" fact (CUR-9); the status says where the parcel
+    // physically is, and it moves at hand-over.
+    const stampData = (txShipmentUpdate.mock.calls[0]?.[0] as { data: Record<string, unknown> })
+      .data;
+    expect(stampData).not.toHaveProperty('status');
     // Phase D ran AFTER tx1: fetchLabel + putObject + tx2 awb_labels create.
     expect(fetchLabel).toHaveBeenCalledWith('DLVSTUB202605000042');
     expect(putObject).toHaveBeenCalledWith(

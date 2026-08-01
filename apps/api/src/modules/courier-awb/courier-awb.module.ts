@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ShipmentProvisionModule } from '../shipment-provision/shipment-provision.module';
 import { CourierDelhiveryModule } from '../courier-delhivery/courier-delhivery.module';
 import { CourierSharedModule } from '../courier-shared/courier-shared.module';
+import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.module';
 import { OrderModule } from '../order/order.module';
 import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-wallet-accrual.module';
 import { AwbSupersedeService } from './services/awb-supersede.service';
@@ -9,6 +10,7 @@ import { AwbGenerationService } from './services/awb-generation.service';
 import { AwbGenerationJobService } from './services/awb-generation-job.service';
 import { AwbGenerationQueue } from './queue/awb-generation.queue';
 import { AwbGenerationWorker } from './queue/awb-generation.worker';
+import { OrderConfirmedAwbListener } from './services/order-confirmed-awb-listener.service';
 
 /**
  * Module 9 — courier-awb: the AWB generation saga (CP2).
@@ -34,6 +36,10 @@ import { AwbGenerationWorker } from './queue/awb-generation.worker';
     CourierSharedModule,
     OrderModule,
     SellerWalletAccrualModule,
+    // The R3 dep-free bus. The order module publishes to it; this
+    // module subscribes, which is what lets the AWB be generated at
+    // confirmation without closing an order ↔ courier-awb cycle.
+    LifecycleEventsModule,
   ],
   providers: [
     AwbSupersedeService,
@@ -41,7 +47,15 @@ import { AwbGenerationWorker } from './queue/awb-generation.worker';
     AwbGenerationJobService,
     AwbGenerationQueue,
     AwbGenerationWorker,
+    OrderConfirmedAwbListener,
   ],
-  exports: [AwbSupersedeService, AwbGenerationService, AwbGenerationJobService, AwbGenerationQueue],
+  exports: [
+    AwbSupersedeService,
+    AwbGenerationService,
+    AwbGenerationJobService,
+    AwbGenerationQueue,
+    // Exported for the e2e harness's between-test drain only.
+    OrderConfirmedAwbListener,
+  ],
 })
 export class CourierAwbModule {}

@@ -17,6 +17,7 @@ import { prisma, StaffRole, type PrismaClient } from '@skydrop/db';
 import { AppModule } from '../../src/app.module';
 import { AllExceptionsFilter } from '../../src/common/filters/all-exceptions.filter';
 import { NotificationListener } from '../../src/modules/notifications/services/notification-listener.service';
+import { OrderConfirmedAwbListener } from '../../src/modules/courier-awb/services/order-confirmed-awb-listener.service';
 
 export interface AppHarness {
   app: NestExpressApplication;
@@ -94,6 +95,26 @@ export async function drainNotificationListener(app: NestExpressApplication): Pr
 }
 
 /**
+ * Quiesce the AWB-at-confirmation listener.
+ *
+ * The SECOND bus subscriber, and it owes the same drain as the first
+ * for the same reason: it spawns fire-and-forget async work on every
+ * order transition, and work still in flight when the harness truncates
+ * holds FK locks that deadlock — or, as it did here, survives the reset
+ * and leaves rows that make the next `seller.deleteMany` violate a
+ * RESTRICT constraint.
+ *
+ * This was written with a `drainInFlight()` on it and NOT wired in
+ * here, which is precisely the mistake the M11 note above warns about.
+ * Any future post-commit fire-and-forget doing async DB work joins this
+ * list.
+ */
+export async function drainAwbListener(app: NestExpressApplication): Promise<void> {
+  const listener = app.get(OrderConfirmedAwbListener, { strict: false });
+  await listener.drainInFlight();
+}
+
+/**
  * Wipes the auth-related tables so each test starts from a clean slate
  * (seed reference data — notification_templates, system_settings, etc.
  * — is preserved). Catalog tables go first: products/variants/proposals
@@ -111,7 +132,10 @@ export async function resetAuthState(
   prisma: PrismaClient,
   app?: NestExpressApplication,
 ): Promise<void> {
-  if (app) await drainNotificationListener(app);
+  if (app) {
+    await drainNotificationListener(app);
+    await drainAwbListener(app);
+  }
   // Order-critical chain (CLAUDE MUST #12): Module-8 warehouse rows
   // (shipment_items FK stock_batches/warehouse_bins; shipments FK
   // orders/staff_users; manifests FK staff_users) → resetWarehouseState
@@ -404,6 +428,75 @@ export async function flushTestRedis(): Promise<void> {
   const r = new IORedis(url, { maxRetriesPerRequest: null, lazyConnect: false });
   await r.flushdb();
   await r.quit();
+}
+
+/**
+ * Give the AWB job a chance to finish before pulling a pick.
+ *
+ * ── WHY A TEST NEEDS THIS ──────────────────────────────────────────
+ * The AWB is generated when the order reaches CONFIRMED, on a BullMQ
+ * job. While that job runs it holds a row lock on the shipment, and
+ * `PickQueueService.pullNext` selects `FOR UPDATE OF s SKIP LOCKED` —
+ * so a pull issued in that window SKIPS the very parcel and hands back
+ * a different one. The subsequent `start` then fails PICK_NOT_CLAIMED.
+ *
+ * That is correct production behaviour, not a bug: a picker whose
+ * parcel is momentarily locked simply gets the next one, and this
+ * parcel comes back on the following pull. It only bites a test, which
+ * confirms an order and pulls a pick microseconds later — something no
+ * warehouse does.
+ *
+ * ── WHY IT DOES NOT THROW ──────────────────────────────────────────
+ * This waits for the LOCK to clear, not for an AWB to exist. A spec
+ * that deliberately drives a courier failure never gets one, and
+ * failing there would be asserting something this helper was never
+ * about. It settles on an AWB, on a supersede, or on the deadline —
+ * and returns either way.
+ */
+export async function settleAwb(prisma: PrismaClient, shipmentId: string): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const s = await prisma.shipment.findUnique({
+      where: { id: shipmentId },
+      select: { awbNumber: true, supersededAt: true },
+    });
+    if (s === null || s.awbNumber !== null || s.supersededAt !== null) return;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+/**
+ * Claim a specific shipment into a pick.
+ *
+ * `pullNext` is FIFO with `FOR UPDATE OF s SKIP LOCKED`, so it hands
+ * back whichever eligible parcel it reaches first — and it SKIPS any
+ * row another transaction currently holds. Since the AWB is generated
+ * at order confirmation and manifest close re-enters the same job,
+ * there are now more moments when a given parcel is briefly locked.
+ *
+ * A picker does not care: they get the next parcel and this one comes
+ * back. A test asserting on one specific parcel does care, so it pulls
+ * until that parcel is the one it holds.
+ *
+ * Retries the PULL, not the start — pulling is the idempotent half.
+ */
+export async function claimPick(
+  baseUrl: string,
+  staffAuth: Record<string, string>,
+  shipmentId: string,
+  attempts = 8,
+): Promise<void> {
+  const request = (await import('supertest')).default;
+  let last = 0;
+  for (let i = 0; i < attempts; i += 1) {
+    await request(baseUrl).post('/warehouse/picks/next').set(staffAuth);
+    const res = await request(baseUrl).post(`/warehouse/picks/${shipmentId}/start`).set(staffAuth);
+    if (res.status === 200) return;
+    last = res.status;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  throw new Error(
+    `claimPick: could not claim ${shipmentId} after ${attempts} pulls (last ${last})`,
+  );
 }
 
 /**

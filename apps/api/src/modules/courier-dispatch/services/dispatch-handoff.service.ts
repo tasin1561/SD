@@ -76,7 +76,13 @@ export class DispatchHandoffService {
         manifestNumber: true,
         status: true,
         shipments: {
-          where: { status: ShipmentStatus.AWB_GENERATED },
+          // "Has an AWB and has not gone yet" — selected on `awbNumber`
+          // rather than on status. The AWB is now generated at order
+          // confirmation, and advancing the status there would take the
+          // parcel out of the pick and pack queues, so the shipment sits
+          // in CREATED with a real AWB on it until this hand-over.
+          // CUR-9 already names `awbNumber` the authoritative fact.
+          where: { awbNumber: { not: null }, supersededAt: null, deletedAt: null },
           select: {
             id: true,
             orderShipments: {

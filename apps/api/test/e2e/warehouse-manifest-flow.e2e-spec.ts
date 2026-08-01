@@ -6,6 +6,8 @@ import {
   bootTestApp,
   createTestStaff,
   waitFor,
+  claimPick,
+  settleAwb,
   flushTestRedis,
   resetAuthState,
   type AppHarness,
@@ -167,12 +169,13 @@ describe('Warehouse manifest flow (e2e)', () => {
     });
     const shipmentId = prov.shipmentId;
 
+    // The AWB is generated at confirmation on a BullMQ job, and while it
+    // runs it holds a row lock the pick's SKIP LOCKED pull would skip
+    // past. Settle first — see settleAwb.
+    await settleAwb(h.prisma, shipmentId);
+
     // Pick.
-    await request(h.baseUrl).post('/warehouse/picks/next').set(staffAuth).expect(200);
-    await request(h.baseUrl)
-      .post(`/warehouse/picks/${shipmentId}/start`)
-      .set(staffAuth)
-      .expect(200);
+    await claimPick(h.baseUrl, staffAuth, shipmentId);
     const resv = await h.prisma.stockReservation.findFirstOrThrow({
       where: { orderId, status: 'ACTIVE', NOT: { binId: null } },
     });
@@ -276,7 +279,14 @@ describe('Warehouse manifest flow (e2e)', () => {
       where: { id: a.shipmentId },
     });
     expect(shA.awbNumber).not.toBeNull();
-    expect(shA.status).toBe(ShipmentStatus.AWB_GENERATED);
+    // The AWB does NOT advance the shipment's status. Since it is now
+    // generated at order confirmation, the parcel still has to be picked
+    // and packed, and both queues select on `status = 'created'` — so
+    // moving it here took the shipment out of the warehouse flow
+    // entirely. `awbNumber` is the authoritative "has an AWB" fact
+    // (CUR-9); the status says where the parcel physically is, and it
+    // advances at hand-over.
+    expect(shA.status).toBe(ShipmentStatus.CREATED);
 
     // Idempotent re-close — the manifest is now CONFIRMED; re-close is a
     // no-op (alreadyClosed:true, not a 409 race).
