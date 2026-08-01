@@ -102,6 +102,13 @@ export interface CompletePackResult {
   readonly status: ShipmentStatus;
   readonly packCompletedAt: string;
   readonly alreadyComplete: boolean;
+  /** The DRAFT manifest the parcel auto-attached to (WMS-7). Null when
+   *  the attach has not happened — it is post-commit and best-effort. */
+  readonly manifestId: string | null;
+  readonly manifestNumber: string | null;
+  /** R4 — serialized units moved PICKED → PACKED; 0 for a parcel that
+   *  carries none. */
+  readonly unitsScanned: number;
 }
 
 // ── Manifest ─────────────────────────────────────────────────────────

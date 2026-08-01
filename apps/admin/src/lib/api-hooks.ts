@@ -424,6 +424,86 @@ export function useCompletePick(): UseMutationResult<
 }
 
 // Pack
+// ───────── The pack box (scan to open → scan in → scan to close) ─────────
+
+export interface PackBoxLine {
+  variantId: string;
+  skuCode: string;
+  productName: string;
+  quantity: number;
+}
+export interface OpenPackBox {
+  packBoxId: string;
+  shipmentId: string;
+  orderId: string;
+  awbNumber: string;
+  expiresAt: string;
+  expected: PackBoxLine[];
+  alreadyOpen: boolean;
+}
+export interface PackScanResult {
+  packBoxId: string;
+  variantId: string;
+  skuCode: string;
+  stockUnitId: string | null;
+  scannedCount: number;
+  expectedCount: number;
+  complete: boolean;
+}
+
+export function useOpenPackBox(): UseMutationResult<OpenPackBox, Error, { awbNumber: string }> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<OpenPackBox>('/api/warehouse/packs/boxes/open', { method: 'POST', body }),
+  });
+}
+
+export function useScanIntoPackBox(): UseMutationResult<
+  PackScanResult,
+  Error,
+  { packBoxId: string; code: string }
+> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: ({ packBoxId, code }) =>
+      client.request<PackScanResult>(`/api/warehouse/packs/boxes/${packBoxId}/scan`, {
+        method: 'POST',
+        body: { code },
+      }),
+  });
+}
+
+export function useClosePackBox(): UseMutationResult<
+  CompletePackResult,
+  Error,
+  { packBoxId: string; awbNumber: string }
+> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: ({ packBoxId, awbNumber }) =>
+      client.request<CompletePackResult>(`/api/warehouse/packs/boxes/${packBoxId}/close`, {
+        method: 'POST',
+        body: { awbNumber },
+      }),
+  });
+}
+
+export function useCancelPackBox(): UseMutationResult<
+  { packBoxId: string; releasedScans: number },
+  Error,
+  { packBoxId: string; reason: string }
+> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: ({ packBoxId, reason }) =>
+      client.request<{ packBoxId: string; releasedScans: number }>(
+        `/api/warehouse/packs/boxes/${packBoxId}/cancel`,
+        { method: 'POST', body: { reason } },
+      ),
+  });
+}
+
 export function usePullNextPack(): UseMutationResult<{ pack: PulledPack | null }, Error, void> {
   const client = useApiClient();
   return useMutation({

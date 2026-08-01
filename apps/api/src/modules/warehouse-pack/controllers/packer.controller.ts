@@ -21,6 +21,13 @@ import type { AuthenticatedStaff } from '../../../common/types/request';
 import { PackQueueService, type PulledPack } from '../services/pack-queue.service';
 import { PackService, type CompletePackResult } from '../services/pack.service';
 import { CompletePackDto } from '../dto/complete-pack.dto';
+import {
+  CancelPackBoxDto,
+  ClosePackBoxDto,
+  OpenPackBoxDto,
+  ScanIntoPackBoxDto,
+} from '../dto/pack-box.dto';
+import { PackBoxService, type OpenBoxResult, type ScanResult } from '../services/pack-box.service';
 
 /**
  * Packer workflow (pull → complete). Staff JWT only — packer role
@@ -40,6 +47,7 @@ export class PackerController {
   constructor(
     private readonly queue: PackQueueService,
     private readonly pack: PackService,
+    private readonly boxes: PackBoxService,
   ) {}
 
   @Post('next')
@@ -71,5 +79,71 @@ export class PackerController {
     @Body() body?: CompletePackDto,
   ): Promise<CompletePackResult> {
     return this.pack.complete(shipmentId, staff.id, ctx, body?.scannedSerials);
+  }
+
+  // ── The box ─────────────────────────────────────────────────────────
+  // Scan the label to open, scan the products in, scan the label again
+  // to close. Opening takes an exclusive claim on both the parcel and
+  // the packer, so ten benches can run at once without two people
+  // filling the same box.
+
+  @Post('boxes/open')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Open a box by scanning the shipping label. Exclusive: one open box per parcel and one per packer. Re-scanning your own open box is idempotent.',
+  })
+  openBox(
+    @Body() body: OpenPackBoxDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): Promise<OpenBoxResult> {
+    return this.boxes.open(body.awbNumber, staff.id);
+  }
+
+  @Post('boxes/:packBoxId/scan')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Scan one product into the open box — a per-unit serial or a SKU barcode. Refuses a product that is not on the order, one too many, or a unit picked for a different parcel.',
+  })
+  scanIntoBox(
+    @Param('packBoxId', new ParseUUIDPipe({ version: '7' })) packBoxId: string,
+    @Body() body: ScanIntoPackBoxDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): Promise<ScanResult> {
+    return this.boxes.scan(packBoxId, body.code, staff.id);
+  }
+
+  @Post('boxes/:packBoxId/close')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Close the box by scanning the same label again, then complete the pack. Contents are checked as a SET — a count alone would pass two of one item and none of another.',
+  })
+  async closeBox(
+    @Param('packBoxId', new ParseUUIDPipe({ version: '7' })) packBoxId: string,
+    @Body() body: ClosePackBoxDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<CompletePackResult> {
+    const closed = await this.boxes.close(packBoxId, body.awbNumber, staff.id);
+    // The box is the scan discipline; PackService.complete is still the
+    // one place a parcel becomes PACKED — the stamp, the PICKED→PACKED
+    // transition and the WMS-7 manifest attach all stay where they were.
+    return this.pack.complete(closed.shipmentId, staff.id, ctx);
+  }
+
+  @Post('boxes/:packBoxId/cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Abandon an open box: scans discarded, serialized units returned to PICKED, parcel back in the queue. Returns NOTHING to inventory — packing never removed it (stock leaves once, at dispatch).',
+  })
+  cancelBox(
+    @Param('packBoxId', new ParseUUIDPipe({ version: '7' })) packBoxId: string,
+    @Body() body: CancelPackBoxDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): Promise<{ packBoxId: string; releasedScans: number }> {
+    return this.boxes.cancel(packBoxId, body.reason, staff.id);
   }
 }

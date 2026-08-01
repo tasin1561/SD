@@ -1,131 +1,264 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
-import { Button, Card, CardBody, EmptyState, useToast } from '@skydrop/ui/components';
-import { ApiError } from '@skydrop/api-client';
-import type { PulledPack } from '@skydrop/api-client';
-import { usePullNextPack, useCompletePack } from '@/lib/api-hooks';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { Button, Card, CardBody, EmptyState, Input, useToast } from '@skydrop/ui/components';
+import { Check } from 'lucide-react';
+import {
+  useCancelPackBox,
+  useClosePackBox,
+  useOpenPackBox,
+  useScanIntoPackBox,
+  type OpenPackBox,
+  type PackBoxLine,
+} from '@/lib/api-hooks';
+import { serverVerdict } from '@/lib/server-verdict';
 
 /**
- * Packer workspace — pull-then-complete. Phase 1A has no persistent
- * claim on a pack task (the schema is intentionally claim-free); the
- * race is resolved at complete via the atomic guard on
- * (status=CREATED, pack_completed_at IS NULL). If two packers pull
- * the same shipment and one completes first, the second sees a 409
- * PACK_NOT_AVAILABLE and re-pulls.
+ * The pack bench.
+ *
+ * One input, always focused, and the packer never touches the keyboard:
+ * scan the shipping label to open the box, scan each product in, scan
+ * the label again to close. A barcode scanner types the code and presses
+ * Enter, so the whole station runs off that single field — anything else
+ * would have someone putting a parcel down to click.
+ *
+ * It replaced a pull-then-"Mark packed" screen, which asked a packer to
+ * ASSERT the box was right rather than prove it.
+ *
+ * The screen's job is to answer, from across a bench, "what still has to
+ * go in this box". So the outstanding lines are the biggest thing on it,
+ * and a satisfied line goes QUIET rather than disappearing — a line that
+ * vanishes leaves the packer wondering whether they scanned it or
+ * imagined it.
+ *
+ * Refusals are surfaced verbatim (FE-2). The client deliberately does
+ * not pre-check quantities: the server owns that, and a second opinion
+ * here could only ever disagree with it.
  */
+
+interface ScannedLine extends PackBoxLine {
+  scanned: number;
+}
+
 export function PackStation(): ReactElement {
   const toast = useToast();
-  const [pack, setPack] = useState<PulledPack | null>(null);
+  const [box, setBox] = useState<OpenPackBox | null>(null);
+  const [lines, setLines] = useState<ScannedLine[]>([]);
+  const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [reason, setReason] = useState('');
 
-  const pull = usePullNextPack();
-  const complete = useCompletePack();
+  const open = useOpenPackBox();
+  const scan = useScanIntoPackBox();
+  const close = useClosePackBox();
+  const cancel = useCancelPackBox();
 
-  function fmtError(err: unknown): string {
-    if (err instanceof ApiError) {
-      const b = err.body as { code?: unknown; message?: unknown } | null;
-      const code = typeof b?.code === 'string' ? b.code : null;
-      const msg = typeof b?.message === 'string' ? b.message : err.message;
-      return code ? `[${code}] ${msg}` : msg;
-    }
-    return err instanceof Error ? err.message : 'Operation failed';
+  // A scanner types into whatever holds focus, so focus has to come back
+  // here after every state change or the next scan goes nowhere.
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [box, lines, error, cancelling]);
+
+  const total = lines.reduce((n, l) => n + l.quantity, 0);
+  const done = lines.reduce((n, l) => n + l.scanned, 0);
+  const complete = total > 0 && done === total;
+
+  function reset(): void {
+    setBox(null);
+    setLines([]);
+    setCode('');
+    setReason('');
+    setCancelling(false);
   }
 
-  async function onPull(): Promise<void> {
+  /**
+   * One handler for every scan.
+   *
+   * What a scan MEANS is decided by state, not by the packer picking a
+   * mode: no box open ⇒ it is a label, open it. Box open and the code
+   * matches that label ⇒ they are closing. Anything else is a product
+   * going in.
+   */
+  async function onScan(raw: string): Promise<void> {
+    const value = raw.trim();
+    if (value.length === 0) return;
     setError(null);
+    setCode('');
+
     try {
-      const result = await pull.mutateAsync();
-      if (!result.pack) {
-        toast.info('Pack queue is empty.');
-        setPack(null);
+      if (box === null) {
+        const opened = await open.mutateAsync({ awbNumber: value });
+        setBox(opened);
+        setLines(opened.expected.map((l) => ({ ...l, scanned: 0 })));
+        toast.info(opened.alreadyOpen ? 'Box already open' : `Box open — ${opened.awbNumber}`);
         return;
       }
-      setPack(result.pack);
+
+      if (value === box.awbNumber) {
+        const result = await close.mutateAsync({ packBoxId: box.packBoxId, awbNumber: value });
+        toast.success(
+          result.manifestNumber
+            ? `Packed — manifest ${result.manifestNumber}`
+            : 'Packed — ready for pickup',
+        );
+        reset();
+        return;
+      }
+
+      const result = await scan.mutateAsync({ packBoxId: box.packBoxId, code: value });
+      setLines((prev) =>
+        prev.map((l) => (l.variantId === result.variantId ? { ...l, scanned: l.scanned + 1 } : l)),
+      );
     } catch (err) {
-      setError(fmtError(err));
+      // Verbatim. "That unit was picked for a different parcel" is the
+      // entire value of the gate; softening it would throw that away.
+      setError(serverVerdict(err));
     }
   }
 
-  async function onComplete(): Promise<void> {
-    if (!pack) return;
+  async function onCancel(): Promise<void> {
+    if (box === null || reason.trim().length < 3) return;
     setError(null);
-    setBusy(true);
     try {
-      await complete.mutateAsync({ shipmentId: pack.shipmentId });
-      toast.success(`Packed — shipment ${pack.shipmentNumber} attached to manifest.`);
-      setPack(null);
+      const result = await cancel.mutateAsync({ packBoxId: box.packBoxId, reason: reason.trim() });
+      toast.info(
+        result.releasedScans > 0
+          ? `Box cancelled — ${result.releasedScans} scan(s) released, parcel back in the queue`
+          : 'Box cancelled — parcel back in the queue',
+      );
+      reset();
     } catch (err) {
-      setError(fmtError(err));
-    } finally {
-      setBusy(false);
+      setError(serverVerdict(err));
     }
   }
+
+  const busy = open.isPending || scan.isPending || close.isPending || cancel.isPending;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <Button variant="primary" size="md" onClick={() => void onPull()} disabled={pull.isPending}>
-          {pull.isPending ? 'Pulling…' : pack ? 'Pull next (after complete)' : 'Pull next'}
-        </Button>
-      </div>
+    <div className="max-w-3xl space-y-4">
+      <Card>
+        <CardBody>
+          <label htmlFor="pack-scan" className="text-text-muted mb-1 block text-xs">
+            {box === null
+              ? 'Scan the shipping label to open a box'
+              : 'Scan a product — or the label again to close'}
+          </label>
+          <Input
+            id="pack-scan"
+            ref={inputRef}
+            value={code}
+            disabled={busy}
+            autoComplete="off"
+            placeholder={box === null ? 'Shipping label…' : 'Product barcode or serial…'}
+            onChange={(e) => setCode(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void onScan(code);
+              }
+            }}
+            className="font-mono text-base"
+          />
+          {box !== null && (
+            <div className="text-text-faint mt-2 text-xs">
+              Box open on <span className="font-mono">{box.awbNumber}</span> — {done} of {total}{' '}
+              scanned
+            </div>
+          )}
+        </CardBody>
+      </Card>
 
-      {error && (
-        <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
+      {error !== null && (
+        <div
+          role="alert"
+          className="text-critical rounded-[5px] border border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] px-3 py-2 text-sm"
+        >
           {error}
         </div>
       )}
 
-      {!pack ? (
+      {box === null ? (
         <EmptyState
-          title="No pack in progress"
-          description="Click Pull next to claim the next picked shipment."
+          title="No box open"
+          description="Scan the shipping label on a parcel to start. You can hold one box at a time — close or cancel it before starting the next."
         />
       ) : (
-        <Card>
-          <CardBody>
-            <div className="mb-3">
-              <div className="text-text-bright font-medium text-sm">
-                Shipment {pack.shipmentNumber}
-              </div>
-              <div className="text-text-faint text-xs mt-0.5">
-                Picked{' '}
-                {pack.pickCompletedAt ? new Date(pack.pickCompletedAt).toLocaleString() : '—'}
-              </div>
-            </div>
+        <>
+          <Card>
+            <CardBody className="p-0">
+              <ul className="divide-border divide-y">
+                {lines.map((l) => {
+                  const satisfied = l.scanned >= l.quantity;
+                  return (
+                    <li
+                      key={l.variantId}
+                      className={
+                        'flex items-center justify-between gap-4 px-4 py-3 ' +
+                        (satisfied ? 'text-text-faint' : 'text-text-bright')
+                      }
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium">{l.productName}</div>
+                        <div className="text-text-faint font-mono text-xs">{l.skuCode}</div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2 tabular-nums">
+                        {satisfied && (
+                          <Check size={15} className="text-[var(--status-delivered-fg)]" />
+                        )}
+                        <span className={satisfied ? 'text-sm' : 'text-lg font-semibold'}>
+                          {l.scanned} / {l.quantity}
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </CardBody>
+          </Card>
 
-            <div className="space-y-2 mb-3">
-              {pack.items.map((it) => (
-                <div
-                  key={it.shipmentItemId}
-                  className="p-2 rounded-[5px] border border-border flex items-baseline justify-between"
-                >
-                  <div>
-                    <div className="text-text-bright text-sm">
-                      {it.productName}
-                      {it.variantLabel ? (
-                        <span className="text-text-muted"> · {it.variantLabel}</span>
-                      ) : null}
-                    </div>
-                    <div className="text-text-faint text-xs font-mono">
-                      {it.skuCode} · qty {it.quantity}
-                    </div>
-                  </div>
-                  <div className="text-text-faint text-xs font-mono">
-                    {it.pickedBinId ? `bin ${it.pickedBinId}` : '—'}
-                  </div>
-                </div>
-              ))}
+          {complete && (
+            <div className="text-sm text-[var(--status-delivered-fg)]">
+              Everything is in. Scan the label again to close the box.
             </div>
+          )}
 
-            <div className="flex justify-end">
-              <Button variant="primary" size="md" onClick={() => void onComplete()} disabled={busy}>
-                {busy ? 'Completing…' : 'Mark packed'}
-              </Button>
-            </div>
-          </CardBody>
-        </Card>
+          <Card>
+            <CardBody className="space-y-2">
+              {!cancelling ? (
+                <Button variant="ghost" size="md" onClick={() => setCancelling(true)}>
+                  Cancel this box
+                </Button>
+              ) : (
+                <>
+                  <div className="text-text-muted text-xs">
+                    The scans are discarded and the parcel goes back in the queue. Nothing returns
+                    to inventory — packing never took it out.
+                  </div>
+                  <Input
+                    value={reason}
+                    placeholder="Why? e.g. damaged outer carton"
+                    onChange={(e) => setReason(e.target.value)}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="destructive"
+                      size="md"
+                      disabled={reason.trim().length < 3 || cancel.isPending}
+                      onClick={() => void onCancel()}
+                    >
+                      {cancel.isPending ? 'Cancelling…' : 'Cancel the box'}
+                    </Button>
+                    <Button variant="ghost" size="md" onClick={() => setCancelling(false)}>
+                      Keep packing
+                    </Button>
+                  </div>
+                </>
+              )}
+            </CardBody>
+          </Card>
+        </>
       )}
     </div>
   );

@@ -75,6 +75,7 @@ model StaffUser {
   sellerCourierLinksCreated  SellerCourierAccountLink[]    @relation("SellerCourierAccountLinkCreatedBy")
   shipmentsPickStarted       Shipment[]                    @relation("ShipmentPickStartedBy")
   shipmentsPacked            Shipment[]                    @relation("ShipmentPackedBy")
+  packBoxes                  PackBox[]                     @relation("PackBoxPacker")
   shipmentItemsRtoDisposed   ShipmentItem[]                @relation("ShipmentItemRtoDisposedBy")
   manifestsClosed            Manifest[]                    @relation("ManifestClosedBy")
   manifestsHandoffConfirmed  Manifest[]                    @relation("ManifestHandoffConfirmedBy")
@@ -662,6 +663,7 @@ model ProductVariant {
   stockAlertStates   StockAlertState[]
   stockUnits         StockUnit[]
   freightAllocations InboundFreightAllocation[]
+  packBoxScans       PackBoxScan[]
 
   @@unique([sellerId, skuCode])
   @@index([productId])
@@ -974,6 +976,7 @@ model StockUnit {
   shipmentItem     ShipmentItem?     @relation(fields: [shipmentItemId], references: [id])
   lastScanBy       StaffUser?        @relation("StockUnitLastScanBy", fields: [lastScanByStaffId], references: [id])
   events           StockUnitEvent[]
+  packBoxScans     PackBoxScan[]
 
   @@unique([sellerId, serialBarcode])
   @@index([sellerId, variantId, status])
@@ -1737,6 +1740,7 @@ model Order {
   tickets                Ticket[]
   earlyReservationReview EarlyReservationReview?
   courierSettlementLines CourierSettlementLine[]
+  packBoxes              PackBox[]
 
   @@unique([sellerId, sellerOrderRef])
   @@index([sellerId, status])
@@ -2070,6 +2074,7 @@ model Shipment {
   manifest             Manifest?         @relation(fields: [manifestId], references: [id])
   orderShipments       OrderShipment[]
   items                ShipmentItem[]
+  packBoxes            PackBox[]
   awbLabels            AwbLabel[]
   trackingEvents       TrackingEvent[]
   webhooks             CourierWebhook[]
@@ -3263,6 +3268,21 @@ enum InventoryMode {
 /// DISPATCHED until it either stays gone or comes back as an RTO, and
 /// the discrepancy report ages long-DISPATCHED units instead of
 /// pretending a delivery scan exists).
+/// The life of one physical box at the pack bench.
+///
+/// OPEN is the exclusive claim: a packer may hold at most one, and a
+/// parcel may be in at most one, both enforced by partial unique
+/// indexes rather than by application checks — ten packers working in
+/// parallel is exactly the case a read-then-write guard gets wrong.
+enum PackBoxStatus {
+  OPEN      @map("open")
+  CLOSED    @map("closed")
+  CANCELLED @map("cancelled")
+  EXPIRED   @map("expired")
+
+  @@map("pack_box_status")
+}
+
 enum StockUnitStatus {
   IN_STOCK     @map("in_stock")
   PICKED       @map("picked")
@@ -4419,4 +4439,70 @@ model SellerUserInvitation {
   @@index([expiresAt])
   @@index([invitedById])
   @@map("seller_user_invitations")
+}
+
+/// One box being packed at the bench.
+///
+/// The packer scans the shipping label to OPEN it, scans each product
+/// into it, and scans the label again to CLOSE — at which point the
+/// parcel is packed. Opening is what makes the claim exclusive; before
+/// this existed two packers could pull the same parcel and only collide
+/// at the very end.
+///
+/// `expiresAt` mirrors the pick claim (WMS-5): a box abandoned at the
+/// end of a shift must not wedge the order forever.
+model PackBox {
+  id             String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  shipmentId     String        @map("shipment_id") @db.Uuid
+  orderId        String        @map("order_id") @db.Uuid
+  packerStaffId  String        @map("packer_staff_id") @db.Uuid
+  status         PackBoxStatus @default(OPEN)
+  /// What was scanned to open it — the AWB. Recorded so a mis-scan is
+  /// visible afterwards rather than inferred.
+  openedWithCode String        @map("opened_with_code")
+  openedAt       DateTime      @default(now()) @map("opened_at") @db.Timestamptz
+  expiresAt      DateTime      @map("expires_at") @db.Timestamptz
+  closedAt       DateTime?     @map("closed_at") @db.Timestamptz
+  cancelledAt    DateTime?     @map("cancelled_at") @db.Timestamptz
+  /// Why the packer abandoned the box. Free text; the reason is
+  /// operational evidence, not a state.
+  cancelReason   String?       @map("cancel_reason") @db.Text
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+
+  shipment Shipment      @relation(fields: [shipmentId], references: [id])
+  order    Order         @relation(fields: [orderId], references: [id])
+  packer   StaffUser     @relation("PackBoxPacker", fields: [packerStaffId], references: [id])
+  scans    PackBoxScan[]
+
+  @@index([shipmentId])
+  @@index([packerStaffId, status])
+  @@index([status, expiresAt])
+  @@map("pack_boxes")
+}
+
+/// One scan into an open box. APPEND-ONLY while the box is open; a
+/// cancel discards the whole box rather than editing rows out of it.
+///
+/// `stockUnitId` is set only for a serialized (STRICT-mode) product,
+/// which is what links a specific physical unit to this order. A
+/// NORMAL-mode SKU has no per-unit barcode, so the scan records the
+/// variant and the code that was read.
+model PackBoxScan {
+  id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  packBoxId   String   @map("pack_box_id") @db.Uuid
+  variantId   String   @map("variant_id") @db.Uuid
+  stockUnitId String?  @map("stock_unit_id") @db.Uuid
+  /// Exactly what the scanner read, kept verbatim for dispute review.
+  scannedCode String   @map("scanned_code")
+  scannedAt   DateTime @default(now()) @map("scanned_at") @db.Timestamptz
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  packBox   PackBox        @relation(fields: [packBoxId], references: [id], onDelete: Cascade)
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+  stockUnit StockUnit?     @relation(fields: [stockUnitId], references: [id])
+
+  @@index([packBoxId])
+  @@index([stockUnitId])
+  @@map("pack_box_scans")
 }

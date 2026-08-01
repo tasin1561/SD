@@ -96,6 +96,7 @@ export {
   EarlyReservationReviewStatus,
   // R4 — strict-mode per-unit inventory
   InventoryMode,
+  PackBoxStatus,
   StockUnitStatus,
   // R3 — BD→India inbound freight billing
   InboundFreightMode,

@@ -294,6 +294,15 @@ const systemSettings: SystemSettingSeed[] = [
       'Courier assigned to a shipment at provisioning (FK couriers.code). Hardcoded in Phase 1A; Module 9 introduces serviceability/multi-courier routing',
   },
   {
+    key: 'ops.pack_box_timeout_minutes',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 60,
+    displayName: 'Pack Box Timeout (minutes)',
+    description:
+      'A box left open at the pack bench longer than this is auto-released: its scans are discarded and the parcel returns to the pack queue. Stops a box abandoned at the end of a shift from wedging an order.',
+  },
+  {
     key: 'ops.pick_task_timeout_hours',
     category: 'ops',
     valueType: SettingValueType.INT,
