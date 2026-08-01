@@ -6,6 +6,7 @@ import { useState, type ReactNode, type ReactElement } from 'react';
 import { useApiClient } from '@skydrop/auth/client';
 import type { SellerMe } from '@skydrop/api-client';
 import { AppShell, Toaster, type NavGroup } from '@skydrop/ui/components';
+import { canAccess, seesEverything } from '@/lib/role-access';
 import {
   Boxes,
   Building2,
@@ -95,12 +96,25 @@ export function AuthedShell({
     },
   ];
 
+  // Cosmetic role filter (FE-2) — a link to a page the role cannot open
+  // reads as a broken app. Both this and the RoleBoundary read the same
+  // table, so the nav and the routes cannot disagree. The server is
+  // still the boundary.
+  const visibleGroups: NavGroup[] = seesEverything(identity.role)
+    ? navGroups
+    : navGroups
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((item) => canAccess(identity.role, item.href)),
+        }))
+        .filter((group) => group.items.length > 0);
+
   return (
     <Toaster>
       <AppShell
         subtitle="Seller"
         sectionLabel="Seller portal"
-        navGroups={navGroups}
+        navGroups={visibleGroups}
         identityPrimary={identity.companyName}
         identitySecondary={identity.emailDisplay}
         pathname={pathname}

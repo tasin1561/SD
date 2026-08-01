@@ -8,6 +8,7 @@ import {
 } from '../../src/common/decorators/seller-roles.decorator';
 import { IS_PUBLIC_KEY } from '../../src/common/decorators/public.decorator';
 import { SELLER_AUTH_ALLOW_SUSPENDED_KEY } from '../../src/common/decorators/seller-auth-allow-suspended.decorator';
+import { SELLER_VIEWER_READABLE_KEY } from '../../src/common/decorators/seller-viewer-readable.decorator';
 import type { JwtService } from '../../src/modules/auth-common/services/jwt.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
@@ -27,6 +28,8 @@ function makeGuard(opts: {
   sellerStatus?: SellerStatus;
   allowSuspended?: boolean;
   isPublic?: boolean;
+  /** the controller carries @SellerViewerReadable() */
+  viewerReadable?: boolean;
 }) {
   const verifySellerAccess = jest.fn(() => ({ sub: 'user-1', jti: 'jti-1' }));
   const jwt = { verifySellerAccess };
@@ -60,6 +63,7 @@ function makeGuard(opts: {
   const getAllAndOverride = jest.fn((key: string) => {
     if (key === IS_PUBLIC_KEY) return opts.isPublic ?? false;
     if (key === SELLER_AUTH_ALLOW_SUSPENDED_KEY) return opts.allowSuspended ?? false;
+    if (key === SELLER_VIEWER_READABLE_KEY) return opts.viewerReadable ?? false;
     return undefined;
   });
   const reflector = { get, getAllAndOverride } as unknown as Reflector;
@@ -121,9 +125,25 @@ describe('SellerJwtGuard — RBAC policy', () => {
   });
 
   it.each(['GET', 'HEAD', 'OPTIONS'])(
-    'default: VIEWER may perform a %s (read-only access to everything)',
+    'default: VIEWER is BLOCKED from a %s on a controller that has not opted in',
     async (method) => {
+      // Was "VIEWER may read everything". The role is now an
+      // allow-list: a controller opts in with @SellerViewerReadable().
       const { guard, ctx } = makeGuard({ role: SellerUserRole.VIEWER, method });
+      await expect(guard.canActivate(ctx)).rejects.toMatchObject({
+        response: { code: 'INSUFFICIENT_ROLE' },
+      });
+    },
+  );
+
+  it.each(['GET', 'HEAD', 'OPTIONS'])(
+    'VIEWER may perform a %s once the controller opts in',
+    async (method) => {
+      const { guard, ctx } = makeGuard({
+        role: SellerUserRole.VIEWER,
+        method,
+        viewerReadable: true,
+      });
       await expect(guard.canActivate(ctx)).resolves.toBe(true);
     },
   );
@@ -172,13 +192,75 @@ describe('SellerJwtGuard — RBAC policy', () => {
     });
   });
 
-  it("class-level roles do NOT lock VIEWER out of that controller's reads", async () => {
+  it("class-level roles do NOT lock the company roles out of that controller's reads", async () => {
+    // OPS / INVENTORY / FINANCE see the whole company view and are
+    // limited only in what they may CHANGE.
     const { guard, ctx } = makeGuard({
-      role: SellerUserRole.VIEWER,
+      role: SellerUserRole.FINANCE,
       method: 'GET',
       classRoles: [SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.INVENTORY],
     });
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
+  });
+
+  // ── VIEWER reads are an ALLOW-LIST ───────────────────────────────────
+  // "Read-only" used to mean read-EVERYTHING: a VIEWER could pull the
+  // wallet ledger, the profile's bank details, the team list and the
+  // whole catalogue. These four pin the narrowed rule.
+
+  it('VIEWER is BLOCKED reading a controller that has not opted in', async () => {
+    const { guard, ctx } = makeGuard({ role: SellerUserRole.VIEWER, method: 'GET' });
+    await expect(guard.canActivate(ctx)).rejects.toMatchObject({
+      response: { code: 'INSUFFICIENT_ROLE' },
+    });
+  });
+
+  it('VIEWER is blocked even when the class-level write list is wide', async () => {
+    // Declaring who may WRITE must not accidentally re-open the read.
+    const { guard, ctx } = makeGuard({
+      role: SellerUserRole.VIEWER,
+      method: 'GET',
+      classRoles: [SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.OPS],
+    });
+    await expect(guard.canActivate(ctx)).rejects.toMatchObject({
+      response: { code: 'INSUFFICIENT_ROLE' },
+    });
+  });
+
+  it('VIEWER CAN read a controller marked @SellerViewerReadable()', async () => {
+    const { guard, ctx } = makeGuard({
+      role: SellerUserRole.VIEWER,
+      method: 'GET',
+      viewerReadable: true,
+      classRoles: [SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.OPS],
+    });
+    await expect(guard.canActivate(ctx)).resolves.toBe(true);
+  });
+
+  it('the marker opens READS only — a VIEWER still cannot write there', async () => {
+    const { guard, ctx } = makeGuard({
+      role: SellerUserRole.VIEWER,
+      method: 'POST',
+      viewerReadable: true,
+      classRoles: [SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.OPS],
+    });
+    await expect(guard.canActivate(ctx)).rejects.toMatchObject({
+      response: { code: 'INSUFFICIENT_ROLE' },
+    });
+  });
+
+  it('the marker does not widen anything for the other roles', async () => {
+    // INVENTORY could already read; marking the controller changes
+    // nothing about who may write to it.
+    const { guard, ctx } = makeGuard({
+      role: SellerUserRole.INVENTORY,
+      method: 'POST',
+      viewerReadable: true,
+      classRoles: [SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.OPS],
+    });
+    await expect(guard.canActivate(ctx)).rejects.toMatchObject({
+      response: { code: 'INSUFFICIENT_ROLE' },
+    });
   });
 
   // ── HANDLER-level declaration is absolute ────────────────────────────
@@ -235,6 +317,9 @@ describe('SellerJwtGuard — RBAC policy', () => {
     const ok = makeGuard({
       role: SellerUserRole.VIEWER,
       method: 'GET',
+      // The route must also be one VIEWER may read at all — status and
+      // role are independent gates, and this asserts both are applied.
+      viewerReadable: true,
       sellerStatus: SellerStatus.SUSPENDED,
       allowSuspended: true,
     });

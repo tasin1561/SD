@@ -7,6 +7,7 @@ import type { SellerMe } from '@skydrop/api-client';
 import { QueryProvider } from '@/components/query-provider';
 import { apiOrigin } from '@/lib/api-origin';
 import { AuthedShell } from './_components/authed-shell';
+import { RoleBoundary } from './_components/role-boundary';
 
 /**
  * Authed route group layout — the GATE.
@@ -56,7 +57,13 @@ export default async function AuthedLayout({
   return (
     <QueryProvider>
       <AuthProvider<SellerMe> identityKind="seller" initialIdentity={identity}>
-        <AuthedShell identity={identity}>{children}</AuthedShell>
+        <AuthedShell identity={identity}>
+          {/* Cosmetic role gating (FE-2) — the server refuses the
+              requests regardless; this stops a role being shown a
+              page it cannot use. Wraps the whole tree so no page
+              can be forgotten. */}
+          <RoleBoundary role={identity.role}>{children}</RoleBoundary>
+        </AuthedShell>
       </AuthProvider>
     </QueryProvider>
   );

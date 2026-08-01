@@ -35,6 +35,7 @@ import {
 } from '../services/order.service';
 import { SellerUserRole } from '@skydrop/db';
 import { SellerRoles } from '../../../common/decorators/seller-roles.decorator';
+import { SellerViewerReadable } from '../../../common/decorators/seller-viewer-readable.decorator';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -43,6 +44,10 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
 @SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.OPS)
+// The orders surface is the ONE area a VIEWER may read: the list, an
+// order's detail, and its event timeline — which is what the tracking
+// view is built from. Writes here remain OWNER / ADMIN / OPS.
+@SellerViewerReadable()
 @Controller('seller/orders')
 export class SellerOrderController {
   constructor(private readonly svc: OrderService) {}

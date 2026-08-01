@@ -14,16 +14,28 @@ import { AuditLogService } from '../../modules/auth-common/services/audit-log.se
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { SELLER_AUTH_ALLOW_SUSPENDED_KEY } from '../decorators/seller-auth-allow-suspended.decorator';
 import { SELLER_ROLES_KEY } from '../decorators/seller-roles.decorator';
+import { SELLER_VIEWER_READABLE_KEY } from '../decorators/seller-viewer-readable.decorator';
 
-/** Methods that only READ. VIEWER is documented as "read-only access to
- *  everything visible to the company", so these are open to every role
- *  unless an endpoint narrows them explicitly. */
+/** Methods that only READ. Open to every role EXCEPT VIEWER, whose
+ *  reads are an allow-list — see `VIEWER_READ_DENIED`. */
 const SAFE_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /** Default allow-list for MUTATING methods when an endpoint declares no
  *  `@SellerRoles`. Deliberately the narrowest useful set — see the
  *  fail-closed note on the decorator. */
 const DEFAULT_WRITE_ROLES: readonly SellerUserRole[] = [SellerUserRole.OWNER, SellerUserRole.ADMIN];
+
+/** The allow-list applied to a VIEWER reading a controller that has not
+ *  opted in via `@SellerViewerReadable()`. Deliberately every role
+ *  EXCEPT VIEWER rather than an empty array, so the 403 names the roles
+ *  that would have worked instead of reading as a misconfiguration. */
+const VIEWER_READ_DENIED: readonly SellerUserRole[] = [
+  SellerUserRole.OWNER,
+  SellerUserRole.ADMIN,
+  SellerUserRole.OPS,
+  SellerUserRole.INVENTORY,
+  SellerUserRole.FINANCE,
+];
 
 /**
  * Bearer-token auth for seller routes. Crucially, this guard re-checks
@@ -44,8 +56,9 @@ const DEFAULT_WRITE_ROLES: readonly SellerUserRole[] = [SellerUserRole.OWNER, Se
  *      and writes alike (use it to lock down one specific endpoint, or
  *      to open a self-service POST to every role).
  *   2. Read-only methods (GET/HEAD/OPTIONS) with no handler-level
- *      declaration — open to every role. VIEWER is defined as
- *      "read-only access to everything visible to the company".
+ *      declaration — open to every role EXCEPT VIEWER. VIEWER's reads
+ *      are an allow-list: the controller opts in with
+ *      `@SellerViewerReadable()`, and anything unmarked is closed.
  *   3. `@SellerRoles(...)` on the CLASS — the domain's WRITE allow-list
  *      (e.g. catalog controllers add INVENTORY, order controllers add
  *      OPS). Declaring it does NOT restrict that controller's GETs.
@@ -151,11 +164,28 @@ export class SellerJwtGuard implements CanActivate {
     // A HANDLER-level declaration is absolute — it applies to reads and
     // writes alike, so a specific endpoint can always be locked down.
     // A CLASS-level declaration is the domain's WRITE allow-list only;
-    // reads stay open to every company role, because VIEWER is defined
-    // as "read-only access to everything visible to the company". A
-    // domain controller therefore does NOT accidentally lock VIEWER out
-    // of its GETs just by declaring who may mutate.
-    const allowedRoles = handlerRoles ?? (isRead ? null : (classRoles ?? DEFAULT_WRITE_ROLES));
+    // reads stay open to the company roles, because OPS / INVENTORY /
+    // FINANCE are trusted with the whole view and limited only in what
+    // they may CHANGE. A domain controller therefore does NOT lock them
+    // out of its GETs just by declaring who may mutate.
+    //
+    // VIEWER is the exception: its reads are an ALLOW-LIST, opted into
+    // per controller with `@SellerViewerReadable()`. "Read-only" used to
+    // mean read-EVERYTHING, which let the lowest-privilege account pull
+    // the wallet ledger, the bank details on the profile, the team list
+    // and the whole catalogue. Anything unmarked is closed to VIEWER,
+    // so a new controller is invisible to the role until someone opts
+    // it in deliberately — the same fail-closed shape as the write side.
+    const viewerReadable =
+      this.reflector.getAllAndOverride<boolean>(SELLER_VIEWER_READABLE_KEY, [
+        ctx.getHandler(),
+        ctx.getClass(),
+      ]) === true;
+
+    const readRoles: readonly SellerUserRole[] | null =
+      user.role === SellerUserRole.VIEWER && !viewerReadable ? VIEWER_READ_DENIED : null;
+
+    const allowedRoles = handlerRoles ?? (isRead ? readRoles : (classRoles ?? DEFAULT_WRITE_ROLES));
 
     if (allowedRoles !== null && !allowedRoles.includes(user.role)) {
       await this.audit.log({
