@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import {
   Button,
   Card,
@@ -12,6 +12,8 @@ import {
   Select,
   useToast,
 } from '@skydrop/ui/components';
+import { useQuery } from '@tanstack/react-query';
+import { useApiClient } from '@skydrop/auth/client';
 import { ApiError } from '@skydrop/api-client';
 import type { PulledAssignment } from '@skydrop/api-client';
 import { usePullNextCall, useRecordCallAttempt, useReleaseCall } from '@/lib/api-hooks';
@@ -54,13 +56,28 @@ const OUTCOME_OPTIONS: ReadonlyArray<{
   },
 ];
 
+/** How long to wait before looking again when the queue came back empty. */
+const EMPTY_QUEUE_RETRY_MS = 15_000;
+
 export function CallCenterStation(): ReactElement {
   const toast = useToast();
+  const client = useApiClient();
   const pull = usePullNextCall();
   const record = useRecordCallAttempt();
   const release = useReleaseCall();
 
+  // Availability is the stop control. The same query key the
+  // MyAvailability card writes, so toggling it there takes effect here
+  // immediately without a second source of truth.
+  const settings = useQuery({
+    queryKey: ['agent-settings', 'me'],
+    queryFn: () => client.request<{ isAvailable: boolean }>('/api/agent/settings'),
+  });
+  const isAvailable = settings.data?.isAvailable ?? false;
+
   const [assignment, setAssignment] = useState<PulledAssignment | null>(null);
+  /** Last look found nothing — drives the copy, not the schedule. */
+  const [queueEmpty, setQueueEmpty] = useState(false);
   const [outcome, setOutcome] = useState<CallOutcome | ''>('');
   const [notes, setNotes] = useState('');
   const [callbackTime, setCallbackTime] = useState('');
@@ -83,22 +100,74 @@ export function CallCenterStation(): ReactElement {
     setCallbackTime('');
   }
 
-  async function onPull(): Promise<void> {
-    setError(null);
-    try {
-      const r = await pull.mutateAsync();
-      if (!r.assignment) {
-        toast.info('Queue is empty.');
-        return;
+  /**
+   * Claim the next entry.
+   *
+   * `pullNext` stays the mechanism even though this is now automatic:
+   * it claims a row with FOR UPDATE SKIP LOCKED inside the assigning
+   * transaction, so two agents advancing at the same instant can never
+   * be handed the same customer. What changed is only WHO triggers it.
+   *
+   * Push-assigning from the server would break the other half of that
+   * guarantee — an order handed to an agent who has stepped away sits
+   * ASSIGNED and uncalled until the expiry timer fires. Pulling on the
+   * agent's own action proves someone is actually at the desk.
+   */
+  const advance = useCallback(
+    async (announce: boolean): Promise<void> => {
+      setError(null);
+      try {
+        const r = await pull.mutateAsync();
+        if (!r.assignment) {
+          setQueueEmpty(true);
+          if (announce) toast.info('Queue is empty.');
+          return;
+        }
+        setQueueEmpty(false);
+        setAssignment(r.assignment);
+        setOutcome('');
+        setNotes('');
+        setCallbackTime('');
+      } catch (err) {
+        setError(fmtError(err));
       }
-      setAssignment(r.assignment);
-      setOutcome('');
-      setNotes('');
-      setCallbackTime('');
-    } catch (err) {
-      setError(fmtError(err));
-    }
-  }
+    },
+    // `toast` and `pull` are stable; fmtError is a pure local helper.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  // Auto-advance. An agent should not have to ask for work between
+  // every call — they log an outcome and the next customer is there.
+  // Gated on availability, so ending a shift or stepping away actually
+  // stops the flow rather than piling up assignments nobody is calling.
+  //
+  // Two triggers, deliberately separate:
+  //   • straight after an outcome is recorded — an explicit call in
+  //     onRecord, so the next customer appears immediately;
+  //   • a steady interval — for the case where the queue was empty and
+  //     work arrives later.
+  //
+  // The interval depends ONLY on availability, and each tick reads live
+  // state through a ref. An earlier version keyed the effect on
+  // assignment / isPending / queueEmpty and rebuilt its timer whenever
+  // any of them changed: unrelated re-renders reset the schedule, and
+  // measuring it gave 4 pulls in 20s on one run and 0 in 50s on the
+  // next. A schedule that unreliable is worse than no schedule.
+  const advanceRef = useRef(advance);
+  advanceRef.current = advance;
+
+  const idleRef = useRef(false);
+  idleRef.current = isAvailable && assignment === null && !pull.isPending;
+
+  useEffect(() => {
+    if (!isAvailable) return;
+    if (idleRef.current) void advanceRef.current(false);
+    const id = setInterval(() => {
+      if (idleRef.current) void advanceRef.current(false);
+    }, EMPTY_QUEUE_RETRY_MS);
+    return () => clearInterval(id);
+  }, [isAvailable]);
 
   async function onRecord(): Promise<void> {
     if (!assignment || !outcome) return;
@@ -128,6 +197,9 @@ export function CallCenterStation(): ReactElement {
         r.finalOrderStatus !== null ? `order → ${r.finalOrderStatus}` : 'no order transition';
       toast.success(`Recorded ${r.outcome} · ${tail}`);
       resetCall();
+      // Immediately, not on the next tick — the agent has just hung up
+      // and the whole point is that the next customer is already there.
+      void advance(false);
     } catch (err) {
       setError(fmtError(err));
     }
@@ -152,13 +224,19 @@ export function CallCenterStation(): ReactElement {
       <MyAvailability />
 
       <div className="flex items-center gap-2">
+        {/* Calls arrive on their own while available; this is the
+            manual nudge for "the queue was empty, try now". */}
         <Button
           variant="primary"
           size="md"
-          onClick={() => void onPull()}
-          disabled={pull.isPending || assignment !== null}
+          onClick={() => void advance(true)}
+          disabled={pull.isPending || assignment !== null || !isAvailable}
         >
-          {pull.isPending ? 'Pulling…' : assignment ? 'Active call' : 'Pull next call'}
+          {pull.isPending
+            ? 'Finding next call…'
+            : assignment
+              ? 'Active call'
+              : 'Check for a call now'}
         </Button>
         {assignment && (
           <Button
@@ -180,8 +258,14 @@ export function CallCenterStation(): ReactElement {
 
       {!assignment ? (
         <EmptyState
-          title="No active call"
-          description="Pull next call to claim the next FIFO entry."
+          title={isAvailable ? 'Waiting for the next call' : 'You are marked unavailable'}
+          description={
+            !isAvailable
+              ? 'Mark yourself available above to start receiving calls.'
+              : queueEmpty
+                ? 'Nobody is waiting to be called right now. The queue is checked again every few seconds — you do not need to do anything.'
+                : 'The next customer in the queue is handed to you automatically.'
+          }
         />
       ) : (
         <Card>
