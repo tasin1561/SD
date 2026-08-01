@@ -1870,6 +1870,15 @@ const notificationTemplates: TemplateSeed[] = [
     bodyTemplate:
       'Hi {{ company_name }}, your Skydrop onboarding is complete. You can now ship inventory to our warehouse and start placing orders from {{ app_url }}. Questions? {{ support_email }}.',
   },
+  {
+    code: 'staff.bin_collapse_challenge.email',
+    name: 'Bin collapse — confirmation code',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STAFF,
+    subject: 'Confirm collapsing {{ warehouse_code }} to one location — code {{ code }}',
+    bodyTemplate:
+      'Hi {{ staff_name }}, someone signed in as you asked to collapse every bin in {{ warehouse_name }} ({{ warehouse_code }}) into a single FLOOR location. That would merge {{ bins_affected }} bin(s) holding {{ units_affected }} unit(s), and the original placement would survive only in the backup taken alongside it.\n\nReason given: {{ reason }}\n\nYour code is {{ code }}. It expires in {{ expires_minutes }} minutes.\n\nIf this was not you, do not enter the code — tell whoever runs the warehouse, and change your password.',
+  },
   // ---- Module 5 — Inventory & WMS (sender resolves to hello@) ----------
   {
     code: 'seller.stock_low_alert.email',

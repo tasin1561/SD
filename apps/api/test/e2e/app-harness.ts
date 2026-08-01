@@ -302,6 +302,12 @@ export async function resetInventoryState(prisma: PrismaClient): Promise<void> {
         'cycle_counts',
         'goods_receipt_lines',
         'goods_receipts',
+        // Bin-layout backups + the collapse challenges that produce
+        // them: both FK warehouses/staff with RESTRICT, so they have to
+        // go before the topology they describe (MUST #12).
+        'bin_layout_snapshot_lines',
+        'bin_layout_snapshots',
+        'bin_collapse_challenges',
         // Test-created topology (seeded warehouses are preserved).
         'warehouse_bins',
         'warehouse_zones',

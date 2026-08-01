@@ -87,6 +87,7 @@ model StaffUser {
   stockUnitsScanned          StockUnit[]                   @relation("StockUnitLastScanBy")
   inboundFreightSettled      InboundFreightCharge[]        @relation("InboundFreightSettledBy")
   binLayoutSnapshotsTaken    BinLayoutSnapshot[]           @relation("BinSnapshotTakenBy")
+  binCollapseChallenges      BinCollapseChallenge[]        @relation("BinCollapseChallengeStaff")
 
   @@index([role])
   @@index([deletedAt])
@@ -458,6 +459,7 @@ model Warehouse {
   zones                  WarehouseZone[]
   bins                   WarehouseBin[]
   binLayoutSnapshots     BinLayoutSnapshot[]
+  binCollapseChallenges  BinCollapseChallenge[]
   stockBatches           StockBatch[]
   stockLevels            StockLevel[]
   stockMovements         StockMovement[]
@@ -476,6 +478,36 @@ model Warehouse {
 
   @@index([status])
   @@map("warehouses")
+}
+
+/// The email challenge that stands between an operator and a collapse.
+///
+/// A collapse merges every bin in a warehouse into FLOOR. It is the one
+/// action here that destroys information rather than moving goods, and
+/// it cannot be undone from the bins themselves — only from the snapshot
+/// taken alongside it. So it is gated the way god-mode is (typed
+/// confirmation, long reason, CRITICAL audit) plus a code sent to the
+/// actor's own mailbox, which is the part that survives a shoulder-surfed
+/// session.
+model BinCollapseChallenge {
+  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  warehouseId String    @map("warehouse_id") @db.Uuid
+  staffUserId String    @map("staff_user_id") @db.Uuid
+  /// Hashed, never stored in the clear — same discipline as every other
+  /// token table here.
+  codeHash    String    @map("code_hash")
+  reason      String    @db.Text
+  attempts    Int       @default(0)
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz
+  consumedAt  DateTime? @map("consumed_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  staffUser StaffUser @relation("BinCollapseChallengeStaff", fields: [staffUserId], references: [id], onDelete: Cascade)
+
+  @@index([warehouseId])
+  @@index([expiresAt])
+  @@map("bin_collapse_challenges")
 }
 
 /// A point-in-time record of where every unit sat in one warehouse.

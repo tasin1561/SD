@@ -879,12 +879,44 @@ export function useCompleteGoodsReceipt(): UseMutationResult<
   });
 }
 
-// Warehouse bins for a putaway-bin picker
+// ───────── Admin: warehouse topology (zones + bins) ─────────
+
 export interface WarehouseBin {
   readonly id: string;
   readonly code: string;
   readonly type: string;
   readonly zoneId: string;
+  readonly aisle: string | null;
+  readonly rack: string | null;
+  readonly shelf: string | null;
+}
+
+export interface WarehouseZone {
+  readonly id: string;
+  readonly warehouseId: string;
+  readonly code: string;
+  readonly name: string;
+  readonly pickOrder: number;
+  readonly isActive: boolean;
+}
+
+export interface WarehouseSummary {
+  readonly id: string;
+  readonly code: string;
+  readonly name: string;
+  readonly status: string;
+  readonly countryCode: string;
+  readonly timezone: string;
+  /** Does this building record WHERE stock sits? Per-warehouse. */
+  readonly binTrackingEnabled: boolean;
+}
+
+export function useWarehouses(): UseQueryResult<ReadonlyArray<WarehouseSummary>> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-warehouses', 'list'],
+    queryFn: () => client.request<ReadonlyArray<WarehouseSummary>>('/api/admin/warehouses'),
+  });
 }
 
 export function useWarehouseBins(warehouseId: string): UseQueryResult<ReadonlyArray<WarehouseBin>> {
@@ -894,6 +926,92 @@ export function useWarehouseBins(warehouseId: string): UseQueryResult<ReadonlyAr
     queryFn: () =>
       client.request<ReadonlyArray<WarehouseBin>>(`/api/admin/warehouses/${warehouseId}/bins`),
     enabled: Boolean(warehouseId),
+  });
+}
+
+export function useWarehouseZones(
+  warehouseId: string,
+): UseQueryResult<ReadonlyArray<WarehouseZone>> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-warehouses', 'zones', warehouseId],
+    queryFn: () =>
+      client.request<ReadonlyArray<WarehouseZone>>(`/api/admin/warehouses/${warehouseId}/zones`),
+    enabled: Boolean(warehouseId),
+  });
+}
+
+export function useCreateZone(
+  warehouseId: string,
+): UseMutationResult<WarehouseZone, Error, { code: string; name: string; pickOrder?: number }> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<WarehouseZone>(`/api/admin/warehouses/${warehouseId}/zones`, {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-warehouses'] });
+    },
+  });
+}
+
+export interface CreateBinBody {
+  readonly zoneId: string;
+  readonly type: string;
+  readonly aisle: string;
+  readonly rack: string;
+  readonly shelf: string;
+}
+
+export function useCreateBin(
+  warehouseId: string,
+): UseMutationResult<WarehouseBin, Error, CreateBinBody> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<WarehouseBin>(`/api/admin/warehouses/${warehouseId}/bins`, {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-warehouses'] });
+    },
+  });
+}
+
+export function useDeleteBin(warehouseId: string): UseMutationResult<void, Error, string> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (binId) => {
+      await client.request<void>(`/api/admin/warehouses/${warehouseId}/bins/${binId}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-warehouses'] });
+    },
+  });
+}
+
+export function useSetBinTracking(
+  warehouseId: string,
+): UseMutationResult<WarehouseSummary, Error, boolean> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled) =>
+      client.request<WarehouseSummary>(`/api/admin/warehouses/${warehouseId}/bin-tracking`, {
+        method: 'PATCH',
+        body: { enabled },
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-warehouses'] });
+    },
   });
 }
 

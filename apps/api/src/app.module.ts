@@ -40,6 +40,7 @@ import { WarehousePickModule } from './modules/warehouse-pick/warehouse-pick.mod
 import { WarehouseManifestModule } from './modules/warehouse-manifest/warehouse-manifest.module';
 import { WarehousePackModule } from './modules/warehouse-pack/warehouse-pack.module';
 import { WarehouseRtoModule } from './modules/warehouse-rto/warehouse-rto.module';
+import { WarehouseBinOpsModule } from './modules/warehouse-bin-ops/warehouse-bin-ops.module';
 import { CourierSharedModule } from './modules/courier-shared/courier-shared.module';
 import { CourierDelhiveryModule } from './modules/courier-delhivery/courier-delhivery.module';
 import { CourierAwbModule } from './modules/courier-awb/courier-awb.module';
@@ -142,6 +143,7 @@ import { envSchema } from './config/env.schema';
     WarehouseManifestModule,
     WarehousePackModule,
     WarehouseRtoModule,
+    WarehouseBinOpsModule,
     CourierSharedModule,
     CourierDelhiveryModule,
     CourierAwbModule,
