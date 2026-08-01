@@ -6,6 +6,8 @@ import { RtoRestockTargetService } from './services/rto-restock-target.service';
 import { RtoInspectionService } from './services/rto-inspection.service';
 import { RtoDispositionService } from './services/rto-disposition.service';
 import { RtoReadService } from './services/rto-read.service';
+import { RtoPutawayService } from './services/rto-putaway.service';
+import { InventoryTransferModule } from '../inventory-transfer/inventory-transfer.module';
 import { WarehouseRtoController } from './controllers/warehouse-rto.controller';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { TicketModule } from '../ticket/ticket.module';
@@ -19,6 +21,11 @@ import { InboundFreightModule } from '../inbound-freight/inbound-freight.module'
  *   - finalize — Model A: RESTOCK → RETURN_RESTOCK +qty re-add;
  *     WRITE_OFF → no movement (dispatch decrement stands). No
  *     reservation release — the reservation was FULFILLED at DISPATCH.
+ *   - putaway — the restocked units land in RTO_HOLD, which is not
+ *     pickable, because at finalize they are on the returns bench and
+ *     not on a shelf. Putaway is the person who inspected them walking
+ *     them somewhere and saying where; only then does INV-3 count them
+ *     as available.
  *
  * Imports OrderModule (the read + saga transitions) and
  * InventorySharedModule for StockMutationService (INV-1 — the
@@ -35,6 +42,10 @@ import { InboundFreightModule } from '../inbound-freight/inbound-freight.module'
     TicketModule,
     // R3: a written-off unit still owes its inbound-freight share.
     InboundFreightModule,
+    // Return putaway is an ordinary same-warehouse bin transfer — it
+    // goes through the shared transfer service so the move lands in the
+    // ledger as a paired OUT/IN like any other (INV-1).
+    InventoryTransferModule,
   ],
   controllers: [WarehouseRtoController],
   providers: [
@@ -43,6 +54,7 @@ import { InboundFreightModule } from '../inbound-freight/inbound-freight.module'
     RtoInspectionService,
     RtoDispositionService,
     RtoReadService,
+    RtoPutawayService,
     StaffJwtGuard,
   ],
 })

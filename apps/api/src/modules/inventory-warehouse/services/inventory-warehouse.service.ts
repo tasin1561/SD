@@ -16,6 +16,7 @@ import type {
 } from '../dto/warehouse.dto';
 import type { CreateZoneDto, UpdateZoneDto } from '../dto/zone.dto';
 import type { CreateBinDto, ListBinsQueryDto, UpdateBinDto } from '../dto/bin.dto';
+import { composeBinCode, normalizeBinGrid, DEFAULT_ZONE_CODE, FLOOR_BIN_CODE } from '../bin-code';
 
 export interface WarehouseView {
   id: string;
@@ -24,6 +25,7 @@ export interface WarehouseView {
   status: WarehouseStatus;
   countryCode: string;
   timezone: string;
+  binTrackingEnabled: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -46,6 +48,7 @@ export interface BinView {
   code: string;
   type: BinType;
   aisle: string | null;
+  rack: string | null;
   shelf: string | null;
   maxWeightKg: Prisma.Decimal | null;
   maxVolumeCm3: Prisma.Decimal | null;
@@ -60,6 +63,7 @@ const WAREHOUSE_SELECT = {
   status: true,
   countryCode: true,
   timezone: true,
+  binTrackingEnabled: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -82,6 +86,7 @@ const BIN_SELECT = {
   code: true,
   type: true,
   aisle: true,
+  rack: true,
   shelf: true,
   maxWeightKg: true,
   maxVolumeCm3: true,
@@ -149,6 +154,7 @@ export class InventoryWarehouseService {
           },
           select: WAREHOUSE_SELECT,
         });
+        await this.provisionDefaultTopology(tx, row.id);
         await this.writeAudit(
           tx,
           staffId,
@@ -212,6 +218,97 @@ export class InventoryWarehouseService {
         changes,
       );
       return row;
+    });
+  }
+
+  /**
+   * Turn location tracking on or off for one building.
+   *
+   * Per-warehouse on purpose: a mature site can run binned while a newly
+   * opened one does not. The flag changes what the system ASKS FOR and
+   * what it SHOWS — it moves nothing. Turning it on does not relocate
+   * existing FLOOR stock (that drains as it is picked, or is moved
+   * deliberately), and turning it off does not collapse existing bins.
+   *
+   * The collapse is a SEPARATE, deliberate action
+   * (`BinCollapseService`), because it is destructive and this is a
+   * toggle. Making it a side effect here would mean a misclick costs a
+   * warehouse's worth of putaway work.
+   */
+  async setBinTracking(
+    staffId: string,
+    warehouseId: string,
+    enabled: boolean,
+    ctx: ClientContext,
+  ): Promise<WarehouseView> {
+    const current = await this.getWarehouse(warehouseId);
+    if (current.binTrackingEnabled === enabled) return current;
+
+    return this.prisma.client.$transaction(async (tx) => {
+      // Turning tracking ON with no real bins would leave receiving
+      // agents with nothing to choose. FLOOR does not count — it is the
+      // off-state bin.
+      if (enabled) {
+        const realBins = await tx.warehouseBin.count({
+          where: { warehouseId, deletedAt: null, code: { not: FLOOR_BIN_CODE } },
+        });
+        if (realBins === 0) {
+          throw new ConflictException({
+            code: 'NO_BINS_TO_TRACK',
+            message:
+              'Create at least one bin before turning on location tracking — otherwise receiving has nowhere to put anything',
+          });
+        }
+      }
+      const row = await tx.warehouse.update({
+        where: { id: warehouseId },
+        data: { binTrackingEnabled: enabled },
+        select: WAREHOUSE_SELECT,
+      });
+      await this.writeAudit(
+        tx,
+        staffId,
+        enabled
+          ? 'inventory.warehouse.bin_tracking_enabled'
+          : 'inventory.warehouse.bin_tracking_disabled',
+        'warehouse',
+        warehouseId,
+        ctx,
+        { code: row.code, binTrackingEnabled: enabled },
+      );
+      return row;
+    });
+  }
+
+  /**
+   * Every warehouse gets a usable topology the moment it exists: a MAIN
+   * zone and a FLOOR bin.
+   *
+   * This is not a convenience. Before it, creating a warehouse left you
+   * with somewhere that could not receive stock, because `stock_levels`
+   * requires a bin and there was no screen to make one — which is
+   * exactly how production ended up with one warehouse and zero bins.
+   */
+  private async provisionDefaultTopology(
+    tx: Prisma.TransactionClient,
+    warehouseId: string,
+  ): Promise<void> {
+    const zone = await tx.warehouseZone.create({
+      data: { warehouseId, code: DEFAULT_ZONE_CODE, name: 'Main', pickOrder: 100 },
+      select: { id: true },
+    });
+    await tx.warehouseBin.create({
+      data: {
+        warehouseId,
+        zoneId: zone.id,
+        code: FLOOR_BIN_CODE,
+        type: BinType.STORAGE,
+        // The one bin with no grid coordinates — it is not a shelf, it
+        // is "somewhere in this building".
+        aisle: null,
+        rack: null,
+        shelf: null,
+      },
     });
   }
 
@@ -360,14 +457,16 @@ export class InventoryWarehouseService {
     await this.requireZone(warehouseId, input.zoneId);
     try {
       return await this.prisma.client.$transaction(async (tx) => {
+        const grid = normalizeBinGrid(input);
         const row = await tx.warehouseBin.create({
           data: {
             warehouseId,
             zoneId: input.zoneId,
-            code: input.code,
+            code: composeBinCode(input),
             type: input.type,
-            aisle: input.aisle ?? null,
-            shelf: input.shelf ?? null,
+            aisle: grid.aisle,
+            rack: grid.rack,
+            shelf: grid.shelf,
             maxWeightKg: dec(input.maxWeightKg),
             maxVolumeCm3: dec(input.maxVolumeCm3),
           },
@@ -385,7 +484,7 @@ export class InventoryWarehouseService {
       throw this.mapCodeConflict(
         err,
         'BIN_CODE_TAKEN',
-        `Bin code "${input.code}" already exists in this warehouse`,
+        `Bin ${composeBinCode(input)} already exists in this warehouse`,
       );
     }
   }
@@ -410,13 +509,27 @@ export class InventoryWarehouseService {
       data.type = input.type;
       changes['type'] = input.type;
     }
-    if (input.aisle !== undefined) {
-      data.aisle = input.aisle;
-      changes['aisle'] = input.aisle;
-    }
-    if (input.shelf !== undefined) {
-      data.shelf = input.shelf;
-      changes['shelf'] = input.shelf;
+    const movingGrid =
+      input.aisle !== undefined || input.rack !== undefined || input.shelf !== undefined;
+    if (movingGrid) {
+      if (input.aisle === undefined || input.rack === undefined || input.shelf === undefined) {
+        throw new BadRequestException({
+          code: 'BIN_GRID_INCOMPLETE',
+          message:
+            'Aisle, rack and shelf must be supplied together — the bin code is derived from all three',
+        });
+      }
+      const grid = normalizeBinGrid({ aisle: input.aisle, rack: input.rack, shelf: input.shelf });
+      data.aisle = grid.aisle;
+      data.rack = grid.rack;
+      data.shelf = grid.shelf;
+      // The code follows the coordinates. Leaving it behind would let a
+      // pick list say A-01-03 for a bin that is now on rack 4.
+      data.code = composeBinCode(grid);
+      changes['aisle'] = grid.aisle;
+      changes['rack'] = grid.rack;
+      changes['shelf'] = grid.shelf;
+      changes['code'] = data.code;
     }
     if (input.maxWeightKg !== undefined) {
       data.maxWeightKg = dec(input.maxWeightKg);

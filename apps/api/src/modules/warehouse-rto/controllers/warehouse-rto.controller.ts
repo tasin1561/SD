@@ -25,7 +25,12 @@ import {
 } from '../services/rto-inspection.service';
 import { RtoDispositionService, type FinalizeRtoResult } from '../services/rto-disposition.service';
 import { RtoReadService, type RtoShipmentDetail } from '../services/rto-read.service';
-import { InspectRtoItemDto, ReceiveRtoDto } from '../dto/warehouse-rto.dto';
+import {
+  RtoPutawayService,
+  type RtoPutawayPending,
+  type RtoPutawayResult,
+} from '../services/rto-putaway.service';
+import { InspectRtoItemDto, ReceiveRtoDto, RtoPutawayDto } from '../dto/warehouse-rto.dto';
 
 /**
  * Warehouse RTO operator workflow (receive → inspect[…] → finalize).
@@ -45,6 +50,7 @@ export class WarehouseRtoController {
     private readonly inspection: RtoInspectionService,
     private readonly disposition: RtoDispositionService,
     private readonly read: RtoReadService,
+    private readonly putaway: RtoPutawayService,
   ) {}
 
   @Get('shipments/:shipmentId')
@@ -112,5 +118,33 @@ export class WarehouseRtoController {
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<FinalizeRtoResult> {
     return this.disposition.finalize(shipmentId, staff.id, ctx);
+  }
+
+  @Get('shipments/:shipmentId/putaway')
+  @ApiOperation({
+    summary:
+      'What is sitting in hold for this parcel, each with a suggested shelf (the bin it was picked from, else where this SKU currently lives here)',
+  })
+  listPutaway(
+    @Param('shipmentId', new ParseUUIDPipe({ version: '7' }))
+    shipmentId: string,
+  ): Promise<RtoPutawayPending[]> {
+    return this.putaway.listPending(shipmentId);
+  }
+
+  @Post('shipments/:shipmentId/putaway')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Shelve returned goods: hold bin → a real bin, as a paired transfer. Only now do the units become sellable (INV-3 excludes hold bins)',
+  })
+  doPutaway(
+    @Param('shipmentId', new ParseUUIDPipe({ version: '7' }))
+    shipmentId: string,
+    @Body() body: RtoPutawayDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<RtoPutawayResult> {
+    return this.putaway.putaway(shipmentId, body.lines, staff.id, ctx);
   }
 }

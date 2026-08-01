@@ -1,4 +1,6 @@
 import { GoodsReceiptStatus, VariantStatus } from '@skydrop/db';
+import { BadRequestException } from '@nestjs/common';
+import type { BinPolicyService } from '../../src/modules/inventory-shared/bin-policy.service';
 import { GoodsReceiptService } from '../../src/modules/inventory-receipt/services/goods-receipt.service';
 import { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
@@ -61,6 +63,21 @@ function makeSut(opts: {
   } as unknown as WarehouseResolverService;
   const noop = {} as unknown;
 
+  const binPolicy = {
+    // Faithful to the real service: with tracking ON the agent's choice
+    // is required and honoured. The OFF path has its own suite
+    // (bin-policy.service.spec.ts) — it needs a real warehouse row.
+    resolvePutawayBin: async (_warehouseId: string, requested?: string | null) => {
+      if (!requested) {
+        throw new BadRequestException({
+          code: 'BIN_REQUIRED',
+          message: 'This warehouse tracks locations — choose the bin',
+        });
+      }
+      return { binId: requested, trackingEnabled: true };
+    },
+  } as unknown as BinPolicyService;
+
   const svc = new GoodsReceiptService(
     prisma,
     audit,
@@ -70,6 +87,7 @@ function makeSut(opts: {
     noop as StockUnitService,
     noop as InventoryModeService,
     noop as StockAlertService,
+    binPolicy,
     noop as StockCacheService,
     noop as EmailQueue,
     { sellerAppUrl: 'http://a', supportEmail: 'h@x.io' } as unknown as EnvService,
@@ -142,7 +160,7 @@ describe('GoodsReceiptService — admin recording lifecycle', () => {
     });
     await expect(
       sut.svc.recordLines('staff1', 'gr1', [{ lineId: 'ln1', receivedQty: 5 }], CTX),
-    ).rejects.toMatchObject({ response: { code: 'PUTAWAY_BIN_REQUIRED' } });
+    ).rejects.toMatchObject({ response: { code: 'BIN_REQUIRED' } });
   });
 
   it('recordLines rejects a line id not on the receipt', async () => {

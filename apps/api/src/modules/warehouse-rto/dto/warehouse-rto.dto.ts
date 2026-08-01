@@ -1,6 +1,17 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import { RtoDisposition, RtoItemCondition } from '@skydrop/db';
-import { IsEnum, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+  ValidateNested,
+} from 'class-validator';
 
 export class ReceiveRtoDto {
   @ApiProperty({ description: 'AWB number to look up the inbound parcel' })
@@ -32,4 +43,23 @@ export class InspectRtoItemDto {
   @IsString()
   @MaxLength(1000)
   readonly notes?: string;
+}
+
+export class RtoPutawayLineDto {
+  @ApiProperty({ description: 'The inspected shipment item being shelved' })
+  @IsUUID('7')
+  shipmentItemId!: string;
+
+  @ApiProperty({ description: 'The bin it is being put into (must be pickable)' })
+  @IsUUID('7')
+  destBinId!: string;
+}
+
+export class RtoPutawayDto {
+  @ApiProperty({ type: [RtoPutawayLineDto] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => RtoPutawayLineDto)
+  lines!: RtoPutawayLineDto[];
 }

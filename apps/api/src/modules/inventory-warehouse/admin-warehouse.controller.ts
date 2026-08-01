@@ -21,6 +21,7 @@ import type { AuthenticatedStaff } from '../../common/types/request';
 import {
   CreateWarehouseDto,
   ListWarehousesQueryDto,
+  SetBinTrackingDto,
   UpdateWarehouseDto,
 } from './dto/warehouse.dto';
 import { CreateZoneDto, UpdateZoneDto } from './dto/zone.dto';
@@ -81,6 +82,20 @@ export class AdminWarehouseController {
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<WarehouseView> {
     return this.svc.updateWarehouse(staff.id, id, body, ctx);
+  }
+
+  @Patch(':id/bin-tracking')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Turn location tracking on/off for this warehouse (moves no stock)',
+  })
+  setBinTracking(
+    @Param('id', uuid()) id: string,
+    @Body() body: SetBinTrackingDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<WarehouseView> {
+    return this.svc.setBinTracking(staff.id, id, body.enabled, ctx);
   }
 
   // -------- zones --------

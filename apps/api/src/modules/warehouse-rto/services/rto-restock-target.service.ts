@@ -9,7 +9,16 @@ export interface RestockTarget {
   readonly crossWarehouse: boolean;
 }
 
-/** Bin types that may hold returned goods, in preference order. */
+/**
+ * Where a return lands, in preference order.
+ *
+ * RTO_HOLD FIRST, deliberately: a return is received, not yet sellable.
+ * It sits in hold until someone inspects it and shelves it (return
+ * putaway), which is what stops an untriaged return being promised to
+ * the next customer. That gate only means anything because availability
+ * (INV-3) excludes non-pickable bins — before that it counted hold
+ * stock as sellable and the order shortfalled at pick time instead.
+ */
 const TARGET_BIN_TYPES: readonly BinType[] = [BinType.RTO_HOLD, BinType.STORAGE];
 
 /**
@@ -61,11 +70,23 @@ export class RtoRestockTargetService {
       readonly staffId: string;
     },
   ): Promise<RestockTarget> {
-    // Same warehouse: the original bin+batch are still correct.
+    // Same warehouse: the BATCH is still correct — the goods are the
+    // same goods, with the same expiry and the same freight lineage.
+    //
+    // The BIN is not. At finalize the carton is on the returns bench,
+    // not back on the shelf it was picked from; nobody has carried it
+    // there. Booking it into the picked bin claims a putaway that never
+    // happened, and — because that bin IS pickable — offers the unit to
+    // the next customer before anyone has physically shelved it.
+    //
+    // So it lands in hold, exactly like a cross-warehouse return, and
+    // `RtoPutawayService` is what moves it to a shelf. A warehouse with
+    // no hold bin falls through to STORAGE and behaves as it always did.
     if (input.receivedWarehouseId === input.originWarehouseId) {
+      const holdBinId = await this.findBinByTypes(tx, input.originWarehouseId, [BinType.RTO_HOLD]);
       return {
         warehouseId: input.originWarehouseId,
-        binId: input.pickedBinId,
+        binId: holdBinId ?? input.pickedBinId,
         batchId: input.pickedBatchId,
         crossWarehouse: false,
       };
@@ -83,8 +104,13 @@ export class RtoRestockTargetService {
 
   // ── internal ──────────────────────────────────────────────────────
 
-  private async resolveBin(tx: Prisma.TransactionClient, warehouseId: string): Promise<string> {
-    for (const type of TARGET_BIN_TYPES) {
+  /** First live bin of any of the given types, lowest code wins. */
+  private async findBinByTypes(
+    tx: Prisma.TransactionClient,
+    warehouseId: string,
+    types: readonly BinType[],
+  ): Promise<string | null> {
+    for (const type of types) {
       const bin = await tx.warehouseBin.findFirst({
         where: { warehouseId, type, deletedAt: null },
         orderBy: { code: 'asc' },
@@ -92,6 +118,12 @@ export class RtoRestockTargetService {
       });
       if (bin) return bin.id;
     }
+    return null;
+  }
+
+  private async resolveBin(tx: Prisma.TransactionClient, warehouseId: string): Promise<string> {
+    const found = await this.findBinByTypes(tx, warehouseId, TARGET_BIN_TYPES);
+    if (found) return found;
     throw new ConflictException({
       code: 'RTO_RESTOCK_NO_TARGET_BIN',
       message:

@@ -1,5 +1,7 @@
 import { GoodsReceiptStatus, VariantStatus } from '@skydrop/db';
 import type { InventoryMode } from '@skydrop/db';
+import { BadRequestException } from '@nestjs/common';
+import type { BinPolicyService } from '../../src/modules/inventory-shared/bin-policy.service';
 import { GoodsReceiptService } from '../../src/modules/inventory-receipt/services/goods-receipt.service';
 import { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
@@ -130,6 +132,21 @@ function makeSut(receipt: ReturnType<typeof makeReceipt>) {
     serialPrefixFor: jest.fn(async () => 'SDU'),
   } as unknown as InventoryModeService;
 
+  const binPolicy = {
+    // Faithful to the real service: with tracking ON the agent's choice
+    // is required and honoured. The OFF path has its own suite
+    // (bin-policy.service.spec.ts) — it needs a real warehouse row.
+    resolvePutawayBin: async (_warehouseId: string, requested?: string | null) => {
+      if (!requested) {
+        throw new BadRequestException({
+          code: 'BIN_REQUIRED',
+          message: 'This warehouse tracks locations — choose the bin',
+        });
+      }
+      return { binId: requested, trackingEnabled: true };
+    },
+  } as unknown as BinPolicyService;
+
   const svc = new GoodsReceiptService(
     prisma,
     audit,
@@ -139,6 +156,7 @@ function makeSut(receipt: ReturnType<typeof makeReceipt>) {
     units,
     modes,
     alerts,
+    binPolicy,
     cache,
     email,
     env,

@@ -77,8 +77,35 @@ const INPUT = {
 };
 
 describe('RtoRestockTargetService.resolve — same warehouse', () => {
-  it('returns the picked bin/batch untouched and creates nothing', async () => {
+  it('lands in RTO_HOLD, not the picked bin, keeping the picked batch', async () => {
+    // At finalize the carton is on the returns bench, not back on the
+    // shelf it was picked from — nobody carried it there. Booking it
+    // into the picked bin would claim a putaway that never happened
+    // AND, because that bin is pickable, offer the unit to the next
+    // customer before anyone had physically shelved it.
+    //
+    // The BATCH is untouched: same goods, same expiry, same freight
+    // lineage. Only the location is in question.
     const sut = makeSut();
+    const t = await sut.svc.resolve(sut.tx, {
+      ...INPUT,
+      receivedWarehouseId: ORIGIN,
+    });
+    expect(t).toEqual({
+      warehouseId: ORIGIN,
+      binId: 'bin-rto',
+      batchId: PICKED_BATCH,
+      crossWarehouse: false,
+    });
+    // Still no child batch — that is the cross-warehouse concern.
+    expect(sut.batchCreate).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the picked bin when the warehouse has no hold bin', async () => {
+    // A warehouse that never set up a returns area behaves exactly as
+    // it did before: the goods go back where they came from. Refusing
+    // instead would strand a return over a setup step.
+    const sut = makeSut({ bins: [] });
     const t = await sut.svc.resolve(sut.tx, {
       ...INPUT,
       receivedWarehouseId: ORIGIN,
@@ -89,8 +116,6 @@ describe('RtoRestockTargetService.resolve — same warehouse', () => {
       batchId: PICKED_BATCH,
       crossWarehouse: false,
     });
-    expect(sut.batchCreate).not.toHaveBeenCalled();
-    expect(sut.binFindFirst).not.toHaveBeenCalled();
   });
 });
 

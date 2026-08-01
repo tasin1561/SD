@@ -86,6 +86,7 @@ model StaffUser {
   courierSettlementsRecorded CourierSettlement[]           @relation("CourierSettlementRecordedBy")
   stockUnitsScanned          StockUnit[]                   @relation("StockUnitLastScanBy")
   inboundFreightSettled      InboundFreightCharge[]        @relation("InboundFreightSettledBy")
+  binLayoutSnapshotsTaken    BinLayoutSnapshot[]           @relation("BinSnapshotTakenBy")
 
   @@index([role])
   @@index([deletedAt])
@@ -438,18 +439,25 @@ model Address {
 }
 
 model Warehouse {
-  id          String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  code        String          @unique
-  name        String
-  status      WarehouseStatus @default(ACTIVE)
-  countryCode String          @default("IN") @map("country_code") @db.Char(2)
-  timezone    String          @default("Asia/Kolkata")
-  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt   DateTime?       @map("deleted_at") @db.Timestamptz
+  id                 String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  code               String          @unique
+  name               String
+  status             WarehouseStatus @default(ACTIVE)
+  countryCode        String          @default("IN") @map("country_code") @db.Char(2)
+  timezone           String          @default("Asia/Kolkata")
+  /// Does this building track WHERE stock sits? Per-warehouse on purpose:
+  /// a mature site can run binned while a newly-opened one does not.
+  /// OFF means every putaway resolves to the warehouse's FLOOR bin —
+  /// `stock_levels.bin_id` is NOT NULL, so "no bin" is not representable
+  /// and the off state is one real bin rather than a null.
+  binTrackingEnabled Boolean         @default(false) @map("bin_tracking_enabled")
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt          DateTime?       @map("deleted_at") @db.Timestamptz
 
   zones                  WarehouseZone[]
   bins                   WarehouseBin[]
+  binLayoutSnapshots     BinLayoutSnapshot[]
   stockBatches           StockBatch[]
   stockLevels            StockLevel[]
   stockMovements         StockMovement[]
@@ -468,6 +476,60 @@ model Warehouse {
 
   @@index([status])
   @@map("warehouses")
+}
+
+/// A point-in-time record of where every unit sat in one warehouse.
+///
+/// Taken BEFORE a collapse-to-FLOOR, which is destructive: it merges
+/// every bin's contents into one and the original placement is not
+/// otherwise recoverable. Snapshot-first is the same visible-vs-silent
+/// ordering the rest of the codebase uses — a crash mid-collapse leaves
+/// a usable backup rather than a half-collapsed warehouse with no record
+/// of what it was.
+///
+/// Also answers "what was where on 12 August" on its own.
+model BinLayoutSnapshot {
+  id             String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  warehouseId    String    @map("warehouse_id") @db.Uuid
+  reason         String    @db.Text
+  takenByStaffId String    @map("taken_by_staff_id") @db.Uuid
+  /// Set when this snapshot was restored FROM. A restore is best-effort
+  /// per line (stock sells and moves in the meantime), so this records
+  /// that it was attempted, not that it was total.
+  restoredAt     DateTime? @map("restored_at") @db.Timestamptz
+  lineCount      Int       @default(0) @map("line_count")
+  totalQty       Int       @default(0) @map("total_qty")
+  /// Swept by the retention cron — `ops.bin_snapshot_retention_months`.
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  warehouse Warehouse               @relation(fields: [warehouseId], references: [id])
+  takenBy   StaffUser               @relation("BinSnapshotTakenBy", fields: [takenByStaffId], references: [id])
+  lines     BinLayoutSnapshotLine[]
+
+  @@index([warehouseId, createdAt])
+  @@index([expiresAt])
+  @@map("bin_layout_snapshots")
+}
+
+/// One (seller, variant, bin, batch, qty) row as it stood. Bare scalar
+/// UUIDs, not relations: a snapshot is a historical fact and must
+/// survive a bin being deleted after the collapse that emptied it.
+model BinLayoutSnapshotLine {
+  id         String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  snapshotId String   @map("snapshot_id") @db.Uuid
+  sellerId   String   @map("seller_id") @db.Uuid
+  variantId  String   @map("variant_id") @db.Uuid
+  binId      String   @map("bin_id") @db.Uuid
+  binCode    String   @map("bin_code")
+  batchId    String   @map("batch_id") @db.Uuid
+  qtyOnHand  Int      @map("qty_on_hand")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  snapshot BinLayoutSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@index([snapshotId])
+  @@map("bin_layout_snapshot_lines")
 }
 
 model WarehouseZone {
@@ -496,7 +558,12 @@ model WarehouseBin {
   warehouseId  String    @map("warehouse_id") @db.Uuid
   zoneId       String    @map("zone_id") @db.Uuid
   code         String
+  /// Grid coordinates. `code` is composed from these deterministically
+  /// (A + 01 + 03 -> "A-01-03") so the same shelf can never be entered
+  /// two ways. FLOOR — the bin used when tracking is off — is the one
+  /// bin with no coordinates.
   aisle        String?
+  rack         String?
   shelf        String?
   type         BinType
   maxWeightKg  Decimal?  @map("max_weight_kg") @db.Decimal(10, 2)
@@ -1190,6 +1257,13 @@ model GoodsReceiptLine {
   manufacturedAt DateTime? @map("manufactured_at") @db.Timestamptz
   expiresAt      DateTime? @map("expires_at") @db.Timestamptz
   putawayBinId   String?   @map("putaway_bin_id") @db.Uuid
+  /// Where the agent SAYS they put it, recorded while bin tracking is
+  /// off. Deliberately NOT on `stock_levels`: with tracking off the
+  /// stock genuinely is in FLOOR, and writing a location into the stock
+  /// record would claim knowledge the system does not have. This is a
+  /// note taken on arrival — a head start when tracking is switched on,
+  /// never an authority, because stock sells and gets shuffled after.
+  notedLocation  String?   @map("noted_location")
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 

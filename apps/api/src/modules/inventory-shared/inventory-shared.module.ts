@@ -9,6 +9,7 @@ import { StockCacheService } from './stock-cache.service';
 import { StockAlertService } from './stock-alert.service';
 import { InventoryModeService } from './inventory-mode.service';
 import { StockUnitService } from './stock-unit.service';
+import { BinPolicyService } from './bin-policy.service';
 
 /**
  * Shared inventory primitives consumed by every inventory-* module.
@@ -32,6 +33,11 @@ import { StockUnitService } from './stock-unit.service';
  *  - InventoryModeService   — R4: resolves a SKU's NORMAL/STRICT mode
  *    (variant column → seller setting → seeded default; fails OPEN to
  *    NORMAL so a settings outage can never stop the pick floor).
+ *  - BinPolicyService       — the ONE reader of
+ *    warehouses.bin_tracking_enabled, and the shared owner of which bin
+ *    types a picker can reach. Availability (INV-3) and pick allocation
+ *    MUST agree on that list; when they did not, stock in RTO_HOLD
+ *    counted as sellable and then shortfalled at pick time.
  *  - StockUnitService       — R4: the sole writer of stock_units /
  *    stock_unit_events. WRAPS the aggregate layer inside the caller's tx;
  *    stock_levels.qtyOnHand stays authoritative (INV-1/INV-3 untouched).
@@ -50,6 +56,7 @@ import { StockUnitService } from './stock-unit.service';
     StockAlertService,
     InventoryModeService,
     StockUnitService,
+    BinPolicyService,
   ],
   exports: [
     WarehouseResolverService,
@@ -59,6 +66,7 @@ import { StockUnitService } from './stock-unit.service';
     StockAlertService,
     InventoryModeService,
     StockUnitService,
+    BinPolicyService,
   ],
 })
 export class InventorySharedModule {}

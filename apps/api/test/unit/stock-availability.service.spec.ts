@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { StockAvailabilityService } from '../../src/modules/inventory-shared/stock-availability.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 
@@ -52,6 +54,10 @@ describe('StockAvailabilityService.compute (INV-3 scalar)', () => {
       sellerId: 's1',
       variantId: 'v1',
       warehouseId: 'w1',
+      // INV-3 counts only what a picker could reach. This predicate must
+      // stay identical to StockPickAllocationService's; both derive from
+      // NON_PICKABLE_BIN_TYPES so they cannot drift apart again.
+      bin: { type: { notIn: ['RTO_HOLD', 'DAMAGED', 'QUARANTINE'] }, deletedAt: null },
     });
     expect(resvAgg.mock.calls[0]?.[0].where).toEqual({
       sellerId: 's1',
@@ -117,5 +123,39 @@ describe('StockAvailabilityService.computeBulk', () => {
     expect(map.size).toBe(0);
     expect(levelGroup).not.toHaveBeenCalled();
     expect(resvGroup).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The regression guard for the bug this filter fixed.
+ *
+ * Availability and pick allocation each decide which bins count. When
+ * they disagreed, a return restocked into RTO_HOLD raised qtyOnHand,
+ * availability counted it as sellable, an order confirmed and reserved
+ * against it, and pick allocation then refused to touch the bin —
+ * shortfall, and WMS-4 routed the order to PENDING_MANUAL_PLACEMENT. The
+ * order did not fail where it was placed; it failed on the floor.
+ *
+ * A behavioural test cannot catch the drift (both versions are
+ * internally consistent), so this asserts the two sites read the SAME
+ * constant.
+ */
+describe('INV-3 / pick allocation predicate agreement', () => {
+  it('the non-pickable list is shared, not copied', async () => {
+    const { NON_PICKABLE_BIN_TYPES } =
+      await import('../../src/modules/inventory-shared/bin-policy.service');
+    const allocatorSource = readFileSync(
+      join(
+        __dirname,
+        '../../src/modules/inventory-stock/services/stock-pick-allocation.service.ts',
+      ),
+      'utf8',
+    );
+    // Imported from bin-policy, never re-listed locally.
+    expect(allocatorSource).toContain(
+      "import { NON_PICKABLE_BIN_TYPES as SHARED_NON_PICKABLE_BIN_TYPES } from '../../inventory-shared/bin-policy.service'",
+    );
+    expect(allocatorSource).not.toMatch(/const NON_PICKABLE_BIN_TYPES[^=]*=\s*\[\s*BinType\./);
+    expect([...NON_PICKABLE_BIN_TYPES]).toEqual(['RTO_HOLD', 'DAMAGED', 'QUARANTINE']);
   });
 });

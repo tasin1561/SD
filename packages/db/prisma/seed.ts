@@ -312,6 +312,15 @@ const systemSettings: SystemSettingSeed[] = [
       'A shipment whose pick has been in progress longer than this is auto-reverted to re-pickable by the BullMQ pick-expiration worker (WMS-5)',
   },
   {
+    key: 'ops.bin_snapshot_retention_months',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 3,
+    displayName: 'Bin Layout Snapshot Retention (months)',
+    description:
+      'How long a pre-collapse bin layout backup is kept before the retention sweep deletes it. A collapse merges every bin into FLOOR and is not otherwise recoverable, so this is the window in which a restore is still possible.',
+  },
+  {
     key: 'ops.pick_allocation_retry_max',
     category: 'ops',
     valueType: SettingValueType.INT,

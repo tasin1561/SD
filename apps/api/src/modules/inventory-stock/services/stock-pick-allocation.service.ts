@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { NON_PICKABLE_BIN_TYPES as SHARED_NON_PICKABLE_BIN_TYPES } from '../../inventory-shared/bin-policy.service';
 import { ActorType, BatchStatus, BinType, ReservationStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -14,8 +15,16 @@ class RetryablePickConflictError extends Error {
 
 const MAX_POPULATE_ATTEMPTS = 3;
 
-/** Bins whose stock is NOT pickable for customer orders. */
-const NON_PICKABLE_BIN_TYPES: BinType[] = [BinType.RTO_HOLD, BinType.DAMAGED, BinType.QUARANTINE];
+/**
+ * Bins whose stock is NOT pickable for customer orders.
+ *
+ * Imported, not redeclared: `StockAvailabilityService` filters INV-3 on
+ * this same list, and the two MUST agree. A local copy is how they came
+ * to disagree in the first place — availability counted RTO_HOLD stock
+ * that this allocator would then refuse to pick, so the order confirmed
+ * and shortfalled on the floor.
+ */
+const NON_PICKABLE_BIN_TYPES: BinType[] = [...SHARED_NON_PICKABLE_BIN_TYPES];
 
 export interface AllocationPick {
   binId: string;

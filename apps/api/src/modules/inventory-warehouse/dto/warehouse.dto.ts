@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { WarehouseStatus } from '@skydrop/db';
 import {
+  IsBoolean,
   IsEnum,
   IsOptional,
   IsString,
@@ -74,4 +75,13 @@ export class ListWarehousesQueryDto {
   @IsOptional()
   @IsEnum(WarehouseStatus)
   status?: WarehouseStatus;
+}
+
+export class SetBinTrackingDto {
+  @ApiProperty({
+    description:
+      'Turn location tracking on or off for this warehouse. Off routes every putaway to the FLOOR bin; on requires at least one real bin to exist. Moves no stock either way.',
+  })
+  @IsBoolean()
+  enabled!: boolean;
 }

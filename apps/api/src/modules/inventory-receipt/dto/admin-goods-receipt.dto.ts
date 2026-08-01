@@ -10,8 +10,10 @@ import {
   IsNumber,
   IsObject,
   IsOptional,
+  IsString,
   IsUUID,
   Max,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -73,10 +75,25 @@ export class RecordReceiptLineDto {
   @Max(1_000_000)
   damagedQty?: number;
 
-  @ApiProperty({ required: false, description: 'Putaway bin (required when receivedQty > 0)' })
+  @ApiProperty({
+    required: false,
+    description:
+      'Putaway bin. Required when this warehouse tracks locations; ignored entirely when it does not.',
+  })
   @IsOptional()
   @IsUUID('7')
   putawayBinId?: string;
+
+  @ApiProperty({
+    required: false,
+    maxLength: 64,
+    description:
+      'Optional free note of where the goods were physically put, recorded while the warehouse is NOT tracking locations. A head start when tracking is switched on — never an authority, since stock sells and moves afterwards.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  notedLocation?: string;
 
   @ApiProperty({
     required: false,

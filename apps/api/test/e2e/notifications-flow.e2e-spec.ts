@@ -117,7 +117,7 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
     const bin = await request(h.baseUrl)
       .post(`/admin/warehouses/${warehouseId}/bins`)
       .set(staffAuth)
-      .send({ zoneId: zone.body.id, code: 'A-1-1', type: 'STORAGE' })
+      .send({ zoneId: zone.body.id, aisle: 'A', rack: '1', shelf: '1', type: 'STORAGE' })
       .expect(201);
     binId = bin.body.id as string;
 

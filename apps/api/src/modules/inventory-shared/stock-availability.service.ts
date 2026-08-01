@@ -1,6 +1,27 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@skydrop/db';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import { NON_PICKABLE_BIN_TYPES } from './bin-policy.service';
+
+/**
+ * Availability counts only stock a picker could actually reach.
+ *
+ * This predicate MUST stay identical to the one
+ * `StockPickAllocationService` applies when it hunts for a bin. They are
+ * both expressed from `NON_PICKABLE_BIN_TYPES` for that reason.
+ *
+ * When they disagreed, the failure was quiet and expensive: a return
+ * restocked into RTO_HOLD raised `qtyOnHand`, availability counted it,
+ * the seller saw sellable stock, an order confirmed and reserved against
+ * it — and then pick allocation refused to touch the bin, shortfalled,
+ * and WMS-4 fail-routed the order to PENDING_MANUAL_PLACEMENT. The order
+ * did not fail where it was placed; it failed on the warehouse floor.
+ */
+function pickableLevelFilter(): Prisma.StockLevelWhereInput {
+  // A fresh object each call: Prisma's generated `notIn` wants a mutable
+  // array, so a shared `as const` literal cannot be spread into a where.
+  return { bin: { type: { notIn: [...NON_PICKABLE_BIN_TYPES] }, deletedAt: null } };
+}
 
 export interface ComputeAvailabilityInput {
   sellerId: string;
@@ -22,10 +43,15 @@ export interface ComputeBulkAvailabilityInput {
  * INV-3 availability primitive — the single sanctioned place that turns
  * raw stock rows into the COMPUTED `qtyAvailable` scalar:
  *
- *   qtyAvailable = SUM(stock_levels.qtyOnHand)
+ *   qtyAvailable = SUM(stock_levels.qtyOnHand WHERE bin is pickable)
  *                − SUM(stock_reservations.qtyReserved WHERE status=ACTIVE)
  *
- * over one (seller, variant, warehouse). ACTIVE reservations count
+ * over one (seller, variant, warehouse). The bin-type filter is the part
+ * that keeps this honest — see pickableLevelFilter above. Goods in a
+ * hold, damaged or quarantine bin are on hand but not for sale, and
+ * saying otherwise promises a customer something no picker can fetch.
+ *
+ * ACTIVE reservations count
  * uniformly (phase-1 floating + phase-2 allocated). No cache, no writes,
  * no side effects — a pure read. Lives in inventory-shared so any
  * inventory-* module (and the cross-module read/reservation/alert paths)
@@ -52,7 +78,7 @@ export class StockAvailabilityService {
     const { sellerId, variantId, warehouseId } = input;
     const [onHand, reserved] = await Promise.all([
       db.stockLevel.aggregate({
-        where: { sellerId, variantId, warehouseId },
+        where: { sellerId, variantId, warehouseId, ...pickableLevelFilter() },
         _sum: { qtyOnHand: true },
       }),
       db.stockReservation.aggregate({
@@ -80,7 +106,12 @@ export class StockAvailabilityService {
     const [levels, reservations] = await Promise.all([
       db.stockLevel.groupBy({
         by: ['variantId'],
-        where: { sellerId, warehouseId, variantId: { in: variantIds } },
+        where: {
+          sellerId,
+          warehouseId,
+          variantId: { in: variantIds },
+          ...pickableLevelFilter(),
+        },
         _sum: { qtyOnHand: true },
       }),
       db.stockReservation.groupBy({

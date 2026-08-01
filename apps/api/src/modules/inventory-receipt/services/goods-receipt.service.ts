@@ -22,6 +22,7 @@ import { StockMutationService } from '../../inventory-shared/stock-mutation.serv
 import { StockUnitService } from '../../inventory-shared/stock-unit.service';
 import { InventoryModeService } from '../../inventory-shared/inventory-mode.service';
 import { StockAlertService } from '../../inventory-shared/stock-alert.service';
+import { BinPolicyService } from '../../inventory-shared/bin-policy.service';
 import { StockCacheService } from '../../inventory-shared/stock-cache.service';
 import { EmailQueue } from '../../email/queue/email.queue';
 import { EnvService } from '../../../config/env.service';
@@ -95,6 +96,7 @@ export class GoodsReceiptService {
     private readonly units: StockUnitService,
     private readonly modes: InventoryModeService,
     private readonly alerts: StockAlertService,
+    private readonly binPolicy: BinPolicyService,
     private readonly cache: StockCacheService,
     private readonly email: EmailQueue,
     private readonly env: EnvService,
@@ -327,6 +329,7 @@ export class GoodsReceiptService {
       receivedQty: number;
       damagedQty?: number;
       putawayBinId?: string;
+      notedLocation?: string;
       manufacturedAt?: string;
       expiresAt?: string;
       unitCostInr?: number;
@@ -337,6 +340,7 @@ export class GoodsReceiptService {
     this.assertStatus(receipt.status, [GoodsReceiptStatus.ARRIVING], 'record lines for');
 
     const lineIds = new Set(receipt.lines.map((l) => l.id));
+    const resolvedBins = new Map<string, string>();
     for (const l of lines) {
       if (!lineIds.has(l.lineId)) {
         throw new BadRequestException({
@@ -344,14 +348,20 @@ export class GoodsReceiptService {
           message: `Line ${l.lineId} is not part of this receipt`,
         });
       }
-      if (l.receivedQty > 0 && !l.putawayBinId) {
-        throw new BadRequestException({
-          code: 'PUTAWAY_BIN_REQUIRED',
-          message: `Line ${l.lineId} received ${l.receivedQty} units but has no putaway bin`,
-        });
-      }
+      // BinPolicyService is the ONE reader of the tracking flag. When
+      // the warehouse is not tracking locations the agent's choice is
+      // ignored entirely rather than defaulted — honouring it would
+      // silently bin half a building nobody decided to bin.
+      const resolved = await this.binPolicy.resolvePutawayBin(
+        receipt.warehouseId,
+        l.putawayBinId,
+        undefined,
+      );
+      resolvedBins.set(l.lineId, resolved.binId);
+      // Validate whenever a real choice was made — in either mode. The
+      // FLOOR fallback is ours and needs no checking.
       if (l.putawayBinId) {
-        await this.assertPutawayBin(receipt.warehouseId, l.putawayBinId);
+        await this.assertPutawayBin(receipt.warehouseId, resolved.binId);
       }
     }
 
@@ -362,7 +372,8 @@ export class GoodsReceiptService {
           data: {
             receivedQty: l.receivedQty,
             damagedQty: l.damagedQty ?? 0,
-            putawayBinId: l.putawayBinId ?? null,
+            putawayBinId: resolvedBins.get(l.lineId) ?? null,
+            ...(l.notedLocation !== undefined ? { notedLocation: l.notedLocation || null } : {}),
             ...(l.manufacturedAt !== undefined
               ? { manufacturedAt: l.manufacturedAt ? new Date(l.manufacturedAt) : null }
               : {}),
@@ -471,6 +482,7 @@ export class GoodsReceiptService {
         receivedQty: number;
         damagedQty?: number;
         putawayBinId?: string;
+        notedLocation?: string;
         manufacturedAt?: string;
         expiresAt?: string;
         unitCostInr?: number;
@@ -503,6 +515,7 @@ export class GoodsReceiptService {
       });
     }
     const lineIds = new Set(receipt.lines.map((l) => l.id));
+    const resolvedBins = new Map<string, string>();
     for (const l of correctionLines) {
       if (!lineIds.has(l.lineId)) {
         throw new BadRequestException({
@@ -510,13 +523,17 @@ export class GoodsReceiptService {
           message: `Line ${l.lineId} is not part of this receipt`,
         });
       }
-      if (l.receivedQty > 0 && !l.putawayBinId) {
-        throw new BadRequestException({
-          code: 'PUTAWAY_BIN_REQUIRED',
-          message: `Line ${l.lineId} received ${l.receivedQty} units but has no putaway bin`,
-        });
+      const resolved = await this.binPolicy.resolvePutawayBin(
+        receipt.warehouseId,
+        l.putawayBinId,
+        undefined,
+      );
+      resolvedBins.set(l.lineId, resolved.binId);
+      // Validate whenever a real choice was made — in either mode. The
+      // FLOOR fallback is ours and needs no checking.
+      if (l.putawayBinId) {
+        await this.assertPutawayBin(receipt.warehouseId, resolved.binId);
       }
-      if (l.putawayBinId) await this.assertPutawayBin(receipt.warehouseId, l.putawayBinId);
     }
     await this.prisma.client.$transaction(async (tx) => {
       for (const l of correctionLines) {
@@ -525,7 +542,8 @@ export class GoodsReceiptService {
           data: {
             receivedQty: l.receivedQty,
             damagedQty: l.damagedQty ?? 0,
-            putawayBinId: l.putawayBinId ?? null,
+            putawayBinId: resolvedBins.get(l.lineId) ?? null,
+            ...(l.notedLocation !== undefined ? { notedLocation: l.notedLocation || null } : {}),
             ...(l.manufacturedAt !== undefined
               ? { manufacturedAt: l.manufacturedAt ? new Date(l.manufacturedAt) : null }
               : {}),
