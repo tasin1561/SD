@@ -7,6 +7,7 @@ import {
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
 import { StockAvailabilityService } from '../../inventory-shared/stock-availability.service';
 
 const RESERVATION_TTL_SETTING_KEY = 'ops.stock_reservation_ttl_hours';
@@ -139,6 +140,7 @@ export class StockReservationService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
     private readonly availability: StockAvailabilityService,
+    private readonly settings: SettingsResolverService,
   ) {}
 
   /** PHASE-1: soft qty claim, NULL bin/batch. Module 6 calls this at
@@ -221,21 +223,27 @@ export class StockReservationService {
   }
 
   /**
-   * Effective reservation TTL: seller.reservationTtlHoursOverride wins,
-   * else ops.stock_reservation_ttl_hours, else a hard fallback.
+   * Effective reservation TTL: seller_setting_overrides wins, then the
+   * grandfathered `seller.reservationTtlHoursOverride` column, then
+   * ops.stock_reservation_ttl_hours, then a hard fallback.
+   *
+   * The first term is new. A per-seller TTL existed only as that legacy
+   * column, and nothing — no endpoint, no DTO, no screen — could write
+   * it, so the capability was reachable by direct SQL and no other way.
+   * The key is now `sellerOverridable`, which puts it in the per-seller
+   * settings UI alongside every other one.
    */
   async resolveTtlHours(sellerId: string): Promise<number> {
-    const [seller, setting] = await Promise.all([
-      this.prisma.client.seller.findUnique({
-        where: { id: sellerId },
-        select: { reservationTtlHoursOverride: true },
-      }),
-      this.prisma.client.systemSetting.findUnique({
-        where: { key: RESERVATION_TTL_SETTING_KEY },
-        select: { valueInt: true },
-      }),
-    ]);
-    return seller?.reservationTtlHoursOverride ?? setting?.valueInt ?? DEFAULT_TTL_HOURS;
+    const seller = await this.prisma.client.seller.findUnique({
+      where: { id: sellerId },
+      select: { reservationTtlHoursOverride: true },
+    });
+    return this.settings.resolveIntWithLegacy(
+      sellerId,
+      RESERVATION_TTL_SETTING_KEY,
+      seller?.reservationTtlHoursOverride,
+      DEFAULT_TTL_HOURS,
+    );
   }
 
   /**

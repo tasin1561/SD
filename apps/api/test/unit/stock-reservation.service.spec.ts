@@ -6,6 +6,7 @@ import {
 import { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { StockAvailabilityService } from '../../src/modules/inventory-shared/stock-availability.service';
+import type { SettingsResolverService } from '../../src/modules/settings/services/settings-resolver.service';
 
 const NOW = new Date('2026-05-16T12:00:00.000Z');
 
@@ -67,7 +68,15 @@ function makeSut(
     compute: jest.fn(async () => opts.available ?? 0),
   } as unknown as StockAvailabilityService;
 
-  const svc = new StockReservationService(prisma, audit, availability);
+  // The precedence itself (override > legacy column > global) is pinned
+  // in settings-resolver.service.spec.ts; here it just has to answer.
+  const settings = {
+    resolveIntWithLegacy: jest.fn(
+      async (_s: string, _k: string, legacy: number | null | undefined, fallback: number) =>
+        legacy ?? fallback,
+    ),
+  } as unknown as SettingsResolverService;
+  const svc = new StockReservationService(prisma, audit, availability, settings);
   return { svc, created, updated, levelUpdates, findManyCalls, client };
 }
 

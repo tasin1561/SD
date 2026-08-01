@@ -198,7 +198,11 @@ const systemSettings: SystemSettingSeed[] = [
     valueType: SettingValueType.INT,
     valueInt: 48,
     displayName: 'Stock Reservation TTL (hours)',
-    description: 'Auto-release reservations after N hours',
+    description:
+      'Auto-release reservations after N hours. Per-seller override via seller_setting_overrides (the grandfathered sellers.reservation_ttl_hours_override column still wins over the global default, but the override row wins over both).',
+    sellerOverridable: true,
+    overrideMinInt: 1,
+    overrideMaxInt: 8760,
   },
   {
     key: 'ops.stock_adjustment_approval_threshold_inr',

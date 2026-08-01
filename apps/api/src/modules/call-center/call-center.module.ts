@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { SettingsModule } from '../settings/settings.module';
 import { OrderModule } from '../order/order.module';
 import { CallQueueModule } from '../call-queue/call-queue.module';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
@@ -36,7 +37,7 @@ import { EarlyReservationModule } from '../early-reservation/early-reservation.m
  * only for intra-module use by later call-center services.
  */
 @Module({
-  imports: [OrderModule, CallQueueModule, EarlyReservationModule],
+  imports: [OrderModule, CallQueueModule, EarlyReservationModule, SettingsModule],
   controllers: [
     AgentSettingsController,
     AgentCallController,

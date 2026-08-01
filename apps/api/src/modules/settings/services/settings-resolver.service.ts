@@ -358,6 +358,46 @@ export class SettingsResolverService {
     };
   }
 
+  /**
+   * An INT setting for one seller, where a GRANDFATHERED column on
+   * `sellers` also carries a per-seller value.
+   *
+   * Precedence, and the order matters:
+   *   1. `seller_setting_overrides` — what the admin UI writes. A value
+   *      set here is the most recent deliberate decision, so it wins.
+   *   2. The legacy column, for sellers configured before the generic
+   *      mechanism existed.
+   *   3. The global default.
+   *
+   * This exists because the two legacy columns
+   * (`callMaxAttemptsBeforeNdrOverride`, `reservationTtlHoursOverride`)
+   * are read directly by their consumers, which meant a key could be
+   * marked `sellerOverridable` — and therefore appear in the per-seller
+   * settings UI — while the code that acts on it never looked at
+   * `seller_setting_overrides` at all. An admin would set the value,
+   * see it saved, and nothing would change. Owning the precedence here
+   * means the two remaining legacy sites cannot disagree about it.
+   *
+   * When the legacy columns are eventually backfilled and dropped, this
+   * method collapses to `resolve()` and the callers stop passing a
+   * legacy value.
+   */
+  async resolveIntWithLegacy(
+    sellerId: string,
+    key: string,
+    legacyValue: number | null | undefined,
+    fallback: number,
+  ): Promise<number> {
+    const resolved = await this.resolve(sellerId, key);
+    if (resolved.source === 'SELLER_OVERRIDE') {
+      const n = Number(resolved.value);
+      if (Number.isFinite(n)) return n;
+    }
+    if (legacyValue !== null && legacyValue !== undefined) return legacyValue;
+    const n = Number(resolved.value);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
   private jsonSafe(value: unknown): Prisma.InputJsonValue | null {
     if (value === null || value === undefined) return null;
     if (value instanceof Date) return value.toISOString();

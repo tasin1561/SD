@@ -1,4 +1,5 @@
 import { CallOutcome, CallQueueStatus, OrderStatus, QueueClosureReason } from '@skydrop/db';
+import type { SettingsResolverService } from '../../src/modules/settings/services/settings-resolver.service';
 import { CallAttemptService } from '../../src/modules/call-center/services/call-attempt.service';
 import { CallOutcomeMappingService } from '../../src/modules/call-center/services/call-outcome-mapping.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
@@ -125,6 +126,15 @@ function makeService(
   );
   const earlyReservations = { handleNdrCap, resolveNdrPolicy };
 
+  // The precedence itself (override > legacy column > global) is pinned
+  // in settings-resolver.service.spec.ts; here it just has to answer.
+  const settings = {
+    resolveIntWithLegacy: jest.fn(
+      async (_s: string, _k: string, legacy: number | null | undefined, fallback: number) =>
+        legacy ?? fallback,
+    ),
+  } as unknown as SettingsResolverService;
+
   const svc = new CallAttemptService(
     { client } as unknown as PrismaService,
     audit as unknown as AuditLogService,
@@ -133,6 +143,7 @@ function makeService(
     queue as unknown as CallQueueService,
     mapping,
     earlyReservations as unknown as EarlyReservationService,
+    settings,
   );
   return {
     svc,

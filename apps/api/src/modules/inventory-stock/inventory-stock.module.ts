@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { SettingsModule } from '../settings/settings.module';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { CatalogReadModule } from '../catalog-read/catalog-read.module';
 import { InventorySharedModule } from '../inventory-shared/inventory-shared.module';
@@ -25,7 +26,7 @@ import { ReservationWorker } from './queue/reservation.worker';
  * moved out.
  */
 @Module({
-  imports: [InventorySharedModule, CatalogReadModule],
+  imports: [InventorySharedModule, CatalogReadModule, SettingsModule],
   controllers: [SellerStockController, SellerThresholdController],
   providers: [
     StockReadService,

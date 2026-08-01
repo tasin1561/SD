@@ -20,6 +20,7 @@ import { OrderWriteService } from '../../order/services/order-write.service';
 import { CallQueueService } from '../../call-queue/services/call-queue.service';
 import { EarlyReservationService } from '../../early-reservation/services/early-reservation.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
+import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
 import {
   CallOutcomeMappingService,
   type RescheduleKind,
@@ -120,6 +121,7 @@ export class CallAttemptService {
     private readonly queue: CallQueueService,
     private readonly mapping: CallOutcomeMappingService,
     private readonly earlyReservations: EarlyReservationService,
+    private readonly settings: SettingsResolverService,
   ) {
     this.countingOutcomes = (Object.values(CallOutcome) as CallOutcome[]).filter((o) =>
       mapping.countsTowardCap(o),
@@ -530,20 +532,29 @@ export class CallAttemptService {
     }
   }
 
-  /** sellers.callMaxAttemptsBeforeNdrOverride ??
-   *  ops.call_max_attempts_before_ndr ?? hard default. */
+  /**
+   * seller_setting_overrides ?? sellers.callMaxAttemptsBeforeNdrOverride
+   * ?? ops.call_max_attempts_before_ndr ?? hard default.
+   *
+   * The first term used to be missing. The key is marked
+   * `sellerOverridable`, so it appeared in the per-seller settings UI and
+   * an admin could set it — and this method never looked at
+   * `seller_setting_overrides`, so the value saved, displayed, and did
+   * nothing. A seller configured for five call attempts kept getting
+   * three, and the only symptom was orders rejecting earlier than
+   * someone expected.
+   */
   private async effectiveMaxAttempts(sellerId: string): Promise<number> {
-    const [seller, setting] = await Promise.all([
-      this.prisma.client.seller.findUnique({
-        where: { id: sellerId },
-        select: { callMaxAttemptsBeforeNdrOverride: true },
-      }),
-      this.prisma.client.systemSetting.findUnique({
-        where: { key: SETTING_MAX_ATTEMPTS },
-        select: { valueInt: true },
-      }),
-    ]);
-    return seller?.callMaxAttemptsBeforeNdrOverride ?? setting?.valueInt ?? DEFAULT_MAX_ATTEMPTS;
+    const seller = await this.prisma.client.seller.findUnique({
+      where: { id: sellerId },
+      select: { callMaxAttemptsBeforeNdrOverride: true },
+    });
+    return this.settings.resolveIntWithLegacy(
+      sellerId,
+      SETTING_MAX_ATTEMPTS,
+      seller?.callMaxAttemptsBeforeNdrOverride,
+      DEFAULT_MAX_ATTEMPTS,
+    );
   }
 
   private async rescheduleBounds(): Promise<{
