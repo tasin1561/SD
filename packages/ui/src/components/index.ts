@@ -23,4 +23,6 @@ export * from './form';
 export * from './modal';
 export * from './page';
 export * from './status-badge';
+export * from './theme-init';
+export * from './theme-toggle';
 export * from './toast';

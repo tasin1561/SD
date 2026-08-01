@@ -52,7 +52,17 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        {/* `suppressHydrationWarning` on the SCRIPT, not just on <html>:
+            the browser STRIPS the nonce attribute from the DOM once CSP
+            has been applied (it stops a nonce being read back out via a
+            CSS attribute selector), so the server renders nonce="…" and
+            the client reads "". React flags that as a mismatch, and
+            suppression does not cascade from <html>. */}
+        <script
+          nonce={nonce}
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: themeInitScript }}
+        />
       </head>
       <body>{children}</body>
     </html>

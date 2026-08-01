@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
+import { themeInitScript } from '@skydrop/ui/components';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 
@@ -28,13 +30,36 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
-}): React.ReactElement {
+}): Promise<React.ReactElement> {
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    // `suppressHydrationWarning`: the init script below stamps
+    // `data-theme` on this element BEFORE hydration, so the server HTML
+    // and the client tree legitimately differ by that one attribute.
+    // React does not descend, so this does not mask mismatches in the
+    // app tree.
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${geistSans.variable} ${geistMono.variable}`}
+    >
+      <head>
+        {/* `suppressHydrationWarning` on the SCRIPT, not just on
+            <html>: the browser STRIPS the nonce attribute from the DOM
+            once CSP has been applied (it stops a nonce being read back
+            out via a CSS attribute selector), so the server renders
+            nonce="…" and the client reads "". React flags that as a
+            mismatch, and suppression does not cascade from <html>. */}
+        <script
+          nonce={nonce}
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: themeInitScript }}
+        />
+      </head>
       <body>{children}</body>
     </html>
   );

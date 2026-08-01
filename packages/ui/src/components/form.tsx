@@ -58,12 +58,20 @@ export function Label({ className, ...rest }: LabelHTMLAttributes<HTMLLabelEleme
  * `sd-field` is the hook for two mobile rules that live in tokens.css
  * and cannot be expressed per-call-site:
  *
- *   1. Full width below `sm`. Filter bars across both apps pin their
- *      controls with `w-80` / `w-[220px]` / `w-[160px]`, which on a
- *      phone produces a ragged column of mismatched widths — and a
- *      control wider than the viewport where the number was picked for
- *      a desktop. There are ~90 such call sites; the rule overrides all
- *      of them below `sm` and leaves every desktop width untouched.
+ *   1. The width DEFAULT (full width), declared in Tailwind's `base`
+ *      layer so a call site's own `w-80` / `w-[220px]` — a utility, and
+ *      utilities beat base — actually wins. It used to be a literal
+ *      `w-full` here, which is also a utility: two utilities, and the
+ *      winner is decided by Tailwind's generated source order rather
+ *      than by which one the author wrote at the call site. In practice
+ *      `w-full` won for `<select>`, so every filter dropdown stretched
+ *      the full row on desktop while the search box beside it kept its
+ *      intended width.
+ *
+ *      Below `sm` the rule flips to `!important` full width regardless:
+ *      those pinned desktop numbers produce a ragged column of
+ *      mismatched fields on a phone, and any number wider than the
+ *      viewport overflows the page.
  *
  *   2. 16px text on touch devices. Mobile Safari ZOOMS THE PAGE when
  *      you focus an input whose font-size is under 16px, and does not
@@ -73,7 +81,7 @@ export function Label({ className, ...rest }: LabelHTMLAttributes<HTMLLabelEleme
  * control.
  */
 const inputBase =
-  'sd-field w-full min-h-[38px] px-2.5 py-1.5 rounded-[5px] bg-bg border border-border text-text-bright text-sm placeholder:text-text-faint focus:border-accent focus:outline-none transition-colors disabled:opacity-50';
+  'sd-field min-h-[38px] px-2.5 py-1.5 rounded-[5px] bg-bg border border-border text-text-bright text-sm placeholder:text-text-faint focus:border-accent focus:outline-none transition-colors disabled:opacity-50';
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   function Input({ className, ...rest }, ref): ReactElement {

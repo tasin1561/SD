@@ -450,6 +450,18 @@
  * viewport overflows the page. Overriding here rather than at ~90 call
  * sites keeps the desktop widths — which are correct — untouched.
  * ───────────────────────────────────────────────────────────────────── */
+/* The DEFAULT width for a form control, in Tailwind's `base` layer so
+ * that a call site's own `w-80` / `w-[220px]` — a utility, and
+ * utilities beat base — actually wins. As a literal `w-full` on the
+ * component this was utility-vs-utility, decided by generated source
+ * order, and `<select>` lost: every filter dropdown stretched the full
+ * row on desktop while the search box next to it kept its width. */
+@layer base {
+  .sd-field {
+    width: 100%;
+  }
+}
+
 @media (max-width: 639.98px) {
   .sd-field {
     width: 100% !important;

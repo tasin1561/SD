@@ -4,6 +4,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { clsx } from 'clsx';
 import { Menu, X } from 'lucide-react';
 import { useEffect, useState, type ComponentType, type ReactElement, type ReactNode } from 'react';
+import { ThemeToggle } from './theme-toggle';
 
 /**
  * The application shell — sidebar, topbar, content column.
@@ -350,11 +351,16 @@ export function AppShell({
                     mobile — there is no room for them in a 52px bar,
                     and this is where a phone user looks for them. */}
                 <div className="border-border shrink-0 space-y-2.5 border-t px-4 py-3">
-                  <div className="min-w-0">
-                    <div className="text-text-body truncate text-xs font-medium">
-                      {identityPrimary}
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-text-body truncate text-xs font-medium">
+                        {identityPrimary}
+                      </div>
+                      <div className="text-text-faint truncate text-[11px]">
+                        {identitySecondary}
+                      </div>
                     </div>
-                    <div className="text-text-faint truncate text-[11px]">{identitySecondary}</div>
+                    <ThemeToggle />
                   </div>
                   <SignOutButton
                     onSignOut={onSignOut}
@@ -384,6 +390,7 @@ export function AppShell({
               <div className="text-text-body truncate text-xs">{identityPrimary}</div>
               <div className="text-text-faint truncate text-[11px]">{identitySecondary}</div>
             </div>
+            <ThemeToggle />
             <SignOutButton onSignOut={onSignOut} signingOut={signingOut} />
           </div>
         </header>
