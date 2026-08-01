@@ -15,7 +15,6 @@ import type { ListProductsQueryDto } from '../dto/list-products.dto';
 export interface ProductView {
   id: string;
   sellerId: string;
-  categoryId: string | null;
   name: string;
   description: string | null;
   brand: string | null;
@@ -35,7 +34,6 @@ export interface ProductView {
 const VIEW_SELECT = {
   id: true,
   sellerId: true,
-  categoryId: true,
   name: true,
   description: true,
   brand: true,
@@ -68,9 +66,6 @@ export class CatalogProductService {
     input: CreateProductDto,
     ctx: ClientContext,
   ): Promise<ProductView> {
-    if (input.categoryId) {
-      await this.requireCategory(input.categoryId);
-    }
     const status =
       input.status === ProductStatus.DRAFT ? ProductStatus.DRAFT : ProductStatus.ACTIVE;
 
@@ -79,7 +74,6 @@ export class CatalogProductService {
         const row = await tx.product.create({
           data: {
             sellerId,
-            categoryId: input.categoryId ?? null,
             name: input.name,
             description: input.description ?? null,
             brand: input.brand ?? null,
@@ -104,7 +98,6 @@ export class CatalogProductService {
             entityId: row.id,
             metadata: {
               externalRef: row.externalRef,
-              categoryId: row.categoryId,
               status: row.status,
               ipAddress: ctx.ipAddress,
               userAgent: ctx.userAgent,
@@ -129,7 +122,6 @@ export class CatalogProductService {
     const pageSize = query.pageSize ?? 20;
     const where: Prisma.ProductWhereInput = { sellerId, deletedAt: null };
     if (query.status) where.status = query.status;
-    if (query.categoryId) where.categoryId = query.categoryId;
     if (query.search) {
       where.OR = [
         { name: { contains: query.search, mode: 'insensitive' } },
@@ -168,9 +160,6 @@ export class CatalogProductService {
     ctx: ClientContext,
   ): Promise<ProductView> {
     await this.requireProduct(sellerId, id);
-    if (input.categoryId) {
-      await this.requireCategory(input.categoryId);
-    }
 
     const data: Prisma.ProductUpdateInput = {};
     const changes: Record<string, string | number | null> = {};
@@ -186,11 +175,6 @@ export class CatalogProductService {
     setStr('externalRef', 'externalRef');
     setStr('externalSku', 'externalSku');
     setStr('defaultHsCode', 'defaultHsCode');
-    if (input.categoryId !== undefined) {
-      data.category =
-        input.categoryId === null ? { disconnect: true } : { connect: { id: input.categoryId } };
-      changes['categoryId'] = input.categoryId;
-    }
     if (input.defaultWeightGrams !== undefined) {
       data.defaultWeightGrams = input.defaultWeightGrams;
       changes['defaultWeightGrams'] = input.defaultWeightGrams;
@@ -354,19 +338,6 @@ export class CatalogProductService {
       throw new NotFoundException({ code: 'PRODUCT_NOT_FOUND', message: 'Product not found' });
     }
     return row;
-  }
-
-  private async requireCategory(categoryId: string): Promise<void> {
-    const cat = await this.prisma.client.category.findFirst({
-      where: { id: categoryId, deletedAt: null },
-      select: { id: true },
-    });
-    if (!cat) {
-      throw new BadRequestException({
-        code: 'CATEGORY_NOT_FOUND',
-        message: 'Category not found',
-      });
-    }
   }
 
   private mapExternalRefConflict(err: unknown, externalRef: string | undefined): unknown {

@@ -36,7 +36,6 @@ const detail = (sellerId: string, warehouseId: string): CachedStockDetail => ({
     {
       variantId: 'v1',
       productId: 'p1',
-      categoryId: null,
       skuCode: 'SKU-1',
       variantLabel: null,
       status: VariantStatus.ACTIVE,

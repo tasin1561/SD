@@ -23,7 +23,6 @@ import type { ProductStatus, VariantStatus } from '@skydrop/db';
 
 export interface ListSellerProductsQuery {
   readonly status?: ProductStatus;
-  readonly categoryId?: string;
   readonly search?: string;
   readonly page?: number;
   readonly pageSize?: number;
@@ -32,7 +31,6 @@ export interface ListSellerProductsQuery {
 export interface SellerProductView {
   readonly id: string;
   readonly sellerId: string;
-  readonly categoryId: string | null;
   readonly name: string;
   readonly description: string | null;
   readonly brand: string | null;
@@ -60,7 +58,6 @@ export interface UpdateSellerProductRequest {
   readonly name?: string;
   readonly description?: string | null;
   readonly brand?: string | null;
-  readonly categoryId?: string | null;
   readonly externalRef?: string | null;
   readonly externalSku?: string | null;
   readonly defaultWeightGrams?: number | null;

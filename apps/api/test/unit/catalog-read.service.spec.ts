@@ -1,13 +1,11 @@
 import { Prisma, VariantStatus } from '@skydrop/db';
 import { CatalogReadService } from '../../src/modules/catalog-read/services/catalog-read.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
-import type { AttributeResolutionService } from '../../src/modules/catalog-attribute/services/attribute-resolution.service';
 
 const dec = (n: string | number): Prisma.Decimal => new Prisma.Decimal(n);
 
 interface ProductShape {
   name: string;
-  categoryId: string | null;
   deletedAt: Date | null;
   defaultWeightGrams: number | null;
   defaultLengthCm: Prisma.Decimal | null;
@@ -15,12 +13,6 @@ interface ProductShape {
   defaultHeightCm: Prisma.Decimal | null;
   defaultDeclaredValueInr: Prisma.Decimal | null;
   defaultHsCode: string | null;
-  category: {
-    id: string;
-    deletedAt: Date | null;
-    defaultHsCode: string | null;
-    defaultGstRate: Prisma.Decimal | null;
-  } | null;
 }
 interface VariantShape {
   id: string;
@@ -45,7 +37,6 @@ interface VariantShape {
 function product(over: Partial<ProductShape> = {}): ProductShape {
   return {
     name: 'Product',
-    categoryId: null,
     deletedAt: null,
     defaultWeightGrams: null,
     defaultLengthCm: null,
@@ -53,7 +44,6 @@ function product(over: Partial<ProductShape> = {}): ProductShape {
     defaultHeightCm: null,
     defaultDeclaredValueInr: null,
     defaultHsCode: null,
-    category: null,
     ...over,
   };
 }
@@ -89,27 +79,18 @@ function makeSut(
     ),
   );
   const findUnique = jest.fn(async () => gst ?? { valueDecimal: dec('18.00'), valueInt: null });
-  const findFirst = jest.fn(async ({ where }: { where: { id: string } }) => {
-    const v = variants.find(
-      (x) => x.id === where.id && x.deletedAt === null && x.product.deletedAt === null,
-    );
-    return v ? { product: { categoryId: v.product.categoryId } } : null;
-  });
   const prisma = {
     client: {
-      productVariant: { findMany, findFirst },
+      productVariant: { findMany },
       systemSetting: { findUnique },
     },
   } as unknown as PrismaService;
-  const attributes = {
-    resolveEffectiveAttributes: jest.fn(async () => [{ attributeKey: 'color' }]),
-  } as unknown as AttributeResolutionService;
-  const svc = new CatalogReadService(prisma, attributes);
-  return { svc, findMany, findUnique, attributes };
+  const svc = new CatalogReadService(prisma);
+  return { svc, findMany, findUnique };
 }
 
 describe('CatalogReadService — property inheritance precedence', () => {
-  it('variant value wins over product and category', async () => {
+  it('variant value wins over the product default', async () => {
     const { svc } = makeSut([
       variant({
         id: 'v1',
@@ -119,7 +100,6 @@ describe('CatalogReadService — property inheritance precedence', () => {
         product: product({
           defaultWeightGrams: 999,
           defaultHsCode: 'P-HS',
-          category: { id: 'c1', deletedAt: null, defaultHsCode: 'C-HS', defaultGstRate: dec('5') },
         }),
       }),
     ]);
@@ -129,42 +109,20 @@ describe('CatalogReadService — property inheritance precedence', () => {
     expect(r.gstRate.toString()).toBe('12');
   });
 
-  it('falls to product, then category for hsCode; gst falls to system default', async () => {
+  it('falls to the product for hsCode; gst falls to the system default', async () => {
     const { svc } = makeSut([
       variant({
         id: 'v1',
         product: product({
           defaultWeightGrams: 777,
-          defaultHsCode: null,
-          category: { id: 'c1', deletedAt: null, defaultHsCode: 'C-HS', defaultGstRate: null },
+          defaultHsCode: 'P-HS',
         }),
       }),
     ]);
     const r = (await svc.getVariantById('v1'))!;
     expect(r.weightGrams).toBe(777); // product default
-    expect(r.hsCode).toBe('C-HS'); // category default
+    expect(r.hsCode).toBe('P-HS'); // product default
     expect(r.gstRate.toString()).toBe('18'); // system_settings default
-  });
-
-  it('a soft-deleted category contributes nothing to inheritance', async () => {
-    const { svc } = makeSut([
-      variant({
-        id: 'v1',
-        product: product({
-          defaultHsCode: null,
-          category: {
-            id: 'c1',
-            deletedAt: new Date(),
-            defaultHsCode: 'C-HS',
-            defaultGstRate: dec('9'),
-          },
-        }),
-      }),
-    ]);
-    const r = (await svc.getVariantById('v1'))!;
-    expect(r.categoryId).toBeNull();
-    expect(r.hsCode).toBeNull();
-    expect(r.gstRate.toString()).toBe('18');
   });
 
   it('uses valueInt when the GST setting has no decimal', async () => {
@@ -203,20 +161,5 @@ describe('CatalogReadService — batch + safety', () => {
     expect(Object.isFrozen(r)).toBe(true);
     expect(Object.isFrozen(r.attributes)).toBe(true);
     expect(r.attributes).toEqual({ color: 'Red' });
-  });
-
-  it('getEffectiveAttributesForVariant delegates to the cached resolver', async () => {
-    const { svc, attributes } = makeSut([
-      variant({ id: 'v1', product: product({ categoryId: 'c9' }) }),
-    ]);
-    const eff = await svc.getEffectiveAttributesForVariant('v1');
-    expect(eff).toEqual([{ attributeKey: 'color' }]);
-    expect(attributes.resolveEffectiveAttributes).toHaveBeenCalledWith('c9');
-  });
-
-  it('returns [] effective attributes when the variant has no category', async () => {
-    const { svc, attributes } = makeSut([variant({ id: 'v1' })]);
-    expect(await svc.getEffectiveAttributesForVariant('v1')).toEqual([]);
-    expect(attributes.resolveEffectiveAttributes).not.toHaveBeenCalled();
   });
 });

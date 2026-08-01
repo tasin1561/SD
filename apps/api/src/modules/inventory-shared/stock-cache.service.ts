@@ -26,7 +26,6 @@ const CACHE_TTL_SECONDS = 5 * 60;
 export interface CachedVariantStock {
   variantId: string;
   productId: string;
-  categoryId: string | null;
   skuCode: string;
   variantLabel: string | null;
   status: VariantStatus;

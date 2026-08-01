@@ -239,7 +239,6 @@ async function fetchProducts(
 ): Promise<SellerProductListResponse> {
   const sp = new URLSearchParams();
   if (query.status) sp.set('status', query.status);
-  if (query.categoryId) sp.set('categoryId', query.categoryId);
   if (query.search) sp.set('search', query.search);
   if (query.page) sp.set('page', String(query.page));
   if (query.pageSize) sp.set('pageSize', String(query.pageSize));
@@ -397,7 +396,6 @@ export function useStockList(query: ListSellerStockQuery): UseQueryResult<Seller
     queryKey: ['seller-stock', 'list', query],
     queryFn: () => {
       const sp = new URLSearchParams();
-      if (query.categoryId) sp.set('categoryId', query.categoryId);
       if (query.status) sp.set('status', query.status);
       if (query.page) sp.set('page', String(query.page));
       if (query.pageSize) sp.set('pageSize', String(query.pageSize));

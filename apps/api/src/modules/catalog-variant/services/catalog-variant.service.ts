@@ -7,11 +7,9 @@ import {
 import { ActorType, Prisma, VariantStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
-import { AttributeResolutionService } from '../../catalog-attribute/services/attribute-resolution.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import type { CreateVariantDto } from '../dto/create-variant.dto';
 import type { UpdateVariantDto } from '../dto/update-variant.dto';
-import { VariantAttributeValidatorService } from './variant-attribute-validator.service';
 
 export interface VariantView {
   id: string;
@@ -64,8 +62,6 @@ export class CatalogVariantService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
-    private readonly resolution: AttributeResolutionService,
-    private readonly validator: VariantAttributeValidatorService,
   ) {}
 
   async create(
@@ -74,9 +70,8 @@ export class CatalogVariantService {
     input: CreateVariantDto,
     ctx: ClientContext,
   ): Promise<VariantView> {
-    const product = await this.requireProduct(sellerId, productId);
+    await this.requireProduct(sellerId, productId);
     const attributes = input.attributes ?? {};
-    await this.validateAttributes(product.categoryId, attributes);
 
     try {
       const created = await this.prisma.client.$transaction(async (tx) => {
@@ -151,14 +146,13 @@ export class CatalogVariantService {
     input: UpdateVariantDto,
     ctx: ClientContext,
   ): Promise<VariantView> {
-    const product = await this.requireProduct(sellerId, productId);
+    await this.requireProduct(sellerId, productId);
     await this.requireVariant(sellerId, productId, variantId);
 
     const data: Prisma.ProductVariantUpdateInput = {};
     const changes: Record<string, string | number | null | boolean> = {};
 
     if (input.attributes !== undefined) {
-      await this.validateAttributes(product.categoryId, input.attributes);
       data.attributes = input.attributes as Prisma.InputJsonValue;
       changes['attributes'] = 'updated';
     }
@@ -304,16 +298,6 @@ export class CatalogVariantService {
 
   // ---------- internal ----------
 
-  private async validateAttributes(
-    categoryId: string | null,
-    attributes: Record<string, unknown>,
-  ): Promise<void> {
-    const effective = categoryId
-      ? await this.resolution.resolveEffectiveAttributes(categoryId)
-      : [];
-    this.validator.validate(effective, attributes);
-  }
-
   private async setStatus(
     sellerId: string,
     variantId: string,
@@ -347,13 +331,10 @@ export class CatalogVariantService {
     });
   }
 
-  private async requireProduct(
-    sellerId: string,
-    productId: string,
-  ): Promise<{ id: string; categoryId: string | null }> {
+  private async requireProduct(sellerId: string, productId: string): Promise<{ id: string }> {
     const row = await this.prisma.client.product.findFirst({
       where: { id: productId, sellerId, deletedAt: null },
-      select: { id: true, categoryId: true },
+      select: { id: true },
     });
     if (!row) {
       throw new NotFoundException({ code: 'PRODUCT_NOT_FOUND', message: 'Product not found' });

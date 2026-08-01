@@ -22,8 +22,6 @@ export {
   PackageType,
   ProductStatus,
   VariantStatus,
-  CategoryProposalStatus,
-  AttributeValueType,
   CsvImportType,
   // Layer 4 — Inventory & WMS
   BatchStatus,

@@ -36,7 +36,7 @@ export class SellerVariantController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
-    summary: 'Create a variant (attributes validated against category schema)',
+    summary: 'Create a variant',
     description:
       'On attribute failure returns 400 ATTRIBUTE_VALIDATION_FAILED with an ' +
       '`errors` array listing every problem so the seller can fix in one pass.',

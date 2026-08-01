@@ -255,23 +255,19 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
 
 /**
  * Wipes Module-4 catalog tables. Call BEFORE resetAuthState in catalog
- * suites: products/variants/proposals FK-restrict seller deletion, so
- * they must go first. TRUNCATE … CASCADE sidesteps the category
- * self-FK ordering problem (and only cascades into already-empty
- * downstream tables in Phase 1A).
+ * suites: products/variants FK-restrict seller deletion, so they must
+ * go first. CASCADE only reaches already-empty downstream tables in
+ * Phase 1A.
  */
 export async function resetCatalogState(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(
     'TRUNCATE TABLE ' +
       [
-        'category_proposals',
-        'category_attribute_definitions',
         'product_images',
         'product_variants',
         'products',
         'bulk_product_uploads',
         'seller_csv_mappings',
-        'categories',
       ].join(', ') +
       ' RESTART IDENTITY CASCADE',
   );

@@ -19,8 +19,6 @@ export type {
   BulkOrderUpload,
   CallAttempt,
   CallQueueEntry,
-  Category,
-  CategoryCourierRule,
   Courier,
   CourierCredential,
   CourierWebhook,

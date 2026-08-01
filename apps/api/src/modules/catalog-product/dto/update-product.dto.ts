@@ -4,7 +4,6 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  IsUUID,
   Min,
   MaxLength,
   MinLength,
@@ -23,12 +22,6 @@ export class UpdateProductDto {
   @MinLength(1)
   @MaxLength(200)
   name?: string;
-
-  @ApiProperty({ required: false, nullable: true })
-  @IsOptional()
-  @ValidateIf((_, v) => v !== null)
-  @IsUUID('7')
-  categoryId?: string | null;
 
   @ApiProperty({ required: false, nullable: true, maxLength: 4000 })
   @IsOptional()

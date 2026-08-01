@@ -78,13 +78,6 @@ export type {
   RecordReceiptLineInput,
 } from './endpoints/admin-goods-receipts';
 export type {
-  CategoryView,
-  CategoryTreeNode,
-  CreateCategoryRequest,
-  UpdateCategoryRequest,
-  MoveCategoryRequest,
-} from './endpoints/admin-categories';
-export type {
   WebhookEndpointView,
   WebhookEndpointWithSecret,
   CreateWebhookEndpointRequest,

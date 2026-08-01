@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { CatalogAttributeModule } from '../catalog-attribute/catalog-attribute.module';
 import { CatalogReadService } from './services/catalog-read.service';
 
 /**
@@ -9,7 +8,6 @@ import { CatalogReadService } from './services/catalog-read.service';
  * directly, so property-inheritance precedence lives in one place.
  */
 @Module({
-  imports: [CatalogAttributeModule],
   providers: [CatalogReadService],
   exports: [CatalogReadService],
 })

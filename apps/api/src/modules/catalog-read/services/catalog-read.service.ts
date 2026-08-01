@@ -1,10 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, VariantStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
-import {
-  AttributeResolutionService,
-  type EffectiveAttribute,
-} from '../../catalog-attribute/services/attribute-resolution.service';
 
 const GST_SETTING_KEY = 'pricing.gst_rate';
 /** Used only if the system_settings row is missing — schema seeds 18.00. */
@@ -19,7 +15,6 @@ export interface ResolvedVariant {
   readonly variantId: string;
   readonly productId: string;
   readonly sellerId: string;
-  readonly categoryId: string | null;
   readonly skuCode: string;
   readonly variantLabel: string | null;
   readonly status: VariantStatus;
@@ -30,8 +25,8 @@ export interface ResolvedVariant {
   readonly heightCm: Prisma.Decimal | null;
   readonly declaredValueInr: Prisma.Decimal | null;
   readonly hsCode: string | null;
-  /** Always resolves: variant → category → system default (whole percent
-   *  in Phase 1A — see phase-1a-debt). */
+  /** Always resolves: variant → system default (whole percent in Phase
+   *  1A — see phase-1a-debt). */
   readonly gstRate: Prisma.Decimal;
   /**
    * Inventory-owned passthrough (Module 5). The RAW per-variant
@@ -78,7 +73,6 @@ const VARIANT_SELECT = {
   product: {
     select: {
       name: true,
-      categoryId: true,
       deletedAt: true,
       defaultWeightGrams: true,
       defaultLengthCm: true,
@@ -86,14 +80,6 @@ const VARIANT_SELECT = {
       defaultHeightCm: true,
       defaultDeclaredValueInr: true,
       defaultHsCode: true,
-      category: {
-        select: {
-          id: true,
-          deletedAt: true,
-          defaultHsCode: true,
-          defaultGstRate: true,
-        },
-      },
     },
   },
 } as const;
@@ -108,9 +94,10 @@ type VariantWithChain = Prisma.ProductVariantGetPayload<{
  * through this service rather than querying products/variants directly,
  * so property-inheritance precedence stays defined in one place.
  *
- * Precedence (highest → lowest): variant → product → category →
- * system_settings. Only gstRate falls all the way to system_settings;
- * the others stop at product (hsCode also considers category).
+ * Precedence (highest → lowest): variant → product → system_settings.
+ * Only gstRate reaches system_settings; every other property stops at
+ * the product, and a null all the way down is a validation error at the
+ * point of use rather than a silent default.
  *
  * Pure read: no method writes. Returns are frozen.
  */
@@ -118,10 +105,7 @@ type VariantWithChain = Prisma.ProductVariantGetPayload<{
 export class CatalogReadService {
   private readonly logger = new Logger(CatalogReadService.name);
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly attributes: AttributeResolutionService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async getVariantById(variantId: string): Promise<ResolvedVariant | null> {
     const map = await this.getVariantsByIds([variantId]);
@@ -148,8 +132,8 @@ export class CatalogReadService {
   }
 
   /**
-   * Batch resolve. One query for all variants (+ product + category via a
-   * nested select) and one query for the GST system default — no N+1
+   * Batch resolve. One query for all variants (+ product via a nested
+   * select) and one query for the GST system default — no N+1
    * regardless of how many ids are passed. Missing/soft-deleted variants
    * (or variants whose product is soft-deleted) are simply absent from
    * the returned map.
@@ -173,32 +157,13 @@ export class CatalogReadService {
     return out;
   }
 
-  /**
-   * Effective attribute set for a variant's category, reusing the
-   * AttributeResolutionService Redis cache. Empty when the variant has no
-   * category (or is missing) — attributes are then unconstrained.
-   */
-  async getEffectiveAttributesForVariant(variantId: string): Promise<EffectiveAttribute[]> {
-    const v = await this.prisma.client.productVariant.findFirst({
-      where: { id: variantId, deletedAt: null, product: { deletedAt: null } },
-      select: { product: { select: { categoryId: true } } },
-    });
-    const categoryId = v?.product.categoryId ?? null;
-    if (!categoryId) return [];
-    return this.attributes.resolveEffectiveAttributes(categoryId);
-  }
-
   private resolve(row: VariantWithChain, gstDefault: Prisma.Decimal): ResolvedVariant {
     const product = row.product;
-    // A soft-deleted category contributes nothing to inheritance.
-    const category =
-      product.category && product.category.deletedAt === null ? product.category : null;
 
     return Object.freeze({
       variantId: row.id,
       productId: row.productId,
       sellerId: row.sellerId,
-      categoryId: category?.id ?? null,
       skuCode: row.skuCode,
       variantLabel: row.variantLabel,
       status: row.status,
@@ -208,8 +173,8 @@ export class CatalogReadService {
       widthCm: row.widthCm ?? product.defaultWidthCm ?? null,
       heightCm: row.heightCm ?? product.defaultHeightCm ?? null,
       declaredValueInr: row.declaredValueInr ?? product.defaultDeclaredValueInr ?? null,
-      hsCode: row.hsCode ?? product.defaultHsCode ?? category?.defaultHsCode ?? null,
-      gstRate: row.gstRate ?? category?.defaultGstRate ?? gstDefault,
+      hsCode: row.hsCode ?? product.defaultHsCode ?? null,
+      gstRate: row.gstRate ?? gstDefault,
       lowStockThreshold: row.lowStockThreshold ?? null,
       productName: product.name,
       // Primary image: isPrimary wins, else lowest displayOrder. Picked

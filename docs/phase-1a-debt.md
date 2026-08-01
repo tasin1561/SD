@@ -89,16 +89,6 @@ pick it up.
 
 ## Catalog (Module 4)
 
-- **Attribute-cache invalidation is best-effort, not event-driven.**
-  `AttributeResolutionService` caches a category's effective attribute
-  set in Redis (5-min TTL) and, on any attribute-def write, `DEL`s that
-  category plus every descendant. The `DEL` is fire-and-forget — if Redis
-  is briefly unavailable the stale set serves until TTL. An event-bus
-  (or write-through) invalidation would make it airtight and also let
-  other API instances invalidate. Deferred to keep Module 4 in-process.
-  **Pick up:** Module 11/with the worker split, or when multi-instance
-  API deployment lands.
-
 - **Image MIME is trusted, not sniffed.** Presign/register validate the
   client-declared `mimeType` against an allowlist and HEAD-verify object
   size, but the bytes are never content-sniffed. A seller could upload
@@ -124,19 +114,13 @@ pick it up.
   **Pick up:** Module 11/worker split, or when CSV sizes outgrow the
   1000-row Phase 1A cap.
 
-- **Attribute-def delete warns but does not enforce.** Deleting a
-  category attribute definition returns a soft `warning` with the count
-  of products in that category, but does not block deletion or rewrite
-  existing variant `attributes` JSON. A deleted-then-unknown key only
-  surfaces on the variant's next validation.
-  **Pick up:** Module 12 (admin tooling) if a hard guard is wanted.
-
-- **No product-level attribute proposal flow.** Sellers propose
-  *categories* (with attribute defs) for admin approval, but cannot
-  propose adding an attribute to an *existing* category. They must file
-  a new proposal or ask an admin directly.
-  **Pick up:** Module 12 or a later catalog iteration if seller demand
-  appears.
+- **Categories were removed (2026-08-01), and with them three debt
+  entries.** The attribute-cache invalidation race, the soft-warning
+  attribute-def delete, and the missing product-level attribute
+  proposal flow all described machinery that no longer exists.
+  `product_variants.attributes` is now free-form, which is strictly
+  more permissive than before: with no category the effective set was
+  empty and every key was rejected as unknown.
 
 - **Image keys use uuidv4, not uuidv7.** All DB ids are `uuidv7()`
   (time-sortable). The Spaces object key's random segment uses uuidv4
@@ -187,7 +171,7 @@ pick it up.
 
 - **Alert cooldown is a single global value.** `ops.stock_alert_cooldown
   _hours` applies to all sellers/SKUs uniformly.
-  **Pick up:** per-seller (or per-category) cooldown config later.
+  **Pick up:** per-seller cooldown config later.
 
 - **Cycle-count reconciliation = one adjustment per discrepancy.** Each
   discrepant item generates its own single-line PENDING `CYCLE_COUNT`
@@ -817,7 +801,7 @@ pick it up.
 ### M11 design deferrals
 
 - **Two idempotency regimes coexist on notification_logs.** Pre-M11
-  fire-once sites (auth/seller-mgmt/inventory/category-proposal — the
+  fire-once sites (auth/seller-mgmt/inventory — the
   8+ existing callers) dedup via the polymorphic
   `(templateCode, recipientType, recipientId)` LOOKUP in the caller
   service BEFORE enqueueing; the row carries NO eventId and lives

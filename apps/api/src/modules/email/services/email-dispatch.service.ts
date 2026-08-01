@@ -71,8 +71,8 @@ export class EmailDispatchService {
     // pre-created the ledger row, UPDATE that row instead of creating
     // a fresh one. Keeps the row stable from intent (QUEUED) →
     // outcome (SENT/FAILED); the row id stays the dedup gate's anchor.
-    // Legacy fire-once callers (the 8+ existing sites — auth,
-    // seller-mgmt, inventory, category-proposal) leave
+    // Legacy fire-once callers (the existing sites — auth,
+    // seller-mgmt, inventory) leave
     // existingNotificationLogId unset and get the original create
     // path unchanged.
     const log = await this.persistLog(input, rendered, sender, subject, sendResult, status);

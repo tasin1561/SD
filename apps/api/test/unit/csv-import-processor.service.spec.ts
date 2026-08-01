@@ -2,13 +2,11 @@ import Papa from 'papaparse';
 import { BulkUploadStatus } from '@skydrop/db';
 import { CsvImportProcessorService } from '../../src/modules/catalog-csv-import/services/csv-import-processor.service';
 import { CsvParserService } from '../../src/modules/catalog-csv-import/services/csv-parser.service';
-import { VariantAttributeValidatorService } from '../../src/modules/catalog-variant/services/variant-attribute-validator.service';
 import { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { EnvService } from '../../src/config/env.service';
 import { makeTestEnv } from '../helpers/env';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { SpacesService } from '../../src/infrastructure/spaces/spaces.service';
-import type { AttributeResolutionService } from '../../src/modules/catalog-attribute/services/attribute-resolution.service';
 import type { CsvTargetField } from '../../src/modules/catalog-csv-import/csv-fields';
 
 function makeEnv(): EnvService {
@@ -18,7 +16,6 @@ function makeEnv(): EnvService {
 interface ProductRow {
   id: string;
   sellerId: string;
-  categoryId: string | null;
   name: string;
   externalRef: string | null;
   defaultHsCode: string | null;
@@ -59,7 +56,6 @@ function makeSut(csvByKey: Record<string, string>) {
         },
       ),
     },
-    category: { findFirst: jest.fn(async () => null) },
     product: {
       findFirst: jest.fn(
         async ({ where }: { where: { sellerId: string; externalRef?: string } }) =>
@@ -131,18 +127,12 @@ function makeSut(csvByKey: Record<string, string>) {
       putObjects[key] = body;
     }),
   } as unknown as SpacesService;
-  const resolution = {
-    resolveEffectiveAttributes: jest.fn(async () => []),
-  } as unknown as AttributeResolutionService;
-
   const svc = new CsvImportProcessorService(
     prisma,
     spaces,
     makeEnv(),
     new AuditLogService(prisma),
     new CsvParserService(),
-    resolution,
-    new VariantAttributeValidatorService(),
   );
   return { svc, products, variants, bulk, putObjects };
 }

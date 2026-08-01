@@ -9,7 +9,6 @@ import type { VariantStatus } from '@skydrop/db';
 export interface SellerStockRow {
   readonly variantId: string;
   readonly productId: string;
-  readonly categoryId: string | null;
   readonly skuCode: string;
   readonly variantLabel: string | null;
   readonly status: VariantStatus;
@@ -37,7 +36,6 @@ export interface SellerStockSummary {
 }
 
 export interface ListSellerStockQuery {
-  readonly categoryId?: string;
   readonly status?: VariantStatus;
   readonly page?: number;
   readonly pageSize?: number;

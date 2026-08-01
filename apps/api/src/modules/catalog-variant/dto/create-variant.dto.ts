@@ -21,9 +21,8 @@ export class CreateVariantDto {
     required: false,
     additionalProperties: true,
     description:
-      'Attribute map validated against the effective attribute set of the ' +
-      "product's category. Keys are strings; values must be primitives " +
-      '(string/number/boolean). Defaults to {}.',
+      'Free-form attribute map (e.g. colour, size). Keys are strings; ' +
+      'values must be primitives (string/number/boolean). Defaults to {}.',
   })
   @IsOptional()
   @IsObject()

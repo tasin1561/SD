@@ -56,8 +56,8 @@ const ZERO = new Prisma.Decimal(0);
  * (unit weight × units). A line whose SKU has no recorded weight falls
  * back to a COUNT-based share rather than being treated as weightless —
  * a missing weight must not make freight free. Effective weight comes from
- * `CatalogReadService` so the variant → product → category inheritance
- * chain is honoured (MUST #13).
+ * `CatalogReadService` so the variant → product inheritance chain is
+ * honoured (MUST #13).
  *
  * ── WHAT IS NOT AMORTISED ─────────────────────────────────────────────
  * PAY_NOW bills. Those were charged in full when ops recorded them, so

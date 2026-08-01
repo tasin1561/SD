@@ -8,12 +8,11 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
-import type { AddressType, CategoryProposalStatus, GoodsReceiptStatus } from '@skydrop/db';
+import type { AddressType, GoodsReceiptStatus } from '@skydrop/db';
 
 /**
  * Seller-side surfaces that had endpoints and no screens: the seller's
- * own addresses, their customers, inbound goods receipts, and category
- * proposals.
+ * own addresses, their customers, and inbound goods receipts.
  */
 
 interface Paginated<T> {
@@ -224,84 +223,6 @@ export function useCancelGoodsReceipt(): UseMutationResult<
   });
 }
 
-// ───────── Category proposals ─────────
-
-export interface ProposalView {
-  id: string;
-  proposedName: string;
-  proposedSlug: string;
-  proposedParentId: string | null;
-  rationale: string;
-  status: CategoryProposalStatus;
-  decisionNote: string | null;
-  resultingCategoryId: string | null;
-  reviewedAt: string | null;
-  createdAt: string;
-}
-
-export function useProposals(query: {
-  status?: string;
-  page?: number;
-  pageSize?: number;
-}): UseQueryResult<Paginated<ProposalView>> {
-  const client = useApiClient();
-  return useQuery({
-    queryKey: ['seller-proposals', query],
-    queryFn: () =>
-      client.request<Paginated<ProposalView>>(`/api/seller/category-proposals${qs(query)}`),
-  });
-}
-
-export function useCreateProposal(): UseMutationResult<
-  ProposalView,
-  Error,
-  { proposedName: string; proposedSlug: string; rationale: string; proposedParentId?: string }
-> {
-  const client = useApiClient();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body) =>
-      client.request<ProposalView>('/api/seller/category-proposals', { method: 'POST', body }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-proposals'] }),
-  });
-}
-
-export function useWithdrawProposal(): UseMutationResult<ProposalView, Error, { id: string }> {
-  const client = useApiClient();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id }) =>
-      client.request<ProposalView>(`/api/seller/category-proposals/${id}/withdraw`, {
-        method: 'POST',
-        body: {},
-      }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-proposals'] }),
-  });
-}
-
-// ───────── Category browse (read-only) ─────────
-
-export interface CategoryNode {
-  id: string;
-  name: string;
-  slug: string;
-  parentId: string | null;
-  status: string;
-  defaultGstRate: number | null;
-  defaultHsCode: string | null;
-  children?: readonly CategoryNode[];
-}
-
-export function useCategoryTree(): UseQueryResult<readonly CategoryNode[]> {
-  const client = useApiClient();
-  return useQuery({
-    queryKey: ['seller-categories', 'tree'],
-    // The tree is near-static and shared by every seller.
-    staleTime: 10 * 60_000,
-    queryFn: () => client.request<readonly CategoryNode[]>('/api/seller/categories/tree'),
-  });
-}
-
 // ───────── Saved CSV column mappings ─────────
 
 export interface CsvMappingView {
@@ -387,38 +308,5 @@ export function useRecipientAddresses(query: {
     enabled: query.customerId !== undefined && query.customerId !== '',
     queryFn: () =>
       client.request<readonly CachedAddressView[]>(`/api/seller/recipient-addresses${qs(query)}`),
-  });
-}
-
-// ───────── What a category will require of your variants ─────────
-
-export interface EffectiveAttribute {
-  attributeKey: string;
-  displayLabel: string;
-  valueType: string;
-  allowedValues: readonly string[];
-  isRequired: boolean;
-  displayOrder: number;
-  sourceCategoryId: string;
-}
-
-/**
- * The RESOLVED set — this category's own definitions plus everything
- * inherited from its ancestors. That is the set a variant is actually
- * validated against, which is why the seller-facing endpoint returns
- * only the effective view and not the raw per-category rows.
- */
-export function useCategoryAttributes(
-  categoryId: string | null,
-): UseQueryResult<readonly EffectiveAttribute[]> {
-  const client = useApiClient();
-  return useQuery({
-    queryKey: ['seller-categories', 'attributes', categoryId],
-    enabled: categoryId !== null,
-    staleTime: 5 * 60_000,
-    queryFn: () =>
-      client.request<readonly EffectiveAttribute[]>(
-        `/api/seller/categories/${categoryId ?? ''}/attributes`,
-      ),
   });
 }

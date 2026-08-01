@@ -166,7 +166,7 @@ reading the logs.
 **A retried send creates extra `notification_logs` rows for pre-M11
 callers.** BullMQ retries five times. The M11 lifecycle path pre-creates its
 row and UPDATEs it (NOTIF-2 store-then-send), so it stays one row. The older
-fire-once callers — auth, seller management, inventory, category proposals —
+fire-once callers — auth, seller management, inventory —
 do not pass `existingNotificationLogId`, so each attempt CREATEs. One
 persistently failing invitation email can therefore leave five `FAILED`
 rows, and one that succeeds on the third attempt leaves two `FAILED` plus

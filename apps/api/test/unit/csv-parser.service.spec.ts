@@ -75,8 +75,10 @@ describe('CsvParserService.detectMapping — alias resolution', () => {
     expect(d.mapping.weightKg).toBe('Weight (kg)');
     expect(d.mapping.declaredValueInr).toBe('Price INR');
     expect(d.mapping.hsCode).toBe('HS');
-    expect(d.mapping.categorySlug).toBe('Category Slug');
-    expect(d.unmatchedHeaders.map((u) => u.header)).toEqual(['Mystery Column']);
+    // Categories are gone. An old sheet still carrying the column is
+    // reported as unmatched and ignored, not rejected — a seller should
+    // not have to re-cut a spreadsheet because we dropped a feature.
+    expect(d.unmatchedHeaders.map((u) => u.header)).toEqual(['Category Slug', 'Mystery Column']);
     expect(d.missingRequired).toEqual([]);
   });
 

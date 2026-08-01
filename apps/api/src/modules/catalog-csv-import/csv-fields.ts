@@ -18,8 +18,7 @@ export type CsvTargetField =
   | 'declaredValueInr'
   | 'hsCode'
   | 'barcode'
-  | 'variantAttributes'
-  | 'categorySlug';
+  | 'variantAttributes';
 
 export const CSV_ALIAS_MAP: Record<CsvTargetField, string[]> = {
   productName: ['product name', 'name', 'title', 'product title'],
@@ -34,7 +33,6 @@ export const CSV_ALIAS_MAP: Record<CsvTargetField, string[]> = {
   hsCode: ['hs code', 'hs', 'harmonized code'],
   barcode: ['barcode', 'ean', 'upc'],
   variantAttributes: ['attributes', 'variant attributes', 'options'],
-  categorySlug: ['category', 'category slug'],
 };
 
 /** Required mapped fields for a row to be importable. */

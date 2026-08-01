@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
-import { CatalogAttributeModule } from '../catalog-attribute/catalog-attribute.module';
 import { CatalogVariantModule } from '../catalog-variant/catalog-variant.module';
 import { SellerCsvImportController } from './seller-csv-import.controller';
 import { SellerCsvMappingController } from './seller-csv-mapping.controller';
@@ -18,7 +17,7 @@ import { CsvImportWorker } from './queue/csv-import.worker';
  * preview/process (17).
  */
 @Module({
-  imports: [CatalogAttributeModule, CatalogVariantModule],
+  imports: [CatalogVariantModule],
   controllers: [SellerCsvImportController, SellerCsvMappingController],
   providers: [
     CsvParserService,

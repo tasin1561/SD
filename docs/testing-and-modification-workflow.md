@@ -91,23 +91,19 @@ vetted by sending the invite. The `Seller.status` column still exists
 because admin can later `SUSPEND` / `REAPPROVE` a seller, but no
 manual-approval action lives at registration time. Move on.
 
-### 1.4. Seller: build a category-product-variant chain
+### 1.4. Seller: build a product-variant chain
 
-1. **Catalog** → if no categories show, the admin needs to create one
-   (Section 1.4b).
 1. **Catalog** → **New product**:
    - Name: `Test Widget`
-   - Category: `Apparel` (or whichever exists)
    - Variant SKU: `TST-WIDGET-001`
-   - Variant weight: `200 g`
+   - Variant weight: `200 g` — set this. It picks the rate-card slab,
+     and it is how an inbound freight bill gets split across a
+     consignment.
    - Declared value: `₹ 500`
    - Save.
 
-#### 1.4b. Admin: create a category (if needed)
-
-1. `admin.skydrop.online/catalog/categories` → **New category**.
-2. Name `Apparel`, Slug `apparel`, package type `STANDARD`, GST `18`.
-3. Save.
+There is no category to file it under; that feature was removed on
+2026-08-01.
 
 ### 1.5. Seller: ship stock → admin: receive it
 

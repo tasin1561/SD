@@ -35,8 +35,8 @@ export interface EmailDispatchInput {
    * gate model — the row IS the dedup gate, created BEFORE the BullMQ
    * enqueue so a retry hits the partial-unique on (event_id, …)
    * before Resend is called a second time. Legacy fire-once call
-   * sites (auth, seller-mgmt, inventory alerts/receipt/adjustments,
-   * category-proposal) omit this field and keep the create-on-send
+   * sites (auth, seller-mgmt, inventory alerts/receipt/adjustments)
+   * omit this field and keep the create-on-send
    * model unchanged.
    */
   existingNotificationLogId?: string;

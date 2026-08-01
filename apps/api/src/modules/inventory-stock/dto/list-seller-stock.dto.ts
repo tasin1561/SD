@@ -1,14 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { VariantStatus } from '@skydrop/db';
-import { IsEnum, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
 
 export class ListSellerStockQueryDto {
-  @ApiProperty({ required: false, description: 'Filter by catalog category' })
-  @IsOptional()
-  @IsUUID('7')
-  categoryId?: string;
-
   @ApiProperty({ required: false, enum: VariantStatus, description: 'Filter by variant status' })
   @IsOptional()
   @IsEnum(VariantStatus)

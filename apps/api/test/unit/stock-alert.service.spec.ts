@@ -62,7 +62,6 @@ function makeSut(opts: {
             skuCode: 'SKU',
             variantLabel: null,
             productId: 'p1',
-            categoryId: null,
             status: VariantStatus.ACTIVE,
             lowStockThreshold: opts.variantThreshold ?? null,
           }
@@ -72,7 +71,6 @@ function makeSut(opts: {
             skuCode: 'SKU',
             variantLabel: null,
             productId: 'p1',
-            categoryId: null,
             status: VariantStatus.ACTIVE,
             lowStockThreshold: opts.variantThreshold ?? null,
           },

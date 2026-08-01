@@ -20,7 +20,7 @@ Phase 1A covers **everything except billing/wallet/remittance**. Specifically:
 
 **IN SCOPE (Phase 1A):**
 - Seller onboarding (invite-only)
-- Product/SKU catalog with categories, variants, images
+- Product/SKU catalog with products, variants, images
 - Inventory & WMS (multi-bin, batches, reservations, append-only ledger, FIFO/FEFO picking)
 - Order management (single + bulk CSV upload)
 - Call center workflow (round-robin queue, attempt logging, outcome capture)
@@ -285,7 +285,7 @@ The schema gives you the shape; these rules give you correctness. Violating them
 
 6. **NOTIF-6: Dev-mode stub via empty `RESEND_API_KEY`.** No separate adapter; `ResendService` checks `env.resendApiKey` and either calls the real SDK (production) or emits `[DEV] Would send email` log lines (development + e2e). The dispatch service writes the notification_logs row regardless (status SENT in dev, status SENT/FAILED in prod). The e2e tests rely on this — they assert against notification_logs rows AND the `[DEV] Would send email` log lines, never against actual Resend delivery.
 
-7. **NOTIF-7: Reuses the existing EmailModule substrate.** M11 ADDS the lifecycle fan-out layer (mapping + ledger + listener) on top of M1's already-built EmailQueue / EmailWorker / EmailDispatchService / TemplateRenderService + the seeded notification_templates. The substrate was NOT duplicated; the M11 ledger's CREATE-then-UPDATE pattern is the ONE extension point added to EmailDispatchService (`existingNotificationLogId` path). The pre-M11 fire-once callers (auth/seller-mgmt/inventory/category-proposal) are UNCHANGED.
+7. **NOTIF-7: Reuses the existing EmailModule substrate.** M11 ADDS the lifecycle fan-out layer (mapping + ledger + listener) on top of M1's already-built EmailQueue / EmailWorker / EmailDispatchService / TemplateRenderService + the seeded notification_templates. The substrate was NOT duplicated; the M11 ledger's CREATE-then-UPDATE pattern is the ONE extension point added to EmailDispatchService (`existingNotificationLogId` path). The pre-M11 fire-once callers (auth/seller-mgmt/inventory) are UNCHANGED.
 
 8. **NOTIF-8: Missing recipient address lands a SKIPPED row, NOT FAILED.** A customer order with no `recipientEmail` snapshot (the ORD-6 immutable customer email) is a foreseeable Phase-1A reality (a CSV row that omitted the email, an admin manual entry that skipped it). The listener detects null toEmail at resolve time; the ledger writes a `status: SKIPPED` row carrying the same `eventId` so a re-emit STILL consumes the dedup gate (no second SKIPPED row). No BullMQ enqueue. SELLER toEmail is non-null by schema; a null SELLER address is a data integrity error, not a runtime path. Phase-2 SMS/WhatsApp will generalize "no resolvable address" to "no phone / no whatsapp number" at this same gate.
 
@@ -348,7 +348,7 @@ Canonical applications:
 1. Send via BullMQ workers only. API endpoints enqueue; workers send.
 2. Throttle per (recipient, template). Check `notification_logs` before send; mark THROTTLED if limit exceeded.
 3. Respect seller's quiet hours for non-urgent categories.
-4. **Two idempotency regimes coexist on `notification_logs`** — pre-M11 fire-once callers (auth/seller-mgmt/inventory/category-proposal) dedup via the polymorphic `(templateCode, recipientType, recipientId)` LOOKUP in the caller service BEFORE enqueueing; the row carries NO `eventId`. M11 lifecycle fan-out callers set `eventId = order_status:<statusEventId>` and rely on the partial-unique `(event_id, recipient_type, recipient_id, channel, template_code) WHERE event_id IS NOT NULL` (NOTIF-2). The two coexist because the partial-unique only fires when `eventId` is present. **NEW lifecycle-event fan-out paths MUST set `eventId`** (the partial-unique is their only protection). **DO NOT add `eventId` to legacy callers** without auditing their dedup logic — they currently rely on a template-code lookup that ignores `eventId`. (See phase-1a-debt M11 entry "Two idempotency regimes" for the migration path.)
+4. **Two idempotency regimes coexist on `notification_logs`** — pre-M11 fire-once callers (auth/seller-mgmt/inventory) dedup via the polymorphic `(templateCode, recipientType, recipientId)` LOOKUP in the caller service BEFORE enqueueing; the row carries NO `eventId`. M11 lifecycle fan-out callers set `eventId = order_status:<statusEventId>` and rely on the partial-unique `(event_id, recipient_type, recipient_id, channel, template_code) WHERE event_id IS NOT NULL` (NOTIF-2). The two coexist because the partial-unique only fires when `eventId` is present. **NEW lifecycle-event fan-out paths MUST set `eventId`** (the partial-unique is their only protection). **DO NOT add `eventId` to legacy callers** without auditing their dedup logic — they currently rely on a template-code lookup that ignores `eventId`. (See phase-1a-debt M11 entry "Two idempotency regimes" for the migration path.)
 
 **Outbound webhook rules:**
 1. Sign every payload with HMAC-SHA256 using endpoint's `secretKey`.
@@ -363,17 +363,16 @@ Canonical applications:
 
 **Catalog rules (Module 4):**
 1. **CatalogReadService is the only sanctioned path for cross-module variant reads.** Downstream modules (Inventory, Orders, Shipments, Couriers) MUST import `CatalogReadService` via NestJS DI. Never query `ProductVariant` directly from outside the catalog modules. Property resolution (effective weight, dims, value, HS, GST) is centralized there.
-2. **Property inheritance order:** variant.field → product.defaultField → category.defaultField → system_settings (GST only). Other properties have no system fallback — null all the way down = validation error.
-3. **Attribute inheritance:** walks `parent_id` chain; child overrides parent for same `attribute_key`. Cached in Redis 5-min TTL; invalidation on write walks descendants.
-4. **Variant attribute validation:** required attributes present, valueType matches, ENUM in allowedValues, no extra keys, no nested objects/arrays in values.
-5. **Image lifecycle:**
+2. **Property inheritance order:** variant.field → product.defaultField → system_settings (GST only). Other properties have no system fallback — null all the way down = validation error. **Categories were removed 2026-08-01** — they sat between product and system_settings for `hsCode`/`gstRate` only, and both survive without them.
+3. **Variant attributes are FREE-FORM.** `product_variants.attributes` is an unvalidated JSON map. The schema that validated it was category-scoped and went with categories (2026-08-01). Note this is strictly MORE permissive than before, not less: with no category the effective set was empty and the validator rejected every key as unknown, so an uncategorised product could not carry attributes at all.
+4. **Image lifecycle:**
    - Registered: row alive, Spaces object alive
    - Soft-deleted: `row.deletedAt` set, object preserved (recoverable)
    - Hard-deleted (Phase 2 cron): row gone, object deleted together
    - Never registered (orphan): no row → object > 24h → cleaned by orphan cron (skips `thumbnails/` prefix)
-6. **Presigned URL security:** key path must match `sellers/{sellerId}/variants/{variantId}/{token}.{ext}`; service validates seller segment matches authenticated seller; HEAD verifies object exists and size matches before registering.
-7. **CSV re-upload PATCH semantics:** CSV-provided cells overwrite; omitted/blank cells do not null out existing values. Dedup by `(sellerId, externalRef)` for products, `(sellerId, skuCode)` for variants.
-8. **Archive vs delete:** ARCHIVED status blocks new uses (orders, stock receiving) — enforce in service layer; `deletedAt` makes the row invisible in read paths. Both preserve historical references.
+5. **Presigned URL security:** key path must match `sellers/{sellerId}/variants/{variantId}/{token}.{ext}`; service validates seller segment matches authenticated seller; HEAD verifies object exists and size matches before registering.
+6. **CSV re-upload PATCH semantics:** CSV-provided cells overwrite; omitted/blank cells do not null out existing values. Dedup by `(sellerId, externalRef)` for products, `(sellerId, skuCode)` for variants.
+7. **Archive vs delete:** ARCHIVED status blocks new uses (orders, stock receiving) — enforce in service layer; `deletedAt` makes the row invisible in read paths. Both preserve historical references.
 
 **Inventory rules (Module 5) — INV-1 through INV-9 are NON-NEGOTIABLE:**
 
@@ -607,7 +606,7 @@ Module order — each builds on prior modules:
 | 1 | Auth & Access Control (staff + seller, refresh, password reset, email verify, API keys) | ✅ DONE |
 | 2 | Seller Onboarding (invite, registration, approval workflow) | ✅ DONE |
 | 3 | Seller Profile (merged into Module 2) | ✅ DONE |
-| 4 | Product/SKU Catalog (categories, products, variants, images, CSV upload) | ✅ DONE |
+| 4 | Product/SKU Catalog (products, variants, images, CSV upload) | ✅ DONE |
 | 5 | Inventory & WMS (warehouses, bins, batches, levels, movements, reservations, receiving, cycle counts) | ✅ DONE |
 | 6 | Order Management (manual entry, CSV upload, lifecycle, events) | ✅ DONE |
 | 7 | Call Center Workflow (queue, distributor, attempt logging) | ✅ DONE |
@@ -746,10 +745,9 @@ Plan doc: `~/.claude/plans/silly-bouncing-cloud.md` (gap analysis + per-phase de
   - **OPEN, needs a decision:** (a) **Cloudflare is not proxying** — DNS A-records point straight at the origin, so there is no CDN, no WAF, no DDoS absorption, and the origin IP is public. `docs/infrastructure.md` claims all three; it is wrong in the same way the Nginx line was. (b) a **reboot is pending** for an already-installed kernel patch (pm2/Caddy/Docker all resurrect cleanly, so it is safe — it is just an outage window someone has to choose).
 - **UI coverage audit (2026-07-28) — every controller now has a screen.** Listed every `@Controller` prefix against every page route rather than trusting the "not yet implemented" list, which had gone stale in both directions. Fifteen gaps, two of them DEAD-END WORKFLOWS where something could be started that nobody could finish:
   - **Stock adjustments** — INV-8 routes anything above the value threshold to PENDING and waits for a human, and there was no screen for that human. Above-threshold stock could not be corrected through any interface; the approval queue had a writer and no reader. Now `/inventory/adjustments`.
-  - **Category proposals** — a seller proposed, the row landed PENDING, and nothing anywhere could approve or reject one. Now both sides: admin `/catalog/proposals` (approving is a CREATE — it makes a category every seller then files under, so the form asks for the GST/HS defaults it will carry) and seller `/catalog/proposals`.
   - Also built: admin `/inventory/{cycle-counts,movements,transfers}`, `/call-center/{queue,agents}`, `/pricing`, per-shipment manual scan (TRK-9) on order detail, per-seller setting overrides (SET-1) on seller detail; seller `/customers`, `/inbound`, `/settings/addresses`, and an agent's own availability switch on the call station.
   - **Two shapes worth remembering.** (a) A capability with an endpoint and no screen is invisible to every roadmap doc — the audit is `grep -rhoP "@Controller\('\K[^']+"` against `find -name page.tsx`, and it is worth re-running whenever a module lands. (b) Build against the DTO, not the model: the inbound form was first written asking for a warehouse and no contents, when `warehouseId` is optional (the server places it) and `lines` is required. Reading the controller's DTO would have shown that immediately.
-  - **The last four landed too** (admin category attributes; seller category browse, CSV column mappings, per-address delivery history) — **every admin and seller controller now has a caller.** Re-run the sweep with the parameterised form (`:id` → `\$\{[^}]*\}`) or template-literal paths read as missing.
+  - **The last four landed too** (seller CSV column mappings, per-address delivery history, and two category screens since removed) — **every admin and seller controller now has a caller.** Re-run the sweep with the parameterised form (`:id` → `\$\{[^}]*\}`) or template-literal paths read as missing.
   - **The sweep found a feature that had never worked.** Seller image upload called `/api/seller/images*`; the controller is `seller/variants/:variantId/images`. Confirmed against production — `/seller/images` 404s, the real path 401s. The bodies were wrong too: `variantId` is a PATH param and the API runs `forbidNonWhitelisted`, so `filename`/`contentType` made every call a 400 even against the right URL. Nothing caught it because nothing had exercised it. **A screen existing is not evidence its endpoint does.**
 - Test totals (2026-07-28, post-security-round-3): **1514 unit (API, 138 suites)** + **127 e2e (API, 20 suites, RUN IN CI)** + **26 vitest (packages: api-client 16 + auth 10)** + **33 vitest (admin: FE-2 boundary 7 + ops primitives 17 + status-kinds/serverVerdict 9)** + **5 vitest (seller)** + **15 Playwright specs** (admin login 3 + seller login 3 + the shared nonce-CSP trio × admin/seller/track — **now a CI job**, no longer manual-only), all green. CP1 + CP2 verification docs: `apps/admin/CP1_VERIFICATION.md` + `apps/admin/CP2_FEATURE_SMOKE.md` + `apps/seller/CP1_VERIFICATION.md` + `apps/seller/CP2_FEATURE_SMOKE.md`.
 

@@ -45,14 +45,11 @@ export class SellerStockService {
 
   async list(
     sellerId: string,
-    opts: { categoryId?: string; status?: VariantStatus; page?: number; pageSize?: number },
+    opts: { status?: VariantStatus; page?: number; pageSize?: number },
   ): Promise<AggregatedStockList> {
     const page = opts.page ?? 1;
     const pageSize = opts.pageSize ?? 20;
-    const merged = await this.merged(sellerId, {
-      categoryId: opts.categoryId,
-      status: opts.status,
-    });
+    const merged = await this.merged(sellerId, { status: opts.status });
     const rows = [...merged.values()].sort((a, b) => a.skuCode.localeCompare(b.skuCode));
     const items = rows.slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize);
     return { items, total: rows.length, page, pageSize };
@@ -94,7 +91,7 @@ export class SellerStockService {
 
   private async merged(
     sellerId: string,
-    opts: { categoryId?: string | undefined; status?: VariantStatus | undefined },
+    opts: { status?: VariantStatus | undefined },
   ): Promise<Map<string, AggregatedVariantStock>> {
     const warehouseIds = await this.warehouseIds();
     const out = new Map<string, AggregatedVariantStock>();

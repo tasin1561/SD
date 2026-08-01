@@ -18,9 +18,6 @@ import { SellerProfileModule } from './modules/seller-profile/seller-profile.mod
 import { SellerAddressModule } from './modules/seller-address/seller-address.module';
 import { SellerNotificationPreferenceModule } from './modules/seller-notification-preference/seller-notification-preference.module';
 import { AdminSellerModule } from './modules/admin-seller/admin-seller.module';
-import { CatalogCategoryModule } from './modules/catalog-category/catalog-category.module';
-import { CatalogAttributeModule } from './modules/catalog-attribute/catalog-attribute.module';
-import { CatalogCategoryProposalModule } from './modules/catalog-category-proposal/catalog-category-proposal.module';
 import { CatalogProductModule } from './modules/catalog-product/catalog-product.module';
 import { CatalogVariantModule } from './modules/catalog-variant/catalog-variant.module';
 import { CatalogImageModule } from './modules/catalog-image/catalog-image.module';
@@ -123,9 +120,6 @@ import { envSchema } from './config/env.schema';
     SellerAddressModule,
     SellerNotificationPreferenceModule,
     AdminSellerModule,
-    CatalogCategoryModule,
-    CatalogAttributeModule,
-    CatalogCategoryProposalModule,
     CatalogProductModule,
     CatalogVariantModule,
     CatalogImageModule,

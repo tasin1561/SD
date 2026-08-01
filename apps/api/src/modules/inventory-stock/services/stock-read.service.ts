@@ -39,7 +39,7 @@ export interface StockListResult {
  *    seller-facing reads only. A stale display number is harmless; a stale
  *    decision is not — hence the hard naming split.
  *
- * Catalog metadata (sku/label/status/category) and the raw per-variant
+ * Catalog metadata (sku/label/status) and the raw per-variant
  * threshold come exclusively via CatalogReadService — inventory never
  * queries product_variants directly (CLAUDE MUST #13). The seller-default
  * threshold fallback is inventory's own logic (reads `sellers`, allowed).
@@ -117,7 +117,6 @@ export class StockReadService {
     return {
       variantId,
       productId: resolved.productId,
-      categoryId: resolved.categoryId,
       skuCode: resolved.skuCode,
       variantLabel: resolved.variantLabel,
       status: resolved.status,
@@ -137,11 +136,10 @@ export class StockReadService {
   async getDisplayVariants(
     sellerId: string,
     warehouseId: string,
-    opts: { categoryId?: string | undefined; status?: VariantStatus | undefined } = {},
+    opts: { status?: VariantStatus | undefined } = {},
   ): Promise<CachedVariantStock[]> {
     const detail = await this.getOrBuildDetail(sellerId, warehouseId);
     let rows = detail.variants;
-    if (opts.categoryId) rows = rows.filter((v) => v.categoryId === opts.categoryId);
     if (opts.status) rows = rows.filter((v) => v.status === opts.status);
     return [...rows].sort((a, b) => a.skuCode.localeCompare(b.skuCode));
   }
@@ -150,7 +148,6 @@ export class StockReadService {
     sellerId: string,
     warehouseId: string,
     opts: {
-      categoryId?: string;
       status?: VariantStatus;
       page?: number;
       pageSize?: number;
@@ -158,10 +155,7 @@ export class StockReadService {
   ): Promise<StockListResult> {
     const page = opts.page ?? 1;
     const pageSize = opts.pageSize ?? 20;
-    const rows = await this.getDisplayVariants(sellerId, warehouseId, {
-      categoryId: opts.categoryId,
-      status: opts.status,
-    });
+    const rows = await this.getDisplayVariants(sellerId, warehouseId, { status: opts.status });
     const total = rows.length;
     const items = rows.slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize);
     return { items, total, page, pageSize };
@@ -228,7 +222,6 @@ export class StockReadService {
       variants.push({
         variantId,
         productId: meta.productId,
-        categoryId: meta.categoryId,
         skuCode: meta.skuCode,
         variantLabel: meta.variantLabel,
         status: meta.status,

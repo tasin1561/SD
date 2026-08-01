@@ -154,7 +154,6 @@ model Seller {
   webhookEndpoints        SellerWebhookEndpoint[]
   notificationPreferences SellerNotificationPreference[]
   onboardingProgress      SellerOnboardingProgress[]
-  categoryProposals       CategoryProposal[]
   sellerCsvMappings       SellerCsvMapping[]
   bulkProductUploads      BulkProductUpload[]
   stockAlertStates        StockAlertState[]
@@ -556,40 +555,9 @@ model PinCode {
 // Layer 3 — Catalog (5 tables)
 // ============================================================
 
-model Category {
-  id                 String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  parentId           String?      @map("parent_id") @db.Uuid
-  slug               String       @unique
-  name               String
-  fullPath           String       @map("full_path")
-  depth              Int          @default(0)
-  sortOrder          Int          @default(0) @map("sort_order")
-  defaultPackageType PackageType? @map("default_package_type")
-  requiresFragile    Boolean      @default(false) @map("requires_fragile")
-  requiresColdChain  Boolean      @default(false) @map("requires_cold_chain")
-  defaultHsCode      String?      @map("default_hs_code")
-  defaultGstRate     Decimal?     @map("default_gst_rate") @db.Decimal(5, 2)
-  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt          DateTime     @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt          DateTime?    @map("deleted_at") @db.Timestamptz
-
-  parent               Category?                     @relation("CategoryParent", fields: [parentId], references: [id])
-  children             Category[]                    @relation("CategoryParent")
-  products             Product[]
-  courierRules         CategoryCourierRule[]
-  attributeDefinitions CategoryAttributeDefinition[]
-  resultingProposal    CategoryProposal[]            @relation("ResultingCategory")
-
-  @@index([parentId])
-  @@index([depth])
-  @@index([deletedAt])
-  @@map("categories")
-}
-
 model Product {
   id                      String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
   sellerId                String        @map("seller_id") @db.Uuid
-  categoryId              String?       @map("category_id") @db.Uuid
   name                    String
   description             String?       @db.Text
   brand                   String?
@@ -607,12 +575,10 @@ model Product {
   deletedAt               DateTime?     @map("deleted_at") @db.Timestamptz
 
   seller   Seller           @relation(fields: [sellerId], references: [id])
-  category Category?        @relation(fields: [categoryId], references: [id])
   variants ProductVariant[]
 
   @@unique([sellerId, externalRef])
   @@index([sellerId])
-  @@index([categoryId])
   @@index([status])
   @@index([deletedAt])
   @@map("products")
@@ -703,78 +669,6 @@ model ProductImage {
   @@index([displayOrder])
   @@index([deletedAt])
   @@map("product_images")
-}
-
-// courierCode is a denormalized string reference to couriers.code (Layer 8).
-// Not modeled as a Prisma relation per spec.
-model CategoryCourierRule {
-  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  categoryId  String    @map("category_id") @db.Uuid
-  courierCode String    @map("courier_code")
-  isAllowed   Boolean   @default(true) @map("is_allowed")
-  notes       String?
-  metadata    Json?
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
-
-  category Category @relation(fields: [categoryId], references: [id])
-
-  @@unique([categoryId, courierCode])
-  @@index([courierCode])
-  @@map("category_courier_rules")
-}
-
-// Seller-submitted request to add a new category. proposedParentId and
-// reviewedByStaffId are bare UUID columns (not Prisma relations) — a
-// proposal is a loosely-coupled request, mirroring the denormalized
-// reference precedent of CategoryCourierRule.courierCode. Only
-// resultingCategoryId is a relation (set on approval).
-model CategoryProposal {
-  id                  String                 @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  sellerId            String                 @map("seller_id") @db.Uuid
-  proposedName        String                 @map("proposed_name")
-  proposedParentId    String?                @map("proposed_parent_id") @db.Uuid
-  proposedSlug        String                 @map("proposed_slug")
-  rationale           String                 @db.Text
-  status              CategoryProposalStatus @default(PENDING)
-  reviewedByStaffId   String?                @map("reviewed_by_staff_id") @db.Uuid
-  reviewedAt          DateTime?              @map("reviewed_at") @db.Timestamptz
-  decisionNote        String?                @map("decision_note") @db.Text
-  resultingCategoryId String?                @map("resulting_category_id") @db.Uuid
-  createdAt           DateTime               @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt           DateTime               @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt           DateTime?              @map("deleted_at") @db.Timestamptz
-
-  seller            Seller    @relation(fields: [sellerId], references: [id])
-  resultingCategory Category? @relation("ResultingCategory", fields: [resultingCategoryId], references: [id])
-
-  @@index([sellerId, status])
-  @@index([status])
-  @@index([proposedParentId])
-  @@index([deletedAt])
-  @@map("category_proposals")
-}
-
-model CategoryAttributeDefinition {
-  id            String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  categoryId    String             @map("category_id") @db.Uuid
-  attributeKey  String             @map("attribute_key")
-  displayLabel  String             @map("display_label")
-  valueType     AttributeValueType @map("value_type")
-  allowedValues String[]           @default([]) @map("allowed_values")
-  isRequired    Boolean            @default(false) @map("is_required")
-  displayOrder  Int                @default(100) @map("display_order")
-  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt     DateTime?          @map("deleted_at") @db.Timestamptz
-
-  category Category @relation(fields: [categoryId], references: [id])
-
-  @@unique([categoryId, attributeKey])
-  @@index([categoryId])
-  @@index([deletedAt])
-  @@map("category_attribute_definitions")
 }
 
 model SellerCsvMapping {
@@ -3156,24 +3050,6 @@ enum VariantStatus {
   OUT_OF_STOCK @map("out_of_stock")
 
   @@map("variant_status")
-}
-
-enum CategoryProposalStatus {
-  PENDING   @map("pending")
-  APPROVED  @map("approved")
-  REJECTED  @map("rejected")
-  WITHDRAWN @map("withdrawn")
-
-  @@map("category_proposal_status")
-}
-
-enum AttributeValueType {
-  STRING  @map("string")
-  NUMBER  @map("number")
-  BOOLEAN @map("boolean")
-  ENUM    @map("enum")
-
-  @@map("attribute_value_type")
 }
 
 enum CsvImportType {

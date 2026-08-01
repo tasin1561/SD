@@ -11,12 +11,15 @@ import {
 } from './app-harness';
 
 /**
- * Cross-feature catalog smoke (e2e): admin builds a category tree with
- * attributes → seller proposes a subcategory → admin approves (creating
- * the category + attribute defs in one tx) → seller creates a product →
- * a variant whose attributes are validated against the inherited
- * effective set (valid passes, invalid 400s) → image presign/register
- * (mock Spaces) → CSV import end-to-end with a saved mapping.
+ * Cross-feature catalog smoke (e2e): seller creates a product → a
+ * variant carrying free-form attributes → image presign/register (mock
+ * Spaces) → CSV import end-to-end with a saved mapping.
+ *
+ * This used to open with an admin building a category tree, because a
+ * variant's attributes were validated against its category's inherited
+ * definitions. Categories are gone: the inheritance chain is now
+ * variant → product, gstRate falls through to `pricing.gst_rate`, and
+ * the attribute map is free-form.
  */
 describe('Catalog flow (e2e)', () => {
   let h: AppHarness;
@@ -62,81 +65,27 @@ describe('Catalog flow (e2e)', () => {
     sellerAccess = reg.body.accessToken as string;
   });
 
-  it('admin tree + attributes → proposal → approval → product → variant validation → image → CSV', async () => {
-    const staffAuth = { Authorization: `Bearer ${staffAccess}` };
+  it('product → variant → image → CSV import', async () => {
     const sellerAuth = { Authorization: `Bearer ${sellerAccess}` };
 
-    // 1) Admin creates a root category.
-    const root = await request(h.baseUrl)
-      .post('/admin/categories')
-      .set(staffAuth)
-      .send({ name: 'Apparel', slug: 'apparel' })
-      .expect(201);
-    expect(root.body.depth).toBe(0);
-    expect(root.body.fullPath).toBe('Apparel');
-
-    // 2) Admin defines inherited attributes on the root.
-    await request(h.baseUrl)
-      .post(`/admin/categories/${root.body.id}/attributes`)
-      .set(staffAuth)
-      .send({
-        attributeKey: 'color',
-        displayLabel: 'Colour',
-        valueType: 'ENUM',
-        allowedValues: ['Red', 'Blue'],
-        isRequired: true,
-      })
-      .expect(201);
-
-    // 3) Seller proposes a subcategory under the root.
-    const proposal = await request(h.baseUrl)
-      .post('/seller/category-proposals')
-      .set(sellerAuth)
-      .send({
-        proposedName: 'Premium Apparel',
-        proposedSlug: 'premium-apparel',
-        proposedParentId: root.body.id,
-        rationale: 'We sell a distinct premium apparel line and need its own node.',
-      })
-      .expect(201);
-
-    // 4) Admin approves — creates the category + an extra attribute def.
-    const approval = await request(h.baseUrl)
-      .post(`/admin/category-proposals/${proposal.body.id}/approve`)
-      .set(staffAuth)
-      .send({
-        decisionNote: 'Approved.',
-        attributeDefinitions: [
-          {
-            attributeKey: 'material',
-            displayLabel: 'Material',
-            valueType: 'STRING',
-            isRequired: true,
-          },
-        ],
-      })
-      .expect(200);
-    const categoryId = approval.body.categoryId as string;
-    expect(categoryId).toBeTruthy();
-    expect(approval.body.attributeDefinitionsCreated).toBe(1);
-
-    // Effective attributes for the child = inherited `color` + own `material`.
-    const eff = await request(h.baseUrl)
-      .get(`/admin/categories/${categoryId}/attributes/effective`)
-      .set(staffAuth)
-      .expect(200);
-    const keys = (eff.body as Array<{ attributeKey: string }>).map((a) => a.attributeKey).sort();
-    expect(keys).toEqual(['color', 'material']);
-
-    // 5) Seller creates a product in the approved category.
+    // 1) Seller creates a product. There is no category to file it under
+    //    — the chain is variant → product, and gstRate falls through to
+    //    the `pricing.gst_rate` system setting.
     const product = await request(h.baseUrl)
       .post('/seller/products')
       .set(sellerAuth)
-      .send({ name: 'Premium Tee', categoryId, externalRef: 'PT-1' })
+      .send({ name: 'Premium Tee', externalRef: 'PT-1' })
       .expect(201);
     const productId = product.body.id as string;
 
-    // 6) Valid variant — satisfies required color (enum) + material.
+    // 2) A variant carrying free-form attributes.
+    //
+    //    This is the case that used to FAIL. Attribute definitions were
+    //    category-scoped, so a product with no category had an empty
+    //    effective set and the validator rejected every key as unknown —
+    //    meaning attributes were unusable unless an admin had first
+    //    built a category for them. Removing categories makes the map
+    //    what a seller always assumed it was.
     const okVariant = await request(h.baseUrl)
       .post(`/seller/products/${productId}/variants`)
       .set(sellerAuth)
@@ -146,14 +95,7 @@ describe('Catalog flow (e2e)', () => {
       })
       .expect(201);
     const variantId = okVariant.body.id as string;
-
-    // 6b) Invalid variant — bad enum value + missing required material.
-    const badVariant = await request(h.baseUrl)
-      .post(`/seller/products/${productId}/variants`)
-      .set(sellerAuth)
-      .send({ skuCode: 'PT-1-GREEN', attributes: { color: 'Green' } })
-      .expect(400);
-    expect(badVariant.body.code).toBe('ATTRIBUTE_VALIDATION_FAILED');
+    expect(okVariant.body.attributes).toEqual({ color: 'Red', material: 'Cotton' });
 
     // 7) Image presign → simulate client upload → register (HEAD-verified).
     const spaces = h.app.get(SpacesService);

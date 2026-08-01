@@ -39,7 +39,7 @@ export class SellerStockController {
   @Get()
   @SellerAuthAllowSuspended()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Paginated stock across all warehouses (filter by category/status)' })
+  @ApiOperation({ summary: 'Paginated stock across all warehouses (filter by status)' })
   list(
     @CurrentSeller() seller: AuthenticatedSeller,
     @Query() query: ListSellerStockQueryDto,

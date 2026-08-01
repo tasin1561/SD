@@ -139,11 +139,8 @@ src/
     ├── seller-address/           # /seller/addresses CRUD
     ├── seller-notification-preference/  # /seller/notification-preferences
     ├── admin-seller/             # /admin/sellers — list, detail, status, notes, onboarding
-    ├── catalog-category/         # /admin/categories tree + /seller/categories reads
-    ├── catalog-attribute/        # category attribute defs + effective-set resolver (Redis)
-    ├── catalog-category-proposal/ # seller propose / admin approve|reject
     ├── catalog-product/          # /seller/products CRUD + archive
-    ├── catalog-variant/          # /seller/products/:id/variants + attribute validation
+    ├── catalog-variant/          # /seller/products/:id/variants
     ├── catalog-image/            # presign/register + thumbnail & orphan-sweep crons
     ├── catalog-csv-import/       # CSV template/preview/process + saved mappings
     └── catalog-read/             # CatalogReadService — sole cross-module variant read
@@ -231,36 +228,6 @@ Notes:
 ## Module 4 (Product/SKU Catalog) — endpoint map
 
 ```
-# Categories — admin manages the tree; sellers read it.
-GET    /admin/categories                         (staff auth)
-GET    /admin/categories/tree                    (staff auth)
-GET    /admin/categories/:id                     (staff auth)
-POST   /admin/categories                         (staff auth)
-PATCH  /admin/categories/:id                     (staff auth)
-POST   /admin/categories/:id/move                (staff auth)
-DELETE /admin/categories/:id                     (staff auth)
-GET    /seller/categories                        (seller auth, allow-suspended)
-GET    /seller/categories/tree                   (seller auth, allow-suspended)
-GET    /seller/categories/:id                    (seller auth, allow-suspended)
-
-# Category attribute definitions (own set + inherited "effective" set).
-GET    /admin/categories/:categoryId/attributes            (staff auth)
-GET    /admin/categories/:categoryId/attributes/effective  (staff auth)
-POST   /admin/categories/:categoryId/attributes            (staff auth)
-PATCH  /admin/categories/:categoryId/attributes/:id        (staff auth)
-DELETE /admin/categories/:categoryId/attributes/:id        (staff auth; soft warning by product count)
-GET    /seller/categories/:categoryId/attributes           (seller auth, allow-suspended)
-
-# Category proposals — sellers can't create categories directly.
-POST   /seller/category-proposals                (seller auth, APPROVED)
-GET    /seller/category-proposals                (seller auth, allow-suspended)
-GET    /seller/category-proposals/:id            (seller auth, allow-suspended)
-POST   /seller/category-proposals/:id/withdraw   (seller auth, APPROVED)
-GET    /admin/category-proposals                 (staff auth)
-GET    /admin/category-proposals/:id             (staff auth)
-POST   /admin/category-proposals/:id/approve     (staff auth; category+attrs in one tx, email)
-POST   /admin/category-proposals/:id/reject      (staff auth; email)
-
 # Products + variants.
 POST   /seller/products                          (seller auth, APPROVED)
 GET    /seller/products                          (seller auth, allow-suspended)
@@ -300,11 +267,10 @@ DELETE /seller/csv-mappings/:id                  (seller auth, APPROVED; soft)
 
 Notes:
 - Property inheritance (weight/dims/declared-value/HS/GST) resolves
-  variant → product → category → `system_settings` (GST only). All
-  cross-module variant reads MUST go through `CatalogReadService`.
-- Attribute inheritance: a category's effective attribute set = its own
-  defs + every ancestor's, child overrides parent on the same key;
-  cached in Redis 5 min, descendant-invalidated on write.
+  variant → product → `system_settings` (GST only). All cross-module
+  variant reads MUST go through `CatalogReadService`.
+- `product_variants.attributes` is free-form. Categories carried the
+  attribute schema and were removed on 2026-08-01.
 - Background jobs (in-process BullMQ): thumbnail generation, image
   orphan-sweep (daily 03:15 UTC), CSV import processing.
 - GST is whole-percent in Phase 1A; CSV imports are idempotent

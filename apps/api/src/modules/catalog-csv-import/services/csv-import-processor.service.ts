@@ -5,8 +5,6 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { EnvService } from '../../../config/env.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
-import { AttributeResolutionService } from '../../catalog-attribute/services/attribute-resolution.service';
-import { VariantAttributeValidatorService } from '../../catalog-variant/services/variant-attribute-validator.service';
 import { CsvParserService, type CoercedVariantRow } from './csv-parser.service';
 import type { CsvTargetField } from '../csv-fields';
 import { errorReportKeyFor } from '../csv-import-key';
@@ -38,8 +36,6 @@ export class CsvImportProcessorService {
     private readonly env: EnvService,
     private readonly audit: AuditLogService,
     private readonly parser: CsvParserService,
-    private readonly resolution: AttributeResolutionService,
-    private readonly validator: VariantAttributeValidatorService,
   ) {}
 
   /**
@@ -48,7 +44,7 @@ export class CsvImportProcessorService {
    *    (sellerId, externalRef) — variant-first so a re-upload never
    *    orphans a product.
    *  - identical re-upload ⇒ no diff ⇒ row counted as skipped.
-   *  - any row that fails coercion / category / attribute validation is
+   *  - any row that fails coercion is
    *    written to an error-report CSV; other rows still import (partial
    *    success ⇒ COMPLETED_WITH_ERRORS).
    * Each row commits in its own transaction so a failing row never
@@ -100,7 +96,6 @@ export class CsvImportProcessorService {
       rowsSkipped: 0,
     };
     const errorRows: ErrorRow[] = [];
-    const categoryCache = new Map<string, { id: string } | null>();
 
     for (let i = 0; i < parsed.rows.length; i++) {
       const raw = parsed.rows[i];
@@ -121,50 +116,8 @@ export class CsvImportProcessorService {
         continue;
       }
 
-      // Resolve category by slug (cached per run).
-      let categoryId: string | null = null;
-      if (row.categorySlug) {
-        let cat = categoryCache.get(row.categorySlug);
-        if (cat === undefined) {
-          cat = await this.prisma.client.category.findFirst({
-            where: { slug: row.categorySlug, deletedAt: null },
-            select: { id: true },
-          });
-          categoryCache.set(row.categorySlug, cat);
-        }
-        if (!cat) {
-          errorRows.push({
-            rowNumber,
-            errorField: 'categorySlug',
-            errorReason: `Category slug "${row.categorySlug}" not found`,
-            original: raw,
-          });
-          counters.rowsFailed += 1;
-          continue;
-        }
-        categoryId = cat.id;
-      }
-
-      // Validate attributes against the category's effective schema.
-      const effective = categoryId
-        ? await this.resolution.resolveEffectiveAttributes(categoryId)
-        : [];
-      const attrErrors = this.validator.collect(effective, row.attributes ?? {});
-      if (attrErrors.length > 0) {
-        for (const reason of attrErrors) {
-          errorRows.push({
-            rowNumber,
-            errorField: 'attributes',
-            errorReason: reason,
-            original: raw,
-          });
-        }
-        counters.rowsFailed += 1;
-        continue;
-      }
-
       try {
-        const outcome = await this.upsertRow(sellerId, categoryId, row);
+        const outcome = await this.upsertRow(sellerId, row);
         counters.productsCreated += outcome.productCreated ? 1 : 0;
         counters.productsUpdated += outcome.productUpdated ? 1 : 0;
         counters.variantsCreated += outcome.variantCreated ? 1 : 0;
@@ -225,7 +178,6 @@ export class CsvImportProcessorService {
 
   private async upsertRow(
     sellerId: string,
-    categoryId: string | null,
     row: CoercedVariantRow,
   ): Promise<{
     productCreated: boolean;
@@ -247,7 +199,7 @@ export class CsvImportProcessorService {
 
       if (existingVariant) {
         productId = existingVariant.productId;
-        productUpdated = await this.patchProduct(tx, productId, categoryId, row);
+        productUpdated = await this.patchProduct(tx, productId, row);
       } else if (row.productExternalRef) {
         const existingProduct = await tx.product.findFirst({
           where: { sellerId, externalRef: row.productExternalRef, deletedAt: null },
@@ -255,13 +207,13 @@ export class CsvImportProcessorService {
         });
         if (existingProduct) {
           productId = existingProduct.id;
-          productUpdated = await this.patchProduct(tx, productId, categoryId, row);
+          productUpdated = await this.patchProduct(tx, productId, row);
         } else {
-          productId = await this.createProduct(tx, sellerId, categoryId, row);
+          productId = await this.createProduct(tx, sellerId, row);
           productCreated = true;
         }
       } else {
-        productId = await this.createProduct(tx, sellerId, categoryId, row);
+        productId = await this.createProduct(tx, sellerId, row);
         productCreated = true;
       }
 
@@ -298,13 +250,11 @@ export class CsvImportProcessorService {
   private async createProduct(
     tx: Prisma.TransactionClient,
     sellerId: string,
-    categoryId: string | null,
     row: CoercedVariantRow,
   ): Promise<string> {
     const p = await tx.product.create({
       data: {
         sellerId,
-        categoryId,
         name: row.productName,
         externalRef: row.productExternalRef ?? null,
         defaultWeightGrams: row.weightGrams ?? null,
@@ -322,18 +272,14 @@ export class CsvImportProcessorService {
   private async patchProduct(
     tx: Prisma.TransactionClient,
     productId: string,
-    categoryId: string | null,
     row: CoercedVariantRow,
   ): Promise<boolean> {
     const cur = await tx.product.findUniqueOrThrow({
       where: { id: productId },
-      select: { name: true, categoryId: true, defaultHsCode: true },
+      select: { name: true, defaultHsCode: true },
     });
     const data: Prisma.ProductUpdateInput = {};
     if (row.productName !== cur.name) data.name = row.productName;
-    if (categoryId !== null && categoryId !== cur.categoryId) {
-      data.category = { connect: { id: categoryId } };
-    }
     if (row.hsCode !== undefined && row.hsCode !== cur.defaultHsCode) {
       data.defaultHsCode = row.hsCode;
     }

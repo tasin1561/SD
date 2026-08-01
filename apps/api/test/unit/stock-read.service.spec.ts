@@ -9,7 +9,6 @@ function resolved(over: Record<string, unknown> = {}) {
     variantId: 'v1',
     productId: 'p1',
     sellerId: 's1',
-    categoryId: 'c1',
     skuCode: 'SKU-1',
     variantLabel: 'Red / L',
     status: VariantStatus.ACTIVE,
@@ -99,7 +98,6 @@ describe('StockReadService — display path (cache-backed)', () => {
         {
           variantId: 'v1',
           productId: 'p1',
-          categoryId: 'c1',
           skuCode: 'SKU-1',
           variantLabel: null,
           status: VariantStatus.ACTIVE,
@@ -146,10 +144,10 @@ describe('StockReadService — display path (cache-backed)', () => {
     expect(cache.setAggregate).toHaveBeenCalledTimes(1);
   });
 
-  it('filters by category and paginates the cached set', async () => {
+  it('filters by status and paginates the cached set', async () => {
     const catalog = new Map([
-      ['v1', resolved({ variantId: 'v1', skuCode: 'A', categoryId: 'c1' })],
-      ['v2', resolved({ variantId: 'v2', skuCode: 'B', categoryId: 'c2' })],
+      ['v1', resolved({ variantId: 'v1', skuCode: 'A', status: VariantStatus.ACTIVE })],
+      ['v2', resolved({ variantId: 'v2', skuCode: 'B', status: VariantStatus.ARCHIVED })],
     ]);
     const { svc } = makeSut({
       levels: [
@@ -158,7 +156,7 @@ describe('StockReadService — display path (cache-backed)', () => {
       ],
       catalog,
     });
-    const res = await svc.listStockForDisplay('s1', 'w1', { categoryId: 'c2' });
+    const res = await svc.listStockForDisplay('s1', 'w1', { status: VariantStatus.ARCHIVED });
     expect(res.total).toBe(1);
     expect(res.items[0]?.variantId).toBe('v2');
   });

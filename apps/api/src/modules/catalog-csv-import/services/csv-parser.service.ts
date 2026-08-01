@@ -38,7 +38,6 @@ export interface CoercedVariantRow {
   hsCode?: string;
   barcode?: string;
   attributes?: Record<string, string | number | boolean>;
-  categorySlug?: string;
 }
 
 @Injectable()
@@ -164,8 +163,6 @@ export class CsvParserService {
     const bc = get('barcode');
     if (bc !== undefined) row.barcode = bc;
     if (attributes !== undefined) row.attributes = attributes;
-    const cat = get('categorySlug');
-    if (cat !== undefined) row.categorySlug = cat;
     return { row, errors: [] };
   }
 

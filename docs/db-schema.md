@@ -68,7 +68,7 @@ These rules apply to **every** table unless explicitly noted otherwise.
 |---|---|---|
 | 1 — Identity & Access | 13 | Auth, tokens, RBAC, audit, onboarding progress |
 | 2 — Addresses & Locations | 5 | Polymorphic addresses, warehouse hierarchy |
-| 3 — Catalog | 9 | Products, variants, categories, images, proposals, attribute defs, CSV |
+| 3 — Catalog | 5 | Products, variants, images, CSV uploads + mappings |
 | 4 — Inventory & WMS | 7 | Stock levels, movements, reservations, batches |
 | 5 — Orders & Customers | 6 | Orders, items, customers, events |
 | 6 — Call Center | 3 | Queue, attempts, agent config |
@@ -307,28 +307,31 @@ IN pincode cache (hybrid — grows organically + service area classification).
 
 ---
 
-# Layer 3 — Catalog (9 tables)
+# Layer 3 — Catalog (5 tables)
 
-## categories
-Global category tree with handling hints.
-
-**Key fields:**
-- `parentId` (self-FK, nullable — root has null)
-- `slug` (unique), `name`, `fullPath` (denormalized: "Apparel > Men > T-Shirts")
-- `depth` (0 = root), `sortOrder`
-- `defaultPackageType: PackageType?`
-- `requiresFragile`, `requiresColdChain`
-- `defaultHsCode`, `defaultGstRate (@db.Decimal(5,2))`
-
-**Indexes:** `parentId`, `depth`, `slug` (unique), `deletedAt`
-
-**PackageType enum:** `BOX`, `POLYBAG`, `ENVELOPE`, `TUBE`, `CUSTOM`
+> **Categories were removed (2026-08-01).** `categories`,
+> `category_courier_rules`, `category_proposals`,
+> `category_attribute_definitions` and `products.category_id` are gone,
+> along with the `category_proposal_status` and `attribute_value_type`
+> enums. They contributed exactly two things to a live order — a
+> fallback for `hsCode` and one for `gstRate` — and both survive: hsCode
+> falls back to the product, gstRate to `pricing.gst_rate`. The other
+> category columns (`default_package_type`, `requires_fragile`,
+> `requires_cold_chain`) were written and never read, and
+> `category_courier_rules` had no reader at all.
+>
+> `product_variants.attributes` stays and is now free-form. That is
+> strictly more permissive: with no category the effective attribute set
+> was empty and the validator rejected EVERY key as unknown, so an
+> uncategorised product could not carry attributes at all.
+>
+> `PackageType` survives — orders use it.
 
 ## products
 Conceptual products (seller-scoped).
 
 **Key fields:**
-- `sellerId`, `categoryId` (nullable)
+- `sellerId`
 - `name`, `description`, `brand`
 - `externalRef` (seller's own product ID), `externalSku`
 - `defaultWeightGrams`, `defaultLengthCm` / `WidthCm` / `HeightCm` (@db.Decimal(6,2))
@@ -336,7 +339,7 @@ Conceptual products (seller-scoped).
 - `status: ProductStatus`
 
 **Constraints:** `@@unique([sellerId, externalRef])`
-**Indexes:** `sellerId`, `categoryId`, `status`, `deletedAt`
+**Indexes:** `sellerId`, `status`, `deletedAt`
 
 **ProductStatus enum:** `ACTIVE`, `ARCHIVED`, `DRAFT`
 
@@ -346,10 +349,10 @@ The actual SKUs. **THE most-referenced table — what stock and orders track.**
 **Key fields:**
 - `productId`, `sellerId` (denormalized for seller-scoped queries)
 - `skuCode`
-- `attributes: Json?` — flexible per-category (size/color/etc.)
+- `attributes: Json?` — free-form (size/color/etc.), not validated
 - `variantLabel` (short human-readable)
-- Physical overrides: `weightGrams`, `lengthCm`/`WidthCm`/`HeightCm`, `declaredValueInr` — nullable, fall back to product/category defaults
-- `hsCode`, `gstRate` (override category defaults)
+- Physical overrides: `weightGrams`, `lengthCm`/`WidthCm`/`HeightCm`, `declaredValueInr` — nullable, fall back to the product defaults
+- `hsCode` (falls back to `products.defaultHsCode`), `gstRate` (falls back to the `pricing.gst_rate` system setting)
 - `barcode` (indexed for warehouse scanning)
 - `externalSku` (seller's variant code if different from skuCode)
 - `status: VariantStatus`
@@ -372,50 +375,6 @@ Multiple per variant, primary flag.
 
 **Indexes:** `variantId`, `isPrimary`, `displayOrder`, `deletedAt`
 
-## category_courier_rules
-Per-category courier handling rules.
-
-**Key fields:**
-- `categoryId`, `courierCode` (denormalized — FK to couriers in Layer 8)
-- `isAllowed`, `notes`, `metadata: Json?`
-
-**Constraints:** `@@unique([categoryId, courierCode])`
-**Indexes:** `courierCode`
-
-## category_proposals
-Seller-submitted requests to add a new category (Module 4). Sellers can't
-create categories directly; they propose, an admin reviews. On approval a
-real `categories` row is created and linked back via `resultingCategoryId`.
-
-**Key fields:**
-- `sellerId` (FK seller), `proposedName`, `proposedSlug`, `rationale`
-- `proposedParentId?` — bare UUID, NOT a Prisma relation (a proposal is a
-  loosely-coupled request; the parent may be restructured before review).
-  Mirrors the `category_courier_rules.courierCode` denormalized precedent.
-- `reviewedByStaffId?` — bare UUID (same rationale, not a relation)
-- `status: CategoryProposalStatus` (PENDING, APPROVED, REJECTED, WITHDRAWN)
-- `reviewedAt?`, `decisionNote?`
-- `resultingCategoryId?` — relation to `categories` (set on approval)
-
-**Indexes:** `(sellerId, status)`, `status`, `proposedParentId`, `deletedAt`
-
-**CategoryProposalStatus enum:** `PENDING`, `APPROVED`, `REJECTED`, `WITHDRAWN`
-
-## category_attribute_definitions
-Per-category attribute schema (Module 4). Variants under a category must
-satisfy the effective attribute set (this category's defs + all inherited
-from ancestors, child overrides parent on same `attributeKey`).
-
-**Key fields:**
-- `categoryId` (FK category), `attributeKey`, `displayLabel`
-- `valueType: AttributeValueType` (STRING, NUMBER, BOOLEAN, ENUM)
-- `allowedValues String[]` (used when valueType=ENUM)
-- `isRequired`, `displayOrder`
-
-**Constraints:** `@@unique([categoryId, attributeKey])`
-**Indexes:** `categoryId`, `deletedAt`
-
-**AttributeValueType enum:** `STRING`, `NUMBER`, `BOOLEAN`, `ENUM`
 
 ## seller_csv_mappings
 Saved column-mapping presets for a seller's CSV imports (Module 4). Lets a
@@ -566,8 +525,8 @@ multi-line.
 
 **Key fields:**
 - `adjustmentId` (FK `stock_adjustments`, **cascade delete**)
-- `variantId`, `binId` (bare scalar UUIDs — loosely-coupled-ref precedent,
-  like `category_proposals.proposedParentId`), `batchId?`
+- `variantId`, `binId` (bare scalar UUIDs — the loosely-coupled-ref
+  precedent), `batchId?`
 - `qtyChange` (signed; sign agrees with the parent type — INCREASE>0,
   DECREASE<0)
 - `unitCostInr?` — RESOLVED cost snapshot (line input → `batch.unitCostInr`)
@@ -1583,10 +1542,6 @@ A minimal seed of templates needed for Phase 1A flows. Codes:
 - `seller.password_reset.email`
 
 Hindi variants for customer-facing SMS added via admin UI later.
-
-## categories (seed taxonomy — optional)
-
-Phase 1A can launch with sellers creating their own categories under a flat list. A pre-seeded global taxonomy (Apparel, Electronics, Beauty, Home, etc.) can be added if helpful.
 
 ---
 

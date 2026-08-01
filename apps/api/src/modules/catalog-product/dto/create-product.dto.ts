@@ -6,7 +6,6 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  IsUUID,
   Min,
   MaxLength,
   MinLength,
@@ -18,11 +17,6 @@ export class CreateProductDto {
   @MinLength(1)
   @MaxLength(200)
   name!: string;
-
-  @ApiProperty({ required: false, nullable: true, description: 'Existing category id' })
-  @IsOptional()
-  @IsUUID('7')
-  categoryId?: string;
 
   @ApiProperty({ required: false, maxLength: 4000 })
   @IsOptional()

@@ -31,7 +31,6 @@ const TEMPLATE_COLUMNS: Array<[string, string]> = [
   ['HS Code', '6109'],
   ['Barcode', '8901234567890'],
   ['Attributes', 'color=Red;size=M'],
-  ['Category Slug', 't-shirts'],
 ];
 
 export interface CsvPresignResult {

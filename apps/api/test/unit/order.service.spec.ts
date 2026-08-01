@@ -15,7 +15,6 @@ function resolvedVariant(over: Partial<Record<string, unknown>> = {}): AnyArgs {
     variantId: 'v1',
     productId: 'p1',
     sellerId: 's1',
-    categoryId: null,
     skuCode: 'SKU-1',
     variantLabel: 'Red / M',
     status: 'ACTIVE',
