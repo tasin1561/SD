@@ -273,6 +273,16 @@ Logical zones within a warehouse.
 **Constraints:** `@@unique([warehouseId, code])`
 **Indexes:** `warehouseId`, `deletedAt`
 
+> **Bin tracking (2026-08-01):** `warehouses.bin_tracking_enabled`
+> (per-warehouse, default false) decides whether the system asks where
+> stock went. Off routes putaway to that warehouse's `FLOOR` bin — a real
+> row, because `stock_levels.bin_id` is NOT NULL and "no bin" cannot be
+> represented. `warehouse_bins.rack` joins `aisle`/`shelf`; the `code` is
+> COMPOSED from all three (`A-01-03`) and never typed. New tables:
+> `bin_layout_snapshots` + `_lines` (the backup taken before a
+> collapse-to-FLOOR) and `bin_collapse_challenges` (the emailed code
+> gating it). See BIN-1..4 in CLAUDE.md.
+
 ## warehouse_bins
 Discrete storage locations.
 
