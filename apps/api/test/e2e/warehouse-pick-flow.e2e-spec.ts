@@ -4,6 +4,7 @@ import { OrderWriteService } from '../../src/modules/order/services/order-write.
 import { ShipmentProvisionService } from '../../src/modules/shipment-provision/services/shipment-provision.service';
 import {
   bootTestApp,
+  pullPickFor,
   createTestStaff,
   flushTestRedis,
   resetAuthState,
@@ -172,12 +173,14 @@ describe('Warehouse pick flow (e2e)', () => {
     const orderId = await createConfirmedOrder(2);
     const shipmentId = await provisionShipment(orderId);
 
-    // pullNext claims the shipment
-    const next = await request(h.baseUrl).post('/warehouse/picks/next').set(staffAuth).expect(200);
-    expect(next.body.pick).not.toBeNull();
-    expect(next.body.pick.shipmentId).toBe(shipmentId);
-    expect(next.body.pick.items).toHaveLength(1);
-    const shipmentItemId = next.body.pick.items[0].shipmentItemId as string;
+    // pullNext claims the shipment. Pull until THIS parcel comes back:
+    // the AWB job (now fired at confirmation) holds a row lock that the
+    // pull's SKIP LOCKED steps over, so a single pull is timing-
+    // dependent. See pullPickFor.
+    const pick = await pullPickFor(h.baseUrl, staffAuth, shipmentId);
+    expect(pick.shipmentId).toBe(shipmentId);
+    expect(pick.items).toHaveLength(1);
+    const shipmentItemId = pick.items[0]!.shipmentItemId;
 
     const claimed = await h.prisma.shipment.findUniqueOrThrow({
       where: { id: shipmentId },

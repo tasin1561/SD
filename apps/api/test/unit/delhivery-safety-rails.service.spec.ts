@@ -14,10 +14,16 @@ type AnyArgs = Record<string, unknown>;
  * matters: nothing with a physical-world effect happens unless somebody
  * deliberately turned it on.
  */
-function makeGuard(opts: { setting?: AnyArgs | null } = {}) {
-  const findUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
-    opts.setting === undefined ? { valueBoolean: true } : opts.setting,
-  );
+function makeGuard(opts: { setting?: AnyArgs | null; baseUrl?: string } = {}) {
+  // Key-aware: the write FLAG and the base URL are separate settings,
+  // and the whole point of the target check is that they can disagree.
+  const findUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async (args) => {
+    const key = (args as { where?: { key?: string } }).where?.key;
+    if (key === 'courier.delhivery_api_base_url') {
+      return opts.baseUrl === undefined ? null : { valueString: opts.baseUrl };
+    }
+    return opts.setting === undefined ? { valueBoolean: true } : opts.setting;
+  });
   const prisma = {
     client: { systemSetting: { findUnique } },
   } as unknown as PrismaService;
@@ -99,6 +105,83 @@ function makeLimiter(opts: { used?: number; redisThrows?: boolean } = {}) {
   } as unknown as RedisService;
   return { svc: new DelhiveryRateLimitService(redis), incr, expire };
 }
+
+/* ── where a live write would actually go ─────────────────────────────
+ * The write flag became ambiguous the moment a simulator existed:
+ * exercising the real code path REQUIRES turning it on, and it is then
+ * one edit to the base URL away from a worker manifesting real parcels
+ * that nobody decided to create. These pin that permission granted for
+ * a simulator cannot silently become permission for production.
+ */
+describe('DelhiveryWriteGuardService — write target', () => {
+  it.each([
+    ['http://localhost:4010', 'localhost'],
+    ['http://127.0.0.1:4010', 'loopback'],
+    ['http://192.168.1.20:4010', 'private LAN'],
+    ['http://10.2.3.4:4010', 'private 10/8'],
+    ['http://172.16.5.6:4010', 'private 172.16/12'],
+    ['http://delhivery-sim:4010', 'the simulator by name'],
+  ])('treats %s as a simulator (%s)', async (baseUrl) => {
+    const { svc } = makeGuard({ setting: { valueBoolean: true }, baseUrl });
+    await expect(svc.writeTarget()).resolves.toMatchObject({ simulator: true });
+  });
+
+  it.each([
+    ['https://track.delhivery.com', 'the real API'],
+    ['https://staging.delhivery.com', 'anything on their domain'],
+    ['http://203.0.113.9:4010', 'a simulator someone exposed publicly'],
+  ])('treats %s as PRODUCTION (%s)', async (baseUrl) => {
+    const { svc } = makeGuard({ setting: { valueBoolean: true }, baseUrl });
+    await expect(svc.writeTarget()).resolves.toMatchObject({ simulator: false });
+  });
+
+  it('treats an unparseable base URL as production, not as safe', async () => {
+    const { svc } = makeGuard({ setting: { valueBoolean: true }, baseUrl: 'not a url' });
+    await expect(svc.writeTarget()).resolves.toMatchObject({ simulator: false });
+  });
+
+  it('an empty base URL is stub mode — the adapter never reaches a network', async () => {
+    const { svc } = makeGuard({ setting: { valueBoolean: true }, baseUrl: '' });
+    await expect(svc.writeTarget()).resolves.toMatchObject({ simulator: true });
+  });
+
+  it('a write to a SIMULATOR is silent — that is the working mode', async () => {
+    const { svc, auditLog } = makeGuard({
+      setting: { valueBoolean: true },
+      baseUrl: 'http://localhost:4010',
+    });
+    await expect(svc.assertWritable('shipment.create')).resolves.toBeUndefined();
+    expect(auditLog).not.toHaveBeenCalled();
+  });
+
+  it('a write to PRODUCTION is allowed but AUDITED at HIGH with the host', async () => {
+    // Allowed, because a controlled first-parcel test is exactly this.
+    // Audited, so "when did we start manifesting real parcels, and
+    // against what" is answerable from the log rather than from memory.
+    const { svc, auditLog } = makeGuard({
+      setting: { valueBoolean: true },
+      baseUrl: 'https://track.delhivery.com',
+    });
+    await expect(svc.assertWritable('shipment.create')).resolves.toBeUndefined();
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'courier.delhivery.live_write_to_production',
+        severity: 'HIGH',
+        metadata: expect.objectContaining({ host: 'track.delhivery.com' }),
+      }),
+    );
+  });
+
+  it('the flag being OFF still blocks, whatever the target', async () => {
+    const { svc } = makeGuard({
+      setting: { valueBoolean: false },
+      baseUrl: 'http://localhost:4010',
+    });
+    await expect(svc.assertWritable('shipment.create')).rejects.toMatchObject({
+      response: { code: 'DELHIVERY_LIVE_WRITES_DISABLED' },
+    });
+  });
+});
 
 describe('DelhiveryRateLimitService', () => {
   it('budgets to 80% of the documented limit, leaving WAF headroom', () => {

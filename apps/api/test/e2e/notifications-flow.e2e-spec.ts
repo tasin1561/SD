@@ -16,6 +16,7 @@ import {
   bootTestApp,
   createTestStaff,
   flushTestRedis,
+  claimPick,
   resetAuthState,
   waitFor,
   type AppHarness,
@@ -208,11 +209,12 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
       where: { orderShipments: { some: { orderId } } },
     });
 
-    await request(h.baseUrl).post('/warehouse/picks/next').set(staffAuth).expect(200);
-    await request(h.baseUrl)
-      .post(`/warehouse/picks/${shipment.id}/start`)
-      .set(staffAuth)
-      .expect(200);
+    // The AWB is generated at confirmation on a BullMQ job, and while
+    // it runs it holds a row lock the pick's SKIP LOCKED pull skips
+    // past — so a pull issued microseconds later can hand back a
+    // different parcel. Correct in production; a test needs the
+    // specific one. See claimPick.
+    await claimPick(h.baseUrl, staffAuth, shipment.id);
     const resv = await h.prisma.stockReservation.findFirstOrThrow({
       where: { orderId, status: 'ACTIVE', NOT: { binId: null } },
     });

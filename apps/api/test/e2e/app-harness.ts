@@ -479,6 +479,36 @@ export async function settleAwb(prisma: PrismaClient, shipmentId: string): Promi
  *
  * Retries the PULL, not the start — pulling is the idempotent half.
  */
+/**
+ * Pull picks until the one for `shipmentId` comes back, and return it.
+ *
+ * The identity-asserting sibling of `claimPick`. `pullNext` is FIFO with
+ * SKIP LOCKED, so a parcel whose AWB job is mid-flight is skipped and
+ * some other parcel is handed over — or, with nothing else eligible,
+ * nothing at all. Waiting for the AWB to land is not enough on its own:
+ * the lock can be taken by a retry, and the window is wider on a slow
+ * CI runner than on a developer's machine. Pulling until the expected
+ * parcel appears is the only formulation that does not depend on timing.
+ */
+export async function pullPickFor(
+  baseUrl: string,
+  staffAuth: Record<string, string>,
+  shipmentId: string,
+  attempts = 10,
+): Promise<{ shipmentId: string; items: Array<{ shipmentItemId: string }> }> {
+  const request = (await import('supertest')).default;
+  for (let i = 0; i < attempts; i += 1) {
+    const res = await request(baseUrl).post('/warehouse/picks/next').set(staffAuth);
+    const pick = res.body?.pick as {
+      shipmentId: string;
+      items: Array<{ shipmentItemId: string }>;
+    } | null;
+    if (pick && pick.shipmentId === shipmentId) return pick;
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  throw new Error(`pullPickFor: ${shipmentId} never came back after ${attempts} pulls`);
+}
+
 export async function claimPick(
   baseUrl: string,
   staffAuth: Record<string, string>,

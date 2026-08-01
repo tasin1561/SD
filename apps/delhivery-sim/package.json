@@ -1,0 +1,17 @@
+{
+  "name": "@skydrop/delhivery-sim",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A fake Delhivery that speaks the real wire API, so the REAL adapter code path can be exercised end to end without manifesting a real parcel.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo *.tsbuildinfo"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0"
+  }
+}

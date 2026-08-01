@@ -293,6 +293,15 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  apps/delhivery-sim:
+    devDependencies:
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
   apps/marketing:
     dependencies:
       clsx:
