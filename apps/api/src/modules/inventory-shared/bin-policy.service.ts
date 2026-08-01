@@ -1,7 +1,7 @@
-import { BadRequestException, Injectable, ConflictException } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { BinType, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
-import { FLOOR_BIN_CODE } from '../inventory-warehouse/bin-code';
+import { DEFAULT_ZONE_CODE, FLOOR_BIN_CODE } from '../inventory-warehouse/bin-code';
 
 /**
  * The ONE place `warehouses.bin_tracking_enabled` is read.
@@ -72,19 +72,22 @@ export class BinPolicyService {
     });
     if (existing) return existing.id;
 
-    const zone = await db.warehouseZone.findFirst({
-      where: { warehouseId, deletedAt: null },
-      orderBy: { pickOrder: 'asc' },
-      select: { id: true },
-    });
-    if (!zone) {
-      throw new ConflictException({
-        code: 'WAREHOUSE_HAS_NO_ZONE',
-        message:
-          `Warehouse ${warehouseId} has no zone, so a FLOOR bin cannot be created. ` +
-          `Create a zone first.`,
-      });
-    }
+    // A warehouse that predates auto-provisioning may have no zone
+    // either — the one in production has neither. Refusing here would
+    // mean it could not receive stock until someone found the right
+    // screen, which is the dead end this whole change exists to remove.
+    // Creating MAIN is the same thing warehouse creation now does.
+    const zone =
+      (await db.warehouseZone.findFirst({
+        where: { warehouseId, deletedAt: null },
+        orderBy: { pickOrder: 'asc' },
+        select: { id: true },
+      })) ??
+      (await db.warehouseZone.create({
+        data: { warehouseId, code: DEFAULT_ZONE_CODE, name: 'Main', pickOrder: 100 },
+        select: { id: true },
+      }));
+
     const created = await db.warehouseBin.create({
       data: {
         warehouseId,
