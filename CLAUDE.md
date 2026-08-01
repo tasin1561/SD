@@ -349,10 +349,14 @@ Canonical applications:
 2. Every decrypt writes an `audit_logs` row before returning plaintext.
 3. Plaintext credentials are NEVER logged, NEVER serialized to API responses, NEVER cached longer than 5 min.
 
-**Pricing rules:**
-1. Calculate charges at order creation, not display time. Persist to `order_charges` with full `computationContext` JSON.
-2. GST (18%) applies after all surcharges: `gst = (baseShipping + sum(surcharges)) * 0.18`.
-3. Historical accuracy: past orders show charges as persisted. Don't recompute from current rate cards.
+**Pricing rules (FLAT — replaced the zone/slab engine 2026-08-01):**
+1. **One flat delivery fee per seller, anywhere in India.** `pricing.flat_delivery_fee_inr` (seeded 200), resolved through SET-1: a per-seller override beats the global default, and the override is the one that counts. No zones, no weight slabs, no surcharges, no rate-card lookup. `PricingEngineService` reads settings and nothing else.
+2. **A returned parcel costs delivery + `pricing.flat_rto_fee_inr`** (seeded 30 ⇒ 230 total). The RTO half is NOT predicted at order create — it is charged when the parcel is physically RECEIVED (`RtoFeeAccrualService.chargeOnReceive`, hooked into `RtoReceiptService.receive`). A courier scan saying a parcel is coming back is not the parcel coming back; a debit taken on one would need an adjusting entry.
+3. **The delivery fee is ALSO swept at RTO receive if unpaid.** An order that returns never reaches DELIVERED, so on AT_DELIVERY fee timing the outbound leg would otherwise be free. Idempotent via `OrderChargesAccrualService.debitIfNeeded`'s own gate.
+4. **`WalletEntryDirection.RTO_FEE` is its own direction** — never folded into ORDER_CHARGES, so "what did returns cost this month" is answerable from the ledger alone. Per WAL-1 it is a DEBIT and therefore ABSENT from `CREDIT_DIRECTIONS` on BOTH sides (API + apps/seller's mirrored set). It is also EXCLUDED from the ORDER_CHARGES sum, or the fee would be taken twice with the second charge invisible inside another total.
+5. **GST on the flat fees is `pricing.flat_fee_gst_percent`, seeded 0** — today the fee is what the seller pays, full stop. GLOBAL only, never seller-overridable: a tax rate is set by law, not negotiated. The GST line is written even at zero, because the invoice reads it and an absent line says "we forgot" rather than "none was charged". Distinct from `pricing.gst_rate`, which is the fallback GST on the GOODS.
+6. **A fee that resolves to 0 is FLAGGED (`NO_FLAT_DELIVERY_FEE`), and `OrderChargesService` refuses to persist it.** Recording ₹0 as a real price bills the seller nothing for a parcel that cost money to move, and nothing fails on its own — a zero is a valid Decimal, the tx commits, the UI renders "₹0.00". Under the old engine this was the COMMON case (an unlisted pincode → "DEFAULT" zone → no match); flat pricing removes that seam but the guard stays.
+7. Charges are computed at order create (post-commit, best-effort) and persisted to `order_charges` with `computationContext`. **Historical accuracy: past orders show charges as persisted — never recompute.** The rate-card / zone-matrix / surcharge tables still exist and are no longer read by anything.
 
 **Notification rules (general — see also Module 11 invariants NOTIF-1..8 above):**
 1. Send via BullMQ workers only. API endpoints enqueue; workers send.
