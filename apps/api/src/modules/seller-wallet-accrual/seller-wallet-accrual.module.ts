@@ -7,6 +7,7 @@ import { PendingAccrualWorker } from './queue/pending-accrual.worker';
 import { AccrualExecutionService } from './services/accrual-execution.service';
 import { CourierFeeAccrualService } from './services/courier-fee-accrual.service';
 import { OrderChargesAccrualService } from './services/order-charges-accrual.service';
+import { OrderChargesRefundService } from './services/order-charges-refund.service';
 import { CodCreditService } from './services/cod-credit.service';
 import { RtoFeeAccrualService } from './services/rto-fee-accrual.service';
 import { OrderDeliveredAccrualListener } from './services/order-delivered-accrual-listener.service';
@@ -56,6 +57,7 @@ import { InboundFreightModule } from '../inbound-freight/inbound-freight.module'
   providers: [
     OrderDeliveredAccrualListener,
     OrderChargesAccrualService,
+    OrderChargesRefundService,
     RtoFeeAccrualService,
     CodCreditService,
     CourierFeeAccrualService,
@@ -67,6 +69,9 @@ import { InboundFreightModule } from '../inbound-freight/inbound-freight.module'
   ],
   exports: [
     OrderChargesAccrualService,
+    // Given back when an order is cancelled before it ships — consumed
+    // by OrderWriteService's post-commit cancel hook.
+    OrderChargesRefundService,
     CourierFeeAccrualService,
     RtoFeeAccrualService,
     CodCreditService,

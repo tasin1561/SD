@@ -335,9 +335,9 @@ export function useDiscardDraftOrder(orderId: string): UseMutationResult<void, E
   });
 }
 
-/** Pre-reservation cancel (DRAFT / PENDING_CONFIRMATION). The server
- *  matrix enforces the allowed source states; the UI surfaces server
- *  rejection verbatim (FE-2). */
+/** Call an order off. Allowed until the parcel is packed; the server's
+ *  matrix is the authority on that and on giving back any delivery fee
+ *  already taken, and its rejection is surfaced verbatim (FE-2). */
 export function useCancelOrder(
   orderId: string,
 ): UseMutationResult<OrderView, Error, { cancellationReason?: string; note?: string }> {
@@ -350,7 +350,12 @@ export function useCancelOrder(
         body,
       }),
     onSuccess: () => {
+      // Prefix invalidation: ['seller-orders'] covers the list AND
+      // ['seller-orders','detail',id].
       void queryClient.invalidateQueries({ queryKey: ['seller-orders'] });
+      // The refund lands in the same moment — a stale balance beside a
+      // cancelled order reads as the money not having come back.
+      void queryClient.invalidateQueries({ queryKey: ['seller-wallet'] });
     },
   });
 }

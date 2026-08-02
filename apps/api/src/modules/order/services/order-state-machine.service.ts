@@ -207,6 +207,14 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
     [
       { to: OrderStatus.PACKED, sideEffects: [] },
       { to: OrderStatus.PACK_FAILED, sideEffects: [] },
+      // Cancellable by the SELLER right up to the moment it is packed.
+      // The goods are off the shelf and in a tote, but nothing has been
+      // handed to a courier and no stock has left: qtyOnHand does not
+      // move until DISPATCH (CUR-3), so releasing the reservation is the
+      // whole of the correction. What it does leave is a physical tote
+      // to re-shelve, which is why the packer's open box blocks this at
+      // the service layer rather than here.
+      { to: OrderStatus.CANCELLED, sideEffects: [RELEASE_STOCK] },
       { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
     ],
   ],
@@ -216,6 +224,11 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
     [
       { to: OrderStatus.PENDING_PICK, sideEffects: [] }, // re-pick
       { to: OrderStatus.PICKED, sideEffects: [] },
+      // A failed pack is still an unpacked parcel, so the seller's
+      // cancel window has not closed. Often the right answer: something
+      // went wrong at the bench and calling the order off beats
+      // re-picking it.
+      { to: OrderStatus.CANCELLED, sideEffects: [RELEASE_STOCK] },
       { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
     ],
   ],

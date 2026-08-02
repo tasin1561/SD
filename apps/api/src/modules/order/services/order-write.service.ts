@@ -9,6 +9,7 @@ import {
   ActorType,
   OrderCancellationReason,
   OrderStatus,
+  PackBoxStatus,
   Prisma,
   QueueClosureReason,
   ReservationReleaseReason,
@@ -26,6 +27,7 @@ import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { CallQueueService } from '../../call-queue/services/call-queue.service';
 import { ShipmentProvisionService } from '../../shipment-provision/services/shipment-provision.service';
 import { OrderLifecycleEventBus } from '../../lifecycle-events/order-lifecycle-event-bus.service';
+import { OrderChargesRefundService } from '../../seller-wallet-accrual/services/order-charges-refund.service';
 import { OrderEventWriterService, type EventActor } from './order-event-writer.service';
 import { OrderSideEffect, OrderStateMachineService } from './order-state-machine.service';
 
@@ -48,6 +50,58 @@ const VOIDABLE_TERMINAL_STATES: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.REJECTED,
   OrderStatus.REJECTED_BY_CUSTOMER,
   OrderStatus.REJECTED_NDR,
+]);
+
+/**
+ * States an order can be called off from and honestly say the parcel
+ * never went anywhere — so a delivery fee already taken has to go back.
+ *
+ * An ALLOW-LIST rather than "everything before DISPATCHED", so a status
+ * added later is not silently refundable: someone has to decide where
+ * it sits relative to the courier having the parcel. The dividing line
+ * is exactly that — once DISPATCHED, the courier has been given the
+ * goods and the cost of moving them is real whatever happens next.
+ * PENDING_DISPATCH is on this side of the line: it is packed and
+ * manifested but still on our floor.
+ */
+const REFUNDABLE_FROM_STATES: ReadonlySet<OrderStatus> = new Set([
+  OrderStatus.DRAFT,
+  OrderStatus.PENDING_CONFIRMATION,
+  OrderStatus.CALL_NO_RESPONSE,
+  OrderStatus.CALL_RESCHEDULED,
+  OrderStatus.AWAITING_SELLER_DECISION,
+  OrderStatus.CONFIRMED,
+  OrderStatus.OUT_OF_STOCK,
+  OrderStatus.PENDING_PICK,
+  OrderStatus.PICKED,
+  OrderStatus.PACK_FAILED,
+  OrderStatus.PACKED,
+  OrderStatus.PENDING_DISPATCH,
+  OrderStatus.PENDING_MANUAL_PLACEMENT,
+]);
+
+/**
+ * How far a SELLER may cancel their own order.
+ *
+ * The rule is "until it is packed": once the parcel is boxed, sealed
+ * and labelled it is a physical object waiting for a van, and undoing
+ * it is warehouse work rather than a decision the seller can take
+ * alone. Admins keep the wider CANCELLED_BY_ADMIN reach for exactly
+ * those cases — the matrix is what enforces the difference, and this
+ * set only decides which refusal MESSAGE the seller reads.
+ */
+const SELLER_CANCELLABLE_STATES: ReadonlySet<OrderStatus> = new Set([
+  OrderStatus.DRAFT,
+  OrderStatus.PENDING_CONFIRMATION,
+  OrderStatus.CALL_NO_RESPONSE,
+  OrderStatus.CALL_RESCHEDULED,
+  OrderStatus.AWAITING_SELLER_DECISION,
+  OrderStatus.CONFIRMED,
+  OrderStatus.OUT_OF_STOCK,
+  OrderStatus.PENDING_PICK,
+  OrderStatus.PICKED,
+  OrderStatus.PACK_FAILED,
+  OrderStatus.PENDING_MANUAL_PLACEMENT,
 ]);
 
 /** Structural shape the shipment-provision hook needs from the loaded
@@ -192,6 +246,12 @@ export class OrderWriteService {
     // listener that does not exist (or hasn't subscribed yet) is a
     // SILENT no-op — emit() is best-effort by contract (NOTIF-1).
     private readonly lifecycleBus: OrderLifecycleEventBus,
+    // Giving the delivery fee back when an order ends before it ships.
+    // An AT_AWB seller is debited at CONFIRMED (CUR-2b), days before
+    // anything moves; without this hook a cancellation quietly kept
+    // their money and only the seller noticing an odd balance would
+    // surface it.
+    private readonly chargesRefund: OrderChargesRefundService,
   ) {}
 
   /**
@@ -362,6 +422,13 @@ export class OrderWriteService {
       await this.provisionShipmentForOrder(order, input.ctx);
     } else if (from !== result.status && VOIDABLE_TERMINAL_STATES.has(result.status)) {
       await this.voidShipmentForOrder(order.id, result.status, input.ctx);
+      // 7th post-commit hook: return the delivery fee, if one was
+      // already taken, on an order that is ending before the courier
+      // ever had it. Runs AFTER the void so the shipment is dead first
+      // — the money step is the one whose failure we most want to be
+      // loud about, and putting it last means a failure here cannot
+      // leave a live shipment behind as well.
+      await this.refundChargesForEndedOrder(order.id, order.sellerId, from, result.status);
     }
 
     // M11 (NOTIF-1 / NOTIF-5): 6th post-commit hook — emit the
@@ -522,6 +589,145 @@ export class OrderWriteService {
         { orderId, landed, err: (e as Error).message },
         'Post-commit shipment void failed; order status persisted, supervisor/reconciler can re-trigger',
       );
+    }
+  }
+
+  /**
+   * A seller calling off their own order.
+   *
+   * ── Why this lives on the WRITE boundary ──────────────────────────
+   * It used to be `OrderService.cancel`, which refused anything with a
+   * stock side-effect (`CANCEL_NEEDS_STOCK_RELEASE`) and wrote the
+   * order row itself. That made a seller's cancel button work only on
+   * orders nobody had acted on yet — the moment a call agent confirmed
+   * it, the seller had to email us. It also meant a cancelled
+   * PENDING_CONFIRMATION order was never REMOVED FROM THE CALL QUEUE,
+   * because the CC-6 dequeue hangs off `transitionStatus` and that path
+   * went around it: an agent would be handed a dead order to phone.
+   *
+   * Routing every seller cancel through `transitionStatus` fixes both
+   * at once and costs nothing — the matrix already knew which states
+   * release stock, and the saga already knew how.
+   *
+   * The window closes at PACKED (see SELLER_CANCELLABLE_STATES). What
+   * the matrix cannot express is the packer standing at the bench right
+   * now with the box open, so that check is here.
+   */
+  async cancelBySeller(input: {
+    readonly sellerId: string;
+    readonly orderId: string;
+    readonly actor: EventActor;
+    readonly cancellationReason?: OrderCancellationReason;
+    readonly note?: string;
+    readonly ctx?: ClientContext;
+  }): Promise<TransitionStatusResult> {
+    const order = await this.prisma.client.order.findFirst({
+      where: { id: input.orderId, sellerId: input.sellerId, deletedAt: null },
+      select: { id: true, status: true },
+    });
+    if (!order) {
+      throw new NotFoundException({ code: 'ORDER_NOT_FOUND', message: 'Order not found' });
+    }
+
+    if (CANCEL_FAMILY.has(order.status)) {
+      throw new ConflictException({
+        code: 'ALREADY_CANCELLED',
+        message: 'This order is already cancelled',
+      });
+    }
+
+    if (!SELLER_CANCELLABLE_STATES.has(order.status)) {
+      // Say WHICH side of the line they are on. "Cannot be cancelled"
+      // on a packed parcel reads as a bug; "it is already packed" reads
+      // as a fact they can act on by calling us.
+      const packedOrLater =
+        order.status === OrderStatus.PACKED ||
+        order.status === OrderStatus.PENDING_DISPATCH ||
+        order.status === OrderStatus.DISPATCHED ||
+        order.status === OrderStatus.IN_TRANSIT ||
+        order.status === OrderStatus.OUT_FOR_DELIVERY;
+      throw new ConflictException({
+        code: 'NOT_CANCELLABLE',
+        message: packedOrLater
+          ? 'This order is already packed and can no longer be cancelled here — contact support if it has not yet been collected'
+          : `An order in ${order.status} cannot be cancelled`,
+      });
+    }
+
+    // PACK-1: the open box IS a packer's claim on this parcel. Without
+    // this check the cancel would succeed and the packer would discover
+    // it only when their close scan failed, mid-shift, with the goods
+    // already in the box.
+    const openBox = await this.prisma.client.packBox.findFirst({
+      where: {
+        status: PackBoxStatus.OPEN,
+        shipment: { orderShipments: { some: { orderId: order.id } } },
+      },
+      select: { id: true },
+    });
+    if (openBox) {
+      throw new ConflictException({
+        code: 'ORDER_BEING_PACKED',
+        message:
+          'Someone is packing this order right now. Try again in a few minutes, or contact support to stop it.',
+      });
+    }
+
+    return this.transitionStatus({
+      orderId: order.id,
+      to: OrderStatus.CANCELLED,
+      actor: input.actor,
+      cancellationReason: input.cancellationReason ?? OrderCancellationReason.SELLER_REQUESTED,
+      reason: input.note ?? 'Cancelled by seller',
+      ...(input.ctx ? { ctx: input.ctx } : {}),
+    });
+  }
+
+  /**
+   * Post-commit: give back a delivery fee taken for a parcel that will
+   * now never ship.
+   *
+   * Best-effort in the sense that it cannot undo the cancellation —
+   * that is already committed and correct. But it is NOT best-effort in
+   * the sense of "quietly give up": a failure here means we are holding
+   * money for a service we are not going to perform, so it audits HIGH
+   * and names the order. The service itself is idempotent on the order,
+   * so re-running it is always safe and an operator re-triggering after
+   * a fault cannot double-credit.
+   */
+  private async refundChargesForEndedOrder(
+    orderId: string,
+    sellerId: string,
+    from: OrderStatus,
+    landed: OrderStatus,
+  ): Promise<void> {
+    // Cancelling a DISPATCHED order is a real thing an admin can do,
+    // but the courier already has the parcel — the delivery is being
+    // paid for whatever happens to it now.
+    if (!REFUNDABLE_FROM_STATES.has(from)) return;
+    try {
+      await this.chargesRefund.refundIfCharged(
+        orderId,
+        sellerId,
+        `Order ${landed.toLowerCase().replaceAll('_', ' ')} before dispatch`,
+      );
+    } catch (e) {
+      this.logger.error(
+        { orderId, sellerId, from, landed, err: (e as Error).message },
+        'Post-commit order-charges refund FAILED — the seller is still holding a charge for a parcel that will not ship',
+      );
+      await this.audit
+        .log({
+          actorType: ActorType.SYSTEM,
+          actorId: null,
+          sellerId,
+          action: 'wallet.order_charges_refund_failed',
+          entityType: 'order',
+          entityId: orderId,
+          severity: 'HIGH',
+          metadata: { fromStatus: from, landedStatus: landed, error: (e as Error).message },
+        })
+        .catch(() => undefined);
     }
   }
 

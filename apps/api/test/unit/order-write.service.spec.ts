@@ -21,6 +21,8 @@ function makeService(
     liveOrderShipment?: { shipmentId: string } | null;
     /** Pre-existing DISPATCH movement → the gate fires. */
     existingDispatchMovement?: boolean;
+    /** A packer has this order's box open (PACK-1 claim). */
+    openPackBox?: boolean;
   } = {},
 ) {
   const order =
@@ -45,6 +47,7 @@ function makeService(
   const stockMovementFindFirst = jest.fn(async () =>
     opts.existingDispatchMovement ? { id: 'mv-prior' } : null,
   );
+  const packBoxFindFirst = jest.fn(async () => (opts.openPackBox ? { id: 'box-1' } : null));
 
   const client = {} as {
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
@@ -52,6 +55,7 @@ function makeService(
     systemSetting: { findUnique: typeof systemSettingFindUnique };
     orderShipment: { findFirst: typeof orderShipmentFindFirst };
     stockMovement: { findFirst: typeof stockMovementFindFirst };
+    packBox: { findFirst: typeof packBoxFindFirst };
   };
   client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => {
     if (opts.statusTxThrows) throw new Error('status tx boom');
@@ -61,13 +65,16 @@ function makeService(
   client.systemSetting = { findUnique: systemSettingFindUnique };
   client.orderShipment = { findFirst: orderShipmentFindFirst };
   client.stockMovement = { findFirst: stockMovementFindFirst };
+  client.packBox = { findFirst: packBoxFindFirst };
 
   const stateMachine = new OrderStateMachineService();
   const events = {
     statusChanged: jest.fn(async () => ({ id: 'e1' })),
     stockReserved: jest.fn(async () => ({ id: 'e2' })),
   };
-  const audit = { log: jest.fn(async () => 'a1') };
+  // Params declared so `.mock.calls[n][0]` is typed — an argless
+  // jest.fn infers an empty call tuple and indexing it fails to compile.
+  const audit = { log: jest.fn(async (_entry: AnyArgs, _tx?: unknown) => 'a1') };
   const reserve = jest.fn(async (i: { orderItemId: string }) => {
     if (opts.reserveThrows) throw new InsufficientStockError(2, 0);
     return { id: `r-${i.orderItemId}` };
@@ -106,6 +113,12 @@ function makeService(
   const busEmit = jest.fn();
   const lifecycleBus = { emit: busEmit };
 
+  // 7th hook: giving the delivery fee back when an order ends before it
+  // ships. Returns null by default = "nothing was ever charged", which
+  // is the ordinary case for an AT_DELIVERY seller.
+  const refundIfCharged = jest.fn(async () => null);
+  const chargesRefund = { refundIfCharged };
+
   const svc = new OrderWriteService(
     { client } as unknown as PrismaService,
     stateMachine,
@@ -116,6 +129,7 @@ function makeService(
     shipmentProvision as never,
     mutation as never,
     lifecycleBus as never,
+    chargesRefund as never,
   );
   return {
     svc,
@@ -136,6 +150,8 @@ function makeService(
     dequeueOrder,
     provisionFromSnapshot,
     voidForOrder,
+    refundIfCharged,
+    packBoxFindFirst,
   };
 }
 
@@ -508,5 +524,220 @@ describe('OrderWriteService.transitionStatus — DISPATCH_STOCK (M9 bug-1 fix)',
     });
     expect(runWithRetry).not.toHaveBeenCalled(); // no phase-2 rows
     expect(mutationApply).not.toHaveBeenCalled();
+  });
+});
+
+describe('OrderWriteService.cancelBySeller — the window closes at PACKED', () => {
+  const SELLER = { type: ActorType.SELLER, id: 's1' };
+
+  it('cancels a CONFIRMED order and releases its stock', async () => {
+    // The behaviour change. This used to be refused outright
+    // (CANCEL_NEEDS_STOCK_RELEASE) — a seller whose order had been
+    // confirmed by a call agent had no way to call it off themselves.
+    const { svc, release, orderUpdate } = makeService({
+      order: {
+        id: 'o1',
+        sellerId: 's1',
+        orderNumber: 'SD-2026-26-000001',
+        status: OrderStatus.CONFIRMED,
+        items: [{ id: 'oi1', variantId: 'v1', quantity: 2 }],
+      },
+      active: [{ id: 'res-1', orderItemId: 'oi1', qtyReserved: 2 }],
+    });
+
+    const res = await svc.cancelBySeller({ sellerId: 's1', orderId: 'o1', actor: SELLER });
+
+    expect(res.status).toBe(OrderStatus.CANCELLED);
+    expect(release).toHaveBeenCalledTimes(1);
+    const data = orderUpdate.mock.calls[0]![0].data as AnyArgs;
+    expect(data.cancellationReason).toBe('SELLER_REQUESTED');
+    expect(data.cancelledAt).toBeInstanceOf(Date);
+  });
+
+  it('cancels a PICKED order — the goods are in a tote, not on a van', async () => {
+    const { svc, release } = makeService({
+      order: {
+        id: 'o1',
+        sellerId: 's1',
+        orderNumber: 'SD-2026-26-000001',
+        status: OrderStatus.PICKED,
+        items: [{ id: 'oi1', variantId: 'v1', quantity: 2 }],
+      },
+      active: [{ id: 'res-1', orderItemId: 'oi1', qtyReserved: 2 }],
+    });
+
+    const res = await svc.cancelBySeller({ sellerId: 's1', orderId: 'o1', actor: SELLER });
+    expect(res.status).toBe(OrderStatus.CANCELLED);
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a PACKED order and says WHY, not just "no"', async () => {
+    const { svc } = makeService({
+      order: {
+        id: 'o1',
+        sellerId: 's1',
+        orderNumber: 'SD-2026-26-000001',
+        status: OrderStatus.PACKED,
+        items: [],
+      },
+    });
+
+    await expect(
+      svc.cancelBySeller({ sellerId: 's1', orderId: 'o1', actor: SELLER }),
+    ).rejects.toMatchObject({
+      response: { code: 'NOT_CANCELLABLE', message: expect.stringContaining('already packed') },
+    });
+  });
+
+  it('refuses a DISPATCHED order', async () => {
+    const { svc } = makeService({
+      order: {
+        id: 'o1',
+        sellerId: 's1',
+        orderNumber: 'SD-2026-26-000001',
+        status: OrderStatus.DISPATCHED,
+        items: [],
+      },
+    });
+    await expect(
+      svc.cancelBySeller({ sellerId: 's1', orderId: 'o1', actor: SELLER }),
+    ).rejects.toMatchObject({ response: { code: 'NOT_CANCELLABLE' } });
+  });
+
+  it('refuses while a packer has the box open (PACK-1 claim)', async () => {
+    // Without this the cancel would win the race and the packer would
+    // find out at their close scan, with the goods already in the box.
+    const { svc } = makeService({
+      order: {
+        id: 'o1',
+        sellerId: 's1',
+        orderNumber: 'SD-2026-26-000001',
+        status: OrderStatus.PICKED,
+        items: [{ id: 'oi1', variantId: 'v1', quantity: 2 }],
+      },
+      active: [{ id: 'res-1', orderItemId: 'oi1', qtyReserved: 2 }],
+      openPackBox: true,
+    });
+
+    await expect(
+      svc.cancelBySeller({ sellerId: 's1', orderId: 'o1', actor: SELLER }),
+    ).rejects.toMatchObject({ response: { code: 'ORDER_BEING_PACKED' } });
+  });
+
+  it('refuses an order already cancelled', async () => {
+    const { svc } = makeService({
+      order: {
+        id: 'o1',
+        sellerId: 's1',
+        orderNumber: 'SD-2026-26-000001',
+        status: OrderStatus.CANCELLED,
+        items: [],
+      },
+    });
+    await expect(
+      svc.cancelBySeller({ sellerId: 's1', orderId: 'o1', actor: SELLER }),
+    ).rejects.toMatchObject({ response: { code: 'ALREADY_CANCELLED' } });
+  });
+
+  it('404s another seller’s order rather than leaking that it exists', async () => {
+    const { svc } = makeService({ order: null });
+    await expect(
+      svc.cancelBySeller({ sellerId: 's-other', orderId: 'o1', actor: SELLER }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('CC-6: leaves the call queue — the gap that closing this path fixed', async () => {
+    // The old OrderService.cancel wrote the order row directly, so the
+    // dequeue hanging off transitionStatus never ran and an agent could
+    // still be handed a cancelled order to phone.
+    const { svc, dequeueOrder } = makeService({
+      order: {
+        id: 'o1',
+        sellerId: 's1',
+        orderNumber: 'SD-2026-26-000001',
+        status: OrderStatus.PENDING_CONFIRMATION,
+        items: [],
+      },
+    });
+    await svc.cancelBySeller({ sellerId: 's1', orderId: 'o1', actor: SELLER });
+    expect(dequeueOrder).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('OrderWriteService — refunding a fee for a parcel that never ships', () => {
+  it('refunds when an order is cancelled before dispatch', async () => {
+    const { svc, refundIfCharged } = makeService({
+      order: {
+        id: 'o1',
+        sellerId: 's1',
+        orderNumber: 'SD-2026-26-000001',
+        status: OrderStatus.CONFIRMED,
+        items: [{ id: 'oi1', variantId: 'v1', quantity: 2 }],
+      },
+      active: [{ id: 'res-1', orderItemId: 'oi1', qtyReserved: 2 }],
+    });
+
+    await svc.cancelBySeller({
+      sellerId: 's1',
+      orderId: 'o1',
+      actor: { type: ActorType.SELLER, id: 's1' },
+    });
+
+    expect(refundIfCharged).toHaveBeenCalledTimes(1);
+    expect(refundIfCharged.mock.calls[0]).toEqual([
+      'o1',
+      's1',
+      expect.stringContaining('before dispatch'),
+    ]);
+  });
+
+  it('does NOT refund a DISPATCHED order — the courier already has it', async () => {
+    const { svc, refundIfCharged } = makeService({
+      order: {
+        id: 'o1',
+        sellerId: 's1',
+        orderNumber: 'SD-2026-26-000001',
+        status: OrderStatus.DISPATCHED,
+        items: [{ id: 'oi1', variantId: 'v1', quantity: 2 }],
+      },
+      active: [{ id: 'res-1', orderItemId: 'oi1', qtyReserved: 2 }],
+    });
+
+    await svc.transitionStatus({
+      orderId: 'o1',
+      to: OrderStatus.CANCELLED_BY_ADMIN,
+      actor: ACTOR,
+      reason: 'admin pulled it back',
+    });
+
+    expect(refundIfCharged).not.toHaveBeenCalled();
+  });
+
+  it('a refund failure never undoes the cancellation, and audits HIGH', async () => {
+    const { svc, refundIfCharged, audit } = makeService({
+      order: {
+        id: 'o1',
+        sellerId: 's1',
+        orderNumber: 'SD-2026-26-000001',
+        status: OrderStatus.CONFIRMED,
+        items: [{ id: 'oi1', variantId: 'v1', quantity: 2 }],
+      },
+      active: [{ id: 'res-1', orderItemId: 'oi1', qtyReserved: 2 }],
+    });
+    refundIfCharged.mockRejectedValueOnce(new Error('wallet down'));
+
+    const res = await svc.cancelBySeller({
+      sellerId: 's1',
+      orderId: 'o1',
+      actor: { type: ActorType.SELLER, id: 's1' },
+    });
+
+    expect(res.status).toBe(OrderStatus.CANCELLED);
+    expect(
+      audit.log.mock.calls.some(
+        (c) =>
+          c[0]['action'] === 'wallet.order_charges_refund_failed' && c[0]['severity'] === 'HIGH',
+      ),
+    ).toBe(true);
   });
 });

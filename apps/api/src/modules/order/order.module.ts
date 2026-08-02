@@ -6,6 +6,7 @@ import { InventorySharedModule } from '../inventory-shared/inventory-shared.modu
 import { CallQueueModule } from '../call-queue/call-queue.module';
 import { ShipmentProvisionModule } from '../shipment-provision/shipment-provision.module';
 import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.module';
+import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-wallet-accrual.module';
 import { OrderCoreModule } from './order-core.module';
 import { SellerOrderController } from './controllers/seller-order.controller';
 import { SellerCustomerController } from './controllers/seller-customer.controller';
@@ -62,6 +63,12 @@ import { OrderWriteService } from './services/order-write.service';
     // emit hook. The order module knows nothing about the
     // notifications module on the other side of the bus.
     LifecycleEventsModule,
+    // Cancelling an order before it ships has to give back a delivery
+    // fee already taken (an AT_AWB seller is debited at CONFIRMED).
+    // Safe to import: seller-wallet-accrual reaches wallet / settings /
+    // pricing / inbound-freight and none of them reach back here, so
+    // this does not close a cycle.
+    SellerWalletAccrualModule,
   ],
   controllers: [
     SellerOrderController,

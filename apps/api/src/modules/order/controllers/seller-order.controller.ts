@@ -38,6 +38,7 @@ import {
   type OrderListItem,
   type OrderView,
 } from '../services/order.service';
+import { OrderWriteService } from '../services/order-write.service';
 import { SellerUserRole } from '@skydrop/db';
 import { SellerRoles } from '../../../common/decorators/seller-roles.decorator';
 import { SellerViewerReadable } from '../../../common/decorators/seller-viewer-readable.decorator';
@@ -57,6 +58,7 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 export class SellerOrderController {
   constructor(
     private readonly svc: OrderService,
+    private readonly orderWrite: OrderWriteService,
     private readonly reputation: CustomerReputationService,
   ) {}
 
@@ -152,14 +154,26 @@ export class SellerOrderController {
 
   @Post(':id/cancel')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Cancel a pre-reservation order' })
-  cancel(
+  @ApiOperation({
+    summary: 'Cancel an order — allowed until it is packed. Refunds a delivery fee already taken.',
+  })
+  async cancel(
     @CurrentSeller() seller: AuthenticatedSeller,
     @Param('id', uuid()) id: string,
     @Body() body: CancelOrderDto,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<OrderView> {
-    return this.svc.cancel(seller.id, id, body, this.actor(seller), ctx);
+    await this.orderWrite.cancelBySeller({
+      sellerId: seller.id,
+      orderId: id,
+      actor: this.actor(seller),
+      ...(body.reason !== undefined ? { cancellationReason: body.reason } : {}),
+      ...(body.note !== undefined ? { note: body.note } : {}),
+      ctx,
+    });
+    // Re-read so the seller gets the full order back, same as before —
+    // the write boundary returns a transition result, not a view.
+    return this.svc.loadOwned(seller.id, id);
   }
 
   @Delete(':id')

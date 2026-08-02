@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import {
   ActorType,
-  OrderCancellationReason,
   OrderSource,
   OrderStatus,
   PaymentMode,
@@ -30,7 +29,6 @@ import { OrderChargesService } from '../../order-charges/services/order-charges.
 import { EarlyReservationService } from '../../early-reservation/services/early-reservation.service';
 import type { CreateOrderDto } from '../dto/create-order.dto';
 import type { UpdateOrderDto } from '../dto/update-order.dto';
-import type { CancelOrderDto } from '../dto/cancel-order.dto';
 
 const ORDER_VIEW_INCLUDE = {
   items: {
@@ -629,76 +627,6 @@ export class OrderService {
     // other at-placement entry point (no-op unless the seller opted in).
     await this.reserveAtPlacementAsync(id);
     return updated;
-  }
-
-  /**
-   * Seller/customer cancel. Only valid from a pre-reservation state — the
-   * state machine declares NO side-effects for those CANCELLED edges
-   * (DRAFT / PENDING_CONFIRMATION). A CONFIRMED+ order's CANCELLED edge
-   * carries RELEASE_STOCK; that path is OrderWriteService.transitionStatus
-   * (commit 12), not this seller-facing shortcut.
-   */
-  async cancel(
-    sellerId: string,
-    id: string,
-    input: CancelOrderDto,
-    actor: EventActor,
-    ctx: ClientContext,
-  ): Promise<OrderView> {
-    const order = await this.loadOwned(sellerId, id);
-    if (!this.stateMachine.isValidTransition(order.status, OrderStatus.CANCELLED)) {
-      throw new ConflictException({
-        code: 'NOT_CANCELLABLE',
-        message: `An order in ${order.status} cannot be cancelled here`,
-      });
-    }
-    if (this.stateMachine.requiredSideEffects(order.status, OrderStatus.CANCELLED).length > 0) {
-      throw new ConflictException({
-        code: 'CANCEL_NEEDS_STOCK_RELEASE',
-        message: `Cancelling a ${order.status} order releases reserved stock; use the ops cancel path`,
-      });
-    }
-
-    const reason = input.reason ?? OrderCancellationReason.SELLER_REQUESTED;
-    const now = new Date();
-    return this.prisma.client.$transaction(async (tx) => {
-      const updated = await tx.order.update({
-        where: { id },
-        data: {
-          status: OrderStatus.CANCELLED,
-          cancellationReason: reason,
-          cancelledAt: now,
-          cancelledById: actor.type === ActorType.STAFF ? (actor.id ?? null) : null,
-        },
-        include: ORDER_VIEW_INCLUDE,
-      });
-      await this.events.statusChanged(tx, {
-        orderId: id,
-        from: order.status,
-        to: OrderStatus.CANCELLED,
-        actor,
-        description: `Order cancelled (${reason})${input.note ? `: ${input.note}` : ''}`,
-        data: { reason, note: input.note ?? null },
-      });
-      await this.audit.log(
-        {
-          actorType: actor.type,
-          actorId: actor.id ?? null,
-          sellerId,
-          action: 'order.cancelled',
-          entityType: 'order',
-          entityId: id,
-          metadata: {
-            orderNumber: order.orderNumber,
-            fromStatus: order.status,
-            reason,
-            ...this.ctxMeta(ctx),
-          },
-        },
-        tx,
-      );
-      return updated;
-    });
   }
 
   /**

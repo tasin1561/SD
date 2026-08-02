@@ -73,6 +73,10 @@ const CREDIT_DIRECTIONS: ReadonlySet<WalletEntryDirection> = new Set([
   // Omitting it here would take the top-up back OUT of the wallet it was
   // meant to fill.
   WalletEntryDirection.TOPUP,
+  // Giving the delivery fee back on an order cancelled before it
+  // shipped. Omitting it here would charge the seller a SECOND time for
+  // a parcel that never moved.
+  WalletEntryDirection.ORDER_CHARGES_REFUND,
 ]);
 
 function isCredit(d: WalletEntryDirection): boolean {

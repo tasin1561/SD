@@ -208,6 +208,7 @@ const CREDIT_DIRECTIONS: ReadonlySet<WalletEntryView['direction']> = new Set([
   'OPENING_BALANCE',
   'SCRAP_REFUND',
   'TOPUP',
+  'ORDER_CHARGES_REFUND',
 ]);
 
 function LedgerRow({ entry }: { readonly entry: WalletEntryView }): ReactElement {
@@ -295,6 +296,11 @@ function humanizeDirection(d: WalletEntryView['direction']): string {
     // so it stays OUT of CREDIT_DIRECTIONS above.
     case 'COD_COLLECTION_FEE':
       return 'COD collection fee';
+    // The delivery fee given back on an order cancelled before it
+    // shipped. A CREDIT — registered in CREDIT_DIRECTIONS above; leaving
+    // it out would show the refund as a second charge.
+    case 'ORDER_CHARGES_REFUND':
+      return 'Cancelled order refund';
   }
 }
 

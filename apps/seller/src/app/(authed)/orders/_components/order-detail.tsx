@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, Pencil } from 'lucide-react';
+import { ArrowLeft, Pencil, XCircle } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import type { OrderStatus } from '@skydrop/db';
 import { ApiError } from '@skydrop/api-client';
@@ -26,8 +26,9 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import { OrderTimeline } from './order-timeline';
+import { CancelOrderDialog } from './cancel-order-dialog';
 import { OrderChargesSection } from './order-charges';
-import { canSeeMoney } from '@/lib/role-access';
+import { canSeeMoney, canWriteOrders } from '@/lib/role-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 
 /**
@@ -47,10 +48,32 @@ import { useSellerIdentity } from '@skydrop/auth/client';
  *   - Lifecycle timeline (CP2.A.4 — closes the M12 deferral #1 for
  *     the seller half)
  */
+/**
+ * The states a seller may cancel from — until the parcel is packed.
+ * COSMETIC ONLY (FE-2): this decides whether the button is offered, and
+ * the server decides whether the cancel happens. Mirrors the API's
+ * SELLER_CANCELLABLE_STATES; if the two ever drift the seller sees a
+ * verbatim refusal rather than a wrong outcome.
+ */
+const CANCELLABLE: ReadonlySet<string> = new Set([
+  'DRAFT',
+  'PENDING_CONFIRMATION',
+  'CALL_NO_RESPONSE',
+  'CALL_RESCHEDULED',
+  'AWAITING_SELLER_DECISION',
+  'CONFIRMED',
+  'OUT_OF_STOCK',
+  'PENDING_PICK',
+  'PICKED',
+  'PACK_FAILED',
+  'PENDING_MANUAL_PLACEMENT',
+]);
+
 export function OrderDetailView({ orderId }: { orderId: string }): ReactElement {
   const detail = useOrderDetail(orderId);
   const events = useOrderEvents(orderId);
   const identity = useSellerIdentity();
+  const [cancelOpen, setCancelOpen] = useState(false);
 
   return (
     <div className="max-w-5xl">
@@ -91,6 +114,13 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                     </Button>
                   </Link>
                 )}
+                {CANCELLABLE.has(detail.data.status) &&
+                  identity !== null &&
+                  canWriteOrders(identity.role) && (
+                    <Button variant="ghost" size="sm" onClick={() => setCancelOpen(true)}>
+                      <XCircle size={12} /> Cancel
+                    </Button>
+                  )}
                 <OrderStatusBadge status={detail.data.status as OrderStatus} />
               </div>
             }
@@ -252,6 +282,14 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             Placed {new Date(detail.data.placedAt).toISOString().replace('T', ' ').slice(0, 16)} ·
             Updated {new Date(detail.data.updatedAt).toISOString().replace('T', ' ').slice(0, 16)}
           </div>
+
+          <CancelOrderDialog
+            open={cancelOpen}
+            orderId={orderId}
+            orderNumber={detail.data.orderNumber}
+            status={detail.data.status}
+            onOpenChange={setCancelOpen}
+          />
         </>
       )}
     </div>

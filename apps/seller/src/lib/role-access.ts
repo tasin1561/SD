@@ -72,3 +72,19 @@ export function seesEverything(role: SellerRole): boolean {
 export function canSeeMoney(role: SellerRole): boolean {
   return role !== 'VIEWER';
 }
+
+/**
+ * Whether a role may CHANGE an order — cancel it, edit it, place one.
+ *
+ * Mirrors the API's class-level `@SellerRoles(OWNER, ADMIN, OPS)` on
+ * `SellerOrderController`. Wider than `canSeeMoney` on purpose:
+ * INVENTORY and FINANCE see the whole company view (including every
+ * order) and are limited only in what they may act on — cancelling
+ * someone's order is not a finance or a stock decision.
+ *
+ * COSMETIC (FE-2). The guard is the boundary; this only decides whether
+ * the seller is shown a button that would be refused.
+ */
+export function canWriteOrders(role: SellerRole): boolean {
+  return role === 'OWNER' || role === 'ADMIN' || role === 'OPS';
+}

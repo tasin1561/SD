@@ -4038,6 +4038,18 @@ enum WalletEntryDirection {
   // folded into ORDER_CHARGES so COD-handling revenue stays countable
   // separately from the delivery fee.
   COD_COLLECTION_FEE @map("cod_collection_fee")
+  // Giving back the delivery fee on an order that was cancelled before
+  // it shipped. A CREDIT — REGISTERED in WalletService's
+  // CREDIT_DIRECTIONS and in apps/seller's mirrored set (WAL-1);
+  // omitting it there would take the fee a SECOND time on a parcel that
+  // never moved. Deliberately NOT ADJUSTMENT_CREDIT: that one means "we
+  // made a ledger mistake" and requires a reasonCode, whereas nothing
+  // went wrong here — the charge was correct when taken and the
+  // cancellation is what changed. Keeping them apart is what lets
+  // "money returned because an order was called off" be counted without
+  // reading it as a tally of our own errors. `linkedEntryId` points at
+  // the ORDER_CHARGES row being returned.
+  ORDER_CHARGES_REFUND @map("order_charges_refund")
 
   @@map("wallet_entry_direction")
 }

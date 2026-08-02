@@ -348,38 +348,6 @@ describe('OrderService.submit', () => {
   });
 });
 
-describe('OrderService.cancel', () => {
-  it('cancels a PENDING_CONFIRMATION order with reason + no stock release', async () => {
-    const { svc, orderUpdate, events } = makeService({
-      existing: existingOrder({ status: OrderStatus.PENDING_CONFIRMATION }),
-    });
-    await svc.cancel('s1', 'o1', {}, ACTOR, CTX);
-    const data = orderUpdate.mock.calls[0]![0].data as AnyArgs;
-    expect(data.status).toBe(OrderStatus.CANCELLED);
-    expect(data.cancellationReason).toBe('SELLER_REQUESTED');
-    expect(data.cancelledAt).toBeInstanceOf(Date);
-    expect(events.statusChanged).toHaveBeenCalledTimes(1);
-  });
-
-  it('refuses to cancel a CONFIRMED order here (needs stock release)', async () => {
-    const { svc } = makeService({
-      existing: existingOrder({ status: OrderStatus.CONFIRMED }),
-    });
-    await expect(svc.cancel('s1', 'o1', {}, ACTOR, CTX)).rejects.toMatchObject({
-      response: { code: 'CANCEL_NEEDS_STOCK_RELEASE' },
-    });
-  });
-
-  it('refuses to cancel a terminal order', async () => {
-    const { svc } = makeService({
-      existing: existingOrder({ status: OrderStatus.DELIVERED }),
-    });
-    await expect(svc.cancel('s1', 'o1', {}, ACTOR, CTX)).rejects.toMatchObject({
-      response: { code: 'NOT_CANCELLABLE' },
-    });
-  });
-});
-
 describe('OrderService.edit', () => {
   it('edits a DRAFT note and writes a note event', async () => {
     const { svc, orderUpdate, events } = makeService({ existing: existingOrder() });

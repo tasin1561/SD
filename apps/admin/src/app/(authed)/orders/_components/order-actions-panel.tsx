@@ -210,6 +210,16 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
         description="Sane admin cancel — drives the order through the state machine to CANCELLED_BY_ADMIN. Any active stock reservation will be released by the saga."
       >
         <div className="space-y-3">
+          {/* Money moves here, and the operator should know before they
+              press it rather than field the seller's question later.
+              Stated as a rule, not a figure: the panel does not know
+              whether this particular order was charged, and inventing a
+              number would be worse than naming the condition. */}
+          <p className="text-text-muted text-xs">
+            If a delivery fee has already been charged for this order and the parcel has not been
+            dispatched, it is credited back to the seller&apos;s wallet automatically. Once
+            dispatched, the fee stands — the courier already has the parcel.
+          </p>
           <FormField label="Cancellation reason" htmlFor="cancel-reason" required>
             <Select
               id="cancel-reason"
