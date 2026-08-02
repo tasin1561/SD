@@ -226,6 +226,24 @@ export class CustomerReputationService {
   }
 
   /**
+   * The same picture, reached from an order rather than a phone number.
+   *
+   * For a call agent, who is looking at an assignment and not typing
+   * anything. The "yours" half is scoped to THAT ORDER'S seller — the
+   * agent is acting on their behalf, so they see what the seller would
+   * see and no more. Staff could read further; scoping it keeps the
+   * panel the same object in both places rather than two that drift.
+   */
+  async lookupForOrder(orderId: string): Promise<CustomerReputation | null> {
+    const order = await this.prisma.client.order.findFirst({
+      where: { id: orderId, deletedAt: null },
+      select: { sellerId: true, recipientPhoneE164: true },
+    });
+    if (!order) return null;
+    return this.lookup(order.sellerId, order.recipientPhoneE164);
+  }
+
+  /**
    * The seller's own unpacked orders for this number — what a new order
    * would be duplicating.
    *

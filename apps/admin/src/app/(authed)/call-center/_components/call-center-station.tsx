@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { CustomerRiskStrip } from './customer-risk-strip';
 import {
   Button,
   Card,
@@ -279,6 +280,12 @@ export function CallCenterStation(): ReactElement {
               </div>
             </div>
 
+            {/* Above the customer's details, not below them: an agent
+                reads top-down with the phone already ringing, and a
+                warning under the address is a warning read after the
+                call has started. Renders nothing for a first-time
+                customer. */}
+            <CustomerRiskStrip orderId={assignment.orderId} />
             <RecipientPanel order={assignment.order} />
 
             <div className="grid grid-cols-1 gap-3 mt-4">

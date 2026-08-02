@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  NotFoundException,
   Param,
   ParseUUIDPipe,
   Post,
@@ -12,6 +13,10 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ActorType, OrderStatus } from '@skydrop/db';
+import {
+  CustomerReputationService,
+  type CustomerReputation,
+} from '../services/customer-reputation.service';
 import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
 import {
   ClientInfo,
@@ -60,6 +65,7 @@ export class AdminOrderController {
     private readonly orders: OrderService,
     private readonly orderWrite: OrderWriteService,
     private readonly override: OrderAdminOverrideService,
+    private readonly reputation: CustomerReputationService,
   ) {}
 
   @Get()
@@ -85,6 +91,20 @@ export class AdminOrderController {
   })
   events(@Param('id', uuid()) id: string): Promise<OrderEventView[]> {
     return this.orders.listEventsForAdmin(id);
+  }
+
+  @Get(':id/customer-reputation')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      "What we know about this order's customer — platform-wide counts plus the seller's own history. For the agent about to phone them.",
+  })
+  async customerReputation(@Param('id', uuid()) id: string): Promise<CustomerReputation> {
+    const res = await this.reputation.lookupForOrder(id);
+    if (res === null) {
+      throw new NotFoundException({ code: 'ORDER_NOT_FOUND', message: 'Order not found' });
+    }
+    return res;
   }
 
   @Get(':id/shipments')

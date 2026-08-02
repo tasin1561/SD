@@ -879,6 +879,57 @@ export function useCompleteGoodsReceipt(): UseMutationResult<
   });
 }
 
+// ───────── Admin: who is on the other end of the call ─────────
+
+export interface CustomerOrderSummary {
+  readonly orderId: string;
+  readonly orderNumber: string;
+  readonly status: string;
+  readonly placedAt: string;
+  readonly valueInr: string | null;
+  readonly itemCount: number;
+}
+
+export interface CustomerReputation {
+  readonly phoneE164: string;
+  readonly platform: {
+    readonly totalOrders: number;
+    readonly delivered: number;
+    readonly returned: number;
+    readonly refusedOnCall: number;
+    readonly returnRatePercent: string | null;
+    readonly firstOrderAt: string | null;
+    readonly lastOrderAt: string | null;
+  };
+  readonly yours: {
+    readonly totalOrders: number;
+    readonly delivered: number;
+    readonly returned: number;
+    readonly recentOrders: ReadonlyArray<CustomerOrderSummary>;
+    readonly openOrders: ReadonlyArray<CustomerOrderSummary>;
+  };
+  readonly riskLevel: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'BLOCKED';
+  readonly riskNotes: string | null;
+  readonly customerName: string | null;
+}
+
+/**
+ * Reached from the ORDER, not a phone number — the agent is looking at
+ * an assignment, not typing anything.
+ */
+export function useOrderCustomerReputation(
+  orderId: string | null,
+): UseQueryResult<CustomerReputation> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-order-customer-reputation', orderId],
+    enabled: orderId !== null,
+    staleTime: 60_000,
+    queryFn: () =>
+      client.request<CustomerReputation>(`/api/admin/orders/${orderId ?? ''}/customer-reputation`),
+  });
+}
+
 // ───────── Admin: warehouse topology (zones + bins) ─────────
 
 export interface WarehouseBin {

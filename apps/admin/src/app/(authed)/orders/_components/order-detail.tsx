@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { CustomerRiskStrip } from '../../call-center/_components/customer-risk-strip';
 import { ArrowLeft } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { useOrderDetail } from '@/lib/api-hooks';
@@ -73,6 +74,11 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
           />
 
           <Section title="Recipient">
+            {/* The same strip the call agent sees. On this page it is
+                the answer to "why did this one come back?" — a customer
+                who returns a third of what they order was never a
+                surprise, and the RTO investigation should start there. */}
+            <CustomerRiskStrip orderId={detail.data.id} />
             <Card>
               <CardBody>
                 <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[160px_1fr] gap-x-3 sm:gap-x-6 gap-y-1.5 text-sm">

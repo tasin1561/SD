@@ -245,6 +245,41 @@ describe('Customer history + duplicate warning (e2e)', () => {
     expect(res.body.yours.recentOrders).toHaveLength(1);
   });
 
+  it('the call agent reaches the same picture from the ORDER, not a phone number', async () => {
+    // The agent is looking at an assignment with the phone already
+    // ringing — they are not going to type a number into a search box.
+    await request(h.baseUrl)
+      .post('/seller/orders')
+      .set(sellerA)
+      .send(orderBody(variantA))
+      .expect(201);
+    const second = await request(h.baseUrl)
+      .post('/seller/orders')
+      .set(sellerB)
+      .send(orderBody(variantB))
+      .expect(201);
+
+    const res = await request(h.baseUrl)
+      .get(`/admin/orders/${second.body.id as string}/customer-reputation`)
+      .set(staffAuth)
+      .expect(200);
+
+    // Platform-wide counts, exactly as the seller sees...
+    expect(res.body.platform.totalOrders).toBe(2);
+    // ...and the "yours" half scoped to THAT ORDER's seller, because the
+    // agent is acting on their behalf. Staff could read further; keeping
+    // it identical means the panel is one object in both places rather
+    // than two that drift.
+    expect(res.body.yours.totalOrders).toBe(1);
+  });
+
+  it('a reputation lookup on an order that does not exist 404s', async () => {
+    await request(h.baseUrl)
+      .get('/admin/orders/019fad84-0000-7000-8000-000000000000/customer-reputation')
+      .set(staffAuth)
+      .expect(404);
+  });
+
   it('rejects a phone that is not E.164 rather than silently matching nothing', async () => {
     // A seller typing a local format and getting a confident "no history"
     // is the failure mode worth being loud about.
