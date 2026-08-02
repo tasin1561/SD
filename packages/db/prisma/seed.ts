@@ -616,7 +616,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueDecimal: '2.50',
     displayName: 'Instant Pay Fee (%)',
     description:
-      'Charged on the POST-GST amount when a seller is on INSTANT_PAY. On ₹1,000 COD: GST leaves ₹847.46, and 2.5% of that is ₹21.19 — what the seller pays to be credited now rather than waiting for the courier. Per-seller override; the rate is negotiable, unlike the tax.',
+      'Charged on the POST-GST amount when a seller is on INSTANT_PAY. ALL-IN: it already contains wallet.cod_collection_fee_percent rather than sitting on top of it, so an Instant Pay order carries this one fee and not both. On ₹1,000 COD: GST leaves ₹847.46, and 2.5% of that is ₹21.19 — what the seller pays to be credited now rather than waiting for the courier. Per-seller override; the rate is negotiable, unlike the tax.',
     sellerOverridable: true,
     overrideMinDecimal: '0',
     overrideMaxDecimal: '100',

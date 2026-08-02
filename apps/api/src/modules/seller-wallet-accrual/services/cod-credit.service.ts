@@ -16,16 +16,18 @@ import { WalletService } from '../../seller-wallet/services/wallet.service';
  *                 percentage fee. We front the money until the courier
  *                 pays, and the fee is what that costs.
  *
- * Both withhold GST first, and both then carry the COD collection fee —
- * what handling cash-on-delivery costs at all. Instant Pay's fee STACKS
- * on that: the collection fee is the base service, the instant fee is
- * the premium for not waiting. Both are seeded so that today only the
- * instant one is non-zero.
+ * Both withhold GST first, and both then carry ONE fee off the post-GST
+ * amount:
  *
- * Both fees are computed off the same post-GST base rather than
- * compounding, so the two percentages stay independently readable — a
- * seller quoted "2.5% instant" should be able to find 2.5% in the
- * ledger, not 2.5% of something already reduced.
+ *   SETTLEMENT  — `wallet.cod_collection_fee_percent`, what handling
+ *                 cash-on-delivery costs at all. Seeded at 0.
+ *   INSTANT_PAY — `wallet.instant_pay_fee_percent`, which is ALL-IN: it
+ *                 already contains that base charge rather than sitting
+ *                 on top of it.
+ *
+ * One line in the ledger either way, reading exactly the percentage the
+ * seller was quoted. Splitting the instant rate into "base + premium"
+ * would total the same and match nothing anyone was told.
  * Both land here so the arithmetic exists once:
  * two call sites doing their own tax maths is how a quarter's filing
  * stops reconciling.
@@ -139,28 +141,39 @@ export class CodCreditService {
       .toDecimalPlaces(2);
     const postGst = grossInr.minus(gst);
 
-    // The base charge for handling COD, on both modes. Seeded at 0, so
-    // today this is a no-op — which is exactly when to get the shape
-    // right rather than while money is moving through it.
+    // The base charge for handling COD. Seeded at 0, so today this is a
+    // no-op — which is exactly when to get the shape right rather than
+    // while money is moving through it.
     const collectionPercent = await this.sellerDecimal(
       sellerId,
       COLLECTION_FEE_KEY,
       DEFAULT_COLLECTION_FEE_PERCENT,
     );
-    const collectionFee = postGst.times(collectionPercent).dividedBy(100).toDecimalPlaces(2);
 
+    let collectionFee = new Prisma.Decimal(0);
     let instantFee = new Prisma.Decimal(0);
-    if (mode === 'INSTANT_PAY') {
+
+    if (mode === 'SETTLEMENT') {
+      collectionFee = postGst.times(collectionPercent).dividedBy(100).toDecimalPlaces(2);
+    } else {
       const feePercent = await this.sellerDecimal(
         sellerId,
         INSTANT_FEE_KEY,
         DEFAULT_INSTANT_FEE_PERCENT,
       );
-      // On the POST-GST amount, and STACKED on the collection fee: this
-      // is the premium for early access, not a replacement for the cost
-      // of collecting at all. Both are computed off the same base rather
-      // than compounding, so the two rates stay independently readable.
-      instantFee = postGst.times(feePercent).dividedBy(100).toDecimalPlaces(2);
+      // The Instant Pay rate is ALL-IN: it already contains the base
+      // collection charge. So this replaces that fee rather than adding
+      // to it, and the ledger carries ONE line reading exactly the
+      // percentage the seller was quoted. Splitting 2.5% into "1%
+      // collection + 1.5% instant" would total the same and match
+      // nothing the seller was told.
+      //
+      // The max() guards a misconfiguration rather than a normal case:
+      // if the base rate were ever set above the instant rate, the
+      // premium product would cost LESS than the standard one, which is
+      // certainly not what anybody meant.
+      const effective = feePercent.greaterThan(collectionPercent) ? feePercent : collectionPercent;
+      instantFee = postGst.times(effective).dividedBy(100).toDecimalPlaces(2);
     }
 
     // The full COD is credited, and the deductions are their own

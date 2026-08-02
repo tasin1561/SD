@@ -4029,10 +4029,11 @@ enum WalletEntryDirection {
   // rather than folded into ORDER_CHARGES so the revenue from the
   // service is countable on its own.
   INSTANT_PAY_FEE    @map("instant_pay_fee")
-  // What collecting COD costs the seller at all, charged on BOTH credit
-  // modes. Instant Pay's fee stacks on top of it: this is the base
-  // service, that is the premium for early access. Seeded at 0%, so it
-  // changes nothing until someone decides it should. Always a DEBIT,
+  // What collecting COD costs a seller on SETTLEMENT. An INSTANT_PAY
+  // seller does NOT also pay this: that rate is all-in and already
+  // contains it, so an order carries one fee line reading exactly the
+  // percentage the seller was quoted. Seeded at 0%, so it changes
+  // nothing until someone decides it should. Always a DEBIT,
   // therefore ABSENT from CREDIT_DIRECTIONS. Its own value rather than
   // folded into ORDER_CHARGES so COD-handling revenue stays countable
   // separately from the delivery fee.

@@ -228,10 +228,10 @@ describe('CodCreditService — INSTANT_PAY mode', () => {
     expect(amountOf(entries, 'COD_COLLECTION_FEE')).toBe('8.47');
   });
 
-  it('Instant Pay STACKS on the collection fee rather than replacing it', async () => {
-    // The collection fee is what handling COD costs at all; the instant
-    // fee is the premium for not waiting. A seller on Instant Pay is
-    // buying the second, not opting out of the first.
+  it('the Instant Pay rate is ALL-IN — the base fee is not charged on top', async () => {
+    // 2.5% already contains the 1% base. Charging both would mean a
+    // seller quoted 2.5% pays 3.5%, and no arithmetic in their ledger
+    // would match the number they agreed to.
     const { svc, tx, entries } = makeSut({
       collectionFeePercent: '1.00',
       instantFeePercent: '2.50',
@@ -242,15 +242,26 @@ describe('CodCreditService — INSTANT_PAY mode', () => {
       grossInr: new Prisma.Decimal('1000'),
       mode: 'INSTANT_PAY',
     });
-    expect(r.collectionFeeInr).toBe('8.47');
-    expect(r.instantFeeInr).toBe('21.19');
-    // 847.46 − 8.47 − 21.19
-    expect(r.netCreditedInr).toBe('817.80');
-    // Both computed off the SAME post-GST base, not compounded — a
-    // seller quoted "2.5% instant" must be able to find 2.5% in the
-    // ledger, not 2.5% of something already reduced.
-    expect(amountOf(entries, 'COD_COLLECTION_FEE')).toBe('8.47');
+    expect(r.instantFeeInr).toBe('21.19'); // 2.5% of the post-GST 847.46
+    expect(r.collectionFeeInr).toBe('0.00');
+    expect(r.netCreditedInr).toBe('826.27'); // 847.46 − 21.19, not −29.66
+    // ONE fee line, reading exactly what the seller was quoted.
+    expect(amountOf(entries, 'COD_COLLECTION_FEE')).toBe('absent');
     expect(amountOf(entries, 'INSTANT_PAY_FEE')).toBe('21.19');
+  });
+
+  it('a base rate above the instant rate cannot make the premium cheaper', async () => {
+    // Guards a misconfiguration, not a normal case: if someone sets the
+    // base above the instant rate, Instant Pay would otherwise cost LESS
+    // than waiting, which is certainly not what anybody meant.
+    const { svc, tx } = makeSut({ collectionFeePercent: '3.00', instantFeePercent: '2.50' });
+    const r = await svc.creditForOrder(tx, {
+      orderId: ORDER,
+      sellerId: SELLER,
+      grossInr: new Prisma.Decimal('1000'),
+      mode: 'INSTANT_PAY',
+    });
+    expect(r.instantFeeInr).toBe('25.42'); // 3%, not 2.5%
   });
 
   it('a zero GST rate withholds nothing and writes no liability', async () => {
