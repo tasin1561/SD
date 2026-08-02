@@ -1,4 +1,5 @@
 import { Currency, PaymentMode, Prisma, WalletEntryDirection } from '@skydrop/db';
+import type { CodCreditService } from '../../src/modules/seller-wallet-accrual/services/cod-credit.service';
 import { AccrualExecutionService } from '../../src/modules/seller-wallet-accrual/services/accrual-execution.service';
 import { OrderChargesAccrualService } from '../../src/modules/seller-wallet-accrual/services/order-charges-accrual.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
@@ -70,12 +71,20 @@ function makeService(
   const freightAmortisation = {
     debitForDeliveredOrder,
   } as unknown as InboundFreightAmortisationService;
+  // Mode resolution + the tax maths are pinned in cod-credit.service
+  // and end to end; here the default SETTLEMENT mode means delivery
+  // credits nothing, which is exactly what these cases assert.
+  const codCredit = {
+    resolveMode: jest.fn(async () => 'SETTLEMENT' as const),
+    creditForOrder: jest.fn(async () => ({ credited: false })),
+  } as unknown as CodCreditService;
 
   const svc = new AccrualExecutionService(
     prisma,
     wallet as unknown as WalletService,
     chargesAccrual,
     freightAmortisation,
+    codCredit,
   );
   return {
     svc,
@@ -89,18 +98,18 @@ function makeService(
 }
 
 describe('AccrualExecutionService.executeAccrual', () => {
-  it('COD order, nothing debited yet: credits COD + debits charges in one tx', async () => {
+  it('on SETTLEMENT, delivery debits charges but does NOT credit COD', async () => {
+    // Delivery is not when the money reaches us. Crediting here for
+    // every seller is what made Skydrop front 5-10 days of everyone's
+    // COD and absorb any short payment; the credit now waits for the
+    // courier's payout. INSTANT_PAY is the paid opt-out.
     const { svc, applyEntry, recomputeCacheAfterCommit } = makeService({
       charges: [{ type: 'BASE_SHIPPING', amountInr: new Prisma.Decimal('80') }],
     });
     await svc.executeAccrual('order-1');
-    expect(applyEntry).toHaveBeenCalledTimes(2);
-    const directions = applyEntry.mock.calls.map((c) => (c[1] as AnyArgs).direction);
-    expect(directions).toEqual(
-      expect.arrayContaining([
-        WalletEntryDirection.COD_COLLECTION,
-        WalletEntryDirection.ORDER_CHARGES,
-      ]),
+    expect(applyEntry).toHaveBeenCalledTimes(1);
+    expect((applyEntry.mock.calls[0]![1] as AnyArgs).direction).toBe(
+      WalletEntryDirection.ORDER_CHARGES,
     );
     expect(recomputeCacheAfterCommit).toHaveBeenCalledWith(
       'seller-1',
@@ -109,16 +118,13 @@ describe('AccrualExecutionService.executeAccrual', () => {
     );
   });
 
-  it('R1c: charges already debited early (AT_AWB) — still credits COD, does NOT re-debit charges', async () => {
+  it('R1c: charges already debited early (AT_AWB) — delivery then writes nothing', async () => {
     const { svc, applyEntry } = makeService({
       chargesEntryExists: true,
       charges: [{ type: 'BASE_SHIPPING', amountInr: new Prisma.Decimal('80') }],
     });
     await svc.executeAccrual('order-1');
-    expect(applyEntry).toHaveBeenCalledTimes(1);
-    expect((applyEntry.mock.calls[0]![1] as AnyArgs).direction).toBe(
-      WalletEntryDirection.COD_COLLECTION,
-    );
+    expect(applyEntry).not.toHaveBeenCalled();
   });
 
   it('fully processed already (both entries exist): no writes at all, still succeeds', async () => {
@@ -208,15 +214,22 @@ describe('AccrualExecutionService.executeAccrual', () => {
         alreadyCharged: false,
       })),
     } as unknown as InboundFreightAmortisationService;
+    const codCredit = {
+      resolveMode: jest.fn(async () => 'SETTLEMENT' as const),
+      creditForOrder: jest.fn(async () => ({ credited: false })),
+    } as unknown as CodCreditService;
     const svc = new AccrualExecutionService(
       prisma,
       wallet as unknown as WalletService,
       chargesAccrual,
       freightAmortisation,
+      codCredit,
     );
 
     await svc.executeAccrual('order-1');
     await svc.executeAccrual('order-1');
-    expect(applyEntry).toHaveBeenCalledTimes(2); // one COD + one ORDER_CHARGES, never twice each
+    // One ORDER_CHARGES debit, never twice. COD is not credited at
+    // delivery on the default SETTLEMENT mode.
+    expect(applyEntry).toHaveBeenCalledTimes(1);
   });
 });

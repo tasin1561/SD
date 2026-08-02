@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-wallet-accrual.module';
+import { SellerWalletModule } from '../seller-wallet/seller-wallet.module';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { CourierSettlementService } from './services/courier-settlement.service';
@@ -16,7 +18,12 @@ import { AdminCourierSettlementController } from './controllers/admin-courier-se
  * claw back from a seller who was paid in good faith.
  */
 @Module({
-  imports: [AuthCommonModule],
+  imports: [
+    AuthCommonModule,
+    // Recording a payout is now what CREDITS a settlement-mode seller.
+    SellerWalletAccrualModule,
+    SellerWalletModule,
+  ],
   controllers: [AdminCourierSettlementController],
   providers: [CourierSettlementService, StaffJwtGuard],
   exports: [CourierSettlementService],

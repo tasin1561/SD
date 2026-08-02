@@ -7,6 +7,7 @@ import { PendingAccrualWorker } from './queue/pending-accrual.worker';
 import { AccrualExecutionService } from './services/accrual-execution.service';
 import { CourierFeeAccrualService } from './services/courier-fee-accrual.service';
 import { OrderChargesAccrualService } from './services/order-charges-accrual.service';
+import { CodCreditService } from './services/cod-credit.service';
 import { RtoFeeAccrualService } from './services/rto-fee-accrual.service';
 import { OrderDeliveredAccrualListener } from './services/order-delivered-accrual-listener.service';
 import { PendingAccrualSchedulerService } from './services/pending-accrual-scheduler.service';
@@ -56,6 +57,7 @@ import { InboundFreightModule } from '../inbound-freight/inbound-freight.module'
     OrderDeliveredAccrualListener,
     OrderChargesAccrualService,
     RtoFeeAccrualService,
+    CodCreditService,
     CourierFeeAccrualService,
     AccrualExecutionService,
     PendingAccrualSchedulerService,
@@ -63,6 +65,11 @@ import { InboundFreightModule } from '../inbound-freight/inbound-freight.module'
     PendingAccrualQueue,
     PendingAccrualWorker,
   ],
-  exports: [OrderChargesAccrualService, CourierFeeAccrualService, RtoFeeAccrualService],
+  exports: [
+    OrderChargesAccrualService,
+    CourierFeeAccrualService,
+    RtoFeeAccrualService,
+    CodCreditService,
+  ],
 })
 export class SellerWalletAccrualModule {}

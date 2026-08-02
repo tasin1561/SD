@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ActorType, Currency, PaymentMode, Prisma, WalletEntryDirection } from '@skydrop/db';
+import { Currency, PaymentMode, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import { OrderChargesAccrualService } from './order-charges-accrual.service';
+import { CodCreditService } from './cod-credit.service';
 import { InboundFreightAmortisationService } from '../../inbound-freight/services/inbound-freight-amortisation.service';
 
 /**
@@ -29,6 +30,7 @@ export class AccrualExecutionService {
     private readonly wallet: WalletService,
     private readonly chargesAccrual: OrderChargesAccrualService,
     private readonly freightAmortisation: InboundFreightAmortisationService,
+    private readonly codCredit: CodCreditService,
   ) {}
 
   async executeAccrual(orderId: string): Promise<void> {
@@ -51,22 +53,33 @@ export class AccrualExecutionService {
       // 1 and the INSTANT listener path is mutually exclusive with the
       // T+N one — but a guard whose correctness rests on there only ever
       // being one caller is a guard waiting to be wrong.
-      const codAlready = await tx.sellerWalletEntry.findFirst({
-        where: { linkedOrderId: orderId, direction: WalletEntryDirection.COD_COLLECTION },
-        select: { id: true },
-      });
-
-      if (!codAlready && order.paymentMode === PaymentMode.COD) {
-        const codAmount = order.codAmountInr ?? new Prisma.Decimal(0);
-        if (codAmount.gt(0)) {
-          await this.wallet.applyEntry(tx, {
+      // COD is credited HERE only for a seller on INSTANT_PAY — that is
+      // what they pay the fee for. On SETTLEMENT (the default) delivery
+      // is not the trigger: the money has not reached us yet, and the
+      // credit waits for the courier's payout. Crediting at delivery for
+      // everyone is what made Skydrop front 5-10 days of every seller's
+      // COD and absorb any short payment.
+      if (order.paymentMode === PaymentMode.COD) {
+        const mode = await this.codCredit.resolveMode(order.sellerId);
+        if (mode === 'INSTANT_PAY') {
+          const result = await this.codCredit.creditForOrder(tx, {
+            orderId: order.id,
             sellerId: order.sellerId,
-            currency: Currency.INR,
-            direction: WalletEntryDirection.COD_COLLECTION,
-            amount: codAmount,
-            linkedOrderId: order.id,
-            actorType: ActorType.SYSTEM,
+            grossInr: order.codAmountInr ?? new Prisma.Decimal(0),
+            mode,
           });
+          if (result.credited) {
+            this.logger.log(
+              {
+                orderId: order.id,
+                gross: result.grossInr,
+                gst: result.gstWithheldInr,
+                fee: result.instantFeeInr,
+                net: result.netCreditedInr,
+              },
+              'Instant Pay COD credit',
+            );
+          }
         }
       }
 

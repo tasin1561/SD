@@ -579,6 +579,46 @@ const systemSettings: SystemSettingSeed[] = [
   },
   // R2 — seller-initiated withdrawal requests.
   {
+    key: 'wallet.cod_credit_mode',
+    category: 'wallet',
+    valueType: SettingValueType.STRING,
+    valueString: 'SETTLEMENT',
+    displayName: 'COD Credit Mode',
+    description:
+      "How a seller is paid their COD money. 'SETTLEMENT' (default) credits them when the courier actually settles with us — no float, no fee. 'INSTANT_PAY' credits at delivery for a percentage fee, and we front the money until the courier pays. ONE at a time: this is a mode, not two switches. Per-seller override.",
+    sellerOverridable: true,
+  },
+  {
+    key: 'wallet.cod_gst_percent',
+    category: 'wallet',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '18.00',
+    displayName: 'GST Withheld from COD (%)',
+    description:
+      'The customer pays a tax-INCLUSIVE price, so this is extracted from the COD (cod × r / (100 + r)), never added on top: ₹1,000 at 18% withholds ₹152.54, not ₹180. WE file it, so the withheld amount is a liability recorded in gst_withholdings — not margin. GLOBAL only: a tax rate is set by law, not negotiated per seller.',
+  },
+  {
+    key: 'wallet.instant_pay_fee_percent',
+    category: 'wallet',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '2.50',
+    displayName: 'Instant Pay Fee (%)',
+    description:
+      'Charged on the POST-GST amount when a seller is on INSTANT_PAY. On ₹1,000 COD: GST leaves ₹847.46, and 2.5% of that is ₹21.19 — what the seller pays to be credited now rather than waiting for the courier. Per-seller override; the rate is negotiable, unlike the tax.',
+    sellerOverridable: true,
+    overrideMinDecimal: '0',
+    overrideMaxDecimal: '100',
+  },
+  {
+    key: 'wallet.settlement_shortfall_alert_percent',
+    category: 'wallet',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '5.00',
+    displayName: 'Settlement Shortfall Alert (%)',
+    description:
+      'A seller is credited what the order was WORTH, not what the courier remitted — a short payment is our dispute with the courier, not a clawback from a seller paid in good faith. This is the circuit breaker: a settlement short by more than this percentage audits CRITICAL and asks for a human, so we absorb the occasional error without quietly funding a systematic one.',
+  },
+  {
     key: 'wallet.minimum_balance_inr',
     category: 'wallet',
     valueType: SettingValueType.DECIMAL,

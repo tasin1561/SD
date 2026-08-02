@@ -286,6 +286,11 @@ function humanizeDirection(d: WalletEntryView['direction']): string {
     // registered in CREDIT_DIRECTIONS above.
     case 'TOPUP':
       return 'Wallet top-up';
+    // What Instant Pay costs: being credited at delivery rather than
+    // waiting for the courier to settle. A DEBIT, so it stays OUT of
+    // CREDIT_DIRECTIONS above.
+    case 'INSTANT_PAY_FEE':
+      return 'Instant Pay fee';
   }
 }
 

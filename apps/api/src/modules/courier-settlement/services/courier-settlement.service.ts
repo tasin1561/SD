@@ -1,10 +1,13 @@
 import {
+  Logger,
   BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, OrderStatus, Prisma } from '@skydrop/db';
+import { Currency, ActorType, OrderStatus, Prisma } from '@skydrop/db';
+import { CodCreditService } from '../../seller-wallet-accrual/services/cod-credit.service';
+import { WalletService } from '../../seller-wallet/services/wallet.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
@@ -97,9 +100,13 @@ const ZERO = new Prisma.Decimal(0);
  */
 @Injectable()
 export class CourierSettlementService {
+  private readonly logger = new Logger(CourierSettlementService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
+    private readonly codCredit: CodCreditService,
+    private readonly wallet: WalletService,
   ) {}
 
   /**
@@ -185,6 +192,14 @@ export class CourierSettlementService {
       });
     }
 
+    const creditedSellers = new Set<string>();
+    const shortfalls: Array<{
+      orderId: string;
+      expected: string;
+      settled: string;
+      shortfall: string;
+    }> = [];
+
     let allocated = ZERO;
     const lineData = input.lines.map((line) => {
       const settled = this.parseMoney(line.settledInr, `line ${line.orderId}`);
@@ -195,6 +210,13 @@ export class CourierSettlementService {
         settledInr: settled,
         note: line.note ?? null,
       };
+    });
+
+    // Which of these orders belong to a seller waiting on settlement to
+    // be paid, and which were already paid at delivery under Instant Pay.
+    const sellerByOrder = await this.prisma.client.order.findMany({
+      where: { id: { in: input.lines.map((l) => l.orderId) } },
+      select: { id: true, sellerId: true, codAmountInr: true },
     });
 
     const created = await this.prisma.client.$transaction(async (tx) => {
@@ -213,6 +235,45 @@ export class CourierSettlementService {
           lines: { include: { order: { select: { orderNumber: true } } } },
         },
       });
+
+      // ── The credit ───────────────────────────────────────────────
+      //
+      // This REVERSES what SETL-1 originally said — that the settlement
+      // ledger never writes a wallet entry. That rule was written when
+      // sellers were paid at DELIVERED, i.e. BEFORE the settlement, so
+      // its concern was not clawing back money already given. Now the
+      // seller is paid FROM the settlement, so the settlement is the
+      // trigger and the reasoning inverts.
+      //
+      // The seller is credited what the ORDER WAS WORTH, not what the
+      // courier actually remitted. A short payment is our dispute with
+      // the courier — the seller has no visibility into them and no
+      // leverage, and absorbing that risk is the service. The
+      // circuit breaker below is what stops us quietly funding a
+      // systematic shortfall rather than an occasional error.
+      for (const line of lineData) {
+        const order = sellerByOrder.find((o) => o.id === line.orderId);
+        if (!order) continue;
+        const mode = await this.codCredit.resolveMode(order.sellerId);
+        if (mode !== 'SETTLEMENT') continue; // already paid at delivery
+        await this.codCredit.creditForOrder(tx, {
+          orderId: order.id,
+          sellerId: order.sellerId,
+          grossInr: line.expectedInr,
+          mode,
+        });
+        creditedSellers.add(order.sellerId);
+
+        const shortfall = line.expectedInr.sub(line.settledInr);
+        if (shortfall.gt(0)) {
+          shortfalls.push({
+            orderId: order.id,
+            expected: line.expectedInr.toString(),
+            settled: line.settledInr.toString(),
+            shortfall: shortfall.toString(),
+          });
+        }
+      }
 
       await this.audit.log(
         {
@@ -242,7 +303,67 @@ export class CourierSettlementService {
       return row;
     });
 
+    // Balances are cached; the credits above changed them.
+    for (const sellerId of creditedSellers) {
+      await this.wallet.recomputeCacheAfterCommit(sellerId, Currency.INR, 'post-settlement-credit');
+    }
+
+    // ── The circuit breaker ──────────────────────────────────────────
+    //
+    // We pay sellers what their orders were worth and absorb the
+    // difference. That is right for the occasional error and ruinous for
+    // a systematic one: at ₹200 a parcel, a standing 5% shortfall eats a
+    // quarter of the delivery fee. So a payout short by more than the
+    // threshold audits CRITICAL and asks for a human, rather than
+    // quietly funding it.
+    //
+    // The alternative — refusing to credit — would punish sellers for a
+    // dispute they cannot see and have no leverage in.
+    if (shortfalls.length > 0) {
+      const totalShort = shortfalls.reduce((n, sf) => n + Number(sf.shortfall), 0);
+      const totalExpected = shortfalls.reduce((n, sf) => n + Number(sf.expected), 0);
+      const pct = totalExpected > 0 ? (totalShort / totalExpected) * 100 : 0;
+      const threshold = await this.shortfallAlertPercent();
+      await this.audit.log({
+        actorType: ActorType.STAFF,
+        staffUserId: staffId,
+        action:
+          pct > threshold
+            ? 'wallet.courier_settlement.shortfall_breach'
+            : 'wallet.courier_settlement.shortfall',
+        entityType: 'courier_settlement',
+        entityId: created.id,
+        severity: pct > threshold ? 'CRITICAL' : 'MEDIUM',
+        metadata: {
+          reference,
+          shortPaidOrders: shortfalls.length,
+          totalShortfallInr: totalShort.toFixed(2),
+          shortfallPercent: pct.toFixed(2),
+          thresholdPercent: threshold.toFixed(2),
+          // Sellers were credited in full regardless — this is our
+          // exposure to recover from the courier, not theirs to absorb.
+          absorbedByUs: true,
+          lines: shortfalls.slice(0, 50),
+        },
+      });
+      if (pct > threshold) {
+        this.logger.error(
+          { reference, totalShort, pct, threshold },
+          'Courier settlement short by more than the alert threshold — sellers were paid in full; recover this from the courier',
+        );
+      }
+    }
+
     return this.toView(created);
+  }
+
+  /** The point at which absorbing a shortfall stops being a rounding error. */
+  private async shortfallAlertPercent(): Promise<number> {
+    const row = await this.prisma.client.systemSetting.findUnique({
+      where: { key: 'wallet.settlement_shortfall_alert_percent' },
+      select: { valueDecimal: true },
+    });
+    return Number(row?.valueDecimal ?? 5);
   }
 
   async list(query: {

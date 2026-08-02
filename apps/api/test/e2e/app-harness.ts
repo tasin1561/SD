@@ -234,6 +234,8 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         // Wallet + payouts (M21-M24)
         // Top-ups FK sellers, seller_users, staff and wallet entries —
         // all RESTRICT, so they go before every one of them (MUST #12).
+        // GST withholdings FK sellers and orders with RESTRICT.
+        'gst_withholdings',
         'wallet_topup_requests',
         'withdrawal_requests',
         'pending_accruals',

@@ -1,4 +1,6 @@
 import { OrderStatus, Prisma } from '@skydrop/db';
+import type { CodCreditService } from '../../src/modules/seller-wallet-accrual/services/cod-credit.service';
+import type { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
 import { CourierSettlementService } from '../../src/modules/courier-settlement/services/courier-settlement.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
@@ -16,6 +18,7 @@ function makeSut(
     duplicate?: AnyArgs | null;
     orders?: Array<{ id: string; orderNumber: string; codAmountInr: Prisma.Decimal | null }>;
     delivered?: AnyArgs[];
+    shortfallThreshold?: string;
   } = {},
 ) {
   const accountFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
@@ -58,13 +61,33 @@ function makeSut(
     },
     order: { findMany: orderFindMany },
   };
-  const prisma = { client } as unknown as PrismaService;
+  // The shortfall circuit breaker reads its threshold from settings.
+  const client2 = {
+    ...client,
+    systemSetting: {
+      findUnique: jest.fn(async () => ({ valueDecimal: opts.shortfallThreshold ?? '5.00' })),
+    },
+  };
+  const prisma = { client: client2 } as unknown as PrismaService;
 
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown?]>(async () => 'a1');
   const audit = { log: auditLog } as unknown as AuditLogService;
 
+  // The credit itself is pinned in cod-credit.service.spec and end to
+  // end. Here the default SETTLEMENT mode means the recorder DOES try to
+  // credit, so the stub records the calls without doing wallet maths.
+  const creditForOrder = jest.fn(async () => ({ credited: true }));
+  const codCredit = {
+    resolveMode: jest.fn(async () => 'SETTLEMENT' as const),
+    creditForOrder,
+  } as unknown as CodCreditService;
+  const wallet = {
+    recomputeCacheAfterCommit: jest.fn(async () => undefined),
+  } as unknown as WalletService;
+
   return {
-    svc: new CourierSettlementService(prisma, audit),
+    svc: new CourierSettlementService(prisma, audit, codCredit, wallet),
+    creditForOrder,
     auditLog,
     created,
     settlementCreate,
