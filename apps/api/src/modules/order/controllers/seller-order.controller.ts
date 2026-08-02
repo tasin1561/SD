@@ -13,6 +13,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { minutes } from '../../../common/throttler/throttler.module';
 import { ActorType } from '@skydrop/db';
 import { CurrentSeller } from '../../../common/decorators/current-seller.decorator';
 import {
@@ -93,6 +95,20 @@ export class SellerOrderController {
   // order id and 400 on the UUID pipe.
   @Get('customer-lookup')
   @SellerAuthAllowSuspended()
+  // The ONE GET on this controller a VIEWER may not make. The class
+  // carries @SellerViewerReadable() so a VIEWER can read orders, and
+  // this endpoint inherited that by being a GET on the same controller
+  // — which nobody decided. It is not an order they already have: it
+  // takes an arbitrary phone number and answers questions about it,
+  // which is a lookup TOOL rather than a view of their own data.
+  // Handler-level @SellerRoles wins over the class opt-in (rule 1).
+  @SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.OPS)
+  // Tighter than the 100/min baseline. Entering an order is one lookup;
+  // even a fast operator does a handful a minute. The platform-wide
+  // counts are a deliberate disclosure, but disclosing them one number
+  // at a time to someone placing orders is a different act from letting
+  // a script walk a list of numbers and harvest who shops where.
+  @Throttle({ default: { limit: 30, ttl: minutes(1) } })
   @ApiOperation({
     summary:
       'What we know about a phone number before you ship to it: platform-wide counts, your own orders, and anything of yours not yet packed',

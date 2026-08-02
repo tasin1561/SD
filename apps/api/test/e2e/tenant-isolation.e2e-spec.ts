@@ -226,6 +226,125 @@ describe('cross-tenant isolation (e2e)', () => {
     }
   });
 
+  it('cannot touch another seller’s staged CSV rows', async () => {
+    // A staged row is a half-formed order carrying a real customer's
+    // name, phone and address. It is the one place that data sits
+    // OUTSIDE the orders table, so it is also the one place a
+    // seller-scoping mistake would not be caught by the order tests.
+    const upload = await h.prisma.bulkOrderUpload.create({
+      data: {
+        sellerId: alpha.sellerId,
+        fileName: 'a.csv',
+        spacesKey: 'k',
+        fileSizeBytes: 10,
+        status: 'COMPLETED',
+        rowCount: 1,
+      },
+      select: { id: true },
+    });
+    const row = await h.prisma.stagedOrderRow.create({
+      data: {
+        uploadId: upload.id,
+        sellerId: alpha.sellerId,
+        rowNumber: 1,
+        data: { customerName: 'Alpha Customer', customerPhone: '+919876500099' },
+        problems: [],
+        status: 'NEEDS_INPUT',
+      },
+      select: { id: true },
+    });
+
+    // Beta must not see it in their queue…
+    const list = await request(h.baseUrl).get('/seller/orders-pending').set(beta.auth);
+    if (list.status === 200) {
+      expect(JSON.stringify(list.body)).not.toContain('Alpha Customer');
+      expect(JSON.stringify(list.body)).not.toContain(row.id);
+    }
+
+    // …nor edit, import or discard it by id.
+    for (const [path, body] of [
+      [`/seller/orders-pending/${row.id}`, { data: { customerName: 'hijacked' } }],
+      [`/seller/orders-pending/${row.id}/import`, {}],
+      [`/seller/orders-pending/${row.id}/discard`, {}],
+    ] as Array<[string, object]>) {
+      const res = await request(h.baseUrl).post(path).set(beta.auth).send(body);
+      expectDenied(res.status, res.body, `staged row via ${path}`);
+    }
+
+    // And it is untouched.
+    const after = await h.prisma.stagedOrderRow.findUniqueOrThrow({ where: { id: row.id } });
+    expect(after.status).toBe('NEEDS_INPUT');
+    expect((after.data as Record<string, unknown>)['customerName']).toBe('Alpha Customer');
+  });
+
+  it('cannot read another seller’s bank-transfer proof', async () => {
+    // The proof is a bank screenshot or receipt — account numbers,
+    // names, balances. It lives in Spaces behind a presigned URL, so a
+    // missing seller check here would hand over a working link to the
+    // file itself rather than merely a row.
+    // Created rather than looked up: a `findFirst` that returned nothing
+    // would turn this into a test that silently passes without ever
+    // reaching the assertion.
+    const bank = await h.prisma.platformBankAccount.create({
+      data: {
+        label: 'Tenant Test Bank',
+        bankName: 'Test',
+        accountName: 'Skydrop',
+        accountNumber: '000',
+        currency: 'INR',
+      },
+      select: { id: true },
+    });
+
+    const topup = await h.prisma.walletTopupRequest.create({
+      data: {
+        sellerId: alpha.sellerId,
+        bankAccountId: bank.id,
+        amount: '5000.00',
+        currency: 'INR',
+        status: 'PENDING',
+        proofSpacesKey: `topup-proofs/${alpha.sellerId}/secret-receipt.png`,
+      },
+      select: { id: true },
+    });
+
+    const res = await request(h.baseUrl)
+      .get(`/seller/wallet/topups/${topup.id}/proof-url`)
+      .set(beta.auth);
+    expectDenied(res.status, res.body, "another seller's topup proof");
+    // Belt and braces: no presigned URL leaked in the body either.
+    expect(JSON.stringify(res.body)).not.toContain('secret-receipt');
+  });
+
+  it('cannot cancel another seller’s order', async () => {
+    const order = await h.prisma.order.create({
+      data: {
+        orderNumber: `SD-2026-99-${Date.now().toString().slice(-6)}`,
+        sellerId: alpha.sellerId,
+        recipientName: 'Alpha Customer',
+        recipientPhoneE164: '+919876500098',
+        recipientAddressLine1: 'a',
+        recipientCity: 'Delhi',
+        recipientStateProvince: 'Delhi',
+        recipientPostalCode: '110001',
+        paymentMode: 'COD',
+        declaredValueInr: '100',
+        totalWeightGrams: 100,
+        status: 'PENDING_CONFIRMATION',
+      },
+      select: { id: true },
+    });
+
+    const res = await request(h.baseUrl)
+      .post(`/seller/orders/${order.id}/cancel`)
+      .set(beta.auth)
+      .send({});
+    expectDenied(res.status, res.body, "another seller's order cancel");
+
+    const after = await h.prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(after.status).toBe('PENDING_CONFIRMATION');
+  });
+
   it('a seller token is refused on every admin surface', async () => {
     // The seller guard and the staff guard are different; a seller JWT
     // must not be accepted as staff anywhere.

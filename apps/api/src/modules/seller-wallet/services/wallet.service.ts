@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ActorType, Currency, Prisma, WalletEntryDirection } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 
 /**
  * Phase 1B M21 — the wallet primitive.
@@ -107,12 +108,29 @@ export class WalletService {
       throw new Error(`WALLET_REASON_REQUIRED: reasonCode required on ADJUSTMENT_*`);
     }
 
-    // Compute current balance from the ledger (authoritative — INV-3
-    // style). For a wallet with hot write traffic, this is O(history)
-    // — Phase 1B sellers will have a few hundred entries / month,
-    // which is fine; if we scale we add per-(sellerId, currency)
-    // running-sum materialised view.
-    const current = await this.balanceLive(input.sellerId, input.currency, tx);
+    // ── Serialize every write to THIS wallet ──────────────────────────
+    // Read-then-write under READ COMMITTED is not a guard. Two
+    // concurrent credits — two parcels for one seller delivering at the
+    // same moment, a top-up landing while an accrual sweeps — both read
+    // the same balance and both stamp the SAME runningBalanceAfter. The
+    // statement then stops adding up, and because the ledger is
+    // append-only the error is permanent: there is no row to correct,
+    // only an adjusting entry that makes the history stranger.
+    //
+    // A transaction-scoped advisory lock is the same instrument the
+    // manifest find-or-create (WMS-7) and order numbering (ORD-8) use.
+    // It is released on commit or rollback, so a failure cannot wedge a
+    // seller's wallet.
+    await this.lockWallet(tx, input.sellerId, input.currency);
+
+    // With the lock held, the LAST ENTRY's running balance is the
+    // current balance — that column is what the ledger exists to carry.
+    // Reading it is one indexed row instead of the whole history: the
+    // previous implementation fetched EVERY entry for the seller into
+    // Node and summed them in JS, on every single money write, inside
+    // the transaction. At a few hundred entries that is invisible; at
+    // six figures it is a self-inflicted outage on the money path.
+    const current = await this.latestRunningBalance(tx, input.sellerId, input.currency);
 
     const signedDelta = isCredit(input.direction) ? input.amount : input.amount.neg();
     const next = current.add(signedDelta);
@@ -140,21 +158,76 @@ export class WalletService {
   }
 
   /**
-   * W-3: authoritative balance. Reads the ledger; no cache.
-   * Accepts an optional tx so callers inside a Prisma.$transaction
-   * see in-tx writes.
+   * Serialize writes to one (seller, currency) wallet.
+   *
+   * `pg_advisory_xact_lock` takes two 32-bit keys: a namespace so
+   * wallet locks cannot collide with the manifest (0x04d47) or order
+   * numbering (0x04d46) locks, and an FNV-1a hash of the wallet's
+   * identity. Held to commit-or-rollback, so a crash mid-write releases
+   * it rather than freezing a seller's money.
+   *
+   * A hash collision between two DIFFERENT wallets costs one of them a
+   * brief wait — it can never produce a wrong balance, because the lock
+   * is a mutex and not an identity.
+   */
+  private async lockWallet(tx: TxClient, sellerId: string, currency: Currency): Promise<void> {
+    await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${sellerId}|${currency}`);
+  }
+
+  /**
+   * The balance as of the last entry — O(1), and the ledger's own
+   * account of itself rather than a cache to be trusted.
+   *
+   * Ordered by `id` DESC: ids are uuidv7, so they are monotonic, and
+   * unlike `createdAt` they break ties. Postgres fixes
+   * `CURRENT_TIMESTAMP` for the whole transaction, so two entries
+   * written together — the COD credit and the charges debit that pair
+   * on delivery — carry the SAME createdAt, and ordering on it alone
+   * would pick between them arbitrarily.
+   */
+  private async latestRunningBalance(
+    tx: TxClient,
+    sellerId: string,
+    currency: Currency,
+  ): Promise<Prisma.Decimal> {
+    const last = await tx.sellerWalletEntry.findFirst({
+      where: { sellerId, currency },
+      orderBy: { id: 'desc' },
+      select: { runningBalanceAfter: true },
+    });
+    return last?.runningBalanceAfter ?? new Prisma.Decimal(0);
+  }
+
+  /**
+   * W-3: authoritative balance, summed across the whole ledger.
+   *
+   * This is the VERIFICATION path, not the hot path — `applyEntry`
+   * reads the last entry's running balance instead. Kept because
+   * re-deriving the total from the entries themselves is the only way
+   * to catch a running balance that has gone wrong; a system that only
+   * ever reads its own last answer cannot notice it was mistaken.
+   *
+   * Summed in SQL. It used to pull every row for the seller into Node
+   * and add them up in a loop, which made the cost of asking "what is
+   * my balance" grow with how long the seller had been trading.
    */
   async balanceLive(sellerId: string, currency: Currency, tx?: TxClient): Promise<Prisma.Decimal> {
     const client = tx ?? this.prisma.client;
-    const rows = await client.sellerWalletEntry.findMany({
-      where: { sellerId, currency },
-      select: { direction: true, amount: true },
+    const credits = [...CREDIT_DIRECTIONS];
+    // Sequential rather than Promise.all: an interactive Prisma
+    // transaction runs one statement at a time, and issuing two
+    // concurrently against the same tx client is undefined behaviour.
+    const credited = await client.sellerWalletEntry.aggregate({
+      _sum: { amount: true },
+      where: { sellerId, currency, direction: { in: credits } },
     });
-    let sum = new Prisma.Decimal(0);
-    for (const r of rows) {
-      sum = isCredit(r.direction) ? sum.add(r.amount) : sum.sub(r.amount);
-    }
-    return sum;
+    const debited = await client.sellerWalletEntry.aggregate({
+      _sum: { amount: true },
+      where: { sellerId, currency, direction: { notIn: credits } },
+    });
+    return (credited._sum.amount ?? new Prisma.Decimal(0)).sub(
+      debited._sum.amount ?? new Prisma.Decimal(0),
+    );
   }
 
   /**

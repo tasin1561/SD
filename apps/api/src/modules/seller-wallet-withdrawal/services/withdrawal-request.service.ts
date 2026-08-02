@@ -11,6 +11,7 @@ import {
   WithdrawalRequestedBy,
   WithdrawalRequestStatus,
 } from '@skydrop/db';
+import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
@@ -141,72 +142,94 @@ export class WithdrawalRequestService {
       }
     }
 
-    // Both limits are COUNTS of requests, not totals — the amount is
-    // governed by the balance floor below.
-    const maxPerDay = await this.settings.resolve(sellerId, MAX_PER_DAY_KEY);
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const todayCount = await this.prisma.client.withdrawalRequest.count({
-      where: { sellerId, createdAt: { gte: since } },
-    });
-    if (todayCount >= Number(maxPerDay.value)) {
-      throw new ConflictException({
-        code: 'WITHDRAWAL_DAILY_LIMIT_REACHED',
-        message: `Already submitted ${todayCount} withdrawal request(s) in the last 24h (limit ${maxPerDay.value})`,
-      });
-    }
-
-    const maxPerMonth = await this.settings.resolve(sellerId, MAX_PER_MONTH_KEY);
-    const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const monthCount = await this.prisma.client.withdrawalRequest.count({
-      where: { sellerId, createdAt: { gte: monthAgo } },
-    });
-    if (monthCount >= Number(maxPerMonth.value)) {
-      throw new ConflictException({
-        code: 'WITHDRAWAL_MONTHLY_LIMIT_REACHED',
-        message: `Already submitted ${monthCount} withdrawal request(s) in the last 30 days (limit ${maxPerMonth.value})`,
-      });
-    }
-
-    // The balance floor. What the seller may take is the balance MINUS
-    // the minimum they must leave behind — not the whole balance.
+    // ── Everything below is ONE locked transaction ────────────────────
+    // Every check here is a read-then-write: count the day's requests,
+    // count the month's, read the balance, then insert. Run
+    // concurrently, two submissions each see the state before the other
+    // and both pass — the seller ends up with two requests for the
+    // whole withdrawable balance and both count limits bypassed. It is
+    // the same shape as the wallet writer, the ticket double-refund and
+    // the pickup-request duplicate, so it takes the same instrument: the
+    // seller's own wallet lock, which also serialises this against a
+    // credit landing mid-check.
     //
-    // This is what stands between us and an unpaid delivery fee on a
-    // prepaid seller, whose wallet is the only security we hold. Raising
-    // their floor is how a credit limit is expressed here.
-    const balance = await this.wallet.balanceLive(sellerId, input.currency);
-    const withdrawable = await this.withdrawableBalance(sellerId, input.currency, balance);
-    if (withdrawable.lt(amount)) {
-      throw new BadRequestException({
-        code: 'INSUFFICIENT_WITHDRAWABLE_BALANCE',
-        message:
-          `Wallet balance is ${balance}, of which ${withdrawable} is withdrawable ` +
-          `(the rest is held by this account's minimum balance). Requested ${amount}.`,
+    // The money itself was never at risk — a remittance is what actually
+    // pays, and that refuses to push the wallet negative. What was at
+    // risk is the limits meaning anything, and an operator being shown a
+    // queue that asks for more than exists.
+    return this.prisma.client.$transaction(async (tx) => {
+      await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${sellerId}|${input.currency}`);
+
+      // Both limits are COUNTS of requests, not totals — the amount is
+      // governed by the balance floor below.
+      const maxPerDay = await this.settings.resolve(sellerId, MAX_PER_DAY_KEY);
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const todayCount = await tx.withdrawalRequest.count({
+        where: { sellerId, createdAt: { gte: since } },
       });
-    }
+      if (todayCount >= Number(maxPerDay.value)) {
+        throw new ConflictException({
+          code: 'WITHDRAWAL_DAILY_LIMIT_REACHED',
+          message: `Already submitted ${todayCount} withdrawal request(s) in the last 24h (limit ${maxPerDay.value})`,
+        });
+      }
 
-    const row = await this.prisma.client.withdrawalRequest.create({
-      data: {
-        sellerId,
-        currency: input.currency,
-        amountRequested: amount,
-        requestedBy,
-        requestedByUserId,
-        note: input.note ?? null,
-      },
+      const maxPerMonth = await this.settings.resolve(sellerId, MAX_PER_MONTH_KEY);
+      const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const monthCount = await tx.withdrawalRequest.count({
+        where: { sellerId, createdAt: { gte: monthAgo } },
+      });
+      if (monthCount >= Number(maxPerMonth.value)) {
+        throw new ConflictException({
+          code: 'WITHDRAWAL_MONTHLY_LIMIT_REACHED',
+          message: `Already submitted ${monthCount} withdrawal request(s) in the last 30 days (limit ${maxPerMonth.value})`,
+        });
+      }
+
+      // The balance floor. What the seller may take is the balance MINUS
+      // the minimum they must leave behind — not the whole balance.
+      //
+      // This is what stands between us and an unpaid delivery fee on a
+      // prepaid seller, whose wallet is the only security we hold. Raising
+      // their floor is how a credit limit is expressed here.
+      const balance = await this.wallet.balanceLive(sellerId, input.currency, tx);
+      const withdrawable = await this.withdrawableBalance(sellerId, input.currency, balance);
+      if (withdrawable.lt(amount)) {
+        throw new BadRequestException({
+          code: 'INSUFFICIENT_WITHDRAWABLE_BALANCE',
+          message:
+            `Wallet balance is ${balance}, of which ${withdrawable} is withdrawable ` +
+            `(the rest is held by this account's minimum balance). Requested ${amount}.`,
+        });
+      }
+
+      const row = await tx.withdrawalRequest.create({
+        data: {
+          sellerId,
+          currency: input.currency,
+          amountRequested: amount,
+          requestedBy,
+          requestedByUserId,
+          note: input.note ?? null,
+        },
+      });
+
+      await this.audit.log(
+        {
+          actorType: ActorType.SELLER,
+          actorId: requestedByUserId,
+          sellerId,
+          action: 'seller.withdrawal_request.created',
+          entityType: 'withdrawal_request',
+          entityId: row.id,
+          metadata: { currency: input.currency, amount: amount.toString() },
+          severity: 'MEDIUM',
+        },
+        tx,
+      );
+
+      return this.toView(row);
     });
-
-    await this.audit.log({
-      actorType: ActorType.SELLER,
-      actorId: requestedByUserId,
-      sellerId,
-      action: 'seller.withdrawal_request.created',
-      entityType: 'withdrawal_request',
-      entityId: row.id,
-      metadata: { currency: input.currency, amount: amount.toString() },
-      severity: 'MEDIUM',
-    });
-
-    return this.toView(row);
   }
 
   async listForSeller(sellerId: string): Promise<readonly WithdrawalRequestView[]> {

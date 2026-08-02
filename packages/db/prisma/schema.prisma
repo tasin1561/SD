@@ -1756,7 +1756,17 @@ model Order {
   packBoxes              PackBox[]
 
   @@unique([sellerId, sellerOrderRef])
-  @@index([sellerId, status])
+  // A seller's own list, newest first — the most-hit read in the
+  // product. Without placedAt in the key, Postgres walks the GLOBAL
+  // newest-first index and discards every other seller's rows to find
+  // twenty: measured at 300k orders / 50 sellers it threw away 980 rows
+  // per page, and that ratio grows with the number of sellers rather
+  // than with the seller's own volume. 6.6ms → 0.25ms, and now flat as
+  // we add sellers.
+  @@index([sellerId, placedAt(sort: Desc)])
+  // Same list with a status filter. Supersedes the old
+  // [sellerId, status] index, which this one's prefix covers.
+  @@index([sellerId, status, placedAt(sort: Desc)])
   @@index([customerId])
   @@index([recipientPhoneE164])
   @@index([recipientPostalCode])
@@ -4229,6 +4239,11 @@ model SellerWalletEntry {
   topupRequest WalletTopupRequest? @relation("TopupWalletEntry")
 
   @@index([sellerId, currency, createdAt])
+  // Lets applyEntry find the wallet's LAST entry — and therefore its
+  // current balance — with a single index seek instead of sorting the
+  // seller's whole history. Ordered on `id` because ids are uuidv7
+  // (monotonic) and, unlike createdAt, distinct within one transaction.
+  @@index([sellerId, currency, id])
   @@index([linkedOrderId])
   @@index([linkedRemittanceId])
   @@index([linkedEntryId])

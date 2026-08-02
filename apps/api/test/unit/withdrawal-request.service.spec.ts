@@ -63,17 +63,28 @@ function makeService(
   const remittanceFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
     opts.remittance === undefined ? { id: 'rem-1', sellerId: 'seller-1' } : opts.remittance,
   );
+  const withdrawalRequest = {
+    create,
+    findMany,
+    count,
+    findUnique,
+    update,
+    updateMany,
+    findUniqueOrThrow,
+  };
+  // The create path now runs its limit checks, its balance read and the
+  // insert inside ONE transaction holding the seller's wallet lock —
+  // otherwise two concurrent submissions each see the state before the
+  // other and both pass. `$executeRaw` stands in for that lock; a mocked
+  // Prisma has no locking to exercise, which is exactly why the property
+  // itself is proven in wallet-concurrency.e2e-spec against a real
+  // database rather than here.
+  const executeRaw = jest.fn(async () => 1);
+  const txClient = { withdrawalRequest, $executeRaw: executeRaw };
   const client = {
-    withdrawalRequest: {
-      create,
-      findMany,
-      count,
-      findUnique,
-      update,
-      updateMany,
-      findUniqueOrThrow,
-    },
+    withdrawalRequest,
     remittance: { findUnique: remittanceFindUnique },
+    $transaction: <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient),
   };
   const prisma = { client } as unknown as PrismaService;
 

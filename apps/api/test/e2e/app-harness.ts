@@ -239,6 +239,11 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         // GST withholdings FK sellers and orders with RESTRICT.
         'gst_withholdings',
         'wallet_topup_requests',
+        // The bank accounts top-ups point at (RESTRICT), so they follow
+        // the requests. Not seeded — every suite that needs one creates
+        // it, and without this they accumulate across runs until a test
+        // that counts them starts failing for no visible reason.
+        'platform_bank_accounts',
         'withdrawal_requests',
         'pending_accruals',
         'seller_wallet_entries',
