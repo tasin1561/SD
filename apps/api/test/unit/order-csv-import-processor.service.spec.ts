@@ -1,4 +1,5 @@
 import { BulkUploadStatus, OrderStatus } from '@skydrop/db';
+import type { StagedOrderRowService } from '../../src/modules/order-csv-import/services/staged-order-row.service';
 import { OrderCsvImportProcessorService } from '../../src/modules/order-csv-import/services/order-csv-import-processor.service';
 import { OrderCsvParserService } from '../../src/modules/order-csv-import/services/order-csv-parser.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
@@ -56,6 +57,9 @@ function makeService(opts: {
     parser,
     catalog as never,
     orders as never,
+    // Staging is exercised in its own suite and end to end; here it
+    // must not be able to fail the import loop.
+    { stage: jest.fn(async () => undefined) } as unknown as StagedOrderRowService,
   );
   return { svc, findUnique, update, spaces, audit, catalog, orders };
 }

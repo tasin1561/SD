@@ -169,6 +169,7 @@ model Seller {
   remittances             Remittance[]
   withdrawalRequests      WithdrawalRequest[]
   topupRequests           WalletTopupRequest[]
+  stagedOrderRows         StagedOrderRow[]
   gstWithholdings         GstWithholding[]
   pendingAccruals         PendingAccrual[]
   tickets                 Ticket[]
@@ -1829,6 +1830,60 @@ model OrderEvent {
   @@map("order_events")
 }
 
+/// Why a row is sitting here instead of being an order.
+enum StagedRowStatus {
+  /// Something the CSV did not supply, or supplied wrongly.
+  NEEDS_INPUT         @map("needs_input")
+  /// The customer already has an unpacked order; the seller decides.
+  DUPLICATE_SUSPECTED @map("duplicate_suspected")
+  /// Became a real order.
+  IMPORTED            @map("imported")
+  /// The seller looked and threw it away.
+  DISCARDED           @map("discarded")
+
+  @@map("staged_row_status")
+}
+
+/// A CSV row that could not become an order on its own.
+///
+/// Before this, such a row went into a downloadable error report — a
+/// dead end. The seller could see WHAT was wrong and had nowhere to fix
+/// it; the only route back was editing the spreadsheet and re-uploading
+/// the whole file, which re-ran every row that had already imported.
+///
+/// Rows that import cleanly still import. This is only the remainder,
+/// and it is a queue rather than a report: the seller fills the gaps
+/// here and each row becomes an order individually.
+model StagedOrderRow {
+  id              String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  uploadId        String          @map("upload_id") @db.Uuid
+  sellerId        String          @map("seller_id") @db.Uuid
+  /// 1-based line in the file the seller uploaded, header included — so
+  /// "row 47" here means row 47 in their spreadsheet.
+  rowNumber       Int             @map("row_number")
+  /// The mapped values as parsed, edited in place by the seller. Kept as
+  /// JSON rather than columns: this is a half-formed order, and giving
+  /// it the order table's NOT NULL constraints is exactly why it could
+  /// not be stored as one.
+  data            Json
+  status          StagedRowStatus @default(NEEDS_INPUT)
+  /// What is wrong, per field. Recomputed on every edit.
+  problems        Json
+  /// Populated for DUPLICATE_SUSPECTED — the orders it may duplicate.
+  duplicateOf     Json?           @map("duplicate_of")
+  resolvedOrderId String?         @map("resolved_order_id") @db.Uuid
+  resolvedAt      DateTime?       @map("resolved_at") @db.Timestamptz
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+
+  upload BulkOrderUpload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  seller Seller          @relation(fields: [sellerId], references: [id])
+
+  @@unique([uploadId, rowNumber])
+  @@index([sellerId, status])
+  @@map("staged_order_rows")
+}
+
 model BulkOrderUpload {
   id                 String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
   sellerId           String           @map("seller_id") @db.Uuid
@@ -1854,6 +1909,8 @@ model BulkOrderUpload {
   uploadedBySeller Seller?    @relation("BulkUploadUploadedBySeller", fields: [uploadedBySellerId], references: [id])
   uploadedByStaff  StaffUser? @relation("BulkUploadUploadedByStaff", fields: [uploadedByStaffId], references: [id])
   orders           Order[]
+
+  stagedRows StagedOrderRow[]
 
   @@index([sellerId])
   @@index([status])

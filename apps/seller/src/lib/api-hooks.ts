@@ -189,6 +189,78 @@ export function useCustomerLookup(phoneE164: string): UseQueryResult<CustomerRep
   });
 }
 
+/**
+ * CSV rows that could not import on their own — a queue, not a report.
+ */
+export interface StagedRowProblem {
+  readonly field: string;
+  readonly reason: string;
+}
+
+export interface StagedRow {
+  readonly id: string;
+  readonly uploadId: string;
+  readonly rowNumber: number;
+  readonly status: 'NEEDS_INPUT' | 'DUPLICATE_SUSPECTED' | 'IMPORTED' | 'DISCARDED';
+  readonly data: Record<string, unknown>;
+  readonly problems: ReadonlyArray<StagedRowProblem>;
+  readonly duplicateOf: ReadonlyArray<CustomerOrderSummary> | null;
+  readonly resolvedOrderId: string | null;
+  readonly createdAt: string;
+}
+
+export function usePendingRows(): UseQueryResult<ReadonlyArray<StagedRow>> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-orders-pending'],
+    queryFn: () => client.request<ReadonlyArray<StagedRow>>('/api/seller/orders-pending'),
+  });
+}
+
+export function usePatchPendingRow(): UseMutationResult<
+  StagedRow,
+  Error,
+  { rowId: string; data: Record<string, unknown> }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ rowId, data }) =>
+      client.request<StagedRow>(`/api/seller/orders-pending/${rowId}`, {
+        method: 'POST',
+        body: { data },
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-orders-pending'] }),
+  });
+}
+
+export function useImportPendingRow(): UseMutationResult<{ orderId: string }, Error, string> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (rowId) =>
+      client.request<{ orderId: string }>(`/api/seller/orders-pending/${rowId}/import`, {
+        method: 'POST',
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['seller-orders-pending'] });
+      void qc.invalidateQueries({ queryKey: ['seller-orders'] });
+    },
+  });
+}
+
+export function useDiscardPendingRow(): UseMutationResult<StagedRow, Error, string> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (rowId) =>
+      client.request<StagedRow>(`/api/seller/orders-pending/${rowId}/discard`, {
+        method: 'POST',
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-orders-pending'] }),
+  });
+}
+
 export function useCreateOrder(): UseMutationResult<OrderView, Error, CreateOrderInput> {
   const client = useApiClient();
   const queryClient = useQueryClient();

@@ -8,6 +8,7 @@ export {
   SellerStatus,
   Currency,
   TopupRequestStatus,
+  StagedRowStatus,
   CodCreditMode,
   SellerNoteCategory,
   ActorType,

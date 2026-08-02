@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
 import { OrderStatus } from '@skydrop/db';
-import { useOrdersList } from '@/lib/api-hooks';
+import { usePendingRows, useOrdersList } from '@/lib/api-hooks';
 import { Plus } from 'lucide-react';
 import {
   Button,
@@ -60,6 +60,7 @@ export function OrdersIndex(): ReactElement {
   const params = useMemo(() => parseParams(new URLSearchParams(sp.toString())), [sp]);
 
   const [searchInput, setSearchInput] = useState(params.search);
+  const pendingCount = usePendingRows().data?.length ?? 0;
 
   const updateUrl = useCallback(
     (next: Partial<QueryParams>) => {
@@ -88,6 +89,16 @@ export function OrdersIndex(): ReactElement {
         subtitle="Your orders. Filter by status / search; rows link to detail + tracking."
         action={
           <div className="flex items-center gap-2">
+            {/* Only when there IS something waiting. A permanent nav
+                item for an empty queue is noise; a queue nobody knows
+                about is worse than both. */}
+            {pendingCount > 0 && (
+              <Link href="/orders/pending">
+                <Button variant="ghost" size="md">
+                  <span className="text-[var(--status-pending-fg)]">{pendingCount} pending</span>
+                </Button>
+              </Link>
+            )}
             <Link href="/orders/import">
               <Button variant="ghost" size="md">
                 CSV import

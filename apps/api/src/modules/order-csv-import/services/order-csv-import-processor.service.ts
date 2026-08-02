@@ -7,6 +7,7 @@ import { EnvService } from '../../../config/env.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 import { OrderService, type BulkOrderPatchInput } from '../../order/services/order.service';
+import { StagedOrderRowService } from './staged-order-row.service';
 import type { CreateOrderDto } from '../../order/dto/create-order.dto';
 import { OrderCsvParserService, type CoercedOrderRow } from './order-csv-parser.service';
 import type { OrderCsvField } from '../order-csv-fields';
@@ -49,6 +50,7 @@ export class OrderCsvImportProcessorService {
     private readonly parser: OrderCsvParserService,
     private readonly catalog: CatalogReadService,
     private readonly orders: OrderService,
+    private readonly staged: StagedOrderRowService,
   ) {}
 
   async process(uploadId: string, mapping: Partial<Record<OrderCsvField, string>>): Promise<void> {
@@ -107,6 +109,15 @@ export class OrderCsvImportProcessorService {
             original: raw,
           });
         }
+        // ...and park it somewhere the seller can actually fix it. The
+        // error CSV stays for bulk triage; this is the queue.
+        await this.staged.stage({
+          uploadId,
+          sellerId,
+          rowNumber,
+          data: this.mappedValues(raw, mapping),
+          problems: errors.map((e) => ({ field: e.field ?? '', reason: e.reason })),
+        });
         counters.rowsFailed += 1;
         continue;
       }
@@ -132,11 +143,31 @@ export class OrderCsvImportProcessorService {
           counters.rowsFailed += 1;
         }
       } catch (err) {
+        // A suspected duplicate is not a malformed row — it is a
+        // question only the seller can answer, so it goes to the queue
+        // carrying the orders it might duplicate rather than into an
+        // error report that offers no way to answer it.
+        const dup = this.asDuplicate(err);
         errorRows.push({
           rowNumber,
-          errorField: '',
+          errorField: dup ? 'customerPhone' : '',
           errorReason: err instanceof Error ? err.message : 'Unexpected error importing row',
           original: raw,
+        });
+        await this.staged.stage({
+          uploadId,
+          sellerId,
+          rowNumber,
+          data: this.mappedValues(raw, mapping),
+          problems: dup
+            ? []
+            : [
+                {
+                  field: '',
+                  reason: err instanceof Error ? err.message : 'Unexpected error importing row',
+                },
+              ],
+          ...(dup ? { duplicateOf: dup } : {}),
         });
         counters.rowsFailed += 1;
       }
@@ -258,5 +289,35 @@ export class OrderCsvImportProcessorService {
       data: { status: BulkUploadStatus.FAILED, completedAt: new Date() },
     });
     this.logger.warn({ uploadId, reason }, 'Order CSV import failed');
+  }
+
+  /**
+   * The mapped cells, keyed by the field they map to.
+   *
+   * Deliberately the RAW values rather than the coerced ones: the row is
+   * here because coercion failed, so what the seller needs to see and
+   * edit is what their file actually said.
+   */
+  private mappedValues(
+    raw: Record<string, string>,
+    mapping: Partial<Record<string, string>>,
+  ): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const [field, header] of Object.entries(mapping)) {
+      if (typeof header === 'string' && header.length > 0) {
+        out[field] = raw[header] ?? '';
+      }
+    }
+    return out;
+  }
+
+  /** The duplicate 409's payload, or null if this was some other error. */
+  private asDuplicate(err: unknown): unknown {
+    if (typeof err !== 'object' || err === null) return null;
+    const res = (err as { response?: unknown }).response;
+    if (typeof res !== 'object' || res === null) return null;
+    const body = res as { code?: unknown; details?: { existingOrders?: unknown } };
+    if (body.code !== 'DUPLICATE_ORDER_SUSPECTED') return null;
+    return body.details?.existingOrders ?? null;
   }
 }

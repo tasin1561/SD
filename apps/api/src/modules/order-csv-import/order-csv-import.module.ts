@@ -5,6 +5,8 @@ import { OrderCoreModule } from '../order/order-core.module';
 import { SellerOrderCsvImportController } from './seller-order-csv-import.controller';
 import { OrderCsvParserService } from './services/order-csv-parser.service';
 import { OrderCsvImportService } from './services/order-csv-import.service';
+import { StagedOrderRowService } from './services/staged-order-row.service';
+import { SellerStagedOrderController } from './controllers/seller-staged-order.controller';
 import { OrderCsvImportProcessorService } from './services/order-csv-import-processor.service';
 import { OrderCsvImportQueue } from './queue/order-csv-import.queue';
 import { OrderCsvImportWorker } from './queue/order-csv-import.worker';
@@ -18,11 +20,12 @@ import { OrderCsvImportWorker } from './queue/order-csv-import.worker';
  */
 @Module({
   imports: [CatalogReadModule, OrderCoreModule],
-  controllers: [SellerOrderCsvImportController],
+  controllers: [SellerOrderCsvImportController, SellerStagedOrderController],
   providers: [
     OrderCsvParserService,
     OrderCsvImportService,
     OrderCsvImportProcessorService,
+    StagedOrderRowService,
     OrderCsvImportQueue,
     OrderCsvImportWorker,
     SellerJwtGuard,
