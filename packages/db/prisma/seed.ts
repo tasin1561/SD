@@ -598,6 +598,18 @@ const systemSettings: SystemSettingSeed[] = [
       'The customer pays a tax-INCLUSIVE price, so this is extracted from the COD (cod × r / (100 + r)), never added on top: ₹1,000 at 18% withholds ₹152.54, not ₹180. WE file it, so the withheld amount is a liability recorded in gst_withholdings — not margin. GLOBAL only: a tax rate is set by law, not negotiated per seller.',
   },
   {
+    key: 'wallet.cod_collection_fee_percent',
+    category: 'wallet',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '0.00',
+    displayName: 'COD Collection Fee (%)',
+    description:
+      "What collecting COD costs the seller at all, charged on the POST-GST amount and on BOTH credit modes. Instant Pay's fee stacks on top: this is the base service, that is the premium for early access. Seeded at 0 — it changes nothing until someone decides it should. Per-seller override; the rate is negotiable, unlike the tax.",
+    sellerOverridable: true,
+    overrideMinDecimal: '0',
+    overrideMaxDecimal: '100',
+  },
+  {
     key: 'wallet.instant_pay_fee_percent',
     category: 'wallet',
     valueType: SettingValueType.DECIMAL,

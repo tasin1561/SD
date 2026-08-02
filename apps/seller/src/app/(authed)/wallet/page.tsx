@@ -291,6 +291,10 @@ function humanizeDirection(d: WalletEntryView['direction']): string {
     // CREDIT_DIRECTIONS above.
     case 'INSTANT_PAY_FEE':
       return 'Instant Pay fee';
+    // The base charge for handling COD, on both credit modes. A DEBIT,
+    // so it stays OUT of CREDIT_DIRECTIONS above.
+    case 'COD_COLLECTION_FEE':
+      return 'COD collection fee';
   }
 }
 

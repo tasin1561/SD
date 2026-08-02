@@ -33,6 +33,7 @@ interface Entry {
 function makeSut(opts: {
   gstPercent?: string;
   instantFeePercent?: string;
+  collectionFeePercent?: string;
   alreadyCredited?: boolean;
 }) {
   const entries: Entry[] = [];
@@ -64,7 +65,11 @@ function makeSut(opts: {
     resolve: jest.fn(async (_s: string, key: string) => ({
       key,
       valueType: 'DECIMAL',
-      value: key.includes('instant_pay_fee') ? (opts.instantFeePercent ?? '2.50') : 'SETTLEMENT',
+      value: key.includes('instant_pay_fee')
+        ? (opts.instantFeePercent ?? '2.50')
+        : key.includes('cod_collection_fee')
+          ? (opts.collectionFeePercent ?? '0.00')
+          : 'SETTLEMENT',
       source: 'SYSTEM_DEFAULT' as const,
     })),
   } as unknown as SettingsResolverService;
@@ -97,8 +102,11 @@ describe('CodCreditService — SETTLEMENT mode', () => {
     expect(r.netCreditedInr).toBe('847.46');
     expect(amountOf(entries, 'COD_COLLECTION')).toBe('1000.00');
     expect(amountOf(entries, 'ORDER_CHARGES')).toBe('152.54');
-    // No fee: waiting for the courier to settle is the free option.
+    // No instant fee: waiting for the courier to settle is what you do
+    // instead of paying for it. And the collection fee is seeded at 0,
+    // so today nothing is charged for handling the cash either.
     expect(amountOf(entries, 'INSTANT_PAY_FEE')).toBe('absent');
+    expect(amountOf(entries, 'COD_COLLECTION_FEE')).toBe('absent');
   });
 
   it('records the withholding as a liability of its own, with the rate snapshotted', async () => {
@@ -201,6 +209,48 @@ describe('CodCreditService — INSTANT_PAY mode', () => {
       mode: 'INSTANT_PAY',
     });
     expect(r.instantFeeInr).toBe('8.47');
+  });
+
+  it('a collection fee applies on SETTLEMENT too, once it is non-zero', async () => {
+    // Seeded at 0, so this is dormant today. The shape matters now
+    // rather than later: getting it right while nothing is charged is
+    // cheaper than getting it right while money is moving through it.
+    const { svc, tx, entries } = makeSut({ collectionFeePercent: '1.00' });
+    const r = await svc.creditForOrder(tx, {
+      orderId: ORDER,
+      sellerId: SELLER,
+      grossInr: new Prisma.Decimal('1000'),
+      mode: 'SETTLEMENT',
+    });
+    // 1% of the post-GST 847.46.
+    expect(r.collectionFeeInr).toBe('8.47');
+    expect(r.netCreditedInr).toBe('838.99');
+    expect(amountOf(entries, 'COD_COLLECTION_FEE')).toBe('8.47');
+  });
+
+  it('Instant Pay STACKS on the collection fee rather than replacing it', async () => {
+    // The collection fee is what handling COD costs at all; the instant
+    // fee is the premium for not waiting. A seller on Instant Pay is
+    // buying the second, not opting out of the first.
+    const { svc, tx, entries } = makeSut({
+      collectionFeePercent: '1.00',
+      instantFeePercent: '2.50',
+    });
+    const r = await svc.creditForOrder(tx, {
+      orderId: ORDER,
+      sellerId: SELLER,
+      grossInr: new Prisma.Decimal('1000'),
+      mode: 'INSTANT_PAY',
+    });
+    expect(r.collectionFeeInr).toBe('8.47');
+    expect(r.instantFeeInr).toBe('21.19');
+    // 847.46 − 8.47 − 21.19
+    expect(r.netCreditedInr).toBe('817.80');
+    // Both computed off the SAME post-GST base, not compounded — a
+    // seller quoted "2.5% instant" must be able to find 2.5% in the
+    // ledger, not 2.5% of something already reduced.
+    expect(amountOf(entries, 'COD_COLLECTION_FEE')).toBe('8.47');
+    expect(amountOf(entries, 'INSTANT_PAY_FEE')).toBe('21.19');
   });
 
   it('a zero GST rate withholds nothing and writes no liability', async () => {

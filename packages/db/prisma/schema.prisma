@@ -3977,31 +3977,31 @@ enum InboundFreightStatus {
 enum WalletEntryDirection {
   // M22 — COD collected from customer credits the seller wallet on
   // DELIVERED. Always CREDIT.
-  COD_COLLECTION    @map("cod_collection")
+  COD_COLLECTION     @map("cod_collection")
   // M22 — sum of order's BASE_SHIPPING + surcharges + GST debits the
   // seller wallet on DELIVERED. Always DEBIT.
-  ORDER_CHARGES     @map("order_charges")
+  ORDER_CHARGES      @map("order_charges")
   // M23 — admin records a payout to the seller. DEBIT on the wallet
   // matching the bank-account currency.
-  REMITTANCE_OUT    @map("remittance_out")
+  REMITTANCE_OUT     @map("remittance_out")
   // M23 — paired with REMITTANCE_OUT for cross-currency: the BD seller
   // receives BDT, but COD was collected in INR. CREDIT on the
   // destination currency wallet (BDT) at the FX-snapshotted rate.
-  REMITTANCE_FX     @map("remittance_fx")
+  REMITTANCE_FX      @map("remittance_fx")
   // Operator correction: a NEW entry that compensates an earlier
   // mistaken entry. linkedEntryId points at the original. reasonCode +
   // note required.
-  ADJUSTMENT_CREDIT @map("adjustment_credit")
-  ADJUSTMENT_DEBIT  @map("adjustment_debit")
+  ADJUSTMENT_CREDIT  @map("adjustment_credit")
+  ADJUSTMENT_DEBIT   @map("adjustment_debit")
   // Initial balance on wallet creation (zero unless backfilled).
-  OPENING_BALANCE   @map("opening_balance")
+  OPENING_BALANCE    @map("opening_balance")
   // R7 — a damage/loss ticket resolved in the seller's favour credits
   // them the agreed amount. Deliberately NOT ADJUSTMENT_CREDIT: that one
   // is reserved for operator error-correction (and requires
   // reasonCode + linkedEntryId), so overloading it would make genuine
   // ledger corrections indistinguishable from damage settlements in
   // every report. Registered in WalletService's CREDIT_DIRECTIONS.
-  SCRAP_REFUND      @map("scrap_refund")
+  SCRAP_REFUND       @map("scrap_refund")
   // R3 — the BD→India inbound freight bill for a goods receipt. Always a
   // DEBIT, so it is deliberately ABSENT from WalletService's
   // CREDIT_DIRECTIONS set (adding it there would pay sellers for their
@@ -4009,26 +4009,34 @@ enum WalletEntryDirection {
   // courier leg per order; this is the inbound leg per consignment, and
   // conflating them would make the two cost bases unseparable in every
   // report.
-  INBOUND_FREIGHT   @map("inbound_freight")
+  INBOUND_FREIGHT    @map("inbound_freight")
   // The flat return fee, charged when a parcel physically comes back —
   // not when the courier says it is coming. Always a DEBIT, so it is
   // deliberately ABSENT from WalletService's CREDIT_DIRECTIONS (adding
   // it there would PAY sellers for their own returns). Distinct from
   // ORDER_CHARGES so "what did returns cost us this month" stays a
   // question the ledger can answer on its own.
-  RTO_FEE           @map("rto_fee")
+  RTO_FEE            @map("rto_fee")
   // A seller wiring money INTO the wallet, verified by an operator
   // against the bank. Always a CREDIT — REGISTERED in WalletService's
   // CREDIT_DIRECTIONS and in apps/seller's mirrored set (WAL-1);
   // omitting it there would take the top-up back OUT of the wallet it
   // was meant to fill.
-  TOPUP             @map("topup")
+  TOPUP              @map("topup")
   // What Instant Pay costs the seller: the fee for being credited at
   // delivery instead of waiting for the courier to settle. Always a
   // DEBIT, so deliberately ABSENT from CREDIT_DIRECTIONS. Its own value
   // rather than folded into ORDER_CHARGES so the revenue from the
   // service is countable on its own.
-  INSTANT_PAY_FEE   @map("instant_pay_fee")
+  INSTANT_PAY_FEE    @map("instant_pay_fee")
+  // What collecting COD costs the seller at all, charged on BOTH credit
+  // modes. Instant Pay's fee stacks on top of it: this is the base
+  // service, that is the premium for early access. Seeded at 0%, so it
+  // changes nothing until someone decides it should. Always a DEBIT,
+  // therefore ABSENT from CREDIT_DIRECTIONS. Its own value rather than
+  // folded into ORDER_CHARGES so COD-handling revenue stays countable
+  // separately from the delivery fee.
+  COD_COLLECTION_FEE @map("cod_collection_fee")
 
   @@map("wallet_entry_direction")
 }

@@ -11,12 +11,22 @@ import { WalletService } from '../../seller-wallet/services/wallet.service';
  * `wallet.cod_credit_mode`:
  *
  *   SETTLEMENT  — credited when the courier actually settles with us.
- *                 The seller waits; we carry no float and charge nothing.
+ *                 The seller waits and we carry no float.
  *   INSTANT_PAY — credited the moment the parcel is delivered, for a
  *                 percentage fee. We front the money until the courier
  *                 pays, and the fee is what that costs.
  *
- * Both withhold GST first. Both land here so the arithmetic exists once:
+ * Both withhold GST first, and both then carry the COD collection fee —
+ * what handling cash-on-delivery costs at all. Instant Pay's fee STACKS
+ * on that: the collection fee is the base service, the instant fee is
+ * the premium for not waiting. Both are seeded so that today only the
+ * instant one is non-zero.
+ *
+ * Both fees are computed off the same post-GST base rather than
+ * compounding, so the two percentages stay independently readable — a
+ * seller quoted "2.5% instant" should be able to find 2.5% in the
+ * ledger, not 2.5% of something already reduced.
+ * Both land here so the arithmetic exists once:
  * two call sites doing their own tax maths is how a quarter's filing
  * stops reconciling.
  *
@@ -40,9 +50,11 @@ import { WalletService } from '../../seller-wallet/services/wallet.service';
 const MODE_KEY = 'wallet.cod_credit_mode';
 const GST_KEY = 'wallet.cod_gst_percent';
 const INSTANT_FEE_KEY = 'wallet.instant_pay_fee_percent';
+const COLLECTION_FEE_KEY = 'wallet.cod_collection_fee_percent';
 
 const DEFAULT_GST_PERCENT = '18.00';
 const DEFAULT_INSTANT_FEE_PERCENT = '2.50';
+const DEFAULT_COLLECTION_FEE_PERCENT = '0.00';
 
 export type CodCreditModeValue = 'SETTLEMENT' | 'INSTANT_PAY';
 
@@ -51,6 +63,9 @@ export interface CodCreditResult {
   readonly mode: CodCreditModeValue;
   readonly grossInr: string;
   readonly gstWithheldInr: string;
+  /** The base charge for collecting COD. Applies on both modes. */
+  readonly collectionFeeInr: string;
+  /** The premium for being paid before the courier settles. INSTANT_PAY only. */
   readonly instantFeeInr: string;
   readonly netCreditedInr: string;
   readonly reason?: string;
@@ -61,6 +76,7 @@ const NOT_CREDITED = (mode: CodCreditModeValue, reason: string): CodCreditResult
   mode,
   grossInr: '0.00',
   gstWithheldInr: '0.00',
+  collectionFeeInr: '0.00',
   instantFeeInr: '0.00',
   netCreditedInr: '0.00',
   reason,
@@ -123,6 +139,16 @@ export class CodCreditService {
       .toDecimalPlaces(2);
     const postGst = grossInr.minus(gst);
 
+    // The base charge for handling COD, on both modes. Seeded at 0, so
+    // today this is a no-op — which is exactly when to get the shape
+    // right rather than while money is moving through it.
+    const collectionPercent = await this.sellerDecimal(
+      sellerId,
+      COLLECTION_FEE_KEY,
+      DEFAULT_COLLECTION_FEE_PERCENT,
+    );
+    const collectionFee = postGst.times(collectionPercent).dividedBy(100).toDecimalPlaces(2);
+
     let instantFee = new Prisma.Decimal(0);
     if (mode === 'INSTANT_PAY') {
       const feePercent = await this.sellerDecimal(
@@ -130,8 +156,10 @@ export class CodCreditService {
         INSTANT_FEE_KEY,
         DEFAULT_INSTANT_FEE_PERCENT,
       );
-      // On the POST-GST amount: the seller is paying for early access to
-      // THEIR money, and the tax was never theirs to be advanced.
+      // On the POST-GST amount, and STACKED on the collection fee: this
+      // is the premium for early access, not a replacement for the cost
+      // of collecting at all. Both are computed off the same base rather
+      // than compounding, so the two rates stay independently readable.
       instantFee = postGst.times(feePercent).dividedBy(100).toDecimalPlaces(2);
     }
 
@@ -173,6 +201,18 @@ export class CodCreditService {
       });
     }
 
+    if (collectionFee.greaterThan(0)) {
+      await this.wallet.applyEntry(tx, {
+        sellerId,
+        currency: Currency.INR,
+        direction: WalletEntryDirection.COD_COLLECTION_FEE,
+        amount: collectionFee,
+        linkedOrderId: orderId,
+        actorType: ActorType.SYSTEM,
+        note: `COD collection fee at ${collectionPercent.toFixed(2)}%`,
+      });
+    }
+
     if (instantFee.greaterThan(0)) {
       await this.wallet.applyEntry(tx, {
         sellerId,
@@ -190,8 +230,9 @@ export class CodCreditService {
       mode,
       grossInr: grossInr.toFixed(2),
       gstWithheldInr: gst.toFixed(2),
+      collectionFeeInr: collectionFee.toFixed(2),
       instantFeeInr: instantFee.toFixed(2),
-      netCreditedInr: postGst.minus(instantFee).toFixed(2),
+      netCreditedInr: postGst.minus(collectionFee).minus(instantFee).toFixed(2),
     };
   }
 

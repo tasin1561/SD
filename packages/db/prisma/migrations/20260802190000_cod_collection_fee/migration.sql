@@ -1,0 +1,14 @@
+-- What collecting COD costs the seller at all.
+--
+-- Charged on BOTH credit modes. Instant Pay's fee stacks on top: this is
+-- the base service, that is the premium for being paid before the
+-- courier settles.
+--
+-- Seeded at 0%, so it changes nothing today — which is exactly when to
+-- get the structure right, rather than while money is moving through it.
+--
+-- Its own direction rather than folded into ORDER_CHARGES, so
+-- COD-handling revenue stays countable apart from the delivery fee.
+-- Always a DEBIT, therefore absent from WalletService.CREDIT_DIRECTIONS
+-- and from apps/seller's mirrored set (WAL-1).
+ALTER TYPE "wallet_entry_direction" ADD VALUE IF NOT EXISTS 'cod_collection_fee';
