@@ -6,6 +6,8 @@ import { SellerWalletModule } from '../seller-wallet/seller-wallet.module';
 import { SettingsModule } from '../settings/settings.module';
 import { AdminWithdrawalRequestController } from './controllers/admin-withdrawal-request.controller';
 import { SellerWithdrawalRequestController } from './controllers/seller-withdrawal-request.controller';
+import { AutoWithdrawalSweepService } from './services/auto-withdrawal-sweep.service';
+import { AutoWithdrawalQueue } from './queue/auto-withdrawal.queue';
 import { WithdrawalRequestService } from './services/withdrawal-request.service';
 
 /**
@@ -17,6 +19,12 @@ import { WithdrawalRequestService } from './services/withdrawal-request.service'
 @Module({
   imports: [AuthCommonModule, SellerWalletModule, SettingsModule],
   controllers: [SellerWithdrawalRequestController, AdminWithdrawalRequestController],
-  providers: [WithdrawalRequestService, SellerJwtGuard, StaffJwtGuard],
+  providers: [
+    WithdrawalRequestService,
+    AutoWithdrawalSweepService,
+    AutoWithdrawalQueue,
+    SellerJwtGuard,
+    StaffJwtGuard,
+  ],
 })
 export class SellerWalletWithdrawalModule {}

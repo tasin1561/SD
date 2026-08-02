@@ -16,11 +16,21 @@ const AT_AWB = 'AT_AWB';
  * `OrderChargesAccrualService.debitIfNeeded` so the debit math and
  * idempotency gate can never drift between the two timings.
  *
- * Called from `courier-awb`'s AWB-generation loop, best-effort — a
- * failure here must NEVER block AWB generation (the shipment already
- * has a real AWB by the time this runs; the charge can always be
- * caught by the DELIVERED-time fallback if this early attempt fails,
- * since `debitIfNeeded`'s gate is shared and idempotent either way).
+ * Called wherever a parcel is ENTERED WITH A COURIER — the Delhivery
+ * AWB-generation loop AND manual placement, which is how a parcel goes
+ * out with anyone else. It used to be wired only to the Delhivery path,
+ * so a manually-placed parcel on an AT_AWB seller was never charged at
+ * entry and quietly fell through to the DELIVERED-time debit. Same
+ * physical event, so the same hook belongs on both.
+ *
+ * Best-effort — a failure here must NEVER block the parcel going out.
+ * The shipment already has a real AWB by the time this runs, and the
+ * charge is caught by the DELIVERED-time fallback if this attempt
+ * fails, since `debitIfNeeded`'s gate is shared and idempotent either
+ * way. That is also why an insufficient balance is not enforced here:
+ * refusing to charge would silently ship for free, and refusing to
+ * SHIP is a decision that belongs upstream of a parcel that already
+ * has a waybill.
  */
 @Injectable()
 export class CourierFeeAccrualService {

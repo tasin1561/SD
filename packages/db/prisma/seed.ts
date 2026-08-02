@@ -579,6 +579,61 @@ const systemSettings: SystemSettingSeed[] = [
   },
   // R2 — seller-initiated withdrawal requests.
   {
+    key: 'wallet.minimum_balance_inr',
+    category: 'wallet',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '0.00',
+    displayName: 'Minimum Wallet Balance (INR)',
+    description:
+      'A floor the seller may not withdraw below. Withdrawable = balance − this. Distinct from the minimum WITHDRAWAL amount: that is the smallest single request, this is what must be left behind. Raise it for a seller shipping prepaid, where the wallet is the only thing standing between us and an unpaid delivery fee. Per-seller override.',
+    sellerOverridable: true,
+    overrideMinDecimal: '0',
+    overrideMaxDecimal: '10000000',
+  },
+  {
+    key: 'wallet.withdrawal_max_per_month',
+    category: 'wallet',
+    valueType: SettingValueType.INT,
+    valueInt: 20,
+    displayName: 'Withdrawal Requests Per Month (max)',
+    description:
+      'Maximum number of withdrawal requests in a rolling 30-day window. A COUNT of requests, not a total amount — the daily limit works the same way. Per-seller override.',
+    sellerOverridable: true,
+    overrideMinInt: 1,
+    overrideMaxInt: 500,
+  },
+  {
+    key: 'wallet.auto_withdraw_enabled',
+    category: 'wallet',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'Auto Withdrawal Enabled',
+    description:
+      "When on, everything above the minimum balance is requested automatically at the seller's chosen time each day — no manual request needed. Off by default: a seller should opt into money moving without them asking. Per-seller override.",
+    sellerOverridable: true,
+  },
+  {
+    key: 'wallet.auto_withdraw_hour_local',
+    category: 'wallet',
+    valueType: SettingValueType.INT,
+    valueInt: 10,
+    displayName: 'Auto Withdrawal Hour (seller local time)',
+    description:
+      "Hour of day (0-23) the auto-withdrawal sweep raises the request, in the SELLER's local timezone — not ours. A Bangladeshi seller asking for 10am means 10am in Dhaka. Per-seller override.",
+    sellerOverridable: true,
+    overrideMinInt: 0,
+    overrideMaxInt: 23,
+  },
+  {
+    key: 'wallet.withdrawal_sla_hours',
+    category: 'wallet',
+    valueType: SettingValueType.INT,
+    valueInt: 48,
+    displayName: 'Withdrawal SLA (hours)',
+    description:
+      'What we tell the seller to expect: a request is processed within this many hours. DISPLAY ONLY — it does not hold, delay or schedule anything, and an agent may pay sooner.',
+  },
+  {
     key: 'wallet.withdrawal_min_threshold_inr',
     category: 'wallet',
     valueType: SettingValueType.DECIMAL,

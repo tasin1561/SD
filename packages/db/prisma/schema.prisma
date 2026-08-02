@@ -120,6 +120,10 @@ model Seller {
   displayCurrency                  Currency     @default(INR) @map("display_currency")
   displayLanguage                  String       @default("en") @map("display_language")
   countryCode                      String       @default("BD") @map("country_code") @db.Char(2)
+  /// IANA zone the seller lives in. Auto-withdrawal fires at an hour of
+  /// THEIR day; without this "10am" would silently mean 10am in whatever
+  /// timezone the server happens to run in.
+  timezone                         String       @default("Asia/Dhaka")
   emailVerifiedAt                  DateTime?    @map("email_verified_at") @db.Timestamptz
   lastLoginAt                      DateTime?    @map("last_login_at") @db.Timestamptz
   // Module 5 — inventory: per-seller low-stock threshold default (variant
@@ -4134,8 +4138,14 @@ model Remittance {
   // row in Phase 1A schema; future-proofing for the multi-bank-account
   // refactor.
   bankAccountSnapshot Json     @map("bank_account_snapshot")
-  // Bank reference for ops reconciliation.
+  // Bank reference for ops reconciliation. The seller sees this — it is
+  // how they match our payout against their own statement.
   bankReference       String   @map("bank_reference")
+  /// Spaces KEY of the transfer screenshot, never a URL (reads are
+  /// presigned on demand). Evidence for the seller that the transfer
+  /// left our account, and for us when they say it never arrived.
+  proofSpacesKey      String?  @map("proof_spaces_key")
+  proofMimeType       String?  @map("proof_mime_type")
   // When the bank confirmed the payout (operator enters this).
   paidAt              DateTime @map("paid_at") @db.Timestamptz
   // Audit + ops.

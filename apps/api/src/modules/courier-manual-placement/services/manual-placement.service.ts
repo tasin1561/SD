@@ -3,6 +3,7 @@ import { ActorType, OrderCancellationReason, OrderStatus, ShipmentStatus } from 
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
+import { CourierFeeAccrualService } from '../../seller-wallet-accrual/services/courier-fee-accrual.service';
 import { StockReservationService } from '../../inventory-stock/services/stock-reservation.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
@@ -80,6 +81,7 @@ export class ManualPlacementService {
     private readonly audit: AuditLogService,
     private readonly orderWrite: OrderWriteService,
     private readonly reservations: StockReservationService,
+    private readonly courierFeeAccrual: CourierFeeAccrualService,
   ) {}
 
   async placeAwb(
@@ -188,6 +190,13 @@ export class ManualPlacementService {
         tx,
       );
     });
+
+    // The parcel is now entered with a courier — the same physical
+    // event the Delhivery AWB job represents, so the same AT_AWB charge
+    // hook belongs here. Without it, a manually-placed parcel on a
+    // prepaid-fee seller went out unbilled at entry and only got charged
+    // if it later delivered.
+    await this.courierFeeAccrual.tryEarlyAccrual(orderId);
 
     // STEP 2 (LAST) — the durable transition + Model-A DISPATCH_STOCK.
     return this.dispatchAfterStamp(shipmentId, orderId, awbNumber, staffId, ctx);

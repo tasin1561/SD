@@ -1,5 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { OrderStatus, ShipmentStatus } from '@skydrop/db';
+import type { CourierFeeAccrualService } from '../../src/modules/seller-wallet-accrual/services/courier-fee-accrual.service';
 import { ManualPlacementService } from '../../src/modules/courier-manual-placement/services/manual-placement.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
@@ -100,6 +101,9 @@ function makeService(
     {
       listActiveForOrderWithLocations,
     } as unknown as StockReservationService,
+    // Charging at courier entry is exercised in the accrual suite and
+    // end to end; here it must not be able to fail the placement.
+    { tryEarlyAccrual: jest.fn(async () => undefined) } as unknown as CourierFeeAccrualService,
   );
   return {
     svc,

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-wallet-accrual.module';
 import { OrderModule } from '../order/order.module';
 import { InventoryStockModule } from '../inventory-stock/inventory-stock.module';
 import { ManualPlacementService } from './services/manual-placement.service';
@@ -21,7 +22,14 @@ import { InventorySharedModule } from '../inventory-shared/inventory-shared.modu
  * LEAF consumer — nothing imports `courier-manual-placement`.
  */
 @Module({
-  imports: [OrderModule, InventoryStockModule, InventorySharedModule],
+  imports: [
+    OrderModule,
+    InventoryStockModule,
+    InventorySharedModule,
+    // A manually-placed parcel is entered with a courier just as much as
+    // a Delhivery one, so it fires the same AT_AWB charge hook.
+    SellerWalletAccrualModule,
+  ],
   controllers: [ManualPlacementController],
   providers: [ManualPlacementService, StaffJwtGuard],
   exports: [ManualPlacementService],

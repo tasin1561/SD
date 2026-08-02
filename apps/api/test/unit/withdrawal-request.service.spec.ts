@@ -29,6 +29,8 @@ function makeService(
     balance?: string;
     minThreshold?: string;
     maxPerDay?: number;
+    maxPerMonth?: number;
+    minBalance?: string;
     todayCount?: number;
     existingRequest?: AnyArgs | null;
     remittance?: AnyArgs | null;
@@ -95,6 +97,24 @@ function makeService(
         key,
         valueType: 'INT',
         value: opts.maxPerDay ?? 1,
+        source: 'SYSTEM_DEFAULT' as const,
+      };
+    }
+    if (key === 'wallet.withdrawal_max_per_month') {
+      return {
+        key,
+        valueType: 'INT',
+        value: opts.maxPerMonth ?? 20,
+        source: 'SYSTEM_DEFAULT' as const,
+      };
+    }
+    if (key === 'wallet.minimum_balance_inr') {
+      // The floor a seller may not withdraw below. Zero by default, so
+      // the pre-existing cases below still describe the same behaviour.
+      return {
+        key,
+        valueType: 'DECIMAL',
+        value: opts.minBalance ?? '0.00',
         source: 'SYSTEM_DEFAULT' as const,
       };
     }
@@ -168,12 +188,49 @@ describe('WithdrawalRequestService.create', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it('rejects INSUFFICIENT_WALLET_BALANCE when the wallet is short', async () => {
+  it('refuses when the wallet is short', async () => {
     const { svc, create } = makeService({ balance: '100' });
     await expect(
       svc.create('seller-1', 'user-1', { currency: Currency.INR, amount: '1000.00' }),
-    ).rejects.toMatchObject({ response: { code: 'INSUFFICIENT_WALLET_BALANCE' } });
+    ).rejects.toMatchObject({ response: { code: 'INSUFFICIENT_WITHDRAWABLE_BALANCE' } });
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('refuses to withdraw below the minimum balance, even with the money there', async () => {
+    // ₹5,000 in the wallet but ₹4,000 must stay behind, so only ₹1,000
+    // is withdrawable. This is what stands between us and an unpaid
+    // delivery fee on a seller who ships prepaid: their wallet is the
+    // only security we hold, and a floor is how a credit limit is
+    // expressed here.
+    const { svc, create } = makeService({ balance: '5000', minBalance: '4000.00' });
+    await expect(
+      svc.create('seller-1', 'user-1', { currency: Currency.INR, amount: '2000.00' }),
+    ).rejects.toMatchObject({ response: { code: 'INSUFFICIENT_WITHDRAWABLE_BALANCE' } });
+    expect(create).not.toHaveBeenCalled();
+
+    // ...and the part below the floor still goes through.
+    const ok = makeService({ balance: '5000', minBalance: '4000.00' });
+    await expect(
+      ok.svc.create('seller-1', 'user-1', { currency: Currency.INR, amount: '900.00' }),
+    ).resolves.toBeDefined();
+  });
+
+  it('refuses past the monthly request count, not just the daily one', async () => {
+    const { svc, create } = makeService({ maxPerDay: 50, maxPerMonth: 2, todayCount: 2 });
+    await expect(
+      svc.create('seller-1', 'user-1', { currency: Currency.INR, amount: '1000.00' }),
+    ).rejects.toMatchObject({ response: { code: 'WITHDRAWAL_MONTHLY_LIMIT_REACHED' } });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('withdrawableBalance is balance minus the floor, clamped at zero', async () => {
+    // Three callers need this same number — the guard, whatever the
+    // seller is shown as available, and the auto-withdrawal sweep, which
+    // withdraws exactly it. Three independent subtractions would
+    // eventually disagree, and the symptom would be a sweep asking for
+    // money the guard then refuses.
+    const { svc } = makeService({ balance: '1000', minBalance: '4000.00' });
+    expect((await svc.withdrawableBalance('seller-1', Currency.INR)).toFixed(2)).toBe('0.00');
   });
 });
 
