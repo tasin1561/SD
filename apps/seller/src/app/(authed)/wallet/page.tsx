@@ -207,6 +207,7 @@ const CREDIT_DIRECTIONS: ReadonlySet<WalletEntryView['direction']> = new Set([
   'ADJUSTMENT_CREDIT',
   'OPENING_BALANCE',
   'SCRAP_REFUND',
+  'TOPUP',
 ]);
 
 function LedgerRow({ entry }: { readonly entry: WalletEntryView }): ReactElement {
@@ -281,6 +282,10 @@ function humanizeDirection(d: WalletEntryView['direction']): string {
     // reason as inbound freight.
     case 'RTO_FEE':
       return 'Return fee';
+    // Money the seller wired in, verified against the bank. A CREDIT —
+    // registered in CREDIT_DIRECTIONS above.
+    case 'TOPUP':
+      return 'Wallet top-up';
   }
 }
 

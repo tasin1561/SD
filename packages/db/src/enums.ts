@@ -7,6 +7,7 @@ export {
   StaffRole,
   SellerStatus,
   Currency,
+  TopupRequestStatus,
   SellerNoteCategory,
   ActorType,
   SellerOnboardingStep,

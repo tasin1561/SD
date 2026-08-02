@@ -69,6 +69,10 @@ const CREDIT_DIRECTIONS: ReadonlySet<WalletEntryDirection> = new Set([
   WalletEntryDirection.OPENING_BALANCE,
   // R7 — damage/loss ticket settled in the seller's favour.
   WalletEntryDirection.SCRAP_REFUND,
+  // A seller wiring money in, verified against the bank by an operator.
+  // Omitting it here would take the top-up back OUT of the wallet it was
+  // meant to fill.
+  WalletEntryDirection.TOPUP,
 ]);
 
 function isCredit(d: WalletEntryDirection): boolean {

@@ -87,6 +87,7 @@ model StaffUser {
   stockUnitsScanned          StockUnit[]                   @relation("StockUnitLastScanBy")
   inboundFreightSettled      InboundFreightCharge[]        @relation("InboundFreightSettledBy")
   binLayoutSnapshotsTaken    BinLayoutSnapshot[]           @relation("BinSnapshotTakenBy")
+  topupsReviewed             WalletTopupRequest[]          @relation("TopupReviewedBy")
   binCollapseChallenges      BinCollapseChallenge[]        @relation("BinCollapseChallengeStaff")
 
   @@index([role])
@@ -163,6 +164,7 @@ model Seller {
   walletBalances          SellerWalletBalance[]
   remittances             Remittance[]
   withdrawalRequests      WithdrawalRequest[]
+  topupRequests           WalletTopupRequest[]
   pendingAccruals         PendingAccrual[]
   tickets                 Ticket[]
   earlyReservationReviews EarlyReservationReview[]
@@ -3948,8 +3950,98 @@ enum WalletEntryDirection {
   // ORDER_CHARGES so "what did returns cost us this month" stays a
   // question the ledger can answer on its own.
   RTO_FEE           @map("rto_fee")
+  // A seller wiring money INTO the wallet, verified by an operator
+  // against the bank. Always a CREDIT — REGISTERED in WalletService's
+  // CREDIT_DIRECTIONS and in apps/seller's mirrored set (WAL-1);
+  // omitting it there would take the top-up back OUT of the wallet it
+  // was meant to fill.
+  TOPUP             @map("topup")
 
   @@map("wallet_entry_direction")
+}
+
+enum TopupRequestStatus {
+  PENDING  @map("pending")
+  ACCEPTED @map("accepted")
+  REJECTED @map("rejected")
+
+  @@map("topup_request_status")
+}
+
+/// One of OUR bank accounts, shown to sellers so they know where to send
+/// money. Admin-managed reference data.
+///
+/// The account number is NOT encrypted, unlike a seller's: this is a
+/// destination we publish on purpose, and encrypting a number we display
+/// on a screen would be theatre. `isActive` retires an account without
+/// deleting it — a past top-up must still name the account it went to.
+model PlatformBankAccount {
+  id            String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  label         String
+  bankName      String    @map("bank_name")
+  accountName   String    @map("account_name")
+  accountNumber String    @map("account_number")
+  /// IFSC (India) or routing/SWIFT (Bangladesh) — free-form because the
+  /// two countries do not share a format.
+  branchCode    String?   @map("branch_code")
+  currency      Currency
+  instructions  String?   @db.Text
+  isActive      Boolean   @default(true) @map("is_active")
+  displayOrder  Int       @default(100) @map("display_order")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz
+
+  topupRequests WalletTopupRequest[]
+
+  @@index([isActive, displayOrder])
+  @@map("platform_bank_accounts")
+}
+
+/// A seller says "I sent you money"; an operator checks the bank and
+/// agrees or does not.
+///
+/// The wallet is NOT credited on submission. A claim is not a payment —
+/// crediting first and clawing back on rejection would let anyone move
+/// their balance up by filling in a form, and the claw-back would land
+/// after they had already withdrawn against it.
+///
+/// A reference is mandatory: either `transactionRef` or a proof image,
+/// enforced in the service. Without one there is nothing for the
+/// operator to check against the statement, and "trust me" is not a
+/// reconciliation.
+model WalletTopupRequest {
+  id                String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId          String             @map("seller_id") @db.Uuid
+  bankAccountId     String             @map("bank_account_id") @db.Uuid
+  currency          Currency
+  amount            Decimal            @db.Decimal(14, 2)
+  /// The seller's bank reference / UTR. One of this or proofSpacesKey.
+  transactionRef    String?            @map("transaction_ref")
+  /// Spaces key of the uploaded proof. NEVER a URL — reads are
+  /// presigned on demand (the storage rule from the 2026-07-28 pass).
+  proofSpacesKey    String?            @map("proof_spaces_key")
+  proofMimeType     String?            @map("proof_mime_type")
+  status            TopupRequestStatus @default(PENDING)
+  /// Set once accepted — the credit that resulted. UNIQUE, so a second
+  /// accept cannot mint a second credit.
+  walletEntryId     String?            @unique @map("wallet_entry_id") @db.Uuid
+  submittedByUserId String?            @map("submitted_by_user_id") @db.Uuid
+  reviewedByStaffId String?            @map("reviewed_by_staff_id") @db.Uuid
+  reviewedAt        DateTime?          @map("reviewed_at") @db.Timestamptz
+  reviewNote        String?            @map("review_note") @db.Text
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller          Seller              @relation(fields: [sellerId], references: [id])
+  bankAccount     PlatformBankAccount @relation(fields: [bankAccountId], references: [id])
+  submittedByUser SellerUser?         @relation("TopupSubmittedBy", fields: [submittedByUserId], references: [id])
+  reviewedByStaff StaffUser?          @relation("TopupReviewedBy", fields: [reviewedByStaffId], references: [id])
+  walletEntry     SellerWalletEntry?  @relation("TopupWalletEntry", fields: [walletEntryId], references: [id])
+
+  @@index([sellerId, status])
+  @@index([status, createdAt])
+  @@map("wallet_topup_requests")
 }
 
 model SellerWalletEntry {
@@ -3988,6 +4080,8 @@ model SellerWalletEntry {
   // R3 — set when this entry is the settlement debit for an inbound
   // freight bill (the FK lives on inbound_freight_charges).
   inboundFreight InboundFreightCharge?
+
+  topupRequest WalletTopupRequest? @relation("TopupWalletEntry")
 
   @@index([sellerId, currency, createdAt])
   @@index([linkedOrderId])
@@ -4394,6 +4488,7 @@ model SellerUser {
   invitationsAuthored             SellerUserInvitation[]         @relation("SellerUserInvitedByUser")
   invitationsAccepted             SellerUserInvitation[]         @relation("SellerUserInvitationAccepted")
   refreshTokens                   SellerRefreshToken[]
+  topupsSubmitted                 WalletTopupRequest[]           @relation("TopupSubmittedBy")
   passwordResetTokens             SellerPasswordResetToken[]
   emailVerificationTokens         SellerEmailVerificationToken[]
   withdrawalRequestsMade          WithdrawalRequest[]

@@ -232,6 +232,9 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         'ticket_events',
         'tickets',
         // Wallet + payouts (M21-M24)
+        // Top-ups FK sellers, seller_users, staff and wallet entries —
+        // all RESTRICT, so they go before every one of them (MUST #12).
+        'wallet_topup_requests',
         'withdrawal_requests',
         'pending_accruals',
         'seller_wallet_entries',
