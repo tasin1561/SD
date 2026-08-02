@@ -12,12 +12,24 @@ import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock
  * so callers can compose into their own tx (e.g. M22's COD-accrual
  * listener writes BOTH a CREDIT and a DEBIT in one Prisma.$transaction).
  *
- * **W-3: Balance is COMPUTED from the ledger, never stored
- * authoritatively.** The seller_wallet_balances row is a CACHE
- * (recomputed post-commit via `recomputeCacheAfterCommit`); the
- * authoritative balance is `SUM(direction-signed amount)` over the
- * append-only ledger. The cache lets `/seller/wallet` render in O(1)
- * instead of O(ledger).
+ * **W-3: Balance lives in the LEDGER, never in a cache.** The
+ * authoritative balance is the last entry's `runningBalanceAfter` —
+ * O(1), and the reason that column exists. `seller_wallet_balances` is
+ * only a display cache, refreshed post-commit. It is never read to
+ * decide anything.
+ *
+ * The entries themselves remain the ultimate authority: `balanceLive`
+ * re-derives the total by summing them, and `verifyBalance` compares
+ * the two. That check is deliberately OFF the write path — charging
+ * every write an O(history) sum, for a result nothing acts on, is not
+ * auditing. It is a cost that grows with how long a seller has traded.
+ *
+ * **W-5: every write to one wallet is SERIALIZED** by a
+ * transaction-scoped advisory lock on (sellerId, currency). Without it,
+ * two concurrent credits both read the same balance and stamp the same
+ * running balance, and the ledger — being append-only — cannot be
+ * corrected afterwards. Proven in `wallet-concurrency.e2e-spec`, which
+ * fails on the unlocked implementation.
  *
  * **W-4: Per-currency wallets.** Each (sellerId, currency) is its
  * own running balance. Cross-border remittance writes TWO paired
@@ -186,7 +198,7 @@ export class WalletService {
    * would pick between them arbitrarily.
    */
   private async latestRunningBalance(
-    tx: TxClient,
+    tx: TxClient | PrismaService['client'],
     sellerId: string,
     currency: Currency,
   ): Promise<Prisma.Decimal> {
@@ -244,11 +256,18 @@ export class WalletService {
   }
 
   /**
-   * Cache recompute — call POST-COMMIT (mirrors INV-5 for stock).
-   * Reads the freshly-committed ledger and upserts the cache row.
-   * Best-effort: a failure here is logged but never throws — the
-   * cache will catch up on the next applyEntry's post-commit hook
-   * or a manual reconciler.
+   * Cache refresh — call POST-COMMIT (mirrors INV-5 for stock).
+   * Best-effort: a failure here is logged but never throws — the cache
+   * catches up on the next applyEntry's post-commit hook or a manual
+   * reconciler.
+   *
+   * Reads the committed ledger's LAST running balance rather than
+   * re-summing it. Summing was 25ms at 400k entries, on every money
+   * write, and it bought nothing the write path had not already
+   * computed under the wallet lock. Verification still matters, but it
+   * belongs in `verifyBalance` where it can be run deliberately —
+   * paying for an audit on every write, in a place whose result nobody
+   * reads, is not the same as auditing.
    */
   async recomputeCacheAfterCommit(
     sellerId: string,
@@ -256,7 +275,7 @@ export class WalletService {
     lastEntryId: string,
   ): Promise<void> {
     try {
-      const balance = await this.balanceLive(sellerId, currency);
+      const balance = await this.latestRunningBalance(this.prisma.client, sellerId, currency);
       await this.prisma.client.sellerWalletBalance.upsert({
         where: { sellerId_currency: { sellerId, currency } },
         create: {
@@ -273,5 +292,44 @@ export class WalletService {
         'Wallet balance cache recompute failed; cache lag possible',
       );
     }
+  }
+
+  /**
+   * Does the ledger still add up?
+   *
+   * Compares the O(1) answer every other path relies on — the last
+   * entry's running balance — against the entries themselves, summed.
+   * They can only diverge if something wrote outside `applyEntry` or a
+   * historical race left a bad row behind, and neither announces itself.
+   *
+   * Deliberately NOT on the write path: an O(history) check charged to
+   * every write is a cost that grows with how long a seller has traded,
+   * for a result nothing acts on. Run it from ops tooling, or on a
+   * schedule, where a divergence can actually be looked at.
+   */
+  async verifyBalance(
+    sellerId: string,
+    currency: Currency,
+  ): Promise<{
+    readonly running: Prisma.Decimal;
+    readonly summed: Prisma.Decimal;
+    readonly agrees: boolean;
+  }> {
+    const running = await this.latestRunningBalance(this.prisma.client, sellerId, currency);
+    const summed = await this.balanceLive(sellerId, currency);
+    const agrees = running.equals(summed);
+    if (!agrees) {
+      this.logger.error(
+        {
+          sellerId,
+          currency,
+          running: running.toString(),
+          summed: summed.toString(),
+          drift: summed.sub(running).toString(),
+        },
+        'WALLET LEDGER DOES NOT ADD UP — the running balance disagrees with the entries it was built from',
+      );
+    }
+    return { running, summed, agrees };
   }
 }
