@@ -175,6 +175,15 @@ export class CreateOrderDto {
   @Min(0)
   totalWeightGrams?: number;
 
+  @ApiProperty({
+    required: false,
+    description:
+      'Set true to place the order even though this customer has an unpacked order already. Recorded on the order, so a later dispute has an answer.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  acknowledgeDuplicate?: boolean;
+
   @ApiProperty({ required: false, enum: PackageType })
   @IsOptional()
   @IsEnum(PackageType)

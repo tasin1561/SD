@@ -19,6 +19,7 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { CustomerService } from './customer.service';
+import { CustomerReputationService } from './customer-reputation.service';
 import { OrderNumberingService } from './order-numbering.service';
 import { OrderEventWriterService, type EventActor } from './order-event-writer.service';
 import { OrderStateMachineService } from './order-state-machine.service';
@@ -176,6 +177,7 @@ export class OrderService {
     private readonly prisma: PrismaService,
     private readonly numbering: OrderNumberingService,
     private readonly customers: CustomerService,
+    private readonly reputation: CustomerReputationService,
     private readonly events: OrderEventWriterService,
     private readonly addressCache: RecipientAddressCacheService,
     private readonly addressValidation: AddressValidationService,
@@ -298,6 +300,7 @@ export class OrderService {
 
     this.assertPayment(input);
     const lines = await this.resolveLines(sellerId, input.items);
+    await this.assertNotDuplicate(sellerId, input, lines);
 
     const declaredValueInr =
       input.declaredValueInr !== undefined
@@ -340,6 +343,8 @@ export class OrderService {
             recipientName: input.recipientName,
             recipientPhoneE164: input.recipientPhoneE164.trim(),
             recipientAltPhoneE164: input.recipientAltPhoneE164 ?? null,
+            // Recorded, not just honoured — see the column comment.
+            duplicateAcknowledgedAt: input.acknowledgeDuplicate === true ? new Date() : null,
             recipientEmail: input.recipientEmail ?? null,
             recipientAddressLine1: input.recipientAddressLine1,
             recipientAddressLine2: input.recipientAddressLine2 ?? null,
@@ -453,6 +458,55 @@ export class OrderService {
   }
 
   // ── helpers ────────────────────────────────────────────────────────
+
+  /**
+   * Refuse a second unpacked order to the same customer unless the
+   * seller says they meant it.
+   *
+   * The common case this catches is a double submit — the same order
+   * entered twice, which becomes two parcels, two delivery fees and a
+   * confused customer. The seller can always proceed; they just have to
+   * say so, and that acknowledgement is recorded on the order so a
+   * later dispute has an answer.
+   *
+   * Scoped to THIS seller by construction: the lookup filters on
+   * sellerId, so seller A's pending order can never warn seller B about
+   * a customer they happen to share. That is not a rule enforced
+   * somewhere — it is that B's query does not see A's rows.
+   *
+   * Once a parcel is PACKED the warning stops: the box is physically
+   * made up, the two orders can no longer be consolidated, and a
+   * warning about it is noise the seller will learn to click through.
+   */
+  private async assertNotDuplicate(
+    sellerId: string,
+    input: CreateOrderDto,
+    lines: ReadonlyArray<{ variantId: string }>,
+  ): Promise<void> {
+    if (input.acknowledgeDuplicate === true) return;
+
+    const open = await this.reputation.findOpenOrdersForPhone(
+      sellerId,
+      input.recipientPhoneE164,
+      lines.map((l) => l.variantId),
+    );
+    if (open.length === 0) return;
+
+    throw new ConflictException({
+      code: 'DUPLICATE_ORDER_SUSPECTED',
+      message:
+        `This customer already has ${open.length} order(s) not yet packed. ` +
+        `Re-submit with acknowledgeDuplicate to place it anyway.`,
+      // `details` specifically — the global exception filter passes that
+      // key through and drops anything else, so a bespoke field name
+      // would vanish between the throw and the response.
+      //
+      // The seller needs to SEE what they would be duplicating, not just
+      // be told a number: the decision is "is this the same order?", and
+      // a count cannot answer it.
+      details: { existingOrders: open },
+    });
+  }
 
   private assertPayment(input: CreateOrderDto): void {
     if (input.paymentMode === PaymentMode.COD) {

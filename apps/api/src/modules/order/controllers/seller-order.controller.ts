@@ -27,6 +27,11 @@ import { CreateOrderDto } from '../dto/create-order.dto';
 import { UpdateOrderDto } from '../dto/update-order.dto';
 import { CancelOrderDto } from '../dto/cancel-order.dto';
 import { ListOrdersQueryDto } from '../dto/list-orders-query.dto';
+import { CustomerLookupQueryDto } from '../dto/customer-lookup.dto';
+import {
+  CustomerReputationService,
+  type CustomerReputation,
+} from '../services/customer-reputation.service';
 import {
   OrderService,
   type OrderEventView,
@@ -50,7 +55,10 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 @SellerViewerReadable()
 @Controller('seller/orders')
 export class SellerOrderController {
-  constructor(private readonly svc: OrderService) {}
+  constructor(
+    private readonly svc: OrderService,
+    private readonly reputation: CustomerReputationService,
+  ) {}
 
   private actor(seller: AuthenticatedSeller): { type: ActorType; id: string } {
     return { type: ActorType.SELLER, id: seller.id };
@@ -76,6 +84,25 @@ export class SellerOrderController {
     @Query() query: ListOrdersQueryDto,
   ): Promise<{ items: OrderListItem[]; total: number; page: number; pageSize: number }> {
     return this.svc.list(seller.id, query);
+  }
+
+  // MUST stay above @Get(':id') — Nest matches in declaration order, so
+  // a parameterised route declared first would swallow this path as an
+  // order id and 400 on the UUID pipe.
+  @Get('customer-lookup')
+  @SellerAuthAllowSuspended()
+  @ApiOperation({
+    summary:
+      'What we know about a phone number before you ship to it: platform-wide counts, your own orders, and anything of yours not yet packed',
+  })
+  customerLookup(
+    @CurrentSeller() seller: AuthenticatedSeller,
+    @Query() query: CustomerLookupQueryDto,
+  ): Promise<CustomerReputation> {
+    // Counts span every seller — refusal risk belongs to the customer,
+    // not to the seller-customer pair. The ORDER LIST inside is filtered
+    // to this seller's own, so nobody learns who else sells to them.
+    return this.reputation.lookup(seller.id, query.phoneE164.trim());
   }
 
   @Get(':id')

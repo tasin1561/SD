@@ -48,7 +48,13 @@ function baseDto(over: Partial<CreateOrderDto> = {}): CreateOrderDto {
   } as CreateOrderDto;
 }
 
-function makeService(opts: { variants?: Map<string, AnyArgs>; existing?: AnyArgs | null } = {}) {
+function makeService(
+  opts: {
+    variants?: Map<string, AnyArgs>;
+    existing?: AnyArgs | null;
+    openOrders?: AnyArgs[];
+  } = {},
+) {
   const orderCreate = jest.fn(async (args: { data: AnyArgs }) => ({
     id: 'o1',
     ...args.data,
@@ -129,10 +135,16 @@ function makeService(opts: { variants?: Map<string, AnyArgs>; existing?: AnyArgs
   const reserveAtPlacement = jest.fn(async () => ({ reserved: 0, skipped: 0, enabled: false }));
   const earlyReservations = { reserveAtPlacement };
 
+  // No open orders by default, so these cases describe a first order to
+  // a customer. The duplicate path has its own suite.
+  const findOpenOrdersForPhone = jest.fn(async () => opts.openOrders ?? []);
+  const reputation = { findOpenOrdersForPhone };
+
   const svc = new OrderService(
     { client } as unknown as PrismaService,
     numbering as never,
     customers as never,
+    reputation as never,
     events as never,
     addressCache as never,
     addressValidation as never,
@@ -145,6 +157,7 @@ function makeService(opts: { variants?: Map<string, AnyArgs>; existing?: AnyArgs
   );
   return {
     svc,
+    findOpenOrdersForPhone,
     enqueueOrder,
     orderCreate,
     orderUpdate,

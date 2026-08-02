@@ -7,6 +7,7 @@ import { EarlyReservationModule } from '../early-reservation/early-reservation.m
 import { OrderNumberingService } from './services/order-numbering.service';
 import { OrderStateMachineService } from './services/order-state-machine.service';
 import { OrderEventWriterService } from './services/order-event-writer.service';
+import { CustomerReputationService } from './services/customer-reputation.service';
 import { CustomerService } from './services/customer.service';
 import { RecipientAddressCacheService } from './services/recipient-address-cache.service';
 import { AddressValidationService } from './services/address-validation.service';
@@ -49,12 +50,14 @@ import { OrderAdminOverrideService } from './services/order-admin-override.servi
     OrderStateMachineService,
     OrderEventWriterService,
     CustomerService,
+    CustomerReputationService,
     RecipientAddressCacheService,
     AddressValidationService,
     OrderService,
     OrderAdminOverrideService,
   ],
   exports: [
+    CustomerReputationService,
     OrderNumberingService,
     OrderStateMachineService,
     OrderEventWriterService,

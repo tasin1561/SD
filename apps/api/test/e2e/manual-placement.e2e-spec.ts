@@ -145,6 +145,8 @@ describe('Manual courier placement (e2e)', () => {
       .send({
         recipientName: 'Asha Verma',
         recipientPhoneE164: '+919876543210',
+        // Fixture: several orders for one customer on purpose.
+        acknowledgeDuplicate: true,
         recipientAddressLine1: '12 MG Road',
         recipientCity: 'Bengaluru',
         recipientStateProvince: 'Karnataka',

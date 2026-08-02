@@ -170,6 +170,8 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
       .send({
         recipientName: 'Pooja Sharma',
         recipientPhoneE164: '+919876543211',
+        // Fixture: several orders for one customer on purpose.
+        acknowledgeDuplicate: true,
         // recipientEmail snapshot — ORD-6 canonical. The 'undefined'
         // sentinel: omit the key to leave it NULL on the order row.
         ...(opts.customerEmail === undefined
