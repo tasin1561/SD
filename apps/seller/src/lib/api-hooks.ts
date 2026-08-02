@@ -125,6 +125,68 @@ export interface CreateOrderInput {
   readonly preferredLanguage?: 'en' | 'hi';
   readonly sellerNotes?: string;
   readonly items: readonly CreateOrderItemInput[];
+  /** Place it anyway despite an unpacked order to the same customer. */
+  readonly acknowledgeDuplicate?: boolean;
+}
+
+/**
+ * What we know about a phone number before shipping to it.
+ *
+ * The counts span every seller — refusal risk belongs to the CUSTOMER,
+ * not to the seller-customer pair — while `yours` is only ever this
+ * seller's. Nobody learns who else sells to this person.
+ */
+export interface CustomerReputation {
+  readonly phoneE164: string;
+  readonly platform: {
+    readonly totalOrders: number;
+    readonly delivered: number;
+    readonly returned: number;
+    readonly refusedOnCall: number;
+    readonly returnRatePercent: string | null;
+    readonly firstOrderAt: string | null;
+    readonly lastOrderAt: string | null;
+  };
+  readonly yours: {
+    readonly totalOrders: number;
+    readonly delivered: number;
+    readonly returned: number;
+    readonly recentOrders: ReadonlyArray<CustomerOrderSummary>;
+    readonly openOrders: ReadonlyArray<CustomerOrderSummary>;
+  };
+  readonly riskLevel: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'BLOCKED';
+  readonly riskNotes: string | null;
+  readonly customerName: string | null;
+}
+
+export interface CustomerOrderSummary {
+  readonly orderId: string;
+  readonly orderNumber: string;
+  readonly status: string;
+  readonly placedAt: string;
+  readonly valueInr: string | null;
+  readonly itemCount: number;
+}
+
+/**
+ * Fires as the seller types, once the number is a complete E.164.
+ *
+ * `enabled` on that check rather than a debounce alone: a half-typed
+ * number is not a miss, it is an incomplete question, and asking it
+ * would render a confident "no history" for a customer who has one.
+ */
+export function useCustomerLookup(phoneE164: string): UseQueryResult<CustomerReputation> {
+  const client = useApiClient();
+  const complete = /^\+[1-9]\d{7,14}$/.test(phoneE164.trim());
+  return useQuery({
+    queryKey: ['seller-customer-lookup', phoneE164.trim()],
+    enabled: complete,
+    staleTime: 30_000,
+    queryFn: () =>
+      client.request<CustomerReputation>(
+        `/api/seller/orders/customer-lookup?phoneE164=${encodeURIComponent(phoneE164.trim())}`,
+      ),
+  });
 }
 
 export function useCreateOrder(): UseMutationResult<OrderView, Error, CreateOrderInput> {

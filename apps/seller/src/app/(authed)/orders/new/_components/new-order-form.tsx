@@ -10,6 +10,8 @@ import {
   useProductVariants,
   useSubmitOrder,
 } from '@/lib/api-hooks';
+import { CustomerHistoryPanel } from './customer-history-panel';
+import { DuplicateOrderDialog, type DuplicateCandidate } from './duplicate-order-dialog';
 
 /**
  * Single-line manual order form.
@@ -119,6 +121,11 @@ export function NewOrderForm(): ReactElement {
   const toast = useToast();
   const [form, setForm] = useState<FormState>(INITIAL);
   const [error, setError] = useState<string | null>(null);
+  // The server decides whether this is a duplicate; the dialog only
+  // relays its answer and collects the acknowledgement (FE-2 — the UI
+  // never pre-empts a server guardrail with its own copy of the rule).
+  const [duplicates, setDuplicates] = useState<ReadonlyArray<DuplicateCandidate> | null>(null);
+  const [pendingAction, setPendingAction] = useState<'draft' | 'submit' | null>(null);
   const [busy, setBusy] = useState<'draft' | 'submit' | null>(null);
 
   const create = useCreateOrder();
@@ -171,7 +178,7 @@ export function NewOrderForm(): ReactElement {
     return null;
   }
 
-  function buildBody() {
+  function buildBody(acknowledgeDuplicate = false) {
     const body: Parameters<typeof create.mutate>[0] = {
       recipientName: form.recipientName.trim(),
       recipientPhoneE164: form.recipientPhoneE164.trim(),
@@ -202,12 +209,17 @@ export function NewOrderForm(): ReactElement {
       ...(form.totalWeightGrams.trim() ? { totalWeightGrams: Number(form.totalWeightGrams) } : {}),
       ...(form.sellerOrderRef.trim() ? { sellerOrderRef: form.sellerOrderRef.trim() } : {}),
       ...(form.sellerNotes.trim() ? { sellerNotes: form.sellerNotes.trim() } : {}),
+      ...(acknowledgeDuplicate ? { acknowledgeDuplicate: true } : {}),
     };
     return body;
   }
 
-  async function go(action: 'draft' | 'submit', e: FormEvent): Promise<void> {
-    e.preventDefault();
+  async function go(
+    action: 'draft' | 'submit',
+    e: FormEvent | null,
+    acknowledgeDuplicate = false,
+  ): Promise<void> {
+    e?.preventDefault();
     setError(null);
     const v = validate();
     if (v) {
@@ -216,19 +228,33 @@ export function NewOrderForm(): ReactElement {
     }
     setBusy(action);
     try {
-      const created = await create.mutateAsync(buildBody());
+      const created = await create.mutateAsync(buildBody(acknowledgeDuplicate));
       if (action === 'submit') {
         await submit.mutateAsync({ id: created.id });
         toast.success(`Order ${created.orderNumber} submitted for confirmation.`);
       } else {
         toast.success(`Draft order ${created.orderNumber} saved.`);
       }
+      setDuplicates(null);
       router.push(`/orders/${created.id}`);
     } catch (err) {
       if (err instanceof ApiError) {
-        const b = err.body as { code?: unknown; message?: unknown } | null;
+        const b = err.body as {
+          code?: unknown;
+          message?: unknown;
+          details?: { existingOrders?: unknown };
+        } | null;
         const code = typeof b?.code === 'string' ? b.code : null;
         const msg = typeof b?.message === 'string' ? b.message : err.message;
+        // The one refusal that gets a conversation rather than a
+        // verdict: the seller has to be able to SEE what they would be
+        // duplicating, because the question is "is this the same order?"
+        if (code === 'DUPLICATE_ORDER_SUSPECTED' && Array.isArray(b?.details?.existingOrders)) {
+          setDuplicates(b.details.existingOrders as ReadonlyArray<DuplicateCandidate>);
+          setPendingAction(action);
+          setBusy(null);
+          return;
+        }
         setError(code ? `[${code}] ${msg}` : msg);
       } else if (err instanceof Error) {
         setError(err.message);
@@ -241,6 +267,11 @@ export function NewOrderForm(): ReactElement {
 
   return (
     <form className="space-y-4" onSubmit={(e) => void go('submit', e)}>
+      {/* Who they are shipping to — rendered ABOVE the form, because a
+          warning read after the address has been typed is a warning read
+          too late. Renders nothing for a first-time customer. */}
+      <CustomerHistoryPanel phoneE164={form.recipientPhoneE164} />
+
       {/* Recipient */}
       <Card>
         <CardBody>
@@ -510,6 +541,22 @@ export function NewOrderForm(): ReactElement {
           {busy === 'submit' ? 'Submitting…' : 'Submit for confirmation'}
         </Button>
       </div>
+
+      <DuplicateOrderDialog
+        open={duplicates !== null}
+        candidates={duplicates ?? []}
+        busy={busy !== null}
+        onCancel={() => {
+          setDuplicates(null);
+          setPendingAction(null);
+        }}
+        onConfirm={() => {
+          const action = pendingAction ?? 'submit';
+          setDuplicates(null);
+          setPendingAction(null);
+          void go(action, null, true);
+        }}
+      />
     </form>
   );
 }
