@@ -1,0 +1,50 @@
+name: Setup workspace
+description: >
+  pnpm + Node + install + the workspace package builds. Every CI job needs
+  this preamble, and four hand-maintained copies of it is how one job
+  quietly ends up on a different pnpm version from the rest.
+
+inputs:
+  packages:
+    description: >
+      Space-separated @skydrop/* package names to build. Apps consume the
+      compiled `dist` of these, so a job typechecking or testing an app
+      must build what that app imports first. Build only what the job
+      needs — apps/api depends on @skydrop/db ALONE, so the e2e job has
+      no reason to spend 35s compiling three frontend packages.
+
+      @skydrop/auth in particular MUST be built before vitest runs in
+      apps/admin or apps/seller: its `./client` / `./server` subpath
+      exports point at `dist/`, so unbuilt means vitest cannot resolve
+      `@skydrop/auth/client` at all.
+    required: false
+    default: db api-client ui auth
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v4
+      with:
+        version: 11.1.1
+        run_install: false
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: pnpm
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - name: Build the workspace packages
+      shell: bash
+      # Turbo's `^build` would do this transitively, but keeping it
+      # explicit means a failure lands in the obvious step rather than
+      # inside whatever task happened to trigger the dependency.
+      run: |
+        for p in ${{ inputs.packages }}; do
+          echo "::group::build @skydrop/$p"
+          pnpm --filter "@skydrop/$p" build
+          echo "::endgroup::"
+        done

@@ -12,11 +12,158 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# ─────────────────────────────────────────────────────────────────────────
+# SHAPE OF THIS FILE — four jobs, all in parallel (2026-08-03)
+#
+# It used to be two: a `checks` job running everything in sequence, and
+# `browser`. `checks` took 12m and `browser` 5m, so every push cost ~12m of
+# CI plus 4m of Deploy behind it — and the work inside `checks` had no
+# ordering requirement at all. Lint does not depend on the e2e suite.
+#
+# Measured breakdown of the old 12 minutes: e2e 252s, four Next builds
+# 155s, typecheck 95s, lint 30s, format 21s, unit 48s, package builds 52s,
+# runner + container setup ~68s. Split by what actually needs to be
+# together, the longest single job is the e2e suite, so that is now the
+# whole critical path.
+#
+# TWO THINGS TO KNOW BEFORE EDITING:
+#
+# 1. Parallel jobs each pay setup + package builds again (~2m apiece).
+#    That is deliberate: it costs more runner-minutes and less wall clock,
+#    and wall clock is what someone is sitting through. Passing the built
+#    packages between jobs as artifacts was the alternative and is WORSE —
+#    it reintroduces a serial dependency longer than the rebuild it saves.
+#
+# 2. `browser` is the ONLY job that builds the Next apps, and that build
+#    IS the build check. It used to happen in both, and the `browser` copy
+#    is the correct one: this file set `NODE_ENV: test` job-wide, so the
+#    old `checks` build produced test-env frontends and proved nothing
+#    about what ships. Do not "restore" a build step elsewhere — and note
+#    that removing an app from the browser job's build list stops its
+#    build being checked anywhere at all.
+# ─────────────────────────────────────────────────────────────────────────
+
 jobs:
-  checks:
-    name: typecheck + lint + unit
+  # ── Static analysis ──────────────────────────────────────────────────
+  # No database, no Redis: tsc and eslint never run the app, and skipping
+  # the service containers takes ~30s off this job's startup.
+  static:
+    name: typecheck + lint + format
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-workspace
+
+      - name: Typecheck — all workspaces
+        run: pnpm -r typecheck
+
+      - name: Lint — all workspaces that have lint
+        run: pnpm -r --if-present lint
+
+      # The repo has shipped a .prettierrc since M0 that nothing enforced,
+      # and ~600 files had drifted from it. Normalised 2026-07-27; this
+      # step is what stops it happening again. `.prettierignore` is the
+      # single source of what is excluded (notably *.md — prose keeps its
+      # author's formatting).
+      - name: Format check
+        run: pnpm format:check
+
+      # The seam between the two halves. Each side's own tests pass while
+      # the path joining them is wrong — three bugs in one day were this
+      # exact shape, and none of them were caught by a unit test.
+      - name: Frontend calls resolve to real API routes
+        run: python3 scripts/check-frontend-routes.py
+
+  # ── Unit tests ───────────────────────────────────────────────────────
+  # Mocked-Prisma suites, so the service containers are insurance rather
+  # than a requirement — a job that fails on a missing socket instead of a
+  # real assertion is a slow and confusing way to learn that.
+  unit:
+    name: unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: timescale/timescaledb-ha:pg18
+        env:
+          POSTGRES_USER: skydrop
+          POSTGRES_PASSWORD: skydrop
+          POSTGRES_DB: skydrop_test
+        options: >-
+          --health-cmd "pg_isready -U skydrop -d skydrop_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 6379:6379
+
+    env:
+      DATABASE_URL: postgresql://skydrop:skydrop@localhost:5432/skydrop_test?schema=public
+      REDIS_URL: redis://localhost:6379/0
+      NODE_ENV: test
+      RESEND_API_KEY: ''
+      JWT_ACCESS_SECRET: ci-access-secret-not-prod
+      JWT_REFRESH_SECRET: ci-refresh-secret-not-prod
+      COURIER_CREDENTIALS_KEY_v1: ci-aes-gcm-32byte-key-padding-32x
+      TRACKING_WEBHOOK_SECRET_DELHIVERY: ci-tracking-webhook
+      SELLER_APP_URL: http://localhost:3003
+      ADMIN_APP_URL: http://localhost:3002
+      API_BASE_URL: http://localhost:4000
+      DO_SPACES_ACCESS_KEY: ci-stub
+      DO_SPACES_SECRET_KEY: ci-stub
+      DO_SPACES_BUCKET: ci-stub
+      DO_SPACES_REGION: sgp1
+      DO_SPACES_ENDPOINT: https://sgp1.digitaloceanspaces.com
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-workspace
+
+      - name: Prisma migrate (test DB)
+        working-directory: packages/db
+        run: pnpm exec prisma migrate deploy
+
+      - name: Unit tests — API (jest)
+        run: pnpm --filter @skydrop/api test
+
+      - name: Unit tests — admin (vitest)
+        run: pnpm --filter @skydrop/admin test
+
+      - name: Unit tests — seller (vitest)
+        run: pnpm --filter @skydrop/seller test
+
+      - name: Unit tests — packages
+        run: pnpm --filter './packages/*' --if-present test
+
+  # ── API e2e ──────────────────────────────────────────────────────────
+  # The long pole, and therefore the critical path. It stays a single
+  # sequential job on purpose: the harness's global setup DROPS and
+  # recreates the shared test database, so two runners pointed at one
+  # database report mass fake failures. Sharding it needs a database per
+  # shard first — worth doing when four minutes starts to hurt, not
+  # before.
+  #
+  # This suite was previously NEVER run by CI — it only ran on a dev
+  # machine, and had in fact been fully wedged for a while (a reset-chain
+  # FK violation) with nothing watching. Running it here is what makes the
+  # cross-lifecycle invariants (stock conservation through RTO, order
+  # lifecycle, seller RBAC on real requests) enforced rather than assumed.
+  e2e:
+    name: e2e — API
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     services:
       # The M0 migration needs (a) the timescaledb extension AND
@@ -48,11 +195,9 @@ jobs:
           - 6379:6379
 
     env:
-      # Single source of truth for envs the test harness reads.
       DATABASE_URL: postgresql://skydrop:skydrop@localhost:5432/skydrop_test?schema=public
       REDIS_URL: redis://localhost:6379/0
       NODE_ENV: test
-      # Email + S3 + courier are stub-mode in CI.
       RESEND_API_KEY: ''
       JWT_ACCESS_SECRET: ci-access-secret-not-prod
       JWT_REFRESH_SECRET: ci-refresh-secret-not-prod
@@ -70,78 +215,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - uses: ./.github/actions/setup-workspace
         with:
-          version: 11.1.1
-          run_install: false
-
-      - name: Setup Node 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build the workspace packages (db / api-client / ui / auth)
-        # apps depend on the compiled `dist` of these — Turbo `^build`
-        # would do this transitively but we keep it explicit so a CI
-        # failure is in the obvious step.
-        # @skydrop/auth MUST be built before vitest runs in
-        # apps/admin + apps/seller — its `./client` / `./server`
-        # subpath exports point at `dist/`, so unbuilt = vitest fails
-        # to resolve `@skydrop/auth/client`.
-        run: |
-          pnpm --filter @skydrop/db build
-          pnpm --filter @skydrop/api-client build
-          pnpm --filter @skydrop/ui build
-          pnpm --filter @skydrop/auth build
+          # apps/api's ONLY workspace dependency. The three frontend
+          # packages cost ~35s here and nothing in this job imports them.
+          packages: db
 
       - name: Prisma migrate (test DB)
         working-directory: packages/db
         run: pnpm exec prisma migrate deploy
 
-      - name: Typecheck — all workspaces
-        run: pnpm -r typecheck
-
-      - name: Lint — all workspaces that have lint
-        run: pnpm -r --if-present lint
-
-      # The repo has shipped a .prettierrc since M0 that nothing enforced,
-      # and ~600 files had drifted from it. Normalised 2026-07-27; this
-      # step is what stops it happening again. `.prettierignore` is the
-      # single source of what is excluded (notably *.md — prose keeps its
-      # author's formatting).
-      - name: Format check
-        run: pnpm format:check
-
-      # The seam between the two halves. Each side's own tests pass while
-      # the path joining them is wrong — three bugs in one day were this
-      # exact shape, and none of them were caught by a unit test.
-      - name: Frontend calls resolve to real API routes
-        run: python3 scripts/check-frontend-routes.py
-
-      - name: Unit tests — API (jest)
-        run: pnpm --filter @skydrop/api test
-
-      - name: Unit tests — admin (vitest)
-        run: pnpm --filter @skydrop/admin test
-
-      - name: Unit tests — seller (vitest)
-        run: pnpm --filter @skydrop/seller test
-
-      - name: Unit tests — packages
-        run: pnpm --filter './packages/*' --if-present test
-
-      # The e2e suite was previously NEVER run by CI — it only ran on a
-      # dev machine, and it had in fact been fully wedged for a while
-      # (a reset-chain FK violation) with nothing watching. Running it
-      # here is what makes the cross-lifecycle invariants (stock
-      # conservation through RTO, order lifecycle, seller RBAC on real
-      # requests) actually enforced rather than assumed.
-      #
       # TEST_DB_DOCKER_CONTAINER='' switches the harness from
       # `docker exec skydrop-postgres` (local dev) to a direct TCP psql
       # against the service container above.
@@ -150,24 +233,17 @@ jobs:
           TEST_DB_DOCKER_CONTAINER: ''
         run: pnpm --filter @skydrop/api test:e2e
 
-      - name: Build the four Next apps
-        run: |
-          pnpm --filter @skydrop/api build
-          pnpm --filter @skydrop/admin build
-          pnpm --filter @skydrop/seller build
-          pnpm --filter @skydrop/track build
-
   # ── Browser specs ────────────────────────────────────────────────────
-  # Its own job, not a step in `checks`, for one concrete reason: the API
-  # e2e suite's global teardown DROPS the test database. Anything needing
-  # a live API afterwards would come up against nothing. Isolating it also
-  # means a browser failure is unambiguous rather than buried at the end
-  # of a twenty-minute job.
+  # Its own job, not a step alongside the API e2e, for one concrete
+  # reason: that suite's global teardown DROPS the test database, and
+  # anything needing a live API afterwards would come up against nothing.
   #
-  # These specs are thin (login round-trips) but they cover the seams
-  # nothing else can: the FE-3 same-origin proxy, the FE-4 SSR cookie
-  # gate, and FE-2 server-verdict-verbatim — all three only exist in a
-  # real browser talking to a real Next server.
+  # These specs cover seams nothing else can: the FE-3 same-origin proxy,
+  # the FE-4 SSR cookie gate, FE-2 server-verdict-verbatim, the nonce CSP,
+  # and phone-width layout — all of which only exist in a real browser
+  # talking to a real Next server. It is also, per the note at the top of
+  # this file, where the Next apps get built and therefore where a broken
+  # build is caught.
   browser:
     name: browser specs (playwright)
     runs-on: ubuntu-latest
@@ -198,15 +274,15 @@ jobs:
           - 6379:6379
 
     # Exactly what apps/api/src/config/env.schema.ts declares REQUIRED,
-    # plus the proxy target. Deliberately NOT a copy of the `checks` env:
-    # that block carries several names the app never reads (the test
+    # plus the proxy target. Deliberately NOT a copy of the other jobs'
+    # env: that block carries several names the app never reads (the test
     # harness does), and copying it is how this job's first run failed —
     # JWT_ACCESS_SECRET is not JWT_SIGNING_KEY, so the boot died on a
     # missing variable that looked present.
     #
     # NODE_ENV and PORT are scoped to the API step instead of set here:
     # `next start` chooses its own, and a job-wide NODE_ENV=test would
-    # reach two frontends that were built for production.
+    # reach frontends that were built for production.
     env:
       DATABASE_URL: postgresql://skydrop:skydrop@localhost:5432/skydrop_test?schema=public
       REDIS_URL: redis://localhost:6379/0
@@ -223,28 +299,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 11.1.1
-          run_install: false
-
-      - name: Setup Node 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build the workspace packages
-        run: |
-          pnpm --filter @skydrop/db build
-          pnpm --filter @skydrop/api-client build
-          pnpm --filter @skydrop/ui build
-          pnpm --filter @skydrop/auth build
+      - uses: ./.github/actions/setup-workspace
 
       - name: Prisma migrate + seed
         working-directory: packages/db
