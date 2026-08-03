@@ -16,6 +16,17 @@ import type { ClientContext } from '../../staff-auth/staff-auth.service';
 import type { CreateStaffInvitationDto } from '../dto/create-staff-invitation.dto';
 import { staffRoleKeyForEnum } from '../../../common/auth/staff-role-key';
 
+/** The seven seeded roles, whose keys mirror the legacy enum's spelling. */
+const LEGACY_ROLE_KEYS = new Set([
+  'super_admin',
+  'seller_approval_admin',
+  'call_agent',
+  'warehouse_staff',
+  'warehouse_supervisor',
+  'manual_placement_admin',
+  'finance',
+]);
+
 /**
  * Phase 1B — admin staff invitations.
  *
@@ -419,7 +430,10 @@ export class StaffInvitationService {
       id: string;
       email: string;
       emailDisplay: string;
+      /** Legacy enum, for display continuity only. */
       role: StaffRole;
+      roleId: string;
+      roleName: string;
       emailVerifiedAt: string | null;
       lastLoginAt: string | null;
       createdAt: string;
@@ -434,6 +448,8 @@ export class StaffInvitationService {
         email: true,
         emailDisplay: true,
         role: true,
+        roleId: true,
+        staffRole: { select: { name: true } },
         emailVerifiedAt: true,
         lastLoginAt: true,
         createdAt: true,
@@ -445,6 +461,8 @@ export class StaffInvitationService {
       email: r.email,
       emailDisplay: r.emailDisplay,
       role: r.role,
+      roleId: r.roleId,
+      roleName: r.staffRole.name,
       emailVerifiedAt: r.emailVerifiedAt?.toISOString() ?? null,
       lastLoginAt: r.lastLoginAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
@@ -452,47 +470,92 @@ export class StaffInvitationService {
     }));
   }
 
+  /**
+   * Move somebody to a different role.
+   *
+   * Takes a role ROW id, not an enum value — that is what lets a person
+   * be given a role somebody invented this morning. The legacy
+   * `staff_users.role` column is kept in step ONLY where the target role
+   * is one of the seven seeded ones; a custom role has no enum to write,
+   * and the column is no longer consulted for authorisation, so it is
+   * left alone rather than filled with a lie. It goes when the
+   * invitation flow stops carrying an enum too (phase-1a-debt).
+   */
   async updateRole(
     targetStaffId: string,
-    newRole: StaffRole,
+    newRoleId: string,
     actor: { staffId: string },
     ctx: ClientContext,
-  ): Promise<{ id: string; role: StaffRole }> {
+  ): Promise<{ id: string; roleId: string; roleName: string }> {
     if (targetStaffId === actor.staffId) {
       throw new BadRequestException({
         code: 'CANNOT_CHANGE_OWN_ROLE',
-        message: 'A SUPER_ADMIN cannot change their own role',
+        message:
+          'You cannot change your own role. Ask another super admin — this is what stops somebody removing their own way back in.',
       });
     }
-    const before = await this.prisma.client.staffUser.findUnique({
-      where: { id: targetStaffId },
-      select: { id: true, role: true, deletedAt: true },
-    });
+    const [before, target] = await Promise.all([
+      this.prisma.client.staffUser.findUnique({
+        where: { id: targetStaffId },
+        select: { id: true, roleId: true, deletedAt: true, staffRole: { select: { name: true } } },
+      }),
+      this.prisma.client.staffRoleDefinition.findFirst({
+        where: { id: newRoleId, deletedAt: null },
+        select: { id: true, key: true, name: true, isSuperAdmin: true },
+      }),
+    ]);
     if (!before || before.deletedAt !== null) {
-      throw new NotFoundException({
-        code: 'STAFF_NOT_FOUND',
-        message: 'Staff user not found',
+      throw new NotFoundException({ code: 'STAFF_NOT_FOUND', message: 'Staff user not found' });
+    }
+    if (!target) {
+      throw new NotFoundException({ code: 'ROLE_NOT_FOUND', message: 'No such role' });
+    }
+    if (before.roleId === target.id) {
+      return { id: before.id, roleId: target.id, roleName: target.name };
+    }
+
+    // Somebody must be left who can put things back. Counting inside the
+    // update's transaction so two concurrent demotions cannot both see a
+    // survivor that the other is removing.
+    await this.prisma.client.$transaction(async (tx) => {
+      const superAdminsLeft = await tx.staffUser.count({
+        where: {
+          deletedAt: null,
+          id: { not: targetStaffId },
+          staffRole: { isSuperAdmin: true, deletedAt: null },
+        },
       });
-    }
-    if (before.role === newRole) {
-      return { id: before.id, role: before.role };
-    }
-    const updated = await this.prisma.client.staffUser.update({
-      where: { id: targetStaffId },
-      data: { role: newRole },
-      select: { id: true, role: true },
+      if (!target.isSuperAdmin && superAdminsLeft === 0) {
+        throw new BadRequestException({
+          code: 'LAST_SUPER_ADMIN',
+          message:
+            'This is the last super admin. Moving them off that role would leave nobody able to manage roles or staff.',
+        });
+      }
+      await tx.staffUser.update({
+        where: { id: targetStaffId },
+        data: {
+          roleId: target.id,
+          // Legacy column, best-effort: only the seeded roles have an
+          // enum spelling to mirror.
+          ...(LEGACY_ROLE_KEYS.has(target.key)
+            ? { role: target.key.toUpperCase() as StaffRole }
+            : {}),
+        },
+      });
     });
+
     await this.audit.log({
       actorType: ActorType.STAFF,
       staffUserId: actor.staffId,
       action: 'staff.staff_user.role_changed',
       entityType: 'staff_user',
       entityId: targetStaffId,
-      severity: 'MEDIUM',
-      changes: { before: before.role, after: newRole },
+      severity: 'HIGH',
+      changes: { before: before.staffRole.name, after: target.name },
       metadata: { ipAddress: ctx.ipAddress, userAgent: ctx.userAgent },
     });
-    return updated;
+    return { id: targetStaffId, roleId: target.id, roleName: target.name };
   }
 
   async deactivate(

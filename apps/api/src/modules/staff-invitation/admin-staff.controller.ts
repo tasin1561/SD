@@ -12,7 +12,6 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { StaffRole } from '@skydrop/db';
 import { CurrentStaff } from '../../common/decorators/current-staff.decorator';
 import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/client-info.decorator';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
@@ -92,14 +91,14 @@ export class AdminStaffController {
   @Patch('users/:id/role')
   @RequirePermissions('staff.manage')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Change a staff member’s role' })
+  @ApiOperation({ summary: 'Move a staff member to a role (by role id, including custom roles)' })
   updateRole(
     @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
-    @Body() body: { role: StaffRole },
+    @Body() body: { roleId: string },
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ) {
-    return this.svc.updateRole(id, body.role, { staffId: staff.id }, ctx);
+    return this.svc.updateRole(id, body.roleId, { staffId: staff.id }, ctx);
   }
 
   @Delete('users/:id')

@@ -27,7 +27,10 @@ export interface StaffUserRow {
   readonly id: string;
   readonly email: string;
   readonly emailDisplay: string;
+  /** Legacy enum, kept for display continuity. */
   readonly role: StaffRole;
+  readonly roleId: string;
+  readonly roleName: string;
   readonly emailVerifiedAt: string | null;
   readonly lastLoginAt: string | null;
   readonly createdAt: string;

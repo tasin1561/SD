@@ -1347,19 +1347,20 @@ export function useStaffUsersList(): UseQueryResult<StaffUserRow[]> {
   });
 }
 
+/** Takes a role ROW id, so a role somebody invented can be assigned. */
 export function useUpdateStaffRole(): UseMutationResult<
-  { id: string; role: string },
+  { id: string; roleId: string; roleName: string },
   Error,
-  { id: string; role: string }
+  { id: string; roleId: string }
 > {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, role }) =>
-      client.request<{ id: string; role: string }>(`/api/admin/staff/users/${id}/role`, {
-        method: 'PATCH',
-        body: { role },
-      }),
+    mutationFn: ({ id, roleId }) =>
+      client.request<{ id: string; roleId: string; roleName: string }>(
+        `/api/admin/staff/users/${id}/role`,
+        { method: 'PATCH', body: { roleId } },
+      ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-staff'] });
     },
