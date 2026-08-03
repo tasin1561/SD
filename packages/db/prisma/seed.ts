@@ -2015,6 +2015,22 @@ const notificationTemplates: TemplateSeed[] = [
       'Hi {{ contact_name }}, after reviewing your Skydrop application we are unable to approve it at this time. Reason: {{ rejection_reason }}. Reach out to support@skydrop.online if you would like to appeal.',
   },
   {
+    code: 'marketing.invite_lead_ack.email',
+    name: 'Invite request — acknowledgement to the requester',
+    channel: NotificationChannel.EMAIL,
+    // A stranger, not a seller yet. The recipient type is the closest
+    // truthful one; there is no account to point an id at, which is why
+    // the ledger row carries only the address.
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'We have your Skydrop invite request',
+    // Says back what they told us. A confirmation that only says
+    // "received" leaves the one doubt worth answering — whether the
+    // details went in correctly — and someone who typed their email
+    // wrong will never see this at all, which is itself the signal.
+    bodyTemplate:
+      'Thanks {{ full_name }} — we have your request for a Skydrop invite.\n\nSomeone will read it properly and get back to you within one working day, on this address or on {{ phone }}.\n\nWhat you told us:\n  Company: {{ company_name }}\n  Delivering to: {{ direction }}\n  Sells: {{ product_types }}\n  Orders a month: {{ monthly_orders }}\n\nIf any of that is wrong, just reply to this email and we will fix it before we call.\n\n— The Skydrop team\n{{ support_email }}',
+  },
+  {
     code: 'staff.invite_lead.email',
     name: 'New invite request — staff alert',
     channel: NotificationChannel.EMAIL,
@@ -2037,6 +2053,28 @@ const notificationTemplates: TemplateSeed[] = [
     // to — a fact nobody has any way to check later without this line.
     bodyTemplate:
       'Your Skydrop staff account is set up and ready to use.\n\nSign in here: {{ login_url }}\nYour username is your email: {{ email }}\nRole: {{ role }}\n\nForgotten your password? Use the "forgot password?" link on the sign-in page and we will email you a reset link.\n\nIf you did not set this account up, tell us at {{ support_email }} straight away.',
+  },
+  {
+    code: 'staff.password_changed.email',
+    name: 'Staff password changed — security alert',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STAFF,
+    subject: 'Your Skydrop staff password was changed',
+    // The "if this was not you" line is the entire point. A password
+    // change the owner did not make is indistinguishable from a takeover
+    // until somebody tells them, and every session was just signed out —
+    // so the attacker holds the only working credential.
+    bodyTemplate:
+      'The password on your Skydrop staff account ({{ email }}) was changed on {{ changed_at }}.\n\nEvery signed-in session was ended, so you will need to sign in again: {{ login_url }}\n\nIf this was not you, someone else has access to your account. Reply to this email or contact {{ support_email }} immediately, and we will lock it.\n\nRequest origin: {{ ip_address }}',
+  },
+  {
+    code: 'seller.password_changed.email',
+    name: 'Seller password changed — security alert',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Your Skydrop password was changed',
+    bodyTemplate:
+      'The password on your Skydrop account ({{ email }}) was changed on {{ changed_at }}.\n\nEvery signed-in session was ended, so you will need to sign in again: {{ login_url }}\n\nIf this was not you, someone else has access to your account — and your account holds your stock and your money. Contact {{ support_email }} immediately and we will lock it.\n\nRequest origin: {{ ip_address }}',
   },
   {
     code: 'staff.password_reset.email',

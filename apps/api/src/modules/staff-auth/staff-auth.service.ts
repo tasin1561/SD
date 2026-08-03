@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   BadRequestException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { ActorType, NotificationRecipientType } from '@skydrop/db';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
@@ -42,6 +43,8 @@ export interface StaffRefreshResult {
 
 @Injectable()
 export class StaffAuthService {
+  private readonly logger = new Logger(StaffAuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly env: EnvService,
@@ -346,6 +349,49 @@ export class StaffAuthService {
         tx,
       );
     });
+
+    // The account holder is told, always.
+    //
+    // A password change they did not make is indistinguishable from a
+    // takeover until somebody tells them — and every session was just
+    // revoked, so at this moment whoever set the password holds the only
+    // working credential. This email is the only thing standing between
+    // that and a silent, permanent loss of the account.
+    //
+    // Best-effort AFTER the commit: the change is done and correct, and
+    // failing the request now would leave the user believing their reset
+    // did not work while it silently did. A send failure is logged at
+    // ERROR because a security notice nobody received is worth knowing
+    // about.
+    try {
+      const owner = await this.prisma.client.staffUser.findUnique({
+        where: { id: row.staffUserId },
+        select: { email: true, emailDisplay: true },
+      });
+      if (owner) {
+        await this.email.enqueue({
+          templateCode: 'staff.password_changed.email',
+          recipient: {
+            type: NotificationRecipientType.STAFF,
+            id: row.staffUserId,
+            email: owner.email,
+          },
+          variables: {
+            email: owner.emailDisplay,
+            changed_at: new Date().toUTCString(),
+            login_url: `${this.env.adminAppUrl}/login`,
+            support_email: this.env.supportEmail,
+            ip_address: ctx.ipAddress ?? 'unknown',
+          },
+          triggerEvent: 'staff.password_reset.completed',
+        });
+      }
+    } catch (e) {
+      this.logger.error(
+        { staffUserId: row.staffUserId, err: (e as Error).message },
+        'Staff password-changed notice could not be queued; the password WAS changed',
+      );
+    }
 
     return { ok: true };
   }

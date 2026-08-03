@@ -225,6 +225,27 @@ export class InviteLeadService {
         leads_url: `${this.env.adminAppUrl}/leads`,
       };
 
+      // The requester's own acknowledgement, first — it is the one a
+      // person is waiting for. Its own try/catch: our internal alert
+      // failing must not cost them their confirmation, and vice versa.
+      try {
+        await this.email.enqueue({
+          templateCode: 'marketing.invite_lead_ack.email',
+          recipient: { type: NotificationRecipientType.SELLER, id: null, email: lead.email },
+          variables: {
+            ...variables,
+            product_types: lead.productTypes ?? 'not said',
+            monthly_orders: lead.monthlyOrders ?? 'not said',
+          },
+          triggerEvent: 'marketing.invite_lead.acknowledged',
+        });
+      } catch (e) {
+        this.logger.error(
+          { leadId, err: (e as Error).message },
+          'Could not queue the requester acknowledgement; the lead IS stored',
+        );
+      }
+
       // One enqueue per recipient, each in its own try/catch: one bad
       // address must not stop the others being told (NOTIF-3).
       for (const r of recipients) {

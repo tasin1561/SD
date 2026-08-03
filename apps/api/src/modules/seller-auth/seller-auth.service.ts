@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import {
   ActorType,
@@ -85,6 +86,8 @@ export interface SellerMe {
 
 @Injectable()
 export class SellerAuthService {
+  private readonly logger = new Logger(SellerAuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly env: EnvService,
@@ -666,6 +669,43 @@ export class SellerAuthService {
         tx,
       );
     });
+
+    // Tell the owner, always. See the staff equivalent for the full
+    // reasoning; the stake is higher here — a seller account holds their
+    // stock and their wallet.
+    //
+    // Best-effort after the commit: the change is done, and failing now
+    // would tell someone their reset did not work when it silently did.
+    try {
+      const owner = await this.prisma.client.sellerUser.findUnique({
+        where: { id: row.sellerUserId },
+        select: { email: true, fullName: true },
+      });
+      if (owner) {
+        await this.email.enqueue({
+          templateCode: 'seller.password_changed.email',
+          recipient: {
+            type: NotificationRecipientType.SELLER,
+            id: row.sellerUserId,
+            email: owner.email,
+          },
+          variables: {
+            email: owner.email,
+            contact_name: owner.fullName,
+            changed_at: new Date().toUTCString(),
+            login_url: `${this.env.sellerAppUrl}/login`,
+            support_email: this.env.supportEmail,
+            ip_address: ctx.ipAddress ?? 'unknown',
+          },
+          triggerEvent: 'seller.password_reset.completed',
+        });
+      }
+    } catch (e) {
+      this.logger.error(
+        { sellerUserId: row.sellerUserId, err: (e as Error).message },
+        'Seller password-changed notice could not be queued; the password WAS changed',
+      );
+    }
 
     return { ok: true };
   }

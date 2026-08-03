@@ -153,11 +153,16 @@ export function InviteForm(): ReactElement {
           </a>
           .
         </p>
+        {/* Was a dim mono line reading "back to the flight plan" — which
+            names a SECTION of the home page, not the home page, and was
+            styled so quietly it read as a caption rather than the only
+            way onward from a page with nothing else on it. */}
         <Link
           href="/"
-          className="mt-8 inline-flex items-center gap-2 font-mono text-sm text-fg-muted hover:text-fg-strong transition-colors"
+          className="mt-8 inline-flex items-center gap-2 rounded-xl border border-line px-5 py-3 text-sm font-medium text-fg-strong transition-colors hover:border-sky hover:text-sky"
         >
-          Back to the flight plan
+          Back to the main site
+          <ArrowUpRight size={15} />
         </Link>
       </div>
     );
