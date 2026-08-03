@@ -548,3 +548,40 @@ h3 {
     opacity: 0.5;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+ * Touch floors — the same rules `@skydrop/ui`'s tokens.css applies to
+ * the three app frontends, restated here because marketing is its own
+ * design world and does not import that package.
+ *
+ * These are SELECTORS, not classes sprinkled across call sites, for the
+ * reason FE-7 gives: `min-height` has no effect on a non-replaced inline
+ * box, so a blanket rule on `a` reaches standalone links — a footer
+ * column, a nav item, a card action — and leaves a link inside a
+ * sentence alone. That is the distinction WCAG 2.5.8 draws, expressed
+ * as a rule rather than a list to keep in sync.
+ *
+ * They live after `@import 'tailwindcss'` and outside any `@layer`, so
+ * they win over utilities regardless of specificity — which is what
+ * makes the 16px floor beat a `text-sm` on a field.
+ *
+ * Every one of these was a real finding the day marketing joined the
+ * Playwright projects: the footer's links were 20px tall and every
+ * field on the invite form rendered at 14px.
+ * ──────────────────────────────────────────────────────────────────── */
+@media (pointer: coarse) {
+  a {
+    min-height: 30px;
+  }
+
+  /* Under 16px, focusing a field zooms mobile Safari — and it never
+   * zooms back out, leaving the rest of the form off-screen mid-entry.
+   * The invite form is the only public form we have; losing somebody
+   * inside it costs a lead. */
+  input:not([type='checkbox']):not([type='radio']):not([type='hidden']),
+  select,
+  textarea {
+    min-height: 44px;
+    font-size: 16px;
+  }
+}

@@ -1,10 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Skydrop Playwright config — root-level, three projects:
- *   - admin  (port 3002, apps/admin)
- *   - seller (port 3003, apps/seller)
- *   - track  (port 3004, apps/track)
+ * Skydrop Playwright config — root-level, four projects:
+ *   - admin     (port 3002, apps/admin)
+ *   - seller    (port 3003, apps/seller)
+ *   - track     (port 3004, apps/track)
+ *   - marketing (port 3005, apps/marketing)
  *
  * Each project's specs live under apps/<name>/e2e/. Specs under
  * `e2e-shared/` run against EVERY project — that is where checks which
@@ -35,11 +36,20 @@ import { defineConfig, devices } from '@playwright/test';
 const ADMIN_PORT = 3002;
 const SELLER_PORT = 3003;
 const TRACK_PORT = 3004;
+const MARKETING_PORT = 3005;
 
 /** Specs that must hold for every frontend, not just one. */
 const SHARED = 'e2e-shared/**/*.spec.ts';
 
-/** CI serves the built apps; a dev machine serves `dev` for hot reload. */
+/**
+ * CI serves the built apps; a dev machine serves `dev` for hot reload.
+ *
+ * This holds for marketing too, but its `start` is not `next start` —
+ * that command refuses an `output: 'export'` app outright. It runs
+ * `scripts/serve-static.mjs`, which resolves extensionless URLs the way
+ * Caddy's `try_files` does in production; a plain file server would 404
+ * on `/request-invite`, which the export writes as a `.html` file.
+ */
 const APP_COMMAND = (app: string): string =>
   process.env.CI ? `pnpm --filter @skydrop/${app} start` : `pnpm --filter @skydrop/${app} dev`;
 
@@ -52,6 +62,7 @@ export default defineConfig({
     'apps/admin/e2e/**/*.spec.ts',
     'apps/seller/e2e/**/*.spec.ts',
     'apps/track/e2e/**/*.spec.ts',
+    'apps/marketing/e2e/**/*.spec.ts',
     SHARED,
   ],
   fullyParallel: false,
@@ -89,6 +100,14 @@ export default defineConfig({
         baseURL: `http://localhost:${TRACK_PORT}`,
       },
     },
+    {
+      name: 'marketing',
+      testMatch: ['apps/marketing/e2e/**/*.spec.ts', SHARED],
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: `http://localhost:${MARKETING_PORT}`,
+      },
+    },
   ],
   webServer: [
     {
@@ -112,6 +131,15 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
       env: { API_ORIGIN },
+    },
+    {
+      command: APP_COMMAND('marketing'),
+      // The landing page. Marketing is a static export with no API of
+      // its own — the one request it makes is the invite submission,
+      // and the spec for it intercepts that rather than sending it.
+      url: `http://localhost:${MARKETING_PORT}/`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
     },
   ],
 });

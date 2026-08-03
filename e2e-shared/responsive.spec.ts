@@ -37,11 +37,20 @@ import { test, expect } from '@playwright/test';
  * so there it runs the unauthenticated half.
  */
 
-/** A page each project serves without a session. */
-const PUBLIC_ENTRY: Record<string, string> = {
-  admin: '/login',
-  seller: '/login',
-  track: '/',
+/**
+ * Pages each project serves without a session.
+ *
+ * A list rather than one page, because marketing's two routes are
+ * different layout problems: the landing page is a long scroll of
+ * hand-built sections, and `/request-invite` is the only public FORM in
+ * the estate — which makes it the only place the 16px iOS-zoom rule
+ * below can bite outside an authenticated app.
+ */
+const PUBLIC_ENTRY: Record<string, readonly string[]> = {
+  admin: ['/login'],
+  seller: ['/login'],
+  track: ['/'],
+  marketing: ['/', '/request-invite'],
 };
 
 /**
@@ -142,7 +151,7 @@ test.describe('responsive layout', () => {
       });
       const page = await context.newPage();
 
-      const routes: string[] = [PUBLIC_ENTRY[project] ?? '/'];
+      const routes: string[] = [...(PUBLIC_ENTRY[project] ?? ['/'])];
       const creds = credentialsFor(project);
       if (creds !== null && AUTHED_ROUTES[project] !== undefined) {
         await page.goto('/login', { waitUntil: 'networkidle' });

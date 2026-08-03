@@ -255,12 +255,16 @@ jobs:
           pnpm exec prisma migrate deploy
           pnpm run seed
 
-      - name: Build the API and the three frontends
+      - name: Build the API and the four frontends
         run: |
           pnpm --filter @skydrop/api build
           pnpm --filter @skydrop/admin build
           pnpm --filter @skydrop/seller build
           pnpm --filter @skydrop/track build
+          # Marketing is a static export; its `start` serves out/ via
+          # scripts/serve-static.mjs, so the build must run first here
+          # even though nothing else in this job consumes it.
+          pnpm --filter @skydrop/marketing build
 
       - name: Install Playwright chromium
         # Only the browser the config uses, with its OS deps.
@@ -283,8 +287,9 @@ jobs:
           echo "API did not become ready — last 80 log lines:"; tail -80 /tmp/api.log; exit 1
 
       - name: Browser specs
-        # The admin + seller + track servers are auto-spawned by
-        # playwright's webServer config (built output in CI, not `dev`).
+        # The admin + seller + track + marketing servers are auto-spawned
+        # by playwright's webServer config (built output in CI, not
+        # `dev`).
         run: pnpm e2e:fe
 
       - name: API log on failure

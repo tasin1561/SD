@@ -16,6 +16,21 @@ import { test, expect } from '@playwright/test';
  * check something every project inherits, so a fourth frontend cannot
  * be added without it.
  *
+ * ── THE ONE EXEMPTION, AND WHY IT IS STATED OUT LOUD ─────────────────
+ * `apps/marketing` is `output: 'export'`. There is no Node process in
+ * front of those files, so Next never gets to set a header and there is
+ * no middleware to mint a per-request nonce; its headers come from
+ * Caddy (`docs/caddy-security-headers.md`), and that policy carries
+ * `script-src 'self' 'unsafe-inline'` ON PURPOSE — a static export's
+ * own hydration scripts are inline and can never be nonced.
+ *
+ * So marketing cannot pass these three assertions, and a local server
+ * emitting an imitation of the Caddy block would let CI report a policy
+ * nobody deployed as verified. It is SKIPPED WITH A REASON rather than
+ * quietly excluded: a skip shows up in the run output every time, and
+ * the thing that keeps it honest is that its real headers are checked
+ * against production by the curl in that doc, not by this job.
+ *
  * ── WHAT IT ASSERTS ──────────────────────────────────────────────────
  * 1. Zero CSP violations in the console. This is the one that catches
  *    the real bug; a violation means something on the page was blocked.
@@ -31,9 +46,30 @@ const ENTRY: Record<string, string> = {
   admin: '/login',
   seller: '/login',
   track: '/',
+  marketing: '/',
+};
+
+/**
+ * Projects whose own server emits the nonce CSP. Anything outside this
+ * set is skipped with its reason named, never silently.
+ */
+const SERVES_OWN_CSP = new Set(['admin', 'seller', 'track']);
+
+const SKIP_REASON: Record<string, string> = {
+  marketing:
+    "static export (output: 'export') — no server, no middleware, so its headers come from Caddy " +
+    'and its CSP allows inline scripts by design. See docs/caddy-security-headers.md.',
 };
 
 test.describe('nonce CSP', () => {
+  test.beforeEach(({}, testInfo) => {
+    const project = testInfo.project.name;
+    test.skip(
+      !SERVES_OWN_CSP.has(project),
+      `${project}: ${SKIP_REASON[project] ?? 'does not serve its own CSP'}`,
+    );
+  });
+
   test('the page loads with no CSP violations and actually hydrates', async ({
     page,
   }, testInfo) => {

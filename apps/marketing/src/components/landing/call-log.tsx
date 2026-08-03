@@ -63,7 +63,13 @@ export function CallLog(): ReactElement {
           <span className="truncate" style={{ color: '#8296AE' }}>
             &gt; {l.label}
           </span>
+          {/* The outcome is the point of the row, so it never wraps and
+              never shrinks — at 320px it is the label that gives way,
+              which is what its `truncate` is for. Without this, "NDR —
+              HELD" breaks across two lines and the log stops reading
+              like a terminal. */}
           <span
+            className="shrink-0 whitespace-nowrap"
             style={{
               color: l.tone === 'green' ? '#34D399' : l.tone === 'saffron' ? '#F59E0B' : '#38BDF8',
             }}

@@ -56,7 +56,14 @@ export function WhySkydrop(): ReactElement {
           sub="Not a generic aggregator with a corridor bolted on — every instrument below exists because this lane demands it."
         />
 
-        <div className="persp mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+        {/* `[&>*]:min-w-0` — a grid item's automatic minimum size is its
+            min-content width, so ONE stubborn cell widens the track and
+            every sibling stretches to match. At 320px that pushed the
+            whole page 14px past the viewport and the entire document
+            scrolled sideways. Letting items shrink below their
+            min-content is the fix; each cell already clips or wraps its
+            own content. */}
+        <div className="persp mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-6 [&>*]:min-w-0">
           {/* Signature cell — subtle tilt + pointer glow */}
           <Reveal className="sm:col-span-2 lg:col-span-4 lg:row-span-3">
             <TiltPanel max={2.5} className="h-full">
