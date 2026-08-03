@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { ActorType, NotificationRecipientType, StaffRole } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -46,6 +47,8 @@ export interface CreatedInvitation extends InvitationListItem {
 
 @Injectable()
 export class StaffInvitationService {
+  private readonly logger = new Logger(StaffInvitationService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly env: EnvService,
@@ -369,6 +372,40 @@ export class StaffInvitationService {
       changes: { invitationId: inv.id, role: inv.role, email: inv.email },
       metadata: { ipAddress: ctx.ipAddress, userAgent: ctx.userAgent },
     });
+
+    // A note confirming the account exists, where to sign in, and which
+    // address is the username.
+    //
+    // Best-effort AFTER the account is committed: the person is about to
+    // be signed in and a mail fault must not undo an account that now
+    // exists, nor answer with an error to someone whose signup worked.
+    //
+    // Worth sending even though they are already logged in — the value is
+    // three days later, on a different device, when the question is
+    // "which of my addresses was it, and where do I go". That is exactly
+    // when nobody has the invitation email any more.
+    try {
+      await this.email.enqueue({
+        templateCode: 'staff.welcome.email',
+        recipient: {
+          type: NotificationRecipientType.STAFF,
+          id: created.id,
+          email: created.email,
+        },
+        variables: {
+          email: created.email,
+          role: created.role,
+          login_url: `${this.env.adminAppUrl}/login`,
+          support_email: this.env.supportEmail,
+        },
+        triggerEvent: 'staff.invitation.accepted',
+      });
+    } catch (e) {
+      this.logger.error(
+        { staffId: created.id, err: (e as Error).message },
+        'Staff welcome email could not be queued; the account IS created',
+      );
+    }
 
     return { staffId: created.id, email: created.email, role: created.role };
   }

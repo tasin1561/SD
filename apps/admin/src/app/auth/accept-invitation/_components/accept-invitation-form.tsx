@@ -17,6 +17,44 @@ interface AccessTokenResponse {
   readonly expiresAt: string;
 }
 
+/**
+ * Refusals that end the road. Anything not listed stays inline, because
+ * the difference that matters is whether trying again could work.
+ */
+const TERMINAL_CODES: ReadonlySet<string> = new Set([
+  'INVITATION_ALREADY_USED',
+  'INVITATION_EXPIRED',
+  'INVITATION_NOT_FOUND',
+  'INVALID_INVITATION',
+  'INVITATION_REVOKED',
+]);
+
+/** What each one means to the person holding the dead link. */
+function terminalCopy(code: string): { title: string; body: string } {
+  switch (code) {
+    case 'INVITATION_ALREADY_USED':
+      return {
+        title: 'This invitation has already been used',
+        body: 'An account was set up with this link. If that was you, sign in — and if you have forgotten the password, the sign-in page can email you a reset.',
+      };
+    case 'INVITATION_EXPIRED':
+      return {
+        title: 'This invitation has expired',
+        body: 'Invitation links are short-lived on purpose. Ask whoever invited you to send a new one — it takes them a moment.',
+      };
+    case 'INVITATION_REVOKED':
+      return {
+        title: 'This invitation was withdrawn',
+        body: 'Someone cancelled it before it was used. If that seems wrong, speak to whoever invited you.',
+      };
+    default:
+      return {
+        title: 'This invitation link is not valid',
+        body: 'It may have been mistyped, or truncated by a mail client. Open the link from your invitation email again, or ask for a fresh one.',
+      };
+  }
+}
+
 export function AcceptInvitationForm({
   initialToken,
 }: {
@@ -29,6 +67,17 @@ export function AcceptInvitationForm({
   const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * A refusal the form can never recover from.
+   *
+   * Kept apart from `error` on purpose. An inline note is right for
+   * "passwords do not match" — you fix it and carry on. It is wrong for
+   * a spent or expired invitation: the link is dead, no amount of
+   * retyping helps, and a small red line beside a still-enabled button
+   * invites exactly that. These get a dialog that says what happened and
+   * where to go instead.
+   */
+  const [dead, setDead] = useState<{ code: string; message: string } | null>(null);
 
   function fmtError(e: unknown): string {
     if (e instanceof ApiError) {
@@ -80,10 +129,70 @@ export function AcceptInvitationForm({
       router.replace('/dashboard');
       router.refresh();
     } catch (err) {
-      setError(fmtError(err));
+      const code =
+        err instanceof ApiError && err.body !== null && typeof err.body === 'object'
+          ? String((err.body as { code?: unknown }).code ?? '')
+          : '';
+      const raw =
+        err instanceof ApiError && err.body !== null && typeof err.body === 'object'
+          ? String((err.body as { message?: unknown }).message ?? '')
+          : '';
+      if (TERMINAL_CODES.has(code)) {
+        setDead({ code, message: raw || fmtError(err) });
+      } else {
+        setError(fmtError(err));
+      }
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (dead !== null) {
+    const copy = terminalCopy(dead.code);
+    return (
+      <>
+        <AuthConsoleHeader label="operations console" />
+        {/* Replaces the form rather than covering it. The link is spent;
+            leaving a live password field behind a dismissible overlay
+            just invites another attempt at something that cannot work. */}
+        <div
+          role="alertdialog"
+          aria-labelledby="dead-title"
+          aria-describedby="dead-body"
+          className="boot-rise boot-rise-2 ticks relative overflow-hidden rounded-xl border bg-surface p-6 sm:p-7"
+          style={{ borderColor: 'var(--color-critical-ring)' }}
+        >
+          <div className="mb-3 flex items-center justify-between">
+            <span className="telemetry text-critical">link not usable</span>
+            <span className="telemetry text-text-muted">{dead.code.toLowerCase()}</span>
+          </div>
+          <h1 id="dead-title" className="text-text-bright mb-2 text-lg font-semibold">
+            {copy.title}
+          </h1>
+          <p id="dead-body" className="text-text-muted mb-5 text-sm">
+            {copy.body}
+          </p>
+          {/* The server's own words, kept verbatim underneath ours (FE-2)
+              — the prose above is our reading of the code, and if the two
+              ever disagree the server is right. */}
+          <p className="text-text-faint mb-6 text-xs">
+            Server said: [{dead.code}] {dead.message}
+          </p>
+          <a
+            href="/login"
+            className="block w-full rounded-[5px] bg-accent px-3 py-1.5 text-center text-sm font-medium text-accent-fg transition-colors hover:bg-accent-hover"
+          >
+            Go to sign in
+          </a>
+          <a
+            href="/auth/forgot-password"
+            className="text-text-muted hover:text-text-bright mt-3 block text-center text-xs transition-colors"
+          >
+            forgot your password?
+          </a>
+        </div>
+      </>
+    );
   }
 
   return (

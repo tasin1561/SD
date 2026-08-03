@@ -2027,6 +2027,18 @@ const notificationTemplates: TemplateSeed[] = [
       '{{ full_name }} at {{ company_name }} asked for an invite.\n\nDirection: {{ direction }}\nEmail: {{ email }}\nPhone: {{ phone }}\nSells: {{ product_types }}\nOrders a month: {{ monthly_orders }}\n\n{{ lead_message }}\n\nWork the queue here: {{ leads_url }}',
   },
   {
+    code: 'staff.welcome.email',
+    name: 'Staff account created — welcome',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STAFF,
+    subject: 'Your Skydrop staff account is ready',
+    // Says the ADDRESS back to them on purpose. Staff often have more
+    // than one, and the one that works is whichever the invitation went
+    // to — a fact nobody has any way to check later without this line.
+    bodyTemplate:
+      'Your Skydrop staff account is set up and ready to use.\n\nSign in here: {{ login_url }}\nYour username is your email: {{ email }}\nRole: {{ role }}\n\nForgotten your password? Use the "forgot password?" link on the sign-in page and we will email you a reset link.\n\nIf you did not set this account up, tell us at {{ support_email }} straight away.',
+  },
+  {
     code: 'staff.password_reset.email',
     name: 'Staff password reset — email',
     channel: NotificationChannel.EMAIL,
