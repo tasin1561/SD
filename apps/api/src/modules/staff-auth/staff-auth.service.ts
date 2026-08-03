@@ -17,6 +17,7 @@ import {
 } from '../auth-common/services/refresh-token.service';
 import { AuditLogService } from '../auth-common/services/audit-log.service';
 import { EmailQueue } from '../email/queue/email.queue';
+import { ALL_PERMISSION_KEYS } from '../../common/auth/permissions';
 
 const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000; // 30 min
 const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -513,11 +514,26 @@ export class StaffAuthService {
 
   // ---------- ME ----------
 
+  /**
+   * The identity the admin app renders from.
+   *
+   * It carries `permissions` because the UI decides what to SHOW from
+   * them — a menu of thirty items, most of which 403, is not a usable
+   * console. They are resolved here from the role rather than read off
+   * the token, so an admin editing a role takes effect on the next page
+   * load instead of whenever the access token happens to expire.
+   *
+   * FE-2 still holds: this list decides what is rendered, never what is
+   * permitted. The server refuses regardless.
+   */
   async getMe(staffId: string): Promise<{
     id: string;
     email: string;
     emailDisplay: string;
     role: string;
+    roleKey: string;
+    roleName: string;
+    permissions: readonly string[];
     emailVerifiedAt: Date | null;
     lastLoginAt: Date | null;
     createdAt: Date;
@@ -532,15 +548,35 @@ export class StaffAuthService {
         emailVerifiedAt: true,
         lastLoginAt: true,
         createdAt: true,
+        staffRole: {
+          select: {
+            key: true,
+            name: true,
+            isSuperAdmin: true,
+            deletedAt: true,
+            permissions: { select: { permission: true } },
+          },
+        },
       },
     });
-    if (!staff) {
+    if (!staff || staff.staffRole.deletedAt !== null) {
       throw new UnauthorizedException({
         code: 'UNAUTHORIZED',
         message: 'Staff session no longer valid',
       });
     }
-    return staff;
+    const { staffRole, ...rest } = staff;
+    return {
+      ...rest,
+      roleKey: staffRole.key,
+      roleName: staffRole.name,
+      // A super-admin role holds the catalogue implicitly, exactly as the
+      // guard resolves it — the two must agree or the UI hides a control
+      // the server would have allowed.
+      permissions: staffRole.isSuperAdmin
+        ? ALL_PERMISSION_KEYS
+        : staffRole.permissions.map((p) => p.permission),
+    };
   }
 
   // ---------- internal ----------

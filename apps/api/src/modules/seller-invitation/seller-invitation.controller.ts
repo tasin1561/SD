@@ -24,6 +24,7 @@ import {
   ListSellerInvitationsQueryDto,
 } from './dto/list.dto';
 import { SellerInvitationService } from './seller-invitation.service';
+import { RequirePermissions } from '../../common/auth/require-permissions.decorator';
 
 /**
  * Admin endpoints — every method requires a valid staff JWT.
@@ -36,11 +37,13 @@ import { SellerInvitationService } from './seller-invitation.service';
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('sellers.view')
 @Controller('admin/seller-invitations')
 export class SellerInvitationAdminController {
   constructor(private readonly svc: SellerInvitationService) {}
 
   @Post()
+  @RequirePermissions('sellers.invite')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a seller invitation and email the plaintext token' })
   create(
@@ -58,6 +61,7 @@ export class SellerInvitationAdminController {
   }
 
   @Post(':id/resend')
+  @RequirePermissions('sellers.invite')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Rotate the token and re-send the invitation email' })
   resend(
@@ -69,6 +73,7 @@ export class SellerInvitationAdminController {
   }
 
   @Delete(':id')
+  @RequirePermissions('sellers.invite')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Soft-delete a PENDING invitation' })
   async remove(

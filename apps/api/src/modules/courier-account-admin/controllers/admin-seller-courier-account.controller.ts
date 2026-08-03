@@ -23,12 +23,14 @@ import {
   CourierAccountAdminService,
   type SellerCourierAccountLinkView,
 } from '../services/courier-account-admin.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /** Admin surface for assigning a seller to specific courier accounts (R1). */
 @ApiTags('admin-seller-courier-accounts')
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('courier.accounts.view')
 @Controller('admin/sellers/:sellerId/courier-accounts')
 export class AdminSellerCourierAccountController {
   constructor(private readonly svc: CourierAccountAdminService) {}
@@ -41,6 +43,7 @@ export class AdminSellerCourierAccountController {
   }
 
   @Post()
+  @RequirePermissions('sellers.courier_links.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Link (or update the weight of) a seller-to-courier-account assignment',
@@ -54,6 +57,7 @@ export class AdminSellerCourierAccountController {
   }
 
   @Patch(':courierAccountId')
+  @RequirePermissions('sellers.courier_links.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Update a link's distribution weight or active state" })
   update(
@@ -66,6 +70,7 @@ export class AdminSellerCourierAccountController {
   }
 
   @Delete(':courierAccountId')
+  @RequirePermissions('sellers.courier_links.manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Remove a seller-to-courier-account link (reverts to the default account)',

@@ -21,6 +21,7 @@ import {
   CourierAccountAdminService,
   type CourierAccountView,
 } from '../services/courier-account-admin.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /**
  * Admin CRUD for CourierAccount (R1). RBAC is StaffJwtGuard-only for
@@ -32,11 +33,13 @@ import {
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('courier.accounts.view')
 @Controller('admin/courier-accounts')
 export class AdminCourierAccountController {
   constructor(private readonly svc: CourierAccountAdminService) {}
 
   @Post()
+  @RequirePermissions('courier.accounts.manage')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a courier account (encrypts + stores a new credential)' })
   create(
@@ -57,6 +60,7 @@ export class AdminCourierAccountController {
   }
 
   @Patch(':accountId')
+  @RequirePermissions('courier.accounts.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update a courier account (label/isActive/isDefault/notes)' })
   update(

@@ -43,6 +43,7 @@ import {
   type ForceMutateResult,
   type ReleaseReservationsResult,
 } from '../services/order-admin-override.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -59,6 +60,7 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('orders.view')
 @Controller('admin/orders')
 export class AdminOrderController {
   constructor(
@@ -117,6 +119,7 @@ export class AdminOrderController {
   }
 
   @Post(':id/cancel')
+  @RequirePermissions('orders.cancel')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Sane admin cancel → CANCELLED_BY_ADMIN (NOT god mode)' })
   cancel(
@@ -138,6 +141,7 @@ export class AdminOrderController {
   }
 
   @Post(':id/force-mutation')
+  @RequirePermissions('orders.override')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'GOD MODE (ORD-2): bypass the state machine / edit rules. Audited CRITICAL.',
@@ -160,6 +164,7 @@ export class AdminOrderController {
   }
 
   @Post(':id/release-reservations')
+  @RequirePermissions('orders.override')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: "Manually release an order's ACTIVE reservations (god-mode cleanup; idempotent)",

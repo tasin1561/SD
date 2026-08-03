@@ -18,6 +18,7 @@ import {
   type OrderChargeView,
   type PersistChargesResult,
 } from '../services/order-charges.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -25,6 +26,7 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('orders.charges.view')
 @Controller('admin/orders/:orderId/charges')
 export class AdminOrderChargesController {
   constructor(private readonly svc: OrderChargesService) {}
@@ -39,6 +41,7 @@ export class AdminOrderChargesController {
   }
 
   @Post('compute')
+  @RequirePermissions('orders.charges.compute')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:

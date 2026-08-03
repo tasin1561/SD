@@ -8,7 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { StaffRole } from '@skydrop/db';
+
 import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
 import {
   ClientInfo,
@@ -17,11 +17,11 @@ import {
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
-import { requireStaffRoles } from '../../../common/auth/require-staff-roles';
 import {
   DispatchHandoffService,
   type DispatchHandoffResult,
 } from '../services/dispatch-handoff.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /**
  * Module 9 — supervisor dispatch endpoints (commit 13, CUR-4).
@@ -33,13 +33,15 @@ import {
  * bug-1 qtyOnHand decrement, commit 12), the shipment is marked
  * HANDED_TO_COURIER, the manifest flips CONFIRMED → DISPATCHED.
  *
- * RBAC: gated inline via `requireStaffRoles` (Phase-1A posture, mirrors
- * AdminManifestController). Dispatch is operations-staff concern.
+ * RBAC: `courier.dispatch.handoff`, declared on the controller. That
+ * permission is what CUR-4 now means — the guarantee survives an admin
+ * inventing a role, which a check against a role NAME would not.
  */
 @ApiTags('admin-courier-dispatch')
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('courier.dispatch.handoff')
 @Controller('admin/courier')
 export class DispatchController {
   constructor(private readonly handoff: DispatchHandoffService) {}
@@ -56,7 +58,6 @@ export class DispatchController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<DispatchHandoffResult> {
-    requireStaffRoles(staff, [StaffRole.WAREHOUSE_SUPERVISOR, StaffRole.SUPER_ADMIN]);
     return this.handoff.confirmHandoff(manifestId, staff.id, ctx);
   }
 }

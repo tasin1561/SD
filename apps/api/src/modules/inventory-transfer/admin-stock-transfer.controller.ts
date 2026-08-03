@@ -6,6 +6,7 @@ import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../common/types/request';
 import { CreateStockTransferDto } from './dto/stock-transfer.dto';
 import { StockTransferService, type StockTransferResult } from './services/stock-transfer.service';
+import { RequirePermissions } from '../../common/auth/require-permissions.decorator';
 
 /**
  * R6 — admin stock transfer (inter-warehouse, or bin-to-bin within one
@@ -17,6 +18,7 @@ import { StockTransferService, type StockTransferResult } from './services/stock
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('inventory.transfers.manage')
 @Controller('admin/stock-transfers')
 export class AdminStockTransferController {
   constructor(private readonly transfers: StockTransferService) {}

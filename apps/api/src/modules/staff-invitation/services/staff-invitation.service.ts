@@ -14,6 +14,7 @@ import { TokenHashService } from '../../auth-common/services/token-hash.service'
 import { EmailQueue } from '../../email/queue/email.queue';
 import type { ClientContext } from '../../staff-auth/staff-auth.service';
 import type { CreateStaffInvitationDto } from '../dto/create-staff-invitation.dto';
+import { staffRoleKeyForEnum } from '../../../common/auth/staff-role-key';
 
 /**
  * Phase 1B — admin staff invitations.
@@ -351,6 +352,7 @@ export class StaffInvitationService {
           emailDisplay: inv.email,
           passwordHash,
           role: inv.role,
+          staffRole: { connect: { key: staffRoleKeyForEnum(inv.role) } },
           emailVerifiedAt: now,
         },
         select: { id: true, email: true, role: true },

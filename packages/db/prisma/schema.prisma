@@ -33,12 +33,16 @@ model StaffUser {
   emailDisplay    String    @map("email_display")
   passwordHash    String    @map("password_hash")
   role            StaffRole
+  /// The dynamic role. `role` above is the LEGACY enum, authoritative
+  /// only until the permission guard lands; see staff_roles.
+  roleId          String    @map("role_id") @db.Uuid
   emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
   lastLoginAt     DateTime? @map("last_login_at") @db.Timestamptz
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt       DateTime? @map("deleted_at") @db.Timestamptz
 
+  staffRole                  StaffRoleDefinition           @relation(fields: [roleId], references: [id], onDelete: Restrict)
   sellersApproved            Seller[]                      @relation("SellerApprovedBy")
   invitesAuthored            SellerInvitation[]            @relation("SellerInvitedBy")
   staffInvitesAuthored       StaffInvitation[]             @relation("StaffInvitedBy")
@@ -92,7 +96,68 @@ model StaffUser {
 
   @@index([role])
   @@index([deletedAt])
+  @@index([roleId], map: "staff_users_role_id_idx")
   @@map("staff_users")
+}
+
+/// A named bundle of permissions. DATA, not a type: created, renamed and
+/// deleted by an admin holding `rbac.manage`, with no deploy.
+///
+/// The permission KEYS it grants are defined in code
+/// (apps/api/src/common/auth/permissions.ts) because a line of code
+/// checks each one; the bundling is what is editable. See that file for
+/// why the split falls there.
+model StaffRoleDefinition {
+  id          String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// Stable machine key. Seeded roles keep the legacy enum's spelling so
+  /// the backfill is a straight join.
+  key         String  @unique
+  name        String
+  description String?
+
+  /// Seeded, and therefore undeletable — deleting the role every
+  /// existing staff member holds is not an edit anyone means to make.
+  /// Its PERMISSIONS stay editable (except the super-admin's).
+  isSystem     Boolean @default(false) @map("is_system")
+  /// Holds every permission implicitly, including ones added later by a
+  /// future migration. Exactly one role has this, it cannot be edited,
+  /// and its last holder cannot be demoted — otherwise an admin can
+  /// tick themselves out of the building.
+  isSuperAdmin Boolean @default(false) @map("is_super_admin")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  permissions StaffRolePermission[]
+  staff       StaffUser[]
+
+  @@map("staff_roles")
+}
+
+/// One granted permission key. A row's absence IS the denial — there is
+/// no deny-list, because a permission that is both granted and denied
+/// has to be resolved by a precedence rule nobody remembers.
+model StaffRolePermission {
+  id         String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  roleId     String @map("role_id") @db.Uuid
+  /// A `PermissionKey` from the catalogue. Stored as text rather than an
+  /// enum so adding a permission is a code change, not a migration; the
+  /// guard rejects a key the catalogue does not define.
+  permission String
+
+  /// Reserved for per-warehouse / per-seller narrowing ("supervisor of
+  /// Delhi, not Mumbai"). NULL means unscoped, which is every row today.
+  /// Present now so adding scope later is not a migration of everything.
+  scope String?
+
+  grantedAt DateTime @default(now()) @map("granted_at") @db.Timestamptz
+
+  role StaffRoleDefinition @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permission, scope], map: "staff_role_permissions_role_permission_scope_key")
+  @@index([roleId], map: "staff_role_permissions_role_id_idx")
+  @@map("staff_role_permissions")
 }
 
 model Seller {
@@ -181,12 +246,12 @@ model Seller {
   userInvitations         SellerUserInvitation[]
   settingOverrides        SellerSettingOverride[]
   courierAccountLinks     SellerCourierAccountLink[]
+  inviteLeads             InviteLead[]                   @relation("InviteLeadConvertedSeller")
 
   @@index([status])
   @@index([deletedAt])
   @@index([approvedById])
   @@map("sellers")
-  inviteLeads InviteLead[] @relation("InviteLeadConvertedSeller")
 }
 
 model SellerInvitation {
@@ -3988,31 +4053,31 @@ enum InboundFreightStatus {
 enum WalletEntryDirection {
   // M22 — COD collected from customer credits the seller wallet on
   // DELIVERED. Always CREDIT.
-  COD_COLLECTION     @map("cod_collection")
+  COD_COLLECTION       @map("cod_collection")
   // M22 — sum of order's BASE_SHIPPING + surcharges + GST debits the
   // seller wallet on DELIVERED. Always DEBIT.
-  ORDER_CHARGES      @map("order_charges")
+  ORDER_CHARGES        @map("order_charges")
   // M23 — admin records a payout to the seller. DEBIT on the wallet
   // matching the bank-account currency.
-  REMITTANCE_OUT     @map("remittance_out")
+  REMITTANCE_OUT       @map("remittance_out")
   // M23 — paired with REMITTANCE_OUT for cross-currency: the BD seller
   // receives BDT, but COD was collected in INR. CREDIT on the
   // destination currency wallet (BDT) at the FX-snapshotted rate.
-  REMITTANCE_FX      @map("remittance_fx")
+  REMITTANCE_FX        @map("remittance_fx")
   // Operator correction: a NEW entry that compensates an earlier
   // mistaken entry. linkedEntryId points at the original. reasonCode +
   // note required.
-  ADJUSTMENT_CREDIT  @map("adjustment_credit")
-  ADJUSTMENT_DEBIT   @map("adjustment_debit")
+  ADJUSTMENT_CREDIT    @map("adjustment_credit")
+  ADJUSTMENT_DEBIT     @map("adjustment_debit")
   // Initial balance on wallet creation (zero unless backfilled).
-  OPENING_BALANCE    @map("opening_balance")
+  OPENING_BALANCE      @map("opening_balance")
   // R7 — a damage/loss ticket resolved in the seller's favour credits
   // them the agreed amount. Deliberately NOT ADJUSTMENT_CREDIT: that one
   // is reserved for operator error-correction (and requires
   // reasonCode + linkedEntryId), so overloading it would make genuine
   // ledger corrections indistinguishable from damage settlements in
   // every report. Registered in WalletService's CREDIT_DIRECTIONS.
-  SCRAP_REFUND       @map("scrap_refund")
+  SCRAP_REFUND         @map("scrap_refund")
   // R3 — the BD→India inbound freight bill for a goods receipt. Always a
   // DEBIT, so it is deliberately ABSENT from WalletService's
   // CREDIT_DIRECTIONS set (adding it there would pay sellers for their
@@ -4020,26 +4085,26 @@ enum WalletEntryDirection {
   // courier leg per order; this is the inbound leg per consignment, and
   // conflating them would make the two cost bases unseparable in every
   // report.
-  INBOUND_FREIGHT    @map("inbound_freight")
+  INBOUND_FREIGHT      @map("inbound_freight")
   // The flat return fee, charged when a parcel physically comes back —
   // not when the courier says it is coming. Always a DEBIT, so it is
   // deliberately ABSENT from WalletService's CREDIT_DIRECTIONS (adding
   // it there would PAY sellers for their own returns). Distinct from
   // ORDER_CHARGES so "what did returns cost us this month" stays a
   // question the ledger can answer on its own.
-  RTO_FEE            @map("rto_fee")
+  RTO_FEE              @map("rto_fee")
   // A seller wiring money INTO the wallet, verified by an operator
   // against the bank. Always a CREDIT — REGISTERED in WalletService's
   // CREDIT_DIRECTIONS and in apps/seller's mirrored set (WAL-1);
   // omitting it there would take the top-up back OUT of the wallet it
   // was meant to fill.
-  TOPUP              @map("topup")
+  TOPUP                @map("topup")
   // What Instant Pay costs the seller: the fee for being credited at
   // delivery instead of waiting for the courier to settle. Always a
   // DEBIT, so deliberately ABSENT from CREDIT_DIRECTIONS. Its own value
   // rather than folded into ORDER_CHARGES so the revenue from the
   // service is countable on its own.
-  INSTANT_PAY_FEE    @map("instant_pay_fee")
+  INSTANT_PAY_FEE      @map("instant_pay_fee")
   // What collecting COD costs a seller on SETTLEMENT. An INSTANT_PAY
   // seller does NOT also pay this: that rate is all-in and already
   // contains it, so an order carries one fee line reading exactly the
@@ -4048,7 +4113,7 @@ enum WalletEntryDirection {
   // therefore ABSENT from CREDIT_DIRECTIONS. Its own value rather than
   // folded into ORDER_CHARGES so COD-handling revenue stays countable
   // separately from the delivery fee.
-  COD_COLLECTION_FEE @map("cod_collection_fee")
+  COD_COLLECTION_FEE   @map("cod_collection_fee")
   // Giving back the delivery fee on an order that was cancelled before
   // it shipped. A CREDIT — REGISTERED in WalletService's
   // CREDIT_DIRECTIONS and in apps/seller's mirrored set (WAL-1);
@@ -4780,18 +4845,18 @@ enum ShippingDirection {
 /// only decision this list has to support is "who do I call next".
 enum InviteLeadStatus {
   /// Nobody has looked at it yet.
-  NEW          @map("new")
+  NEW       @map("new")
   /// Someone reached out and is waiting to hear back.
-  CONTACTED    @map("contacted")
+  CONTACTED @map("contacted")
   /// Talked to them; they are a real prospect worth onboarding.
-  QUALIFIED    @map("qualified")
+  QUALIFIED @map("qualified")
   /// Became a seller. `convertedSellerId` says which one.
-  CONVERTED    @map("converted")
+  CONVERTED @map("converted")
   /// Not a fit, or never replied. `notes` says why.
-  DECLINED     @map("declined")
+  DECLINED  @map("declined")
   /// Obvious junk. Kept rather than deleted so the same address can be
   /// recognised on its next attempt.
-  SPAM         @map("spam")
+  SPAM      @map("spam")
 
   @@map("invite_lead_status")
 }
@@ -4809,50 +4874,50 @@ enum InviteLeadStatus {
 /// invited by staff, and that boundary is what keeps an open endpoint
 /// from being able to create anything that can log in.
 model InviteLead {
-  id           String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  fullName     String           @map("full_name")
-  companyName  String           @map("company_name")
-  email        String
+  id                String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  fullName          String             @map("full_name")
+  companyName       String             @map("company_name")
+  email             String
   /// E.164 where the form could coerce it; kept as typed otherwise, so
   /// a lead is never rejected over a phone format.
-  phone        String
+  phone             String
   /// A second number in the other country. Sellers working this corridor
   /// routinely carry both a Bangladeshi and an Indian line, and the one
   /// that reaches them depends on which side they are standing on.
-  altPhone     String?          @map("alt_phone")
+  altPhone          String?            @map("alt_phone")
   /// Which way they want parcels to go. Null on leads captured before
   /// the question existed — absence is not the same as BD_TO_IN, and
   /// defaulting it would invent an answer nobody gave.
   shippingDirection ShippingDirection? @map("shipping_direction")
   /// What they sell, in their words.
-  productTypes String?          @map("product_types")
+  productTypes      String?            @map("product_types")
   /// Their own estimate of monthly volume — a free-text bucket, since a
   /// number nobody can hold us to is worth less than the phrase they
   /// chose.
-  monthlyOrders String?         @map("monthly_orders")
-  message      String?          @db.Text
+  monthlyOrders     String?            @map("monthly_orders")
+  message           String?            @db.Text
 
-  status       InviteLeadStatus @default(NEW)
+  status            InviteLeadStatus @default(NEW)
   /// Internal, never shown to the lead.
-  notes        String?          @db.Text
-  contactedAt  DateTime?        @map("contacted_at") @db.Timestamptz
+  notes             String?          @db.Text
+  contactedAt       DateTime?        @map("contacted_at") @db.Timestamptz
   /// Set when the lead becomes a seller, so "where did this account come
   /// from" has an answer a year later.
-  convertedSellerId String?     @map("converted_seller_id") @db.Uuid
+  convertedSellerId String?          @map("converted_seller_id") @db.Uuid
 
   /// How many times this address has submitted. A second attempt updates
   /// the row instead of adding a duplicate — someone impatient should
   /// not become two entries in the queue.
-  submissionCount Int           @default(1) @map("submission_count")
+  submissionCount Int @default(1) @map("submission_count")
 
   /// For triaging a flood. Never shown in the list.
-  ipAddress    String?          @map("ip_address") @db.Inet
-  userAgent    String?          @map("user_agent")
+  ipAddress String? @map("ip_address") @db.Inet
+  userAgent String? @map("user_agent")
 
-  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  convertedSeller Seller?       @relation("InviteLeadConvertedSeller", fields: [convertedSellerId], references: [id])
+  convertedSeller Seller? @relation("InviteLeadConvertedSeller", fields: [convertedSellerId], references: [id])
 
   /// One row per address. The upsert key.
   @@unique([email])

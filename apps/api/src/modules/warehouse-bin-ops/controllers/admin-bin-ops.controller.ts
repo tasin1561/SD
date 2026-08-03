@@ -10,7 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { StaffRole } from '@skydrop/db';
+
 import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
 import {
   ClientInfo,
@@ -19,7 +19,6 @@ import {
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
-import { requireStaffRoles } from '../../../common/auth/require-staff-roles';
 import {
   BinCollapseService,
   type CollapseResult,
@@ -36,6 +35,7 @@ import {
   MoveWholeBinDto,
   RequestBinCollapseDto,
 } from '../dto/bin-ops.dto';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -51,6 +51,7 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('warehouse.view')
 @Controller('admin/warehouses/:warehouseId/bin-ops')
 export class AdminBinOpsController {
   constructor(
@@ -61,6 +62,7 @@ export class AdminBinOpsController {
   // ── re-shelving ───────────────────────────────────────────────────
 
   @Post('move-bin/:sourceBinId')
+  @RequirePermissions('warehouse.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -73,11 +75,11 @@ export class AdminBinOpsController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<BulkTransferResult> {
-    requireStaffRoles(staff, [StaffRole.WAREHOUSE_SUPERVISOR, StaffRole.SUPER_ADMIN]);
     return this.bulk.moveWholeBin(warehouseId, sourceBinId, body.destBinId, staff.id, ctx);
   }
 
   @Post('bulk-transfer')
+  @RequirePermissions('warehouse.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -89,13 +91,13 @@ export class AdminBinOpsController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<BulkTransferResult> {
-    requireStaffRoles(staff, [StaffRole.WAREHOUSE_SUPERVISOR, StaffRole.SUPER_ADMIN]);
     return this.bulk.moveLines(warehouseId, body.lines, staff.id, ctx);
   }
 
   // ── collapse ──────────────────────────────────────────────────────
 
   @Post('collapse/request')
+  @RequirePermissions('warehouse.bins.collapse')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -107,11 +109,11 @@ export class AdminBinOpsController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<RequestCollapseResult> {
-    requireStaffRoles(staff, [StaffRole.SUPER_ADMIN]);
     return this.collapse.requestCollapse(warehouseId, staff.id, body.reason, ctx);
   }
 
   @Post('collapse/confirm')
+  @RequirePermissions('warehouse.bins.collapse')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -123,7 +125,6 @@ export class AdminBinOpsController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<CollapseResult> {
-    requireStaffRoles(staff, [StaffRole.SUPER_ADMIN]);
     return this.collapse.confirmCollapse(warehouseId, staff.id, body, ctx);
   }
 
@@ -131,10 +132,7 @@ export class AdminBinOpsController {
 
   @Get('snapshots')
   @ApiOperation({ summary: 'Bin layout backups for this warehouse, newest first' })
-  async listSnapshots(
-    @Param('warehouseId', uuid()) warehouseId: string,
-    @CurrentStaff() staff: AuthenticatedStaff,
-  ): Promise<
+  async listSnapshots(@Param('warehouseId', uuid()) warehouseId: string): Promise<
     Array<{
       id: string;
       reason: string;
@@ -145,11 +143,11 @@ export class AdminBinOpsController {
       createdAt: Date;
     }>
   > {
-    requireStaffRoles(staff, [StaffRole.WAREHOUSE_SUPERVISOR, StaffRole.SUPER_ADMIN]);
     return this.collapse.listSnapshots(warehouseId);
   }
 
   @Post('snapshots/:snapshotId/restore')
+  @RequirePermissions('warehouse.bins.collapse')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -160,7 +158,6 @@ export class AdminBinOpsController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<RestoreResult> {
-    requireStaffRoles(staff, [StaffRole.SUPER_ADMIN]);
     return this.collapse.restore(snapshotId, staff.id, ctx);
   }
 }

@@ -11,8 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { StaffRole } from '@skydrop/db';
-import { requireStaffRoles } from '../../../common/auth/require-staff-roles';
+
 import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
 import {
   ClientInfo,
@@ -27,6 +26,7 @@ import {
   type ReconciliationReport,
   type SettlementView,
 } from '../services/courier-settlement.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /**
  * R2c admin surface — the inbound half of the COD loop.
@@ -40,11 +40,13 @@ import {
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('money.view')
 @Controller('admin/courier-settlements')
 export class AdminCourierSettlementController {
   constructor(private readonly svc: CourierSettlementService) {}
 
   @Post()
+  @RequirePermissions('money.settlements.record')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary:
@@ -55,7 +57,6 @@ export class AdminCourierSettlementController {
     @Body() body: RecordSettlementDto,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<SettlementView> {
-    requireStaffRoles(staff, [StaffRole.FINANCE, StaffRole.SUPER_ADMIN]);
     return this.svc.record(
       staff.id,
       {
@@ -74,11 +75,9 @@ export class AdminCourierSettlementController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Recorded payouts, newest first' })
   list(
-    @CurrentStaff() staff: AuthenticatedStaff,
     @Query('courierAccountId') courierAccountId?: string,
     @Query('limit') limit?: string,
   ): Promise<readonly SettlementView[]> {
-    requireStaffRoles(staff, [StaffRole.FINANCE, StaffRole.SUPER_ADMIN]);
     return this.svc.list({
       ...(courierAccountId === undefined ? {} : { courierAccountId }),
       ...(limit === undefined ? {} : { limit: Number(limit) }),
@@ -91,11 +90,7 @@ export class AdminCourierSettlementController {
     summary:
       'The float report: COD owed on delivered orders no payout covers yet, how much of it is overdue, and which orders a payout under-paid. Read-only — a short-payment is a conversation with the courier, never a clawback from the seller.',
   })
-  reconciliation(
-    @CurrentStaff() staff: AuthenticatedStaff,
-    @Query() query: ReconciliationQueryDto,
-  ): Promise<ReconciliationReport> {
-    requireStaffRoles(staff, [StaffRole.FINANCE, StaffRole.SUPER_ADMIN]);
+  reconciliation(@Query() query: ReconciliationQueryDto): Promise<ReconciliationReport> {
     return this.svc.reconciliation(
       query.overdueAfterDays === undefined ? {} : { overdueAfterDays: query.overdueAfterDays },
     );
@@ -105,11 +100,9 @@ export class AdminCourierSettlementController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'One payout with its per-order allocation' })
   getById(
-    @CurrentStaff() staff: AuthenticatedStaff,
     @Param('settlementId', new ParseUUIDPipe({ version: '7' }))
     settlementId: string,
   ): Promise<SettlementView> {
-    requireStaffRoles(staff, [StaffRole.FINANCE, StaffRole.SUPER_ADMIN]);
     return this.svc.getById(settlementId);
   }
 }

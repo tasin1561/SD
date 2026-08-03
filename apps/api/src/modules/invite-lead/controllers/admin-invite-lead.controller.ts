@@ -11,14 +11,14 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ParseUUIDPipe } from '@nestjs/common';
-import { StaffRole } from '@skydrop/db';
-import { requireStaffRoles } from '../../../common/auth/require-staff-roles';
+
 import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import { ListInviteLeadsQueryDto, UpdateInviteLeadDto } from '../dto/invite-lead.dto';
 import { InviteLeadService, type LeadView } from '../services/invite-lead.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /**
  * The leads queue.
@@ -31,6 +31,7 @@ import { InviteLeadService, type LeadView } from '../services/invite-lead.servic
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('leads.view')
 @Controller('admin/invite-leads')
 export class AdminInviteLeadController {
   constructor(private readonly leads: InviteLeadService) {}
@@ -38,15 +39,12 @@ export class AdminInviteLeadController {
   @Get()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'List invite requests, newest first' })
-  list(
-    @CurrentStaff() staff: AuthenticatedStaff,
-    @Query() query: ListInviteLeadsQueryDto,
-  ): ReturnType<InviteLeadService['list']> {
-    requireStaffRoles(staff, [StaffRole.SUPER_ADMIN, StaffRole.SELLER_APPROVAL_ADMIN]);
+  list(@Query() query: ListInviteLeadsQueryDto): ReturnType<InviteLeadService['list']> {
     return this.leads.list(query);
   }
 
   @Patch(':id')
+  @RequirePermissions('leads.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Move a lead along, and record what was said' })
   update(
@@ -54,7 +52,6 @@ export class AdminInviteLeadController {
     @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
     @Body() body: UpdateInviteLeadDto,
   ): Promise<LeadView> {
-    requireStaffRoles(staff, [StaffRole.SUPER_ADMIN, StaffRole.SELLER_APPROVAL_ADMIN]);
     return this.leads.update(id, body, staff.id);
   }
 }

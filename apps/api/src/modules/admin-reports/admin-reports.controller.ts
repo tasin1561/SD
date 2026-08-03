@@ -5,11 +5,13 @@ import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../common/types/request';
 import { ReportsService, type ReportSummary } from './services/reports.service';
+import { RequirePermissions } from '../../common/auth/require-permissions.decorator';
 
 @ApiTags('admin-reports')
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('reports.view')
 @Controller('admin/reports')
 export class AdminReportsController {
   constructor(private readonly svc: ReportsService) {}

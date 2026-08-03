@@ -28,6 +28,7 @@ import {
   ScrollText,
   Send,
   Settings,
+  KeyRound,
   ShieldCheck,
   Store,
   Truck,
@@ -36,6 +37,8 @@ import {
   Warehouse,
   Webhook,
 } from 'lucide-react';
+import { canSeePath } from '@/lib/page-access';
+import { PermissionBoundary } from './permission-boundary';
 
 /**
  * The admin shell.
@@ -76,7 +79,13 @@ export function AuthedShell({
   //
   // Icons earn their place in the mobile drawer, where the nav is the
   // whole screen and a column of same-length labels is slow to scan.
-  const navGroups: NavGroup[] = [
+  //
+  // FILTERED BY PERMISSION. A link to a page that answers "not part of
+  // your access" is worse than no link: it reads as something broken
+  // rather than something deliberate. A group whose every item is hidden
+  // disappears with them — an empty "Money" heading is a list of what
+  // you are not allowed to do.
+  const allGroups: NavGroup[] = [
     {
       heading: 'Operations',
       items: [
@@ -130,11 +139,16 @@ export function AuthedShell({
         { href: '/reports', label: 'Reports', icon: <BarChart3 size={15} /> },
         { href: '/webhooks', label: 'Webhooks', icon: <Webhook size={15} /> },
         { href: '/staff', label: 'Staff', icon: <ShieldCheck size={15} /> },
+        { href: '/roles', label: 'Roles', icon: <KeyRound size={15} /> },
         { href: '/system/capacity', label: 'System limits', icon: <Activity size={15} /> },
         { href: '/settings', label: 'Settings', icon: <Settings size={15} /> },
       ],
     },
   ];
+
+  const navGroups: NavGroup[] = allGroups
+    .map((g) => ({ ...g, items: g.items.filter((i) => canSeePath(identity, i.href)) }))
+    .filter((g) => g.items.length > 0);
 
   return (
     <Toaster>
@@ -143,7 +157,7 @@ export function AuthedShell({
         sectionLabel="Staff console"
         navGroups={navGroups}
         identityPrimary={identity.emailDisplay}
-        identitySecondary={identity.role}
+        identitySecondary={identity.roleName}
         footerNote="Phase 1A"
         pathname={pathname}
         Link={Link}
@@ -152,7 +166,7 @@ export function AuthedShell({
         }}
         signingOut={loggingOut}
       >
-        {children}
+        <PermissionBoundary permissions={identity.permissions}>{children}</PermissionBoundary>
       </AppShell>
     </Toaster>
   );

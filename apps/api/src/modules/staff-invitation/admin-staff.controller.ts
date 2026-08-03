@@ -16,11 +16,11 @@ import { StaffRole } from '@skydrop/db';
 import { CurrentStaff } from '../../common/decorators/current-staff.decorator';
 import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/client-info.decorator';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
-import { requireStaffRoles } from '../../common/auth/require-staff-roles';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../common/types/request';
 import { CreateStaffInvitationDto } from './dto/create-staff-invitation.dto';
 import { StaffInvitationService } from './services/staff-invitation.service';
+import { RequirePermissions } from '../../common/auth/require-permissions.decorator';
 
 /**
  * Admin staff management — invitations + active staff list +
@@ -30,6 +30,7 @@ import { StaffInvitationService } from './services/staff-invitation.service';
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('staff.view')
 @Controller('admin/staff')
 export class AdminStaffController {
   constructor(private readonly svc: StaffInvitationService) {}
@@ -37,6 +38,7 @@ export class AdminStaffController {
   // ── Invitations ────────────────────────────────────────────────────
 
   @Post('invitations')
+  @RequirePermissions('staff.manage')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Invite a new staff member (SUPER_ADMIN only)' })
   createInvitation(
@@ -44,19 +46,18 @@ export class AdminStaffController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ) {
-    requireStaffRoles(staff, [StaffRole.SUPER_ADMIN]);
     return this.svc.create(body, { staffId: staff.id }, ctx);
   }
 
   @Get('invitations')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'List staff invitations' })
-  listInvitations(@CurrentStaff() staff: AuthenticatedStaff) {
-    requireStaffRoles(staff, [StaffRole.SUPER_ADMIN]);
+  listInvitations() {
     return this.svc.list();
   }
 
   @Post('invitations/:id/resend')
+  @RequirePermissions('staff.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Rotate the token + re-issue the invitation link' })
   resendInvitation(
@@ -64,11 +65,11 @@ export class AdminStaffController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ) {
-    requireStaffRoles(staff, [StaffRole.SUPER_ADMIN]);
     return this.svc.resend(id, { staffId: staff.id }, ctx);
   }
 
   @Delete('invitations/:id')
+  @RequirePermissions('staff.manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Revoke a pending invitation' })
   async revokeInvitation(
@@ -76,7 +77,6 @@ export class AdminStaffController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<void> {
-    requireStaffRoles(staff, [StaffRole.SUPER_ADMIN]);
     await this.svc.softDelete(id, { staffId: staff.id }, ctx);
   }
 
@@ -85,12 +85,12 @@ export class AdminStaffController {
   @Get('users')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'List all staff users (active + deactivated)' })
-  listStaff(@CurrentStaff() staff: AuthenticatedStaff) {
-    requireStaffRoles(staff, [StaffRole.SUPER_ADMIN]);
+  listStaff() {
     return this.svc.listStaff();
   }
 
   @Patch('users/:id/role')
+  @RequirePermissions('staff.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Change a staff member’s role' })
   updateRole(
@@ -99,11 +99,11 @@ export class AdminStaffController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ) {
-    requireStaffRoles(staff, [StaffRole.SUPER_ADMIN]);
     return this.svc.updateRole(id, body.role, { staffId: staff.id }, ctx);
   }
 
   @Delete('users/:id')
+  @RequirePermissions('staff.manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Deactivate a staff user (soft-delete)' })
   async deactivate(
@@ -111,7 +111,6 @@ export class AdminStaffController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<void> {
-    requireStaffRoles(staff, [StaffRole.SUPER_ADMIN]);
     await this.svc.deactivate(id, { staffId: staff.id }, ctx);
   }
 }

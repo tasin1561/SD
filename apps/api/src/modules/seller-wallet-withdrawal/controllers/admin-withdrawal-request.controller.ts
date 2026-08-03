@@ -23,6 +23,7 @@ import {
   WithdrawalRequestService,
   type WithdrawalRequestView,
 } from '../services/withdrawal-request.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /**
  * Admin surface for resolving withdrawal requests (R2). RBAC is
@@ -35,6 +36,7 @@ import {
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('money.view')
 @Controller('admin/withdrawal-requests')
 export class AdminWithdrawalRequestController {
   constructor(private readonly svc: WithdrawalRequestService) {}
@@ -62,6 +64,7 @@ export class AdminWithdrawalRequestController {
   }
 
   @Patch(':requestId/paid')
+  @RequirePermissions('money.withdrawals.review')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -76,6 +79,7 @@ export class AdminWithdrawalRequestController {
   }
 
   @Patch(':requestId/reject')
+  @RequirePermissions('money.withdrawals.review')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reject a pending withdrawal request' })
   reject(

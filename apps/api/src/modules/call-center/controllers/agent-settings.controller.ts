@@ -10,6 +10,7 @@ import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import { UpdateAgentSettingsDto } from '../dto/update-agent-settings.dto';
 import { AgentSettingsService, type AgentSettingsView } from '../services/agent-settings.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /**
  * Agent self-service for their own call settings (locked decision 10c).
@@ -22,6 +23,7 @@ import { AgentSettingsService, type AgentSettingsView } from '../services/agent-
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('callcenter.work')
 @Controller('agent/settings')
 export class AgentSettingsController {
   constructor(private readonly svc: AgentSettingsService) {}

@@ -9,7 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { StaffRole } from '@skydrop/db';
+
 import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
 import {
   ClientInfo,
@@ -18,13 +18,13 @@ import {
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
-import { requireStaffRoles } from '../../../common/auth/require-staff-roles';
 import {
   ManualPlacementService,
   type ManualCancelResult,
   type ManualPlacementResult,
 } from '../services/manual-placement.service';
 import { CancelUnfulfillableDto, PlaceManualAwbDto } from '../dto/manual-placement.dto';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /**
  * Module 9 — manual courier placement endpoints (commit 14, CUR-8).
@@ -32,12 +32,13 @@ import { CancelUnfulfillableDto, PlaceManualAwbDto } from '../dto/manual-placeme
  * For shipments Delhivery could not carry (auto-superseded → order in
  * PENDING_MANUAL_PLACEMENT). A MANUAL_PLACEMENT_ADMIN (or SUPER_ADMIN)
  * records the manually-arranged courier AWB, or cancels an order no
- * courier can fulfil. RBAC gated inline via `requireStaffRoles`.
+ * courier can fulfil. RBAC: `courier.manual_placement` (CUR-8).
  */
 @ApiTags('admin-courier-manual-placement')
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('courier.manual_placement')
 @Controller('admin/courier/manual-placement')
 export class ManualPlacementController {
   constructor(private readonly svc: ManualPlacementService) {}
@@ -55,7 +56,6 @@ export class ManualPlacementController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<ManualPlacementResult> {
-    requireStaffRoles(staff, [StaffRole.MANUAL_PLACEMENT_ADMIN, StaffRole.SUPER_ADMIN]);
     return this.svc.placeAwb(
       shipmentId,
       {
@@ -81,7 +81,6 @@ export class ManualPlacementController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<ManualCancelResult> {
-    requireStaffRoles(staff, [StaffRole.MANUAL_PLACEMENT_ADMIN, StaffRole.SUPER_ADMIN]);
     return this.svc.cancelUnfulfillable(shipmentId, body.reason, staff.id, ctx);
   }
 }

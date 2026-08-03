@@ -21,12 +21,41 @@ import { vi } from 'vitest';
  * No mocked hooks, no faked errors.
  */
 
-export function makeStaff(role: StaffRole = 'SUPER_ADMIN' as StaffRole): StaffMe {
+/**
+ * Every permission, as the fixture's default. The real catalogue lives
+ * in the API and is served at runtime; duplicating all 68 keys here
+ * would be a second list to keep in step for no benefit, since these
+ * tests are about components rather than about which keys exist.
+ */
+const ALL_TEST_PERMISSIONS: readonly string[] = [
+  'orders.view',
+  'orders.cancel',
+  'orders.override',
+  'orders.charges.view',
+  'orders.charges.compute',
+  'sellers.view',
+  'sellers.approve',
+  'sellers.suspend',
+  'staff.view',
+  'staff.manage',
+  'rbac.manage',
+];
+
+export function makeStaff(
+  role: StaffRole = 'SUPER_ADMIN' as StaffRole,
+  permissions?: readonly string[],
+): StaffMe {
   return {
     id: 'staff-1',
     email: 't@example.com',
     emailDisplay: 't@example.com',
     role,
+    roleKey: role.toLowerCase(),
+    roleName: role,
+    // Defaults to a super admin's whole catalogue, so a test about
+    // something else is not silently gated by a permission it never
+    // meant to exercise. Pass a list to test the gating itself.
+    permissions: permissions ?? ALL_TEST_PERMISSIONS,
     emailVerifiedAt: '2026-01-01T00:00:00.000Z',
     lastLoginAt: '2026-01-01T00:00:00.000Z',
     createdAt: '2026-01-01T00:00:00.000Z',

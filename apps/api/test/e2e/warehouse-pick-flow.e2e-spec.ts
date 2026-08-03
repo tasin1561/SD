@@ -286,7 +286,7 @@ describe('Warehouse pick flow (e2e)', () => {
     expect(resvs[0]!.binId).toBeNull(); // collapsed back to phase-1
   });
 
-  it('supervisor force-expire: 403 INSUFFICIENT_ROLE when role lacks supervisor/super_admin', async () => {
+  it('supervisor force-expire: 403 when the role lacks warehouse.pick.supervise', async () => {
     const agent = await createTestStaff(h.prisma, {
       role: StaffRole.CALL_AGENT,
     });
@@ -304,6 +304,10 @@ describe('Warehouse pick flow (e2e)', () => {
       .post(`/admin/warehouse/picks/${shipmentId}/expire`)
       .set(agentAuth)
       .expect(403);
-    expect(denied.body.code).toBe('INSUFFICIENT_ROLE');
+    // The refusal is now about a PERMISSION rather than a role name — a
+    // call agent does not hold `warehouse.pick.supervise`. Same 403, and
+    // it now also covers a custom role that was never given it, which a
+    // check against the role name could not have seen.
+    expect(denied.body.code).toBe('INSUFFICIENT_PERMISSION');
   });
 });

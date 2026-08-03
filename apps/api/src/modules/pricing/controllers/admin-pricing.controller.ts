@@ -7,11 +7,13 @@ import {
   PricingEngineService,
   type PricingComputeOutput,
 } from '../services/pricing-engine.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 @ApiTags('admin-pricing')
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('pricing.preview')
 @Controller('admin/pricing')
 export class AdminPricingController {
   constructor(private readonly engine: PricingEngineService) {}

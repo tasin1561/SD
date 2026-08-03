@@ -25,6 +25,7 @@ import {
   StockAdjustmentService,
   type StockAdjustmentView,
 } from './services/stock-adjustment.service';
+import { RequirePermissions } from '../../common/auth/require-permissions.decorator';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -37,11 +38,13 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('inventory.view')
 @Controller('admin/stock-adjustments')
 export class AdminStockAdjustmentController {
   constructor(private readonly svc: StockAdjustmentService) {}
 
   @Post()
+  @RequirePermissions('inventory.adjustments.create')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Initiate an adjustment; auto-executes if below the approval threshold',
@@ -69,6 +72,7 @@ export class AdminStockAdjustmentController {
   }
 
   @Post(':id/approve')
+  @RequirePermissions('inventory.adjustments.approve')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Approve a PENDING adjustment (enqueues the executor)' })
   approve(
@@ -80,6 +84,7 @@ export class AdminStockAdjustmentController {
   }
 
   @Post(':id/reject')
+  @RequirePermissions('inventory.adjustments.approve')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reject a PENDING adjustment' })
   reject(

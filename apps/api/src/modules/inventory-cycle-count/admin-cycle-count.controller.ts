@@ -22,6 +22,7 @@ import {
   ScheduleCycleCountDto,
 } from './dto/cycle-count.dto';
 import { CycleCountService, type CycleCountView } from './services/cycle-count.service';
+import { RequirePermissions } from '../../common/auth/require-permissions.decorator';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -33,6 +34,7 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('inventory.view')
 @Controller('admin/cycle-counts')
 export class AdminCycleCountController {
   constructor(private readonly svc: CycleCountService) {}
@@ -46,6 +48,7 @@ export class AdminCycleCountController {
   }
 
   @Post()
+  @RequirePermissions('inventory.cycle_counts.manage')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Schedule a cycle count' })
   schedule(
@@ -63,6 +66,7 @@ export class AdminCycleCountController {
   }
 
   @Post(':id/start')
+  @RequirePermissions('inventory.cycle_counts.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'SCHEDULED -> IN_PROGRESS' })
   start(
@@ -74,6 +78,7 @@ export class AdminCycleCountController {
   }
 
   @Post(':id/items')
+  @RequirePermissions('inventory.cycle_counts.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Record counted items (IN_PROGRESS); systemQty snapshotted now' })
   recordItems(
@@ -86,6 +91,7 @@ export class AdminCycleCountController {
   }
 
   @Post(':id/complete')
+  @RequirePermissions('inventory.cycle_counts.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'IN_PROGRESS -> COMPLETED; one PENDING CYCLE_COUNT adjustment per discrepancy',

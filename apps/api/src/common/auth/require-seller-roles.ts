@@ -3,7 +3,10 @@ import type { SellerUserRole } from '@skydrop/db';
 import type { AuthenticatedSeller } from '../types/request';
 
 /**
- * Inline RBAC gate for seller endpoints (mirrors requireStaffRoles).
+ * Inline RBAC gate for seller endpoints. The STAFF side moved to
+ * declared permissions (see permissions.ts); sellers keep a fixed role
+ * enum deliberately — a seller's team roles are a product feature with
+ * six defined shapes, not something each company composes.
  *
  * Phase 1B introduces SellerUser RBAC. The session's `role` is checked
  * against the `allowed` list at the controller layer. OWNER is NOT

@@ -18,6 +18,7 @@ import { AppModule } from '../../src/app.module';
 import { AllExceptionsFilter } from '../../src/common/filters/all-exceptions.filter';
 import { NotificationListener } from '../../src/modules/notifications/services/notification-listener.service';
 import { OrderConfirmedAwbListener } from '../../src/modules/courier-awb/services/order-confirmed-awb-listener.service';
+import { staffRoleKeyForEnum } from '../../src/common/auth/staff-role-key';
 
 export interface AppHarness {
   app: NestExpressApplication;
@@ -432,7 +433,13 @@ export async function createTestStaff(
     parallelism: 1,
   });
   const staff = await prisma.staffUser.create({
-    data: { email: email.toLowerCase(), emailDisplay: email, passwordHash, role },
+    data: {
+      email: email.toLowerCase(),
+      emailDisplay: email,
+      passwordHash,
+      role,
+      staffRole: { connect: { key: staffRoleKeyForEnum(role) } },
+    },
   });
   return { id: staff.id, email: staff.email, role, password };
 }

@@ -26,6 +26,7 @@ import {
   type AgentListRow,
   type AgentMetrics,
 } from '../services/admin-agent.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /**
  * Admin views/controls over call agents (decision 11). Settings WRITES
@@ -37,6 +38,7 @@ import {
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('callcenter.queue.view')
 @Controller('admin/agents')
 export class AdminAgentController {
   constructor(
@@ -69,6 +71,7 @@ export class AdminAgentController {
   }
 
   @Patch(':staffUserId/settings')
+  @RequirePermissions('callcenter.agents.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Admin edits any agent setting (incl. the 10a cap)' })
   updateSettings(

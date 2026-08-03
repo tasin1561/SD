@@ -28,6 +28,7 @@ import {
   ScanIntoPackBoxDto,
 } from '../dto/pack-box.dto';
 import { PackBoxService, type OpenBoxResult, type ScanResult } from '../services/pack-box.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /**
  * Packer workflow (pull → complete). Staff JWT only — packer role
@@ -42,6 +43,7 @@ import { PackBoxService, type OpenBoxResult, type ScanResult } from '../services
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('warehouse.pack')
 @Controller('warehouse/packs')
 export class PackerController {
   constructor(

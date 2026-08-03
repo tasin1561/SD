@@ -19,17 +19,20 @@ import {
   type SystemSettingFull,
   type SystemSettingsCategoryGroup,
 } from '../services/system-settings.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /**
  * Admin system-settings endpoints (Module 14). RBAC is currently
- * StaffJwtGuard-only (the broader requireStaffRoles sweep is a M12
- * fast-follow); the service layer is the actual integrity boundary
- * (audit log + isEditableByAdmin gate).
+ * `system.settings.view` to read, `system.settings.manage` to write.
+ * The service layer remains an integrity boundary of its own (audit log
+ * + isEditableByAdmin gate) — one value here changes behaviour for every
+ * seller at once.
  */
 @ApiTags('admin-system-settings')
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('system.settings.view')
 @Controller('admin/system-settings')
 export class AdminSystemSettingsController {
   constructor(private readonly svc: SystemSettingsService) {}
@@ -51,6 +54,7 @@ export class AdminSystemSettingsController {
   }
 
   @Patch(':key')
+  @RequirePermissions('system.settings.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:

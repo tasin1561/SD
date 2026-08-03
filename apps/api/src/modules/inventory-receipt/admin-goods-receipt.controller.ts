@@ -23,6 +23,7 @@ import {
 } from './dto/admin-goods-receipt.dto';
 import { ResolveDiscrepancyDto } from './dto/resolve-discrepancy.dto';
 import { GoodsReceiptService, type GoodsReceiptView } from './services/goods-receipt.service';
+import { RequirePermissions } from '../../common/auth/require-permissions.decorator';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -35,6 +36,7 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('inventory.view')
 @Controller('admin/goods-receipts')
 export class AdminGoodsReceiptController {
   constructor(private readonly svc: GoodsReceiptService) {}
@@ -54,6 +56,7 @@ export class AdminGoodsReceiptController {
   }
 
   @Post(':id/start-receiving')
+  @RequirePermissions('inventory.goods_receipts.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'PENDING -> ARRIVING; marks the receiving staff' })
   startReceiving(
@@ -65,6 +68,7 @@ export class AdminGoodsReceiptController {
   }
 
   @Post(':id/lines')
+  @RequirePermissions('inventory.goods_receipts.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Record actual received/damaged counts + putaway bins (ARRIVING)' })
   recordLines(
@@ -77,6 +81,7 @@ export class AdminGoodsReceiptController {
   }
 
   @Post(':id/complete')
+  @RequirePermissions('inventory.goods_receipts.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -92,6 +97,7 @@ export class AdminGoodsReceiptController {
   }
 
   @Post(':id/resolve-discrepancy')
+  @RequirePermissions('inventory.goods_receipts.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Resolve a DISCREPANCY receipt by correction or force-complete -> COMPLETED',

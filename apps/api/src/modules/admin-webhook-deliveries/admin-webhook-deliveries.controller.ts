@@ -21,6 +21,7 @@ import type { AuthenticatedStaff } from '../../common/types/request';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../auth-common/services/audit-log.service';
 import { OutboundWebhookQueue } from '../seller-webhook-delivery/queue/outbound-webhook.queue';
+import { RequirePermissions } from '../../common/auth/require-permissions.decorator';
 
 interface DeliveryView {
   readonly id: string;
@@ -52,6 +53,7 @@ interface DeliveryView {
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('webhooks.view')
 @Controller('admin/webhook-deliveries')
 export class AdminWebhookDeliveriesController {
   constructor(
@@ -139,6 +141,7 @@ export class AdminWebhookDeliveriesController {
   }
 
   @Post(':id/retry')
+  @RequirePermissions('webhooks.retry')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({
     summary:

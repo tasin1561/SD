@@ -9,14 +9,14 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { StaffRole } from '@skydrop/db';
+
 import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
-import { requireStaffRoles } from '../../../common/auth/require-staff-roles';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import { ManualTrackingService, type ManualScanOutcome } from '../services/manual-tracking.service';
 import { RecordManualScanDto } from '../dto/record-manual-scan.dto';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /**
  * Module 10 (TRK-9) — manual scan recording for manual-courier
@@ -27,13 +27,14 @@ import { RecordManualScanDto } from '../dto/record-manual-scan.dto';
  * record handoff confirmations without bouncing to a separate role.
  *
  * Endpoint: POST /admin/tracking/shipments/:shipmentId/manual-scan.
- * RBAC inline via requireStaffRoles. ThrottleKey('auth-user') so the
- * rate limit applies per staff user.
+ * RBAC: `orders.tracking.manual_scan` (TRK-9). ThrottleKey('auth-user')
+ * so the rate limit applies per staff user.
  */
 @ApiTags('admin-tracking-manual')
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('orders.tracking.manual_scan')
 @Controller('admin/tracking')
 export class AdminManualTrackingController {
   constructor(private readonly svc: ManualTrackingService) {}
@@ -50,11 +51,6 @@ export class AdminManualTrackingController {
     @Body() body: RecordManualScanDto,
     @CurrentStaff() staff: AuthenticatedStaff,
   ): Promise<ManualScanOutcome> {
-    requireStaffRoles(staff, [
-      StaffRole.MANUAL_PLACEMENT_ADMIN,
-      StaffRole.WAREHOUSE_SUPERVISOR,
-      StaffRole.SUPER_ADMIN,
-    ]);
     return this.svc.recordScan(
       shipmentId,
       {

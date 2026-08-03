@@ -11,8 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { StaffRole } from '@skydrop/db';
-import { requireStaffRoles } from '../../../common/auth/require-staff-roles';
+
 import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
 import {
   ClientInfo,
@@ -27,18 +26,20 @@ import {
   WaiveInboundFreightDto,
 } from '../dto/inbound-freight.dto';
 import { InboundFreightService, type FreightChargeView } from '../services/inbound-freight.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /**
  * R3 admin surface — recording and resolving the BD→India freight bill.
  *
- * RBAC is enforced INSIDE each handler via `requireStaffRoles` (the M9
- * pattern): recording and settling move money, so they are limited to
- * finance/super-admin rather than any authenticated staff member.
+ * RBAC: reading is `money.view`; recording, settling and waiving move
+ * money and are `money.freight.manage`. FRT-2 keeps this separable from
+ * the outbound courier fee, and the permission split mirrors that.
  */
 @ApiTags('admin-inbound-freight')
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('money.view')
 @Controller('admin/inbound-freight')
 export class AdminInboundFreightController {
   constructor(private readonly svc: InboundFreightService) {}
@@ -54,6 +55,7 @@ export class AdminInboundFreightController {
   }
 
   @Post()
+  @RequirePermissions('money.freight.manage')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary:
@@ -64,7 +66,6 @@ export class AdminInboundFreightController {
     @Body() body: RecordInboundFreightDto,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<FreightChargeView> {
-    requireStaffRoles(staff, [StaffRole.FINANCE, StaffRole.SUPER_ADMIN]);
     return this.svc.record(
       staff.id,
       {
@@ -78,6 +79,7 @@ export class AdminInboundFreightController {
   }
 
   @Post(':freightChargeId/settle')
+  @RequirePermissions('money.freight.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -89,11 +91,11 @@ export class AdminInboundFreightController {
     freightChargeId: string,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<FreightChargeView> {
-    requireStaffRoles(staff, [StaffRole.FINANCE, StaffRole.SUPER_ADMIN]);
     return this.svc.settle(staff.id, freightChargeId, ctx);
   }
 
   @Post(':freightChargeId/waive')
+  @RequirePermissions('money.freight.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -106,7 +108,6 @@ export class AdminInboundFreightController {
     @Body() body: WaiveInboundFreightDto,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<FreightChargeView> {
-    requireStaffRoles(staff, [StaffRole.FINANCE, StaffRole.SUPER_ADMIN]);
     return this.svc.waive(staff.id, freightChargeId, body.reason, ctx);
   }
 }

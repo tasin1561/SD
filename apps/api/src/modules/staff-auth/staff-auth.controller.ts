@@ -33,6 +33,7 @@ import {
 } from './dto/password-reset.dto';
 import { StaffEmailVerificationConfirmDto } from './dto/email-verification.dto';
 import { StaffAuthService } from './staff-auth.service';
+import { StaffSelfService } from '../../common/auth/require-permissions.decorator';
 
 interface AccessTokenResponse {
   accessToken: string;
@@ -41,6 +42,7 @@ interface AccessTokenResponse {
 }
 
 @ApiTags('auth-staff')
+@StaffSelfService()
 @Controller('auth/staff')
 @ThrottleKey('auth-user')
 export class StaffAuthController {

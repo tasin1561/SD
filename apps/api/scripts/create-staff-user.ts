@@ -12,6 +12,7 @@
  */
 import argon2 from 'argon2';
 import { prisma, StaffRole } from '@skydrop/db';
+import { staffRoleKeyForEnum } from '../src/common/auth/staff-role-key';
 
 async function main(): Promise<void> {
   const [, , emailArg, passwordArg, roleArg] = process.argv;
@@ -35,8 +36,19 @@ async function main(): Promise<void> {
 
   const staff = await prisma.staffUser.upsert({
     where: { email },
-    create: { email, emailDisplay: emailArg, passwordHash, role },
-    update: { emailDisplay: emailArg, passwordHash, role },
+    create: {
+      email,
+      emailDisplay: emailArg,
+      passwordHash,
+      role,
+      staffRole: { connect: { key: staffRoleKeyForEnum(role) } },
+    },
+    update: {
+      emailDisplay: emailArg,
+      passwordHash,
+      role,
+      staffRole: { connect: { key: staffRoleKeyForEnum(role) } },
+    },
     select: { id: true, email: true, role: true },
   });
 

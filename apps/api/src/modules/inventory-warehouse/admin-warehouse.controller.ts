@@ -32,6 +32,7 @@ import {
   type WarehouseView,
   type ZoneView,
 } from './services/inventory-warehouse.service';
+import { RequirePermissions } from '../../common/auth/require-permissions.decorator';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -43,6 +44,7 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('warehouse.view')
 @Controller('admin/warehouses')
 export class AdminWarehouseController {
   constructor(private readonly svc: InventoryWarehouseService) {}
@@ -56,6 +58,7 @@ export class AdminWarehouseController {
   }
 
   @Post()
+  @RequirePermissions('warehouse.manage')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a warehouse' })
   createWarehouse(
@@ -73,6 +76,7 @@ export class AdminWarehouseController {
   }
 
   @Patch(':id')
+  @RequirePermissions('warehouse.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update a warehouse (code is immutable)' })
   updateWarehouse(
@@ -85,6 +89,7 @@ export class AdminWarehouseController {
   }
 
   @Patch(':id/bin-tracking')
+  @RequirePermissions('warehouse.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Turn location tracking on/off for this warehouse (moves no stock)',
@@ -107,6 +112,7 @@ export class AdminWarehouseController {
   }
 
   @Post(':id/zones')
+  @RequirePermissions('warehouse.manage')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a zone in a warehouse' })
   createZone(
@@ -119,6 +125,7 @@ export class AdminWarehouseController {
   }
 
   @Patch(':id/zones/:zoneId')
+  @RequirePermissions('warehouse.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update a zone' })
   updateZone(
@@ -132,6 +139,7 @@ export class AdminWarehouseController {
   }
 
   @Delete(':id/zones/:zoneId')
+  @RequirePermissions('warehouse.manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Soft-delete a zone (must have no active bins)' })
   async deleteZone(
@@ -152,6 +160,7 @@ export class AdminWarehouseController {
   }
 
   @Post(':id/bins')
+  @RequirePermissions('warehouse.manage')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a bin in a warehouse' })
   createBin(
@@ -164,6 +173,7 @@ export class AdminWarehouseController {
   }
 
   @Patch(':id/bins/:binId')
+  @RequirePermissions('warehouse.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update a bin (may move it to another zone in the same warehouse)' })
   updateBin(
@@ -177,6 +187,7 @@ export class AdminWarehouseController {
   }
 
   @Delete(':id/bins/:binId')
+  @RequirePermissions('warehouse.manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Soft-delete a bin (must hold no stock or active reservations)' })
   async deleteBin(

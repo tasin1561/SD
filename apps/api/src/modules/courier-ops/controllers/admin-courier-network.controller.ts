@@ -10,8 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { StaffRole } from '@skydrop/db';
-import { requireStaffRoles } from '../../../common/auth/require-staff-roles';
+
 import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
 import {
   ClientInfo,
@@ -29,6 +28,7 @@ import {
   CourierWarehouseRegistrationService,
   type WarehouseRegistrationOutcome,
 } from '../services/courier-warehouse-registration.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 const DEFAULT_WINDOW_DAYS = 30;
 const DEFAULT_LIMIT = 25;
@@ -45,6 +45,7 @@ const DEFAULT_LIMIT = 25;
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('courier.ops.view')
 @Controller('admin/courier-ops')
 export class AdminCourierNetworkController {
   constructor(
@@ -53,18 +54,15 @@ export class AdminCourierNetworkController {
   ) {}
 
   @Get('margin-report')
+  @RequirePermissions('courier.margin.view')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
       'What we billed versus what Delhivery actually charged. SAMPLED — each row is a live rate-limited call, so the report states how many it priced and lists what it skipped. Never adjusts anything.',
   })
-  marginReport(
-    @CurrentStaff() staff: AuthenticatedStaff,
-    @Query() query: MarginReportQueryDto,
-  ): Promise<MarginReport> {
+  marginReport(@Query() query: MarginReportQueryDto): Promise<MarginReport> {
     // Real courier cost is commercially sensitive and this is a P&L
     // question, so it stops at finance and the top.
-    requireStaffRoles(staff, [StaffRole.FINANCE, StaffRole.SUPER_ADMIN]);
     const to = query.to === undefined ? new Date() : new Date(query.to);
     const from =
       query.from === undefined
@@ -78,6 +76,7 @@ export class AdminCourierNetworkController {
   }
 
   @Post('warehouses')
+  @RequirePermissions('courier.accounts.manage')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary:
@@ -88,11 +87,11 @@ export class AdminCourierNetworkController {
     @Body() body: RegisterCourierWarehouseDto,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<WarehouseRegistrationOutcome> {
-    requireStaffRoles(staff, [StaffRole.SUPER_ADMIN]);
     return this.warehouses.register(staff.id, { ...body }, ctx);
   }
 
   @Put('warehouses')
+  @RequirePermissions('courier.accounts.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -103,7 +102,6 @@ export class AdminCourierNetworkController {
     @Body() body: RegisterCourierWarehouseDto,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<WarehouseRegistrationOutcome> {
-    requireStaffRoles(staff, [StaffRole.SUPER_ADMIN, StaffRole.WAREHOUSE_SUPERVISOR]);
     return this.warehouses.update(staff.id, { ...body }, ctx);
   }
 }

@@ -1,12 +1,10 @@
 import { Controller, Get, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { StaffRole } from '@skydrop/db';
-import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
+
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
-import { requireStaffRoles } from '../../../common/auth/require-staff-roles';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
-import type { AuthenticatedStaff } from '../../../common/types/request';
 import { CapacityService, type CapacityReport } from '../services/capacity.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /**
  * The capacity monitor's data.
@@ -21,6 +19,7 @@ import { CapacityService, type CapacityReport } from '../services/capacity.servi
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('system.capacity.view')
 @Controller('admin/system')
 export class AdminCapacityController {
   constructor(private readonly capacity: CapacityService) {}
@@ -30,8 +29,7 @@ export class AdminCapacityController {
   @ApiOperation({
     summary: 'Live capacity: what is running out, how fast, and what to do about it',
   })
-  report(@CurrentStaff() staff: AuthenticatedStaff): Promise<CapacityReport> {
-    requireStaffRoles(staff, [StaffRole.SUPER_ADMIN]);
+  report(): Promise<CapacityReport> {
     return this.capacity.report();
   }
 }

@@ -20,6 +20,7 @@ import {
   type ResolvedSetting,
   type SellerSettingOverrideView,
 } from '../services/settings-resolver.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /**
  * Admin surface for the generic per-seller settings-override
@@ -31,6 +32,7 @@ import {
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('sellers.view')
 @Controller('admin/sellers/:sellerId/settings')
 export class AdminSellerSettingsController {
   constructor(private readonly svc: SettingsResolverService) {}
@@ -45,6 +47,7 @@ export class AdminSellerSettingsController {
   }
 
   @Patch(':key')
+  @RequirePermissions('sellers.settings.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -60,6 +63,7 @@ export class AdminSellerSettingsController {
   }
 
   @Delete(':key')
+  @RequirePermissions('sellers.settings.manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: "Clear a seller's override, reverting to the system default" })
   clearOverride(

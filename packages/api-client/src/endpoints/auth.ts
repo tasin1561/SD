@@ -19,7 +19,22 @@ export interface StaffMe {
   readonly id: string;
   readonly email: string;
   readonly emailDisplay: string;
+  /**
+   * LEGACY enum. No longer what authorisation is decided on — read
+   * `permissions`. Kept because the staff list and the invite form still
+   * display it.
+   */
   readonly role: StaffRole;
+  /** `staff_roles.key` — the role actually held, including custom ones. */
+  readonly roleKey: string;
+  /** Display name of that role. */
+  readonly roleName: string;
+  /**
+   * What this person may do. The UI hides what is not in here — a
+   * courtesy, not a control: FE-2 still holds and the server refuses
+   * regardless of what was rendered.
+   */
+  readonly permissions: readonly string[];
   readonly emailVerifiedAt: string | null;
   readonly lastLoginAt: string | null;
   readonly createdAt: string;

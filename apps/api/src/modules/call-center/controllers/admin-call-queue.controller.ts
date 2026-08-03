@@ -27,6 +27,7 @@ import {
 } from '../services/admin-call-queue.service';
 import { BulkDequeueDto, ListCallQueueQueryDto, ReassignDto } from '../dto/admin-call-queue.dto';
 import { RecordCallAttemptDto } from '../dto/record-call-attempt.dto';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /**
  * Admin queue ops (decision 11). Staff JWT only — broad admin-only role
@@ -38,6 +39,7 @@ import { RecordCallAttemptDto } from '../dto/record-call-attempt.dto';
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('callcenter.queue.view')
 @Controller('admin/call-queue')
 export class AdminCallQueueController {
   constructor(private readonly svc: AdminCallQueueService) {}
@@ -66,6 +68,7 @@ export class AdminCallQueueController {
   }
 
   @Post(':entryId/reassign')
+  @RequirePermissions('callcenter.queue.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Hard-reassign an OPEN entry to a specific agent' })
   reassign(
@@ -78,6 +81,7 @@ export class AdminCallQueueController {
   }
 
   @Post(':entryId/force-outcome')
+  @RequirePermissions('callcenter.queue.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -118,6 +122,7 @@ export class AdminCallQueueController {
   }
 
   @Post('bulk-dequeue')
+  @RequirePermissions('callcenter.queue.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Close every OPEN queue entry for a seller (CONFIRMED orders untouched)',

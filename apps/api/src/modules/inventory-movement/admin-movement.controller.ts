@@ -7,6 +7,7 @@ import {
   InventoryMovementService,
   type MovementListResult,
 } from './services/inventory-movement.service';
+import { RequirePermissions } from '../../common/auth/require-permissions.decorator';
 
 /**
  * Cross-seller stock-movement ledger for staff (read-only). RBAC scoping
@@ -16,6 +17,7 @@ import {
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('inventory.view')
 @Controller('admin/stock-movements')
 export class AdminMovementController {
   constructor(private readonly svc: InventoryMovementService) {}

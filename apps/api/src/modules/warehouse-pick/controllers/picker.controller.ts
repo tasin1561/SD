@@ -25,6 +25,7 @@ import {
   type CompletePickResult,
 } from '../services/pick-execution.service';
 import { RecordPickItemDto } from '../dto/record-pick-item.dto';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /**
  * Picker workflow (pull → start → recordItem(s) → complete). Staff JWT
@@ -39,6 +40,7 @@ import { RecordPickItemDto } from '../dto/record-pick-item.dto';
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('warehouse.pick')
 @Controller('warehouse/picks')
 export class PickerController {
   constructor(

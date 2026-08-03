@@ -31,6 +31,7 @@ import {
   type RtoPutawayResult,
 } from '../services/rto-putaway.service';
 import { InspectRtoItemDto, ReceiveRtoDto, RtoPutawayDto } from '../dto/warehouse-rto.dto';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /**
  * Warehouse RTO operator workflow (receive → inspect[…] → finalize).
@@ -43,6 +44,7 @@ import { InspectRtoItemDto, ReceiveRtoDto, RtoPutawayDto } from '../dto/warehous
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('warehouse.view')
 @Controller('warehouse/rto')
 export class WarehouseRtoController {
   constructor(
@@ -67,6 +69,7 @@ export class WarehouseRtoController {
   }
 
   @Post('receive')
+  @RequirePermissions('warehouse.rto.receive')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -81,6 +84,7 @@ export class WarehouseRtoController {
   }
 
   @Post('items/:shipmentItemId/inspect')
+  @RequirePermissions('warehouse.rto.inspect')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -106,6 +110,7 @@ export class WarehouseRtoController {
   }
 
   @Post('shipments/:shipmentId/finalize')
+  @RequirePermissions('warehouse.rto.finalize')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -133,6 +138,7 @@ export class WarehouseRtoController {
   }
 
   @Post('shipments/:shipmentId/putaway')
+  @RequirePermissions('warehouse.rto.putaway')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:

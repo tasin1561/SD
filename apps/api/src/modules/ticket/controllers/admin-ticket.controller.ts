@@ -17,6 +17,7 @@ import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import { TransitionTicketDto } from '../dto/ticket.dto';
 import { TicketService, type TicketView } from '../services/ticket.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /**
  * R7 — the ops resolution panel's backend: one queue for auto-raised
@@ -26,6 +27,7 @@ import { TicketService, type TicketView } from '../services/ticket.service';
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('tickets.view')
 @Controller('admin/tickets')
 export class AdminTicketController {
   constructor(private readonly tickets: TicketService) {}
@@ -57,6 +59,7 @@ export class AdminTicketController {
   }
 
   @Patch(':ticketId')
+  @RequirePermissions('tickets.resolve')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:

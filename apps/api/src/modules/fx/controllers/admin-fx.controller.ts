@@ -18,11 +18,13 @@ import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import { SetFxRateDto } from '../dto/set-fx-rate.dto';
 import { FxRateService, type FxRateView } from '../services/fx-rate.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 @ApiTags('admin-fx')
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('fx.view')
 @Controller('admin/fx-rates')
 export class AdminFxController {
   constructor(private readonly svc: FxRateService) {}
@@ -35,6 +37,7 @@ export class AdminFxController {
   }
 
   @Patch()
+  @RequirePermissions('fx.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:

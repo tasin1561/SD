@@ -11,8 +11,6 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { StaffRole } from '@skydrop/db';
-import { requireStaffRoles } from '../../../common/auth/require-staff-roles';
 import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
 import {
   ClientInfo,
@@ -39,22 +37,12 @@ import {
   type NdrOutcome,
   type NdrReadiness,
 } from '../services/courier-shipment-action.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /** Reads include the courier's real cost, which is commercially
  *  sensitive — hence FINANCE rather than every warehouse hand. */
-const READ_ROLES = [
-  StaffRole.WAREHOUSE_SUPERVISOR,
-  StaffRole.MANUAL_PLACEMENT_ADMIN,
-  StaffRole.FINANCE,
-  StaffRole.SUPER_ADMIN,
-];
 
 /** Writes reach the physical world; the list is deliberately shorter. */
-const WRITE_ROLES = [
-  StaffRole.MANUAL_PLACEMENT_ADMIN,
-  StaffRole.WAREHOUSE_SUPERVISOR,
-  StaffRole.SUPER_ADMIN,
-];
 
 /**
  * Courier operations against a single shipment.
@@ -74,6 +62,7 @@ const WRITE_ROLES = [
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('courier.ops.view')
 @Controller('admin/courier-ops/shipments/:shipmentId')
 export class AdminCourierOpsController {
   constructor(
@@ -88,11 +77,9 @@ export class AdminCourierOpsController {
       "The courier's own view: expected delivery time and what this parcel actually costs us. Parts degrade independently — a missing piece explains itself in `unavailable`.",
   })
   getInsight(
-    @CurrentStaff() staff: AuthenticatedStaff,
     @Param('shipmentId', new ParseUUIDPipe({ version: '7' })) shipmentId: string,
     @Query() query: ShipmentInsightQueryDto,
   ): Promise<ShipmentInsight> {
-    requireStaffRoles(staff, READ_ROLES);
     return this.insight.insight(shipmentId, query.mode === undefined ? {} : { mode: query.mode });
   }
 
@@ -103,11 +90,9 @@ export class AdminCourierOpsController {
       'Proof of delivery, consignee signature, or a reverse-pickup QC image. Delhivery only serves documents it has not archived, so fetch while a dispute is live.',
   })
   getDocument(
-    @CurrentStaff() staff: AuthenticatedStaff,
     @Param('shipmentId', new ParseUUIDPipe({ version: '7' })) shipmentId: string,
     @Query() query: FetchDocumentQueryDto,
   ): ReturnType<CourierShipmentInsightService['document']> {
-    requireStaffRoles(staff, READ_ROLES);
     return this.insight.document(shipmentId, query.docType);
   }
 
@@ -118,10 +103,8 @@ export class AdminCourierOpsController {
       'Whether Indian law requires an e-way bill for this parcel (declared value above ₹50,000). Moving goods without one risks detention and a penalty.',
   })
   ewaybillRequirement(
-    @CurrentStaff() staff: AuthenticatedStaff,
     @Param('shipmentId', new ParseUUIDPipe({ version: '7' })) shipmentId: string,
   ): ReturnType<CourierShipmentActionService['ewaybillRequirement']> {
-    requireStaffRoles(staff, READ_ROLES);
     return this.actions.ewaybillRequirement(shipmentId);
   }
 
@@ -132,15 +115,14 @@ export class AdminCourierOpsController {
       'Whether a failed delivery can be re-attempted, decided locally from the courier NSL code and attempt count — so an ineligible request is explained rather than rejected by Delhivery.',
   })
   ndrReadiness(
-    @CurrentStaff() staff: AuthenticatedStaff,
     @Param('shipmentId', new ParseUUIDPipe({ version: '7' })) shipmentId: string,
     @Query() query: NdrActionDto,
   ): Promise<NdrReadiness> {
-    requireStaffRoles(staff, READ_ROLES);
     return this.actions.ndrReadiness(shipmentId, query.action);
   }
 
   @Post('edit')
+  @RequirePermissions('courier.ops.write')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -152,11 +134,11 @@ export class AdminCourierOpsController {
     @Body() body: EditShipmentDto,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<ActionOutcome> {
-    requireStaffRoles(staff, WRITE_ROLES);
     return this.actions.editDestination(staff.id, shipmentId, { ...body }, ctx);
   }
 
   @Post('cancel')
+  @RequirePermissions('courier.ops.write')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -168,11 +150,11 @@ export class AdminCourierOpsController {
     @Body() body: CancelWithCourierDto,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<ActionOutcome> {
-    requireStaffRoles(staff, WRITE_ROLES);
     return this.actions.cancelWithCourier(staff.id, shipmentId, body.reason, ctx);
   }
 
   @Post('ewaybill')
+  @RequirePermissions('courier.ops.write')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Attach the e-way bill number to a consignment.' })
   attachEwaybill(
@@ -181,7 +163,6 @@ export class AdminCourierOpsController {
     @Body() body: AttachEwaybillDto,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<ActionOutcome> {
-    requireStaffRoles(staff, WRITE_ROLES);
     return this.actions.attachEwaybill(
       staff.id,
       shipmentId,
@@ -191,6 +172,7 @@ export class AdminCourierOpsController {
   }
 
   @Post('ndr-action')
+  @RequirePermissions('courier.ops.write')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -202,7 +184,6 @@ export class AdminCourierOpsController {
     @Body() body: NdrActionDto,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<NdrOutcome> {
-    requireStaffRoles(staff, WRITE_ROLES);
     return this.actions.takeNdrAction(staff.id, shipmentId, body.action, ctx);
   }
 }

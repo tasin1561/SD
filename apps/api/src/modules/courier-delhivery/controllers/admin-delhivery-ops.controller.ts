@@ -1,11 +1,8 @@
 import { Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { StaffRole } from '@skydrop/db';
-import { requireStaffRoles } from '../../../common/auth/require-staff-roles';
-import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
+
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
-import type { AuthenticatedStaff } from '../../../common/types/request';
 import { DelhiveryHttpService } from '../services/delhivery-http.service';
 import {
   DelhiveryRateLimitService,
@@ -16,6 +13,7 @@ import {
   type PoolStats,
 } from '../services/delhivery-waybill-pool.service';
 import { DelhiveryWriteGuardService } from '../services/delhivery-write-guard.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /** The endpoints worth surfacing. `waybill_bulk` is first because its
  *  budget is FIVE per five minutes — the one that actually bites. */
@@ -67,6 +65,7 @@ export interface DelhiveryOpsStatusView {
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('courier.waybills.manage')
 @Controller('admin/delhivery')
 export class AdminDelhiveryOpsController {
   constructor(
@@ -81,13 +80,7 @@ export class AdminDelhiveryOpsController {
   @ApiOperation({
     summary: 'Waybill pool depth, live-write guard state, and remaining rate budget per endpoint.',
   })
-  async status(@CurrentStaff() staff: AuthenticatedStaff): Promise<DelhiveryOpsStatusView> {
-    requireStaffRoles(staff, [
-      StaffRole.WAREHOUSE_SUPERVISOR,
-      StaffRole.MANUAL_PLACEMENT_ADMIN,
-      StaffRole.SUPER_ADMIN,
-    ]);
-
+  async status(): Promise<DelhiveryOpsStatusView> {
     const [stubMode, liveWritesEnabled, waybillPool, rateBudgets] = await Promise.all([
       this.http.isStubMode(),
       this.writeGuard.liveWritesEnabled(),
@@ -115,12 +108,9 @@ export class AdminDelhiveryOpsController {
     summary:
       'Top the AWB pool up to its low watermark. No-ops when already above it; blocked by the write guard in live mode.',
   })
-  async refill(
-    @CurrentStaff() staff: AuthenticatedStaff,
-  ): Promise<{ fetched: number; poolAfter: number }> {
+  async refill(): Promise<{ fetched: number; poolAfter: number }> {
     // Narrower than the read: this one can spend the account's real AWB
     // allocation.
-    requireStaffRoles(staff, [StaffRole.MANUAL_PLACEMENT_ADMIN, StaffRole.SUPER_ADMIN]);
     return this.pool.refillIfNeeded();
   }
 }

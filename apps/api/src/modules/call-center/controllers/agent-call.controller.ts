@@ -27,6 +27,7 @@ import {
 } from '../services/call-attempt.service';
 import { RecordCallAttemptDto } from '../dto/record-call-attempt.dto';
 import { CallHistoryQueryDto } from '../dto/call-history-query.dto';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /**
  * Agent call workflow (pull model — locked decision #4). Staff JWT only;
@@ -38,6 +39,7 @@ import { CallHistoryQueryDto } from '../dto/call-history-query.dto';
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('callcenter.work')
 @Controller('agent/calls')
 export class AgentCallController {
   constructor(

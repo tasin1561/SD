@@ -12,8 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { PickupRequestStatus, StaffRole } from '@skydrop/db';
-import { requireStaffRoles } from '../../../common/auth/require-staff-roles';
+import { PickupRequestStatus } from '@skydrop/db';
 import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
 import {
   ClientInfo,
@@ -24,6 +23,7 @@ import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import { ClosePickupDto, RaisePickupDto, ReleasePickupDayDto } from '../dto/courier-ops.dto';
 import { CourierPickupService, type PickupRequestView } from '../services/courier-pickup.service';
+import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /**
  * Pickup requests — the van, not the parcel.
@@ -37,6 +37,7 @@ import { CourierPickupService, type PickupRequestView } from '../services/courie
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('courier.pickups.manage')
 @Controller('admin/courier-ops/pickups')
 export class AdminPickupController {
   constructor(private readonly pickups: CourierPickupService) {}
@@ -45,16 +46,9 @@ export class AdminPickupController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Recent pickup requests, newest first.' })
   list(
-    @CurrentStaff() staff: AuthenticatedStaff,
     @Query('warehouseId') warehouseId?: string,
     @Query('fromDate') fromDate?: string,
   ): Promise<readonly PickupRequestView[]> {
-    requireStaffRoles(staff, [
-      StaffRole.WAREHOUSE_SUPERVISOR,
-      StaffRole.WAREHOUSE_STAFF,
-      StaffRole.MANUAL_PLACEMENT_ADMIN,
-      StaffRole.SUPER_ADMIN,
-    ]);
     return this.pickups.list({
       ...(warehouseId === undefined ? {} : { warehouseId }),
       ...(fromDate === undefined ? {} : { fromDate }),
@@ -72,7 +66,6 @@ export class AdminPickupController {
     @Body() body: RaisePickupDto,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<PickupRequestView> {
-    requireStaffRoles(staff, [StaffRole.WAREHOUSE_SUPERVISOR, StaffRole.SUPER_ADMIN]);
     return this.pickups.raise(
       staff.id,
       {
@@ -96,7 +89,6 @@ export class AdminPickupController {
     @Body() body: ClosePickupDto,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<PickupRequestView> {
-    requireStaffRoles(staff, [StaffRole.WAREHOUSE_SUPERVISOR, StaffRole.SUPER_ADMIN]);
     return this.pickups.close(staff.id, requestId, PickupRequestStatus[body.status], ctx);
   }
 
@@ -112,7 +104,6 @@ export class AdminPickupController {
     @Body() body: ReleasePickupDayDto,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<{ released: boolean }> {
-    requireStaffRoles(staff, [StaffRole.WAREHOUSE_SUPERVISOR, StaffRole.SUPER_ADMIN]);
     return this.pickups.releaseDay(staff.id, requestId, body.reason, ctx);
   }
 }

@@ -12,4 +12,5 @@ export {
   useSetIdentity,
   useHasAccessToken,
   hasStaffRole,
+  hasPermission,
 } from './hooks';

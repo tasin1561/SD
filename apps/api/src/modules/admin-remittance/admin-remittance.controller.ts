@@ -10,21 +10,22 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Currency, StaffRole } from '@skydrop/db';
+import { Currency } from '@skydrop/db';
 import { CurrentStaff } from '../../common/decorators/current-staff.decorator';
 import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/client-info.decorator';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
-import { requireStaffRoles } from '../../common/auth/require-staff-roles';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../common/types/request';
 import { WalletService } from '../seller-wallet/services/wallet.service';
 import { CreateRemittanceDto } from './dto/create-remittance.dto';
 import { RemittanceService } from './services/remittance.service';
+import { RequirePermissions } from '../../common/auth/require-permissions.decorator';
 
 @ApiTags('admin-remittances')
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('money.view')
 @Controller('admin/remittances')
 export class AdminRemittanceController {
   constructor(
@@ -33,6 +34,7 @@ export class AdminRemittanceController {
   ) {}
 
   @Post()
+  @RequirePermissions('money.remittances.manage')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Record a remittance — debits the seller wallet + audits',
@@ -42,7 +44,6 @@ export class AdminRemittanceController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<{ id: string }> {
-    requireStaffRoles(staff, [StaffRole.SUPER_ADMIN, StaffRole.FINANCE]);
     return this.svc.create(body, { staffId: staff.id }, ctx);
   }
 
@@ -50,12 +51,10 @@ export class AdminRemittanceController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'List recorded remittances (most-recently-paid first)' })
   list(
-    @CurrentStaff() staff: AuthenticatedStaff,
     @Query('sellerId') sellerId?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ) {
-    requireStaffRoles(staff, [StaffRole.SUPER_ADMIN, StaffRole.FINANCE]);
     return this.svc.list({
       ...(sellerId ? { sellerId } : {}),
       ...(page ? { page: Number(page) } : {}),
@@ -69,10 +68,8 @@ export class AdminRemittanceController {
     summary: 'Wallet balances per currency for a seller (admin remittance form pre-fill)',
   })
   async sellerBalances(
-    @CurrentStaff() staff: AuthenticatedStaff,
     @Param('sellerId') sellerId: string,
   ): Promise<{ balances: Array<{ currency: Currency; balance: string }> }> {
-    requireStaffRoles(staff, [StaffRole.SUPER_ADMIN, StaffRole.FINANCE]);
     const [inr, bdt] = await Promise.all([
       this.wallet.balanceCached(sellerId, Currency.INR),
       this.wallet.balanceCached(sellerId, Currency.BDT),

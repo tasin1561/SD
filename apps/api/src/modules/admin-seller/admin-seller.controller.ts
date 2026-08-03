@@ -31,6 +31,7 @@ import {
   type SellerNoteView,
 } from './services/admin-seller.service';
 import type { OnboardingProgressView } from '../seller-onboarding/services/seller-onboarding.service';
+import { RequirePermissions } from '../../common/auth/require-permissions.decorator';
 
 /**
  * Admin endpoints — every method requires a valid staff JWT.
@@ -44,6 +45,7 @@ import type { OnboardingProgressView } from '../seller-onboarding/services/selle
 @ApiBearerAuth('staff-jwt')
 @UseGuards(StaffJwtGuard)
 @ThrottleKey('auth-user')
+@RequirePermissions('sellers.view')
 @Controller('admin/sellers')
 export class AdminSellerController {
   constructor(private readonly svc: AdminSellerService) {}
@@ -63,6 +65,7 @@ export class AdminSellerController {
   }
 
   @Patch(':id/status')
+  @RequirePermissions('sellers.approve', 'sellers.suspend')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Suspend or reapprove a seller (delegates to SellerAccountStatusService)',
@@ -77,6 +80,7 @@ export class AdminSellerController {
   }
 
   @Post(':id/bank-account/reveal')
+  @RequirePermissions('sellers.bank_account.reveal')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -101,6 +105,7 @@ export class AdminSellerController {
   }
 
   @Post(':id/notes')
+  @RequirePermissions('sellers.notes.manage')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a note on a seller' })
   createNote(
@@ -113,6 +118,7 @@ export class AdminSellerController {
   }
 
   @Patch(':id/notes/:noteId')
+  @RequirePermissions('sellers.notes.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update a note (any staff can edit per RBAC debt)' })
   updateNote(
@@ -126,6 +132,7 @@ export class AdminSellerController {
   }
 
   @Delete(':id/notes/:noteId')
+  @RequirePermissions('sellers.notes.manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Soft-delete a note' })
   async deleteNote(
@@ -146,6 +153,7 @@ export class AdminSellerController {
   }
 
   @Post(':id/onboarding/:stepCode/override')
+  @RequirePermissions('sellers.approve')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Admin marks an onboarding step complete; captures reason in audit' })
   overrideStep(
