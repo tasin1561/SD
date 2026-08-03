@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactElement } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Search } from 'lucide-react';
 import {
   Button,
   ErrorNote,
@@ -27,6 +27,19 @@ import { serverVerdict } from '@/lib/server-verdict';
  * differently — the server treats every permission identically — but a
  * role that quietly acquired six of them should say so before it is
  * saved, rather than being six unremarkable ticks in a list of sixty.
+ *
+ * ── SEARCH ───────────────────────────────────────────────────────────
+ * Sixty-eight of them across ten groups does not fit on a screen, and
+ * scrolling to find "the one about returns" is how a role ends up with
+ * whatever was nearby instead. The query matches the label, the
+ * explanation AND the key, because people arrive knowing any of the
+ * three — someone reading a 403 in a log knows `warehouse.rto.finalize`
+ * and nothing else.
+ *
+ * Filtering NEVER touches the selection. A permission ticked and then
+ * searched out of view is still ticked and still saved, so the count
+ * below says how many are hidden — otherwise "2 of 68" next to an empty
+ * list reads as if something was lost.
  */
 export function RoleEditor({
   role,
@@ -47,6 +60,7 @@ export function RoleEditor({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selected, setSelected] = useState<readonly string[]>([]);
+  const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   // Re-seed on every open, and whenever a DIFFERENT role is opened —
@@ -56,6 +70,7 @@ export function RoleEditor({
     setName(role?.name ?? '');
     setDescription(role?.description ?? '');
     setSelected(role?.permissions ?? []);
+    setQuery('');
     setError(null);
   }, [open, role]);
 
@@ -63,6 +78,20 @@ export function RoleEditor({
   const dangerousCount = selected.filter(
     (k) => catalogue.permissions.find((p) => p.key === k)?.dangerous === true,
   ).length;
+
+  const needle = query.trim().toLowerCase();
+  const matches =
+    needle === ''
+      ? catalogue.permissions
+      : catalogue.permissions.filter(
+          (p) =>
+            p.label.toLowerCase().includes(needle) ||
+            p.description.toLowerCase().includes(needle) ||
+            p.key.toLowerCase().includes(needle) ||
+            p.group.toLowerCase().includes(needle),
+        );
+  const visible = new Set(matches.map((p) => p.key));
+  const hiddenSelected = selected.filter((k) => !visible.has(k)).length;
 
   function toggle(key: string): void {
     setSelected((cur) => (cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]));
@@ -114,9 +143,30 @@ export function RoleEditor({
         </FormField>
 
         <div>
-          <div className="mb-2 flex items-center justify-between">
+          <div className="relative mb-2">
+            <Search
+              size={13}
+              className="text-text-faint pointer-events-none absolute top-1/2 left-3 -translate-y-1/2"
+            />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search permissions — try “return”, “wallet” or a key"
+              className="pl-8"
+              aria-label="Search permissions"
+            />
+          </div>
+
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
             <span className="text-text-muted text-xs">
               {selected.length} of {catalogue.permissions.length} permissions
+              {needle !== '' && ` · ${matches.length} match${matches.length === 1 ? '' : 'es'}`}
+              {hiddenSelected > 0 && (
+                <span className="text-[var(--status-pending-fg)]">
+                  {' '}
+                  · {hiddenSelected} selected not shown
+                </span>
+              )}
             </span>
             {dangerousCount > 0 && (
               <span className="text-critical inline-flex items-center gap-1.5 text-xs">
@@ -127,8 +177,14 @@ export function RoleEditor({
           </div>
 
           <div className="border-border max-h-[46vh] space-y-4 overflow-y-auto rounded-xl border p-3">
+            {matches.length === 0 && (
+              <p className="text-text-muted py-6 text-center text-sm">
+                Nothing matches “{query.trim()}”. The search covers the name, the explanation and
+                the permission key.
+              </p>
+            )}
             {catalogue.groups.map((group) => {
-              const items = catalogue.permissions.filter((p) => p.group === group);
+              const items = matches.filter((p) => p.group === group);
               if (items.length === 0) return null;
               return (
                 <fieldset key={group}>

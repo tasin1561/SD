@@ -72,8 +72,7 @@ export function useCreateRole(): UseMutationResult<
   const client = useApiClient();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) =>
-      client.request<RoleView>(ROOT, { method: 'POST', body: JSON.stringify(body) }),
+    mutationFn: (body) => client.request<RoleView>(ROOT, { method: 'POST', body }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
   });
 }
@@ -87,7 +86,7 @@ export function useUpdateRole(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...body }) =>
-      client.request<RoleView>(`${ROOT}/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+      client.request<RoleView>(`${ROOT}/${id}`, { method: 'PATCH', body }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
   });
 }
