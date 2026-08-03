@@ -118,7 +118,9 @@ SD/
 
 **Migrations applied:** Through Module 9 — M7 call-center reconcile + reject terminals + call-queue partial unique index; M8 warehouse-ops schema additions; M9 courier integration schema (`supersede_reason` enum, `manifest_status` += confirmed/dispatched/failed, shipment supersede columns, manifest awb-job/handoff columns).
 
-**TimescaleDB hypertables:** `tracking_events` and `stock_movements` (composite PK, monthly chunks, 7d/30d compression).
+**TimescaleDB hypertables:** `tracking_events` and `stock_movements` (composite PK, monthly chunks).
+
+**Compression is NOT active in production, and cannot be.** The init migration configures 7d/30d compression policies, but wraps them in `EXCEPTION WHEN feature_not_supported` — DigitalOcean's managed Postgres ships TimescaleDB under the **Apache** licence and compression is a **Community** feature. Local Docker (timescaledb-ha) has Community, so it works in dev and is silently skipped on production. This doc claimed active compression for months; it never ran there. **Do NOT write a migration that sets `timescaledb.compress` or calls `add_compression_policy` without that exception guard — it will FAIL THE PRODUCTION DEPLOY** (this was nearly shipped on 2026-08-03). The planning consequence: the two fastest-growing tables per order grow linearly and permanently, so archival is the only lever unless we move to Timescale Cloud or self-host. `/system/capacity` reports this as a first-class metric.
 
 **Consumption pattern:**
 
@@ -797,6 +799,14 @@ Below: remaining frontends + module-level fast-follows + Phase-1B prerequisites.
 - **Fast-follows across modules**: (1) M15→M6 — `PricingEngineService.compute()` auto-called from `OrderService.create()` post-commit (M17 admin Compute action already exists as the per-order trigger); (2) admin `GET /admin/orders/:id/events` endpoint (the admin half of M12 deferral #1; the seller half is already wired); (3) admin tracking deep-link on order detail (AWB → public tracking URL); (4) seller manual order create UI (M6 `POST /seller/orders` backend exists); (5) CSV order/product import UIs (both M4/M6 backends exist); (6) seller inventory view (M5 backend exists); (7) warehouse-ops + queue-management admin feature areas (M12 deferral #3, no architectural blockers); (8) explicit seller-side FE-2 write tests (discipline is structurally enforced; admin-side proves the pattern).
 
 ---
+
+## Scaling & capacity (2026-08-03)
+
+**SCALE-1: exactly ONE API process may own the background queues.** All 16 in-process BullMQ workers start themselves in `onModuleInit`; two instances would fire every cron twice and register duplicate delayed jobs. `WORKERS_ENABLED` (env, default true) gates them via `WorkerRoleService.shouldStart()`, and **every new worker MUST call it before `new Worker(...)`** — `worker-role.spec.ts` enforces this structurally by reading every `*.worker.ts`, because a worker that forgets behaves perfectly on one instance and silently double-fires on two. To scale horizontally: start additional API processes with `WORKERS_ENABLED=false`, and raise `capacity.api_instances` so the connection gauge stays honest.
+
+**SCALE-2: connections are the binding constraint, not rows.** The managed database is 1 GB RAM / **25 connections** / 10 GB disk, and ~10 connections are held permanently by DO's own agents (pghoard, pg_cron, system-stats, TimescaleDB workers). Each API instance takes a Prisma pool of `cpus × 2 + 1` (5 on the current droplet). At idle with zero orders, production sits at 17/25. Adding instances requires either a bigger plan or PgBouncer in transaction-pooling mode (`pgbouncer=true` in the Prisma URL — prepared statements need it). Our advisory locks are transaction-scoped so they survive transaction pooling.
+
+**SCALE-3: `/system/capacity` is the monitor** (`system-capacity` module, SUPER_ADMIN, LEAF — exports nothing, and nothing in the product may make a decision from its numbers). **Ceilings that the system cannot know are `capacity.*` system settings** an admin maintains when the plan changes; usage is measured live. The page states which is which — a guessed ceiling reads plausibly and is worse than one that admits it is unknown. Every metric carries a `consequence` and a `remedy` in prose: these failures arrive as an outage rather than a trend (a full disk works perfectly then refuses every write; the 26th connection errors while 25 are fine), so a bare percentage just moves the problem to whoever reads it at 3am. **When adding a metric, write both sentences.**
 
 ## Session Hygiene
 
