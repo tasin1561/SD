@@ -35,6 +35,10 @@ import { TiltPanel } from '@/lib/tilt';
  *  (`connect-src 'self'`) would block anyway. */
 const ENDPOINT = '/api/public/invite-leads';
 
+/** Sent even when blank, so the server answers with the length rule the
+ *  field actually broke rather than a type error about a missing key. */
+const REQUIRED = new Set(['fullName', 'companyName', 'email', 'phone']);
+
 const VOLUMES = ['Under 100', '100–500', '500–2,000', '2,000+', 'Not sure yet'] as const;
 
 /**
@@ -92,18 +96,25 @@ export function InviteForm(): ReactElement {
     setBusy(true);
 
     const form = new FormData(e.currentTarget);
-    const payload = Object.fromEntries(
-      [
-        'fullName',
-        'companyName',
-        'email',
-        'phone',
-        'productTypes',
-        'monthlyOrders',
-        'message',
-        'website',
-      ].map((k) => [k, String(form.get(k) ?? '').trim()]),
-    );
+
+    // Read from the form itself, never from a second list of field names.
+    //
+    // A hand-kept list WAS this code, and it was a bug: the shipping
+    // direction and the second phone number were added to the markup and
+    // never to the list, so the browser dropped both on every submission.
+    // The person filling the form saw their answers accepted; the lead
+    // arrived with an empty route. Nothing failed — which is what made it
+    // survive. A field can only reach the server now by existing in the
+    // DOM, which is the same condition under which someone can fill it.
+    const payload: Record<string, string> = {};
+    for (const key of new Set(form.keys())) {
+      const value = String(form.get(key) ?? '').trim();
+      // An unanswered optional is OMITTED, not sent blank: the server
+      // reads shippingDirection as an enum, which accepts absent and
+      // rejects ''. Required fields are sent either way, so an empty one
+      // is answered by the rule it actually broke.
+      if (value !== '' || REQUIRED.has(key)) payload[key] = value;
+    }
 
     try {
       const res = await fetch(ENDPOINT, {
