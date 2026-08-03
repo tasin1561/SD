@@ -30,11 +30,11 @@ import { LeadDrawer } from './lead-drawer';
 /**
  * People who asked to be let in.
  *
- * A table, at the same width as every other admin queue, because that is
- * what this is. The first version rendered each lead as a full-width
- * card with an always-open notes textarea and a row of status buttons —
- * so one screen showed one lead, every card was mostly empty space, and
- * the whole page sat in a narrow column with half the display unused.
+ * A table, using the full width, because that is what this is. The
+ * first version rendered each lead as a full-width card with an
+ * always-open notes textarea and a row of status buttons — so one screen
+ * showed one lead, every card was mostly empty space, and the whole page
+ * sat in a narrow column with half the display unused.
  *
  * The list answers "who is waiting, and how long have they been
  * waiting"; acting on one is a click into the drawer. That split is what
@@ -86,7 +86,14 @@ export function LeadsIndex(): ReactElement {
   const items = q.data?.items ?? [];
 
   return (
-    <div className="max-w-6xl">
+    // No max-width. `<main>` is flex-1 with no cap of its own, so a
+    // capped page leaves the rest of the display empty — which on a wide
+    // screen is most of it. Other admin pages cap at 6xl and are right
+    // to: a form or a detail view gets unreadable past ~75 characters.
+    // A dense table is the opposite — every extra pixel goes into the
+    // columns, and the contact column in particular was truncating names
+    // while a third of the screen sat unused.
+    <div>
       <PageHeader
         title="Invite requests"
         subtitle="People who asked to be let into the beta from the landing page. Newest first — a lead goes cold fast."
