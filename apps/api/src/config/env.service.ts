@@ -25,6 +25,11 @@ export class EnvService {
     return this.env.BIND_HOST;
   }
 
+  /** Where all outbound mail is diverted, or '' for normal delivery. */
+  get mailRedirectTo(): string {
+    return this.env.MAIL_REDIRECT_TO;
+  }
+
   /** True when this process owns the BullMQ workers + crons. */
   get workersEnabled(): boolean {
     return this.env.WORKERS_ENABLED;

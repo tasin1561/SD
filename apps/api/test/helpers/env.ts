@@ -19,6 +19,8 @@ const BASE_ENV: Env = {
   // {{ tracking_url }} template variables.
   PUBLIC_TRACKING_URL: 'http://localhost:3003/track',
   SUPPORT_EMAIL: 'support@skydrop.online',
+  // Normal delivery in tests; the redirect has its own spec.
+  MAIL_REDIRECT_TO: '',
   DEV_MOCK_SPACES: true,
   SPACES_ENDPOINT: 'https://sgp1.digitaloceanspaces.com',
   SPACES_REGION: 'sgp1',

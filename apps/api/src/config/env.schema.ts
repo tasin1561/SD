@@ -53,6 +53,18 @@ export const envSchema = z.object({
   // Credentialed vars are optional so the app boots in DEV_MOCK_SPACES mode
   // without real DO creds (used by e2e + local dev).
   DEV_MOCK_SPACES: z.coerce.boolean().default(false),
+  // Send every outbound email HERE instead of to its real recipient.
+  //
+  // For staging, where the point is to see real mail arrive — rendered
+  // templates, working links, correct variables — without any chance of
+  // reaching a customer. Empty in production, where mail must go where
+  // it is addressed.
+  //
+  // A redirect rather than an allow-list: an allow-list silently drops
+  // the notifications you did not think to list, which is exactly the
+  // set worth looking at. Redirecting shows you all of them, each
+  // labelled with who it was meant for.
+  MAIL_REDIRECT_TO: z.string().email().or(z.literal('')).default(''),
   SPACES_ENDPOINT: z.string().url().default('https://sgp1.digitaloceanspaces.com'),
   SPACES_REGION: z.string().default('sgp1'),
   SPACES_BUCKET: z.string().default('skydrop-storage'),
