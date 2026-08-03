@@ -597,6 +597,15 @@ const systemSettings: SystemSettingSeed[] = [
     description:
       'The customer pays a tax-INCLUSIVE price, so this is extracted from the COD (cod × r / (100 + r)), never added on top: ₹1,000 at 18% withholds ₹152.54, not ₹180. WE file it, so the withheld amount is a liability recorded in gst_withholdings — not margin. GLOBAL only: a tax rate is set by law, not negotiated per seller.',
   },
+  {
+    key: 'tracking.webhook_payload_retention_days',
+    category: 'tracking',
+    valueType: SettingValueType.INT,
+    valueInt: 90,
+    displayName: 'Courier payload retention (days)',
+    description:
+      'How long the raw courier payload is kept on each webhook row. courier_webhooks is the largest table per order — every scan stores the payload up to three times (headers, raw body, and the parsed copy of the same thing) and nothing ever removed it. After this window the payload columns are BLANKED and the row survives: when the scan arrived, whether its signature verified, and which tracking event it produced are evidence and stay forever. The payload itself is a debugging artefact, useful while a courier dispute is live and worthless a quarter later. Nothing reads these columns after ingest. This does NOT touch tracking_events, and it must never be extended to financial data.',
+  },
   // ── capacity ceilings ─────────────────────────────────────────────
   // What the platform is allowed to grow into. These are the numbers a
   // managed database knows and does not tell us: Postgres reports its

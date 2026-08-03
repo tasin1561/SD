@@ -9,6 +9,9 @@ import { TrackingEventsModule } from '../tracking-events/tracking-events.module'
 import { WebhookAuthService } from './services/webhook-auth.service';
 import { WebhookIngestService } from './services/webhook-ingest.service';
 import { WebhookProcessorService } from './services/webhook-processor.service';
+import { WebhookPayloadRetentionService } from './services/webhook-payload-retention.service';
+import { WebhookRetentionQueue } from './queue/webhook-retention.queue';
+import { WebhookRetentionWorker } from './queue/webhook-retention.worker';
 import { TrackingWebhookQueue } from './queue/tracking-webhook.queue';
 import { TrackingWebhookWorker } from './queue/tracking-webhook.worker';
 import { PublicWebhookController } from './controllers/public-webhook.controller';
@@ -50,7 +53,12 @@ import { PublicWebhookController } from './controllers/public-webhook.controller
     WebhookProcessorService,
     TrackingWebhookQueue,
     TrackingWebhookWorker,
+    // Bounds the size of courier_webhooks, the largest table per order.
+    WebhookPayloadRetentionService,
+    WebhookRetentionQueue,
+    WebhookRetentionWorker,
   ],
-  exports: [],
+  // The capacity monitor reports how much payload is still retained.
+  exports: [WebhookPayloadRetentionService],
 })
 export class TrackingIngestionModule {}

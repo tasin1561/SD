@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { EnvService } from '../../../config/env.service';
+import { WebhookPayloadRetentionService } from '../../tracking-ingestion/services/webhook-payload-retention.service';
 
 /**
  * What is running out, how fast, and what to do about it.
@@ -101,19 +102,21 @@ export class CapacityService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly env: EnvService,
+    private readonly webhookRetention: WebhookPayloadRetentionService,
   ) {}
 
   async report(): Promise<CapacityReport> {
-    const [db, timescale, redis, queues, growth, settings] = await Promise.all([
+    const [db, timescale, payloads, redis, queues, growth, settings] = await Promise.all([
       this.databaseMetrics(),
       this.timescaleMetrics(),
+      this.payloadRetentionMetrics(),
       this.redisMetrics(),
       this.queueDepth(),
       this.growth(),
       this.ceilings(),
     ]);
 
-    const metrics = [...db, ...timescale, ...redis, ...queues];
+    const metrics = [...db, ...timescale, ...payloads, ...redis, ...queues];
     const worstStatus = metrics.reduce<CapacityStatus>(
       (worst, m) => (RANK[m.status] > RANK[worst] ? m.status : worst),
       'OK',
@@ -219,7 +222,9 @@ export class CapacityService {
         ceilingSource: ceilings.dbStorageGb > 0 ? 'CONFIGURED' : 'UNKNOWN',
         consequence:
           'A full disk does not degrade — the database stops accepting writes. Orders cannot be placed and money cannot be recorded until it is resized.',
-        remedy: `Resize the database plan, and turn on TimescaleDB compression for the scan and stock-movement history if it is not already reclaiming space. Plan: ${ceilings.dbPlanLabel}. Update ${CAPACITY_SETTING_KEYS.dbStorageGb} in system settings whenever the plan changes — this gauge is only as honest as that number.`,
+        remedy:
+          `The disk CAN be grown: a DigitalOcean managed database is resized in place from the control panel — choose a larger plan and it migrates with a brief failover, with no data moved by hand. It only ever grows; storage cannot be shrunk again, so step up rather than jump. Current plan: ${ceilings.dbPlanLabel}. ` +
+          `Two things after resizing: update ${CAPACITY_SETTING_KEYS.dbStorageGb} here, because this gauge is only as honest as that number; and check first whether the growth is really the courier payloads reported below — reclaiming those is free, where a bigger plan is monthly, forever.`,
       },
       {
         key: 'db_idle_in_tx',
@@ -295,6 +300,39 @@ export class CapacityService {
       ];
     } catch (e) {
       this.logger.warn({ err: (e as Error).message }, 'TimescaleDB capacity probe failed');
+      return [];
+    }
+  }
+
+  // ── courier payload retention ───────────────────────────────────────
+
+  /**
+   * How much of the largest table is still carrying a raw payload.
+   *
+   * Not a ceiling — a progress reading. It shows the daily sweep doing
+   * its job, and it is the number that answers "is storage growth
+   * bounded now, or still open-ended".
+   */
+  private async payloadRetentionMetrics(): Promise<CapacityMetric[]> {
+    try {
+      const { retained, retentionDays } = await this.webhookRetention.pendingCount();
+      return [
+        {
+          key: 'webhook_payloads_retained',
+          label: 'Courier payloads held',
+          current: retained,
+          ceiling: null,
+          unit: `rows within the ${retentionDays}-day window`,
+          percent: null,
+          status: 'OK',
+          ceilingSource: 'MEASURED',
+          consequence:
+            'These rows carry the courier payload up to three times over — headers, raw body, and the parsed copy of the same thing — and they are the biggest single consumer of disk per order. Left unbounded, this table alone decides when the database fills.',
+          remedy: `A daily sweep blanks the payload past ${retentionDays} days and keeps the row, so what remains is bounded by the window rather than by how long we have been trading. Shorten tracking.webhook_payload_retention_days to reclaim more; lengthen it if courier disputes are taking longer than that to resolve. The scan timeline customers see lives in tracking_events and is never touched.`,
+        },
+      ];
+    } catch (e) {
+      this.logger.warn({ err: (e as Error).message }, 'Payload retention probe failed');
       return [];
     }
   }
