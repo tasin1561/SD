@@ -20,7 +20,8 @@
     "db:down": "docker compose -f docker/docker-compose.yml down",
     "db:reset": "docker compose -f docker/docker-compose.yml down -v && docker compose -f docker/docker-compose.yml up -d",
     "db:logs": "docker compose -f docker/docker-compose.yml logs -f",
-    "e2e:fe": "playwright test"
+    "e2e:fe": "playwright test",
+    "sim:e2e": "tsx scripts/sim-e2e.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
