@@ -63,12 +63,32 @@ function extractEmailedUrls(): EmailedUrl[] {
 }
 
 function pageExists(app: 'admin' | 'seller', path: string): boolean {
+  const appDir = join(REPO, 'apps', app, 'src', 'app');
+
+  // A Next ROUTE GROUP — a directory named `(something)` — does not
+  // appear in the URL, so `/leads` may live at `(authed)/leads`. Looking
+  // only at the literal path made this check blind to every
+  // authenticated page, which is most of them: it passed until now only
+  // because the URLs we happened to email were all public ones.
+  const candidates = [join(appDir, path, 'page.tsx')];
   try {
-    statSync(join(REPO, 'apps', app, 'src', 'app', path, 'page.tsx'));
-    return true;
+    for (const entry of readdirSync(appDir, { withFileTypes: true })) {
+      if (entry.isDirectory() && entry.name.startsWith('(') && entry.name.endsWith(')')) {
+        candidates.push(join(appDir, entry.name, path, 'page.tsx'));
+      }
+    }
   } catch {
-    return false;
+    // No app directory — the miss is reported by the caller.
   }
+
+  return candidates.some((c) => {
+    try {
+      statSync(c);
+      return true;
+    } catch {
+      return false;
+    }
+  });
 }
 
 describe('emailed URLs resolve to real pages', () => {

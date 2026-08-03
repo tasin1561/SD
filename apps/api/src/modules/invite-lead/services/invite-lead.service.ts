@@ -1,8 +1,10 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { InviteLeadStatus, Prisma } from '@skydrop/db';
+import { InviteLeadStatus, NotificationRecipientType, Prisma, StaffRole } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { ActorType } from '@skydrop/db';
+import { EnvService } from '../../../config/env.service';
+import { EmailQueue } from '../../email/queue/email.queue';
 
 /**
  * People asking to be let into the beta.
@@ -65,6 +67,8 @@ export class InviteLeadService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
+    private readonly email: EmailQueue,
+    private readonly env: EnvService,
   ) {}
 
   /**
@@ -99,6 +103,7 @@ export class InviteLeadService {
         select: { id: true },
       });
       this.logger.log({ leadId: created.id }, 'New invite lead');
+      await this.announce(created.id, { email, ...data });
       await this.audit
         .log({
           actorType: ActorType.SYSTEM,
@@ -125,6 +130,103 @@ export class InviteLeadService {
       { leadId: existing.id, submissions: existing.submissionCount + 1 },
       'Repeat invite-lead submission',
     );
+  }
+
+  /**
+   * Tell someone a lead is waiting.
+   *
+   * Best-effort by construction: the lead is already committed, and a
+   * mail problem must never turn a captured lead into a 500 that makes
+   * the visitor think the form is broken and go away. That is the exact
+   * failure this whole feature exists to remove.
+   *
+   * Only on CREATION, not on a repeat. Someone double-clicking, or
+   * resending because they were unsure, should not ring the alarm twice
+   * — the `submissionCount` on the row already says they were keen.
+   *
+   * Recipients default to every active SUPER_ADMIN rather than a
+   * hardcoded address: that stays correct as admins come and go, and it
+   * cannot quietly point at a mailbox nobody opens.
+   * `marketing.lead_notification_email` overrides it with a shared inbox
+   * when one person should own the queue.
+   */
+  private async announce(
+    leadId: string,
+    lead: {
+      email: string;
+      fullName: string;
+      companyName: string;
+      phone: string;
+      productTypes: string | null;
+      monthlyOrders: string | null;
+      message: string | null;
+    },
+  ): Promise<void> {
+    try {
+      const setting = await this.prisma.client.systemSetting.findUnique({
+        where: { key: 'marketing.lead_notification_email' },
+        select: { valueString: true },
+      });
+      const override = setting?.valueString?.trim() ?? '';
+
+      const recipients: Array<{ id: string | null; email: string }> =
+        override !== ''
+          ? [{ id: null, email: override }]
+          : (
+              await this.prisma.client.staffUser.findMany({
+                where: { role: StaffRole.SUPER_ADMIN, deletedAt: null },
+                select: { id: true, email: true },
+              })
+            ).map((s) => ({ id: s.id, email: s.email }));
+
+      if (recipients.length === 0) {
+        // Worth a warning: a lead arrived and nobody was told.
+        this.logger.warn(
+          { leadId },
+          'No SUPER_ADMIN to notify of a new invite lead, and no override address set',
+        );
+        return;
+      }
+
+      const variables = {
+        full_name: lead.fullName,
+        company_name: lead.companyName,
+        email: lead.email,
+        phone: lead.phone,
+        product_types: lead.productTypes ?? 'not said',
+        monthly_orders: lead.monthlyOrders ?? 'not said',
+        // The subject carries the volume only when they gave one, so it
+        // never reads "— not said" on a phone lock screen.
+        volume_suffix: lead.monthlyOrders ? ` (${lead.monthlyOrders}/mo)` : '',
+        lead_message: lead.message ?? '',
+        leads_url: `${this.env.adminAppUrl}/leads`,
+      };
+
+      // One enqueue per recipient, each in its own try/catch: one bad
+      // address must not stop the others being told (NOTIF-3).
+      for (const r of recipients) {
+        try {
+          await this.email.enqueue({
+            templateCode: 'staff.invite_lead.email',
+            recipient: { type: NotificationRecipientType.STAFF, id: r.id, email: r.email },
+            variables,
+            triggerEvent: 'marketing.invite_lead.created',
+          });
+        } catch (e) {
+          this.logger.error(
+            { leadId, err: (e as Error).message },
+            'Could not queue the invite-lead alert for one recipient',
+          );
+        }
+      }
+    } catch (e) {
+      // The lead is safe either way. Losing the alert is a nuisance;
+      // losing the lead would be the bug.
+      this.logger.error(
+        { leadId, err: (e as Error).message },
+        'Invite-lead alert failed entirely — the lead IS stored, nobody was told',
+      );
+    }
   }
 
   async list(filters: {

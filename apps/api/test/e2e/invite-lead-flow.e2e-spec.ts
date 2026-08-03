@@ -185,6 +185,74 @@ describe('Invite leads (e2e)', () => {
     expect(res.body.counts).toMatchObject({ NEW: 2, SPAM: 1 });
   });
 
+  it('emails every super-admin when a lead arrives', async () => {
+    // Default recipients are the SUPER_ADMINs rather than a hardcoded
+    // address: that stays correct as admins come and go, and cannot
+    // quietly point at a mailbox nobody opens.
+    const before = await h.prisma.notificationLog.count({
+      where: { templateCode: 'staff.invite_lead.email' },
+    });
+    const admins = await h.prisma.staffUser.count({
+      where: { role: 'SUPER_ADMIN', deletedAt: null },
+    });
+    expect(admins).toBeGreaterThan(0);
+
+    await request(h.baseUrl).post('/public/invite-leads').send(LEAD).expect(200);
+    await new Promise((r) => setTimeout(r, 2500));
+
+    const after = await h.prisma.notificationLog.count({
+      where: { templateCode: 'staff.invite_lead.email' },
+    });
+    expect(after - before).toBe(admins);
+  });
+
+  it('stays quiet on a repeat — a double-click is not news', async () => {
+    await request(h.baseUrl).post('/public/invite-leads').send(LEAD).expect(200);
+    await new Promise((r) => setTimeout(r, 2500));
+    const afterFirst = await h.prisma.notificationLog.count({
+      where: { templateCode: 'staff.invite_lead.email' },
+    });
+
+    await request(h.baseUrl).post('/public/invite-leads').send(LEAD).expect(200);
+    await new Promise((r) => setTimeout(r, 2500));
+
+    expect(
+      await h.prisma.notificationLog.count({
+        where: { templateCode: 'staff.invite_lead.email' },
+      }),
+    ).toBe(afterFirst);
+  });
+
+  it('sends to the override address alone when one is configured', async () => {
+    // A shared inbox, when one person should own the queue.
+    await h.prisma.systemSetting.update({
+      where: { key: 'marketing.lead_notification_email' },
+      data: { valueString: 'leads@skydrop.test' },
+    });
+
+    await request(h.baseUrl).post('/public/invite-leads').send(LEAD).expect(200);
+    await new Promise((r) => setTimeout(r, 2500));
+
+    const rows = await h.prisma.notificationLog.findMany({
+      where: { templateCode: 'staff.invite_lead.email' },
+      select: { toEmail: true },
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.toEmail).toBe('leads@skydrop.test');
+  });
+
+  it('still records the lead when the alert cannot be sent', async () => {
+    // The lead is the thing that matters. A mail problem turning a
+    // captured lead into a 500 would recreate the exact failure this
+    // feature exists to remove.
+    await h.prisma.notificationTemplate.deleteMany({
+      where: { code: 'staff.invite_lead.email' },
+    });
+
+    await request(h.baseUrl).post('/public/invite-leads').send(LEAD).expect(200);
+    expect(await h.prisma.inviteLead.count()).toBe(1);
+  });
+
   it('is closed to staff who do not decide who gets invited', async () => {
     const warehouse = await loginAs(StaffRole.WAREHOUSE_STAFF);
     await request(h.baseUrl).get('/admin/invite-leads').set(warehouse).expect(403);

@@ -606,6 +606,15 @@ const systemSettings: SystemSettingSeed[] = [
     description:
       'How long the raw courier payload is kept on each webhook row. courier_webhooks is the largest table per order — every scan stores the payload up to three times (headers, raw body, and the parsed copy of the same thing) and nothing ever removed it. After this window the payload columns are BLANKED and the row survives: when the scan arrived, whether its signature verified, and which tracking event it produced are evidence and stay forever. The payload itself is a debugging artefact, useful while a courier dispute is live and worthless a quarter later. Nothing reads these columns after ingest. This does NOT touch tracking_events, and it must never be extended to financial data.',
   },
+  {
+    key: 'marketing.lead_notification_email',
+    category: 'notifications',
+    valueType: SettingValueType.STRING,
+    valueString: '',
+    displayName: 'Invite-request alert address',
+    description:
+      'Where a new invite request is announced. EMPTY means every active SUPER_ADMIN — which is right by default, because it stays correct as admins come and go and cannot silently point at a mailbox nobody reads. Set it to a shared inbox when one person should own the queue.',
+  },
   // ── capacity ceilings ─────────────────────────────────────────────
   // What the platform is allowed to grow into. These are the numbers a
   // managed database knows and does not tell us: Postgres reports its
@@ -2004,6 +2013,18 @@ const notificationTemplates: TemplateSeed[] = [
     subject: 'Update on your Skydrop application',
     bodyTemplate:
       'Hi {{ contact_name }}, after reviewing your Skydrop application we are unable to approve it at this time. Reason: {{ rejection_reason }}. Reach out to support@skydrop.online if you would like to appeal.',
+  },
+  {
+    code: 'staff.invite_lead.email',
+    name: 'New invite request — staff alert',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STAFF,
+    // The company and the volume are in the subject on purpose: this
+    // arrives on a phone, and whether it is worth opening now depends on
+    // exactly those two things.
+    subject: 'New invite request — {{ company_name }}{{ volume_suffix }}',
+    bodyTemplate:
+      '{{ full_name }} at {{ company_name }} asked for an invite.\n\nEmail: {{ email }}\nPhone: {{ phone }}\nSells: {{ product_types }}\nOrders a month: {{ monthly_orders }}\n\n{{ lead_message }}\n\nWork the queue here: {{ leads_url }}',
   },
   {
     code: 'staff.password_reset.email',

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
+import { EmailModule } from '../email/email.module';
 import { AdminInviteLeadController } from './controllers/admin-invite-lead.controller';
 import { PublicInviteLeadController } from './controllers/public-invite-lead.controller';
 import { InviteLeadService } from './services/invite-lead.service';
@@ -12,6 +13,9 @@ import { InviteLeadService } from './services/invite-lead.service';
  * two apart is what makes an open endpoint safe to expose.
  */
 @Module({
+  // For the new-lead alert. EmailModule is the M1 substrate every
+  // fire-once caller already uses.
+  imports: [EmailModule],
   controllers: [PublicInviteLeadController, AdminInviteLeadController],
   providers: [InviteLeadService, StaffJwtGuard],
 })
