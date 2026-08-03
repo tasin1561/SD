@@ -1,7 +1,14 @@
 import argon2 from 'argon2';
 import { prisma, StaffRole } from '@skydrop/db';
 
-const API = 'http://127.0.0.1:4000';
+// Read from the environment, and default to local dev.
+//
+// This was hardcoded to :4000, which meant pointing DATABASE_URL at a
+// second environment wrote the staff user into THAT database and then
+// tried to authenticate against production's API. It failed closed here
+// — the user did not exist there — but the shape is the dangerous one:
+// two halves of the same script talking to two different environments.
+const API = process.env['SKYDROP_API_URL'] ?? 'http://127.0.0.1:4000';
 const STAFF = { email: 'admin@test.local', password: 'Test-Admin-1234' };
 const SELLER = { email: 'seller@test.local', password: 'Test-Seller-1234' };
 
