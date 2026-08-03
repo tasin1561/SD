@@ -7,6 +7,7 @@ import { useApiClient } from '@skydrop/auth/client';
 import type { StaffMe } from '@skydrop/api-client';
 import { AppShell, Toaster, type NavGroup } from '@skydrop/ui/components';
 import {
+  Activity,
   ArrowLeftRight,
   Banknote,
   BarChart3,
@@ -127,6 +128,7 @@ export function AuthedShell({
         { href: '/reports', label: 'Reports', icon: <BarChart3 size={15} /> },
         { href: '/webhooks', label: 'Webhooks', icon: <Webhook size={15} /> },
         { href: '/staff', label: 'Staff', icon: <ShieldCheck size={15} /> },
+        { href: '/system/capacity', label: 'System limits', icon: <Activity size={15} /> },
         { href: '/settings', label: 'Settings', icon: <Settings size={15} /> },
       ],
     },

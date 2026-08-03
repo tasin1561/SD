@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Worker, type Job } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
+import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { EmailDispatchService } from '../services/email-dispatch.service';
 import type { EmailDispatchInput, EmailSendResult } from '../email.types';
 import { EMAIL_QUEUE_NAME } from './email.queue';
@@ -49,9 +50,13 @@ export class EmailWorker implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly redis: RedisService,
     private readonly dispatch: EmailDispatchService,
+    private readonly workerRole: WorkerRoleService,
   ) {}
 
   onModuleInit(): void {
+    // Only the queue-owning instance starts workers; every other
+    // API instance serves HTTP only. See WorkerRoleService.
+    if (!this.workerRole.shouldStart(EmailWorker.name)) return;
     this.worker = new Worker<EmailDispatchInput, EmailSendResult>(
       EMAIL_QUEUE_NAME,
       async (job: Job<EmailDispatchInput>): Promise<EmailSendResult> => {

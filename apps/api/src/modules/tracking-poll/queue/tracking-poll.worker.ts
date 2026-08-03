@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Worker, type Job } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
+import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { TrackingPollService } from '../services/tracking-poll.service';
 import { JOB_POLL_TRACKING, TRACKING_POLL_QUEUE_NAME } from './tracking-poll.queue';
 
@@ -19,9 +20,13 @@ export class TrackingPollWorker implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly redis: RedisService,
     private readonly poll: TrackingPollService,
+    private readonly workerRole: WorkerRoleService,
   ) {}
 
   onModuleInit(): void {
+    // Only the queue-owning instance starts workers; every other
+    // API instance serves HTTP only. See WorkerRoleService.
+    if (!this.workerRole.shouldStart(TrackingPollWorker.name)) return;
     this.worker = new Worker(
       TRACKING_POLL_QUEUE_NAME,
       async (job: Job): Promise<void> => {

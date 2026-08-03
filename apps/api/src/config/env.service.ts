@@ -25,6 +25,11 @@ export class EnvService {
     return this.env.BIND_HOST;
   }
 
+  /** True when this process owns the BullMQ workers + crons. */
+  get workersEnabled(): boolean {
+    return this.env.WORKERS_ENABLED;
+  }
+
   get logLevel(): Env['LOG_LEVEL'] {
     return this.env.LOG_LEVEL;
   }

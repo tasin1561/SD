@@ -2,6 +2,7 @@ import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@ne
 import { Worker, type Job } from 'bullmq';
 import { ActorType } from '@skydrop/db';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
+import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { StockAdjustmentService } from '../services/stock-adjustment.service';
 import {
   ADJUSTMENT_QUEUE_NAME,
@@ -24,9 +25,13 @@ export class AdjustmentWorker implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly redis: RedisService,
     private readonly adjustments: StockAdjustmentService,
+    private readonly workerRole: WorkerRoleService,
   ) {}
 
   onModuleInit(): void {
+    // Only the queue-owning instance starts workers; every other
+    // API instance serves HTTP only. See WorkerRoleService.
+    if (!this.workerRole.shouldStart(AdjustmentWorker.name)) return;
     this.worker = new Worker<ExecuteAdjustmentJob>(
       ADJUSTMENT_QUEUE_NAME,
       async (job: Job<ExecuteAdjustmentJob>): Promise<void> => {

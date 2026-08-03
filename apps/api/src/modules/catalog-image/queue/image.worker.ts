@@ -2,6 +2,7 @@ import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@ne
 import { Worker, type Job } from 'bullmq';
 import sharp from 'sharp';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
+import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { deriveThumbnailKey } from '../image-key';
@@ -35,9 +36,13 @@ export class ImageWorker implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly spaces: SpacesService,
     private readonly orphanCleanup: OrphanCleanupService,
+    private readonly workerRole: WorkerRoleService,
   ) {}
 
   onModuleInit(): void {
+    // Only the queue-owning instance starts workers; every other
+    // API instance serves HTTP only. See WorkerRoleService.
+    if (!this.workerRole.shouldStart(ImageWorker.name)) return;
     this.worker = new Worker(
       IMAGE_QUEUE_NAME,
       async (job: Job): Promise<void> => {

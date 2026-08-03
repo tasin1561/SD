@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Worker, type Job } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
+import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { PendingAccrualSweepService } from '../services/pending-accrual-sweep.service';
 import { JOB_SWEEP_PENDING_ACCRUALS, PENDING_ACCRUAL_QUEUE_NAME } from './pending-accrual.queue';
 
@@ -19,9 +20,13 @@ export class PendingAccrualWorker implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly redis: RedisService,
     private readonly sweep: PendingAccrualSweepService,
+    private readonly workerRole: WorkerRoleService,
   ) {}
 
   onModuleInit(): void {
+    // Only the queue-owning instance starts workers; every other
+    // API instance serves HTTP only. See WorkerRoleService.
+    if (!this.workerRole.shouldStart(PendingAccrualWorker.name)) return;
     this.worker = new Worker(
       PENDING_ACCRUAL_QUEUE_NAME,
       async (job: Job): Promise<void> => {

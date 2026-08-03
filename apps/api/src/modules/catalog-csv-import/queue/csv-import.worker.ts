@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Worker, type Job } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
+import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { CsvImportProcessorService } from '../services/csv-import-processor.service';
 import { CSV_IMPORT_QUEUE_NAME, JOB_PROCESS_CSV, type ProcessCsvJob } from './csv-import.queue';
 
@@ -17,9 +18,13 @@ export class CsvImportWorker implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly redis: RedisService,
     private readonly processor: CsvImportProcessorService,
+    private readonly workerRole: WorkerRoleService,
   ) {}
 
   onModuleInit(): void {
+    // Only the queue-owning instance starts workers; every other
+    // API instance serves HTTP only. See WorkerRoleService.
+    if (!this.workerRole.shouldStart(CsvImportWorker.name)) return;
     this.worker = new Worker<ProcessCsvJob>(
       CSV_IMPORT_QUEUE_NAME,
       async (job: Job<ProcessCsvJob>): Promise<void> => {

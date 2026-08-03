@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigModule as NestConfigModule } from '@nestjs/config';
 import { envSchema, type Env } from './env.schema';
 import { EnvService } from './env.service';
+import { WorkerRoleService } from '../common/queue/worker-role.service';
 
 function validateEnv(raw: Record<string, unknown>): Env {
   const result = envSchema.safeParse(raw);
@@ -28,7 +29,10 @@ function validateEnv(raw: Record<string, unknown>): Env {
       provide: EnvService,
       useFactory: (): EnvService => new EnvService(validateEnv(process.env)),
     },
+    // Global so every worker can ask whether this process owns the
+    // queues without each module wiring it up.
+    WorkerRoleService,
   ],
-  exports: [EnvService],
+  exports: [EnvService, WorkerRoleService],
 })
 export class ConfigModule {}

@@ -58,6 +58,7 @@ import { TrackingPollModule } from './modules/tracking-poll/tracking-poll.module
 import { LifecycleEventsModule } from './modules/lifecycle-events/lifecycle-events.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { SystemSettingsModule } from './modules/system-settings/system-settings.module';
+import { SystemCapacityModule } from './modules/system-capacity/system-capacity.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { PricingModule } from './modules/pricing/pricing.module';
 import { FxModule } from './modules/fx/fx.module';
@@ -162,6 +163,7 @@ import { envSchema } from './config/env.schema';
     LifecycleEventsModule,
     NotificationsModule,
     SystemSettingsModule,
+    SystemCapacityModule,
     SettingsModule,
     PricingModule,
     FxModule,

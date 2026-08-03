@@ -597,6 +597,51 @@ const systemSettings: SystemSettingSeed[] = [
     description:
       'The customer pays a tax-INCLUSIVE price, so this is extracted from the COD (cod × r / (100 + r)), never added on top: ₹1,000 at 18% withholds ₹152.54, not ₹180. WE file it, so the withheld amount is a liability recorded in gst_withholdings — not margin. GLOBAL only: a tax rate is set by law, not negotiated per seller.',
   },
+  // ── capacity ceilings ─────────────────────────────────────────────
+  // What the platform is allowed to grow into. These are the numbers a
+  // managed database knows and does not tell us: Postgres reports its
+  // connection limit but not the disk its plan bought. So the monitor
+  // measures usage and reads the CEILING from here, and says on screen
+  // which is which — a guessed ceiling wrong by 4x is worse than a
+  // gauge that admits it does not know.
+  //
+  // UPDATE THESE WHEN THE PLAN CHANGES. Nothing else will.
+  {
+    key: 'capacity.db_storage_gb',
+    category: 'capacity',
+    valueType: SettingValueType.INT,
+    valueInt: 10,
+    displayName: 'Database disk (GB)',
+    description:
+      'The storage the current managed-database plan includes. A full disk does not slow the system down — it stops accepting writes, so orders cannot be placed and money cannot be recorded. Update this the day the plan is resized.',
+  },
+  {
+    key: 'capacity.db_plan_label',
+    category: 'capacity',
+    valueType: SettingValueType.STRING,
+    valueString: '1 GB RAM / 1 vCPU / 10 GB (basic)',
+    displayName: 'Database plan',
+    description:
+      'Human label for the current plan, shown on the capacity page so the remedy can name what to upgrade from.',
+  },
+  {
+    key: 'capacity.redis_max_memory_mb',
+    category: 'capacity',
+    valueType: SettingValueType.INT,
+    valueInt: 512,
+    displayName: 'Redis memory ceiling (MB)',
+    description:
+      "How much memory Redis may use before jobs are refused or evicted. Redis shares the droplet's RAM and reports no limit of its own, so this is a judgement about how much of the droplet it may take. An evicted delayed job is work that silently never happens.",
+  },
+  {
+    key: 'capacity.api_instances',
+    category: 'capacity',
+    valueType: SettingValueType.INT,
+    valueInt: 1,
+    displayName: 'API instances running',
+    description:
+      'How many API processes serve traffic. Each holds its own database connection pool, so this is the multiplier on the connection ceiling. Exactly one of them should carry WORKERS_ENABLED=true.',
+  },
   {
     key: 'wallet.cod_collection_fee_percent',
     category: 'wallet',

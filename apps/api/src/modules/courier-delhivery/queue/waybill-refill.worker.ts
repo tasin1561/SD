@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Worker, type Job } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
+import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { DelhiveryWaybillPoolService } from '../services/delhivery-waybill-pool.service';
 import { JOB_REFILL_WAYBILLS, WAYBILL_REFILL_QUEUE_NAME } from './waybill-refill.queue';
@@ -38,9 +39,13 @@ export class WaybillRefillWorker implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly prisma: PrismaService,
     private readonly pool: DelhiveryWaybillPoolService,
+    private readonly workerRole: WorkerRoleService,
   ) {}
 
   onModuleInit(): void {
+    // Only the queue-owning instance starts workers; every other
+    // API instance serves HTTP only. See WorkerRoleService.
+    if (!this.workerRole.shouldStart(WaybillRefillWorker.name)) return;
     this.worker = new Worker(
       WAYBILL_REFILL_QUEUE_NAME,
       async (job: Job): Promise<void> => {

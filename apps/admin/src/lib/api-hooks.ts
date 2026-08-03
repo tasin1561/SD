@@ -1380,3 +1380,56 @@ export function useDeactivateStaffUser(): UseMutationResult<void, Error, { id: s
     },
   });
 }
+
+// ───────── System capacity (live monitor) ─────────
+
+export type CapacityStatus = 'OK' | 'WATCH' | 'WARNING' | 'CRITICAL';
+
+export interface CapacityMetric {
+  key: string;
+  label: string;
+  current: number;
+  ceiling: number | null;
+  unit: string;
+  percent: number | null;
+  status: CapacityStatus;
+  ceilingSource: 'MEASURED' | 'CONFIGURED' | 'UNKNOWN';
+  consequence: string;
+  remedy: string;
+  detail?: string;
+}
+
+export interface CapacityReport {
+  generatedAt: string;
+  worstStatus: CapacityStatus;
+  metrics: CapacityMetric[];
+  growth: {
+    ordersLast30Days: number;
+    ordersPrev30Days: number;
+    monthlyGrowthPercent: number | null;
+    storageMonthsRemaining: number | null;
+  };
+  topology: {
+    workersEnabledHere: boolean;
+    apiInstancesAssumed: number;
+    note: string;
+  };
+}
+
+/**
+ * Live capacity. Polled rather than pushed: the numbers move on the
+ * scale of minutes, and a websocket for four gauges would be more
+ * moving parts than the thing it watches.
+ */
+export function useCapacityReport(refetchMs: number): UseQueryResult<CapacityReport> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-capacity'],
+    queryFn: () => client.request<CapacityReport>('/api/admin/system/capacity'),
+    refetchInterval: refetchMs,
+    // Keep polling while the tab is backgrounded: this is the page
+    // someone leaves open on a second monitor during an incident.
+    refetchIntervalInBackground: true,
+    staleTime: 0,
+  });
+}

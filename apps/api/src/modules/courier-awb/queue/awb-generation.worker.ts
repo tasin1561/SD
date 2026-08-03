@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Worker, type Job } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
+import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AwbGenerationJobService } from '../services/awb-generation-job.service';
 import {
@@ -33,9 +34,13 @@ export class AwbGenerationWorker implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly prisma: PrismaService,
     private readonly jobService: AwbGenerationJobService,
+    private readonly workerRole: WorkerRoleService,
   ) {}
 
   async onModuleInit(): Promise<void> {
+    // Only the queue-owning instance starts workers; every other
+    // API instance serves HTTP only. See WorkerRoleService.
+    if (!this.workerRole.shouldStart(AwbGenerationWorker.name)) return;
     const backoffMs = await AwbGenerationQueue.resolveBackoffMs(this.prisma);
 
     this.worker = new Worker<AwbGenerationJob>(

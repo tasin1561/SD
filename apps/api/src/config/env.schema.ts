@@ -15,6 +15,16 @@ export const envSchema = z.object({
    * must answer from outside its namespace.
    */
   BIND_HOST: z.string().default('127.0.0.1'),
+  // Whether THIS process runs the in-process BullMQ workers and crons.
+  // Every API instance serves HTTP; exactly ONE should own the queues.
+  // Running two means every cron fires twice — the sweeps are idempotent
+  // so most double-fires are absorbed, but the schedulers would also
+  // register duplicate delayed jobs, and "mostly absorbed" is not a
+  // property to build horizontal scaling on.
+  WORKERS_ENABLED: z
+    .string()
+    .default('true')
+    .transform((v) => v !== 'false'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 
   DATABASE_URL: z.string().url(),

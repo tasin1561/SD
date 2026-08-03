@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Worker, type Job } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
+import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { OutboundWebhookDispatchService } from '../services/outbound-webhook-dispatch.service';
 import type { OutboundWebhookJobInput, WebhookSendResult } from '../types';
 import { OUTBOUND_WEBHOOK_QUEUE_NAME } from './outbound-webhook.queue';
@@ -19,9 +20,13 @@ export class OutboundWebhookWorker implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly redis: RedisService,
     private readonly dispatch: OutboundWebhookDispatchService,
+    private readonly workerRole: WorkerRoleService,
   ) {}
 
   onModuleInit(): void {
+    // Only the queue-owning instance starts workers; every other
+    // API instance serves HTTP only. See WorkerRoleService.
+    if (!this.workerRole.shouldStart(OutboundWebhookWorker.name)) return;
     this.worker = new Worker<OutboundWebhookJobInput, WebhookSendResult>(
       OUTBOUND_WEBHOOK_QUEUE_NAME,
       async (job: Job<OutboundWebhookJobInput>): Promise<WebhookSendResult> => {
