@@ -35,7 +35,12 @@ export default function RequestInvitePage(): ReactElement {
   return (
     <>
       <Nav />
-      <main id="main" className="bg-surface relative min-h-screen overflow-hidden pt-28 pb-24">
+      {/* `pt-12`, not `pt-28`. The 112px was written for a nav that
+          overlays the page and has to be cleared — this one sits in
+          normal flow, so main already starts below it and every pixel
+          of that padding was surplus. It pushed the wordmark 177px down
+          a page whose whole job is the form underneath it. */}
+      <main id="main" className="bg-surface relative min-h-screen overflow-hidden pt-12 pb-24">
         <div aria-hidden className="console-grid absolute inset-0" />
 
         {/* The live corridor, well back. Decorative only — it carries no

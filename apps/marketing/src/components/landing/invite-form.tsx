@@ -181,24 +181,14 @@ export function InviteForm(): ReactElement {
 
   return (
     <>
-      {/* The same opening line as the sign-in consoles. Someone arriving
-          from an ad has not seen the rest of the site, so the wordmark
-          and the live-status dot do the introducing. */}
+      {/* The sign-in consoles open with the wordmark and the live-status
+          dot, because those pages have no nav to introduce the product.
+          This one does — it sits 65px above, saying the same two things
+          — so repeating them here read as a mistake once the surplus
+          padding above was removed. What the nav does NOT say is the
+          terms of entry, and that is the line worth keeping. */}
       <div className="boot-rise mb-7 text-center">
-        <div className="flex items-baseline justify-center gap-3">
-          <span className="font-display text-fg-strong text-2xl font-semibold tracking-tight">
-            Skydrop
-          </span>
-          <span className="telemetry text-fg-muted inline-flex items-center gap-1.5">
-            <span
-              aria-hidden
-              className="status-dot inline-block h-1 w-1 rounded-full"
-              style={{ background: 'var(--green, #10B981)' }}
-            />
-            sys online
-          </span>
-        </div>
-        <div className="telemetry text-fg-muted mt-2">invite-only beta · bd → in</div>
+        <div className="telemetry text-fg-muted">invite-only beta · bd → in</div>
       </div>
 
       <TiltPanel max={2.5} className="boot-rise boot-rise-2">
