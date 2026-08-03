@@ -106,4 +106,5 @@ export {
   CourierWaybillStatus,
   PickupRequestStatus,
   InviteLeadStatus,
+  ShippingDirection,
 } from '@prisma/client';

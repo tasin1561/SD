@@ -54,6 +54,8 @@ export class PublicInviteLeadController {
       companyName: body.companyName,
       email: body.email,
       phone: body.phone,
+      altPhone: body.altPhone,
+      shippingDirection: body.shippingDirection,
       productTypes: body.productTypes,
       monthlyOrders: body.monthlyOrders,
       message: body.message,

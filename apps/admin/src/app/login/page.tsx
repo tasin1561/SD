@@ -59,8 +59,14 @@ export default async function LoginPage(): Promise<ReactElement> {
         </div>
       </TiltPanel>
 
-      <div className="boot-rise boot-rise-3 telemetry text-text-muted text-center mt-5">
-        forgot password? contact your admin
+      {/* It used to say "contact your admin", which for the SUPER_ADMIN
+          reading it means contact yourself — and for everyone else meant
+          waiting on somebody with a database console. The API and the
+          reset page both existed; only the way in was missing. */}
+      <div className="boot-rise boot-rise-3 telemetry text-text-muted mt-5 text-center">
+        <a href="/auth/forgot-password" className="hover:text-text-bright transition-colors">
+          forgot password?
+        </a>
       </div>
     </>
   );

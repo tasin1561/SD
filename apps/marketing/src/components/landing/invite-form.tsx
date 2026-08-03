@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { ArrowUpRight, Check } from 'lucide-react';
+import { TiltPanel } from '@/lib/tilt';
 
 /**
  * Asking to be let in.
@@ -35,6 +36,25 @@ import { ArrowUpRight, Check } from 'lucide-react';
 const ENDPOINT = '/api/public/invite-leads';
 
 const VOLUMES = ['Under 100', '100–500', '500–2,000', '2,000+', 'Not sure yet'] as const;
+
+/**
+ * Which way they want parcels to travel.
+ *
+ * We run Bangladesh → India today, so the other two are demand we cannot
+ * serve. They are offered anyway: a lead asking for the reverse corridor
+ * is the clearest signal we could get about what to build next, and a
+ * form that only offers the direction we already run can never tell us
+ * one exists.
+ *
+ * Phrased from the seller's side — "my customers are in …" — because
+ * that is how someone thinks about their own business. "BD_TO_IN" is our
+ * word for it, not theirs.
+ */
+const DIRECTIONS = [
+  { value: 'BD_TO_IN', label: 'India — I am in Bangladesh, shipping to Indian customers' },
+  { value: 'IN_TO_BD', label: 'Bangladesh — I am in India, shipping to Bangladeshi customers' },
+  { value: 'BOTH', label: 'Both directions' },
+] as const;
 
 interface FieldProps {
   readonly id: string;
@@ -144,135 +164,217 @@ export function InviteForm(): ReactElement {
   }
 
   return (
-    <form onSubmit={(e) => void handleSubmit(e)} className="panel ticks p-6 sm:p-9" noValidate>
-      <div className="telemetry text-fg-muted">invite request</div>
-      <h1
-        className="mt-3 font-display font-semibold text-fg-strong"
-        style={{ fontSize: 'clamp(1.8rem, 3.4vw, 2.6rem)', letterSpacing: '-0.025em' }}
-      >
-        Tell us about your store
-      </h1>
-      <p className="mt-4 text-fg-body max-w-[52ch]">
-        Skydrop is invite-only while we scale the warehouse. Four fields is all we need to start —
-        the rest helps us come to the call prepared.
-      </p>
-
-      <div className="mt-8 grid gap-5 sm:grid-cols-2">
-        <Field id="fullName" label="Your name" required>
-          <input
-            id="fullName"
-            name="fullName"
-            required
-            maxLength={120}
-            autoComplete="name"
-            className={inputClass}
-            placeholder="Rahim Uddin"
-          />
-        </Field>
-        <Field id="companyName" label="Company" required>
-          <input
-            id="companyName"
-            name="companyName"
-            required
-            maxLength={160}
-            autoComplete="organization"
-            className={inputClass}
-            placeholder="Dhaka Threads"
-          />
-        </Field>
-        <Field id="email" label="Email" required>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            required
-            maxLength={200}
-            autoComplete="email"
-            className={inputClass}
-            placeholder="you@yourstore.com"
-          />
-        </Field>
-        <Field id="phone" label="Phone or WhatsApp" required hint="However you write it is fine.">
-          <input
-            id="phone"
-            name="phone"
-            required
-            maxLength={32}
-            autoComplete="tel"
-            inputMode="tel"
-            className={inputClass}
-            placeholder="+880 1712 345678"
-          />
-        </Field>
-        <Field id="productTypes" label="What do you sell?">
-          <input
-            id="productTypes"
-            name="productTypes"
-            maxLength={300}
-            className={inputClass}
-            placeholder="Womenswear — kurtis, sarees"
-          />
-        </Field>
-        <Field id="monthlyOrders" label="Orders a month">
-          <select id="monthlyOrders" name="monthlyOrders" className={inputClass} defaultValue="">
-            <option value="">Select…</option>
-            {VOLUMES.map((v) => (
-              <option key={v} value={v}>
-                {v}
-              </option>
-            ))}
-          </select>
-        </Field>
+    <>
+      {/* The same opening line as the sign-in consoles. Someone arriving
+          from an ad has not seen the rest of the site, so the wordmark
+          and the live-status dot do the introducing. */}
+      <div className="boot-rise mb-7 text-center">
+        <div className="flex items-baseline justify-center gap-3">
+          <span className="font-display text-fg-strong text-2xl font-semibold tracking-tight">
+            Skydrop
+          </span>
+          <span className="telemetry text-fg-muted inline-flex items-center gap-1.5">
+            <span
+              aria-hidden
+              className="status-dot inline-block h-1 w-1 rounded-full"
+              style={{ background: 'var(--green, #10B981)' }}
+            />
+            sys online
+          </span>
+        </div>
+        <div className="telemetry text-fg-muted mt-2">invite-only beta · bd → in</div>
       </div>
 
-      <div className="mt-5">
-        <Field id="message" label="Anything else">
-          <textarea
-            id="message"
-            name="message"
-            maxLength={2000}
-            rows={4}
-            className={inputClass.replace('h-12', 'min-h-[7rem] py-3')}
-            placeholder="Where you ship from, what you have tried before, what worries you about India."
-          />
-        </Field>
-      </div>
-
-      {/* Hidden from people, irresistible to scripts. Off-screen rather
-          than display:none, because some bots skip what is not rendered. */}
-      <div aria-hidden className="absolute left-[-9999px] h-0 w-0 overflow-hidden">
-        <label htmlFor="website">Website</label>
-        <input id="website" name="website" type="text" tabIndex={-1} autoComplete="off" />
-      </div>
-
-      {error !== null ? (
-        <p
-          role="alert"
-          className="mt-6 rounded-xl border px-4 py-3 text-sm"
-          style={{ borderColor: 'var(--red, #EF4444)', color: 'var(--red, #EF4444)' }}
+      <TiltPanel max={2.5} className="boot-rise boot-rise-2">
+        <form
+          onSubmit={(e) => void handleSubmit(e)}
+          className="panel ticks relative overflow-hidden p-6 sm:p-9"
+          noValidate
         >
-          {error}
-        </p>
-      ) : null}
+          <div className="telemetry text-fg-muted">invite request</div>
+          <h1
+            className="mt-3 font-display font-semibold text-fg-strong"
+            style={{ fontSize: 'clamp(1.8rem, 3.4vw, 2.6rem)', letterSpacing: '-0.025em' }}
+          >
+            Tell us about your store
+          </h1>
+          <p className="mt-4 text-fg-body max-w-[52ch]">
+            Skydrop is invite-only while we scale the warehouse. Four fields is all we need to start
+            — the rest helps us come to the call prepared.
+          </p>
 
-      <button
-        type="submit"
-        disabled={busy}
-        className="group mt-8 inline-flex items-center gap-2 rounded-xl bg-sky px-6 py-4 text-sm font-medium text-accent-fg transition-colors hover:bg-sky-deep disabled:opacity-60"
-        style={{ boxShadow: '0 0 42px var(--glow)' }}
-      >
-        {busy ? 'Sending…' : 'Request an invite'}
-        {busy ? null : (
-          <ArrowUpRight
-            size={16}
-            className="transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
-          />
-        )}
-      </button>
+          {/* First, because it frames everything after it — and because
+              a lead in the wrong direction is worth knowing about before
+              reading their volume. */}
+          <div className="mt-8">
+            <Field
+              id="shippingDirection"
+              label="Where do you want to deliver parcels?"
+              hint="We run Bangladesh → India today. Tell us either way — the other direction is what we are deciding whether to build next."
+            >
+              <select
+                id="shippingDirection"
+                name="shippingDirection"
+                className={inputClass}
+                defaultValue=""
+              >
+                <option value="">Select…</option>
+                {DIRECTIONS.map((d) => (
+                  <option key={d.value} value={d.value}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
 
-      <p className="mt-5 text-xs text-fg-muted max-w-[52ch]">
-        We use this only to get in touch about Skydrop. No newsletter, and we do not pass it on.
-      </p>
-    </form>
+          <div className="mt-5 grid gap-5 sm:grid-cols-2">
+            <Field id="fullName" label="Your name" required>
+              <input
+                id="fullName"
+                name="fullName"
+                required
+                maxLength={120}
+                autoComplete="name"
+                className={inputClass}
+                placeholder="Rahim Uddin"
+              />
+            </Field>
+            <Field id="companyName" label="Company" required>
+              <input
+                id="companyName"
+                name="companyName"
+                required
+                maxLength={160}
+                autoComplete="organization"
+                className={inputClass}
+                placeholder="Dhaka Threads"
+              />
+            </Field>
+            <Field id="email" label="Email" required>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                maxLength={200}
+                autoComplete="email"
+                className={inputClass}
+                placeholder="you@yourstore.com"
+              />
+            </Field>
+            <Field
+              id="phone"
+              label="Phone or WhatsApp"
+              required
+              hint="However you write it is fine."
+            >
+              <input
+                id="phone"
+                name="phone"
+                required
+                maxLength={32}
+                autoComplete="tel"
+                inputMode="tel"
+                className={inputClass}
+                placeholder="+880 1712 345678"
+              />
+            </Field>
+            <Field
+              id="altPhone"
+              label="Second number"
+              hint="If you have one in the other country — whichever reaches you."
+            >
+              <input
+                id="altPhone"
+                name="altPhone"
+                maxLength={32}
+                autoComplete="tel"
+                inputMode="tel"
+                className={inputClass}
+                placeholder="+91 98765 43210"
+              />
+            </Field>
+            <Field id="productTypes" label="What do you sell?">
+              <input
+                id="productTypes"
+                name="productTypes"
+                maxLength={300}
+                className={inputClass}
+                placeholder="Womenswear — kurtis, sarees"
+              />
+            </Field>
+            <Field id="monthlyOrders" label="Orders a month">
+              <select
+                id="monthlyOrders"
+                name="monthlyOrders"
+                className={inputClass}
+                defaultValue=""
+              >
+                <option value="">Select…</option>
+                {VOLUMES.map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+
+          <div className="mt-5">
+            <Field id="message" label="Anything else">
+              <textarea
+                id="message"
+                name="message"
+                maxLength={2000}
+                rows={4}
+                className={inputClass.replace('h-12', 'min-h-[7rem] py-3')}
+                placeholder="Where you ship from, what you have tried before, what worries you about India."
+              />
+            </Field>
+          </div>
+
+          {/* Hidden from people, irresistible to scripts. Off-screen rather
+          than display:none, because some bots skip what is not rendered. */}
+          <div aria-hidden className="absolute left-[-9999px] h-0 w-0 overflow-hidden">
+            <label htmlFor="website">Website</label>
+            <input id="website" name="website" type="text" tabIndex={-1} autoComplete="off" />
+          </div>
+
+          {error !== null ? (
+            <p
+              role="alert"
+              className="mt-6 rounded-xl border px-4 py-3 text-sm"
+              style={{ borderColor: 'var(--red, #EF4444)', color: 'var(--red, #EF4444)' }}
+            >
+              {error}
+            </p>
+          ) : null}
+
+          <button
+            type="submit"
+            disabled={busy}
+            className="group mt-8 inline-flex items-center gap-2 rounded-xl bg-sky px-6 py-4 text-sm font-medium text-accent-fg transition-colors hover:bg-sky-deep disabled:opacity-60"
+            style={{ boxShadow: '0 0 42px var(--glow)' }}
+          >
+            {busy ? 'Sending…' : 'Request an invite'}
+            {busy ? null : (
+              <ArrowUpRight
+                size={16}
+                className="transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+              />
+            )}
+          </button>
+
+          <p className="text-fg-muted mt-5 max-w-[52ch] text-xs">
+            We use this only to get in touch about Skydrop. No newsletter, and we do not pass it on.
+          </p>
+
+          {/* Reads --px/--py from TiltPanel. Decorative, and last in the DOM
+          so it cannot sit above a focus ring. */}
+          <div aria-hidden className="glow-follow" />
+        </form>
+      </TiltPanel>
+    </>
   );
 }

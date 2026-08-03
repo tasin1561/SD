@@ -1,5 +1,11 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { InviteLeadStatus, NotificationRecipientType, Prisma, StaffRole } from '@skydrop/db';
+import {
+  InviteLeadStatus,
+  NotificationRecipientType,
+  Prisma,
+  ShippingDirection,
+  StaffRole,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { ActorType } from '@skydrop/db';
@@ -35,6 +41,8 @@ export interface SubmitLeadInput {
   readonly companyName: string;
   readonly email: string;
   readonly phone: string;
+  readonly altPhone?: string | undefined;
+  readonly shippingDirection?: ShippingDirection | undefined;
   readonly productTypes?: string | undefined;
   readonly monthlyOrders?: string | undefined;
   readonly message?: string | undefined;
@@ -48,6 +56,8 @@ export interface LeadView {
   readonly companyName: string;
   readonly email: string;
   readonly phone: string;
+  readonly altPhone: string | null;
+  readonly shippingDirection: ShippingDirection | null;
   readonly productTypes: string | null;
   readonly monthlyOrders: string | null;
   readonly message: string | null;
@@ -59,6 +69,14 @@ export interface LeadView {
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
+
+/** How a direction reads in an alert, where an enum name would not. */
+const DIRECTION_LABEL: Record<string, string> = {
+  BD_TO_IN: 'Bangladesh → India',
+  IN_TO_BD: 'India → Bangladesh (NOT SERVED YET)',
+  BOTH: 'Both directions (reverse NOT SERVED YET)',
+  UNSPECIFIED: 'not said',
+};
 
 @Injectable()
 export class InviteLeadService {
@@ -85,6 +103,8 @@ export class InviteLeadService {
       fullName: input.fullName.trim(),
       companyName: input.companyName.trim(),
       phone: input.phone.trim(),
+      altPhone: input.altPhone?.trim() || null,
+      shippingDirection: input.shippingDirection ?? null,
       productTypes: input.productTypes?.trim() || null,
       monthlyOrders: input.monthlyOrders?.trim() || null,
       message: input.message?.trim() || null,
@@ -157,6 +177,8 @@ export class InviteLeadService {
       fullName: string;
       companyName: string;
       phone: string;
+      altPhone: string | null;
+      shippingDirection: ShippingDirection | null;
       productTypes: string | null;
       monthlyOrders: string | null;
       message: string | null;
@@ -192,7 +214,8 @@ export class InviteLeadService {
         full_name: lead.fullName,
         company_name: lead.companyName,
         email: lead.email,
-        phone: lead.phone,
+        phone: lead.phone + (lead.altPhone ? ` / ${lead.altPhone}` : ''),
+        direction: DIRECTION_LABEL[lead.shippingDirection ?? 'UNSPECIFIED'],
         product_types: lead.productTypes ?? 'not said',
         monthly_orders: lead.monthlyOrders ?? 'not said',
         // The subject carries the volume only when they gave one, so it
@@ -254,6 +277,7 @@ export class InviteLeadService {
               { fullName: { contains: search, mode: 'insensitive' as const } },
               { email: { contains: search, mode: 'insensitive' as const } },
               { phone: { contains: search } },
+              { altPhone: { contains: search } },
             ],
           }
         : {}),
@@ -334,6 +358,8 @@ export class InviteLeadService {
       companyName: r.companyName,
       email: r.email,
       phone: r.phone,
+      altPhone: r.altPhone,
+      shippingDirection: r.shippingDirection,
       productTypes: r.productTypes,
       monthlyOrders: r.monthlyOrders,
       message: r.message,

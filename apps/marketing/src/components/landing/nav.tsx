@@ -1,13 +1,18 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState, type ReactElement } from 'react';
 import { Menu, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { ThemeToggle } from './theme-toggle';
 
 const LINKS = [
-  { href: '#how-it-works', label: 'Flight plan' },
-  { href: '#why-skydrop', label: 'Why Skydrop' },
+  // Root-relative, NOT bare fragments. A bare `#why-skydrop` only
+  // resolves on the page that contains that section — from
+  // /request-invite it appended a hash to the URL and moved nothing,
+  // which reads as a dead button rather than a link to another page.
+  { href: '/#how-it-works', label: 'Flight plan' },
+  { href: '/#why-skydrop', label: 'Why Skydrop' },
   { href: 'https://track.skydrop.online', label: 'Track a parcel', external: true },
 ];
 
@@ -50,8 +55,8 @@ export function Nav(): ReactElement {
       }
     >
       <div className="max-w-7xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between">
-        <a
-          href="#top"
+        <Link
+          href="/#top"
           className="flex items-baseline gap-3 font-display font-semibold text-lg tracking-tight text-fg-strong"
           aria-label="Skydrop home"
         >
@@ -60,29 +65,40 @@ export function Nav(): ReactElement {
             <span aria-hidden className="status-dot inline-block h-1 w-1 rounded-full bg-green" />
             sys online
           </span>
-        </a>
+        </Link>
 
         <nav className="hidden lg:flex items-center gap-1">
-          {LINKS.map((l) => (
-            <a
-              key={l.href}
-              href={l.href}
-              {...(l.external ? { target: '_blank', rel: 'noopener' } : {})}
-              className="px-3 py-2 text-sm text-fg-muted hover:text-fg-strong transition-colors rounded-lg"
-            >
-              {l.label}
-            </a>
-          ))}
+          {LINKS.map((l) =>
+            l.external ? (
+              <a
+                key={l.href}
+                href={l.href}
+                target="_blank"
+                rel="noopener"
+                className="px-3 py-2 text-sm text-fg-muted hover:text-fg-strong transition-colors rounded-lg"
+              >
+                {l.label}
+              </a>
+            ) : (
+              <Link
+                key={l.href}
+                href={l.href}
+                className="px-3 py-2 text-sm text-fg-muted hover:text-fg-strong transition-colors rounded-lg"
+              >
+                {l.label}
+              </Link>
+            ),
+          )}
         </nav>
 
         <div className="hidden lg:flex items-center gap-2">
           <ThemeToggle />
-          <a
+          <Link
             href="/request-invite"
             className="inline-flex items-center gap-2 bg-sky text-accent-fg font-medium text-sm px-4 py-2.5 rounded-xl hover:bg-sky-deep transition-colors"
           >
             Request an invite
-          </a>
+          </Link>
         </div>
 
         <div className="lg:hidden flex items-center gap-1">
@@ -131,24 +147,36 @@ export function Nav(): ReactElement {
             </button>
           </div>
           <nav className="flex flex-col gap-2">
-            {LINKS.map((l) => (
-              <a
-                key={l.href}
-                href={l.href}
-                {...(l.external ? { target: '_blank', rel: 'noopener' } : {})}
-                onClick={() => setOpen(false)}
-                className="px-4 py-3 text-base text-fg-strong hover:bg-surface-3 rounded-xl transition-colors"
-              >
-                {l.label}
-              </a>
-            ))}
-            <a
+            {LINKS.map((l) =>
+              l.external ? (
+                <a
+                  key={l.href}
+                  href={l.href}
+                  target="_blank"
+                  rel="noopener"
+                  onClick={() => setOpen(false)}
+                  className="px-4 py-3 text-base text-fg-strong hover:bg-surface-3 rounded-xl transition-colors"
+                >
+                  {l.label}
+                </a>
+              ) : (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  onClick={() => setOpen(false)}
+                  className="px-4 py-3 text-base text-fg-strong hover:bg-surface-3 rounded-xl transition-colors"
+                >
+                  {l.label}
+                </Link>
+              ),
+            )}
+            <Link
               href="/request-invite"
               onClick={() => setOpen(false)}
               className="mt-4 inline-flex items-center justify-center gap-2 bg-sky text-accent-fg font-medium text-base px-4 py-3.5 rounded-xl hover:bg-sky-deep transition-colors"
             >
               Request an invite
-            </a>
+            </Link>
           </nav>
         </div>
       </div>

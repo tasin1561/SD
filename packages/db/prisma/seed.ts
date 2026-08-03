@@ -2024,7 +2024,7 @@ const notificationTemplates: TemplateSeed[] = [
     // exactly those two things.
     subject: 'New invite request — {{ company_name }}{{ volume_suffix }}',
     bodyTemplate:
-      '{{ full_name }} at {{ company_name }} asked for an invite.\n\nEmail: {{ email }}\nPhone: {{ phone }}\nSells: {{ product_types }}\nOrders a month: {{ monthly_orders }}\n\n{{ lead_message }}\n\nWork the queue here: {{ leads_url }}',
+      '{{ full_name }} at {{ company_name }} asked for an invite.\n\nDirection: {{ direction }}\nEmail: {{ email }}\nPhone: {{ phone }}\nSells: {{ product_types }}\nOrders a month: {{ monthly_orders }}\n\n{{ lead_message }}\n\nWork the queue here: {{ leads_url }}',
   },
   {
     code: 'staff.password_reset.email',

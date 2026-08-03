@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { ArrowUpRight, Search } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { TiltPanel } from '@/lib/tilt';
@@ -70,7 +71,7 @@ export function Hero(): ReactElement {
             </p>
 
             <div className="boot-rise boot-rise-4 mt-8 flex flex-wrap gap-3">
-              <a
+              <Link
                 href="/request-invite"
                 className="group inline-flex items-center gap-2 rounded-xl bg-sky px-5 py-3.5 text-sm font-medium text-accent-fg transition-all hover:bg-sky-deep hover:-translate-y-px"
               >
@@ -79,7 +80,7 @@ export function Hero(): ReactElement {
                   size={16}
                   className="transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
                 />
-              </a>
+              </Link>
               <a
                 href="https://track.skydrop.online"
                 className="inline-flex items-center gap-2 rounded-xl border border-line-strong px-5 py-3.5 text-sm text-fg-strong transition-all hover:bg-surface-3 hover:-translate-y-px"

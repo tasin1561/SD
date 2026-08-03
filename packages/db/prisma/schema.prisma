@@ -4758,6 +4758,23 @@ model PackBoxScan {
   @@map("pack_box_scans")
 }
 
+/// Which way a lead wants parcels to travel.
+///
+/// Skydrop runs BD → India today, so IN_TO_BD and BOTH are demand we
+/// cannot serve yet. They are on the form anyway, because a lead asking
+/// for the reverse corridor is the most valuable thing we could learn
+/// about what to build next — and a form that only offers the direction
+/// we already run can never tell us.
+enum ShippingDirection {
+  /// Seller in Bangladesh, customers in India. What we run.
+  BD_TO_IN @map("bd_to_in")
+  /// Seller in India, customers in Bangladesh. Not served yet.
+  IN_TO_BD @map("in_to_bd")
+  BOTH     @map("both")
+
+  @@map("shipping_direction")
+}
+
 /// Where a lead sits in the conversation. Deliberately short: a longer
 /// pipeline invites guessing at which stage something is in, and the
 /// only decision this list has to support is "who do I call next".
@@ -4799,6 +4816,14 @@ model InviteLead {
   /// E.164 where the form could coerce it; kept as typed otherwise, so
   /// a lead is never rejected over a phone format.
   phone        String
+  /// A second number in the other country. Sellers working this corridor
+  /// routinely carry both a Bangladeshi and an Indian line, and the one
+  /// that reaches them depends on which side they are standing on.
+  altPhone     String?          @map("alt_phone")
+  /// Which way they want parcels to go. Null on leads captured before
+  /// the question existed — absence is not the same as BD_TO_IN, and
+  /// defaulting it would invent an answer nobody gave.
+  shippingDirection ShippingDirection? @map("shipping_direction")
   /// What they sell, in their words.
   productTypes String?          @map("product_types")
   /// Their own estimate of monthly volume — a free-text bucket, since a

@@ -56,6 +56,20 @@ const NEXT_STATUS: ReadonlyArray<LeadStatus> = [
   'SPAM',
 ];
 
+/**
+ * How a direction reads to whoever is about to call.
+ *
+ * The reverse corridor is called out rather than shown neutrally: we do
+ * not run India → Bangladesh, so that lead needs a different
+ * conversation, and finding that out on the call wastes both people's
+ * time.
+ */
+const DIRECTION: Record<string, { label: string; unserved: boolean }> = {
+  BD_TO_IN: { label: 'BD → IN', unserved: false },
+  IN_TO_BD: { label: 'IN → BD — not served yet', unserved: true },
+  BOTH: { label: 'Both directions — reverse not served yet', unserved: true },
+};
+
 function howLongAgo(iso: string): string {
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
   if (mins < 60) return `${mins}m ago`;
@@ -108,6 +122,14 @@ function LeadCard({ lead }: { readonly lead: InviteLead }): ReactElement {
               >
                 <Phone size={12} /> {lead.phone}
               </a>
+              {lead.altPhone !== null && lead.altPhone !== '' && (
+                <a
+                  href={`tel:${lead.altPhone.replace(/\s+/g, '')}`}
+                  className="text-accent inline-flex items-center gap-1 hover:underline"
+                >
+                  <Phone size={12} /> {lead.altPhone}
+                </a>
+              )}
               <span className="text-text-faint">{howLongAgo(lead.createdAt)}</span>
             </div>
           </div>
@@ -117,8 +139,17 @@ function LeadCard({ lead }: { readonly lead: InviteLead }): ReactElement {
           />
         </div>
 
-        {(lead.productTypes || lead.monthlyOrders) && (
+        {(lead.productTypes || lead.monthlyOrders || lead.shippingDirection) && (
           <div className="text-text-muted flex flex-wrap gap-x-6 gap-y-1 text-xs">
+            {lead.shippingDirection !== null && DIRECTION[lead.shippingDirection] && (
+              <span
+                className={
+                  DIRECTION[lead.shippingDirection]!.unserved ? 'text-[var(--status-rto-fg)]' : ''
+                }
+              >
+                {DIRECTION[lead.shippingDirection]!.label}
+              </span>
+            )}
             {lead.productTypes && <span>Sells: {lead.productTypes}</span>}
             {lead.monthlyOrders && <span>Volume: {lead.monthlyOrders}</span>}
           </div>

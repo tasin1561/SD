@@ -1450,6 +1450,8 @@ export interface InviteLead {
   companyName: string;
   email: string;
   phone: string;
+  altPhone: string | null;
+  shippingDirection: 'BD_TO_IN' | 'IN_TO_BD' | 'BOTH' | null;
   productTypes: string | null;
   monthlyOrders: string | null;
   message: string | null;

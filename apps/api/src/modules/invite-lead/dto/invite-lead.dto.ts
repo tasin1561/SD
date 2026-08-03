@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { InviteLeadStatus } from '@skydrop/db';
+import { InviteLeadStatus, ShippingDirection } from '@skydrop/db';
 import { IsEmail, IsEnum, IsInt, IsOptional, IsString, Length, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -27,6 +27,25 @@ export class SubmitInviteLeadDto {
   @IsString()
   @Length(6, 32)
   phone!: string;
+
+  @ApiPropertyOptional({
+    example: '+919876543210',
+    description:
+      'A second number in the other country. Sellers on this corridor routinely carry both a Bangladeshi and an Indian line.',
+  })
+  @IsOptional()
+  @IsString()
+  @Length(0, 32)
+  altPhone?: string;
+
+  @ApiPropertyOptional({
+    enum: ShippingDirection,
+    description:
+      'Which way they want parcels to travel. IN_TO_BD and BOTH are demand we cannot serve yet — captured anyway, because it is the clearest signal of what to build next.',
+  })
+  @IsOptional()
+  @IsEnum(ShippingDirection)
+  shippingDirection?: ShippingDirection;
 
   @ApiPropertyOptional({ example: 'Womenswear, mostly kurtis and sarees' })
   @IsOptional()
