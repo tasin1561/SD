@@ -113,15 +113,23 @@ async function preflight(): Promise<void> {
     where: { key: 'courier.delhivery_live_writes_enabled' },
     data: { valueBoolean: true },
   });
-  const origin = await prisma.systemSetting.findUnique({
-    where: { key: 'courier.delhivery_origin_pincode' },
-    select: { valueString: true },
-  });
-  if (!origin?.valueString) {
-    await prisma.systemSetting.update({
-      where: { key: 'courier.delhivery_origin_pincode' },
-      data: { valueString: '560001' },
+  // The two settings the adapter needs before it will marshal a
+  // create-shipment call at all. Both are seeded EMPTY on purpose —
+  // they describe a real warehouse Delhivery has on file, and a wrong
+  // value is worse than no value. For a simulator any value does, and
+  // filling them here is what stops the run dying on
+  // "pickup location not configured" thirty seconds in.
+  for (const [key, value] of [
+    ['courier.delhivery_origin_pincode', '560001'],
+    ['courier.delhivery_pickup_location', 'Skydrop'],
+  ] as const) {
+    const row = await prisma.systemSetting.findUnique({
+      where: { key },
+      select: { valueString: true },
     });
+    if (!row?.valueString) {
+      await prisma.systemSetting.update({ where: { key }, data: { valueString: value } });
+    }
   }
   line(`→ adapter pointed at ${SIM}, live writes ON (loopback ⇒ simulator)`);
 }
