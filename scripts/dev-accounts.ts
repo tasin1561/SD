@@ -82,7 +82,14 @@ async function main(): Promise<void> {
   const bins = (await call(`/admin/warehouses/${wh.id}/bins`, {
     token: staffToken,
   })) as unknown as Array<{ id: string; type: string }>;
-  const binId = bins.find((b) => b.type === 'STORAGE' || b.type === 'FLOOR')!.id;
+  // A bin is OPTIONAL when the warehouse is not bin-tracking, and a
+  // freshly seeded warehouse has none at all — the seed inserts the
+  // warehouse row directly, bypassing the auto-provisioning that
+  // warehouse CREATION does. `BinPolicyService.floorBinId` self-heals
+  // that on first putaway, so omitting the bin is the correct call
+  // rather than a shortcut. Demanding one is what made this script fail
+  // against a clean database.
+  const binId = bins.find((b) => b.type === 'STORAGE' || b.type === 'FLOOR')?.id ?? null;
 
   for (const name of ['Blue T-Shirt', 'Phone Case', 'Water Bottle']) {
     const sku = name.replace(/\s+/g, '-').toUpperCase();
@@ -111,7 +118,11 @@ async function main(): Promise<void> {
     await call(`/admin/goods-receipts/${gr['id']}/lines`, {
       method: 'POST',
       token: staffToken,
-      body: { lines: [{ lineId: lines[0]!.id, receivedQty: 50, putawayBinId: binId }] },
+      body: {
+        lines: [
+          { lineId: lines[0]!.id, receivedQty: 50, ...(binId ? { putawayBinId: binId } : {}) },
+        ],
+      },
     });
     await call(`/admin/goods-receipts/${gr['id']}/complete`, { method: 'POST', token: staffToken });
     console.log(`  stocked ${name} (${sku}) × 50`);
