@@ -18,6 +18,9 @@ const STAFF: StaffMe = {
   // The role enum is a string at runtime; the imported StaffRole
   // type is a TS enum — using SUPER_ADMIN literal is fine.
   role: 'SUPER_ADMIN' as StaffMe['role'],
+  roleKey: 'super_admin',
+  roleName: 'Super admin',
+  permissions: ['staff.view', 'rbac.manage'],
   emailVerifiedAt: null,
   lastLoginAt: null,
   createdAt: '2026-01-01T00:00:00.000Z',
