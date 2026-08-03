@@ -32,21 +32,6 @@ const path = require('node:path');
 // forked copy.
 const ROOT = __dirname;
 
-// ── Running a SECOND environment from the same file (2026-08-03) ─────
-// ROOT was already derived so a second checkout would not need a forked
-// copy of this config. The ports and process names were not, so it did.
-// Both now come from the environment:
-//
-//   SKYDROP_ENV_SUFFIX   appended to every process name ('-staging')
-//   SKYDROP_PORT_OFFSET  added to every port (100 → api 4100, admin 3102)
-//
-// Unset, they are '' and 0, so production is byte-for-byte what it was.
-// Set, one `pm2 start ecosystem.config.cjs` in the staging checkout
-// brings up a parallel stack that cannot collide on a port or a name.
-const SUFFIX = process.env.SKYDROP_ENV_SUFFIX ?? '';
-const OFFSET = Number(process.env.SKYDROP_PORT_OFFSET ?? 0);
-const API_PORT = 4000 + OFFSET;
-
 const envText = fs.readFileSync(path.join(ROOT, '.env'), 'utf8');
 const shared = { NODE_ENV: 'production' };
 for (const line of envText.split('\n')) {
@@ -62,24 +47,24 @@ for (const line of envText.split('\n')) {
 // so pm2 needs `interpreter: 'none'` — otherwise it tries to eval the wrapper
 // as JS and hits `SyntaxError: missing ) after argument list`.
 const nextApp = (name, port) => ({
-  name: name + SUFFIX,
+  name,
   cwd: path.join(ROOT, 'apps', name.replace('skydrop-', '')),
   script: './node_modules/.bin/next',
   // -H 127.0.0.1: loopback only. Caddy reverse-proxies to these from this
   // host; binding 0.0.0.0 also put them on the droplet's DigitalOcean VPC
   // address, leaving one ufw rule as the only thing in front of them.
-  args: `start -p ${port + OFFSET} -H 127.0.0.1`,
+  args: `start -p ${port} -H 127.0.0.1`,
   interpreter: 'none',
   instances: 1,
   exec_mode: 'fork',
   max_memory_restart: '512M',
-  env: { ...shared, PORT: port + OFFSET, API_ORIGIN: `http://127.0.0.1:${API_PORT}` },
+  env: { ...shared, PORT: port, API_ORIGIN: 'http://127.0.0.1:4000' },
 });
 
 module.exports = {
   apps: [
     {
-      name: 'skydrop-api' + SUFFIX,
+      name: 'skydrop-api',
       cwd: path.join(ROOT, 'apps', 'api'),
       script: 'dist/main.js',
       instances: 1,
@@ -87,7 +72,7 @@ module.exports = {
       max_memory_restart: '512M',
       // BIND_HOST defaults to 127.0.0.1 in the env schema; same reasoning
       // as the -H flag above.
-      env: { ...shared, PORT: API_PORT },
+      env: { ...shared, PORT: 4000 },
     },
     nextApp('skydrop-admin', 3002),
     nextApp('skydrop-seller', 3003),
