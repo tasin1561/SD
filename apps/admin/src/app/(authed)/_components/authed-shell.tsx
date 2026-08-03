@@ -7,6 +7,7 @@ import { useApiClient } from '@skydrop/auth/client';
 import type { StaffMe } from '@skydrop/api-client';
 import { AppShell, Toaster, type NavGroup } from '@skydrop/ui/components';
 import {
+  Inbox,
   Activity,
   ArrowLeftRight,
   Banknote,
@@ -117,6 +118,7 @@ export function AuthedShell({
     {
       heading: 'Network',
       items: [
+        { href: '/leads', label: 'Invite requests', icon: <Inbox size={15} /> },
         { href: '/sellers', label: 'Sellers', icon: <Store size={15} /> },
         { href: '/courier-accounts', label: 'Courier accounts', icon: <Building2 size={15} /> },
         { href: '/delhivery', label: 'Delhivery', icon: <Gauge size={15} /> },

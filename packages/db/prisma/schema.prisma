@@ -186,6 +186,7 @@ model Seller {
   @@index([deletedAt])
   @@index([approvedById])
   @@map("sellers")
+  inviteLeads InviteLead[] @relation("InviteLeadConvertedSeller")
 }
 
 model SellerInvitation {
@@ -4755,4 +4756,82 @@ model PackBoxScan {
   @@index([packBoxId])
   @@index([stockUnitId])
   @@map("pack_box_scans")
+}
+
+/// Where a lead sits in the conversation. Deliberately short: a longer
+/// pipeline invites guessing at which stage something is in, and the
+/// only decision this list has to support is "who do I call next".
+enum InviteLeadStatus {
+  /// Nobody has looked at it yet.
+  NEW          @map("new")
+  /// Someone reached out and is waiting to hear back.
+  CONTACTED    @map("contacted")
+  /// Talked to them; they are a real prospect worth onboarding.
+  QUALIFIED    @map("qualified")
+  /// Became a seller. `convertedSellerId` says which one.
+  CONVERTED    @map("converted")
+  /// Not a fit, or never replied. `notes` says why.
+  DECLINED     @map("declined")
+  /// Obvious junk. Kept rather than deleted so the same address can be
+  /// recognised on its next attempt.
+  SPAM         @map("spam")
+
+  @@map("invite_lead_status")
+}
+
+/// Somebody asking to be let into the beta.
+///
+/// The landing page used to open a `mailto:` link, which asks the
+/// browser to hand off to a mail client — a chooser dialog on desktop,
+/// nothing at all on a phone without mail configured. Every lead that
+/// did not complete that handoff was simply lost, and we never knew a
+/// single one had tried.
+///
+/// Not a `Seller`, and deliberately unrelated to one: a lead is a
+/// stranger who typed their details into a public form. Sellers are
+/// invited by staff, and that boundary is what keeps an open endpoint
+/// from being able to create anything that can log in.
+model InviteLead {
+  id           String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  fullName     String           @map("full_name")
+  companyName  String           @map("company_name")
+  email        String
+  /// E.164 where the form could coerce it; kept as typed otherwise, so
+  /// a lead is never rejected over a phone format.
+  phone        String
+  /// What they sell, in their words.
+  productTypes String?          @map("product_types")
+  /// Their own estimate of monthly volume — a free-text bucket, since a
+  /// number nobody can hold us to is worth less than the phrase they
+  /// chose.
+  monthlyOrders String?         @map("monthly_orders")
+  message      String?          @db.Text
+
+  status       InviteLeadStatus @default(NEW)
+  /// Internal, never shown to the lead.
+  notes        String?          @db.Text
+  contactedAt  DateTime?        @map("contacted_at") @db.Timestamptz
+  /// Set when the lead becomes a seller, so "where did this account come
+  /// from" has an answer a year later.
+  convertedSellerId String?     @map("converted_seller_id") @db.Uuid
+
+  /// How many times this address has submitted. A second attempt updates
+  /// the row instead of adding a duplicate — someone impatient should
+  /// not become two entries in the queue.
+  submissionCount Int           @default(1) @map("submission_count")
+
+  /// For triaging a flood. Never shown in the list.
+  ipAddress    String?          @map("ip_address") @db.Inet
+  userAgent    String?          @map("user_agent")
+
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  convertedSeller Seller?       @relation("InviteLeadConvertedSeller", fields: [convertedSellerId], references: [id])
+
+  /// One row per address. The upsert key.
+  @@unique([email])
+  @@index([status, createdAt])
+  @@index([createdAt])
+  @@map("invite_leads")
 }

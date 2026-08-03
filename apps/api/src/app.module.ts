@@ -59,6 +59,7 @@ import { LifecycleEventsModule } from './modules/lifecycle-events/lifecycle-even
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { SystemSettingsModule } from './modules/system-settings/system-settings.module';
 import { SystemCapacityModule } from './modules/system-capacity/system-capacity.module';
+import { InviteLeadModule } from './modules/invite-lead/invite-lead.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { PricingModule } from './modules/pricing/pricing.module';
 import { FxModule } from './modules/fx/fx.module';
@@ -164,6 +165,7 @@ import { envSchema } from './config/env.schema';
     NotificationsModule,
     SystemSettingsModule,
     SystemCapacityModule,
+    InviteLeadModule,
     SettingsModule,
     PricingModule,
     FxModule,

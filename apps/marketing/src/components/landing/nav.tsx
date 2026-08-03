@@ -78,7 +78,7 @@ export function Nav(): ReactElement {
         <div className="hidden lg:flex items-center gap-2">
           <ThemeToggle />
           <a
-            href="mailto:hello@skydrop.online?subject=Skydrop%20invite%20request"
+            href="/request-invite"
             className="inline-flex items-center gap-2 bg-sky text-accent-fg font-medium text-sm px-4 py-2.5 rounded-xl hover:bg-sky-deep transition-colors"
           >
             Request an invite
@@ -143,7 +143,7 @@ export function Nav(): ReactElement {
               </a>
             ))}
             <a
-              href="mailto:hello@skydrop.online?subject=Skydrop%20invite%20request"
+              href="/request-invite"
               onClick={() => setOpen(false)}
               className="mt-4 inline-flex items-center justify-center gap-2 bg-sky text-accent-fg font-medium text-base px-4 py-3.5 rounded-xl hover:bg-sky-deep transition-colors"
             >

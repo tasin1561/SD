@@ -1433,3 +1433,74 @@ export function useCapacityReport(refetchMs: number): UseQueryResult<CapacityRep
     staleTime: 0,
   });
 }
+
+// ───────── Invite leads (marketing) ─────────
+
+export type InviteLeadStatus =
+  | 'NEW'
+  | 'CONTACTED'
+  | 'QUALIFIED'
+  | 'CONVERTED'
+  | 'DECLINED'
+  | 'SPAM';
+
+export interface InviteLead {
+  id: string;
+  fullName: string;
+  companyName: string;
+  email: string;
+  phone: string;
+  productTypes: string | null;
+  monthlyOrders: string | null;
+  message: string | null;
+  status: InviteLeadStatus;
+  notes: string | null;
+  submissionCount: number;
+  contactedAt: string | null;
+  convertedSellerId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InviteLeadPage {
+  items: InviteLead[];
+  total: number;
+  page: number;
+  pageSize: number;
+  counts: Partial<Record<InviteLeadStatus, number>>;
+}
+
+export function useInviteLeads(params: {
+  status?: InviteLeadStatus;
+  search?: string;
+  page?: number;
+}): UseQueryResult<InviteLeadPage> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-invite-leads', params],
+    queryFn: () => {
+      const sp = new URLSearchParams();
+      if (params.status) sp.set('status', params.status);
+      if (params.search) sp.set('search', params.search);
+      if (params.page) sp.set('page', String(params.page));
+      const qs = sp.toString();
+      return client.request<InviteLeadPage>(`/api/admin/invite-leads${qs ? `?${qs}` : ''}`);
+    },
+  });
+}
+
+export function useUpdateInviteLead(): UseMutationResult<
+  InviteLead,
+  Error,
+  { id: string; status?: InviteLeadStatus; notes?: string }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }) =>
+      client.request<InviteLead>(`/api/admin/invite-leads/${id}`, { method: 'PATCH', body }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-invite-leads'] });
+    },
+  });
+}

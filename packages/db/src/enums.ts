@@ -105,4 +105,5 @@ export {
   // D3 — pre-fetched courier AWB pool
   CourierWaybillStatus,
   PickupRequestStatus,
+  InviteLeadStatus,
 } from '@prisma/client';

@@ -71,7 +71,7 @@ export function Hero(): ReactElement {
 
             <div className="boot-rise boot-rise-4 mt-8 flex flex-wrap gap-3">
               <a
-                href="mailto:hello@skydrop.online?subject=Skydrop%20invite%20request"
+                href="/request-invite"
                 className="group inline-flex items-center gap-2 rounded-xl bg-sky px-5 py-3.5 text-sm font-medium text-accent-fg transition-all hover:bg-sky-deep hover:-translate-y-px"
               >
                 Request an invite

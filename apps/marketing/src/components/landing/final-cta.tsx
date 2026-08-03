@@ -46,7 +46,7 @@ export function FinalCta(): ReactElement {
         <div className="mt-9 flex flex-wrap justify-center items-center gap-4">
           <Magnetic range={8}>
             <a
-              href="mailto:hello@skydrop.online?subject=Skydrop%20invite%20request"
+              href="/request-invite"
               className="group inline-flex items-center gap-2 rounded-xl bg-sky px-6 py-4 text-sm font-medium text-accent-fg transition-colors hover:bg-sky-deep"
               style={{ boxShadow: '0 0 42px var(--glow)' }}
             >

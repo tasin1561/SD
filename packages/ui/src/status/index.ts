@@ -27,6 +27,7 @@ import {
   StockUnitStatus,
   TicketStatus,
   WithdrawalRequestStatus,
+  InviteLeadStatus,
 } from '@skydrop/db';
 
 export const STATUS_KINDS = [
@@ -300,4 +301,32 @@ export function statusLabel(
     .split('_')
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
     .join(' ');
+}
+
+/**
+ * A beta invite request → kind.
+ *
+ * NEW is 'pending' rather than 'draft': somebody is waiting on a reply,
+ * and a queue that renders unanswered leads the same grey as an
+ * abandoned draft is a queue nobody feels urgency about.
+ */
+export function inviteLeadStatusKind(status: InviteLeadStatus): StatusKind {
+  switch (status) {
+    case InviteLeadStatus.NEW:
+      return 'pending';
+    case InviteLeadStatus.CONTACTED:
+      return 'in-transit';
+    case InviteLeadStatus.QUALIFIED:
+      return 'confirmed';
+    case InviteLeadStatus.CONVERTED:
+      return 'delivered';
+    case InviteLeadStatus.DECLINED:
+      return 'cancelled';
+    case InviteLeadStatus.SPAM:
+      return 'failed';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled InviteLeadStatus: ${String(exhaustive)}`);
+    }
+  }
 }
