@@ -47,6 +47,10 @@ import { fireScanWebhook, type WebhookTarget } from './webhooks.js';
  */
 
 const PORT = Number(process.env['PORT'] ?? 4010);
+/** Where we are reachable. `pdf_download_link` has to be ABSOLUTE — the
+ *  adapter hands it straight to `fetch`, which cannot resolve a bare
+ *  path, and Delhivery returns a fully-qualified pre-signed URL there. */
+const SELF_URL = process.env['SIM_SELF_URL'] ?? `http://127.0.0.1:${PORT}`;
 const API_BASE_URL = process.env['SKYDROP_API_URL'] ?? 'http://localhost:3000';
 const WEBHOOK_SECRET = process.env['TRACKING_WEBHOOK_SECRET_DELHIVERY'] ?? '';
 const COURIER_CODE = process.env['COURIER_CODE'] ?? 'delhivery';
@@ -163,7 +167,7 @@ function handleCreate(bodyRaw: string, res: ServerResponse): void {
         refnum: parcel.refnum,
         status: 'Success',
         remarks: [''],
-        pdf_download_link: `/api/p/packing_slip?wbns=${awb}`,
+        pdf_download_link: `${SELF_URL}/_sim/label/${awb}.pdf`,
       },
     ],
   });
@@ -207,7 +211,30 @@ function handleWaybillBulk(count: number, res: ServerResponse): void {
   json(res, 200, list);
 }
 
-function handlePackingSlip(res: ServerResponse): void {
+/**
+ * The packing-slip METADATA call.
+ *
+ * Delhivery answers this with JSON carrying a pre-signed URL, and the
+ * adapter then fetches that URL for the bytes — two steps, not one. The
+ * simulator used to return the PDF itself here, so the adapter parsed
+ * PDF bytes as JSON, found no `pdf_download_link`, and every label
+ * fetch failed. That kept each manifest from ever reaching CONFIRMED,
+ * which in turn made dispatch handoff impossible — so no parcel driven
+ * through the simulator could be dispatched, let alone delivered.
+ */
+function handlePackingSlip(awb: string, res: ServerResponse): void {
+  json(res, 200, {
+    packages: [
+      {
+        waybill: awb,
+        pdf_download_link: `${SELF_URL}/_sim/label/${awb}.pdf`,
+      },
+    ],
+  });
+}
+
+/** The bytes the pre-signed URL points at. */
+function handleLabelBytes(res: ServerResponse): void {
   // A minimal but VALID PDF, so the label upload path exercises real
   // bytes rather than a string that happens not to crash.
   const pdf = Buffer.from(
@@ -314,7 +341,10 @@ const server = createServer((req, res) => {
       return handleServiceability(url.searchParams.get('filter_codes') ?? '', res);
     if (path === '/waybill/api/bulk/json/')
       return handleWaybillBulk(Number(url.searchParams.get('count') ?? '1'), res);
-    if (path === '/api/p/packing_slip') return handlePackingSlip(res);
+    if (path === '/api/p/packing_slip') {
+      return handlePackingSlip(url.searchParams.get('wbns') ?? '', res);
+    }
+    if (path.startsWith('/_sim/label/')) return handleLabelBytes(res);
 
     if (path === '/api/p/edit' && method === 'POST') {
       // Cancel and edit share this endpoint; `cancellation: "true"` is

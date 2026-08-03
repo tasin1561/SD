@@ -32,18 +32,57 @@ export interface WebhookTarget {
  * it. The prefixed codes match the adapter's stub table, so a scenario
  * behaves identically whichever mode it runs against.
  */
-const RAW_CODE: Record<SimScan['stage'], string> = {
-  MANIFESTED: 'DLV-MANIFESTED',
-  IN_TRANSIT: 'DLV-IN-TRANSIT',
-  OUT_FOR_DELIVERY: 'DLV-OFD',
-  DELIVERED: 'DLV-DELIVERED',
-  NDR: 'DLV-NDR',
-  RTO_INITIATED: 'DLV-RTO-INIT',
-  RTO_IN_TRANSIT: 'DLV-RTO-IT',
-  RTO_DELIVERED: 'DLV-RTO-DEL',
-  LOST: 'DLV-LOST',
-  DAMAGED: 'DLV-DAMAGED',
-  CANCELLED: 'DLV-CANCELLED',
+/**
+ * Delhivery's own status vocabulary, as a (StatusType, Status) PAIR.
+ *
+ * The pair is the unit of meaning, not the status alone. "In Transit"
+ * under `UD` means the parcel is moving toward the customer; under `RT`
+ * it means it is coming BACK to us. A simulator that sent only a status
+ * would let the adapter walk the order forward while the goods return —
+ * which is exactly the trap the adapter's PAIR_TABLE exists to avoid,
+ * and a fake courier that cannot express the difference cannot exercise
+ * it.
+ *
+ * This used to send the simulator's own stage names (`IN_TRANSIT`) with
+ * no StatusType at all. Nothing matched, so every scan fell through to
+ * an unmapped `status_sync` event: the timeline filled up and no order
+ * ever moved. In REAL mode — which is the mode this simulator exists to
+ * exercise — the `DLV-` prefixed codes it also sent are not Delhivery's
+ * vocabulary either; those belong to the in-process stub.
+ *
+ * An NDR is the subtle one. It does not have a status of its own: the
+ * parcel goes back to the DC as `UD|Pending` and the NSL code carries
+ * the reason. Reading only the status would record a routine in-transit
+ * scan and lose the failed attempt entirely.
+ */
+interface DelhiveryScanCode {
+  readonly statusType: string;
+  readonly status: string;
+  /** Only NDR carries one; `EOD-` is what marks a failed attempt. */
+  readonly nslCode?: string;
+}
+
+const SCAN_CODE: Record<SimScan['stage'], DelhiveryScanCode> = {
+  // Pre-transit. Deliberately maps to no transition — the parcel has
+  // not moved, and the adapter drops it on purpose.
+  MANIFESTED: { statusType: 'UD', status: 'Manifested' },
+  IN_TRANSIT: { statusType: 'UD', status: 'In Transit' },
+  // Delhivery's "Dispatched" on a forward leg IS our out-for-delivery:
+  // on a vehicle, heading to the customer.
+  OUT_FOR_DELIVERY: { statusType: 'UD', status: 'Dispatched' },
+  DELIVERED: { statusType: 'DL', status: 'Delivered' },
+  // Back at the DC after a failed attempt, with the reason in the NSL.
+  NDR: { statusType: 'UD', status: 'Pending', nslCode: 'EOD-74' },
+  // "RTO Initiated" carries its direction in the words, so the adapter
+  // maps it without a leg. It has to come BEFORE any RT scan: the return
+  // chain only opens once the order is RTO_INITIATED, and an `RT|In
+  // Transit` arriving first is correctly ignored.
+  RTO_INITIATED: { statusType: 'RT', status: 'RTO Initiated' },
+  RTO_IN_TRANSIT: { statusType: 'RT', status: 'In Transit' },
+  RTO_DELIVERED: { statusType: 'DL', status: 'RTO' },
+  LOST: { statusType: 'UD', status: 'Lost' },
+  DAMAGED: { statusType: 'UD', status: 'Damaged' },
+  CANCELLED: { statusType: 'CN', status: 'Canceled' },
 };
 
 export interface WebhookOutcome {
@@ -88,13 +127,15 @@ export async function fireScanWebhook(
   parcel: SimParcel,
   scan: SimScan,
 ): Promise<WebhookOutcome> {
+  const code = SCAN_CODE[scan.stage];
   const payload = {
     Shipment: {
       AWB: parcel.awb,
       ReferenceNo: parcel.orderRef,
+      ...(code.nslCode === undefined ? {} : { NSLCode: code.nslCode }),
       Status: {
-        Status: scan.stage,
-        StatusCode: RAW_CODE[scan.stage],
+        Status: code.status,
+        StatusType: code.statusType,
         StatusDateTime: scan.at,
         StatusLocation: scan.location,
         Instructions: scan.note ?? '',

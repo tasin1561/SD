@@ -78,9 +78,8 @@ function assertLocal(): void {
   }
 }
 
-async function main(): Promise<void> {
-  assertLocal();
-
+/** Both processes up, and the adapter pointed at the simulator. */
+async function preflight(): Promise<void> {
   // ── 0. Both processes up? ─────────────────────────────────────────
   const simUp = await fetch(`${SIM}/_sim/parcels`).then(
     (r) => r.ok,
@@ -125,7 +124,19 @@ async function main(): Promise<void> {
     });
   }
   line(`→ adapter pointed at ${SIM}, live writes ON (loopback ⇒ simulator)`);
+}
 
+interface SetupResult {
+  readonly orderId: string;
+  readonly awb: string;
+  readonly staffToken: string;
+  readonly sellerToken: string;
+  readonly sellerId: string;
+  readonly variantId: string;
+}
+
+/** A fresh seller, stock, and one confirmed order carrying an AWB. */
+async function setupOrder(): Promise<SetupResult> {
   // ── 2. Staff + seller ─────────────────────────────────────────────
   const stamp = Date.now();
   const staffEmail = `sim-staff-${stamp}@skydrop.local`;
@@ -346,39 +357,260 @@ async function main(): Promise<void> {
   line('→ confirmed on the call — AWB job enqueued');
 
   // The AWB job is a queue worker, so give it a moment to land.
-  let awb: string | null = null;
-  for (let i = 0; i < 40 && awb === null; i += 1) {
-    await new Promise((r) => setTimeout(r, 500));
-    const shipments = (await call(`/admin/orders/${orderId}/shipments`, {
-      token: staffToken,
-    })) as unknown as Array<{ awbNumber: string | null }>;
-    awb = shipments.find((s) => s.awbNumber)?.awbNumber ?? null;
+  const awb = await waitForAwb(orderId, staffToken);
+  if (awb === null) {
+    throw new Error(
+      `No AWB for order ${orderId}. Check the API log for the AWB job, and the ` +
+        `simulator log for an UNHANDLED line — that is how you find a call it does not speak.`,
+    );
+  }
+  line(`→ AWB ${awb} issued by the simulator`);
+  return {
+    orderId,
+    awb,
+    staffToken,
+    sellerToken,
+    sellerId: reg['seller'] ? ((reg['seller'] as Json)['id'] as string) : '',
+    variantId: variant['id'] as string,
+  };
+}
+
+// ── the warehouse legs ──────────────────────────────────────────────
+// Everything between a confirmed order and a parcel a courier can carry.
+// Without these the order sits at CONFIRMED and every scan is correctly
+// IGNORED: TRK-4 skips a transition whose target is not reachable from
+// where the order actually is, and a parcel nobody picked has not earned
+// "in transit". That guard is why the first version of this script
+// looked like it worked and moved nothing.
+
+async function driveToDispatched(orderId: string, token: string): Promise<void> {
+  // PICK. `pullNext` is FOR UPDATE SKIP LOCKED over eligible shipments,
+  // so it can hand back someone else's; take ours or put it back.
+  let shipmentId: string | null = null;
+  for (let i = 0; i < 25 && shipmentId === null; i += 1) {
+    const pulled = await call('/warehouse/picks/next', { method: 'POST', token });
+    const pick = pulled['pick'] as { shipmentId: string; orderId: string } | null;
+    if (!pick) throw new Error('Pick queue empty — the order should be eligible once CONFIRMED');
+    if (pick.orderId === orderId) shipmentId = pick.shipmentId;
+  }
+  if (shipmentId === null) throw new Error('Could not pull our own pick');
+
+  const started = await call(`/warehouse/picks/${shipmentId}/start`, { method: 'POST', token });
+  if (started['fullyAllocated'] !== true) {
+    throw new Error(
+      `Pick could not be fully allocated (status ${String(started['status'])}) — WMS-4 would ` +
+        `route this to manual placement. Is there enough stock?`,
+    );
   }
 
-  line();
-  if (awb === null) {
-    line('⚠  No AWB yet. Check the API log for the AWB job, and the simulator log for');
-    line('   an UNHANDLED line — that is how you find a call the simulator does not speak.');
-    line(`   Order: ${orderId}`);
-  } else {
-    line(`✔  AWB ${awb} issued by the simulator — the real adapter path ran end to end.`);
-    line();
-    line('Move the parcel (each advance fires a SIGNED webhook at the API):');
-    line();
-    for (const stage of ['IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED']) {
-      line(
-        `  curl -s -XPOST ${SIM}/_sim/parcels/${awb}/advance \\\n` +
-          `    -H 'content-type: application/json' -d '{"stage":"${stage}"}'`,
-      );
+  // The bin and batch come from the phase-2 reservations the allocator
+  // just populated (INV-4). They are the authoritative record of where
+  // the goods are; `shipment_items.picked*` is only the operational hint.
+  const items = await prisma.shipmentItem.findMany({
+    where: { shipmentId },
+    select: { id: true, orderItemId: true },
+  });
+  for (const item of items) {
+    const reservation = await prisma.stockReservation.findFirst({
+      where: { orderItemId: item.orderItemId, status: 'ACTIVE', binId: { not: null } },
+      select: { binId: true, batchId: true },
+    });
+    if (!reservation?.binId || !reservation.batchId) {
+      throw new Error(`No phase-2 reservation for shipment item ${item.id}`);
     }
-    line();
-    line('  Failed delivery instead:  {"stage":"NDR","note":"customer unreachable"}');
-    line('  Then a return:            RTO_INITIATED → RTO_IN_TRANSIT');
-    line('  (RTO_RECEIVED is deliberately warehouse-only — TRK-6.)');
+    await call(`/warehouse/picks/${shipmentId}/items`, {
+      method: 'POST',
+      token,
+      body: {
+        shipmentItemId: item.id,
+        pickedBinId: reservation.binId,
+        pickedBatchId: reservation.batchId,
+      },
+    });
   }
+  await call(`/warehouse/picks/${shipmentId}/complete`, { method: 'POST', token });
+  line('   picked');
+
+  // PACK. Entry to PICKED makes the shipment eligible by construction —
+  // the pack queue is a virtual FIFO query, not a table.
+  let packed = false;
+  for (let i = 0; i < 25 && !packed; i += 1) {
+    const pulled = await call('/warehouse/packs/next', { method: 'POST', token });
+    const pack = pulled['pack'] as { shipmentId: string } | null;
+    if (!pack) throw new Error('Pack queue empty — the shipment should be eligible once PICKED');
+    if (pack.shipmentId === shipmentId) packed = true;
+  }
+  await call(`/warehouse/packs/${shipmentId}/complete`, { method: 'POST', token, body: {} });
+  line('   packed');
+
+  // MANIFEST. Packing auto-attached the shipment to a DRAFT manifest for
+  // its (courier, warehouse) pair (WMS-7); closing it moves every
+  // shipment on it to PENDING_DISPATCH and enqueues AWB generation.
+  const manifests = (await call('/admin/warehouse/manifests?status=DRAFT', { token })) as {
+    items: Array<{ id: string }>;
+  };
+  const manifestId = manifests.items[0]?.id;
+  if (!manifestId) throw new Error('No DRAFT manifest — the pack auto-attach (WMS-7) did not run');
+  await call(`/admin/warehouse/manifests/${manifestId}/close`, { method: 'POST', token });
+  line('   manifest closed');
+
+  // Closing the manifest enqueues AWB generation for it (CUR-2); the
+  // manifest only becomes CONFIRMED once that job has run, and handoff
+  // refuses until then. The AWB itself already exists — it was issued at
+  // order confirmation (CUR-2b) — so this is the job reconciling the
+  // manifest, not a second call to the courier.
+  let manifestReady = false;
+  for (let i = 0; i < 40 && !manifestReady; i += 1) {
+    await new Promise((r) => setTimeout(r, 500));
+    const m = await prisma.manifest.findUniqueOrThrow({
+      where: { id: manifestId },
+      select: { status: true },
+    });
+    if (m.status === 'CONFIRMED' || m.status === 'DISPATCHED') manifestReady = true;
+    if (m.status === 'FAILED') {
+      throw new Error('Manifest AWB generation FAILED — check the API log for the reason');
+    }
+  }
+  if (!manifestReady)
+    throw new Error('Manifest never reached CONFIRMED — is the AWB worker running?');
+
+  // HANDOFF. The supervisor confirming the courier physically took the
+  // parcels is what makes them DISPATCHED — and CUR-3's one and only
+  // decrement of qtyOnHand.
+  await call(`/admin/courier/manifests/${manifestId}/confirm-handoff`, { method: 'POST', token });
+  line('   handed to courier → DISPATCHED');
+}
+
+/** Move the parcel in the simulator. Each advance fires a signed webhook. */
+async function advance(awb: string, stage: string, note?: string): Promise<void> {
+  const res = await fetch(`${SIM}/_sim/parcels/${awb}/advance`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ stage, ...(note === undefined ? {} : { note }) }),
+  });
+  if (!res.ok) throw new Error(`sim advance ${stage} → ${res.status}`);
+  // The webhook is processed off a queue; give the processor a moment.
+  await new Promise((r) => setTimeout(r, 1500));
+}
+
+/** On-hand for one seller's variant — the number conservation is about. */
+async function onHand(variantId: string): Promise<number> {
+  const agg = await prisma.stockLevel.aggregate({
+    _sum: { qtyOnHand: true },
+    where: { variantId },
+  });
+  return agg._sum.qtyOnHand ?? 0;
+}
+
+async function orderStatus(orderId: string): Promise<string> {
+  const row = await prisma.order.findUniqueOrThrow({
+    where: { id: orderId },
+    select: { status: true },
+  });
+  return row.status;
+}
+
+async function waitForAwb(orderId: string, token: string): Promise<string | null> {
+  for (let i = 0; i < 40; i += 1) {
+    await new Promise((r) => setTimeout(r, 500));
+    const shipments = (await call(`/admin/orders/${orderId}/shipments`, {
+      token,
+    })) as unknown as Array<{ awbNumber: string | null }>;
+    const found = shipments.find((sh) => sh.awbNumber)?.awbNumber;
+    if (found) return found;
+  }
+  return null;
+}
+
+async function main(): Promise<void> {
+  assertLocal();
+  await preflight();
+
+  // ── Parcel 1: the happy path ──────────────────────────────────────
   line();
-  line(`Order:  ${API.replace(':4000', ':3002')}/orders/${orderId}   (admin)`);
-  line(`Track:  ${SIM}/_sim/parcels`);
+  line('━━ PARCEL 1 — delivered ━━');
+  const a = await setupOrder();
+  await driveToDispatched(a.orderId, a.staffToken);
+  for (const stage of ['IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED']) {
+    await advance(a.awb, stage);
+    line(`   scan ${stage} → order ${await orderStatus(a.orderId)}`);
+  }
+
+  // ── Parcel 2: refused, returned, and put back on the shelf ────────
+  line();
+  line('━━ PARCEL 2 — refused, returned, restocked ━━');
+  const b = await setupOrder();
+  await driveToDispatched(b.orderId, b.staffToken);
+  for (const [stage, note] of [
+    ['IN_TRANSIT', undefined],
+    ['OUT_FOR_DELIVERY', undefined],
+    ['NDR', 'customer refused the parcel'],
+    ['RTO_INITIATED', undefined],
+    ['RTO_IN_TRANSIT', undefined],
+  ] as Array<[string, string | undefined]>) {
+    await advance(b.awb, stage, note);
+    line(`   scan ${stage} → order ${await orderStatus(b.orderId)}`);
+  }
+
+  // The scans stop here ON PURPOSE. A webhook may drive a parcel as far
+  // as RTO_IN_TRANSIT and no further: `RTO_RECEIVED` is the warehouse's
+  // to declare, because it is what triggers the conservation-critical
+  // finalize chain and a spoofed scan must not be able to reach it
+  // (TRK-6). Somebody has to physically have the carton.
+  await call('/warehouse/rto/receive', {
+    method: 'POST',
+    token: b.staffToken,
+    body: { awbNumber: b.awb },
+  });
+  line(`   warehouse received it → order ${await orderStatus(b.orderId)}`);
+
+  const rtoShipment = await prisma.shipment.findFirstOrThrow({
+    where: { awbNumber: b.awb },
+    select: { id: true, items: { select: { id: true } } },
+  });
+  for (const item of rtoShipment.items) {
+    await call(`/warehouse/rto/items/${item.id}/inspect`, {
+      method: 'POST',
+      token: b.staffToken,
+      body: { condition: 'GOOD', disposition: 'RESTOCK', notes: 'Simulator run — sellable' },
+    });
+  }
+  await call(`/warehouse/rto/shipments/${rtoShipment.id}/finalize`, {
+    method: 'POST',
+    token: b.staffToken,
+  });
+  line(`   inspected + finalized → order ${await orderStatus(b.orderId)}`);
+
+  // ── What the run proved ───────────────────────────────────────────
+  // Conservation, per parcel, against its own seller's stock — not a
+  // running total across every test seller, which says nothing.
+  //
+  // Ten units received, one ordered. The delivered parcel leaves NINE:
+  // qtyOnHand decrements exactly once, at dispatch (CUR-3), and
+  // DELIVERED is stock-neutral. The returned-and-restocked parcel goes
+  // back to TEN — the unit came home and was put back on the shelf.
+  const aOnHand = await onHand(a.variantId);
+  const bOnHand = await onHand(b.variantId);
+  const aStatus = await orderStatus(a.orderId);
+  const bStatus = await orderStatus(b.orderId);
+
+  line();
+  line('━━ RESULT ━━');
+  line(`  parcel 1  ${a.awb}  ${aStatus}  · on hand ${aOnHand} (expected 9)`);
+  line(`  parcel 2  ${b.awb}  ${bStatus}  · on hand ${bOnHand} (expected 10)`);
+  line();
+
+  const problems: string[] = [];
+  if (aStatus !== 'DELIVERED') problems.push(`parcel 1 ended ${aStatus}, not DELIVERED`);
+  if (bStatus !== 'RTO_RESTOCKED') problems.push(`parcel 2 ended ${bStatus}, not RTO_RESTOCKED`);
+  if (aOnHand !== 9) problems.push(`delivered parcel left ${aOnHand} on hand, not 9`);
+  if (bOnHand !== 10) problems.push(`restocked parcel left ${bOnHand} on hand, not 10`);
+
+  if (problems.length > 0) {
+    for (const p of problems) line(`  ✖ ${p}`);
+    throw new Error(`${problems.length} lifecycle assertion(s) failed`);
+  }
+  line('  ✔ both lifecycles complete, and stock conserved on each.');
   line();
   line('To go back to the in-process stub when you are done:');
   line("  UPDATE system_settings SET value_string='' WHERE key='courier.delhivery_api_base_url';");

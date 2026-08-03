@@ -28,7 +28,32 @@ Delhivery agrees.
 Only a real parcel proves that. This makes our own bugs cheap to find;
 it does not replace `docs/delhivery-go-live-test.md`.
 
-## Running it
+## The one-command run
+
+```bash
+pnpm --filter @skydrop/delhivery-sim start   # terminal 1
+pnpm --filter @skydrop/api start:dev         # terminal 2
+pnpm sim:e2e                                 # terminal 3
+```
+
+`scripts/sim-e2e.ts` goes from an empty dev database to two finished
+parcels and asserts the result: one delivered, one refused and returned
+and put back on the shelf. It seeds the staff user, the seller, the
+stock and the courier credential; drives pick, pack, manifest close and
+dispatch handoff; fires the scans; and checks that the delivered parcel
+left nine units on hand and the restocked one ten.
+
+Two bits of local setup it cannot do for you, both in `apps/api/.env`:
+
+```
+TRACKING_WEBHOOK_SECRET_DELHIVERY=devsimsecret   # same value the sim gets
+COURIER_CREDENTIALS_KEY_V1=<64 hex chars>        # any value locally
+DEV_MOCK_SPACES=true                             # or label upload fails,
+                                                 # and the manifest never
+                                                 # reaches CONFIRMED
+```
+
+## Running it manually
 
 ```bash
 # 1. start the simulator
