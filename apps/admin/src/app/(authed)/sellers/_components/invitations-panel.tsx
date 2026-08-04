@@ -4,6 +4,7 @@ import { useState, type ReactElement } from 'react';
 import { ChevronDown, ChevronRight, RotateCw, Trash2 } from 'lucide-react';
 import { useInvitationsList, useResendInvitation, useDeleteInvitation } from '@/lib/api-hooks';
 import { Button, Card, CardBody, ConfirmDialog, useToast } from '@skydrop/ui/components';
+import { usePermission } from '@/lib/use-permission';
 
 /**
  * Inline panel listing pending invitations on the sellers page. Most
@@ -13,6 +14,7 @@ import { Button, Card, CardBody, ConfirmDialog, useToast } from '@skydrop/ui/com
 export function InvitationsPanel(): ReactElement {
   const [expanded, setExpanded] = useState(false);
   const list = useInvitationsList();
+  const canInvite = usePermission('sellers.invite');
   const resend = useResendInvitation();
   const del = useDeleteInvitation();
   const toast = useToast();
@@ -66,34 +68,39 @@ export function InvitationsPanel(): ReactElement {
                   </div>
                   {inv.status === 'pending' && (
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={resend.isPending}
-                        onClick={() =>
-                          resend.mutate(
-                            { id: inv.id },
-                            {
-                              onSuccess: () => toast.success(`Invitation re-sent to ${inv.email}`),
-                              onError: (e) =>
-                                toast.error(
-                                  e instanceof Error ? e.message : 'Failed to resend invitation.',
-                                ),
-                            },
-                          )
-                        }
-                        title="Rotate token + re-send invitation email"
-                      >
-                        <RotateCw size={12} /> Resend
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setPendingDeleteId(inv.id)}
-                        title="Soft-delete invitation"
-                      >
-                        <Trash2 size={12} />
-                      </Button>
+                      {canInvite && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={resend.isPending}
+                          onClick={() =>
+                            resend.mutate(
+                              { id: inv.id },
+                              {
+                                onSuccess: () =>
+                                  toast.success(`Invitation re-sent to ${inv.email}`),
+                                onError: (e) =>
+                                  toast.error(
+                                    e instanceof Error ? e.message : 'Failed to resend invitation.',
+                                  ),
+                              },
+                            )
+                          }
+                          title="Rotate token + re-send invitation email"
+                        >
+                          <RotateCw size={12} /> Resend
+                        </Button>
+                      )}
+                      {canInvite && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setPendingDeleteId(inv.id)}
+                          title="Soft-delete invitation"
+                        >
+                          <Trash2 size={12} />
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>

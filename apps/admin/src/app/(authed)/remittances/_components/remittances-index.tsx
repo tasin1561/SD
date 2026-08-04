@@ -16,6 +16,7 @@ import {
 } from '@skydrop/ui/components';
 import { useRemittancesList } from '@/lib/api-hooks';
 import { RemittanceFormModal } from './remittance-form-modal';
+import { usePermission } from '@/lib/use-permission';
 
 /**
  * Paginated list of recorded remittances. Each row links to the
@@ -23,6 +24,7 @@ import { RemittanceFormModal } from './remittance-form-modal';
  */
 export function RemittancesIndex(): ReactElement {
   const [creating, setCreating] = useState(false);
+  const canWrite = usePermission('money.remittances.manage');
   const toast = useToast();
   const list = useRemittancesList({ page: 1, pageSize: 50 });
 
@@ -32,9 +34,11 @@ export function RemittancesIndex(): ReactElement {
         title="Remittances"
         subtitle="Recorded payouts to sellers. Each entry debits the seller's wallet (and writes a paired FX credit for cross-currency)."
         action={
-          <Button variant="primary" size="md" onClick={() => setCreating(true)}>
-            Record remittance
-          </Button>
+          canWrite ? (
+            <Button variant="primary" size="md" onClick={() => setCreating(true)}>
+              Record remittance
+            </Button>
+          ) : null
         }
       />
 
@@ -49,9 +53,11 @@ export function RemittancesIndex(): ReactElement {
           title="No remittances yet"
           description="Record one to debit a seller's wallet and reflect the bank transfer in their ledger."
           action={
-            <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
-              Record remittance
-            </Button>
+            canWrite ? (
+              <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
+                Record remittance
+              </Button>
+            ) : null
           }
         />
       ) : (

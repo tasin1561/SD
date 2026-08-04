@@ -25,11 +25,13 @@ import {
 import { InvitationsPanel } from './invitations-panel';
 import { Plus } from 'lucide-react';
 import { CreateInvitationDialog } from './create-invitation-dialog';
+import { usePermission } from '@/lib/use-permission';
 
 const PAGE_SIZE = 20;
 const STATUSES: readonly SellerStatusValue[] = ['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'];
 
 export function SellersIndex(): ReactElement {
+  const canWrite = usePermission('sellers.invite');
   const [status, setStatus] = useState<SellerStatusValue | ''>('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -48,9 +50,11 @@ export function SellersIndex(): ReactElement {
         title="Sellers"
         subtitle="Invitation lifecycle + seller status management."
         action={
-          <Button variant="primary" size="md" onClick={() => setInviteOpen(true)}>
-            <Plus size={14} /> Invite seller
-          </Button>
+          canWrite ? (
+            <Button variant="primary" size="md" onClick={() => setInviteOpen(true)}>
+              <Plus size={14} /> Invite seller
+            </Button>
+          ) : null
         }
       />
 

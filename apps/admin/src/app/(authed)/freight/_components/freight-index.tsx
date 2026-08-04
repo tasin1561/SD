@@ -26,6 +26,7 @@ import { InboundFreightStatus } from '@skydrop/db';
 import { useFreightList, type FreightChargeView } from '@/lib/ops-hooks';
 import { RecordFreightModal } from './record-freight-modal';
 import { FreightActions } from './freight-actions';
+import { usePermission } from '@/lib/use-permission';
 
 /**
  * Inbound (BD → India) freight bills — R3.
@@ -37,6 +38,7 @@ import { FreightActions } from './freight-actions';
  * is the question a PAY_LATER bill exists to answer.
  */
 export function FreightIndex(): ReactElement {
+  const canWrite = usePermission('money.freight.manage');
   const [status, setStatus] = useState<string>('');
   const [recording, setRecording] = useState(false);
 
@@ -59,9 +61,11 @@ export function FreightIndex(): ReactElement {
         title="Inbound freight"
         subtitle="One bill per BD→India consignment. Pay-now debits the wallet at receipt; pay-later leaves a receivable that amortises per unit as the stock sells."
         action={
-          <Button variant="primary" size="md" onClick={() => setRecording(true)}>
-            Record freight bill
-          </Button>
+          canWrite ? (
+            <Button variant="primary" size="md" onClick={() => setRecording(true)}>
+              Record freight bill
+            </Button>
+          ) : null
         }
       />
 
@@ -121,9 +125,11 @@ export function FreightIndex(): ReactElement {
             title="No freight bills recorded"
             description="Record the freight invoice for a consignment after the goods receipt is logged. One bill per receipt — recording it twice is refused."
             action={
-              <Button variant="primary" size="sm" onClick={() => setRecording(true)}>
-                Record freight bill
-              </Button>
+              canWrite ? (
+                <Button variant="primary" size="sm" onClick={() => setRecording(true)}>
+                  Record freight bill
+                </Button>
+              ) : null
             }
           />
         </Card>

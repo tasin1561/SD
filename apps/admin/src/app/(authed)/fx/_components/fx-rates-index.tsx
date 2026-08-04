@@ -15,8 +15,10 @@ import type { FxRateView } from '@skydrop/api-client';
 import { useFxRatesList } from '@/lib/api-hooks';
 import { FxOverrideModal } from './fx-override-modal';
 import { FxHistoryDrawer } from './fx-history-drawer';
+import { usePermission } from '@/lib/use-permission';
 
 export function FxRatesIndex(): ReactElement {
+  const canWrite = usePermission('fx.manage');
   const list = useFxRatesList();
   const [editing, setEditing] = useState<FxRateView | null>(null);
   const [historyOf, setHistoryOf] = useState<{
@@ -89,9 +91,11 @@ export function FxRatesIndex(): ReactElement {
                       >
                         Timeline
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setEditing(r)}>
-                        Override
-                      </Button>
+                      {canWrite && (
+                        <Button variant="ghost" size="sm" onClick={() => setEditing(r)}>
+                          Override
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>

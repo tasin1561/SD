@@ -26,11 +26,13 @@ import {
 import { InviteStaffModal } from './invite-staff-modal';
 import { InviteLinkRevealCard } from './invite-link-reveal-card';
 import { useRoles } from '@/lib/rbac-hooks';
+import { usePermission } from '@/lib/use-permission';
 
 // The hardcoded seven are gone: roles are rows now, so the options come
 // from the server and include anything created under Roles.
 
 export function StaffManagementIndex(): ReactElement {
+  const canWrite = usePermission('staff.manage');
   const users = useStaffUsersList();
   const roles = useRoles();
   const invitations = useStaffInvitationsList();
@@ -105,9 +107,11 @@ export function StaffManagementIndex(): ReactElement {
         title="Staff"
         subtitle="Invite + manage admin / operational users. SUPER_ADMIN only."
         action={
-          <Button variant="primary" size="md" onClick={() => setInviting(true)}>
-            Invite staff
-          </Button>
+          canWrite ? (
+            <Button variant="primary" size="md" onClick={() => setInviting(true)}>
+              Invite staff
+            </Button>
+          ) : null
         }
       />
 
@@ -159,7 +163,7 @@ export function StaffManagementIndex(): ReactElement {
                     <td className="px-3 py-2">
                       <select
                         value={u.roleId}
-                        disabled={Boolean(u.deletedAt) || roles.data === undefined}
+                        disabled={Boolean(u.deletedAt) || roles.data === undefined || !canWrite}
                         onChange={(e) => void onRoleChange(u.id, e.target.value)}
                         className="px-2 py-1 rounded-[4px] bg-bg border border-border text-text-body text-xs font-mono"
                       >

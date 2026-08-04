@@ -15,6 +15,7 @@ import {
 import { InboundFreightStatus } from '@skydrop/db';
 import { useSettleFreight, useWaiveFreight, type FreightChargeView } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { usePermission } from '@/lib/use-permission';
 
 const MIN_WAIVE_REASON = 10;
 
@@ -32,6 +33,7 @@ const MIN_WAIVE_REASON = 10;
  */
 export function FreightActions({ row }: { readonly row: FreightChargeView }): ReactElement {
   const toast = useToast();
+  const canWrite = usePermission('money.freight.manage');
   const settle = useSettleFreight();
   const waive = useWaiveFreight();
 
@@ -75,6 +77,10 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
       setError(serverVerdict(err));
     }
   }
+
+  // Settle and waive both move money; without the permission this
+  // row simply has no actions rather than two buttons that 403.
+  if (!canWrite) return <></>;
 
   return (
     <div className="flex items-center justify-end gap-1.5">

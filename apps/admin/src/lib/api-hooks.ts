@@ -30,6 +30,7 @@ import type {
   UpdateSellerStatusResponse,
   UpdateSystemSettingRequest,
 } from '@skydrop/api-client';
+import { usePermission } from './use-permission';
 
 /**
  * Thin TanStack Query wrappers over `ApiClient.request<T>(path)`.
@@ -42,9 +43,12 @@ import type {
 
 // ───────── Admin sellers / invitations ─────────
 
+/** Self-gating — see the note on `useWarehouseOptions`. */
 export function useSellersList(query: ListSellersQuery): UseQueryResult<SellerListResponse> {
   const client = useApiClient();
+  const canRead = usePermission('sellers.view');
   return useQuery({
+    enabled: canRead,
     queryKey: ['admin-sellers', 'list', query],
     queryFn: () => fetchSellers(client, query),
   });
@@ -926,13 +930,16 @@ export interface CustomerReputation {
  * Reached from the ORDER, not a phone number — the agent is looking at
  * an assignment, not typing anything.
  */
+/** Self-gating: it reads an order, and the call station is reachable by
+ *  a role that may work the queue without being able to read orders. */
 export function useOrderCustomerReputation(
   orderId: string | null,
 ): UseQueryResult<CustomerReputation> {
   const client = useApiClient();
+  const canRead = usePermission('orders.view');
   return useQuery({
     queryKey: ['admin-order-customer-reputation', orderId],
-    enabled: orderId !== null,
+    enabled: orderId !== null && canRead,
     staleTime: 60_000,
     queryFn: () =>
       client.request<CustomerReputation>(`/api/admin/orders/${orderId ?? ''}/customer-reputation`),

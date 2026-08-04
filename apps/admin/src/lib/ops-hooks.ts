@@ -20,6 +20,7 @@ import type {
   WithdrawalRequestedBy,
   WithdrawalRequestStatus,
 } from '@skydrop/db';
+import { usePermission } from './use-permission';
 
 /**
  * TanStack Query wrappers for the money + exception surfaces added by
@@ -412,7 +413,9 @@ export function useCourierAccounts(query?: {
   environment?: string;
 }): UseQueryResult<readonly CourierAccountView[]> {
   const client = useApiClient();
+  const canRead = usePermission('courier.accounts.view');
   return useQuery({
+    enabled: canRead,
     queryKey: ['admin-courier-accounts', 'list', query ?? {}],
     queryFn: () =>
       client.request<readonly CourierAccountView[]>(
@@ -851,9 +854,24 @@ export interface WarehouseOption {
   readonly status: string;
 }
 
+/**
+ * SELF-GATING. These three are LOOKUPS — a warehouse picker, a seller
+ * picker, a courier-account picker — dropped into pages all over the
+ * app, most of which are gated on something else entirely. Asking each
+ * of a dozen call sites to remember the permission is how one of them
+ * forgets, and the symptom is a 403 on a page that was otherwise fine.
+ *
+ * So the check lives in the hook. Somebody without the permission gets
+ * an empty list and no request, and the dropdown renders with no
+ * options — which is the truth: there is nothing here they may choose
+ * from. Callers already handle `data === undefined` because that is also
+ * the loading state.
+ */
 export function useWarehouseOptions(): UseQueryResult<readonly WarehouseOption[]> {
   const client = useApiClient();
+  const canRead = usePermission('warehouse.view');
   return useQuery({
+    enabled: canRead,
     queryKey: ['admin-warehouses', 'options'],
     staleTime: 10 * 60_000,
     queryFn: () => client.request<readonly WarehouseOption[]>('/api/admin/warehouses'),

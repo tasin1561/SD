@@ -23,6 +23,7 @@ import {
 } from '@skydrop/ui/components';
 import { useReconciliation, useSettlementsList } from '@/lib/ops-hooks';
 import { RecordSettlementModal } from './record-settlement-modal';
+import { usePermission } from '@/lib/use-permission';
 
 /**
  * Courier settlements + float reconciliation (R2c).
@@ -37,6 +38,7 @@ import { RecordSettlementModal } from './record-settlement-modal';
  * that has left and not come back.
  */
 export function SettlementsIndex(): ReactElement {
+  const canWrite = usePermission('money.settlements.record');
   const [recording, setRecording] = useState(false);
   const [overdueAfterDays, setOverdueAfterDays] = useState(10);
 
@@ -52,9 +54,11 @@ export function SettlementsIndex(): ReactElement {
         title="Courier settlements"
         subtitle="Every rupee the courier pays us, matched to the orders it covers. What is not matched is float we are carrying on the sellers' behalf."
         action={
-          <Button variant="primary" size="md" onClick={() => setRecording(true)}>
-            Record payout
-          </Button>
+          canWrite ? (
+            <Button variant="primary" size="md" onClick={() => setRecording(true)}>
+              Record payout
+            </Button>
+          ) : null
         }
       />
 
@@ -165,9 +169,11 @@ export function SettlementsIndex(): ReactElement {
             title="No payouts recorded"
             description="Enter the courier's payout with its UTR reference and the orders it covers. The reference is what makes recording the same credit twice a refusal instead of a double-count."
             action={
-              <Button variant="primary" size="sm" onClick={() => setRecording(true)}>
-                Record payout
-              </Button>
+              canWrite ? (
+                <Button variant="primary" size="sm" onClick={() => setRecording(true)}>
+                  Record payout
+                </Button>
+              ) : null
             }
           />
         ) : (

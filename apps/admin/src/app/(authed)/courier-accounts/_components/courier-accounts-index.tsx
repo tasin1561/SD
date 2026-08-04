@@ -25,6 +25,7 @@ import {
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { CreateCourierAccountModal } from './create-courier-account-modal';
+import { usePermission } from '@/lib/use-permission';
 
 /**
  * Courier accounts (R1).
@@ -40,6 +41,7 @@ import { CreateCourierAccountModal } from './create-courier-account-modal';
  */
 export function CourierAccountsIndex(): ReactElement {
   const [creating, setCreating] = useState(false);
+  const canWrite = usePermission('courier.accounts.manage');
   const list = useCourierAccounts();
 
   return (
@@ -48,9 +50,11 @@ export function CourierAccountsIndex(): ReactElement {
         title="Courier accounts"
         subtitle="Multiple accounts per courier, with per-seller weighted routing. Every shipment records the account that carried it."
         action={
-          <Button variant="primary" size="md" onClick={() => setCreating(true)}>
-            Add account
-          </Button>
+          canWrite ? (
+            <Button variant="primary" size="md" onClick={() => setCreating(true)}>
+              Add account
+            </Button>
+          ) : null
         }
       />
 
@@ -77,9 +81,11 @@ export function CourierAccountsIndex(): ReactElement {
           title="No courier accounts yet"
           description="Add the Delhivery account whose credentials should be used for AWB generation. The first account for a courier becomes its default."
           action={
-            <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
-              Add account
-            </Button>
+            canWrite ? (
+              <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
+                Add account
+              </Button>
+            ) : null
           }
         />
       ) : (

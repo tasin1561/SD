@@ -28,11 +28,21 @@ import type { StaffMe } from '@skydrop/api-client';
 export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permission: string]> = [
   ['/orders', 'orders.view'],
   ['/call-center/queue', 'callcenter.queue.view'],
-  ['/call-center/agents', 'callcenter.agents.manage'],
+  // READING the agent list is `callcenter.queue.view`; only changing
+  // somebody's settings is `callcenter.agents.manage`. Gating the page
+  // on the write permission meant a role that could manage agents but
+  // not read the queue opened a page that 403'd on its own data.
+  ['/call-center/agents', 'callcenter.queue.view'],
   ['/call-center', 'callcenter.work'],
   ['/warehouse', 'warehouse.view'],
+  // The whole page is pickups, so it needs the pickup permission — not
+  // the warehouse one it inherited from the prefix above.
+  ['/warehouse/pickups', 'courier.pickups.manage'],
   ['/tickets', 'tickets.view'],
   ['/holds', 'holds.manage'],
+  // The index had NO entry, so it fell through as ungated and every
+  // staff member could open it and watch its queries refuse.
+  ['/inventory', 'inventory.view'],
   ['/inventory/adjustments', 'inventory.view'],
   ['/inventory/cycle-counts', 'inventory.view'],
   ['/inventory/movements', 'inventory.view'],
