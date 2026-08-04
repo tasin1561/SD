@@ -8,8 +8,8 @@ import {
   type OrderView,
   type ReleaseReservationsResult,
 } from '@skydrop/api-client';
-import { OrderCancellationReason, OrderStatus, type StaffRole } from '@skydrop/db';
-import { hasStaffRole, useStaffIdentity } from '@skydrop/auth/client';
+import { OrderCancellationReason, OrderStatus } from '@skydrop/db';
+import { usePermission } from '@/lib/use-permission';
 import { useCancelOrder } from '@/lib/api-hooks';
 import {
   Button,
@@ -42,7 +42,11 @@ const TERMINAL_STATUSES: readonly OrderStatus[] = [
 // endpoints today (every admin endpoint is StaffJwtGuard-only in
 // Phase 1A — phase-1a-debt). We gate the UI as if the RBAC will land;
 // the server will reject regardless once it does.
-const OVERRIDE_ROLES: readonly StaffRole[] = ['SUPER_ADMIN' as StaffRole];
+// Was `['SUPER_ADMIN']` checked against the role NAME, which stopped
+// being true the moment roles became data: a "Warehouse manager"
+// somebody creates and gives `orders.override` to would have been shown
+// a disabled button and told to contact a super admin. The permission is
+// the thing the server actually checks, so it is the thing to ask about.
 
 const CANCELLATION_REASONS: ReadonlyArray<{
   value: OrderCancellationReason;
@@ -61,8 +65,8 @@ const CANCELLATION_REASONS: ReadonlyArray<{
 ];
 
 export function OrderActionsPanel({ order }: { readonly order: OrderView }): ReactElement {
-  const staff = useStaffIdentity();
-  const canOverride = hasStaffRole(staff, OVERRIDE_ROLES);
+  const canOverride = usePermission('orders.override');
+  const canCancel = usePermission('orders.cancel');
 
   const [cancelOpen, setCancelOpen] = useState(false);
   const [reason, setReason] = useState<OrderCancellationReason>(OrderCancellationReason.OTHER);
@@ -122,7 +126,7 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
             <Button
               variant="destructive"
               size="md"
-              disabled={inTerminalState || cancel.isPending}
+              disabled={inTerminalState || cancel.isPending || !canCancel}
               onClick={() => setCancelOpen(true)}
               title={
                 inTerminalState
@@ -164,7 +168,7 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
               size="md"
               onClick={() => setOverrideOpen(true)}
               disabled={!canOverride}
-              title={canOverride ? undefined : 'Requires SUPER_ADMIN role'}
+              title={canOverride ? undefined : 'Requires the god-mode override permission'}
             >
               <ShieldAlert size={14} /> Force-mutate…
             </Button>
@@ -184,8 +188,8 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
           </div>
           {!canOverride && (
             <div className="text-text-faint text-xs">
-              Your role can&apos;t use god-mode. Contact a super-admin if an extraordinary
-              correction is required.
+              Your role does not include the god-mode override permission. Ask a super admin if an
+              extraordinary correction is required.
             </div>
           )}
         </div>

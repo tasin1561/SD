@@ -181,15 +181,19 @@ function qs(params: Record<string, string | number | undefined>): string {
 
 // ───────── Tickets (R7) ─────────
 
-export function useTicketsList(query: {
-  status?: string;
-  ticketType?: string;
-  sellerId?: string;
-  page?: number;
-  pageSize?: number;
-}): UseQueryResult<Paginated<TicketView>> {
+export function useTicketsList(
+  query: {
+    status?: string;
+    ticketType?: string;
+    sellerId?: string;
+    page?: number;
+    pageSize?: number;
+  },
+  opts?: { readonly enabled?: boolean },
+): UseQueryResult<Paginated<TicketView>> {
   const client = useApiClient();
   return useQuery({
+    enabled: opts?.enabled ?? true,
     queryKey: ['admin-tickets', 'list', query],
     queryFn: () => client.request<Paginated<TicketView>>(`/api/admin/tickets${qs(query)}`),
   });
@@ -344,14 +348,18 @@ export function useRecordSettlement(): UseMutationResult<
 
 // ───────── Withdrawals (R2) ─────────
 
-export function useWithdrawalsList(query: {
-  sellerId?: string;
-  status?: string;
-  page?: number;
-  pageSize?: number;
-}): UseQueryResult<Paginated<WithdrawalRequestView>> {
+export function useWithdrawalsList(
+  query: {
+    sellerId?: string;
+    status?: string;
+    page?: number;
+    pageSize?: number;
+  },
+  opts?: { readonly enabled?: boolean },
+): UseQueryResult<Paginated<WithdrawalRequestView>> {
   const client = useApiClient();
   return useQuery({
+    enabled: opts?.enabled ?? true,
     queryKey: ['admin-withdrawals', 'list', query],
     queryFn: () =>
       client.request<Paginated<WithdrawalRequestView>>(

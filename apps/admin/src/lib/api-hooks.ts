@@ -182,11 +182,20 @@ export function useDeleteInvitation(): UseMutationResult<void, Error, { id: stri
 
 // ───────── Admin orders ─────────
 
-export function useOrdersList(query: ListOrdersQuery): UseQueryResult<OrderListResponse> {
+/**
+ * `enabled` exists so a caller who lacks `orders.view` never issues the
+ * request. Hiding the result while still asking spends the round trip
+ * and leaves a 403 in the server log for something nobody did wrong.
+ */
+export function useOrdersList(
+  query: ListOrdersQuery,
+  opts?: { readonly enabled?: boolean },
+): UseQueryResult<OrderListResponse> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-orders', 'list', query],
     queryFn: () => fetchOrders(client, query),
+    enabled: opts?.enabled ?? true,
   });
 }
 
@@ -1118,12 +1127,16 @@ export function useCreateRemittance(): UseMutationResult<
 
 import type { ReportSummary } from '@skydrop/api-client';
 
-export function useReportSummary(query?: {
-  from?: string;
-  to?: string;
-}): UseQueryResult<ReportSummary> {
+export function useReportSummary(
+  query?: {
+    from?: string;
+    to?: string;
+  },
+  opts?: { readonly enabled?: boolean },
+): UseQueryResult<ReportSummary> {
   const client = useApiClient();
   return useQuery({
+    enabled: opts?.enabled ?? true,
     queryKey: ['admin-reports', 'summary', query ?? {}],
     queryFn: () => {
       const sp = new URLSearchParams();

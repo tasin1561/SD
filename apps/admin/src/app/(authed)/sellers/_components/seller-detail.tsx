@@ -5,8 +5,7 @@ import { ArrowLeft, Copy, Eye } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import { ApiError } from '@skydrop/api-client';
 import { useRevealBankAccount, useSellerDetail } from '@/lib/api-hooks';
-import { useStaffIdentity, hasStaffRole } from '@skydrop/auth/client';
-import type { StaffRole } from '@skydrop/db';
+import { usePermission } from '@/lib/use-permission';
 import {
   Button,
   Card,
@@ -23,15 +22,12 @@ import {
 import { StatusActionPanel } from './status-action-panel';
 import { SellerSettingsSection } from './seller-settings-section';
 
-const STATUS_ROLES: readonly StaffRole[] = [
-  'SUPER_ADMIN' as StaffRole,
-  'SELLER_APPROVAL_ADMIN' as StaffRole,
-];
-
+// Was a check against the role NAME, which cannot see a role somebody
+// created — the permission is what the server enforces, so it is what
+// the button should ask about.
 export function SellerDetailView({ sellerId }: { sellerId: string }): ReactElement {
   const detail = useSellerDetail(sellerId);
-  const staff = useStaffIdentity();
-  const canChangeStatus = hasStaffRole(staff, STATUS_ROLES);
+  const canChangeStatus = usePermission('sellers.approve', 'sellers.suspend');
 
   return (
     <div className="max-w-4xl">
