@@ -14,6 +14,7 @@ import { TokenHashService } from '../../modules/auth-common/services/token-hash.
 import { AuditLogService } from '../../modules/auth-common/services/audit-log.service';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { SELLER_AUTH_ALLOW_SUSPENDED_KEY } from '../decorators/seller-auth-allow-suspended.decorator';
+import { ALL_SELLER_PERMISSION_KEYS } from '../auth/seller-permissions';
 
 /**
  * Programmatic seller authentication via `Authorization: Bearer skd_*`.
@@ -127,6 +128,15 @@ export class ApiKeyGuard implements CanActivate {
       // API-key auth doesn't have a person — synthesise an ADMIN-equivalent
       // attribution. Endpoints that want fine-grained per-person attribution
       // should use bearer-token auth instead.
+      //
+      // Its PERMISSIONS mirror that: everything the built-in Admin role
+      // covers, which is the whole catalogue except managing roles. A
+      // key is a machine integration; letting one rewrite who may do
+      // what would make an integration credential a privilege-escalation
+      // path, and no integration needs it.
+      roleKey: 'api_key',
+      roleName: 'API key',
+      permissions: ALL_SELLER_PERMISSION_KEYS.filter((k) => k !== 'roles.manage'),
       userId: row.id,
       role: 'ADMIN',
       fullName: 'API Key',

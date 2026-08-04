@@ -58,6 +58,7 @@ import { TrackingPollModule } from './modules/tracking-poll/tracking-poll.module
 import { LifecycleEventsModule } from './modules/lifecycle-events/lifecycle-events.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { SystemSettingsModule } from './modules/system-settings/system-settings.module';
+import { SellerRbacModule } from './modules/seller-rbac/seller-rbac.module';
 import { StaffRbacModule } from './modules/staff-rbac/staff-rbac.module';
 import { SystemCapacityModule } from './modules/system-capacity/system-capacity.module';
 import { InviteLeadModule } from './modules/invite-lead/invite-lead.module';
@@ -165,6 +166,7 @@ import { envSchema } from './config/env.schema';
     LifecycleEventsModule,
     NotificationsModule,
     SystemSettingsModule,
+    SellerRbacModule,
     StaffRbacModule,
     SystemCapacityModule,
     InviteLeadModule,

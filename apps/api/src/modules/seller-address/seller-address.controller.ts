@@ -21,11 +21,13 @@ import type { AuthenticatedSeller } from '../../common/types/request';
 import { CreateSellerAddressDto } from './dto/create-address.dto';
 import { UpdateSellerAddressDto } from './dto/update-address.dto';
 import { SellerAddressService, type SellerAddressView } from './services/seller-address.service';
+import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
 
 @ApiTags('seller-addresses')
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
+@RequireSellerPermissions('addresses.manage')
 @Controller('seller/addresses')
 export class SellerAddressController {
   constructor(private readonly svc: SellerAddressService) {}

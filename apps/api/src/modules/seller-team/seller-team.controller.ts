@@ -16,16 +16,17 @@ import { SellerUserRole } from '@skydrop/db';
 import { CurrentSeller } from '../../common/decorators/current-seller.decorator';
 import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/client-info.decorator';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
-import { requireSellerRoles } from '../../common/auth/require-seller-roles';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../common/types/request';
 import { CreateTeamInvitationDto } from './dto/create-team-invitation.dto';
 import { SellerTeamService } from './services/seller-team.service';
+import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
 
 @ApiTags('seller-team')
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
+@RequireSellerPermissions('team.view')
 @Controller('seller/team')
 export class SellerTeamController {
   constructor(private readonly svc: SellerTeamService) {}
@@ -33,6 +34,7 @@ export class SellerTeamController {
   // ── Invitations ────────────────────────────────────────────────────
 
   @Post('invitations')
+  @RequireSellerPermissions('team.manage')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Invite a team member (OWNER + ADMIN only)',
@@ -42,7 +44,6 @@ export class SellerTeamController {
     @CurrentSeller() seller: AuthenticatedSeller,
     @ClientInfo() ctx: ClientInfoPayload,
   ) {
-    requireSellerRoles(seller, [SellerUserRole.OWNER, SellerUserRole.ADMIN]);
     return this.svc.invite(seller.id, body, { sellerUserId: seller.userId }, ctx);
   }
 
@@ -54,6 +55,7 @@ export class SellerTeamController {
   }
 
   @Post('invitations/:id/resend')
+  @RequireSellerPermissions('team.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Resend (rotate token) on a pending invitation' })
   resendInvitation(
@@ -61,11 +63,11 @@ export class SellerTeamController {
     @CurrentSeller() seller: AuthenticatedSeller,
     @ClientInfo() ctx: ClientInfoPayload,
   ) {
-    requireSellerRoles(seller, [SellerUserRole.OWNER, SellerUserRole.ADMIN]);
     return this.svc.resendInvitation(seller.id, id, { sellerUserId: seller.userId }, ctx);
   }
 
   @Delete('invitations/:id')
+  @RequireSellerPermissions('team.manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Revoke a pending invitation' })
   async revokeInvitation(
@@ -73,7 +75,6 @@ export class SellerTeamController {
     @CurrentSeller() seller: AuthenticatedSeller,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<void> {
-    requireSellerRoles(seller, [SellerUserRole.OWNER, SellerUserRole.ADMIN]);
     await this.svc.revokeInvitation(seller.id, id, { sellerUserId: seller.userId }, ctx);
   }
 
@@ -87,6 +88,7 @@ export class SellerTeamController {
   }
 
   @Patch('members/:id/role')
+  @RequireSellerPermissions('team.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Change a team member’s role' })
   updateRole(
@@ -95,11 +97,11 @@ export class SellerTeamController {
     @CurrentSeller() seller: AuthenticatedSeller,
     @ClientInfo() ctx: ClientInfoPayload,
   ) {
-    requireSellerRoles(seller, [SellerUserRole.OWNER, SellerUserRole.ADMIN]);
     return this.svc.updateRole(seller.id, id, body.role, { sellerUserId: seller.userId }, ctx);
   }
 
   @Delete('members/:id')
+  @RequireSellerPermissions('team.manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Deactivate a team member (soft-delete)' })
   async deactivate(
@@ -107,7 +109,6 @@ export class SellerTeamController {
     @CurrentSeller() seller: AuthenticatedSeller,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<void> {
-    requireSellerRoles(seller, [SellerUserRole.OWNER, SellerUserRole.ADMIN]);
     await this.svc.deactivate(seller.id, id, { sellerUserId: seller.userId }, ctx);
   }
 }

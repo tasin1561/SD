@@ -21,6 +21,7 @@ import {
   type AggregatedStockSummary,
   type AggregatedVariantStock,
 } from './services/seller-stock.service';
+import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
 
 /**
  * Seller stock visibility. Read-only — allowed for SUSPENDED sellers
@@ -32,6 +33,7 @@ import {
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
+@RequireSellerPermissions('inventory.view')
 @Controller('seller/stock')
 export class SellerStockController {
   constructor(private readonly svc: SellerStockService) {}

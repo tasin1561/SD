@@ -1,12 +1,10 @@
 import { Body, Controller, HttpCode, HttpStatus, Param, Patch, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { SellerUserRole } from '@skydrop/db';
 import { CurrentSeller } from '../../../common/decorators/current-seller.decorator';
 import {
   ClientInfo,
   type ClientInfoPayload,
 } from '../../../common/decorators/client-info.decorator';
-import { SellerRoles } from '../../../common/decorators/seller-roles.decorator';
 import { SellerJwtGuard } from '../../../common/guards/seller-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
@@ -15,6 +13,7 @@ import {
   EarlyReservationDecisionService,
   type DecisionResult,
 } from '../services/early-reservation-decision.service';
+import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 
 /**
  * R5b — the seller answers "we could not reach your customer; keep trying
@@ -30,7 +29,7 @@ import {
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
-@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.OPS)
+@RequireSellerPermissions('holds.manage')
 @Controller('seller/early-reservation-reviews')
 export class SellerReviewDecisionController {
   constructor(private readonly decisions: EarlyReservationDecisionService) {}

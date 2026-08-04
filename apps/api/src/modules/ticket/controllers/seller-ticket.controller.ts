@@ -10,15 +10,15 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { ActorType, SellerUserRole, type TicketStatus, TicketType } from '@skydrop/db';
+import { ActorType, type TicketStatus, TicketType } from '@skydrop/db';
 import { CurrentSeller } from '../../../common/decorators/current-seller.decorator';
 import { SellerAuthAllowSuspended } from '../../../common/decorators/seller-auth-allow-suspended.decorator';
-import { SellerRoles } from '../../../common/decorators/seller-roles.decorator';
 import { SellerJwtGuard } from '../../../common/guards/seller-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
 import { CreateSellerTicketDto } from '../dto/ticket.dto';
 import { TicketService, type TicketView } from '../services/ticket.service';
+import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 
 /**
  * R7 — seller-facing parcel-issue tickets. Raising one is an OPS-domain
@@ -29,12 +29,13 @@ import { TicketService, type TicketView } from '../services/ticket.service';
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
-@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.OPS)
+@RequireSellerPermissions('tickets.view')
 @Controller('seller/tickets')
 export class SellerTicketController {
   constructor(private readonly tickets: TicketService) {}
 
   @Post()
+  @RequireSellerPermissions('tickets.create')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Raise a parcel/order issue ticket' })
   create(

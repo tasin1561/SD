@@ -10,6 +10,7 @@ import {
   InventoryMovementService,
   type MovementListResult,
 } from './services/inventory-movement.service';
+import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
 
 /**
  * Seller's own stock-movement ledger (read-only; allowed for SUSPENDED
@@ -20,6 +21,7 @@ import {
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
+@RequireSellerPermissions('inventory.view')
 @Controller('seller/stock')
 export class SellerMovementController {
   constructor(private readonly svc: InventoryMovementService) {}

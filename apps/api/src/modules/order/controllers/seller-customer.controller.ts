@@ -19,8 +19,7 @@ import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
 import { ListCustomersQueryDto, UpdateCustomerDto } from '../dto/customer.dto';
 import { CustomerService, type CustomerView } from '../services/customer.service';
-import { SellerUserRole } from '@skydrop/db';
-import { SellerRoles } from '../../../common/decorators/seller-roles.decorator';
+import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -28,7 +27,7 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
-@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.OPS)
+@RequireSellerPermissions('customers.view')
 @Controller('seller/customers')
 export class SellerCustomerController {
   constructor(private readonly svc: CustomerService) {}
@@ -56,6 +55,7 @@ export class SellerCustomerController {
   }
 
   @Patch(':id')
+  @RequireSellerPermissions('customers.view')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Edit a customer (phone is immutable, ORD-7)' })
   update(
@@ -67,6 +67,7 @@ export class SellerCustomerController {
   }
 
   @Delete(':id')
+  @RequireSellerPermissions('customers.view')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Soft-delete a customer' })
   async remove(

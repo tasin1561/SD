@@ -22,14 +22,13 @@ import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../common/types/request';
 import { CreateCsvMappingDto, UpdateCsvMappingDto } from './dto/csv-mapping.dto';
 import { CsvMappingService, type CsvMappingView } from './services/csv-mapping.service';
-import { SellerUserRole } from '@skydrop/db';
-import { SellerRoles } from '../../common/decorators/seller-roles.decorator';
+import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
 
 @ApiTags('seller-csv-mappings')
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
-@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.INVENTORY)
+@RequireSellerPermissions('catalog.import')
 @Controller('seller/csv-mappings')
 export class SellerCsvMappingController {
   constructor(private readonly svc: CsvMappingService) {}

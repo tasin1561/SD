@@ -8,6 +8,7 @@ import {
   StockUnitReportService,
   type UnitDiscrepancyReport,
 } from '../services/stock-unit-report.service';
+import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 
 /**
  * R4 — the seller's view of their own serialized stock. Read-only by
@@ -18,6 +19,7 @@ import {
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
+@RequireSellerPermissions('inventory.view')
 @Controller('seller/stock-units')
 export class SellerStockUnitController {
   constructor(private readonly reports: StockUnitReportService) {}

@@ -24,8 +24,7 @@ import {
   UpdateGoodsReceiptDto,
 } from './dto/goods-receipt.dto';
 import { GoodsReceiptService, type GoodsReceiptView } from './services/goods-receipt.service';
-import { SellerUserRole } from '@skydrop/db';
-import { SellerRoles } from '../../common/decorators/seller-roles.decorator';
+import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -33,12 +32,13 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
-@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.INVENTORY)
+@RequireSellerPermissions('inbound.view')
 @Controller('seller/goods-receipts')
 export class SellerGoodsReceiptController {
   constructor(private readonly svc: GoodsReceiptService) {}
 
   @Post()
+  @RequireSellerPermissions('inbound.manage')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Declare an incoming goods receipt (APPROVED sellers only)' })
   declare(
@@ -72,6 +72,7 @@ export class SellerGoodsReceiptController {
   }
 
   @Patch(':id')
+  @RequireSellerPermissions('inbound.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Edit a PENDING goods receipt' })
   update(
@@ -84,6 +85,7 @@ export class SellerGoodsReceiptController {
   }
 
   @Post(':id/cancel')
+  @RequireSellerPermissions('inbound.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cancel a PENDING goods receipt' })
   cancel(

@@ -6,36 +6,18 @@ import {
   type ExecutionContext,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { ActorType, SellerStatus, SellerUserRole } from '@skydrop/db';
+import { ActorType, SellerStatus } from '@skydrop/db';
 import type { Request } from 'express';
 import { JwtService } from '../../modules/auth-common/services/jwt.service';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../modules/auth-common/services/audit-log.service';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { SELLER_AUTH_ALLOW_SUSPENDED_KEY } from '../decorators/seller-auth-allow-suspended.decorator';
-import { SELLER_ROLES_KEY } from '../decorators/seller-roles.decorator';
-import { SELLER_VIEWER_READABLE_KEY } from '../decorators/seller-viewer-readable.decorator';
-
-/** Methods that only READ. Open to every role EXCEPT VIEWER, whose
- *  reads are an allow-list — see `VIEWER_READ_DENIED`. */
-const SAFE_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'OPTIONS']);
-
-/** Default allow-list for MUTATING methods when an endpoint declares no
- *  `@SellerRoles`. Deliberately the narrowest useful set — see the
- *  fail-closed note on the decorator. */
-const DEFAULT_WRITE_ROLES: readonly SellerUserRole[] = [SellerUserRole.OWNER, SellerUserRole.ADMIN];
-
-/** The allow-list applied to a VIEWER reading a controller that has not
- *  opted in via `@SellerViewerReadable()`. Deliberately every role
- *  EXCEPT VIEWER rather than an empty array, so the 403 names the roles
- *  that would have worked instead of reading as a misconfiguration. */
-const VIEWER_READ_DENIED: readonly SellerUserRole[] = [
-  SellerUserRole.OWNER,
-  SellerUserRole.ADMIN,
-  SellerUserRole.OPS,
-  SellerUserRole.INVENTORY,
-  SellerUserRole.FINANCE,
-];
+import { ALL_SELLER_PERMISSION_KEYS, type SellerPermissionKey } from '../auth/seller-permissions';
+import {
+  REQUIRE_SELLER_PERMISSIONS_KEY,
+  SELLER_SELF_SERVICE_KEY,
+} from '../auth/require-seller-permissions.decorator';
 
 /**
  * Bearer-token auth for seller routes. Crucially, this guard re-checks
@@ -100,12 +82,25 @@ export class SellerJwtGuard implements CanActivate {
         fullName: true,
         role: true,
         emailVerifiedAt: true,
+        sellerRole: {
+          select: {
+            key: true,
+            name: true,
+            isOwner: true,
+            deletedAt: true,
+            permissions: { select: { permission: true } },
+          },
+        },
         seller: {
           select: { id: true, email: true, status: true, deletedAt: true },
         },
       },
     });
-    if (!user || user.seller.deletedAt !== null) {
+    // A soft-deleted role is not a role: somebody whose role was removed
+    // under them has nothing to reason about permission-wise, and
+    // leaving them with a live session and an empty grant set is a worse
+    // state than asking them to sign in again.
+    if (!user || user.seller.deletedAt !== null || user.sellerRole.deletedAt !== null) {
       throw new UnauthorizedException({
         code: 'UNAUTHORIZED',
         message: 'Seller session no longer valid',
@@ -150,65 +145,60 @@ export class SellerJwtGuard implements CanActivate {
       });
     }
 
-    // ── RBAC: role gate (see the policy note in the class doc).
-    const handlerRoles = this.reflector.get<SellerUserRole[] | undefined>(
-      SELLER_ROLES_KEY,
-      ctx.getHandler(),
-    );
-    const classRoles = this.reflector.get<SellerUserRole[] | undefined>(
-      SELLER_ROLES_KEY,
-      ctx.getClass(),
-    );
-    const isRead = SAFE_METHODS.has(req.method.toUpperCase());
+    // ── RBAC: permission gate ────────────────────────────────────
+    // The role gate this replaces was fail-closed on WRITES only —
+    // reads stayed open to five of the six roles, so "may not change
+    // the wallet" and "may not see the wallet" could not be told apart.
+    // Both are closed by default now, and an endpoint that declares
+    // nothing is refused rather than allowed.
+    const held: readonly string[] = user.sellerRole.isOwner
+      ? ALL_SELLER_PERMISSION_KEYS
+      : user.sellerRole.permissions.map((p) => p.permission);
 
-    // A HANDLER-level declaration is absolute — it applies to reads and
-    // writes alike, so a specific endpoint can always be locked down.
-    // A CLASS-level declaration is the domain's WRITE allow-list only;
-    // reads stay open to the company roles, because OPS / INVENTORY /
-    // FINANCE are trusted with the whole view and limited only in what
-    // they may CHANGE. A domain controller therefore does NOT lock them
-    // out of its GETs just by declaring who may mutate.
-    //
-    // VIEWER is the exception: its reads are an ALLOW-LIST, opted into
-    // per controller with `@SellerViewerReadable()`. "Read-only" used to
-    // mean read-EVERYTHING, which let the lowest-privilege account pull
-    // the wallet ledger, the bank details on the profile, the team list
-    // and the whole catalogue. Anything unmarked is closed to VIEWER,
-    // so a new controller is invisible to the role until someone opts
-    // it in deliberately — the same fail-closed shape as the write side.
-    const viewerReadable =
-      this.reflector.getAllAndOverride<boolean>(SELLER_VIEWER_READABLE_KEY, [
+    const selfService =
+      this.reflector.getAllAndOverride<boolean>(SELLER_SELF_SERVICE_KEY, [
         ctx.getHandler(),
         ctx.getClass(),
       ]) === true;
 
-    const readRoles: readonly SellerUserRole[] | null =
-      user.role === SellerUserRole.VIEWER && !viewerReadable ? VIEWER_READ_DENIED : null;
+    if (!selfService) {
+      const required = this.reflector.getAllAndOverride<readonly SellerPermissionKey[] | undefined>(
+        REQUIRE_SELLER_PERMISSIONS_KEY,
+        [ctx.getHandler(), ctx.getClass()],
+      );
 
-    const allowedRoles = handlerRoles ?? (isRead ? readRoles : (classRoles ?? DEFAULT_WRITE_ROLES));
+      if (required === undefined || required.length === 0) {
+        throw new ForbiddenException({
+          code: 'ENDPOINT_NOT_AUTHORIZED',
+          message:
+            'This endpoint declares no permission and is refused by default. ' +
+            'Add @RequireSellerPermissions(...) or @SellerSelfService() to it.',
+        });
+      }
 
-    if (allowedRoles !== null && !allowedRoles.includes(user.role)) {
-      await this.audit.log({
-        actorType: ActorType.SELLER,
-        sellerId: seller.id,
-        actorId: user.id,
-        action: 'seller.access_denied_role',
-        entityType: 'seller_user',
-        entityId: user.id,
-        metadata: {
-          role: user.role,
-          allowedRoles: [...allowedRoles],
-          path: req.url,
-          method: req.method,
-          ipAddress: req.ip ?? null,
-          userAgent: req.header('user-agent') ?? null,
-        },
-        severity: 'LOW',
-      });
-      throw new ForbiddenException({
-        code: 'INSUFFICIENT_ROLE',
-        message: `Role ${user.role} not permitted; required one of: ${allowedRoles.join(', ')}`,
-      });
+      if (!required.some((perm) => held.includes(perm))) {
+        await this.audit.log({
+          actorType: ActorType.SELLER,
+          sellerId: seller.id,
+          actorId: user.id,
+          action: 'seller.access_denied_permission',
+          entityType: 'seller_user',
+          entityId: user.id,
+          metadata: {
+            role: user.sellerRole.key,
+            required: [...required],
+            path: req.url,
+            method: req.method,
+            ipAddress: req.ip ?? null,
+            userAgent: req.header('user-agent') ?? null,
+          },
+          severity: 'LOW',
+        });
+        throw new ForbiddenException({
+          code: 'INSUFFICIENT_PERMISSION',
+          message: `${user.sellerRole.name} does not hold: ${required.join(' or ')}`,
+        });
+      }
     }
 
     req.seller = {
@@ -219,6 +209,9 @@ export class SellerJwtGuard implements CanActivate {
       jti: claims.jti,
       userId: user.id,
       role: user.role,
+      roleKey: user.sellerRole.key,
+      roleName: user.sellerRole.name,
+      permissions: held,
       fullName: user.fullName,
     };
     return true;

@@ -53,8 +53,13 @@ export interface AuthenticatedSeller {
   jti: string;
   /** SellerUser.id — the person who authenticated. */
   userId: string;
-  /** SellerUser.role — used by requireSellerRoles. */
+  /** LEGACY enum. No longer consulted for authorisation. */
   role: SellerUserRole;
+  /** `seller_roles.key` — the role actually held, including custom ones. */
+  roleKey: string;
+  roleName: string;
+  /** Effective permission keys, resolved per request from the role. */
+  permissions: readonly string[];
   /** SellerUser.fullName — for audit + UI display. */
   fullName: string;
 }

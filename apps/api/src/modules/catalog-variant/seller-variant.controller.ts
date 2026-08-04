@@ -21,19 +21,19 @@ import type { AuthenticatedSeller } from '../../common/types/request';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
 import { CatalogVariantService, type VariantView } from './services/catalog-variant.service';
-import { SellerUserRole } from '@skydrop/db';
-import { SellerRoles } from '../../common/decorators/seller-roles.decorator';
+import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
 
 @ApiTags('seller-variants')
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
-@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.INVENTORY)
+@RequireSellerPermissions('catalog.view')
 @Controller('seller/products/:productId/variants')
 export class SellerVariantController {
   constructor(private readonly svc: CatalogVariantService) {}
 
   @Post()
+  @RequireSellerPermissions('catalog.manage')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Create a variant',
@@ -74,6 +74,7 @@ export class SellerVariantController {
   }
 
   @Patch(':variantId')
+  @RequireSellerPermissions('catalog.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update a variant (re-validates attributes if provided)' })
   update(
@@ -87,6 +88,7 @@ export class SellerVariantController {
   }
 
   @Post(':variantId/archive')
+  @RequireSellerPermissions('catalog.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Archive a variant' })
   archive(
@@ -99,6 +101,7 @@ export class SellerVariantController {
   }
 
   @Post(':variantId/unarchive')
+  @RequireSellerPermissions('catalog.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Unarchive a variant' })
   unarchive(
@@ -111,6 +114,7 @@ export class SellerVariantController {
   }
 
   @Delete(':variantId')
+  @RequireSellerPermissions('catalog.manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Soft-delete a variant' })
   async remove(

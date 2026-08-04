@@ -14,6 +14,7 @@ import { SellerJwtGuard } from '../../../common/guards/seller-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
 import { OrderChargesService, type OrderChargeView } from '../services/order-charges.service';
+import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -21,6 +22,7 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
+@RequireSellerPermissions('charges.view')
 @Controller('seller/orders/:orderId/charges')
 export class SellerOrderChargesController {
   constructor(private readonly svc: OrderChargesService) {}

@@ -11,10 +11,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { SellerUserRole } from '@skydrop/db';
 import { CurrentSeller } from '../../../common/decorators/current-seller.decorator';
 import { SellerAuthAllowSuspended } from '../../../common/decorators/seller-auth-allow-suspended.decorator';
-import { SellerRoles } from '../../../common/decorators/seller-roles.decorator';
 import { SellerJwtGuard } from '../../../common/guards/seller-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import {
@@ -28,6 +26,7 @@ import {
   type TopupRequestView,
 } from '../services/wallet-topup.service';
 import { ListTopupsQueryDto, PresignTopupProofDto, SubmitTopupDto } from '../dto/wallet-topup.dto';
+import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 
 /**
  * Putting money into your own wallet.
@@ -40,7 +39,7 @@ import { ListTopupsQueryDto, PresignTopupProofDto, SubmitTopupDto } from '../dto
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
-@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.FINANCE)
+@RequireSellerPermissions('wallet.view')
 @Controller('seller/wallet/topups')
 export class SellerTopupController {
   constructor(private readonly svc: WalletTopupService) {}
@@ -53,6 +52,7 @@ export class SellerTopupController {
   }
 
   @Post('proof-upload')
+  @RequireSellerPermissions('wallet.topup')
   @HttpCode(HttpStatus.OK)
   @SellerAuthAllowSuspended()
   @ApiOperation({
@@ -66,6 +66,7 @@ export class SellerTopupController {
   }
 
   @Post()
+  @RequireSellerPermissions('wallet.topup')
   @HttpCode(HttpStatus.CREATED)
   @SellerAuthAllowSuspended()
   @ApiOperation({

@@ -22,8 +22,7 @@ import {
   type AlertConfigView,
   type VariantThresholdView,
 } from './services/seller-threshold.service';
-import { SellerUserRole } from '@skydrop/db';
-import { SellerRoles } from '../../common/decorators/seller-roles.decorator';
+import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -38,7 +37,7 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
-@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.INVENTORY)
+@RequireSellerPermissions('inventory.view')
 @Controller()
 export class SellerThresholdController {
   constructor(private readonly svc: SellerThresholdService) {}
@@ -52,6 +51,7 @@ export class SellerThresholdController {
   }
 
   @Patch('seller/stock/alert-config/default')
+  @RequireSellerPermissions('catalog.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Set/clear the seller default low-stock threshold' })
   setDefault(
@@ -63,6 +63,7 @@ export class SellerThresholdController {
   }
 
   @Patch('seller/products/:productId/variants/:variantId/threshold')
+  @RequireSellerPermissions('catalog.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Set/clear a variant low-stock threshold (wins over the seller default)',

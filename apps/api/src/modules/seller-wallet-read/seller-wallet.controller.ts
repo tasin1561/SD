@@ -8,6 +8,7 @@ import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../common/types/request';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { WalletService } from '../seller-wallet/services/wallet.service';
+import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
 
 interface WalletBalanceView {
   readonly currency: Currency;
@@ -48,6 +49,7 @@ interface WalletEntriesPage {
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
+@RequireSellerPermissions('wallet.view')
 @Controller('seller/wallet')
 export class SellerWalletController {
   constructor(

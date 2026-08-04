@@ -1,9 +1,8 @@
 import { Controller, Get, HttpCode, HttpStatus, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { type EarlyReservationReviewStatus, SellerUserRole } from '@skydrop/db';
+import { type EarlyReservationReviewStatus } from '@skydrop/db';
 import { CurrentSeller } from '../../../common/decorators/current-seller.decorator';
 import { SellerAuthAllowSuspended } from '../../../common/decorators/seller-auth-allow-suspended.decorator';
-import { SellerRoles } from '../../../common/decorators/seller-roles.decorator';
 import { SellerJwtGuard } from '../../../common/guards/seller-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
@@ -11,6 +10,7 @@ import {
   EarlyReservationReviewService,
   type ReviewView,
 } from '../services/early-reservation-review.service';
+import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 
 /**
  * R5 — the seller dashboard surface the founder described: "it will go to
@@ -24,7 +24,7 @@ import {
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
-@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.OPS)
+@RequireSellerPermissions('holds.manage')
 @Controller('seller/early-reservation-reviews')
 export class SellerEarlyReservationController {
   constructor(private readonly reviews: EarlyReservationReviewService) {}

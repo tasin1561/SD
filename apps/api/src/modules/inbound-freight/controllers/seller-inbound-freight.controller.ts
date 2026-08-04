@@ -7,6 +7,7 @@ import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
 import { ListInboundFreightQueryDto } from '../dto/inbound-freight.dto';
 import { InboundFreightService, type FreightChargeView } from '../services/inbound-freight.service';
+import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 
 /**
  * R3 seller surface — read-only. A seller can see what their inbound
@@ -18,6 +19,7 @@ import { InboundFreightService, type FreightChargeView } from '../services/inbou
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
+@RequireSellerPermissions('freight.view')
 @Controller('seller/inbound-freight')
 export class SellerInboundFreightController {
   constructor(private readonly svc: InboundFreightService) {}

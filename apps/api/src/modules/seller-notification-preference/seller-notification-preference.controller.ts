@@ -22,11 +22,13 @@ import {
   SellerNotificationPreferenceService,
   type NotificationPreferenceView,
 } from './services/seller-notification-preference.service';
+import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
 
 @ApiTags('seller-notification-preferences')
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
+@RequireSellerPermissions('notifications.manage')
 @Controller('seller/notification-preferences')
 export class SellerNotificationPreferenceController {
   constructor(private readonly svc: SellerNotificationPreferenceService) {}

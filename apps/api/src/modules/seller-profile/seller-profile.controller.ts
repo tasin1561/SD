@@ -21,6 +21,7 @@ import { UpdateSellerProfileDto } from './dto/update-profile.dto';
 import { UpdateSellerBankDetailsDto } from './dto/update-bank-details.dto';
 import { SellerProfileService, type SellerProfileView } from './services/seller-profile.service';
 import { SellerLogoService } from './services/seller-logo.service';
+import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
 
 const ALLOWED_LOGO_MIME = ['image/jpeg', 'image/png', 'image/webp'] as const;
 type AllowedLogoMime = (typeof ALLOWED_LOGO_MIME)[number];
@@ -49,6 +50,7 @@ class RegisterLogoDto {
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
+@RequireSellerPermissions('profile.view')
 @Controller('seller/profile')
 export class SellerProfileController {
   constructor(
@@ -68,6 +70,7 @@ export class SellerProfileController {
   }
 
   @Patch()
+  @RequireSellerPermissions('profile.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update profile fields (APPROVED sellers only)' })
   updateProfile(
@@ -79,6 +82,7 @@ export class SellerProfileController {
   }
 
   @Patch('bank-details')
+  @RequireSellerPermissions('profile.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Update bank details (APPROVED sellers only)',
@@ -94,6 +98,7 @@ export class SellerProfileController {
   }
 
   @Post('logo/presign')
+  @RequireSellerPermissions('profile.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Presign a PUT URL for uploading the company logo',
@@ -105,6 +110,7 @@ export class SellerProfileController {
   }
 
   @Post('logo/register')
+  @RequireSellerPermissions('profile.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Register an uploaded logo (called after the presigned PUT succeeds)',
@@ -118,6 +124,7 @@ export class SellerProfileController {
   }
 
   @Delete('logo')
+  @RequireSellerPermissions('profile.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Remove the company logo' })
   removeLogo(@CurrentSeller() seller: AuthenticatedSeller, @ClientInfo() ctx: ClientInfoPayload) {

@@ -23,6 +23,7 @@ import {
   type WebhookEndpointView,
   type WebhookEndpointWithSecret,
 } from './services/seller-webhook.service';
+import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -38,6 +39,7 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
+@RequireSellerPermissions('webhooks.manage')
 @Controller('seller/webhook-endpoints')
 export class SellerWebhookController {
   constructor(private readonly svc: SellerWebhookService) {}

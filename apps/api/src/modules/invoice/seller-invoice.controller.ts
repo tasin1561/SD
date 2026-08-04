@@ -17,8 +17,7 @@ import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../common/types/request';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { InvoiceService } from './services/invoice.service';
-import { SellerUserRole } from '@skydrop/db';
-import { SellerRoles } from '../../common/decorators/seller-roles.decorator';
+import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
 
 /**
  * Seller invoice endpoints. The seller sees:
@@ -34,7 +33,7 @@ import { SellerRoles } from '../../common/decorators/seller-roles.decorator';
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
-@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.FINANCE)
+@RequireSellerPermissions('charges.view')
 @Controller('seller/orders/:id/invoice')
 export class SellerInvoiceController {
   constructor(

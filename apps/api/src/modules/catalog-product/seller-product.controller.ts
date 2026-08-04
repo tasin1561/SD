@@ -23,19 +23,19 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ListProductsQueryDto } from './dto/list-products.dto';
 import { CatalogProductService, type ProductView } from './services/catalog-product.service';
-import { SellerUserRole } from '@skydrop/db';
-import { SellerRoles } from '../../common/decorators/seller-roles.decorator';
+import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
 
 @ApiTags('seller-products')
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
-@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.INVENTORY)
+@RequireSellerPermissions('catalog.view')
 @Controller('seller/products')
 export class SellerProductController {
   constructor(private readonly svc: CatalogProductService) {}
 
   @Post()
+  @RequireSellerPermissions('catalog.manage')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a product (APPROVED sellers only)' })
   create(
@@ -69,6 +69,7 @@ export class SellerProductController {
   }
 
   @Patch(':id')
+  @RequireSellerPermissions('catalog.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update a product (APPROVED only)' })
   update(
@@ -81,6 +82,7 @@ export class SellerProductController {
   }
 
   @Post(':id/archive')
+  @RequireSellerPermissions('catalog.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Archive a product (cascades ARCHIVED to its variants)' })
   archive(
@@ -92,6 +94,7 @@ export class SellerProductController {
   }
 
   @Post(':id/unarchive')
+  @RequireSellerPermissions('catalog.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Unarchive a product (does NOT re-activate variants)' })
   unarchive(
@@ -103,6 +106,7 @@ export class SellerProductController {
   }
 
   @Delete(':id')
+  @RequireSellerPermissions('catalog.manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Soft-delete a product (cascades soft-delete to its variants)' })
   async remove(

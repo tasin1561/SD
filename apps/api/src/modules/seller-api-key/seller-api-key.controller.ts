@@ -17,11 +17,13 @@ import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../common/types/request';
 import { ApiKeyListItemDto, CreateApiKeyDto, CreatedApiKeyDto } from './dto/create.dto';
 import { SellerApiKeyService } from './seller-api-key.service';
+import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
 
 @ApiTags('seller-api-keys')
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
+@RequireSellerPermissions('api_keys.manage')
 @Controller('seller/api-keys')
 export class SellerApiKeyController {
   constructor(private readonly svc: SellerApiKeyService) {}

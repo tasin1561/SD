@@ -24,19 +24,19 @@ import {
   type ImageView,
   type PresignResult,
 } from './services/catalog-image.service';
-import { SellerUserRole } from '@skydrop/db';
-import { SellerRoles } from '../../common/decorators/seller-roles.decorator';
+import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
 
 @ApiTags('seller-variant-images')
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
-@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.INVENTORY)
+@RequireSellerPermissions('catalog.view')
 @Controller('seller/variants/:variantId/images')
 export class SellerImageController {
   constructor(private readonly svc: CatalogImageService) {}
 
   @Post('presign')
+  @RequireSellerPermissions('catalog.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Get a presigned PUT URL for a variant image (15-min TTL)',
@@ -50,6 +50,7 @@ export class SellerImageController {
   }
 
   @Post()
+  @RequireSellerPermissions('catalog.manage')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Register an uploaded image (HEAD-verified) + queue thumbnail',
@@ -75,6 +76,7 @@ export class SellerImageController {
   }
 
   @Delete(':imageId')
+  @RequireSellerPermissions('catalog.manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Soft-delete an image; queues deletion of the original + thumbnail',

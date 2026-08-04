@@ -11,14 +11,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { SellerUserRole } from '@skydrop/db';
 import { CurrentSeller } from '../../../common/decorators/current-seller.decorator';
-import { SellerRoles } from '../../../common/decorators/seller-roles.decorator';
 import { SellerJwtGuard } from '../../../common/guards/seller-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
 import { StagedOrderRowService, type StagedRowView } from '../services/staged-order-row.service';
 import { ListStagedRowsQueryDto, PatchStagedRowDto } from '../dto/staged-order-row.dto';
+import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 
 /**
  * Pending orders — the CSV rows that could not import on their own.
@@ -31,7 +30,7 @@ import { ListStagedRowsQueryDto, PatchStagedRowDto } from '../dto/staged-order-r
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
-@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.OPS)
+@RequireSellerPermissions('orders.pending.manage')
 @Controller('seller/orders-pending')
 export class SellerStagedOrderController {
   constructor(private readonly svc: StagedOrderRowService) {}

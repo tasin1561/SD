@@ -41,9 +41,7 @@ import {
   type OrderView,
 } from '../services/order.service';
 import { OrderWriteService } from '../services/order-write.service';
-import { SellerUserRole } from '@skydrop/db';
-import { SellerRoles } from '../../../common/decorators/seller-roles.decorator';
-import { SellerViewerReadable } from '../../../common/decorators/seller-viewer-readable.decorator';
+import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -51,11 +49,10 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
-@SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.OPS)
 // The orders surface is the ONE area a VIEWER may read: the list, an
 // order's detail, and its event timeline — which is what the tracking
 // view is built from. Writes here remain OWNER / ADMIN / OPS.
-@SellerViewerReadable()
+@RequireSellerPermissions('orders.view')
 @Controller('seller/orders')
 export class SellerOrderController {
   constructor(
@@ -69,6 +66,7 @@ export class SellerOrderController {
   }
 
   @Post()
+  @RequireSellerPermissions('orders.create')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a manual order (DRAFT)' })
   create(
@@ -102,7 +100,6 @@ export class SellerOrderController {
   // takes an arbitrary phone number and answers questions about it,
   // which is a lookup TOOL rather than a view of their own data.
   // Handler-level @SellerRoles wins over the class opt-in (rule 1).
-  @SellerRoles(SellerUserRole.OWNER, SellerUserRole.ADMIN, SellerUserRole.OPS)
   // Tighter than the 100/min baseline. Entering an order is one lookup;
   // even a fast operator does a handful a minute. The platform-wide
   // counts are a deliberate disclosure, but disclosing them one number
@@ -146,6 +143,7 @@ export class SellerOrderController {
   }
 
   @Patch(':id')
+  @RequireSellerPermissions('orders.create')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Edit an order (DRAFT full / PENDING_CONFIRMATION corrections)' })
   edit(
@@ -158,6 +156,7 @@ export class SellerOrderController {
   }
 
   @Post(':id/submit')
+  @RequireSellerPermissions('orders.create')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Submit a DRAFT order for call confirmation' })
   submit(
@@ -169,6 +168,7 @@ export class SellerOrderController {
   }
 
   @Post(':id/cancel')
+  @RequireSellerPermissions('orders.cancel')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Cancel an order — allowed until it is packed. Refunds a delivery fee already taken.',
@@ -193,6 +193,7 @@ export class SellerOrderController {
   }
 
   @Delete(':id')
+  @RequireSellerPermissions('orders.create')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Discard (soft-delete) a DRAFT order' })
   async discard(
