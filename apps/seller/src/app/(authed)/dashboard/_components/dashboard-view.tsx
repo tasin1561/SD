@@ -16,6 +16,7 @@ import {
   PageHeader,
   Section,
 } from '@skydrop/ui/components';
+import { can } from '@/lib/page-access';
 
 /**
  * Seller dashboard synthesis — Recent orders + nav pivot. The shell
@@ -35,9 +36,24 @@ import {
  */
 export function DashboardView(): ReactElement {
   const identity = useSellerIdentity();
-  const recent = useOrdersList({ page: 1, pageSize: 5 });
-  const profile = useSellerProfile();
-  const products = useProductsList({ page: 1, pageSize: 1, status: 'ACTIVE' });
+  // This is the ONE page open to everybody, so it is where a permission
+  // gap shows first. A viewer holds `orders.view` and nothing else, and
+  // the page was fetching the profile and the catalogue regardless —
+  // serving them their own landing page with two refusals on it.
+  //
+  // Each query is gated on the permission its DATA needs, and the same
+  // answer drives the section, so a request nobody may make is never
+  // sent rather than sent and hidden.
+  const canOrders = can(identity, 'orders.view');
+  const canProfile = can(identity, 'profile.view');
+  const canCatalog = can(identity, 'catalog.view');
+
+  const recent = useOrdersList({ page: 1, pageSize: 5 }, { enabled: canOrders });
+  const profile = useSellerProfile({ enabled: canProfile });
+  const products = useProductsList(
+    { page: 1, pageSize: 1, status: 'ACTIVE' },
+    { enabled: canCatalog },
+  );
   const companyName = identity?.companyName ?? 'there';
 
   // Onboarding checklist — show only when at least one step is unmet.
@@ -64,7 +80,7 @@ export function DashboardView(): ReactElement {
         subtitle="Your most recent orders + quick navigation."
       />
 
-      {!onboardingDone && (
+      {canProfile && canCatalog && !onboardingDone && (
         <Section title="Get started">
           <Card>
             <CardBody>
@@ -102,60 +118,62 @@ export function DashboardView(): ReactElement {
         </Section>
       )}
 
-      <Section
-        title="Recent orders"
-        action={
-          <Link
-            href="/orders"
-            className="text-text-muted hover:text-text-body text-xs transition-colors"
-          >
-            See all →
-          </Link>
-        }
-      >
-        {recent.isLoading ? (
-          <LoadingState label="Loading recent orders…" />
-        ) : recent.isError ? (
-          <ErrorState
-            message={recent.error?.message ?? 'Failed to load recent orders.'}
-            retry={() => void recent.refetch()}
-          />
-        ) : !recent.data || recent.data.items.length === 0 ? (
-          <EmptyState
-            title="No orders yet"
-            description="Once you create an order or import a CSV, they show up here."
-          />
-        ) : (
-          <Card>
-            <ol className="divide-y divide-border">
-              {recent.data.items.map((o) => (
-                // Stacked on a phone. Side by side, the fixed 176px
-                // order number and a status badge as long as "Awaiting
-                // Seller Decision" (177px) cannot both fit in 320px,
-                // and neither is allowed to shrink.
-                <li
-                  key={o.id}
-                  className="hover:bg-surface-hover flex flex-col gap-1 px-4 py-2.5 transition-colors sm:flex-row sm:items-center sm:gap-4 sm:py-3"
-                >
-                  <Link
-                    href={`/orders/${o.id}`}
-                    className="text-text-bright flex min-h-[30px] items-center font-mono text-xs hover:underline sm:min-h-0 sm:w-44 sm:shrink-0"
+      {canOrders && (
+        <Section
+          title="Recent orders"
+          action={
+            <Link
+              href="/orders"
+              className="text-text-muted hover:text-text-body text-xs transition-colors"
+            >
+              See all →
+            </Link>
+          }
+        >
+          {recent.isLoading ? (
+            <LoadingState label="Loading recent orders…" />
+          ) : recent.isError ? (
+            <ErrorState
+              message={recent.error?.message ?? 'Failed to load recent orders.'}
+              retry={() => void recent.refetch()}
+            />
+          ) : !recent.data || recent.data.items.length === 0 ? (
+            <EmptyState
+              title="No orders yet"
+              description="Once you create an order or import a CSV, they show up here."
+            />
+          ) : (
+            <Card>
+              <ol className="divide-y divide-border">
+                {recent.data.items.map((o) => (
+                  // Stacked on a phone. Side by side, the fixed 176px
+                  // order number and a status badge as long as "Awaiting
+                  // Seller Decision" (177px) cannot both fit in 320px,
+                  // and neither is allowed to shrink.
+                  <li
+                    key={o.id}
+                    className="hover:bg-surface-hover flex flex-col gap-1 px-4 py-2.5 transition-colors sm:flex-row sm:items-center sm:gap-4 sm:py-3"
                   >
-                    {o.orderNumber}
-                  </Link>
-                  <div className="text-text-body min-w-0 flex-1 truncate text-sm">
-                    {o.recipientName}
-                    <span className="text-text-faint ml-1">· {o.recipientCity}</span>
-                  </div>
-                  <div className="min-w-0 sm:shrink-0">
-                    <OrderStatusBadge status={o.status} />
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </Card>
-        )}
-      </Section>
+                    <Link
+                      href={`/orders/${o.id}`}
+                      className="text-text-bright flex min-h-[30px] items-center font-mono text-xs hover:underline sm:min-h-0 sm:w-44 sm:shrink-0"
+                    >
+                      {o.orderNumber}
+                    </Link>
+                    <div className="text-text-body min-w-0 flex-1 truncate text-sm">
+                      {o.recipientName}
+                      <span className="text-text-faint ml-1">· {o.recipientCity}</span>
+                    </div>
+                    <div className="min-w-0 sm:shrink-0">
+                      <OrderStatusBadge status={o.status} />
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </Card>
+          )}
+        </Section>
+      )}
 
       <Section title="Next steps">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

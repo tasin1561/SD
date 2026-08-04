@@ -9,6 +9,8 @@ import {
 } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
 import type { AddressType, GoodsReceiptStatus } from '@skydrop/db';
+import { can } from '@/lib/page-access';
+import { useSellerIdentity } from '@skydrop/auth/client';
 
 /**
  * Seller-side surfaces that had endpoints and no screens: the seller's
@@ -303,9 +305,10 @@ export function useRecipientAddresses(query: {
   customerId?: string;
 }): UseQueryResult<readonly CachedAddressView[]> {
   const client = useApiClient();
+  const canRead = can(useSellerIdentity(), 'recipient_addresses.manage');
   return useQuery({
     queryKey: ['seller-recipient-addresses', query],
-    enabled: query.customerId !== undefined && query.customerId !== '',
+    enabled: canRead && query.customerId !== undefined && query.customerId !== '',
     queryFn: () =>
       client.request<readonly CachedAddressView[]>(`/api/seller/recipient-addresses${qs(query)}`),
   });

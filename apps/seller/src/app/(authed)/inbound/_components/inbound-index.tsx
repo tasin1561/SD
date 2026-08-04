@@ -34,6 +34,8 @@ import {
   type GoodsReceiptView,
 } from '@/lib/account-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { can } from '@/lib/page-access';
+import { useSellerIdentity } from '@skydrop/auth/client';
 
 const PAGE_SIZE = 25;
 
@@ -50,6 +52,7 @@ const PAGE_SIZE = 25;
  * not the stock you think you have.
  */
 export function InboundIndex(): ReactElement {
+  const canManage = can(useSellerIdentity(), 'inbound.manage');
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [announcing, setAnnouncing] = useState(false);
@@ -72,7 +75,11 @@ export function InboundIndex(): ReactElement {
       <PageHeader
         title="Inbound stock"
         subtitle="Consignments you are sending to the Indian warehouse, and what happened when they arrived."
-        action={<Button onClick={() => setAnnouncing(true)}>Announce a consignment</Button>}
+        action={
+          canManage ? (
+            <Button onClick={() => setAnnouncing(true)}>Announce a consignment</Button>
+          ) : undefined
+        }
       />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
@@ -117,7 +124,11 @@ export function InboundIndex(): ReactElement {
           <EmptyState
             title="Nothing inbound"
             description="Announce a consignment before it ships so receiving knows to expect it."
-            action={<Button onClick={() => setAnnouncing(true)}>Announce a consignment</Button>}
+            action={
+              canManage ? (
+                <Button onClick={() => setAnnouncing(true)}>Announce a consignment</Button>
+              ) : undefined
+            }
           />
         ) : (
           <>
@@ -157,7 +168,7 @@ export function InboundIndex(): ReactElement {
                       <StatusBadge kind={receiptKind(r.status)} label={r.status.toLowerCase()} />
                     </Td>
                     <Td align="right">
-                      {(r.status === 'PENDING' || r.status === 'ARRIVING') && (
+                      {canManage && (r.status === 'PENDING' || r.status === 'ARRIVING') && (
                         <Button variant="ghost" size="sm" onClick={() => setCancelling(r)}>
                           Cancel
                         </Button>

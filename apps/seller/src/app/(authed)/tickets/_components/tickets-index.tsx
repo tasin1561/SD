@@ -26,6 +26,8 @@ import {
 import { TicketStatus, TicketType } from '@skydrop/db';
 import { useSellerTickets } from '@/lib/ops-hooks';
 import { RaiseTicketModal } from './raise-ticket-modal';
+import { can } from '@/lib/page-access';
+import { useSellerIdentity } from '@skydrop/auth/client';
 
 /**
  * The seller's ticket list.
@@ -36,6 +38,7 @@ import { RaiseTicketModal } from './raise-ticket-modal';
  * through the same negotiation, and a refund lands in their wallet.
  */
 export function SellerTicketsIndex(): ReactElement {
+  const canWrite = can(useSellerIdentity(), 'tickets.create');
   const [status, setStatus] = useState<string>('');
   const [raising, setRaising] = useState(false);
   const list = useSellerTickets(status === '' ? {} : { status });
@@ -52,9 +55,11 @@ export function SellerTicketsIndex(): ReactElement {
         title="Tickets"
         subtitle="Damage we found on returns, and any issue you raise about a parcel. Settled tickets that end in a refund credit your wallet."
         action={
-          <Button variant="primary" size="md" onClick={() => setRaising(true)}>
-            Raise an issue
-          </Button>
+          canWrite ? (
+            <Button variant="primary" size="md" onClick={() => setRaising(true)}>
+              Raise an issue
+            </Button>
+          ) : null
         }
       />
 
@@ -113,7 +118,7 @@ export function SellerTicketsIndex(): ReactElement {
                 : 'Try a different status.'
             }
             action={
-              status === '' ? (
+              canWrite && status === '' ? (
                 <Button variant="primary" size="sm" onClick={() => setRaising(true)}>
                   Raise an issue
                 </Button>

@@ -26,11 +26,14 @@ import {
 import { InviteMemberModal } from './invite-member-modal';
 import { InviteLinkRevealCard } from './invite-link-reveal-card';
 import { useRoles } from '@/lib/rbac-hooks';
+import { can } from '@/lib/page-access';
+import { useSellerIdentity } from '@skydrop/auth/client';
 
 // The hardcoded six are gone: roles are rows now, so the options come
 // from the server and include anything created under Team → Roles.
 
 export function TeamManagementIndex(): ReactElement {
+  const canWrite = can(useSellerIdentity(), 'team.manage');
   const roles = useRoles();
   const members = useTeamMembersList();
   const invitations = useTeamInvitationsList();
@@ -105,9 +108,11 @@ export function TeamManagementIndex(): ReactElement {
         title="Team"
         subtitle="Invite + manage your team. Owners and admins can change roles or remove members."
         action={
-          <Button variant="primary" size="md" onClick={() => setInviting(true)}>
-            Invite member
-          </Button>
+          canWrite ? (
+            <Button variant="primary" size="md" onClick={() => setInviting(true)}>
+              Invite member
+            </Button>
+          ) : null
         }
       />
 

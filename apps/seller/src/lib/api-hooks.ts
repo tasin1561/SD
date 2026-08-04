@@ -32,6 +32,8 @@ import type {
   UpdateSellerProductRequest,
   UpdateSellerVariantRequest,
 } from '@skydrop/api-client';
+import { can } from '@/lib/page-access';
+import { useSellerIdentity } from '@skydrop/auth/client';
 
 /**
  * Seller-side TanStack Query wrappers — mirror apps/admin/src/lib/api-hooks
@@ -44,9 +46,13 @@ import type {
 
 // ───────── Seller orders ─────────
 
-export function useOrdersList(query: ListSellerOrdersQuery): UseQueryResult<OrderListResponse> {
+export function useOrdersList(
+  query: ListSellerOrdersQuery,
+  opts?: { readonly enabled?: boolean },
+): UseQueryResult<OrderListResponse> {
   const client = useApiClient();
   return useQuery({
+    enabled: opts?.enabled ?? true,
     queryKey: ['seller-orders', 'list', query],
     queryFn: () => fetchOrders(client, query),
   });
@@ -211,7 +217,13 @@ export interface StagedRow {
 
 export function usePendingRows(): UseQueryResult<ReadonlyArray<StagedRow>> {
   const client = useApiClient();
+  const canReadPending = can(useSellerIdentity(), 'orders.pending.manage');
   return useQuery({
+    // Self-gating: this is a COUNT shown beside the order list, and the
+    // order list is open to anyone with `orders.view` — including a
+    // viewer, who cannot read the draft queue at all. Without this the
+    // orders page 403s on a query nobody asked for.
+    enabled: canReadPending,
     queryKey: ['seller-orders-pending'],
     queryFn: () => client.request<ReadonlyArray<StagedRow>>('/api/seller/orders-pending'),
   });
@@ -364,9 +376,11 @@ export function useCancelOrder(
 
 export function useProductsList(
   query: ListSellerProductsQuery,
+  opts?: { readonly enabled?: boolean },
 ): UseQueryResult<SellerProductListResponse> {
   const client = useApiClient();
   return useQuery({
+    enabled: opts?.enabled ?? true,
     queryKey: ['seller-catalog', 'products', 'list', query],
     queryFn: () => fetchProducts(client, query),
   });
@@ -655,9 +669,12 @@ import type {
   UpdateSellerProfileRequest,
 } from '@skydrop/api-client';
 
-export function useSellerProfile(): UseQueryResult<SellerProfileView> {
+export function useSellerProfile(opts?: {
+  readonly enabled?: boolean;
+}): UseQueryResult<SellerProfileView> {
   const client = useApiClient();
   return useQuery({
+    enabled: opts?.enabled ?? true,
     queryKey: ['seller-profile'],
     queryFn: () => client.request<SellerProfileView>('/api/seller/profile'),
   });

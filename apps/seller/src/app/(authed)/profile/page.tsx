@@ -29,6 +29,8 @@ import {
   useUpdateSellerBankDetails,
   useUpdateSellerProfile,
 } from '@/lib/api-hooks';
+import { can } from '@/lib/page-access';
+import { useSellerIdentity } from '@skydrop/auth/client';
 
 /**
  * Seller profile — Phase 1B M19+M20.
@@ -100,6 +102,7 @@ function fmtError(e: unknown): string {
 }
 
 function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }): ReactElement {
+  const canManage = can(useSellerIdentity(), 'profile.manage');
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -163,6 +166,7 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
       <CardHeader
         title="Company info"
         action={
+          canManage &&
           !editing && (
             <Button
               variant="ghost"
@@ -291,6 +295,7 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
 }
 
 function BankDetailsSection({ profile }: { readonly profile: SellerProfileView }): ReactElement {
+  const canManage = can(useSellerIdentity(), 'profile.manage');
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -359,6 +364,7 @@ function BankDetailsSection({ profile }: { readonly profile: SellerProfileView }
       <CardHeader
         title="Bank details"
         action={
+          canManage &&
           !editing && (
             <Button
               variant="ghost"
@@ -474,6 +480,7 @@ function BankDetailsSection({ profile }: { readonly profile: SellerProfileView }
 }
 
 function LogoSection({ profile }: { readonly profile: SellerProfileView }): ReactElement {
+  const canManage = can(useSellerIdentity(), 'profile.manage');
   const presign = usePresignLogo();
   const register = useRegisterLogo();
   const remove = useRemoveLogo();
@@ -547,72 +554,81 @@ function LogoSection({ profile }: { readonly profile: SellerProfileView }): Reac
     <Card>
       <CardHeader title="Company logo" />
       <CardBody>
-        <div className="flex items-start gap-4">
-          {profile.logoUrl ? (
-            <div className="w-24 h-24 rounded-[6px] border border-border bg-bg overflow-hidden shrink-0">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={profile.logoUrl} alt="Logo" className="w-full h-full object-contain" />
-            </div>
-          ) : (
-            <div className="w-24 h-24 rounded-[6px] border border-dashed border-border-strong bg-surface flex items-center justify-center text-text-faint text-xs shrink-0">
-              No logo
-            </div>
-          )}
+        {canManage ? (
+          <>
+            {/* Uploading or removing a logo is `profile.manage`; without it
+            the card shows the logo and no controls, rather than buttons
+            that refuse. */}
+            <div className="flex items-start gap-4">
+              {profile.logoUrl ? (
+                <div className="w-24 h-24 rounded-[6px] border border-border bg-bg overflow-hidden shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={profile.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                </div>
+              ) : (
+                <div className="w-24 h-24 rounded-[6px] border border-dashed border-border-strong bg-surface flex items-center justify-center text-text-faint text-xs shrink-0">
+                  No logo
+                </div>
+              )}
 
-          <div className="flex-1 space-y-2">
-            <div className="text-text-muted text-xs">
-              JPG, PNG, or WEBP. Up to 1 MB. Recommended 256×256, square.
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="inline-flex items-center gap-2 cursor-pointer">
-                <span className="px-3 py-1.5 rounded-[5px] text-sm bg-accent text-accent-fg hover:bg-accent-hover transition-colors">
-                  {busy ? 'Uploading…' : 'Choose file'}
-                </span>
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  disabled={busy}
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) void onPick(f);
-                    e.target.value = '';
-                  }}
-                  className="hidden"
-                />
-              </label>
-              {profile.logoUrl && !confirmRemove && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => setConfirmRemove(true)}
-                >
-                  Remove
-                </Button>
-              )}
-              {confirmRemove && (
-                <>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => void onRemove()}
-                  >
-                    Confirm remove
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setConfirmRemove(false)}>
-                    Cancel
-                  </Button>
-                </>
-              )}
-            </div>
-            {error && (
-              <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
-                {error}
+              <div className="flex-1 space-y-2">
+                <div className="text-text-muted text-xs">
+                  JPG, PNG, or WEBP. Up to 1 MB. Recommended 256×256, square.
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <span className="px-3 py-1.5 rounded-[5px] text-sm bg-accent text-accent-fg hover:bg-accent-hover transition-colors">
+                      {busy ? 'Uploading…' : 'Choose file'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      disabled={busy}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void onPick(f);
+                        e.target.value = '';
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                  {profile.logoUrl && !confirmRemove && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => setConfirmRemove(true)}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                  {confirmRemove && (
+                    <>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => void onRemove()}
+                      >
+                        Confirm remove
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setConfirmRemove(false)}>
+                        Cancel
+                      </Button>
+                    </>
+                  )}
+                </div>
+                {error && (
+                  <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
+                    {error}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+          </>
+        ) : (
+          <p className="text-text-muted text-xs">Your role cannot change the company logo.</p>
+        )}
       </CardBody>
     </Card>
   );

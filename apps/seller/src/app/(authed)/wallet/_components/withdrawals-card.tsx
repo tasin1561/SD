@@ -26,6 +26,8 @@ import {
 } from '@skydrop/ui/components';
 import { useRequestWithdrawal, useSellerWithdrawals } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { can } from '@/lib/page-access';
+import { useSellerIdentity } from '@skydrop/auth/client';
 
 /**
  * Payout requests, on the wallet page because that is where the balance
@@ -37,6 +39,7 @@ import { serverVerdict } from '@/lib/server-verdict';
  * rather than leaving a seller to wonder why the balance has not moved.
  */
 export function WithdrawalsCard(): ReactElement {
+  const canWrite = can(useSellerIdentity(), 'wallet.withdraw');
   const [requesting, setRequesting] = useState(false);
   const list = useSellerWithdrawals();
   const rows = list.data ?? [];
@@ -46,9 +49,11 @@ export function WithdrawalsCard(): ReactElement {
       <CardHeader
         title="Payout requests"
         action={
-          <Button variant="primary" size="sm" onClick={() => setRequesting(true)}>
-            Request a payout
-          </Button>
+          canWrite ? (
+            <Button variant="primary" size="sm" onClick={() => setRequesting(true)}>
+              Request a payout
+            </Button>
+          ) : null
         }
       />
       <CardBody>
