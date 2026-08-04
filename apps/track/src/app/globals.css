@@ -324,3 +324,55 @@ h3 {
     opacity: 0;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+ * Scrollbars — the same treatment the rest of the estate gets.
+ *
+ * apps/track shares apps/marketing's palette and, like it, does NOT
+ * import `@skydrop/ui` — so the rule is restated here rather than
+ * inherited. That is worth knowing before assuming a shared style
+ * reaches this app: it does not. This gap was found by curling the
+ * deployed CSS of all four frontends and noticing track was the one
+ * without it.
+ *
+ * Invisible at rest rather than removed: the thumb is the only
+ * indication of how far through a long tracking timeline you are, so it
+ * paints when the pointer is over the scrolling region.
+ * ──────────────────────────────────────────────────────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+*:hover,
+*:focus-within {
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+:hover::-webkit-scrollbar-thumb,
+:focus-within::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fg-muted);
+  background-clip: content-box;
+}
