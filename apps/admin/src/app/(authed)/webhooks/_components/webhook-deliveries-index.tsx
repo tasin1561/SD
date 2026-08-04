@@ -15,6 +15,7 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import { useRetryWebhookDelivery, useWebhookDeliveriesList } from '@/lib/api-hooks';
+import { usePermission } from '@/lib/use-permission';
 
 const STATUSES = [
   '',
@@ -27,6 +28,7 @@ const STATUSES = [
 ] as const;
 
 export function WebhookDeliveriesIndex(): ReactElement {
+  const canRetry = usePermission('webhooks.retry');
   const [status, setStatus] = useState<string>('');
   const list = useWebhookDeliveriesList({
     page: 1,
@@ -148,7 +150,7 @@ export function WebhookDeliveriesIndex(): ReactElement {
                         <Button
                           variant="ghost"
                           size="sm"
-                          disabled={retryingId === d.id}
+                          disabled={retryingId === d.id || !canRetry}
                           onClick={() => void onRetry(d.id)}
                         >
                           {retryingId === d.id ? 'Retrying…' : 'Retry'}

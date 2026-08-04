@@ -331,13 +331,16 @@ export function useUpdateSystemSetting(
 
 // ───────── Admin order charges (Module 17) ─────────
 
-export function useOrderCharges(orderId: string): UseQueryResult<readonly OrderChargeView[]> {
+export function useOrderCharges(
+  orderId: string,
+  opts?: { readonly enabled?: boolean },
+): UseQueryResult<readonly OrderChargeView[]> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-order-charges', orderId],
     queryFn: () =>
       client.request<readonly OrderChargeView[]>(`/api/admin/orders/${orderId}/charges`),
-    enabled: Boolean(orderId),
+    enabled: (opts?.enabled ?? true) && Boolean(orderId),
   });
 }
 

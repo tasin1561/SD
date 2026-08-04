@@ -22,6 +22,7 @@ import {
   type WithdrawalRequestView,
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { usePermission } from '@/lib/use-permission';
 
 type Mode = 'paid' | 'reject';
 
@@ -41,6 +42,7 @@ export function ResolveWithdrawalModal({
   readonly request: WithdrawalRequestView | null;
   readonly onClose: () => void;
 }): ReactElement {
+  const canResolve = usePermission('money.withdrawals.review');
   const toast = useToast();
   const markPaid = useMarkWithdrawalPaid();
   const reject = useRejectWithdrawal();
@@ -201,7 +203,7 @@ export function ResolveWithdrawalModal({
         <Button
           variant={mode === 'reject' ? 'destructive' : 'primary'}
           size="md"
-          disabled={!canSubmit || busy}
+          disabled={!canSubmit || busy || !canResolve}
           onClick={() => void submit()}
         >
           {busy ? 'Saving…' : mode === 'paid' ? 'Mark paid' : 'Reject request'}

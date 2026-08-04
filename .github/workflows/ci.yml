@@ -76,6 +76,14 @@ jobs:
       - name: Frontend calls resolve to real API routes
         run: python3 scripts/check-frontend-routes.py
 
+      # The OTHER seam: a page reachable by one permission that fetches
+      # something needing another. The visitor did nothing wrong and gets
+      # a 403 on a page working exactly as designed — it happened to a
+      # call agent on the admin dashboard and a viewer on the seller one,
+      # and neither was caught by a test that only opens the page.
+      - name: Pages ask only for what their gate allows
+        run: python3 scripts/check-page-permissions.py
+
   # ── Unit tests ───────────────────────────────────────────────────────
   # Mocked-Prisma suites, so the service containers are insurance rather
   # than a requirement — a job that fails on a missing socket instead of a

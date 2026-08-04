@@ -20,6 +20,7 @@ import {
 import { TicketStatus } from '@skydrop/db';
 import { useTicketEvents, useTransitionTicket, type TicketView } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { usePermission } from '@/lib/use-permission';
 
 /** Mirrors the server's TICKET_TRANSITIONS matrix. Cosmetic only (FE-2)
  *  — the server re-checks and returns INVALID_TICKET_TRANSITION. This
@@ -72,6 +73,7 @@ export function TicketDrawer({
   readonly ticket: TicketView | null;
   readonly onClose: () => void;
 }): ReactElement {
+  const canResolve = usePermission('tickets.resolve');
   const toast = useToast();
   const events = useTicketEvents(ticket?.id ?? null);
   const transition = useTransitionTicket();
@@ -281,7 +283,10 @@ export function TicketDrawer({
             variant={to === TicketStatus.RESOLVED_REFUND ? 'destructive' : 'primary'}
             size="md"
             disabled={
-              to === '' || transition.isPending || (needsAmount && refundAmountInr.trim() === '')
+              !canResolve ||
+              to === '' ||
+              transition.isPending ||
+              (needsAmount && refundAmountInr.trim() === '')
             }
             onClick={() => void submit()}
           >

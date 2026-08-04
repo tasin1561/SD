@@ -14,6 +14,7 @@ import {
   ModalFooter,
   Textarea,
 } from '@skydrop/ui/components';
+import { usePermission } from '@/lib/use-permission';
 
 /**
  * Edit a system setting. The modal renders a type-appropriate input:
@@ -37,6 +38,7 @@ export function EditSettingDialog({
   settingKey: string;
   onClose: () => void;
 }): ReactElement {
+  const canWrite = usePermission('system.settings.manage');
   const detail = useSystemSetting(settingKey);
   const update = useUpdateSystemSetting(settingKey);
 
@@ -130,7 +132,7 @@ export function EditSettingDialog({
                   type="checkbox"
                   checked={boolDraft}
                   onChange={(e) => setBoolDraft(e.target.checked)}
-                  disabled={update.isPending}
+                  disabled={update.isPending || !canWrite}
                 />
                 <span>{boolDraft ? 'true' : 'false'}</span>
               </label>

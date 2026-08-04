@@ -149,6 +149,7 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
  * Refreshing the page clears it. FE-2: server rejection verbatim.
  */
 function RevealBankAccountPanel({ sellerId }: { readonly sellerId: string }): ReactElement {
+  const canReveal = usePermission('sellers.bank_account.reveal');
   const [reason, setReason] = useState('');
   const [revealed, setRevealed] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -197,7 +198,7 @@ function RevealBankAccountPanel({ sellerId }: { readonly sellerId: string }): Re
           onChange={(e) => setReason(e.target.value)}
           maxLength={200}
           placeholder="e.g. manual payout via DBBL portal — TRF-2026-06-03"
-          disabled={reveal.isPending}
+          disabled={reveal.isPending || !canReveal}
         />
       </FormField>
       <Button

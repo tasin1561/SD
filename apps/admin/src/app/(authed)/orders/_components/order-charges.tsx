@@ -13,6 +13,7 @@ import {
   SkeletonRows,
   Table,
 } from '@skydrop/ui/components';
+import { usePermission } from '@/lib/use-permission';
 
 /**
  * Admin order-charges section (Module 17). Renders all charge rows
@@ -22,7 +23,12 @@ import {
  * [CHARGES_ALREADY_EXIST] if rows already exist (FE-2 verbatim).
  */
 export function OrderChargesSection({ orderId }: { orderId: string }): ReactElement {
-  const charges = useOrderCharges(orderId);
+  // The section is on the order page, which anyone with `orders.view`
+  // may open — but the money is a separate permission. Gated on the
+  // QUERY too, so somebody without it never issues the request.
+  const canView = usePermission('orders.charges.view');
+  const canCompute = usePermission('orders.charges.compute');
+  const charges = useOrderCharges(orderId, { enabled: canView });
   const compute = useComputeOrderCharges(orderId);
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -55,6 +61,8 @@ export function OrderChargesSection({ orderId }: { orderId: string }): ReactElem
 
   const total = charges.data?.reduce((sum, c) => sum + Number(c.totalAmountInr), 0) ?? 0;
 
+  if (!canView) return <></>;
+
   return (
     <Card>
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
@@ -63,9 +71,11 @@ export function OrderChargesSection({ orderId }: { orderId: string }): ReactElem
             ? `${charges.data.length} line${charges.data.length === 1 ? '' : 's'}`
             : 'No charges'}
         </div>
-        <Button onClick={handleCompute} disabled={compute.isPending}>
-          {compute.isPending ? 'Computing…' : 'Compute & persist charges'}
-        </Button>
+        {canCompute && (
+          <Button onClick={handleCompute} disabled={compute.isPending}>
+            {compute.isPending ? 'Computing…' : 'Compute & persist charges'}
+          </Button>
+        )}
       </div>
       {serverError && (
         <div className="px-4 py-2 border-b border-border text-critical text-xs bg-[var(--color-critical-tint)]">

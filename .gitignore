@@ -113,3 +113,4 @@ tmp/
 /test.png
 /screenshots/
 .playwright-artifacts/
+__pycache__/

@@ -22,6 +22,7 @@ import {
   type InviteLeadStatus as LeadStatus,
 } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { usePermission } from '@/lib/use-permission';
 
 /**
  * One lead, opened from the queue.
@@ -55,6 +56,7 @@ export function LeadDrawer({
   readonly lead: InviteLead | null;
   readonly onClose: () => void;
 }): ReactElement {
+  const canWrite = usePermission('leads.manage');
   const toast = useToast();
   const update = useUpdateInviteLead();
   const [status, setStatus] = useState<LeadStatus>('NEW');
@@ -195,7 +197,7 @@ export function LeadDrawer({
         <Button
           variant="primary"
           size="md"
-          disabled={!dirty || update.isPending}
+          disabled={!dirty || update.isPending || !canWrite}
           onClick={() => void save()}
         >
           {update.isPending ? 'Saving…' : 'Save'}
