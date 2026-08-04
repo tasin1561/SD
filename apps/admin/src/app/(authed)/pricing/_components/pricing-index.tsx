@@ -132,7 +132,7 @@ export function PricingIndex(): ReactElement {
   const r = preview.data;
 
   return (
-    <div className="max-w-4xl">
+    <div>
       <PageHeader
         title="Pricing preview"
         subtitle="What the engine would charge for a shipment, without creating an order to find out."

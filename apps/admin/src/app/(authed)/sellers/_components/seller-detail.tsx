@@ -30,7 +30,7 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
   const canChangeStatus = usePermission('sellers.approve', 'sellers.suspend');
 
   return (
-    <div className="max-w-4xl">
+    <div>
       <Link
         href="/sellers"
         className="inline-flex items-center gap-1.5 text-text-muted hover:text-text-body text-xs mb-4 transition-colors"

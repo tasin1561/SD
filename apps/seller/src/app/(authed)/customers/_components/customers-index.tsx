@@ -59,7 +59,7 @@ export function CustomersIndex(): ReactElement {
   const orderTotal = items.reduce((n, c) => n + c.totalOrdersCount, 0);
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <PageHeader
         title="Customers"
         subtitle="Everyone you have shipped to, and how those orders ended."

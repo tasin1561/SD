@@ -67,7 +67,7 @@ export function PickupsIndex(): ReactElement {
   const rows = list.data ?? [];
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <PageHeader
         title="Pickups"
         subtitle="One request per warehouse per day covers the whole handover — not one per parcel. Raise it when the parcels are packed and ready to hand over."

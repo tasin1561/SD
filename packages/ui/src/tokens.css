@@ -459,6 +459,17 @@
 @layer base {
   .sd-field {
     width: 100%;
+    /* …but never absurd. Pages fill the width they are given (2026-08-04
+     * — every page-level `max-w` cap was removed, because a console with
+     * a third of the screen empty reads as broken). `width: 100%` in a
+     * full-width card then produced a 1500px email box, which is worse
+     * than the gap it fixed.
+     *
+     * A cap on the FIELD rather than on the form: a filter row above a
+     * table is a form too, and capping that would squash the toolbar
+     * back to where it started. In `base`, so any utility beats it when
+     * a control genuinely needs the room. */
+    max-width: 32rem;
   }
 }
 

@@ -60,7 +60,7 @@ export function AdminHoldsIndex(): ReactElement {
   const oldest = open.length === 0 ? 0 : Math.max(...open.map((r) => ageDays(r.createdAt)));
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <PageHeader
         title="Held stock"
         subtitle="Orders where stock was claimed at placement and the customer could not be reached. The seller decides; this is the view that tells you who to chase."

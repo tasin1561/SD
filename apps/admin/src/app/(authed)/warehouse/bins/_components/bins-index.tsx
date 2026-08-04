@@ -181,7 +181,7 @@ export function BinsIndex(): ReactElement {
   if (warehouses.isLoading) return <LoadingState label="Loading warehouses" />;
 
   return (
-    <div className="max-w-5xl space-y-4">
+    <div className="space-y-4">
       <PageHeader
         title="Bins"
         subtitle="Where stock physically sits. Build the layout here; the switch below decides whether the system asks for it."

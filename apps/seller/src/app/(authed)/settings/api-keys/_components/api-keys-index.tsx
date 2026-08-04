@@ -69,7 +69,7 @@ export function ApiKeysIndex(): ReactElement {
   }
 
   return (
-    <div className="max-w-4xl space-y-4">
+    <div className="space-y-4">
       <Link
         href="/settings"
         className="inline-flex items-center gap-1.5 text-text-muted hover:text-text-body text-xs mb-4 transition-colors"

@@ -14,7 +14,7 @@ import { CsvImportPanel } from '../_components/csv-import-panel';
  */
 export default function OrderImportPage(): ReactElement {
   return (
-    <div className="max-w-3xl">
+    <div>
       <PageHeader
         title="Bulk order import"
         subtitle="Upload a CSV of orders. Each row becomes a draft order; ORD-9 idempotency keys on (sellerOrderRef)."

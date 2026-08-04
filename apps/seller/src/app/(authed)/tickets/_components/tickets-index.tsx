@@ -50,7 +50,7 @@ export function SellerTicketsIndex(): ReactElement {
   const refunded = rows.reduce((sum, t) => sum + Number(t.resolutionAmountInr ?? 0), 0);
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <PageHeader
         title="Tickets"
         subtitle="Damage we found on returns, and any issue you raise about a parcel. Settled tickets that end in a refund credit your wallet."

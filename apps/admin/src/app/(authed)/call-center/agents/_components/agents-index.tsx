@@ -54,7 +54,7 @@ export function AgentsIndex(): ReactElement {
   const holding = items.reduce((n, a) => n + a.activeAssigned, 0);
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <PageHeader
         title="Call agents"
         subtitle="Who is taking calls, what they are holding, and how their attempts are landing."

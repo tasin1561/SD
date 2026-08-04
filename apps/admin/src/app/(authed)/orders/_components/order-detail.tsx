@@ -37,7 +37,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
   const detail = useOrderDetail(orderId);
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <Link
         href="/orders"
         className="inline-flex items-center gap-1.5 text-text-muted hover:text-text-body text-xs mb-4 transition-colors"

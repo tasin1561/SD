@@ -28,7 +28,7 @@ export function FxRatesIndex(): ReactElement {
   const toast = useToast();
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <PageHeader
         title="FX rates"
         subtitle="Current rate per (from, to) pair. Override sets isManualOverride=true. Every change is recorded in the append-only history (Timeline)."

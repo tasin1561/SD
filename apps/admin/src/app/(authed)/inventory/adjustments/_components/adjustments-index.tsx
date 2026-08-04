@@ -73,7 +73,7 @@ export function AdjustmentsIndex(): ReactElement {
   );
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <PageHeader
         title="Stock adjustments"
         subtitle="Corrections to counted stock. Anything above the value threshold waits here for a second pair of eyes before it moves inventory."

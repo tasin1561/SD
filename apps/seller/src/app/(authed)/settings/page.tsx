@@ -37,7 +37,7 @@ export default function SettingsPage(): ReactElement {
     },
   ];
   return (
-    <div className="max-w-4xl">
+    <div>
       <PageHeader title="Settings" subtitle="Addresses, webhooks, notifications, API keys." />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {items.map((it) => (

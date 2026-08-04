@@ -103,7 +103,7 @@ export function TeamManagementIndex(): ReactElement {
   }
 
   return (
-    <div className="max-w-6xl space-y-4">
+    <div className="space-y-4">
       <PageHeader
         title="Team"
         subtitle="Invite + manage your team. Owners and admins can change roles or remove members."

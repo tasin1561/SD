@@ -64,7 +64,7 @@ export function MovementsIndex(): ReactElement {
   }
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <PageHeader
         title="Stock movements"
         subtitle="Append-only. Every change to a quantity, and what caused it. Read this when a number does not add up."

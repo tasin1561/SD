@@ -137,7 +137,7 @@ export function PackStation(): ReactElement {
   const busy = open.isPending || scan.isPending || close.isPending || cancel.isPending;
 
   return (
-    <div className="max-w-3xl space-y-4">
+    <div className="space-y-4">
       <Card>
         <CardBody>
           <label htmlFor="pack-scan" className="text-text-muted mb-1 block text-xs">

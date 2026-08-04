@@ -83,7 +83,7 @@ export function OrdersIndex(): ReactElement {
   });
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <PageHeader
         title="Orders"
         subtitle="Your orders. Filter by status / search; rows link to detail + tracking."

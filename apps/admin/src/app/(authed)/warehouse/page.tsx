@@ -9,7 +9,7 @@ import { PackageCheck, Layers, FileText, RotateCcw, Inbox, Truck, Grid3x3 } from
  */
 export default function WarehouseHubPage(): ReactElement {
   return (
-    <div className="max-w-4xl">
+    <div>
       <PageHeader
         title="Warehouse"
         subtitle="Receive → Pick → Pack → Manifest → Pickup → Dispatch. RTO handled separately."

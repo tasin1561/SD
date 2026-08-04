@@ -48,7 +48,7 @@ export function UnitTriageIndex(): ReactElement {
   const data = triage.data;
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <PageHeader
         title="Unit discrepancies"
         subtitle="For SKUs tracked per unit by serial. Which sellers have a scan missing, a parcel unaccounted for, or serials that disagree with the stock count."

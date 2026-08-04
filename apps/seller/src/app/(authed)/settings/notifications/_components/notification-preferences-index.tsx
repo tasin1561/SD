@@ -62,7 +62,7 @@ export function NotificationPreferencesIndex(): ReactElement {
   const toast = useToast();
 
   return (
-    <div className="max-w-4xl">
+    <div>
       <Link
         href="/settings"
         className="inline-flex items-center gap-1.5 text-text-muted hover:text-text-body text-xs mb-4 transition-colors"

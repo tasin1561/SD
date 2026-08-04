@@ -9,7 +9,7 @@ import { SavedMappings } from './_components/saved-mappings';
  */
 export default function CatalogImportPage(): ReactElement {
   return (
-    <div className="max-w-3xl">
+    <div>
       <PageHeader
         title="Bulk catalog import"
         subtitle="Upload a CSV of products + variants. Re-uploading updates existing rows (dedup by (sellerId, externalRef) for products and (sellerId, skuCode) for variants)."

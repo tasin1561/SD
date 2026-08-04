@@ -91,7 +91,7 @@ export function CatalogIndex(): ReactElement {
   });
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <PageHeader
         title="Catalog"
         subtitle="Products, variants, images. Click a product to edit or manage its variants."

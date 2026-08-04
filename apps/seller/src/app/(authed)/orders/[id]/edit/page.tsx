@@ -16,7 +16,7 @@ export default async function EditOrderPage({
 }): Promise<ReactElement> {
   const { id } = await params;
   return (
-    <div className="max-w-3xl">
+    <div>
       <PageHeader
         title="Edit order"
         subtitle="DRAFT orders are fully editable. PENDING_CONFIRMATION orders allow recipient + notes corrections only."

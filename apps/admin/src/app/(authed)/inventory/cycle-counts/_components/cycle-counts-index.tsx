@@ -70,7 +70,7 @@ export function CycleCountsIndex(): ReactElement {
   const open = items.find((c) => c.id === openId) ?? null;
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <PageHeader
         title="Cycle counts"
         subtitle="Physical verification against what the system believes. Completing a count raises an adjustment for every difference."

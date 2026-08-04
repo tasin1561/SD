@@ -76,7 +76,7 @@ export function QueueIndex(): ReactElement {
   }
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <PageHeader
         title="Call queue"
         subtitle="What is waiting to be confirmed, and who is holding it."

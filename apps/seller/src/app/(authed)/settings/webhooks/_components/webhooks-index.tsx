@@ -61,7 +61,7 @@ export function WebhooksIndex(): ReactElement {
   }
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <PageHeader
         title="Outbound webhooks"
         subtitle="Wire Skydrop events into your own systems via HMAC-signed HTTPS POSTs. Configure here; the delivery worker will fire once it ships in Phase 1B."

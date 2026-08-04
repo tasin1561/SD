@@ -74,7 +74,7 @@ export function DashboardView(): ReactElement {
   const onboardingDone = profileComplete && bankDetailsComplete && hasProduct && hasOrder;
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <PageHeader
         title={`Hello, ${companyName}`}
         subtitle="Your most recent orders + quick navigation."

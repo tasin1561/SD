@@ -102,7 +102,7 @@ export function StaffManagementIndex(): ReactElement {
   }
 
   return (
-    <div className="max-w-6xl space-y-4">
+    <div className="space-y-4">
       <PageHeader
         title="Staff"
         subtitle="Invite + manage admin / operational users. SUPER_ADMIN only."

@@ -43,7 +43,7 @@ export function SellerFreightIndex(): ReactElement {
   const outstanding = list.data?.outstandingInr ?? '0';
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <PageHeader
         title="Inbound freight"
         subtitle="The shipping cost of getting your stock from Bangladesh into our Indian warehouse. Charged per unit as the stock sells, not all at once."

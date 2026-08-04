@@ -55,7 +55,7 @@ export function DelhiveryOpsIndex(): ReactElement {
   }
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <PageHeader
         title="Delhivery"
         subtitle="Waybill pool depth, the live-write guard, and remaining rate budget. Refreshes every 30 seconds."

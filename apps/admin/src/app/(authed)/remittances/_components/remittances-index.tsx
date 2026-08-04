@@ -29,7 +29,7 @@ export function RemittancesIndex(): ReactElement {
   const list = useRemittancesList({ page: 1, pageSize: 50 });
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <PageHeader
         title="Remittances"
         subtitle="Recorded payouts to sellers. Each entry debits the seller's wallet (and writes a paired FX credit for cross-currency)."

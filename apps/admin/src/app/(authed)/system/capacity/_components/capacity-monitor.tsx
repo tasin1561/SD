@@ -154,7 +154,7 @@ export function CapacityMonitor(): ReactElement {
   const tone = TONE[worstStatus];
 
   return (
-    <div className="max-w-5xl space-y-5">
+    <div className="space-y-5">
       <PageHeader
         title="System limits"
         subtitle="What the platform can currently take, how much of it is used, and what to do before it runs out. Refreshes every 15 seconds."

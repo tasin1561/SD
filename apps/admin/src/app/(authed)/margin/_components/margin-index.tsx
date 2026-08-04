@@ -49,7 +49,7 @@ export function MarginIndex(): ReactElement {
   const data = report.data;
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <PageHeader
         title="Lane margin"
         subtitle="What we billed against what the courier actually charged. Measured from Delhivery's own figures, not the rate card's assumption."

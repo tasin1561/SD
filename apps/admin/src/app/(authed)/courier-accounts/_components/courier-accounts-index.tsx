@@ -45,7 +45,7 @@ export function CourierAccountsIndex(): ReactElement {
   const list = useCourierAccounts();
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <PageHeader
         title="Courier accounts"
         subtitle="Multiple accounts per courier, with per-seller weighted routing. Every shipment records the account that carried it."

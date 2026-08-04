@@ -65,7 +65,7 @@ export function TicketsIndex(): ReactElement {
   }
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <PageHeader
         title="Tickets"
         subtitle="Scrap/damage raised by RTO inspection, and parcel issues raised by sellers. Resolving with a refund credits the seller's wallet in the same transaction."

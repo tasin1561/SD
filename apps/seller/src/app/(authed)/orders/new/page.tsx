@@ -11,7 +11,7 @@ import { PageHeader } from '@skydrop/ui/components';
  */
 export default function NewOrderPage(): ReactElement {
   return (
-    <div className="max-w-3xl">
+    <div>
       <PageHeader
         title="New order"
         subtitle="Enter recipient + line details. Stock is reserved when the call centre confirms the order."

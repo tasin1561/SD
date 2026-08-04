@@ -37,6 +37,8 @@ export function PermissionBoundary({
   const needed = permissionForPath(pathname);
 
   return (
+    // A refusal is prose, so it keeps a reading width — unlike a
+    // page, which fills the space it is given.
     <div className="max-w-2xl">
       <PageHeader title="Not available" />
       <EmptyState

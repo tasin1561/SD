@@ -47,7 +47,7 @@ export function UnitDiscrepanciesIndex(): ReactElement {
     (data?.countMismatches.length ?? 0);
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <PageHeader
         title="Unit discrepancies"
         subtitle="For SKUs tracked per unit by serial. Where a scan is missing, a parcel is unaccounted for, or the serials disagree with the stock count."

@@ -87,7 +87,7 @@ export function OrdersIndex(): ReactElement {
   });
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <PageHeader
         title="Orders"
         subtitle="Cross-seller list. Filter by status / source / search; rows link to the order detail."

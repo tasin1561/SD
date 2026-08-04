@@ -31,7 +31,7 @@ export function ReportsDashboard(): ReactElement {
   });
 
   return (
-    <div className="max-w-6xl space-y-4">
+    <div className="space-y-4">
       <PageHeader
         title="Reports"
         subtitle="Operational metrics across the date range. Confirm + NDR + RTO + delivery rates; dispatch times; wallet flows."

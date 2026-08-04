@@ -56,7 +56,7 @@ export function FreightIndex(): ReactElement {
     .reduce((sum, r) => sum + Number(r.totalInr), 0);
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <PageHeader
         title="Inbound freight"
         subtitle="One bill per BD→India consignment. Pay-now debits the wallet at receipt; pay-later leaves a receivable that amortises per unit as the stock sells."

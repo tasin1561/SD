@@ -63,7 +63,7 @@ export function AddressesIndex(): ReactElement {
   const hasOrigin = items.some((a) => a.type === 'BD_ORIGIN');
 
   return (
-    <div className="max-w-4xl">
+    <div>
       <PageHeader
         title="Your addresses"
         subtitle="Where your stock ships from, and where you can be reached. These are yours — customer addresses live on the order."

@@ -52,7 +52,7 @@ export default function WalletPage(): ReactElement {
   }
 
   return (
-    <div className="max-w-4xl space-y-4">
+    <div className="space-y-4">
       <PageHeader
         title="Wallet"
         subtitle="What's owed to you. COD net of charges per delivered order; remittances debit as we pay you out."

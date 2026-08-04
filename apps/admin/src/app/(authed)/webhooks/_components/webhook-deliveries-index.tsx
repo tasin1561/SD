@@ -59,7 +59,7 @@ export function WebhookDeliveriesIndex(): ReactElement {
   }
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <PageHeader
         title="Webhook deliveries"
         subtitle="Outbound HMAC-signed POSTs to seller-configured endpoints. Read-only diagnostic view."

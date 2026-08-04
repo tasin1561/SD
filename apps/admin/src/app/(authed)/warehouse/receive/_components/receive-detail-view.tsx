@@ -158,7 +158,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
   }
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <Link
         href="/warehouse/receive"
         className="inline-flex items-center gap-1.5 text-text-muted hover:text-text-body text-xs mb-4 transition-colors"

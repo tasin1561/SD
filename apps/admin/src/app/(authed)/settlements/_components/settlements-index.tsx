@@ -49,7 +49,7 @@ export function SettlementsIndex(): ReactElement {
   const shortPaid = recon.data?.shortPaidOrders ?? [];
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <PageHeader
         title="Courier settlements"
         subtitle="Every rupee the courier pays us, matched to the orders it covers. What is not matched is float we are carrying on the sellers' behalf."

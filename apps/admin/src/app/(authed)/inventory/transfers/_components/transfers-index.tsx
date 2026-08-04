@@ -72,7 +72,7 @@ export function TransfersIndex(): ReactElement {
     form.sourceWarehouseId !== '' && form.sourceWarehouseId === form.destWarehouseId;
 
   return (
-    <div className="max-w-3xl">
+    <div>
       <PageHeader
         title="Inter-warehouse transfer"
         subtitle="Moves units out of one warehouse and into another as a matched pair of movements."

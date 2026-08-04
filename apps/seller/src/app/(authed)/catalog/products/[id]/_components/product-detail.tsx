@@ -47,7 +47,7 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
   const [editing, setEditing] = useState(false);
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <Link
         href="/catalog"
         className="inline-flex items-center gap-1.5 text-text-muted hover:text-text-body text-xs mb-4 transition-colors"

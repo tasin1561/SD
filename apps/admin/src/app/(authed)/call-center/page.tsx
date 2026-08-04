@@ -9,7 +9,7 @@ import { CallCenterStation } from './_components/call-center-station';
  */
 export default function CallCenterPage(): ReactElement {
   return (
-    <div className="max-w-4xl">
+    <div>
       <PageHeader
         title="Call centre"
         subtitle="Pull a call, talk to the customer, record the outcome. The order moves automatically."

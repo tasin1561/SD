@@ -77,7 +77,7 @@ export function InventoryView(): ReactElement {
   }, [summary.data]);
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <PageHeader
         title="Inventory"
         subtitle="Stock available for orders. Receiving happens at the warehouse — speak to ops to add inventory."

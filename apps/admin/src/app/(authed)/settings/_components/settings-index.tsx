@@ -31,7 +31,7 @@ export function SettingsIndex(): ReactElement {
   const [editingKey, setEditingKey] = useState<string | null>(null);
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <PageHeader
         title="System settings"
         subtitle="Runtime configuration — values consumed by the operational services. Edits audit MEDIUM with before/after."

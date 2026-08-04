@@ -71,7 +71,7 @@ export function InboundIndex(): ReactElement {
   const discrepant = items.filter((r) => r.hasDiscrepancies);
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <PageHeader
         title="Inbound stock"
         subtitle="Consignments you are sending to the Indian warehouse, and what happened when they arrived."

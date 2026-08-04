@@ -137,7 +137,7 @@ export function DashboardView(): ReactElement {
   const nothingToShow = !canOrders && !canTickets && !canMoney && !canReports;
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <PageHeader
         title="Overview"
         subtitle="What is waiting on someone right now, and how the last 30 days have gone."

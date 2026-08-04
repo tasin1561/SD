@@ -45,7 +45,7 @@ export function SellersIndex(): ReactElement {
   });
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <PageHeader
         title="Sellers"
         subtitle="Invitation lifecycle + seller status management."

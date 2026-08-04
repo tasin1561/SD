@@ -197,7 +197,7 @@ export function PendingOrdersIndex(): ReactElement {
   const list = rows.data ?? [];
 
   return (
-    <div className="max-w-5xl space-y-4">
+    <div className="space-y-4">
       <PageHeader
         title="Pending orders"
         subtitle="Rows from a CSV upload that need a decision before they can become orders. Everything else in your upload has already imported."

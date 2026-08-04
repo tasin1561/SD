@@ -72,7 +72,7 @@ export default function ProfilePage(): ReactElement {
   }
 
   return (
-    <div className="max-w-3xl space-y-4">
+    <div className="space-y-4">
       <PageHeader
         title="Profile"
         subtitle="Company info + bank details. Edit a section by clicking the pencil."

@@ -100,7 +100,7 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
   }
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <PageHeader
         title={`Manifest ${m.manifestNumber}`}
         subtitle={`${m.courierCode} · ${m.status} · ${m.shipmentCount} shipment(s)`}

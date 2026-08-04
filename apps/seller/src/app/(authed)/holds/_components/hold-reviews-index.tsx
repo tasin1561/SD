@@ -52,7 +52,7 @@ export function HoldReviewsIndex(): ReactElement {
   const heldUnits = openRows.reduce((sum, r) => sum + r.heldQty, 0);
 
   return (
-    <div className="max-w-4xl">
+    <div>
       <PageHeader
         title="Held stock"
         subtitle="Orders where we held your stock at placement but could not reach the customer. Release it, or ask us to keep trying."

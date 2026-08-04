@@ -57,7 +57,7 @@ export function WithdrawalsIndex(): ReactElement {
   const autoRaised = items.filter((w) => w.requestedBy === 'SYSTEM').length;
 
   return (
-    <div className="max-w-6xl">
+    <div>
       <PageHeader
         title="Withdrawals"
         subtitle="Seller payout requests, and the ones the auto-withdraw cycle raised. Approving one does not move money — record the remittance, then link it here."
