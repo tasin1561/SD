@@ -58,11 +58,11 @@ export default async function AuthedLayout({
     <QueryProvider>
       <AuthProvider<SellerMe> identityKind="seller" initialIdentity={identity}>
         <AuthedShell identity={identity}>
-          {/* Cosmetic role gating (FE-2) — the server refuses the
-              requests regardless; this stops a role being shown a
-              page it cannot use. Wraps the whole tree so no page
-              can be forgotten. */}
-          <RoleBoundary role={identity.role}>{children}</RoleBoundary>
+          {/* Cosmetic permission gating (FE-2) — the API refuses the
+              requests regardless; this stops somebody being shown a
+              page they cannot use. Wraps the whole tree so no page can
+              be forgotten. */}
+          <RoleBoundary permissions={identity.permissions}>{children}</RoleBoundary>
         </AuthedShell>
       </AuthProvider>
     </QueryProvider>

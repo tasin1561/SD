@@ -43,6 +43,15 @@ export interface StaffMe {
 /** GET /auth/seller/me — seller identity (matches SellerAuthService.SellerMe). */
 export interface SellerMe {
   readonly id: string;
+  /** `seller_roles.key` — the role held, including ones the company made. */
+  readonly roleKey: string;
+  readonly roleName: string;
+  /**
+   * What this person may do. The seller app hides what is not in here —
+   * a courtesy, not a control: the API refuses regardless of what was
+   * rendered.
+   */
+  readonly permissions: readonly string[];
   readonly email: string;
   readonly emailDisplay: string;
   readonly companyName: string;

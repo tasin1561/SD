@@ -25,10 +25,13 @@ import {
 } from '@/lib/api-hooks';
 import { InviteMemberModal } from './invite-member-modal';
 import { InviteLinkRevealCard } from './invite-link-reveal-card';
+import { useRoles } from '@/lib/rbac-hooks';
 
-const ROLES = ['OWNER', 'ADMIN', 'OPS', 'INVENTORY', 'FINANCE', 'VIEWER'] as const;
+// The hardcoded six are gone: roles are rows now, so the options come
+// from the server and include anything created under Team → Roles.
 
 export function TeamManagementIndex(): ReactElement {
+  const roles = useRoles();
   const members = useTeamMembersList();
   const invitations = useTeamInvitationsList();
   const updateRole = useUpdateTeamMemberRole();
@@ -53,11 +56,11 @@ export function TeamManagementIndex(): ReactElement {
     return e instanceof Error ? e.message : 'Action failed';
   }
 
-  async function onRoleChange(id: string, role: string): Promise<void> {
+  async function onRoleChange(id: string, roleId: string): Promise<void> {
     setError(null);
     try {
-      await updateRole.mutateAsync({ id, role });
-      toast.success(`Role updated to ${role}.`);
+      const result = await updateRole.mutateAsync({ id, roleId });
+      toast.success(`Role updated to ${result.roleName}.`);
     } catch (e) {
       setError(fmtError(e));
     }
@@ -162,15 +165,15 @@ export function TeamManagementIndex(): ReactElement {
                     </td>
                     <td className="px-3 py-2">
                       <select
-                        value={m.role}
-                        disabled={Boolean(m.deletedAt) || m.isYou}
+                        value={m.roleId}
+                        disabled={Boolean(m.deletedAt) || m.isYou || roles.data === undefined}
                         onChange={(e) => void onRoleChange(m.id, e.target.value)}
                         className="px-2 py-1 rounded-[4px] bg-bg border border-border text-text-body text-xs font-mono"
                         title={m.isYou ? 'You cannot change your own role.' : undefined}
                       >
-                        {ROLES.map((r) => (
-                          <option key={r} value={r}>
-                            {r}
+                        {(roles.data ?? []).map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name}
                           </option>
                         ))}
                       </select>

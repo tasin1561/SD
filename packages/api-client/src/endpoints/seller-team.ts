@@ -25,6 +25,8 @@ export interface CreateTeamInvitationRequest {
 }
 
 export interface TeamMemberRow {
+  readonly roleId: string;
+  readonly roleName: string;
   readonly id: string;
   readonly email: string;
   readonly emailDisplay: string;

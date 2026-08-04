@@ -12,7 +12,6 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { SellerUserRole } from '@skydrop/db';
 import { CurrentSeller } from '../../common/decorators/current-seller.decorator';
 import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/client-info.decorator';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
@@ -93,11 +92,11 @@ export class SellerTeamController {
   @ApiOperation({ summary: 'Change a team member’s role' })
   updateRole(
     @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
-    @Body() body: { role: SellerUserRole },
+    @Body() body: { roleId: string },
     @CurrentSeller() seller: AuthenticatedSeller,
     @ClientInfo() ctx: ClientInfoPayload,
   ) {
-    return this.svc.updateRole(seller.id, id, body.role, { sellerUserId: seller.userId }, ctx);
+    return this.svc.updateRole(seller.id, id, body.roleId, { sellerUserId: seller.userId }, ctx);
   }
 
   @Delete('members/:id')

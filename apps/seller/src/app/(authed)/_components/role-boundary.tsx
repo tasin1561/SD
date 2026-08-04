@@ -3,7 +3,7 @@
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, type ReactElement, type ReactNode } from 'react';
 import { Button, EmptyState, PageHeader } from '@skydrop/ui/components';
-import { canAccess, homeFor, type SellerRole } from '@/lib/role-access';
+import { canSeePath, permissionForPath, FALLBACK_PATH } from '@/lib/page-access';
 
 /**
  * Hides pages a role has no business on.
@@ -25,17 +25,18 @@ import { canAccess, homeFor, type SellerRole } from '@/lib/role-access';
  * bookmarked is confusing.
  */
 export function RoleBoundary({
-  role,
+  permissions,
   children,
 }: {
-  readonly role: SellerRole;
+  readonly permissions: readonly string[];
   readonly children: ReactNode;
 }): ReactElement {
   const pathname = usePathname();
   const router = useRouter();
-  const allowed = canAccess(role, pathname);
-  const home = homeFor(role);
-  const isLanding = pathname === '/dashboard';
+  const allowed = canSeePath({ permissions }, pathname);
+  const home = FALLBACK_PATH;
+  const needed = permissionForPath(pathname);
+  const isLanding = pathname === FALLBACK_PATH;
 
   useEffect(() => {
     if (!allowed && isLanding) router.replace(home);
@@ -52,10 +53,14 @@ export function RoleBoundary({
       <PageHeader title="Not available" />
       <EmptyState
         title="This section is not part of your access"
-        description={`Your account has the ${role.toLowerCase()} role, which covers orders and tracking. Ask an owner or admin on your team if you need more.`}
+        description={
+          needed === null
+            ? 'Your role does not cover this page.'
+            : `This page needs the “${needed}” permission and your role does not have it. Whoever owns this account can grant it under Team → Roles.`
+        }
         action={
           <Button variant="primary" size="md" onClick={() => router.push(home)}>
-            Go to orders
+            Go to the dashboard
           </Button>
         }
       />

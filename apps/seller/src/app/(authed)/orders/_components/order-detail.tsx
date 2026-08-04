@@ -28,7 +28,7 @@ import {
 import { OrderTimeline } from './order-timeline';
 import { CancelOrderDialog } from './cancel-order-dialog';
 import { OrderChargesSection } from './order-charges';
-import { canSeeMoney, canWriteOrders } from '@/lib/role-access';
+import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 
 /**
@@ -116,7 +116,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                 )}
                 {CANCELLABLE.has(detail.data.status) &&
                   identity !== null &&
-                  canWriteOrders(identity.role) && (
+                  can(identity, 'orders.cancel') && (
                     <Button variant="ghost" size="sm" onClick={() => setCancelOpen(true)}>
                       <XCircle size={12} /> Cancel
                     </Button>
@@ -260,7 +260,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               server rejects /charges for that role, and rendering its
               403 in a red box reads as a broken page rather than as
               policy. Cosmetic — the server is still the boundary. */}
-          {identity !== null && canSeeMoney(identity.role) && (
+          {identity !== null && can(identity, 'charges.view') && (
             <Section title="Charges">
               <OrderChargesSection orderId={orderId} />
             </Section>

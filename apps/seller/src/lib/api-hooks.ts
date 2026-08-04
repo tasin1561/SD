@@ -1017,19 +1017,20 @@ export function useTeamMembersList(): UseQueryResult<TeamMemberRow[]> {
   });
 }
 
+/** Takes a role ROW id, so a role the company invented can be assigned. */
 export function useUpdateTeamMemberRole(): UseMutationResult<
-  { id: string; role: string },
+  { id: string; roleId: string; roleName: string },
   Error,
-  { id: string; role: string }
+  { id: string; roleId: string }
 > {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, role }) =>
-      client.request<{ id: string; role: string }>(`/api/seller/team/members/${id}/role`, {
-        method: 'PATCH',
-        body: { role },
-      }),
+    mutationFn: ({ id, roleId }) =>
+      client.request<{ id: string; roleId: string; roleName: string }>(
+        `/api/seller/team/members/${id}/role`,
+        { method: 'PATCH', body: { roleId } },
+      ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['seller-team'] });
     },

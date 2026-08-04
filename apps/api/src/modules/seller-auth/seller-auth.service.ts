@@ -30,6 +30,7 @@ import { SellerOnboardingService } from '../seller-onboarding/services/seller-on
 import { SellerNotificationPreferenceService } from '../seller-notification-preference/services/seller-notification-preference.service';
 import type { SellerRegisterViaInvitationDto } from './dto/register-via-invitation.dto';
 import { provisionDefaultSellerRoles } from '../../common/auth/seller-role-provisioning';
+import { ALL_SELLER_PERMISSION_KEYS } from '../../common/auth/seller-permissions';
 
 const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
 const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -62,6 +63,11 @@ export interface SellerRegistrationResult {
 }
 
 export interface SellerMe {
+  /** `seller_roles.key` — the role held, including ones the company made. */
+  roleKey: string;
+  roleName: string;
+  /** What the seller app hides things by. FE-2: rendering, not permission. */
+  permissions: readonly string[];
   // id is the COMPANY id (back-compat with all existing consumers).
   id: string;
   // email is the AUTHENTICATED USER's email (Phase 1B — the person who
@@ -871,6 +877,15 @@ export class SellerAuthService {
         fullName: true,
         role: true,
         emailVerifiedAt: true,
+        sellerRole: {
+          select: {
+            key: true,
+            name: true,
+            isOwner: true,
+            deletedAt: true,
+            permissions: { select: { permission: true } },
+          },
+        },
         seller: {
           select: {
             id: true,
@@ -888,7 +903,7 @@ export class SellerAuthService {
         },
       },
     });
-    if (!user) {
+    if (!user || user.sellerRole.deletedAt !== null) {
       throw new UnauthorizedException({
         code: 'UNAUTHORIZED',
         message: 'Seller session no longer valid',
@@ -911,6 +926,16 @@ export class SellerAuthService {
       createdAt: user.seller.createdAt,
       sellerUserId: user.id,
       role: user.role,
+      roleKey: user.sellerRole.key,
+      roleName: user.sellerRole.name,
+      // What the UI hides things by. Resolved from the role rather than
+      // read off the token, so an owner editing a role takes effect on
+      // the next page load instead of whenever the access token expires.
+      // FE-2 still holds: this decides what is RENDERED, never what is
+      // permitted — the API refuses regardless.
+      permissions: user.sellerRole.isOwner
+        ? ALL_SELLER_PERMISSION_KEYS
+        : user.sellerRole.permissions.map((p) => p.permission),
       fullName: user.fullName,
     };
   }

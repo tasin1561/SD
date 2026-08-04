@@ -6,13 +6,14 @@ import { useState, type ReactNode, type ReactElement } from 'react';
 import { useApiClient } from '@skydrop/auth/client';
 import type { SellerMe } from '@skydrop/api-client';
 import { AppShell, Toaster, type NavGroup } from '@skydrop/ui/components';
-import { canAccess, seesEverything } from '@/lib/role-access';
+import { canSeePath } from '@/lib/page-access';
 import {
   Boxes,
   Building2,
   LayoutDashboard,
   LifeBuoy,
   Lock,
+  KeyRound,
   MapPin,
   Package,
   PackageOpen,
@@ -89,6 +90,7 @@ export function AuthedShell({
       heading: 'Account',
       items: [
         { href: '/team', label: 'Team', icon: <Users size={15} /> },
+        { href: '/team/roles', label: 'Roles', icon: <KeyRound size={15} /> },
         { href: '/profile', label: 'Profile', icon: <Building2 size={15} /> },
         { href: '/settings/addresses', label: 'Addresses', icon: <MapPin size={15} /> },
         { href: '/settings', label: 'Settings', icon: <Settings size={15} /> },
@@ -100,14 +102,16 @@ export function AuthedShell({
   // reads as a broken app. Both this and the RoleBoundary read the same
   // table, so the nav and the routes cannot disagree. The server is
   // still the boundary.
-  const visibleGroups: NavGroup[] = seesEverything(identity.role)
-    ? navGroups
-    : navGroups
-        .map((group) => ({
-          ...group,
-          items: group.items.filter((item) => canAccess(identity.role, item.href)),
-        }))
-        .filter((group) => group.items.length > 0);
+  // Filtered by PERMISSION. A link to a page that answers "not part of
+  // your access" reads as broken rather than deliberate, and a group
+  // whose every item is hidden goes with them — an empty "Money"
+  // heading is a list of what you are not allowed to do.
+  const visibleGroups: NavGroup[] = navGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => canSeePath(identity, item.href)),
+    }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <Toaster>

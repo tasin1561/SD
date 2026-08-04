@@ -13,6 +13,16 @@ import { TokenHashService } from '../../auth-common/services/token-hash.service'
 import { EmailQueue } from '../../email/queue/email.queue';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import type { CreateTeamInvitationDto } from '../dto/create-team-invitation.dto';
+/** The six defaults, whose keys mirror the legacy enum's spelling. */
+const LEGACY_SELLER_ROLE_KEYS = new Set([
+  'owner',
+  'admin',
+  'ops',
+  'inventory',
+  'finance',
+  'viewer',
+]);
+
 import { sellerRoleIdForEnum } from '../../../common/auth/seller-role-provisioning';
 
 const DEFAULT_EXPIRES_IN_DAYS = 7;
@@ -39,7 +49,10 @@ export interface TeamMemberView {
   readonly email: string;
   readonly emailDisplay: string;
   readonly fullName: string;
+  /** Legacy enum, kept for display continuity. */
   readonly role: SellerUserRole;
+  readonly roleId: string;
+  readonly roleName: string;
   readonly emailVerifiedAt: string | null;
   readonly lastLoginAt: string | null;
   readonly createdAt: string;
@@ -351,6 +364,8 @@ export class SellerTeamService {
         emailDisplay: true,
         fullName: true,
         role: true,
+        roleId: true,
+        sellerRole: { select: { name: true } },
         emailVerifiedAt: true,
         lastLoginAt: true,
         createdAt: true,
@@ -363,6 +378,8 @@ export class SellerTeamService {
       emailDisplay: r.emailDisplay,
       fullName: r.fullName,
       role: r.role,
+      roleId: r.roleId,
+      roleName: r.sellerRole.name,
       emailVerifiedAt: r.emailVerifiedAt?.toISOString() ?? null,
       lastLoginAt: r.lastLoginAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
@@ -371,55 +388,91 @@ export class SellerTeamService {
     }));
   }
 
+  /**
+   * Move a team member to a different role.
+   *
+   * Takes a role ROW id, not an enum — that is what lets somebody be
+   * given a role the company invented this morning. The legacy `role`
+   * column is kept in step only for the six defaults; a custom role has
+   * no enum spelling and the column is no longer consulted for
+   * authorisation, so it is left alone rather than filled with a lie.
+   */
   async updateRole(
     sellerId: string,
     targetUserId: string,
-    newRole: SellerUserRole,
+    newRoleId: string,
     actor: { sellerUserId: string },
     ctx: ClientContext,
-  ): Promise<{ id: string; role: SellerUserRole }> {
+  ): Promise<{ id: string; roleId: string; roleName: string }> {
     if (targetUserId === actor.sellerUserId) {
       throw new BadRequestException({
         code: 'CANNOT_CHANGE_OWN_ROLE',
-        message: 'You cannot change your own role',
+        message:
+          'You cannot change your own role. Ask another owner — this is what stops somebody removing their own way back in.',
       });
     }
-    const target = await this.prisma.client.sellerUser.findFirst({
-      where: { id: targetUserId, sellerId },
-      select: { id: true, role: true, deletedAt: true },
-    });
+    const [target, role] = await Promise.all([
+      this.prisma.client.sellerUser.findFirst({
+        where: { id: targetUserId, sellerId },
+        select: {
+          id: true,
+          role: true,
+          roleId: true,
+          deletedAt: true,
+          sellerRole: { select: { name: true, isOwner: true } },
+        },
+      }),
+      // Scoped by sellerId: a role id from another company must not be
+      // assignable, and the id is not a secret.
+      this.prisma.client.sellerRoleDefinition.findFirst({
+        where: { id: newRoleId, sellerId, deletedAt: null },
+        select: { id: true, key: true, name: true, isOwner: true, isSystem: true },
+      }),
+    ]);
     if (!target || target.deletedAt !== null) {
-      throw new NotFoundException({
-        code: 'MEMBER_NOT_FOUND',
-        message: 'Team member not found',
-      });
+      throw new NotFoundException({ code: 'MEMBER_NOT_FOUND', message: 'Team member not found' });
     }
-    // Last-OWNER protection: if we're demoting an OWNER, ensure at
-    // least one other OWNER will remain.
-    if (target.role === 'OWNER' && newRole !== 'OWNER') {
-      const otherOwners = await this.prisma.client.sellerUser.count({
-        where: {
-          sellerId,
-          role: 'OWNER',
-          deletedAt: null,
-          id: { not: targetUserId },
+    if (!role) {
+      throw new NotFoundException({ code: 'ROLE_NOT_FOUND', message: 'No such role' });
+    }
+    if (target.roleId === role.id) {
+      return { id: target.id, roleId: role.id, roleName: role.name };
+    }
+
+    await this.prisma.client.$transaction(async (tx) => {
+      // Somebody must be left who can get back in. Counted INSIDE the
+      // update's transaction, so two concurrent demotions cannot each
+      // see the owner the other is removing.
+      if (target.sellerRole.isOwner && !role.isOwner) {
+        const otherOwners = await tx.sellerUser.count({
+          where: {
+            sellerId,
+            deletedAt: null,
+            id: { not: targetUserId },
+            sellerRole: { isOwner: true, deletedAt: null },
+          },
+        });
+        if (otherOwners === 0) {
+          throw new BadRequestException({
+            code: 'LAST_OWNER',
+            message:
+              'This is the last owner. Moving them off that role would leave nobody able to manage the account.',
+          });
+        }
+      }
+      await tx.sellerUser.update({
+        where: { id: targetUserId },
+        data: {
+          roleId: role.id,
+          // Legacy column, best-effort — only the six defaults have an
+          // enum spelling to mirror.
+          ...(role.isSystem && LEGACY_SELLER_ROLE_KEYS.has(role.key)
+            ? { role: role.key.toUpperCase() as SellerUserRole }
+            : {}),
         },
       });
-      if (otherOwners === 0) {
-        throw new BadRequestException({
-          code: 'LAST_OWNER',
-          message: 'Cannot demote the last OWNER. Promote another member to OWNER first.',
-        });
-      }
-    }
-    if (target.role === newRole) {
-      return { id: target.id, role: target.role };
-    }
-    const updated = await this.prisma.client.sellerUser.update({
-      where: { id: targetUserId },
-      data: { role: newRole },
-      select: { id: true, role: true },
     });
+
     await this.audit.log({
       actorType: ActorType.SELLER,
       sellerId,
@@ -427,10 +480,10 @@ export class SellerTeamService {
       entityType: 'seller_user',
       entityId: targetUserId,
       severity: 'MEDIUM',
-      changes: { before: target.role, after: newRole },
+      changes: { before: target.sellerRole.name, after: role.name },
       metadata: { ipAddress: ctx.ipAddress, userAgent: ctx.userAgent },
     });
-    return updated;
+    return { id: targetUserId, roleId: role.id, roleName: role.name };
   }
 
   async deactivate(

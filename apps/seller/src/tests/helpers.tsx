@@ -18,9 +18,33 @@ import { vi } from 'vitest';
  * `{code, message}` exactly as returned).
  */
 
+/** Enough of the catalogue for component tests; the real list is served
+ *  by the API and duplicating all 30 keys here would be a second list to
+ *  keep in step for no benefit. */
+const ALL_TEST_SELLER_PERMISSIONS: readonly string[] = [
+  'orders.view',
+  'orders.create',
+  'orders.cancel',
+  'catalog.view',
+  'catalog.manage',
+  'inventory.view',
+  'wallet.view',
+  'charges.view',
+  'team.view',
+  'team.manage',
+  'roles.manage',
+  'profile.view',
+];
+
 export function makeSeller(overrides: Partial<SellerMe> = {}): SellerMe {
   return {
     id: 'seller-1',
+    roleKey: 'owner',
+    roleName: 'Owner',
+    // Defaults to an owner's whole catalogue, so a test about something
+    // else is not silently gated by a permission it never meant to
+    // exercise. Override to test the gating itself.
+    permissions: ALL_TEST_SELLER_PERMISSIONS,
     email: 's@example.com',
     emailDisplay: 's@example.com',
     companyName: 'Acme Co',
