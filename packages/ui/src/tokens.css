@@ -557,3 +557,66 @@ dd {
     min-height: 32px;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+ * Scrollbars — out of the way until they are needed.
+ *
+ * The platform default is a chunky opaque gutter in a colour nobody
+ * chose, and this app has a lot of scrollable regions: the sidebar, the
+ * page, a modal body, a list inside that modal. Four grey bars on one
+ * screen is most of what makes a dense console look unfinished.
+ *
+ * INVISIBLE AT REST, not removed. `display: none` would take the
+ * position indicator away permanently — on a long ledger the thumb is
+ * the only thing telling you whether you are near the top or the
+ * bottom. Instead the track is transparent and the thumb only paints
+ * when the pointer is over the scrolling region or something inside it
+ * has focus, which is exactly when it is being read.
+ *
+ * Both syntaxes are here on purpose: `scrollbar-width`/`scrollbar-color`
+ * is the standard (Firefox, and Chrome from 121), `::-webkit-scrollbar`
+ * covers the WebKit-based browsers that ignore it. A browser applying
+ * both lands in the same place.
+ *
+ * Scrolling itself is untouched — wheel, trackpad, keyboard, and drag
+ * all behave exactly as before. Overflow is never `hidden` here.
+ * ──────────────────────────────────────────────────────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+*:hover,
+*:focus-within {
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+  /* Inset so the 8px track reads as a ~4px thumb without the layout
+   * shifting when it appears. */
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+:hover::-webkit-scrollbar-thumb,
+:focus-within::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-faint);
+  background-clip: content-box;
+}

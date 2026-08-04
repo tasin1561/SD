@@ -585,3 +585,50 @@ h3 {
     font-size: 16px;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+ * Scrollbars — the same treatment `@skydrop/ui`'s tokens.css gives the
+ * three app frontends, restated here because marketing is its own
+ * design world and does not import that package.
+ *
+ * Invisible at rest rather than removed: `display: none` would take
+ * away the only indication of how far down a long page you are. The
+ * thumb paints when the pointer is over the scrolling region.
+ * ──────────────────────────────────────────────────────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+*:hover,
+*:focus-within {
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+:hover::-webkit-scrollbar-thumb,
+:focus-within::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fg-muted);
+  background-clip: content-box;
+}
