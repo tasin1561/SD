@@ -29,6 +29,7 @@ import { EmailQueue } from '../email/queue/email.queue';
 import { SellerOnboardingService } from '../seller-onboarding/services/seller-onboarding.service';
 import { SellerNotificationPreferenceService } from '../seller-notification-preference/services/seller-notification-preference.service';
 import type { SellerRegisterViaInvitationDto } from './dto/register-via-invitation.dto';
+import { provisionDefaultSellerRoles } from '../../common/auth/seller-role-provisioning';
 
 const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
 const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -194,12 +195,18 @@ export class SellerAuthService {
         select: { id: true, email: true, status: true },
       });
 
+      // The company's six starting roles, BEFORE its first login —
+      // `seller_users.role_id` is NOT NULL, so a company without roles
+      // is a company whose owner row cannot be created.
+      const { ownerRoleId } = await provisionDefaultSellerRoles(tx, createdSeller.id);
+
       // Phase 1B — the OWNER SellerUser row carries the auth credentials
       // for the new RBAC flow. Same tx so the company + owner come up
       // together or not at all.
       const createdOwner = await tx.sellerUser.create({
         data: {
           sellerId: createdSeller.id,
+          roleId: ownerRoleId,
           email: normalizedEmail,
           emailDisplay: invitation.email,
           passwordHash,

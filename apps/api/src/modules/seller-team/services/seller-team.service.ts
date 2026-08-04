@@ -13,6 +13,7 @@ import { TokenHashService } from '../../auth-common/services/token-hash.service'
 import { EmailQueue } from '../../email/queue/email.queue';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import type { CreateTeamInvitationDto } from '../dto/create-team-invitation.dto';
+import { sellerRoleIdForEnum } from '../../../common/auth/seller-role-provisioning';
 
 const DEFAULT_EXPIRES_IN_DAYS = 7;
 
@@ -301,6 +302,7 @@ export class SellerTeamService {
       const user = await tx.sellerUser.create({
         data: {
           sellerId: inv.sellerId,
+          roleId: await sellerRoleIdForEnum(tx, inv.sellerId, inv.role),
           email: emailLower,
           emailDisplay: inv.email,
           passwordHash,

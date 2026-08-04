@@ -112,6 +112,12 @@ interface FakeClient {
     create: jest.Mock;
     update: jest.Mock;
   };
+  /** Registration provisions the company's six starting roles in the
+   *  same tx, because `seller_users.role_id` is NOT NULL. */
+  sellerRoleDefinition: {
+    create: jest.Mock;
+    findFirst: jest.Mock;
+  };
   sellerInvitation: {
     findUnique: jest.Mock;
     findFirst: jest.Mock;
@@ -231,6 +237,14 @@ function buildClient(): FakeClient {
           return row;
         },
       ),
+    },
+    sellerRoleDefinition: {
+      create: jest.fn(async ({ data }: { data: { key: string; isOwner?: boolean } }) => ({
+        id: `role-${data.key}`,
+      })),
+      findFirst: jest.fn(async ({ where }: { where: { key?: string } }) => ({
+        id: `role-${where.key ?? 'owner'}`,
+      })),
     },
     sellerUser: {
       findFirst: jest.fn(async ({ where }: { where: Record<string, unknown> }) => {

@@ -247,6 +247,7 @@ model Seller {
   settingOverrides        SellerSettingOverride[]
   courierAccountLinks     SellerCourierAccountLink[]
   inviteLeads             InviteLead[]                   @relation("InviteLeadConvertedSeller")
+  roles                   SellerRoleDefinition[]
 
   @@index([status])
   @@index([deletedAt])
@@ -4707,6 +4708,9 @@ model SellerUser {
   passwordHash    String         @map("password_hash")
   fullName        String         @map("full_name")
   role            SellerUserRole
+  /// The dynamic role, scoped to this seller. `role` above is the
+  /// LEGACY enum, no longer consulted for authorisation.
+  roleId          String         @map("role_id") @db.Uuid
   invitedById     String?        @map("invited_by_id") @db.Uuid
   emailVerifiedAt DateTime?      @map("email_verified_at") @db.Timestamptz
   lastLoginAt     DateTime?      @map("last_login_at") @db.Timestamptz
@@ -4714,6 +4718,7 @@ model SellerUser {
   updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt       DateTime?      @map("deleted_at") @db.Timestamptz
 
+  sellerRole                      SellerRoleDefinition           @relation(fields: [roleId], references: [id], onDelete: Restrict)
   seller                          Seller                         @relation(fields: [sellerId], references: [id])
   invitedBy                       SellerUser?                    @relation("SellerUserInvitedBy", fields: [invitedById], references: [id])
   invitedUsers                    SellerUser[]                   @relation("SellerUserInvitedBy")
@@ -4730,6 +4735,64 @@ model SellerUser {
   @@index([sellerId])
   @@index([sellerId, role])
   @@map("seller_users")
+}
+
+/// A role inside ONE seller's account.
+///
+/// Scoped by `sellerId` — Dhaka Threads' "Manager" has nothing to do
+/// with anybody else's, and one company editing a role must never touch
+/// another's. Every lookup carries the seller id; the unique key is
+/// `(sellerId, key)` rather than `key` alone for exactly that reason.
+///
+/// The permission KEYS it grants are defined in code
+/// (apps/api/src/common/auth/seller-permissions.ts).
+model SellerRoleDefinition {
+  id          String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId    String  @map("seller_id") @db.Uuid
+  key         String
+  name        String
+  description String?
+
+  /// One of the six created with every company. Undeletable — deleting
+  /// the role a company's whole team holds is not an edit anyone means
+  /// to make. Its permissions stay editable (except the owner's).
+  isSystem Boolean @default(false) @map("is_system")
+  /// Holds every permission implicitly, including ones added later.
+  /// Exactly one per seller, uneditable, and its last holder cannot be
+  /// moved off it — otherwise a company locks itself out of its own
+  /// account with no way back that does not involve us.
+  isOwner  Boolean @default(false) @map("is_owner")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  seller      Seller                 @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  permissions SellerRolePermission[]
+  users       SellerUser[]
+
+  @@unique([sellerId, key], map: "seller_roles_seller_id_key_key")
+  @@index([sellerId], map: "seller_roles_seller_id_idx")
+  @@map("seller_roles")
+}
+
+/// One granted permission key. Absence IS the denial — there is no
+/// deny-list, because a permission both granted and denied needs a
+/// precedence rule nobody remembers.
+model SellerRolePermission {
+  id         String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  roleId     String  @map("role_id") @db.Uuid
+  permission String
+  /// Reserved for future narrowing (a warehouse, a channel). NULL today.
+  scope      String?
+
+  grantedAt DateTime @default(now()) @map("granted_at") @db.Timestamptz
+
+  role SellerRoleDefinition @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permission, scope], map: "seller_role_permissions_role_permission_scope_key")
+  @@index([roleId], map: "seller_role_permissions_role_id_idx")
+  @@map("seller_role_permissions")
 }
 
 model SellerUserInvitation {
