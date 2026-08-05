@@ -34,6 +34,7 @@ import {
   type CallQueueRow,
 } from '@/lib/callcenter-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useRouter } from 'next/navigation';
 
 const PAGE_SIZE = 25;
 
@@ -52,6 +53,7 @@ const PAGE_SIZE = 25;
  * end of it.
  */
 export function QueueIndex(): ReactElement {
+  const router = useRouter();
   const [status, setStatus] = useState('');
   const [agentId, setAgentId] = useState('');
   const [page, setPage] = useState(1);
@@ -161,7 +163,7 @@ export function QueueIndex(): ReactElement {
               </THead>
               <TBody>
                 {items.map((e) => (
-                  <Tr key={e.id}>
+                  <Tr key={e.id} onActivate={() => router.push(`/orders/${e.orderId}`)}>
                     <Td>
                       {e.order === null ? (
                         <Ident value={e.orderId} />

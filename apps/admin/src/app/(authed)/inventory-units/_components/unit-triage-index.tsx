@@ -111,8 +111,7 @@ export function UnitTriageIndex(): ReactElement {
                 {data?.sellers.map((s) => (
                   <Tr
                     key={s.sellerId}
-                    interactive
-                    onClick={() => setSelected(selected === s.sellerId ? null : s.sellerId)}
+                    onActivate={() => setSelected(selected === s.sellerId ? null : s.sellerId)}
                   >
                     <Td>
                       <span className="text-text-strong">{s.companyName ?? 'Unknown seller'}</span>

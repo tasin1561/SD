@@ -116,7 +116,12 @@ export function InventoryView(): ReactElement {
           </THead>
           <TBody>
             {list.data.items.map((row) => (
-              <Tr key={row.variantId}>
+              <Tr
+                key={row.variantId}
+                onActivate={() =>
+                  router.push(`/catalog/products/${row.productId}/variants/${row.variantId}`)
+                }
+              >
                 <Td className="font-mono text-xs">
                   <Link
                     href={`/catalog/products/${row.productId}/variants/${row.variantId}`}

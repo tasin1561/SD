@@ -26,6 +26,7 @@ import {
 } from '@skydrop/ui/components';
 import { useMarginReport } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useRouter } from 'next/navigation';
 
 /**
  * What our lanes actually earn.
@@ -42,6 +43,7 @@ import { serverVerdict } from '@/lib/server-verdict';
  *    `assumptionDrift` shows how far apart those two are.
  */
 export function MarginIndex(): ReactElement {
+  const router = useRouter();
   const [limit, setLimit] = useState(25);
   const [run, setRun] = useState(false);
   const report = useMarginReport(limit, run);
@@ -142,7 +144,7 @@ export function MarginIndex(): ReactElement {
               </THead>
               <TBody>
                 {data.rows.map((r) => (
-                  <Tr key={r.shipmentId}>
+                  <Tr key={r.shipmentId} onActivate={() => router.push(`/orders/${r.orderId}`)}>
                     <Td>
                       {r.orderId === null ? (
                         <Ident value={r.shipmentNumber} />

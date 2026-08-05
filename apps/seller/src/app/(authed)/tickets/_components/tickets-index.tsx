@@ -28,6 +28,7 @@ import { useSellerTickets } from '@/lib/ops-hooks';
 import { RaiseTicketModal } from './raise-ticket-modal';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
+import { useRouter } from 'next/navigation';
 
 /**
  * The seller's ticket list.
@@ -38,6 +39,7 @@ import { useSellerIdentity } from '@skydrop/auth/client';
  * through the same negotiation, and a refund lands in their wallet.
  */
 export function SellerTicketsIndex(): ReactElement {
+  const router = useRouter();
   const canWrite = can(useSellerIdentity(), 'tickets.create');
   const [status, setStatus] = useState<string>('');
   const [raising, setRaising] = useState(false);
@@ -140,7 +142,7 @@ export function SellerTicketsIndex(): ReactElement {
           </THead>
           <TBody>
             {rows.map((t) => (
-              <Tr key={t.id}>
+              <Tr key={t.id} onActivate={() => router.push(`/orders/${t.orderId}`)}>
                 <Td className="text-text-muted whitespace-nowrap text-xs">
                   {t.ticketType === TicketType.SCRAP_DAMAGE ? 'Skydrop' : 'You'}
                 </Td>

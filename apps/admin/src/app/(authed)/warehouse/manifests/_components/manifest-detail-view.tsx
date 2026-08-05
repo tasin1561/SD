@@ -21,6 +21,7 @@ import {
 } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 import { useCloseManifest, useConfirmHandoff, useManifestDetail } from '@/lib/api-hooks';
+import { useRouter } from 'next/navigation';
 
 /**
  * Manifest detail — shows the manifest header, the list of shipments
@@ -32,6 +33,7 @@ import { useCloseManifest, useConfirmHandoff, useManifestDetail } from '@/lib/ap
  * FE-2: server-verdict surfacing on every action.
  */
 export function ManifestDetailView({ id }: { readonly id: string }): ReactElement {
+  const router = useRouter();
   const toast = useToast();
   const detail = useManifestDetail(id);
   const close = useCloseManifest();
@@ -168,7 +170,7 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
           </THead>
           <TBody>
             {m.shipments.map((s) => (
-              <Tr key={s.id}>
+              <Tr key={s.id} onActivate={() => router.push(`/orders/${s.orderId}`)}>
                 <Td className="font-mono text-xs">{s.shipmentNumber}</Td>
                 <Td className="text-text-muted text-xs uppercase">{s.status}</Td>
                 <Td>

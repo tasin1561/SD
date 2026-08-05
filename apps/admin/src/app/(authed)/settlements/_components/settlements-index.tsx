@@ -24,6 +24,7 @@ import {
 import { useReconciliation, useSettlementsList } from '@/lib/ops-hooks';
 import { RecordSettlementModal } from './record-settlement-modal';
 import { usePermission } from '@/lib/use-permission';
+import { useRouter } from 'next/navigation';
 
 /**
  * Courier settlements + float reconciliation (R2c).
@@ -249,6 +250,7 @@ function UnsettledTable({
     shortfallInr: string;
   }>;
 }): ReactElement {
+  const router = useRouter();
   return (
     <Table>
       <THead>
@@ -263,7 +265,7 @@ function UnsettledTable({
       </THead>
       <TBody>
         {rows.map((r) => (
-          <Tr key={r.orderId}>
+          <Tr key={r.orderId} onActivate={() => router.push(`/orders/${r.orderId}`)}>
             <Td>
               <Link href={`/orders/${r.orderId}`} className="text-accent hover:underline">
                 <Ident value={r.orderNumber} />

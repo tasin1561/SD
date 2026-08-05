@@ -30,6 +30,7 @@ import {
 import { EarlyReservationReviewStatus } from '@skydrop/db';
 import { useDecideHoldReview, useHoldReviews, type ReviewView } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useRouter } from 'next/navigation';
 
 /**
  * Held stock awaiting the seller's call.
@@ -43,6 +44,7 @@ import { serverVerdict } from '@/lib/server-verdict';
  * Doing nothing has a cost, so the screen leads with how much is held.
  */
 export function HoldReviewsIndex(): ReactElement {
+  const router = useRouter();
   const [status, setStatus] = useState<string>(EarlyReservationReviewStatus.OPEN);
   const [selected, setSelected] = useState<ReviewView | null>(null);
   const list = useHoldReviews(status === '' ? {} : { status });
@@ -131,7 +133,7 @@ export function HoldReviewsIndex(): ReactElement {
           </THead>
           <TBody>
             {rows.map((r) => (
-              <Tr key={r.id}>
+              <Tr key={r.id} onActivate={() => router.push(`/orders/${r.orderId}`)}>
                 <Td>
                   <Link href={`/orders/${r.orderId}`} className="text-accent hover:underline">
                     <Ident value={`${r.orderId.slice(0, 8)}…`} />

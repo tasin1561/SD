@@ -146,6 +146,11 @@ export function AdminHoldsIndex(): ReactElement {
               const age = ageDays(r.createdAt);
               return (
                 <Tr key={r.id}>
+                  {/* Deliberately NOT a clickable row. The link goes to the
+                      SELLER, which is an attribute of this row rather than
+                      its subject — the row is a held reservation. Sending the whole row
+                      to the seller would take somebody somewhere they did
+                      not ask to go, so the link stays a link. */}
                   <Td>
                     <Link href={`/sellers/${r.sellerId}`} className="text-accent hover:underline">
                       <Ident value={`${r.sellerId.slice(0, 8)}…`} />
