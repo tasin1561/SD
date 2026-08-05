@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
+import { CourierSharedModule } from '../courier-shared/courier-shared.module';
 import { CourierDelhiveryModule } from '../courier-delhivery/courier-delhivery.module';
 import { EmailModule } from '../email/email.module';
 import { AdminCourierEscalationController } from './controllers/admin-courier-escalation.controller';
@@ -8,7 +9,6 @@ import { InboundEmailGuard } from './guards/inbound-email.guard';
 import { CourierOutboxQueue } from './queue/courier-outbox.queue';
 import { CourierChannelSettingsService } from './services/courier-channel-settings.service';
 import { CourierEscalationIngestService } from './services/courier-escalation-ingest.service';
-import { CourierMcpReaderService } from './services/courier-mcp-reader.service';
 import { CourierMessageClassifierService } from './services/courier-message-classifier.service';
 import { CourierModeChallengeService } from './services/courier-mode-challenge.service';
 import { CourierOpsQueueService } from './services/courier-ops-queue.service';
@@ -41,6 +41,7 @@ import { InboundEmailAuthService } from './services/inbound-email-auth.service';
  */
 @Module({
   imports: [
+    CourierSharedModule, // the MCP reader (R3: dependency-free, shared)
     CourierDelhiveryModule, // the support adapter + its capability flags
     EmailModule, // the 2FA code for a write-mode change
     AuthCommonModule, // audit
@@ -51,7 +52,6 @@ import { InboundEmailAuthService } from './services/inbound-email-auth.service';
     InboundEmailGuard,
     CourierMessageClassifierService,
     CourierEscalationIngestService,
-    CourierMcpReaderService,
     CourierChannelSettingsService,
     CourierOutboxService,
     CourierOutboxDispatcherService,

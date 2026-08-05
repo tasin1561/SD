@@ -8,7 +8,7 @@ import {
   type RaiseTicketOutcome,
   type RaiseTicketRequest,
 } from '../../courier-shared/services/courier-support-adapter';
-import { CourierMcpReaderService } from '../../courier-escalation/services/courier-mcp-reader.service';
+import { CourierMcpReaderService } from '../../courier-shared/services/courier-mcp-reader.service';
 
 /**
  * Delhivery's implementation of the support adapter. Honest about being

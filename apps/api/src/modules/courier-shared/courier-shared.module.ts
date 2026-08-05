@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { CourierAccountRoutingService } from './services/courier-account-routing.service';
 import { CourierCredentialService } from './services/courier-credential.service';
+import { CourierMcpReaderService } from './services/courier-mcp-reader.service';
 import { NdrAttemptContextService } from './services/ndr-attempt-context.service';
 
 /**
@@ -18,7 +19,17 @@ import { NdrAttemptContextService } from './services/ndr-attempt-context.service
  * PrismaService / EnvService / AuditLogService are global.
  */
 @Module({
-  providers: [CourierCredentialService, CourierAccountRoutingService, NdrAttemptContextService],
-  exports: [CourierCredentialService, CourierAccountRoutingService, NdrAttemptContextService],
+  providers: [
+    CourierCredentialService,
+    CourierAccountRoutingService,
+    NdrAttemptContextService,
+    CourierMcpReaderService,
+  ],
+  exports: [
+    CourierCredentialService,
+    CourierAccountRoutingService,
+    NdrAttemptContextService,
+    CourierMcpReaderService,
+  ],
 })
 export class CourierSharedModule {}

@@ -3,6 +3,7 @@ import { CourierSharedModule } from '../courier-shared/courier-shared.module';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { DelhiveryHttpService } from './services/delhivery-http.service';
 import { DelhiveryRateLimitService } from './services/delhivery-rate-limit.service';
+import { DelhiverySupportAdapterService } from './services/delhivery-support-adapter.service';
 import { DelhiveryWriteGuardService } from './services/delhivery-write-guard.service';
 import { DelhiveryAwbService } from './services/delhivery-awb.service';
 import { DelhiveryLabelService } from './services/delhivery-label.service';
@@ -54,6 +55,7 @@ import { AdminDelhiveryOpsController } from './controllers/admin-delhivery-ops.c
     DelhiveryHttpService,
     DelhiveryRateLimitService,
     DelhiveryWriteGuardService,
+    DelhiverySupportAdapterService,
     DelhiveryAwbService,
     DelhiveryLabelService,
     DelhiveryServiceabilityService,
@@ -78,6 +80,7 @@ import { AdminDelhiveryOpsController } from './controllers/admin-delhivery-ops.c
     DelhiveryHttpService,
     DelhiveryRateLimitService,
     DelhiveryWriteGuardService,
+    DelhiverySupportAdapterService,
     DelhiveryAwbService,
     DelhiveryLabelService,
     DelhiveryServiceabilityService,
