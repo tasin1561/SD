@@ -1,6 +1,3 @@
-import { Test } from '@nestjs/testing';
-import { AppModule } from '../../src/app.module';
-
 /**
  * The application's dependency graph resolves.
  *
@@ -26,6 +23,20 @@ import { AppModule } from '../../src/app.module';
  * unit suite rather than in e2e where the feedback is fifteen minutes
  * away.
  *
+ * ── IT SETS ITS OWN ENV, AND THAT IS DELIBERATE ───────────────────────
+ * `AppModule` validates the environment at IMPORT time — `ConfigModule
+ * .forRoot()` runs at module scope, so a missing var throws before any
+ * test body executes. The first version of this file relied on the
+ * ambient environment, passed locally off a developer `.env`, and failed
+ * in CI on `JWT_SIGNING_KEY: Required`.
+ *
+ * Depending on the workflow's env block would have been the wrong fix: a
+ * boot check whose requirements live in a YAML file drifts from the
+ * schema it is checking, and the failure is a red suite that looks like
+ * a real defect. So the values are set HERE, before a dynamic import,
+ * and they are obvious throwaways — this test cares only that providers
+ * resolve, never that a credential works.
+ *
  * ── WHAT IT CATCHES, AND WHAT IT DOES NOT ────────────────────────────
  * Catches: a provider missing from `providers`, a service missing from
  * another module's `exports`, a circular module dependency, a token that
@@ -43,13 +54,39 @@ import { AppModule } from '../../src/app.module';
  * `UnknownDependenciesException` — it names the service and the
  * unresolvable argument, which is the line worth having.
  */
+
+/**
+ * Minimum env for the schema to validate. Applied before the dynamic
+ * import below, because validation runs at module scope.
+ *
+ * Only ever DEFAULTS: an ambient value wins, so this cannot mask a real
+ * misconfiguration in an environment that sets these for real.
+ */
+const BOOT_ENV: Readonly<Record<string, string>> = {
+  NODE_ENV: 'test',
+  DATABASE_URL: 'postgresql://skydrop:skydrop@localhost:5432/skydrop_test?schema=public',
+  REDIS_URL: 'redis://localhost:6379/1',
+  // 32-char minimum per the schema. Obviously throwaway, and never used:
+  // compile() resolves providers, it does not sign anything.
+  JWT_SIGNING_KEY: 'boot-check-signing-key-not-a-secret',
+  SELLER_APP_URL: 'https://app.example.test',
+  ADMIN_APP_URL: 'https://admin.example.test',
+};
+
+for (const [k, v] of Object.entries(BOOT_ENV)) {
+  process.env[k] ??= v;
+}
+
 describe('AppModule', () => {
   it('resolves every provider — the app can actually start', async () => {
+    // Dynamic imports so BOOT_ENV is in place first. A static import
+    // would run ConfigModule.forRoot() during module load, before the
+    // assignment above has any chance to apply.
+    const { Test } = await import('@nestjs/testing');
+    const { AppModule } = await import('../../src/app.module');
+
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     expect(moduleRef).toBeDefined();
     await moduleRef.close();
-    // A failure here reads as an UnknownDependenciesException naming the
-    // service and the unresolvable argument index — which is the whole
-    // value: it tells you the file to open.
   }, 60_000);
 });
