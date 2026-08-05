@@ -260,6 +260,26 @@ minutes, correctly classified, with no duplicates.
 
 ### Phase 3 — Outbox, routing, mode switch
 
+> **KNOWN GAP, OWNED BY THIS PHASE (recorded 2026-08-06): panel-raised
+> tickets do not thread.**
+>
+> Phase 2's ingest returns `NO_ESCALATION` and stores nothing when a
+> courier email names a ticket we have no `courier_escalations` row for —
+> which is every ticket a human raised directly in the Delhivery One
+> panel, including all ~63 that already exist.
+>
+> That is deliberate, not an oversight. The alternative is fabricating a
+> Ticket and a seller linkage out of an email, and a wrong binding
+> surfaces one seller's shipment conversation on another seller's
+> account — worse than no threading, and much harder to notice.
+>
+> **The reconciler in this phase is what closes it**: match an unbound
+> external ticket id to a shipment (by the AWB in the body, or by an
+> operator binding it once), then create the escalation. Until then,
+> those messages are logged and visible and go nowhere. Do not
+> rediscover this as a bug.
+
+
 - `outbox` table with states:
   `PENDING | SENDING | SENT_UNCONFIRMED | CONFIRMED | FAILED`.
   `SENT_UNCONFIRMED` must never be blind-retried — it goes to a reconciler that
