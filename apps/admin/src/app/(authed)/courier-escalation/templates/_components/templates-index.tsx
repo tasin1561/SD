@@ -200,6 +200,9 @@ function CandidateCard({
   const [state, setState] = useState(candidate.suggestedState ?? '');
   const [action, setAction] = useState('');
   const [priority, setPriority] = useState('50');
+  // Ids are per-candidate: several cards render at once, so a bare
+  // id="code" would point every label at the first card's input.
+  const fid = (name: string): string => `${candidate.id}-${name}`;
 
   const submit = (): void => {
     void (async () => {
@@ -256,17 +259,34 @@ function CandidateCard({
           open ? (
             <div className="border-border flex flex-col gap-3 border-t pt-3">
               <div className="grid gap-3 sm:grid-cols-2">
-                <FormField label="Code" hint="Stable, e.g. NDR_ACK_24_48.">
-                  <Input value={code} onChange={(e) => setCode(e.target.value)} />
+                <FormField label="Code" hint="Stable, e.g. NDR_ACK_24_48." htmlFor={fid('code')}>
+                  <Input id={fid('code')} value={code} onChange={(e) => setCode(e.target.value)} />
                 </FormField>
-                <FormField label="Means" hint="The state this implies, e.g. ACKNOWLEDGED.">
-                  <Input value={state} onChange={(e) => setState(e.target.value)} />
-                </FormField>
-                <FormField label="Action" hint="Optional, e.g. ASK_SELLER_ALT_PHONE.">
-                  <Input value={action} onChange={(e) => setAction(e.target.value)} />
-                </FormField>
-                <FormField label="Order" hint="Lower is checked first.">
+                <FormField
+                  label="Means"
+                  hint="The state this implies, e.g. ACKNOWLEDGED."
+                  htmlFor={fid('state')}
+                >
                   <Input
+                    id={fid('state')}
+                    value={state}
+                    onChange={(e) => setState(e.target.value)}
+                  />
+                </FormField>
+                <FormField
+                  label="Action"
+                  hint="Optional, e.g. ASK_SELLER_ALT_PHONE."
+                  htmlFor={fid('action')}
+                >
+                  <Input
+                    id={fid('action')}
+                    value={action}
+                    onChange={(e) => setAction(e.target.value)}
+                  />
+                </FormField>
+                <FormField label="Order" hint="Lower is checked first." htmlFor={fid('priority')}>
+                  <Input
+                    id={fid('priority')}
                     inputMode="numeric"
                     value={priority}
                     onChange={(e) => setPriority(e.target.value)}
@@ -276,8 +296,13 @@ function CandidateCard({
               <FormField
                 label="Pattern"
                 hint="A regular expression without delimiters, matched case-insensitively. The server refuses one that does not match the message above."
+                htmlFor={fid('pattern')}
               >
-                <Input value={pattern} onChange={(e) => setPattern(e.target.value)} />
+                <Input
+                  id={fid('pattern')}
+                  value={pattern}
+                  onChange={(e) => setPattern(e.target.value)}
+                />
               </FormField>
               <div className="flex flex-wrap items-center gap-2">
                 <Button

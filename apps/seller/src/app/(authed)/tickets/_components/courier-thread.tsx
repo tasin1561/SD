@@ -7,8 +7,10 @@ import {
   Card,
   CardBody,
   ErrorNote,
+  FormField,
   SkeletonRows,
   StatusBadge,
+  Textarea,
   useToast,
 } from '@skydrop/ui/components';
 import {
@@ -123,13 +125,18 @@ export function CourierThread({ ticketId }: { readonly ticketId: string }): Reac
 
         {canReply ? (
           <div className="border-border mt-4 flex flex-col gap-2 border-t pt-3">
-            <textarea
-              className="sd-field"
-              rows={3}
-              placeholder="Write to the courier. Sent exactly as you type it."
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-            />
+            <FormField
+              label="Write to the courier"
+              htmlFor={`courier-reply-${ticketId}`}
+              hint="Sent exactly as you type it. We do not edit or translate it."
+            >
+              <Textarea
+                id={`courier-reply-${ticketId}`}
+                rows={3}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+              />
+            </FormField>
             <div className="flex items-center gap-3">
               <Button variant="primary" size="sm" onClick={send} disabled={draft.trim() === ''}>
                 <Send size={14} /> Queue message

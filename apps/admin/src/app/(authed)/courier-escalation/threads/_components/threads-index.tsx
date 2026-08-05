@@ -9,6 +9,7 @@ import {
   CardBody,
   EmptyState,
   ErrorNote,
+  FormField,
   Ident,
   PageHeader,
   SkeletonRows,
@@ -225,12 +226,18 @@ function ThreadPanel({ escalationId }: { readonly escalationId: string }): React
 
         {canWrite ? (
           <div className="border-border mt-4 flex flex-col gap-2 border-t pt-3">
-            <Textarea
-              rows={3}
-              placeholder="Write to the courier. Stored and sent exactly as typed."
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-            />
+            <FormField
+              label="Reply to the courier"
+              htmlFor={`reply-${escalationId}`}
+              hint="Stored and sent exactly as typed — never rewritten or translated."
+            >
+              <Textarea
+                id={`reply-${escalationId}`}
+                rows={3}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+              />
+            </FormField>
             <div className="flex items-center gap-3">
               <Button variant="primary" size="sm" onClick={send} disabled={draft.trim() === ''}>
                 <Send size={14} /> Queue reply

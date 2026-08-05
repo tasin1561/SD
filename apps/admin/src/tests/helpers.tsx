@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, type RenderOptions, type RenderResult } from '@testing-library/react';
 import type { ReactElement, ReactNode } from 'react';
 import { AuthProvider } from '@skydrop/auth/client';
+import { Toaster } from '@skydrop/ui/components';
 import type { StaffMe } from '@skydrop/api-client';
 import type { StaffRole } from '@skydrop/db';
 import { vi } from 'vitest';
@@ -130,7 +131,12 @@ export function renderWithProviders(
     return (
       <QueryClientProvider client={queryClient}>
         <AuthProvider<StaffMe> identityKind="staff" initialIdentity={identity}>
-          {children}
+          {/* The real AuthedShell mounts this around everything, so a
+              component that reports an outcome with useToast renders here
+              exactly as it does in the app. Without it the harness threw
+              on any such component and the failure looked like a broken
+              test rather than a missing provider. */}
+          <Toaster>{children}</Toaster>
         </AuthProvider>
       </QueryClientProvider>
     );

@@ -37,6 +37,11 @@ function make(
 ) {
   const messagesCreated: Record<string, unknown>[] = [];
   const audits: Record<string, unknown>[] = [];
+  // Which write happened first. Asserting that BOTH happened is not the
+  // same as asserting the ORDER, and the order is the whole property:
+  // enqueue-then-store can deliver words that never appeared in the
+  // thread they came from.
+  const order: string[] = [];
 
   const prisma = {
     client: {
@@ -56,6 +61,7 @@ function make(
       },
       courierEscalationMessage: {
         create: jest.fn().mockImplementation((a: { data: Record<string, unknown> }) => {
+          order.push('message');
           messagesCreated.push(a.data);
           return Promise.resolve({ id: 'msg-1' });
         }),
@@ -65,6 +71,7 @@ function make(
 
   const outbox = {
     enqueue: jest.fn().mockImplementation(() => {
+      order.push('enqueue');
       if (opts.enqueueThrows !== undefined) throw opts.enqueueThrows;
       return Promise.resolve({ id: 'ob-new' });
     }),
@@ -85,7 +92,7 @@ function make(
     classifier as never,
     audit as never,
   );
-  return { svc, prisma, outbox, audit, audits, messagesCreated };
+  return { svc, prisma, outbox, audit, audits, messagesCreated, order };
 }
 
 describe('CourierEscalationService.openForTicket', () => {
@@ -168,7 +175,7 @@ describe('CourierEscalationService.thread', () => {
 
 describe('CourierEscalationService.postReply', () => {
   it('stores the message VERBATIM and only then queues delivery', async () => {
-    const { svc, messagesCreated, outbox } = make();
+    const { svc, messagesCreated, outbox, order } = make();
 
     const body = '  Customer says the address is  wrong.\n\nPlease reattempt tomorrow.  ';
     await svc.postReply({ escalationId: 'esc-1', body, sellerId: 'seller-1' });
@@ -183,6 +190,12 @@ describe('CourierEscalationService.postReply', () => {
     // state would pollute the escalation's state.
     expect(messagesCreated[0]?.needsReview).toBe(false);
     expect(outbox.enqueue).toHaveBeenCalled();
+    // Visible-vs-silent, pinned as an ORDER and not as two facts: the
+    // thread shows it first, delivery is arranged second.
+    expect(order).toEqual(['message', 'enqueue']);
+    // And the hash stored beside it is the classifier's, not something
+    // improvised at the call site — the ingest dedups on this column.
+    expect(messagesCreated[0]?.bodyHash).toBe('hash-abc');
   });
 
   it('raises a ticket first and comments after one exists', async () => {
