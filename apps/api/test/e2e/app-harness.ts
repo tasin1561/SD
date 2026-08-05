@@ -233,6 +233,9 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         // Courier escalations FK tickets (CASCADE), and their messages
         // cascade from those — listed anyway so the reset stays
         // explicit rather than relying on a chain (MUST #12).
+        // Portal runs reference outbox items by id (soft, no FK) — cleared
+        // first anyway so a suite cannot inherit a run it never made.
+        'courier_portal_runs',
         'courier_outbox_items',
         'courier_escalation_messages',
         'courier_escalations',

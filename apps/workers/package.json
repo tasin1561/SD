@@ -8,6 +8,8 @@
     "start": "node ../api/dist/workers-main.js",
     "start:prod": "node ../api/dist/workers-main.js",
     "dev": "node --enable-source-maps ../api/dist/workers-main.js",
+    "start:portal": "node ../api/dist/portal-worker-main.js",
+    "dev:portal": "node --enable-source-maps ../api/dist/portal-worker-main.js",
     "typecheck": "echo 'typecheck delegated to @skydrop/api'",
     "lint": "echo 'lint delegated to @skydrop/api'",
     "clean": "echo 'no build artefacts to clean'"

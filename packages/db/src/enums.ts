@@ -112,6 +112,7 @@ export {
   CourierOutboxKind,
   CourierDispatchErrorClass,
   CourierWriteMode,
+  CourierPortalMode,
   PickupRequestStatus,
   InviteLeadStatus,
   ShippingDirection,

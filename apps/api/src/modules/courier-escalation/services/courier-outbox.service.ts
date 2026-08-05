@@ -58,32 +58,24 @@ export function classifyDispatchError(err: unknown): CourierDispatchErrorClass {
   const code = (e?.code ?? '').toUpperCase();
   const message = (e?.message ?? '').toLowerCase();
 
-  if (
-    ['ENOTFOUND', 'ECONNREFUSED', 'EAI_AGAIN', 'ECONNRESET', 'EPROTO', 'CERT_HAS_EXPIRED'].includes(
-      code,
-    )
-  ) {
-    // ECONNRESET is a judgement call: it can happen mid-response, so a
-    // reset MIGHT have landed.
-    //
-    // TODO(reclassify-on-readback): move ECONNRESET to AMBIGUOUS the
-    // moment `CourierSupportAdapter.capabilities().getThread` is true.
-    //
-    // The current classification is only defensible BECAUSE there is no
-    // read-back: with `getThread` unsupported, an AMBIGUOUS item is
-    // stranded indefinitely — the reconciler cannot decide it and no
-    // human can either. So the lesser evil is to treat a reset as never
-    // having arrived.
-    //
-    // Once a read-back exists that reasoning REVERSES, and not
-    // marginally: stranding an item for one reconciler cycle costs a
-    // short delay, while a duplicate lands permanently in a thread the
-    // customer reads and is invisible to us. Written as a condition
-    // rather than a note to self, because "revisit later" is the kind of
-    // comment that outlives the thing it was waiting for.
+  if (['ENOTFOUND', 'ECONNREFUSED', 'EAI_AGAIN', 'EPROTO', 'CERT_HAS_EXPIRED'].includes(code)) {
+    // ECONNRESET is DELIBERATELY ABSENT from this list — see below.
     return CourierDispatchErrorClass.PRE_DISPATCH;
   }
   if (e?.status === 401 || e?.status === 403) return CourierDispatchErrorClass.PRE_DISPATCH;
+
+  // ECONNRESET is AMBIGUOUS as of 2026-08-06, moved from PRE_DISPATCH on
+  // exactly the condition its TODO named: the portal channel makes
+  // `capabilities().getThread` true, so a read-back now exists.
+  //
+  // A reset can occur mid-response, so the request MAY have been
+  // processed. While there was no read-back, calling it pre-dispatch was
+  // the lesser evil: an AMBIGUOUS item would have been stranded forever
+  // because neither the reconciler nor a human could decide it. With a
+  // read-back the trade REVERSES and not marginally — stranding costs one
+  // reconciler cycle, while a duplicate lands permanently in a thread the
+  // customer reads and is invisible to us.
+  if (code === 'ECONNRESET') return CourierDispatchErrorClass.AMBIGUOUS;
   if (typeof e?.status === 'number' && e.status >= 500) return CourierDispatchErrorClass.AMBIGUOUS;
   if (code === 'ETIMEDOUT' || e?.name === 'AbortError' || message.includes('timeout')) {
     return CourierDispatchErrorClass.AMBIGUOUS;

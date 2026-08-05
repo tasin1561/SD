@@ -538,6 +538,15 @@ const systemSettings: SystemSettingSeed[] = [
     overrideMaxInt: 168,
   },
   {
+    key: 'courier.portal_canary_awb',
+    category: 'courier',
+    valueType: SettingValueType.STRING,
+    valueString: '',
+    displayName: 'Portal Canary AWB',
+    description:
+      'An AWB WE OWN, which the nightly portal canary raises and resolves tickets against. EMPTY by default and deliberately not guessed: a canary pointed at a real customer’s shipment would raise and close support tickets on a parcel somebody is waiting for, which is worse than having no canary. The canary refuses to run until this is set.',
+  },
+  {
     key: 'ops.alert_email',
     category: 'ops',
     valueType: SettingValueType.STRING,
@@ -1884,6 +1893,24 @@ function autoHtmlFromText(subject: string, body: string): string {
 // facing templates additionally seed Hindi variants (deferred until
 // the customer apps land).
 const notificationTemplates: TemplateSeed[] = [
+  {
+    code: 'ops.courier_portal_challenge.email',
+    name: 'Courier portal challenge — a human must sign in',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STAFF,
+    subject: 'Delhivery portal is asking for a {{ challenge }} — automation is frozen',
+    bodyTemplate:
+      'The portal automation hit a {{ challenge }} challenge at {{ url }} and STOPPED. Nothing has been retried, and nothing will be: retrying a challenge in a loop is indistinguishable from an attack and would cost us the account.\n\nThe portal write channel is paused for 24 hours. Sign in to one.delhivery.com by hand, complete the challenge, then resume the channel from Admin → Courier escalation.\n\nThe ops queue is unaffected — humans can still clear it.',
+  },
+  {
+    code: 'ops.courier_taxonomy_changed.email',
+    name: 'Delhivery issue-category taxonomy changed',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STAFF,
+    subject: 'Delhivery issue categories changed ({{ created }} new, {{ changed }} re-worded)',
+    bodyTemplate:
+      'The nightly taxonomy fetch found changes.\n\nNew: {{ created }}\nRe-worded: {{ changed }}\nNo longer offered: {{ disappeared }}\n\nA NEW category is not on the auto list and cannot be until someone decides about it — but it may be the one your sellers now need. A category that DISAPPEARED is worth a look: if it carried a human-only lock, that lock has stopped being exercised.',
+  },
   {
     code: 'ops.courier_mode_change_code.email',
     name: 'Courier write-mode change — confirmation code',

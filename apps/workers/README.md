@@ -1,51 +1,116 @@
 # @skydrop/workers
 
-BullMQ workers process for Skydrop.
+Two processes live here, and they are not the same shape.
 
-This package is a **thin pm2 entry-point wrapper** — the actual code
-lives in [`apps/api/src/workers-main.ts`](../api/src/workers-main.ts).
-The reasoning:
+**Neither is deployed today.** pm2 on the droplet runs `skydrop-api`,
+`skydrop-admin`, `skydrop-seller` and `skydrop-track` — nothing else — so
+everything below is code that exists and does not run.
 
-- BullMQ workers are registered as NestJS providers inside the same
-  `AppModule` that `apps/api` uses. Re-implementing the module wiring
-  in a second package would invite drift.
-- Compiling apps/api once produces `dist/main.js` AND
-  `dist/workers-main.js` side-by-side. apps/workers just runs the
-  second one.
+---
 
-## What runs here
+## `start` — the BullMQ workers
 
-Every `OnApplicationBootstrap` hook + every BullMQ `Worker(...)`
-registered in any module under `apps/api/src/modules` — currently:
+```
+node ../api/dist/workers-main.js
+```
 
-- `email` — Resend dispatch
-- `image-thumbnail` / `image-orphan-cleanup` — Sharp processing
-- `csv-import-processor` — catalog CSV ingest
-- `reservation-cleanup` — phase-1 reservation expiry
-- `adjustment-executor` — threshold-gated stock adjustments
-- `order-csv-import` — order CSV ingest
-- `call-assignment-expiration` — CC-7 idempotent timer
-- `warehouse-pick-expiration` — WMS-5 idempotent timer
-- `courier-awb-generation` — CUR-2 per-manifest AWB saga
-- `tracking-webhook-processing` — M10 webhook saga
-- Notifications listener (M11) — lifecycle event subscriber
+Boots the **same `AppModule`** as the API, without an HTTP listener. That
+is deliberate: the BullMQ workers are registered as providers inside that
+module, and re-implementing the wiring in a second package would invite
+drift. Compiling apps/api once produces `dist/main.js` and
+`dist/workers-main.js` side by side.
 
-## Distribution semantics
+### Enabling it means disabling them in the API
 
-BullMQ distributes jobs across all live workers regardless of process.
-Running this AND `@skydrop/api` (which still hosts workers in-process)
-gives 2× parallel consumption per queue — fine, no double-execution
-risk because BullMQ uses `BRPOP` semantics.
+Every worker currently starts inside `skydrop-api` under SCALE-1's
+`WORKERS_ENABLED` (env, default **true**), checked via
+`WorkerRoleService.shouldStart()`.
 
-For Phase-1B horizontal scaling: introduce `WORKERS_DISABLED=true` on
-the api process and run workers only here.
+**Deploying this process without setting `WORKERS_ENABLED=false` on the
+API gives every cron two owners.** BullMQ's `BRPOP` semantics stop two
+workers from processing the same *job*, but they do not stop two
+*processes* from each registering the same repeatable schedule and each
+firing it — the NDR runner would submit every eligible parcel to Delhivery
+twice.
+
+(An earlier version of this file claimed 2× consumption was "fine, no
+double-execution risk", and named the flag `WORKERS_DISABLED`. Both were
+wrong: the flag is `WORKERS_ENABLED`, and the risk is real for scheduled
+work.)
+
+---
+
+## `start:portal` — the courier portal worker
+
+```
+node ../api/dist/portal-worker-main.js
+```
+
+Boots `CourierPortalModule` and **nothing else** — its own small root
+module of Config + Prisma + Redis + the portal. It does **not** boot
+`AppModule`.
+
+### Why it is a separate process
+
+A long-lived Chromium must not run inside the process serving customer
+HTTP:
+
+- it holds a **decrypted portal login** for the life of the process;
+- it is the heaviest thing in the system by memory;
+- if it crashes it must not take the API down.
+
+`CourierPortalModule` is unreachable from `AppModule`, so the API never
+constructs a browser, never loads Playwright and never decrypts a portal
+credential. `apps/api/test/unit/portal-worker-isolation.spec.ts` asserts
+that by walking the real import graph — the failure it guards against is
+somebody adding the module to `AppModule` "to expose a trigger endpoint",
+which would compile, boot, and pass every other test.
+
+### Why it does NOT boot AppModule
+
+`workers-main.js` is right to: those workers *are* the application's
+background half. This process is not. Booting `AppModule` here would hand
+it every other queue and cron as well — the two-owners problem again, and
+this time inside a process whose whole purpose is to stay alive for hours.
+
+### Before starting it
+
+1. **Chromium binaries** — `pnpm --filter @skydrop/api exec playwright
+   install chromium` on the host. The npm package does not include the
+   browser.
+2. **`PORTAL_STATE_DIR`** — where the logged-in `storageState` is kept
+   between runs (default `/home/skydrop/portal-state`). Must be writable,
+   and should **not** be in a backup archive: it is a live session.
+3. **The credential** — `courier_credentials` needs `portalUsername` and
+   `portalPassword` for `delhivery` / PRODUCTION. Env is not an option:
+   CUR-1 governs courier secrets and there is no second path.
+4. **`courier.portal_canary_awb`** — an AWB **we own**. The canary raises
+   and resolves tickets against it nightly; pointed at a real customer's
+   shipment, that is worse than having no canary at all.
+
+### What it does once started
+
+`portal_mode` defaults to **SHADOW**, and shadow is not a no-op: the
+worker logs in, navigates to the real ticket, reads the real thread,
+resolves the real category and composes the action — then stops before the
+click and records what it would have done in `courier_portal_runs`.
+
+That is the point. Every selector and every eligibility read is exercised
+against production before anything is written into a thread a customer
+reads. Going LIVE is a separate, 2FA'd, audited change, and it is
+independent of `write_mode` — so shadow runs while humans keep clearing
+the ops queue.
+
+---
 
 ## Scripts
 
-| Command          | What                                               |
-| ---------------- | -------------------------------------------------- |
-| `pnpm start`     | Run `node ../api/dist/workers-main.js`             |
-| `pnpm dev`       | Same with source maps                              |
+| Command             | What                                          |
+| ------------------- | --------------------------------------------- |
+| `pnpm start`        | BullMQ workers (`workers-main.js`)            |
+| `pnpm dev`          | Same, with source maps                        |
+| `pnpm start:portal` | Portal worker (`portal-worker-main.js`)       |
+| `pnpm dev:portal`   | Same, with source maps                        |
 
-Build is delegated to `@skydrop/api`. Ensure `pnpm --filter @skydrop/api build`
-ran before `pnpm --filter @skydrop/workers start`.
+Build is delegated to `@skydrop/api`; run
+`pnpm --filter @skydrop/api build` first.

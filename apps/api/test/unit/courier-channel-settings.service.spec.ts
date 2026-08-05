@@ -10,7 +10,18 @@ import { CourierOutboxReconcilerService } from '../../src/modules/courier-escala
  * locked categories are enforced rather than documented.
  */
 
-function make(row: Partial<Record<string, unknown>> = {}) {
+/** A taxonomy row as the portal fetcher would have persisted it. */
+const cat = (
+  externalId: string,
+  label: string,
+  isHumanOnly = false,
+): { externalId: string; label: string; isHumanOnly: boolean } => ({
+  externalId,
+  label,
+  isHumanOnly,
+});
+
+function make(row: Partial<Record<string, unknown>> = {}, taxonomy: unknown[] = []) {
   const updates: Record<string, unknown>[] = [];
   const base = {
     courierCode: 'delhivery',
@@ -24,6 +35,10 @@ function make(row: Partial<Record<string, unknown>> = {}) {
   };
   const prisma = {
     client: {
+      // The taxonomy is what the human-only lock is enforced FROM as of
+      // Phase 5 — empty means "never fetched", which is why the blanket
+      // refusal keys on it.
+      courierIssueCategory: { findMany: jest.fn().mockResolvedValue(taxonomy) },
       courierChannelSettings: {
         upsert: jest.fn().mockResolvedValue(base),
         update: jest.fn().mockImplementation((a: { data: Record<string, unknown> }) => {
@@ -104,27 +119,70 @@ describe('mayAutoAct fails closed', () => {
   });
 });
 
-describe('the human-only lock', () => {
-  it('an EMPTY auto list is always allowed — the shipped state', () => {
+describe('the human-only lock, before the taxonomy exists', () => {
+  it('an EMPTY auto list is always allowed — the shipped state', async () => {
     const { svc } = make();
-    expect(() => svc.assertAutoCategoriesAllowed([])).not.toThrow();
+    await expect(svc.assertAutoCategoriesAllowed([])).resolves.toBeUndefined();
   });
 
-  it('ANY non-empty list is refused while the taxonomy is unfetched', () => {
-    // Blunter than "reject the two locked IDs" on purpose: we do not KNOW
-    // the locked IDs, so we cannot tell whether a supplied string is one.
-    // Accepting an unverifiable list would leave the lock existing only
-    // in a comment.
-    const { svc } = make();
-    expect(() => svc.assertAutoCategoriesAllowed(['anything'])).toThrow(
-      /TAXONOMY_NOT_FETCHED|taxonomy/i,
+  it('ANY non-empty list is refused while the taxonomy is unfetched', async () => {
+    // Blunter than "reject the two locked IDs" on purpose: with no
+    // taxonomy we cannot tell whether a supplied string IS one of them,
+    // and accepting an unverifiable list would leave the lock existing
+    // only in a comment.
+    const { svc } = make({}, []);
+    await expect(svc.assertAutoCategoriesAllowed(['anything'])).rejects.toThrow(/taxonomy/i);
+  });
+
+  it('the hard-coded constant is empty — superseded by the table', () => {
+    // Kept only so imports do not break. The authoritative answer is a
+    // query now, because the IDs are Delhivery's and a source list would
+    // need editing every time they add a category.
+    expect(HUMAN_ONLY_CATEGORY_IDS).toHaveLength(0);
+  });
+});
+
+describe('the human-only lock, once the taxonomy IS fetched', () => {
+  const taxonomy = [
+    cat('cat-reattempt', 'Reattempt / Delay'),
+    cat('cat-claims', 'Claims / Finance', true),
+    cat('cat-vas', 'Protect VAS', true),
+  ];
+
+  it('allows a category that is known and not locked', async () => {
+    // What Phase 5 unblocks: before the fetch this was refused along with
+    // everything else, including the eight that were always safe.
+    const { svc } = make({}, taxonomy);
+    await expect(svc.assertAutoCategoriesAllowed(['cat-reattempt'])).resolves.toBeUndefined();
+  });
+
+  it('refuses Claims/Finance BY ID', async () => {
+    const { svc } = make({}, taxonomy);
+    await expect(svc.assertAutoCategoriesAllowed(['cat-claims'])).rejects.toThrow(/human-only/i);
+  });
+
+  it('refuses Protect VAS by id too', async () => {
+    const { svc } = make({}, taxonomy);
+    await expect(svc.assertAutoCategoriesAllowed(['cat-vas'])).rejects.toThrow(/human-only/i);
+  });
+
+  it('refuses an id that is not in the taxonomy at all', async () => {
+    // An unknown category cannot be shown NOT to be Claims/Finance, so it
+    // cannot be automated. Refusing is the only answer without a guess.
+    const { svc } = make({}, taxonomy);
+    await expect(svc.assertAutoCategoriesAllowed(['cat-invented'])).rejects.toThrow(
+      /unknown|not in/i,
     );
   });
 
-  it('the locked-ID list is empty, and that is WHY the blanket refusal exists', () => {
-    // If someone populates this from the real taxonomy, the refusal
-    // above must be relaxed to a per-ID check in the same change.
-    expect(HUMAN_ONLY_CATEGORY_IDS).toHaveLength(0);
+  it('mayAutoAct re-checks the lock at PICKUP, not only at write time', async () => {
+    // A category can be flagged human-only by a re-fetch AFTER it was
+    // added to the auto list. The later fact has to win.
+    const { svc } = make(
+      { writeMode: CourierWriteMode.AUTO, autoCategories: ['cat-claims'] },
+      taxonomy,
+    );
+    expect(await svc.mayAutoAct('cat-claims')).toBe(false);
   });
 });
 

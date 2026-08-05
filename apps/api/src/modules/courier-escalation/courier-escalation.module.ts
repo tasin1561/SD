@@ -37,7 +37,17 @@ import { InboundEmailAuthService } from './services/inbound-email-auth.service';
  *
  * An escalation HANGS OFF a Ticket (R7) — ops works one queue, not two.
  *
- * A LEAF module: nothing imports it, it exports nothing.
+ * ── NO LONGER A LEAF ─────────────────────────────────────────────────
+ * It was, through Phase 4. Phase 5's portal worker is a SECOND consumer
+ * of the outbox — a different channel for the same messages — so the two
+ * services it needs are exported: the channel settings (mode, pause,
+ * portal mode) and the outbox itself (claim, confirm, fail).
+ *
+ * Deliberately those TWO and no more. The ops-queue service, the mode
+ * challenge and the reconciler stay internal: they are the console's and
+ * the API's business, and a portal worker that could raise a 2FA
+ * challenge or serve a queue page would be a portal worker doing
+ * somebody else's job.
  */
 @Module({
   imports: [
@@ -60,5 +70,6 @@ import { InboundEmailAuthService } from './services/inbound-email-auth.service';
     CourierModeChallengeService,
     CourierOutboxQueue,
   ],
+  exports: [CourierChannelSettingsService, CourierOutboxService],
 })
 export class CourierEscalationModule {}

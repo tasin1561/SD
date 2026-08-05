@@ -101,3 +101,25 @@ describe('AppModule', () => {
     await moduleRef.close();
   }, 60_000);
 });
+
+describe('PortalWorkerRootModule', () => {
+  it('resolves every provider — the portal worker can actually start', async () => {
+    // AppModule deliberately cannot reach the portal, so the test above
+    // says NOTHING about this graph. Without this, the portal worker would
+    // be the one part of the system with no DI check — the exact shape of
+    // the defect CI caught on 2026-08-06, in the exact place the isolation
+    // rule guarantees no other gate will look.
+    //
+    // Importing the entry module does NOT start a browser: Chromium is
+    // launched lazily inside PortalSessionService, and compile() never
+    // runs onModuleInit.
+    const { Test } = await import('@nestjs/testing');
+    const { PortalWorkerRootModule } = await import('../../src/portal-worker-main');
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [PortalWorkerRootModule],
+    }).compile();
+    expect(moduleRef).toBeDefined();
+    await moduleRef.close();
+  }, 60_000);
+});

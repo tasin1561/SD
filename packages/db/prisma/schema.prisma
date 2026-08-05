@@ -1875,6 +1875,11 @@ model CourierChannelSettings {
   /// enforced in the service, not by hoping.
   autoCategories String[]         @default([]) @map("auto_categories")
 
+  /// How far the PORTAL channel may go. Separate from `writeMode` so
+  /// SHADOW can run under MANUAL: the ops queue keeps serving humans
+  /// while the worker learns the portal against the same real items.
+  portalMode CourierPortalMode @default(SHADOW) @map("portal_mode")
+
   /// Health, not intent. Null = not paused.
   pausedUntil DateTime? @map("paused_until") @db.Timestamptz
   pauseReason String?   @map("pause_reason") @db.Text
@@ -1914,6 +1919,97 @@ model CourierModeChallenge {
 
   @@index([expiresAt])
   @@map("courier_mode_challenges")
+}
+
+/// How far the portal channel is allowed to go, independent of write_mode.
+///
+/// SHADOW is not a disabled state — the worker runs, logs in, navigates,
+/// resolves the category, composes the action and records exactly what it
+/// WOULD have done. It just never clicks the last button. That is the
+/// only way to find out whether browser automation understands the portal
+/// before it touches a ticket a customer can see.
+enum CourierPortalMode {
+  /// Prepares and logs everything, executes nothing. The default.
+  SHADOW @map("shadow")
+  /// Executes.
+  LIVE   @map("live")
+
+  @@map("courier_portal_mode")
+}
+
+/// Delhivery's issue-category tree, as THEY define it.
+///
+/// ── WHY THIS TABLE IS THE POINT OF PHASE 5 ───────────────────────────
+/// The Claims/Finance and Protect VAS locks are specified to be enforced
+/// by category ID, and until now that was unenforceable: we had no IDs,
+/// so `assertAutoCategoriesAllowed` had to refuse ANY non-empty auto list
+/// as the only honest substitute. The portal is the first channel that
+/// can READ the taxonomy, which is what turns those locks from a comment
+/// into a predicate.
+///
+/// ── IDS, NEVER LABELS ────────────────────────────────────────────────
+/// `externalId` is the key on everything. Labels get re-worded and
+/// localised — "Shipment not delivered (need POD)/Fake remark" is one
+/// edit away from not matching a string comparison, and that edit would
+/// silently unlock a category rather than fail loudly.
+model CourierIssueCategory {
+  id               String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courierCode      String  @map("courier_code")
+  /// THEIR id. The only thing anything matches on.
+  externalId       String  @map("external_id")
+  /// THEIR label, for humans reading the console. Never matched on.
+  label            String
+  /// Parent's externalId, for the subcategory tree.
+  parentExternalId String? @map("parent_external_id")
+
+  /// True when this category may never be actioned unattended. Derived
+  /// from the label at fetch time (see the fetcher) and then FROZEN —
+  /// a later re-fetch does not clear it, because the safe direction for a
+  /// lock is sticky.
+  isHumanOnly Boolean @default(false) @map("is_human_only")
+
+  /// When we last saw it in a fetch. A category that stops appearing is
+  /// NOT deleted — it is left with a stale `lastSeenAt` so a disappearing
+  /// category is visible rather than silently gone.
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at") @db.Timestamptz
+  firstSeenAt DateTime @default(now()) @map("first_seen_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([courierCode, externalId])
+  @@index([courierCode, isHumanOnly])
+  @@map("courier_issue_categories")
+}
+
+/// One portal automation run, and what it did or would have done.
+///
+/// Separate from `courier_outbox_items` because an outbox item is a
+/// MESSAGE and this is an ATTEMPT: a single item can be shadowed a dozen
+/// times before it is ever executed, and collapsing the two would lose
+/// every shadow observation the moment the item was finally sent.
+model CourierPortalRun {
+  id           String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// Null for a canary or a taxonomy fetch — those act on no item.
+  outboxItemId String?           @map("outbox_item_id") @db.Uuid
+  kind         String
+  mode         CourierPortalMode
+  /// SHADOW / OK / ALREADY_PRESENT / NOT_ELIGIBLE / TASK_PENDING /
+  /// CHALLENGE / FAILED. A string rather than an enum because the portal
+  /// will teach us outcomes we have not thought of, and a migration per
+  /// discovery is friction in exactly the wrong place.
+  outcome      String
+  /// What it did, or in SHADOW what it would have done. Never the
+  /// customer-visible body — that lives on the outbox item.
+  detail       String?           @db.Text
+  /// Screenshot path when a challenge or failure needs a human to look.
+  artifactPath String?           @map("artifact_path")
+  startedAt    DateTime          @default(now()) @map("started_at") @db.Timestamptz
+  endedAt      DateTime?         @map("ended_at") @db.Timestamptz
+
+  @@index([outboxItemId])
+  @@index([kind, startedAt])
+  @@map("courier_portal_runs")
 }
 
 /// The outcome of one NDR action we asked Delhivery to perform.

@@ -65,7 +65,7 @@ export class CourierModeChallengeService {
     }
     // Validate BEFORE mailing anything: a code for a change that will be
     // refused at confirm time is a wasted round trip and a confusing one.
-    this.settings.assertAutoCategoriesAllowed(input.autoCategories);
+    await this.settings.assertAutoCategoriesAllowed(input.autoCategories, courierCode);
 
     const staff = await this.prisma.client.staffUser.findUnique({
       where: { id: input.staffId },
