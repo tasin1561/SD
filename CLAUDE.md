@@ -826,6 +826,23 @@ exactly what you cannot know in advance, which is the whole reason the change
 needed a gate. A subset run is only ever a fast inner loop, never the thing you
 commit on.
 
+**`pnpm gate` can be OOM-killed on the dev machine (exit 137). That is a local
+memory constraint, NOT a failure — and NOT something to optimise (2026-08-06).**
+The composed script runs typecheck, lint and ~1770 jest tests in one process
+tree; on a machine with less headroom the kernel kills it. CI runs the same
+script on a dedicated runner and passes.
+
+**The workaround is to run the four stages individually** — `npx prettier
+--check .`, `pnpm typecheck`, `pnpm lint`, then `npx jest --config
+jest.config.ts` in `apps/api` plus `npx vitest run` in apps/admin, apps/seller,
+packages/api-client and packages/auth. That is the SAME coverage, just not in
+one process.
+
+**Do not "fix" this by capping jest workers or sharding the gate.** It would
+slow CI — which has no problem — to accommodate one laptop, and a slower gate
+is a gate people skip. An exit 137 with no test failures above it is the OOM,
+not a red suite; check for `Tests:` output before assuming otherwise.
+
 **A local `tsc --noEmit` is NOT a gate on its own (2026-07-27).** `apps/api` typechecks incrementally, and a stale `tsconfig.build.tsbuildinfo` will happily skip re-checking a newly-added file: commit `2347b29` was reported as passing typecheck locally and CI then found eight errors in a spec written minutes earlier. **Delete the `.tsbuildinfo` before the pre-commit typecheck**, or treat CI as the only typecheck that counts. Same failure class as the e2e gap above — a gate that did not run looks identical to a gate that passed.
 
 Below: remaining frontends + module-level fast-follows + Phase-1B prerequisites.
