@@ -26,6 +26,7 @@ function make(ctx: Ctx = {}) {
     return Promise.resolve(ctx.status ?? { complete: false, success: null, raw: {} });
   });
   const open = jest.fn().mockResolvedValue({ id: 'ticket-1' });
+  const openForTicket = jest.fn().mockResolvedValue({ id: 'esc-1', created: true });
 
   const prisma = {
     client: {
@@ -63,9 +64,13 @@ function make(ctx: Ctx = {}) {
     { pollDeadlineMinutes: jest.fn().mockResolvedValue(240) } as never,
     { checkStatus } as never,
     { open } as never,
+    // The escalation service — the entry point that was missing until
+    // 2026-08-06. A failed NDR request now BEGINS a courier conversation
+    // rather than only opening a ticket nothing could be said about.
+    { openForTicket } as never,
     { log: jest.fn().mockResolvedValue(undefined) } as never,
   );
-  return { svc, checkStatus, open, updates };
+  return { svc, checkStatus, open, openForTicket, updates };
 }
 
 const settledTo = (updates: { data: Record<string, unknown> }[]): unknown[] =>

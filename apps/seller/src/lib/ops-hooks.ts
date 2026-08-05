@@ -261,3 +261,60 @@ export function useUnitDiscrepancies(warehouseId?: string): UseQueryResult<UnitD
       ),
   });
 }
+
+// ───────── Courier conversation (the escalation thread) ─────────
+
+export interface CourierThreadMessage {
+  readonly id: string;
+  readonly direction: 'INBOUND' | 'OUTBOUND';
+  readonly channel: string;
+  /** VERBATIM — the courier's words, or yours. Never rewritten. */
+  readonly body: string;
+  readonly occurredAt: string;
+  readonly state: string | null;
+  readonly templateCode: string | null;
+  readonly needsReview: boolean;
+}
+
+export interface CourierThread {
+  readonly id: string;
+  readonly ticketId: string;
+  readonly externalTicketId: string | null;
+  readonly awbNumber: string | null;
+  readonly state: string | null;
+  readonly lastMessageAt: string | null;
+  readonly needsReviewAt: string | null;
+  readonly pendingOutbound: number;
+  readonly messages: readonly CourierThreadMessage[];
+}
+
+/** The conversation for a ticket, or null when none has been opened. */
+export function useCourierThreadForTicket(ticketId: string): UseQueryResult<CourierThread | null> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['courier-thread', ticketId],
+    queryFn: () =>
+      client.request<CourierThread | null>(`/api/seller/courier-escalations/by-ticket/${ticketId}`),
+    // A courier reply can arrive at any time and the seller is often
+    // sitting on this screen waiting for one.
+    refetchInterval: 30_000,
+  });
+}
+
+export function useReplyToCourier(): UseMutationResult<
+  { messageId: string; outboxItemId: string | null },
+  Error,
+  { escalationId: string; body: string; ticketId: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ escalationId, body }) =>
+      client.request<{ messageId: string; outboxItemId: string | null }>(
+        `/api/seller/courier-escalations/${escalationId}/reply`,
+        { method: 'POST', body: { body } },
+      ),
+    onSuccess: (_r, vars) =>
+      void qc.invalidateQueries({ queryKey: ['courier-thread', vars.ticketId] }),
+  });
+}

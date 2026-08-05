@@ -5,6 +5,7 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { courierActor } from '../../courier-shared/services/courier-credential.service';
 import { DelhiveryNdrService } from '../../courier-delhivery/services/delhivery-ndr.service';
 import { TicketService } from '../../ticket/services/ticket.service';
+import { CourierEscalationService } from '../../courier-escalation/services/courier-escalation.service';
 import { NdrSettingsService } from './ndr-settings.service';
 
 const JOB = 'ndr-upl-poller';
@@ -54,6 +55,7 @@ export class NdrUplPollerService {
     private readonly settings: NdrSettingsService,
     private readonly ndr: DelhiveryNdrService,
     private readonly tickets: TicketService,
+    private readonly escalations: CourierEscalationService,
     private readonly audit: AuditLogService,
   ) {}
 
@@ -232,6 +234,18 @@ export class NdrUplPollerService {
       await this.prisma.client.ndrActionRequest.updateMany({
         where: { shipmentId, status: NdrRequestStatus.FAILED, ticketId: null },
         data: { status: NdrRequestStatus.ESCALATED, ticketId: ticket.id },
+      });
+
+      // BEGIN THE COURIER CONVERSATION. Without this the ticket exists and
+      // nothing can ever be said to Delhivery about it: the read pipeline
+      // would answer NO_ESCALATION for every reply and the outbox would
+      // have nothing to deliver. Idempotent on ticketId, so escalating the
+      // same shipment on a second night joins the same thread rather than
+      // splitting the conversation in two.
+      await this.escalations.openForTicket({
+        ticketId: ticket.id,
+        awbNumber,
+        courierCode: shipment?.courierCode ?? 'delhivery',
       });
       return true;
     } catch (err) {

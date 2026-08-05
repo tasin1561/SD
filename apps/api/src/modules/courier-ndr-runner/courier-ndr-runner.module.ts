@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { CourierDelhiveryModule } from '../courier-delhivery/courier-delhivery.module';
+import { CourierEscalationModule } from '../courier-escalation/courier-escalation.module';
 import { CourierSharedModule } from '../courier-shared/courier-shared.module';
 import { EmailModule } from '../email/email.module';
 import { TicketModule } from '../ticket/ticket.module';
@@ -45,6 +46,7 @@ import { NdrUplPollerService } from './services/ndr-upl-poller.service';
     CourierSharedModule, // NdrAttemptContextService — the single attempt-count seam
     CourierDelhiveryModule, // the adapter: NDR, tracking fetch, write guard
     TicketModule, // the escalation path for a failed request
+    CourierEscalationModule, // opens the courier conversation on that ticket
     EmailModule, // the M11 substrate the reconciliation alert goes through
     AuthCommonModule, // audit
   ],

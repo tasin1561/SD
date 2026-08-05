@@ -1056,6 +1056,8 @@ export interface CourierChannelView {
   readonly settings: {
     readonly courierCode: string;
     readonly writeMode: 'MANUAL' | 'SUPERVISED' | 'AUTO';
+    /** The browser tier's own switch — separate from writeMode by design. */
+    readonly portalMode: 'SHADOW' | 'LIVE';
     readonly autoCategories: readonly string[];
     readonly pausedUntil: string | null;
     readonly pauseReason: string | null;
@@ -1194,5 +1196,201 @@ export function useResumeCourierChannel(): UseMutationResult<
         { method: 'POST' },
       ),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['courier-escalation'] }),
+  });
+}
+
+// ── courier conversations, the pattern library, and what the portal did ──
+//
+// Every one of these reads a table that, until these hooks existed, had a
+// writer and no reader. A shadow portal run that nobody can look at is not
+// a dry run; it is a log file on a server.
+
+export interface CourierThreadMessage {
+  readonly id: string;
+  readonly direction: 'INBOUND' | 'OUTBOUND';
+  readonly channel: string;
+  /** VERBATIM. Never rewritten, never translated, never summarised. */
+  readonly body: string;
+  readonly occurredAt: string;
+  readonly state: string | null;
+  readonly templateCode: string | null;
+  readonly needsReview: boolean;
+}
+
+export interface CourierThread {
+  readonly id: string;
+  readonly ticketId: string;
+  readonly externalTicketId: string | null;
+  readonly awbNumber: string | null;
+  readonly state: string | null;
+  readonly lastMessageAt: string | null;
+  readonly needsReviewAt: string | null;
+  readonly pendingOutbound: number;
+  readonly messages: readonly CourierThreadMessage[];
+}
+
+export interface CourierEscalationRow {
+  readonly id: string;
+  readonly awbNumber: string | null;
+  readonly externalTicketId: string | null;
+  readonly state: string | null;
+  readonly lastMessageAt: string | null;
+  readonly needsReviewAt: string | null;
+  readonly sellerName: string | null;
+  readonly messageCount: number;
+}
+
+export interface CourierTemplateCandidate {
+  readonly id: string;
+  readonly body: string;
+  readonly seenCount: number;
+  readonly status: string;
+  readonly suggestedRegex: string | null;
+  readonly suggestedState: string | null;
+  readonly firstSeenAt: string;
+  readonly lastSeenAt: string;
+}
+
+export interface CourierTemplate {
+  readonly id: string;
+  readonly code: string;
+  readonly pattern: string;
+  readonly state: string;
+  readonly action: string | null;
+  readonly priority: number;
+  readonly isActive: boolean;
+}
+
+export interface CourierPortalRun {
+  readonly id: string;
+  readonly kind: string;
+  readonly mode: string;
+  readonly outcome: string;
+  readonly detail: string | null;
+  readonly startedAt: string;
+}
+
+export interface CourierTaxonomyRow {
+  readonly externalId: string;
+  readonly label: string;
+  readonly isHumanOnly: boolean;
+  readonly lastSeenAt: string;
+}
+
+export function useCourierEscalations(): UseQueryResult<CourierEscalationRow[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['courier-escalation', 'escalations'],
+    queryFn: () =>
+      client.request<CourierEscalationRow[]>('/api/admin/courier-escalation/escalations'),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useCourierThread(escalationId: string | null): UseQueryResult<CourierThread> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['courier-escalation', 'thread', escalationId],
+    queryFn: () =>
+      client.request<CourierThread>(
+        `/api/admin/courier-escalation/escalations/${escalationId ?? ''}`,
+      ),
+    enabled: escalationId !== null,
+  });
+}
+
+export function useReplyToCourierAsStaff(): UseMutationResult<
+  { messageId: string; outboxItemId: string | null },
+  Error,
+  { escalationId: string; body: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ escalationId, body }) =>
+      client.request<{ messageId: string; outboxItemId: string | null }>(
+        `/api/admin/courier-escalation/escalations/${escalationId}/reply`,
+        { method: 'POST', body: { body } },
+      ),
+    // The reply lands in the thread AND in the outbox — both views move.
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['courier-escalation'] }),
+  });
+}
+
+export function useCourierTemplateCandidates(): UseQueryResult<CourierTemplateCandidate[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['courier-escalation', 'template-candidates'],
+    queryFn: () =>
+      client.request<CourierTemplateCandidate[]>(
+        '/api/admin/courier-escalation/template-candidates',
+      ),
+  });
+}
+
+export function useCourierTemplates(): UseQueryResult<CourierTemplate[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['courier-escalation', 'templates'],
+    queryFn: () => client.request<CourierTemplate[]>('/api/admin/courier-escalation/templates'),
+  });
+}
+
+export function usePromoteCandidate(): UseMutationResult<
+  CourierTemplate,
+  Error,
+  {
+    candidateId: string;
+    code: string;
+    pattern: string;
+    state: string;
+    action?: string;
+    priority?: number;
+    notes?: string;
+  }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ candidateId, ...body }) =>
+      client.request<CourierTemplate>(
+        `/api/admin/courier-escalation/template-candidates/${candidateId}/promote`,
+        { method: 'POST', body },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['courier-escalation'] }),
+  });
+}
+
+export function useRejectCandidate(): UseMutationResult<
+  { ok: true },
+  Error,
+  { candidateId: string; notes?: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ candidateId, notes }) =>
+      client.request<{ ok: true }>(
+        `/api/admin/courier-escalation/template-candidates/${candidateId}/reject`,
+        { method: 'POST', body: notes === undefined ? {} : { notes } },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['courier-escalation'] }),
+  });
+}
+
+export function useCourierPortalRuns(): UseQueryResult<CourierPortalRun[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['courier-escalation', 'portal-runs'],
+    queryFn: () => client.request<CourierPortalRun[]>('/api/admin/courier-escalation/portal-runs'),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useCourierTaxonomy(): UseQueryResult<CourierTaxonomyRow[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['courier-escalation', 'taxonomy'],
+    queryFn: () => client.request<CourierTaxonomyRow[]>('/api/admin/courier-escalation/taxonomy'),
   });
 }

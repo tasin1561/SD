@@ -35,6 +35,7 @@ import {
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import { EscalationTabs } from './escalation-tabs';
 
 /**
  * The courier escalation console — the MANUAL consumer of the outbox.
@@ -95,6 +96,7 @@ export function CourierEscalationIndex(): ReactElement {
         title="Courier escalation"
         subtitle="Messages waiting to reach Delhivery, and the switch that decides who sends them."
       />
+      <EscalationTabs />
 
       {noWriteChannel ? (
         <Card>

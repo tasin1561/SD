@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
+import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
@@ -22,8 +23,20 @@ import {
   ListOutboxQueryDto,
   MarkSentDto,
   PauseChannelDto,
+  PostReplyDto,
+  PromoteCandidateDto,
+  RejectCandidateDto,
   RequestModeChangeDto,
 } from '../dto/courier-ops.dto';
+import {
+  CourierEscalationService,
+  type EscalationView,
+} from '../services/courier-escalation.service';
+import {
+  CourierTemplateReviewService,
+  type CandidateView,
+  type TemplateView,
+} from '../services/courier-template-review.service';
 import {
   CourierChannelSettingsService,
   HUMAN_ONLY_CATEGORY_LABELS,
@@ -68,6 +81,9 @@ export class AdminCourierEscalationController {
     private readonly challenges: CourierModeChallengeService,
     private readonly reconciler: CourierOutboxReconcilerService,
     private readonly adapter: DelhiverySupportAdapterService,
+    private readonly escalations: CourierEscalationService,
+    private readonly templates: CourierTemplateReviewService,
+    private readonly prisma: PrismaService,
   ) {}
 
   // ── the queue ───────────────────────────────────────────────────────
@@ -227,5 +243,172 @@ export class AdminCourierEscalationController {
   @ApiOperation({ summary: 'Clear the pause. The previously chosen mode comes back untouched.' })
   resume(@CurrentStaff() staff: AuthenticatedStaff): Promise<ChannelSettingsView> {
     return this.settings.resume({ staffId: staff.id });
+  }
+  // ── the conversation ────────────────────────────────────────────────
+
+  @Get('escalations')
+  @RequirePermissions('courier.ops.view')
+  @ApiOperation({
+    summary: 'Open courier conversations, most recently active first.',
+  })
+  async escalationList(): Promise<
+    readonly {
+      id: string;
+      awbNumber: string | null;
+      externalTicketId: string | null;
+      state: string | null;
+      lastMessageAt: Date | null;
+      needsReviewAt: Date | null;
+      sellerName: string | null;
+      messageCount: number;
+    }[]
+  > {
+    const rows = await this.prisma.client.courierEscalation.findMany({
+      orderBy: [{ needsReviewAt: 'desc' }, { lastMessageAt: 'desc' }],
+      take: 100,
+      select: {
+        id: true,
+        awbNumber: true,
+        externalTicketId: true,
+        state: true,
+        lastMessageAt: true,
+        needsReviewAt: true,
+        ticket: { select: { seller: { select: { companyName: true } } } },
+        _count: { select: { messages: true } },
+      },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      awbNumber: r.awbNumber,
+      externalTicketId: r.externalTicketId,
+      state: r.state,
+      lastMessageAt: r.lastMessageAt,
+      needsReviewAt: r.needsReviewAt,
+      sellerName: r.ticket.seller?.companyName ?? null,
+      messageCount: r._count.messages,
+    }));
+  }
+
+  @Get('escalations/:escalationId')
+  @RequirePermissions('courier.ops.view')
+  @ApiOperation({ summary: 'The full thread — verbatim, oldest first.' })
+  escalationThread(
+    @Param('escalationId', new ParseUUIDPipe({ version: '7' })) escalationId: string,
+  ): Promise<EscalationView> {
+    // No sellerId: an operator sees every conversation.
+    return this.escalations.thread(escalationId);
+  }
+
+  @Post('escalations/:escalationId/reply')
+  @HttpCode(HttpStatus.CREATED)
+  @RequirePermissions('courier.ops.write')
+  @ApiOperation({ summary: "Reply to the courier on the seller's behalf. Stored verbatim." })
+  escalationReply(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('escalationId', new ParseUUIDPipe({ version: '7' })) escalationId: string,
+    @Body() body: PostReplyDto,
+  ): Promise<{ messageId: string; outboxItemId: string | null }> {
+    return this.escalations.postReply({ escalationId, body: body.body, staffId: staff.id });
+  }
+
+  // ── the promotion queue ─────────────────────────────────────────────
+
+  @Get('template-candidates')
+  @RequirePermissions('courier.ops.view')
+  @ApiOperation({
+    summary:
+      'Messages the regex library could not classify, most-repeated first. This is how the library grows.',
+  })
+  candidates(): Promise<CandidateView[]> {
+    return this.templates.listCandidates();
+  }
+
+  @Get('templates')
+  @RequirePermissions('courier.ops.view')
+  @ApiOperation({ summary: 'The live pattern library, in match order.' })
+  templateList(): Promise<TemplateView[]> {
+    return this.templates.listTemplates();
+  }
+
+  @Post('template-candidates/:candidateId/promote')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('courier.ops.write')
+  @ApiOperation({
+    summary:
+      'Turn an unmatched message into a live pattern. The pattern must compile AND match the body it came from.',
+  })
+  promote(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('candidateId', new ParseUUIDPipe({ version: '7' })) candidateId: string,
+    @Body() body: PromoteCandidateDto,
+  ): Promise<TemplateView> {
+    return this.templates.promote({
+      candidateId,
+      code: body.code,
+      pattern: body.pattern,
+      state: body.state,
+      action: body.action ?? null,
+      ...(body.priority === undefined ? {} : { priority: body.priority }),
+      notes: body.notes ?? null,
+      staffId: staff.id,
+    });
+  }
+
+  @Post('template-candidates/:candidateId/reject')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('courier.ops.write')
+  @ApiOperation({ summary: 'Looked at, deliberately not promoted.' })
+  async rejectCandidate(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('candidateId', new ParseUUIDPipe({ version: '7' })) candidateId: string,
+    @Body() body: RejectCandidateDto,
+  ): Promise<{ ok: true }> {
+    await this.templates.reject({ candidateId, staffId: staff.id, notes: body.notes ?? null });
+    return { ok: true };
+  }
+
+  // ── what the portal worker has been doing ───────────────────────────
+
+  @Get('portal-runs')
+  @RequirePermissions('courier.ops.view')
+  @ApiOperation({
+    summary:
+      'What the portal worker did, or in SHADOW would have done. The only way to read shadow output.',
+  })
+  portalRuns(): Promise<
+    readonly {
+      id: string;
+      kind: string;
+      mode: string;
+      outcome: string;
+      detail: string | null;
+      startedAt: Date;
+    }[]
+  > {
+    return this.prisma.client.courierPortalRun.findMany({
+      orderBy: { startedAt: 'desc' },
+      take: 100,
+      select: { id: true, kind: true, mode: true, outcome: true, detail: true, startedAt: true },
+    });
+  }
+
+  @Get('taxonomy')
+  @RequirePermissions('courier.ops.view')
+  @ApiOperation({
+    summary:
+      "Delhivery's fetched category tree. Empty until the portal has read it, which is why the auto list stays refused.",
+  })
+  taxonomy(): Promise<
+    readonly {
+      externalId: string;
+      label: string;
+      isHumanOnly: boolean;
+      lastSeenAt: Date;
+    }[]
+  > {
+    return this.prisma.client.courierIssueCategory.findMany({
+      orderBy: [{ isHumanOnly: 'desc' }, { label: 'asc' }],
+      select: { externalId: true, label: true, isHumanOnly: true, lastSeenAt: true },
+    });
   }
 }

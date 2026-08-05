@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
+import { Fragment, useState, type ReactElement } from 'react';
+import { MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import {
   Button,
@@ -26,6 +27,7 @@ import {
 import { TicketStatus, TicketType } from '@skydrop/db';
 import { useSellerTickets } from '@/lib/ops-hooks';
 import { RaiseTicketModal } from './raise-ticket-modal';
+import { CourierThread } from './courier-thread';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { useRouter } from 'next/navigation';
@@ -43,6 +45,9 @@ export function SellerTicketsIndex(): ReactElement {
   const canWrite = can(useSellerIdentity(), 'tickets.create');
   const [status, setStatus] = useState<string>('');
   const [raising, setRaising] = useState(false);
+  // Which ticket's courier conversation is open. One at a time: these are
+  // long verbatim threads, and expanding several turns the list into a wall.
+  const [openThread, setOpenThread] = useState<string | null>(null);
   const list = useSellerTickets(status === '' ? {} : { status });
 
   const rows = list.data ?? [];
@@ -138,45 +143,73 @@ export function SellerTicketsIndex(): ReactElement {
               <Th>Status</Th>
               <Th align="right">Refund</Th>
               <Th>Date</Th>
+              <Th>Courier</Th>
             </Tr>
           </THead>
           <TBody>
             {rows.map((t) => (
-              <Tr key={t.id} onActivate={() => router.push(`/orders/${t.orderId}`)}>
-                <Td className="text-text-muted whitespace-nowrap text-xs">
-                  {t.ticketType === TicketType.SCRAP_DAMAGE ? 'Skydrop' : 'You'}
-                </Td>
-                <Td className="max-w-xs">
-                  <div className="truncate">{t.subject}</div>
-                  {t.resolutionNotes !== null && t.resolutionNotes !== '' && (
-                    <div className="text-text-faint mt-0.5 truncate text-xs">
-                      {t.resolutionNotes}
-                    </div>
-                  )}
-                </Td>
-                <Td>
-                  {t.orderId === null ? (
-                    <span className="text-text-faint">—</span>
-                  ) : (
-                    <Link href={`/orders/${t.orderId}`} className="text-accent hover:underline">
-                      <Ident value={`${t.orderId.slice(0, 8)}…`} />
-                    </Link>
-                  )}
-                </Td>
-                <Td>
-                  <TicketStatusBadge status={t.status} />
-                </Td>
-                <Td align="right">
-                  {t.resolutionAmountInr === null ? (
-                    <span className="text-text-faint">—</span>
-                  ) : (
-                    <Money amount={t.resolutionAmountInr} direction="credit" />
-                  )}
-                </Td>
-                <Td className="text-text-muted whitespace-nowrap">
-                  {new Date(t.createdAt).toLocaleDateString()}
-                </Td>
-              </Tr>
+              <Fragment key={t.id}>
+                <Tr onActivate={() => router.push(`/orders/${t.orderId}`)}>
+                  <Td className="text-text-muted whitespace-nowrap text-xs">
+                    {t.ticketType === TicketType.SCRAP_DAMAGE ? 'Skydrop' : 'You'}
+                  </Td>
+                  <Td className="max-w-xs">
+                    <div className="truncate">{t.subject}</div>
+                    {t.resolutionNotes !== null && t.resolutionNotes !== '' && (
+                      <div className="text-text-faint mt-0.5 truncate text-xs">
+                        {t.resolutionNotes}
+                      </div>
+                    )}
+                  </Td>
+                  <Td>
+                    {t.orderId === null ? (
+                      <span className="text-text-faint">—</span>
+                    ) : (
+                      <Link href={`/orders/${t.orderId}`} className="text-accent hover:underline">
+                        <Ident value={`${t.orderId.slice(0, 8)}…`} />
+                      </Link>
+                    )}
+                  </Td>
+                  <Td>
+                    <TicketStatusBadge status={t.status} />
+                  </Td>
+                  <Td align="right">
+                    {t.resolutionAmountInr === null ? (
+                      <span className="text-text-faint">—</span>
+                    ) : (
+                      <Money amount={t.resolutionAmountInr} direction="credit" />
+                    )}
+                  </Td>
+                  <Td className="text-text-muted whitespace-nowrap">
+                    {new Date(t.createdAt).toLocaleDateString()}
+                  </Td>
+                  <Td>
+                    {/* The conversation with the courier, in their words.
+                        Opening it is a deliberate click: the thread is long
+                        and belongs beside the ticket, not inside every row. */}
+                    <button
+                      type="button"
+                      className="text-accent inline-flex items-center gap-1 text-xs hover:underline"
+                      aria-expanded={openThread === t.id}
+                      onClick={(e) => {
+                        // The row navigates to the order; this cell does not.
+                        e.stopPropagation();
+                        setOpenThread(openThread === t.id ? null : t.id);
+                      }}
+                    >
+                      <MessageSquare size={13} />
+                      {openThread === t.id ? 'Hide' : 'View'}
+                    </button>
+                  </Td>
+                </Tr>
+                {openThread === t.id ? (
+                  <Tr>
+                    <Td colSpan={7} className="bg-surface-1 p-3">
+                      <CourierThread ticketId={t.id} />
+                    </Td>
+                  </Tr>
+                ) : null}
+              </Fragment>
             ))}
           </TBody>
         </Table>

@@ -4,11 +4,14 @@ import { CourierSharedModule } from '../courier-shared/courier-shared.module';
 import { CourierDelhiveryModule } from '../courier-delhivery/courier-delhivery.module';
 import { EmailModule } from '../email/email.module';
 import { AdminCourierEscalationController } from './controllers/admin-courier-escalation.controller';
+import { SellerCourierEscalationController } from './controllers/seller-courier-escalation.controller';
 import { InboundEmailController } from './controllers/inbound-email.controller';
 import { InboundEmailGuard } from './guards/inbound-email.guard';
 import { CourierOutboxQueue } from './queue/courier-outbox.queue';
 import { CourierChannelSettingsService } from './services/courier-channel-settings.service';
 import { CourierEscalationIngestService } from './services/courier-escalation-ingest.service';
+import { CourierEscalationService } from './services/courier-escalation.service';
+import { CourierTemplateReviewService } from './services/courier-template-review.service';
 import { CourierMessageClassifierService } from './services/courier-message-classifier.service';
 import { CourierModeChallengeService } from './services/courier-mode-challenge.service';
 import { CourierOpsQueueService } from './services/courier-ops-queue.service';
@@ -56,7 +59,11 @@ import { InboundEmailAuthService } from './services/inbound-email-auth.service';
     EmailModule, // the 2FA code for a write-mode change
     AuthCommonModule, // audit
   ],
-  controllers: [InboundEmailController, AdminCourierEscalationController],
+  controllers: [
+    InboundEmailController,
+    AdminCourierEscalationController,
+    SellerCourierEscalationController,
+  ],
   providers: [
     InboundEmailAuthService,
     InboundEmailGuard,
@@ -69,7 +76,9 @@ import { InboundEmailAuthService } from './services/inbound-email-auth.service';
     CourierOpsQueueService,
     CourierModeChallengeService,
     CourierOutboxQueue,
+    CourierEscalationService,
+    CourierTemplateReviewService,
   ],
-  exports: [CourierChannelSettingsService, CourierOutboxService],
+  exports: [CourierChannelSettingsService, CourierOutboxService, CourierEscalationService],
 })
 export class CourierEscalationModule {}

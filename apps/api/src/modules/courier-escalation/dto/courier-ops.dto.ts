@@ -85,3 +85,60 @@ export class PauseChannelDto {
   @Length(5, 500)
   reason!: string;
 }
+
+export class PostReplyDto {
+  @ApiProperty({
+    description:
+      'What to say to the courier. Stored and sent VERBATIM — never rewritten, never translated.',
+  })
+  @IsString()
+  @Length(1, 5000)
+  body!: string;
+}
+
+export class PromoteCandidateDto {
+  @ApiProperty({ description: 'Stable code for the template, e.g. NDR_ACK_24_48.' })
+  @IsString()
+  @Length(2, 64)
+  code!: string;
+
+  @ApiProperty({
+    description:
+      'JS regex source WITHOUT delimiters, matched case-insensitively. Validated by compiling it AND checking it matches the candidate body.',
+  })
+  @IsString()
+  @Length(3, 500)
+  pattern!: string;
+
+  @ApiProperty({ description: 'State label this implies, e.g. ACKNOWLEDGED.' })
+  @IsString()
+  @Length(2, 64)
+  state!: string;
+
+  @ApiProperty({ required: false, description: 'Action label, e.g. ASK_SELLER_ALT_PHONE.' })
+  @IsOptional()
+  @IsString()
+  @Length(2, 64)
+  action?: string;
+
+  @ApiProperty({ required: false, default: 50, description: 'Lower runs first.' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  priority?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  @Length(1, 1000)
+  notes?: string;
+}
+
+export class RejectCandidateDto {
+  @ApiProperty({ required: false, description: 'Why it was not promoted.' })
+  @IsOptional()
+  @IsString()
+  @Length(1, 1000)
+  notes?: string;
+}
