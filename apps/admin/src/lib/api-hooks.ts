@@ -133,6 +133,38 @@ export function useInvitationsList(): UseQueryResult<{
   });
 }
 
+/**
+ * Any seller invitation for one email, whatever its state.
+ *
+ * Distinct from `useInvitationsList`, which asks for `status=pending`
+ * only — the lead drawer needs to know about a USED one too, because
+ * "they already registered" and "nobody has been invited" are different
+ * answers and only one of them warrants a button.
+ *
+ * Self-gating on `sellers.view`: the drawer lives on the leads page,
+ * which is gated on `leads.view`.
+ */
+export function useSellerInvitationFor(
+  email: string | null,
+): UseQueryResult<SellerInvitationListItem | null> {
+  const client = useApiClient();
+  const canRead = usePermission('sellers.view');
+  return useQuery({
+    enabled: canRead && email !== null && email !== '',
+    queryKey: ['admin-invitations', 'for-email', email],
+    queryFn: async () => {
+      const res = await client.request<{ items: SellerInvitationListItem[] }>(
+        `/api/admin/seller-invitations?email=${encodeURIComponent(email ?? '')}`,
+      );
+      // `email` is a `contains` filter server-side, so narrow it here to
+      // an exact match — inviting `a@b.com` must not report on
+      // `xa@b.com`. Newest first is the server's order.
+      const exact = res.items.filter((i) => i.email.toLowerCase() === (email ?? '').toLowerCase());
+      return exact[0] ?? null;
+    },
+  });
+}
+
 export function useCreateInvitation(): UseMutationResult<
   SellerInvitationListItem,
   Error,

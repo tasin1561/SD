@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactElement } from 'react';
-import { Mail, Phone, Send } from 'lucide-react';
+import { Check, Mail, Phone, Send } from 'lucide-react';
 import {
   Button,
   DescriptionList,
@@ -18,6 +18,8 @@ import { inviteLeadStatusKind } from '@skydrop/ui/status';
 import { InviteLeadStatus } from '@skydrop/db';
 import {
   useCreateInvitation,
+  useResendInvitation,
+  useSellerInvitationFor,
   useUpdateInviteLead,
   type InviteLead,
   type InviteLeadStatus as LeadStatus,
@@ -62,6 +64,8 @@ export function LeadDrawer({
   const toast = useToast();
   const update = useUpdateInviteLead();
   const invite = useCreateInvitation();
+  const resend = useResendInvitation();
+  const existing = useSellerInvitationFor(lead?.email ?? null);
   const [status, setStatus] = useState<LeadStatus>('NEW');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -107,6 +111,27 @@ export function LeadDrawer({
     } catch (e) {
       // The server's refusal is the useful part here — "that email
       // already has a Skydrop login" tells you exactly what happened.
+      setError(serverVerdict(e));
+    }
+  }
+
+  /**
+   * Resend, which ROTATES the token.
+   *
+   * The earlier link cannot be shown again, and that is deliberate
+   * rather than an oversight: only a hash of the token is stored, so
+   * there is nothing to display. Resending issues a fresh link and
+   * invalidates the old one — which is also what you want when the
+   * reason for resending is that the first link went astray.
+   */
+  async function resendInvite(): Promise<void> {
+    if (existing.data === null || existing.data === undefined) return;
+    setError(null);
+    try {
+      const fresh = await resend.mutateAsync({ id: existing.data.id });
+      setInviteUrl(fresh.inviteUrl);
+      toast.success(`New invitation sent to ${fresh.email}`);
+    } catch (e) {
       setError(serverVerdict(e));
     }
   }
@@ -222,28 +247,76 @@ export function LeadDrawer({
 
         {canInvite && (
           <div className="border-border rounded-xl border p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="min-w-0">
-                <div className="text-text-bright text-sm">Invite them to register</div>
-                <div className="text-text-muted text-xs">
-                  Sends a registration link to {lead.email}.
+            {existing.data === undefined ? (
+              <div className="text-text-muted text-xs">Checking for an invitation…</div>
+            ) : existing.data === null ? (
+              // Nobody has invited them yet.
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-text-bright text-sm">Invite them to register</div>
+                  <div className="text-text-muted text-xs">
+                    Sends a registration link to {lead.email}.
+                  </div>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={invite.isPending}
+                  onClick={() => void sendInvite()}
+                >
+                  <Send size={12} /> {invite.isPending ? 'Sending…' : 'Send invite'}
+                </Button>
+              </div>
+            ) : existing.data.status === 'used' ? (
+              // They accepted it. There is nothing to resend, and the
+              // account exists — offering a button here would be an
+              // invitation to break something.
+              <div className="flex items-start gap-2">
+                <Check size={13} className="text-[var(--status-delivered-fg)] mt-0.5 shrink-0" />
+                <div className="text-sm">
+                  <span className="text-text-bright">They registered</span>
+                  <span className="text-text-muted block text-xs">
+                    Invitation accepted{' '}
+                    {existing.data.usedAt === null
+                      ? ''
+                      : new Date(existing.data.usedAt).toLocaleString()}
+                    . Their account is under Sellers.
+                  </span>
                 </div>
               </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={invite.isPending}
-                onClick={() => void sendInvite()}
-              >
-                <Send size={12} /> {invite.isPending ? 'Sending…' : 'Send invite'}
-              </Button>
-            </div>
+            ) : (
+              // Sent and still outstanding, or expired unaccepted.
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-text-bright flex items-center gap-1.5 text-sm">
+                    Invitation sent
+                    <StatusBadge
+                      kind={existing.data.status === 'expired' ? 'failed' : 'pending'}
+                      label={existing.data.status}
+                    />
+                  </div>
+                  <div className="text-text-muted text-xs">
+                    {new Date(existing.data.invitedAt).toLocaleString()} ·{' '}
+                    {existing.data.status === 'expired' ? 'expired' : 'expires'}{' '}
+                    {new Date(existing.data.expiresAt).toLocaleDateString()}
+                  </div>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={resend.isPending}
+                  onClick={() => void resendInvite()}
+                >
+                  <Send size={12} /> {resend.isPending ? 'Sending…' : 'Resend'}
+                </Button>
+              </div>
+            )}
 
             {inviteUrl !== null && (
               <div className="mt-3">
                 <div className="text-text-muted mb-1 text-xs">
-                  The email is on its way. This link is here in case it does not arrive — it is the
-                  only time it is shown.
+                  The email is on its way. This link is shown once — only a hash of it is stored, so
+                  it cannot be looked up later. Resending issues a new one and retires this.
                 </div>
                 <code className="text-text-body block overflow-x-auto rounded-lg bg-[var(--color-bg)] p-2 text-xs">
                   {inviteUrl}
