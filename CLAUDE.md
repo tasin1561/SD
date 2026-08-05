@@ -826,6 +826,46 @@ exactly what you cannot know in advance, which is the whole reason the change
 needed a gate. A subset run is only ever a fast inner loop, never the thing you
 commit on.
 
+**Two suites must never be filtered out of a local run**, whatever the change
+looked like: `app-module-boots.spec.ts` (one test, a few seconds, and the only
+thing that proves the app starts — the cheapest value-per-second in the
+repository and the easiest to lose to a path filter) and any `*-threading` or
+structural spec that reads sources rather than behaviour, because those exist
+precisely to catch what a behavioural test cannot see.
+
+**What `pnpm gate` does NOT prove (2026-08-06).** It runs typecheck, lint,
+`format:check` and the unit suite. **None of those four builds the Nest
+container.** Typecheck resolves imports and checks types; it does not ask whether
+a provider is registered. The unit tests construct their subjects DIRECTLY —
+`new Service(mockPrisma, mockAudit)` — so they never resolve a dependency
+through DI either. A service can be imported, typed, fully unit-tested, and
+absent from its module's `providers`, and all four gates stay green on an
+application that cannot start. That happened: Phases 3/4 shipped with
+`DelhiverySupportAdapterService` unregistered, 1796 unit tests passed, and CI's
+e2e and browser jobs — the only two that START the app — found it.
+
+**`test/unit/app-module-boots.spec.ts` closes that gap.** It compiles the real
+`AppModule`; `compile()` resolves every provider without running
+`onModuleInit`, so it needs no Postgres and no Redis and belongs in the unit
+suite rather than fifteen minutes away in e2e. It catches a missing provider, a
+missing `exports` entry, a circular module dependency, and an unresolvable
+token — the entire class of defect invisible to the other gates.
+
+**A red boot test presents as a HUNG SUITE, not a failing test.** Nest's
+exception zone calls `process.exit(1)` on an unresolvable dependency, so under
+jest the run dies or stalls instead of reporting a named failure; CI logged it
+as `process.exit called with "1"`. **Do not kill a stalled run assuming it is
+stuck** — search the output for `UnknownDependenciesException`, which names the
+service and the argument index that could not be resolved. That one line is the
+whole diagnosis.
+
+**When a module cycle is the underlying cause, extract — never `forwardRef`.**
+The same incident had `courier-delhivery` importing a service from
+`courier-escalation`, which imports `courier-delhivery`. A `forwardRef` would
+have made the boot test pass while leaving the cycle in place; moving the
+dependency-free service into `courier-shared` removed it (the R3 rule, seventh
+application).
+
 **`pnpm gate` can be OOM-killed on the dev machine (exit 137). That is a local
 memory constraint, NOT a failure — and NOT something to optimise (2026-08-06).**
 The composed script runs typecheck, lint and ~1770 jest tests in one process
