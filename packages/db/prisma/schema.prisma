@@ -1526,6 +1526,208 @@ model CourierWaybill {
   @@map("courier_waybills")
 }
 
+/// How a courier message reached us. Each channel has a different
+/// trustworthiness and a different failure mode, and collapsing them
+/// would lose the ability to say "the portal says X but the email said
+/// Y" — which is exactly the disagreement worth surfacing.
+enum CourierMessageChannel {
+  /// Delhivery CCs a dedicated mailbox on ticket activity.
+  EMAIL  @map("email")
+  /// Delhivery One MCP, once the realm is provisioned.
+  MCP    @map("mcp")
+  /// Browser automation reading the portal (Phase 5).
+  PORTAL @map("portal")
+  /// A human pasted it in from the panel.
+  MANUAL @map("manual")
+
+  @@map("courier_message_channel")
+}
+
+/// Which way a message travelled.
+enum CourierMessageDirection {
+  INBOUND  @map("inbound")
+  OUTBOUND @map("outbound")
+
+  @@map("courier_message_direction")
+}
+
+enum CourierTemplateCandidateStatus {
+  /// No pattern matched. The default, and the only state the system
+  /// produces on its own while the model is off.
+  UNMATCHED @map("unmatched")
+  /// A model proposed a pattern; a human has not looked yet.
+  SUGGESTED @map("suggested")
+  /// Promoted into the live library.
+  PROMOTED  @map("promoted")
+  /// Looked at and deliberately not promoted.
+  REJECTED  @map("rejected")
+
+  @@map("courier_template_candidate_status")
+}
+
+/// A conversation with the courier about one ticket.
+///
+/// It HANGS OFF a Ticket rather than being its own seller-facing entity:
+/// R7's ticket queue already is "someone reports a parcel problem, ops
+/// works one list", and a second inbox would mean two places to look and
+/// two things to keep in sync. The escalation is the COURIER-FACING half
+/// of a conversation the seller already has a home for.
+model CourierEscalation {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  ticketId String @unique @map("ticket_id") @db.Uuid
+
+  /// Delhivery's own ticket id, once we know it. Null while the ticket
+  /// exists only on our side — a raise can be pending, or the whole
+  /// escalation can start life as an email we received first.
+  externalTicketId String? @map("external_ticket_id")
+  /// Their category id, NEVER a label string: labels are localised and
+  /// re-worded, ids are not.
+  categoryId       String? @map("category_id")
+  awbNumber        String? @map("awb_number")
+  courierCode      String  @default("delhivery") @map("courier_code")
+
+  /// The classifier's latest read of where this stands. A LABEL, never
+  /// an instruction: TypeScript decides what to do with it.
+  state         String?
+  lastMessageAt DateTime? @map("last_message_at") @db.Timestamptz
+  /// Set when a message needs a human — low classifier confidence, an
+  /// unmatched template, or a state that asks something of the seller.
+  needsReviewAt DateTime? @map("needs_review_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  ticket   Ticket                     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  messages CourierEscalationMessage[]
+
+  @@index([externalTicketId])
+  @@index([awbNumber])
+  @@index([needsReviewAt])
+  @@map("courier_escalations")
+}
+
+/// One message in that conversation. APPEND-ONLY.
+///
+/// ── THE DEDUP KEY IS THE WHOLE DESIGN ────────────────────────────────
+/// `(escalationId, bodyHash, minuteBucket)`. The minute-bucket is NOT
+/// belt-and-braces: Delhivery's canned replies repeat VERBATIM across
+/// days ("trying our best to deliver within 24 to 48 hours" lands again
+/// tomorrow, byte-identical), so a content hash alone would treat the
+/// second genuine reply as a duplicate and silently swallow it. The
+/// bucket makes the key "this exact text, from this conversation, in
+/// this minute" — which dedups a re-delivered webhook and a polled
+/// re-read of the same message, while letting the same sentence arrive
+/// again tomorrow.
+model CourierEscalationMessage {
+  id           String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  escalationId String @map("escalation_id") @db.Uuid
+
+  direction CourierMessageDirection
+  channel   CourierMessageChannel
+
+  /// VERBATIM. Never rewritten, never translated, never summarised —
+  /// the seller is meant to feel they are reading the courier.
+  body         String @db.Text
+  /// sha256 of the normalised body; half the dedup key.
+  bodyHash     String @map("body_hash")
+  /// Epoch MINUTE of `occurredAt`; the other half. Stored rather than
+  /// derived so the unique index can use it.
+  minuteBucket BigInt @map("minute_bucket")
+
+  /// When the courier sent it (their timestamp when we have one), NOT
+  /// when we ingested it — same discipline as TRK-3's eventAt.
+  occurredAt DateTime @map("occurred_at") @db.Timestamptz
+
+  /// Classifier output. A STATE LABEL and nothing else.
+  templateCode String?  @map("template_code")
+  state        String?
+  confidence   Decimal? @db.Decimal(4, 3)
+  /// True when this went to a human — unmatched, or below the gate.
+  needsReview  Boolean  @default(false) @map("needs_review")
+
+  /// Message-id / external id from the source channel, for tracing.
+  sourceRef String? @map("source_ref")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  escalation CourierEscalation @relation(fields: [escalationId], references: [id], onDelete: Cascade)
+
+  @@unique([escalationId, bodyHash, minuteBucket], map: "courier_escalation_messages_dedup")
+  @@index([escalationId, occurredAt])
+  @@index([needsReview])
+  @@map("courier_escalation_messages")
+}
+
+/// Messages the regex library could not classify, and the corpus they
+/// become.
+///
+/// ── WHY THIS EXISTS BEFORE THE MODEL DOES ────────────────────────────
+/// With the LLM off, an unmatched message would otherwise vanish and the
+/// regex library would never learn what it is missing. Every miss lands
+/// here as UNMATCHED, so the corpus builds from REAL traffic before the
+/// model is ever enabled — and when it is, its `suggestedRegex` lands in
+/// the same queue for a human to promote. A pattern nobody reviewed is a
+/// pattern that silently mislabels.
+model CourierTemplateCandidate {
+  id        String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// Normalised body — the thing a pattern would have to match.
+  body      String @db.Text
+  bodyHash  String @unique @map("body_hash")
+  /// How many times this exact text has now been seen. The ordering
+  /// signal: the most repeated miss is the most valuable pattern.
+  seenCount Int    @default(1) @map("seen_count")
+
+  status CourierTemplateCandidateStatus @default(UNMATCHED)
+
+  /// Only ever set by a model, never applied automatically.
+  suggestedRegex    String?   @map("suggested_regex")
+  suggestedState    String?   @map("suggested_state")
+  /// Filled by the human who promoted or rejected it.
+  reviewedByStaffId String?   @map("reviewed_by_staff_id") @db.Uuid
+  reviewedAt        DateTime? @map("reviewed_at") @db.Timestamptz
+  reviewNotes       String?   @map("review_notes") @db.Text
+
+  firstSeenAt DateTime @default(now()) @map("first_seen_at") @db.Timestamptz
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at") @db.Timestamptz
+
+  @@index([status, seenCount])
+  @@map("courier_template_candidates")
+}
+
+/// The regex library itself — DATA, not code.
+///
+/// Adding a template must not need a deploy: the corpus grows from real
+/// courier traffic, and a library that ships in a TypeScript array means
+/// every new canned reply waits on a release. Patterns are seeded from
+/// the four verbatim templates we have and extended from
+/// `courier_template_candidates` as real ones surface.
+model CourierMessageTemplate {
+  id   String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// Stable identifier used in logs and tests, e.g. NDR_ACK_24_48.
+  code String @unique
+
+  /// JS-flavoured regex source, matched case-insensitively against the
+  /// normalised body. Stored WITHOUT delimiters.
+  pattern String
+  /// The state label this implies. Consumed by TypeScript; never an
+  /// instruction to the system.
+  state   String
+  /// What ops should do about it, if anything. Also a label.
+  action  String?
+
+  /// Lower runs first. Lets a specific pattern win over a general one
+  /// without depending on insertion order.
+  priority Int     @default(100)
+  isActive Boolean @default(true) @map("is_active")
+
+  notes     String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([isActive, priority])
+  @@map("courier_message_templates")
+}
+
 /// The outcome of one NDR action we asked Delhivery to perform.
 ///
 /// Delhivery's NDR API is ASYNCHRONOUS: the call returns a UPL id, not a
@@ -4631,14 +4833,15 @@ model Ticket {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  seller             Seller        @relation(fields: [sellerId], references: [id])
-  order              Order?        @relation(fields: [orderId], references: [id])
-  shipment           Shipment?     @relation(fields: [shipmentId], references: [id])
-  shipmentItem       ShipmentItem? @relation(fields: [shipmentItemId], references: [id])
-  openedByStaff      StaffUser?    @relation("TicketOpenedByStaff", fields: [openedByStaffId], references: [id])
-  openedBySellerUser SellerUser?   @relation("TicketOpenedBySellerUser", fields: [openedBySellerUserId], references: [id])
-  resolvedByStaff    StaffUser?    @relation("TicketResolvedByStaff", fields: [resolvedByStaffId], references: [id])
+  seller             Seller             @relation(fields: [sellerId], references: [id])
+  order              Order?             @relation(fields: [orderId], references: [id])
+  shipment           Shipment?          @relation(fields: [shipmentId], references: [id])
+  shipmentItem       ShipmentItem?      @relation(fields: [shipmentItemId], references: [id])
+  openedByStaff      StaffUser?         @relation("TicketOpenedByStaff", fields: [openedByStaffId], references: [id])
+  openedBySellerUser SellerUser?        @relation("TicketOpenedBySellerUser", fields: [openedBySellerUserId], references: [id])
+  resolvedByStaff    StaffUser?         @relation("TicketResolvedByStaff", fields: [resolvedByStaffId], references: [id])
   events             TicketEvent[]
+  courierEscalation  CourierEscalation?
 
   /// Auto-raise idempotency: at most ONE ticket of a given type per
   /// shipment item, so re-inspecting a line (the operator may correct

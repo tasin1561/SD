@@ -230,6 +230,11 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         // R5 early-reservation reviews — FK-RESTRICT orders + sellers.
         'early_reservation_reviews',
         // R7 tickets — FK-RESTRICT sellers; ticket_events cascades.
+        // Courier escalations FK tickets (CASCADE), and their messages
+        // cascade from those — listed anyway so the reset stays
+        // explicit rather than relying on a chain (MUST #12).
+        'courier_escalation_messages',
+        'courier_escalations',
         'ticket_events',
         'tickets',
         // Wallet + payouts (M21-M24)

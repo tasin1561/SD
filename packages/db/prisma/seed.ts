@@ -2511,6 +2511,84 @@ async function seedNotificationTemplates() {
   );
 }
 
+/**
+ * The courier message-template library — the FOUR canned replies we have
+ * verbatim from the Delhivery One panel.
+ *
+ * These are seeded as DATA, and the library is read from the database at
+ * match time, so a fifth template is a row rather than a release. That
+ * matters because the corpus grows from real courier traffic: every
+ * unmatched message lands in `courier_template_candidates`, and promoting
+ * one must not wait on a deploy.
+ *
+ * Patterns are deliberately LOOSE around the parts that vary (names,
+ * AWBs, dates) and tight on the phrase that identifies the template. They
+ * are matched case-insensitively against a whitespace-normalised body.
+ *
+ * `state` and `action` are LABELS. Nothing here instructs the system; a
+ * TypeScript decision table consumes the label and decides what happens.
+ */
+const courierMessageTemplates = [
+  {
+    code: 'NDR_ACK_24_48',
+    // "...trying our best to deliver your shipment within 24 to 48 hours"
+    pattern: 'trying our best to deliver.{0,40}within 24 to 48 hours',
+    state: 'ACKNOWLEDGED',
+    action: null,
+    priority: 10,
+    notes: 'Delhivery NDR acknowledgement. No action — it is a holding reply.',
+  },
+  {
+    code: 'OFD_TODAY',
+    // "...out for delivery and should be delivered by the end of the day"
+    pattern: 'out for delivery and should be delivered by the end of the day',
+    state: 'OUT_FOR_DELIVERY',
+    action: null,
+    priority: 10,
+    notes: 'Parcel is on a van today. Informational.',
+  },
+  {
+    code: 'REQ_ALT_PHONE',
+    // "...share an alternate contact number for the consignee by replying to this ticket"
+    pattern: 'share an alternate contact number for the consignee',
+    state: 'ACTION_REQUIRED',
+    action: 'ASK_SELLER_ALT_PHONE',
+    priority: 5,
+    notes:
+      'The only one of the four that asks something of us. Higher priority (lower number) so it wins over a generic acknowledgement in the same message.',
+  },
+  {
+    code: 'BEHAVIOUR_ACK',
+    // "We sincerely regret the unacceptable behavior of our delivery agent
+    //  and assure you that strict disciplinary action will be taken..."
+    pattern: 'regret the unacceptable behavior of our delivery agent',
+    state: 'ACKNOWLEDGED',
+    action: null,
+    priority: 10,
+    notes: 'Behaviour-complaint acknowledgement. American spelling is THEIRS — do not "fix" it.',
+  },
+];
+
+async function seedCourierMessageTemplates() {
+  for (const t of courierMessageTemplates) {
+    await prisma.courierMessageTemplate.upsert({
+      where: { code: t.code },
+      // Update the pattern on re-seed: a corrected pattern should reach
+      // deployed environments. `isActive` is NOT touched, so a template
+      // an operator switched off stays off.
+      update: {
+        pattern: t.pattern,
+        state: t.state,
+        action: t.action,
+        priority: t.priority,
+        notes: t.notes,
+      },
+      create: t,
+    });
+  }
+  console.log(`  ${courierMessageTemplates.length} courier message templates`);
+}
+
 async function main() {
   console.log('Seeding reference data…');
   // Warehouses first: ops.default_warehouse_id resolves BLR-01's id.
@@ -2525,6 +2603,7 @@ async function main() {
   await seedSurchargeRules();
   await seedPinCodes();
   await seedNotificationTemplates();
+  await seedCourierMessageTemplates();
   console.log('Done.');
 }
 

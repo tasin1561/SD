@@ -105,6 +105,9 @@ export {
   // D3 — pre-fetched courier AWB pool
   CourierWaybillStatus,
   NdrRequestStatus,
+  CourierMessageChannel,
+  CourierMessageDirection,
+  CourierTemplateCandidateStatus,
   PickupRequestStatus,
   InviteLeadStatus,
   ShippingDirection,
