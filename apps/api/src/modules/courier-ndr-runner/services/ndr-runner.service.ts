@@ -23,6 +23,28 @@ export interface NdrRunSummary {
   /** Prepared but NOT sent because the action is not on the auto list. */
   readonly heldForOperator: number;
   readonly reasons: Readonly<Record<string, number>>;
+  /** True when live writes are off: everything ran except the submission. */
+  readonly dryRun: boolean;
+  /** Per-parcel decisions. The record that makes the selection rule
+   *  auditable against real parcels before anything is enabled. */
+  readonly plan: readonly NdrPlanEntry[];
+}
+
+/** What the runner decided about one parcel, and why. */
+export interface NdrPlanEntry {
+  readonly shipmentId: string;
+  readonly awbNumber: string;
+  /** The FRESH code read from the courier, not our stored one. */
+  readonly nslCode: string | null;
+  readonly attemptCount: number;
+  readonly action: string;
+  readonly disposition:
+    | 'WOULD_SUBMIT'
+    | 'SUBMITTED'
+    | 'HELD_NOT_ON_AUTO_LIST'
+    | 'SKIPPED'
+    | 'FAILED';
+  readonly reason: string | null;
 }
 
 /**
@@ -95,6 +117,8 @@ export class NdrRunnerService {
         failed: 0,
         heldForOperator: 0,
         reasons: {},
+        dryRun: false,
+        plan: [],
       };
     }
 
@@ -103,19 +127,26 @@ export class NdrRunnerService {
     // it per parcel would throw fifty times and write fifty HIGH audit
     // rows for one configuration fact. The per-call guard stays; this
     // just stops the batch from being the noisiest way to learn it.
-    if (!(await this.writeGuard.liveWritesEnabled())) {
+    //
+    // Writes off does NOT mean do nothing: it means DRY RUN. Everything
+    // up to the submission still happens — selection, the live tracking
+    // read, the eligibility verdict — and the plan is recorded instead of
+    // sent. That is deliberate, because the riskiest thing in this
+    // service is a guess: `ShipmentStatus.DELIVERY_ATTEMPTED` is our
+    // best equivalent of Delhivery's "package must be in Pending", and
+    // if it is wrong it fails SILENTLY IN BOTH DIRECTIONS — eligible
+    // parcels never selected, ineligible ones submitted — with nothing
+    // to show either. The dry-run plan is what makes that answerable
+    // against real parcels without enabling a single write.
+    //
+    // The reads it performs are free and side-effect-free (tracking is
+    // 750 calls per 5 minutes and creates nothing). The kill switch
+    // above still stops everything, including this.
+    const dryRun = !(await this.writeGuard.liveWritesEnabled());
+    if (dryRun) {
       this.logger.log(
-        'NDR runner: live writes are disabled (courier.delhivery_live_writes_enabled) — nothing submitted',
+        'NDR runner: live writes are disabled — DRY RUN (planning only, nothing will be submitted)',
       );
-      return {
-        enabled: true,
-        considered: 0,
-        submitted: 0,
-        skipped: 0,
-        failed: 0,
-        heldForOperator: 0,
-        reasons: { LIVE_WRITES_DISABLED: 1 },
-      };
     }
 
     const autoActions = await this.settings.autoActions();
@@ -126,6 +157,7 @@ export class NdrRunnerService {
     let skipped = 0;
     let failed = 0;
     let held = 0;
+    const plan: NdrPlanEntry[] = [];
 
     for (const c of candidates) {
       // FRESH NSL — re-read from the courier, not from our rows.
@@ -133,6 +165,15 @@ export class NdrRunnerService {
       if (fresh === null) {
         skipped += 1;
         bump('TRACKING_READ_FAILED');
+        plan.push({
+          shipmentId: c.shipmentId,
+          awbNumber: c.awbNumber,
+          nslCode: null,
+          attemptCount: -1,
+          action: 'RE-ATTEMPT',
+          disposition: 'SKIPPED',
+          reason: 'TRACKING_READ_FAILED',
+        });
         continue;
       }
 
@@ -146,6 +187,30 @@ export class NdrRunnerService {
       if (!verdict.eligible) {
         skipped += 1;
         bump(verdict.reason ?? 'INELIGIBLE');
+        plan.push({
+          shipmentId: c.shipmentId,
+          awbNumber: c.awbNumber,
+          nslCode: fresh.nslCode,
+          attemptCount: fresh.attemptCount,
+          action,
+          disposition: 'SKIPPED',
+          reason: verdict.reason ?? 'INELIGIBLE',
+        });
+        continue;
+      }
+
+      // DRY RUN stops here — everything above already happened, so the
+      // entry carries the real NSL and the real verdict.
+      if (dryRun) {
+        plan.push({
+          shipmentId: c.shipmentId,
+          awbNumber: c.awbNumber,
+          nslCode: fresh.nslCode,
+          attemptCount: fresh.attemptCount,
+          action,
+          disposition: 'WOULD_SUBMIT',
+          reason: autoActions.includes(action) ? null : 'would also be held: not on the auto list',
+        });
         continue;
       }
 
@@ -153,6 +218,15 @@ export class NdrRunnerService {
       if (!autoActions.includes(action)) {
         held += 1;
         bump('HELD_NOT_ON_AUTO_LIST');
+        plan.push({
+          shipmentId: c.shipmentId,
+          awbNumber: c.awbNumber,
+          nslCode: fresh.nslCode,
+          attemptCount: fresh.attemptCount,
+          action,
+          disposition: 'HELD_NOT_ON_AUTO_LIST',
+          reason: 'action is not in courier.ndr_auto_categories',
+        });
         await this.audit.log({
           actorType: ActorType.SYSTEM,
           action: 'courier.ndr.held_for_operator',
@@ -212,9 +286,27 @@ export class NdrRunnerService {
           failed += 1;
           bump('COURIER_REFUSED');
         }
+        plan.push({
+          shipmentId: c.shipmentId,
+          awbNumber: c.awbNumber,
+          nslCode: fresh.nslCode,
+          attemptCount: fresh.attemptCount,
+          action,
+          disposition: result.success ? 'SUBMITTED' : 'FAILED',
+          reason: result.success ? null : result.message,
+        });
       } catch (err) {
         failed += 1;
         bump('SUBMIT_THREW');
+        plan.push({
+          shipmentId: c.shipmentId,
+          awbNumber: c.awbNumber,
+          nslCode: fresh.nslCode,
+          attemptCount: fresh.attemptCount,
+          action,
+          disposition: 'FAILED',
+          reason: err instanceof Error ? err.message : String(err),
+        });
         // The in-flight partial unique means a retry cannot double-send;
         // a throw here leaves the row SUBMITTED and the poller owns it.
         this.logger.warn(
@@ -232,14 +324,41 @@ export class NdrRunnerService {
       failed,
       heldForOperator: held,
       reasons,
+      dryRun,
+      plan,
     };
+
+    // The plan is logged per parcel, not only counted. Counts say the
+    // selection rule produced N candidates; only the rows say WHICH
+    // parcels and on what NSL — which is the question that has to be
+    // answered against real traffic before writes are enabled.
+    for (const e of plan) {
+      this.logger.log(
+        {
+          dryRun,
+          awbNumber: e.awbNumber,
+          shipmentId: e.shipmentId,
+          nslCode: e.nslCode,
+          attemptCount: e.attemptCount,
+          action: e.action,
+          disposition: e.disposition,
+          reason: e.reason,
+          selectedBy: 'shipment.status=DELIVERY_ATTEMPTED',
+        },
+        `NDR plan: ${e.disposition} ${e.awbNumber}`,
+      );
+    }
     await this.audit.log({
       actorType: ActorType.SYSTEM,
-      action: 'courier.ndr.batch_completed',
+      action: dryRun ? 'courier.ndr.batch_dry_run' : 'courier.ndr.batch_completed',
       entityType: 'courier',
       entityId: 'delhivery',
       severity: submitted > 0 ? 'HIGH' : 'LOW',
-      metadata: { ...summary, reasons: summary.reasons as Prisma.InputJsonValue },
+      metadata: {
+        ...summary,
+        reasons: summary.reasons as Prisma.InputJsonValue,
+        plan: plan as unknown as Prisma.InputJsonValue,
+      },
     });
     return summary;
   }

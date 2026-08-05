@@ -84,14 +84,38 @@ describe('NdrRunnerService — the gates', () => {
     expect(takeAction).not.toHaveBeenCalled();
   });
 
-  it('GATE 3: live writes off means nothing is submitted, checked ONCE not per parcel', async () => {
-    // Per-parcel it would throw fifty times and write fifty HIGH audit
-    // rows for one configuration fact.
-    const { svc, takeAction, fetchTracking } = make({ liveWrites: false });
+  it('GATE 3: live writes off submits NOTHING', async () => {
+    const { svc, takeAction } = make({ liveWrites: false });
     const out = await svc.run();
     expect(takeAction).not.toHaveBeenCalled();
-    expect(fetchTracking).not.toHaveBeenCalled();
-    expect(out.reasons['LIVE_WRITES_DISABLED']).toBe(1);
+    expect(out.submitted).toBe(0);
+    expect(out.dryRun).toBe(true);
+  });
+
+  it('GATE 3 is a DRY RUN, not a no-op — it still reads and still plans', async () => {
+    // The point of the dry run: `DELIVERY_ATTEMPTED` is a GUESS at
+    // Delhivery's "must be in Pending", and a wrong guess fails silently
+    // in both directions. The plan is what makes it answerable against
+    // real parcels without enabling a write.
+    const { svc, fetchTracking } = make({ liveWrites: false });
+    const out = await svc.run();
+    expect(fetchTracking).toHaveBeenCalledTimes(1);
+    expect(out.plan).toHaveLength(1);
+    expect(out.plan[0]).toMatchObject({
+      awbNumber: 'AWB1',
+      disposition: 'WOULD_SUBMIT',
+      nslCode: 'EOD-74', // the FRESH code, not the cached 'STALE-CODE'
+      attemptCount: 1,
+    });
+  });
+
+  it('a dry-run plan records SKIPPED parcels with their reason too', async () => {
+    // "Why was this parcel not picked up" is half the question the plan
+    // exists to answer — a plan of only the selected ones cannot show
+    // that the selection rule is too narrow.
+    const { svc } = make({ liveWrites: false, eligible: false });
+    const out = await svc.run();
+    expect(out.plan[0]).toMatchObject({ disposition: 'SKIPPED', reason: 'NSL_NOT_ELIGIBLE' });
   });
 
   it('GATE 2: an empty auto list PREPARES but does not send — the shipped default', async () => {

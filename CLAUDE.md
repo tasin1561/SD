@@ -813,6 +813,19 @@ Plan doc: `~/.claude/plans/silly-bouncing-cloud.md` (gap analysis + per-phase de
 
 It was two jobs until 2026-08-03, with everything but the browser specs running SEQUENTIALLY in one 12-minute `checks` job — for no reason, since lint does not depend on the e2e suite. Splitting it put the critical path on the longest single job (the e2e suite) and roughly halved CI. **Two properties to preserve:** (a) each job rebuilds the workspace packages rather than receiving them as artifacts — that costs runner-minutes and saves wall clock, and artifact-passing reintroduces a serial dependency longer than the rebuild it avoids; the shared preamble lives in the `.github/actions/setup-workspace` composite so four copies cannot drift apart, and its `packages` input exists so the e2e job builds `@skydrop/db` ALONE (apps/api's only workspace dependency — the `@skydrop/ui` mention in the notification listener is a comment). (b) **`browser` is the ONLY job that builds the Next apps, and that build IS the build check** — it used to happen in both, and the `checks` copy was actively wrong because that job set `NODE_ENV: test` job-wide and therefore built test-env frontends. Removing an app from the browser job's build list stops its build being checked anywhere. `browser` is also the only thing in CI that exercises a browser, which makes it the check that catches a CSP or hydration regression — it was a manual-only smoke until 2026-07-27 and is now a real gate. `Deploy` then SSHes to the droplet, runs `prisma migrate deploy` and restarts pm2. Both were repaired on 2026-07-27: CI had been red for ~14h on a floating `timescaledb-ha:pg18` tag that stopped provisioning a default `postgres` role (fixed by health-checking `pg_isready -U skydrop -d skydrop_test`), the e2e suite had never been wired into CI at all, and Deploy was failing on a pm2 target (`skydrop-workers`) that does not exist (Phase-1A workers run in-process inside apps/api). **Before claiming any invariant is verified, check that the e2e step actually ran in the CI log — that gap is exactly how "the conservation specs passed" was asserted on 2026-07-27 when they had never executed.**
 
+**`pnpm gate` is the pre-commit gate. Run it whole; never a subset (2026-08-06).**
+It is `gate:clean` (delete every `.tsbuildinfo` — see the stale-cache trap below)
+then typecheck → lint → `format:check` → the full unit suite, which is exactly
+what CI's `static` and `unit` jobs run. **Do not substitute a filtered test run
+for it.** Running `jest test/unit/delhivery test/unit/courier` after a change
+that touched shared code shipped two failing tests in `awb-generation.service.spec.ts`
+on 2026-08-05 — the file matched neither prefix, so the gate reported green on
+a suite it had never executed. The failure mode is not "I picked the wrong
+filter", it is that a filter exists at all: the set of affected files is
+exactly what you cannot know in advance, which is the whole reason the change
+needed a gate. A subset run is only ever a fast inner loop, never the thing you
+commit on.
+
 **A local `tsc --noEmit` is NOT a gate on its own (2026-07-27).** `apps/api` typechecks incrementally, and a stale `tsconfig.build.tsbuildinfo` will happily skip re-checking a newly-added file: commit `2347b29` was reported as passing typecheck locally and CI then found eight errors in a spec written minutes earlier. **Delete the `.tsbuildinfo` before the pre-commit typecheck**, or treat CI as the only typecheck that counts. Same failure class as the e2e gap above — a gate that did not run looks identical to a gate that passed.
 
 Below: remaining frontends + module-level fast-follows + Phase-1B prerequisites.
