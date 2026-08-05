@@ -1526,6 +1526,96 @@ model CourierWaybill {
   @@map("courier_waybills")
 }
 
+/// The outcome of one NDR action we asked Delhivery to perform.
+///
+/// Delhivery's NDR API is ASYNCHRONOUS: the call returns a UPL id, not a
+/// result, and the real answer is only available by polling. So a row
+/// here is not "we got a re-attempt" — it is "we asked, and here is what
+/// we know so far".
+enum NdrRequestStatus {
+  /// Sent, UPL id stored, outcome not yet known.
+  SUBMITTED @map("submitted")
+  /// The UPL poll said Delhivery accepted it.
+  CONFIRMED @map("confirmed")
+  /// Delhivery rejected it, OR the poll deadline passed without an
+  /// answer. Those are the same thing operationally: see the model doc.
+  FAILED    @map("failed")
+  /// Handed to the ticket path — a human now owns it.
+  ESCALATED @map("escalated")
+
+  @@map("ndr_request_status")
+}
+
+/// One NDR action request, from submission to whether it actually worked.
+///
+/// ── WHY THIS TABLE EXISTS AT ALL ──────────────────────────────────────
+/// Without it, "did we ask Delhivery to re-attempt this parcel?" is
+/// unanswerable — the call is fire-and-forget over the wire, and the
+/// only local trace would be an audit line nobody joins against. It is
+/// also the input to the reconciliation job, which is the one thing that
+/// can catch Delhivery accepting our calls and not acting on them.
+///
+/// ── UNPOLLED IS FAILED, NOT UNKNOWN ───────────────────────────────────
+/// If the poll deadline passes with no answer, the row goes FAILED
+/// rather than staying SUBMITTED. Treating silence as "still might work"
+/// is how a parcel sits for a week: the customer is waiting either way,
+/// and a re-attempt we cannot confirm has to be chased by a human. The
+/// cost of being wrong is a duplicate chase; the cost of the other
+/// choice is a parcel nobody is looking at.
+///
+/// ── `newAttemptSeen` IS THE POINT ─────────────────────────────────────
+/// A CONFIRMED UPL means Delhivery ACCEPTED the request, not that a van
+/// went out. Reconciliation asks the only question that matters — did a
+/// new delivery attempt actually appear in tracking afterwards — and
+/// that answer lives here so the trend is queryable rather than
+/// recomputed.
+model NdrActionRequest {
+  id         String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  shipmentId String @map("shipment_id") @db.Uuid
+  /// Denormalised: the AWB is how Delhivery identifies this, and a
+  /// superseded shipment must not silently repoint the history.
+  awbNumber  String @map("awb_number")
+  /// 'RE-ATTEMPT' | 'PICKUP_RESCHEDULE' — Delhivery's own vocabulary,
+  /// kept as their string rather than mapped into an enum of ours: it is
+  /// their API's input, and a mapping layer here would only be a place
+  /// for the two to disagree.
+  action     String
+
+  /// The NSL and attempt count AS READ IMMEDIATELY BEFORE SUBMITTING.
+  /// Snapshotted because eligibility was judged on these exact values;
+  /// re-deriving them later would be judging a past decision on present
+  /// facts.
+  nslCodeAtSubmit      String? @map("nsl_code_at_submit")
+  attemptCountAtSubmit Int     @map("attempt_count_at_submit")
+
+  status         NdrRequestStatus @default(SUBMITTED)
+  /// Delhivery's async handle. Null only if the submit itself failed.
+  uplId          String?          @map("upl_id")
+  /// Verbatim courier text — never rewritten, never translated.
+  courierMessage String?          @map("courier_message") @db.Text
+
+  submittedAt  DateTime  @default(now()) @map("submitted_at") @db.Timestamptz
+  polledAt     DateTime? @map("polled_at") @db.Timestamptz
+  pollAttempts Int       @default(0) @map("poll_attempts")
+
+  /// Reconciliation output. `newAttemptSeen` null = not yet checked.
+  reconciledAt   DateTime? @map("reconciled_at") @db.Timestamptz
+  newAttemptSeen Boolean?  @map("new_attempt_seen")
+
+  /// Set when this was handed to the ticket path.
+  ticketId String? @map("ticket_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([status, submittedAt])
+  @@index([shipmentId])
+  @@index([awbNumber])
+  @@map("ndr_action_requests")
+}
+
 /// D6 — a request for Delhivery to send a van to one of our warehouses.
 ///
 /// The grain is the thing to get right: a pickup is raised against a
@@ -2229,6 +2319,8 @@ model Shipment {
   charges              OrderCharge[]
   notificationLogs     NotificationLog[]
   tickets              Ticket[]
+
+  ndrActionRequests NdrActionRequest[]
 
   @@index([courierCode, status])
   @@index([status, createdAt])
@@ -4468,11 +4560,16 @@ enum TicketType {
   /// inspected DAMAGED or MISSING. Carries the shipment item + courier
   /// so liability can be argued with the courier or settled with the
   /// seller.
-  SCRAP_DAMAGE        @map("scrap_damage")
+  SCRAP_DAMAGE           @map("scrap_damage")
   /// Raised by a seller about a specific parcel/order ("where is this",
   /// "arrived broken", "wrong item"). Same lifecycle + resolution
   /// mechanics, so ops works ONE queue instead of two.
-  SELLER_RAISED_ISSUE @map("seller_raised_issue")
+  SELLER_RAISED_ISSUE    @map("seller_raised_issue")
+  /// Auto-raised when an NDR re-attempt could not be confirmed with the
+  /// courier. Lives in the SAME queue as the other two deliberately: ops
+  /// works one list, and this is the seam the courier-escalation work
+  /// hangs its Delhivery conversation off (see the escalation brief).
+  COURIER_NDR_ESCALATION @map("courier_ndr_escalation")
 
   @@map("ticket_type")
 }

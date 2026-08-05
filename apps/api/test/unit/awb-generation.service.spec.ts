@@ -189,7 +189,16 @@ describe('AwbGenerationService.generateForShipment', () => {
       .data;
     expect(stampData).not.toHaveProperty('status');
     // Phase D ran AFTER tx1: fetchLabel + putObject + tx2 awb_labels create.
-    expect(fetchLabel).toHaveBeenCalledWith('DLVSTUB202605000042');
+    expect(fetchLabel).toHaveBeenCalledWith(
+      'DLVSTUB202605000042',
+      // AWB generation is a queue worker, so the credential decrypt must
+      // attribute to the RUNNER branch — CUR-10 as amended turns on
+      // telling that apart from an operator having clicked something.
+      expect.objectContaining({
+        type: 'SYSTEM',
+        trigger: expect.objectContaining({ kind: 'RUNNER' }),
+      }),
+    );
     expect(putObject).toHaveBeenCalledWith(
       'awb-labels/ship-1/v1-DLVSTUB202605000042.pdf',
       expect.any(Buffer),
@@ -288,7 +297,16 @@ describe('AwbGenerationService.generateForShipment', () => {
     expect(txShipmentUpdate).not.toHaveBeenCalled();
     expect(auditCalls(auditLog, 'awb.generated')).toHaveLength(0);
     // Phase D ran to completion.
-    expect(fetchLabel).toHaveBeenCalledWith('DLVSTUB202605000042');
+    expect(fetchLabel).toHaveBeenCalledWith(
+      'DLVSTUB202605000042',
+      // AWB generation is a queue worker, so the credential decrypt must
+      // attribute to the RUNNER branch — CUR-10 as amended turns on
+      // telling that apart from an operator having clicked something.
+      expect.objectContaining({
+        type: 'SYSTEM',
+        trigger: expect.objectContaining({ kind: 'RUNNER' }),
+      }),
+    );
     expect(putObject).toHaveBeenCalledTimes(1);
     expect(txAwbLabelCreate).toHaveBeenCalledTimes(1);
     expect(auditCalls(auditLog, 'awb.label_persisted')).toHaveLength(1);

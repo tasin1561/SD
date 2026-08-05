@@ -104,6 +104,7 @@ export {
   InboundFreightStatus,
   // D3 — pre-fetched courier AWB pool
   CourierWaybillStatus,
+  NdrRequestStatus,
   PickupRequestStatus,
   InviteLeadStatus,
   ShippingDirection,

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { CourierAccountRoutingService } from './services/courier-account-routing.service';
 import { CourierCredentialService } from './services/courier-credential.service';
+import { NdrAttemptContextService } from './services/ndr-attempt-context.service';
 
 /**
  * Module 9 — courier-shared: internal infrastructure consumed by the
@@ -11,10 +12,13 @@ import { CourierCredentialService } from './services/courier-credential.service'
  * `CourierCredentialService` is the ONLY sanctioned path to courier
  * credential plaintext (CUR-1). `CourierAccountRoutingService` (R1) is
  * the ONLY sanctioned path to multi-account selection logic.
+ * `NdrAttemptContextService` is the ONE place the NDR attempt count and
+ * current NSL are resolved — the numbers Delhivery's eligibility rules
+ * are judged on, and the seam that swaps to a courier-side field.
  * PrismaService / EnvService / AuditLogService are global.
  */
 @Module({
-  providers: [CourierCredentialService, CourierAccountRoutingService],
-  exports: [CourierCredentialService, CourierAccountRoutingService],
+  providers: [CourierCredentialService, CourierAccountRoutingService, NdrAttemptContextService],
+  exports: [CourierCredentialService, CourierAccountRoutingService, NdrAttemptContextService],
 })
 export class CourierSharedModule {}

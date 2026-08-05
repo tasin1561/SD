@@ -460,6 +460,104 @@ const systemSettings: SystemSettingSeed[] = [
       'Refill the AWB pool when fewer than this many unassigned waybills remain. Set it above a comfortable day of volume: the pool cannot be topped up inline (5 bulk fetches per 5 minutes), so running dry stalls manifesting until the cron next runs.',
   },
   {
+    key: 'courier.ndr_runner_enabled',
+    category: 'courier',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'NDR Nightly Runner Enabled',
+    description:
+      'The KILL SWITCH for automated NDR re-attempts. OFF by default. CUR-10 as amended permits a runner to fire courier writes only on a channel an operator explicitly enabled — this is that channel. Turning it off stops the runner at its next tick without a deploy; in-flight UPL polling and reconciliation continue, because abandoning requests already sent would be worse than finishing them.',
+  },
+  {
+    key: 'courier.ndr_runner_cron',
+    category: 'courier',
+    valueType: SettingValueType.STRING,
+    valueString: '35 21 * * *',
+    displayName: 'NDR Nightly Runner Schedule',
+    description:
+      "Cron for the nightly NDR batch, evaluated in Asia/Dhaka (the droplet runs UTC — the timezone is passed explicitly to BullMQ, never assumed). 21:35 Dhaka is just after Delhivery's 21:00 IST cutoff, by which time the day's dispatches have closed and NDR parcels are back in facility. Moving this earlier means submitting against a day that has not finished.",
+  },
+  {
+    key: 'courier.ndr_auto_categories',
+    category: 'courier',
+    valueType: SettingValueType.JSON,
+    valueJson: [],
+    displayName: 'NDR Auto-Action Allow List',
+    description:
+      "Which NDR actions the runner may fire unattended: a JSON array of 'RE-ATTEMPT' and/or 'PICKUP_RESCHEDULE'. EMPTY by default, which means the runner prepares and logs but sends nothing — the only safe initial state while the write contract has never been exercised. Widen one entry at a time.",
+  },
+  {
+    key: 'courier.ndr_batch_max',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 50,
+    displayName: 'NDR Nightly Batch Cap',
+    description:
+      'Most parcels the nightly runner will submit in one night. A cap rather than "all eligible" because the first unattended night should not be able to summon fifty vans if the eligibility filter is wrong, and because each submission costs a fresh tracking read.',
+    overrideMinInt: 1,
+    overrideMaxInt: 1000,
+  },
+  {
+    key: 'courier.ndr_upl_poll_cron',
+    category: 'courier',
+    valueType: SettingValueType.STRING,
+    valueString: '*/20 * * * *',
+    displayName: 'NDR UPL Poll Schedule',
+    description:
+      'How often to ask Delhivery what happened to a submitted NDR request. Every 20 minutes: the outcome is not real-time (the request is queued on their side for the next delivery cycle), the answer rarely changes within an hour, and the NDR endpoints have no documented rate budget so a conservative fallback applies. Faster polling would buy nothing an operator could act on before morning.',
+  },
+  {
+    key: 'courier.ndr_upl_poll_deadline_minutes',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 240,
+    displayName: 'NDR UPL Poll Deadline (minutes)',
+    description:
+      'How long a submitted request may go unanswered before it is treated as FAILED. Silence is NOT "still might work": the customer is waiting either way, and an unconfirmable re-attempt has to be chased by a human. Four hours covers a long courier-side queue while still landing the escalation before the next morning.',
+    overrideMinInt: 30,
+    overrideMaxInt: 1440,
+  },
+  {
+    key: 'courier.ndr_reconciliation_cron',
+    category: 'courier',
+    valueType: SettingValueType.STRING,
+    valueString: '0 12 * * *',
+    displayName: 'NDR Reconciliation Schedule',
+    description:
+      'Daily check of whether confirmed re-attempts actually produced a new delivery attempt in tracking. Midday Dhaka, so a night of requests has had a full delivery cycle to show up.',
+  },
+  {
+    key: 'courier.ndr_reconciliation_window_hours',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 48,
+    displayName: 'NDR Reconciliation Window (hours)',
+    description:
+      'How long after a CONFIRMED request a new attempt scan may still appear before we count it as not acted on. Too short and a slow-but-working courier reads as a failure; too long and a systematic problem takes days to surface.',
+    overrideMinInt: 6,
+    overrideMaxInt: 168,
+  },
+  {
+    key: 'ops.alert_email',
+    category: 'ops',
+    valueType: SettingValueType.STRING,
+    valueString: '',
+    displayName: 'Operations Alert Email',
+    description:
+      'Where system-detected operational problems are sent (currently the NDR reconciliation alert). EMPTY by default and deliberately not defaulted to a guessed address: an alert delivered nowhere is worse than one that visibly has no destination, because the first looks like everything is fine. When unset, the alert is still written to audit_logs at CRITICAL — the durable record does not depend on email being configured.',
+  },
+  {
+    key: 'courier.ndr_reconciliation_alert_percent',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 25,
+    displayName: 'NDR Reconciliation Alert Threshold (%)',
+    description:
+      'Alert when more than this percentage of confirmed re-attempts produced no new attempt scan. This is the ONLY check that catches Delhivery accepting our calls and not acting on them — every other signal says success. Some drift is normal (a parcel delivered before the re-attempt ran); a sustained quarter is not.',
+    overrideMinInt: 1,
+    overrideMaxInt: 100,
+  },
+  {
     key: 'courier.delhivery_waybill_pool_refill_batch',
     category: 'courier',
     valueType: SettingValueType.INT,
@@ -1786,6 +1884,16 @@ function autoHtmlFromText(subject: string, body: string): string {
 // facing templates additionally seed Hindi variants (deferred until
 // the customer apps land).
 const notificationTemplates: TemplateSeed[] = [
+  {
+    code: 'ops.ndr_reconciliation_alert.email',
+    name: 'NDR reconciliation alert — email to ops',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STAFF,
+    subject:
+      'NDR reconciliation: {{ not_acted_percent }}% of confirmed re-attempts produced nothing',
+    bodyTemplate:
+      'Of {{ checked }} re-attempts Delhivery CONFIRMED, {{ not_acted }} produced no new delivery attempt in tracking ({{ not_acted_percent }}%, threshold {{ threshold }}%).\n\nDelhivery accepting a request is not the same as acting on it. This is the only check that tells those apart — takeAction, the UPL poll and the tracking feed all report success either way.',
+  },
   {
     code: 'order.confirmed.customer.sms',
     name: 'Order confirmed — SMS to customer',

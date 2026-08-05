@@ -407,6 +407,11 @@ export async function resetWarehouseState(prisma: PrismaClient): Promise<void> {
         // Module 10 (F9) — must precede shipments because courier_webhooks
         // is SET NULL (not CASCADE) on shipment delete.
         'courier_webhooks',
+        // Phase 1 NDR orchestration. CASCADE on shipments would take
+        // these anyway, but listing it keeps the reset explicit — an
+        // implicit cascade is how a suite starts depending on a row it
+        // never created.
+        'ndr_action_requests',
         'tracking_events',
         'delivery_attempts',
         'shipment_items',

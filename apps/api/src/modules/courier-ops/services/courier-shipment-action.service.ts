@@ -344,10 +344,15 @@ export class CourierShipmentActionService {
     };
   }
 
-  /** Poll a previously-submitted NDR request for its real outcome. */
-  async ndrStatus(staffId: string, uplId: string): ReturnType<DelhiveryNdrService['checkStatus']> {
-    return this.ndr.checkStatus(uplId, courierActor.operator(staffId));
-  }
+  // `ndrStatus` was REMOVED (2026-08-06). It wrapped
+  // DelhiveryNdrService.checkStatus — which IS the UPL status poll — and
+  // had no caller: no controller, no service, nothing. NdrUplPollerService
+  // now owns UPL polling on a schedule and persists each outcome onto
+  // ndr_action_requests, so an operator reads the stored result rather
+  // than spending a rate-limited call to re-ask Delhivery. Keeping the
+  // operator-facing duplicate would have left two paths to one answer,
+  // one live and one dead, and the next person would pick whichever they
+  // found first.
 
   // ── internal ────────────────────────────────────────────────────────
 
