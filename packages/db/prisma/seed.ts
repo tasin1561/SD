@@ -595,7 +595,12 @@ const systemSettings: SystemSettingSeed[] = [
     valueDecimal: '18.00',
     displayName: 'GST Withheld from COD (%)',
     description:
-      'The customer pays a tax-INCLUSIVE price, so this is extracted from the COD (cod × r / (100 + r)), never added on top: ₹1,000 at 18% withholds ₹152.54, not ₹180. WE file it, so the withheld amount is a liability recorded in gst_withholdings — not margin. GLOBAL only: a tax rate is set by law, not negotiated per seller.',
+      'The customer pays a tax-INCLUSIVE price, so this is extracted from the COD (cod × r / (100 + r)), never added on top: ₹1,000 at 18% withholds ₹152.54, not ₹180. WE file it, so the withheld amount is a liability recorded in gst_withholdings — not margin. Per-seller override because GST is slabbed by what is being sold — apparel is 5% or 12%, electronics 18% — so one rate across every seller is wrong for most of them. It is still not NEGOTIABLE: the override records which slab a seller trades in, and the rate is snapshotted per order so changing it never restates a filed quarter.',
+    sellerOverridable: true,
+    // The GST slabs, and nothing between 0 and 28 is impossible. A wider
+    // range would let a typo withhold a third of a seller's takings.
+    overrideMinDecimal: '0',
+    overrideMaxDecimal: '28',
   },
   {
     key: 'tracking.webhook_payload_retention_days',

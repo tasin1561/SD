@@ -1,6 +1,5 @@
 import { Prisma } from '@skydrop/db';
 import { CodCreditService } from '../../src/modules/seller-wallet-accrual/services/cod-credit.service';
-import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { SettingsResolverService } from '../../src/modules/settings/services/settings-resolver.service';
 import type { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
 
@@ -51,16 +50,6 @@ function makeSut(opts: {
     },
   } as unknown as Prisma.TransactionClient;
 
-  const prisma = {
-    client: {
-      systemSetting: {
-        findUnique: jest.fn(async () => ({
-          valueDecimal: new Prisma.Decimal(opts.gstPercent ?? '18.00'),
-        })),
-      },
-    },
-  } as unknown as PrismaService;
-
   const settings = {
     resolve: jest.fn(async (_s: string, key: string) => ({
       key,
@@ -69,7 +58,11 @@ function makeSut(opts: {
         ? (opts.instantFeePercent ?? '2.50')
         : key.includes('cod_collection_fee')
           ? (opts.collectionFeePercent ?? '0.00')
-          : 'SETTLEMENT',
+          : // GST now resolves through the SAME per-seller path as the
+            // fees, rather than a global systemSetting lookup.
+            key.includes('cod_gst_percent')
+            ? (opts.gstPercent ?? '18.00')
+            : 'SETTLEMENT',
       source: 'SYSTEM_DEFAULT' as const,
     })),
   } as unknown as SettingsResolverService;
@@ -81,11 +74,42 @@ function makeSut(opts: {
     }),
   } as unknown as WalletService;
 
-  return { svc: new CodCreditService(prisma, settings, wallet), tx, entries, withholdings };
+  return { svc: new CodCreditService(settings, wallet), tx, entries, withholdings };
 }
 
 const amountOf = (entries: Entry[], direction: string): string =>
   entries.find((e) => e.direction === direction)?.amount.toFixed(2) ?? 'absent';
+
+describe('CodCreditService — the GST rate is per seller', () => {
+  it("withholds at the seller's own slab, not a platform-wide 18%", async () => {
+    // GST is slabbed by what is being sold — apparel 5% or 12%,
+    // electronics 18% — so one rate across every seller is wrong for
+    // most of them. A seller trading in the 5% slab on ₹1,000 owes
+    // 1000 × 5 / 105 = ₹47.62, not ₹152.54.
+    const { svc, tx } = makeSut({ gstPercent: '5.00' });
+    const r = await svc.creditForOrder(tx, {
+      orderId: ORDER,
+      sellerId: SELLER,
+      grossInr: new Prisma.Decimal('1000'),
+      mode: 'SETTLEMENT',
+    });
+    expect(r.gstWithheldInr).toBe('47.62');
+  });
+
+  it('still EXTRACTS at the overridden rate rather than adding it on top', async () => {
+    // The divisor is (100 + rate) whatever the rate is. Getting this
+    // wrong at 12% over-withholds on every order by the same shape as
+    // at 18%, just less visibly.
+    const { svc, tx } = makeSut({ gstPercent: '12.00' });
+    const r = await svc.creditForOrder(tx, {
+      orderId: ORDER,
+      sellerId: SELLER,
+      grossInr: new Prisma.Decimal('1000'),
+      mode: 'SETTLEMENT',
+    });
+    expect(r.gstWithheldInr).toBe('107.14');
+  });
+});
 
 describe('CodCreditService — SETTLEMENT mode', () => {
   it('extracts GST from the tax-inclusive price, it does not add it on top', async () => {

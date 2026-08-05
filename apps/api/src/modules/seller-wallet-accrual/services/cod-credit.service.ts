@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { ActorType, Currency, Prisma, WalletEntryDirection } from '@skydrop/db';
-import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 
@@ -87,7 +86,10 @@ const NOT_CREDITED = (mode: CodCreditModeValue, reason: string): CodCreditResult
 @Injectable()
 export class CodCreditService {
   constructor(
-    private readonly prisma: PrismaService,
+    // No PrismaService: every write here happens on the CALLER's
+    // transaction, and the only thing that ever read outside it was the
+    // global GST lookup — which is now resolved per seller through
+    // SettingsResolverService.
     private readonly settings: SettingsResolverService,
     private readonly wallet: WalletService,
   ) {}
@@ -131,7 +133,12 @@ export class CodCreditService {
       return NOT_CREDITED(mode, 'Already credited');
     }
 
-    const gstPercent = await this.globalDecimal(GST_KEY, DEFAULT_GST_PERCENT);
+    // Per SELLER, not global. GST is slabbed by what is being sold —
+    // apparel 5% or 12%, electronics 18% — so a single platform-wide
+    // rate is wrong for most sellers rather than safely conservative.
+    // Still not negotiable: the override records which slab a seller
+    // trades in, clamped 0–28 at write time (SET-1).
+    const gstPercent = await this.sellerDecimal(sellerId, GST_KEY, DEFAULT_GST_PERCENT);
     // Extracted from a tax-inclusive price. The divisor is (100 + rate),
     // not 100 — see the class comment; getting this wrong over-withholds
     // on every single order.
@@ -251,16 +258,7 @@ export class CodCreditService {
 
   // ── internal ──────────────────────────────────────────────────────
 
-  /** A rate set by law — global, never per-seller. */
-  private async globalDecimal(key: string, fallback: string): Promise<Prisma.Decimal> {
-    const row = await this.prisma.client.systemSetting.findUnique({
-      where: { key },
-      select: { valueDecimal: true },
-    });
-    return new Prisma.Decimal(row?.valueDecimal ?? fallback);
-  }
-
-  /** A rate that is negotiated — resolved per seller (SET-1). */
+  /** A rate that varies by seller — resolved through SET-1. */
   private async sellerDecimal(
     sellerId: string,
     key: string,
