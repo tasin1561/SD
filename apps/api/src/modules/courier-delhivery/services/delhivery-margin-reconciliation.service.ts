@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@skydrop/db';
 import { DelhiveryCostService } from './delhivery-cost.service';
+import type { CourierCredentialActor } from '../../courier-shared/services/courier-credential.service';
 
 export interface MarginCheck {
   readonly lane: string;
@@ -52,24 +53,30 @@ export class DelhiveryMarginReconciliationService {
 
   constructor(private readonly cost: DelhiveryCostService) {}
 
-  async check(input: {
-    readonly originPin: string;
-    readonly destinationPin: string;
-    readonly chargeableWeightGrams: number;
-    readonly isCod: boolean;
-    /** What we charged the seller for shipping, all-in. */
-    readonly billedToSellerInr: string;
-    /** The rate card's assumed cost, if we want drift measured. */
-    readonly assumedCostInr?: string;
-    readonly billingMode?: 'S' | 'E';
-  }): Promise<MarginCheck> {
-    const actual = await this.cost.estimate({
-      originPin: input.originPin,
-      destinationPin: input.destinationPin,
-      chargeableWeightGrams: input.chargeableWeightGrams,
-      paymentType: input.isCod ? 'COD' : 'Pre-paid',
-      ...(input.billingMode === undefined ? {} : { billingMode: input.billingMode }),
-    });
+  async check(
+    input: {
+      readonly originPin: string;
+      readonly destinationPin: string;
+      readonly chargeableWeightGrams: number;
+      readonly isCod: boolean;
+      /** What we charged the seller for shipping, all-in. */
+      readonly billedToSellerInr: string;
+      /** The rate card's assumed cost, if we want drift measured. */
+      readonly assumedCostInr?: string;
+      readonly billingMode?: 'S' | 'E';
+    },
+    actor?: CourierCredentialActor,
+  ): Promise<MarginCheck> {
+    const actual = await this.cost.estimate(
+      {
+        originPin: input.originPin,
+        destinationPin: input.destinationPin,
+        chargeableWeightGrams: input.chargeableWeightGrams,
+        paymentType: input.isCod ? 'COD' : 'Pre-paid',
+        ...(input.billingMode === undefined ? {} : { billingMode: input.billingMode }),
+      },
+      actor,
+    );
 
     const billed = new Prisma.Decimal(input.billedToSellerInr);
     const actualCost = new Prisma.Decimal(actual.totalInr);

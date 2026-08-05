@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DelhiveryHttpService } from './delhivery-http.service';
 import { DelhiveryWriteGuardService } from './delhivery-write-guard.service';
+import type { CourierCredentialActor } from '../../courier-shared/services/courier-credential.service';
 
 export interface DelhiveryEditInput {
   readonly awbNumber: string;
@@ -57,7 +58,10 @@ export class DelhiveryShipmentEditService {
     private readonly writeGuard: DelhiveryWriteGuardService,
   ) {}
 
-  async edit(input: DelhiveryEditInput): Promise<DelhiveryEditResult> {
+  async edit(
+    input: DelhiveryEditInput,
+    actor?: CourierCredentialActor,
+  ): Promise<DelhiveryEditResult> {
     if (input.paymentMode === 'COD' && input.codAmountInr === undefined) {
       // Delhivery would reject this; failing here says why.
       throw new Error(
@@ -81,6 +85,7 @@ export class DelhiveryShipmentEditService {
     if (input.codAmountInr !== undefined) body['cod_amount'] = input.codAmountInr;
 
     const raw = await this.http.request<Record<string, unknown>>({
+      actor,
       method: 'POST',
       path: '/api/p/edit',
       endpoint: 'edit',
@@ -98,13 +103,14 @@ export class DelhiveryShipmentEditService {
    * has to reflect that, which is why the result is surfaced rather than
    * swallowed.
    */
-  async cancel(awbNumber: string): Promise<DelhiveryEditResult> {
+  async cancel(awbNumber: string, actor?: CourierCredentialActor): Promise<DelhiveryEditResult> {
     if (await this.http.isStubMode()) {
       return { success: true, awbNumber, message: 'stub', raw: null };
     }
     await this.writeGuard.assertWritable('shipment.cancel', { awbNumber });
 
     const raw = await this.http.request<Record<string, unknown>>({
+      actor,
       method: 'POST',
       path: '/api/p/edit',
       endpoint: 'edit',

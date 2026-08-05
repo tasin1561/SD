@@ -60,7 +60,10 @@ export class AdminCourierNetworkController {
     summary:
       'What we billed versus what Delhivery actually charged. SAMPLED — each row is a live rate-limited call, so the report states how many it priced and lists what it skipped. Never adjusts anything.',
   })
-  marginReport(@Query() query: MarginReportQueryDto): Promise<MarginReport> {
+  marginReport(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Query() query: MarginReportQueryDto,
+  ): Promise<MarginReport> {
     // Real courier cost is commercially sensitive and this is a P&L
     // question, so it stops at finance and the top.
     const to = query.to === undefined ? new Date() : new Date(query.to);
@@ -68,7 +71,7 @@ export class AdminCourierNetworkController {
       query.from === undefined
         ? new Date(to.getTime() - DEFAULT_WINDOW_DAYS * 86_400_000)
         : new Date(query.from);
-    return this.margin.report({
+    return this.margin.report(staff.id, {
       from,
       to,
       limit: query.limit ?? DEFAULT_LIMIT,

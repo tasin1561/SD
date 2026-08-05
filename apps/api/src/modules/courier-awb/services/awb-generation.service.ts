@@ -13,6 +13,7 @@ import { CourierAccountRoutingService } from '../../courier-shared/services/cour
 import { DelhiveryAwbService } from '../../courier-delhivery/services/delhivery-awb.service';
 import { DelhiveryLabelService } from '../../courier-delhivery/services/delhivery-label.service';
 import type { DelhiveryAwbRequest } from '../../courier-delhivery/types/delhivery.types';
+import { courierActor } from '../../courier-shared/services/courier-credential.service';
 
 export type AwbGenerationOutcome =
   | {
@@ -224,7 +225,10 @@ export class AwbGenerationService {
       itemDescription: shipment.items.map((i) => `${i.productName} x${i.quantity}`).join('; '),
     };
 
-    const awb = await this.delhiveryAwb.generateAwb(req);
+    const awb = await this.delhiveryAwb.generateAwb(
+      req,
+      courierActor.runner('awb-generation', shipmentId),
+    );
     if (!awb.ok) {
       this.logger.warn(
         { shipmentId, errorCode: awb.errorCode, serviceable: awb.serviceable },
@@ -310,7 +314,10 @@ export class AwbGenerationService {
     actor: { type: ActorType; id?: string | null },
   ): Promise<AwbGenerationOutcome> {
     try {
-      const label = await this.delhiveryLabel.fetchLabel(awbNumber);
+      const label = await this.delhiveryLabel.fetchLabel(
+        awbNumber,
+        courierActor.runner('awb-generation', shipmentId),
+      );
       const labelVersion = await this.nextLabelVersion(shipmentId);
       const spacesKey = `awb-labels/${shipmentId}/v${labelVersion}-${awbNumber}.pdf`;
       await this.spaces.putObject(spacesKey, label.bytes, label.mimeType);

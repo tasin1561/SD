@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PaymentMode } from '@skydrop/db';
 import { DelhiveryHttpService } from './delhivery-http.service';
 import type { DelhiveryClient, DelhiveryServiceabilityResult } from '../types/delhivery.types';
+import type { CourierCredentialActor } from '../../courier-shared/services/courier-credential.service';
 
 /** The live pin record, as Delhivery actually returns it. */
 interface DelhiveryPostalCode {
@@ -77,8 +78,11 @@ export class DelhiveryServiceabilityService implements Pick<
   constructor(private readonly http: DelhiveryHttpService) {}
 
   /** The adapter-interface slice: a plain boolean for existing callers. */
-  async checkServiceability(pincode: string): Promise<DelhiveryServiceabilityResult> {
-    const detail = await this.describePin(pincode);
+  async checkServiceability(
+    pincode: string,
+    actor?: CourierCredentialActor,
+  ): Promise<DelhiveryServiceabilityResult> {
+    const detail = await this.describePin(pincode, actor);
     return { serviceable: detail.serviceable, fromLiveApi: detail.fromLiveApi };
   }
 
@@ -86,13 +90,16 @@ export class DelhiveryServiceabilityService implements Pick<
    * Can we actually ship THIS order to THIS pin? The question the
    * pre-flight gate needs answered, rather than a bare boolean.
    */
-  async canShip(input: {
-    pincode: string;
-    paymentMode: PaymentMode;
-    codAmountInr?: number;
-    weightGrams?: number;
-  }): Promise<{ ok: boolean; reason: string | null; detail: DelhiveryPinDetail }> {
-    const detail = await this.describePin(input.pincode);
+  async canShip(
+    input: {
+      pincode: string;
+      paymentMode: PaymentMode;
+      codAmountInr?: number;
+      weightGrams?: number;
+    },
+    actor?: CourierCredentialActor,
+  ): Promise<{ ok: boolean; reason: string | null; detail: DelhiveryPinDetail }> {
+    const detail = await this.describePin(input.pincode, actor);
 
     if (!detail.serviceable) {
       return {
@@ -141,7 +148,7 @@ export class DelhiveryServiceabilityService implements Pick<
   }
 
   /** The full live record for a pin. */
-  async describePin(pincode: string): Promise<DelhiveryPinDetail> {
+  async describePin(pincode: string, actor?: CourierCredentialActor): Promise<DelhiveryPinDetail> {
     if (await this.http.isStubMode()) {
       return this.stubDetail(pincode);
     }
@@ -149,6 +156,7 @@ export class DelhiveryServiceabilityService implements Pick<
     const result = await this.http.request<{
       delivery_codes?: Array<{ postal_code?: DelhiveryPostalCode }>;
     }>({
+      actor,
       method: 'GET',
       path: `/c/api/pin-codes/json/?filter_codes=${encodeURIComponent(pincode)}`,
       endpoint: 'serviceability',

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DelhiveryHttpService } from './delhivery-http.service';
 import { DelhiveryWriteGuardService } from './delhivery-write-guard.service';
+import type { CourierCredentialActor } from '../../courier-shared/services/courier-credential.service';
 
 export interface PickupRequestInput {
   /** Must match a registered pickup location EXACTLY (case + spaces). */
@@ -54,7 +55,10 @@ export class DelhiveryPickupService {
     private readonly writeGuard: DelhiveryWriteGuardService,
   ) {}
 
-  async requestPickup(input: PickupRequestInput): Promise<PickupRequestResult> {
+  async requestPickup(
+    input: PickupRequestInput,
+    actor?: CourierCredentialActor,
+  ): Promise<PickupRequestResult> {
     this.validate(input);
 
     if (await this.http.isStubMode()) {
@@ -68,6 +72,7 @@ export class DelhiveryPickupService {
     });
 
     const raw = await this.http.request<Record<string, unknown>>({
+      actor,
       method: 'POST',
       path: '/fm/request/new/',
       endpoint: 'pickup',

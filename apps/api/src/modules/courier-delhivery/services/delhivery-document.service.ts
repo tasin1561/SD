@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DelhiveryHttpService } from './delhivery-http.service';
+import type { CourierCredentialActor } from '../../courier-shared/services/courier-credential.service';
 
 /** Document types Delhivery will return for a B2C consignment. */
 export type DelhiveryDocumentType =
@@ -44,7 +45,11 @@ export class DelhiveryDocumentService {
 
   constructor(private readonly http: DelhiveryHttpService) {}
 
-  async fetch(awbNumber: string, docType: DelhiveryDocumentType): Promise<DelhiveryDocumentResult> {
+  async fetch(
+    awbNumber: string,
+    docType: DelhiveryDocumentType,
+    actor?: CourierCredentialActor,
+  ): Promise<DelhiveryDocumentResult> {
     if (await this.http.isStubMode()) {
       return {
         awbNumber,
@@ -56,6 +61,7 @@ export class DelhiveryDocumentService {
     }
 
     const raw = await this.http.request<Record<string, unknown>>({
+      actor,
       method: 'GET',
       path:
         `/api/rest/fetch/pkg/document/?doc_type=${encodeURIComponent(docType)}` +

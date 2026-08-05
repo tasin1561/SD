@@ -19,9 +19,74 @@ interface CacheEntry {
   cachedAt: number;
 }
 
+/**
+ * WHY a credential was decrypted, not just who.
+ *
+ * The amended CUR-10 (2026-08-05) turns on exactly one distinction: a
+ * courier call is either operator-triggered, or fired by a runner whose
+ * write channel an operator enabled. Before this, every decrypt audited
+ * as `SYSTEM` with a null actor id — so the audit log could show THAT a
+ * call happened and never which branch of the invariant it took. An
+ * invariant that cannot be evidenced has not really been adopted.
+ *
+ * Modelled as a discriminated union so the branches cannot be mixed: a
+ * RUNNER cannot carry a staff id, an OPERATOR cannot omit one.
+ */
+export type CourierCallTrigger =
+  /** A human clicked something. `staffId` is who. */
+  | { readonly kind: 'OPERATOR'; readonly staffId: string }
+  /** A cron or queue worker. `job` names it; `runId` pins the occurrence. */
+  | { readonly kind: 'RUNNER'; readonly job: string; readonly runId?: string | null | undefined }
+  /** Inbound from the courier. `source` names the channel. */
+  | { readonly kind: 'WEBHOOK'; readonly source: string };
+
 export interface CourierCredentialActor {
   type: ActorType;
   id?: string | null;
+  /** Optional so a missed call site still works — see `courierActor`. */
+  trigger?: CourierCallTrigger;
+}
+
+/**
+ * Build an actor from its trigger. Use these rather than hand-rolling
+ * the object: the mapping from trigger to `ActorType`/`id` is a decision
+ * (an operator's decrypt is attributed to the STAFF actor; a runner's to
+ * SYSTEM) and open-coding it at ten call sites is how two of them
+ * eventually disagree.
+ */
+export const courierActor = {
+  operator(staffId: string): CourierCredentialActor {
+    return { type: ActorType.STAFF, id: staffId, trigger: { kind: 'OPERATOR', staffId } };
+  },
+  runner(job: string, runId?: string | null): CourierCredentialActor {
+    return { type: ActorType.SYSTEM, id: null, trigger: { kind: 'RUNNER', job, runId } };
+  },
+  webhook(source: string): CourierCredentialActor {
+    return { type: ActorType.SYSTEM, id: null, trigger: { kind: 'WEBHOOK', source } };
+  },
+} as const;
+
+/** Flattened for the audit row's metadata — one shape, whatever the branch. */
+export function describeTrigger(trigger: CourierCallTrigger | undefined): {
+  triggerKind: string;
+  triggerDetail: string | null;
+} {
+  if (trigger === undefined) {
+    // The default-SYSTEM path. Named rather than left blank so an
+    // unattributed decrypt is searchable instead of merely absent.
+    return { triggerKind: 'UNATTRIBUTED', triggerDetail: null };
+  }
+  switch (trigger.kind) {
+    case 'OPERATOR':
+      return { triggerKind: 'OPERATOR', triggerDetail: trigger.staffId };
+    case 'RUNNER':
+      return {
+        triggerKind: 'RUNNER',
+        triggerDetail: trigger.runId == null ? trigger.job : `${trigger.job}:${trigger.runId}`,
+      };
+    case 'WEBHOOK':
+      return { triggerKind: 'WEBHOOK', triggerDetail: trigger.source };
+  }
 }
 
 /**
@@ -230,6 +295,7 @@ export class CourierCredentialService {
         environment,
         encryptionKeyVersion: credential.encryptionKeyVersion,
         fieldNames: credential.fieldNames,
+        ...describeTrigger(actor.trigger),
       },
     });
 

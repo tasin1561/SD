@@ -4,6 +4,7 @@ import {
   type DelhiveryTransportMode,
 } from '../../courier-delhivery/services/delhivery-tat.service';
 import { DelhiveryCostService } from '../../courier-delhivery/services/delhivery-cost.service';
+import { courierActor } from '../../courier-shared/services/courier-credential.service';
 import {
   DelhiveryDocumentService,
   type DelhiveryDocumentType,
@@ -64,6 +65,7 @@ export class CourierShipmentInsightService {
   ) {}
 
   async insight(
+    staffId: string,
     shipmentId: string,
     opts: { mode?: DelhiveryTransportMode } = {},
   ): Promise<ShipmentInsight> {
@@ -89,25 +91,31 @@ export class CourierShipmentInsightService {
     // would be felt on a page load.
     const [tat, cost] = await Promise.all([
       this.tat
-        .expectedTat({
-          originPin,
-          destinationPin: shipment.destinationPin,
-          ...(opts.mode === undefined ? {} : { mode: opts.mode }),
-        })
+        .expectedTat(
+          {
+            originPin,
+            destinationPin: shipment.destinationPin,
+            ...(opts.mode === undefined ? {} : { mode: opts.mode }),
+          },
+          courierActor.operator(staffId),
+        )
         .catch((err: unknown) => {
           unavailable.push(`Expected delivery time: ${describe(err)}`);
           return null;
         }),
       this.cost
-        .estimate({
-          originPin,
-          destinationPin: shipment.destinationPin,
-          chargeableWeightGrams: shipment.chargeableWeightGrams,
-          paymentType: shipment.isCod ? 'COD' : 'Pre-paid',
-          ...(shipment.lengthCm === null ? {} : { lengthCm: shipment.lengthCm }),
-          ...(shipment.widthCm === null ? {} : { breadthCm: shipment.widthCm }),
-          ...(shipment.heightCm === null ? {} : { heightCm: shipment.heightCm }),
-        })
+        .estimate(
+          {
+            originPin,
+            destinationPin: shipment.destinationPin,
+            chargeableWeightGrams: shipment.chargeableWeightGrams,
+            paymentType: shipment.isCod ? 'COD' : 'Pre-paid',
+            ...(shipment.lengthCm === null ? {} : { lengthCm: shipment.lengthCm }),
+            ...(shipment.widthCm === null ? {} : { breadthCm: shipment.widthCm }),
+            ...(shipment.heightCm === null ? {} : { heightCm: shipment.heightCm }),
+          },
+          courierActor.operator(staffId),
+        )
         .catch((err: unknown) => {
           unavailable.push(`Courier cost: ${describe(err)}`);
           return null;
@@ -151,6 +159,7 @@ export class CourierShipmentInsightService {
    * while a dispute is live rather than assuming it will keep.
    */
   async document(
+    staffId: string,
     shipmentId: string,
     docType: DelhiveryDocumentType,
   ): Promise<{
@@ -167,7 +176,11 @@ export class CourierShipmentInsightService {
         message: 'This shipment has no AWB yet, so the courier holds no paperwork for it.',
       });
     }
-    const result = await this.documents.fetch(shipment.awbNumber, docType);
+    const result = await this.documents.fetch(
+      shipment.awbNumber,
+      docType,
+      courierActor.operator(staffId),
+    );
     return {
       shipmentId: shipment.shipmentId,
       awbNumber: shipment.awbNumber,

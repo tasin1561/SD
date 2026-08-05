@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { CourierCredentialActor } from '../../courier-shared/services/courier-credential.service';
 import { PaymentMode } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { DelhiveryHttpService } from './delhivery-http.service';
@@ -66,7 +67,10 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
     private readonly serviceability: DelhiveryServiceabilityService,
   ) {}
 
-  async generateAwb(req: DelhiveryAwbRequest): Promise<DelhiveryAwbResult> {
+  async generateAwb(
+    req: DelhiveryAwbRequest,
+    actor?: CourierCredentialActor,
+  ): Promise<DelhiveryAwbResult> {
     if (await this.http.isStubMode()) {
       return this.stubGenerateAwb(req);
     }
@@ -103,6 +107,7 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
 
     try {
       const response = await this.http.request<DelhiveryCreateResponse>({
+        actor,
         method: 'POST',
         path: '/api/cmu/create.json',
         endpoint: 'create',

@@ -3,6 +3,7 @@ import { ChargeType, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { DelhiveryMarginReconciliationService } from '../../courier-delhivery/services/delhivery-margin-reconciliation.service';
 import { ShipmentCourierContextService } from './shipment-courier-context.service';
+import { courierActor } from '../../courier-shared/services/courier-credential.service';
 
 export interface MarginRow {
   readonly shipmentId: string;
@@ -82,7 +83,10 @@ export class CourierMarginReportService {
     private readonly reconciliation: DelhiveryMarginReconciliationService,
   ) {}
 
-  async report(input: { from: Date; to: Date; limit: number }): Promise<MarginReport> {
+  async report(
+    staffId: string,
+    input: { from: Date; to: Date; limit: number },
+  ): Promise<MarginReport> {
     const originPin = await this.context.originPin();
     const skipped: { shipmentId: string; reason: string }[] = [];
 
@@ -149,14 +153,17 @@ export class CourierMarginReportService {
       }
 
       try {
-        const check = await this.reconciliation.check({
-          originPin,
-          destinationPin: s.destPostalCode,
-          chargeableWeightGrams:
-            s.chargeableWeightGrams ?? s.declaredWeightGrams ?? s.totalWeightGrams,
-          isCod: s.codAmountInr !== null && s.codAmountInr.greaterThan(0),
-          billedToSellerInr: billed.toString(),
-        });
+        const check = await this.reconciliation.check(
+          {
+            originPin,
+            destinationPin: s.destPostalCode,
+            chargeableWeightGrams:
+              s.chargeableWeightGrams ?? s.declaredWeightGrams ?? s.totalWeightGrams,
+            isCod: s.codAmountInr !== null && s.codAmountInr.greaterThan(0),
+            billedToSellerInr: billed.toString(),
+          },
+          courierActor.operator(staffId),
+        );
         rows.push({
           shipmentId: s.id,
           shipmentNumber: s.shipmentNumber,

@@ -90,7 +90,14 @@ describe('DelhiveryHttpService.authHeaders', () => {
     const headers = await svc.authHeaders(CredentialEnvironment.SANDBOX);
     expect(headers.Authorization).toBe('Token secret-token');
     expect(headers['Content-Type']).toBe('application/json');
-    expect(getCredential).toHaveBeenCalledWith('delhivery', CredentialEnvironment.SANDBOX);
+    // Third argument is the actor; undefined here because this test calls
+    // authHeaders directly. The threading is covered by
+    // delhivery-actor-threading.spec.ts.
+    expect(getCredential).toHaveBeenCalledWith(
+      'delhivery',
+      CredentialEnvironment.SANDBOX,
+      undefined,
+    );
   });
 
   it('throws when the credential lacks the apiToken field', async () => {

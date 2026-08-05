@@ -2,7 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { CredentialEnvironment } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { EnvService } from '../../../config/env.service';
-import { CourierCredentialService } from '../../courier-shared/services/courier-credential.service';
+import {
+  CourierCredentialService,
+  type CourierCredentialActor,
+} from '../../courier-shared/services/courier-credential.service';
 import { DelhiveryRateLimitService, type DelhiveryEndpoint } from './delhivery-rate-limit.service';
 
 const BASE_URL_SETTING = 'courier.delhivery_api_base_url';
@@ -35,6 +38,17 @@ export interface DelhiveryRequestOptions {
   encoding?: 'json' | 'form-data-key';
   /** Per-request timeout in ms (default 25 000). */
   timeoutMs?: number;
+  /**
+   * WHO/WHY, for the CUR-1 decrypt audit row.
+   *
+   * Optional so a missed call site still works rather than throwing on a
+   * live courier path — but every call site is expected to pass one, and
+   * `delhivery-actor-threading.spec.ts` fails if one does not. An omitted
+   * actor audits as `UNATTRIBUTED`, which is searchable; the old default
+   * audited as plain SYSTEM and was indistinguishable from a genuine
+   * runner call.
+   */
+  actor?: CourierCredentialActor | undefined;
 }
 
 /**
@@ -110,8 +124,9 @@ export class DelhiveryHttpService {
    */
   async authHeaders(
     environment: CredentialEnvironment = this.environment(),
+    actor?: CourierCredentialActor,
   ): Promise<Record<string, string>> {
-    const creds = await this.credentials.getCredential(COURIER_CODE, environment);
+    const creds = await this.credentials.getCredential(COURIER_CODE, environment, actor);
     const token = creds[TOKEN_FIELD];
     if (token === undefined || token === '') {
       throw new Error(`Delhivery credential is missing the '${TOKEN_FIELD}' field`);
@@ -148,7 +163,7 @@ export class DelhiveryHttpService {
     // blocks our whole egress IP and would take live traffic with it.
     await this.rateLimit.consume(opts.endpoint);
     const baseUrl = await this.getBaseUrl();
-    const headers = await this.authHeaders(opts.environment ?? this.environment());
+    const headers = await this.authHeaders(opts.environment ?? this.environment(), opts.actor);
     const url = `${baseUrl.replace(/\/$/, '')}${opts.path}`;
 
     let body: string | undefined;

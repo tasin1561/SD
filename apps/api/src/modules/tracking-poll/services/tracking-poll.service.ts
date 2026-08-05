@@ -15,6 +15,7 @@ import type { DelhiveryRawScan } from '../../courier-delhivery/types/delhivery.t
 import { TrackingStatusMappingService } from '../../tracking-events/services/tracking-status-mapping.service';
 import { TrackingEventAppendService } from '../../tracking-events/services/tracking-event-append.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
+import { courierActor } from '../../courier-shared/services/courier-credential.service';
 
 const COURIER_CODE = 'delhivery';
 
@@ -121,7 +122,10 @@ export class TrackingPollService {
       const batch = shipments.slice(i, i + batchSize);
       let results;
       try {
-        results = await this.fetch.fetchTracking(batch.map((s) => s.awbNumber));
+        results = await this.fetch.fetchTracking(
+          batch.map((s) => s.awbNumber),
+          courierActor.runner('tracking-poll'),
+        );
       } catch (err) {
         // A transient fetch failure for one batch never aborts the
         // cycle — the next cron run retries. Log and continue.

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DelhiveryHttpService } from './delhivery-http.service';
 import type { DelhiveryClient, DelhiveryLabelResult } from '../types/delhivery.types';
+import type { CourierCredentialActor } from '../../courier-shared/services/courier-credential.service';
 
 /**
  * Module 9 — Delhivery shipping-label fetch. Implements the
@@ -23,7 +24,10 @@ import type { DelhiveryClient, DelhiveryLabelResult } from '../types/delhivery.t
 export class DelhiveryLabelService implements Pick<DelhiveryClient, 'fetchLabel'> {
   constructor(private readonly http: DelhiveryHttpService) {}
 
-  async fetchLabel(awbNumber: string): Promise<DelhiveryLabelResult> {
+  async fetchLabel(
+    awbNumber: string,
+    actor?: CourierCredentialActor,
+  ): Promise<DelhiveryLabelResult> {
     if (await this.http.isStubMode()) {
       const bytes = Buffer.from(
         `%PDF-1.4\n% Skydrop stub label for AWB ${awbNumber}\n%%EOF\n`,
@@ -35,6 +39,7 @@ export class DelhiveryLabelService implements Pick<DelhiveryClient, 'fetchLabel'
     const meta = await this.http.request<{
       packages?: Array<{ waybill?: string; pdf_download_link?: string }>;
     }>({
+      actor,
       method: 'GET',
       path: `/api/p/packing_slip?wbns=${encodeURIComponent(awbNumber)}&pdf=true&pdf_size=4R`,
       endpoint: 'label',

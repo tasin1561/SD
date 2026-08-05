@@ -18,6 +18,9 @@ import {
 } from '../services/delhivery-waybill-pool.service';
 import { DelhiveryWriteGuardService } from '../services/delhivery-write-guard.service';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
+import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
+import type { AuthenticatedStaff } from '../../../common/types/request';
+import { courierActor } from '../../courier-shared/services/courier-credential.service';
 
 /** The endpoints worth surfacing. `waybill_bulk` is first because its
  *  budget is FIVE per five minutes — the one that actually bites. */
@@ -126,10 +129,12 @@ export class AdminDelhiveryOpsController {
     summary:
       'Top the AWB pool up to its low watermark. No-ops when already above it; blocked by the write guard in live mode.',
   })
-  async refill(): Promise<{ fetched: number; poolAfter: number }> {
+  async refill(
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): Promise<{ fetched: number; poolAfter: number }> {
     // Narrower than the read: this one can spend the account's real AWB
     // allocation.
-    return this.pool.refillIfNeeded();
+    return this.pool.refillIfNeeded(courierActor.operator(staff.id));
   }
 
   /**
@@ -167,7 +172,10 @@ export class AdminDelhiveryOpsController {
     required: false,
     description: 'Pincode to look up. Defaults to courier.delhivery_origin_pincode.',
   })
-  async connectivity(@Query('pincode') pincode?: string): Promise<DelhiveryConnectivityView> {
+  async connectivity(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Query('pincode') pincode?: string,
+  ): Promise<DelhiveryConnectivityView> {
     const stubMode = await this.http.isStubMode();
     // Default to our own dispatch origin: it is the pincode whose
     // serviceability we most need to be true, and it needs no argument.
@@ -185,7 +193,7 @@ export class AdminDelhiveryOpsController {
     }
 
     try {
-      const detail = await this.serviceability.describePin(target);
+      const detail = await this.serviceability.describePin(target, courierActor.operator(staff.id));
       return {
         // In stub mode this is false and the call never left the box —
         // reporting it as reachability would be the worst outcome here,

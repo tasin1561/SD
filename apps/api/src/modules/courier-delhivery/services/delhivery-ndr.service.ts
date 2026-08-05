@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DelhiveryHttpService } from './delhivery-http.service';
 import { DelhiveryWriteGuardService } from './delhivery-write-guard.service';
+import type { CourierCredentialActor } from '../../courier-shared/services/courier-credential.service';
 
 export type NdrAction = 'RE-ATTEMPT' | 'PICKUP_RESCHEDULE';
 
@@ -114,7 +115,10 @@ export class DelhiveryNdrService {
     return { eligible: true, reason: null };
   }
 
-  async takeAction(input: NdrActionInput): Promise<NdrActionResult> {
+  async takeAction(
+    input: NdrActionInput,
+    actor?: CourierCredentialActor,
+  ): Promise<NdrActionResult> {
     const eligibility = this.checkEligibility(input);
     if (!eligibility.eligible) {
       this.logger.log(
@@ -147,6 +151,7 @@ export class DelhiveryNdrService {
     });
 
     const raw = await this.http.request<Record<string, unknown>>({
+      actor,
       method: 'POST',
       path: '/api/p/update',
       endpoint: 'ndr',
@@ -186,7 +191,10 @@ export class DelhiveryNdrService {
    * this, a re-attempt that was refused downstream would look identical
    * to one that worked.
    */
-  async checkStatus(uplId: string): Promise<{
+  async checkStatus(
+    uplId: string,
+    actor?: CourierCredentialActor,
+  ): Promise<{
     readonly complete: boolean;
     readonly success: boolean | null;
     readonly raw: unknown;
@@ -195,6 +203,7 @@ export class DelhiveryNdrService {
       return { complete: true, success: true, raw: null };
     }
     const raw = await this.http.request<Record<string, unknown>>({
+      actor,
       method: 'GET',
       path: `/api/cmu/get_bulk_upl/${encodeURIComponent(uplId)}?verbose=true`,
       endpoint: 'ndr',

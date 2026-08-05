@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DelhiveryHttpService } from './delhivery-http.service';
 import { DelhiveryWriteGuardService } from './delhivery-write-guard.service';
+import type { CourierCredentialActor } from '../../courier-shared/services/courier-credential.service';
 
 export interface EwaybillUpdateResult {
   readonly success: boolean;
@@ -40,12 +41,15 @@ export class DelhiveryEwaybillService {
     return declaredValueInr > EWAYBILL_THRESHOLD_INR;
   }
 
-  async update(input: {
-    readonly awbNumber: string;
-    /** The invoice number the e-way bill was raised against. */
-    readonly invoiceNumber: string;
-    readonly ewaybillNumber: string;
-  }): Promise<EwaybillUpdateResult> {
+  async update(
+    input: {
+      readonly awbNumber: string;
+      /** The invoice number the e-way bill was raised against. */
+      readonly invoiceNumber: string;
+      readonly ewaybillNumber: string;
+    },
+    actor?: CourierCredentialActor,
+  ): Promise<EwaybillUpdateResult> {
     if (await this.http.isStubMode()) {
       return { success: true, awbNumber: input.awbNumber, message: 'stub', raw: null };
     }
@@ -54,6 +58,7 @@ export class DelhiveryEwaybillService {
     });
 
     const raw = await this.http.request<Record<string, unknown>>({
+      actor,
       method: 'PUT',
       path: `/api/rest/ewaybill/${encodeURIComponent(input.awbNumber)}/`,
       endpoint: 'ewaybill',

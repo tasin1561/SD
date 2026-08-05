@@ -5,6 +5,7 @@ import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { DelhiveryWaybillPoolService } from '../services/delhivery-waybill-pool.service';
 import { JOB_REFILL_WAYBILLS, WAYBILL_REFILL_QUEUE_NAME } from './waybill-refill.queue';
+import { courierActor } from '../../courier-shared/services/courier-credential.service';
 
 const REFILL_ENABLED_SETTING = 'courier.delhivery_waybill_pool_refill_enabled';
 
@@ -60,7 +61,9 @@ export class WaybillRefillWorker implements OnModuleInit, OnModuleDestroy {
           return;
         }
         try {
-          const result = await this.pool.refillIfNeeded();
+          const result = await this.pool.refillIfNeeded(
+            courierActor.runner('waybill-refill', job.id),
+          );
           if (result.fetched > 0) {
             this.logger.log(result, 'Waybill pool topped up');
           }

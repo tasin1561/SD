@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DelhiveryHttpService } from './delhivery-http.service';
 import { DelhiveryWriteGuardService } from './delhivery-write-guard.service';
+import type { CourierCredentialActor } from '../../courier-shared/services/courier-credential.service';
 
 export interface DelhiveryWarehouseInput {
   /**
@@ -58,7 +59,10 @@ export class DelhiveryWarehouseService {
     private readonly writeGuard: DelhiveryWriteGuardService,
   ) {}
 
-  async register(input: DelhiveryWarehouseInput): Promise<DelhiveryWarehouseResult> {
+  async register(
+    input: DelhiveryWarehouseInput,
+    actor?: CourierCredentialActor,
+  ): Promise<DelhiveryWarehouseResult> {
     this.assertName(input.name);
     if (await this.http.isStubMode()) {
       return { success: true, name: input.name, message: 'stub', raw: null };
@@ -69,6 +73,7 @@ export class DelhiveryWarehouseService {
     });
 
     const raw = await this.http.request<Record<string, unknown>>({
+      actor,
       method: 'POST',
       path: '/api/backend/clientwarehouse/create/',
       endpoint: 'warehouse',
@@ -79,7 +84,10 @@ export class DelhiveryWarehouseService {
   }
 
   /** Update an existing location. The NAME is the key and is immutable. */
-  async update(input: DelhiveryWarehouseInput): Promise<DelhiveryWarehouseResult> {
+  async update(
+    input: DelhiveryWarehouseInput,
+    actor?: CourierCredentialActor,
+  ): Promise<DelhiveryWarehouseResult> {
     this.assertName(input.name);
     if (await this.http.isStubMode()) {
       return { success: true, name: input.name, message: 'stub', raw: null };
@@ -90,6 +98,7 @@ export class DelhiveryWarehouseService {
     });
 
     const raw = await this.http.request<Record<string, unknown>>({
+      actor,
       method: 'POST',
       path: '/api/backend/clientwarehouse/edit/',
       endpoint: 'warehouse',

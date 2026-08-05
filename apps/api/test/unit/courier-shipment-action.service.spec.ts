@@ -167,6 +167,16 @@ describe('CourierShipmentActionService — NDR action', () => {
     expect(out.nslCode).toBe('EOD-74');
     expect(ndrTakeAction).toHaveBeenCalledWith(
       expect.objectContaining({ currentNslCode: 'EOD-74', attemptCount: 1 }),
+      // The actor is the point of the second argument: an NDR re-attempt
+      // sends a real van, and CUR-10 as amended distinguishes an operator
+      // doing that from a runner doing it. Asserting the SHAPE here means
+      // a refactor that drops attribution fails a behavioural test too,
+      // not only the structural one.
+      expect.objectContaining({
+        type: 'STAFF',
+        id: 'staff-1',
+        trigger: { kind: 'OPERATOR', staffId: 'staff-1' },
+      }),
     );
   });
 

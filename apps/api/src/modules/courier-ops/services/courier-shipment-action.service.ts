@@ -13,6 +13,7 @@ import {
   type NdrAction,
 } from '../../courier-delhivery/services/delhivery-ndr.service';
 import { ShipmentCourierContextService } from './shipment-courier-context.service';
+import { courierActor } from '../../courier-shared/services/courier-credential.service';
 
 export interface ActionOutcome {
   readonly success: boolean;
@@ -99,10 +100,13 @@ export class CourierShipmentActionService {
       });
     }
 
-    const result = await this.editSvc.edit({
-      awbNumber: shipment.awbNumber,
-      ...changes,
-    });
+    const result = await this.editSvc.edit(
+      {
+        awbNumber: shipment.awbNumber,
+        ...changes,
+      },
+      courierActor.operator(staffId),
+    );
 
     await this.audit.log({
       actorType: ActorType.STAFF,
@@ -150,7 +154,7 @@ export class CourierShipmentActionService {
   ): Promise<ActionOutcome> {
     const shipment = await this.requireAwb(shipmentId);
 
-    const result = await this.editSvc.cancel(shipment.awbNumber);
+    const result = await this.editSvc.cancel(shipment.awbNumber, courierActor.operator(staffId));
 
     await this.audit.log({
       actorType: ActorType.STAFF,
@@ -209,11 +213,14 @@ export class CourierShipmentActionService {
   ): Promise<ActionOutcome> {
     const shipment = await this.requireAwb(shipmentId);
 
-    const result = await this.ewaybill.update({
-      awbNumber: shipment.awbNumber,
-      invoiceNumber: input.invoiceNumber,
-      ewaybillNumber: input.ewaybillNumber,
-    });
+    const result = await this.ewaybill.update(
+      {
+        awbNumber: shipment.awbNumber,
+        invoiceNumber: input.invoiceNumber,
+        ewaybillNumber: input.ewaybillNumber,
+      },
+      courierActor.operator(staffId),
+    );
 
     await this.audit.log({
       actorType: ActorType.STAFF,
@@ -296,12 +303,15 @@ export class CourierShipmentActionService {
     const shipment = await this.requireAwb(shipmentId);
     const { nslCode, attemptCount } = await this.latestAttempt(shipmentId);
 
-    const result = await this.ndr.takeAction({
-      awbNumber: shipment.awbNumber,
-      action,
-      currentNslCode: nslCode,
-      attemptCount,
-    });
+    const result = await this.ndr.takeAction(
+      {
+        awbNumber: shipment.awbNumber,
+        action,
+        currentNslCode: nslCode,
+        attemptCount,
+      },
+      courierActor.operator(staffId),
+    );
 
     await this.audit.log({
       actorType: ActorType.STAFF,
@@ -335,8 +345,8 @@ export class CourierShipmentActionService {
   }
 
   /** Poll a previously-submitted NDR request for its real outcome. */
-  async ndrStatus(uplId: string): ReturnType<DelhiveryNdrService['checkStatus']> {
-    return this.ndr.checkStatus(uplId);
+  async ndrStatus(staffId: string, uplId: string): ReturnType<DelhiveryNdrService['checkStatus']> {
+    return this.ndr.checkStatus(uplId, courierActor.operator(staffId));
   }
 
   // ── internal ────────────────────────────────────────────────────────

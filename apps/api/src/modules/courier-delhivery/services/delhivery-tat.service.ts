@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DelhiveryHttpService } from './delhivery-http.service';
+import type { CourierCredentialActor } from '../../courier-shared/services/courier-credential.service';
 
 export type DelhiveryTransportMode = 'S' | 'E' | 'N';
 
@@ -34,13 +35,16 @@ export class DelhiveryTatService {
 
   constructor(private readonly http: DelhiveryHttpService) {}
 
-  async expectedTat(input: {
-    originPin: string;
-    destinationPin: string;
-    mode?: DelhiveryTransportMode;
-    /** "YYYY-MM-DD HH:mm" — shifts the answer to a real expected date. */
-    expectedPickupAt?: string;
-  }): Promise<DelhiveryTatResult> {
+  async expectedTat(
+    input: {
+      originPin: string;
+      destinationPin: string;
+      mode?: DelhiveryTransportMode;
+      /** "YYYY-MM-DD HH:mm" — shifts the answer to a real expected date. */
+      expectedPickupAt?: string;
+    },
+    actor?: CourierCredentialActor,
+  ): Promise<DelhiveryTatResult> {
     const mode = input.mode ?? 'S';
     if (await this.http.isStubMode()) {
       return { tatDays: 3, mode, fromLiveApi: false, message: null };
@@ -61,6 +65,7 @@ export class DelhiveryTatService {
       msg?: string;
       data?: { tat?: number };
     }>({
+      actor,
       method: 'GET',
       path: `/api/dc/expected_tat?${qs.toString()}`,
       endpoint: 'tat',

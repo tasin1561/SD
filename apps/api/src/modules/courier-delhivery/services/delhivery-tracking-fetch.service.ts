@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { CourierCredentialActor } from '../../courier-shared/services/courier-credential.service';
 import { DelhiveryHttpService } from './delhivery-http.service';
 import type {
   CourierTrackingResult,
@@ -89,7 +90,10 @@ export class DelhiveryTrackingFetchService implements Pick<DelhiveryClient, 'fet
 
   constructor(private readonly http: DelhiveryHttpService) {}
 
-  async fetchTracking(awbNumbers: string[]): Promise<CourierTrackingResult[]> {
+  async fetchTracking(
+    awbNumbers: string[],
+    actor?: CourierCredentialActor,
+  ): Promise<CourierTrackingResult[]> {
     const awbs = awbNumbers.map((a) => a.trim()).filter((a) => a !== '');
     if (awbs.length === 0) return [];
 
@@ -105,6 +109,7 @@ export class DelhiveryTrackingFetchService implements Pick<DelhiveryClient, 'fet
     }
 
     const response = await this.http.request<DelhiveryTrackResponse>({
+      actor,
       method: 'GET',
       path: `/api/v1/packages/json/?waybill=${encodeURIComponent(awbs.join(','))}`,
       endpoint: 'tracking',

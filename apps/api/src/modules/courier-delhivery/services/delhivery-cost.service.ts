@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@skydrop/db';
 import { DelhiveryHttpService } from './delhivery-cost-types';
 import type { DelhiveryChargeRow } from './delhivery-cost-types';
+import type { CourierCredentialActor } from '../../courier-shared/services/courier-credential.service';
 
 export interface DelhiveryCostResult {
   /** What Delhivery bills us, all-in, including tax. */
@@ -62,19 +63,22 @@ export class DelhiveryCostService {
 
   constructor(private readonly http: DelhiveryHttpService) {}
 
-  async estimate(input: {
-    originPin: string;
-    destinationPin: string;
-    chargeableWeightGrams: number;
-    /** 'S' surface (default) or 'E' express. */
-    billingMode?: 'S' | 'E';
-    paymentType: 'Pre-paid' | 'COD';
-    /** Which leg to price: the forward delivery, an RTO or a DTO. */
-    shipmentStatus?: 'Delivered' | 'RTO' | 'DTO';
-    lengthCm?: number;
-    breadthCm?: number;
-    heightCm?: number;
-  }): Promise<DelhiveryCostResult> {
+  async estimate(
+    input: {
+      originPin: string;
+      destinationPin: string;
+      chargeableWeightGrams: number;
+      /** 'S' surface (default) or 'E' express. */
+      billingMode?: 'S' | 'E';
+      paymentType: 'Pre-paid' | 'COD';
+      /** Which leg to price: the forward delivery, an RTO or a DTO. */
+      shipmentStatus?: 'Delivered' | 'RTO' | 'DTO';
+      lengthCm?: number;
+      breadthCm?: number;
+      heightCm?: number;
+    },
+    actor?: CourierCredentialActor,
+  ): Promise<DelhiveryCostResult> {
     if (await this.http.isStubMode()) {
       return this.stub(input.chargeableWeightGrams);
     }
@@ -93,6 +97,7 @@ export class DelhiveryCostService {
     if (input.heightCm !== undefined) qs.set('h', String(input.heightCm));
 
     const rows = await this.http.request<DelhiveryChargeRow[]>({
+      actor,
       method: 'GET',
       path: `/api/kinko/v1/invoice/charges/.json?${qs.toString()}`,
       endpoint: 'cost',

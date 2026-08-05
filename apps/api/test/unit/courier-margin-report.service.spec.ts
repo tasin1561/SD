@@ -74,7 +74,7 @@ describe('CourierMarginReportService', () => {
     const { svc } = makeReport({
       charges: [{ type: ChargeType.BASE_SHIPPING, totalAmountInr: new Prisma.Decimal('200') }],
     });
-    const r = await svc.report(WINDOW);
+    const r = await svc.report('staff-1', WINDOW);
     expect(r.sampledShipments).toBe(1);
     expect(r.totalBilledInr).toBe('200.00');
     expect(r.totalActualCostInr).toBe('176.29');
@@ -88,7 +88,7 @@ describe('CourierMarginReportService', () => {
     const { svc } = makeReport({
       charges: [{ type: ChargeType.BASE_SHIPPING, totalAmountInr: new Prisma.Decimal('120') }],
     });
-    const r = await svc.report(WINDOW);
+    const r = await svc.report('staff-1', WINDOW);
     expect(r.lossMakingCount).toBe(1);
     expect(r.rows[0]?.lossMaking).toBe(true);
   });
@@ -102,7 +102,7 @@ describe('CourierMarginReportService', () => {
         { type: ChargeType.GST, totalAmountInr: new Prisma.Decimal('36') },
       ],
     });
-    const r = await svc.report(WINDOW);
+    const r = await svc.report('staff-1', WINDOW);
     expect(r.totalBilledInr).toBe('200.00');
   });
 
@@ -116,7 +116,7 @@ describe('CourierMarginReportService', () => {
         { type: ChargeType.RESHIPMENT_FEE, totalAmountInr: new Prisma.Decimal('90') },
       ],
     });
-    const r = await svc.report(WINDOW);
+    const r = await svc.report('staff-1', WINDOW);
     expect(r.totalBilledInr).toBe('200.00');
   });
 
@@ -128,7 +128,7 @@ describe('CourierMarginReportService', () => {
         { type: ChargeType.FUEL_SURCHARGE, totalAmountInr: new Prisma.Decimal('15') },
       ],
     });
-    const r = await svc.report(WINDOW);
+    const r = await svc.report('staff-1', WINDOW);
     expect(r.totalBilledInr).toBe('240.00');
   });
 
@@ -137,7 +137,7 @@ describe('CourierMarginReportService', () => {
     const { svc } = makeReport({
       shipments: [shipment(), shipment({ id: 'ship-2', orderShipments: [] })],
     });
-    const r = await svc.report(WINDOW);
+    const r = await svc.report('staff-1', WINDOW);
     expect(r.sampledShipments).toBe(1);
     expect(r.skipped).toHaveLength(1);
     expect(r.skipped[0]?.reason).toMatch(/no linked order/i);
@@ -145,21 +145,21 @@ describe('CourierMarginReportService', () => {
 
   it('skips an order with no persisted charges instead of scoring it zero', async () => {
     const { svc } = makeReport({ charges: [] });
-    const r = await svc.report(WINDOW);
+    const r = await svc.report('staff-1', WINDOW);
     expect(r.sampledShipments).toBe(0);
     expect(r.skipped[0]?.reason).toMatch(/no shipping charges/i);
   });
 
   it('survives a failed cost lookup, keeping the rest of the sample', async () => {
     const { svc } = makeReport({ checkThrows: new Error('rate budget exhausted') });
-    const r = await svc.report(WINDOW);
+    const r = await svc.report('staff-1', WINDOW);
     expect(r.sampledShipments).toBe(0);
     expect(r.skipped[0]?.reason).toContain('rate budget exhausted');
   });
 
   it('explains itself when the origin pincode is unconfigured', async () => {
     const { svc, check } = makeReport({ originPin: null });
-    const r = await svc.report(WINDOW);
+    const r = await svc.report('staff-1', WINDOW);
     expect(r.rows).toHaveLength(0);
     expect(r.skipped[0]?.reason).toMatch(/origin pincode is not configured/i);
     expect(check).not.toHaveBeenCalled();

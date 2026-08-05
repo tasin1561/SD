@@ -9,6 +9,7 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { ClientInfoPayload } from '../../../common/decorators/client-info.decorator';
 import { DelhiveryPickupService } from '../../courier-delhivery/services/delhivery-pickup.service';
+import { courierActor } from '../../courier-shared/services/courier-credential.service';
 
 const COURIER_CODE = 'delhivery';
 const PICKUP_LOCATION_SETTING = 'courier.delhivery_pickup_location';
@@ -159,12 +160,15 @@ export class CourierPickupService {
 
     let result: Awaited<ReturnType<DelhiveryPickupService['requestPickup']>>;
     try {
-      result = await this.pickup.requestPickup({
-        pickupLocation: pickupLocationName,
-        pickupDate: input.pickupDate,
-        pickupTime: input.pickupTime,
-        expectedPackageCount: input.expectedPackageCount,
-      });
+      result = await this.pickup.requestPickup(
+        {
+          pickupLocation: pickupLocationName,
+          pickupDate: input.pickupDate,
+          pickupTime: input.pickupTime,
+          expectedPackageCount: input.expectedPackageCount,
+        },
+        courierActor.operator(staffId),
+      );
     } catch (err) {
       // The row STAYS, marked FAILED. We do not know whether Delhivery
       // registered the request before the failure, so the day stays

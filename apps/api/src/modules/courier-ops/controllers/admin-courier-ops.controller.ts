@@ -77,10 +77,15 @@ export class AdminCourierOpsController {
       "The courier's own view: expected delivery time and what this parcel actually costs us. Parts degrade independently — a missing piece explains itself in `unavailable`.",
   })
   getInsight(
+    @CurrentStaff() staff: AuthenticatedStaff,
     @Param('shipmentId', new ParseUUIDPipe({ version: '7' })) shipmentId: string,
     @Query() query: ShipmentInsightQueryDto,
   ): Promise<ShipmentInsight> {
-    return this.insight.insight(shipmentId, query.mode === undefined ? {} : { mode: query.mode });
+    return this.insight.insight(
+      staff.id,
+      shipmentId,
+      query.mode === undefined ? {} : { mode: query.mode },
+    );
   }
 
   @Get('document')
@@ -90,10 +95,11 @@ export class AdminCourierOpsController {
       'Proof of delivery, consignee signature, or a reverse-pickup QC image. Delhivery only serves documents it has not archived, so fetch while a dispute is live.',
   })
   getDocument(
+    @CurrentStaff() staff: AuthenticatedStaff,
     @Param('shipmentId', new ParseUUIDPipe({ version: '7' })) shipmentId: string,
     @Query() query: FetchDocumentQueryDto,
   ): ReturnType<CourierShipmentInsightService['document']> {
-    return this.insight.document(shipmentId, query.docType);
+    return this.insight.document(staff.id, shipmentId, query.docType);
   }
 
   @Get('ewaybill-requirement')

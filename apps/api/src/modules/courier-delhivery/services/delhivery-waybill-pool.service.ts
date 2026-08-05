@@ -3,6 +3,7 @@ import { CourierWaybillStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { DelhiveryHttpService } from './delhivery-http.service';
 import { DelhiveryWriteGuardService } from './delhivery-write-guard.service';
+import type { CourierCredentialActor } from '../../courier-shared/services/courier-credential.service';
 
 const COURIER_CODE = 'delhivery';
 const LOW_WATER_SETTING = 'courier.delhivery_waybill_pool_low_water';
@@ -146,7 +147,9 @@ export class DelhiveryWaybillPoolService {
    * account's real allocation, and a runaway loop here would burn through
    * it.
    */
-  async refillIfNeeded(): Promise<{ fetched: number; poolAfter: number }> {
+  async refillIfNeeded(
+    actor?: CourierCredentialActor,
+  ): Promise<{ fetched: number; poolAfter: number }> {
     const [lowWater, batch, settleSeconds] = await Promise.all([
       this.intSetting(LOW_WATER_SETTING, DEFAULT_LOW_WATER),
       this.intSetting(REFILL_BATCH_SETTING, DEFAULT_REFILL_BATCH),
@@ -178,6 +181,7 @@ export class DelhiveryWaybillPoolService {
     });
 
     const raw = await this.http.request<string | string[]>({
+      actor,
       method: 'GET',
       path: `/waybill/api/bulk/json/?count=${batch}`,
       endpoint: 'waybill_bulk',

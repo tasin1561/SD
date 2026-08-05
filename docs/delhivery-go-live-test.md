@@ -113,6 +113,25 @@ the first real write, where the failure is expensive and ambiguous between bad
 credentials and a bad payload. If it is red, stop: the rest of this procedure
 cannot tell you anything useful.
 
+**Then check the audit row it wrote.** A green call proves the token; the row
+proves CUR-1's audit path, which had also never run in production:
+
+```sql
+SELECT * FROM audit_logs
+ WHERE action = 'courier.credential.decrypted'
+ ORDER BY created_at DESC LIMIT 1;
+```
+
+Expect `entity_id` = the credential row, and in `metadata`:
+`encryptionKeyVersion` matching the row's version, `fieldNames: ["apiToken"]`,
+and `triggerKind` / `triggerDetail` naming who caused it.
+
+**`severity` lives in `metadata`, not as a column on `audit_logs`.** Written
+down because it is invisible until you try to filter on it — an ops console
+listing "all HIGH courier events" needs `metadata->>'severity'`, and a
+`WHERE severity = 'HIGH'` will fail as an unknown column rather than quietly
+returning nothing.
+
 ### 2. Settings are configured
 
 Admin → Settings. All four must be right; the first three are read on every

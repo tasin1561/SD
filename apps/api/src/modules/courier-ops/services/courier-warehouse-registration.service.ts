@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { ActorType } from '@skydrop/db';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { ClientInfoPayload } from '../../../common/decorators/client-info.decorator';
+import { courierActor } from '../../courier-shared/services/courier-credential.service';
 import {
   DelhiveryWarehouseService,
   type DelhiveryWarehouseInput,
@@ -54,7 +55,7 @@ export class CourierWarehouseRegistrationService {
     ctx: ClientInfoPayload,
   ): Promise<WarehouseRegistrationOutcome> {
     this.assertExactName(input.name);
-    const result = await this.warehouses.register(input);
+    const result = await this.warehouses.register(input, courierActor.operator(staffId));
     await this.auditIt(staffId, 'registered', input.name, result, ctx);
     return { success: result.success, name: result.name, message: result.message };
   }
@@ -65,7 +66,7 @@ export class CourierWarehouseRegistrationService {
     ctx: ClientInfoPayload,
   ): Promise<WarehouseRegistrationOutcome> {
     this.assertExactName(input.name);
-    const result = await this.warehouses.update(input);
+    const result = await this.warehouses.update(input, courierActor.operator(staffId));
     await this.auditIt(staffId, 'updated', input.name, result, ctx);
     return { success: result.success, name: result.name, message: result.message };
   }
