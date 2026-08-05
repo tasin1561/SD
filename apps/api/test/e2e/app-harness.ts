@@ -233,6 +233,7 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         // Courier escalations FK tickets (CASCADE), and their messages
         // cascade from those — listed anyway so the reset stays
         // explicit rather than relying on a chain (MUST #12).
+        'courier_outbox_items',
         'courier_escalation_messages',
         'courier_escalations',
         'ticket_events',
@@ -329,6 +330,8 @@ export async function resetInventoryState(prisma: PrismaClient): Promise<void> {
         'bin_layout_snapshot_lines',
         'bin_layout_snapshots',
         'bin_collapse_challenges',
+        // Courier write-mode 2FA challenges FK staff_users (MUST #12).
+        'courier_mode_challenges',
         // Test-created topology (seeded warehouses are preserved).
         'warehouse_bins',
         'warehouse_zones',

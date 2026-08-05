@@ -1023,3 +1023,176 @@ export function useAdminHoldReviews(query: {
       client.request<readonly AdminReviewRow[]>(`/api/admin/early-reservation-reviews${qs(query)}`),
   });
 }
+
+// ───────── Courier escalation: outbox + write-mode (Phase 3/4) ─────────
+
+export interface OpsQueueItem {
+  readonly id: string;
+  readonly kind: 'COMMENT' | 'RAISE_TICKET';
+  readonly status: 'PENDING' | 'SENDING' | 'SENT_UNCONFIRMED' | 'CONFIRMED' | 'FAILED';
+  readonly body: string;
+  readonly categoryId: string | null;
+  readonly awbNumber: string | null;
+  readonly externalTicketId: string | null;
+  readonly orderId: string | null;
+  readonly sellerId: string | null;
+  readonly sellerName: string | null;
+  readonly deepLink: string;
+  readonly claimedByStaffId: string | null;
+  readonly claimExpiresAt: string | null;
+  readonly createdAt: string;
+  readonly lastError: string | null;
+}
+
+export interface OpsQueueCounts {
+  readonly pending: number;
+  readonly sending: number;
+  readonly sentUnconfirmed: number;
+  readonly confirmedToday: number;
+  readonly failedToday: number;
+}
+
+export interface CourierChannelView {
+  readonly settings: {
+    readonly courierCode: string;
+    readonly writeMode: 'MANUAL' | 'SUPERVISED' | 'AUTO';
+    readonly autoCategories: readonly string[];
+    readonly pausedUntil: string | null;
+    readonly pauseReason: string | null;
+    readonly effectivelyPaused: boolean;
+    readonly updatedAt: string;
+  };
+  readonly capabilities: Record<string, boolean>;
+  readonly lockedCategoryLabels: readonly string[];
+  readonly counts: OpsQueueCounts;
+}
+
+export function useCourierOutbox(): UseQueryResult<OpsQueueItem[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['courier-escalation', 'outbox'],
+    queryFn: () => client.request<OpsQueueItem[]>('/api/admin/courier-escalation/outbox'),
+    // A claim lease is ten minutes; a stale queue shows work someone
+    // else already took.
+    refetchInterval: 20_000,
+  });
+}
+
+export function useCourierChannel(): UseQueryResult<CourierChannelView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['courier-escalation', 'channel'],
+    queryFn: () => client.request<CourierChannelView>('/api/admin/courier-escalation/channel'),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useClaimOutboxItem(): UseMutationResult<OpsQueueItem, Error, string> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (itemId: string) =>
+      client.request<OpsQueueItem>(`/api/admin/courier-escalation/outbox/${itemId}/claim`, {
+        method: 'POST',
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['courier-escalation'] }),
+  });
+}
+
+export function useMarkOutboxSent(): UseMutationResult<
+  { ok: true },
+  Error,
+  { itemId: string; externalTicketId?: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, externalTicketId }) =>
+      client.request<{ ok: true }>(`/api/admin/courier-escalation/outbox/${itemId}/mark-sent`, {
+        method: 'POST',
+        body: externalTicketId === undefined ? {} : { externalTicketId },
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['courier-escalation'] }),
+  });
+}
+
+export function useReleaseOutboxItem(): UseMutationResult<{ ok: true }, Error, string> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (itemId: string) =>
+      client.request<{ ok: true }>(`/api/admin/courier-escalation/outbox/${itemId}/release`, {
+        method: 'POST',
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['courier-escalation'] }),
+  });
+}
+
+export function useRequestModeChange(): UseMutationResult<
+  { challengeId: string; expiresAt: string },
+  Error,
+  { writeMode: string; autoCategories: string[]; reason: string }
+> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<{ challengeId: string; expiresAt: string }>(
+        '/api/admin/courier-escalation/channel/mode/request',
+        { method: 'POST', body },
+      ),
+  });
+}
+
+export function useConfirmModeChange(): UseMutationResult<
+  CourierChannelView['settings'],
+  Error,
+  { challengeId: string; code: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<CourierChannelView['settings']>(
+        '/api/admin/courier-escalation/channel/mode/confirm',
+        { method: 'POST', body },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['courier-escalation'] }),
+  });
+}
+
+export function usePauseCourierChannel(): UseMutationResult<
+  CourierChannelView['settings'],
+  Error,
+  { minutes: number; reason: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<CourierChannelView['settings']>(
+        '/api/admin/courier-escalation/channel/pause',
+        {
+          method: 'POST',
+          body,
+        },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['courier-escalation'] }),
+  });
+}
+
+export function useResumeCourierChannel(): UseMutationResult<
+  CourierChannelView['settings'],
+  Error,
+  void
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      client.request<CourierChannelView['settings']>(
+        '/api/admin/courier-escalation/channel/resume',
+        { method: 'POST' },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['courier-escalation'] }),
+  });
+}

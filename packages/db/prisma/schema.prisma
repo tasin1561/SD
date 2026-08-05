@@ -93,6 +93,7 @@ model StaffUser {
   binLayoutSnapshotsTaken    BinLayoutSnapshot[]           @relation("BinSnapshotTakenBy")
   topupsReviewed             WalletTopupRequest[]          @relation("TopupReviewedBy")
   binCollapseChallenges      BinCollapseChallenge[]        @relation("BinCollapseChallengeStaff")
+  courierModeChallenges      CourierModeChallenge[]        @relation("CourierModeChallengeStaff")
 
   @@index([role])
   @@index([deletedAt])
@@ -1599,6 +1600,7 @@ model CourierEscalation {
 
   ticket   Ticket                     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   messages CourierEscalationMessage[]
+  outbox   CourierOutboxItem[]
 
   @@index([externalTicketId])
   @@index([awbNumber])
@@ -1726,6 +1728,192 @@ model CourierMessageTemplate {
 
   @@index([isActive, priority])
   @@map("courier_message_templates")
+}
+
+/// Where an outbound courier message is in its life.
+///
+/// `SENT_UNCONFIRMED` is the state the whole design exists to handle: we
+/// dispatched something and do not know whether it landed. It is NEVER
+/// blind-retried — a retry is how one comment becomes three.
+enum CourierOutboxStatus {
+  /// Queued, not claimed.
+  PENDING          @map("pending")
+  /// Claimed and being worked, by a worker or a human.
+  SENDING          @map("sending")
+  /// Dispatched, outcome UNKNOWN. Only a read-back may move it on.
+  SENT_UNCONFIRMED @map("sent_unconfirmed")
+  /// Read back from Delhivery and found present. Terminal, and the ONLY
+  /// success — never set by anyone asserting they did it.
+  CONFIRMED        @map("confirmed")
+  /// Definitively not sent. Safe to re-enqueue as a NEW item.
+  FAILED           @map("failed")
+
+  @@map("courier_outbox_status")
+}
+
+/// How a failure should be treated, which is a different question from
+/// what went wrong.
+enum CourierDispatchErrorClass {
+  /// The request provably never reached them — DNS failure, connection
+  /// refused, 401. Nothing happened on their side, so failing over
+  /// immediately is safe.
+  PRE_DISPATCH @map("pre_dispatch")
+  /// A timeout or a 5xx. The request MAY have been processed. This is
+  /// the class that must never be retried blind — it goes to the
+  /// reconciler, which reads their state before deciding.
+  AMBIGUOUS    @map("ambiguous")
+  /// They answered, and the answer was no. Not retryable as-is.
+  REJECTED     @map("rejected")
+
+  @@map("courier_dispatch_error_class")
+}
+
+/// What kind of write this is.
+enum CourierOutboxKind {
+  /// Add a comment to an existing courier ticket.
+  COMMENT      @map("comment")
+  /// Raise a new ticket.
+  RAISE_TICKET @map("raise_ticket")
+
+  @@map("courier_outbox_kind")
+}
+
+/// Operator intent for the write channel. Distinct from health — see
+/// `CourierChannelSettings.pausedUntil`.
+enum CourierWriteMode {
+  /// Everything to the ops queue. The worker claims nothing.
+  MANUAL     @map("manual")
+  /// The worker prepares and holds for one-click approval.
+  SUPERVISED @map("supervised")
+  /// The worker executes unattended, except locked categories.
+  AUTO       @map("auto")
+
+  @@map("courier_write_mode")
+}
+
+/// One outbound message, and everything needed to decide what to do with
+/// it after something went wrong.
+///
+/// ── WHY AN OUTBOX AND NOT A QUEUE JOB ────────────────────────────────
+/// BullMQ retries on failure, which is correct for idempotent work and
+/// catastrophic here: posting a comment is not idempotent, and a retried
+/// timeout puts the same message in a customer-visible thread twice. The
+/// outbox is a durable row whose STATE decides what may happen next, and
+/// the queue only ever wakes something up to look at it.
+model CourierOutboxItem {
+  id           String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  escalationId String @map("escalation_id") @db.Uuid
+
+  kind       CourierOutboxKind
+  /// VERBATIM outbound text. Never rewritten, never translated — the
+  /// seller's words reach the courier as the seller wrote them.
+  body       String            @db.Text
+  /// Delhivery's category ID for a RAISE_TICKET. An ID, never a label:
+  /// labels are localised and re-worded, IDs are not.
+  categoryId String?           @map("category_id")
+
+  status   CourierOutboxStatus @default(PENDING)
+  attempts Int                 @default(0)
+
+  /// The mode this item was ROUTED under, stamped at claim time and not
+  /// at enqueue. Flipping the mode must not leave a mis-stamped backlog
+  /// that executes under yesterday's intent.
+  routedMode CourierWriteMode? @map("routed_mode")
+
+  /// Claim lease. Whoever holds it owns the item until it expires; a
+  /// human and the worker can never both be acting on one message.
+  claimedByStaffId String?   @map("claimed_by_staff_id") @db.Uuid
+  /// 'worker' when the automated consumer holds it. Deliberately not a
+  /// staff FK — the worker is not a person and must not borrow one.
+  claimedByKind    String?   @map("claimed_by_kind")
+  claimedAt        DateTime? @map("claimed_at") @db.Timestamptz
+  claimExpiresAt   DateTime? @map("claim_expires_at") @db.Timestamptz
+
+  /// Set the moment we dispatch, BEFORE we know the outcome. This is
+  /// what makes a crash mid-post recoverable instead of invisible.
+  dispatchedAt DateTime? @map("dispatched_at") @db.Timestamptz
+  /// Set only by a READ-BACK that found the message present.
+  confirmedAt  DateTime? @map("confirmed_at") @db.Timestamptz
+  /// Their id for what we created — a ticket id for RAISE_TICKET.
+  externalRef  String?   @map("external_ref")
+
+  lastError      String?                    @map("last_error") @db.Text
+  lastErrorClass CourierDispatchErrorClass? @map("last_error_class")
+
+  /// sha256 of (escalation, kind, body). Logged instead of the payload,
+  /// so an action is traceable without the text living in two places.
+  requestFingerprint String @map("request_fingerprint")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  escalation CourierEscalation @relation(fields: [escalationId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([escalationId])
+  @@index([claimExpiresAt])
+  @@map("courier_outbox_items")
+}
+
+/// The write channel's settings. One row per courier.
+///
+/// ── TWO VARIABLES, NOT ONE ───────────────────────────────────────────
+/// `writeMode` is what the OPERATOR chose. `pausedUntil` is what the
+/// SYSTEM decided about its own health. A canary failure or an open
+/// circuit sets the pause; it must never overwrite the mode, or
+/// recovering would silently restore a mode nobody re-chose — and an
+/// operator who set MANUAL on purpose would find themselves back in AUTO
+/// because a health check went green.
+model CourierChannelSettings {
+  id          String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courierCode String @unique @map("courier_code")
+
+  writeMode      CourierWriteMode @default(MANUAL) @map("write_mode")
+  /// Delhivery category IDs the worker may act on unattended. EMPTY is
+  /// the shipped state and the only safe one while the taxonomy is
+  /// unfetched. Claims/Finance and Protect VAS can never appear here —
+  /// enforced in the service, not by hoping.
+  autoCategories String[]         @default([]) @map("auto_categories")
+
+  /// Health, not intent. Null = not paused.
+  pausedUntil DateTime? @map("paused_until") @db.Timestamptz
+  pauseReason String?   @map("pause_reason") @db.Text
+
+  updatedByStaffId String?  @map("updated_by_staff_id") @db.Uuid
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("courier_channel_settings")
+}
+
+/// A pending 2FA challenge for a write-mode change.
+///
+/// Mirrors `BinCollapseChallenge`: a six-digit code mailed to the actor,
+/// stored hashed, attempt-capped and expiring. Widening the write channel
+/// is the act that lets software send vans and post to a customer-visible
+/// thread, so it gets the same ceremony as collapsing a warehouse.
+model CourierModeChallenge {
+  id          String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courierCode String @map("courier_code")
+  staffUserId String @map("staff_user_id") @db.Uuid
+
+  /// What they are asking for. Verified again at confirm time — a
+  /// challenge is not a licence to set anything.
+  requestedMode       CourierWriteMode @map("requested_mode")
+  requestedCategories String[]         @default([]) @map("requested_categories")
+
+  /// Hashed, never stored in the clear.
+  codeHash   String    @map("code_hash")
+  reason     String    @db.Text
+  attempts   Int       @default(0)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  staffUser StaffUser @relation("CourierModeChallengeStaff", fields: [staffUserId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("courier_mode_challenges")
 }
 
 /// The outcome of one NDR action we asked Delhivery to perform.

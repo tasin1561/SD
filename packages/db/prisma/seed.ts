@@ -1885,6 +1885,15 @@ function autoHtmlFromText(subject: string, body: string): string {
 // the customer apps land).
 const notificationTemplates: TemplateSeed[] = [
   {
+    code: 'ops.courier_mode_change_code.email',
+    name: 'Courier write-mode change — confirmation code',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STAFF,
+    subject: 'Confirm the {{ courier_code }} write-mode change: {{ code }}',
+    bodyTemplate:
+      'Someone (you, we hope) asked to set the {{ courier_code }} courier write channel to {{ requested_mode }}.\n\nConfirmation code: {{ code }}\n\nReason given: {{ reason }}\n\nThis widens what the system may do WITHOUT a human — including posting into threads customers read. If this was not you, do not share the code, and tell someone.\n\nThe code expires in 10 minutes.',
+  },
+  {
     code: 'ops.ndr_reconciliation_alert.email',
     name: 'NDR reconciliation alert — email to ops',
     channel: NotificationChannel.EMAIL,
