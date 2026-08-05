@@ -172,9 +172,23 @@ export class StaffInvitationService {
     };
   }
 
+  /**
+   * Invitations still waiting on somebody.
+   *
+   * USED ones are excluded. An accepted invitation is not pending — the
+   * person it created is in the staff list above it, so showing both
+   * made somebody appear as an active Call agent AND an outstanding
+   * SUPER_ADMIN invitation, which is a contradiction the screen cannot
+   * explain. The row it left behind is history, and history that looks
+   * like a to-do item is worse than no history.
+   *
+   * EXPIRED ones stay: an invitation nobody accepted in time still needs
+   * a decision — resend it or revoke it — and hiding it is how a
+   * colleague waits a week for a link that will never work.
+   */
   async list(): Promise<{ items: InvitationListItem[]; total: number }> {
     const rows = await this.prisma.client.staffInvitation.findMany({
-      where: { deletedAt: null },
+      where: { deletedAt: null, usedAt: null },
       orderBy: { createdAt: 'desc' },
       take: 200,
       select: {

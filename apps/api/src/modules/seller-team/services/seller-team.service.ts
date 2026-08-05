@@ -149,9 +149,14 @@ export class SellerTeamService {
     return { ...this.toInvView(row), token: plaintext, inviteUrl: url };
   }
 
+  /**
+   * Invitations still waiting on somebody. USED ones are excluded —
+   * see the note on `StaffInvitationService.list`; the seller team page
+   * had exactly the same contradiction.
+   */
   async listInvitations(sellerId: string): Promise<{ items: TeamInvitationView[]; total: number }> {
     const rows = await this.prisma.client.sellerUserInvitation.findMany({
-      where: { sellerId, deletedAt: null },
+      where: { sellerId, deletedAt: null, usedAt: null },
       orderBy: { createdAt: 'desc' },
       take: 200,
       select: this.invitationSelect,
