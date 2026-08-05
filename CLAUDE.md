@@ -833,6 +833,16 @@ repository and the easiest to lose to a path filter) and any `*-threading` or
 structural spec that reads sources rather than behaviour, because those exist
 precisely to catch what a behavioural test cannot see.
 
+**Do not push onto an unverified head (2026-08-06).** If a previous commit's
+CI has not gone green, WAIT — or push the fix for it first. A commit stacked on
+an unverified head inherits whatever is broken underneath it, so its run goes
+red for a reason that has nothing to do with the change, and the result teaches
+nothing while costing a full CI cycle. It also muddies the record: three red
+runs where only one had a real defect makes the history read as instability
+rather than as one bug and two self-inflicted repeats. This happened on
+2026-08-06 — a docs-only commit went out on top of an unverified fix and failed
+on a test failure that was already known.
+
 **What `pnpm gate` does NOT prove (2026-08-06).** It runs typecheck, lint,
 `format:check` and the unit suite. **None of those four builds the Nest
 container.** Typecheck resolves imports and checks types; it does not ask whether

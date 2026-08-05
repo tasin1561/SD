@@ -30,12 +30,23 @@
  * ambient environment, passed locally off a developer `.env`, and failed
  * in CI on `JWT_SIGNING_KEY: Required`.
  *
- * Depending on the workflow's env block would have been the wrong fix: a
- * boot check whose requirements live in a YAML file drifts from the
- * schema it is checking, and the failure is a red suite that looks like
- * a real defect. So the values are set HERE, before a dynamic import,
- * and they are obvious throwaways — this test cares only that providers
- * resolve, never that a credential works.
+ * **Does compiling the container GENUINELY need this env? Yes.** Not an
+ * accident of coupling: `ConfigModule` calls
+ * `NestConfigModule.forRoot({ validate })` inside its `@Module` decorator
+ * argument, so validation runs when the file is IMPORTED, and the
+ * `EnvService` factory validates `process.env` again when the provider
+ * resolves. The app is designed to refuse to construct on a bad
+ * environment — fail-fast on misconfiguration is the feature. There is
+ * therefore no way to build this container without a valid env, and this
+ * test is not reaching for configuration it does not need.
+ *
+ * Which means CI supplying the vars would ALSO have been correct. The
+ * reason they live here instead is portability: a load-bearing boot check
+ * should run in a fresh clone, in a new CI job, on a machine with no
+ * `.env`, without anyone first discovering which vars it wants. `??=`
+ * keeps that honest — a real environment's values always win, so this
+ * cannot mask a genuine misconfiguration where the vars are set for
+ * real.
  *
  * ── WHAT IT CATCHES, AND WHAT IT DOES NOT ────────────────────────────
  * Catches: a provider missing from `providers`, a service missing from
