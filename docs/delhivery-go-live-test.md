@@ -69,11 +69,49 @@ otherwise fail mid-test with the guard already on.
 
 - `COURIER_CREDENTIALS_KEY_V1` is set in the droplet's environment (the key is
   **never** in the database).
-- A `CourierAccount` exists for `delhivery` / `PRODUCTION`, added via
-  **Admin → Courier accounts**, with the API token in `credentialFields`.
-- The token is the live one. If it has been rotated since it was stored, store
-  the new one — decryption succeeding proves nothing about whether Delhivery
-  still honours it.
+- An **active `courier_credentials` row** exists for the `delhivery` courier in
+  the `PRODUCTION` environment, carrying an `apiToken` field.
+
+  **Corrected 2026-08-05.** This step used to require a `CourierAccount` "with
+  the API token in `credentialFields`". That is wrong and would have sent you
+  looking for a missing prerequisite: `CourierCredentialService.getCredential`
+  resolves by `(courierCode, environment)` straight off `courier_credentials`,
+  and no `CourierAccount` is consulted anywhere on the auth path. Production
+  today has one active credential and **zero** courier accounts, and the AWB
+  call authenticates fine.
+
+  What you lose with zero accounts is **CACC-1 traceability**:
+  `AwbGenerationService.resolveCourierAccountId` finds nothing, so the test
+  parcel's `Shipment.courierAccountId` will be **null** and the shipment will
+  not record which courier account carried it. That is accepted knowingly for
+  this test — it is one parcel that gets cancelled, and creating an account
+  purely to satisfy a column would add a moving part to the run that is meant
+  to have as few as possible. Do NOT let that null become the norm: real
+  traffic needs accounts, and CACC-1 says never to infer the account from
+  `courierCode` after the fact.
+
+- **The token is proven, not merely present.** Decryption succeeding proves
+  nothing about whether Delhivery still honours it — see step 0 below, which is
+  the cheapest possible way to find out and must be green before anything here
+  is enabled.
+
+### 0. Prove the credential works — before any flag moves
+
+**Admin → Delhivery → connectivity** (`GET /admin/delhivery/connectivity`).
+
+One serviceability lookup. It creates nothing, is idempotent, and travels the
+entire chain that a write depends on: decrypt the credential (writing the CUR-1
+`courier.credential.decrypted` audit row), authenticate, pass the client-side
+rate limiter, parse a real response.
+
+**Read `reachedLiveApi`, not the HTTP status.** A serviceability answer can be
+served from a local `ServiceArea` row, and in stub mode the call never leaves
+the process — both would return 200 and prove nothing at all.
+
+This step exists because the alternative was discovering a dead token *inside*
+the first real write, where the failure is expensive and ambiguous between bad
+credentials and a bad payload. If it is red, stop: the rest of this procedure
+cannot tell you anything useful.
 
 ### 2. Settings are configured
 
@@ -86,6 +124,16 @@ shipment.
 | `courier.delhivery_pickup_location` | The warehouse name **exactly** as registered with Delhivery. Case and spaces included. |
 | `courier.delhivery_origin_pincode` | The pincode goods dispatch from. |
 | `courier.delhivery_waybill_pool_refill_batch` | **Set this to 25 for the test.** It defaults to 500, and pulling 500 real waybills as your first live write is a large, pointless first action. Delhivery mints in batches of 25 anyway. Put it back afterwards. |
+
+**Applied to production 2026-08-05** (via the admin API, so all three are
+audited as `staff.system_setting.updated`): origin pincode `""` → `700128`,
+pickup location `Skydrop` → `MSEXPORT`, refill batch `500` → `25`.
+
+`Skydrop` was never a registered warehouse name — the Delhivery One panel shows
+`MSEXPORT` on existing orders. Config and registration had simply never been
+reconciled, and nothing would have reported the disagreement until a create
+call failed. **The panel remains authoritative for both values**; neither can be
+confirmed programmatically (see the warehouse-API note at step 3).
 
 ### 3. Confirm you are actually in live mode
 
@@ -142,6 +190,15 @@ shipment and **Close** it.
 
 Closing enqueues AWB generation. This is the real test: the create-shipment
 call goes to Delhivery with our payload.
+
+**If it rejects with `ClientWarehouse matching query does not exist`, that is
+the pickup-location string and nothing else.** Check
+`courier.delhivery_pickup_location` against the name in the Delhivery One panel
+— byte-identical, case and spaces included — before touching anything about the
+payload shape. This error reads like a data problem and is a configuration one,
+and there is no read-only API that would have caught it earlier: Delhivery's
+warehouse API has `create` and `edit` but no list, so the create call is the
+first thing that ever validates the name.
 
 ### Step 4 — Confirm the AWB is real
 
