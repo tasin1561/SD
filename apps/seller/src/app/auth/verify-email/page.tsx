@@ -18,7 +18,7 @@ export default async function SellerVerifyEmailPage({
   const token = (rawToken ?? '').trim();
 
   return (
-    <div className="min-h-screen grid place-items-center bg-bg text-text-body p-6">
+    <>
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <div className="text-text-bright font-semibold text-lg tracking-tight">Skydrop</div>
@@ -49,6 +49,6 @@ export default async function SellerVerifyEmailPage({
           )}
         </div>
       </div>
-    </div>
+    </>
   );
 }

@@ -13,7 +13,7 @@ import { PasswordResetRequestForm } from './_components/request-form';
  */
 export default function PasswordResetPage(): ReactElement {
   return (
-    <div className="min-h-screen grid place-items-center bg-bg text-text-body p-6">
+    <>
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <div className="text-text-bright font-semibold text-lg tracking-tight">Skydrop</div>
@@ -34,6 +34,6 @@ export default function PasswordResetPage(): ReactElement {
           </a>
         </div>
       </div>
-    </div>
+    </>
   );
 }
