@@ -312,6 +312,13 @@ Only after Phases 1–4 are stable, and only with separate explicit approval.
 long-lived production Chromium is a new runtime dependency and a new process
 class.
 
+> **PHASE 5 GATE — the process split must land first.** `@skydrop/workers`
+> deployed, `WORKERS_ENABLED=false` on the API (SCALE-1), verified by the
+> `worker-role.spec.ts` discipline plus a live check that exactly one process
+> owns the queues. A long-lived Chromium holding a decrypted portal login must
+> not run inside the process serving customer HTTP. Scheduled between Phase 3
+> and Phase 5; Phase 5 does not start until it is done.
+
 - Long-lived Playwright process, persistent `storageState`, real Chromium.
 - **Serial execution, one job at a time.** Randomised 20–90s human-shaped gaps.
   There is no throughput pressure (~30 items/day) — spend it on looking normal.
@@ -386,25 +393,44 @@ interface CourierSupportAdapter {
 
 ## Cross-cutting rules
 
-**Secrets.** Courier credentials live only in the worker process env — never in
-the DB, never reachable from any Next.js app, never in a Next.js server action.
-Exclude from backup archives. Support two secrets simultaneously so rotation can
-be tested without downtime.
+**Secrets `[AMENDED 2026-08-05, RESOLVED]`.** Every **courier** secret goes into
+`courier_credentials` under **CUR-1** — AES-256-GCM envelope encryption, the key
+in env as `COURIER_CREDENTIALS_KEY_<version>`, decrypt only via
+`CourierCredentialService`, and an `audit_logs` row written BEFORE plaintext is
+returned. Plaintext is never logged, never serialized into a response, never
+cached beyond 5 minutes.
 
-> `[AMENDED 2026-08-05]` **This boundary is NOT currently in effect.**
-> `apps/workers` is built (`apps/api/src/workers-main.ts` boots the same
-> `AppModule` with no HTTP listener) but **is not deployed** — pm2 runs only
-> `skydrop-api`, `skydrop-admin`, `skydrop-seller`, `skydrop-track`, so all 17
-> workers run inside the HTTP-serving API process. Achieving the stated boundary
-> requires deploying `@skydrop/workers` and setting `WORKERS_ENABLED=false` on
-> the API (SCALE-1). Until that split happens, do not claim the separation.
->
-> Note also that Delhivery credentials currently live **encrypted in the DB**
-> (`courier_credentials`, CUR-1) with only the KEY in env — a deliberate,
-> audited design. This brief's "never in the DB" rule conflicts with CUR-1;
-> **CUR-1 wins for existing courier credentials.** Any NEW secret introduced by
-> this system (portal login, MCP client secret, inbound-email webhook secret)
-> follows the brief: env only, worker process only.
+The brief originally said *"courier credentials live only in the worker process
+env — never in the DB."* **That is superseded: CUR-1 wins, and it extends to new
+secrets rather than being grandfathered.** Envelope encryption is strictly better
+than raw env for this class of secret — it has a rotation path (versioned keys,
+two live simultaneously), a per-use audit trail, and no plaintext sitting in a
+process dump or a crash report. So:
+
+| Secret | Home | Why |
+|---|---|---|
+| Delhivery API token | `courier_credentials` (CUR-1) | courier credential |
+| Portal login (Phase 5) | `courier_credentials` (CUR-1) | courier credential |
+| MCP client secret | `courier_credentials` (CUR-1) | courier credential |
+| Inbound-email webhook secret | **env** | app infra, not a courier credential — same class as `TRACKING_WEBHOOK_SECRET_DELHIVERY` |
+
+No migration is required; the existing token is already correct.
+
+The unchanged half of the original rule still holds: **no courier secret is
+reachable from any Next.js app or a Next.js server action**, and secrets are
+excluded from backup archives.
+
+**Process separation `[AMENDED 2026-08-05, RESOLVED]`.** `apps/workers` is built
+(`apps/api/src/workers-main.ts` boots the same `AppModule` with no HTTP listener)
+but **not deployed** — pm2 runs only `skydrop-api`, `skydrop-admin`,
+`skydrop-seller`, `skydrop-track`, so all 17 workers run inside the HTTP-serving
+API process.
+
+- **NOT a Phase 1 blocker.** Credentials already live in the HTTP process today.
+  That is the status quo, not a regression this project introduces.
+- **HARD PREREQUISITE FOR PHASE 5.** A long-lived Chromium must not run inside
+  the HTTP process. Deploying `@skydrop/workers` with `WORKERS_ENABLED=false` on
+  the API (SCALE-1) is a **Phase 5 gate**, scheduled between Phase 3 and Phase 5.
 
 **No LLM in the tool-call path.** Claude classifies and labels. TypeScript
 decides and acts. Model output must never select a tool or an argument.
@@ -458,4 +484,7 @@ Work in this order. Stop and report at each numbered step.
 3. **Phase 1 orchestration** — nightly runner, UPL poller, reconciliation job.
 4. **Phase 2** — inbound email ingestion, read pipeline, classifier.
 5. **Phases 3 and 4** — outbox, mode switch, ops console.
-6. **Phase 5** — Playwright. Separate explicit approval, after 1–5 are stable.
+6. **Process split** — deploy `@skydrop/workers`, set `WORKERS_ENABLED=false` on
+   the API. Worth doing on its own merits (SCALE-1 horizontal headroom); a hard
+   gate for step 7.
+7. **Phase 5** — Playwright. Separate explicit approval, after 1–6 are stable.

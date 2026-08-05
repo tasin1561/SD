@@ -3,6 +3,7 @@ import { Worker, type Job } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { wafAwareBackoff } from '../../courier-delhivery/util/waf-backoff';
 import { AwbGenerationJobService } from '../services/awb-generation-job.service';
 import {
   AWB_BACKOFF_STRATEGY,
@@ -60,12 +61,11 @@ export class AwbGenerationWorker implements OnModuleInit, OnModuleDestroy {
         connection: this.redis.createConnection(),
         concurrency: 1,
         settings: {
-          // Custom per-attempt backoff: attemptsMade is 1-based after
-          // the first failure; clamp to the last configured delay.
-          backoffStrategy: (attemptsMade: number): number => {
-            const idx = Math.min(Math.max(attemptsMade - 1, 0), backoffMs.length - 1);
-            return backoffMs[idx] ?? 1000;
-          },
+          // Custom per-attempt backoff over courier.awb_job_retry_backoff_ms,
+          // EXCEPT on an AWS WAF 403, where the configured schedule
+          // ([1000,5000,15000]) would spend every attempt inside the 30s
+          // block window and re-hit the WAF each time — see waf-backoff.ts.
+          backoffStrategy: wafAwareBackoff(backoffMs),
         },
       },
     );
