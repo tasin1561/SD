@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactElement } from 'react';
-import { Mail, Phone } from 'lucide-react';
+import { Mail, Phone, Send } from 'lucide-react';
 import {
   Button,
   DescriptionList,
@@ -17,6 +17,7 @@ import {
 import { inviteLeadStatusKind } from '@skydrop/ui/status';
 import { InviteLeadStatus } from '@skydrop/db';
 import {
+  useCreateInvitation,
   useUpdateInviteLead,
   type InviteLead,
   type InviteLeadStatus as LeadStatus,
@@ -57,11 +58,14 @@ export function LeadDrawer({
   readonly onClose: () => void;
 }): ReactElement {
   const canWrite = usePermission('leads.manage');
+  const canInvite = usePermission('sellers.invite');
   const toast = useToast();
   const update = useUpdateInviteLead();
+  const invite = useCreateInvitation();
   const [status, setStatus] = useState<LeadStatus>('NEW');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
 
   // Re-seed whenever a different lead is opened — otherwise the previous
   // lead's notes appear under this one's name, which is the kind of
@@ -71,12 +75,41 @@ export function LeadDrawer({
     setStatus(lead.status);
     setNotes(lead.notes ?? '');
     setError(null);
+    setInviteUrl(null);
   }, [lead]);
 
   if (lead === null) return <></>;
 
   const dirty = status !== lead.status || notes !== (lead.notes ?? '');
   const direction = lead.shippingDirection === null ? null : DIRECTION[lead.shippingDirection];
+
+  /**
+   * Invite this lead to register, from the same place you read their
+   * request.
+   *
+   * The alternative was copying the address, opening Sellers, and
+   * pasting it into a second form — which is where the wrong email gets
+   * typed, and it loses the connection between the request and the
+   * invitation entirely.
+   *
+   * The status moves to QUALIFIED, not CONVERTED: an invitation sent is
+   * not an account created. They become CONVERTED when they actually
+   * register, which is not this button's business to claim.
+   */
+  async function sendInvite(): Promise<void> {
+    if (lead === null) return;
+    setError(null);
+    try {
+      const created = await invite.mutateAsync({ email: lead.email });
+      setInviteUrl(created.inviteUrl);
+      if (status === 'NEW' || status === 'CONTACTED') setStatus('QUALIFIED');
+      toast.success(`Invitation sent to ${lead.email}`);
+    } catch (e) {
+      // The server's refusal is the useful part here — "that email
+      // already has a Skydrop login" tells you exactly what happened.
+      setError(serverVerdict(e));
+    }
+  }
 
   async function save(): Promise<void> {
     if (lead === null) return;
@@ -186,6 +219,39 @@ export function LeadDrawer({
             rows={4}
           />
         </FormField>
+
+        {canInvite && (
+          <div className="border-border rounded-xl border p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-text-bright text-sm">Invite them to register</div>
+                <div className="text-text-muted text-xs">
+                  Sends a registration link to {lead.email}.
+                </div>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={invite.isPending}
+                onClick={() => void sendInvite()}
+              >
+                <Send size={12} /> {invite.isPending ? 'Sending…' : 'Send invite'}
+              </Button>
+            </div>
+
+            {inviteUrl !== null && (
+              <div className="mt-3">
+                <div className="text-text-muted mb-1 text-xs">
+                  The email is on its way. This link is here in case it does not arrive — it is the
+                  only time it is shown.
+                </div>
+                <code className="text-text-body block overflow-x-auto rounded-lg bg-[var(--color-bg)] p-2 text-xs">
+                  {inviteUrl}
+                </code>
+              </div>
+            )}
+          </div>
+        )}
 
         {error !== null && <ErrorNote message={error} />}
       </div>

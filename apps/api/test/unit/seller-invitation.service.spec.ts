@@ -24,11 +24,21 @@ function buildClient() {
   const sellersByEmail = new Set<string>();
   let seq = 0;
   const auditCalls: { data: Record<string, unknown> }[] = [];
+  const sellerUsersByEmail = new Set<string>();
 
   const client = {
     seller: {
       findUnique: jest.fn(async ({ where }: { where: { email: string } }) =>
         sellersByEmail.has(where.email) ? { id: 'pre-existing' } : null,
+      ),
+    },
+    // Checked as well as `seller`: registration creates a SellerUser
+    // carrying the same address, and that column is globally unique, so
+    // somebody already on another company's team must be refused HERE
+    // rather than when they click the link.
+    sellerUser: {
+      findUnique: jest.fn(async ({ where }: { where: { email: string } }) =>
+        sellerUsersByEmail.has(where.email) ? { id: 'pre-existing-user' } : null,
       ),
     },
     sellerInvitation: {
@@ -85,7 +95,7 @@ function buildClient() {
       }),
     },
   };
-  return { client, invitations, sellersByEmail, auditCalls };
+  return { client, invitations, sellersByEmail, sellerUsersByEmail, auditCalls };
 }
 
 function makeEnv(): EnvService {
@@ -137,6 +147,20 @@ describe('SellerInvitationService', () => {
     await expect(
       svc.create({ email: 'exists@brand.com' }, { staffId: 'staff-1' }, ctx),
     ).rejects.toThrow(ConflictException);
+  });
+
+  it('create: refuses an email that is a TEAM MEMBER elsewhere, not a seller', async () => {
+    // The gap this closes. Registration creates a Seller AND a SellerUser
+    // with the same address, and `seller_users.email` is globally unique
+    // — so somebody already on another company's team passed the old
+    // check, accepted, and the registration transaction died on the
+    // constraint. The failure landed on THEM, at the moment they clicked
+    // the link. It belongs on whoever sends the invite.
+    const { svc, fixt } = makeSut();
+    fixt.sellerUsersByEmail.add('agent@othercompany.com');
+    await expect(
+      svc.create({ email: 'agent@othercompany.com' }, { staffId: 'staff-1' }, ctx),
+    ).rejects.toMatchObject({ response: { code: 'EMAIL_ALREADY_REGISTERED' } });
   });
 
   it('create: refuses when a live invitation already exists', async () => {

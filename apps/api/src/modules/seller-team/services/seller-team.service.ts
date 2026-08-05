@@ -103,15 +103,37 @@ export class SellerTeamService {
         message:
           existing.sellerId === sellerId
             ? 'This person is already a team member.'
-            : 'This email is registered with another seller account.',
+            : // Deliberately does NOT say it belongs to another seller.
+              // Naming the neighbour confirms who else is on the
+              // platform, which is not this company's business.
+              'That email already has a Skydrop login.',
       });
     }
 
+    // Pending invitations are checked ACROSS every seller, not just this
+    // one. `seller_users.email` is globally unique, so if two companies
+    // both invite the same person the first to accept wins and the second
+    // gets a failure at the moment they click the link — the same shape
+    // as the seller-invite bug, one table over.
     const live = await this.findLive(sellerId, emailLower);
-    if (live) {
+    const elsewhere =
+      live === null
+        ? await this.prisma.client.sellerUserInvitation.findFirst({
+            where: {
+              email: emailLower,
+              deletedAt: null,
+              usedAt: null,
+              expiresAt: { gt: new Date() },
+            },
+            select: { id: true },
+          })
+        : null;
+    if (live || elsewhere) {
       throw new ConflictException({
         code: 'INVITATION_ALREADY_PENDING',
-        message: `A pending invitation already exists for ${input.email}. Resend it instead.`,
+        message: live
+          ? `A pending invitation already exists for ${input.email}. Resend it instead.`
+          : 'That email already has a pending invitation.',
       });
     }
 

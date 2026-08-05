@@ -43,15 +43,32 @@ export class SellerInvitationService {
   ): Promise<CreatedInvitationDto> {
     const emailLower = input.email.trim().toLowerCase();
 
-    // Refuse to invite someone who already has a seller account.
-    const existing = await this.prisma.client.seller.findUnique({
-      where: { email: emailLower },
-      select: { id: true },
-    });
-    if (existing) {
+    // Refuse to invite an email that already has a login.
+    //
+    // BOTH tables, not just `sellers`. Registration creates a Seller AND
+    // a SellerUser carrying the same address, and `seller_users.email` is
+    // globally unique — so somebody already on ANOTHER company's team
+    // passed this check, accepted the invitation, and the registration
+    // transaction then died on the unique constraint. The failure landed
+    // on them, at the moment they clicked the link, with nothing they
+    // could do about it. Catching it here means the refusal lands on
+    // whoever is sending the invite, while they can still act on it.
+    const [seller, sellerUser] = await Promise.all([
+      this.prisma.client.seller.findUnique({
+        where: { email: emailLower },
+        select: { id: true },
+      }),
+      this.prisma.client.sellerUser.findUnique({
+        where: { email: emailLower },
+        select: { id: true },
+      }),
+    ]);
+    if (seller !== null || sellerUser !== null) {
       throw new ConflictException({
         code: 'EMAIL_ALREADY_REGISTERED',
-        message: 'A seller account already exists for this email',
+        // Deliberately does not say WHOSE. An admin can look it up; the
+        // message does not need to name another company.
+        message: 'That email already has a Skydrop login.',
       });
     }
 
