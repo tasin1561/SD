@@ -6,6 +6,7 @@ import { CourierCredentialService } from '../../courier-shared/services/courier-
 import { DelhiveryRateLimitService, type DelhiveryEndpoint } from './delhivery-rate-limit.service';
 
 const BASE_URL_SETTING = 'courier.delhivery_api_base_url';
+const ORIGIN_PIN_SETTING = 'courier.delhivery_origin_pincode';
 const COURIER_CODE = 'delhivery';
 
 /** The credential field holding the API token. The encrypted payload
@@ -224,6 +225,22 @@ export class DelhiveryHttpService {
   private async rawBaseUrl(): Promise<string> {
     const row = await this.prisma.client.systemSetting.findUnique({
       where: { key: BASE_URL_SETTING },
+      select: { valueString: true },
+    });
+    return (row?.valueString ?? '').trim();
+  }
+
+  /**
+   * The configured dispatch-origin pincode, or `''` when unset.
+   *
+   * Lives here rather than in a caller because it is Delhivery account
+   * configuration, sitting beside the base URL it is always read with.
+   * `courier-ops` resolves the same key for a shipment's lane; this is
+   * the account-level default for callers that have no shipment.
+   */
+  async originPincode(): Promise<string> {
+    const row = await this.prisma.client.systemSetting.findUnique({
+      where: { key: ORIGIN_PIN_SETTING },
       select: { valueString: true },
     });
     return (row?.valueString ?? '').trim();

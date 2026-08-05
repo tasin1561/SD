@@ -1,9 +1,13 @@
-import { Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, HttpCode, HttpStatus, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import { DelhiveryHttpService } from '../services/delhivery-http.service';
+import {
+  DelhiveryServiceabilityService,
+  type DelhiveryPinDetail,
+} from '../services/delhivery-serviceability.service';
 import {
   DelhiveryRateLimitService,
   type DelhiveryEndpoint,
@@ -26,6 +30,19 @@ const WATCHED_ENDPOINTS: readonly DelhiveryEndpoint[] = [
   'edit',
   'ewaybill',
 ];
+
+export interface DelhiveryConnectivityView {
+  /** The ONLY field that means "we talked to Delhivery". A serviceability
+   *  answer can come from a local ServiceArea row, and a cached yes is
+   *  indistinguishable from a successful call unless this is read. */
+  readonly reachedLiveApi: boolean;
+  readonly stubMode: boolean;
+  readonly pincode: string | null;
+  readonly detail: DelhiveryPinDetail | null;
+  /** Present when the call failed. The failure IS the result here, so it
+   *  is returned rather than thrown — an operator has to read it. */
+  readonly error: string | null;
+}
 
 export interface DelhiveryRateBudgetView {
   readonly endpoint: string;
@@ -73,6 +90,7 @@ export class AdminDelhiveryOpsController {
     private readonly writeGuard: DelhiveryWriteGuardService,
     private readonly rateLimit: DelhiveryRateLimitService,
     private readonly http: DelhiveryHttpService,
+    private readonly serviceability: DelhiveryServiceabilityService,
   ) {}
 
   @Get('status')
@@ -112,5 +130,84 @@ export class AdminDelhiveryOpsController {
     // Narrower than the read: this one can spend the account's real AWB
     // allocation.
     return this.pool.refillIfNeeded();
+  }
+
+  /**
+   * Prove the courier integration can actually talk to Delhivery —
+   * WITHOUT creating anything.
+   *
+   * This exists because there was no way to answer "does our stored
+   * token work?" short of manifesting a parcel. `status` above reads
+   * only our own database, so it stays green while the credential is
+   * expired, revoked, or was never valid; and every path that does
+   * exercise the credential needs a shipment that already has an AWB —
+   * which you cannot have before the first successful write. That is a
+   * circle, and it puts the first real test of authentication inside the
+   * first real write, where a failure is expensive and ambiguous.
+   *
+   * A serviceability lookup breaks it. It is free, idempotent, creates
+   * nothing, and travels the whole chain that matters: decrypt the
+   * credential (CUR-1, which writes its own audit row), authenticate,
+   * survive the rate limiter, and parse a real response. If this is
+   * green, the only thing left unproven about a write is our payload
+   * shape — which is exactly what the go-live test is for.
+   *
+   * `fromLiveApi` is the field to read. A serviceability answer can be
+   * served from a local ServiceArea row, and a cached "yes" would look
+   * identical to a successful call while proving nothing at all.
+   */
+  @Get('connectivity')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Read-only reachability check: decrypt the credential and make one live serviceability call. Creates nothing.',
+  })
+  @ApiQuery({
+    name: 'pincode',
+    required: false,
+    description: 'Pincode to look up. Defaults to courier.delhivery_origin_pincode.',
+  })
+  async connectivity(@Query('pincode') pincode?: string): Promise<DelhiveryConnectivityView> {
+    const stubMode = await this.http.isStubMode();
+    // Default to our own dispatch origin: it is the pincode whose
+    // serviceability we most need to be true, and it needs no argument.
+    const target = (pincode ?? '').trim() || (await this.http.originPincode());
+
+    if (target.length === 0) {
+      return {
+        reachedLiveApi: false,
+        stubMode,
+        pincode: null,
+        detail: null,
+        error:
+          'No pincode supplied and courier.delhivery_origin_pincode is unset — nothing to look up.',
+      };
+    }
+
+    try {
+      const detail = await this.serviceability.describePin(target);
+      return {
+        // In stub mode this is false and the call never left the box —
+        // reporting it as reachability would be the worst outcome here,
+        // because it looks exactly like proof.
+        reachedLiveApi: detail.fromLiveApi,
+        stubMode,
+        pincode: target,
+        detail,
+        error: null,
+      };
+    } catch (err) {
+      // Deliberately surfaced rather than thrown: the failure IS the
+      // answer, and an operator needs to read it. The message carries no
+      // credential material — DelhiveryHttpService never puts the token
+      // in an error, and the token is redacted by the logger regardless.
+      return {
+        reachedLiveApi: false,
+        stubMode,
+        pincode: target,
+        detail: null,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
   }
 }
