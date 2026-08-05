@@ -63,11 +63,24 @@ export function classifyDispatchError(err: unknown): CourierDispatchErrorClass {
       code,
     )
   ) {
-    // ECONNRESET is a judgement call: it can happen mid-response. Treated
-    // as pre-dispatch only because the alternative — every reset item
-    // stuck awaiting a read-back we may not be able to perform — is worse
-    // in a channel where reads are also unavailable. Revisit if the
-    // reconciler ever finds resets that HAD landed.
+    // ECONNRESET is a judgement call: it can happen mid-response, so a
+    // reset MIGHT have landed.
+    //
+    // TODO(reclassify-on-readback): move ECONNRESET to AMBIGUOUS the
+    // moment `CourierSupportAdapter.capabilities().getThread` is true.
+    //
+    // The current classification is only defensible BECAUSE there is no
+    // read-back: with `getThread` unsupported, an AMBIGUOUS item is
+    // stranded indefinitely — the reconciler cannot decide it and no
+    // human can either. So the lesser evil is to treat a reset as never
+    // having arrived.
+    //
+    // Once a read-back exists that reasoning REVERSES, and not
+    // marginally: stranding an item for one reconciler cycle costs a
+    // short delay, while a duplicate lands permanently in a thread the
+    // customer reads and is invisible to us. Written as a condition
+    // rather than a note to self, because "revisit later" is the kind of
+    // comment that outlives the thing it was waiting for.
     return CourierDispatchErrorClass.PRE_DISPATCH;
   }
   if (e?.status === 401 || e?.status === 403) return CourierDispatchErrorClass.PRE_DISPATCH;

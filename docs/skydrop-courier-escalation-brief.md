@@ -294,12 +294,23 @@ minutes, correctly classified, with no duplicates.
 - **Auto-pause is a separate field from the operator's chosen mode.** Canary
   failure or circuit-breaker open sets `paused_until`; it must not overwrite
   `write_mode`. On recovery the system returns to the chosen mode.
-- **Audit `[AMENDED 2026-08-05]`: there is no `courier_action_log`.** Two partial
-  trails are worse than one, and every courier action already writes to
-  `audit_logs`. Add a **`request_fingerprint`** column to `audit_logs` and record
-  actor / channel / op / awb / external_id / outcome in the existing metadata.
-  Log the fingerprint, **not** the payload. Redact `Authorization` in every HTTP
-  logger and error reporter.
+- **Audit `[AMENDED 2026-08-05, CORRECTED 2026-08-06]`: there is no
+  `courier_action_log`, and no new COLUMN either.** Two partial trails are worse
+  than one, and every courier action already writes to `audit_logs`.
+
+  The 2026-08-05 amendment said to add a `request_fingerprint` **column**. That
+  was wrong, and the build did not do it: every sibling courier action records
+  its context in `metadata`, so a dedicated column used by exactly one subsystem
+  would have been a schema change to satisfy a phrasing — and it would have left
+  the outbox's audit rows shaped differently from the NDR runner's and the
+  shipment-action ones sitting beside them.
+
+  So the fingerprint, actor, channel, op, awb, external_id, outcome and routed
+  mode all go in **`metadata`**, exactly as `courier.shipment.*` and
+  `courier.ndr.*` already do. Log the fingerprint, **not** the payload — the
+  body already lives in `courier_outbox_items`, and copying customer-visible
+  text into the audit trail would put it in two places with two retention
+  stories. Redact `Authorization` in every HTTP logger and error reporter.
 
 **Checkpoint:** mode toggle works; jobs route correctly; no double-sends under
 induced timeouts.
