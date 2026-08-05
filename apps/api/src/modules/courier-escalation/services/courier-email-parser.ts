@@ -39,9 +39,33 @@ const AWB_PATTERN = /\b([0-9]{11,14})\b/;
 /**
  * Where a reply stops and the quoted thread begins.
  *
- * Getting this wrong in the SAFE direction (keeping too much) only makes
- * a message noisy; getting it wrong the other way silently truncates
- * what the courier said, which is the half that matters.
+ * ── "KEEPING TOO MUCH IS THE SAFE DIRECTION" IS ONLY HALF TRUE ───────
+ * For READING, yes: extra quoted history is noise, while over-trimming
+ * silently truncates what the courier actually said. But retained
+ * history breaks two things that are not about reading at all, and both
+ * fail SILENTLY:
+ *
+ *  1. **Dedup goes inert.** The dedup key is a hash of the body. If the
+ *     body carries the growing thread beneath it, the same logical
+ *     message read through two channels (an email that quotes history
+ *     and a portal re-read that does not) hashes differently and is
+ *     stored twice. The unique index never fires, the minute-bucket
+ *     never matters, and the pipeline looks like it is working while
+ *     quietly duplicating.
+ *
+ *  2. **Classification sticks.** The matcher runs over the whole body.
+ *     One quoted "out for delivery and should be delivered by the end of
+ *     the day" from last week makes EVERY later message in that thread
+ *     classify as OFD_TODAY, forever, with high confidence.
+ *
+ * So the markers below are load-bearing, not cosmetic. The check that
+ * matters on the first real Delhivery email is NOT whether the text
+ * reads nicely: it is ingesting the same message twice and confirming
+ * `courier_escalation_messages_dedup` actually fires. If it does not,
+ * the stripping is wrong however good the text looks.
+ *
+ * TODO(delhivery-api): these markers are English-client conventions. A
+ * real notification email is what tells us which one Delhivery uses.
  */
 const QUOTE_MARKERS: readonly RegExp[] = [
   /^\s*On .+ wrote:\s*$/im,

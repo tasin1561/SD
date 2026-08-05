@@ -108,6 +108,37 @@ describe('courier email parser', () => {
     expect(out.body).not.toContain('<p>');
   });
 
+  it('strips history so the SAME message hashes the same however it arrived', () => {
+    // The property dedup depends on. If history survives, an email that
+    // quotes the thread and a portal re-read that does not produce
+    // different hashes for one logical message, the unique index never
+    // fires, and the pipeline duplicates silently while looking healthy.
+    const withHistory = parseCourierEmail({
+      subject: 'Ticket ID: 42424',
+      text: 'We are looking into it.\n\nOn Tue, 5 Aug 2026 at 10:00, Skydrop wrote:\n> please advise',
+    }).body;
+    const withoutHistory = parseCourierEmail({
+      subject: 'Ticket ID: 42424',
+      text: 'We are looking into it.',
+    }).body;
+    expect(withHistory).toBe(withoutHistory);
+  });
+
+  it('a quoted older reply must not classify the NEW message', () => {
+    // Second silent failure of retained history: one quoted
+    // "out for delivery" from last week would make every later message
+    // in the thread match OFD_TODAY with full confidence, forever.
+    const parsed = parseCourierEmail({
+      subject: 'Ticket ID: 42424',
+      text:
+        'We have escalated this to the hub.\n\n' +
+        'On Mon, 4 Aug 2026 at 09:00, Delhivery wrote:\n' +
+        '> Your shipment is out for delivery and should be delivered by the end of the day.',
+    });
+    expect(parsed.body).toBe('We have escalated this to the hub.');
+    expect(parsed.body.toLowerCase()).not.toContain('out for delivery');
+  });
+
   it('picks up an AWB when one is present', () => {
     const out = parseCourierEmail({
       subject: 'Ticket ID: 42424',

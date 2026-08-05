@@ -1,12 +1,11 @@
-import { Body, Controller, Headers, HttpCode, HttpStatus, Logger, Post, Req } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Logger, Post, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CourierMessageChannel } from '@skydrop/db';
-import type { Request } from 'express';
 import { Public } from '../../../common/decorators/public.decorator';
 import { Throttle } from '@nestjs/throttler';
 import { CourierEscalationIngestService } from '../services/courier-escalation-ingest.service';
 import { parseCourierEmail } from '../services/courier-email-parser';
-import { InboundEmailAuthService } from '../services/inbound-email-auth.service';
+import { InboundEmailGuard } from '../guards/inbound-email.guard';
 import { InboundEmailDto } from '../dto/inbound-email.dto';
 
 /**
@@ -21,8 +20,15 @@ import { InboundEmailDto } from '../dto/inbound-email.dto';
  * the Worker exists because Email Routing can only forward or run a
  * Worker, and forwarding to a human is the thing we are replacing.
  *
- * Authentication is HMAC over the RAW BYTES (TRK-1 discipline) and the
- * endpoint fails closed when the secret is unset.
+ * Authentication is HMAC over the RAW BYTES (TRK-1 discipline), applied
+ * by `InboundEmailGuard` so it runs BEFORE the ValidationPipe — an
+ * unauthenticated caller gets 401, never a 400 describing our schema.
+ * The endpoint fails closed when the secret is unset.
+ *
+ * Practical consequence worth knowing during provisioning: once the
+ * secret IS set, a 400 means the Worker's payload disagrees with the DTO
+ * and a 401 means the secrets disagree. Two different layers, two
+ * different fixes.
  *
  * ── ACK FAST, PROCESS INLINE (FOR NOW) ───────────────────────────────
  * Unlike the tracking webhook this does NOT queue: courier email is a
@@ -40,12 +46,10 @@ import { InboundEmailDto } from '../dto/inbound-email.dto';
 export class InboundEmailController {
   private readonly logger = new Logger(InboundEmailController.name);
 
-  constructor(
-    private readonly auth: InboundEmailAuthService,
-    private readonly ingest: CourierEscalationIngestService,
-  ) {}
+  constructor(private readonly ingest: CourierEscalationIngestService) {}
 
   @Public()
+  @UseGuards(InboundEmailGuard)
   @Post()
   @HttpCode(HttpStatus.OK)
   // Generous but finite: a Worker loop must not be able to spend the
@@ -54,16 +58,8 @@ export class InboundEmailController {
   @ApiOperation({
     summary: 'Inbound courier email from the Cloudflare Email Routing Worker. HMAC-authenticated.',
   })
-  async receive(
-    @Req() req: Request & { rawBody?: Buffer },
-    @Headers('x-skydrop-signature') signature: string | undefined,
-    @Body() body: InboundEmailDto,
-  ): Promise<{ ok: true; result: string }> {
-    // The EXACT bytes. Re-serialising the parsed object would reorder
-    // keys and change whitespace, so the signature would not verify for
-    // honest requests.
-    this.auth.assertValid(req.rawBody ?? Buffer.alloc(0), signature);
-
+  async receive(@Body() body: InboundEmailDto): Promise<{ ok: true; result: string }> {
+    // Reaching here means the guard already verified the signature.
     const parsed = parseCourierEmail({
       subject: body.subject,
       text: body.text ?? null,

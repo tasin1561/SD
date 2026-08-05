@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { InboundEmailController } from './controllers/inbound-email.controller';
+import { InboundEmailGuard } from './guards/inbound-email.guard';
 import { CourierEscalationIngestService } from './services/courier-escalation-ingest.service';
 import { CourierMcpReaderService } from './services/courier-mcp-reader.service';
 import { CourierMessageClassifierService } from './services/courier-message-classifier.service';
@@ -28,6 +29,7 @@ import { InboundEmailAuthService } from './services/inbound-email-auth.service';
   controllers: [InboundEmailController],
   providers: [
     InboundEmailAuthService,
+    InboundEmailGuard,
     CourierMessageClassifierService,
     CourierEscalationIngestService,
     CourierMcpReaderService,
