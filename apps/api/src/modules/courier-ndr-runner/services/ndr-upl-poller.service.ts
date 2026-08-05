@@ -90,7 +90,9 @@ export class NdrUplPollerService {
       if (row.uplId === null || row.uplId === '') {
         await this.settle(row.id, NdrRequestStatus.FAILED, 'No UPL id was returned by the submit');
         failed += 1;
-        escalated += (await this.escalate(row.shipmentId, row.awbNumber, row.action, 'no UPL id')) ? 1 : 0;
+        escalated += (await this.escalate(row.shipmentId, row.awbNumber, row.action, 'no UPL id'))
+          ? 1
+          : 0;
         continue;
       }
 
@@ -129,7 +131,14 @@ export class NdrUplPollerService {
         } else {
           await this.settle(row.id, NdrRequestStatus.FAILED, outcome.message);
           failed += 1;
-          escalated += (await this.escalate(row.shipmentId, row.awbNumber, row.action, outcome.message)) ? 1 : 0;
+          escalated += (await this.escalate(
+            row.shipmentId,
+            row.awbNumber,
+            row.action,
+            outcome.message,
+          ))
+            ? 1
+            : 0;
         }
         continue;
       }
@@ -142,7 +151,12 @@ export class NdrUplPollerService {
           NdrRequestStatus.FAILED,
           `No outcome within ${deadlineMinutes} minutes — treated as failed`,
         );
-        escalated += (await this.escalate(row.shipmentId, row.awbNumber, row.action, 'poll deadline passed'))
+        escalated += (await this.escalate(
+          row.shipmentId,
+          row.awbNumber,
+          row.action,
+          'poll deadline passed',
+        ))
           ? 1
           : 0;
         continue;

@@ -52,8 +52,9 @@ export class NdrSettingsService {
     });
     const raw = row?.valueJson;
     if (!Array.isArray(raw)) return [];
-    return raw.filter((v): v is NdrAction =>
-      typeof v === 'string' && (KNOWN_ACTIONS as readonly string[]).includes(v),
+    return raw.filter(
+      (v): v is NdrAction =>
+        typeof v === 'string' && (KNOWN_ACTIONS as readonly string[]).includes(v),
     );
   }
 

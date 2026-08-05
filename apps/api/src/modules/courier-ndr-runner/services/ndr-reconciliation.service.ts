@@ -68,7 +68,13 @@ export class NdrReconciliationService {
         reconciledAt: null,
         submittedAt: { lt: new Date(now - windowHours * 3_600_000) },
       },
-      select: { id: true, shipmentId: true, awbNumber: true, submittedAt: true, attemptCountAtSubmit: true },
+      select: {
+        id: true,
+        shipmentId: true,
+        awbNumber: true,
+        submittedAt: true,
+        attemptCountAtSubmit: true,
+      },
       take: 500,
     });
 

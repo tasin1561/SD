@@ -55,7 +55,11 @@ export class NdrQueue implements OnModuleInit, OnModuleDestroy {
     await this.queue.add(
       JOB_NIGHTLY_RUN,
       {},
-      { repeat: { pattern: runnerCron, tz: NDR_TIMEZONE }, removeOnComplete: 50, removeOnFail: 100 },
+      {
+        repeat: { pattern: runnerCron, tz: NDR_TIMEZONE },
+        removeOnComplete: 50,
+        removeOnFail: 100,
+      },
     );
     await this.queue.add(
       JOB_POLL_UPLS,
@@ -65,7 +69,11 @@ export class NdrQueue implements OnModuleInit, OnModuleDestroy {
     await this.queue.add(
       JOB_RECONCILE,
       {},
-      { repeat: { pattern: reconcileCron, tz: NDR_TIMEZONE }, removeOnComplete: 50, removeOnFail: 100 },
+      {
+        repeat: { pattern: reconcileCron, tz: NDR_TIMEZONE },
+        removeOnComplete: 50,
+        removeOnFail: 100,
+      },
     );
 
     this.logger.log(

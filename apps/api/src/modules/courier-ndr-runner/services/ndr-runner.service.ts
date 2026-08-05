@@ -4,7 +4,10 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { courierActor } from '../../courier-shared/services/courier-credential.service';
 import { NdrAttemptContextService } from '../../courier-shared/services/ndr-attempt-context.service';
-import { DelhiveryNdrService, type NdrAction } from '../../courier-delhivery/services/delhivery-ndr.service';
+import {
+  DelhiveryNdrService,
+  type NdrAction,
+} from '../../courier-delhivery/services/delhivery-ndr.service';
 import { DelhiveryTrackingFetchService } from '../../courier-delhivery/services/delhivery-tracking-fetch.service';
 import { DelhiveryWriteGuardService } from '../../courier-delhivery/services/delhivery-write-guard.service';
 import { NdrSettingsService } from './ndr-settings.service';
@@ -262,7 +265,9 @@ export class NdrRunnerService {
       orderBy: { updatedAt: 'asc' },
       take: cap,
     });
-    return rows.flatMap((r) => (r.awbNumber === null ? [] : [{ shipmentId: r.id, awbNumber: r.awbNumber }]));
+    return rows.flatMap((r) =>
+      r.awbNumber === null ? [] : [{ shipmentId: r.id, awbNumber: r.awbNumber }],
+    );
   }
 
   /**
