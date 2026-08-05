@@ -17,6 +17,7 @@ import {
   TablePaginator,
 } from '@skydrop/ui/components';
 import { useGoodsReceiptsList } from '@/lib/api-hooks';
+import { useRouter } from 'next/navigation';
 
 const PAGE_SIZE = 20;
 const STATUSES: ReadonlyArray<GoodsReceiptStatus> = [
@@ -28,6 +29,7 @@ const STATUSES: ReadonlyArray<GoodsReceiptStatus> = [
 ] as GoodsReceiptStatus[];
 
 export function ReceiveIndex(): ReactElement {
+  const router = useRouter();
   const [status, setStatus] = useState<GoodsReceiptStatus | ''>('PENDING');
   const [page, setPage] = useState(1);
 
@@ -83,7 +85,7 @@ export function ReceiveIndex(): ReactElement {
           </THead>
           <TBody>
             {list.data.items.map((r) => (
-              <Tr key={r.id} interactive>
+              <Tr key={r.id} onActivate={() => router.push(`/warehouse/receive/${r.id}`)}>
                 <Td className="font-mono text-xs">
                   <Link
                     href={`/warehouse/receive/${r.id}`}

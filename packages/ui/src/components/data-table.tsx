@@ -135,17 +135,63 @@ export function TBody({
   return <tbody className={clsx('divide-y divide-border', className)} {...rest} />;
 }
 
+/** Clicks that came from something with its own behaviour. */
+const OWN_BEHAVIOUR = 'a, button, input, select, textarea, label, [role="button"]';
+
 export function Tr({
   className,
   interactive,
+  onActivate,
+  onClick,
   ...rest
-}: HTMLAttributes<HTMLTableRowElement> & { readonly interactive?: boolean }): ReactElement {
+}: HTMLAttributes<HTMLTableRowElement> & {
+  readonly interactive?: boolean;
+  /**
+   * Makes the WHOLE row respond, not just the cell with the link in it.
+   *
+   * `interactive` alone only paints a pointer cursor, so eight tables
+   * looked clickable everywhere and answered in one cell — you aim at a
+   * seller, hit the email column, and nothing happens.
+   *
+   * ── IT IS A POINTER CONVENIENCE, NOT THE ONLY WAY IN ─────────────
+   * A `<tr>` cannot be tabbed to and has no Enter key, so a row that
+   * navigates ONLY by row-click is unreachable by keyboard and silent to
+   * a screen reader. Keep the real `<a>` in the primary cell — that is
+   * the accessible path — and let this layer on top. Giving the row its
+   * own tab stop would add a second, unlabelled one beside the link.
+   *
+   * ── TWO GUARDS, BOTH FROM REAL ANNOYANCES ───────────────────────
+   *  - A click that started on a link, button or form control is left
+   *    alone. Without it, "Deactivate" in a row would fire its confirm
+   *    AND navigate away from the row it is about.
+   *  - A click that ends a text SELECTION is ignored. Selecting an email
+   *    to copy it ends in a click inside the row, and navigating away
+   *    mid-copy is maddening in a way that is hard to attribute.
+   */
+  readonly onActivate?: () => void;
+}): ReactElement {
+  const clickable = interactive === true || onActivate !== undefined;
   return (
     <tr
       className={clsx(
-        interactive && 'hover:bg-surface-hover cursor-pointer transition-colors',
+        clickable && 'hover:bg-surface-hover cursor-pointer transition-colors',
         className,
       )}
+      onClick={(event) => {
+        onClick?.(event);
+        if (onActivate === undefined || event.defaultPrevented) return;
+        if ((event.target as HTMLElement).closest(OWN_BEHAVIOUR) !== null) return;
+        // Selected TEXT, not `isCollapsed`. A Selection with no ranges is
+        // specified as collapsed, but implementations disagree —
+        // happy-dom reports it as non-collapsed, which made this guard
+        // swallow every ordinary click and cost an hour to find. Asking
+        // whether anything is actually selected means the same thing
+        // everywhere.
+        const selected =
+          typeof window === 'undefined' ? '' : (window.getSelection()?.toString() ?? '');
+        if (selected.trim() !== '') return;
+        onActivate();
+      }}
       {...rest}
     />
   );

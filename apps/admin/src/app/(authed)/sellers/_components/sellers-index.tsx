@@ -26,11 +26,13 @@ import { InvitationsPanel } from './invitations-panel';
 import { Plus } from 'lucide-react';
 import { CreateInvitationDialog } from './create-invitation-dialog';
 import { usePermission } from '@/lib/use-permission';
+import { useRouter } from 'next/navigation';
 
 const PAGE_SIZE = 20;
 const STATUSES: readonly SellerStatusValue[] = ['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'];
 
 export function SellersIndex(): ReactElement {
+  const router = useRouter();
   const canWrite = usePermission('sellers.invite');
   const [status, setStatus] = useState<SellerStatusValue | ''>('');
   const [search, setSearch] = useState('');
@@ -113,7 +115,7 @@ export function SellersIndex(): ReactElement {
           </THead>
           <TBody>
             {list.data.items.map((s) => (
-              <Tr key={s.id} interactive>
+              <Tr key={s.id} onActivate={() => router.push(`/sellers/${s.id}`)}>
                 <Td>
                   <Link href={`/sellers/${s.id}`} className="text-text-bright hover:underline">
                     {s.companyName}

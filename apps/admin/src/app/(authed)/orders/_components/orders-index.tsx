@@ -183,7 +183,7 @@ export function OrdersIndex(): ReactElement {
           </THead>
           <TBody>
             {list.data.items.map((o) => (
-              <Tr key={o.id} interactive>
+              <Tr key={o.id} onActivate={() => router.push(`/orders/${o.id}`)}>
                 <Td>
                   <Link
                     href={`/orders/${o.id}`}

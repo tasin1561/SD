@@ -29,6 +29,7 @@ import {
   THead,
   Tr,
 } from '@skydrop/ui/components';
+import { useRouter } from 'next/navigation';
 
 /**
  * Seller product detail. Inline edit (no separate edit page) — write
@@ -42,6 +43,7 @@ import {
  * of validation.
  */
 export function ProductDetailView({ productId }: { productId: string }): ReactElement {
+  const router = useRouter();
   const detail = useProductDetail(productId);
   const variants = useProductVariants(productId);
   const [editing, setEditing] = useState(false);
@@ -129,7 +131,12 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
                 </THead>
                 <TBody>
                   {variants.data.map((v) => (
-                    <Tr key={v.id} interactive>
+                    <Tr
+                      key={v.id}
+                      onActivate={() =>
+                        router.push(`/catalog/products/${productId}/variants/${v.id}`)
+                      }
+                    >
                       <Td>
                         <Link
                           href={`/catalog/products/${productId}/variants/${v.id}`}

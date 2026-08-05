@@ -178,7 +178,7 @@ export function CatalogIndex(): ReactElement {
           </THead>
           <TBody>
             {list.data.items.map((p) => (
-              <Tr key={p.id} interactive>
+              <Tr key={p.id} onActivate={() => router.push(`/catalog/products/${p.id}`)}>
                 <Td>
                   <Link
                     href={`/catalog/products/${p.id}`}

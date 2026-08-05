@@ -171,7 +171,7 @@ export function TicketsIndex(): ReactElement {
           </THead>
           <TBody>
             {items.map((t) => (
-              <Tr key={t.id} interactive onClick={() => setSelected(t)}>
+              <Tr key={t.id} onActivate={() => setSelected(t)}>
                 <Td className="text-text-muted whitespace-nowrap text-xs">
                   {t.ticketType === TicketType.SCRAP_DAMAGE ? 'Scrap / damage' : 'Seller issue'}
                 </Td>

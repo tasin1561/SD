@@ -159,7 +159,7 @@ export function LeadsIndex(): ReactElement {
               const dir =
                 lead.shippingDirection === null ? null : DIRECTION_SHORT[lead.shippingDirection];
               return (
-                <Tr key={lead.id} interactive onClick={() => setSelected(lead)}>
+                <Tr key={lead.id} onActivate={() => setSelected(lead)}>
                   <Td>
                     <span className="text-text-bright">{lead.companyName}</span>
                     {lead.submissionCount > 1 && (

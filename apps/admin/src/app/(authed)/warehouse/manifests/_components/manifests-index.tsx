@@ -17,10 +17,12 @@ import {
   Tr,
   TablePaginator,
 } from '@skydrop/ui/components';
+import { useRouter } from 'next/navigation';
 
 const PAGE_SIZE = 25;
 
 export function ManifestsIndex(): ReactElement {
+  const router = useRouter();
   const [status, setStatus] = useState<ManifestStatus | ''>('');
   const [page, setPage] = useState(1);
 
@@ -77,7 +79,7 @@ export function ManifestsIndex(): ReactElement {
           </THead>
           <TBody>
             {list.data.items.map((m) => (
-              <Tr key={m.id} interactive>
+              <Tr key={m.id} onActivate={() => router.push(`/warehouse/manifests/${m.id}`)}>
                 <Td>
                   <Link
                     href={`/warehouse/manifests/${m.id}`}
