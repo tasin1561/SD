@@ -53,6 +53,9 @@ export function ThemeToggle(): ReactElement | null {
       aria-label={label}
       title={label}
       onClick={() => apply(isDark ? 'light' : 'dark')}
+      // Named so the light theme can give it a surface. On black a
+      // hairline is enough to read as a control; on a pale page it is not.
+      data-slot="theme-toggle"
       className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-line text-fg-muted hover:text-fg-strong hover:bg-surface-3 transition-colors"
     >
       {isDark ? <Sun size={15} aria-hidden="true" /> : <Moon size={15} aria-hidden="true" />}

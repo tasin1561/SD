@@ -91,7 +91,11 @@ export default async function AwbPage({
     return (
       <div className="relative min-h-screen grid place-items-center bg-surface text-fg-body p-6 overflow-hidden">
         <div aria-hidden className="console-grid absolute inset-0" />
-        <div aria-hidden className="pointer-events-none absolute inset-0 opacity-55">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{ opacity: 'var(--map-veil)' }}
+        >
           <CorridorConsole />
         </div>
         <div className="absolute top-4 right-4 sm:top-5 sm:right-6 z-20 flex items-center gap-2">
@@ -132,7 +136,11 @@ export default async function AwbPage({
   return (
     <div className="relative min-h-screen bg-surface text-fg-body p-5 sm:p-6 overflow-hidden">
       <div aria-hidden className="console-grid absolute inset-0 opacity-60" />
-      <div aria-hidden className="pointer-events-none fixed inset-0 opacity-40">
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0"
+        style={{ opacity: 'var(--map-veil-soft)' }}
+      >
         <CorridorConsole />
       </div>
       <div className="relative max-w-2xl mx-auto pt-2">

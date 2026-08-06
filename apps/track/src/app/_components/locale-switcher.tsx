@@ -17,7 +17,10 @@ export function LocaleSwitcher({ active }: { readonly active: Locale }): ReactEl
   }
 
   return (
-    <div className="inline-flex items-center rounded-lg border border-line overflow-hidden text-xs">
+    <div
+      data-slot="locale-switcher"
+      className="inline-flex items-center rounded-lg border border-line overflow-hidden text-xs"
+    >
       <button
         type="button"
         onClick={() => set('en')}

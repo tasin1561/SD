@@ -18,7 +18,13 @@ export default async function Home(): Promise<ReactElement> {
     <div className="relative min-h-screen grid place-items-center bg-surface text-fg-body p-6 overflow-hidden">
       <div aria-hidden className="console-grid absolute inset-0" />
       {/* The corridor runs across the WHOLE page — ambient, behind everything */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 opacity-55">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        // The veil is a TOKEN. Halving the map is right on black and
+        // wrong on white — it was what made the network unreadable.
+        style={{ opacity: 'var(--map-veil)' }}
+      >
         <CorridorConsole />
       </div>
       <div

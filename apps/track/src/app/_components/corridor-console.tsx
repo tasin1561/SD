@@ -129,28 +129,30 @@ export function CorridorConsole(): ReactElement {
       sweepTint: '56,189,248',
       blip: '#38BDF8',
     };
+    // Every colour on this canvas is a TOKEN read, with no branch on the
+    // colour scheme. It used to be nineteen rgba literals behind an
+    // `if (light)`, which is why the light map was uncalibrated: those
+    // numbers were authored against black and nothing kept the two
+    // palettes in step. The values now live beside every other token in
+    // globals.css, so a theme change is a stylesheet change and this
+    // file only reads. A missing variable falls back to the dark value
+    // it replaced, so a typo degrades rather than blanks the map.
     const readColors = (): void => {
       const cs = getComputedStyle(document.documentElement);
-      colors.saffron = cs.getPropertyValue('--saffron').trim() || colors.saffron;
-      colors.muted = cs.getPropertyValue('--fg-muted').trim() || colors.muted;
-      colors.grid = cs.getPropertyValue('--grid').trim() || colors.grid;
-      const light = cs.colorScheme.includes('light');
-      // The light map used to be drawn at dark-mode alphas — land at
-      // 0.05 — which works on black and vanishes on white. A wash that
-      // faint is not subtlety, it is an invisible map, and the corridor
-      // IS the page: the whole product is one BD→IN lane. So India gets
-      // a real pale-sky landmass, Bangladesh a saffron one (it is the
-      // origin, and warm against the cool destination reads as the
-      // direction of travel), and the routes enough weight to follow.
-      colors.land = light ? 'rgba(37,99,235,0.11)' : 'rgba(56,189,248,0.04)';
-      colors.coast = light ? 'rgba(29,78,216,0.55)' : 'rgba(116,166,220,0.35)';
-      colors.bdFill = light ? 'rgba(245,158,11,0.28)' : 'rgba(245,158,11,0.08)';
-      colors.bdCoast = light ? 'rgba(180,83,9,0.75)' : 'rgba(245,158,11,0.45)';
-      colors.route = light ? 'rgba(37,99,235,0.42)' : 'rgba(56,189,248,0.16)';
-      colors.halo = light ? 'rgba(37,99,235,0.55)' : 'rgba(56,189,248,0.35)';
-      colors.trail = light ? 'rgba(37,99,235,0.75)' : 'rgba(56,189,248,0.5)';
-      colors.sweepTint = light ? '37,99,235' : '56,189,248';
-      colors.blip = light ? '#2563EB' : '#38BDF8';
+      const v = (name: string, fallback: string): string =>
+        cs.getPropertyValue(name).trim() || fallback;
+      colors.saffron = v('--map-origin', '#F59E0B');
+      colors.muted = v('--map-label', '#8296AE');
+      colors.grid = v('--grid', 'rgba(56,189,248,0.06)');
+      colors.land = v('--map-land', 'rgba(56,189,248,0.04)');
+      colors.coast = v('--map-coast', 'rgba(116,166,220,0.35)');
+      colors.bdFill = v('--map-bd-fill', 'rgba(245,158,11,0.08)');
+      colors.bdCoast = v('--map-bd-coast', 'rgba(245,158,11,0.45)');
+      colors.route = v('--map-route', 'rgba(56,189,248,0.16)');
+      colors.halo = v('--map-halo', 'rgba(56,189,248,0.35)');
+      colors.trail = v('--map-trail', 'rgba(56,189,248,0.5)');
+      colors.sweepTint = v('--map-sweep', '56,189,248');
+      colors.blip = v('--map-blip', '#38BDF8');
     };
     readColors();
 

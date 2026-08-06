@@ -48,6 +48,31 @@
   --accent-fg: #051018;
   --glow: rgba(56, 189, 248, 0.35);
   color-scheme: dark;
+  /* ── Map tokens ─────────────────────────────────────────────────
+   * The corridor is drawn to a <canvas>, so it cannot use CSS and had
+   * nineteen rgba literals hardcoded in a JS branch on the colour
+   * scheme instead. That is why it was uncalibrated in light: those
+   * numbers were authored against black. They live here now, in both
+   * themes, and the canvas only reads them.
+   *
+   * These DARK values are byte-identical to the literals they replace,
+   * so the dark map renders exactly as before. */
+  --map-land: rgba(56, 189, 248, 0.04);
+  --map-coast: rgba(116, 166, 220, 0.35);
+  --map-bd-fill: rgba(245, 158, 11, 0.08);
+  --map-bd-coast: rgba(245, 158, 11, 0.45);
+  --map-route: rgba(56, 189, 248, 0.16);
+  --map-halo: rgba(56, 189, 248, 0.35);
+  --map-trail: rgba(56, 189, 248, 0.5);
+  --map-blip: #38bdf8;
+  --map-origin: #f59e0b;
+  --map-label: #8296ae;
+  --map-sweep: 56, 189, 248;
+  /* The veil the page draws the canvas behind. On black, halving the map
+     keeps it as atmosphere. On white it halved the map into invisibility
+     — which is what made the network unreadable, not the colours. */
+  --map-veil: 0.55;
+  --map-veil-soft: 0.4;
 }
 
 @media (prefers-color-scheme: light) {
@@ -57,14 +82,21 @@
        the media-query theme and the toggled theme stop matching. */
     --sky: #2563eb;
     --sky-deep: #1d4ed8;
-    --surface: #fafafa;
+    /* Three surface levels, so the page stops being one flat wash:
+         page  --page-top → --page-bottom, a soft cool off-white with a
+               gentle vertical gradient — not #fff, and no lavender
+         card  --surface-2, white, lifted by a 1px line and a real shadow
+         input --surface, a half-step below the card and recessed in it */
+    --page-top: #f8fafc;
+    --page-bottom: #e8eef6;
+    --surface: #f4f7fb;
     --surface-2: #ffffff;
-    --surface-3: #eff6ff;
-    --fg-strong: #111827;
-    --fg-body: #374151;
-    --fg-muted: #4b5563;
-    --line: #e5e7eb;
-    --line-strong: #d1d5db;
+    --surface-3: #eef3f9;
+    --fg-strong: #0f172a;
+    --fg-body: #334155;
+    --fg-muted: #475569;
+    --line: #dbe3ec;
+    --line-strong: #c2ceda;
     --grid: rgba(37, 99, 235, 0.07);
     --accent-fg: #ffffff;
     /* Declared for light too. These existed only in the dark :root,
@@ -91,6 +123,26 @@
     --tone-cancelled: #475569;
     --glow: rgba(37, 99, 235, 0.2);
     color-scheme: light;
+    /* Map, calibrated for daylight. Strokes go dark enough to read as
+       borders; the landmass takes a faint fill so outlines become shapes;
+       the corridor and its hubs become the visual feature they already are
+       in dark. Bangladesh moves off tan — a yellow-brown that clashes with
+       cool neutrals — onto terracotta, which still reads as the warm
+       origin against the cool destination. */
+    --map-land: rgba(37, 99, 235, 0.09);
+    --map-coast: rgba(23, 42, 79, 0.64);
+    --map-bd-fill: rgba(194, 65, 12, 0.13);
+    --map-bd-coast: rgba(154, 52, 18, 0.8);
+    --map-route: rgba(29, 78, 216, 0.78);
+    --map-halo: rgba(37, 99, 235, 0.5);
+    --map-trail: rgba(29, 78, 216, 0.7);
+    --map-blip: #1d4ed8;
+    --map-origin: #b45309;
+    --map-label: #475569;
+    --map-sweep: 37, 99, 235;
+    /* No halving on white — the colours above are already tuned for it. */
+    --map-veil: 0.92;
+    --map-veil-soft: 0.62;
   }
 }
 
@@ -110,6 +162,31 @@
   --accent-fg: #051018;
   --glow: rgba(56, 189, 248, 0.35);
   color-scheme: dark;
+  /* ── Map tokens ─────────────────────────────────────────────────
+   * The corridor is drawn to a <canvas>, so it cannot use CSS and had
+   * nineteen rgba literals hardcoded in a JS branch on the colour
+   * scheme instead. That is why it was uncalibrated in light: those
+   * numbers were authored against black. They live here now, in both
+   * themes, and the canvas only reads them.
+   *
+   * These DARK values are byte-identical to the literals they replace,
+   * so the dark map renders exactly as before. */
+  --map-land: rgba(56, 189, 248, 0.04);
+  --map-coast: rgba(116, 166, 220, 0.35);
+  --map-bd-fill: rgba(245, 158, 11, 0.08);
+  --map-bd-coast: rgba(245, 158, 11, 0.45);
+  --map-route: rgba(56, 189, 248, 0.16);
+  --map-halo: rgba(56, 189, 248, 0.35);
+  --map-trail: rgba(56, 189, 248, 0.5);
+  --map-blip: #38bdf8;
+  --map-origin: #f59e0b;
+  --map-label: #8296ae;
+  --map-sweep: 56, 189, 248;
+  /* The veil the page draws the canvas behind. On black, halving the map
+     keeps it as atmosphere. On white it halved the map into invisibility
+     — which is what made the network unreadable, not the colours. */
+  --map-veil: 0.55;
+  --map-veil-soft: 0.4;
 }
 
 :root[data-theme='light'] {
@@ -127,14 +204,21 @@
    * The dark theme is deliberately untouched. */
   --sky: #2563eb;
   --sky-deep: #1d4ed8;
-  --surface: #fafafa;
+  /* Three surface levels, so the page stops being one flat wash:
+       page  --page-top → --page-bottom, a soft cool off-white with a
+             gentle vertical gradient — not #fff, and no lavender
+       card  --surface-2, white, lifted by a 1px line and a real shadow
+       input --surface, a half-step below the card and recessed in it */
+  --page-top: #f8fafc;
+  --page-bottom: #e8eef6;
+  --surface: #f4f7fb;
   --surface-2: #ffffff;
-  --surface-3: #eff6ff;
-  --fg-strong: #111827;
-  --fg-body: #374151;
-  --fg-muted: #4b5563;
-  --line: #e5e7eb;
-  --line-strong: #d1d5db;
+  --surface-3: #eef3f9;
+  --fg-strong: #0f172a;
+  --fg-body: #334155;
+  --fg-muted: #475569;
+  --line: #dbe3ec;
+  --line-strong: #c2ceda;
   --grid: rgba(37, 99, 235, 0.07);
   --accent-fg: #ffffff;
   /* Declared for light too. These existed only in the dark :root,
@@ -161,6 +245,26 @@
   --tone-cancelled: #475569;
   --glow: rgba(37, 99, 235, 0.2);
   color-scheme: light;
+  /* Map, calibrated for daylight. Strokes go dark enough to read as
+     borders; the landmass takes a faint fill so outlines become shapes;
+     the corridor and its hubs become the visual feature they already are
+     in dark. Bangladesh moves off tan — a yellow-brown that clashes with
+     cool neutrals — onto terracotta, which still reads as the warm
+     origin against the cool destination. */
+  --map-land: rgba(37, 99, 235, 0.09);
+  --map-coast: rgba(23, 42, 79, 0.64);
+  --map-bd-fill: rgba(194, 65, 12, 0.13);
+  --map-bd-coast: rgba(154, 52, 18, 0.8);
+  --map-route: rgba(29, 78, 216, 0.78);
+  --map-halo: rgba(37, 99, 235, 0.5);
+  --map-trail: rgba(29, 78, 216, 0.7);
+  --map-blip: #1d4ed8;
+  --map-origin: #b45309;
+  --map-label: #475569;
+  --map-sweep: 37, 99, 235;
+  /* No halving on white — the colours above are already tuned for it. */
+  --map-veil: 0.92;
+  --map-veil-soft: 0.62;
 }
 
 @theme inline {
@@ -314,57 +418,113 @@ h3 {
   box-shadow: inset 0 3px 0 -1px var(--tone);
 }
 
-/* ── The lookup card is the one dark object on the light page ─────────
+/* ── Light-theme chrome ───────────────────────────────────────────────
  *
- * It was pure white on a near-white ground, so the single interactive
- * thing on the page had no edge — it read as part of the sheet rather
- * than as something to use. The fix is not a slightly different white:
- * a control wants to look like a control. A dark instrument sitting on
- * a pale map separates instantly, keeps the corridor fully readable
- * around it, and lets the button be the bright cyan the dark theme
- * already owns.
- *
- * Scoped to the LOOKUP only. The result page's status panel stays pale
- * and washed in the parcel's tone — that one is CONTENT, and content
- * on a tracking page should be quiet so the status is the loud thing.
- *
- * Implemented by REDEFINING the theme variables on the card's subtree,
- * the same move as the admin nav rail: every child already reads
- * --fg-strong / --surface / --sky, so nothing inside needs touching and
- * the component stays correct in dark, where it is dark already.
- *
- * Contrast on the card: heading 16.6:1, body 11.7:1, muted 6.8:1, the
- * sky eyebrow 8.1:1, and the button's ink 9.0:1 on its own fill. */
-[data-theme='light'] [data-lookup-panel] {
-  --surface-2: #0e1a2f;
-  --surface: #0a1424;
-  --line: rgba(148, 178, 255, 0.18);
-  --fg-strong: #f8fafc;
-  --fg-body: #cbd5e1;
-  --fg-muted: #94a3b8;
-  --sky: #38bdf8;
-  --sky-deep: #7dd3fc;
-  --accent-fg: #051018;
-  border-color: rgba(148, 178, 255, 0.22);
-  box-shadow:
-    0 18px 48px -12px rgba(14, 26, 47, 0.45),
-    0 2px 8px rgba(14, 26, 47, 0.18);
-}
+ * Everything here is scoped to the light theme and therefore cannot
+ * reach dark. Declared TWICE throughout — once for the OS-preference
+ * path, once for the pinned toggle — because a selector list cannot
+ * contain an @media, and the two are different selectors. */
+
+/* The page: a soft cool off-white with a gentle vertical gradient, so
+   the sheet itself has a top and a bottom and the card has something
+   to sit against. Replaces a flat wash plus three coloured radials —
+   one of which was violet, which is what made the page read lavender. */
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']) [data-lookup-panel] {
-    --surface-2: #0e1a2f;
-    --surface: #0a1424;
-    --line: rgba(148, 178, 255, 0.18);
-    --fg-strong: #f8fafc;
-    --fg-body: #cbd5e1;
-    --fg-muted: #94a3b8;
-    --sky: #38bdf8;
-    --sky-deep: #7dd3fc;
-    --accent-fg: #051018;
-    border-color: rgba(148, 178, 255, 0.22);
+  :root:not([data-theme='dark']) body {
+    background-image: linear-gradient(180deg, var(--page-top) 0%, var(--page-bottom) 100%);
+    background-attachment: fixed;
+  }
+}
+:root[data-theme='light'] body {
+  background-image: linear-gradient(180deg, var(--page-top) 0%, var(--page-bottom) 100%);
+  background-attachment: fixed;
+}
+
+/* The lookup card is a LIGHT surface again — white, dark text, a 1px
+   line and a real but quiet shadow. It was navy for one iteration,
+   which solved the separation problem by importing the other theme
+   rather than by designing this one. Elevation does the same job
+   without the page having to contain a foreign object.
+   The terminal `>_` prefix and mono input are untouched; they inherit
+   the recoloured tokens. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) [data-lookup-panel],
+  :root:not([data-theme='dark']) [data-status-panel] {
+    border-color: var(--line-strong);
     box-shadow:
-      0 18px 48px -12px rgba(14, 26, 47, 0.45),
-      0 2px 8px rgba(14, 26, 47, 0.18);
+      0 1px 2px rgba(15, 23, 42, 0.05),
+      0 16px 32px -16px rgba(15, 23, 42, 0.22);
+  }
+  :root:not([data-theme='dark']) [data-status-panel] {
+    background: color-mix(in srgb, var(--tone) 7%, var(--surface-2));
+    border-color: color-mix(in srgb, var(--tone) 26%, var(--line-strong));
+    box-shadow:
+      inset 0 3px 0 -1px var(--tone),
+      0 16px 32px -16px rgba(15, 23, 42, 0.22);
+  }
+}
+:root[data-theme='light'] [data-lookup-panel],
+:root[data-theme='light'] [data-status-panel] {
+  border-color: var(--line-strong);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.05),
+    0 16px 32px -16px rgba(15, 23, 42, 0.22);
+}
+:root[data-theme='light'] [data-status-panel] {
+  background: color-mix(in srgb, var(--tone) 7%, var(--surface-2));
+  border-color: color-mix(in srgb, var(--tone) 26%, var(--line-strong));
+  box-shadow:
+    inset 0 3px 0 -1px var(--tone),
+    0 16px 32px -16px rgba(15, 23, 42, 0.22);
+}
+
+/* The AWB field is the third surface level — recessed inside the card
+   rather than flush with it, which is what the inset line buys. On
+   black the same field is already distinct, so this stays in light. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) [data-lookup-panel] input {
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.05);
+  }
+}
+:root[data-theme='light'] [data-lookup-panel] input {
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+/* Theme toggle and locale pills. On black a 1px hairline is enough to
+   say "control"; on a pale page it is not, and an INACTIVE pill was
+   only distinguishable from the page by a line it barely had. They get
+   a white surface and the same quiet elevation as the card, so active
+   (filled sky) versus inactive (raised white) reads without relying on
+   a dark background. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) [data-slot='theme-toggle'],
+  :root:not([data-theme='dark']) [data-slot='locale-switcher'] {
+    background: var(--surface-2);
+    border-color: var(--line-strong);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  }
+}
+:root[data-theme='light'] [data-slot='theme-toggle'],
+:root[data-theme='light'] [data-slot='locale-switcher'] {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+/* Toggling the theme should settle, not snap — but only the flat
+   surfaces transition. The canvas repaints on its own (a
+   MutationObserver re-reads the tokens), and animating it as well is
+   what makes a theme switch look like it jumps. */
+@media (prefers-reduced-motion: no-preference) {
+  body,
+  [data-lookup-panel],
+  [data-status-panel],
+  [data-slot='theme-toggle'],
+  [data-slot='locale-switcher'] {
+    transition:
+      background-color 220ms ease,
+      border-color 220ms ease,
+      color 220ms ease;
   }
 }
 
