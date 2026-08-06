@@ -51,7 +51,11 @@ export default async function Home(): Promise<ReactElement> {
         </div>
 
         <TiltPanel max={3} className="boot-rise boot-rise-2">
-          <div className="panel ticks relative overflow-hidden p-6 sm:p-7">
+          {/* The lookup is a CONTROL, not content — see the note in
+              globals.css on why it is the one dark object on a light
+              page. Marked rather than restyled here: the recolour is a
+              theme concern and this component is correct in dark. */}
+          <div data-lookup-panel className="panel ticks relative overflow-hidden p-6 sm:p-7">
             <div className="mb-3 flex items-center justify-between">
               <span className="telemetry text-sky">lookup</span>
               <span className="telemetry text-fg-muted">corridor · live</span>
