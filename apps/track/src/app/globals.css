@@ -14,6 +14,28 @@
   --green: #34d399;
   --red: #f87171;
 
+  /* ── The parcel spectrum ────────────────────────────────────────
+   * A tracking page has twelve display statuses and this palette had
+   * four colours for them, so five buckets — processing, the three
+   * return states and cancelled — all rendered as the same grey dot.
+   * Half a parcel's life was therefore colourless, and the half that
+   * worries a customer most (it is coming back) looked identical to
+   * the half that means nothing is happening yet.
+   *
+   * These DARK values are exactly what the page renders today, to the
+   * hex, so the dark theme is unchanged. The light overrides below
+   * open the spectrum out. */
+  --tone-processing: var(--fg-muted);
+  --tone-dispatched: var(--sky);
+  --tone-in-transit: var(--sky);
+  --tone-out-for-delivery: var(--sky);
+  --tone-attempted: var(--saffron);
+  --tone-delivered: var(--green);
+  --tone-returning: var(--fg-muted);
+  --tone-returned: var(--fg-muted);
+  --tone-lost: var(--red);
+  --tone-cancelled: var(--fg-muted);
+
   --surface: #060b16;
   --surface-2: #0c1424;
   --surface-3: rgba(56, 189, 248, 0.05);
@@ -45,6 +67,28 @@
     --line-strong: #d1d5db;
     --grid: rgba(37, 99, 235, 0.07);
     --accent-fg: #ffffff;
+    /* Declared for light too. These existed only in the dark :root,
+     so the light page drew 'delivered' in dark-mode mint — 1.9:1
+     on a white card, on the one line a customer is looking for. */
+    --green: #15803d;
+    --red: #dc2626;
+    /* The spectrum, opened out. A parcel's journey reads as a
+     progression — indigo while we hold it, blue once it moves, sky in
+     transit, violet on the van — then amber for a failed attempt,
+     green for done, orange for anything coming back, red for gone.
+     Orange for the return states is the one that matters: that is the
+     outcome a customer needs to notice, and it was grey. Every value
+     clears 4.5:1 on the white card it sits on. */
+    --tone-processing: #4f46e5;
+    --tone-dispatched: #2563eb;
+    --tone-in-transit: #0369a1;
+    --tone-out-for-delivery: #7c3aed;
+    --tone-attempted: #b45309;
+    --tone-delivered: #15803d;
+    --tone-returning: #c2410c;
+    --tone-returned: #9a3412;
+    --tone-lost: #dc2626;
+    --tone-cancelled: #475569;
     --glow: rgba(37, 99, 235, 0.2);
     color-scheme: light;
   }
@@ -71,11 +115,6 @@
 :root[data-theme='light'] {
   /* ── DAY CORRIDOR — the light theme ────────────────────────────────
    *
-   * Not white. A white ground with white cards has no depth; every
-   * surface reads as one plane. This is sampled from the product's own
-   * reference frames: a cool blue-grey ground, white cards sitting ON
-   * it, and a pale sky tint for grouped panels.
-   *
    * DAY DECK, matched to the operator console: a near-white ground,
    * white cards, and one vivid blue (#2563eb) for every primary action.
    * Two earlier passes tried to carry the colour in the GROUND — a cool
@@ -98,6 +137,28 @@
   --line-strong: #d1d5db;
   --grid: rgba(37, 99, 235, 0.07);
   --accent-fg: #ffffff;
+  /* Declared for light too. These existed only in the dark :root,
+     so the light page drew 'delivered' in dark-mode mint — 1.9:1
+     on a white card, on the one line a customer is looking for. */
+  --green: #15803d;
+  --red: #dc2626;
+  /* The spectrum, opened out. A parcel's journey reads as a
+     progression — indigo while we hold it, blue once it moves, sky in
+     transit, violet on the van — then amber for a failed attempt,
+     green for done, orange for anything coming back, red for gone.
+     Orange for the return states is the one that matters: that is the
+     outcome a customer needs to notice, and it was grey. Every value
+     clears 4.5:1 on the white card it sits on. */
+  --tone-processing: #4f46e5;
+  --tone-dispatched: #2563eb;
+  --tone-in-transit: #0369a1;
+  --tone-out-for-delivery: #7c3aed;
+  --tone-attempted: #b45309;
+  --tone-delivered: #15803d;
+  --tone-returning: #c2410c;
+  --tone-returned: #9a3412;
+  --tone-lost: #dc2626;
+  --tone-cancelled: #475569;
   --glow: rgba(37, 99, 235, 0.2);
   color-scheme: light;
 }
@@ -202,6 +263,55 @@ h3 {
 .ticks::after {
   bottom: 6px;
   right: 8px;
+}
+
+/* ── Light-only: colour where the page's own content is ──────────────
+ *
+ * Scoped to the light theme, so the dark console is untouched. The
+ * point is not to tint the page — a tinted ground flattens whatever
+ * sits on it — but to let the parcel's own status colour the thing the
+ * customer came to read. */
+
+/* The ground gets a soft daylight wash instead of one flat grey, so the
+   card has something to sit against.
+
+   Declared TWICE on purpose — the OS default and the pinned toggle are
+   different selectors and a selector list cannot contain an @media, so
+   the first attempt at this silently dropped the rule. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) body {
+    background-image:
+      radial-gradient(72rem 40rem at 78% -10%, rgba(37, 99, 235, 0.09), transparent 60%),
+      radial-gradient(56rem 32rem at 8% 8%, rgba(124, 58, 237, 0.06), transparent 60%),
+      radial-gradient(48rem 30rem at 50% 110%, rgba(245, 158, 11, 0.05), transparent 60%);
+    background-attachment: fixed;
+  }
+  :root:not([data-theme='dark']) [data-status-panel] {
+    background: color-mix(in srgb, var(--tone) 7%, var(--surface-2));
+    border-color: color-mix(in srgb, var(--tone) 24%, var(--line));
+    box-shadow: inset 0 3px 0 -1px var(--tone);
+  }
+}
+:root[data-theme='light'] body {
+  background-image:
+    radial-gradient(72rem 40rem at 78% -10%, rgba(37, 99, 235, 0.09), transparent 60%),
+    radial-gradient(56rem 32rem at 8% 8%, rgba(124, 58, 237, 0.06), transparent 60%),
+    radial-gradient(48rem 30rem at 50% 110%, rgba(245, 158, 11, 0.05), transparent 60%);
+  background-attachment: fixed;
+}
+
+/* The status instrument, washed in the parcel's own tone. `color-mix`
+   keeps ONE source of truth: the tone comes from the spectrum, and the
+   7% pool and the top rule are derived from it rather than being a
+   second table of pale colours somebody has to keep in step.
+
+   `:root:not([data-theme='dark'])` on its own would have hit the DARK
+   console too — track has no attribute until the toggle is used, and
+   its default is dark. It only means "light" INSIDE the media query. */
+:root[data-theme='light'] [data-status-panel] {
+  background: color-mix(in srgb, var(--tone) 7%, var(--surface-2));
+  border-color: color-mix(in srgb, var(--tone) 24%, var(--line));
+  box-shadow: inset 0 3px 0 -1px var(--tone);
 }
 
 .console-grid {

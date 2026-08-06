@@ -8,18 +8,18 @@ import { type Locale, statusKey, t } from '@/lib/i18n';
  */
 
 const STATUS_DOT: Record<string, string> = {
-  delivered: 'var(--green)',
-  out_for_delivery: 'var(--sky)',
-  in_transit: 'var(--sky)',
-  dispatched: 'var(--sky)',
-  delivery_attempted: 'var(--saffron)',
-  processing: 'var(--fg-muted)',
-  return_initiated: 'var(--fg-muted)',
-  returning: 'var(--fg-muted)',
-  returned: 'var(--fg-muted)',
-  lost: 'var(--red)',
-  damaged: 'var(--red)',
-  cancelled: 'var(--fg-muted)',
+  delivered: 'var(--tone-delivered)',
+  out_for_delivery: 'var(--tone-out-for-delivery)',
+  in_transit: 'var(--tone-in-transit)',
+  dispatched: 'var(--tone-dispatched)',
+  delivery_attempted: 'var(--tone-attempted)',
+  processing: 'var(--tone-processing)',
+  return_initiated: 'var(--tone-returning)',
+  returning: 'var(--tone-returning)',
+  returned: 'var(--tone-returned)',
+  lost: 'var(--tone-lost)',
+  damaged: 'var(--tone-lost)',
+  cancelled: 'var(--tone-cancelled)',
 };
 
 export function TimelineView({
