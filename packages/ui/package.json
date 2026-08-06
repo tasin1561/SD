@@ -8,7 +8,9 @@
   "types": "dist/index.d.ts",
   "sideEffects": [
     "./dist/tokens.css",
-    "./src/tokens.css"
+    "./src/tokens.css",
+    "./dist/corridor.css",
+    "./src/corridor.css"
   ],
   "exports": {
     ".": {
@@ -27,14 +29,15 @@
       "types": "./dist/components/index.d.ts",
       "default": "./dist/components/index.js"
     },
-    "./tokens.css": "./dist/tokens.css"
+    "./tokens.css": "./dist/tokens.css",
+    "./corridor.css": "./dist/corridor.css"
   },
   "files": [
     "dist",
     "src"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && cp src/tokens.css dist/tokens.css",
+    "build": "tsc -p tsconfig.build.json && cp src/tokens.css dist/tokens.css && cp src/corridor.css dist/corridor.css",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist .turbo *.tsbuildinfo"
   },

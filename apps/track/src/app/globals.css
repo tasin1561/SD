@@ -5,268 +5,13 @@
  * get their OS preference automatically).
  */
 
+/* Shared public-site tokens. Both this app and the other public
+ * site read every colour from here; neither declares them itself.
+ * Imported BEFORE tailwind so @theme inline can map them. */
+@import '@skydrop/ui/corridor.css';
 @import 'tailwindcss';
 
-:root {
-  --sky: #38bdf8;
-  --sky-deep: #0284c7;
-  --saffron: #f59e0b;
-  --green: #34d399;
-  --red: #f87171;
-
-  /* ── The parcel spectrum ────────────────────────────────────────
-   * A tracking page has twelve display statuses and this palette had
-   * four colours for them, so five buckets — processing, the three
-   * return states and cancelled — all rendered as the same grey dot.
-   * Half a parcel's life was therefore colourless, and the half that
-   * worries a customer most (it is coming back) looked identical to
-   * the half that means nothing is happening yet.
-   *
-   * These DARK values are exactly what the page renders today, to the
-   * hex, so the dark theme is unchanged. The light overrides below
-   * open the spectrum out. */
-  --tone-processing: var(--fg-muted);
-  --tone-dispatched: var(--sky);
-  --tone-in-transit: var(--sky);
-  --tone-out-for-delivery: var(--sky);
-  --tone-attempted: var(--saffron);
-  --tone-delivered: var(--green);
-  --tone-returning: var(--fg-muted);
-  --tone-returned: var(--fg-muted);
-  --tone-lost: var(--red);
-  --tone-cancelled: var(--fg-muted);
-
-  --surface: #060b16;
-  --surface-2: #0c1424;
-  --surface-3: rgba(56, 189, 248, 0.05);
-  --fg-strong: #f3f7fc;
-  --fg-body: #c3d0e0;
-  --fg-muted: #8296ae;
-  --line: rgba(148, 178, 255, 0.1);
-  --line-strong: rgba(148, 178, 255, 0.22);
-  --grid: rgba(56, 189, 248, 0.05);
-  --accent-fg: #051018;
-  --glow: rgba(56, 189, 248, 0.35);
-  color-scheme: dark;
-  /* ── Map tokens ─────────────────────────────────────────────────
-   * The corridor is drawn to a <canvas>, so it cannot use CSS and had
-   * nineteen rgba literals hardcoded in a JS branch on the colour
-   * scheme instead. That is why it was uncalibrated in light: those
-   * numbers were authored against black. They live here now, in both
-   * themes, and the canvas only reads them.
-   *
-   * These DARK values are byte-identical to the literals they replace,
-   * so the dark map renders exactly as before. */
-  --map-land: rgba(56, 189, 248, 0.04);
-  --map-coast: rgba(116, 166, 220, 0.35);
-  --map-bd-fill: rgba(245, 158, 11, 0.08);
-  --map-bd-coast: rgba(245, 158, 11, 0.45);
-  --map-route: rgba(56, 189, 248, 0.16);
-  --map-halo: rgba(56, 189, 248, 0.35);
-  --map-trail: rgba(56, 189, 248, 0.5);
-  --map-blip: #38bdf8;
-  --map-origin: #f59e0b;
-  --map-label: #8296ae;
-  --map-sweep: 56, 189, 248;
-  /* The veil the page draws the canvas behind. On black, halving the map
-     keeps it as atmosphere. On white it halved the map into invisibility
-     — which is what made the network unreadable, not the colours. */
-  --map-veil: 0.55;
-  --map-veil-soft: 0.4;
-}
-
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme]) {
-    /* DAY CORRIDOR — see the note on :root[data-theme='light'] below.
-       Kept byte-identical to that block: two copies that drift are how
-       the media-query theme and the toggled theme stop matching. */
-    --sky: #2563eb;
-    --sky-deep: #1d4ed8;
-    /* Three surface levels, so the page stops being one flat wash:
-         page  --page-top → --page-bottom, a soft cool off-white with a
-               gentle vertical gradient — not #fff, and no lavender
-         card  --surface-2, white, lifted by a 1px line and a real shadow
-         input --surface, a half-step below the card and recessed in it */
-    --page-top: #f8fafc;
-    --page-bottom: #e8eef6;
-    --surface: #f4f7fb;
-    --surface-2: #ffffff;
-    --surface-3: #eef3f9;
-    --fg-strong: #0f172a;
-    --fg-body: #334155;
-    --fg-muted: #475569;
-    --line: #dbe3ec;
-    --line-strong: #c2ceda;
-    --grid: rgba(37, 99, 235, 0.07);
-    --accent-fg: #ffffff;
-    /* Declared for light too. These existed only in the dark :root,
-     so the light page drew 'delivered' in dark-mode mint — 1.9:1
-     on a white card, on the one line a customer is looking for. */
-    --green: #15803d;
-    --red: #dc2626;
-    /* The spectrum, opened out. A parcel's journey reads as a
-     progression — indigo while we hold it, blue once it moves, sky in
-     transit, violet on the van — then amber for a failed attempt,
-     green for done, orange for anything coming back, red for gone.
-     Orange for the return states is the one that matters: that is the
-     outcome a customer needs to notice, and it was grey. Every value
-     clears 4.5:1 on the white card it sits on. */
-    --tone-processing: #4f46e5;
-    --tone-dispatched: #2563eb;
-    --tone-in-transit: #0369a1;
-    --tone-out-for-delivery: #7c3aed;
-    --tone-attempted: #b45309;
-    --tone-delivered: #15803d;
-    --tone-returning: #c2410c;
-    --tone-returned: #9a3412;
-    --tone-lost: #dc2626;
-    --tone-cancelled: #475569;
-    --glow: rgba(37, 99, 235, 0.2);
-    color-scheme: light;
-    /* Map, calibrated for daylight. Strokes go dark enough to read as
-       borders; the landmass takes a faint fill so outlines become shapes;
-       the corridor and its hubs become the visual feature they already are
-       in dark. Bangladesh moves off tan — a yellow-brown that clashes with
-       cool neutrals — onto terracotta, which still reads as the warm
-       origin against the cool destination. */
-    --map-land: rgba(37, 99, 235, 0.09);
-    --map-coast: rgba(23, 42, 79, 0.64);
-    --map-bd-fill: rgba(194, 65, 12, 0.13);
-    --map-bd-coast: rgba(154, 52, 18, 0.8);
-    --map-route: rgba(29, 78, 216, 0.78);
-    --map-halo: rgba(37, 99, 235, 0.5);
-    --map-trail: rgba(29, 78, 216, 0.7);
-    --map-blip: #1d4ed8;
-    --map-origin: #b45309;
-    --map-label: #475569;
-    --map-sweep: 37, 99, 235;
-    /* No halving on white — the colours above are already tuned for it. */
-    --map-veil: 0.92;
-    --map-veil-soft: 0.62;
-  }
-}
-
 /* Explicit user choice (theme toggle) — beats the media query. */
-:root[data-theme='dark'] {
-  --sky: #38bdf8;
-  --sky-deep: #0284c7;
-  --surface: #060b16;
-  --surface-2: #0c1424;
-  --surface-3: rgba(56, 189, 248, 0.05);
-  --fg-strong: #f3f7fc;
-  --fg-body: #c3d0e0;
-  --fg-muted: #8296ae;
-  --line: rgba(148, 178, 255, 0.1);
-  --line-strong: rgba(148, 178, 255, 0.22);
-  --grid: rgba(56, 189, 248, 0.05);
-  --accent-fg: #051018;
-  --glow: rgba(56, 189, 248, 0.35);
-  color-scheme: dark;
-  /* ── Map tokens ─────────────────────────────────────────────────
-   * The corridor is drawn to a <canvas>, so it cannot use CSS and had
-   * nineteen rgba literals hardcoded in a JS branch on the colour
-   * scheme instead. That is why it was uncalibrated in light: those
-   * numbers were authored against black. They live here now, in both
-   * themes, and the canvas only reads them.
-   *
-   * These DARK values are byte-identical to the literals they replace,
-   * so the dark map renders exactly as before. */
-  --map-land: rgba(56, 189, 248, 0.04);
-  --map-coast: rgba(116, 166, 220, 0.35);
-  --map-bd-fill: rgba(245, 158, 11, 0.08);
-  --map-bd-coast: rgba(245, 158, 11, 0.45);
-  --map-route: rgba(56, 189, 248, 0.16);
-  --map-halo: rgba(56, 189, 248, 0.35);
-  --map-trail: rgba(56, 189, 248, 0.5);
-  --map-blip: #38bdf8;
-  --map-origin: #f59e0b;
-  --map-label: #8296ae;
-  --map-sweep: 56, 189, 248;
-  /* The veil the page draws the canvas behind. On black, halving the map
-     keeps it as atmosphere. On white it halved the map into invisibility
-     — which is what made the network unreadable, not the colours. */
-  --map-veil: 0.55;
-  --map-veil-soft: 0.4;
-}
-
-:root[data-theme='light'] {
-  /* ── DAY CORRIDOR — the light theme ────────────────────────────────
-   *
-   * DAY DECK, matched to the operator console: a near-white ground,
-   * white cards, and one vivid blue (#2563eb) for every primary action.
-   * Two earlier passes tried to carry the colour in the GROUND — a cool
-   * blue-grey page — and both read as monochrome, because a tinted page
-   * flattens whatever sits on it. The life comes from contrast of
-   * surface instead: white cards and pale pools of colour on a quiet
-   * ground. Contrast computed: body 9.9:1, muted 7.2:1, sky 5.0:1 as
-   * link text on the ground and 5.2:1 as white text on a sky fill.
-   *
-   * The dark theme is deliberately untouched. */
-  --sky: #2563eb;
-  --sky-deep: #1d4ed8;
-  /* Three surface levels, so the page stops being one flat wash:
-       page  --page-top → --page-bottom, a soft cool off-white with a
-             gentle vertical gradient — not #fff, and no lavender
-       card  --surface-2, white, lifted by a 1px line and a real shadow
-       input --surface, a half-step below the card and recessed in it */
-  --page-top: #f8fafc;
-  --page-bottom: #e8eef6;
-  --surface: #f4f7fb;
-  --surface-2: #ffffff;
-  --surface-3: #eef3f9;
-  --fg-strong: #0f172a;
-  --fg-body: #334155;
-  --fg-muted: #475569;
-  --line: #dbe3ec;
-  --line-strong: #c2ceda;
-  --grid: rgba(37, 99, 235, 0.07);
-  --accent-fg: #ffffff;
-  /* Declared for light too. These existed only in the dark :root,
-     so the light page drew 'delivered' in dark-mode mint — 1.9:1
-     on a white card, on the one line a customer is looking for. */
-  --green: #15803d;
-  --red: #dc2626;
-  /* The spectrum, opened out. A parcel's journey reads as a
-     progression — indigo while we hold it, blue once it moves, sky in
-     transit, violet on the van — then amber for a failed attempt,
-     green for done, orange for anything coming back, red for gone.
-     Orange for the return states is the one that matters: that is the
-     outcome a customer needs to notice, and it was grey. Every value
-     clears 4.5:1 on the white card it sits on. */
-  --tone-processing: #4f46e5;
-  --tone-dispatched: #2563eb;
-  --tone-in-transit: #0369a1;
-  --tone-out-for-delivery: #7c3aed;
-  --tone-attempted: #b45309;
-  --tone-delivered: #15803d;
-  --tone-returning: #c2410c;
-  --tone-returned: #9a3412;
-  --tone-lost: #dc2626;
-  --tone-cancelled: #475569;
-  --glow: rgba(37, 99, 235, 0.2);
-  color-scheme: light;
-  /* Map, calibrated for daylight. Strokes go dark enough to read as
-     borders; the landmass takes a faint fill so outlines become shapes;
-     the corridor and its hubs become the visual feature they already are
-     in dark. Bangladesh moves off tan — a yellow-brown that clashes with
-     cool neutrals — onto terracotta, which still reads as the warm
-     origin against the cool destination. */
-  --map-land: rgba(37, 99, 235, 0.09);
-  --map-coast: rgba(23, 42, 79, 0.64);
-  --map-bd-fill: rgba(194, 65, 12, 0.13);
-  --map-bd-coast: rgba(154, 52, 18, 0.8);
-  --map-route: rgba(29, 78, 216, 0.78);
-  --map-halo: rgba(37, 99, 235, 0.5);
-  --map-trail: rgba(29, 78, 216, 0.7);
-  --map-blip: #1d4ed8;
-  --map-origin: #b45309;
-  --map-label: #475569;
-  --map-sweep: 37, 99, 235;
-  /* No halving on white — the colours above are already tuned for it. */
-  --map-veil: 0.92;
-  --map-veil-soft: 0.62;
-}
-
 @theme inline {
   --color-sky: var(--sky);
   --color-sky-deep: var(--sky-deep);
@@ -382,20 +127,6 @@ h3 {
    Declared TWICE on purpose — the OS default and the pinned toggle are
    different selectors and a selector list cannot contain an @media, so
    the first attempt at this silently dropped the rule. */
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']) body {
-    background-image:
-      radial-gradient(72rem 40rem at 78% -10%, rgba(37, 99, 235, 0.09), transparent 60%),
-      radial-gradient(56rem 32rem at 8% 8%, rgba(124, 58, 237, 0.06), transparent 60%),
-      radial-gradient(48rem 30rem at 50% 110%, rgba(245, 158, 11, 0.05), transparent 60%);
-    background-attachment: fixed;
-  }
-  :root:not([data-theme='dark']) [data-status-panel] {
-    background: color-mix(in srgb, var(--tone) 7%, var(--surface-2));
-    border-color: color-mix(in srgb, var(--tone) 24%, var(--line));
-    box-shadow: inset 0 3px 0 -1px var(--tone);
-  }
-}
 :root[data-theme='light'] body {
   background-image:
     radial-gradient(72rem 40rem at 78% -10%, rgba(37, 99, 235, 0.09), transparent 60%),
@@ -429,12 +160,6 @@ h3 {
    the sheet itself has a top and a bottom and the card has something
    to sit against. Replaces a flat wash plus three coloured radials —
    one of which was violet, which is what made the page read lavender. */
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']) body {
-    background-image: linear-gradient(180deg, var(--page-top) 0%, var(--page-bottom) 100%);
-    background-attachment: fixed;
-  }
-}
 :root[data-theme='light'] body {
   background-image: linear-gradient(180deg, var(--page-top) 0%, var(--page-bottom) 100%);
   background-attachment: fixed;
@@ -447,22 +172,6 @@ h3 {
    without the page having to contain a foreign object.
    The terminal `>_` prefix and mono input are untouched; they inherit
    the recoloured tokens. */
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']) [data-lookup-panel],
-  :root:not([data-theme='dark']) [data-status-panel] {
-    border-color: var(--line-strong);
-    box-shadow:
-      0 1px 2px rgba(15, 23, 42, 0.05),
-      0 16px 32px -16px rgba(15, 23, 42, 0.22);
-  }
-  :root:not([data-theme='dark']) [data-status-panel] {
-    background: color-mix(in srgb, var(--tone) 7%, var(--surface-2));
-    border-color: color-mix(in srgb, var(--tone) 26%, var(--line-strong));
-    box-shadow:
-      inset 0 3px 0 -1px var(--tone),
-      0 16px 32px -16px rgba(15, 23, 42, 0.22);
-  }
-}
 :root[data-theme='light'] [data-lookup-panel],
 :root[data-theme='light'] [data-status-panel] {
   border-color: var(--line-strong);
@@ -481,11 +190,6 @@ h3 {
 /* The AWB field is the third surface level — recessed inside the card
    rather than flush with it, which is what the inset line buys. On
    black the same field is already distinct, so this stays in light. */
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']) [data-lookup-panel] input {
-    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.05);
-  }
-}
 :root[data-theme='light'] [data-lookup-panel] input {
   box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.05);
 }
@@ -496,14 +200,6 @@ h3 {
    a white surface and the same quiet elevation as the card, so active
    (filled sky) versus inactive (raised white) reads without relying on
    a dark background. */
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']) [data-slot='theme-toggle'],
-  :root:not([data-theme='dark']) [data-slot='locale-switcher'] {
-    background: var(--surface-2);
-    border-color: var(--line-strong);
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
-  }
-}
 :root[data-theme='light'] [data-slot='theme-toggle'],
 :root[data-theme='light'] [data-slot='locale-switcher'] {
   background: var(--surface-2);

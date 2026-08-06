@@ -1,0 +1,238 @@
+/*
+ * CORRIDOR — the shared token set for the two PUBLIC sites
+ * (apps/marketing and apps/track).
+ *
+ * ── WHY THIS FILE EXISTS ─────────────────────────────────────────────
+ * Both sites were built from one design direction and each kept its OWN
+ * copy of the tokens. They drifted: track gained a twelve-status tone
+ * set, a full set of map tokens and a rebuilt light theme; marketing
+ * got none of it and its light theme sat two revisions behind. Two
+ * copies of a palette are not a shared palette — they are a palette and
+ * a fork nobody has noticed yet.
+ *
+ * `@skydrop/ui/tokens.css` is DELIBERATELY SEPARATE and unaffected. It
+ * serves the authenticated consoles (admin, seller), which have their
+ * own density, their own eight-kind status vocabulary in
+ * `packages/ui/src/status`, and no map. Sharing between the two public
+ * sites is the real duplication; sharing across all four would be a
+ * coincidence dressed up as a system.
+ *
+ * ── THIS COMMIT IS DELIBERATELY ALMOST INERT ─────────────────────────
+ * Every value below reproduces what the sites render TODAY, with ONE
+ * exception: the primary is unified (see next block). The corporate
+ * retheme lands in the commit AFTER this one, so that if the retheme
+ * looks wrong it can be reverted without unwiring the shared package.
+ *
+ * The one unavoidable exception is marketing's LIGHT theme. The two
+ * light themes had genuinely diverged, so consolidating meant choosing
+ * one, and track's is the newer and the only one whose contrast was
+ * measured. Marketing therefore moves onto it here. That change is
+ * shown in the regression shots rather than buried.
+ */
+
+/* ─────────────────────────────────────────────────────────────────────
+ * THE PRIMARY — one hue, two lightnesses.
+ *
+ * Previously the two themes used different COLOURS, not one colour at
+ * two lightnesses: dark ran a bright cyan (#38bdf8, hue 198°) and light
+ * a royal blue (#2563eb, hue 221°). That is a 23° hue split on the
+ * single most important token in the system, and it is why the two
+ * themes read as different products. Eleven further tokens were tinted
+ * from it and inherited the split.
+ *
+ * Both themes now take hsl(212 72%) and differ ONLY in lightness —
+ * light L36, dark L62 — lightened in dark exactly as far as contrast
+ * requires and no further. Cyan is gone: it reads as a developer-tool
+ * accent, not a logistics company.
+ *
+ *   light  L36  #1a579e   7.24:1 white-on-fill · 6.88:1 as text on paper
+ *   dark   L62  #5899e4   5.86:1 on the page   · 6.36:1 ink-on-fill
+ * ──────────────────────────────────────────────────────────────────── */
+
+/* ─────────────────────────────────────────────────────────────────────
+ * NIGHT — dark. Values as they render today, primary excepted.
+ * ──────────────────────────────────────────────────────────────────── */
+:root,
+:root[data-theme='dark'] {
+  --sky: #5899e4;
+  --sky-deep: #2479db;
+  --saffron: #f59e0b;
+  --green: #34d399;
+  --red: #f87171;
+
+  --surface: #060b16;
+  --surface-2: #0c1424;
+  --surface-3: rgba(88, 153, 228, 0.05);
+  --fg-strong: #f3f7fc;
+  --fg-body: #c3d0e0;
+  --fg-muted: #8296ae;
+  --line: rgba(148, 178, 255, 0.1);
+  --line-strong: rgba(148, 178, 255, 0.22);
+  --grid: rgba(88, 153, 228, 0.05);
+  --accent-fg: #051018;
+  --glow: rgba(88, 153, 228, 0.35);
+
+  /* ── Status tones ──────────────────────────────────────────────────
+   * Twelve buyer-facing statuses over EIGHT tones in five families.
+   * Statuses that do not change what a customer does now share a tone
+   * and are told apart by their label; inventing a hue per status is
+   * how a tracking page ends up a rainbow, and nobody distinguishes
+   * twelve hues reliably anyway.
+   *
+   * ⚠ RENDERED AS TEXT AND AS DOTS — NOT AS FILLS.
+   * Today each tone is used three ways: a 7px timeline node and a 10px
+   * status dot (non-text, 3:1), a 14px/500 event label (normal text,
+   * 4.5:1 — this is the binding one), and a 24–30px/600 headline (large
+   * text, 3:1). All eight clear 4.5:1 in every one of those.
+   *
+   * There are NO pills or filled badges anywhere yet. If you add one,
+   * these tokens are the wrong thing to fill it with: a fill needs its
+   * LABEL at 4.5:1 against the fill AND the fill at 3:1 against the
+   * surface, which is a different requirement from any of the above.
+   * --tone-moving (#5899e4) is the first that breaks — white on it is
+   * 3.4:1, well under. Add explicit `-fill` / `-on-fill` pairs at that
+   * point rather than compromising these values, which are correct for
+   * what they currently do.
+   *
+   * These DARK values are today's, so dark renders unchanged here; the
+   * five-family collapse lands in the retheme commit. */
+  --tone-processing: var(--fg-muted);
+  --tone-dispatched: var(--sky);
+  --tone-in-transit: var(--sky);
+  --tone-out-for-delivery: var(--sky);
+  --tone-attempted: var(--saffron);
+  --tone-delivered: var(--green);
+  --tone-returning: var(--fg-muted);
+  --tone-returned: var(--fg-muted);
+  --tone-lost: var(--red);
+  --tone-cancelled: var(--fg-muted);
+
+  /* ── Map ───────────────────────────────────────────────────────────
+   * The corridor is drawn to a <canvas>, which cannot read CSS, so
+   * these are read once and re-read on a theme change. Keeping them
+   * here rather than as literals in the component is what stopped the
+   * two themes' maps drifting apart. */
+  --map-land: rgba(56, 189, 248, 0.04);
+  --map-coast: rgba(116, 166, 220, 0.35);
+  --map-bd-fill: rgba(245, 158, 11, 0.08);
+  --map-bd-coast: rgba(245, 158, 11, 0.45);
+  --map-route: rgba(56, 189, 248, 0.16);
+  --map-halo: rgba(56, 189, 248, 0.35);
+  --map-trail: rgba(56, 189, 248, 0.5);
+  --map-blip: #38bdf8;
+  --map-origin: #f59e0b;
+  --map-label: #8296ae;
+  --map-sweep: 56, 189, 248;
+  /* The veil the page draws the canvas behind. Halving the map is right
+     on black and was what made it invisible on white. */
+  --map-veil: 0.55;
+  --map-veil-soft: 0.4;
+
+  color-scheme: dark;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * DAY — light. Track's current light theme, which both sites now share.
+ *
+ * Declared TWICE: once for the OS preference, once for the pinned
+ * toggle. A selector list cannot contain an @media, so the two must be
+ * written out, and two copies that drift are how the OS theme and the
+ * toggled theme stop matching.
+ * ──────────────────────────────────────────────────────────────────── */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --sky: #1a579e;
+    --sky-deep: #15467f;
+    --green: #15803d;
+    --red: #dc2626;
+
+    --page-top: #f8fafc;
+    --page-bottom: #e8eef6;
+    --surface: #f4f7fb;
+    --surface-2: #ffffff;
+    --surface-3: #eef3f9;
+    --fg-strong: #0f172a;
+    --fg-body: #334155;
+    --fg-muted: #475569;
+    --line: #dbe3ec;
+    --line-strong: #c2ceda;
+    --grid: rgba(26, 87, 158, 0.07);
+    --accent-fg: #ffffff;
+    --glow: rgba(26, 87, 158, 0.2);
+
+    --tone-processing: #4f46e5;
+    --tone-dispatched: #2563eb;
+    --tone-in-transit: #0369a1;
+    --tone-out-for-delivery: #7c3aed;
+    --tone-attempted: #b45309;
+    --tone-delivered: #15803d;
+    --tone-returning: #c2410c;
+    --tone-returned: #9a3412;
+    --tone-lost: #dc2626;
+    --tone-cancelled: #475569;
+
+    --map-land: rgba(37, 99, 235, 0.09);
+    --map-coast: rgba(23, 42, 79, 0.64);
+    --map-bd-fill: rgba(194, 65, 12, 0.13);
+    --map-bd-coast: rgba(154, 52, 18, 0.8);
+    --map-route: rgba(29, 78, 216, 0.78);
+    --map-halo: rgba(37, 99, 235, 0.5);
+    --map-trail: rgba(29, 78, 216, 0.7);
+    --map-blip: #1d4ed8;
+    --map-origin: #b45309;
+    --map-label: #475569;
+    --map-sweep: 37, 99, 235;
+    --map-veil: 0.92;
+    --map-veil-soft: 0.62;
+
+    color-scheme: light;
+  }
+}
+
+:root[data-theme='light'] {
+  --sky: #1a579e;
+  --sky-deep: #15467f;
+  --green: #15803d;
+  --red: #dc2626;
+
+  --page-top: #f8fafc;
+  --page-bottom: #e8eef6;
+  --surface: #f4f7fb;
+  --surface-2: #ffffff;
+  --surface-3: #eef3f9;
+  --fg-strong: #0f172a;
+  --fg-body: #334155;
+  --fg-muted: #475569;
+  --line: #dbe3ec;
+  --line-strong: #c2ceda;
+  --grid: rgba(26, 87, 158, 0.07);
+  --accent-fg: #ffffff;
+  --glow: rgba(26, 87, 158, 0.2);
+
+  --tone-processing: #4f46e5;
+  --tone-dispatched: #2563eb;
+  --tone-in-transit: #0369a1;
+  --tone-out-for-delivery: #7c3aed;
+  --tone-attempted: #b45309;
+  --tone-delivered: #15803d;
+  --tone-returning: #c2410c;
+  --tone-returned: #9a3412;
+  --tone-lost: #dc2626;
+  --tone-cancelled: #475569;
+
+  --map-land: rgba(37, 99, 235, 0.09);
+  --map-coast: rgba(23, 42, 79, 0.64);
+  --map-bd-fill: rgba(194, 65, 12, 0.13);
+  --map-bd-coast: rgba(154, 52, 18, 0.8);
+  --map-route: rgba(29, 78, 216, 0.78);
+  --map-halo: rgba(37, 99, 235, 0.5);
+  --map-trail: rgba(29, 78, 216, 0.7);
+  --map-blip: #1d4ed8;
+  --map-origin: #b45309;
+  --map-label: #475569;
+  --map-sweep: 37, 99, 235;
+  --map-veil: 0.92;
+  --map-veil-soft: 0.62;
+
+  color-scheme: light;
+}

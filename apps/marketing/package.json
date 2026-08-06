@@ -13,6 +13,7 @@
     "clean": "rm -rf .next out .turbo dist *.tsbuildinfo"
   },
   "dependencies": {
+    "@skydrop/ui": "workspace:*",
     "clsx": "^2.1.0",
     "lucide-react": "^0.469.0",
     "next": "^15.5.22",
