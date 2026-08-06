@@ -186,83 +186,104 @@
  *
  * This palette is sampled from the product's own reference frames — a
  * cool blue-grey ground, white cards that sit ON it, and a pale sky
- * tint for grouped panels. The accent is a steel sky rather than the
- * indigo, which puts the light theme in the same colour family as the
- * dark one instead of two unrelated products sharing a toggle.
+ * tint for grouped panels — and then given real chroma. The first pass
+ * was faithful to the references and came out near-monochrome: one
+ * muted steel accent and eight status chips at 10% tint, which in a
+ * product where COLOUR IS THE STATE CHANNEL reads as a greyscale
+ * screenshot of itself.
  *
- * Contrast was computed, not eyeballed, against every real pairing:
- * body 9.9:1 on the ground, muted 6.1:1 on white and 5.2:1 on the
- * tint, accent 5.5:1 BOTH as text on white and as white text on the
- * accent fill. Two values moved because of that check rather than by
- * taste — the sampled accent #317aa5 lands at 4.71:1, one rounding
- * error from failing, and muted at #546b80 fell to 4.43:1 on a tinted
- * panel composited over the ground, which is the case a white-only
- * check never sees.
+ * So the hue does the work it is there to do. The accent is a true sky
+ * at full chroma, and the eight status kinds are saturated to the point
+ * where a row's state is legible from across the room rather than on
+ * inspection. That is not decoration in this product: an operator scans
+ * a queue for the one red row, and a pale pink chip makes them read.
+ * Colour is still never the ONLY signal — every chip carries its label,
+ * and Money pairs its colour with an explicit +/− glyph.
+ *
+ * Saturation is bounded by contrast, and the bound was computed rather
+ * than guessed. Every status foreground clears 4.5:1 against its own
+ * 16% tint composited over BOTH white and the ground — the second is
+ * the case a white-only check never sees, and it is stricter, so it is
+ * what set the values. The accent has to pass in two directions at
+ * once (as link text, and as white text on a filled button), which is
+ * what caps how bright a blue can go: #0f6fc9 reads beautifully but
+ * lands at 4.43:1 as a link on the ground, so it is one step deeper.
+ * Two of the eight chips (pending, rto) needed their foregrounds
+ * darkened for the same reason after the tint was strengthened.
  *
  * The dark theme above is deliberately untouched. */
 [data-theme='light'] {
-  --color-bg: #eef3f9;
+  --color-bg: #e6eefb;
   --color-surface: #ffffff;
   --color-surface-raised: #ffffff;
-  /* Doubles as the row-hover AND the grouped-panel tint. */
-  --color-surface-hover: #e4eef7;
-  --color-border: #d2dfea;
-  --color-border-strong: #b3c7d7;
-  --color-text-faint: #8296a8;
+  /* Doubles as the row-hover AND the grouped-panel tint. Carries real
+     sky rather than grey, so a hovered row looks selected. */
+  --color-surface-hover: #d3e6fb;
+  --color-border: #cbdcee;
+  --color-border-strong: #a8c4dd;
+  --color-text-faint: #7a8b9e;
   --color-text-muted: #4f6578;
   --color-text-body: #2c3e50;
   --color-text-strong: #16283a;
   --color-text-bright: #0a1420;
 
-  --color-accent: #2c6e9b;
-  --color-accent-hover: #24587c;
+  /* A true sky, as deep as passing in BOTH directions allows. */
+  --color-accent: #0d66bd;
+  --color-accent-hover: #0a4f96;
   --color-accent-fg: #ffffff;
-  --color-accent-tint: rgba(44, 110, 155, 0.1);
-  --color-accent-ring: rgba(44, 110, 155, 0.38);
+  --color-accent-tint: rgba(13, 102, 189, 0.16);
+  --color-accent-ring: rgba(13, 102, 189, 0.42);
 
-  --color-critical: #d93838;
-  --color-critical-tint: rgba(217, 56, 56, 0.1);
-  --color-critical-ring: rgba(217, 56, 56, 0.4);
+  --color-critical: #d01b3c;
+  --color-critical-tint: rgba(208, 27, 60, 0.12);
+  --color-critical-ring: rgba(208, 27, 60, 0.45);
 
-  /* Deeper on white to hold 4.5:1 — dark-theme values would fail. */
-  --color-credit: #15803d;
-  --color-debit: #b91c1c;
+  /* Deeper on white to hold 4.5:1 — dark-theme values would fail.
+     Matched to the delivered/failed chips so a green number and a
+     green badge on the same row are the same green. */
+  --color-credit: #0d6b3b;
+  --color-debit: #be123c;
 
-  /* Light-theme status: same hues, deeper/less-transparent
-     foreground to maintain contrast on white. */
+  /* Light-theme status — the product's loudest colour, on purpose.
+     28% tints and deep saturated foregrounds: this is the channel an
+     operator scans a queue with, and at 10% every chip was the same
+     pale wash. 28% is not an arbitrary step up — it is the ceiling.
+     Past it the tint darkens enough that `failed` can no longer hold
+     4.5:1 against any foreground still recognisable as red. Each fg
+     clears on its own tint over white AND over the ground. */
   /* Blue-grey rather than neutral: a truly neutral chip reads warm and
      dead against a cool ground, which makes "draft" look broken. */
-  --status-draft-bg: rgba(84, 107, 128, 0.12);
-  --status-draft-fg: #4b6076;
-  --status-draft-ring: rgba(84, 107, 128, 0.35);
+  --status-draft-bg: rgba(84, 107, 128, 0.28);
+  --status-draft-fg: #3d5165;
+  --status-draft-ring: rgba(84, 107, 128, 0.45);
 
-  --status-pending-bg: rgba(217, 145, 33, 0.12);
-  --status-pending-fg: #a16207;
-  --status-pending-ring: rgba(217, 145, 33, 0.35);
+  --status-pending-bg: rgba(245, 158, 11, 0.28);
+  --status-pending-fg: #8a4205;
+  --status-pending-ring: rgba(217, 119, 6, 0.5);
 
-  --status-confirmed-bg: rgba(37, 99, 235, 0.1);
-  --status-confirmed-fg: #1d4ed8;
-  --status-confirmed-ring: rgba(37, 99, 235, 0.35);
+  --status-confirmed-bg: rgba(37, 99, 235, 0.28);
+  --status-confirmed-fg: #0e4ba1;
+  --status-confirmed-ring: rgba(37, 99, 235, 0.5);
 
-  --status-in-transit-bg: rgba(124, 58, 237, 0.1);
-  --status-in-transit-fg: #6d28d9;
-  --status-in-transit-ring: rgba(124, 58, 237, 0.35);
+  --status-in-transit-bg: rgba(139, 92, 246, 0.28);
+  --status-in-transit-fg: #5a1fb8;
+  --status-in-transit-ring: rgba(139, 92, 246, 0.5);
 
-  --status-delivered-bg: rgba(21, 128, 61, 0.1);
-  --status-delivered-fg: #15803d;
-  --status-delivered-ring: rgba(21, 128, 61, 0.35);
+  --status-delivered-bg: rgba(16, 185, 129, 0.28);
+  --status-delivered-fg: #0a5c32;
+  --status-delivered-ring: rgba(16, 185, 129, 0.5);
 
-  --status-rto-bg: rgba(194, 65, 12, 0.1);
-  --status-rto-fg: #b45309;
-  --status-rto-ring: rgba(194, 65, 12, 0.35);
+  --status-rto-bg: rgba(249, 115, 22, 0.28);
+  --status-rto-fg: #9a3408;
+  --status-rto-ring: rgba(249, 115, 22, 0.5);
 
-  --status-failed-bg: rgba(185, 28, 28, 0.1);
-  --status-failed-fg: #b91c1c;
-  --status-failed-ring: rgba(185, 28, 28, 0.35);
+  --status-failed-bg: rgba(244, 63, 94, 0.28);
+  --status-failed-fg: #a80f34;
+  --status-failed-ring: rgba(244, 63, 94, 0.5);
 
-  --status-cancelled-bg: rgba(100, 116, 139, 0.1);
-  --status-cancelled-fg: #475569;
-  --status-cancelled-ring: rgba(100, 116, 139, 0.35);
+  --status-cancelled-bg: rgba(100, 116, 139, 0.28);
+  --status-cancelled-fg: #3b4a63;
+  --status-cancelled-ring: rgba(100, 116, 139, 0.45);
 
   /* Navy-tinted, not neutral black: a grey shadow on a blue ground
      muddies it, where a shadow carrying the ground's own hue reads as
@@ -271,6 +292,24 @@
   --shadow-1: 0 1px 0 rgba(16, 40, 64, 0.05);
   --shadow-2: 0 4px 14px rgba(16, 40, 64, 0.08);
   --shadow-3: 0 14px 40px rgba(16, 40, 64, 0.14);
+}
+
+/* Light-only chrome.
+ *
+ * `THead` paints itself `bg-surface-raised`, which in light resolves to
+ * the same white as the card it sits in — so the header row of every
+ * list in the product was invisible, and a dense table read as one
+ * undifferentiated block. In dark, surface-raised IS a distinct step up
+ * from the surface, which is why this never showed there and why the
+ * fix is scoped to light rather than applied to the component.
+ *
+ * Specificity, deliberately: `[data-theme='light'] thead` is (0,1,1)
+ * and beats the utility's (0,1,0) without !important. Scoped to the
+ * attribute, so the media-query path and the dark theme are untouched.
+ * apps/track and apps/marketing never import this file, so it cannot
+ * reach them. */
+[data-theme='light'] thead {
+  background: var(--color-surface-hover);
 }
 
 /* Body baseline — the consuming app sets this on its <html>/<body>;

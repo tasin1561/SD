@@ -38,20 +38,20 @@
     /* DAY CORRIDOR — see the note on :root[data-theme='light'] below.
        Kept byte-identical to that block: two copies that drift are how
        the media-query theme and the toggled theme stop matching. */
-    --sky: #2c6e9b;
-    --sky-deep: #1d4f70;
-    --surface: #eef3f9;
+    --sky: #0d66bd;
+    --sky-deep: #0a4f96;
+    --surface: #e6eefb;
     --surface-2: #ffffff;
-    --surface-3: rgba(37, 99, 145, 0.08);
+    --surface-3: rgba(13, 102, 189, 0.1);
     --fg-strong: #0a1420;
     --fg-body: #2c3e50;
     --fg-muted: #4f6578;
-    --line: rgba(17, 54, 88, 0.14);
-    --line-strong: rgba(17, 54, 88, 0.28);
-    --grid: rgba(44, 110, 155, 0.09);
+    --line: rgba(13, 68, 122, 0.16);
+    --line-strong: rgba(13, 68, 122, 0.32);
+    --grid: rgba(13, 102, 189, 0.11);
     --accent-fg: #ffffff;
     --scrim: rgba(11, 21, 35, 0.55);
-    --glow: rgba(44, 110, 155, 0.18);
+    --glow: rgba(13, 102, 189, 0.24);
     color-scheme: light;
   }
 }
@@ -82,27 +82,30 @@
    * reference frames: a cool blue-grey ground, white cards sitting ON
    * it, and a pale sky tint for grouped panels.
    *
-   * The sky anchor holds — #2c6e9b is the same hue family, desaturated
-   * for daylight, where #0284c7 at full chroma glares against a tinted
-   * ground. Contrast computed: body 10.5:1 on the ground, muted 5.5:1
-   * on white and 4.7:1 on the tint, sky 5.5:1 both as text on white and
-   * as white text on a sky fill.
+   * The sky anchor is a TRUE sky here, not a desaturated one. The first
+   * pass muted it to #2c6e9b and the page came out near-monochrome —
+   * one quiet blue on a quiet ground. #0d66bd is as bright as the two
+   * directions allow: it has to clear 4.5:1 as link text on the GROUND
+   * (the strictest case, and where #0f6fc9 fails at 4.43:1) and again
+   * as white text on a filled button. Contrast computed: body 9.6:1 on
+   * the ground, muted 5.3:1, sky 5.0:1 on the ground and 5.8:1 both
+   * ways on white.
    *
    * The dark theme is deliberately untouched. */
-  --sky: #2c6e9b;
-  --sky-deep: #1d4f70;
-  --surface: #eef3f9;
+  --sky: #0d66bd;
+  --sky-deep: #0a4f96;
+  --surface: #e6eefb;
   --surface-2: #ffffff;
-  --surface-3: rgba(37, 99, 145, 0.08);
+  --surface-3: rgba(13, 102, 189, 0.1);
   --fg-strong: #0a1420;
   --fg-body: #2c3e50;
   --fg-muted: #4f6578;
-  --line: rgba(17, 54, 88, 0.14);
-  --line-strong: rgba(17, 54, 88, 0.28);
-  --grid: rgba(44, 110, 155, 0.09);
+  --line: rgba(13, 68, 122, 0.16);
+  --line-strong: rgba(13, 68, 122, 0.32);
+  --grid: rgba(13, 102, 189, 0.11);
   --accent-fg: #ffffff;
   --scrim: rgba(11, 21, 35, 0.55);
-  --glow: rgba(44, 110, 155, 0.18);
+  --glow: rgba(13, 102, 189, 0.24);
   color-scheme: light;
 }
 

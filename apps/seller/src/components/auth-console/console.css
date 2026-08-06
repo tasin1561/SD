@@ -47,25 +47,25 @@
     /* DAY CORRIDOR — matches @skydrop/ui's light tokens, so the login
        screen and the app behind it are one product. Byte-identical to
        the [data-theme='light'] copy below. */
-    --sky: #2c6e9b;
-    --sky-deep: #1d4f70;
-    --grid: rgba(44, 110, 155, 0.09);
-    --glow: rgba(44, 110, 155, 0.18);
+    --sky: #0d66bd;
+    --sky-deep: #0a4f96;
+    --grid: rgba(13, 102, 189, 0.11);
+    --glow: rgba(13, 102, 189, 0.24);
 
-    --color-bg: #eef3f9;
+    --color-bg: #e6eefb;
     --color-surface: #ffffff;
     --color-surface-raised: #ffffff;
-    --color-surface-hover: rgba(37, 99, 145, 0.08);
-    --color-border: rgba(17, 54, 88, 0.14);
-    --color-border-strong: rgba(17, 54, 88, 0.28);
-    --color-text-faint: #8296a8;
+    --color-surface-hover: rgba(13, 102, 189, 0.1);
+    --color-border: rgba(13, 68, 122, 0.16);
+    --color-border-strong: rgba(13, 68, 122, 0.32);
+    --color-text-faint: #7a8b9e;
     --color-text-muted: #4f6578;
     --color-text-body: #2c3e50;
     --color-text-bright: #0a1420;
-    --color-accent: #2c6e9b;
-    --color-accent-hover: #24587c;
+    --color-accent: #0d66bd;
+    --color-accent-hover: #0a4f96;
     --color-accent-fg: #ffffff;
-    --color-accent-ring: rgba(44, 110, 155, 0.38);
+    --color-accent-ring: rgba(13, 102, 189, 0.42);
   }
 }
 
@@ -73,25 +73,25 @@
   /* DAY CORRIDOR — matches @skydrop/ui's light tokens, so the login
      screen and the app behind it are one product. Byte-identical to
      the [data-theme='light'] copy below. */
-  --sky: #2c6e9b;
-  --sky-deep: #1d4f70;
-  --grid: rgba(44, 110, 155, 0.09);
-  --glow: rgba(44, 110, 155, 0.18);
+  --sky: #0d66bd;
+  --sky-deep: #0a4f96;
+  --grid: rgba(13, 102, 189, 0.11);
+  --glow: rgba(13, 102, 189, 0.24);
 
-  --color-bg: #eef3f9;
+  --color-bg: #e6eefb;
   --color-surface: #ffffff;
   --color-surface-raised: #ffffff;
-  --color-surface-hover: rgba(37, 99, 145, 0.08);
-  --color-border: rgba(17, 54, 88, 0.14);
-  --color-border-strong: rgba(17, 54, 88, 0.28);
-  --color-text-faint: #8296a8;
+  --color-surface-hover: rgba(13, 102, 189, 0.1);
+  --color-border: rgba(13, 68, 122, 0.16);
+  --color-border-strong: rgba(13, 68, 122, 0.32);
+  --color-text-faint: #7a8b9e;
   --color-text-muted: #4f6578;
   --color-text-body: #2c3e50;
   --color-text-bright: #0a1420;
-  --color-accent: #2c6e9b;
-  --color-accent-hover: #24587c;
+  --color-accent: #0d66bd;
+  --color-accent-hover: #0a4f96;
   --color-accent-fg: #ffffff;
-  --color-accent-ring: rgba(44, 110, 155, 0.38);
+  --color-accent-ring: rgba(13, 102, 189, 0.42);
 }
 
 /* ── Instrument chrome ─────────────────────────────────────────── */
