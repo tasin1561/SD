@@ -177,24 +177,48 @@
   --color-debit: #f0a4a4;
 }
 
+/* ── DAY CORRIDOR — the light theme ──────────────────────────────────
+ *
+ * Not white. The previous light theme was a neutral grey-on-white with
+ * an indigo accent, and at full brightness a page of white cards on a
+ * near-white ground has no depth: every surface reads as one plane and
+ * the eye has nothing to rest against.
+ *
+ * This palette is sampled from the product's own reference frames — a
+ * cool blue-grey ground, white cards that sit ON it, and a pale sky
+ * tint for grouped panels. The accent is a steel sky rather than the
+ * indigo, which puts the light theme in the same colour family as the
+ * dark one instead of two unrelated products sharing a toggle.
+ *
+ * Contrast was computed, not eyeballed, against every real pairing:
+ * body 9.9:1 on the ground, muted 6.1:1 on white and 5.2:1 on the
+ * tint, accent 5.5:1 BOTH as text on white and as white text on the
+ * accent fill. Two values moved because of that check rather than by
+ * taste — the sampled accent #317aa5 lands at 4.71:1, one rounding
+ * error from failing, and muted at #546b80 fell to 4.43:1 on a tinted
+ * panel composited over the ground, which is the case a white-only
+ * check never sees.
+ *
+ * The dark theme above is deliberately untouched. */
 [data-theme='light'] {
-  --color-bg: #f8f9fb;
+  --color-bg: #eef3f9;
   --color-surface: #ffffff;
   --color-surface-raised: #ffffff;
-  --color-surface-hover: #f1f3f7;
-  --color-border: #e2e6ec;
-  --color-border-strong: #ccd2dc;
-  --color-text-faint: #9aa1b2;
-  --color-text-muted: #6c7488;
-  --color-text-body: #2a2f3a;
-  --color-text-strong: #14171f;
-  --color-text-bright: #0a0c10;
+  /* Doubles as the row-hover AND the grouped-panel tint. */
+  --color-surface-hover: #e4eef7;
+  --color-border: #d2dfea;
+  --color-border-strong: #b3c7d7;
+  --color-text-faint: #8296a8;
+  --color-text-muted: #4f6578;
+  --color-text-body: #2c3e50;
+  --color-text-strong: #16283a;
+  --color-text-bright: #0a1420;
 
-  --color-accent: #4566e6;
-  --color-accent-hover: #3753c9;
+  --color-accent: #2c6e9b;
+  --color-accent-hover: #24587c;
   --color-accent-fg: #ffffff;
-  --color-accent-tint: rgba(69, 102, 230, 0.08);
-  --color-accent-ring: rgba(69, 102, 230, 0.35);
+  --color-accent-tint: rgba(44, 110, 155, 0.1);
+  --color-accent-ring: rgba(44, 110, 155, 0.38);
 
   --color-critical: #d93838;
   --color-critical-tint: rgba(217, 56, 56, 0.1);
@@ -206,9 +230,11 @@
 
   /* Light-theme status: same hues, deeper/less-transparent
      foreground to maintain contrast on white. */
-  --status-draft-bg: rgba(108, 116, 136, 0.1);
-  --status-draft-fg: #5b6479;
-  --status-draft-ring: rgba(108, 116, 136, 0.35);
+  /* Blue-grey rather than neutral: a truly neutral chip reads warm and
+     dead against a cool ground, which makes "draft" look broken. */
+  --status-draft-bg: rgba(84, 107, 128, 0.12);
+  --status-draft-fg: #4b6076;
+  --status-draft-ring: rgba(84, 107, 128, 0.35);
 
   --status-pending-bg: rgba(217, 145, 33, 0.12);
   --status-pending-fg: #a16207;
@@ -238,9 +264,13 @@
   --status-cancelled-fg: #475569;
   --status-cancelled-ring: rgba(100, 116, 139, 0.35);
 
-  --shadow-1: 0 1px 0 rgba(20, 23, 31, 0.04);
-  --shadow-2: 0 4px 12px rgba(20, 23, 31, 0.06);
-  --shadow-3: 0 12px 36px rgba(20, 23, 31, 0.1);
+  /* Navy-tinted, not neutral black: a grey shadow on a blue ground
+     muddies it, where a shadow carrying the ground's own hue reads as
+     depth. Slightly stronger than before because a white card now has
+     to lift off a tinted ground rather than off near-white. */
+  --shadow-1: 0 1px 0 rgba(16, 40, 64, 0.05);
+  --shadow-2: 0 4px 14px rgba(16, 40, 64, 0.08);
+  --shadow-3: 0 14px 40px rgba(16, 40, 64, 0.14);
 }
 
 /* Body baseline — the consuming app sets this on its <html>/<body>;
