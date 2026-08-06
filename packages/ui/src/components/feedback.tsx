@@ -117,6 +117,11 @@ export function Stat({
 }): ReactElement {
   return (
     <div
+      // The tone was already a prop and had nowhere to show in light
+      // beyond a border colour. Exposing it as an attribute lets the
+      // theme tint the tile without touching dark, where the tile is
+      // correct as a bordered surface.
+      data-tone={tone}
       className={clsx(
         'border-border bg-surface rounded-[var(--radius-3)] border px-4 py-3',
         tone === 'warn' && 'border-[var(--status-pending-ring)]',
@@ -127,6 +132,7 @@ export function Stat({
     >
       <p className="text-text-muted text-xs font-medium tracking-wide uppercase">{label}</p>
       <div
+        data-stat-value
         className={clsx(
           'mt-1.5 text-xl font-semibold',
           tone === 'neutral' && 'text-text-bright',

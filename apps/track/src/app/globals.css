@@ -33,19 +33,19 @@
     /* DAY CORRIDOR — see the note on :root[data-theme='light'] below.
        Kept byte-identical to that block: two copies that drift are how
        the media-query theme and the toggled theme stop matching. */
-    --sky: #0d66bd;
-    --sky-deep: #0a4f96;
-    --surface: #e6eefb;
+    --sky: #2563eb;
+    --sky-deep: #1d4ed8;
+    --surface: #fafafa;
     --surface-2: #ffffff;
-    --surface-3: rgba(13, 102, 189, 0.1);
-    --fg-strong: #0a1420;
-    --fg-body: #2c3e50;
-    --fg-muted: #4f6578;
-    --line: rgba(13, 68, 122, 0.16);
-    --line-strong: rgba(13, 68, 122, 0.32);
-    --grid: rgba(13, 102, 189, 0.11);
+    --surface-3: #eff6ff;
+    --fg-strong: #111827;
+    --fg-body: #374151;
+    --fg-muted: #4b5563;
+    --line: #e5e7eb;
+    --line-strong: #d1d5db;
+    --grid: rgba(37, 99, 235, 0.07);
     --accent-fg: #ffffff;
-    --glow: rgba(13, 102, 189, 0.24);
+    --glow: rgba(37, 99, 235, 0.2);
     color-scheme: light;
   }
 }
@@ -76,29 +76,29 @@
    * reference frames: a cool blue-grey ground, white cards sitting ON
    * it, and a pale sky tint for grouped panels.
    *
-   * The sky anchor is a TRUE sky here, not a desaturated one. The first
-   * pass muted it to #2c6e9b and the page came out near-monochrome —
-   * one quiet blue on a quiet ground. #0d66bd is as bright as the two
-   * directions allow: it has to clear 4.5:1 as link text on the GROUND
-   * (the strictest case, and where #0f6fc9 fails at 4.43:1) and again
-   * as white text on a filled button. Contrast computed: body 9.6:1 on
-   * the ground, muted 5.3:1, sky 5.0:1 on the ground and 5.8:1 both
-   * ways on white.
+   * DAY DECK, matched to the operator console: a near-white ground,
+   * white cards, and one vivid blue (#2563eb) for every primary action.
+   * Two earlier passes tried to carry the colour in the GROUND — a cool
+   * blue-grey page — and both read as monochrome, because a tinted page
+   * flattens whatever sits on it. The life comes from contrast of
+   * surface instead: white cards and pale pools of colour on a quiet
+   * ground. Contrast computed: body 9.9:1, muted 7.2:1, sky 5.0:1 as
+   * link text on the ground and 5.2:1 as white text on a sky fill.
    *
    * The dark theme is deliberately untouched. */
-  --sky: #0d66bd;
-  --sky-deep: #0a4f96;
-  --surface: #e6eefb;
+  --sky: #2563eb;
+  --sky-deep: #1d4ed8;
+  --surface: #fafafa;
   --surface-2: #ffffff;
-  --surface-3: rgba(13, 102, 189, 0.1);
-  --fg-strong: #0a1420;
-  --fg-body: #2c3e50;
-  --fg-muted: #4f6578;
-  --line: rgba(13, 68, 122, 0.16);
-  --line-strong: rgba(13, 68, 122, 0.32);
-  --grid: rgba(13, 102, 189, 0.11);
+  --surface-3: #eff6ff;
+  --fg-strong: #111827;
+  --fg-body: #374151;
+  --fg-muted: #4b5563;
+  --line: #e5e7eb;
+  --line-strong: #d1d5db;
+  --grid: rgba(37, 99, 235, 0.07);
   --accent-fg: #ffffff;
-  --glow: rgba(13, 102, 189, 0.24);
+  --glow: rgba(37, 99, 235, 0.2);
   color-scheme: light;
 }
 

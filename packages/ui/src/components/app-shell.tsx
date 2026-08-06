@@ -307,6 +307,7 @@ export function AppShell({
               <Dialog.Overlay className="data-[state=open]:animate-in data-[state=open]:fade-in-0 fixed inset-0 z-40 bg-black/60 lg:hidden" />
               <Dialog.Content
                 aria-label="Navigation"
+                data-slot="nav-drawer"
                 className="bg-surface border-border fixed inset-y-0 left-0 z-50 flex w-[min(86vw,300px)] flex-col border-r shadow-[var(--shadow-3)] focus:outline-none lg:hidden"
                 style={{
                   paddingTop: 'env(safe-area-inset-top)',

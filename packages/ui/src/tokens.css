@@ -177,139 +177,172 @@
   --color-debit: #f0a4a4;
 }
 
-/* ── DAY CORRIDOR — the light theme ──────────────────────────────────
+/* ── DAY DECK — the light theme ───────────────────────────────────────
  *
- * Not white. The previous light theme was a neutral grey-on-white with
- * an indigo accent, and at full brightness a page of white cards on a
- * near-white ground has no depth: every surface reads as one plane and
- * the eye has nothing to rest against.
+ * Matched to the operator console the founder works in every day: a
+ * near-white ground, white cards, a DARK NAVY nav rail, one vivid blue
+ * for every primary action, and colour carried by pale tinted tiles and
+ * saturated figures rather than by the page itself.
  *
- * This palette is sampled from the product's own reference frames — a
- * cool blue-grey ground, white cards that sit ON it, and a pale sky
- * tint for grouped panels — and then given real chroma. The first pass
- * was faithful to the references and came out near-monochrome: one
- * muted steel accent and eight status chips at 10% tint, which in a
- * product where COLOUR IS THE STATE CHANNEL reads as a greyscale
- * screenshot of itself.
+ * This is the third pass and the previous two are worth recording,
+ * because both were wrong in the same direction. The first sampled the
+ * marketing frames literally and produced a cool blue-grey ground with
+ * one muted steel accent — faithful, and near-monochrome. The second
+ * pushed chroma into the STATUS CHIPS, which made badges loud while the
+ * page around them stayed grey. Neither was the thing being asked for.
  *
- * So the hue does the work it is there to do. The accent is a true sky
- * at full chroma, and the eight status kinds are saturated to the point
- * where a row's state is legible from across the room rather than on
- * inspection. That is not decoration in this product: an operator scans
- * a queue for the one red row, and a pale pink chip makes them read.
- * Colour is still never the ONLY signal — every chip carries its label,
- * and Money pairs its colour with an explicit +/− glyph.
+ * What makes the reference feel colourful is not saturation anywhere in
+ * particular; it is CONTRAST OF SURFACE. A dark rail against a white
+ * page, then small pools of pale colour (blue-50, green-50, amber-50)
+ * carrying figures in their own deeper hue. The chips go back to a
+ * quiet Tailwind-badge weight precisely so the tiles can be the loud
+ * thing — two loud layers cancel out.
  *
- * Saturation is bounded by contrast, and the bound was computed rather
- * than guessed. Every status foreground clears 4.5:1 against its own
- * 16% tint composited over BOTH white and the ground — the second is
- * the case a white-only check never sees, and it is stricter, so it is
- * what set the values. The accent has to pass in two directions at
- * once (as link text, and as white text on a filled button), which is
- * what caps how bright a blue can go: #0f6fc9 reads beautifully but
- * lands at 4.43:1 as a link on the ground, so it is one step deeper.
- * Two of the eight chips (pending, rto) needed their foregrounds
- * darkened for the same reason after the tint was strengthened.
+ * Contrast computed on every pairing that ships: body 9.9:1 on the
+ * ground, accent 5.2:1 as link text and as white-on-fill, every chip
+ * ≥4.5:1 on its own tint, and the nav rail's own ramp against #0f1729.
  *
- * The dark theme above is deliberately untouched. */
+ * The dark theme is untouched. */
 [data-theme='light'] {
-  --color-bg: #e6eefb;
+  --color-bg: #fafafa;
   --color-surface: #ffffff;
   --color-surface-raised: #ffffff;
-  /* Doubles as the row-hover AND the grouped-panel tint. Carries real
-     sky rather than grey, so a hovered row looks selected. */
-  --color-surface-hover: #d3e6fb;
-  --color-border: #cbdcee;
-  --color-border-strong: #a8c4dd;
-  --color-text-faint: #7a8b9e;
-  --color-text-muted: #4f6578;
-  --color-text-body: #2c3e50;
-  --color-text-strong: #16283a;
-  --color-text-bright: #0a1420;
+  --color-surface-hover: #f3f4f6;
+  --color-border: #e5e7eb;
+  --color-border-strong: #d1d5db;
+  --color-text-faint: #6b7280;
+  --color-text-muted: #4b5563;
+  --color-text-body: #374151;
+  --color-text-strong: #1f2937;
+  --color-text-bright: #111827;
 
-  /* A true sky, as deep as passing in BOTH directions allows. */
-  --color-accent: #0d66bd;
-  --color-accent-hover: #0a4f96;
+  --color-accent: #2563eb;
+  --color-accent-hover: #1d4ed8;
   --color-accent-fg: #ffffff;
-  --color-accent-tint: rgba(13, 102, 189, 0.16);
-  --color-accent-ring: rgba(13, 102, 189, 0.42);
+  --color-accent-tint: rgba(37, 99, 235, 0.08);
+  --color-accent-ring: rgba(37, 99, 235, 0.4);
 
-  --color-critical: #d01b3c;
-  --color-critical-tint: rgba(208, 27, 60, 0.12);
-  --color-critical-ring: rgba(208, 27, 60, 0.45);
+  --color-critical: #dc2626;
+  --color-critical-tint: rgba(220, 38, 38, 0.1);
+  --color-critical-ring: rgba(220, 38, 38, 0.4);
 
-  /* Deeper on white to hold 4.5:1 — dark-theme values would fail.
-     Matched to the delivered/failed chips so a green number and a
-     green badge on the same row are the same green. */
-  --color-credit: #0d6b3b;
-  --color-debit: #be123c;
+  /* Deeper on white to hold 4.5:1 — dark-theme values would fail. */
+  --color-credit: #15803d;
+  --color-debit: #b91c1c;
 
-  /* Light-theme status — the product's loudest colour, on purpose.
-     28% tints and deep saturated foregrounds: this is the channel an
-     operator scans a queue with, and at 10% every chip was the same
-     pale wash. 28% is not an arbitrary step up — it is the ceiling.
-     Past it the tint darkens enough that `failed` can no longer hold
-     4.5:1 against any foreground still recognisable as red. Each fg
-     clears on its own tint over white AND over the ground. */
-  /* Blue-grey rather than neutral: a truly neutral chip reads warm and
-     dead against a cool ground, which makes "draft" look broken. */
-  --status-draft-bg: rgba(84, 107, 128, 0.28);
-  --status-draft-fg: #3d5165;
-  --status-draft-ring: rgba(84, 107, 128, 0.45);
+  /* Status chips, at badge weight rather than shouting. Opaque pairs
+     rather than alpha tints: the chip must read the same on a white
+     card, on the ground, and on a hovered row, and a translucent fill
+     changes with all three. Each pair clears 4.5:1. */
+  --status-draft-bg: #f1f5f9;
+  --status-draft-fg: #334155;
+  --status-draft-ring: rgba(51, 65, 85, 0.25);
 
-  --status-pending-bg: rgba(245, 158, 11, 0.28);
-  --status-pending-fg: #8a4205;
-  --status-pending-ring: rgba(217, 119, 6, 0.5);
+  --status-pending-bg: #fef3c7;
+  --status-pending-fg: #b45309;
+  --status-pending-ring: rgba(180, 83, 9, 0.3);
 
-  --status-confirmed-bg: rgba(37, 99, 235, 0.28);
-  --status-confirmed-fg: #0e4ba1;
-  --status-confirmed-ring: rgba(37, 99, 235, 0.5);
+  --status-confirmed-bg: #dbeafe;
+  --status-confirmed-fg: #1d4ed8;
+  --status-confirmed-ring: rgba(29, 78, 216, 0.3);
 
-  --status-in-transit-bg: rgba(139, 92, 246, 0.28);
-  --status-in-transit-fg: #5a1fb8;
-  --status-in-transit-ring: rgba(139, 92, 246, 0.5);
+  --status-in-transit-bg: #ede9fe;
+  --status-in-transit-fg: #6d28d9;
+  --status-in-transit-ring: rgba(109, 40, 217, 0.3);
 
-  --status-delivered-bg: rgba(16, 185, 129, 0.28);
-  --status-delivered-fg: #0a5c32;
-  --status-delivered-ring: rgba(16, 185, 129, 0.5);
+  --status-delivered-bg: #dcfce7;
+  --status-delivered-fg: #15803d;
+  --status-delivered-ring: rgba(21, 128, 61, 0.3);
 
-  --status-rto-bg: rgba(249, 115, 22, 0.28);
-  --status-rto-fg: #9a3408;
-  --status-rto-ring: rgba(249, 115, 22, 0.5);
+  --status-rto-bg: #ffedd5;
+  --status-rto-fg: #c2410c;
+  --status-rto-ring: rgba(194, 65, 12, 0.3);
 
-  --status-failed-bg: rgba(244, 63, 94, 0.28);
-  --status-failed-fg: #a80f34;
-  --status-failed-ring: rgba(244, 63, 94, 0.5);
+  --status-failed-bg: #fee2e2;
+  --status-failed-fg: #b91c1c;
+  --status-failed-ring: rgba(185, 28, 28, 0.3);
 
-  --status-cancelled-bg: rgba(100, 116, 139, 0.28);
-  --status-cancelled-fg: #3b4a63;
-  --status-cancelled-ring: rgba(100, 116, 139, 0.45);
+  --status-cancelled-bg: #e2e8f0;
+  --status-cancelled-fg: #475569;
+  --status-cancelled-ring: rgba(71, 85, 105, 0.25);
 
-  /* Navy-tinted, not neutral black: a grey shadow on a blue ground
-     muddies it, where a shadow carrying the ground's own hue reads as
-     depth. Slightly stronger than before because a white card now has
-     to lift off a tinted ground rather than off near-white. */
-  --shadow-1: 0 1px 0 rgba(16, 40, 64, 0.05);
-  --shadow-2: 0 4px 14px rgba(16, 40, 64, 0.08);
-  --shadow-3: 0 14px 40px rgba(16, 40, 64, 0.14);
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-2: 0 1px 3px rgba(16, 24, 40, 0.1), 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-3: 0 12px 32px rgba(16, 24, 40, 0.12);
 }
 
-/* Light-only chrome.
+/* ── Light-only chrome ────────────────────────────────────────────────
  *
- * `THead` paints itself `bg-surface-raised`, which in light resolves to
- * the same white as the card it sits in — so the header row of every
- * list in the product was invisible, and a dense table read as one
- * undifferentiated block. In dark, surface-raised IS a distinct step up
- * from the surface, which is why this never showed there and why the
- * fix is scoped to light rather than applied to the component.
+ * Everything below is scoped to [data-theme='light'] and therefore
+ * CANNOT reach the dark theme. That scoping is the whole technique: the
+ * components are correct in dark and only their light resolution needs
+ * changing, so the fix belongs to the theme rather than to the
+ * component. apps/track and apps/marketing never import this file. */
+
+/* The nav rail is dark in light mode.
  *
- * Specificity, deliberately: `[data-theme='light'] thead` is (0,1,1)
- * and beats the utility's (0,1,0) without !important. Scoped to the
- * attribute, so the media-query path and the dark theme are untouched.
- * apps/track and apps/marketing never import this file, so it cannot
- * reach them. */
+ * Not a repaint of AppShell — a REDEFINITION of the same variables it
+ * already reads, scoped to its subtree. `bg-surface` and `text-text-*`
+ * inside the rail resolve to these instead, so the shell keeps one set
+ * of classes and both themes stay correct. A component rewritten to
+ * hardcode navy would have broken dark, where the rail already is. */
+[data-theme='light'] aside,
+[data-theme='light'] [data-slot='nav-drawer'] {
+  --color-surface: #0f1729;
+  --color-surface-hover: #1e293b;
+  --color-border: rgba(148, 163, 184, 0.16);
+  --color-border-strong: rgba(148, 163, 184, 0.28);
+  --color-text-bright: #f8fafc;
+  --color-text-body: #e2e8f0;
+  --color-text-muted: #94a3b8;
+  --color-text-faint: #64748b;
+  --color-accent: #60a5fa;
+}
+
+/* The current page is the one blue thing in the rail. `aria-current` is
+   already on it, so no new markup — and the attribute is the honest
+   hook, because it is what a screen reader is told too. */
+[data-theme='light'] aside a[aria-current='page'],
+[data-theme='light'] [data-slot='nav-drawer'] a[aria-current='page'] {
+  background: #2563eb;
+  color: #ffffff;
+}
+[data-theme='light'] aside a[aria-current='page'] span,
+[data-theme='light'] [data-slot='nav-drawer'] a[aria-current='page'] span {
+  color: #ffffff;
+}
+
+/* `THead` paints `bg-surface-raised`, which in light is the same white
+   as the card it sits in — so the header row of every list was
+   invisible. In dark, surface-raised IS a step up, which is why it
+   never showed there. Specificity (0,1,1) beats the utility's (0,1,0)
+   with no !important. */
 [data-theme='light'] thead {
   background: var(--color-surface-hover);
+}
+
+/* Stat tiles: a pool of pale colour with its figure in the deeper hue.
+   This is where the reference gets most of its life, and it costs
+   nothing at the call sites — `tone` was already a prop, it just had
+   nowhere to show in light beyond a border. */
+[data-theme='light'] [data-tone='neutral'] {
+  background: #eff6ff;
+  border-color: #dbeafe;
+}
+[data-theme='light'] [data-tone='neutral'] [data-stat-value] {
+  color: #1d4ed8;
+}
+[data-theme='light'] [data-tone='good'] {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+[data-theme='light'] [data-tone='warn'] {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+[data-theme='light'] [data-tone='bad'] {
+  background: #fef2f2;
+  border-color: #fecaca;
 }
 
 /* Body baseline — the consuming app sets this on its <html>/<body>;
