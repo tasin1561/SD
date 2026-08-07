@@ -22,6 +22,15 @@ import {
   useUpdateOrder,
   type UpdateOrderInput,
 } from '@/lib/api-hooks';
+import {
+  IN_DIAL,
+  IN_LOCAL_LENGTH,
+  IN_PHONE_ERROR,
+  isCompleteLocal,
+  sanitiseLocal,
+  toE164,
+  toLocalDigits,
+} from '@/lib/phone';
 
 /**
  * Edit form for a DRAFT or PENDING_CONFIRMATION order.
@@ -201,8 +210,20 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
     return err instanceof Error ? err.message : 'Action failed';
   }
 
+  /** The same gate the create form uses, from the same module — the two
+   *  screens edit the same field and must refuse the same values. */
+  function phoneProblem(): string | null {
+    if (!form) return null;
+    return isCompleteLocal(toLocalDigits(form.recipientPhoneE164)) ? null : IN_PHONE_ERROR;
+  }
+
   async function onSave(e: FormEvent): Promise<void> {
     e.preventDefault();
+    const bad = phoneProblem();
+    if (bad !== null) {
+      setError(bad);
+      return;
+    }
     setError(null);
     setBusy('save');
     try {
@@ -297,13 +318,33 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
                 required
               />
             </FormField>
-            <FormField label="Phone (E.164)" required>
-              <Input
-                value={form.recipientPhoneE164}
-                onChange={(e) => set('recipientPhoneE164', e.target.value)}
-                placeholder="+919812345678"
-                required
-              />
+            <FormField label="Phone" required hint={`${IN_DIAL} — Indian mobile, 10 digits`}>
+              {/* The dial code is CHROME, not input: it cannot be edited
+                  or deleted, so a seller cannot clear it, type 0091, or
+                  paste a differently-formatted number into it. The field
+                  itself holds only the ten national digits. */}
+              <div className="flex items-stretch">
+                <span
+                  aria-hidden
+                  className="border-border-strong text-text-muted inline-flex select-none items-center rounded-l-[6px] border border-r-0 px-2.5 text-sm"
+                >
+                  {IN_DIAL}
+                </span>
+                <Input
+                  className="rounded-l-none"
+                  value={toLocalDigits(form.recipientPhoneE164)}
+                  onChange={(e) => set('recipientPhoneE164', toE164(sanitiseLocal(e.target.value)))}
+                  // inputMode drives the numeric keypad on a phone; the
+                  // sanitiser is what actually enforces digits, because a
+                  // paste bypasses the keypad entirely.
+                  inputMode="numeric"
+                  autoComplete="tel-national"
+                  maxLength={IN_LOCAL_LENGTH}
+                  placeholder="9812345678"
+                  aria-label={`Phone number, ${IN_DIAL} then ${IN_LOCAL_LENGTH} digits`}
+                  required
+                />
+              </div>
             </FormField>
             <FormField label="Address line 1" required className="col-span-2">
               <Input
