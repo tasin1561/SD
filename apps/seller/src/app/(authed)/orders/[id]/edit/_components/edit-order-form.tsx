@@ -61,52 +61,11 @@ import {
  *   - FE-2: server rejection surfaces `[code] message` VERBATIM.
  */
 
-const INDIAN_STATES: ReadonlyArray<string> = [
-  'Andhra Pradesh',
-  'Arunachal Pradesh',
-  'Assam',
-  'Bihar',
-  'Chhattisgarh',
-  'Goa',
-  'Gujarat',
-  'Haryana',
-  'Himachal Pradesh',
-  'Jharkhand',
-  'Karnataka',
-  'Kerala',
-  'Madhya Pradesh',
-  'Maharashtra',
-  'Manipur',
-  'Meghalaya',
-  'Mizoram',
-  'Nagaland',
-  'Odisha',
-  'Punjab',
-  'Rajasthan',
-  'Sikkim',
-  'Tamil Nadu',
-  'Telangana',
-  'Tripura',
-  'Uttar Pradesh',
-  'Uttarakhand',
-  'West Bengal',
-  'Andaman and Nicobar Islands',
-  'Chandigarh',
-  'Dadra and Nagar Haveli and Daman and Diu',
-  'Delhi',
-  'Jammu and Kashmir',
-  'Ladakh',
-  'Lakshadweep',
-  'Puducherry',
-];
-
 interface FormState {
   recipientName: string;
   recipientPhoneE164: string;
   recipientAddressLine1: string;
   recipientAddressLine2: string;
-  recipientCity: string;
-  recipientStateProvince: string;
   recipientPostalCode: string;
   paymentMode: 'COD' | 'PREPAID';
   codAmountInr: string;
@@ -141,8 +100,6 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
       recipientPhoneE164: d.recipientPhoneE164,
       recipientAddressLine1: d.recipientAddressLine1,
       recipientAddressLine2: d.recipientAddressLine2 ?? '',
-      recipientCity: d.recipientCity,
-      recipientStateProvince: d.recipientStateProvince,
       recipientPostalCode: d.recipientPostalCode,
       paymentMode: d.paymentMode as 'COD' | 'PREPAID',
       codAmountInr: d.codAmountInr?.toString() ?? '',
@@ -197,13 +154,10 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
       recipientName: form.recipientName.trim(),
       recipientPhoneE164: form.recipientPhoneE164.trim(),
       recipientAddressLine1: form.recipientAddressLine1.trim(),
-      recipientCity: form.recipientCity.trim(),
-      recipientStateProvince: form.recipientStateProvince.trim(),
       recipientPostalCode: form.recipientPostalCode.trim(),
       paymentMode: form.paymentMode,
     };
-    if (form.recipientAddressLine2.trim())
-      body.recipientAddressLine2 = form.recipientAddressLine2.trim();
+    body.recipientAddressLine2 = form.recipientAddressLine2.trim();
     if (form.paymentMode === 'COD' && form.codAmountInr.trim())
       body.codAmountInr = Number(form.codAmountInr);
     if (form.declaredValueInr.trim()) body.declaredValueInr = Number(form.declaredValueInr);
@@ -236,6 +190,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
    *  has no such rule; the consequence downstream is a held order. */
   function addressProblem(): string | null {
     if (!form) return null;
+    if (!form.recipientAddressLine2.trim()) return 'Address line 2 (the landmark) is required.';
     return linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2)
       ? DUPLICATE_LINES_ERROR
       : null;
@@ -412,6 +367,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
             </FormField>
             <FormField
               label="Address line 2"
+              required
               className="col-span-2"
               hint={ADDRESS_LINE_2_HINT}
               error={
@@ -424,28 +380,8 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
                 value={form.recipientAddressLine2}
                 onChange={(e) => set('recipientAddressLine2', e.target.value)}
                 maxLength={200}
-              />
-            </FormField>
-            <FormField label="City" required>
-              <Input
-                value={form.recipientCity}
-                onChange={(e) => set('recipientCity', e.target.value)}
                 required
               />
-            </FormField>
-            <FormField label="State" required>
-              <Select
-                value={form.recipientStateProvince}
-                onChange={(e) => set('recipientStateProvince', e.target.value)}
-                required
-              >
-                <option value="">Select a state</option>
-                {INDIAN_STATES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </Select>
             </FormField>
             <FormField label="PIN code" required>
               <Input

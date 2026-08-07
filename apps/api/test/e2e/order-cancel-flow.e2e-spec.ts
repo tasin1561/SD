@@ -138,6 +138,7 @@ describe('Order cancellation (e2e)', () => {
         recipientName: 'Cancel Customer',
         recipientPhoneE164: `+9198765${String(Date.now()).slice(-5)}`,
         recipientAddressLine1: '12 Test Road',
+        recipientAddressLine2: 'Near City Hospital',
         recipientCity: 'New Delhi',
         recipientStateProvince: 'Delhi',
         recipientPostalCode: '110001',

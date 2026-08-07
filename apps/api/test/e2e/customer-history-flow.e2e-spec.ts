@@ -82,6 +82,7 @@ describe('Customer history + duplicate warning (e2e)', () => {
       recipientName: 'Repeat Customer',
       recipientPhoneE164: PHONE,
       recipientAddressLine1: '12 Test Road',
+      recipientAddressLine2: 'Near City Hospital',
       recipientCity: 'New Delhi',
       recipientStateProvince: 'Delhi',
       recipientPostalCode: '110001',

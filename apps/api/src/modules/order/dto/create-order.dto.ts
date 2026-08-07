@@ -10,6 +10,7 @@ import {
   IsEnum,
   IsInt,
   IsNumber,
+  IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
@@ -95,11 +96,14 @@ export class CreateOrderDto {
   @MaxLength(200)
   recipientAddressLine1!: string;
 
-  @ApiProperty({ required: false, maxLength: 200 })
-  @IsOptional()
+  @ApiProperty({
+    maxLength: 200,
+    description: 'The landmark. Required — a parcel without one is materially harder to deliver.',
+  })
   @IsString()
+  @IsNotEmpty({ message: 'recipientAddressLine2 (landmark) is required' })
   @MaxLength(200)
-  recipientAddressLine2?: string;
+  recipientAddressLine2!: string;
 
   @ApiProperty({ required: false, maxLength: 120 })
   @IsOptional()
@@ -107,18 +111,27 @@ export class CreateOrderDto {
   @MaxLength(120)
   recipientLandmark?: string;
 
-  @ApiProperty({ maxLength: 80 })
+  @ApiProperty({
+    required: false,
+    maxLength: 80,
+    description:
+      'Optional. Delhivery routes on the PIN and resolves the locality itself, so the seller form no longer asks. Stored as an empty string when absent.',
+  })
+  @IsOptional()
   @IsString()
   @MaxLength(80)
-  recipientCity!: string;
+  recipientCity?: string;
 
   @ApiProperty({
+    required: false,
     maxLength: 80,
-    description: 'Indian state/UT; validated soft against ops.allowed_indian_states.',
+    description:
+      'Optional. When supplied it is still validated soft against ops.allowed_indian_states (ORD-5); when absent that check cannot run.',
   })
+  @IsOptional()
   @IsString()
   @MaxLength(80)
-  recipientStateProvince!: string;
+  recipientStateProvince?: string;
 
   @ApiProperty({ example: '560001', description: 'Indian PIN (6 digits, first 1-9).' })
   @IsString()

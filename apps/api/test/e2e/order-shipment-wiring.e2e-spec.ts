@@ -124,6 +124,7 @@ describe('Order ↔ shipment-provision wiring (M8 commit 16)', () => {
         // Fixture: several orders for one customer on purpose.
         acknowledgeDuplicate: true,
         recipientAddressLine1: '12 MG Road',
+        recipientAddressLine2: 'Near City Hospital',
         recipientCity: 'Bengaluru',
         recipientStateProvince: 'Karnataka',
         recipientPostalCode: '560001',

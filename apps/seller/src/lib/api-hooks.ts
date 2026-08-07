@@ -118,10 +118,14 @@ export interface CreateOrderInput {
   readonly recipientAltPhoneE164?: string;
   readonly recipientEmail?: string;
   readonly recipientAddressLine1: string;
-  readonly recipientAddressLine2?: string;
+  /** The landmark. Required — the seller form asks for it, and the API
+   *  refuses a create without one. */
+  readonly recipientAddressLine2: string;
   readonly recipientLandmark?: string;
-  readonly recipientCity: string;
-  readonly recipientStateProvince: string;
+  /** Optional now: Delhivery routes on the PIN and resolves the locality
+   *  itself, so the seller form no longer asks. */
+  readonly recipientCity?: string;
+  readonly recipientStateProvince?: string;
   readonly recipientPostalCode: string;
   readonly recipientCountryCode?: string;
   readonly paymentMode: 'COD' | 'PREPAID';

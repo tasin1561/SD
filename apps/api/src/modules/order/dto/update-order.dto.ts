@@ -10,6 +10,7 @@ import {
   IsEnum,
   IsInt,
   IsNumber,
+  IsNotEmpty,
   IsOptional,
   IsString,
   Matches,
@@ -65,9 +66,15 @@ export class UpdateOrderDto {
   @MaxLength(200)
   recipientAddressLine1?: string;
 
-  @ApiProperty({ required: false, maxLength: 200 })
+  @ApiProperty({
+    required: false,
+    maxLength: 200,
+    description:
+      'The landmark. Optional to SEND, but may not be blanked — it is required on create.',
+  })
   @IsOptional()
   @IsString()
+  @IsNotEmpty({ message: 'recipientAddressLine2 (landmark) may not be cleared' })
   @MaxLength(200)
   recipientAddressLine2?: string;
 

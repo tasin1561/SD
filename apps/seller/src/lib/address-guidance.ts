@@ -6,10 +6,11 @@
  * Two of the original rules did not transfer verbatim, and the mapping
  * is deliberate:
  *
- *  - The original template ends "State: ***". State and PIN are their
- *    own fields here, so repeating them on line 1 would put the same
- *    fact in two places and leave the two free to disagree. Line 1 asks
- *    for the parts nothing else captures.
+ *  - The original template ends "State: ***". The form no longer has a
+ *    State or City field at all: Delhivery routes on the PIN and
+ *    resolves the locality itself, so asking a seller to type what the
+ *    courier already knows is two chances to disagree instead of one
+ *    fact. Line 1 asks for the parts the PIN cannot supply.
  *
  *  - The original says line 2 IS the landmark, and it now is: the seller
  *    form's separate Landmark field was removed. That is not only
@@ -26,7 +27,7 @@
  */
 
 export const ADDRESS_LINE_1_HINT =
-  'The address only, in this order — Village/City, Post Office, Police Station, District. No extra words. State and PIN code have their own fields below.';
+  'The address only, in this order — Village/City, Post Office, Police Station, District. No extra words; the PIN below decides the rest.';
 
 export const ADDRESS_LINE_2_HINT =
   'The landmark only — a hospital, school or shop nearby. Nothing else, and never a copy of line 1: an order with both lines the same is held.';

@@ -52,9 +52,9 @@ describe('the copy is in English and names the format', () => {
     }
   });
 
-  it('line 1 does NOT ask for state or PIN — those are their own fields', () => {
-    // Repeating them would put one fact in two places, free to disagree.
+  it('line 1 no longer points at a State field, because there is not one', () => {
     expect(ADDRESS_LINE_1_HINT).not.toMatch(/State:/);
+    expect(ADDRESS_LINE_1_HINT).not.toMatch(/State and PIN/);
     expect(ADDRESS_LINE_2_HINT).not.toMatch(/State:/);
   });
 
@@ -95,6 +95,21 @@ describe('both order forms read the same copy', () => {
     const src = readFileSync(join(__dirname, '../', rel), 'utf8');
     expect(src).not.toContain('recipientLandmark');
     expect(src).not.toMatch(/label="Landmark"/);
+  });
+
+  it.each(forms)('%s no longer asks for city or state', (rel) => {
+    // Delhivery routes on the PIN and resolves the locality itself.
+    const src = readFileSync(join(__dirname, '../', rel), 'utf8');
+    expect(src).not.toContain('recipientCity');
+    expect(src).not.toContain('recipientStateProvince');
+    expect(src).not.toContain('INDIAN_STATES');
+  });
+
+  it.each(forms)('%s requires the landmark before it will submit', (rel) => {
+    // Marked required in the markup AND gated in code — a red asterisk
+    // that nothing enforces is decoration.
+    const src = readFileSync(join(__dirname, '../', rel), 'utf8');
+    expect(src).toContain('the landmark) is required');
   });
 
   it('the edit form gates BOTH of its submit paths', () => {

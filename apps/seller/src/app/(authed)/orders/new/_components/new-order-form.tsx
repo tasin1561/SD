@@ -48,52 +48,11 @@ import {
  *     fires a toast.
  */
 
-const INDIAN_STATES: ReadonlyArray<string> = [
-  'Andhra Pradesh',
-  'Arunachal Pradesh',
-  'Assam',
-  'Bihar',
-  'Chhattisgarh',
-  'Goa',
-  'Gujarat',
-  'Haryana',
-  'Himachal Pradesh',
-  'Jharkhand',
-  'Karnataka',
-  'Kerala',
-  'Madhya Pradesh',
-  'Maharashtra',
-  'Manipur',
-  'Meghalaya',
-  'Mizoram',
-  'Nagaland',
-  'Odisha',
-  'Punjab',
-  'Rajasthan',
-  'Sikkim',
-  'Tamil Nadu',
-  'Telangana',
-  'Tripura',
-  'Uttar Pradesh',
-  'Uttarakhand',
-  'West Bengal',
-  'Andaman and Nicobar Islands',
-  'Chandigarh',
-  'Dadra and Nagar Haveli and Daman and Diu',
-  'Delhi',
-  'Jammu and Kashmir',
-  'Ladakh',
-  'Lakshadweep',
-  'Puducherry',
-];
-
 interface FormState {
   recipientName: string;
   recipientPhoneE164: string;
   recipientAddressLine1: string;
   recipientAddressLine2: string;
-  recipientCity: string;
-  recipientStateProvince: string;
   recipientPostalCode: string;
   paymentMode: 'COD' | 'PREPAID';
   codAmountInr: string;
@@ -112,8 +71,6 @@ const INITIAL: FormState = {
   recipientPhoneE164: IN_DIAL,
   recipientAddressLine1: '',
   recipientAddressLine2: '',
-  recipientCity: '',
-  recipientStateProvince: '',
   recipientPostalCode: '',
   paymentMode: 'PREPAID',
   codAmountInr: '',
@@ -171,14 +128,13 @@ export function NewOrderForm(): ReactElement {
     if (!form.recipientName.trim()) return 'Recipient name is required.';
     if (!isCompleteLocal(toLocalDigits(form.recipientPhoneE164))) return IN_PHONE_ERROR;
     if (!form.recipientAddressLine1.trim()) return 'Address line 1 is required.';
+    if (!form.recipientAddressLine2.trim()) return 'Address line 2 (the landmark) is required.';
     // Advisory, NOT a mirror of a server rule — the API has no such
     // check, so a CSV import still gets through. It is here because
     // duplicated lines get the order held by hand downstream, and
     // finding that out at the field beats finding it out afterwards.
     if (linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2))
       return DUPLICATE_LINES_ERROR;
-    if (!form.recipientCity.trim()) return 'City is required.';
-    if (!form.recipientStateProvince.trim()) return 'State is required.';
     if (!/^[1-9]\d{5}$/.test(form.recipientPostalCode.trim()))
       return 'PIN must be 6 digits (first digit 1-9).';
     if (form.paymentMode === 'COD' && (!form.codAmountInr || Number(form.codAmountInr) <= 0))
@@ -195,8 +151,7 @@ export function NewOrderForm(): ReactElement {
       recipientName: form.recipientName.trim(),
       recipientPhoneE164: form.recipientPhoneE164.trim(),
       recipientAddressLine1: form.recipientAddressLine1.trim(),
-      recipientCity: form.recipientCity.trim(),
-      recipientStateProvince: form.recipientStateProvince.trim(),
+      recipientAddressLine2: form.recipientAddressLine2.trim(),
       recipientPostalCode: form.recipientPostalCode.trim(),
       paymentMode: form.paymentMode,
       items: [
@@ -206,9 +161,6 @@ export function NewOrderForm(): ReactElement {
           ...(form.unitPriceInr.trim() ? { unitPriceInr: Number(form.unitPriceInr) } : {}),
         },
       ],
-      ...(form.recipientAddressLine2.trim()
-        ? { recipientAddressLine2: form.recipientAddressLine2.trim() }
-        : {}),
       ...(form.paymentMode === 'COD' ? { codAmountInr: Number(form.codAmountInr) } : {}),
       ...(form.declaredValueInr.trim() ? { declaredValueInr: Number(form.declaredValueInr) } : {}),
       ...(form.totalWeightGrams.trim() ? { totalWeightGrams: Number(form.totalWeightGrams) } : {}),
@@ -354,6 +306,7 @@ export function NewOrderForm(): ReactElement {
             </FormField>
             <FormField
               label="Address line 2"
+              required
               className="col-span-2"
               hint={ADDRESS_LINE_2_HINT}
               error={
@@ -366,28 +319,8 @@ export function NewOrderForm(): ReactElement {
                 value={form.recipientAddressLine2}
                 onChange={(e) => set('recipientAddressLine2', e.target.value)}
                 maxLength={200}
-              />
-            </FormField>
-            <FormField label="City" required>
-              <Input
-                value={form.recipientCity}
-                onChange={(e) => set('recipientCity', e.target.value)}
                 required
               />
-            </FormField>
-            <FormField label="State" required>
-              <Select
-                value={form.recipientStateProvince}
-                onChange={(e) => set('recipientStateProvince', e.target.value)}
-                required
-              >
-                <option value="">Select a state</option>
-                {INDIAN_STATES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </Select>
             </FormField>
             <FormField label="PIN code" required>
               <Input

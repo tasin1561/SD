@@ -293,7 +293,7 @@ export class OrderService {
       recipientPhoneE164: input.recipientPhoneE164,
       recipientAltPhoneE164: input.recipientAltPhoneE164 ?? null,
       recipientPostalCode: input.recipientPostalCode,
-      recipientStateProvince: input.recipientStateProvince,
+      recipientStateProvince: input.recipientStateProvince ?? '',
       recipientCountryCode: input.recipientCountryCode ?? 'IN',
     });
 
@@ -363,7 +363,7 @@ export class OrderService {
             recipientAddressLine1: input.recipientAddressLine1,
             recipientAddressLine2: input.recipientAddressLine2 ?? null,
             recipientLandmark: input.recipientLandmark ?? null,
-            recipientCity: input.recipientCity,
+            recipientCity: input.recipientCity ?? '',
             recipientStateProvince: canonicalState,
             recipientPostalCode: input.recipientPostalCode.trim(),
             recipientCountryCode: (input.recipientCountryCode ?? 'IN').toUpperCase(),
@@ -417,7 +417,7 @@ export class OrderService {
               line1: input.recipientAddressLine1,
               line2: input.recipientAddressLine2 ?? null,
               landmark: input.recipientLandmark ?? null,
-              city: input.recipientCity,
+              city: input.recipientCity ?? '',
               stateProvince: canonicalState,
               postalCode: input.recipientPostalCode.trim(),
             },

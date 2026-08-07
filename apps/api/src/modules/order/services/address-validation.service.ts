@@ -13,7 +13,7 @@ export interface RecipientAddressInput {
   recipientPhoneE164: string;
   recipientAltPhoneE164?: string | null;
   recipientPostalCode: string;
-  recipientStateProvince: string;
+  recipientStateProvince?: string;
   recipientCountryCode?: string | null;
 }
 
@@ -94,16 +94,25 @@ export class AddressValidationService {
 
     let normalizedState: string | undefined;
     const states = await this.allowedStates();
-    if (states.size > 0) {
-      const canonical = states.get(input.recipientStateProvince.toLowerCase().trim());
+    const suppliedState = input.recipientStateProvince?.trim() ?? '';
+    if (suppliedState === '') {
+      // The seller form no longer asks for a state: Delhivery routes on
+      // the PIN and resolves the locality itself. ORD-5's membership
+      // check therefore cannot run for these orders — it is not being
+      // bypassed, there is simply nothing to check. An order that DOES
+      // carry a state is still validated, so CSV imports and the admin
+      // path keep the guard.
+      normalizedState = '';
+    } else if (states.size > 0) {
+      const canonical = states.get(suppliedState.toLowerCase());
       if (canonical) {
         normalizedState = canonical;
       } else {
-        errors.push(`"${input.recipientStateProvince}" is not an allowed Indian state/UT`);
+        errors.push(`"${suppliedState}" is not an allowed Indian state/UT`);
       }
     } else {
       // List unavailable — accept the value as-is (soft).
-      normalizedState = input.recipientStateProvince.trim();
+      normalizedState = suppliedState;
     }
 
     return normalizedState !== undefined
@@ -120,6 +129,6 @@ export class AddressValidationService {
     if (!result.ok) {
       throw new BadRequestException(result.errors.join('; '));
     }
-    return result.normalizedState ?? input.recipientStateProvince.trim();
+    return result.normalizedState ?? input.recipientStateProvince?.trim() ?? '';
   }
 }

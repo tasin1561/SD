@@ -12,6 +12,16 @@ function makeService(states: unknown = ['Karnataka', 'Maharashtra', 'Delhi']) {
   return { svc, findUnique };
 }
 
+/** The same address with no state at all — the shape the seller form
+ *  now sends. The KEY is absent, not present-and-undefined, because
+ *  under exactOptionalPropertyTypes those are different things and only
+ *  the first is what a missing DTO field produces. */
+const NO_STATE = {
+  recipientPhoneE164: '+919876543210',
+  recipientPostalCode: '560001',
+  recipientCountryCode: 'IN',
+};
+
 const VALID = {
   recipientPhoneE164: '+919876543210',
   recipientPostalCode: '560001',
@@ -95,6 +105,48 @@ describe('AddressValidationService', () => {
           recipientStateProvince: 'Nowhere',
         }),
       ).rejects.toThrow(/PIN.*;.*not an allowed Indian state|not an allowed Indian state/);
+    });
+  });
+
+  // ── ORD-5 amendment: the state is optional now ─────────────────────
+  describe('an order with no state (the seller form stopped asking)', () => {
+    it('validates, because there is nothing to check — not because the check was skipped', async () => {
+      // Delhivery routes on the PIN and resolves the locality itself, so
+      // the seller form no longer collects a state. The membership guard
+      // cannot run on a value that was never supplied; everything else
+      // (PIN shape, phone shape, country) still does.
+      const { svc } = makeService();
+      const r = await svc.validate(NO_STATE);
+      expect(r.ok).toBe(true);
+      expect(r.errors).toEqual([]);
+      expect(r.normalizedState).toBe('');
+    });
+
+    it('treats blank and whitespace the same as absent', async () => {
+      const { svc } = makeService();
+      for (const v of ['', '   ']) {
+        const r = await svc.validate({ ...VALID, recipientStateProvince: v });
+        expect(r.ok).toBe(true);
+        expect(r.normalizedState).toBe('');
+      }
+    });
+
+    it('STILL refuses a bad state when one IS supplied', async () => {
+      // The guard is not gone — CSV import and the admin path still send
+      // a state, and those orders are still checked.
+      const { svc } = makeService();
+      const r = await svc.validate({ ...VALID, recipientStateProvince: 'Atlantis' });
+      expect(r.ok).toBe(false);
+      expect(r.errors.join(' ')).toContain('Atlantis');
+    });
+
+    it('still catches a bad PIN on a stateless order', async () => {
+      // The obvious way this change could go wrong: dropping the state
+      // quietly relaxing the rest of the address check too.
+      const { svc } = makeService();
+      const r = await svc.validate({ ...NO_STATE, recipientPostalCode: '0123' });
+      expect(r.ok).toBe(false);
+      expect(r.errors.join(' ')).toContain('PIN');
     });
   });
 });

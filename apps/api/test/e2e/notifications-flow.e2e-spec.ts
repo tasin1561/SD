@@ -180,6 +180,7 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
             ? {}
             : { recipientEmail: opts.customerEmail }),
         recipientAddressLine1: '12 MG Road',
+        recipientAddressLine2: 'Near City Hospital',
         recipientCity: 'Bengaluru',
         recipientStateProvince: 'Karnataka',
         recipientPostalCode: '560001',
