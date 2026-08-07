@@ -27,7 +27,7 @@ cat ~/.ssh/github-deploy        # <- copy the entire private key (multi-line)
 
 | Name | Value |
 |---|---|
-| `DROPLET_HOST` | `157.245.109.39` (or `skydrop-app-prod.skydrop.online` if you have a DNS A record) |
+| `DROPLET_HOST` | the droplet's public IP — read it from the DigitalOcean console, or `doctl compute droplet list`. **Do not write it back into this file**: it is the origin address, and an origin address in a tracked doc is the one fact an attacker most wants when the host is not behind a proxy. |
 | `DROPLET_USER` | `skydrop` |
 | `DROPLET_SSH_KEY` | the contents of `~/.ssh/github-deploy` from step 1 — the whole thing including `-----BEGIN OPENSSH PRIVATE KEY-----` and trailing newline |
 
