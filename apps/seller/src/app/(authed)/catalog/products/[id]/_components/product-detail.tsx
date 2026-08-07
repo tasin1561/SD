@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import { ProductStatus } from '@skydrop/db';
+import { AddVariantPanel } from './add-variant-panel';
 import { ApiError } from '@skydrop/api-client';
 import type { SellerProductView } from '@skydrop/api-client';
 import { useProductDetail, useProductVariants, useUpdateProduct } from '@/lib/api-hooks';
@@ -43,6 +44,7 @@ import { useRouter } from 'next/navigation';
  * of validation.
  */
 export function ProductDetailView({ productId }: { productId: string }): ReactElement {
+  const [addingVariant, setAddingVariant] = useState(false);
   const router = useRouter();
   const detail = useProductDetail(productId);
   const variants = useProductVariants(productId);
@@ -106,7 +108,19 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
             )}
           </Section>
 
-          <Section title={`Variants${variants.data ? ` (${variants.data.length})` : ''}`}>
+          <Section
+            title={`Variants${variants.data ? ` (${variants.data.length})` : ''}`}
+            action={
+              addingVariant ? undefined : (
+                <Button variant="secondary" size="md" onClick={() => setAddingVariant(true)}>
+                  Add variant
+                </Button>
+              )
+            }
+          >
+            {addingVariant && (
+              <AddVariantPanel productId={productId} onDone={() => setAddingVariant(false)} />
+            )}
             {variants.isLoading ? (
               <LoadingState label="Loading variants…" />
             ) : variants.isError ? (
@@ -117,7 +131,12 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
             ) : !variants.data || variants.data.length === 0 ? (
               <EmptyState
                 title="No variants yet"
-                description="A product needs at least one variant before it can be ordered. Use the CSV import to add them in bulk."
+                description="A product needs at least one variant before it can be ordered — nothing can be stocked or picked against the product itself."
+                action={
+                  <Button variant="primary" size="md" onClick={() => setAddingVariant(true)}>
+                    Add variant
+                  </Button>
+                }
               />
             ) : (
               <Table>

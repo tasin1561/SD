@@ -7,6 +7,7 @@ import { ProductStatus } from '@skydrop/db';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { useProductsList } from '@/lib/api-hooks';
 import { canSeePath } from '@/lib/page-access';
+import { Plus } from 'lucide-react';
 import {
   Button,
   Input,
@@ -107,6 +108,13 @@ export function CatalogIndex(): ReactElement {
                 </Button>
               </Link>
             )}
+            {canSeePath(identity, '/catalog/new') && (
+              <Link href="/catalog/new">
+                <Button variant="primary" size="md">
+                  <Plus size={14} /> New product
+                </Button>
+              </Link>
+            )}
           </span>
         }
       />
@@ -167,7 +175,16 @@ export function CatalogIndex(): ReactElement {
       ) : !list.data || list.data.items.length === 0 ? (
         <EmptyState
           title="No products yet"
-          description="Use the CSV import or contact your account manager to onboard your catalog."
+          description="Add one by hand, or bring a whole catalogue in with the CSV import."
+          action={
+            canSeePath(identity, '/catalog/new') ? (
+              <Link href="/catalog/new">
+                <Button variant="primary" size="md">
+                  <Plus size={14} /> New product
+                </Button>
+              </Link>
+            ) : undefined
+          }
         />
       ) : (
         <Table>

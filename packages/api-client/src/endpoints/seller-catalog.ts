@@ -54,6 +54,45 @@ export interface SellerProductListResponse {
   readonly pageSize: number;
 }
 
+/**
+ * Creating a product. Mirrors CreateProductDto: `name` is the only
+ * required field — everything else is a DEFAULT the variants inherit
+ * when they do not state their own (the M4 inheritance chain:
+ * variant → product.default* → system setting for GST).
+ */
+export interface CreateSellerProductRequest {
+  readonly name: string;
+  readonly description?: string;
+  readonly brand?: string;
+  readonly externalRef?: string;
+  readonly externalSku?: string;
+  readonly defaultWeightGrams?: number;
+  readonly defaultLengthCm?: number;
+  readonly defaultWidthCm?: number;
+  readonly defaultHeightCm?: number;
+  readonly defaultDeclaredValueInr?: number;
+  readonly defaultHsCode?: string;
+}
+
+/**
+ * Creating a variant. Mirrors CreateVariantDto: `skuCode` is the only
+ * required field, and it is UNIQUE PER SELLER and immutable once set.
+ */
+export interface CreateSellerVariantRequest {
+  readonly skuCode: string;
+  readonly variantLabel?: string;
+  readonly weightGrams?: number;
+  readonly lengthCm?: number;
+  readonly widthCm?: number;
+  readonly heightCm?: number;
+  readonly declaredValueInr?: number;
+  readonly hsCode?: string;
+  readonly gstRate?: number;
+  readonly barcode?: string;
+  readonly externalSku?: string;
+  readonly attributes?: Record<string, unknown>;
+}
+
 export interface UpdateSellerProductRequest {
   readonly name?: string;
   readonly description?: string | null;

@@ -104,7 +104,7 @@ export function DashboardView(): ReactElement {
                   done={hasProduct}
                   label="Add your first product"
                   hint="At least one ACTIVE product + variant"
-                  href="/catalog"
+                  href="/catalog/new"
                 />
                 <ChecklistItem
                   done={hasOrder}

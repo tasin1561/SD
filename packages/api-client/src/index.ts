@@ -44,6 +44,8 @@ export type {
 } from './endpoints/admin-system-settings';
 export type {
   ListSellerProductsQuery,
+  CreateSellerProductRequest,
+  CreateSellerVariantRequest,
   SellerProductView,
   SellerProductListResponse,
   UpdateSellerProductRequest,

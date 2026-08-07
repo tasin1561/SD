@@ -24,6 +24,8 @@ import type {
   RegisterVariantImageRequest,
   SellerOrderEventView,
   SellerProductListResponse,
+  CreateSellerProductRequest,
+  CreateSellerVariantRequest,
   SellerProductView,
   SellerStockListResponse,
   SellerStockSummary,
@@ -409,6 +411,47 @@ export function useProductDetail(id: string): UseQueryResult<SellerProductView> 
     queryKey: ['seller-catalog', 'products', 'detail', id],
     queryFn: () => client.request<SellerProductView>(`/api/seller/products/${id}`),
     enabled: Boolean(id),
+  });
+}
+
+/**
+ * Create a product. Invalidates the whole `seller-catalog` prefix so the
+ * list, and any variant query under it, refetch together — a new product
+ * that does not appear in the list reads as the save having failed.
+ */
+export function useCreateProduct(): UseMutationResult<
+  SellerProductView,
+  Error,
+  CreateSellerProductRequest
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<SellerProductView>('/api/seller/products', { method: 'POST', body }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-catalog'] });
+    },
+  });
+}
+
+/** Create a variant under a product. The SKU is unique per seller and
+ *  immutable once set, so a duplicate comes back from the server and is
+ *  surfaced verbatim (FE-2) rather than guessed at here. */
+export function useCreateVariant(
+  productId: string,
+): UseMutationResult<SellerVariantView, Error, CreateSellerVariantRequest> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<SellerVariantView>(`/api/seller/products/${productId}/variants`, {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-catalog'] });
+    },
   });
 }
 
