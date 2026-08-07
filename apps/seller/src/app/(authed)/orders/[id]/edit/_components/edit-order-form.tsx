@@ -23,6 +23,13 @@ import {
   type UpdateOrderInput,
 } from '@/lib/api-hooks';
 import { useSellerIdentity } from '@skydrop/auth/client';
+import {
+  ADDRESS_LINE_1_HINT,
+  ADDRESS_LINE_2_HINT,
+  DUPLICATE_LINES_ERROR,
+  LANDMARK_HINT,
+  linesAreDuplicated,
+} from '@/lib/address-guidance';
 import { prefixHint, stripSellerPrefix } from '@/lib/seller-prefix';
 import {
   IN_DIAL,
@@ -228,9 +235,19 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
     return isCompleteLocal(toLocalDigits(form.recipientPhoneE164)) ? null : IN_PHONE_ERROR;
   }
 
+  /** Same shape, same reason: the create form refuses duplicated address
+   *  lines, so editing must not be the way round it. Advisory — the API
+   *  has no such rule; the consequence downstream is a held order. */
+  function addressProblem(): string | null {
+    if (!form) return null;
+    return linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2)
+      ? DUPLICATE_LINES_ERROR
+      : null;
+  }
+
   async function onSave(e: FormEvent): Promise<void> {
     e.preventDefault();
-    const bad = phoneProblem();
+    const bad = phoneProblem() ?? addressProblem();
     if (bad !== null) {
       setError(bad);
       return;
@@ -249,6 +266,14 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
   }
 
   async function onSaveAndSubmit(): Promise<void> {
+    // Same gate as onSave. It was missing here, so "Save + submit" was
+    // a way around the phone and address rules that "Save" enforces —
+    // a validation only one of two buttons runs is not a validation.
+    const bad = phoneProblem() ?? addressProblem();
+    if (bad !== null) {
+      setError(bad);
+      return;
+    }
     setError(null);
     setBusy('submit');
     try {
@@ -376,7 +401,12 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
                 />
               </div>
             </FormField>
-            <FormField label="Address line 1" required className="col-span-2">
+            <FormField
+              label="Address line 1"
+              required
+              className="col-span-2"
+              hint={ADDRESS_LINE_1_HINT}
+            >
               <Input
                 value={form.recipientAddressLine1}
                 onChange={(e) => set('recipientAddressLine1', e.target.value)}
@@ -384,14 +414,23 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
                 required
               />
             </FormField>
-            <FormField label="Address line 2" className="col-span-2">
+            <FormField
+              label="Address line 2"
+              className="col-span-2"
+              hint={ADDRESS_LINE_2_HINT}
+              error={
+                linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2)
+                  ? DUPLICATE_LINES_ERROR
+                  : undefined
+              }
+            >
               <Input
                 value={form.recipientAddressLine2}
                 onChange={(e) => set('recipientAddressLine2', e.target.value)}
                 maxLength={200}
               />
             </FormField>
-            <FormField label="Landmark" className="col-span-2">
+            <FormField label="Landmark" className="col-span-2" hint={LANDMARK_HINT}>
               <Input
                 value={form.recipientLandmark}
                 onChange={(e) => set('recipientLandmark', e.target.value)}

@@ -11,6 +11,13 @@ import {
   useSubmitOrder,
 } from '@/lib/api-hooks';
 import { useSellerIdentity } from '@skydrop/auth/client';
+import {
+  ADDRESS_LINE_1_HINT,
+  ADDRESS_LINE_2_HINT,
+  DUPLICATE_LINES_ERROR,
+  LANDMARK_HINT,
+  linesAreDuplicated,
+} from '@/lib/address-guidance';
 import { prefixHint } from '@/lib/seller-prefix';
 import { CustomerHistoryPanel } from './customer-history-panel';
 import { DuplicateOrderDialog, type DuplicateCandidate } from './duplicate-order-dialog';
@@ -167,6 +174,12 @@ export function NewOrderForm(): ReactElement {
     if (!form.recipientName.trim()) return 'Recipient name is required.';
     if (!isCompleteLocal(toLocalDigits(form.recipientPhoneE164))) return IN_PHONE_ERROR;
     if (!form.recipientAddressLine1.trim()) return 'Address line 1 is required.';
+    // Advisory, NOT a mirror of a server rule — the API has no such
+    // check, so a CSV import still gets through. It is here because
+    // duplicated lines get the order held by hand downstream, and
+    // finding that out at the field beats finding it out afterwards.
+    if (linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2))
+      return DUPLICATE_LINES_ERROR;
     if (!form.recipientCity.trim()) return 'City is required.';
     if (!form.recipientStateProvince.trim()) return 'State is required.';
     if (!/^[1-9]\d{5}$/.test(form.recipientPostalCode.trim()))
@@ -332,7 +345,12 @@ export function NewOrderForm(): ReactElement {
                 />
               </div>
             </FormField>
-            <FormField label="Address line 1" required className="col-span-2">
+            <FormField
+              label="Address line 1"
+              required
+              className="col-span-2"
+              hint={ADDRESS_LINE_1_HINT}
+            >
               <Input
                 value={form.recipientAddressLine1}
                 onChange={(e) => set('recipientAddressLine1', e.target.value)}
@@ -340,14 +358,23 @@ export function NewOrderForm(): ReactElement {
                 required
               />
             </FormField>
-            <FormField label="Address line 2" className="col-span-2">
+            <FormField
+              label="Address line 2"
+              className="col-span-2"
+              hint={ADDRESS_LINE_2_HINT}
+              error={
+                linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2)
+                  ? DUPLICATE_LINES_ERROR
+                  : undefined
+              }
+            >
               <Input
                 value={form.recipientAddressLine2}
                 onChange={(e) => set('recipientAddressLine2', e.target.value)}
                 maxLength={200}
               />
             </FormField>
-            <FormField label="Landmark" className="col-span-2">
+            <FormField label="Landmark" className="col-span-2" hint={LANDMARK_HINT}>
               <Input
                 value={form.recipientLandmark}
                 onChange={(e) => set('recipientLandmark', e.target.value)}
