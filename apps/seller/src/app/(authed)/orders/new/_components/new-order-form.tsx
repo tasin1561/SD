@@ -73,7 +73,6 @@ const INDIAN_STATES: ReadonlyArray<string> = [
 interface FormState {
   recipientName: string;
   recipientPhoneE164: string;
-  recipientEmail: string;
   recipientAddressLine1: string;
   recipientAddressLine2: string;
   recipientLandmark: string;
@@ -95,7 +94,6 @@ interface FormState {
 const INITIAL: FormState = {
   recipientName: '',
   recipientPhoneE164: '+91',
-  recipientEmail: '',
   recipientAddressLine1: '',
   recipientAddressLine2: '',
   recipientLandmark: '',
@@ -187,7 +185,6 @@ export function NewOrderForm(): ReactElement {
           ...(form.unitPriceInr.trim() ? { unitPriceInr: Number(form.unitPriceInr) } : {}),
         },
       ],
-      ...(form.recipientEmail.trim() ? { recipientEmail: form.recipientEmail.trim() } : {}),
       ...(form.recipientAddressLine2.trim()
         ? { recipientAddressLine2: form.recipientAddressLine2.trim() }
         : {}),
@@ -281,13 +278,6 @@ export function NewOrderForm(): ReactElement {
                 onChange={(e) => set('recipientPhoneE164', e.target.value)}
                 placeholder="+919812345678"
                 required
-              />
-            </FormField>
-            <FormField label="Email">
-              <Input
-                type="email"
-                value={form.recipientEmail}
-                onChange={(e) => set('recipientEmail', e.target.value)}
               />
             </FormField>
             <FormField label="Address line 1" required className="col-span-2">

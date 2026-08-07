@@ -86,7 +86,6 @@ const INDIAN_STATES: ReadonlyArray<string> = [
 interface FormState {
   recipientName: string;
   recipientPhoneE164: string;
-  recipientEmail: string;
   recipientAddressLine1: string;
   recipientAddressLine2: string;
   recipientLandmark: string;
@@ -120,7 +119,6 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
     setForm({
       recipientName: d.recipientName,
       recipientPhoneE164: d.recipientPhoneE164,
-      recipientEmail: d.recipientEmail ?? '',
       recipientAddressLine1: d.recipientAddressLine1,
       recipientAddressLine2: d.recipientAddressLine2 ?? '',
       recipientLandmark: d.recipientLandmark ?? '',
@@ -180,7 +178,6 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
       recipientPostalCode: form.recipientPostalCode.trim(),
       paymentMode: form.paymentMode,
     };
-    if (form.recipientEmail.trim()) body.recipientEmail = form.recipientEmail.trim();
     if (form.recipientAddressLine2.trim())
       body.recipientAddressLine2 = form.recipientAddressLine2.trim();
     if (form.recipientLandmark.trim()) body.recipientLandmark = form.recipientLandmark.trim();
@@ -306,13 +303,6 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
                 onChange={(e) => set('recipientPhoneE164', e.target.value)}
                 placeholder="+919812345678"
                 required
-              />
-            </FormField>
-            <FormField label="Email">
-              <Input
-                type="email"
-                value={form.recipientEmail}
-                onChange={(e) => set('recipientEmail', e.target.value)}
               />
             </FormField>
             <FormField label="Address line 1" required className="col-span-2">
