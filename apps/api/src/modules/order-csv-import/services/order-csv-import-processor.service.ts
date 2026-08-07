@@ -231,8 +231,12 @@ export class OrderCsvImportProcessorService {
       items: [{ variantId: resolved.variantId, quantity: row.quantity }],
     } as CreateOrderDto;
     if (row.customerEmail !== undefined) dto.recipientEmail = row.customerEmail;
-    if (row.addressLine2 !== undefined) dto.recipientAddressLine2 = row.addressLine2;
     if (row.landmark !== undefined) dto.recipientLandmark = row.landmark;
+    // Optional since the seller form stopped asking, but a CSV that DOES
+    // carry them should still store them — and a supplied state is still
+    // checked against ops.allowed_indian_states.
+    if (row.city !== undefined) dto.recipientCity = row.city;
+    if (row.state !== undefined) dto.recipientStateProvince = row.state;
     if (isCod && row.codAmount !== undefined) dto.codAmountInr = row.codAmount;
 
     await this.orders.create(sellerId, dto, actor, ctx, {
@@ -254,6 +258,8 @@ export class OrderCsvImportProcessorService {
     };
     if (row.customerEmail !== undefined) patch.customerEmail = row.customerEmail;
     if (row.landmark !== undefined) patch.landmark = row.landmark;
+    if (row.city !== undefined) patch.city = row.city;
+    if (row.state !== undefined) patch.state = row.state;
     if (row.codAmount !== undefined) patch.codAmount = row.codAmount;
     return patch;
   }

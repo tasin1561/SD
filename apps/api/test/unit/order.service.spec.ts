@@ -555,6 +555,41 @@ const PATCH = {
   // identical-re-upload case is genuinely a no-op
 };
 
+describe('OrderService.applyBulkPatch — a row that omits city/state', () => {
+  it('leaves the stored locality ALONE rather than writing null', async () => {
+    // This exact shape failed a whole CSV import in CI: `patch.city ??
+    // null` put null into a NOT NULL column, so tx.order.update threw
+    // and the upload came back FAILED. Omitting the key must mean
+    // "don't touch", not "clear".
+    const { svc, orderUpdate } = makeService({ existing: patchableOrder() });
+    const { city: _c, state: _s, ...noLocality } = PATCH;
+    const r = await svc.applyBulkPatch('s1', 'o1', noLocality, ACTOR);
+
+    expect(r).toBe('UNCHANGED');
+    expect(orderUpdate).not.toHaveBeenCalled();
+  });
+
+  it('does not blank a locality the first upload got right', async () => {
+    // The softer version of the same bug: writing '' instead of null
+    // would not throw, it would quietly erase "Karnataka".
+    const { svc, orderUpdate } = makeService({ existing: patchableOrder() });
+    const { city: _c, state: _s, ...noLocality } = PATCH;
+    await svc.applyBulkPatch('s1', 'o1', { ...noLocality, customerName: 'Asha Verma' }, ACTOR);
+
+    const data = orderUpdate.mock.calls[0]![0].data as AnyArgs;
+    expect(data).not.toHaveProperty('recipientCity');
+    expect(data).not.toHaveProperty('recipientStateProvince');
+    expect(data.recipientName).toBe('Asha Verma'); // the real edit still lands
+  });
+
+  it('still applies a city/state the row DOES carry', async () => {
+    const { svc, orderUpdate } = makeService({ existing: patchableOrder() });
+    await svc.applyBulkPatch('s1', 'o1', { ...PATCH, city: 'Mysuru' }, ACTOR);
+    const data = orderUpdate.mock.calls[0]![0].data as AnyArgs;
+    expect(data.recipientCity).toBe('Mysuru');
+  });
+});
+
 describe('OrderService.applyBulkPatch — ORD-9 (commit 21 gap-fill)', () => {
   it('returns UNCHANGED for an identical re-upload (no write)', async () => {
     const { svc, orderUpdate } = makeService({ existing: patchableOrder() });

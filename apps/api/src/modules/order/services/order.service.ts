@@ -1195,8 +1195,14 @@ export class OrderService {
     setIf(order.recipientAddressLine1, patch.addressLine1, 'recipientAddressLine1');
     setIf(order.recipientAddressLine2, patch.addressLine2 ?? null, 'recipientAddressLine2');
     setIf(order.recipientLandmark, patch.landmark ?? null, 'recipientLandmark');
-    setIf(order.recipientCity, patch.city ?? null, 'recipientCity');
-    setIf(order.recipientStateProvince, canonicalState, 'recipientStateProvince');
+    // City and state are optional on a CSV row now. A row that omits
+    // them must LEAVE THE STORED VALUE ALONE — `?? null` wrote null into
+    // a NOT NULL column and failed the whole import, and even a '' would
+    // have silently blanked a locality the first upload got right.
+    if (patch.city !== undefined) setIf(order.recipientCity, patch.city, 'recipientCity');
+    if (patch.state !== undefined) {
+      setIf(order.recipientStateProvince, canonicalState, 'recipientStateProvince');
+    }
     setIf(order.recipientPostalCode, patch.pinCode.trim(), 'recipientPostalCode');
 
     const curCod = order.codAmountInr === null ? null : Number(order.codAmountInr);
