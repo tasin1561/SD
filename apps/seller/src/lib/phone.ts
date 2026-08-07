@@ -23,6 +23,13 @@ export const IN_DIAL = '+91';
 /** Exactly ten digits. Nothing shorter, nothing longer, digits only. */
 export const IN_LOCAL_LENGTH = 10;
 
+/** India's numbering plan allocates only the 6, 7, 8 and 9 series to
+ *  mobile. A ten-digit number starting 0-5 is not a number anyone can be
+ *  called on, so accepting it means an order that reaches the call
+ *  centre and dies there — the most expensive place to find out, in a
+ *  business whose whole model is confirming COD by phone. */
+const IN_MOBILE_FIRST_DIGIT = /^[6-9]/;
+
 /** What the seller types, derived from stored E.164 for display.
  *
  *  A stored number that is NOT +91 (a legacy row, an admin entry, an
@@ -47,9 +54,9 @@ export function sanitiseLocal(raw: string): string {
   return d.slice(0, IN_LOCAL_LENGTH);
 }
 
-/** The submit gate. */
+/** The submit gate: ten digits AND a real mobile series. */
 export function isCompleteLocal(local: string): boolean {
-  return new RegExp(`^\\d{${IN_LOCAL_LENGTH}}$`).test(local);
+  return new RegExp(`^\\d{${IN_LOCAL_LENGTH}}$`).test(local) && IN_MOBILE_FIRST_DIGIT.test(local);
 }
 
 /** Local digits → what the API stores. */
@@ -58,4 +65,4 @@ export function toE164(local: string): string {
 }
 
 /** The one message both forms show, so they cannot word it differently. */
-export const IN_PHONE_ERROR = `Phone must be exactly ${IN_LOCAL_LENGTH} digits after ${IN_DIAL}.`;
+export const IN_PHONE_ERROR = `Phone must be ${IN_LOCAL_LENGTH} digits starting 6, 7, 8 or 9 (after ${IN_DIAL}).`;

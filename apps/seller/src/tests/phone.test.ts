@@ -60,6 +60,22 @@ describe('isCompleteLocal — the submit gate', () => {
   it('refuses anything non-numeric', () => {
     expect(isCompleteLocal('98123abcde')).toBe(false);
   });
+
+  // India allocates only the 6/7/8/9 series to mobile. A ten-digit
+  // number outside it is not a number anyone can be called on, and a
+  // call-confirmed COD business finds that out at the most expensive
+  // possible moment — in the call centre.
+  it('accepts every real mobile series', () => {
+    for (const first of ['6', '7', '8', '9']) {
+      expect(isCompleteLocal(`${first}812345678`)).toBe(true);
+    }
+  });
+
+  it('refuses a ten-digit number outside the mobile series', () => {
+    for (const first of ['0', '1', '2', '3', '4', '5']) {
+      expect(isCompleteLocal(`${first}812345678`)).toBe(false);
+    }
+  });
 });
 
 describe('toLocalDigits — E.164 back to what the field shows', () => {

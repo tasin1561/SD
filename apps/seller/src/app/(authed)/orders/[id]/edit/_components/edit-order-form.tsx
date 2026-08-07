@@ -318,7 +318,11 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
                 required
               />
             </FormField>
-            <FormField label="Phone" required hint={`${IN_DIAL} — Indian mobile, 10 digits`}>
+            <FormField
+              label="Phone"
+              required
+              hint={`${IN_DIAL} — ${IN_LOCAL_LENGTH} digits, starting 6-9`}
+            >
               {/* The dial code is CHROME, not input: it cannot be edited
                   or deleted, so a seller cannot clear it, type 0091, or
                   paste a differently-formatted number into it. The field
