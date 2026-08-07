@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
 import { ProductStatus } from '@skydrop/db';
+import { useSellerIdentity } from '@skydrop/auth/client';
 import { useProductsList } from '@/lib/api-hooks';
+import { canSeePath } from '@/lib/page-access';
 import {
   Button,
   Input,
@@ -64,6 +66,7 @@ function productStatusKind(status: ProductStatus): 'confirmed' | 'cancelled' | '
 }
 
 export function CatalogIndex(): ReactElement {
+  const identity = useSellerIdentity();
   const router = useRouter();
   const sp = useSearchParams();
   const params = useMemo(() => parseParams(new URLSearchParams(sp.toString())), [sp]);
@@ -97,11 +100,13 @@ export function CatalogIndex(): ReactElement {
         subtitle="Products, variants, images. Click a product to edit or manage its variants."
         action={
           <span className="flex gap-2">
-            <Link href="/catalog/import">
-              <Button variant="ghost" size="md">
-                CSV import
-              </Button>
-            </Link>
+            {canSeePath(identity, '/catalog/import') && (
+              <Link href="/catalog/import">
+                <Button variant="ghost" size="md">
+                  CSV import
+                </Button>
+              </Link>
+            )}
           </span>
         }
       />

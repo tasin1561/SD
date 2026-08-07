@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
 import { OrderStatus } from '@skydrop/db';
+import { useSellerIdentity } from '@skydrop/auth/client';
 import { usePendingRows, useOrdersList } from '@/lib/api-hooks';
+import { canSeePath } from '@/lib/page-access';
 import { Plus } from 'lucide-react';
 import {
   Button,
@@ -55,6 +57,7 @@ function parseParams(sp: URLSearchParams): QueryParams {
 }
 
 export function OrdersIndex(): ReactElement {
+  const identity = useSellerIdentity();
   const router = useRouter();
   const sp = useSearchParams();
   const params = useMemo(() => parseParams(new URLSearchParams(sp.toString())), [sp]);
@@ -92,23 +95,27 @@ export function OrdersIndex(): ReactElement {
             {/* Only when there IS something waiting. A permanent nav
                 item for an empty queue is noise; a queue nobody knows
                 about is worse than both. */}
-            {pendingCount > 0 && (
+            {pendingCount > 0 && canSeePath(identity, '/orders/pending') && (
               <Link href="/orders/pending">
                 <Button variant="ghost" size="md">
                   <span className="text-[var(--status-pending-fg)]">{pendingCount} pending</span>
                 </Button>
               </Link>
             )}
-            <Link href="/orders/import">
-              <Button variant="ghost" size="md">
-                CSV import
-              </Button>
-            </Link>
-            <Link href="/orders/new">
-              <Button variant="primary" size="md">
-                <Plus size={14} /> New order
-              </Button>
-            </Link>
+            {canSeePath(identity, '/orders/import') && (
+              <Link href="/orders/import">
+                <Button variant="ghost" size="md">
+                  CSV import
+                </Button>
+              </Link>
+            )}
+            {canSeePath(identity, '/orders/new') && (
+              <Link href="/orders/new">
+                <Button variant="primary" size="md">
+                  <Plus size={14} /> New order
+                </Button>
+              </Link>
+            )}
           </div>
         }
       />

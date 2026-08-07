@@ -1,13 +1,17 @@
 import type { ReactElement } from 'react';
-import Link from 'next/link';
-import { Card, CardBody, PageHeader } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/components';
 import { Webhook, Bell, Key, MapPin } from 'lucide-react';
+import { SettingsHub, type SettingsTile } from './_components/settings-hub';
 
 /**
  * Settings hub — links into each settings sub-area.
+ *
+ * The tiles are filtered to what the person can open (SettingsHub);
+ * webhooks, notifications and API keys each need their own permission,
+ * so this list is not the same for everyone.
  */
 export default function SettingsPage(): ReactElement {
-  const items = [
+  const items: SettingsTile[] = [
     {
       href: '/settings/addresses',
       icon: <MapPin size={20} />,
@@ -39,23 +43,7 @@ export default function SettingsPage(): ReactElement {
   return (
     <div>
       <PageHeader title="Settings" subtitle="Addresses, webhooks, notifications, API keys." />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {items.map((it) => (
-          <Link key={it.href} href={it.href} className="block">
-            <Card className="hover:border-border-strong transition-colors">
-              <CardBody>
-                <div className="flex items-start gap-3">
-                  <div className="text-accent">{it.icon}</div>
-                  <div>
-                    <div className="text-text-bright font-medium text-sm">{it.title}</div>
-                    <div className="text-text-muted text-xs mt-0.5">{it.description}</div>
-                  </div>
-                </div>
-              </CardBody>
-            </Card>
-          </Link>
-        ))}
-      </div>
+      <SettingsHub items={items} />
     </div>
   );
 }

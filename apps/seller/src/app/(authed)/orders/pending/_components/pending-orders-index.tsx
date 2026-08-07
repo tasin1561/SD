@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import { useSellerIdentity } from '@skydrop/auth/client';
+import { canSeePath } from '@/lib/page-access';
 import { useState, type ReactElement } from 'react';
 import {
   Button,
@@ -190,6 +192,7 @@ function RowCard({ row }: { readonly row: StagedRow }): ReactElement {
 }
 
 export function PendingOrdersIndex(): ReactElement {
+  const identity = useSellerIdentity();
   const rows = usePendingRows();
 
   if (rows.isLoading) return <LoadingState label="Loading pending rows" />;
@@ -207,11 +210,13 @@ export function PendingOrdersIndex(): ReactElement {
           title="Nothing waiting"
           description="Every row from your uploads became an order. New uploads only land here if something is missing or looks like a duplicate."
           action={
-            <Link href="/orders/import">
-              <Button variant="primary" size="md">
-                Upload a CSV
-              </Button>
-            </Link>
+            canSeePath(identity, '/orders/import') ? (
+              <Link href="/orders/import">
+                <Button variant="primary" size="md">
+                  Upload a CSV
+                </Button>
+              </Link>
+            ) : undefined
           }
         />
       ) : (
