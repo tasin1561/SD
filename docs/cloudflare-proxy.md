@@ -1,8 +1,21 @@
 # Putting Cloudflare in front of the origin
 
-**Status: NOT DONE.** DNS is on Cloudflare but the records are grey-cloud
-(DNS-only), so every request reaches the droplet directly. There is no CDN, no
-WAF, no DDoS absorption, and the origin IP is reachable by anyone who has it.
+**Status: PARTLY DONE.**
+
+- ✅ **SSL/TLS mode is already Full (strict)** — step 1 is complete.
+- ✅ **CAA already permits Cloudflare's CAs.** The dashboard row shows only
+  `letsencrypt.org`, which looks like it would block Cloudflare's edge
+  certificate; the full record set also authorises `pki.goog`, `digicert.com`,
+  `comodoca.com` and `ssl.com`, so Universal SSL can issue. Checked with
+  `dig +short skydrop.online CAA` rather than read off the row.
+- ❌ All fourteen A records are still **grey-cloud (DNS only)**, so every
+  request reaches the droplet directly: no CDN, no WAF, no DDoS absorption.
+- ❌ `ufw` still allows 80/443 from anywhere.
+- ❌ Caddy does not yet read `CF-Connecting-IP`.
+
+Note the staging hostnames (`stg-api`, `stg-app`, `stg-admin`, `stg-track`)
+point at the **same droplet** as production. Whatever is decided about proxying
+applies to them too.
 
 This file is the runbook. **The steps are ordered, and the order is the point** —
 doing step 3 before steps 1 and 2 opens a header-spoofing hole that is worse
@@ -47,10 +60,13 @@ The fix is step 3, and it MUST come after step 2.
 ### 2. The origin stays reachable anyway
 
 `ufw` currently allows 80/443 from anywhere. Proxying without restricting the
-origin is half a mitigation: anyone with the IP simply skips Cloudflare. And the
-IP is **permanently in this repo's git history** (it was removed from
-`docs/cicd.md`, but removing a line does not remove it from 526 commits), so
-assume it is known.
+origin is half a mitigation: anyone with the IP simply skips Cloudflare.
+
+The origin is `68.183.190.55`. It is no longer in any tracked file — it was a
+fixture in `ssrf-guard.spec.ts`, now replaced — but it appears in **141 commits
+of history**, and removing a line does not remove it from the past. Assume it is
+known. (The IP that was in `docs/cicd.md`, `157.245.109.39`, was a STALE address
+from an earlier droplet and never pointed here.)
 
 ### 3. Certificate renewal
 

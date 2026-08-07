@@ -15,7 +15,13 @@ import {
 describe('ssrf-guard', () => {
   describe('isPublicUnicastAddress', () => {
     it('accepts ordinary public addresses', () => {
-      for (const ip of ['8.8.8.8', '1.1.1.1', '68.183.190.55', '2606:4700:4700::1111']) {
+      // 9.9.9.9 is Quad9's resolver. The slot used to hold this
+      // deployment's own origin address, which is a poor fixture: it puts
+      // the production IP in the repo for no benefit and goes stale the
+      // day the host moves. It cannot be a documentation range either —
+      // 203.0.113.0/24 is reserved, so the guard rejects it, which this
+      // test proved when it was tried.
+      for (const ip of ['8.8.8.8', '1.1.1.1', '9.9.9.9', '2606:4700:4700::1111']) {
         expect(isPublicUnicastAddress(ip)).toBe(true);
       }
     });
