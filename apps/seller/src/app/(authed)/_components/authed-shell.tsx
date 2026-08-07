@@ -5,8 +5,9 @@ import { usePathname } from 'next/navigation';
 import { useState, type ReactNode, type ReactElement } from 'react';
 import { useApiClient } from '@skydrop/auth/client';
 import type { SellerMe } from '@skydrop/api-client';
-import { AppShell, Toaster, type NavGroup } from '@skydrop/ui/components';
+import { AppShell, MenuButton, Toaster, type NavGroup } from '@skydrop/ui/components';
 import { canSeePath } from '@/lib/page-access';
+import { quickActionsFor } from '@/lib/quick-actions';
 import {
   Boxes,
   Building2,
@@ -113,6 +114,8 @@ export function AuthedShell({
     }))
     .filter((group) => group.items.length > 0);
 
+  const quickActions = quickActionsFor(identity);
+
   return (
     <Toaster>
       <AppShell
@@ -121,6 +124,10 @@ export function AuthedShell({
         navGroups={visibleGroups}
         identityPrimary={identity.companyName}
         identitySecondary={identity.emailDisplay}
+        headerActions={<MenuButton label="Quick actions" items={quickActions} Link={Link} />}
+        drawerActions={
+          <MenuButton label="Quick actions" items={quickActions} Link={Link} placement="above" />
+        }
         pathname={pathname}
         Link={Link}
         onSignOut={() => {

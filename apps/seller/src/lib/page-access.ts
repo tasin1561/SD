@@ -27,6 +27,12 @@ import type { SellerMe } from '@skydrop/api-client';
  * that refuses is a bad first impression of a system working correctly.
  */
 export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permission: string]> = [
+  // Longest prefix wins, so this beats '/orders' below. It has to be
+  // listed: the create FORM is a write surface, and the server guards
+  // POST /seller/orders with `orders.create`. Resolving it to
+  // `orders.view` let a read-only role open the form, fill it in and
+  // meet the 403 only at submit.
+  ['/orders/new', 'orders.create'],
   ['/orders', 'orders.view'],
   ['/tracking', 'orders.view'],
   ['/customers', 'customers.view'],

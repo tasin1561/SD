@@ -21,6 +21,7 @@ export * from './feedback';
 export * from './money';
 export * from './form';
 export * from './modal';
+export * from './menu-button';
 export * from './page';
 export * from './status-badge';
 export * from './theme-init';

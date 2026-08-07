@@ -224,6 +224,8 @@ export function AppShell({
   navGroups,
   identityPrimary,
   identitySecondary,
+  headerActions,
+  drawerActions,
   footerNote,
   pathname,
   Link,
@@ -241,6 +243,20 @@ export function AppShell({
   readonly identityPrimary: string;
   /** Staff role, or the seller user's email. */
   readonly identitySecondary: string;
+  /**
+   * App-specific controls for the desktop top bar, left of the identity
+   * block. A SLOT rather than a built-in, because what belongs here is
+   * per-app: the shell stays the one piece of chrome (FE-7) and does not
+   * grow a seller-shaped branch.
+   */
+  readonly headerActions?: ReactNode;
+  /**
+   * The same actions for the mobile drawer footer. Deliberately a second
+   * slot rather than re-rendering `headerActions`: the drawer footer sits
+   * at the bottom of the viewport, so a menu there must open UPWARD, and
+   * the caller is the only one that can say so.
+   */
+  readonly drawerActions?: ReactNode;
   readonly footerNote?: string;
   readonly pathname: string | null;
   readonly Link: LinkLike;
@@ -352,6 +368,7 @@ export function AppShell({
                     mobile — there is no room for them in a 52px bar,
                     and this is where a phone user looks for them. */}
                 <div className="border-border shrink-0 space-y-2.5 border-t px-4 py-3">
+                  {drawerActions}
                   <div className="flex items-center gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="text-text-body truncate text-xs font-medium">
@@ -387,6 +404,7 @@ export function AppShell({
             {sectionLabel}
           </div>
           <div className="hidden shrink-0 items-center gap-3 lg:flex">
+            {headerActions}
             <div className="min-w-0 text-right leading-tight">
               <div className="text-text-body truncate text-xs">{identityPrimary}</div>
               <div className="text-text-faint truncate text-[11px]">{identitySecondary}</div>
