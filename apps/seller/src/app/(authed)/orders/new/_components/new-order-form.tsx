@@ -73,7 +73,6 @@ const INDIAN_STATES: ReadonlyArray<string> = [
 interface FormState {
   recipientName: string;
   recipientPhoneE164: string;
-  recipientAltPhoneE164: string;
   recipientEmail: string;
   recipientAddressLine1: string;
   recipientAddressLine2: string;
@@ -96,7 +95,6 @@ interface FormState {
 const INITIAL: FormState = {
   recipientName: '',
   recipientPhoneE164: '+91',
-  recipientAltPhoneE164: '',
   recipientEmail: '',
   recipientAddressLine1: '',
   recipientAddressLine2: '',
@@ -159,11 +157,6 @@ export function NewOrderForm(): ReactElement {
     if (!form.recipientName.trim()) return 'Recipient name is required.';
     if (!/^\+[1-9]\d{6,14}$/.test(form.recipientPhoneE164.trim()))
       return 'Recipient phone must be E.164 (e.g. +919812345678).';
-    if (
-      form.recipientAltPhoneE164.trim() &&
-      !/^\+[1-9]\d{6,14}$/.test(form.recipientAltPhoneE164.trim())
-    )
-      return 'Alt phone must be E.164.';
     if (!form.recipientAddressLine1.trim()) return 'Address line 1 is required.';
     if (!form.recipientCity.trim()) return 'City is required.';
     if (!form.recipientStateProvince.trim()) return 'State is required.';
@@ -194,9 +187,6 @@ export function NewOrderForm(): ReactElement {
           ...(form.unitPriceInr.trim() ? { unitPriceInr: Number(form.unitPriceInr) } : {}),
         },
       ],
-      ...(form.recipientAltPhoneE164.trim()
-        ? { recipientAltPhoneE164: form.recipientAltPhoneE164.trim() }
-        : {}),
       ...(form.recipientEmail.trim() ? { recipientEmail: form.recipientEmail.trim() } : {}),
       ...(form.recipientAddressLine2.trim()
         ? { recipientAddressLine2: form.recipientAddressLine2.trim() }
@@ -291,13 +281,6 @@ export function NewOrderForm(): ReactElement {
                 onChange={(e) => set('recipientPhoneE164', e.target.value)}
                 placeholder="+919812345678"
                 required
-              />
-            </FormField>
-            <FormField label="Alt phone">
-              <Input
-                value={form.recipientAltPhoneE164}
-                onChange={(e) => set('recipientAltPhoneE164', e.target.value)}
-                placeholder="+919812345679"
               />
             </FormField>
             <FormField label="Email">
