@@ -17,17 +17,16 @@
  * sites is the real duplication; sharing across all four would be a
  * coincidence dressed up as a system.
  *
- * ── THIS COMMIT IS DELIBERATELY ALMOST INERT ─────────────────────────
- * Every value below reproduces what the sites render TODAY, with ONE
- * exception: the primary is unified (see next block). The corporate
- * retheme lands in the commit AFTER this one, so that if the retheme
- * looks wrong it can be reverted without unwiring the shared package.
+ * ── STRUCTURE ────────────────────────────────────────────────────────
+ * Both themes are FIRST-CLASS: neither is derived from the other,
+ * because a derived theme is how one of them ends up being the one
+ * nobody checks. Each declares three surfaces plus a recessed input
+ * surface, its own border pair, and the same eight status tones.
  *
- * The one unavoidable exception is marketing's LIGHT theme. The two
- * light themes had genuinely diverged, so consolidating meant choosing
- * one, and track's is the newer and the only one whose contrast was
- * measured. Marketing therefore moves onto it here. That change is
- * shown in the regression shots rather than buried.
+ * The light theme is declared TWICE — once under the OS preference and
+ * once under the pinned toggle. A selector list cannot contain an
+ * @media, so the two must be written out, and two copies that drift
+ * are how the OS theme and the toggled theme stop matching.
  */
 
 /* ─────────────────────────────────────────────────────────────────────
@@ -50,140 +49,179 @@
  * ──────────────────────────────────────────────────────────────────── */
 
 /* ─────────────────────────────────────────────────────────────────────
- * NIGHT — dark. Values as they render today, primary excepted.
+ * NIGHT — dark.
  * ──────────────────────────────────────────────────────────────────── */
 :root,
 :root[data-theme='dark'] {
   --sky: #5899e4;
   --sky-deep: #2479db;
-  --saffron: #f59e0b;
-  --green: #34d399;
-  --red: #f87171;
+  --saffron: #d69e4a;
+  --green: #52b788;
+  --red: #e07a70;
 
-  --surface: #060b16;
-  --surface-2: #0c1424;
-  --surface-3: rgba(88, 153, 228, 0.05);
-  --fg-strong: #f3f7fc;
-  --fg-body: #c3d0e0;
-  --fg-muted: #8296ae;
-  --line: rgba(148, 178, 255, 0.1);
-  --line-strong: rgba(148, 178, 255, 0.22);
-  --grid: rgba(88, 153, 228, 0.05);
-  --accent-fg: #051018;
-  --glow: rgba(88, 153, 228, 0.35);
+  /* Three surfaces, and a page that is NOT near-black. Near-black plus
+     a bright accent is the terminal look this pass is removing; the
+     same accent on a deep desaturated blue-grey reads as a product.
+     input < page < card, so a field is recessed and a card is raised. */
+  --surface: #131b24;
+  --surface-2: #1e2937;
+  --surface-3: #263241;
+  --surface-input: #0f161e;
+  --page-top: #131b24;
+  --page-bottom: #0f161e;
 
-  /* ── Status tones ──────────────────────────────────────────────────
-   * Twelve buyer-facing statuses over EIGHT tones in five families.
-   * Statuses that do not change what a customer does now share a tone
-   * and are told apart by their label; inventing a hue per status is
-   * how a tracking page ends up a rainbow, and nobody distinguishes
-   * twelve hues reliably anyway.
+  --line: #2b3949;
+  --line-strong: #3a4a5c;
+  /* Borders that are the SOLE identifier of a component (a field's
+     bounds, a focus ring) carry 3:1. Decorative separators between
+     surfaces already distinguishable by value do not — WCAG 1.4.11
+     exempts them, and forcing 3:1 on every hairline is what makes a
+     light UI look harsh. */
+  --border-control: #667c92;
+  --focus-ring: #7bafea;
+
+  --fg-strong: #f3f6f9;
+  --fg-body: #cbd5e0;
+  --fg-muted: #93a2b4;
+  --fg-faint: #8493a6;
+
+  /* ── Status tones — FIVE families, eight tones, twelve statuses ────
+   * Twelve hues would be a rainbow, and nobody distinguishes twelve
+   * hues reliably; the two that most need telling apart (returning vs
+   * returned) were 2° apart. Statuses that do not change what a
+   * customer does share a tone and are told apart by their LABEL.
+   * Status is never conveyed by colour alone: every tone carries text,
+   * and the three shape-bearing states carry a marker too.
    *
-   * ⚠ RENDERED AS TEXT AND AS DOTS — NOT AS FILLS.
-   * Today each tone is used three ways: a 7px timeline node and a 10px
-   * status dot (non-text, 3:1), a 14px/500 event label (normal text,
-   * 4.5:1 — this is the binding one), and a 24–30px/600 headline (large
+   * ⚠ THESE ARE TEXT-AND-DOT TONES, NOT FILLS. Each is used as a 7px
+   * node and a 10px dot (non-text, 3:1), a 14px/500 label (normal
+   * text, 4.5:1 — the binding case) and a 24-30px/600 headline (large
    * text, 3:1). All eight clear 4.5:1 in every one of those.
-   *
-   * There are NO pills or filled badges anywhere yet. If you add one,
-   * these tokens are the wrong thing to fill it with: a fill needs its
-   * LABEL at 4.5:1 against the fill AND the fill at 3:1 against the
-   * surface, which is a different requirement from any of the above.
-   * --tone-moving (#5899e4) is the first that breaks — white on it is
-   * 3.4:1, well under. Add explicit `-fill` / `-on-fill` pairs at that
-   * point rather than compromising these values, which are correct for
-   * what they currently do.
-   *
-   * These DARK values are today's, so dark renders unchanged here; the
-   * five-family collapse lands in the retheme commit. */
-  --tone-processing: var(--fg-muted);
-  --tone-dispatched: var(--sky);
-  --tone-in-transit: var(--sky);
-  --tone-out-for-delivery: var(--sky);
-  --tone-attempted: var(--saffron);
-  --tone-delivered: var(--green);
-  --tone-returning: var(--fg-muted);
-  --tone-returned: var(--fg-muted);
-  --tone-lost: var(--red);
-  --tone-cancelled: var(--fg-muted);
+   * There are no pills anywhere yet. If you add one, do NOT fill it
+   * with these: a fill needs its label at 4.5:1 against the fill and
+   * the fill at 3:1 against the surface. --tone-moving (#5899e4) is
+   * the first that breaks — white on it is 3.4:1. Add explicit
+   * `-fill` / `-on-fill` pairs then. */
+  --tone-neutral: #b3bfcd;
+  --tone-neutral-quiet: #8b9bad;
+  --tone-moving: #5899e4;
+  --tone-arriving: #7bafea;
+  --tone-done: #52b788;
+  --tone-attention: #e19447;
+  --tone-returning: #dd852c;
+  --tone-fault: #e07a70;
 
   /* ── Map ───────────────────────────────────────────────────────────
-   * The corridor is drawn to a <canvas>, which cannot read CSS, so
-   * these are read once and re-read on a theme change. Keeping them
-   * here rather than as literals in the component is what stopped the
-   * two themes' maps drifting apart. */
-  --map-land: rgba(56, 189, 248, 0.04);
-  --map-coast: rgba(116, 166, 220, 0.35);
-  --map-bd-fill: rgba(245, 158, 11, 0.08);
-  --map-bd-coast: rgba(245, 158, 11, 0.45);
-  --map-route: rgba(56, 189, 248, 0.16);
-  --map-halo: rgba(56, 189, 248, 0.35);
-  --map-trail: rgba(56, 189, 248, 0.5);
-  --map-blip: #38bdf8;
-  --map-origin: #f59e0b;
-  --map-label: #8296ae;
-  --map-sweep: 56, 189, 248;
-  /* The veil the page draws the canvas behind. Halving the map is right
-     on black and was what made it invisible on white. */
-  --map-veil: 0.55;
-  --map-veil-soft: 0.4;
+   * Raised to the legibility the light map now has: the corridor IS
+   * the page and it had faded to nearly nothing on the darker ground. */
+  --map-land: rgba(88, 153, 228, 0.07);
+  --map-coast: rgba(125, 154, 185, 0.75);
+  --map-bd-fill: rgba(214, 158, 74, 0.2);
+  --map-bd-coast: rgba(214, 158, 74, 0.85);
+  --map-route: rgba(88, 153, 228, 0.55);
+  --map-halo: rgba(88, 153, 228, 0.6);
+  --map-trail: rgba(107, 163, 232, 0.8);
+  --map-blip: #6ba3e8;
+  --map-origin: #d69e4a;
+  --map-label: #93a2b4;
+  --map-sweep: 88, 153, 228;
+  --map-veil: 0.85;
+  --map-veil-soft: 0.6;
+
+  --accent-fg: #0b1219;
+  --grid: rgba(88, 153, 228, 0.05);
+  --glow: rgba(88, 153, 228, 0.22);
+
+  /* The twelve buyer-facing statuses, mapped onto the eight tones.
+     `terminal` states stop the timeline rail — there are FIVE of them,
+     not the three that carry a shape, which is why the rail is driven
+     off a flag rather than a hardcoded list. */
+  --tone-processing: var(--tone-neutral);
+  --tone-cancelled: var(--tone-neutral-quiet);
+  --tone-dispatched: var(--tone-moving);
+  --tone-in-transit: var(--tone-moving);
+  --tone-out-for-delivery: var(--tone-arriving);
+  --tone-delivered: var(--tone-done);
+  --tone-attempted: var(--tone-attention);
+  --tone-returned: var(--tone-returning);
+  --tone-lost: var(--tone-fault);
 
   color-scheme: dark;
 }
 
 /* ─────────────────────────────────────────────────────────────────────
- * DAY — light. Track's current light theme, which both sites now share.
- *
- * Declared TWICE: once for the OS preference, once for the pinned
- * toggle. A selector list cannot contain an @media, so the two must be
- * written out, and two copies that drift are how the OS theme and the
- * toggled theme stop matching.
+ * DAY — light.
  * ──────────────────────────────────────────────────────────────────── */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme='dark']) {
     --sky: #1a579e;
     --sky-deep: #15467f;
-    --green: #15803d;
-    --red: #dc2626;
+    --saffron: #a8730f;
+    --green: #116a31;
+    --red: #b42318;
 
-    --page-top: #f8fafc;
-    --page-bottom: #e8eef6;
-    --surface: #f4f7fb;
+    /* A warm off-white, not a blue-tinted one. The previous light page
+    was #f4f7fb and read lavender against the cool map. */
+    --surface: #faf9f7;
     --surface-2: #ffffff;
-    --surface-3: #eef3f9;
-    --fg-strong: #0f172a;
-    --fg-body: #334155;
-    --fg-muted: #475569;
-    --line: #dbe3ec;
-    --line-strong: #c2ceda;
-    --grid: rgba(26, 87, 158, 0.07);
-    --accent-fg: #ffffff;
-    --glow: rgba(26, 87, 158, 0.2);
+    --surface-3: #f0eeea;
+    --surface-input: #f6f5f2;
+    --page-top: #fdfcfa;
+    --page-bottom: #f2f0ec;
 
-    --tone-processing: #4f46e5;
-    --tone-dispatched: #2563eb;
-    --tone-in-transit: #0369a1;
-    --tone-out-for-delivery: #7c3aed;
-    --tone-attempted: #b45309;
-    --tone-delivered: #15803d;
-    --tone-returning: #c2410c;
-    --tone-returned: #9a3412;
-    --tone-lost: #dc2626;
-    --tone-cancelled: #475569;
+    --line: #e3e0da;
+    --line-strong: #cfcbc3;
+    --border-control: #8f8a81;
+    --focus-ring: #15467f;
 
-    --map-land: rgba(37, 99, 235, 0.09);
+    --fg-strong: #16202b;
+    --fg-body: #3b4959;
+    --fg-muted: #4e5e70;
+    --fg-faint: #5d6d80;
+
+    --tone-neutral: #4e5e70;
+    --tone-neutral-quiet: #586777;
+    --tone-moving: #1a579e;
+    --tone-arriving: #15467f;
+    --tone-done: #116a31;
+    --tone-attention: #79420c;
+    --tone-returning: #99540f;
+    --tone-fault: #b42318;
+
+    --map-land: rgba(26, 87, 158, 0.08);
     --map-coast: rgba(23, 42, 79, 0.64);
-    --map-bd-fill: rgba(194, 65, 12, 0.13);
-    --map-bd-coast: rgba(154, 52, 18, 0.8);
-    --map-route: rgba(29, 78, 216, 0.78);
-    --map-halo: rgba(37, 99, 235, 0.5);
-    --map-trail: rgba(29, 78, 216, 0.7);
-    --map-blip: #1d4ed8;
-    --map-origin: #b45309;
-    --map-label: #475569;
-    --map-sweep: 37, 99, 235;
+    /* Warmed toward the brand saffron at low saturation. The previous
+    terracotta read pink against a cool ground. */
+    --map-bd-fill: rgba(197, 140, 58, 0.22);
+    --map-bd-coast: rgba(146, 94, 20, 0.8);
+    --map-route: rgba(26, 87, 158, 0.72);
+    --map-halo: rgba(26, 87, 158, 0.5);
+    --map-trail: rgba(21, 70, 127, 0.7);
+    --map-blip: #1a579e;
+    --map-origin: #a8730f;
+    --map-label: #4e5e70;
+    --map-sweep: 26, 87, 158;
     --map-veil: 0.92;
     --map-veil-soft: 0.62;
+
+    --accent-fg: #ffffff;
+    /* Reduced — it was competing with the map. */
+    --grid: rgba(26, 87, 158, 0.04);
+    --glow: rgba(26, 87, 158, 0.16);
+
+    /* The twelve buyer-facing statuses, mapped onto the eight tones.
+    `terminal` states stop the timeline rail — there are FIVE of them,
+    not the three that carry a shape, which is why the rail is driven
+    off a flag rather than a hardcoded list. */
+    --tone-processing: var(--tone-neutral);
+    --tone-cancelled: var(--tone-neutral-quiet);
+    --tone-dispatched: var(--tone-moving);
+    --tone-in-transit: var(--tone-moving);
+    --tone-out-for-delivery: var(--tone-arriving);
+    --tone-delivered: var(--tone-done);
+    --tone-attempted: var(--tone-attention);
+    --tone-returned: var(--tone-returning);
+    --tone-lost: var(--tone-fault);
 
     color-scheme: light;
   }
@@ -192,47 +230,72 @@
 :root[data-theme='light'] {
   --sky: #1a579e;
   --sky-deep: #15467f;
-  --green: #15803d;
-  --red: #dc2626;
+  --saffron: #a8730f;
+  --green: #116a31;
+  --red: #b42318;
 
-  --page-top: #f8fafc;
-  --page-bottom: #e8eef6;
-  --surface: #f4f7fb;
+  /* A warm off-white, not a blue-tinted one. The previous light page
+  was #f4f7fb and read lavender against the cool map. */
+  --surface: #faf9f7;
   --surface-2: #ffffff;
-  --surface-3: #eef3f9;
-  --fg-strong: #0f172a;
-  --fg-body: #334155;
-  --fg-muted: #475569;
-  --line: #dbe3ec;
-  --line-strong: #c2ceda;
-  --grid: rgba(26, 87, 158, 0.07);
-  --accent-fg: #ffffff;
-  --glow: rgba(26, 87, 158, 0.2);
+  --surface-3: #f0eeea;
+  --surface-input: #f6f5f2;
+  --page-top: #fdfcfa;
+  --page-bottom: #f2f0ec;
 
-  --tone-processing: #4f46e5;
-  --tone-dispatched: #2563eb;
-  --tone-in-transit: #0369a1;
-  --tone-out-for-delivery: #7c3aed;
-  --tone-attempted: #b45309;
-  --tone-delivered: #15803d;
-  --tone-returning: #c2410c;
-  --tone-returned: #9a3412;
-  --tone-lost: #dc2626;
-  --tone-cancelled: #475569;
+  --line: #e3e0da;
+  --line-strong: #cfcbc3;
+  --border-control: #8f8a81;
+  --focus-ring: #15467f;
 
-  --map-land: rgba(37, 99, 235, 0.09);
+  --fg-strong: #16202b;
+  --fg-body: #3b4959;
+  --fg-muted: #4e5e70;
+  --fg-faint: #5d6d80;
+
+  --tone-neutral: #4e5e70;
+  --tone-neutral-quiet: #586777;
+  --tone-moving: #1a579e;
+  --tone-arriving: #15467f;
+  --tone-done: #116a31;
+  --tone-attention: #79420c;
+  --tone-returning: #99540f;
+  --tone-fault: #b42318;
+
+  --map-land: rgba(26, 87, 158, 0.08);
   --map-coast: rgba(23, 42, 79, 0.64);
-  --map-bd-fill: rgba(194, 65, 12, 0.13);
-  --map-bd-coast: rgba(154, 52, 18, 0.8);
-  --map-route: rgba(29, 78, 216, 0.78);
-  --map-halo: rgba(37, 99, 235, 0.5);
-  --map-trail: rgba(29, 78, 216, 0.7);
-  --map-blip: #1d4ed8;
-  --map-origin: #b45309;
-  --map-label: #475569;
-  --map-sweep: 37, 99, 235;
+  /* Warmed toward the brand saffron at low saturation. The previous
+  terracotta read pink against a cool ground. */
+  --map-bd-fill: rgba(197, 140, 58, 0.22);
+  --map-bd-coast: rgba(146, 94, 20, 0.8);
+  --map-route: rgba(26, 87, 158, 0.72);
+  --map-halo: rgba(26, 87, 158, 0.5);
+  --map-trail: rgba(21, 70, 127, 0.7);
+  --map-blip: #1a579e;
+  --map-origin: #a8730f;
+  --map-label: #4e5e70;
+  --map-sweep: 26, 87, 158;
   --map-veil: 0.92;
   --map-veil-soft: 0.62;
+
+  --accent-fg: #ffffff;
+  /* Reduced — it was competing with the map. */
+  --grid: rgba(26, 87, 158, 0.04);
+  --glow: rgba(26, 87, 158, 0.16);
+
+  /* The twelve buyer-facing statuses, mapped onto the eight tones.
+  `terminal` states stop the timeline rail — there are FIVE of them,
+  not the three that carry a shape, which is why the rail is driven
+  off a flag rather than a hardcoded list. */
+  --tone-processing: var(--tone-neutral);
+  --tone-cancelled: var(--tone-neutral-quiet);
+  --tone-dispatched: var(--tone-moving);
+  --tone-in-transit: var(--tone-moving);
+  --tone-out-for-delivery: var(--tone-arriving);
+  --tone-delivered: var(--tone-done);
+  --tone-attempted: var(--tone-attention);
+  --tone-returned: var(--tone-returning);
+  --tone-lost: var(--tone-fault);
 
   color-scheme: light;
 }

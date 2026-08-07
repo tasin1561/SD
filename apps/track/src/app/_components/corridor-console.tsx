@@ -114,6 +114,8 @@ export function CorridorConsole(): ReactElement {
     let OY = 0;
     let raf = 0;
     let running = false;
+    // 640px: below this the labels overlap each other and the copy.
+    let showLabels = true;
 
     const colors = {
       saffron: '#F59E0B',
@@ -129,14 +131,53 @@ export function CorridorConsole(): ReactElement {
       sweepTint: '56,189,248',
       blip: '#38BDF8',
     };
-    // Every colour on this canvas is a TOKEN read, with no branch on the
-    // colour scheme. It used to be nineteen rgba literals behind an
-    // `if (light)`, which is why the light map was uncalibrated: those
-    // numbers were authored against black and nothing kept the two
-    // palettes in step. The values now live beside every other token in
-    // globals.css, so a theme change is a stylesheet change and this
-    // file only reads. A missing variable falls back to the dark value
-    // it replaced, so a typo degrades rather than blanks the map.
+    // ── Legibility mask ───────────────────────────────────────────
+    // The wordmark, the tagline and the footer line sit directly on
+    // map strokes and airport labels. Rather than put boxes behind
+    // them, the MAP fades where they are: two soft radial holes, one
+    // centred on the masthead and one on the footer line. Applied as a
+    // destination-out composite after everything is drawn, so it costs
+    // one operation and needs no knowledge of what is underneath.
+    const applyTextMask = (g: CanvasRenderingContext2D): void => {
+      g.save();
+      g.globalCompositeOperation = 'destination-out';
+      const hole = (cx: number, cy: number, rx: number, ry: number): void => {
+        const grad = g.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rx, ry));
+        grad.addColorStop(0, 'rgba(0,0,0,0.92)');
+        grad.addColorStop(0.55, 'rgba(0,0,0,0.72)');
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        g.save();
+        g.translate(cx, cy);
+        g.scale(1, ry / Math.max(rx, ry));
+        g.translate(-cx, -cy);
+        g.fillStyle = grad;
+        g.beginPath();
+        g.arc(cx, cy, Math.max(rx, ry), 0, Math.PI * 2);
+        g.fill();
+        g.restore();
+      };
+      // Holes are punched from the text's ACTUAL rects, read from the
+      // DOM. Guessed fractions were wrong at every breakpoint but one —
+      // the footer hole sat at 0.86h while the footer renders at 0.75h,
+      // so the line kept its collision with the BLR marker and measured
+      // 1.58:1. Elements opt in with `data-map-text`.
+      const host = canvas.getBoundingClientRect();
+      document.querySelectorAll<HTMLElement>('[data-map-text]').forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) return;
+        const cx = r.x - host.x + r.width / 2;
+        const cy = r.y - host.y + r.height / 2;
+        // Generous padding: the hole must clear the glyphs, not hug them.
+        hole(cx, cy, r.width / 2 + 56, r.height / 2 + 34);
+      });
+      g.restore();
+    };
+
+    // Every colour here is a TOKEN read, with no branch on the colour
+    // scheme. It used to be nineteen rgba literals behind an
+    // `if (light)`, which is why the light map was uncalibrated and why
+    // the two themes' maps drifted. A missing variable falls back to the
+    // dark value it replaced, so a typo degrades rather than blanks it.
     const readColors = (): void => {
       const cs = getComputedStyle(document.documentElement);
       const v = (name: string, fallback: string): string =>
@@ -172,6 +213,7 @@ export function CorridorConsole(): ReactElement {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       W = Math.round(rect.width);
       H = Math.round(rect.height);
+      showLabels = W >= 640;
       canvas.width = Math.round(W * dpr);
       canvas.height = Math.round(H * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -288,8 +330,13 @@ export function CorridorConsole(): ReactElement {
         g.strokeStyle = colors.halo;
         g.lineWidth = 1;
         g.stroke();
-        g.fillStyle = colors.muted;
-        g.fillText(d.label, dp.x + d.labelDx, dp.y + d.labelDy);
+        // Labels are dropped on narrow viewports: they collided with
+        // each other and with the UI copy, and the markers alone read
+        // the network fine at that size.
+        if (showLabels) {
+          g.fillStyle = colors.muted;
+          g.fillText(d.label, dp.x + d.labelDx, dp.y + d.labelDy);
+        }
       }
 
       // Origin — saffron
@@ -301,8 +348,13 @@ export function CorridorConsole(): ReactElement {
       g.arc(o.x, o.y, 10, 0, Math.PI * 2);
       g.strokeStyle = 'rgba(245,158,11,0.4)';
       g.stroke();
-      g.fillStyle = colors.muted;
-      g.fillText(ORIGIN.label, o.x + ORIGIN.labelDx, o.y + ORIGIN.labelDy);
+      if (showLabels) {
+        g.fillStyle = colors.muted;
+        g.fillText(ORIGIN.label, o.x + ORIGIN.labelDx, o.y + ORIGIN.labelDy);
+      }
+
+      // Last, so it erases whatever ended up under the text zones.
+      applyTextMask(g);
     };
 
     const drawFrame = (): void => {
@@ -392,6 +444,11 @@ export function CorridorConsole(): ReactElement {
         ctx.lineWidth = 1.2;
         ctx.stroke();
       }
+
+      // Again, last. drawBase masks the static layer, but the sweep and
+      // the parcels paint on TOP of the blitted base, so without this a
+      // moving parcel crosses the wordmark at full strength.
+      applyTextMask(ctx);
     };
 
     let lastT = 0;

@@ -41,7 +41,7 @@ export function SearchForm({ locale }: { readonly locale: Locale }): ReactElemen
             // page when a focused input is under 16px and does not zoom
             // back out — on a public tracking page the first thing a
             // customer does is tap this field.
-            className="bg-surface border-line text-fg-strong placeholder:text-fg-muted focus:border-sky h-12 w-full rounded-xl border pr-4 pl-12 font-mono text-base transition-colors focus:outline-none sm:text-sm"
+            className="bg-[var(--surface-input)] border-[var(--border-control)] text-fg-strong placeholder:text-fg-muted h-12 w-full rounded-xl border pr-4 pl-12 font-mono text-base transition-colors focus:outline-none focus-visible:border-[var(--focus-ring)] focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] sm:text-sm"
           />
         </div>
       </div>

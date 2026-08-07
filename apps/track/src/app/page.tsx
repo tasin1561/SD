@@ -44,7 +44,10 @@ export default async function Home(): Promise<ReactElement> {
 
       <div className="relative w-full max-w-md">
         <div className="boot-rise mb-6 text-center">
-          <div className="flex items-baseline justify-center gap-3">
+          {/* Each LINE opts in, not the block. One ellipse centred on the
+              whole masthead leaves its bottom edge — the tagline — in the
+              falloff, which measured 2.18:1 against a hub marker. */}
+          <div data-map-text className="flex items-baseline justify-center gap-3">
             <span className="font-display font-semibold text-2xl tracking-tight text-fg-strong">
               {t(locale, 'brand')}
             </span>
@@ -53,7 +56,9 @@ export default async function Home(): Promise<ReactElement> {
               sys online
             </span>
           </div>
-          <div className="telemetry text-fg-muted mt-2">{t(locale, 'tagline')}</div>
+          <div data-map-text className="telemetry text-fg-muted mt-2">
+            {t(locale, 'tagline')}
+          </div>
         </div>
 
         <TiltPanel max={3} className="boot-rise boot-rise-2">
@@ -62,9 +67,11 @@ export default async function Home(): Promise<ReactElement> {
               page. Marked rather than restyled here: the recolour is a
               theme concern and this component is correct in dark. */}
           <div data-lookup-panel className="panel ticks relative overflow-hidden p-6 sm:p-7">
+            {/* Was two mono micro-labels flanking the header — leftover
+                console chrome. One quiet label survives; mono now denotes
+                machine data only, which on this page is the AWB field. */}
             <div className="mb-3 flex items-center justify-between">
-              <span className="telemetry text-sky">lookup</span>
-              <span className="telemetry text-fg-muted">corridor · live</span>
+              <span className="text-fg-muted text-xs font-medium tracking-wide">Parcel lookup</span>
             </div>
             <h1 className="text-fg-strong text-lg font-semibold mb-1">
               {t(locale, 'landingTitle')}
@@ -75,7 +82,7 @@ export default async function Home(): Promise<ReactElement> {
           </div>
         </TiltPanel>
 
-        <p className="telemetry text-fg-muted text-center mt-5">
+        <p data-map-text className="telemetry text-fg-muted text-center mt-5">
           bd → in corridor · webhook tracking
         </p>
       </div>
