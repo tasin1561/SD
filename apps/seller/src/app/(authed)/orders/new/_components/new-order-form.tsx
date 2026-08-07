@@ -15,7 +15,6 @@ import {
   ADDRESS_LINE_1_HINT,
   ADDRESS_LINE_2_HINT,
   DUPLICATE_LINES_ERROR,
-  LANDMARK_HINT,
   linesAreDuplicated,
 } from '@/lib/address-guidance';
 import { prefixHint } from '@/lib/seller-prefix';
@@ -93,7 +92,6 @@ interface FormState {
   recipientPhoneE164: string;
   recipientAddressLine1: string;
   recipientAddressLine2: string;
-  recipientLandmark: string;
   recipientCity: string;
   recipientStateProvince: string;
   recipientPostalCode: string;
@@ -114,7 +112,6 @@ const INITIAL: FormState = {
   recipientPhoneE164: IN_DIAL,
   recipientAddressLine1: '',
   recipientAddressLine2: '',
-  recipientLandmark: '',
   recipientCity: '',
   recipientStateProvince: '',
   recipientPostalCode: '',
@@ -211,9 +208,6 @@ export function NewOrderForm(): ReactElement {
       ],
       ...(form.recipientAddressLine2.trim()
         ? { recipientAddressLine2: form.recipientAddressLine2.trim() }
-        : {}),
-      ...(form.recipientLandmark.trim()
-        ? { recipientLandmark: form.recipientLandmark.trim() }
         : {}),
       ...(form.paymentMode === 'COD' ? { codAmountInr: Number(form.codAmountInr) } : {}),
       ...(form.declaredValueInr.trim() ? { declaredValueInr: Number(form.declaredValueInr) } : {}),
@@ -372,13 +366,6 @@ export function NewOrderForm(): ReactElement {
                 value={form.recipientAddressLine2}
                 onChange={(e) => set('recipientAddressLine2', e.target.value)}
                 maxLength={200}
-              />
-            </FormField>
-            <FormField label="Landmark" className="col-span-2" hint={LANDMARK_HINT}>
-              <Input
-                value={form.recipientLandmark}
-                onChange={(e) => set('recipientLandmark', e.target.value)}
-                maxLength={120}
               />
             </FormField>
             <FormField label="City" required>

@@ -5,7 +5,6 @@ import {
   ADDRESS_LINE_1_HINT,
   ADDRESS_LINE_2_HINT,
   DUPLICATE_LINES_ERROR,
-  LANDMARK_HINT,
   linesAreDuplicated,
 } from '@/lib/address-guidance';
 
@@ -59,21 +58,15 @@ describe('the copy is in English and names the format', () => {
     expect(ADDRESS_LINE_2_HINT).not.toMatch(/State:/);
   });
 
-  it('line 2 states the no-duplicate rule', () => {
-    expect(ADDRESS_LINE_2_HINT.toLowerCase()).toContain('do not copy line 1');
-  });
-
-  it('the landmark instruction lives on the Landmark field', () => {
-    expect(LANDMARK_HINT.toLowerCase()).toContain('landmark');
+  it('line 2 IS the landmark field now, and still states the no-duplicate rule', () => {
+    // The separate Landmark input was removed: what was typed there was
+    // stored but never sent to Delhivery, whose address is line 1 + line 2.
+    expect(ADDRESS_LINE_2_HINT.toLowerCase()).toContain('landmark');
+    expect(ADDRESS_LINE_2_HINT.toLowerCase()).toContain('never a copy of line 1');
   });
 
   it('is all ASCII — the source instructions were Bengali', () => {
-    for (const s of [
-      ADDRESS_LINE_1_HINT,
-      ADDRESS_LINE_2_HINT,
-      LANDMARK_HINT,
-      DUPLICATE_LINES_ERROR,
-    ]) {
+    for (const s of [ADDRESS_LINE_1_HINT, ADDRESS_LINE_2_HINT, DUPLICATE_LINES_ERROR]) {
       // eslint-disable-next-line no-control-regex
       expect(s).toMatch(/^[\x00-\x7F—’]*$/);
     }
@@ -92,10 +85,16 @@ describe('both order forms read the same copy', () => {
     const src = readFileSync(join(__dirname, '../', rel), 'utf8');
     expect(src).toContain("from '@/lib/address-guidance'");
     expect(src).toContain('ADDRESS_LINE_1_HINT');
-    expect(src).toContain('LANDMARK_HINT');
+    expect(src).toContain('ADDRESS_LINE_2_HINT');
     // The rule must gate submission, not merely be displayed.
     expect(src).toContain('linesAreDuplicated');
     expect(src).toContain('DUPLICATE_LINES_ERROR');
+  });
+
+  it.each(forms)('%s no longer collects a separate landmark', (rel) => {
+    const src = readFileSync(join(__dirname, '../', rel), 'utf8');
+    expect(src).not.toContain('recipientLandmark');
+    expect(src).not.toMatch(/label="Landmark"/);
   });
 
   it('the edit form gates BOTH of its submit paths', () => {

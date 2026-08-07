@@ -11,10 +11,15 @@
  *    fact in two places and leave the two free to disagree. Line 1 asks
  *    for the parts nothing else captures.
  *
- *  - The original says line 2 IS the landmark. This form has a separate
- *    Landmark field, so the landmark instruction goes THERE, where it
- *    applies, and line 2 keeps the rule that was actually about line 2:
- *    do not copy line 1 into it.
+ *  - The original says line 2 IS the landmark, and it now is: the seller
+ *    form's separate Landmark field was removed. That is not only
+ *    simplification. `destLandmark` is stored on the shipment but the
+ *    Delhivery address is built from line 1 + line 2 alone, so anything
+ *    typed into the old field never reached the driver. Putting the
+ *    landmark on line 2 puts it on the parcel.
+ *
+ *    The COLUMN and the API field stay — CSV import still maps
+ *    `landmark`, and orders placed before this still carry one.
  *
  * One place, read by the create form and the edit form, so the two
  * cannot start telling sellers different things.
@@ -24,10 +29,7 @@ export const ADDRESS_LINE_1_HINT =
   'The address only, in this order — Village/City, Post Office, Police Station, District. No extra words. State and PIN code have their own fields below.';
 
 export const ADDRESS_LINE_2_HINT =
-  'Only what did not fit on line 1. Do not copy line 1 here — an order with both lines the same is held.';
-
-export const LANDMARK_HINT =
-  'A nearby landmark only — a hospital, school or shop. Just the place, nothing else.';
+  'The landmark only — a hospital, school or shop nearby. Nothing else, and never a copy of line 1: an order with both lines the same is held.';
 
 /**
  * The duplicate-lines rule as a check rather than only as a sentence.

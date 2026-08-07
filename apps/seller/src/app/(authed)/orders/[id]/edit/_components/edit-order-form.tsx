@@ -27,7 +27,6 @@ import {
   ADDRESS_LINE_1_HINT,
   ADDRESS_LINE_2_HINT,
   DUPLICATE_LINES_ERROR,
-  LANDMARK_HINT,
   linesAreDuplicated,
 } from '@/lib/address-guidance';
 import { prefixHint, stripSellerPrefix } from '@/lib/seller-prefix';
@@ -106,7 +105,6 @@ interface FormState {
   recipientPhoneE164: string;
   recipientAddressLine1: string;
   recipientAddressLine2: string;
-  recipientLandmark: string;
   recipientCity: string;
   recipientStateProvince: string;
   recipientPostalCode: string;
@@ -143,7 +141,6 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
       recipientPhoneE164: d.recipientPhoneE164,
       recipientAddressLine1: d.recipientAddressLine1,
       recipientAddressLine2: d.recipientAddressLine2 ?? '',
-      recipientLandmark: d.recipientLandmark ?? '',
       recipientCity: d.recipientCity,
       recipientStateProvince: d.recipientStateProvince,
       recipientPostalCode: d.recipientPostalCode,
@@ -207,7 +204,6 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
     };
     if (form.recipientAddressLine2.trim())
       body.recipientAddressLine2 = form.recipientAddressLine2.trim();
-    if (form.recipientLandmark.trim()) body.recipientLandmark = form.recipientLandmark.trim();
     if (form.paymentMode === 'COD' && form.codAmountInr.trim())
       body.codAmountInr = Number(form.codAmountInr);
     if (form.declaredValueInr.trim()) body.declaredValueInr = Number(form.declaredValueInr);
@@ -428,13 +424,6 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
                 value={form.recipientAddressLine2}
                 onChange={(e) => set('recipientAddressLine2', e.target.value)}
                 maxLength={200}
-              />
-            </FormField>
-            <FormField label="Landmark" className="col-span-2" hint={LANDMARK_HINT}>
-              <Input
-                value={form.recipientLandmark}
-                onChange={(e) => set('recipientLandmark', e.target.value)}
-                maxLength={120}
               />
             </FormField>
             <FormField label="City" required>
