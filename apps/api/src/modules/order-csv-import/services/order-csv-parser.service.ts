@@ -32,10 +32,12 @@ export interface CoercedOrderRow {
   customerPhone: string;
   customerEmail?: string;
   addressLine1: string;
-  addressLine2?: string;
+  /** The landmark. Required — see ORDER_CSV_REQUIRED_FIELDS. */
+  addressLine2: string;
   landmark?: string;
-  city: string;
-  state: string;
+  /** Optional: Delhivery resolves the locality from the PIN. */
+  city?: string;
+  state?: string;
   pinCode: string;
   codAmount?: number;
   externalRef: string;
@@ -98,16 +100,14 @@ export class OrderCsvParserService {
       return t === '' ? undefined : t;
     };
 
-    const required: OrderCsvField[] = [
-      'productSku',
-      'customerName',
-      'customerPhone',
-      'addressLine1',
-      'city',
-      'state',
-      'pinCode',
-      'externalRef',
-    ];
+    // DERIVED, not restated. This was a second hand-written copy of the
+    // required list and the two had already drifted: it still demanded
+    // city/state (optional on the API since Delhivery resolves them from
+    // the PIN) and never asked for the landmark (required on create), so
+    // a mapped CSV could clear the column check and then fail per row.
+    // `quantity` is excluded because it gets its own numeric coercion
+    // below and would otherwise be reported missing twice.
+    const required: OrderCsvField[] = ORDER_CSV_REQUIRED_FIELDS.filter((f) => f !== 'quantity');
     const values: Partial<Record<OrderCsvField, string>> = {};
     for (const f of required) {
       const v = get(f);
@@ -156,17 +156,20 @@ export class OrderCsvParserService {
       customerName: values.customerName as string,
       customerPhone: values.customerPhone as string,
       addressLine1: values.addressLine1 as string,
-      city: values.city as string,
-      state: values.state as string,
+      addressLine2: values.addressLine2 as string,
       pinCode: values.pinCode as string,
       externalRef: values.externalRef as string,
     };
     const email = get('customerEmail');
     if (email !== undefined) row.customerEmail = email;
-    const line2 = get('addressLine2');
-    if (line2 !== undefined) row.addressLine2 = line2;
     const landmark = get('landmark');
     if (landmark !== undefined) row.landmark = landmark;
+    // Optional, but honoured when a seller does supply them — a row that
+    // carries a state is still checked against ops.allowed_indian_states.
+    const city = get('city');
+    if (city !== undefined) row.city = city;
+    const state = get('state');
+    if (state !== undefined) row.state = state;
     if (codAmount !== undefined) row.codAmount = codAmount;
     return { row, errors: [] };
   }

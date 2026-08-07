@@ -225,8 +225,7 @@ export class OrderCsvImportProcessorService {
       recipientName: row.customerName,
       recipientPhoneE164: row.customerPhone,
       recipientAddressLine1: row.addressLine1,
-      recipientCity: row.city,
-      recipientStateProvince: row.state,
+      recipientAddressLine2: row.addressLine2,
       recipientPostalCode: row.pinCode,
       paymentMode: isCod ? PaymentMode.COD : PaymentMode.PREPAID,
       items: [{ variantId: resolved.variantId, quantity: row.quantity }],
@@ -250,12 +249,10 @@ export class OrderCsvImportProcessorService {
       customerName: row.customerName,
       customerPhone: row.customerPhone,
       addressLine1: row.addressLine1,
-      city: row.city,
-      state: row.state,
+      addressLine2: row.addressLine2,
       pinCode: row.pinCode,
     };
     if (row.customerEmail !== undefined) patch.customerEmail = row.customerEmail;
-    if (row.addressLine2 !== undefined) patch.addressLine2 = row.addressLine2;
     if (row.landmark !== undefined) patch.landmark = row.landmark;
     if (row.codAmount !== undefined) patch.codAmount = row.codAmount;
     return patch;

@@ -392,7 +392,14 @@ function RecipientPanel({ order }: { readonly order: unknown }): ReactElement {
         />
         <Field
           label="City / state / PIN"
-          value={`${o.recipientCity ?? '—'} · ${o.recipientStateProvince ?? '—'} · ${o.recipientPostalCode ?? '—'}`}
+          // `?? '—'` does not catch an EMPTY STRING, and city/state are
+          // stored as '' for orders whose seller never supplied them.
+          // An agent reading "· · 560001" aloud is the failure here.
+          value={
+            [o.recipientCity, o.recipientStateProvince, o.recipientPostalCode]
+              .filter((v) => (v ?? '').trim() !== '')
+              .join(' · ') || '—'
+          }
         />
         <Field
           label="Payment"

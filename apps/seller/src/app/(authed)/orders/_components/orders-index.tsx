@@ -210,7 +210,11 @@ export function OrdersIndex(): ReactElement {
                   <div className="text-text-body">{o.recipientName}</div>
                 </Td>
                 <Td className="text-text-muted">
-                  {o.recipientCity}, {o.recipientStateProvince}
+                  {/* Both are empty for orders placed since the form
+                      stopped asking — Delhivery resolves the locality
+                      from the PIN. Joining only what exists avoids a
+                      row that reads as a bare comma. */}
+                  {[o.recipientCity, o.recipientStateProvince].filter(Boolean).join(', ') || '—'}
                 </Td>
                 <Td>
                   <OrderStatusBadge status={o.status} />

@@ -201,7 +201,10 @@ export function OrdersIndex(): ReactElement {
                   <div className="text-text-body">{o.recipientName}</div>
                 </Td>
                 <Td className="text-text-muted">
-                  {o.recipientCity}, {o.recipientStateProvince}
+                  {/* Empty for orders placed since the seller form stopped
+                      asking — Delhivery resolves the locality from the PIN.
+                      Join only what exists so a row is not a bare comma. */}
+                  {[o.recipientCity, o.recipientStateProvince].filter(Boolean).join(', ') || '—'}
                 </Td>
                 <Td>
                   <OrderStatusBadge status={o.status} />

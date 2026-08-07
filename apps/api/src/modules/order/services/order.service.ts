@@ -109,10 +109,12 @@ export interface BulkOrderPatchInput {
   customerPhone: string;
   customerEmail?: string | null;
   addressLine1: string;
-  addressLine2?: string | null;
+  /** The landmark. Required — see ORDER_CSV_REQUIRED_FIELDS. */
+  addressLine2: string;
   landmark?: string | null;
-  city: string;
-  state: string;
+  /** Optional: Delhivery resolves the locality from the PIN. */
+  city?: string;
+  state?: string;
   pinCode: string;
   codAmount?: number | null;
 }
@@ -1193,7 +1195,7 @@ export class OrderService {
     setIf(order.recipientAddressLine1, patch.addressLine1, 'recipientAddressLine1');
     setIf(order.recipientAddressLine2, patch.addressLine2 ?? null, 'recipientAddressLine2');
     setIf(order.recipientLandmark, patch.landmark ?? null, 'recipientLandmark');
-    setIf(order.recipientCity, patch.city, 'recipientCity');
+    setIf(order.recipientCity, patch.city ?? null, 'recipientCity');
     setIf(order.recipientStateProvince, canonicalState, 'recipientStateProvince');
     setIf(order.recipientPostalCode, patch.pinCode.trim(), 'recipientPostalCode');
 

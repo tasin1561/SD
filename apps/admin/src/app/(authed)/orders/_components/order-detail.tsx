@@ -113,7 +113,9 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                       </div>
                     )}
                     <div className="mt-0.5">
-                      {detail.data.recipientCity}, {detail.data.recipientStateProvince}{' '}
+                      {[detail.data.recipientCity, detail.data.recipientStateProvince]
+                        .filter(Boolean)
+                        .join(', ')}{' '}
                       <span className="font-mono">{detail.data.recipientPostalCode}</span>{' '}
                       <span className="text-text-muted">{detail.data.recipientCountryCode}</span>
                     </div>

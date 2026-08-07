@@ -41,14 +41,29 @@ export const ORDER_CSV_ALIAS_MAP: Record<OrderCsvField, string[]> = {
 };
 
 /** A row needs all of these mapped to be importable. */
+/**
+ * What a CSV must carry for its rows to stand a chance at create.
+ *
+ * This list has to track `CreateOrderDto`, because it is the ONLY thing
+ * standing between a seller and an upload that previews clean then fails
+ * on every row. Two changes on 2026-08-07:
+ *
+ *   + addressLine2 — the landmark, now @IsNotEmpty on create. Without it
+ *     here, a CSV missing the column passed preview and then 400'd once
+ *     per row, which reads as the importer being broken.
+ *   − city, state — optional on the API now (Delhivery resolves the
+ *     locality from the PIN). Demanding them here blocked uploads the
+ *     server would have accepted. They remain SUPPORTED columns, and a
+ *     row that supplies a state is still validated against
+ *     ops.allowed_indian_states.
+ */
 export const ORDER_CSV_REQUIRED_FIELDS: OrderCsvField[] = [
   'productSku',
   'quantity',
   'customerName',
   'customerPhone',
   'addressLine1',
-  'city',
-  'state',
+  'addressLine2',
   'pinCode',
   'externalRef',
 ];

@@ -10,8 +10,8 @@ type AnyArgs = Record<string, unknown>;
 const SELLER = 's1';
 const KEY = `sellers/${SELLER}/order-imports/tok-1.csv`;
 const HEADER =
-  'Product SKU,Quantity,Customer Name,Customer Phone,Address Line1,City,State,Pin Code,External Ref';
-const GOOD_CSV = `${HEADER}\nSKU-1,2,Asha,+919876543210,12 MG Road,Bengaluru,Karnataka,560001,EXT-1\n`;
+  'Product SKU,Quantity,Customer Name,Customer Phone,Address Line1,Address Line2,City,State,Pin Code,External Ref';
+const GOOD_CSV = `${HEADER}\nSKU-1,2,Asha,+919876543210,12 MG Road,Near City Hospital,Bengaluru,Karnataka,560001,EXT-1\n`;
 
 function makeService(opts: { object?: string | null; upload?: AnyArgs | null } = {}) {
   const env = { csvPresignTtlSeconds: 900, csvMaxRows: 1000 } as unknown as EnvService;

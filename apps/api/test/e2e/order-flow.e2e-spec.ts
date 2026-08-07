@@ -233,8 +233,8 @@ describe('Order flow (e2e)', () => {
   it('CSV import: state-aware idempotent re-upload', async () => {
     const spaces = h.app.get(SpacesService);
     const header =
-      'Product SKU,Quantity,Customer Name,Customer Phone,Address Line1,City,State,Pin Code,COD Amount,External Ref';
-    const csv = `${header}\n${skuCode},3,Asha,+919876543210,12 MG Road,Bengaluru,Karnataka,560001,500,CSV-REF-1\n`;
+      'Product SKU,Quantity,Customer Name,Customer Phone,Address Line1,Address Line2,City,State,Pin Code,COD Amount,External Ref';
+    const csv = `${header}\n${skuCode},3,Asha,+919876543210,12 MG Road,Near City Hospital,Bengaluru,Karnataka,560001,500,CSV-REF-1\n`;
 
     const runImport = async (): Promise<{
       ordersCreated: number;

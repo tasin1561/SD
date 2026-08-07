@@ -8,8 +8,9 @@ import type { EnvService } from '../../src/config/env.service';
 type AnyArgs = Record<string, unknown>;
 
 const HEADER =
-  'Product SKU,Quantity,Customer Name,Customer Phone,Address Line1,City,State,Pin Code,COD Amount,External Ref';
-const ROW = 'SKU-1,2,Asha,+919876543210,12 MG Road,Bengaluru,Karnataka,560001,999,EXT-1';
+  'Product SKU,Quantity,Customer Name,Customer Phone,Address Line1,Address Line2,City,State,Pin Code,COD Amount,External Ref';
+const ROW =
+  'SKU-1,2,Asha,+919876543210,12 MG Road,Near City Hospital,Bengaluru,Karnataka,560001,999,EXT-1';
 
 const parser = new OrderCsvParserService();
 const MAPPING = parser.detectMapping(HEADER.split(',')).mapping;

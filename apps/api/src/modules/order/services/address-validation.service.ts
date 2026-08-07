@@ -13,7 +13,7 @@ export interface RecipientAddressInput {
   recipientPhoneE164: string;
   recipientAltPhoneE164?: string | null;
   recipientPostalCode: string;
-  recipientStateProvince?: string;
+  recipientStateProvince?: string | undefined;
   recipientCountryCode?: string | null;
 }
 

@@ -26,6 +26,7 @@ describe('OrderCsvParserService', () => {
       'State',
       'Pincode',
       'Order Ref',
+      'Address 2',
       'Junk',
     ]);
     expect(d.mapping).toMatchObject({
@@ -34,6 +35,7 @@ describe('OrderCsvParserService', () => {
       customerName: 'Recipient Name',
       customerPhone: 'Mobile',
       addressLine1: 'Address 1',
+      addressLine2: 'Address 2',
       city: 'City',
       state: 'State',
       pinCode: 'Pincode',
@@ -56,6 +58,7 @@ describe('OrderCsvParserService', () => {
     customerName: 'Name',
     customerPhone: 'Phone',
     addressLine1: 'Addr',
+    addressLine2: 'Addr2',
     city: 'City',
     state: 'State',
     pinCode: 'Pin',
@@ -71,6 +74,7 @@ describe('OrderCsvParserService', () => {
         Name: 'Asha',
         Phone: '+919876543210',
         Addr: '12 MG Road',
+        Addr2: 'Near City Hospital',
         City: 'Bengaluru',
         State: 'Karnataka',
         Pin: '560001',

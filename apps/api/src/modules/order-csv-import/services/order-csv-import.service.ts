@@ -29,8 +29,11 @@ const TEMPLATE_COLUMNS: Array<[string, string]> = [
   ['Customer Phone', '+919876543210'],
   ['Customer Email', 'asha@example.com'],
   ['Address Line1', '12 MG Road'],
-  ['Address Line2', 'Near Metro'],
-  ['Landmark', 'Opp. City Mall'],
+  // Line 2 is the LANDMARK and is required — the courier address is
+  // line 1 + line 2, so this is the field that makes a rural address
+  // findable. City/State stay as supported columns but are optional:
+  // Delhivery resolves the locality from the PIN.
+  ['Address Line2', 'Near City Hospital'],
   ['City', 'Bengaluru'],
   ['State', 'Karnataka'],
   ['Pin Code', '560001'],
