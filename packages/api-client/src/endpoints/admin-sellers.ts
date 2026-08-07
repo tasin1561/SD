@@ -24,6 +24,8 @@ export interface ListSellersQuery {
 }
 
 export interface SellerListItem {
+  /** Operations short code. Staff surface only — no seller endpoint returns it. */
+  readonly initials?: string | null;
   readonly id: string;
   readonly email: string;
   readonly companyName: string;

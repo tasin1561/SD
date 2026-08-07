@@ -23,6 +23,8 @@ interface SellerRow {
   emailDisplay: string;
   passwordHash: string;
   companyName: string;
+  /** Operations short code, derived at registration. */
+  initials?: string | null;
   contactPersonName: string;
   phone: string;
   whatsapp: string | null;
@@ -106,6 +108,7 @@ interface FakeClient {
     findUnique: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
+    count: jest.Mock;
   };
   sellerUser: {
     findFirst: jest.Mock;
@@ -187,6 +190,12 @@ function buildClient(): FakeClient {
         async ({ where }: { where: { email?: string; id?: string } }) =>
           tables.sellers.find((r) => (where.email ? r.email === where.email : r.id === where.id)) ??
           null,
+      ),
+      // Registration derives the seller's short code and checks it is
+      // free inside the same tx; the real guard is the unique index.
+      count: jest.fn(
+        async ({ where }: { where: { initials?: string } }) =>
+          tables.sellers.filter((r) => r.initials === where.initials).length,
       ),
       create: jest.fn(
         async ({

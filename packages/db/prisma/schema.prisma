@@ -167,6 +167,14 @@ model Seller {
   emailDisplay                     String       @map("email_display")
   passwordHash                     String       @map("password_hash")
   companyName                      String       @map("company_name")
+  /// Short operations handle derived from companyName — "Menev Store" →
+  /// "MSt". Generated once at signup, then owned by STAFF: it appears on
+  /// the admin seller page and nowhere in any seller-facing projection,
+  /// because a seller renaming their own code would break whatever is
+  /// already written on a tote or a manifest. UNIQUE on purpose — a
+  /// three-character code collides, and one that identifies two
+  /// companies fails exactly when it is being trusted.
+  initials                         String?      @unique @db.VarChar(4)
   contactPersonName                String       @map("contact_person_name")
   phone                            String
   whatsapp                         String?

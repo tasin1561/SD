@@ -106,6 +106,7 @@ export function SellersIndex(): ReactElement {
           <THead>
             <Tr>
               <Th>Company</Th>
+              <Th>Code</Th>
               <Th>Contact</Th>
               <Th>Email</Th>
               <Th>Status</Th>
@@ -121,6 +122,7 @@ export function SellersIndex(): ReactElement {
                     {s.companyName}
                   </Link>
                 </Td>
+                <Td className="text-text-muted font-mono text-xs">{s.initials ?? '—'}</Td>
                 <Td>{s.contactPersonName}</Td>
                 <Td className="text-text-muted font-mono text-xs">{s.email}</Td>
                 <Td>

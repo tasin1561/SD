@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   ActorType,
   AddressOwnerType,
@@ -38,6 +43,8 @@ export interface SellerListItem {
   email: string;
   emailDisplay: string;
   companyName: string;
+  /** Operations short code. Staff-visible only — never in a seller projection. */
+  initials: string | null;
   contactPersonName: string;
   status: SellerStatus;
   approvedAt: Date | null;
@@ -231,6 +238,7 @@ export class AdminSellerService {
           email: true,
           emailDisplay: true,
           companyName: true,
+          initials: true,
           contactPersonName: true,
           status: true,
           approvedAt: true,
@@ -263,6 +271,7 @@ export class AdminSellerService {
         email: true,
         emailDisplay: true,
         companyName: true,
+        initials: true,
         contactPersonName: true,
         status: true,
         approvedAt: true,
@@ -346,6 +355,70 @@ export class AdminSellerService {
       recentAuditLogs,
       notes,
     };
+  }
+
+  /**
+   * Staff rename of a seller's operations short code.
+   *
+   * Staff-only by construction: there is no seller-facing endpoint and
+   * the column is absent from every seller projection. A seller renaming
+   * their own code would invalidate whatever is already written on a
+   * tote or printed on a manifest, which is the one thing the code
+   * exists to be stable for.
+   *
+   * Uniqueness is enforced by the index, not by a read-then-write. A
+   * pre-check under READ COMMITTED lets two concurrent renames both see
+   * the code as free; catching P2002 is the only version that actually
+   * holds.
+   */
+  async updateInitials(
+    sellerId: string,
+    initials: string,
+    staffId: string,
+  ): Promise<{ sellerId: string; initials: string }> {
+    const seller = await this.prisma.client.seller.findFirst({
+      where: { id: sellerId, deletedAt: null },
+      select: { id: true, initials: true, companyName: true },
+    });
+    if (seller === null) {
+      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'No such seller.' });
+    }
+
+    const next = initials.trim();
+    if (next === seller.initials) {
+      return { sellerId, initials: next };
+    }
+
+    try {
+      await this.prisma.client.seller.update({
+        where: { id: sellerId },
+        data: { initials: next },
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException({
+          code: 'INITIALS_TAKEN',
+          message: `Another seller already uses "${next}".`,
+        });
+      }
+      throw err;
+    }
+
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      staffUserId: staffId,
+      actorId: staffId,
+      action: 'staff.seller.initials_updated',
+      entityType: 'seller',
+      entityId: sellerId,
+      // MEDIUM, not LOW: the code identifies a company on physical
+      // paperwork, so a change has to be attributable after the fact.
+      severity: 'MEDIUM',
+      changes: { initials: { from: seller.initials, to: next } },
+      metadata: { companyName: seller.companyName },
+    });
+
+    return { sellerId, initials: next };
   }
 
   async updateStatus(

@@ -31,6 +31,7 @@ import { SellerNotificationPreferenceService } from '../seller-notification-pref
 import type { SellerRegisterViaInvitationDto } from './dto/register-via-invitation.dto';
 import { provisionDefaultSellerRoles } from '../../common/auth/seller-role-provisioning';
 import { ALL_SELLER_PERMISSION_KEYS } from '../../common/auth/seller-permissions';
+import { generateSellerInitials } from './util/seller-initials';
 
 const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
 const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -183,12 +184,23 @@ export class SellerAuthService {
         });
       }
 
+      // The operations short code, derived once here and owned by staff
+      // thereafter. Generated INSIDE the registration tx so a company can
+      // never exist without one; uniqueness is checked against the same
+      // transaction, and the unique index is the real guard if two
+      // signups race.
+      const initials = await generateSellerInitials(
+        input.companyName,
+        async (candidate) => (await tx.seller.count({ where: { initials: candidate } })) > 0,
+      );
+
       const createdSeller = await tx.seller.create({
         data: {
           email: normalizedEmail,
           emailDisplay: invitation.email,
           passwordHash,
           companyName: input.companyName,
+          initials,
           contactPersonName: input.contactPersonName,
           phone: input.phone,
           whatsapp: input.whatsapp ?? null,

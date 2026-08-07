@@ -77,6 +77,8 @@ export interface SellerDetailLite {
   readonly email: string;
   readonly emailDisplay: string;
   readonly companyName: string;
+  /** Operations short code — staff-visible only. See the rename hook below. */
+  readonly initials: string | null;
   readonly contactPersonName: string;
   readonly phone: string;
   readonly whatsapp: string | null;
@@ -87,6 +89,29 @@ export interface SellerDetailLite {
   readonly countryCode: string;
   readonly emailVerifiedAt: string | null;
   readonly createdAt: string;
+}
+
+/**
+ * Rename a seller's operations short code.
+ *
+ * There is deliberately no seller-side equivalent: the code is written on
+ * totes and read down manifests, so a seller renaming it would invalidate
+ * paperwork that already exists. The server refuses a duplicate with
+ * INITIALS_TAKEN, surfaced verbatim per FE-2.
+ */
+export function useUpdateSellerInitials(
+  id: string,
+): UseMutationResult<{ sellerId: string; initials: string }, Error, string> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (initials: string) =>
+      client.request<{ sellerId: string; initials: string }>(`/api/admin/sellers/${id}/initials`, {
+        method: 'PATCH',
+        body: { initials },
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-sellers'] }),
+  });
 }
 
 export function useSellerDetail(id: string): UseQueryResult<SellerDetailLite> {

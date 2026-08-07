@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ArrowLeft, Copy, Eye } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import { ApiError } from '@skydrop/api-client';
-import { useRevealBankAccount, useSellerDetail } from '@/lib/api-hooks';
+import { useRevealBankAccount, useSellerDetail, useUpdateSellerInitials } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
 import {
   Button,
@@ -21,6 +21,7 @@ import {
 } from '@skydrop/ui/components';
 import { StatusActionPanel } from './status-action-panel';
 import { SellerSettingsSection } from './seller-settings-section';
+import { serverVerdict } from '@/lib/server-verdict';
 
 // Was a check against the role NAME, which cannot see a role somebody
 // created — the permission is what the server enforces, so it is what
@@ -65,6 +66,10 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
             <Card>
               <CardBody>
                 <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[160px_1fr] gap-x-3 sm:gap-x-6 gap-y-1.5 text-sm">
+                  <dt className="text-text-muted">Short code</dt>
+                  <dd className="text-text-body">
+                    <InitialsRow sellerId={detail.data.id} current={detail.data.initials} />
+                  </dd>
                   <dt className="text-text-muted">Contact name</dt>
                   <dd className="text-text-body">{detail.data.contactPersonName}</dd>
                   <dt className="text-text-muted">Phone</dt>
@@ -230,5 +235,85 @@ function RevealBankAccountPanel({ sellerId }: { readonly sellerId: string }): Re
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The seller's operations short code, with an inline staff rename.
+ *
+ * Editable HERE and nowhere else. The seller portal has no equivalent
+ * control and the API has no seller-facing route, because the code goes
+ * on totes and manifests — a seller renaming it would invalidate
+ * paperwork that already exists in the world.
+ *
+ * FE-2: the uniqueness rule is the SERVER's. This does not pre-check
+ * whether a code is free, because it cannot know, and a client-side
+ * mirror of that rule would go stale the moment another seller is
+ * created. A duplicate comes back as [INITIALS_TAKEN] and is shown
+ * verbatim.
+ */
+function InitialsRow({
+  sellerId,
+  current,
+}: {
+  readonly sellerId: string;
+  readonly current: string | null;
+}): ReactElement {
+  const canEdit = usePermission('sellers.approve');
+  const rename = useUpdateSellerInitials(sellerId);
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(current ?? '');
+  const [error, setError] = useState<string | null>(null);
+
+  if (!editing) {
+    return (
+      <span className="inline-flex items-center gap-2">
+        <span className="font-mono">{current ?? '—'}</span>
+        {canEdit && (
+          <button
+            type="button"
+            className="text-accent text-xs hover:underline"
+            onClick={() => {
+              setValue(current ?? '');
+              setError(null);
+              setEditing(true);
+            }}
+          >
+            Change
+          </button>
+        )}
+      </span>
+    );
+  }
+
+  const save = (): void => {
+    void (async () => {
+      try {
+        await rename.mutateAsync(value.trim());
+        setEditing(false);
+        setError(null);
+      } catch (err) {
+        setError(serverVerdict(err));
+      }
+    })();
+  };
+
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        maxLength={4}
+        aria-label="Seller short code"
+        className="border-border-strong bg-surface text-text-body w-20 rounded-[5px] border px-2 py-1 font-mono text-sm"
+      />
+      <Button variant="primary" size="sm" onClick={save} disabled={value.trim().length < 2}>
+        Save
+      </Button>
+      <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
+        Cancel
+      </Button>
+      {error !== null && <span className="text-critical text-xs">{error}</span>}
+    </span>
   );
 }

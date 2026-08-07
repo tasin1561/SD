@@ -21,6 +21,7 @@ import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../common/types/request';
 import { ListSellersQueryDto } from './dto/list-sellers.dto';
+import { UpdateSellerInitialsDto } from './dto/update-initials.dto';
 import { UpdateSellerStatusDto } from './dto/update-status.dto';
 import { CreateSellerNoteDto, ListSellerNotesQueryDto, UpdateSellerNoteDto } from './dto/note.dto';
 import { OnboardingStepOverrideDto } from './dto/onboarding-override.dto';
@@ -77,6 +78,21 @@ export class AdminSellerController {
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<{ sellerId: string; newStatus: SellerStatus }> {
     return this.svc.updateStatus(id, body, staff.id, ctx);
+  }
+
+  @Patch(':id/initials')
+  @RequirePermissions('sellers.approve')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      "Rename a seller's operations short code. Staff-only by construction — there is no seller-facing equivalent, because a seller renaming their own code would invalidate what is already printed on totes and manifests.",
+  })
+  updateInitials(
+    @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
+    @Body() body: UpdateSellerInitialsDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): Promise<{ sellerId: string; initials: string }> {
+    return this.svc.updateInitials(id, body.initials, staff.id);
   }
 
   @Post(':id/bank-account/reveal')
