@@ -20,6 +20,7 @@ interface OrderFixture {
   sellerId: string;
   sellerEmail: string;
   companyName: string;
+  sellerInitials: string | null;
   customerId: string | null;
   recipientName: string;
   recipientEmail: string | null;
@@ -58,6 +59,7 @@ function makeSut(fixture: OrderFixture | null) {
             seller: {
               email: fixture.sellerEmail,
               companyName: fixture.companyName,
+              initials: fixture.sellerInitials,
             },
             orderShipments: fixture.shipmentId
               ? [
@@ -121,6 +123,7 @@ const ORDER_BASE: OrderFixture = {
   sellerId: 'seller-1',
   sellerEmail: 'seller@acme.in',
   companyName: 'Acme Co',
+  sellerInitials: 'ACo',
   customerId: 'customer-1',
   recipientName: 'Pooja',
   recipientEmail: 'pooja@example.in',
@@ -315,6 +318,51 @@ describe('NotificationListener', () => {
       await listener.handle(lifecycleEvent(OrderStatus.DELIVERY_FAILED));
       for (const call of enqueueCalls) {
         expect(call.variables.ndr_reason).toBe('');
+      }
+    });
+  });
+
+  // ── The seller code must never reach the customer ──────────────────
+  describe('the seller code is stripped from the name customers are greeted by', () => {
+    it('customer_name and recipient_name carry the person, not the code', async () => {
+      // Stored as "ACo Pooja" so the waybill and the packing bench can
+      // tell whose parcel it is. An order confirmation opening "Hello
+      // ACo Pooja" reads as a system error to the person we are asking
+      // to hand cash to a courier.
+      const { listener, enqueueCalls } = makeSut({
+        ...ORDER_BASE,
+        recipientName: 'ACo Pooja',
+        sellerInitials: 'ACo',
+      });
+      await listener.handle(lifecycleEvent(OrderStatus.DELIVERED));
+      expect(enqueueCalls.length).toBeGreaterThan(0);
+      for (const call of enqueueCalls) {
+        expect(call.variables.customer_name).toBe('Pooja');
+        expect(call.variables.recipient_name).toBe('Pooja');
+      }
+    });
+
+    it('leaves a name that merely starts with the same letters alone', async () => {
+      const { listener, enqueueCalls } = makeSut({
+        ...ORDER_BASE,
+        recipientName: 'ACo ACosta Roy',
+        sellerInitials: 'ACo',
+      });
+      await listener.handle(lifecycleEvent(OrderStatus.DELIVERED));
+      for (const call of enqueueCalls) {
+        expect(call.variables.customer_name).toBe('ACosta Roy');
+      }
+    });
+
+    it('is a no-op for a seller with no code', async () => {
+      const { listener, enqueueCalls } = makeSut({
+        ...ORDER_BASE,
+        recipientName: 'Pooja',
+        sellerInitials: null,
+      });
+      await listener.handle(lifecycleEvent(OrderStatus.DELIVERED));
+      for (const call of enqueueCalls) {
+        expect(call.variables.customer_name).toBe('Pooja');
       }
     });
   });

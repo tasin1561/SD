@@ -53,6 +53,7 @@ function makeService(
     variants?: Map<string, AnyArgs>;
     existing?: AnyArgs | null;
     openOrders?: AnyArgs[];
+    sellerInitials?: string | null;
   } = {},
 ) {
   const orderCreate = jest.fn(async (args: { data: AnyArgs }) => ({
@@ -70,9 +71,19 @@ function makeService(
   const orderCount = jest.fn<Promise<number>, [AnyArgs]>(async () => 1);
   const orderItemDeleteMany = jest.fn(async () => ({ count: 1 }));
   const orderItemUpdate = jest.fn(async () => ({ id: 'oi1' }));
+  // The recipient name is stored carrying the seller's short code, so
+  // create reads it inside the tx. Default 'ACo' rather than null so the
+  // prefixing is exercised by every create test rather than only the
+  // one that asks for it.
+  // `in` rather than `??`: an explicit null means "this seller has no
+  // code", which is a case worth testing and which `??` would swallow.
+  const sellerFindUnique = jest.fn(async () => ({
+    initials: 'sellerInitials' in opts ? (opts.sellerInitials ?? null) : 'ACo',
+  }));
   const txClient = {
     order: { create: orderCreate, update: orderUpdate },
     orderItem: { deleteMany: orderItemDeleteMany, update: orderItemUpdate },
+    seller: { findUnique: sellerFindUnique },
   };
 
   // R5 — the at-placement hook reads the order + the default-warehouse
@@ -105,7 +116,10 @@ function makeService(
 
   const numbering = { nextOrderNumber: jest.fn(async () => 'SD-2026-26-000001') };
   const customers = {
-    findOrCreate: jest.fn(async () => ({ id: 'c1', sellerId: 's1' })),
+    findOrCreate: jest.fn<Promise<AnyArgs>, [unknown, AnyArgs]>(async () => ({
+      id: 'c1',
+      sellerId: 's1',
+    })),
     recordNewOrder: jest.fn(async () => undefined),
   };
   const events = {
@@ -175,6 +189,34 @@ function makeService(
     audit,
   };
 }
+
+describe('OrderService.create — the seller code on the recipient name', () => {
+  it('stores the name carrying the code, and the CUSTOMER record without it', async () => {
+    // Composed HERE rather than in the form, so CSV import and the API
+    // land the same shape. The customer is a person who may buy from
+    // two sellers, so their record stays clean.
+    const { svc, orderCreate, customers } = makeService();
+    await svc.create('s1', baseDto(), ACTOR, CTX);
+
+    const data = orderCreate.mock.calls[0]![0].data as AnyArgs;
+    expect(data.recipientName).toBe('ACo Asha');
+    expect(customers.findOrCreate.mock.calls[0]![1]).toMatchObject({ name: 'Asha' });
+  });
+
+  it('does not stack a second code when the name already carries one', async () => {
+    // The edit form round-trips the stored value; a CSV re-upload
+    // resubmits it. "ACo ACo Asha" would only surface on a waybill.
+    const { svc, orderCreate } = makeService();
+    await svc.create('s1', baseDto({ recipientName: 'ACo Asha' }), ACTOR, CTX);
+    expect((orderCreate.mock.calls[0]![0].data as AnyArgs).recipientName).toBe('ACo Asha');
+  });
+
+  it('leaves the name alone for a seller with no code', async () => {
+    const { svc, orderCreate } = makeService({ sellerInitials: null });
+    await svc.create('s1', baseDto(), ACTOR, CTX);
+    expect((orderCreate.mock.calls[0]![0].data as AnyArgs).recipientName).toBe('Asha');
+  });
+});
 
 describe('OrderService.create', () => {
   it('creates a DRAFT order, tx-wrapped, with full snapshot and no reservation (ORD-10)', async () => {

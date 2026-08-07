@@ -90,6 +90,9 @@ export interface SellerMe {
   sellerUserId: string;
   role: SellerUserRole;
   fullName: string;
+  /** The company's short code — shown as a fixed prefix on recipient
+   *  names. Read-only to the seller; staff-editable only. */
+  initials: string | null;
 }
 
 @Injectable()
@@ -911,6 +914,13 @@ export class SellerAuthService {
             displayLanguage: true,
             countryCode: true,
             createdAt: true,
+            // READ-ONLY, and the ONLY seller-facing read of this column
+            // (see seller-initials-not-exposed.spec.ts). The order form
+            // shows it as a fixed prefix on the recipient name, the way
+            // it shows +91 on the phone — so it has to be legible. There
+            // is still no seller WRITE path: the code goes on paperwork
+            // that already exists in the world, so only staff move it.
+            initials: true,
           },
         },
       },
@@ -926,6 +936,7 @@ export class SellerAuthService {
       email: user.email,
       emailDisplay: user.emailDisplay,
       companyName: user.seller.companyName,
+      initials: user.seller.initials,
       contactPersonName: user.seller.contactPersonName,
       phone: user.seller.phone,
       whatsapp: user.seller.whatsapp,

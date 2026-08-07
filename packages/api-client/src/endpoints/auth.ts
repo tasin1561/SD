@@ -55,6 +55,14 @@ export interface SellerMe {
   readonly email: string;
   readonly emailDisplay: string;
   readonly companyName: string;
+  /**
+   * The company's short code — "Menev Store" → "MSt". Shown as a fixed
+   * prefix on recipient names, the way +91 is shown on a phone field.
+   * READ-ONLY here: it is stamped on paperwork that already exists in
+   * the world, so only staff may change it. Null for a seller created
+   * before the column existed.
+   */
+  readonly initials: string | null;
   readonly contactPersonName: string;
   readonly phone: string;
   readonly whatsapp: string | null;

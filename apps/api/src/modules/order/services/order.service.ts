@@ -27,6 +27,7 @@ import { AddressValidationService } from './address-validation.service';
 import { CallQueueService } from '../../call-queue/services/call-queue.service';
 import { OrderChargesService } from '../../order-charges/services/order-charges.service';
 import { EarlyReservationService } from '../../early-reservation/services/early-reservation.service';
+import { composeSellerPrefixedName, stripSellerPrefix } from '../../../common/text/recipient-name';
 import type { CreateOrderDto } from '../dto/create-order.dto';
 import type { UpdateOrderDto } from '../dto/update-order.dto';
 
@@ -320,10 +321,25 @@ export class OrderService {
       created = await this.prisma.client.$transaction(async (tx) => {
         const orderNumber = await this.numbering.nextOrderNumber(tx, now);
 
+        // The stored recipient name carries the seller's code. Composed
+        // HERE rather than in the form so every entry path gets it —
+        // CSV import calls this same method, and an order placed by API
+        // would otherwise be the one parcel on the bench with no code.
+        const seller = await tx.seller.findUnique({
+          where: { id: sellerId },
+          select: { initials: true },
+        });
+        const prefixedRecipientName = composeSellerPrefixedName(
+          seller?.initials,
+          input.recipientName,
+        );
+
         const customer = await this.customers.findOrCreate(tx, {
           sellerId,
           phoneE164: input.recipientPhoneE164.trim(),
-          name: input.customerName ?? input.recipientName,
+          // The CUSTOMER record stays clean — it is a person, and the
+          // same person may buy from two sellers.
+          name: stripSellerPrefix(seller?.initials, input.customerName ?? input.recipientName),
           email: input.customerEmail ?? input.recipientEmail ?? null,
           altPhoneE164: input.recipientAltPhoneE164 ?? null,
           preferredLanguage: input.preferredLanguage ?? 'en',
@@ -338,7 +354,7 @@ export class OrderService {
             source,
             status: initialStatus,
             bulkUploadId: options.bulkUploadId ?? null,
-            recipientName: input.recipientName,
+            recipientName: prefixedRecipientName,
             recipientPhoneE164: input.recipientPhoneE164.trim(),
             recipientAltPhoneE164: input.recipientAltPhoneE164 ?? null,
             // Recorded, not just honoured — see the column comment.
@@ -699,7 +715,15 @@ export class OrderService {
       };
       const canonicalState = await this.addressValidation.assertValid(merged);
 
-      if (input.recipientName !== undefined) data.recipientName = input.recipientName;
+      if (input.recipientName !== undefined) {
+        // Idempotent: the seller's edit form round-trips the stored
+        // value, so this must not stack a second prefix.
+        const seller = await this.prisma.client.seller.findUnique({
+          where: { id: sellerId },
+          select: { initials: true },
+        });
+        data.recipientName = composeSellerPrefixedName(seller?.initials, input.recipientName);
+      }
       if (input.recipientPhoneE164 !== undefined) {
         data.recipientPhoneE164 = input.recipientPhoneE164.trim();
       }

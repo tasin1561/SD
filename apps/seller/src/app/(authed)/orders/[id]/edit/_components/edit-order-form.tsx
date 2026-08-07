@@ -22,6 +22,8 @@ import {
   useUpdateOrder,
   type UpdateOrderInput,
 } from '@/lib/api-hooks';
+import { useSellerIdentity } from '@skydrop/auth/client';
+import { prefixHint, stripSellerPrefix } from '@/lib/seller-prefix';
 import {
   IN_DIAL,
   IN_LOCAL_LENGTH,
@@ -109,6 +111,7 @@ interface FormState {
 }
 
 export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactElement {
+  const sellerInitials = useSellerIdentity()?.initials ?? null;
   const router = useRouter();
   const toast = useToast();
 
@@ -126,7 +129,10 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
     if (form !== null || !detail.data) return;
     const d = detail.data;
     setForm({
-      recipientName: d.recipientName,
+      // The stored value carries the seller code; the input holds the
+      // NAME. Re-composed server-side on save, idempotently, so a stale
+      // strip here can never double the prefix in the database.
+      recipientName: stripSellerPrefix(sellerInitials, d.recipientName),
       recipientPhoneE164: d.recipientPhoneE164,
       recipientAddressLine1: d.recipientAddressLine1,
       recipientAddressLine2: d.recipientAddressLine2 ?? '',
@@ -140,7 +146,12 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
       totalWeightGrams: d.totalWeightGrams?.toString() ?? '',
       sellerNotes: d.sellerNotes ?? '',
     });
-  }, [detail.data, form]);
+    // sellerInitials is in the deps for correctness, though in practice
+    // identity is hydrated by the (authed) layout before this query
+    // resolves. If it ever were late, the seed would keep the prefix
+    // visible in the input — cosmetic, because the server's compose is
+    // idempotent and will not stack a second one on save.
+  }, [detail.data, form, sellerInitials]);
 
   if (detail.isLoading || form === null) return <LoadingState label="Loading order…" />;
   if (detail.isError)
@@ -310,13 +321,28 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
         <CardBody>
           <h2 className="text-text-bright text-sm font-medium mb-3">Recipient</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <FormField label="Full name" required>
-              <Input
-                value={form.recipientName}
-                onChange={(e) => set('recipientName', e.target.value)}
-                maxLength={160}
-                required
-              />
+            <FormField label="Full name" required hint={prefixHint(sellerInitials)}>
+              {/* Chrome, like the +91 below — the seller cannot edit
+                  their own code, so it is not part of the input. */}
+              <div className="flex items-stretch">
+                {sellerInitials !== null && sellerInitials !== '' && (
+                  <span
+                    aria-hidden
+                    className="border-border-strong text-text-muted inline-flex select-none items-center rounded-l-[6px] border border-r-0 px-2.5 text-sm"
+                  >
+                    {sellerInitials}
+                  </span>
+                )}
+                <Input
+                  className={
+                    sellerInitials !== null && sellerInitials !== '' ? 'rounded-l-none' : undefined
+                  }
+                  value={form.recipientName}
+                  onChange={(e) => set('recipientName', e.target.value)}
+                  maxLength={160}
+                  required
+                />
+              </div>
             </FormField>
             <FormField
               label="Phone"

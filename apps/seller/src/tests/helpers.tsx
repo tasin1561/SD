@@ -48,6 +48,7 @@ export function makeSeller(overrides: Partial<SellerMe> = {}): SellerMe {
     email: 's@example.com',
     emailDisplay: 's@example.com',
     companyName: 'Acme Co',
+    initials: 'ACo',
     contactPersonName: 'A. Person',
     phone: '+8801234567890',
     whatsapp: null,

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { ChargeType, NotificationRecipientType, OrderStatus, Prisma } from '@skydrop/db';
 import { EnvService } from '../../../config/env.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { stripSellerPrefix } from '../../../common/text/recipient-name';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { EmailQueue } from '../../email/queue/email.queue';
 import { InvoiceNumberingService } from './invoice-numbering.service';
@@ -128,6 +129,7 @@ export class InvoiceService {
             email: true,
             phone: true,
             countryCode: true,
+            initials: true,
           },
         },
       },
@@ -203,7 +205,9 @@ export class InvoiceService {
         email: 'support@skydrop.online',
       },
       buyer: {
-        name: order.recipientName,
+        // Without the seller's code: the buyer on a tax document is a
+        // person, not a person plus our internal routing prefix.
+        name: stripSellerPrefix(order.seller.initials, order.recipientName),
         addressLine1: order.recipientAddressLine1,
         addressLine2: order.recipientAddressLine2,
         city: order.recipientCity,

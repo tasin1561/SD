@@ -7,6 +7,7 @@ import {
 import { type OrderStatus, ShipmentStatus } from '@skydrop/db';
 import type { Subscription } from 'rxjs';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { stripSellerPrefix } from '../../../common/text/recipient-name';
 import { EnvService } from '../../../config/env.service';
 import {
   OrderLifecycleEventBus,
@@ -317,6 +318,7 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
           select: {
             email: true,
             companyName: true,
+            initials: true,
           },
         },
         // The live shipment (excluding CANCELLED / FAILED_AT_CREATION
@@ -379,7 +381,12 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
       sellerEmail: order.seller.email,
       companyName: order.seller.companyName ?? null,
       customerId: order.customerId,
-      recipientName: order.recipientName,
+      // The stored name carries the seller's code (see
+      // common/text/recipient-name.ts). It comes OFF here: this feeds
+      // `customer_name` in templates, and an order confirmation opening
+      // "Hello MSt John Doe" reads as a system error to the person we
+      // are asking to hand cash to a courier.
+      recipientName: stripSellerPrefix(order.seller.initials, order.recipientName),
       recipientEmail: order.recipientEmail,
       recipientCity: order.recipientCity,
       recipientState: order.recipientStateProvince,

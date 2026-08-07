@@ -10,6 +10,8 @@ import {
   useProductVariants,
   useSubmitOrder,
 } from '@/lib/api-hooks';
+import { useSellerIdentity } from '@skydrop/auth/client';
+import { prefixHint } from '@/lib/seller-prefix';
 import { CustomerHistoryPanel } from './customer-history-panel';
 import { DuplicateOrderDialog, type DuplicateCandidate } from './duplicate-order-dialog';
 import {
@@ -122,6 +124,7 @@ const INITIAL: FormState = {
 };
 
 export function NewOrderForm(): ReactElement {
+  const sellerInitials = useSellerIdentity()?.initials ?? null;
   const router = useRouter();
   const toast = useToast();
   const [form, setForm] = useState<FormState>(INITIAL);
@@ -272,13 +275,30 @@ export function NewOrderForm(): ReactElement {
         <CardBody>
           <h2 className="text-text-bright text-sm font-medium mb-3">Recipient</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <FormField label="Full name" required>
-              <Input
-                value={form.recipientName}
-                onChange={(e) => set('recipientName', e.target.value)}
-                maxLength={160}
-                required
-              />
+            <FormField label="Full name" required hint={prefixHint(sellerInitials)}>
+              {/* The seller code is CHROME, exactly like the +91 below:
+                  it cannot be edited or deleted, and the field holds only
+                  the customer's name. The API composes the stored value,
+                  so a CSV import lands the same shape as this form. */}
+              <div className="flex items-stretch">
+                {sellerInitials !== null && sellerInitials !== '' && (
+                  <span
+                    aria-hidden
+                    className="border-border-strong text-text-muted inline-flex select-none items-center rounded-l-[6px] border border-r-0 px-2.5 text-sm"
+                  >
+                    {sellerInitials}
+                  </span>
+                )}
+                <Input
+                  className={
+                    sellerInitials !== null && sellerInitials !== '' ? 'rounded-l-none' : undefined
+                  }
+                  value={form.recipientName}
+                  onChange={(e) => set('recipientName', e.target.value)}
+                  maxLength={160}
+                  required
+                />
+              </div>
             </FormField>
             <FormField
               label="Phone"
