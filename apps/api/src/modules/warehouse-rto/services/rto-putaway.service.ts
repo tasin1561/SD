@@ -34,6 +34,13 @@ export interface RtoPutawayPending {
   readonly quantity: number;
   readonly holdBinId: string;
   readonly holdBinCode: string;
+  /**
+   * The warehouse the goods are physically in — the RECEIVING one, which
+   * on a cross-warehouse return is not where the parcel shipped from.
+   * Exposed because the operator's screen has to offer bins from THIS
+   * building and cannot work it out from anything else on the row.
+   */
+  readonly warehouseId: string;
   readonly batchId: string;
   /**
    * Where this unit sat before it shipped. A suggestion only — the bin
@@ -137,6 +144,7 @@ export class RtoPutawayService {
         quantity: item.quantity,
         holdBinId: holdLevel.binId,
         holdBinCode: holdLevel.bin.code,
+        warehouseId,
         batchId: holdLevel.batchId,
         suggestedBinId: suggestion?.binId ?? null,
         suggestedBinCode: suggestion?.code ?? null,

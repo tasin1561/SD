@@ -765,6 +765,75 @@ export function useRtoShipmentDetail(shipmentId: string | null): UseQueryResult<
   });
 }
 
+/**
+ * What is still sitting in a hold bin for a finalised return.
+ *
+ * Restocked goods land in RTO_HOLD, and availability deliberately
+ * ignores hold bins (INV-3) — so until these are shelved they exist,
+ * are counted as on-hand, and cannot be sold. This list is how an
+ * operator finds them.
+ */
+export interface RtoPutawayPending {
+  readonly shipmentItemId: string;
+  readonly variantId: string;
+  readonly skuCode: string;
+  readonly productName: string;
+  readonly quantity: number;
+  readonly holdBinId: string;
+  readonly holdBinCode: string;
+  /** The RECEIVING warehouse — on a cross-warehouse return, not the origin. */
+  readonly warehouseId: string;
+  readonly suggestedBinId: string | null;
+  readonly suggestedBinCode: string | null;
+  readonly suggestionReason: 'PICKED_FROM' | 'RECENT_LOCATION' | null;
+}
+
+export interface RtoPutawayResult {
+  readonly shipmentId: string;
+  readonly movedCount: number;
+  readonly lines: ReadonlyArray<{
+    shipmentItemId: string;
+    destBinId: string;
+    qty: number;
+    transferGroupId: string;
+  }>;
+}
+
+export function useRtoPutawayPending(
+  shipmentId: string | null,
+): UseQueryResult<ReadonlyArray<RtoPutawayPending>> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-rto', 'putaway', shipmentId],
+    queryFn: () =>
+      client.request<ReadonlyArray<RtoPutawayPending>>(
+        `/api/warehouse/rto/shipments/${shipmentId}/putaway`,
+      ),
+    enabled: Boolean(shipmentId),
+  });
+}
+
+export function useRtoPutaway(): UseMutationResult<
+  RtoPutawayResult,
+  Error,
+  { shipmentId: string; lines: ReadonlyArray<{ shipmentItemId: string; destBinId: string }> }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ shipmentId, lines }) =>
+      client.request<RtoPutawayResult>(`/api/warehouse/rto/shipments/${shipmentId}/putaway`, {
+        method: 'POST',
+        body: { lines },
+      }),
+    onSuccess: () => {
+      // The pending list AND the stock the operator just made sellable.
+      void queryClient.invalidateQueries({ queryKey: ['admin-rto'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-inventory'] });
+    },
+  });
+}
+
 // ───────── Admin call-center (CC-1 / CC-3 / CC-4) ─────────
 
 import type {

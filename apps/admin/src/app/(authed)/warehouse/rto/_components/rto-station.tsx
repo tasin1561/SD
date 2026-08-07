@@ -12,6 +12,7 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
+import { PutawayPanel } from './putaway-panel';
 import type { RtoItemCondition, RtoDisposition } from '@skydrop/db';
 import {
   useReceiveRto,
@@ -185,6 +186,11 @@ export function RtoStation(): ReactElement {
           </CardBody>
         </Card>
       )}
+
+      {/* After finalise, whatever came back GOOD is sitting in a hold bin
+          and is not sellable. The panel renders nothing when there is
+          nothing in hold, so it appears exactly when there is work. */}
+      {shipmentId !== null && <PutawayPanel shipmentId={shipmentId} />}
     </div>
   );
 }
