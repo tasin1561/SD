@@ -1,34 +1,71 @@
 # Putting Cloudflare in front of the origin
 
-**Status: PARTLY DONE.**
+**Status: DONE for production (2026-08-07).** Kept as the record of what was
+changed, why the order mattered, and the one item still open.
 
-- ✅ **SSL/TLS mode is already Full (strict)** — step 1 is complete.
-- ✅ **CAA already permits Cloudflare's CAs.** The dashboard row shows only
-  `letsencrypt.org`, which looks like it would block Cloudflare's edge
-  certificate; the full record set also authorises `pki.goog`, `digicert.com`,
-  `comodoca.com` and `ssl.com`, so Universal SSL can issue. Checked with
-  `dig +short skydrop.online CAA` rather than read off the row.
-- ❌ All fourteen A records are still **grey-cloud (DNS only)**, so every
-  request reaches the droplet directly: no CDN, no WAF, no DDoS absorption.
-- ❌ `ufw` still allows 80/443 from anywhere.
-- ❌ Caddy does not yet read `CF-Connecting-IP`.
+| | |
+|---|---|
+| SSL/TLS mode | ✅ Full (strict) |
+| CAA | ✅ already authorises Cloudflare's CAs — see the note below |
+| Proxy (orange cloud) | ✅ `skydrop.online`, `www`, `api`, `app`, `admin`, `track` |
+| ufw | ✅ 80/443 restricted to Cloudflare ranges; direct-to-IP now times out |
+| Caddy real client IP | ✅ `header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}` on all five `reverse_proxy` blocks |
+| **`stg-*` records** | ❌ **still DNS-only, still publishing the origin IP** |
 
-Note the staging hostnames (`stg-api`, `stg-app`, `stg-admin`, `stg-track`)
-point at the **same droplet** as production. Whatever is decided about proxying
-applies to them too.
+### Still open: the four staging records
 
-This file is the runbook. **The steps are ordered, and the order is the point** —
-doing step 3 before steps 1 and 2 opens a header-spoofing hole that is worse
-than the situation it replaces.
+`stg-api`, `stg-app`, `stg-admin` and `stg-track` are grey-cloud A records
+pointing at the same droplet, and Cloudflare's own dashboard flags it: *"A
+DNS-only record is revealing an IP address that is hidden by a proxied record."*
+
+They serve **nothing** — there is no Caddy site block for any of them, so the
+TLS handshake fails. They are dead records whose only effect is to publish the
+origin address that everything else now hides. **Delete them, or proxy them.**
+Deleting is cleaner; either needs the dashboard.
+
+### The proof it worked
+
+`audit_logs.metadata.ipAddress` across the cutover, same login endpoint:
+
+```
+07:07:39  103.87.214.86     before Cloudflare — real client
+08:10:11  172.70.188.148    proxied, before the Caddy fix — a CF EDGE
+08:12:48  103.87.214.87     after the Caddy fix — real client again
+```
+
+The middle row is the bug this runbook predicted, observed live. Without the
+Caddy change the 5-per-15-minutes login limit keys on a Cloudflare edge, so
+users sharing a PoP share a bucket and every authentication event is attributed
+to Cloudflare.
+
+### Watch the first certificate renewal
+
+Caddy prefers TLS-ALPN-01, which **cannot** complete behind a terminating proxy.
+It should fall back to HTTP-01, which Cloudflare passes through. This has not
+yet been observed — the current certificates were issued before cutover.
+
+```bash
+sudo journalctl -u caddy | grep -i certificate
+```
+
+The rollback for that specific failure is `/etc/caddy/Caddyfile.bak-precf` plus
+re-opening 80/443, which restores direct ACME.
 
 ---
 
-## Why it is not already done
+The steps below are the order they were done in, and **the order was the point**:
+applying the Caddy change before the firewall would have let anyone forge
+`CF-Connecting-IP` straight at the open origin and defeat the login throttle
+entirely — worse than the two-hop problem it fixes.
 
-Two of the four steps need the Cloudflare dashboard, and there are no Cloudflare
-credentials on the droplet or in the repo (checked: no `~/.cloudflared`, no
-`CF_API*` in `~/app/.env` or `/etc/caddy/`). So this cannot be automated from
-here; a human with dashboard access has to do steps 1 and 2.
+---
+
+## Note on automation
+
+There are no Cloudflare credentials on the droplet or in the repo (no
+`~/.cloudflared`, no `CF_API*` in `~/app/.env` or `/etc/caddy/`), so the
+dashboard steps — SSL mode, orange cloud, and deleting the `stg-*` records —
+cannot be scripted from here.
 
 ---
 
