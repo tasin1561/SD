@@ -154,7 +154,16 @@ describe('Order ↔ shipment-provision wiring (M8 commit 16)', () => {
     });
     expect(orderShipment).not.toBeNull();
     expect(orderShipment!.shipment.status).toBe(ShipmentStatus.CREATED);
-    expect(orderShipment!.shipment.destRecipientName).toBe('Asha Verma');
+    // The snapshot carries the seller's short code, because THIS is what
+    // the courier waybill is printed from — the whole reason the code is
+    // on the name. Read from the seller rather than hardcoded, so
+    // renaming the fixture company cannot silently make this vacuous.
+    const seller = await h.prisma.seller.findFirstOrThrow({
+      where: { companyName: 'Wiring Brand' },
+      select: { initials: true },
+    });
+    expect(seller.initials).toBe('WBr');
+    expect(orderShipment!.shipment.destRecipientName).toBe(`${seller.initials} Asha Verma`);
     expect(orderShipment!.shipment.destPostalCode).toBe('560001');
     expect(orderShipment!.shipment.items).toHaveLength(1);
     expect(orderShipment!.shipment.items[0]!.skuCode).toBe('W-1-STD');
