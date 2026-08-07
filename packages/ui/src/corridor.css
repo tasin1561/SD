@@ -67,7 +67,10 @@
   --surface-2: #1e2937;
   --surface-3: #263241;
   --surface-input: #0f161e;
-  --page-top: #131b24;
+  /* The hero reads its gradient from these. In dark the top is a
+     step LIGHTER than the page so the band lifts; it used to equal
+     --surface, which made the gradient a no-op. */
+  --page-top: #1a2431;
   --page-bottom: #0f161e;
 
   --line: #2b3949;

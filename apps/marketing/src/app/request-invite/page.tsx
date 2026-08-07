@@ -64,7 +64,10 @@ export default function RequestInvitePage(): ReactElement {
           aria-hidden
           className="pointer-events-none absolute -top-32 left-1/2 h-[460px] w-[720px] -translate-x-1/2 rounded-full"
           style={{
-            background: 'radial-gradient(closest-side, var(--glow), transparent)',
+            // Phosphor bloom removed — a saturated halo is the neon-on-dark
+            // treatment this pass drops. The surface step and the
+            // border carry the emphasis instead.
+            background: 'none',
             opacity: 0.5,
           }}
         />

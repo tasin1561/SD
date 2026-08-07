@@ -72,7 +72,10 @@ export function WhySkydrop(): ReactElement {
                   aria-hidden
                   className="pointer-events-none absolute -right-28 -top-28 h-72 w-72 rounded-full"
                   style={{
-                    background: 'radial-gradient(closest-side, var(--glow), transparent)',
+                    // Phosphor bloom removed — a saturated halo is the neon-on-dark
+                    // treatment this pass drops. The surface step and the
+                    // border carry the emphasis instead.
+                    background: 'none',
                     opacity: 0.55,
                   }}
                 />

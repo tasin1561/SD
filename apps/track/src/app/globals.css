@@ -259,6 +259,41 @@ h3 {
 }
 
 /* Timeline event log — rail down the left of the entries */
+/* ── Timeline node shapes ─────────────────────────────────────────────
+ * Status must never be colour alone. These three markers are the
+ * non-colour channel: a plain dot for a step, a hollow ring for a
+ * terminal state, and a haloed node for the one exceptional state (the
+ * NDR). Each is a SHAPE difference, legible with colour removed. */
+.evt-node {
+  height: 7px;
+  width: 7px;
+}
+.evt-node-ring {
+  height: 11px;
+  width: 11px;
+  margin-top: 3px;
+  border-width: 2px;
+  border-style: solid;
+}
+.evt-node-alert {
+  height: 7px;
+  width: 7px;
+}
+
+/* The rail's terminus. A short bar across the line, above a terminal
+   node, so the journey visibly ENDS rather than running off the top of
+   the list. Positioned on the rail (left: 8px) and sized to overhang it
+   on both sides. */
+.evt-cap {
+  position: absolute;
+  left: 3px;
+  top: 6px;
+  width: 11px;
+  height: 2px;
+  border-radius: 1px;
+  z-index: 10;
+}
+
 .evt-rail {
   position: relative;
 }

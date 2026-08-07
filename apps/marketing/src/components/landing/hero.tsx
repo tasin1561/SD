@@ -12,18 +12,25 @@ import { TelemetryTicker } from './telemetry-ticker';
  * the section.
  */
 export function Hero(): ReactElement {
+  // The hero carries the page's only gradient, and it is scoped HERE
+  // rather than on <body> for a measured reason: 99% of this page's
+  // height is opaque sections, so a body gradient would have shown on
+  // ~65px of 6306 — in the gaps between sections, which reads as a bug
+  // rather than as depth.
+  //
+  // It also replaces a "phosphor bloom", a saturated radial glow that
+  // was the most console-like thing on the page. Same job, done with a
+  // flat wash instead of a neon halo.
   return (
-    <section id="top" className="relative bg-surface overflow-hidden">
+    <section
+      id="top"
+      className="relative bg-surface overflow-hidden"
+      style={{
+        backgroundImage:
+          'linear-gradient(180deg, var(--page-top) 0%, var(--surface) 78%, var(--surface) 100%)',
+      }}
+    >
       <div aria-hidden className="console-grid absolute inset-0" />
-      {/* Phosphor bloom top-center */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-48 left-1/2 -translate-x-1/2 w-[900px] h-[560px] rounded-full"
-        style={{
-          background: 'radial-gradient(closest-side, var(--glow), transparent)',
-          opacity: 0.5,
-        }}
-      />
 
       {/* Mobile-only: the corridor runs as the section background (the
           separate console panel below is desktop-only). A light scrim
