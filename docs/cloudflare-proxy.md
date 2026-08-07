@@ -10,18 +10,23 @@ changed, why the order mattered, and the one item still open.
 | Proxy (orange cloud) | ✅ `skydrop.online`, `www`, `api`, `app`, `admin`, `track` |
 | ufw | ✅ 80/443 restricted to Cloudflare ranges; direct-to-IP now times out |
 | Caddy real client IP | ✅ `header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}` on all five `reverse_proxy` blocks |
-| **`stg-*` records** | ❌ **still DNS-only, still publishing the origin IP** |
+| `stg-*` records | ✅ deleted — they served nothing and published the origin |
 
-### Still open: the four staging records
+### The staging records (resolved)
 
-`stg-api`, `stg-app`, `stg-admin` and `stg-track` are grey-cloud A records
-pointing at the same droplet, and Cloudflare's own dashboard flags it: *"A
-DNS-only record is revealing an IP address that is hidden by a proxied record."*
+`stg-api`, `stg-app`, `stg-admin` and `stg-track` were grey-cloud A records on
+the same droplet, and Cloudflare's dashboard flagged them: *"A DNS-only record
+is revealing an IP address that is hidden by a proxied record."* They served
+**nothing** — no Caddy site block existed for any of them, so the TLS handshake
+failed — so they were dead records whose only effect was publishing the address
+everything else now hides. Deleted 2026-08-07.
 
-They serve **nothing** — there is no Caddy site block for any of them, so the
-TLS handshake fails. They are dead records whose only effect is to publish the
-origin address that everything else now hides. **Delete them, or proxy them.**
-Deleting is cleaner; either needs the dashboard.
+Verified after: no record of any type in the zone returns `68.183.190.55`, and
+every hostname resolves to Cloudflare edges only (`104.21.x`, `172.67.x`, and
+`2606:4700::` for AAAA).
+
+**If staging is ever wanted back, it needs a Caddy site block and its own
+proxied record** — recreating a bare A record reopens exactly this hole.
 
 ### The proof it worked
 
