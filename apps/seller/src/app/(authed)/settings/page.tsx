@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import { PageHeader } from '@skydrop/ui/components';
-import { Webhook, Bell, Key, MapPin } from 'lucide-react';
+import { Webhook, Bell, Key } from 'lucide-react';
 import { SettingsHub, type SettingsTile } from './_components/settings-hub';
 
 /**
@@ -12,13 +12,6 @@ import { SettingsHub, type SettingsTile } from './_components/settings-hub';
  */
 export default function SettingsPage(): ReactElement {
   const items: SettingsTile[] = [
-    {
-      href: '/settings/addresses',
-      icon: <MapPin size={20} />,
-      title: 'Your addresses',
-      description:
-        'Where your stock ships from and where you can be reached. A consignment is booked against your Bangladesh origin address.',
-    },
     {
       href: '/settings/webhooks',
       icon: <Webhook size={20} />,

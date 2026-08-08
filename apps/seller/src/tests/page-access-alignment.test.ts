@@ -58,7 +58,12 @@ describe('a single-purpose page takes the permission of its purpose', () => {
     expect(permissionForPath('/orders/abc-123')).toBe('orders.view');
     expect(permissionForPath('/catalog')).toBe('catalog.view');
     expect(permissionForPath('/settings')).toBe('profile.view');
-    expect(permissionForPath('/settings/addresses')).toBe('addresses.manage');
+    // The seller's OWN addresses screen was removed: nothing in the
+    // system read a seller address, and the page nagged for one with a
+    // banner claiming consignments are booked against it. They are not.
+    // Falling through to '/settings' (profile.view) is correct — there is
+    // no page here to gate.
+    expect(permissionForPath('/settings/addresses')).toBe('profile.view');
   });
 });
 
