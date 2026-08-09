@@ -199,11 +199,48 @@ describe('RtoDispositionService.finalize — Model A retry-state matrix', () => 
     const r = await svc.finalize(SHIP, STAFF);
     expect(runWithRetry).not.toHaveBeenCalled(); // no RESTOCK items
     expect(apply).not.toHaveBeenCalled();
+    // RTO_DAMAGED, not RTO_RESTOCKED. Nothing came back sellable, and
+    // this assertion used to say RESTOCKED — encoding a bug that made
+    // the damage-rate report structurally incapable of reading non-zero.
+    expect(transitionStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ to: OrderStatus.RTO_DAMAGED }),
+    );
+    expect(r).toMatchObject({
+      status: OrderStatus.RTO_DAMAGED,
+      restockedCount: 0,
+      writtenOffCount: 1,
+    });
+    expect(r.items[0]?.movementId).toBeNull();
+  });
+
+  it('a MIXED parcel is a restock with losses, not a damaged one', async () => {
+    // The test is "nothing restocked", not "something written off".
+    // Calling a parcel that saved one unit damaged would overstate the
+    // damage rate as badly as the old behaviour understated it.
+    const { svc, transitionStatus } = makeService({
+      items: [
+        item('si-1', RtoDisposition.RESTOCK),
+        item('si-2', RtoDisposition.WRITE_OFF, { rtoCondition: RtoItemCondition.DAMAGED }),
+      ],
+    });
+    const r = await svc.finalize(SHIP, STAFF);
     expect(transitionStatus).toHaveBeenCalledWith(
       expect.objectContaining({ to: OrderStatus.RTO_RESTOCKED }),
     );
-    expect(r).toMatchObject({ restockedCount: 0, writtenOffCount: 1 });
-    expect(r.items[0]?.movementId).toBeNull();
+    expect(r).toMatchObject({ status: OrderStatus.RTO_RESTOCKED, writtenOffCount: 1 });
+  });
+
+  it('an already-RTO_DAMAGED order short-circuits too', async () => {
+    // Gate 1 previously recognised only RTO_RESTOCKED as finalised, so a
+    // retry on a written-off parcel would have tried to transition an
+    // order that is already at a terminal.
+    const { svc, transitionStatus } = makeService({
+      orderStatus: OrderStatus.RTO_DAMAGED,
+      items: [item('si-1', RtoDisposition.WRITE_OFF)],
+    });
+    const r = await svc.finalize(SHIP, STAFF);
+    expect(transitionStatus).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ status: OrderStatus.RTO_DAMAGED, alreadyFinalized: true });
   });
 
   it('STATE 2 (movements done, transition pending): gate-2 skips re-apply, transition runs', async () => {

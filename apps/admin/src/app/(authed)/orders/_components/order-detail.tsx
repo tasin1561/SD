@@ -20,6 +20,7 @@ import {
 import { OrderActionsPanel } from './order-actions-panel';
 import { OrderChargesSection } from './order-charges';
 import { OrderShipmentsSection } from './order-shipments-section';
+import { StuckOrderRecovery } from './stuck-order-recovery';
 import { OrderTimelineSection } from './order-timeline-section';
 
 /**
@@ -257,6 +258,9 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
           </Section>
 
           <Section title="Shipments">
+            {/* Renders nothing unless the order is actually stuck. */}
+            <StuckOrderRecovery orderId={orderId} orderStatus={detail.data.status} />
+
             <OrderShipmentsSection orderId={orderId} orderStatus={detail.data.status} />
           </Section>
 

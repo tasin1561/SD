@@ -166,12 +166,15 @@ export class RtoDispositionService {
     }
 
     // ── GATE 1: idempotency short-circuit on already-finalized.
-    if (order.status === OrderStatus.RTO_RESTOCKED) {
+    // BOTH terminals count: a fully written-off return lands RTO_DAMAGED,
+    // and treating only RTO_RESTOCKED as "done" would let a retry try to
+    // transition an already-finalised order.
+    if (order.status === OrderStatus.RTO_RESTOCKED || order.status === OrderStatus.RTO_DAMAGED) {
       const summary = this.buildItemSummaries(shipment.items, null);
       return {
         shipmentId,
         orderId,
-        status: OrderStatus.RTO_RESTOCKED,
+        status: order.status,
         restockedCount: summary.filter((s) => s.disposition === RtoDisposition.RESTOCK).length,
         writtenOffCount: summary.filter((s) => s.disposition === RtoDisposition.WRITE_OFF).length,
         items: summary,
@@ -324,9 +327,26 @@ export class RtoDispositionService {
     }
 
     // ── Authoritative transition (its own tx).
+    //
+    // RTO_DAMAGED when NOTHING came back sellable. Until now finalize
+    // landed RTO_RESTOCKED unconditionally, so a parcel where every line
+    // was written off reported as restocked — the write-off was visible
+    // in stock movements and unit statuses, and invisible in the one
+    // field reports read. `RTO_DAMAGED` had an inbound matrix edge, a
+    // notification template, a seller webhook and three lines in the
+    // damage-rate report, and no code path ever set it: that report
+    // could only ever read zero.
+    //
+    // The test is "nothing restocked", not "something written off" — a
+    // mixed parcel that saved even one unit is a restock with losses,
+    // and calling it damaged would overstate the damage rate as badly as
+    // the old behaviour understated it.
+    const nothingRestocked = restockItems.length === 0 && writeOffItems.length > 0;
+    const finalStatus = nothingRestocked ? OrderStatus.RTO_DAMAGED : OrderStatus.RTO_RESTOCKED;
+
     await this.orderWrite.transitionStatus({
       orderId,
-      to: OrderStatus.RTO_RESTOCKED,
+      to: finalStatus,
       actor: { type: ActorType.STAFF, id: staffId },
       expectedFrom: OrderStatus.RTO_RECEIVED,
       reason: `RTO finalize on shipment ${shipmentId}`,
@@ -450,7 +470,9 @@ export class RtoDispositionService {
     return {
       shipmentId,
       orderId,
-      status: OrderStatus.RTO_RESTOCKED,
+      // The terminal actually written, not a hardcoded one — the caller
+      // shows this to the supervisor who just finalised.
+      status: finalStatus,
       restockedCount,
       writtenOffCount,
       items: itemSummaries,

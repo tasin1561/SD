@@ -50,6 +50,7 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   ['/inventory-units', 'inventory.view'],
   ['/settlements', 'money.view'],
   ['/withdrawals', 'money.view'],
+  ['/topups', 'money.view'],
   ['/remittances', 'money.view'],
   ['/freight', 'money.view'],
   ['/margin', 'courier.margin.view'],

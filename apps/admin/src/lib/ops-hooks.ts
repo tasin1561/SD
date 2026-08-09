@@ -1401,3 +1401,92 @@ export function useCourierTaxonomy(): UseQueryResult<CourierTaxonomyRow[]> {
     queryFn: () => client.request<CourierTaxonomyRow[]>('/api/admin/courier-escalation/taxonomy'),
   });
 }
+
+// ───────── Wallet top-ups (WAL-2) ─────────
+
+/**
+ * The queue where money enters a seller's wallet.
+ *
+ * WAL-2: a seller declaring a transfer is a claim. Accepting it is the
+ * moment the wallet is credited, and it is guarded on PENDING with a
+ * UNIQUE wallet_entry_id behind it, so a double-click cannot pay twice.
+ *
+ * Both these endpoints and the seller's submit side shipped with no
+ * caller at all — so a seller could not claim a transfer and nobody
+ * could accept one, while COD was the only way a balance could rise.
+ */
+export interface AdminTopupView {
+  readonly id: string;
+  readonly sellerId: string;
+  readonly sellerName: string | null;
+  readonly bankLabel: string;
+  readonly currency: string;
+  readonly amount: string;
+  readonly transactionRef: string | null;
+  readonly hasProof: boolean;
+  readonly status: string;
+  readonly reviewNote: string | null;
+  readonly reviewedAt: string | null;
+  readonly createdAt: string;
+}
+
+export function useAdminTopups(status?: string): UseQueryResult<readonly AdminTopupView[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-topups', status ?? 'all'],
+    queryFn: () =>
+      client.request<readonly AdminTopupView[]>(
+        `/api/admin/wallet/topups${status ? `?status=${encodeURIComponent(status)}` : ''}`,
+      ),
+  });
+}
+
+/** A short-lived link to the uploaded receipt. Fetched on demand rather
+ *  than listed: it is a presigned URL and should not sit in a payload. */
+export function useTopupProofUrl(): UseMutationResult<{ url: string }, Error, { topupId: string }> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: ({ topupId }) =>
+      client.request<{ url: string }>(`/api/admin/wallet/topups/${topupId}/proof-url`),
+  });
+}
+
+export function useAcceptTopup(): UseMutationResult<
+  AdminTopupView,
+  Error,
+  { topupId: string; note?: string }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ topupId, ...body }) =>
+      client.request<AdminTopupView>(`/api/admin/wallet/topups/${topupId}/accept`, {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-topups'] });
+      // This one actually moves money.
+      void queryClient.invalidateQueries({ queryKey: ['admin-wallet'] });
+    },
+  });
+}
+
+export function useRejectTopup(): UseMutationResult<
+  AdminTopupView,
+  Error,
+  { topupId: string; reason: string }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ topupId, ...body }) =>
+      client.request<AdminTopupView>(`/api/admin/wallet/topups/${topupId}/reject`, {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-topups'] });
+    },
+  });
+}

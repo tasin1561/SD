@@ -348,6 +348,50 @@ export function useReleaseReservations(
   });
 }
 
+/**
+ * Recovery from the two states an order could enter and never leave.
+ *
+ * Both matrix edges existed from the start; neither had a driver, so an
+ * order that ran out of stock or short-picked could only be cancelled or
+ * god-moded. These are ordinary transitions — the state machine still
+ * decides, and the saga still runs.
+ */
+export function useRetryStock(
+  orderId: string,
+): UseMutationResult<TransitionStatusResult, Error, void> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      client.request<TransitionStatusResult>(`/api/admin/orders/${orderId}/retry-stock`, {
+        method: 'POST',
+        body: {},
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
+      // Succeeding RESERVES stock, so availability moved.
+      void queryClient.invalidateQueries({ queryKey: ['admin-inventory'] });
+    },
+  });
+}
+
+export function useReturnToPick(
+  orderId: string,
+): UseMutationResult<TransitionStatusResult, Error, void> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      client.request<TransitionStatusResult>(`/api/admin/orders/${orderId}/return-to-pick`, {
+        method: 'POST',
+        body: {},
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
+    },
+  });
+}
+
 // ───────── Admin system settings (Module 14) ─────────
 
 export function useSystemSettingsList(): UseQueryResult<readonly SystemSettingsCategoryGroup[]> {

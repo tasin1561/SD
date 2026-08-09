@@ -140,6 +140,63 @@ export class AdminOrderController {
     });
   }
 
+  @Post(':id/retry-stock')
+  @RequirePermissions('orders.cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Stock has arrived — retry an OUT_OF_STOCK order. Runs the same reserve saga as a call confirmation: CONFIRMED on success, back to OUT_OF_STOCK if there is still nothing to reserve.',
+  })
+  retryStock(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('id', uuid()) id: string,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<TransitionStatusResult> {
+    // The matrix has carried OUT_OF_STOCK → CONFIRMED since M6 and the
+    // schema comment promises "Module 7 retries" — but nothing ever drove
+    // it. An order that ran out of stock is dequeued from the call queue
+    // on its way out of PENDING_CONFIRMATION, so it could then only be
+    // cancelled or god-moded, however much stock later arrived.
+    //
+    // No pre-check that stock exists: the RESERVE_STOCK side-effect is
+    // the check, and its failure route is OUT_OF_STOCK — exactly where
+    // the order already is. Retrying is therefore always safe.
+    return this.orderWrite.transitionStatus({
+      orderId: id,
+      to: OrderStatus.CONFIRMED,
+      actor: { type: ActorType.STAFF, id: staff.id },
+      reason: 'Stock retry requested by admin',
+      ctx,
+    });
+  }
+
+  @Post(':id/return-to-pick')
+  @RequirePermissions('orders.cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Send a PENDING_MANUAL_PLACEMENT order back to the pick floor — the remedy CUR-8 prescribes for a pick-shortfall order that manual placement refuses to dispatch.',
+  })
+  returnToPick(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('id', uuid()) id: string,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<TransitionStatusResult> {
+    // ManualPlacementService rejects a shortfall order with
+    // MANUAL_PLACEMENT_NOT_ALLOCATED and tells the operator to "route it
+    // back to PENDING_PICK and re-pick". That instruction had no
+    // implementation: PickExecutionService.start accepts only CONFIRMED
+    // or PENDING_PICK and the pick queue selects the same two, so the
+    // parcel could not even be re-pulled. This is the missing half.
+    return this.orderWrite.transitionStatus({
+      orderId: id,
+      to: OrderStatus.PENDING_PICK,
+      actor: { type: ActorType.STAFF, id: staff.id },
+      reason: 'Returned to the pick floor for re-pick',
+      ctx,
+    });
+  }
+
   @Post(':id/force-mutation')
   @RequirePermissions('orders.override')
   @HttpCode(HttpStatus.OK)

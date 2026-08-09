@@ -777,6 +777,100 @@ export function useWalletBalances(): UseQueryResult<WalletBalancesResponse> {
   });
 }
 
+/**
+ * Putting money IN.
+ *
+ * WAL-2: submitting is a CLAIM, not a payment. Nothing is credited until
+ * a human has matched it against the bank statement, which is why this
+ * flow ends at "submitted" and the balance does not move.
+ *
+ * These endpoints have existed since the wallet shipped and had no
+ * caller, so COD was the only way a balance could ever rise while order
+ * charges, RTO fees and freight all debited it.
+ */
+export interface PlatformBankAccountView {
+  readonly id: string;
+  readonly label: string;
+  readonly bankName: string;
+  readonly accountName: string;
+  readonly accountNumber: string;
+  readonly branchCode: string | null;
+  readonly currency: string;
+  readonly instructions: string | null;
+}
+
+export interface TopupRequestView {
+  readonly id: string;
+  readonly bankLabel: string;
+  readonly currency: string;
+  readonly amount: string;
+  readonly transactionRef: string | null;
+  readonly hasProof: boolean;
+  readonly status: string;
+  readonly reviewNote: string | null;
+  readonly reviewedAt: string | null;
+  readonly createdAt: string;
+}
+
+export interface TopupPresignResult {
+  readonly uploadUrl: string;
+  readonly spacesKey: string;
+  readonly expiresInSeconds: number;
+}
+
+export interface SubmitTopupInput {
+  readonly bankAccountId: string;
+  readonly amount: number;
+  readonly transactionRef?: string;
+  readonly proofSpacesKey?: string;
+  readonly proofMimeType?: string;
+}
+
+export function useTopupBankAccounts(): UseQueryResult<readonly PlatformBankAccountView[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-wallet', 'topup-banks'],
+    queryFn: () =>
+      client.request<readonly PlatformBankAccountView[]>('/api/seller/wallet/topups/bank-accounts'),
+  });
+}
+
+export function useTopupRequests(): UseQueryResult<readonly TopupRequestView[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-wallet', 'topups'],
+    queryFn: () => client.request<readonly TopupRequestView[]>('/api/seller/wallet/topups'),
+  });
+}
+
+export function usePresignTopupProof(): UseMutationResult<
+  TopupPresignResult,
+  Error,
+  { mimeType: string }
+> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<TopupPresignResult>('/api/seller/wallet/topups/proof-upload', {
+        method: 'POST',
+        body,
+      }),
+  });
+}
+
+export function useSubmitTopup(): UseMutationResult<TopupRequestView, Error, SubmitTopupInput> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<TopupRequestView>('/api/seller/wallet/topups', { method: 'POST', body }),
+    onSuccess: () => {
+      // The list, not the balance — WAL-2 means nothing was credited.
+      void queryClient.invalidateQueries({ queryKey: ['seller-wallet', 'topups'] });
+    },
+  });
+}
+
 export function useWalletEntries(currency?: 'INR' | 'BDT'): UseQueryResult<WalletEntriesPage> {
   const client = useApiClient();
   return useQuery({

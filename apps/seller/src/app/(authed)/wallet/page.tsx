@@ -16,6 +16,7 @@ import {
   Table,
 } from '@skydrop/ui/components';
 import { useInfiniteWalletEntries, useWalletBalances } from '@/lib/api-hooks';
+import { TopupCard } from './_components/topup-card';
 import { WithdrawalsCard } from './_components/withdrawals-card';
 import type { WalletEntryView } from '@skydrop/api-client';
 
@@ -179,6 +180,8 @@ export default function WalletPage(): ReactElement {
           )}
         </CardBody>
       </Card>
+
+      <TopupCard />
 
       <WithdrawalsCard />
 

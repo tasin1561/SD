@@ -566,8 +566,12 @@ describe('Warehouse RTO flow (e2e)', () => {
       .post(`/warehouse/rto/shipments/${shipmentId}/finalize`)
       .set(staffAuth)
       .expect(200);
+    // RTO_DAMAGED: nothing came back sellable. This asserted
+    // RTO_RESTOCKED and passed, because finalize used to land that
+    // terminal unconditionally — which made the damage-rate report
+    // structurally incapable of ever reading non-zero.
     expect(fin.body).toMatchObject({
-      status: OrderStatus.RTO_RESTOCKED,
+      status: OrderStatus.RTO_DAMAGED,
       restockedCount: 0,
       writtenOffCount: 1,
     });

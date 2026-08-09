@@ -117,6 +117,7 @@ export function AuthedShell({
       items: [
         { href: '/settlements', label: 'Settlements', icon: <Banknote size={15} /> },
         { href: '/withdrawals', label: 'Withdrawals', icon: <Wallet size={15} /> },
+        { href: '/topups', label: 'Top-ups', icon: <Wallet size={15} /> },
         { href: '/remittances', label: 'Remittances', icon: <Send size={15} /> },
         { href: '/freight', label: 'Inbound freight', icon: <Truck size={15} /> },
         { href: '/margin', label: 'Lane margin', icon: <BarChart3 size={15} /> },
