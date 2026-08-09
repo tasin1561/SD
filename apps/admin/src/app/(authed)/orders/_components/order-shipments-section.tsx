@@ -6,6 +6,7 @@ import { Card, CardBody, ErrorState, LoadingState } from '@skydrop/ui/components
 import { useAdminOrderShipments } from '@/lib/api-hooks';
 import { CourierOpsPanel } from './courier-ops-panel';
 import { ManualScanPanel } from './manual-scan-panel';
+import { ManualPlacementPanel } from './manual-placement-panel';
 
 const TRACK_URL = process.env.NEXT_PUBLIC_TRACK_URL ?? 'https://track.skydrop.online';
 
@@ -15,7 +16,16 @@ const TRACK_URL = process.env.NEXT_PUBLIC_TRACK_URL ?? 'https://track.skydrop.on
  * track.skydrop.online/<awb>. Useful when an operator wants to see
  * exactly what the customer sees.
  */
-export function OrderShipmentsSection({ orderId }: { readonly orderId: string }): ReactElement {
+export function OrderShipmentsSection({
+  orderId,
+  orderStatus,
+}: {
+  readonly orderId: string;
+  /** Gates the manual-placement actions. Passed down rather than
+   *  re-fetched: the parent already has it, and two reads of the same
+   *  status can disagree for a moment after a dispatch. */
+  readonly orderStatus: string;
+}): ReactElement {
   const shipments = useAdminOrderShipments(orderId);
 
   if (shipments.isLoading) return <LoadingState label="Loading shipments…" />;
@@ -77,6 +87,17 @@ export function OrderShipmentsSection({ orderId }: { readonly orderId: string })
                 />
                 {/* The recovery path when a courier webhook never arrived. */}
                 <ManualScanPanel shipmentId={s.id} />
+
+                {/* Only for an order actually stuck at manual placement.
+                    Rendering it always would offer a dispatch button on
+                    parcels a courier already has. */}
+                {orderStatus === 'PENDING_MANUAL_PLACEMENT' && (
+                  <ManualPlacementPanel
+                    shipmentId={s.id}
+                    shipmentNumber={s.shipmentNumber}
+                    hasAwb={s.awbNumber !== null}
+                  />
+                )}
               </div>
             </li>
           ))}

@@ -257,7 +257,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
           </Section>
 
           <Section title="Shipments">
-            <OrderShipmentsSection orderId={orderId} />
+            <OrderShipmentsSection orderId={orderId} orderStatus={detail.data.status} />
           </Section>
 
           <Section title="Timeline">

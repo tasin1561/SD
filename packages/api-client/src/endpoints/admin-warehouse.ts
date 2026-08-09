@@ -195,8 +195,15 @@ export interface ConfirmHandoffResult {
 
 export interface PlaceManualAwbRequest {
   readonly awbNumber: string;
+  /** The actual carrier (Bluedart / DTDC / …). The shipment's
+   *  courierCode becomes the generic `manual`; this is the ops record of
+   *  who really has the parcel. */
   readonly courierName?: string;
-  readonly trackingUrl?: string;
+  /** `serviceType`, NOT `trackingUrl`. This type said trackingUrl, which
+   *  PlaceManualAwbDto does not accept — and the API runs
+   *  forbidNonWhitelisted, so sending it was a guaranteed 400. It went
+   *  unnoticed because the hooks had no caller until the screen existed. */
+  readonly serviceType?: string;
 }
 
 export interface PlaceManualAwbResult {

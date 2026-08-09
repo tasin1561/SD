@@ -693,12 +693,20 @@ export function usePlaceManualAwb(): UseMutationResult<
   { shipmentId: string } & PlaceManualAwbRequest
 > {
   const client = useApiClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ shipmentId, ...body }) =>
       client.request<PlaceManualAwbResult>(
         `/api/admin/courier/manual-placement/shipments/${shipmentId}/place-awb`,
         { method: 'POST', body },
       ),
+    onSuccess: () => {
+      // This DISPATCHES the order and takes stock off hand. Leaving the
+      // page showing PENDING_MANUAL_PLACEMENT afterwards reads as the
+      // action having failed, and invites a second attempt.
+      void queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-inventory'] });
+    },
   });
 }
 export function useCancelManualPlacement(): UseMutationResult<
@@ -707,12 +715,18 @@ export function useCancelManualPlacement(): UseMutationResult<
   { shipmentId: string } & CancelManualPlacementRequest
 > {
   const client = useApiClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ shipmentId, ...body }) =>
       client.request<void>(`/api/admin/courier/manual-placement/shipments/${shipmentId}/cancel`, {
         method: 'POST',
         body,
       }),
+    onSuccess: () => {
+      // Cancelling releases the reservation, so availability moved too.
+      void queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-inventory'] });
+    },
   });
 }
 
