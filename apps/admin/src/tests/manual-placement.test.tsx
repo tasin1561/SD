@@ -121,6 +121,25 @@ describe('both actions move money-adjacent state, so the cache must follow', () 
   });
 });
 
+describe('the buttons are hidden from roles the server would refuse', () => {
+  it('gates on courier.manual_placement, not the page gate', () => {
+    // /orders is gated on `orders.view`, so without this every reader
+    // of an order would see a dispatch button and a cancel button that
+    // the server declines. Cosmetic (FE-2) — the boundary is still the
+    // API — but offering an action nobody may take is its own bug.
+    // CI's check-page-permissions.py fails the build without it.
+    const src = read(PANEL);
+    expect(src).toContain("usePermission('courier.manual_placement')");
+    expect(src).toMatch(/if \(!mayPlace\) return null;/);
+  });
+
+  it('runs the permission hook BEFORE any early return', () => {
+    // A conditional hook is a runtime crash, not a lint nit.
+    const src = read(PANEL);
+    expect(src.indexOf('usePermission(')).toBeLessThan(src.indexOf('if (!mayPlace)'));
+  });
+});
+
 describe('the destructive path is guarded like one', () => {
   const src = read(PANEL);
 

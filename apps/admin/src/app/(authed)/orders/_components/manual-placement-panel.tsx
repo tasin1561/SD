@@ -12,6 +12,7 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import { serverVerdict } from '@/lib/server-verdict';
+import { usePermission } from '@/lib/use-permission';
 import { useCancelManualPlacement, usePlaceManualAwb } from '@/lib/api-hooks';
 
 /**
@@ -53,7 +54,12 @@ export function ManualPlacementPanel({
   readonly shipmentId: string;
   readonly shipmentNumber: string;
   readonly hasAwb: boolean;
-}): ReactElement {
+}): ReactElement | null {
+  // COSMETIC (FE-2), and necessary: this panel sits on /orders, which is
+  // gated on `orders.view`. Without this, everyone who can read an order
+  // would see two buttons the server refuses them. The server is still
+  // the boundary — this only stops us offering what it will decline.
+  const mayPlace = usePermission('courier.manual_placement');
   const toast = useToast();
   const place = usePlaceManualAwb();
   const cancel = useCancelManualPlacement();
@@ -105,6 +111,8 @@ export function ManualPlacementPanel({
       setError(serverVerdict(err));
     }
   }
+
+  if (!mayPlace) return null;
 
   const awbTooShort = awbNumber.trim() === '';
   // The server's own floor. Mirrored so the operator is told before
