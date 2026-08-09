@@ -72,8 +72,15 @@ describe('FE-2 boundary — seller status action', () => {
     const init = statusCall[1] as RequestInit;
     expect(init.method).toBe('PATCH');
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
-    expect(body['targetStatus']).toBe('SUSPENDED');
-    expect(body['reason']).toBe('Customer-complaint-driven test');
+    // `newStatus` / `reasonNote` — the names UpdateSellerStatusDto
+    // declares. This assertion previously read `targetStatus` / `reason`
+    // and PASSED for months while every suspend 400'd in production,
+    // because it only checked that the client sent what the client sent.
+    // A request-shape assertion is worth nothing unless it is anchored to
+    // the server's DTO; request-contracts.test.ts now does that.
+    expect(body['newStatus']).toBe('SUSPENDED');
+    expect(body['reasonNote']).toBe('Customer-complaint-driven test');
+    expect(body['targetStatus']).toBeUndefined();
 
     // Modal stays OPEN (so the operator can read the error + retry).
     expect(screen.getByText(/Suspend this seller\?/i)).toBeInTheDocument();

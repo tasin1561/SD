@@ -211,7 +211,10 @@ export function TransfersIndex(): ReactElement {
                 destWarehouseId: form.destWarehouseId,
                 destBinId: form.destBinId.trim(),
                 destBatchId: form.destBatchId.trim(),
-                ...(form.description.trim() === '' ? {} : { description: form.description.trim() }),
+                // `reason`, not `description` — CreateStockTransferDto declares
+                // reason, so the old key 400'd when filled and was silently
+                // dropped when blank, losing the note either way.
+                ...(form.description.trim() === '' ? {} : { reason: form.description.trim() }),
               },
               { onSuccess: () => setDone(true) },
             )

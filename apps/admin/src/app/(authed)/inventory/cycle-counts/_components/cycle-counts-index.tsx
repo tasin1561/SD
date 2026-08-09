@@ -379,10 +379,18 @@ function CountDetail({
                     onChange={(e) => setCountedQty(e.target.value)}
                   />
                 </FormField>
-                <FormField label="Bin id" htmlFor="cc-bin" hint="Optional">
+                <FormField
+                  label="Bin id"
+                  htmlFor="cc-bin"
+                  hint="Required — a count is per bin and batch"
+                >
                   <Input id="cc-bin" value={binId} onChange={(e) => setBinId(e.target.value)} />
                 </FormField>
-                <FormField label="Batch id" htmlFor="cc-batch" hint="Optional">
+                <FormField
+                  label="Batch id"
+                  htmlFor="cc-batch"
+                  hint="Required — a count is per bin and batch"
+                >
                   <Input
                     id="cc-batch"
                     value={batchId}
@@ -390,7 +398,11 @@ function CountDetail({
                   />
                 </FormField>
               </div>
-              <FormField label="Notes" htmlFor="cc-notes" hint="Optional">
+              <FormField
+                label="Notes"
+                htmlFor="cc-notes"
+                hint="Required — a count is per bin and batch"
+              >
                 <Textarea
                   id="cc-notes"
                   rows={2}
@@ -401,7 +413,16 @@ function CountDetail({
               </FormField>
               <Button
                 size="md"
-                disabled={variantId.trim() === '' || countedQty === '' || record.isPending}
+                disabled={
+                  variantId.trim() === '' ||
+                  countedQty === '' ||
+                  // Both are REQUIRED server-side; without this the operator
+                  // types a count, clicks, and gets a 400 for a field the
+                  // form told them was optional.
+                  binId.trim() === '' ||
+                  batchId.trim() === '' ||
+                  record.isPending
+                }
                 onClick={() =>
                   record.mutate(
                     {
@@ -410,8 +431,11 @@ function CountDetail({
                         {
                           variantId: variantId.trim(),
                           countedQty: Number(countedQty),
-                          ...(binId.trim() === '' ? {} : { binId: binId.trim() }),
-                          ...(batchId.trim() === '' ? {} : { batchId: batchId.trim() }),
+                          // Sent unconditionally: RecordCountItemDto requires
+                          // both, because systemQty is held per bin+batch.
+                          // Omitting them 400'd the whole line.
+                          binId: binId.trim(),
+                          batchId: batchId.trim(),
                           ...(notes.trim() === '' ? {} : { notes: notes.trim() }),
                         },
                       ],

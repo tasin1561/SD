@@ -43,8 +43,14 @@ export interface SellerListResponse {
 }
 
 export interface UpdateSellerStatusRequest {
-  readonly targetStatus: SellerStatusValue;
-  readonly reason?: string;
+  /** `newStatus`, NOT `targetStatus`. This type said targetStatus and
+   *  `reason`; UpdateSellerStatusDto declares `newStatus` (required) and
+   *  `reasonNote`. With forbidNonWhitelisted every suspend and every
+   *  reapprove 400'd in production — verified live, not inferred. The
+   *  RESPONSE type below always said `newStatus`, which is what made the
+   *  file read as though it agreed with the server. */
+  readonly newStatus: SellerStatusValue;
+  readonly reasonNote?: string;
 }
 
 export interface UpdateSellerStatusResponse {

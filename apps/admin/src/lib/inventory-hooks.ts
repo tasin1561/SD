@@ -309,7 +309,7 @@ export function useCreateTransfer(): UseMutationResult<
     destWarehouseId: string;
     destBinId: string;
     destBatchId: string;
-    description?: string;
+    reason?: string;
   }
 > {
   const client = useApiClient();

@@ -65,8 +65,8 @@ export function StatusActionPanel({
     setServerError(null);
     try {
       await mutate.mutateAsync({
-        targetStatus: intent,
-        ...(reason.trim() ? { reason: reason.trim() } : {}),
+        newStatus: intent,
+        ...(reason.trim() ? { reasonNote: reason.trim() } : {}),
       });
       close();
     } catch (err) {

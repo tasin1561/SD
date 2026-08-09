@@ -649,7 +649,14 @@ export interface NdrOutcome extends ActionOutcome {
   readonly attemptCount: number;
 }
 
-const opsBase = (shipmentId: string): string => `/admin/courier-ops/shipments/${shipmentId}`;
+// The `/api` prefix is NOT optional: ApiClient's baseUrl is '' and the
+// admin app proxies only `/api/*` (app/api/[...path]/route.ts). Without
+// it these seven calls resolved against the Next origin and 404'd — the
+// whole courier-ops panel was dead. CI's check-frontend-routes.py could
+// not see it, because that script only inspects literals STARTING with
+// `/api/`, so an omitted prefix is invisible to the check written to
+// catch omitted prefixes.
+const opsBase = (shipmentId: string): string => `/api/admin/courier-ops/shipments/${shipmentId}`;
 
 export function useShipmentInsight(shipmentId: string | null): UseQueryResult<ShipmentInsight> {
   const client = useApiClient();
