@@ -823,6 +823,34 @@ Plan doc: `~/.claude/plans/silly-bouncing-cloud.md` (gap analysis + per-phase de
 
 It was two jobs until 2026-08-03, with everything but the browser specs running SEQUENTIALLY in one 12-minute `checks` job — for no reason, since lint does not depend on the e2e suite. Splitting it put the critical path on the longest single job (the e2e suite) and roughly halved CI. **Two properties to preserve:** (a) each job rebuilds the workspace packages rather than receiving them as artifacts — that costs runner-minutes and saves wall clock, and artifact-passing reintroduces a serial dependency longer than the rebuild it avoids; the shared preamble lives in the `.github/actions/setup-workspace` composite so four copies cannot drift apart, and its `packages` input exists so the e2e job builds `@skydrop/db` ALONE (apps/api's only workspace dependency — the `@skydrop/ui` mention in the notification listener is a comment). (b) **`browser` is the ONLY job that builds the Next apps, and that build IS the build check** — it used to happen in both, and the `checks` copy was actively wrong because that job set `NODE_ENV: test` job-wide and therefore built test-env frontends. Removing an app from the browser job's build list stops its build being checked anywhere. `browser` is also the only thing in CI that exercises a browser, which makes it the check that catches a CSP or hydration regression — it was a manual-only smoke until 2026-07-27 and is now a real gate. `Deploy` then SSHes to the droplet, runs `prisma migrate deploy` and restarts pm2. Both were repaired on 2026-07-27: CI had been red for ~14h on a floating `timescaledb-ha:pg18` tag that stopped provisioning a default `postgres` role (fixed by health-checking `pg_isready -U skydrop -d skydrop_test`), the e2e suite had never been wired into CI at all, and Deploy was failing on a pm2 target (`skydrop-workers`) that does not exist (Phase-1A workers run in-process inside apps/api). **Before claiming any invariant is verified, check that the e2e step actually ran in the CI log — that gap is exactly how "the conservation specs passed" was asserted on 2026-07-27 when they had never executed.**
 
+**Fonts are COMMITTED. Do not put `next/font/google` back (2026-08-13).**
+It self-hosts at RUNTIME — which is the part everyone checks, and the
+reason this looked fine for months — but it downloads the file during
+`next build`, so every build and every deploy depended on
+fonts.gstatic.com answering. It failed three CI runs in one day, each on
+a different family, each with nothing wrong in the diff; the same outage
+during a deploy fails the deploy for a reason nobody changed. The five
+faces now live as latin-subset woff2 under `apps/<app>/src/app/fonts/`
+(172KB total) behind `next/font/local`. **Keep the `declarations:
+unicode-range`** — the CDN's own @font-face carried it and it is silently
+lost when self-hosting, after which the browser fetches a face for text
+it cannot render. Adding a new family means committing the file, not
+adding an import.
+
+**`scripts/check-frontend-routes.py` now runs BOTH directions
+(2026-08-13).** `call → route` is exact and GATES the build. `route →
+call` — an endpoint nothing reaches — only PRINTS, and the asymmetry is
+deliberate: to say "nothing calls this" you must find EVERY caller, and a
+path composed from a builder, a prop or a helper cannot be seen by a
+static string scan however hard it is chased. A gate that fails on a call
+it could not see is a gate people learn to skip. Treat the list as a
+place to LOOK; it is how the unmanageable platform-bank-accounts screen
+was found. Two blind spots are already closed and worth not
+reintroducing: a bare **`@Controller()`** (legal Nest, empty prefix, full
+paths on the methods) used to drop an entire controller from the route
+table, and a call resolving to more than one route used to credit only
+the first.
+
 **`pnpm gate` is the pre-commit gate. Run it whole; never a subset (2026-08-06).**
 It is `gate:clean` (delete every `.tsbuildinfo` — see the stale-cache trap below)
 then typecheck → lint → `format:check` → the full unit suite, which is exactly
