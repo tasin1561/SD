@@ -33,7 +33,11 @@ REPO = pathlib.Path('.')
 API = REPO / 'apps/api/src'
 
 # ── Build the API route table ────────────────────────────────────────
-CONTROLLER = re.compile(r"@Controller\(\s*'([^']*)'")
+# A bare `@Controller()` is legal Nest and means an EMPTY prefix — the
+# routes carry their full paths on the methods. Requiring a quoted string
+# here dropped the whole controller silently, so its four real endpoints
+# reported as NO MATCHING ROUTE and any dead one in it was unfindable.
+CONTROLLER = re.compile(r"@Controller\(\s*(?:'([^']*)')?\s*\)")
 METHOD = re.compile(r"@(Get|Post|Patch|Put|Delete)\(\s*(?:'([^']*)')?\s*\)")
 
 routes = []  # (METHOD, regex, literal)
@@ -42,7 +46,7 @@ for f in API.rglob('*.controller.ts'):
     m = CONTROLLER.search(text)
     if not m:
         continue
-    prefix = m.group(1).strip('/')
+    prefix = (m.group(1) or '').strip('/')
     for mm in METHOD.finditer(text):
         verb = mm.group(1).upper()
         sub = (mm.group(2) or '').strip('/')

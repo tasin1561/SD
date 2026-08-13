@@ -34,6 +34,7 @@ import {
   type CallQueueRow,
 } from '@/lib/callcenter-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { ForceOutcomePanel } from './force-outcome-panel';
 import { useRouter } from 'next/navigation';
 
 const PAGE_SIZE = 25;
@@ -193,11 +194,18 @@ export function QueueIndex(): ReactElement {
                       <StatusBadge kind={queueKind(e.status)} label={e.status.toLowerCase()} />
                     </Td>
                     <Td align="right">
-                      {e.status === 'ASSIGNED' && (
-                        <Button variant="ghost" size="sm" onClick={() => setReassigning(e)}>
-                          Reassign
-                        </Button>
-                      )}
+                      <div className="flex items-center justify-end gap-1">
+                        {e.status === 'ASSIGNED' && (
+                          <Button variant="ghost" size="sm" onClick={() => setReassigning(e)}>
+                            Reassign
+                          </Button>
+                        )}
+                        <ForceOutcomePanel
+                          entryId={e.id}
+                          entryStatus={e.status}
+                          orderLabel={e.order?.orderNumber ?? e.orderId}
+                        />
+                      </div>
                     </Td>
                   </Tr>
                 ))}

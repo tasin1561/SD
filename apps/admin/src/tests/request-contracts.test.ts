@@ -133,3 +133,58 @@ describe('every admin API call carries the /api prefix', () => {
     expect(literals.filter((l) => !l.startsWith('/api/'))).toEqual([]);
   });
 });
+
+/**
+ * The RESPONSE half, which is worse.
+ *
+ * A wrong request field is a 400 — loud, uniform, and the feature
+ * visibly does not work. A wrong RESPONSE field name is silent: the read
+ * yields `undefined`, TypeScript is satisfied because the declared type
+ * says the field is there, and the UI renders a confident wrong answer.
+ *
+ * `MoveShipmentResult` named three fields the server has never sent
+ * (`fromManifestId` / `toManifestId` / `alreadyMoved` against the real
+ * `sourceManifestId` / `targetManifestId` / `alreadyOnTarget`). Nothing
+ * called it, so nothing noticed — but the moment a caller existed, the
+ * idempotent no-op branch would have reported every already-on-target
+ * move as a real one.
+ */
+describe('client response types name the fields the service returns', () => {
+  const service = readFileSync(
+    join(__dirname, '../../../api/src/modules/warehouse-manifest/services/manifest.service.ts'),
+    'utf8',
+  );
+  const client = R('../../../../packages/api-client/src/endpoints/admin-warehouse.ts');
+
+  it('MoveShipmentResult matches what moveShipment actually returns', () => {
+    const move = service.slice(
+      service.indexOf('async moveShipment('),
+      service.indexOf('async close('),
+    );
+    // Both return sites — the idempotent one and the real one.
+    expect(move).toContain('alreadyOnTarget: true');
+    expect(move).toContain('alreadyOnTarget: false');
+    expect(move).toContain('sourceManifestId');
+    expect(move).toContain('targetManifestId');
+
+    const iface = client.slice(
+      client.indexOf('export interface MoveShipmentResult'),
+      client.indexOf('export interface MoveShipmentResult') + 600,
+    );
+    expect(iface).toContain('sourceManifestId');
+    expect(iface).toContain('targetManifestId');
+    expect(iface).toContain('alreadyOnTarget');
+    // The three names that were there and are not on the wire.
+    expect(iface).not.toContain('fromManifestId');
+    expect(iface).not.toContain('toManifestId');
+    expect(iface).not.toContain('alreadyMoved');
+  });
+
+  it('the panel reads the field directly, with no cast papering over it', () => {
+    // A cast is how a known-wrong type survives: it silences the error
+    // at one call site and leaves the interface lying to the next.
+    const panel = R('../app/(authed)/warehouse/manifests/_components/move-shipment-panel.tsx');
+    expect(panel).toContain('result.alreadyOnTarget');
+    expect(panel).not.toContain('as unknown as');
+  });
+});

@@ -99,10 +99,12 @@ def controller_routes(guard: str, decorator: str, self_service: str):
     out = []
     for f in files:
         src = (ROOT / f).read_text()
-        prefix = re.search(r"@Controller\('([^']*)'\)", src)
+        # `@Controller()` with no argument is an EMPTY prefix, not an
+        # absent controller — the paths live on the methods.
+        prefix = re.search(r"@Controller\(\s*(?:'([^']*)')?\s*\)", src)
         if prefix is None:
             continue
-        prefix = prefix.group(1)
+        prefix = prefix.group(1) or ''
         is_self = f"\n@{self_service}()" in src
         cls = re.search(rf"\n@{decorator}\(([^)]*)\)", src)
         cls_perms = re.findall(r"'([^']+)'", cls.group(1)) if cls else []

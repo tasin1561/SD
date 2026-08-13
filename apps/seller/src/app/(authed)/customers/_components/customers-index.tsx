@@ -23,6 +23,7 @@ import {
 } from '@skydrop/ui/components';
 import { useCustomers } from '@/lib/account-hooks';
 import { AddressHistory } from './address-history';
+import { CustomerDetailPanel } from './customer-detail-panel';
 import { serverVerdict } from '@/lib/server-verdict';
 
 const PAGE_SIZE = 25;
@@ -168,13 +169,17 @@ export function CustomersIndex(): ReactElement {
                           size="sm"
                           onClick={() => setExpanded(expanded === c.id ? null : c.id)}
                         >
-                          {expanded === c.id ? 'Hide addresses' : 'Addresses'}
+                          {expanded === c.id ? 'Hide' : 'Open'}
                         </Button>
                       </Td>
                     </Tr>
                     {expanded === c.id && (
                       <Tr>
                         <Td colSpan={9}>
+                          <CustomerDetailPanel
+                            customerId={c.id}
+                            onDeleted={() => setExpanded(null)}
+                          />
                           <AddressHistory customerId={c.id} />
                         </Td>
                       </Tr>

@@ -1308,6 +1308,130 @@ export function useSetBinTracking(
   });
 }
 
+export interface CreateWarehouseBody {
+  readonly code: string;
+  readonly name: string;
+  readonly status?: string;
+  readonly countryCode?: string;
+  readonly timezone?: string;
+}
+
+/**
+ * No `code`. It is the natural key `ops.default_warehouse_id` and every
+ * manifest refer to, so the update DTO has no such field — and under
+ * forbidNonWhitelisted sending it is a 400 on the whole call rather than
+ * a silently ignored key.
+ */
+export interface UpdateWarehouseBody {
+  readonly name?: string;
+  readonly status?: string;
+  readonly countryCode?: string;
+  readonly timezone?: string;
+}
+
+export function useCreateWarehouse(): UseMutationResult<
+  WarehouseSummary,
+  Error,
+  CreateWarehouseBody
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<WarehouseSummary>('/api/admin/warehouses', { method: 'POST', body }),
+    onSuccess: () => {
+      // The prefix covers the list and every per-warehouse zone/bin key —
+      // a new building arrives with a MAIN zone and a FLOOR bin already
+      // inside it (BIN-1), so those reads are stale too.
+      void queryClient.invalidateQueries({ queryKey: ['admin-warehouses'] });
+    },
+  });
+}
+
+export function useUpdateWarehouse(
+  warehouseId: string,
+): UseMutationResult<WarehouseSummary, Error, UpdateWarehouseBody> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<WarehouseSummary>(`/api/admin/warehouses/${warehouseId}`, {
+        method: 'PATCH',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-warehouses'] });
+    },
+  });
+}
+
+// ───────── Admin: bin operations (re-shelving) ─────────
+
+/**
+ * Both bin-ops endpoints answer with this shape. The counts come from the
+ * SERVER because a whole-bin move expands contents the caller never
+ * enumerated — computing them here would report a number nobody moved.
+ */
+export interface BinOpsResult {
+  readonly warehouseId: string;
+  readonly linesMoved: number;
+  readonly unitsMoved: number;
+}
+
+/**
+ * Mirrors `BulkTransferLineDto` exactly. `qty` is `@IsInt`, so it must be
+ * a number rather than the form input's string.
+ *
+ * `batchId` is carried UNCHANGED through the move: a transfer answers
+ * where stock is, never what it is.
+ */
+export interface BulkTransferLineBody {
+  readonly sellerId: string;
+  readonly variantId: string;
+  readonly batchId: string;
+  readonly qty: number;
+  readonly sourceBinId: string;
+  readonly destBinId: string;
+}
+
+export function useMoveWholeBin(
+  warehouseId: string,
+): UseMutationResult<BinOpsResult, Error, { sourceBinId: string; destBinId: string }> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sourceBinId, destBinId }) =>
+      client.request<BinOpsResult>(
+        `/api/admin/warehouses/${warehouseId}/bin-ops/move-bin/${sourceBinId}`,
+        { method: 'POST', body: { destBinId } },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-warehouses'] });
+      // The move lands as paired TRANSFER_OUT/TRANSFER_IN movements
+      // (BIN-4), so the ledger a reader would check next is stale.
+      void queryClient.invalidateQueries({ queryKey: ['admin-movements'] });
+    },
+  });
+}
+
+export function useBulkBinTransfer(
+  warehouseId: string,
+): UseMutationResult<BinOpsResult, Error, ReadonlyArray<BulkTransferLineBody>> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (lines) =>
+      client.request<BinOpsResult>(`/api/admin/warehouses/${warehouseId}/bin-ops/bulk-transfer`, {
+        method: 'POST',
+        body: { lines },
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-warehouses'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-movements'] });
+    },
+  });
+}
+
 // ───────── Admin: remittances (Phase 1B M23) ─────────
 
 import type { RemittanceListResponse, CreateRemittanceRequest } from '@skydrop/api-client';

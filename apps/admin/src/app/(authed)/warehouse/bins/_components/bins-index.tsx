@@ -34,6 +34,8 @@ import {
   useWarehouseZones,
   type WarehouseBin,
 } from '@/lib/api-hooks';
+import { WarehouseFormPanel } from '../../_components/warehouse-form-panel';
+import { BinOpsPanel } from './bin-ops-panel';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /**
@@ -186,19 +188,26 @@ export function BinsIndex(): ReactElement {
         title="Bins"
         subtitle="Where stock physically sits. Build the layout here; the switch below decides whether the system asks for it."
         action={
-          (warehouses.data?.length ?? 0) > 1 ? (
-            <Select
-              value={activeId}
-              onChange={(e) => setWarehouseId(e.target.value)}
-              aria-label="Warehouse"
-            >
-              {(warehouses.data ?? []).map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.code} — {w.name}
-                </option>
-              ))}
-            </Select>
-          ) : undefined
+          <div className="flex flex-wrap items-center gap-2">
+            {(warehouses.data?.length ?? 0) > 1 && (
+              <Select
+                value={activeId}
+                onChange={(e) => setWarehouseId(e.target.value)}
+                aria-label="Warehouse"
+              >
+                {(warehouses.data ?? []).map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.code} — {w.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+            {/* Buildings are created and renamed here because this is the
+                only screen that already knows which one you are looking
+                at. Until now a warehouse could only be created by seeding. */}
+            {active !== null && <WarehouseFormPanel warehouse={active} />}
+            <WarehouseFormPanel />
+          </div>
         }
       />
 
@@ -477,6 +486,11 @@ export function BinsIndex(): ReactElement {
           </div>
         </div>
       </Modal>
+
+      {/* Moving stock BETWEEN bins. Separate from laying out the shelving
+          above, and deliberately below it: the layout is setup, this is a
+          stock movement that writes paired TRANSFER_OUT/TRANSFER_IN. */}
+      {activeId !== '' && <BinOpsPanel warehouseId={activeId} />}
     </div>
   );
 }

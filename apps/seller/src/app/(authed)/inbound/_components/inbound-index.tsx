@@ -34,6 +34,7 @@ import {
   type GoodsReceiptView,
 } from '@/lib/account-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { EditReceiptPanel } from './edit-receipt-panel';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 
@@ -57,6 +58,7 @@ export function InboundIndex(): ReactElement {
   const [page, setPage] = useState(1);
   const [announcing, setAnnouncing] = useState(false);
   const [cancelling, setCancelling] = useState<GoodsReceiptView | null>(null);
+  const [editing, setEditing] = useState<GoodsReceiptView | null>(null);
 
   const list = useGoodsReceipts({
     ...(status === '' ? {} : { status }),
@@ -168,11 +170,20 @@ export function InboundIndex(): ReactElement {
                       <StatusBadge kind={receiptKind(r.status)} label={r.status.toLowerCase()} />
                     </Td>
                     <Td align="right">
-                      {canManage && (r.status === 'PENDING' || r.status === 'ARRIVING') && (
-                        <Button variant="ghost" size="sm" onClick={() => setCancelling(r)}>
-                          Cancel
-                        </Button>
-                      )}
+                      <div className="flex items-center justify-end gap-1">
+                        {/* Narrower than Cancel on purpose: `update` refuses
+                            ARRIVING, `cancel` allows it. */}
+                        {canManage && r.status === 'PENDING' && (
+                          <Button variant="ghost" size="sm" onClick={() => setEditing(r)}>
+                            Correct
+                          </Button>
+                        )}
+                        {canManage && (r.status === 'PENDING' || r.status === 'ARRIVING') && (
+                          <Button variant="ghost" size="sm" onClick={() => setCancelling(r)}>
+                            Cancel
+                          </Button>
+                        )}
+                      </div>
                     </Td>
                   </Tr>
                 ))}
@@ -191,6 +202,7 @@ export function InboundIndex(): ReactElement {
       )}
 
       <AnnounceConsignment open={announcing} onClose={() => setAnnouncing(false)} />
+      <EditReceiptPanel receipt={editing} onClose={() => setEditing(null)} />
 
       <Modal
         open={cancelling !== null}

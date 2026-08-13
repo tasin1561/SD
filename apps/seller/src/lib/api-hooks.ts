@@ -666,6 +666,51 @@ export function useStockSummary(): UseQueryResult<SellerStockSummary> {
   });
 }
 
+// ───────── Seller low-stock alert thresholds ─────────
+
+export interface SellerAlertConfigView {
+  readonly defaultLowStockThreshold: number | null;
+}
+
+/**
+ * `null` CLEARS the default, which switches low-stock alerting off
+ * entirely for variants with no threshold of their own. The key must be
+ * PRESENT either way — the DTO's `@IsDefined` under `@ValidateIf` accepts
+ * null and rejects undefined, so omitting it is a 400 rather than a no-op.
+ */
+export interface SetDefaultThresholdBody {
+  readonly defaultLowStockThreshold: number | null;
+}
+
+export function useStockAlertConfig(): UseQueryResult<SellerAlertConfigView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-stock', 'alert-config'],
+    queryFn: () => client.request<SellerAlertConfigView>('/api/seller/stock/alert-config'),
+  });
+}
+
+export function useSetDefaultStockThreshold(): UseMutationResult<
+  SellerAlertConfigView,
+  Error,
+  SetDefaultThresholdBody
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<SellerAlertConfigView>('/api/seller/stock/alert-config/default', {
+        method: 'PATCH',
+        body,
+      }),
+    onSuccess: () => {
+      // `isLowStock` on every cached stock row is DERIVED from this
+      // number, so the whole list is stale the moment it lands.
+      void queryClient.invalidateQueries({ queryKey: ['seller-stock'] });
+    },
+  });
+}
+
 // ───────── Seller webhooks (outbound) ─────────
 
 import type {

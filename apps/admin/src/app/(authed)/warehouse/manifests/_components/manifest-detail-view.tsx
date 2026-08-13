@@ -21,6 +21,7 @@ import {
 } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 import { useCloseManifest, useConfirmHandoff, useManifestDetail } from '@/lib/api-hooks';
+import { MoveShipmentPanel } from './move-shipment-panel';
 import { useRouter } from 'next/navigation';
 
 /**
@@ -190,6 +191,15 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
           </TBody>
         </Table>
       )}
+
+      <MoveShipmentPanel
+        manifestId={m.id}
+        manifestNumber={m.manifestNumber}
+        status={m.status}
+        courierCode={m.courierCode}
+        originWarehouseId={m.originWarehouseId}
+        shipments={m.shipments}
+      />
 
       <ConfirmDialog
         open={showCloseConfirm}

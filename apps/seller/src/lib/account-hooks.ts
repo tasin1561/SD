@@ -63,6 +63,73 @@ export function useCustomers(query: {
   });
 }
 
+/**
+ * The detail endpoint returns more than the list projection — the three
+ * fields below are editable and the list never carried them.
+ */
+export interface CustomerDetail extends CustomerView {
+  altPhoneE164: string | null;
+  preferredLanguage: string | null;
+  createdAt: string;
+}
+
+export function useCustomer(id: string): UseQueryResult<CustomerDetail> {
+  const client = useApiClient();
+  const mayRead = can(useSellerIdentity(), 'customers.view');
+  return useQuery({
+    queryKey: ['seller-customer', id],
+    enabled: mayRead && id !== '',
+    queryFn: () => client.request<CustomerDetail>(`/api/seller/customers/${id}`),
+  });
+}
+
+/**
+ * The five editable fields and nothing else. `phoneE164` is absent by
+ * construction (ORD-7 — a customer IS their phone number per seller),
+ * and the API runs forbidNonWhitelisted, so a sixth key 400s the call.
+ *
+ * `null` CLEARS a field; an omitted key leaves it alone. `''` is not the
+ * same thing — it would fail `@IsEmail` rather than erase a wrong address.
+ */
+export interface UpdateCustomerBody {
+  name?: string | null;
+  email?: string | null;
+  altPhoneE164?: string | null;
+  riskNotes?: string | null;
+  preferredLanguage?: string | null;
+}
+
+export function useUpdateCustomer(): UseMutationResult<
+  CustomerDetail,
+  Error,
+  { id: string; body: UpdateCustomerBody }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }) =>
+      client.request<CustomerDetail>(`/api/seller/customers/${id}`, { method: 'PATCH', body }),
+    onSuccess: (_r, { id }) => {
+      void qc.invalidateQueries({ queryKey: ['seller-customer', id] });
+      void qc.invalidateQueries({ queryKey: ['seller-customers'] });
+    },
+  });
+}
+
+/** Soft delete — 204, no body. History survives; the row leaves read paths. */
+export function useDeleteCustomer(): UseMutationResult<void, Error, { id: string }> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }) =>
+      client.request<void>(`/api/seller/customers/${id}`, { method: 'DELETE' }),
+    onSuccess: (_r, { id }) => {
+      qc.removeQueries({ queryKey: ['seller-customer', id] });
+      void qc.invalidateQueries({ queryKey: ['seller-customers'] });
+    },
+  });
+}
+
 // ───────── Inbound goods receipts ─────────
 
 export interface GoodsReceiptView {
@@ -133,6 +200,84 @@ export function useCancelGoodsReceipt(): UseMutationResult<
         body: {},
       }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-goods-receipts'] }),
+  });
+}
+
+/**
+ * A line as the server RETURNS it. Wider than what may be sent back:
+ * `id`, `receivedQty`, `damagedQty`, `batchId`, `putawayBinId` and the
+ * `variant` object are display-only, and echoing any of them into a
+ * PATCH is a 400 on the whole request under forbidNonWhitelisted.
+ */
+export interface GoodsReceiptLineView {
+  id: string;
+  variantId: string;
+  batchId: string | null;
+  expectedQty: number;
+  receivedQty: number;
+  damagedQty: number;
+  unitCostInr: string | null;
+  manufacturedAt: string | null;
+  expiresAt: string | null;
+  putawayBinId: string | null;
+  variant: {
+    skuCode: string;
+    variantLabel: string | null;
+    product: { name: string };
+  };
+}
+
+export interface GoodsReceiptDetailView extends GoodsReceiptView {
+  lines: readonly GoodsReceiptLineView[];
+}
+
+/**
+ * A correction is edited against a FRESH read rather than the row the
+ * list already has. The list page may have sat open while the warehouse
+ * started receiving, and editing a stale copy is how a quantity that was
+ * already counted gets put back.
+ */
+export function useGoodsReceipt(id: string): UseQueryResult<GoodsReceiptDetailView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-goods-receipt', id],
+    enabled: id !== '',
+    queryFn: () => client.request<GoodsReceiptDetailView>(`/api/seller/goods-receipts/${id}`),
+  });
+}
+
+/**
+ * Mirrors `UpdateGoodsReceiptDto` exactly. `null` clears a field —
+ * `@IsOptional()` skips null and the service maps falsy to null, whereas
+ * `''` would fail `@IsDateString`.
+ *
+ * `lines` is a FULL REPLACE (the service deletes then recreates), so a
+ * line resent without its `expiresAt` silently loses FEFO data. The form
+ * carries every date even when untouched.
+ */
+export interface UpdateGoodsReceiptBody {
+  expectedArrivalAt?: string | null;
+  sellerReference?: string | null;
+  lines?: readonly DeclareReceiptLine[];
+}
+
+export function useUpdateGoodsReceipt(): UseMutationResult<
+  GoodsReceiptView,
+  Error,
+  { id: string; body: UpdateGoodsReceiptBody }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }) =>
+      client.request<GoodsReceiptView>(`/api/seller/goods-receipts/${id}`, {
+        method: 'PATCH',
+        body,
+      }),
+    onSuccess: (_r, { id }) => {
+      void qc.invalidateQueries({ queryKey: ['seller-goods-receipts'] });
+      void qc.invalidateQueries({ queryKey: ['seller-goods-receipt', id] });
+    },
   });
 }
 

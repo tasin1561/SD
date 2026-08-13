@@ -170,11 +170,19 @@ export interface MoveShipmentRequest {
   readonly targetManifestId: string;
 }
 
+/**
+ * Names taken from `ManifestService.moveShipment`'s actual return, not
+ * from what reads naturally. All three used to differ from the wire
+ * (`fromManifestId` / `toManifestId` / `alreadyMoved`), and because this
+ * is a RESPONSE type nothing failed: the reads just produced `undefined`,
+ * so the idempotent no-op reported to the operator as a real move.
+ */
 export interface MoveShipmentResult {
   readonly shipmentId: string;
-  readonly fromManifestId: string;
-  readonly toManifestId: string;
-  readonly alreadyMoved: boolean;
+  readonly sourceManifestId: string;
+  readonly targetManifestId: string;
+  /** true ⇒ the shipment was already on the target DRAFT; nothing moved. */
+  readonly alreadyOnTarget: boolean;
 }
 
 // ── Dispatch ─────────────────────────────────────────────────────────
