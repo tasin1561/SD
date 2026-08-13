@@ -711,6 +711,129 @@ export function useSetDefaultStockThreshold(): UseMutationResult<
   });
 }
 
+// ───────── Per-variant stock config (R4 mode + low-stock threshold) ─────────
+
+export type SellerInventoryMode = 'NORMAL' | 'STRICT';
+
+export interface VariantInventoryModeView {
+  readonly variantId: string;
+  readonly productId: string;
+  /** The variant's OWN value. null means "inherit the seller default". */
+  readonly inventoryMode: SellerInventoryMode | null;
+  /** What pick, pack and receiving actually enforce today. */
+  readonly effectiveInventoryMode: SellerInventoryMode;
+  readonly inherited: boolean;
+}
+
+/**
+ * `null` CLEARS the override so the SKU inherits the seller default — it
+ * is NOT a synonym for NORMAL. The key must be PRESENT either way: the
+ * DTO's `@IsDefined` under `@ValidateIf` accepts null and rejects
+ * undefined, so omitting it is a 400 rather than a no-op.
+ */
+export interface SetVariantInventoryModeBody {
+  readonly inventoryMode: SellerInventoryMode | null;
+}
+
+export interface VariantThresholdView {
+  readonly variantId: string;
+  readonly productId: string;
+  readonly lowStockThreshold: number | null;
+}
+
+/** Same clear-vs-omit contract as the mode above. */
+export interface SetVariantThresholdBody {
+  readonly lowStockThreshold: number | null;
+}
+
+export interface VariantStockRow {
+  readonly variantId: string;
+  readonly productId: string;
+  readonly skuCode: string;
+  readonly variantLabel: string | null;
+  readonly qtyOnHand: number;
+  readonly qtyReserved: number;
+  readonly qtyAvailable: number;
+  readonly lowStockThreshold: number | null;
+  readonly isLowStock: boolean;
+  readonly warehouseCount: number;
+}
+
+/**
+ * Stock for ONE SKU, aggregated across warehouses.
+ *
+ * This is also the only read that returns a variant's own
+ * `lowStockThreshold` — the variant detail projection does not carry it,
+ * so without this the threshold control would be a box you type into
+ * without being able to see what is currently set.
+ */
+export function useVariantStock(variantId: string): UseQueryResult<VariantStockRow> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-stock', 'by-variant', variantId],
+    enabled: variantId !== '',
+    queryFn: () => client.request<VariantStockRow>(`/api/seller/stock/by-variant/${variantId}`),
+  });
+}
+
+export function useVariantInventoryMode(
+  productId: string,
+  variantId: string,
+): UseQueryResult<VariantInventoryModeView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-catalog', 'variant', variantId, 'inventory-mode'],
+    enabled: productId !== '' && variantId !== '',
+    queryFn: () =>
+      client.request<VariantInventoryModeView>(
+        `/api/seller/products/${productId}/variants/${variantId}/inventory-mode`,
+      ),
+  });
+}
+
+export function useSetVariantInventoryMode(
+  productId: string,
+  variantId: string,
+): UseMutationResult<VariantInventoryModeView, Error, SetVariantInventoryModeBody> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<VariantInventoryModeView>(
+        `/api/seller/products/${productId}/variants/${variantId}/inventory-mode`,
+        { method: 'PATCH', body },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['seller-catalog', 'variant', variantId, 'inventory-mode'],
+      });
+      // Which SKUs are strict decides what the unit-discrepancy lists
+      // are even about.
+      void queryClient.invalidateQueries({ queryKey: ['seller-stock-units'] });
+    },
+  });
+}
+
+export function useSetVariantThreshold(
+  productId: string,
+  variantId: string,
+): UseMutationResult<VariantThresholdView, Error, SetVariantThresholdBody> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<VariantThresholdView>(
+        `/api/seller/products/${productId}/variants/${variantId}/threshold`,
+        { method: 'PATCH', body },
+      ),
+    onSuccess: () => {
+      // isLowStock on every cached row is derived from the threshold.
+      void queryClient.invalidateQueries({ queryKey: ['seller-stock'] });
+      void queryClient.invalidateQueries({ queryKey: ['seller-catalog'] });
+    },
+  });
+}
+
 // ───────── Seller webhooks (outbound) ─────────
 
 import type {

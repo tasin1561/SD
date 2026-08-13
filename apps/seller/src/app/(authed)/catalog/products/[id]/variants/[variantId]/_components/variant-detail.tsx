@@ -20,6 +20,7 @@ import {
   StatusBadge,
 } from '@skydrop/ui/components';
 import { VariantImageUpload } from './image-upload';
+import { StockConfigPanel } from './stock-config-panel';
 
 /**
  * Variant detail. Inline edit (no separate /edit route). SKU code is
@@ -98,6 +99,8 @@ export function VariantDetailView({
               <VariantReadCard variant={detail.data} />
             )}
           </Section>
+
+          <StockConfigPanel productId={productId} variantId={variantId} />
 
           <Section title="Images">
             <VariantImageUpload variantId={variantId} />
