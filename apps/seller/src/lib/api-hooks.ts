@@ -455,6 +455,59 @@ export function useCreateVariant(
   });
 }
 
+/**
+ * Retiring a product or variant.
+ *
+ * ARCHIVED blocks new uses — no new orders, no stock receiving — while
+ * leaving every historical reference intact (M4 catalog rule 7). That is
+ * why this is the normal way to stop selling something, and deleting is
+ * not offered here: a soft-delete hides the row from read paths, which
+ * is a bigger hammer than "we no longer sell this" and is recoverable
+ * only by staff.
+ *
+ * Both endpoints shipped with M4 and had no caller, so a seller could
+ * add to their catalogue and never take anything out of it.
+ *
+ * Archiving a PRODUCT cascades to its variants; unarchiving does NOT
+ * bring them back, because which variants a seller wants live again is a
+ * decision, not something to infer. The UI says so rather than letting
+ * it be discovered.
+ */
+export function useArchiveProduct(
+  productId: string,
+): UseMutationResult<SellerProductView, Error, { archived: boolean }> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ archived }) =>
+      client.request<SellerProductView>(
+        `/api/seller/products/${productId}/${archived ? 'archive' : 'unarchive'}`,
+        { method: 'POST', body: {} },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-catalog'] });
+    },
+  });
+}
+
+export function useArchiveVariant(
+  productId: string,
+  variantId: string,
+): UseMutationResult<SellerVariantView, Error, { archived: boolean }> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ archived }) =>
+      client.request<SellerVariantView>(
+        `/api/seller/products/${productId}/variants/${variantId}/${archived ? 'archive' : 'unarchive'}`,
+        { method: 'POST', body: {} },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-catalog'] });
+    },
+  });
+}
+
 export function useUpdateProduct(
   productId: string,
 ): UseMutationResult<SellerProductView, Error, UpdateSellerProductRequest> {

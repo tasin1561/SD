@@ -19,6 +19,7 @@ import { ApiError } from '@skydrop/api-client';
 import type { RecordReceiptLineInput } from '@skydrop/api-client';
 import {
   useCompleteGoodsReceipt,
+  useResolveDiscrepancy,
   useGoodsReceiptDetail,
   useRecordReceiptLines,
   useStartReceiving,
@@ -33,7 +34,10 @@ import {
  *   2. ARRIVING  → per-line received/damaged/bin form → "Record line"
  *                  per line, or "Save all" batch → "Complete"
  *   3. COMPLETED → read-only with stock-written badge
- *   4. DISCREPANCY → read-only with "Force-complete" / corrections (deferred)
+ *   4. DISCREPANCY → accept the shortage with a mandatory note, which
+ *                    writes stock for what actually arrived. Without it a
+ *                    short consignment was a dead end: goods on the floor
+ *                    the system would never admit had arrived.
  *
  * Sub-rule (M5/WMS): completing writes stock via StockMutationService
  * (INV-1) under a transaction; partial-failure rolls back so the
@@ -45,13 +49,15 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
   const start = useStartReceiving();
   const record = useRecordReceiptLines();
   const complete = useCompleteGoodsReceipt();
-  const [busy, setBusy] = useState<'start' | 'record' | 'complete' | null>(null);
+  const resolve = useResolveDiscrepancy();
+  const [busy, setBusy] = useState<'start' | 'record' | 'complete' | 'resolve' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Per-line input state — keyed by lineId
   const [received, setReceived] = useState<Record<string, string>>({});
   const [damaged, setDamaged] = useState<Record<string, string>>({});
   const [binByLine, setBinByLine] = useState<Record<string, string>>({});
+  const [forceNote, setForceNote] = useState('');
 
   const bins = useWarehouseBins(detail.data?.warehouseId ?? '');
 
@@ -73,6 +79,25 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
   const isPending = r.status === 'PENDING';
   const isArriving = r.status === 'ARRIVING';
   const isCompleted = r.status === 'COMPLETED';
+  const isDiscrepancy = r.status === 'DISCREPANCY';
+
+  async function onForceComplete(): Promise<void> {
+    setError(null);
+    setBusy('resolve');
+    try {
+      // FORCE_COMPLETE writes stock for the actuals recorded and keeps
+      // the note on the receipt. CORRECT is the other mode the endpoint
+      // takes; an operator who miscounted re-records the lines above and
+      // completes normally rather than resolving.
+      await resolve.mutateAsync({ id, mode: 'FORCE_COMPLETE', note: forceNote.trim() });
+      toast.success('Completed — stock written for what actually arrived.');
+      setForceNote('');
+    } catch (e) {
+      setError(fmtError(e));
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function onStart(): Promise<void> {
     setError(null);
@@ -308,6 +333,48 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
           </div>
         ))}
       </div>
+
+      {/* A DISCREPANCY receipt wrote NO stock. Until this panel existed
+          it was a dead end: the goods were on the floor and the system
+          would never admit they had arrived. */}
+      {isDiscrepancy && (
+        <div className="border-border mt-5 rounded-md border p-4">
+          <h3 className="text-text-bright text-sm font-medium">Counts did not match</h3>
+          <p className="text-text-muted mt-1 mb-3 text-xs">
+            Nothing has been added to stock yet. Either we miscounted — put the true numbers in
+            above and correct it — or the shortage is real and you accept it, which records the gap
+            permanently against this consignment.
+          </p>
+
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-[240px] flex-1">
+              <label className="text-text-muted mb-1 block text-xs" htmlFor="force-note">
+                Why you are accepting it
+              </label>
+              <Input
+                id="force-note"
+                value={forceNote}
+                onChange={(e) => setForceNote(e.target.value)}
+                maxLength={2000}
+                placeholder="e.g. Supplier confirmed 4 units short; credit agreed."
+              />
+            </div>
+            <Button
+              variant="primary"
+              size="md"
+              disabled={busy !== null || forceNote.trim() === ''}
+              onClick={() => void onForceComplete()}
+            >
+              {busy === 'resolve' ? 'Completing…' : 'Accept the shortage and complete'}
+            </Button>
+          </div>
+          {forceNote.trim() === '' && (
+            <p className="text-text-faint mt-2 text-xs">
+              A note is required — it is the only record of why the numbers differ.
+            </p>
+          )}
+        </div>
+      )}
 
       {isCompleted && (
         <div className="text-accent text-xs uppercase tracking-wide mt-5 text-center">

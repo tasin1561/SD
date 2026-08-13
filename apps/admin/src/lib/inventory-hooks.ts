@@ -87,6 +87,57 @@ export function useAdjustmentsList(query: {
   });
 }
 
+/**
+ * Raising a stock correction.
+ *
+ * INV-8: below the value threshold this executes immediately; above it,
+ * it lands PENDING and waits for a second person. The approval queue has
+ * existed since M5 with a reader and no writer — so above-threshold
+ * stock could not be corrected through any interface, and
+ * `inventory.adjustments.create` was a permission nobody could exercise.
+ *
+ * A line is per (variant, bin, batch) because that is the grain stock is
+ * actually held at; an adjustment that named only a variant could not be
+ * applied to anything.
+ */
+export interface AdjustmentLineInput {
+  readonly variantId: string;
+  readonly binId: string;
+  readonly batchId: string;
+  /** Signed: negative removes. The type field says which way, and the
+   *  server checks the two agree rather than inferring one from the
+   *  other. */
+  readonly qtyChange: number;
+}
+
+export function useCreateAdjustment(): UseMutationResult<
+  StockAdjustmentView,
+  Error,
+  {
+    sellerId: string;
+    warehouseId?: string;
+    type: 'INCREASE' | 'DECREASE';
+    reasonCode: string;
+    description?: string;
+    lines: AdjustmentLineInput[];
+  }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<StockAdjustmentView>('/api/admin/stock-adjustments', {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-adjustments'] });
+      // Below-threshold adjustments apply on the spot, so on-hand moved.
+      void queryClient.invalidateQueries({ queryKey: ['admin-inventory'] });
+    },
+  });
+}
+
 export function useAdjustment(id: string | null): UseQueryResult<StockAdjustmentView> {
   const client = useApiClient();
   return useQuery({

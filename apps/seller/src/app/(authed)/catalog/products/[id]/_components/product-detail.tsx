@@ -7,7 +7,13 @@ import { ProductStatus } from '@skydrop/db';
 import { AddVariantPanel } from './add-variant-panel';
 import { ApiError } from '@skydrop/api-client';
 import type { SellerProductView } from '@skydrop/api-client';
-import { useProductDetail, useProductVariants, useUpdateProduct } from '@/lib/api-hooks';
+import {
+  useArchiveProduct,
+  useProductDetail,
+  useProductVariants,
+  useUpdateProduct,
+} from '@/lib/api-hooks';
+import { serverVerdict } from '@/lib/server-verdict';
 import {
   Button,
   Card,
@@ -29,6 +35,7 @@ import {
   Th,
   THead,
   Tr,
+  useToast,
 } from '@skydrop/ui/components';
 import { useRouter } from 'next/navigation';
 
@@ -48,7 +55,24 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
   const router = useRouter();
   const detail = useProductDetail(productId);
   const variants = useProductVariants(productId);
+  const archive = useArchiveProduct(productId);
+  const toast = useToast();
   const [editing, setEditing] = useState(false);
+
+  const isArchived = detail.data?.status === ProductStatus.ARCHIVED;
+
+  async function onToggleArchive(): Promise<void> {
+    try {
+      await archive.mutateAsync({ archived: !isArchived });
+      toast.success(
+        isArchived
+          ? 'Restored. Its variants stay archived — restore the ones you want back.'
+          : 'Archived. It and its variants can no longer be ordered or received.',
+      );
+    } catch (err) {
+      toast.error(serverVerdict(err));
+    }
+  }
 
   return (
     <div>
@@ -95,7 +119,29 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
 
           <Section
             title="Details"
-            action={!editing && <Button onClick={() => setEditing(true)}>Edit product</Button>}
+            action={
+              !editing && (
+                <div className="flex items-center gap-2">
+                  <Button onClick={() => setEditing(true)}>Edit product</Button>
+                  {/* ARCHIVED blocks new orders and stock receiving while
+                      leaving history intact — the normal way to stop
+                      selling something. Delete is deliberately not
+                      offered: it hides the row from read paths, which is
+                      a bigger hammer and staff-recoverable only. */}
+                  <Button
+                    variant="secondary"
+                    disabled={archive.isPending}
+                    onClick={() => void onToggleArchive()}
+                  >
+                    {archive.isPending
+                      ? 'Saving…'
+                      : isArchived
+                        ? 'Restore product'
+                        : 'Archive product'}
+                  </Button>
+                </div>
+              )
+            }
           >
             {editing ? (
               <ProductEditForm

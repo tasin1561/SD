@@ -35,6 +35,7 @@ import {
   type StockAdjustmentView,
 } from '@/lib/inventory-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { NewAdjustmentPanel } from './new-adjustment-panel';
 
 const PAGE_SIZE = 25;
 
@@ -77,6 +78,7 @@ export function AdjustmentsIndex(): ReactElement {
       <PageHeader
         title="Stock adjustments"
         subtitle="Corrections to counted stock. Anything above the value threshold waits here for a second pair of eyes before it moves inventory."
+        action={<NewAdjustmentPanel />}
       />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-3">

@@ -1079,6 +1079,45 @@ export function useCompleteGoodsReceipt(): UseMutationResult<
   });
 }
 
+/**
+ * Closing a DISCREPANCY receipt.
+ *
+ * A receipt whose counts disagreed with the declaration stops at
+ * DISCREPANCY and writes NO stock. Without this the consignment was a
+ * dead end: the goods were physically on the floor and the system would
+ * never admit they had arrived.
+ *
+ * Two modes, and the difference is what actually happened:
+ *   CORRECT        — we miscounted. Supply the true actuals.
+ *   FORCE_COMPLETE — the shortage is real. Accept it with a note that
+ *                    stays on the receipt permanently.
+ */
+export function useResolveDiscrepancy(): UseMutationResult<
+  GoodsReceiptView,
+  Error,
+  {
+    id: string;
+    mode: 'CORRECT' | 'FORCE_COMPLETE';
+    note?: string;
+    lines?: RecordReceiptLineInput[];
+  }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }) =>
+      client.request<GoodsReceiptView>(`/api/admin/goods-receipts/${id}/resolve-discrepancy`, {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-goods-receipts'] });
+      // Resolving WRITES STOCK — the whole point of unblocking it.
+      void queryClient.invalidateQueries({ queryKey: ['admin-inventory'] });
+    },
+  });
+}
+
 // ───────── Admin: who is on the other end of the call ─────────
 
 export interface CustomerOrderSummary {
