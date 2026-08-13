@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { themeInitScript } from '@skydrop/ui/components';
-import { Geist, Geist_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 
 /**
@@ -12,16 +12,45 @@ import './globals.css';
  * on <html>.
  */
 
-const geistSans = Geist({
-  subsets: ['latin'],
+/**
+ * Fonts are COMMITTED, not fetched at build time.
+ *
+ * `next/font/google` self-hosts at RUNTIME, which is the part everyone
+ * checks — but it downloads the file during `next build`, and that made
+ * every build and every deploy depend on fonts.gstatic.com answering.
+ * It failed three CI runs in one day, each time on a different family,
+ * each time with nothing wrong in the diff. The same outage during a
+ * deploy is worse: it fails the deploy for a reason no one changed.
+ *
+ * These are the latin subsets of the same variable faces, so the
+ * rendered result is identical. `declarations` pins unicode-range to
+ * what latin actually covers, which is what the CDN's own @font-face
+ * carried and is otherwise lost when self-hosting.
+ */
+const geistSans = localFont({
+  src: './fonts/geist-latin.woff2',
   variable: '--font-geist-sans',
   display: 'swap',
+  declarations: [
+    {
+      prop: 'unicode-range',
+      value:
+        'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
+    },
+  ],
 });
 
-const geistMono = Geist_Mono({
-  subsets: ['latin'],
+const geistMono = localFont({
+  src: './fonts/geist-mono-latin.woff2',
   variable: '--font-geist-mono',
   display: 'swap',
+  declarations: [
+    {
+      prop: 'unicode-range',
+      value:
+        'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
+    },
+  ],
 });
 
 export const metadata: Metadata = {

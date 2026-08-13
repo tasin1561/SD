@@ -1,30 +1,63 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
-import { Space_Grotesk, Inter, JetBrains_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import { getActiveLocale } from '@/lib/locale';
 import { themeInitScript } from '@/lib/theme-init';
 import './globals.css';
 
 // MISSION CONTROL type stack — matches apps/marketing.
-const grotesk = Space_Grotesk({
-  subsets: ['latin'],
+/**
+ * Fonts are COMMITTED, not fetched at build time.
+ *
+ * `next/font/google` self-hosts at RUNTIME, which is the part everyone
+ * checks — but it downloads the file during `next build`, and that made
+ * every build and every deploy depend on fonts.gstatic.com answering.
+ * It failed three CI runs in one day, each time on a different family,
+ * each time with nothing wrong in the diff. The same outage during a
+ * deploy is worse: it fails the deploy for a reason no one changed.
+ *
+ * These are the latin subsets of the same variable faces, so the
+ * rendered result is identical. `declarations` pins unicode-range to
+ * what latin actually covers, which is what the CDN's own @font-face
+ * carried and is otherwise lost when self-hosting.
+ */
+const grotesk = localFont({
+  src: './fonts/space-grotesk-latin.woff2',
   variable: '--font-grotesk',
-  weight: ['500', '600', '700'],
   display: 'swap',
+  declarations: [
+    {
+      prop: 'unicode-range',
+      value:
+        'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
+    },
+  ],
 });
 
-const inter = Inter({
-  subsets: ['latin'],
+const inter = localFont({
+  src: './fonts/inter-latin.woff2',
   variable: '--font-inter',
-  weight: ['400', '500'],
   display: 'swap',
+  declarations: [
+    {
+      prop: 'unicode-range',
+      value:
+        'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
+    },
+  ],
 });
 
-const jetbrains = JetBrains_Mono({
-  subsets: ['latin'],
+const jetbrains = localFont({
+  src: './fonts/jetbrains-mono-latin.woff2',
   variable: '--font-jetbrains',
-  weight: ['400', '500'],
   display: 'swap',
+  declarations: [
+    {
+      prop: 'unicode-range',
+      value:
+        'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
+    },
+  ],
 });
 
 export const metadata: Metadata = {
