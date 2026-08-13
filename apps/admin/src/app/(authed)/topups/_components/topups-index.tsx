@@ -23,6 +23,7 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import { serverVerdict } from '@/lib/server-verdict';
+import { BankAccountsPanel } from './bank-accounts-panel';
 import { usePermission } from '@/lib/use-permission';
 import {
   useAcceptTopup,
@@ -273,6 +274,9 @@ export function TopupsIndex(): ReactElement {
           </Button>
         </ModalFooter>
       </Modal>
+
+      {/* What the seller was reading when they made the transfer above. */}
+      <BankAccountsPanel />
     </div>
   );
 }
