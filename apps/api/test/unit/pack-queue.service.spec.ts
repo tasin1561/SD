@@ -1,5 +1,7 @@
+import { InventoryMode } from '@skydrop/db';
 import { PackQueueService } from '../../src/modules/warehouse-pack/services/pack-queue.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
+import type { InventoryModeService } from '../../src/modules/inventory-shared/inventory-mode.service';
 import type { OrderReadService } from '../../src/modules/order/services/order-read.service';
 
 type AnyArgs = Record<string, unknown>;
@@ -9,6 +11,10 @@ function makeService(
     queue?: string[];
     orderIdForShipment?: (id: string) => string | null;
     order?: AnyArgs | null;
+    /** R4 — effective mode the resolver reports for `v-1`. */
+    mode?: InventoryMode;
+    /** R4 — resolver blows up (settings outage). */
+    modeThrows?: boolean;
   } = {},
 ) {
   const queue = [...(opts.queue ?? [])];
@@ -38,6 +44,7 @@ function makeService(
           unitWeightGrams: 100,
           pickedBinId: 'bin-1',
           pickedBatchId: 'bat-1',
+          orderItem: { variantId: 'v-1', order: { sellerId: 'seller-1' } },
         },
       ],
     };
@@ -56,11 +63,18 @@ function makeService(
   );
   const orders = { getById };
 
+  const resolveForVariants = jest.fn(async (_sellerId: string, ids: readonly string[]) => {
+    if (opts.modeThrows) throw new Error('settings down');
+    return new Map(ids.map((id) => [id, opts.mode ?? InventoryMode.NORMAL]));
+  });
+  const modes = { resolveForVariants };
+
   const svc = new PackQueueService(
     { client } as unknown as PrismaService,
     orders as unknown as OrderReadService,
+    modes as unknown as InventoryModeService,
   );
-  return { svc, queryRawUnsafe, shipmentFindUnique, getById };
+  return { svc, queryRawUnsafe, shipmentFindUnique, getById, resolveForVariants };
 }
 
 describe('PackQueueService.pullNext', () => {
@@ -136,5 +150,26 @@ describe('PackQueueService.pullNext', () => {
     const call = queryRawUnsafe.mock.calls[0]!;
     expect(call[0]).toContain('AND s.courier_code = $1');
     expect(call.slice(1)).toEqual(['delhivery']);
+  });
+});
+
+describe('PackQueueService.pullNext — R4 inventory mode', () => {
+  it('reports STRICT on the line so the packer screen can offer a scan field', async () => {
+    const { svc, resolveForVariants } = makeService({
+      queue: ['s-1'],
+      mode: InventoryMode.STRICT,
+    });
+    const pulled = await svc.pullNext('staff-1');
+    expect(pulled?.items[0]?.variantId).toBe('v-1');
+    expect(pulled?.items[0]?.inventoryMode).toBe(InventoryMode.STRICT);
+    // Batched once for the whole parcel, never per line.
+    expect(resolveForVariants).toHaveBeenCalledTimes(1);
+    expect(resolveForVariants).toHaveBeenCalledWith('seller-1', ['v-1']);
+  });
+
+  it('FAILS OPEN to NORMAL when the resolver throws — a settings outage must not stall the pack bench', async () => {
+    const { svc } = makeService({ queue: ['s-1'], modeThrows: true });
+    const pulled = await svc.pullNext('staff-1');
+    expect(pulled?.items[0]?.inventoryMode).toBe(InventoryMode.NORMAL);
   });
 });

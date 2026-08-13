@@ -149,12 +149,20 @@ export function SellerTicketsIndex(): ReactElement {
           <TBody>
             {rows.map((t) => (
               <Fragment key={t.id}>
-                <Tr onActivate={() => router.push(`/orders/${t.orderId}`)}>
+                {/* The row opens the ticket, not the order it is about:
+                    a ticket with no order (a general parcel issue) was
+                    sending the reader to /orders/null. */}
+                <Tr onActivate={() => router.push(`/tickets/${t.id}`)}>
                   <Td className="text-text-muted whitespace-nowrap text-xs">
                     {t.ticketType === TicketType.SCRAP_DAMAGE ? 'Skydrop' : 'You'}
                   </Td>
                   <Td className="max-w-xs">
-                    <div className="truncate">{t.subject}</div>
+                    {/* The real link, in the primary cell — the row click
+                        is a pointer convenience layered on top of it, and
+                        a `<tr>` cannot be tabbed to. */}
+                    <Link href={`/tickets/${t.id}`} className="hover:text-accent block truncate">
+                      {t.subject}
+                    </Link>
                     {t.resolutionNotes !== null && t.resolutionNotes !== '' && (
                       <div className="text-text-faint mt-0.5 truncate text-xs">
                         {t.resolutionNotes}
@@ -192,7 +200,7 @@ export function SellerTicketsIndex(): ReactElement {
                       className="text-accent inline-flex items-center gap-1 text-xs hover:underline"
                       aria-expanded={openThread === t.id}
                       onClick={(e) => {
-                        // The row navigates to the order; this cell does not.
+                        // The row navigates to the ticket; this cell does not.
                         e.stopPropagation();
                         setOpenThread(openThread === t.id ? null : t.id);
                       }}

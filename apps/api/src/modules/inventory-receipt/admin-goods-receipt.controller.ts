@@ -22,7 +22,11 @@ import {
   CompleteGoodsReceiptDto,
 } from './dto/admin-goods-receipt.dto';
 import { ResolveDiscrepancyDto } from './dto/resolve-discrepancy.dto';
-import { GoodsReceiptService, type GoodsReceiptView } from './services/goods-receipt.service';
+import {
+  GoodsReceiptService,
+  type GoodsReceiptDetailView,
+  type GoodsReceiptView,
+} from './services/goods-receipt.service';
 import { RequirePermissions } from '../../common/auth/require-permissions.decorator';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
@@ -50,9 +54,11 @@ export class AdminGoodsReceiptController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get one goods receipt' })
-  get(@Param('id', uuid()) id: string): Promise<GoodsReceiptView> {
-    return this.svc.getForAdmin(id);
+  @ApiOperation({
+    summary: 'Get one goods receipt; each line carries the inventory mode receiving will enforce',
+  })
+  get(@Param('id', uuid()) id: string): Promise<GoodsReceiptDetailView> {
+    return this.svc.getDetailForAdmin(id);
   }
 
   @Post(':id/start-receiving')

@@ -490,12 +490,40 @@ import type {
   FinalizeRtoResult,
 } from '@skydrop/api-client';
 
+/**
+ * R4 — the mode a warehouse gate will actually enforce on one line.
+ *
+ * The pick and pack pulls now resolve this per line and hand it over
+ * (`inventoryMode` on `PulledPickItem` / `PulledPackItem`), so a station
+ * knows a SKU needs serials BEFORE the record is refused for lacking
+ * them. Fail-open: the server reports NORMAL when the resolve fails, and
+ * the gate re-resolves independently — these fields are display only.
+ *
+ * Declared here rather than in @skydrop/api-client because the shared
+ * package's interfaces predate the field; the intersections below are
+ * the local truth until that package catches up.
+ */
+export type WarehouseInventoryMode = 'NORMAL' | 'STRICT';
+
+export type StrictPulledPickItem = PulledPick['items'][number] & {
+  readonly variantId: string;
+  readonly inventoryMode: WarehouseInventoryMode;
+};
+
+export type StrictPulledPick = Omit<PulledPick, 'items'> & {
+  readonly items: ReadonlyArray<StrictPulledPickItem>;
+};
+
 // Pick
-export function usePullNextPick(): UseMutationResult<{ pick: PulledPick | null }, Error, void> {
+export function usePullNextPick(): UseMutationResult<
+  { pick: StrictPulledPick | null },
+  Error,
+  void
+> {
   const client = useApiClient();
   return useMutation({
     mutationFn: () =>
-      client.request<{ pick: PulledPick | null }>(`/api/warehouse/picks/next`, {
+      client.request<{ pick: StrictPulledPick | null }>(`/api/warehouse/picks/next`, {
         method: 'POST',
         body: {},
       }),
@@ -511,10 +539,21 @@ export function useStartPick(): UseMutationResult<StartPickResult, Error, { ship
       }),
   });
 }
+/**
+ * `scannedSerials` matches `RecordPickItemDto.scannedSerials?: string[]`
+ * verbatim — the API runs `forbidNonWhitelisted`, so one wrong field
+ * name 400s every record. OMIT it on a NORMAL line rather than sending
+ * an empty array: the gate only looks at it for a STRICT SKU, and an
+ * empty array on every pick is a field the floor learns to ignore.
+ */
+export type RecordPickItemBody = RecordPickItemRequest & {
+  readonly scannedSerials?: readonly string[];
+};
+
 export function useRecordPickItem(): UseMutationResult<
   RecordPickItemResult,
   Error,
-  { shipmentId: string } & RecordPickItemRequest
+  { shipmentId: string } & RecordPickItemBody
 > {
   const client = useApiClient();
   return useMutation({
@@ -631,17 +670,26 @@ export function usePullNextPack(): UseMutationResult<{ pack: PulledPack | null }
       }),
   });
 }
+/**
+ * `scannedSerials` matches `CompletePackDto.scannedSerials?: string[]`
+ * verbatim.
+ *
+ * The pack gate checks the scanned SET against the parcel's PICKED
+ * units, so there is no target count to compute here — the caller sends
+ * what was scanned and the server decides. Omitted entirely for a parcel
+ * that carries no serialized units.
+ */
 export function useCompletePack(): UseMutationResult<
   CompletePackResult,
   Error,
-  { shipmentId: string }
+  { shipmentId: string; scannedSerials?: readonly string[] }
 > {
   const client = useApiClient();
   return useMutation({
-    mutationFn: ({ shipmentId }) =>
+    mutationFn: ({ shipmentId, scannedSerials }) =>
       client.request<CompletePackResult>(`/api/warehouse/packs/${shipmentId}/complete`, {
         method: 'POST',
-        body: {},
+        body: scannedSerials === undefined ? {} : { scannedSerials },
       }),
   });
 }
@@ -1017,11 +1065,22 @@ export function useGoodsReceiptsList(
   });
 }
 
-export function useGoodsReceiptDetail(id: string): UseQueryResult<GoodsReceiptView> {
+/**
+ * R4 — the DETAIL endpoint carries `inventoryMode` per line
+ * (`GoodsReceiptDetailView` on the API side); the LIST deliberately does
+ * not, so this type is not `GoodsReceiptView` everywhere.
+ */
+export type GoodsReceiptDetail = Omit<GoodsReceiptView, 'lines'> & {
+  readonly lines: ReadonlyArray<
+    GoodsReceiptView['lines'][number] & { readonly inventoryMode: WarehouseInventoryMode }
+  >;
+};
+
+export function useGoodsReceiptDetail(id: string): UseQueryResult<GoodsReceiptDetail> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-goods-receipts', 'detail', id],
-    queryFn: () => client.request<GoodsReceiptView>(`/api/admin/goods-receipts/${id}`),
+    queryFn: () => client.request<GoodsReceiptDetail>(`/api/admin/goods-receipts/${id}`),
     enabled: Boolean(id),
   });
 }
@@ -1060,18 +1119,28 @@ export function useRecordReceiptLines(): UseMutationResult<
   });
 }
 
+/**
+ * `serialsByLineId` matches `CompleteGoodsReceiptDto.serialsByLineId?:
+ * Record<string, string[]>` verbatim — keyed by GOODS-RECEIPT-LINE id,
+ * not variant id.
+ *
+ * Only consulted for a STRICT line, and a short list is legitimate: a
+ * supplier who does not serialize is normal, and the server prints
+ * Skydrop serials for whatever was not scanned. Omitted when the receipt
+ * has no strict lines.
+ */
 export function useCompleteGoodsReceipt(): UseMutationResult<
   GoodsReceiptView,
   Error,
-  { id: string }
+  { id: string; serialsByLineId?: Readonly<Record<string, readonly string[]>> }
 > {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id }) =>
+    mutationFn: ({ id, serialsByLineId }) =>
       client.request<GoodsReceiptView>(`/api/admin/goods-receipts/${id}/complete`, {
         method: 'POST',
-        body: {},
+        body: serialsByLineId === undefined ? {} : { serialsByLineId },
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-goods-receipts'] });

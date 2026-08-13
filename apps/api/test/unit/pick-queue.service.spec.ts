@@ -1,5 +1,7 @@
+import { InventoryMode } from '@skydrop/db';
 import { PickQueueService } from '../../src/modules/warehouse-pick/services/pick-queue.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
+import type { InventoryModeService } from '../../src/modules/inventory-shared/inventory-mode.service';
 import type { OrderReadService } from '../../src/modules/order/services/order-read.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { PickExpirationService } from '../../src/modules/warehouse-pick/services/pick-expiration.service';
@@ -21,6 +23,10 @@ function makeService(
     timeoutHours?: number;
     /** getById result; undefined → default {orderId}; null → missing. */
     order?: AnyArgs | null;
+    /** R4 — effective mode the resolver reports for `v-1`. */
+    mode?: InventoryMode;
+    /** R4 — resolver blows up (settings outage). */
+    modeThrows?: boolean;
   } = {},
 ) {
   const queue = [...(opts.queue ?? [])];
@@ -44,6 +50,7 @@ function makeService(
           variantLabel: null,
           quantity: 2,
           unitWeightGrams: 100,
+          orderItem: { variantId: 'v-1', order: { sellerId: 'seller-1' } },
         },
       ],
     };
@@ -70,11 +77,18 @@ function makeService(
   const scheduleExpiration = jest.fn<Promise<void>, [string, Date, Date]>(async () => {});
   const expiration = { scheduleExpiration };
 
+  const resolveForVariants = jest.fn(async (_sellerId: string, ids: readonly string[]) => {
+    if (opts.modeThrows) throw new Error('settings down');
+    return new Map(ids.map((id) => [id, opts.mode ?? InventoryMode.NORMAL]));
+  });
+  const modes = { resolveForVariants };
+
   const svc = new PickQueueService(
     { client } as unknown as PrismaService,
     orders as unknown as OrderReadService,
     audit as unknown as AuditLogService,
     expiration as unknown as PickExpirationService,
+    modes as unknown as InventoryModeService,
   );
   return {
     svc,
@@ -84,6 +98,7 @@ function makeService(
     getById,
     auditLog,
     scheduleExpiration,
+    resolveForVariants,
   };
 }
 
@@ -139,11 +154,13 @@ describe('PickQueueService.pullNext', () => {
       {
         shipmentItemId: 'si-s1',
         orderItemId: 'oi-s1',
+        variantId: 'v-1',
         skuCode: 'SKU-1',
         productName: 'Widget',
         variantLabel: null,
         quantity: 2,
         unitWeightGrams: 100,
+        inventoryMode: InventoryMode.NORMAL,
       },
     ]);
   });
@@ -227,5 +244,34 @@ describe('PickQueueService.pullNext — concurrency (FOR UPDATE … SKIP LOCKED)
       (c) => (c[0].data as { pickStartedByStaffId: string }).pickStartedByStaffId,
     );
     expect(claimedFor.sort()).toEqual(['staff-1', 'staff-2']);
+  });
+});
+
+describe('PickQueueService.pullNext — R4 inventory mode', () => {
+  it('reports STRICT on the line so the picker screen knows serials are required', async () => {
+    const { svc, resolveForVariants } = makeService({
+      queue: ['s-1'],
+      mode: InventoryMode.STRICT,
+    });
+    const pulled = await svc.pullNext('staff-1');
+    expect(pulled?.items[0]?.variantId).toBe('v-1');
+    expect(pulled?.items[0]?.inventoryMode).toBe(InventoryMode.STRICT);
+    // Batched once for the whole parcel, never a resolve per line.
+    expect(resolveForVariants).toHaveBeenCalledTimes(1);
+    expect(resolveForVariants).toHaveBeenCalledWith('seller-1', ['v-1']);
+  });
+
+  it('resolves AFTER the claim tx so a settings read never lengthens the queue row lock', async () => {
+    const { svc, scheduleExpiration, resolveForVariants } = makeService({ queue: ['s-1'] });
+    await svc.pullNext('staff-1');
+    expect(scheduleExpiration.mock.invocationCallOrder[0]).toBeLessThan(
+      resolveForVariants.mock.invocationCallOrder[0] ?? Infinity,
+    );
+  });
+
+  it('FAILS OPEN to NORMAL when the resolver throws — a settings outage must not stop the pick floor', async () => {
+    const { svc } = makeService({ queue: ['s-1'], modeThrows: true });
+    const pulled = await svc.pullNext('staff-1');
+    expect(pulled?.items[0]?.inventoryMode).toBe(InventoryMode.NORMAL);
   });
 });

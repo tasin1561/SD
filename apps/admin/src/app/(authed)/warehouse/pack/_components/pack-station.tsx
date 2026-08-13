@@ -3,15 +3,18 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Button, Card, CardBody, EmptyState, Input, useToast } from '@skydrop/ui/components';
 import { Check } from 'lucide-react';
+import { ApiError } from '@skydrop/api-client';
 import {
   useCancelPackBox,
   useClosePackBox,
+  useCompletePack,
   useOpenPackBox,
   useScanIntoPackBox,
   type OpenPackBox,
   type PackBoxLine,
 } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { SerialScanner } from '@/components/ui/serial-scanner';
 
 /**
  * The pack bench.
@@ -40,6 +43,25 @@ interface ScannedLine extends PackBoxLine {
   scanned: number;
 }
 
+/**
+ * R4 — the box closed, but the parcel would not complete without the
+ * unit serials spelled out. `shipmentId` is what
+ * `POST /warehouse/packs/:shipmentId/complete` needs; the serials are
+ * the ones this box already accepted as units, offered back so the
+ * packer confirms rather than re-scans a sealed box.
+ */
+interface PendingCompletion {
+  readonly shipmentId: string;
+  readonly awbNumber: string;
+}
+
+/** The code on an ApiError body, for choosing which remedy to OFFER. */
+function verdictCode(err: unknown): string | null {
+  if (!(err instanceof ApiError)) return null;
+  const body = err.body as { code?: unknown } | null;
+  return typeof body?.code === 'string' ? body.code : (err.code ?? null);
+}
+
 export function PackStation(): ReactElement {
   const toast = useToast();
   const [box, setBox] = useState<OpenPackBox | null>(null);
@@ -48,11 +70,17 @@ export function PackStation(): ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState('');
+  // Every code the server came back and said was a serialized unit —
+  // the packer scanned them, so the parcel's serials are already known
+  // by the time completion asks for them.
+  const [unitSerials, setUnitSerials] = useState<readonly string[]>([]);
+  const [pending, setPending] = useState<PendingCompletion | null>(null);
 
   const open = useOpenPackBox();
   const scan = useScanIntoPackBox();
   const close = useClosePackBox();
   const cancel = useCancelPackBox();
+  const completePack = useCompletePack();
 
   // A scanner types into whatever holds focus, so focus has to come back
   // here after every state change or the next scan goes nowhere.
@@ -71,6 +99,8 @@ export function PackStation(): ReactElement {
     setCode('');
     setReason('');
     setCancelling(false);
+    setUnitSerials([]);
+    setPending(null);
   }
 
   /**
@@ -97,13 +127,26 @@ export function PackStation(): ReactElement {
       }
 
       if (value === box.awbNumber) {
-        const result = await close.mutateAsync({ packBoxId: box.packBoxId, awbNumber: value });
-        toast.success(
-          result.manifestNumber
-            ? `Packed — manifest ${result.manifestNumber}`
-            : 'Packed — ready for pickup',
-        );
-        reset();
+        try {
+          const result = await close.mutateAsync({ packBoxId: box.packBoxId, awbNumber: value });
+          toast.success(
+            result.manifestNumber
+              ? `Packed — manifest ${result.manifestNumber}`
+              : 'Packed — ready for pickup',
+          );
+          reset();
+        } catch (err) {
+          setError(serverVerdict(err));
+          // The box is CLOSED by the time completion runs, so a refusal
+          // here is not "keep packing" — the remaining step is the one
+          // the server just named. Offer exactly that rather than
+          // leaving a sealed parcel with no way forward.
+          if (verdictCode(err) === 'UNIT_SCAN_REQUIRED') {
+            setPending({ shipmentId: box.shipmentId, awbNumber: box.awbNumber });
+            setBox(null);
+            setLines([]);
+          }
+        }
         return;
       }
 
@@ -111,9 +154,41 @@ export function PackStation(): ReactElement {
       setLines((prev) =>
         prev.map((l) => (l.variantId === result.variantId ? { ...l, scanned: l.scanned + 1 } : l)),
       );
+      if (result.stockUnitId !== null) {
+        setUnitSerials((prev) => (prev.includes(value) ? prev : [...prev, value]));
+      }
     } catch (err) {
       // Verbatim. "That unit was picked for a different parcel" is the
       // entire value of the gate; softening it would throw that away.
+      setError(serverVerdict(err));
+    }
+  }
+
+  /**
+   * Finish a parcel whose box closed but whose completion wanted the
+   * serials listed out.
+   *
+   * No count gate here on purpose: the server checks the scanned SET
+   * against the parcel's PICKED units, and that target is not something
+   * this screen can compute without re-deriving the rule it would then
+   * be free to disagree with. Send what was scanned; the verdict is the
+   * server's.
+   */
+  async function onFinishPack(): Promise<void> {
+    if (pending === null || unitSerials.length === 0) return;
+    setError(null);
+    try {
+      const result = await completePack.mutateAsync({
+        shipmentId: pending.shipmentId,
+        scannedSerials: unitSerials,
+      });
+      toast.success(
+        result.manifestNumber
+          ? `Packed — manifest ${result.manifestNumber}`
+          : 'Packed — ready for pickup',
+      );
+      reset();
+    } catch (err) {
       setError(serverVerdict(err));
     }
   }
@@ -134,41 +209,51 @@ export function PackStation(): ReactElement {
     }
   }
 
-  const busy = open.isPending || scan.isPending || close.isPending || cancel.isPending;
+  const busy =
+    open.isPending ||
+    scan.isPending ||
+    close.isPending ||
+    cancel.isPending ||
+    completePack.isPending;
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardBody>
-          <label htmlFor="pack-scan" className="text-text-muted mb-1 block text-xs">
-            {box === null
-              ? 'Scan the shipping label to open a box'
-              : 'Scan a product — or the label again to close'}
-          </label>
-          <Input
-            id="pack-scan"
-            ref={inputRef}
-            value={code}
-            disabled={busy}
-            autoComplete="off"
-            placeholder={box === null ? 'Shipping label…' : 'Product barcode or serial…'}
-            onChange={(e) => setCode(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                void onScan(code);
-              }
-            }}
-            className="font-mono text-base"
-          />
-          {box !== null && (
-            <div className="text-text-faint mt-2 text-xs">
-              Box open on <span className="font-mono">{box.awbNumber}</span> — {done} of {total}{' '}
-              scanned
-            </div>
-          )}
-        </CardBody>
-      </Card>
+      {/* While a parcel is waiting on its serials the label field means
+          nothing — a scan would open a second box on a bench that is not
+          free yet. */}
+      {pending === null && (
+        <Card>
+          <CardBody>
+            <label htmlFor="pack-scan" className="text-text-muted mb-1 block text-xs">
+              {box === null
+                ? 'Scan the shipping label to open a box'
+                : 'Scan a product — or the label again to close'}
+            </label>
+            <Input
+              id="pack-scan"
+              ref={inputRef}
+              value={code}
+              disabled={busy}
+              autoComplete="off"
+              placeholder={box === null ? 'Shipping label…' : 'Product barcode or serial…'}
+              onChange={(e) => setCode(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void onScan(code);
+                }
+              }}
+              className="font-mono text-base"
+            />
+            {box !== null && (
+              <div className="text-text-faint mt-2 text-xs">
+                Box open on <span className="font-mono">{box.awbNumber}</span> — {done} of {total}{' '}
+                scanned
+              </div>
+            )}
+          </CardBody>
+        </Card>
+      )}
 
       {error !== null && (
         <div
@@ -179,7 +264,48 @@ export function PackStation(): ReactElement {
         </div>
       )}
 
-      {box === null ? (
+      {pending !== null ? (
+        <Card>
+          <CardBody className="space-y-3">
+            <div>
+              <div className="text-text-bright text-sm font-medium">
+                One step left on <span className="font-mono">{pending.awbNumber}</span>
+              </div>
+              <p className="text-text-muted mt-1 text-xs">
+                The box is closed and its contents matched. This parcel is tracked per unit, so the
+                serials go with it — these are the ones you scanned in. Add any the box did not
+                recognise, then finish.
+              </p>
+            </div>
+            <SerialScanner
+              id="pack-finish-serials"
+              label="Unit serials in this parcel"
+              serials={unitSerials}
+              onChange={setUnitSerials}
+              disabled={busy}
+              autoFocus
+              hint="No target count here — the server checks these against the units picked for this parcel and will say if one is missing or does not belong."
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="primary"
+                size="md"
+                disabled={busy || unitSerials.length === 0}
+                onClick={() => void onFinishPack()}
+              >
+                {completePack.isPending ? 'Finishing…' : 'Finish pack'}
+              </Button>
+              <Button variant="ghost" size="md" disabled={busy} onClick={() => reset()}>
+                Leave it for now
+              </Button>
+            </div>
+            <p className="text-text-faint text-xs">
+              Leaving it discards this list and changes nothing on the parcel — it stays picked and
+              un-packed, and whoever takes it next scans its label to open a fresh box.
+            </p>
+          </CardBody>
+        </Card>
+      ) : box === null ? (
         <EmptyState
           title="No box open"
           description="Scan the shipping label on a parcel to start. You can hold one box at a time — close or cancel it before starting the next."

@@ -5,9 +5,11 @@ import { CatalogReadModule } from '../catalog-read/catalog-read.module';
 import { InventorySharedModule } from '../inventory-shared/inventory-shared.module';
 import { SellerStockController } from './seller-stock.controller';
 import { SellerThresholdController } from './seller-threshold.controller';
+import { SellerInventoryModeController } from './seller-inventory-mode.controller';
 import { StockReadService } from './services/stock-read.service';
 import { SellerStockService } from './services/seller-stock.service';
 import { SellerThresholdService } from './services/seller-threshold.service';
+import { SellerInventoryModeService } from './services/seller-inventory-mode.service';
 import { StockReservationService } from './services/stock-reservation.service';
 import { StockPickAllocationService } from './services/stock-pick-allocation.service';
 import { ReservationCleanupService } from './services/reservation-cleanup.service';
@@ -27,11 +29,12 @@ import { ReservationWorker } from './queue/reservation.worker';
  */
 @Module({
   imports: [InventorySharedModule, CatalogReadModule, SettingsModule],
-  controllers: [SellerStockController, SellerThresholdController],
+  controllers: [SellerStockController, SellerThresholdController, SellerInventoryModeController],
   providers: [
     StockReadService,
     SellerStockService,
     SellerThresholdService,
+    SellerInventoryModeService,
     StockReservationService,
     StockPickAllocationService,
     ReservationCleanupService,

@@ -32,6 +32,24 @@ export class InventoryModeService {
     private readonly settings: SettingsResolverService,
   ) {}
 
+  /**
+   * The variant's OWN value, un-resolved — `null` means "inherit", which
+   * the resolved forms deliberately cannot express. Only a config screen
+   * needs this; every gate wants `resolveForVariant(s)` instead.
+   *
+   * Lives here so this service stays the single reader of the
+   * inventory-owned `product_variants.inventory_mode` column (the
+   * MUST #13 clarification: inventory owns the column, and reads of it
+   * go through one place rather than being spread across callers).
+   */
+  async overrideForVariant(variantId: string): Promise<InventoryMode | null> {
+    const variant = await this.prisma.client.productVariant.findUnique({
+      where: { id: variantId },
+      select: { inventoryMode: true },
+    });
+    return variant?.inventoryMode ?? null;
+  }
+
   /** Resolve one variant's effective mode. */
   async resolveForVariant(sellerId: string, variantId: string): Promise<InventoryMode> {
     const variant = await this.prisma.client.productVariant.findUnique({

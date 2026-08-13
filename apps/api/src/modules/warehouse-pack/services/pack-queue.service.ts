@@ -1,11 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InventoryMode } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { InventoryModeService } from '../../inventory-shared/inventory-mode.service';
 import { OrderReadService, type ResolvedOrder } from '../../order/services/order-read.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
 export interface PulledPackItem {
   shipmentItemId: string;
   orderItemId: string;
+  variantId: string;
   skuCode: string;
   productName: string;
   variantLabel: string | null;
@@ -13,6 +16,13 @@ export interface PulledPackItem {
   unitWeightGrams: number | null;
   pickedBinId: string | null;
   pickedBatchId: string | null;
+  /**
+   * R4 — STRICT means `PackService.complete` demands the scanned serial
+   * SET equal this parcel's PICKED units (UNIT-2); a packer screen that
+   * cannot see this offers no scan field and the parcel is refused at
+   * the end with nothing it can do about it.
+   */
+  inventoryMode: InventoryMode;
 }
 
 export interface PulledPack {
@@ -62,6 +72,7 @@ export class PackQueueService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orders: OrderReadService,
+    private readonly modes: InventoryModeService,
   ) {}
 
   /** Returns the next eligible parcel (informational, no claim), or
@@ -119,6 +130,12 @@ export class PackQueueService {
               unitWeightGrams: true,
               pickedBinId: true,
               pickedBatchId: true,
+              // R4 — shipment_items snapshots the SKU string, not the
+              // variant id the mode resolves against. Same join the pick
+              // gate walks.
+              orderItem: {
+                select: { variantId: true, order: { select: { sellerId: true } } },
+              },
             },
           },
         },
@@ -130,9 +147,11 @@ export class PackQueueService {
         orderId: shipment.orderShipments[0]?.orderId ?? null,
         courierCode: shipment.courierCode,
         pickCompletedAt: shipment.pickCompletedAt,
+        sellerId: shipment.items[0]?.orderItem.order.sellerId ?? null,
         items: shipment.items.map((i) => ({
           shipmentItemId: i.id,
           orderItemId: i.orderItemId,
+          variantId: i.orderItem.variantId,
           skuCode: i.skuCode,
           productName: i.productName,
           variantLabel: i.variantLabel,
@@ -146,6 +165,10 @@ export class PackQueueService {
 
     if (!picked) return null;
 
+    // R4 — resolved outside the SKIP-LOCKED tx: a settings read must not
+    // extend a lock the whole pack queue contends on.
+    const items = await this.withModes(picked.sellerId, picked.items);
+
     if (picked.orderId === null) {
       this.logger.error(
         { shipmentId: picked.shipmentId },
@@ -157,7 +180,7 @@ export class PackQueueService {
         orderId: '',
         courierCode: picked.courierCode,
         pickCompletedAt: picked.pickCompletedAt,
-        items: picked.items,
+        items,
         order: null,
       };
     }
@@ -174,8 +197,40 @@ export class PackQueueService {
       orderId: picked.orderId,
       courierCode: picked.courierCode,
       pickCompletedAt: picked.pickCompletedAt,
-      items: picked.items,
+      items,
       order,
     };
+  }
+
+  /**
+   * R4 — stamp each line with the mode the pack gate will enforce. ONE
+   * batched resolve for the parcel, and FAIL-OPEN to NORMAL (UNIT-2): a
+   * settings outage must leave the floor packing, not stall it behind a
+   * scan field nobody can satisfy. `PackService.complete` re-resolves
+   * and stays the authority; this is display only.
+   */
+  private async withModes(
+    sellerId: string | null,
+    items: readonly Omit<PulledPackItem, 'inventoryMode'>[],
+  ): Promise<PulledPackItem[]> {
+    const asNormal = (): PulledPackItem[] =>
+      items.map((i) => ({ ...i, inventoryMode: InventoryMode.NORMAL }));
+    if (sellerId === null) return asNormal();
+    try {
+      const modes = await this.modes.resolveForVariants(
+        sellerId,
+        items.map((i) => i.variantId),
+      );
+      return items.map((i) => ({
+        ...i,
+        inventoryMode: modes.get(i.variantId) ?? InventoryMode.NORMAL,
+      }));
+    } catch (err) {
+      this.logger.warn(
+        { sellerId, err: (err as Error).message },
+        'Inventory-mode resolution failed on pack pull; reporting NORMAL (fail-open)',
+      );
+      return asNormal();
+    }
   }
 }

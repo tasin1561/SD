@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ActorType } from '@skydrop/db';
+import { ActorType, InventoryMode } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { InventoryModeService } from '../../inventory-shared/inventory-mode.service';
 import { OrderReadService, type ResolvedOrder } from '../../order/services/order-read.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { PickExpirationService } from './pick-expiration.service';
@@ -14,11 +15,20 @@ const PICK_TIMEOUT_SETTING_KEY = 'ops.pick_task_timeout_hours';
 export interface PulledPickItem {
   shipmentItemId: string;
   orderItemId: string;
+  variantId: string;
   skuCode: string;
   productName: string;
   variantLabel: string | null;
   quantity: number;
   unitWeightGrams: number | null;
+  /**
+   * R4 — the mode `PickExecutionService.recordItem` will enforce on this
+   * line. STRICT means the picker MUST send exactly `quantity` scanned
+   * serials or the record 409s with UNIT_SCAN_COUNT_MISMATCH; without
+   * this field on the pull the screen has no way to know that before it
+   * is refused.
+   */
+  inventoryMode: InventoryMode;
 }
 
 export interface PulledPick {
@@ -82,6 +92,7 @@ export class PickQueueService {
     private readonly orders: OrderReadService,
     private readonly audit: AuditLogService,
     private readonly expiration: PickExpirationService,
+    private readonly modes: InventoryModeService,
   ) {}
 
   /** Returns the claimed parcel (+ order snapshot), or `null` when no
@@ -138,6 +149,12 @@ export class PickQueueService {
               variantLabel: true,
               quantity: true,
               unitWeightGrams: true,
+              // R4 — the variant (and through it the seller) is what the
+              // mode resolves against; shipment_items snapshots the SKU
+              // string but not the id. Same join recordItem walks.
+              orderItem: {
+                select: { variantId: true, order: { select: { sellerId: true } } },
+              },
             },
           },
         },
@@ -169,9 +186,11 @@ export class PickQueueService {
         shipmentId: shipment.id,
         shipmentNumber: shipment.shipmentNumber,
         orderId,
+        sellerId: shipment.items[0]?.orderItem.order.sellerId ?? null,
         items: shipment.items.map((i) => ({
           shipmentItemId: i.id,
           orderItemId: i.orderItemId,
+          variantId: i.orderItem.variantId,
           skuCode: i.skuCode,
           productName: i.productName,
           variantLabel: i.variantLabel,
@@ -188,6 +207,10 @@ export class PickQueueService {
     // (mirrors M7 CC-7 pullNext ordering).
     await this.expiration.scheduleExpiration(picked.shipmentId, now, pickExpiresAt);
 
+    // R4 — resolved AFTER the claim tx commits, so a settings read can
+    // never lengthen the row lock the whole pick queue contends on.
+    const items = await this.withModes(picked.sellerId, picked.items);
+
     if (picked.orderId === null) {
       // The parcel passed the orders-join filter but its OrderShipment
       // junction is gone — a data anomaly. The claim stands (the picker
@@ -203,7 +226,7 @@ export class PickQueueService {
         orderId: '',
         pickStartedAt: now,
         pickExpiresAt,
-        items: picked.items,
+        items,
         order: null,
       };
     }
@@ -222,9 +245,44 @@ export class PickQueueService {
       orderId: picked.orderId,
       pickStartedAt: now,
       pickExpiresAt,
-      items: picked.items,
+      items,
       order,
     };
+  }
+
+  /**
+   * R4 — stamp each line with the mode the pick gate will enforce.
+   *
+   * ONE batched `resolveForVariants` for the whole parcel rather than a
+   * resolve per line, and FAIL-OPEN to NORMAL (UNIT-2): if the mode
+   * cannot be read at all we hand the picker a parcel they can complete
+   * rather than one whose lines all claim to need serials. The gate in
+   * `recordItem` re-resolves independently and remains the authority —
+   * this field is what the screen renders, not what enforcement trusts.
+   */
+  private async withModes(
+    sellerId: string | null,
+    items: readonly Omit<PulledPickItem, 'inventoryMode'>[],
+  ): Promise<PulledPickItem[]> {
+    const asNormal = (): PulledPickItem[] =>
+      items.map((i) => ({ ...i, inventoryMode: InventoryMode.NORMAL }));
+    if (sellerId === null) return asNormal();
+    try {
+      const modes = await this.modes.resolveForVariants(
+        sellerId,
+        items.map((i) => i.variantId),
+      );
+      return items.map((i) => ({
+        ...i,
+        inventoryMode: modes.get(i.variantId) ?? InventoryMode.NORMAL,
+      }));
+    } catch (err) {
+      this.logger.warn(
+        { sellerId, err: (err as Error).message },
+        'Inventory-mode resolution failed on pick pull; reporting NORMAL (fail-open)',
+      );
+      return asNormal();
+    }
   }
 
   /** Effective pick-task timeout (hours): ops.pick_task_timeout_hours,

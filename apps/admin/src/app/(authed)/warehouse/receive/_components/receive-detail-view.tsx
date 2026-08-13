@@ -15,7 +15,6 @@ import {
   Select,
   useToast,
 } from '@skydrop/ui/components';
-import { ApiError } from '@skydrop/api-client';
 import type { RecordReceiptLineInput } from '@skydrop/api-client';
 import {
   useCompleteGoodsReceipt,
@@ -25,6 +24,8 @@ import {
   useStartReceiving,
   useWarehouseBins,
 } from '@/lib/api-hooks';
+import { serverVerdict } from '@/lib/server-verdict';
+import { SerialScanner, scanCountMet } from '@/components/ui/serial-scanner';
 
 /**
  * Admin receive-station — full goods-receipt lifecycle in one page:
@@ -58,18 +59,11 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
   const [damaged, setDamaged] = useState<Record<string, string>>({});
   const [binByLine, setBinByLine] = useState<Record<string, string>>({});
   const [forceNote, setForceNote] = useState('');
+  // R4 — supplier serials, keyed by GOODS-RECEIPT-LINE id, which is what
+  // `serialsByLineId` on the complete call wants.
+  const [serialsByLine, setSerialsByLine] = useState<Record<string, readonly string[]>>({});
 
   const bins = useWarehouseBins(detail.data?.warehouseId ?? '');
-
-  function fmtError(err: unknown): string {
-    if (err instanceof ApiError) {
-      const b = err.body as { code?: unknown; message?: unknown } | null;
-      const code = typeof b?.code === 'string' ? b.code : null;
-      const msg = typeof b?.message === 'string' ? b.message : err.message;
-      return code ? `[${code}] ${msg}` : msg;
-    }
-    return err instanceof Error ? err.message : 'Action failed';
-  }
 
   if (detail.isLoading) return <LoadingState label="Loading…" />;
   if (detail.isError) return <ErrorState message={detail.error?.message ?? 'Failed to load.'} />;
@@ -93,7 +87,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
       toast.success('Completed — stock written for what actually arrived.');
       setForceNote('');
     } catch (e) {
-      setError(fmtError(e));
+      setError(serverVerdict(e));
     } finally {
       setBusy(null);
     }
@@ -106,7 +100,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
       await start.mutateAsync({ id });
       toast.success('Started receiving — record each line below.');
     } catch (e) {
-      setError(fmtError(e));
+      setError(serverVerdict(e));
     } finally {
       setBusy(null);
     }
@@ -157,17 +151,46 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
       setDamaged({});
       setBinByLine({});
     } catch (e) {
-      setError(fmtError(e));
+      setError(serverVerdict(e));
     } finally {
       setBusy(null);
     }
   }
 
+  /**
+   * How many units this line will register — the recorded figure once
+   * it exists, otherwise whatever is typed in the box above. It is the
+   * ceiling on serials, not a quota: a supplier who does not serialize
+   * is normal, and the server prints Skydrop serials for the rest.
+   */
+  function lineQty(lineId: string, recordedQty: number | null): number {
+    if (recordedQty !== null) return recordedQty;
+    const typed = Number(received[lineId] ?? '');
+    return Number.isFinite(typed) && typed > 0 ? typed : 0;
+  }
+
+  const strictLines = r.lines.filter((l) => l.inventoryMode === 'STRICT');
+  const serialsOverCount = strictLines.some(
+    (l) => !scanCountMet((serialsByLine[l.id] ?? []).length, lineQty(l.id, l.receivedQty), true),
+  );
+
   async function onComplete(): Promise<void> {
     setError(null);
     setBusy('complete');
+    // Only STRICT lines that actually captured something go in the map —
+    // an empty array per line would say "none arrived serialized" as
+    // loudly as a scanned one says the opposite.
+    const serialsByLineId: Record<string, readonly string[]> = {};
+    for (const l of r.lines) {
+      if (l.inventoryMode !== 'STRICT') continue;
+      const captured = serialsByLine[l.id] ?? [];
+      if (captured.length > 0) serialsByLineId[l.id] = captured;
+    }
     try {
-      const result = await complete.mutateAsync({ id });
+      const result = await complete.mutateAsync({
+        id,
+        ...(Object.keys(serialsByLineId).length > 0 ? { serialsByLineId } : {}),
+      });
       if (result.status === 'COMPLETED') {
         toast.success('Receipt completed — stock written.');
       } else if (result.status === 'DISCREPANCY') {
@@ -176,7 +199,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
         toast.info(`Status now ${result.status}.`);
       }
     } catch (e) {
-      setError(fmtError(e));
+      setError(serverVerdict(e));
     } finally {
       setBusy(null);
     }
@@ -224,7 +247,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                 <Button
                   variant="primary"
                   size="md"
-                  disabled={busy !== null}
+                  disabled={busy !== null || serialsOverCount}
                   onClick={() => void onComplete()}
                 >
                   {busy === 'complete' ? 'Completing…' : 'Complete'}
@@ -282,6 +305,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                 </div>
                 <div className="text-text-faint text-xs mt-0.5 font-mono">
                   {line.variant.skuCode} · expected {line.expectedQty}
+                  {line.inventoryMode === 'STRICT' ? ' · per-unit tracked' : ''}
                 </div>
               </div>
               {line.receivedQty !== null && (
@@ -328,6 +352,23 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                       ))}
                   </Select>
                 </FormField>
+              </div>
+            )}
+
+            {/* R4 — only a STRICT SKU asks. On a NORMAL line there is
+                nothing to scan and nothing is shown; an extra field on
+                every line is how a receiving bench learns to skip
+                fields. */}
+            {isArriving && line.inventoryMode === 'STRICT' && (
+              <div className="mt-2">
+                <SerialScanner
+                  id={`receipt-serials-${line.id}`}
+                  label={`Supplier serials for ${line.variant.skuCode}`}
+                  required={lineQty(line.id, line.receivedQty)}
+                  serials={serialsByLine[line.id] ?? []}
+                  onChange={(next) => setSerialsByLine({ ...serialsByLine, [line.id]: next })}
+                  hint="Scan what the supplier printed. Skip any they did not serialize — Skydrop prints a serial for each of those at completion."
+                />
               </div>
             )}
           </div>

@@ -74,6 +74,18 @@ export type GoodsReceiptView = Prisma.GoodsReceiptGetPayload<{
   include: typeof RECEIPT_VIEW_INCLUDE;
 }>;
 
+/**
+ * R4 — the detail view a receiving screen renders. Same rows as
+ * `GoodsReceiptView` plus the per-line inventory mode, because
+ * `complete` demands `serialsByLineId` for a STRICT line and refuses the
+ * receipt without it; the list view deliberately does NOT carry this
+ * (one settings read per receipt on a paginated list, to answer a
+ * question the list never asks).
+ */
+export type GoodsReceiptDetailView = Omit<GoodsReceiptView, 'lines'> & {
+  lines: Array<GoodsReceiptView['lines'][number] & { inventoryMode: InventoryMode }>;
+};
+
 const MAX_RECEIPT_NUMBER_ATTEMPTS = 5;
 
 /**
@@ -289,6 +301,42 @@ export class GoodsReceiptService {
       });
     }
     return row;
+  }
+
+  /**
+   * The admin detail read, enriched with each line's effective inventory
+   * mode. Kept separate from `getForAdmin` so the ten internal callers
+   * that use it as a load-and-guard helper do not each pay a settings
+   * read for a field they never look at.
+   */
+  async getDetailForAdmin(id: string): Promise<GoodsReceiptDetailView> {
+    const receipt = await this.getForAdmin(id);
+    const modes = await this.lineModes(receipt);
+    return {
+      ...receipt,
+      lines: receipt.lines.map((l) => ({
+        ...l,
+        inventoryMode: modes.get(l.variantId) ?? InventoryMode.NORMAL,
+      })),
+    };
+  }
+
+  /** FAIL-OPEN to NORMAL (UNIT-2): an unreadable mode must not stop a
+   *  parcel being booked in. `writeStockAndComplete` re-resolves and is
+   *  the authority; this is what the screen renders. */
+  private async lineModes(receipt: GoodsReceiptView): Promise<Map<string, InventoryMode>> {
+    try {
+      return await this.modes.resolveForVariants(
+        receipt.sellerId,
+        receipt.lines.map((l) => l.variantId),
+      );
+    } catch (err) {
+      this.logger.warn(
+        { receiptId: receipt.id, err: (err as Error).message },
+        'Inventory-mode resolution failed on goods-receipt detail; reporting NORMAL (fail-open)',
+      );
+      return new Map();
+    }
   }
 
   /** PENDING -> ARRIVING; records who is receiving. */
