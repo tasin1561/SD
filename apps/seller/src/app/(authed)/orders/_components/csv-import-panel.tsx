@@ -56,6 +56,23 @@ interface UploadsResponse {
   readonly total: number;
 }
 
+/**
+ * What the server says about a file BEFORE any of it is imported.
+ *
+ * The same shape for both importers — order and catalog previews return
+ * identical fields, so one panel serves both.
+ */
+interface CsvPreview {
+  readonly rowCount: number;
+  readonly headers: readonly string[];
+  readonly sampleRows: ReadonlyArray<Record<string, string>>;
+  readonly mapping: Readonly<Record<string, string | undefined>>;
+  readonly missingRequired: readonly string[];
+  readonly unmatchedHeaders: ReadonlyArray<{ header: string; suggestion: string | null }>;
+  readonly exceedsRowLimit: boolean;
+  readonly rowLimit: number;
+}
+
 export function CsvImportPanel({
   kind,
   endpointBase,
@@ -74,6 +91,20 @@ export function CsvImportPanel({
   const [busy, setBusy] = useState<'uploading' | 'processing' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedName, setSelectedName] = useState<string>('');
+  /**
+   * The uploaded-but-not-yet-imported file.
+   *
+   * The preview endpoint existed on both importers and was never called:
+   * the panel went presign → PUT → process, committing the file before
+   * the seller could see what we made of it. A CSV with a column we
+   * cannot map does not fail loudly — it imports every row wrong, or
+   * fails one row at a time into an error report read after the fact.
+   */
+  const [pending, setPending] = useState<{
+    spacesKey: string;
+    fileName: string;
+    preview: CsvPreview;
+  } | null>(null);
 
   const list = useQuery<UploadsResponse>({
     queryKey: ['seller-csv-uploads', kind],
@@ -154,15 +185,33 @@ export function CsvImportPanel({
         throw new Error(`PUT to Spaces failed: ${put.status}`);
       }
 
-      setBusy('processing');
-      await client.request<CsvUploadJob>(`${endpointBase}/process`, {
+      // Look at it BEFORE committing it. The file is in Spaces either
+      // way; this only decides whether we create orders from it.
+      const preview = await client.request<CsvPreview>(`${endpointBase}/preview`, {
         method: 'POST',
-        body: { spacesKey: presign.spacesKey, fileName: f.name },
+        body: { spacesKey: presign.spacesKey },
       });
-
-      toast.success('Import queued — refresh to track progress.');
+      setPending({ spacesKey: presign.spacesKey, fileName: f.name, preview });
       if (fileRef.current) fileRef.current.value = '';
       setSelectedName('');
+    } catch (err) {
+      setError(fmtError(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function confirmImport(): Promise<void> {
+    if (pending === null) return;
+    setError(null);
+    setBusy('processing');
+    try {
+      await client.request<CsvUploadJob>(`${endpointBase}/process`, {
+        method: 'POST',
+        body: { spacesKey: pending.spacesKey, fileName: pending.fileName },
+      });
+      toast.success('Import queued — refresh to track progress.');
+      setPending(null);
       void queryClient.invalidateQueries({
         queryKey: ['seller-csv-uploads', kind],
       });
@@ -227,11 +276,7 @@ export function CsvImportPanel({
               onClick={() => void upload()}
               disabled={busy !== null || !selectedName}
             >
-              {busy === 'uploading'
-                ? 'Uploading…'
-                : busy === 'processing'
-                  ? 'Queuing…'
-                  : 'Upload + process'}
+              {busy === 'uploading' ? 'Checking…' : 'Upload and check'}
             </Button>
           </div>
 
@@ -242,6 +287,92 @@ export function CsvImportPanel({
           )}
         </CardBody>
       </Card>
+
+      {/* Nothing has been imported yet. This is the step that was
+          missing: the file went straight to process, so a column we
+          could not map became rows that failed one at a time into an
+          error report read afterwards. */}
+      {pending !== null && (
+        <Card>
+          <CardBody>
+            <h2 className="text-text-bright mb-1 text-sm font-medium">
+              Before we import {pending.fileName}
+            </h2>
+            <p className="text-text-muted mb-3 text-xs">
+              {pending.preview.rowCount} row{pending.preview.rowCount === 1 ? '' : 's'} found.
+              Nothing has been imported yet.
+            </p>
+
+            {pending.preview.missingRequired.length > 0 && (
+              <div className="text-critical bg-[var(--color-critical-tint)] border-[var(--color-critical-ring)] mb-3 rounded-[5px] border px-3 py-2 text-xs">
+                <strong>Missing columns:</strong> {pending.preview.missingRequired.join(', ')}. Add
+                them to your file and upload again — every row would fail without them.
+              </div>
+            )}
+
+            {pending.preview.exceedsRowLimit && (
+              <div className="text-critical bg-[var(--color-critical-tint)] border-[var(--color-critical-ring)] mb-3 rounded-[5px] border px-3 py-2 text-xs">
+                Too many rows — the limit is {pending.preview.rowLimit}. Split the file.
+              </div>
+            )}
+
+            {pending.preview.unmatchedHeaders.length > 0 && (
+              <div className="text-text-muted mb-3 text-xs">
+                <strong className="text-text-body">Columns we will ignore:</strong>{' '}
+                {pending.preview.unmatchedHeaders
+                  .map((u) =>
+                    // The suggestion is the useful half — "Phone No is
+                    // ignored" is a shrug; "did you mean customerPhone"
+                    // is a fix.
+                    u.suggestion !== null
+                      ? `${u.header} (did you mean ${u.suggestion}?)`
+                      : u.header,
+                  )
+                  .join(', ')}
+              </div>
+            )}
+
+            <div className="mb-3">
+              <div className="text-text-faint mb-1 text-xs uppercase tracking-wide">
+                What we matched
+              </div>
+              <div className="text-text-muted flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs">
+                {Object.entries(pending.preview.mapping).map(([field, header]) => (
+                  <span key={field}>
+                    {field} <span className="text-text-faint">←</span>{' '}
+                    <span className="text-text-body">{header}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="primary"
+                size="md"
+                disabled={
+                  busy !== null ||
+                  pending.preview.missingRequired.length > 0 ||
+                  pending.preview.exceedsRowLimit
+                }
+                onClick={() => void confirmImport()}
+              >
+                {busy === 'processing'
+                  ? 'Queuing…'
+                  : `Import ${pending.preview.rowCount} row${pending.preview.rowCount === 1 ? '' : 's'}`}
+              </Button>
+              <Button
+                variant="secondary"
+                size="md"
+                disabled={busy !== null}
+                onClick={() => setPending(null)}
+              >
+                Discard
+              </Button>
+            </div>
+          </CardBody>
+        </Card>
+      )}
 
       <h2 className="text-text-bright text-sm font-medium mt-5">Recent imports</h2>
       {list.isLoading ? (
