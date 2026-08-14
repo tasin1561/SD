@@ -24,6 +24,7 @@ import {
 } from '@skydrop/ui/components';
 import { useDelhiveryStatus, useRefillWaybillPool } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { AccountSetupPanel } from './account-setup-panel';
 
 /**
  * The Delhivery operations console.
@@ -244,6 +245,11 @@ export function DelhiveryOpsIndex(): ReactElement {
           </Section>
         </>
       )}
+
+      {/* The two prerequisites for a real parcel. Above is what the
+          account currently holds; this is what has to be true before any
+          of it is spent. */}
+      <AccountSetupPanel />
     </div>
   );
 }

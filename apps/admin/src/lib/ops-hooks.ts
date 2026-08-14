@@ -595,6 +595,128 @@ export function useRefillWaybillPool(): UseMutationResult<
   });
 }
 
+// ───────── Preparing the Delhivery account for real parcels ─────────
+
+/**
+ * Can we actually reach Delhivery with the credential we hold?
+ *
+ * `reachedLiveApi` is the ONLY field worth reading. A serviceability
+ * answer can be served from a local ServiceArea row, and a cached "yes"
+ * looks identical to a successful call while proving nothing — in stub
+ * mode this comes back false precisely so it cannot be mistaken for
+ * proof.
+ *
+ * Read-only: it creates nothing, so it is safe to run before the first
+ * real parcel, which is exactly when someone needs it.
+ */
+export interface DelhiveryPinDetail {
+  readonly pincode: string;
+  readonly serviceable: boolean;
+  readonly codAvailable: boolean | null;
+  readonly prepaidAvailable: boolean | null;
+  readonly city: string | null;
+  readonly state: string | null;
+}
+
+export interface DelhiveryConnectivityView {
+  readonly reachedLiveApi: boolean;
+  readonly stubMode: boolean;
+  readonly pincode: string | null;
+  readonly detail: DelhiveryPinDetail | null;
+  readonly error: string | null;
+}
+
+export function useDelhiveryConnectivity(): UseMutationResult<
+  DelhiveryConnectivityView,
+  Error,
+  { pincode?: string }
+> {
+  const client = useApiClient();
+  return useMutation({
+    // A mutation, not a query: it spends a real call against the
+    // account's rate budget, so it happens when somebody asks for it
+    // and never on render.
+    mutationFn: ({ pincode }) =>
+      client.request<DelhiveryConnectivityView>(
+        `/api/admin/delhivery/connectivity${
+          pincode === undefined || pincode.trim() === ''
+            ? ''
+            : `?pincode=${encodeURIComponent(pincode.trim())}`
+        }`,
+      ),
+  });
+}
+
+/**
+ * Registering one of our warehouses as a Delhivery pickup location.
+ *
+ * Mirrors `RegisterCourierWarehouseDto`. The same body serves register
+ * and update — on update the name identifies WHICH location to change,
+ * which is why it cannot itself be changed.
+ */
+export interface RegisterCourierWarehouseBody {
+  readonly name: string;
+  readonly phone: string;
+  readonly pin: string;
+  readonly address?: string;
+  readonly city?: string;
+  readonly email?: string;
+  readonly registeredName?: string;
+  readonly returnAddress: string;
+  readonly returnCity?: string;
+  readonly returnPin?: string;
+  readonly returnState?: string;
+}
+
+export interface WarehouseRegistrationOutcome {
+  readonly success: boolean;
+  readonly name: string;
+  readonly message: string | null;
+}
+
+/**
+ * Two hooks rather than one with a computed method.
+ *
+ * Registering is permanent and updating is not, which is reason enough
+ * to keep them apart — but it is also what the route check needs: a
+ * `method:` it cannot read statically resolves to GET, and the scan
+ * reported a call to a route that does not exist. A dynamic verb hides
+ * from every static reader, including the next person.
+ *
+ * Neither invalidates anything: Delhivery exposes no "list my pickup
+ * locations" endpoint, so we hold no copy of this to go stale. The
+ * record of what was sent is the audit log.
+ */
+export function useRegisterCourierWarehouse(): UseMutationResult<
+  WarehouseRegistrationOutcome,
+  Error,
+  RegisterCourierWarehouseBody
+> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<WarehouseRegistrationOutcome>('/api/admin/courier-ops/warehouses', {
+        method: 'POST',
+        body,
+      }),
+  });
+}
+
+export function useUpdateCourierWarehouse(): UseMutationResult<
+  WarehouseRegistrationOutcome,
+  Error,
+  RegisterCourierWarehouseBody
+> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<WarehouseRegistrationOutcome>('/api/admin/courier-ops/warehouses', {
+        method: 'PUT',
+        body,
+      }),
+  });
+}
+
 // ───────── Courier ops per shipment (D1–D7 → courier-ops) ─────────
 
 export interface ShipmentInsight {
