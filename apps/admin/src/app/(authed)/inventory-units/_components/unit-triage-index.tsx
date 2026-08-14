@@ -24,6 +24,7 @@ import {
 } from '@skydrop/ui/components';
 import { useSellerUnitReport, useUnitTriage, type StuckUnitRow } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { UnitTracePanel } from './unit-trace-panel';
 
 /**
  * Serialized-unit discrepancies, from the warehouse's side.
@@ -314,6 +315,10 @@ function UnitTable({
           </TBody>
         </Table>
       )}
+
+      {/* The other question: not "which units look wrong" but "what is
+          this one in my hand". */}
+      <UnitTracePanel />
     </div>
   );
 }

@@ -22,6 +22,7 @@ import {
   Tr,
 } from '@skydrop/ui/components';
 import { useUnitDiscrepancies, type StuckUnitRow } from '@/lib/ops-hooks';
+import { UnitTracePanel } from './unit-trace-panel';
 
 /**
  * Serialized-unit discrepancies (strict-mode SKUs only).
@@ -189,6 +190,10 @@ export function UnitDiscrepanciesIndex(): ReactElement {
           </Card>
         </>
       )}
+
+      {/* The other question: not "what looks wrong" but "what is
+          this one item". */}
+      <UnitTracePanel />
     </div>
   );
 }

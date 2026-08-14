@@ -249,6 +249,43 @@ export function useDecideHoldReview(): UseMutationResult<
 
 // ───────── Serialized units (R4) ─────────
 
+/**
+ * Where one of your units has been.
+ *
+ * Scoped to the caller's own account by the server, so a serial another
+ * company printed simply is not found — `stock_units` is keyed on
+ * `(sellerId, serialBarcode)` and two companies may legitimately print
+ * the same number.
+ */
+export interface UnitTraceEvent {
+  readonly fromStatus: StockUnitStatus | null;
+  readonly toStatus: StockUnitStatus;
+  /** Which step moved it: PICK, PACK, DISPATCH, RTO_RECEIVE, ... */
+  readonly gate: string;
+  readonly at: string;
+  readonly shipmentId: string | null;
+  readonly note: string | null;
+}
+
+export interface UnitTrace {
+  /** null when no unit with that serial is yours. */
+  readonly unit: StuckUnitRow | null;
+  readonly events: readonly UnitTraceEvent[];
+}
+
+export function useUnitTrace(serialBarcode: string): UseQueryResult<UnitTrace> {
+  const client = useApiClient();
+  const serial = serialBarcode.trim();
+  return useQuery({
+    queryKey: ['seller-stock-units', 'trace', serial],
+    // An empty lookup would render "no such unit", which reads as an
+    // answer rather than as a question nobody asked.
+    enabled: serial !== '',
+    queryFn: () =>
+      client.request<UnitTrace>(`/api/seller/stock-units/trace/${encodeURIComponent(serial)}`),
+  });
+}
+
 export function useUnitDiscrepancies(warehouseId?: string): UseQueryResult<UnitDiscrepancyReport> {
   const client = useApiClient();
   return useQuery({

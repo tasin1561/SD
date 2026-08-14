@@ -926,6 +926,49 @@ export function useMarginReport(limit: number, enabled: boolean): UseQueryResult
   });
 }
 
+// ───────── One unit's whole history (R4 trace) ─────────
+
+/**
+ * Where a single unit has been.
+ *
+ * The endpoint has existed since R4 and nothing called it, which only
+ * started to matter now that a seller can actually switch a SKU to
+ * STRICT. It answers the question somebody asks holding a returned item
+ * with a barcode on it — has this been dispatched, did it come back
+ * before, is it even ours — and no other screen can answer it.
+ */
+export interface UnitTraceEvent {
+  readonly fromStatus: string | null;
+  readonly toStatus: string;
+  /** Which gate moved it: PICK, PACK, DISPATCH, RTO_RECEIVE, ... */
+  readonly gate: string;
+  readonly at: string;
+  readonly shipmentId: string | null;
+  readonly note: string | null;
+}
+
+export interface UnitTrace {
+  /** null when no unit with that serial belongs to this seller. */
+  readonly unit: StuckUnitRow | null;
+  readonly events: readonly UnitTraceEvent[];
+}
+
+export function useUnitTrace(sellerId: string, serialBarcode: string): UseQueryResult<UnitTrace> {
+  const client = useApiClient();
+  const serial = serialBarcode.trim();
+  return useQuery({
+    queryKey: ['admin-units', 'trace', sellerId, serial],
+    // Only ask once there is something to ask about: an empty lookup
+    // renders "no such unit", which reads as an answer rather than as
+    // a question nobody put.
+    enabled: sellerId !== '' && serial !== '',
+    queryFn: () =>
+      client.request<UnitTrace>(
+        `/api/admin/stock-units/trace/${sellerId}/${encodeURIComponent(serial)}`,
+      ),
+  });
+}
+
 // ───────── Serialized-unit discrepancies, admin side (R4) ─────────
 
 export interface SellerDiscrepancySummary {

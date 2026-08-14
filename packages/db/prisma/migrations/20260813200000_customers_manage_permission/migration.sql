@@ -32,7 +32,7 @@ SELECT
   r.id,
   'customers.manage',
   p.scope
-FROM seller_role_definitions r
+FROM seller_roles r
 JOIN seller_role_permissions p
   ON p.role_id = r.id AND p.permission = 'customers.view'
 WHERE r.is_owner = FALSE
