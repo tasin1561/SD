@@ -55,10 +55,14 @@ export function CustomerDetailPanel({
   /** Let the parent drop this panel — the record it is showing is gone. */
   readonly onDeleted?: () => void;
 }): ReactElement | null {
-  // COSMETIC (FE-2). The server guards all three endpoints on
-  // `customers.view`; without this the panel would offer an edit button
-  // to a teammate whose token the API refuses.
-  const mayView = can(useSellerIdentity(), 'customers.view');
+  // COSMETIC (FE-2), and TWO permissions rather than one: the server
+  // guards the read on `customers.view` and both writes on
+  // `customers.manage`. They were the same key until the write was split
+  // out, which meant a company could not say "let them look" — the only
+  // way to withhold the edit was to withhold the whole customer list.
+  const identity = useSellerIdentity();
+  const mayView = can(identity, 'customers.view');
+  const mayManage = can(identity, 'customers.manage');
 
   const toast = useToast();
   const detail = useCustomer(customerId);
@@ -147,27 +151,29 @@ export function CustomerDetailPanel({
         title={c?.name ?? c?.phoneE164 ?? 'Customer'}
         subtitle={c === undefined ? undefined : c.phoneE164}
         action={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={c === undefined}
-              onClick={() => openEditor()}
-            >
-              Correct details
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              disabled={c === undefined}
-              onClick={() => {
-                setError(null);
-                setRemoving(true);
-              }}
-            >
-              Remove
-            </Button>
-          </div>
+          mayManage ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={c === undefined}
+                onClick={() => openEditor()}
+              >
+                Correct details
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={c === undefined}
+                onClick={() => {
+                  setError(null);
+                  setRemoving(true);
+                }}
+              >
+                Remove
+              </Button>
+            </div>
+          ) : undefined
         }
       />
       <CardBody>

@@ -89,6 +89,19 @@ export const SELLER_PERMISSIONS = [
     sensitive: true,
   },
   {
+    // Split out of customers.view, which was guarding the edit and the
+    // soft delete as well as the read. A role granted "See customers"
+    // could rename and remove customer records, so a company could not
+    // express "let them look" — the only way to withhold the write was
+    // to withhold the read.
+    key: 'customers.manage',
+    label: 'Edit customers',
+    description:
+      'Correct a name, email or note, and remove a customer. The phone number is fixed — it is how a customer is identified.',
+    group: 'Orders',
+    sensitive: true,
+  },
+  {
     key: 'recipient_addresses.manage',
     label: 'Keep a customer address book',
     description: 'Saved delivery addresses to reuse when placing an order.',
@@ -312,6 +325,7 @@ export const DEFAULT_SELLER_ROLES: ReadonlyArray<{
       'orders.import',
       'orders.pending.manage',
       'customers.view',
+      'customers.manage',
       'recipient_addresses.manage',
       'catalog.view',
       'catalog.manage',

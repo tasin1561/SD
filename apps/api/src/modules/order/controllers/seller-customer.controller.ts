@@ -55,7 +55,7 @@ export class SellerCustomerController {
   }
 
   @Patch(':id')
-  @RequireSellerPermissions('customers.view')
+  @RequireSellerPermissions('customers.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Edit a customer (phone is immutable, ORD-7)' })
   update(
@@ -67,7 +67,7 @@ export class SellerCustomerController {
   }
 
   @Delete(':id')
-  @RequireSellerPermissions('customers.view')
+  @RequireSellerPermissions('customers.manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Soft-delete a customer' })
   async remove(
