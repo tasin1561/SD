@@ -46,3 +46,25 @@ export function useLogoutEverywhere(): UseMutationResult<LogoutEverywhereResult,
       client.request<LogoutEverywhereResult>('/api/auth/seller/logout-all', { method: 'POST' }),
   });
 }
+
+/**
+ * Ask for a fresh email-verification link.
+ *
+ * The confirm half has always had a page (the link in the email lands
+ * there); the REQUEST half had no caller, so a seller whose verification
+ * email was lost, filtered or sent before they finished setting up had
+ * no way to get another one and no way to tell anybody.
+ *
+ * Self-service like the rest of this controller — it verifies the
+ * address on the account you are already signed in as, so it takes no
+ * body and there is nothing to authorise beyond being logged in.
+ */
+export function useRequestEmailVerification(): UseMutationResult<{ ok: true }, Error, void> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: () =>
+      client.request<{ ok: true }>('/api/auth/seller/email-verification/request', {
+        method: 'POST',
+      }),
+  });
+}

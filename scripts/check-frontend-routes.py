@@ -162,7 +162,11 @@ for app, root in SOURCES:
 # is deliberate: this may credit a path that only appears in a comment,
 # which loses us a true positive. A false "this is dead" is worse — it is
 # noise, and noise is what stops a check from being run at all.
-PATHISH = re.compile(r"['\"`](/api/[A-Za-z0-9_\-/:${}.?&=\[\]']*)")
+# NB: the character class must NOT contain a quote. It did, and the match
+# swallowed the closing one — `'/api/admin/staff-roles'` produced the
+# mentioned path `/api/admin/staff-roles'`, which matches no route, so ten
+# endpoints with obvious callers were reported as having none.
+PATHISH = re.compile(r"""['"`](/api/[A-Za-z0-9_\-/:${}.?&=\[\]]*)""")
 
 mentioned = set()
 for _app, root in SOURCES:
@@ -274,6 +278,13 @@ EXPECTED_ORPHANS = {
     # from there. A second caller for the same five numbers would be a
     # second thing to keep in step, not a feature.
     'admin/courier-escalation/outbox/counts',
+    # Called, but deliberately not through `request()`: the single-flight
+    # refresh in packages/api-client uses the raw `fetchImpl` (a 401 from
+    # inside request() would recurse), and it composes the path from
+    # `${this.baseUrl}` so no string in the source starts with /api. See
+    # client.ts — it is the one call that must not go through the wrapper.
+    'auth/seller/refresh',
+    'auth/staff/refresh',
 }
 
 def expected(lit: str) -> bool:

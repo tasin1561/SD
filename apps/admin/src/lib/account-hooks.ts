@@ -78,3 +78,25 @@ export function useLogoutAllSessions(): UseMutationResult<LogoutAllResult, Error
     onSuccess: () => qc.clear(),
   });
 }
+
+/**
+ * Ask for a fresh email-verification link.
+ *
+ * The page has always SHOWN "not verified" and offered nothing to do
+ * about it — the confirm half has a page (the link in the email lands
+ * there), the request half had no caller. So a staff member whose
+ * verification email was filtered could read that their address was
+ * unconfirmed and had no way to change it.
+ *
+ * `@StaffSelfService()` like the rest of this controller: it verifies
+ * the address on the account you are already signed in as.
+ */
+export function useRequestEmailVerification(): UseMutationResult<{ ok: true }, Error, void> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: () =>
+      client.request<{ ok: true }>('/api/auth/staff/email-verification/request', {
+        method: 'POST',
+      }),
+  });
+}

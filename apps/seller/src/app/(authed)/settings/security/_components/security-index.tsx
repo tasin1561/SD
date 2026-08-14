@@ -14,9 +14,10 @@ import {
   PageHeader,
   Section,
   Skeleton,
+  useToast,
 } from '@skydrop/ui/components';
 import { serverVerdict } from '@/lib/server-verdict';
-import { useLogoutEverywhere } from '@/lib/session-hooks';
+import { useLogoutEverywhere, useRequestEmailVerification } from '@/lib/session-hooks';
 
 /**
  * Sign-in & sessions.
@@ -35,7 +36,21 @@ import { useLogoutEverywhere } from '@/lib/session-hooks';
  */
 export function SecurityIndex(): ReactElement {
   const identity = useSellerIdentity();
+  const toast = useToast();
   const logoutAll = useLogoutEverywhere();
+  const verify = useRequestEmailVerification();
+
+  async function onVerify(): Promise<void> {
+    setError(null);
+    try {
+      await verify.mutateAsync();
+      // No new state to show: the account is still unverified until the
+      // link is clicked, so saying "sent" is the whole honest outcome.
+      toast.success('Sent. Check your inbox — the link confirms this address.');
+    } catch (e) {
+      setError(serverVerdict(e, 'Could not send a verification link.'));
+    }
+  }
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [revokedCount, setRevokedCount] = useState<number | null>(null);
@@ -89,14 +104,39 @@ export function SecurityIndex(): ReactElement {
                 ))}
               </div>
             ) : (
-              <DescriptionList
-                items={[
-                  { label: 'Signed in as', value: identity.fullName },
-                  { label: 'Email', value: identity.emailDisplay },
-                  { label: 'Role', value: identity.roleName },
-                  { label: 'Company', value: identity.companyName },
-                ]}
-              />
+              <>
+                <DescriptionList
+                  items={[
+                    { label: 'Signed in as', value: identity.fullName },
+                    {
+                      label: 'Email',
+                      value:
+                        identity.emailVerifiedAt === null
+                          ? `${identity.emailDisplay} — not verified`
+                          : identity.emailDisplay,
+                    },
+                    { label: 'Role', value: identity.roleName },
+                    { label: 'Company', value: identity.companyName },
+                  ]}
+                />
+                {identity.emailVerifiedAt === null && (
+                  <div className="border-border mt-3 rounded-md border p-3">
+                    <p className="text-text-muted text-sm">
+                      We have not confirmed this address yet. The link may have been filtered, or
+                      sent before you finished setting up — either way you can have another.
+                    </p>
+                    <Button
+                      className="mt-2"
+                      variant="secondary"
+                      size="sm"
+                      disabled={verify.isPending}
+                      onClick={() => void onVerify()}
+                    >
+                      {verify.isPending ? 'Sending…' : 'Send me a new link'}
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </CardBody>
         </Card>

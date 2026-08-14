@@ -2,6 +2,7 @@
 
 import type { ReactElement } from 'react';
 import {
+  Button,
   Card,
   CardBody,
   CardHeader,
@@ -9,13 +10,28 @@ import {
   ErrorNote,
   LoadingState,
   PageHeader,
+  useToast,
 } from '@skydrop/ui/components';
-import { useAccountIdentity } from '@/lib/account-hooks';
+import { useAccountIdentity, useRequestEmailVerification } from '@/lib/account-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { SessionRevocationCard } from './session-revocation-card';
 
 export function AccountSecurityView(): ReactElement {
   const me = useAccountIdentity();
+  const toast = useToast();
+  const verify = useRequestEmailVerification();
+
+  async function onVerify(): Promise<void> {
+    try {
+      await verify.mutateAsync();
+      // Nothing changes here until the link is clicked, so "sent" is
+      // the whole honest outcome — refetching would show the same
+      // "not verified" and read as a failure.
+      toast.success('Sent. Check your inbox — the link confirms this address.');
+    } catch (e) {
+      toast.error(serverVerdict(e, 'Could not send a verification link.'));
+    }
+  }
 
   return (
     <div>
@@ -56,7 +72,20 @@ export function AccountSecurityView(): ReactElement {
                     label: 'Email verified',
                     value:
                       me.data.emailVerifiedAt === null ? (
-                        <span className="text-pending">Not verified</span>
+                        // Showing the problem without offering the fix is
+                        // what this page did before: the request endpoint
+                        // existed and nothing called it.
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="text-pending">Not verified</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={verify.isPending}
+                            onClick={() => void onVerify()}
+                          >
+                            {verify.isPending ? 'Sending…' : 'Send a new link'}
+                          </Button>
+                        </span>
                       ) : (
                         formatWhen(me.data.emailVerifiedAt)
                       ),
