@@ -974,6 +974,48 @@ export function useCurrentCalls(): UseQueryResult<{
   });
 }
 
+/**
+ * The calling agent's OWN attempts, newest first.
+ *
+ * Scoped to the caller by the server — an agent sees their own work and
+ * nobody else's, which is what makes this safe to put on the station
+ * beside the live call rather than behind a supervisor permission.
+ *
+ * It is the answer to "what did I just tell that customer", asked when
+ * the same number comes back around, and to "did that one actually
+ * save" after a flaky moment. `callcenter.work` is all it needs, the
+ * same permission that lets them take a call at all.
+ */
+export interface AgentCallHistoryRow {
+  readonly attemptId: string;
+  readonly orderId: string;
+  readonly queueEntryId: string;
+  readonly outcome: string;
+  readonly startedAt: string;
+  readonly endedAt: string | null;
+  readonly durationSeconds: number | null;
+  readonly outcomeNotes: string | null;
+  readonly rescheduledFor: string | null;
+}
+
+export interface AgentCallHistory {
+  readonly items: ReadonlyArray<AgentCallHistoryRow>;
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+}
+
+export function useAgentCallHistory(page: number, pageSize = 10): UseQueryResult<AgentCallHistory> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['agent-calls', 'history', page, pageSize],
+    queryFn: () =>
+      client.request<AgentCallHistory>(
+        `/api/agent/calls/history?page=${page}&pageSize=${pageSize}`,
+      ),
+  });
+}
+
 export function useRecordCallAttempt(): UseMutationResult<
   RecordAttemptResult,
   Error,

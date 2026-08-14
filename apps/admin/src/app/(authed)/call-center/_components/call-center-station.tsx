@@ -20,6 +20,7 @@ import type { PulledAssignment } from '@skydrop/api-client';
 import { usePullNextCall, useRecordCallAttempt, useReleaseCall } from '@/lib/api-hooks';
 import { CallOutcome } from '@skydrop/db';
 import { MyAvailability } from './my-availability';
+import { MyCallHistory } from './my-call-history';
 
 const OUTCOME_OPTIONS: ReadonlyArray<{
   value: CallOutcome;
@@ -341,6 +342,10 @@ export function CallCenterStation(): ReactElement {
           </CardBody>
         </Card>
       )}
+
+      {/* Between calls, not during one — collapsed so the live call
+          keeps the screen. */}
+      <MyCallHistory />
     </div>
   );
 }
