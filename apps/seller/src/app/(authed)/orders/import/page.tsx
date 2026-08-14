@@ -24,6 +24,11 @@ export default function OrderImportPage(): ReactElement {
         endpointBase="/api/seller/order-imports"
         templateFileName="skydrop-order-import-template.csv"
         previewSampleSize={5}
+        // The table keeps the last ten runs and four of each row's
+        // numbers; the per-run screen has the rest and, more to the
+        // point, a URL — so a job somebody is watching can be sent to
+        // whoever is asking about it, and run eleven is still reachable.
+        detailHref={(id) => `/orders/import/${id}`}
       />
     </div>
   );

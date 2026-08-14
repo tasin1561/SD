@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import { PageHeader } from '@skydrop/ui/components';
-import { Webhook, Bell, Key } from 'lucide-react';
+import { Webhook, Bell, Key, ShieldCheck } from 'lucide-react';
 import { SettingsHub, type SettingsTile } from './_components/settings-hub';
 
 /**
@@ -12,6 +12,15 @@ import { SettingsHub, type SettingsTile } from './_components/settings-hub';
  */
 export default function SettingsPage(): ReactElement {
   const items: SettingsTile[] = [
+    {
+      // First, and deliberately: it is the tile somebody comes looking
+      // for in a hurry, and it is the only one every role may open.
+      href: '/settings/security',
+      icon: <ShieldCheck size={20} />,
+      title: 'Sign-in & sessions',
+      description:
+        'Who this browser is signed in as, and a way to end every session for the account at once — for a device you no longer control.',
+    },
     {
       href: '/settings/webhooks',
       icon: <Webhook size={20} />,
@@ -35,7 +44,10 @@ export default function SettingsPage(): ReactElement {
   ];
   return (
     <div>
-      <PageHeader title="Settings" subtitle="Addresses, webhooks, notifications, API keys." />
+      <PageHeader
+        title="Settings"
+        subtitle="Sign-in and sessions, webhooks, notifications, API keys."
+      />
       <SettingsHub items={items} />
     </div>
   );

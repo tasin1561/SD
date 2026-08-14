@@ -224,6 +224,7 @@ export function AppShell({
   navGroups,
   identityPrimary,
   identitySecondary,
+  identityHref,
   headerActions,
   drawerActions,
   footerNote,
@@ -249,6 +250,14 @@ export function AppShell({
    * per-app: the shell stays the one piece of chrome (FE-7) and does not
    * grow a seller-shaped branch.
    */
+  /**
+   * Where "who am I signed in as" leads, if anywhere.
+   *
+   * Optional because it is per-app: the identity block is the place a
+   * person clicks looking for their own account, and an app without such
+   * a page should not render a link that goes nowhere.
+   */
+  readonly identityHref?: string;
   readonly headerActions?: ReactNode;
   /**
    * The same actions for the mobile drawer footer. Deliberately a second
@@ -370,14 +379,30 @@ export function AppShell({
                 <div className="border-border shrink-0 space-y-2.5 border-t px-4 py-3">
                   {drawerActions}
                   <div className="flex items-center gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-text-body truncate text-xs font-medium">
-                        {identityPrimary}
+                    {identityHref === undefined ? (
+                      <div className="min-w-0 flex-1">
+                        <div className="text-text-body truncate text-xs font-medium">
+                          {identityPrimary}
+                        </div>
+                        <div className="text-text-faint truncate text-[11px]">
+                          {identitySecondary}
+                        </div>
                       </div>
-                      <div className="text-text-faint truncate text-[11px]">
-                        {identitySecondary}
-                      </div>
-                    </div>
+                    ) : (
+                      <Link
+                        href={identityHref}
+                        className="hover:bg-surface-raised min-w-0 flex-1 rounded-[6px] px-2 py-1 transition-colors"
+                        aria-current={undefined}
+                        onClick={() => setDrawerOpen(false)}
+                      >
+                        <div className="text-text-body truncate text-xs font-medium">
+                          {identityPrimary}
+                        </div>
+                        <div className="text-text-faint truncate text-[11px]">
+                          {identitySecondary}
+                        </div>
+                      </Link>
+                    )}
                     <ThemeToggle />
                   </div>
                   <SignOutButton
@@ -405,10 +430,22 @@ export function AppShell({
           </div>
           <div className="hidden shrink-0 items-center gap-3 lg:flex">
             {headerActions}
-            <div className="min-w-0 text-right leading-tight">
-              <div className="text-text-body truncate text-xs">{identityPrimary}</div>
-              <div className="text-text-faint truncate text-[11px]">{identitySecondary}</div>
-            </div>
+            {identityHref === undefined ? (
+              <div className="min-w-0 text-right leading-tight">
+                <div className="text-text-body truncate text-xs">{identityPrimary}</div>
+                <div className="text-text-faint truncate text-[11px]">{identitySecondary}</div>
+              </div>
+            ) : (
+              <Link
+                href={identityHref}
+                className="hover:bg-surface-raised min-w-0 rounded-[6px] px-2 py-1 text-right leading-tight transition-colors"
+                aria-current={undefined}
+                onClick={() => undefined}
+              >
+                <div className="text-text-body truncate text-xs">{identityPrimary}</div>
+                <div className="text-text-faint truncate text-[11px]">{identitySecondary}</div>
+              </Link>
+            )}
             <ThemeToggle />
             <SignOutButton onSignOut={onSignOut} signingOut={signingOut} />
           </div>

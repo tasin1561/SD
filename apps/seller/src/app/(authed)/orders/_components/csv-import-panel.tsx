@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRef, useState, type ChangeEvent, type ReactElement } from 'react';
 import {
   Button,
@@ -77,11 +78,19 @@ export function CsvImportPanel({
   kind,
   endpointBase,
   templateFileName,
+  detailHref,
 }: {
   readonly kind: Kind;
   readonly endpointBase: string;
   readonly templateFileName: string;
   readonly previewSampleSize?: number;
+  /**
+   * Where a row goes when clicked. Optional because only the orders
+   * importer has a per-run detail screen (GET endpointBase/:id) —
+   * passing nothing leaves the table exactly as it was rather than
+   * linking somewhere that 404s.
+   */
+  readonly detailHref?: (uploadId: string) => string;
 }): ReactElement {
   const toast = useToast();
   const client = useApiClient();
@@ -111,8 +120,13 @@ export function CsvImportPanel({
     queryFn: () => client.request<UploadsResponse>(`${endpointBase}?page=1&pageSize=10`),
     refetchInterval: (q) => {
       const items = q.state.data?.items ?? [];
+      // Both importers write `BulkUploadStatus`, whose only non-terminal
+      // values are PENDING and PROCESSING. This used to also test for
+      // RUNNING and QUEUED, which that enum has never had — so polling
+      // stopped the moment the worker claimed the job and the table
+      // sat on PROCESSING until someone reloaded the page.
       const stillRunning = items.some(
-        (it) => it.status === 'RUNNING' || it.status === 'QUEUED' || it.status === 'PENDING',
+        (it) => it.status === 'PENDING' || it.status === 'PROCESSING',
       );
       return stillRunning ? 5_000 : false;
     },
@@ -409,7 +423,17 @@ export function CsvImportPanel({
               return (
                 <Tr key={u.id}>
                   <Td className="text-text-bright text-xs font-mono truncate max-w-[160px]">
-                    {u.fileName}
+                    {detailHref === undefined ? (
+                      u.fileName
+                    ) : (
+                      <Link
+                        href={detailHref(u.id)}
+                        className="text-accent hover:text-accent-hover"
+                        title={u.fileName}
+                      >
+                        {u.fileName}
+                      </Link>
+                    )}
                   </Td>
                   <Td className="text-text-muted text-xs uppercase">{u.status}</Td>
                   <Td className="text-right font-mono">{u.rowCount}</Td>

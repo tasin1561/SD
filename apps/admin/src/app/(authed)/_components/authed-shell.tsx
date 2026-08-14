@@ -160,6 +160,10 @@ export function AuthedShell({
         navGroups={navGroups}
         identityPrimary={identity.emailDisplay}
         identitySecondary={identity.roleName}
+        // Clicking who you are signed in as is where a person looks for
+        // their own account — the page has no nav entry because it is
+        // not a section of the product, it is about them.
+        identityHref="/account"
         footerNote="Phase 1A"
         pathname={pathname}
         Link={Link}
