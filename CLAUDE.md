@@ -851,6 +851,19 @@ paths on the methods) used to drop an entire controller from the route
 table, and a call resolving to more than one route used to credit only
 the first.
 
+**The list is at ZERO as of 2026-08-14 — every route has a caller.** That
+is the baseline, so anything appearing there is NEW and worth looking at
+rather than part of a standing backlog. Getting there was mostly fixing
+the checker, not writing screens: its loose scan had a quote inside the
+character class, so a match swallowed the closing one and ten endpoints
+with obvious callers read as dead. Exactly two entries are uncalled on
+purpose and sit in `EXPECTED_ORPHANS` with their reason —
+`outbox/counts` (superseded by `/channel`, which returns the same
+numbers) and `auth/*/refresh` (the single-flight refresh uses the raw
+`fetchImpl`, because a 401 from inside `request()` would recurse).
+**When an endpoint should stay uncalled, add it there with the reason
+rather than leaving it to be re-triaged every time.**
+
 **`pnpm gate` is the pre-commit gate. Run it whole; never a subset (2026-08-06).**
 It is `gate:clean` (delete every `.tsbuildinfo` — see the stale-cache trap below)
 then typecheck → lint → `format:check` → the full unit suite, which is exactly
