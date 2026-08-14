@@ -28,6 +28,7 @@ import {
   useCourierOutbox,
   useMarkOutboxSent,
   usePauseCourierChannel,
+  useReconcileOutbox,
   useReleaseOutboxItem,
   useRequestModeChange,
   useResumeCourierChannel,
@@ -66,6 +67,23 @@ export function CourierEscalationIndex(): ReactElement {
   // FE-2: cosmetic. The server refuses regardless — this stops the page
   // offering a control whose request would only come back 403.
   const canWrite = usePermission('courier.ops.write');
+  const reconcile = useReconcileOutbox();
+
+  async function onReconcile(): Promise<void> {
+    try {
+      const r = await reconcile.mutateAsync();
+      toast.success(
+        r.readBackUnavailable
+          ? // Without a read-back, "still unknown" is our own ignorance
+            // rather than anything Delhivery told us — saying "0 confirmed"
+            // would read as a finding.
+            'Could not read state back from Delhivery, so nothing could be confirmed either way.'
+          : `Examined ${r.examined}: ${r.confirmed} confirmed, ${r.returnedToQueue} back in the queue, ${r.stillUnknown} still unknown.`,
+      );
+    } catch (err) {
+      toast.error(serverVerdict(err));
+    }
+  }
 
   const settings = channel.data?.settings;
   const counts = channel.data?.counts;
@@ -117,7 +135,21 @@ export function CourierEscalationIndex(): ReactElement {
         </Card>
       ) : null}
 
-      <Section title="Today">
+      <Section
+        title="Today"
+        action={
+          canWrite ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={reconcile.isPending}
+              onClick={() => void onReconcile()}
+            >
+              {reconcile.isPending ? 'Reconciling…' : 'Reconcile now'}
+            </Button>
+          ) : undefined
+        }
+      >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           <Stat label="Waiting" value={<Num value={counts?.pending ?? 0} />} />
           <Stat label="In hand" value={<Num value={counts?.sending ?? 0} />} />

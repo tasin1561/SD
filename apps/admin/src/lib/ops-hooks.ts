@@ -1302,6 +1302,42 @@ export function useReleaseOutboxItem(): UseMutationResult<{ ok: true }, Error, s
   });
 }
 
+/**
+ * Run the outbox reconciler now.
+ *
+ * A SENT_UNCONFIRMED item is one we handed to Delhivery without learning
+ * whether it landed, and the reconciler is what asks them. A BullMQ
+ * sweep already does this on a schedule — this is the manual trigger for
+ * an operator looking at the Unconfirmed count right now, the same shape
+ * as `AwbGenerationJobService.processManifest` being public.
+ *
+ * `readBackUnavailable` is the field that decides whether the answer
+ * means anything: if we could not read state back from Delhivery, then
+ * "still unknown" is our own ignorance rather than a fact about them.
+ */
+export interface ReconcileSummary {
+  readonly examined: number;
+  readonly confirmed: number;
+  readonly returnedToQueue: number;
+  readonly stillUnknown: number;
+  readonly leasesReclaimed: number;
+  readonly readBackUnavailable: boolean;
+}
+
+export function useReconcileOutbox(): UseMutationResult<ReconcileSummary, Error, void> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      client.request<ReconcileSummary>('/api/admin/courier-escalation/reconcile', {
+        method: 'POST',
+      }),
+    // It moves items between states, so every count and list on the
+    // console is stale the moment it returns.
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['courier-escalation'] }),
+  });
+}
+
 export function useRequestModeChange(): UseMutationResult<
   { challengeId: string; expiresAt: string },
   Error,

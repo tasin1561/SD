@@ -269,6 +269,11 @@ EXPECTED_ORPHANS = {
     # Indian warehouse, and the pickup location is ours). The endpoints
     # are kept for the existing rows; nothing should call them.
     'seller/addresses',
+    # Superseded, not missing: GET /admin/courier-escalation/channel
+    # already returns the same OpsQueueCounts, and the console reads it
+    # from there. A second caller for the same five numbers would be a
+    # second thing to keep in step, not a feature.
+    'admin/courier-escalation/outbox/counts',
 }
 
 def expected(lit: str) -> bool:
