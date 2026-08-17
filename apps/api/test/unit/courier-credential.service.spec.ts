@@ -19,6 +19,10 @@ function makeService(
     credential?: AnyArgs | null;
     keyV1?: string;
     courierAccount?: AnyArgs | null;
+    /** The DEFAULT account `resolveCredential` finds for the pair, if any. */
+    defaultAccount?: AnyArgs | null;
+    /** How many active accounts exist for the pair (drives the refusal). */
+    accountCount?: number;
   } = {},
 ) {
   const encryptedPayload = encryptCredential(JSON.stringify(FIELDS), KEY_V1);
@@ -47,13 +51,21 @@ function makeService(
         }
       : opts.courierAccount,
   );
+  const accountFindFirst = jest.fn(async () =>
+    opts.defaultAccount === undefined ? null : opts.defaultAccount,
+  );
+  const accountCount = jest.fn(async () => opts.accountCount ?? 0);
   const client = {
     courier: { findUnique: courierFindUnique },
     courierCredential: {
       findFirst: credentialFindFirst,
       update: credentialUpdate,
     },
-    courierAccount: { findUnique: courierAccountFindUnique },
+    courierAccount: {
+      findUnique: courierAccountFindUnique,
+      findFirst: accountFindFirst,
+      count: accountCount,
+    },
   };
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs]>(async () => 'a');
   const audit = { log: auditLog };
@@ -72,6 +84,8 @@ function makeService(
     credentialFindFirst,
     credentialUpdate,
     courierAccountFindUnique,
+    accountFindFirst,
+    accountCount,
     auditLog,
   };
 }
@@ -267,6 +281,85 @@ describe('CourierCredentialService.getCredentialForAccount', () => {
     });
     await expect(svc.getCredentialForAccount('acct-1')).rejects.toMatchObject({
       response: { code: 'COURIER_ACCOUNT_NOT_FOUND' },
+    });
+  });
+});
+
+/**
+ * `resolveCredential` — the one place an outbound courier call learns
+ * whose token it carries.
+ *
+ * Before it existed, routing picked an account and the HTTP layer
+ * authenticated with whatever `findFirst` returned. With one credential
+ * those always agreed, which is why nothing failed; with two they would
+ * disagree silently, and every downstream number (margin, settlement,
+ * the audit trail) would be confidently wrong.
+ *
+ * The ORDER is the contract, so each case is pinned separately.
+ */
+describe('CourierCredentialService.resolveCredential', () => {
+  it('an explicit account uses exactly that account', async () => {
+    const { svc, courierAccountFindUnique, accountFindFirst } = makeService();
+    await svc.resolveCredential(COURIER, CredentialEnvironment.PRODUCTION, 'acct-7');
+    expect(courierAccountFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'acct-7' } }),
+    );
+    // It must NOT go looking for a default as well — that would be a
+    // second answer to a question already answered.
+    expect(accountFindFirst).not.toHaveBeenCalled();
+  });
+
+  it('no account named falls to the DEFAULT one when accounts exist', async () => {
+    const { svc, accountFindFirst, courierAccountFindUnique, credentialFindFirst } = makeService({
+      defaultAccount: { id: 'acct-default' },
+    });
+    await svc.resolveCredential(COURIER, CredentialEnvironment.PRODUCTION, null);
+    expect(accountFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ isDefault: true }) }),
+    );
+    expect(courierAccountFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'acct-default' } }),
+    );
+    // And never the legacy lookup — with accounts configured, no call
+    // should be resolving outside one.
+    expect(credentialFindFirst).not.toHaveBeenCalled();
+  });
+
+  it('with NO accounts at all it uses the legacy single credential', async () => {
+    // This is production today: one credential, zero CourierAccount rows.
+    // Behaviour must be byte-identical to before this method existed.
+    const { svc, credentialFindFirst } = makeService();
+    const creds = await svc.resolveCredential(COURIER, CredentialEnvironment.PRODUCTION, null);
+    expect(credentialFindFirst).toHaveBeenCalled();
+    expect(creds.token).toBe(FIELDS.token);
+  });
+
+  it('refuses when accounts exist but none is default', async () => {
+    // The dangerous middle: picking one arbitrarily is how a parcel ends
+    // up on the wrong account's bill with nothing in the log to say why.
+    const { svc, credentialFindFirst } = makeService({ accountCount: 2 });
+    await expect(
+      svc.resolveCredential(COURIER, CredentialEnvironment.PRODUCTION, null),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'NO_DEFAULT_COURIER_ACCOUNT' }),
+    });
+    expect(credentialFindFirst).not.toHaveBeenCalled();
+  });
+
+  it('an inactive or deleted account is refused, not silently replaced', async () => {
+    const { svc } = makeService({
+      courierAccount: {
+        environment: CredentialEnvironment.PRODUCTION,
+        deletedAt: null,
+        isActive: false,
+        courier: { code: COURIER },
+        credential: null,
+      },
+    });
+    await expect(
+      svc.resolveCredential(COURIER, CredentialEnvironment.PRODUCTION, 'acct-off'),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'COURIER_ACCOUNT_NOT_FOUND' }),
     });
   });
 });

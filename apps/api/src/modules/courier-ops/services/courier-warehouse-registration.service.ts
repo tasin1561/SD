@@ -49,13 +49,28 @@ export class CourierWarehouseRegistrationService {
     private readonly warehouses: DelhiveryWarehouseService,
   ) {}
 
+  /**
+   * `courierAccountId` decides WHICH Delhivery account the warehouse is
+   * registered with, and a pickup location only exists inside the
+   * account that registered it. Two accounts collecting from the same
+   * physical building each need their own registration — so this is not
+   * an optional refinement, it is which company you are talking to.
+   *
+   * Null registers under the default/legacy credential, which is the
+   * single-account case.
+   */
   async register(
     staffId: string,
     input: DelhiveryWarehouseInput,
     ctx: ClientInfoPayload,
+    courierAccountId: string | null = null,
   ): Promise<WarehouseRegistrationOutcome> {
     this.assertExactName(input.name);
-    const result = await this.warehouses.register(input, courierActor.operator(staffId));
+    const result = await this.warehouses.register(
+      input,
+      courierActor.operator(staffId),
+      courierAccountId,
+    );
     await this.auditIt(staffId, 'registered', input.name, result, ctx);
     return { success: result.success, name: result.name, message: result.message };
   }
@@ -64,9 +79,14 @@ export class CourierWarehouseRegistrationService {
     staffId: string,
     input: DelhiveryWarehouseInput,
     ctx: ClientInfoPayload,
+    courierAccountId: string | null = null,
   ): Promise<WarehouseRegistrationOutcome> {
     this.assertExactName(input.name);
-    const result = await this.warehouses.update(input, courierActor.operator(staffId));
+    const result = await this.warehouses.update(
+      input,
+      courierActor.operator(staffId),
+      courierAccountId,
+    );
     await this.auditIt(staffId, 'updated', input.name, result, ctx);
     return { success: result.success, name: result.name, message: result.message };
   }

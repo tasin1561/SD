@@ -61,11 +61,30 @@ export class WaybillRefillWorker implements OnModuleInit, OnModuleDestroy {
           return;
         }
         try {
-          const result = await this.pool.refillIfNeeded(
-            courierActor.runner('waybill-refill', job.id),
-          );
-          if (result.fetched > 0) {
-            this.logger.log(result, 'Waybill pool topped up');
+          // Every account, one pool each. A waybill is bought by one
+          // account and only works on that account's shipments, so a
+          // single top-up cannot serve two — and one account running dry
+          // stalls manifesting for its sellers while the others look
+          // healthy.
+          //
+          // Per-account failure isolation, same discipline as the AWB
+          // fan-out: an account whose token is rejected must not stop the
+          // rest from filling.
+          for (const account of await this.refillTargets()) {
+            try {
+              const result = await this.pool.refillIfNeeded(
+                courierActor.runner('waybill-refill', job.id),
+                account,
+              );
+              if (result.fetched > 0) {
+                this.logger.log({ ...result, courierAccountId: account }, 'Waybill pool topped up');
+              }
+            } catch (err) {
+              this.logger.warn(
+                { err: (err as Error).message, courierAccountId: account },
+                'Waybill refill failed for one account — others continue',
+              );
+            }
           }
         } catch (err) {
           // The most likely causes are both operator-visible states, not
@@ -87,6 +106,29 @@ export class WaybillRefillWorker implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Fails CLOSED: an unreadable or absent setting means "do not spend". */
+  /**
+   * Which pools to top up.
+   *
+   * `[null]` when no CourierAccount exists — the single legacy pool,
+   * which is what production has today. Otherwise one entry per active
+   * account for the current environment. Deliberately NOT "accounts plus
+   * null": once accounts exist, nothing should be pooling against no
+   * account, and topping up an orphan pool would hide that something is
+   * still resolving to null.
+   */
+  private async refillTargets(): Promise<ReadonlyArray<string | null>> {
+    const accounts = await this.prisma.client.courierAccount.findMany({
+      where: {
+        courier: { code: 'delhivery' },
+        isActive: true,
+        deletedAt: null,
+      },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return accounts.length === 0 ? [null] : accounts.map((a) => a.id);
+  }
+
   private async refillEnabled(): Promise<boolean> {
     try {
       const row = await this.prisma.client.systemSetting.findUnique({

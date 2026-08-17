@@ -51,6 +51,15 @@ export class CreateCourierAccountDto {
   @IsString()
   @MaxLength(2000)
   notes?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'The warehouse name this account sends as pickup_location.name. Registered per ACCOUNT at Delhivery and matched EXACTLY, so it must be byte-identical to what was registered. Null/omitted falls back to the global courier.delhivery_pickup_location setting.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  pickupLocationName?: string;
 }
 
 export class UpdateCourierAccountDto {
@@ -76,6 +85,15 @@ export class UpdateCourierAccountDto {
   @IsString()
   @MaxLength(2000)
   notes?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'The warehouse name this account sends as pickup_location.name. Registered per ACCOUNT at Delhivery and matched EXACTLY, so it must be byte-identical to what was registered. Null/omitted falls back to the global courier.delhivery_pickup_location setting.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  pickupLocationName?: string;
 }
 
 export class LinkSellerCourierAccountDto {

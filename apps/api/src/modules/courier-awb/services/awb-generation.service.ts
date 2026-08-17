@@ -208,6 +208,18 @@ export class AwbGenerationService {
       });
     }
 
+    // WHICH ACCOUNT — resolved BEFORE the call, because it decides the
+    // token the call authenticates with and the pickup location it
+    // sends. It used to be resolved after, when it could only be
+    // recorded; a shipment stamped with account B while created under
+    // account A's credential is worse than an untraceable one, because
+    // the margin report and the settlement matching then agree with each
+    // other and with nothing real.
+    //
+    // Still never throws: with no accounts configured this is null and
+    // everything resolves exactly as it does today.
+    const courierAccountId = await this.resolveCourierAccountId(shipment);
+
     // Phase B — Delhivery generateAwb.
     const req: DelhiveryAwbRequest = {
       shipmentNumber: shipment.shipmentNumber,
@@ -228,6 +240,7 @@ export class AwbGenerationService {
     const awb = await this.delhiveryAwb.generateAwb(
       req,
       courierActor.runner('awb-generation', shipmentId),
+      courierAccountId,
     );
     if (!awb.ok) {
       this.logger.warn(
@@ -242,15 +255,6 @@ export class AwbGenerationService {
         errorMessage: awb.errorMessage,
       };
     }
-
-    // R1 (revised-plan roadmap): best-effort account resolution for
-    // traceability. Phase 1A seeds NO CourierAccount rows at all, so
-    // this MUST NEVER block AWB generation — it only opportunistically
-    // populates courierAccountId once accounts + seller links exist.
-    // The actual credential/HTTP auth path is untouched (still the
-    // legacy per-courier getCredential — real mode is unvalidated
-    // regardless, see CLAUDE.md CUR TODO(delhivery-api) seams).
-    const courierAccountId = await this.resolveCourierAccountId(shipment);
 
     // Phase C — tx1: durable source-of-truth FIRST. Once this commits,
     // the AWB exists on the shipment row; CUR-9 will fire on any retry.
@@ -398,14 +402,21 @@ export class AwbGenerationService {
   }
 
   /**
-   * R1 — best-effort CourierAccount resolution for traceability only.
-   * Returns `null` (never throws) whenever the seller/courier can't be
-   * resolved or `CourierAccountRoutingService.selectAccount` has
-   * nothing to offer (NO_COURIER_ACCOUNT_AVAILABLE is the Phase-1A norm
-   * — no accounts are seeded yet). This is deliberately decoupled from
-   * the actual credential/HTTP auth path (still `getCredential` via
-   * DelhiveryHttpService) — wiring THAT through per-account credentials
-   * is a separate follow-up once real mode is validated.
+   * WHICH account carries this parcel.
+   *
+   * This is no longer traceability — the answer decides the token the
+   * create call authenticates with, the pickup location it sends, and
+   * which pool its waybill comes from. It is resolved before Phase B for
+   * exactly that reason.
+   *
+   * Returns `null` (never throws) when the seller/courier cannot be
+   * resolved or `selectAccount` has nothing to offer. `null` is a real
+   * answer, not a failure: with no CourierAccount rows configured —
+   * which is production today — `resolveCredential` falls back to the
+   * single active credential and behaviour is unchanged. What null must
+   * NOT do is let a call proceed under some other account's token, which
+   * is why the fallback lives in one place and refuses to guess when
+   * accounts exist but none is default.
    */
   private async resolveCourierAccountId(shipment: {
     courierCode: string;

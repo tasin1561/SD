@@ -156,6 +156,13 @@ export interface CourierAccountView {
   readonly label: string;
   readonly isDefault: boolean;
   readonly isActive: boolean;
+  /**
+   * What this account sends as `pickup_location.name`. Null means it
+   * falls back to the global setting — right for one account, and the
+   * first thing to fill in when there are two, because Delhivery matches
+   * this string exactly and only within the account that registered it.
+   */
+  readonly pickupLocationName: string | null;
   readonly notes: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -436,6 +443,8 @@ export function useCreateCourierAccount(): UseMutationResult<
      *  the duration of the POST. */
     credentialFields: Record<string, string>;
     isDefault?: boolean;
+    /** The warehouse name this account sends as pickup_location.name. */
+    pickupLocationName?: string;
     notes?: string;
   }
 > {
@@ -459,6 +468,7 @@ export function useUpdateCourierAccount(): UseMutationResult<
     label?: string;
     isDefault?: boolean;
     isActive?: boolean;
+    pickupLocationName?: string;
     notes?: string;
   }
 > {

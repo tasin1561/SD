@@ -173,6 +173,81 @@ export class CourierCredentialService {
   }
 
   /**
+   * THE resolution point. Every courier call goes through here.
+   *
+   * Three cases, in order, and the ordering is the whole point:
+   *
+   *   1. An explicit account — the caller already routed (AWB
+   *      generation, an operator acting on one account). Use exactly
+   *      that credential, or fail. Never silently substitute another:
+   *      that is the bug this exists to remove.
+   *   2. No account named, but accounts EXIST — use the default one for
+   *      this (courier, environment). Exactly one is enforced by a
+   *      partial unique index, so this is deterministic.
+   *   3. No accounts configured at all — the legacy `findFirst`. This is
+   *      what production runs today with one credential and zero
+   *      CourierAccount rows, and it must keep working unchanged.
+   *
+   * Case 2 is what makes adding a second account safe: the moment any
+   * account exists, every call is account-scoped, so there is no window
+   * where some paths route and others pick whatever `findFirst` returns.
+   *
+   * The old `getCredential` is deliberately NOT deleted — it is case 3,
+   * and keeping it named separately is what lets the threading spec tell
+   * "resolved through an account" apart from "did not try".
+   */
+  async resolveCredential(
+    courierCode: string,
+    environment: CredentialEnvironment,
+    courierAccountId: string | null,
+    actor: CourierCredentialActor = { type: ActorType.SYSTEM },
+  ): Promise<Readonly<Record<string, string>>> {
+    if (courierAccountId !== null) {
+      return this.getCredentialForAccount(courierAccountId, actor);
+    }
+
+    const courier = await this.prisma.client.courier.findUnique({
+      where: { code: courierCode },
+      select: { id: true },
+    });
+    if (!courier) {
+      throw new NotFoundException({
+        code: 'COURIER_NOT_FOUND',
+        message: `Courier ${courierCode} not found`,
+      });
+    }
+
+    const fallback = await this.prisma.client.courierAccount.findFirst({
+      where: {
+        courierId: courier.id,
+        environment,
+        isDefault: true,
+        isActive: true,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (fallback) return this.getCredentialForAccount(fallback.id, actor);
+
+    // No accounts at all. If some exist for this pair but none is
+    // default, that is a configuration error worth saying out loud
+    // rather than resolving to an arbitrary one.
+    const anyAccount = await this.prisma.client.courierAccount.count({
+      where: { courierId: courier.id, environment, isActive: true, deletedAt: null },
+    });
+    if (anyAccount > 0) {
+      throw new NotFoundException({
+        code: 'NO_DEFAULT_COURIER_ACCOUNT',
+        message:
+          `${courierCode} has ${anyAccount} active ${environment} account(s) but none marked default, ` +
+          'and this call named no account. Mark one default rather than letting the call pick.',
+      });
+    }
+
+    return this.getCredential(courierCode, environment, actor);
+  }
+
+  /**
    * Resolve + decrypt the credential belonging to a SPECIFIC
    * CourierAccount (R1 — the multi-account-aware path). Used once a
    * caller has already picked an account via

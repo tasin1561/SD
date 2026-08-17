@@ -70,6 +70,7 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
   async generateAwb(
     req: DelhiveryAwbRequest,
     actor?: CourierCredentialActor,
+    courierAccountId?: string | null,
   ): Promise<DelhiveryAwbResult> {
     if (await this.http.isStubMode()) {
       return this.stubGenerateAwb(req);
@@ -90,7 +91,7 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
     const preflight = await this.preflightServiceability(req);
     if (preflight !== null) return preflight;
 
-    const pickupLocationName = await this.resolvePickupLocationName();
+    const pickupLocationName = await this.resolvePickupLocationName(courierAccountId ?? null);
     const envelope = {
       shipments: [this.buildShipment(req)],
       pickup_location: { name: pickupLocationName },
@@ -246,7 +247,31 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
     };
   }
 
-  private async resolvePickupLocationName(): Promise<string> {
+  /**
+   * The warehouse name this parcel is collected from.
+   *
+   * A pickup location is registered per ACCOUNT and Delhivery matches
+   * the name exactly WITHIN that account, so two accounts collecting
+   * from the same physical building each need their own registration and
+   * may legitimately hold different names. The account's own name wins;
+   * the global setting is the single-account fallback and is what
+   * production uses today.
+   *
+   * Falling back when an account HAS no name of its own is deliberate:
+   * it keeps a newly-created account working with the existing
+   * registration rather than failing every parcel until somebody fills
+   * in a field they did not know about.
+   */
+  private async resolvePickupLocationName(courierAccountId: string | null): Promise<string> {
+    if (courierAccountId !== null) {
+      const account = await this.prisma.client.courierAccount.findUnique({
+        where: { id: courierAccountId },
+        select: { pickupLocationName: true },
+      });
+      const perAccount = (account?.pickupLocationName ?? '').trim();
+      if (perAccount) return perAccount;
+    }
+
     const setting = await this.prisma.client.systemSetting.findUnique({
       where: { key: 'courier.delhivery_pickup_location' },
       select: { valueString: true },
@@ -254,7 +279,7 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
     const name = (setting?.valueString ?? '').trim();
     if (!name) {
       throw new Error(
-        "Delhivery pickup location not configured (system_settings 'courier.delhivery_pickup_location'). Register the warehouse name in Delhivery's portal and set this key before enabling real mode.",
+        "Delhivery pickup location not configured: this account has no pickup_location_name and system_settings 'courier.delhivery_pickup_location' is unset. Register the warehouse under this account in Delhivery and record the exact name before enabling real mode.",
       );
     }
     return name;

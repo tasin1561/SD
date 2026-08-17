@@ -1511,26 +1511,33 @@ model InboundFreightAllocation {
 /// `"38061110478273,38061110478284,38061110478295"` for several — not an
 /// array.
 model CourierWaybill {
-  id          String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  courierCode String               @map("courier_code")
+  id               String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courierCode      String               @map("courier_code")
+  /// The account that bought this number. NULL only for rows pooled
+  /// before any CourierAccount existed, and claimable then only by a
+  /// call that resolved no account either.
+  courierAccountId String?              @map("courier_account_id") @db.Uuid
   /// The AWB itself. Globally unique — a number handed out twice would
   /// put two parcels on one tracking identity.
-  awbNumber   String               @unique @map("awb_number")
-  status      CourierWaybillStatus @default(AVAILABLE)
-  fetchedAt   DateTime             @default(now()) @map("fetched_at") @db.Timestamptz
+  awbNumber        String               @unique @map("awb_number")
+  status           CourierWaybillStatus @default(AVAILABLE)
+  fetchedAt        DateTime             @default(now()) @map("fetched_at") @db.Timestamptz
   /// Not claimable before this instant — honours the "let it settle"
   /// warning above.
-  usableAfter DateTime             @map("usable_after") @db.Timestamptz
-  assignedAt  DateTime?            @map("assigned_at") @db.Timestamptz
+  usableAfter      DateTime             @map("usable_after") @db.Timestamptz
+  assignedAt       DateTime?            @map("assigned_at") @db.Timestamptz
   /// The shipment that consumed it (soft ref: the AWB outlives a
   /// superseded shipment, and the number can never be reused anyway).
-  shipmentId  String?              @map("shipment_id") @db.Uuid
-  voidedAt    DateTime?            @map("voided_at") @db.Timestamptz
-  voidReason  String?              @map("void_reason")
-  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime             @updatedAt @map("updated_at") @db.Timestamptz
+  shipmentId       String?              @map("shipment_id") @db.Uuid
+  voidedAt         DateTime?            @map("voided_at") @db.Timestamptz
+  voidReason       String?              @map("void_reason")
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz
+
+  courierAccount CourierAccount? @relation(fields: [courierAccountId], references: [id])
 
   @@index([courierCode, status, usableAfter])
+  @@index([courierAccountId, status, usableAfter])
   @@index([shipmentId])
   @@map("courier_waybills")
 }
@@ -3195,25 +3202,33 @@ model CourierCredential {
 /// with no explicit link route to the courier+environment's DEFAULT
 /// account (today's single-account behavior, preserved unchanged).
 model CourierAccount {
-  id               String                @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  courierId        String                @map("courier_id") @db.Uuid
-  environment      CredentialEnvironment
-  label            String
-  credentialId     String                @unique @map("credential_id") @db.Uuid
-  isDefault        Boolean               @default(false) @map("is_default")
-  isActive         Boolean               @default(true) @map("is_active")
-  createdByStaffId String?               @map("created_by_staff_id") @db.Uuid
-  notes            String?               @db.Text
-  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt        DateTime              @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt        DateTime?             @map("deleted_at") @db.Timestamptz
+  id                 String                @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courierId          String                @map("courier_id") @db.Uuid
+  environment        CredentialEnvironment
+  label              String
+  credentialId       String                @unique @map("credential_id") @db.Uuid
+  isDefault          Boolean               @default(false) @map("is_default")
+  /// The warehouse name this account sends as `pickup_location.name`.
+  /// Registered per ACCOUNT at Delhivery and matched exactly, so two
+  /// accounts shipping from the same physical building still each need
+  /// their own registration and may hold different names. NULL falls
+  /// back to the global `courier.delhivery_pickup_location` setting,
+  /// which is what a single-account setup uses.
+  pickupLocationName String?               @map("pickup_location_name")
+  isActive           Boolean               @default(true) @map("is_active")
+  createdByStaffId   String?               @map("created_by_staff_id") @db.Uuid
+  notes              String?               @db.Text
+  createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime              @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt          DateTime?             @map("deleted_at") @db.Timestamptz
 
-  courier        Courier                    @relation(fields: [courierId], references: [id])
-  credential     CourierCredential          @relation(fields: [credentialId], references: [id])
-  createdByStaff StaffUser?                 @relation("CourierAccountCreatedBy", fields: [createdByStaffId], references: [id])
-  sellerLinks    SellerCourierAccountLink[]
-  shipments      Shipment[]
-  settlements    CourierSettlement[]
+  courier         Courier                    @relation(fields: [courierId], references: [id])
+  credential      CourierCredential          @relation(fields: [credentialId], references: [id])
+  createdByStaff  StaffUser?                 @relation("CourierAccountCreatedBy", fields: [createdByStaffId], references: [id])
+  sellerLinks     SellerCourierAccountLink[]
+  shipments       Shipment[]
+  settlements     CourierSettlement[]
+  courierWaybills CourierWaybill[]
 
   // Exactly one DEFAULT active account per (courier_id, environment) —
   // partial unique index courier_accounts_default_uq

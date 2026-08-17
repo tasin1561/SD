@@ -101,10 +101,29 @@ export class DelhiveryRateLimitService {
    * window is exhausted — callers treat it as retryable, never as a
    * shipment failure.
    */
-  async consume(endpoint: DelhiveryEndpoint): Promise<void> {
+  /**
+   * Delhivery rate-limits PER ACCOUNT, so the budget is per account too.
+   *
+   * A shared key makes two accounts throttle each other for no reason:
+   * one busy seller's account would spend the window and refuse calls on
+   * a second account that had used none of its own allowance. Worse, the
+   * refusal reads identically to a real limit, so nobody would look for
+   * the cause.
+   *
+   * `null` keeps the historical unscoped key, so a single-account setup
+   * counts exactly where it counted before and no window resets on
+   * deploy.
+   */
+  async consume(
+    endpoint: DelhiveryEndpoint,
+    courierAccountId: string | null = null,
+  ): Promise<void> {
     const budget = this.budgetFor(endpoint);
     const window = Math.floor(Date.now() / 1000 / WINDOW_SECONDS);
-    const key = `dlv:rl:${endpoint}:${window}`;
+    const key =
+      courierAccountId === null
+        ? `dlv:rl:${endpoint}:${window}`
+        : `dlv:rl:${courierAccountId}:${endpoint}:${window}`;
 
     let used: number;
     try {

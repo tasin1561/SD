@@ -62,6 +62,7 @@ export class DelhiveryWarehouseService {
   async register(
     input: DelhiveryWarehouseInput,
     actor?: CourierCredentialActor,
+    courierAccountId?: string | null,
   ): Promise<DelhiveryWarehouseResult> {
     this.assertName(input.name);
     if (await this.http.isStubMode()) {
@@ -74,6 +75,7 @@ export class DelhiveryWarehouseService {
 
     const raw = await this.http.request<Record<string, unknown>>({
       actor,
+      courierAccountId,
       method: 'POST',
       path: '/api/backend/clientwarehouse/create/',
       endpoint: 'warehouse',
@@ -87,6 +89,7 @@ export class DelhiveryWarehouseService {
   async update(
     input: DelhiveryWarehouseInput,
     actor?: CourierCredentialActor,
+    courierAccountId?: string | null,
   ): Promise<DelhiveryWarehouseResult> {
     this.assertName(input.name);
     if (await this.http.isStubMode()) {
@@ -99,6 +102,7 @@ export class DelhiveryWarehouseService {
 
     const raw = await this.http.request<Record<string, unknown>>({
       actor,
+      courierAccountId,
       method: 'POST',
       path: '/api/backend/clientwarehouse/edit/',
       endpoint: 'warehouse',

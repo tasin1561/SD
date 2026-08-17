@@ -22,6 +22,12 @@ export interface CourierAccountView {
   readonly label: string;
   readonly isDefault: boolean;
   readonly isActive: boolean;
+  /**
+   * What this account sends as `pickup_location.name`. Null means it
+   * uses the global setting — which is correct for a single-account
+   * setup and a thing to fill in the moment there are two.
+   */
+  readonly pickupLocationName: string | null;
   readonly notes: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -102,6 +108,11 @@ export class CourierAccountAdminService {
           label: dto.label,
           credentialId: credential.id,
           isDefault: dto.isDefault ?? false,
+          // Not trimmed: Delhivery matches this string exactly, and
+          // silently "fixing" whitespace here would produce a name that
+          // does not match the registration. The registration path
+          // refuses an untrimmed name loudly instead.
+          pickupLocationName: dto.pickupLocationName ?? null,
           notes: dto.notes ?? null,
           createdByStaffId: staffId,
         },
@@ -173,6 +184,9 @@ export class CourierAccountAdminService {
           ...(dto.label === undefined ? {} : { label: dto.label }),
           ...(dto.isActive === undefined ? {} : { isActive: dto.isActive }),
           ...(dto.isDefault === undefined ? {} : { isDefault: dto.isDefault }),
+          ...(dto.pickupLocationName === undefined
+            ? {}
+            : { pickupLocationName: dto.pickupLocationName }),
           ...(dto.notes === undefined ? {} : { notes: dto.notes }),
         },
       });
@@ -356,6 +370,7 @@ export class CourierAccountAdminService {
       label: string;
       isDefault: boolean;
       isActive: boolean;
+      pickupLocationName: string | null;
       notes: string | null;
       createdAt: Date;
       updatedAt: Date;
@@ -368,6 +383,7 @@ export class CourierAccountAdminService {
       environment: row.environment,
       label: row.label,
       isDefault: row.isDefault,
+      pickupLocationName: row.pickupLocationName,
       isActive: row.isActive,
       notes: row.notes,
       createdAt: row.createdAt,

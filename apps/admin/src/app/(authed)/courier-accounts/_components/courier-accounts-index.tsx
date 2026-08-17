@@ -95,6 +95,7 @@ export function CourierAccountsIndex(): ReactElement {
               <Th>Label</Th>
               <Th>Courier</Th>
               <Th>Environment</Th>
+              <Th>Pickup location</Th>
               <Th>State</Th>
               <Th align="right">Actions</Th>
             </Tr>
@@ -144,6 +145,17 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
           <span className="text-[var(--status-pending-fg)]">Production</span>
         ) : (
           'Sandbox'
+        )}
+      </Td>
+      <Td className="text-xs">
+        {account.pickupLocationName === null ? (
+          // Worth calling out rather than showing a dash: with one
+          // account the global setting is correct, and with two it is
+          // the thing that silently sends parcels from the wrong
+          // registration.
+          <span className="text-text-faint">global setting</span>
+        ) : (
+          <span className="font-mono">{account.pickupLocationName}</span>
         )}
       </Td>
       <Td>

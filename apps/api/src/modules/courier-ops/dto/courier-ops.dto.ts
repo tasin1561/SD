@@ -235,4 +235,12 @@ export class RegisterCourierWarehouseDto {
   @IsString()
   @MaxLength(100)
   readonly returnState?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Which Delhivery account to register this pickup location with. A location exists only inside the account that registered it, so two accounts collecting from the same building each need their own. Omit for the default/single account.',
+  })
+  @IsOptional()
+  @IsUUID('7')
+  readonly courierAccountId?: string;
 }

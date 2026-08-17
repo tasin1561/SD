@@ -18,8 +18,12 @@ function makeService(
     opts.baseUrl === null ? null : { valueString: opts.baseUrl ?? '' },
   );
   const client = { systemSetting: { findUnique: systemSettingFindUnique } };
-  const getCredential = jest.fn(async () => opts.creds ?? { apiToken: 'tok-123' });
-  const credentials = { getCredential };
+  // `resolveCredential`, not `getCredential`: the funnel resolves through
+  // the one function that knows the explicit → default → legacy order, so
+  // a call authenticates as the account it was routed to rather than as
+  // whoever `findFirst` returned.
+  const resolveCredential = jest.fn(async () => opts.creds ?? { apiToken: 'tok-123' });
+  const credentials = { resolveCredential };
   const env = makeTestEnv(opts.isProduction ? { NODE_ENV: 'production' } : {});
 
   const rateLimit = {
@@ -33,7 +37,7 @@ function makeService(
     credentials as unknown as CourierCredentialService,
     rateLimit,
   );
-  return { svc, systemSettingFindUnique, getCredential };
+  return { svc, systemSettingFindUnique, resolveCredential };
 }
 
 describe('DelhiveryHttpService.isStubMode', () => {
@@ -84,18 +88,34 @@ describe('DelhiveryHttpService.environment', () => {
 
 describe('DelhiveryHttpService.authHeaders', () => {
   it('builds the Token auth header from the decrypted credential', async () => {
-    const { svc, getCredential } = makeService({
+    const { svc, resolveCredential } = makeService({
       creds: { apiToken: 'secret-token' },
     });
     const headers = await svc.authHeaders(CredentialEnvironment.SANDBOX);
     expect(headers.Authorization).toBe('Token secret-token');
     expect(headers['Content-Type']).toBe('application/json');
-    // Third argument is the actor; undefined here because this test calls
-    // authHeaders directly. The threading is covered by
-    // delhivery-actor-threading.spec.ts.
-    expect(getCredential).toHaveBeenCalledWith(
+    // The argument order is the contract: courier, environment, ACCOUNT,
+    // actor. The account is third and `null` here because this test calls
+    // authHeaders directly with no account — null is what makes
+    // resolveCredential fall through to the default account, or to the
+    // legacy single credential when none exists. Threading from real call
+    // sites is covered by delhivery-account-threading.spec.ts.
+    expect(resolveCredential).toHaveBeenCalledWith(
       'delhivery',
       CredentialEnvironment.SANDBOX,
+      null,
+      undefined,
+    );
+  });
+
+  it('passes the account through, so the token belongs to it', async () => {
+    const { svc, resolveCredential } = makeService({ creds: { apiToken: 'acct-b-token' } });
+    const headers = await svc.authHeaders(CredentialEnvironment.PRODUCTION, undefined, 'acct-b');
+    expect(headers.Authorization).toBe('Token acct-b-token');
+    expect(resolveCredential).toHaveBeenCalledWith(
+      'delhivery',
+      CredentialEnvironment.PRODUCTION,
+      'acct-b',
       undefined,
     );
   });

@@ -90,7 +90,11 @@ export class AdminCourierNetworkController {
     @Body() body: RegisterCourierWarehouseDto,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<WarehouseRegistrationOutcome> {
-    return this.warehouses.register(staff.id, { ...body }, ctx);
+    // The account is pulled OUT of the body: it selects which Delhivery
+    // account to talk to, it is not part of the warehouse payload sent
+    // to them.
+    const { courierAccountId, ...warehouse } = body;
+    return this.warehouses.register(staff.id, warehouse, ctx, courierAccountId ?? null);
   }
 
   @Put('warehouses')
@@ -105,6 +109,7 @@ export class AdminCourierNetworkController {
     @Body() body: RegisterCourierWarehouseDto,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<WarehouseRegistrationOutcome> {
-    return this.warehouses.update(staff.id, { ...body }, ctx);
+    const { courierAccountId, ...warehouse } = body;
+    return this.warehouses.update(staff.id, warehouse, ctx, courierAccountId ?? null);
   }
 }

@@ -49,6 +49,21 @@ export interface DelhiveryRequestOptions {
    * runner call.
    */
   actor?: CourierCredentialActor | undefined;
+  /**
+   * WHICH Delhivery account this call is made as.
+   *
+   * Optional for the same reason `actor` is — a live courier path must
+   * not throw because an argument was missed — and dangerous for exactly
+   * the same reason: omitting it compiles, runs, and returns a perfectly
+   * good answer from the WRONG account. `delhivery-account-threading.spec.ts`
+   * is what makes it not silent.
+   *
+   * `undefined` resolves through `resolveCredential`, which uses the
+   * default account when accounts exist and the legacy single credential
+   * when none do — so a missed call site is wrong only once a second
+   * account is added, which is precisely when it starts to matter.
+   */
+  courierAccountId?: string | null | undefined;
 }
 
 /**
@@ -125,8 +140,18 @@ export class DelhiveryHttpService {
   async authHeaders(
     environment: CredentialEnvironment = this.environment(),
     actor?: CourierCredentialActor,
+    courierAccountId?: string | null,
   ): Promise<Record<string, string>> {
-    const creds = await this.credentials.getCredential(COURIER_CODE, environment, actor);
+    // `resolveCredential`, never `getCredential`: this is the ONE place
+    // an outbound Delhivery call learns whose token it carries, and
+    // routing to an account only to authenticate as whoever `findFirst`
+    // returned is the bug multi-account exists to remove.
+    const creds = await this.credentials.resolveCredential(
+      COURIER_CODE,
+      environment,
+      courierAccountId ?? null,
+      actor,
+    );
     const token = creds[TOKEN_FIELD];
     if (token === undefined || token === '') {
       throw new Error(`Delhivery credential is missing the '${TOKEN_FIELD}' field`);
@@ -161,9 +186,13 @@ export class DelhiveryHttpService {
   async request<T>(opts: DelhiveryRequestOptions): Promise<T> {
     // Client-side budget FIRST: cheaper than earning a WAF 403, which
     // blocks our whole egress IP and would take live traffic with it.
-    await this.rateLimit.consume(opts.endpoint);
+    await this.rateLimit.consume(opts.endpoint, opts.courierAccountId ?? null);
     const baseUrl = await this.getBaseUrl();
-    const headers = await this.authHeaders(opts.environment ?? this.environment(), opts.actor);
+    const headers = await this.authHeaders(
+      opts.environment ?? this.environment(),
+      opts.actor,
+      opts.courierAccountId ?? null,
+    );
     const url = `${baseUrl.replace(/\/$/, '')}${opts.path}`;
 
     let body: string | undefined;

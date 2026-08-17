@@ -50,6 +50,7 @@ export function CreateCourierAccountModal({
   const [label, setLabel] = useState('');
   const [notes, setNotes] = useState('');
   const [isDefault, setIsDefault] = useState(false);
+  const [pickupLocationName, setPickupLocationName] = useState('');
   const [fields, setFields] = useState<readonly CredField[]>([
     { key: 0, name: 'apiToken', value: '' },
   ]);
@@ -61,6 +62,7 @@ export function CreateCourierAccountModal({
     setLabel('');
     setNotes('');
     setIsDefault(false);
+    setPickupLocationName('');
     setFields([{ key: 0, name: 'apiToken', value: '' }]);
     setError(null);
   }
@@ -76,6 +78,11 @@ export function CreateCourierAccountModal({
         label: label.trim(),
         credentialFields: Object.fromEntries(filled.map((f) => [f.name.trim(), f.value])),
         ...(isDefault ? { isDefault: true } : {}),
+        // NOT trimmed. Delhivery matches this string exactly, so a
+        // trailing space is a different name — and trimming it here
+        // would send something other than what was registered. The
+        // warning below is how the operator finds out instead.
+        ...(pickupLocationName === '' ? {} : { pickupLocationName }),
         ...(notes.trim() === '' ? {} : { notes: notes.trim() }),
       });
       toast.success('Courier account added.');
@@ -221,6 +228,23 @@ export function CreateCourierAccountModal({
             </span>
           </span>
         </label>
+
+        <FormField
+          label="Pickup location name"
+          htmlFor="ca-pickup"
+          hint="The warehouse name registered with THIS account at Delhivery. Blank uses the global setting — fine for one account, wrong as soon as there are two."
+          error={
+            pickupLocationName !== pickupLocationName.trim() && pickupLocationName !== ''
+              ? 'Leading or trailing space. Delhivery matches this exactly, so this would not match the registration.'
+              : undefined
+          }
+        >
+          <Input
+            id="ca-pickup"
+            value={pickupLocationName}
+            onChange={(e) => setPickupLocationName(e.target.value)}
+          />
+        </FormField>
 
         <FormField label="Notes" htmlFor="ca-notes" hint="Optional.">
           <Textarea
