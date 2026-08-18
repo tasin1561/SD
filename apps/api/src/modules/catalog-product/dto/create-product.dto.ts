@@ -24,12 +24,6 @@ export class CreateProductDto {
   @MaxLength(4000)
   description?: string;
 
-  @ApiProperty({ required: false, maxLength: 120 })
-  @IsOptional()
-  @IsString()
-  @MaxLength(120)
-  brand?: string;
-
   @ApiProperty({
     required: false,
     maxLength: 120,

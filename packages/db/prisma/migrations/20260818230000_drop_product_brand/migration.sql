@@ -1,0 +1,16 @@
+-- Drop products.brand.
+--
+-- It was asked for on every product and read by NOTHING: not the
+-- Delhivery payload, not the invoice, not a report. Its only consumers
+-- were a column in the catalogue list, a line in the product editor, and
+-- one clause in the list endpoint's substring search — all removed.
+--
+-- Production held ZERO non-empty values when this ran, so the drop
+-- destroys no data. That check is the precondition, not a formality: a
+-- column with real content in it would need a decision about where the
+-- content goes first.
+--
+-- If a brand ever matters commercially it comes back as a first-class
+-- thing with a reason (a filter sellers use, a line a courier reads),
+-- rather than a free-text box every product had to be given.
+ALTER TABLE "products" DROP COLUMN IF EXISTS "brand";

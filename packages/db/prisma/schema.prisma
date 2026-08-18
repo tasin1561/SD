@@ -756,7 +756,6 @@ model Product {
   sellerId                String        @map("seller_id") @db.Uuid
   name                    String
   description             String?       @db.Text
-  brand                   String?
   externalRef             String?       @map("external_ref")
   externalSku             String?       @map("external_sku")
   defaultWeightGrams      Int?          @map("default_weight_grams")

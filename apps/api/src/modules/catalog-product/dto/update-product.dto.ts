@@ -35,13 +35,6 @@ export class UpdateProductDto {
   @ValidateIf((_, v) => v !== null)
   @IsString()
   @MaxLength(120)
-  brand?: string | null;
-
-  @ApiProperty({ required: false, nullable: true, maxLength: 120 })
-  @IsOptional()
-  @ValidateIf((_, v) => v !== null)
-  @IsString()
-  @MaxLength(120)
   externalRef?: string | null;
 
   @ApiProperty({ required: false, nullable: true, maxLength: 120 })

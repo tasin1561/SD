@@ -343,7 +343,12 @@ Conceptual products (seller-scoped).
 
 **Key fields:**
 - `sellerId`
-- `name`, `description`, `brand`
+- `name`, `description`
+- **`brand` was DROPPED on 2026-08-18.** It was asked for on every product
+  and read by nothing — not the Delhivery payload, not the invoice, not a
+  report — and production held zero non-empty values. If a brand ever
+  matters commercially it returns as a first-class thing with a reason,
+  not a free-text box every product had to be given.
 - `externalRef` (seller's own product ID), `externalSku`
 - `defaultWeightGrams`, `defaultLengthCm` / `WidthCm` / `HeightCm` (@db.Decimal(6,2))
 - `defaultDeclaredValueInr (@db.Decimal(12,2))`, `defaultHsCode`

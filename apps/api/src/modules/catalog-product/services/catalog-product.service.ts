@@ -17,7 +17,6 @@ export interface ProductView {
   sellerId: string;
   name: string;
   description: string | null;
-  brand: string | null;
   externalRef: string | null;
   externalSku: string | null;
   defaultWeightGrams: number | null;
@@ -35,7 +34,6 @@ const VIEW_SELECT = {
   sellerId: true,
   name: true,
   description: true,
-  brand: true,
   externalRef: true,
   externalSku: true,
   defaultWeightGrams: true,
@@ -74,7 +72,6 @@ export class CatalogProductService {
             sellerId,
             name: input.name,
             description: input.description ?? null,
-            brand: input.brand ?? null,
             externalRef: input.externalRef ?? null,
             externalSku: input.externalSku ?? null,
             defaultWeightGrams: input.defaultWeightGrams ?? null,
@@ -123,7 +120,6 @@ export class CatalogProductService {
       where.OR = [
         { name: { contains: query.search, mode: 'insensitive' } },
         { externalRef: { contains: query.search, mode: 'insensitive' } },
-        { brand: { contains: query.search, mode: 'insensitive' } },
       ];
     }
     const [items, total] = await Promise.all([
@@ -168,7 +164,6 @@ export class CatalogProductService {
     };
     setStr('name', 'name');
     setStr('description', 'description');
-    setStr('brand', 'brand');
     setStr('externalRef', 'externalRef');
     setStr('externalSku', 'externalSku');
     if (input.defaultWeightGrams !== undefined) {

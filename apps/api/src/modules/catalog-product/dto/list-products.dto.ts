@@ -9,7 +9,7 @@ export class ListProductsQueryDto {
   @IsEnum(ProductStatus)
   status?: ProductStatus;
 
-  @ApiProperty({ required: false, description: 'Substring match on name / externalRef / brand' })
+  @ApiProperty({ required: false, description: 'Substring match on name / externalRef' })
   @IsOptional()
   @IsString()
   @MaxLength(120)

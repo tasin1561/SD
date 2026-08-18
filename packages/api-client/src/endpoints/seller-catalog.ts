@@ -33,7 +33,6 @@ export interface SellerProductView {
   readonly sellerId: string;
   readonly name: string;
   readonly description: string | null;
-  readonly brand: string | null;
   readonly externalRef: string | null;
   readonly externalSku: string | null;
   readonly defaultWeightGrams: number | null;
@@ -62,7 +61,6 @@ export interface SellerProductListResponse {
 export interface CreateSellerProductRequest {
   readonly name: string;
   readonly description?: string;
-  readonly brand?: string;
   readonly externalRef?: string;
   readonly externalSku?: string;
   readonly defaultWeightGrams?: number;
@@ -93,7 +91,6 @@ export interface CreateSellerVariantRequest {
 export interface UpdateSellerProductRequest {
   readonly name?: string;
   readonly description?: string | null;
-  readonly brand?: string | null;
   readonly externalRef?: string | null;
   readonly externalSku?: string | null;
   readonly defaultWeightGrams?: number | null;
