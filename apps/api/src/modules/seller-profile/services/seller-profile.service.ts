@@ -25,6 +25,7 @@ import {
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import type { UpdateSellerProfileDto } from '../dto/update-profile.dto';
 import type { UpdateSellerBankDetailsDto } from '../dto/update-bank-details.dto';
+import { accountForDisplay } from './bank-account-carry';
 import { BankAccountCipherService } from './bank-account-cipher.service';
 
 /** PENDING or REJECTED only — an APPROVED change IS the live account. */
@@ -242,6 +243,23 @@ export class SellerProfileService {
       bankAccountNumberKeyVersion,
       bankAccountNumberMasked,
     );
+    // Which account triple the pending/rejected request actually shows.
+    const shownAccount =
+      change === null
+        ? { stored: null, masked: null, keyVersion: null }
+        : accountForDisplay(
+            {
+              stored: change.bankAccountNumber,
+              masked: change.bankAccountNumberMasked,
+              keyVersion: change.bankAccountNumberKeyVersion,
+            },
+            {
+              stored: bankAccountCipher,
+              masked: bankAccountNumberMasked,
+              keyVersion: bankAccountNumberKeyVersion,
+            },
+          );
+
     return {
       ...rest,
       // Minted per request for the authenticated owner of this profile;
@@ -262,11 +280,21 @@ export class SellerProfileService {
                 bankName: change.bankName,
                 bankBranchName: change.bankBranchName,
                 bankAccountName: change.bankAccountName,
+                // A request that leaves the account number alone shows the
+                // LIVE one — "still going here" — rather than a dash the
+                // seller has to read as either blank or unchanged. It is
+                // also the only correct answer for a request written
+                // before 2026-08-18: those carry the right ciphertext
+                // without its key version, and revealing that pair hands
+                // back the raw blob.
                 bankAccountNumber:
-                  this.bankCipher.reveal(
-                    change.bankAccountNumber,
-                    change.bankAccountNumberKeyVersion,
-                  ) ?? change.bankAccountNumberMasked,
+                  this.revealForDisplay(
+                    shownAccount.stored,
+                    shownAccount.keyVersion,
+                    shownAccount.masked ?? bankAccountNumberMasked,
+                  ) ??
+                  revealedAccount ??
+                  '',
                 bankRoutingNumber: change.bankRoutingNumber,
                 bankSwiftCode: change.bankSwiftCode,
               },

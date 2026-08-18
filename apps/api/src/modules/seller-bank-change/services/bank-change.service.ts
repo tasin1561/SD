@@ -3,6 +3,7 @@ import { ActorType, BankChangeStatus } from '@skydrop/db';
 
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { accountForDisplay } from '../../seller-profile/services/bank-account-carry';
 import { BankAccountCipherService } from '../../seller-profile/services/bank-account-cipher.service';
 
 export interface BankChangeRequestView {
@@ -107,9 +108,27 @@ export class BankChangeService {
           bankName: r.bankName,
           bankBranchName: r.bankBranchName,
           bankAccountName: r.bankAccountName,
-          bankAccountNumber:
-            this.cipher.reveal(r.bankAccountNumber, r.bankAccountNumberKeyVersion) ??
-            r.bankAccountNumberMasked,
+          // A request that leaves the account number alone shows the LIVE
+          // one, so the column reads "still going here" rather than a dash
+          // the admin has to interpret. Decrypting the request's own copy
+          // is wrong for pre-2026-08-18 rows: they carry the ciphertext
+          // without its key version, and reveal() would hand back the raw
+          // blob as though it were the number.
+          bankAccountNumber: (() => {
+            const shown = accountForDisplay(
+              {
+                stored: r.bankAccountNumber,
+                masked: r.bankAccountNumberMasked,
+                keyVersion: r.bankAccountNumberKeyVersion,
+              },
+              {
+                stored: r.seller.bankAccountNumber,
+                masked: r.seller.bankAccountNumberMasked,
+                keyVersion: r.seller.bankAccountNumberKeyVersion,
+              },
+            );
+            return this.cipher.reveal(shown.stored, shown.keyVersion) ?? shown.masked ?? '';
+          })(),
           bankRoutingNumber: r.bankRoutingNumber,
           bankSwiftCode: r.bankSwiftCode,
         },
@@ -141,6 +160,13 @@ export class BankChangeService {
           id: true,
           sellerId: true,
           status: true,
+          seller: {
+            select: {
+              bankAccountNumber: true,
+              bankAccountNumberMasked: true,
+              bankAccountNumberKeyVersion: true,
+            },
+          },
           bankName: true,
           bankBranchName: true,
           bankAccountName: true,
@@ -179,6 +205,43 @@ export class BankChangeService {
       }
 
       if (status === BankChangeStatus.APPROVED) {
+        // The account number moves as a TRIPLE — ciphertext, mask, key
+        // version — or it does not move at all. A request that leaves the
+        // number alone keeps the LIVE triple: copying its own carried
+        // copy would be right for the ciphertext and wrong for the other
+        // two on any request written before 2026-08-18, which lost them
+        // on the way in. That writes a live account nothing can decrypt
+        // and no screen can show, discovered when a payout fails.
+        const live = {
+          stored: req.seller.bankAccountNumber,
+          masked: req.seller.bankAccountNumberMasked,
+          keyVersion: req.seller.bankAccountNumberKeyVersion,
+        };
+        const account = accountForDisplay(
+          {
+            stored: req.bankAccountNumber,
+            masked: req.bankAccountNumberMasked,
+            keyVersion: req.bankAccountNumberKeyVersion,
+          },
+          live,
+        );
+
+        // A number with no mask is incoherent: every write path produces
+        // both together, so one without the other means the row was
+        // assembled by something that no longer exists. Refuse rather
+        // than guess — rejecting costs the seller one resubmission, and
+        // approving costs them their payouts.
+        // A null key version is legitimate — it means the number predates
+        // encryption and is stored as plaintext — so it is NOT part of
+        // this check.
+        if ((account.stored ?? '') === '' || (account.masked ?? '') === '') {
+          throw new ConflictException({
+            code: 'BANK_CHANGE_UNAPPROVABLE',
+            message:
+              'This request does not carry a complete account number, so approving it would leave the seller with payout details nobody can read. Reject it and ask the seller to submit the change again.',
+          });
+        }
+
         // The one place a change request reaches the live columns. The
         // ciphertext moves across as-is with its key version — decrypting
         // and re-encrypting would put the number in memory for no reason.
@@ -188,9 +251,9 @@ export class BankChangeService {
             bankName: req.bankName,
             bankBranchName: req.bankBranchName,
             bankAccountName: req.bankAccountName,
-            bankAccountNumber: req.bankAccountNumber,
-            bankAccountNumberMasked: req.bankAccountNumberMasked,
-            bankAccountNumberKeyVersion: req.bankAccountNumberKeyVersion,
+            bankAccountNumber: account.stored,
+            bankAccountNumberMasked: account.masked,
+            bankAccountNumberKeyVersion: account.keyVersion,
             bankRoutingNumber: req.bankRoutingNumber,
             bankSwiftCode: req.bankSwiftCode,
           },
