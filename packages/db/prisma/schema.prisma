@@ -5418,6 +5418,13 @@ model SellerUser {
 
   @@index([sellerId])
   @@index([sellerId, role])
+  // Declared because it EXISTS: the RBAC migration created it and the
+  // schema never carried it, so every `migrate diff` proposed dropping
+  // an index the database is actually using. Postgres does not index a
+  // foreign key column for you, and `sellerRole` is onDelete: Restrict —
+  // so without this, checking whether a role is still in use scans
+  // seller_users, and three services filter on roleId besides.
+  @@index([roleId])
   @@map("seller_users")
 }
 

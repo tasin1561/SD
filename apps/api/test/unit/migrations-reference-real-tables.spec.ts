@@ -24,8 +24,24 @@ import { join } from 'node:path';
 
 const MIGRATIONS = join(__dirname, '../../../../packages/db/prisma/migrations');
 
-/** Tables Postgres provides; a migration may reference them freely. */
-const BUILT_IN = new Set(['pg_catalog', 'pg_stat_activity', 'information_schema']);
+/**
+ * Tables Postgres provides; a migration may reference them freely.
+ *
+ * The `pg_*` catalogs belong here for the same reason `information_schema`
+ * does: a guarded migration asks the catalog whether the thing it is
+ * about to change still exists — "rename this constraint IF it is still
+ * called that" — which is what makes it safe to re-run and a no-op on a
+ * database built fresh from migrations.
+ */
+const BUILT_IN = new Set([
+  'pg_catalog',
+  'pg_stat_activity',
+  'pg_constraint',
+  'pg_indexes',
+  'pg_class',
+  'pg_namespace',
+  'information_schema',
+]);
 
 function migrationDirs(): string[] {
   return readdirSync(MIGRATIONS)
