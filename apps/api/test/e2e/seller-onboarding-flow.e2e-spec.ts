@@ -198,11 +198,32 @@ describe('Module 2 (e2e): onboarding flow + suspension + addresses + prefs', () 
       .post('/auth/seller/login')
       .send({ email: inviteEmail, password: 'SellerPass-1234' })
       .expect(200);
+    // The point of this call is that a REAPPROVED seller can write to
+    // their own profile again — so it uses a field they are allowed to
+    // change. It used to send `companyName`, which is no longer one:
+    // the company name and phone are the identity the account was
+    // approved on, and they are absent from the update DTO entirely.
+    await request(h.baseUrl)
+      .patch('/seller/profile')
+      .set('Authorization', `Bearer ${reloggedAgain.body.accessToken}`)
+      .send({ contactPersonName: 'Reapproved Contact' })
+      .expect(200);
+
+    // And the other half of that rule, which is the one worth pinning:
+    // the refusal is the SERVER's, not the form's. `forbidNonWhitelisted`
+    // rejects the key outright, so a client that never loads the UI is
+    // bound by it too.
     await request(h.baseUrl)
       .patch('/seller/profile')
       .set('Authorization', `Bearer ${reloggedAgain.body.accessToken}`)
       .send({ companyName: 'Brand Co Updated' })
-      .expect(200);
+      .expect(400);
+
+    await request(h.baseUrl)
+      .patch('/seller/profile')
+      .set('Authorization', `Bearer ${reloggedAgain.body.accessToken}`)
+      .send({ phone: '+8801711111111' })
+      .expect(400);
   });
 
   it('default address: second BD_ORIGIN with isDefault=true flips the first', async () => {
