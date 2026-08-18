@@ -2178,6 +2178,100 @@ const notificationTemplates: TemplateSeed[] = [
     // wrong will never see this at all, which is itself the signal.
     bodyTemplate:
       'Thanks {{ full_name }} — we have your request for a Skydrop invite.\n\nSomeone will read it properly and get back to you within one working day, on this address or on {{ phone }}.\n\nWhat you told us:\n  Company: {{ company_name }}\n  Delivering to: {{ direction }}\n  Sells: {{ product_types }}\n  Orders a month: {{ monthly_orders }}\n\nIf any of that is wrong, just reply to this email and we will fix it before we call.\n\n— The Skydrop team\n{{ support_email }}',
+    // This one carries its OWN html because "what you told us" is a
+    // detail table, and autoHtmlFromText cannot know that: it breaks the
+    // text into paragraphs on BLANK lines, so the four indented lines
+    // arrive as one <p> whose newlines HTML collapses into spaces —
+    // "Company: Acme Delivering to: Bangladesh → India Sells: not said".
+    // The first thing a prospective seller receives should not read as a
+    // broken email from the company asking to hold their money.
+    //
+    // Every variable is the same one the plain-text body uses; the
+    // renderer has throwOnUndefined:false, so a renamed one would blank
+    // silently rather than fail. Two are wrapped in {% if %} on purpose:
+    // support_email is not currently among the variables InviteLeadService
+    // passes, and an empty line under the sign-off looks like a bug rather
+    // than an omission.
+    //
+    // 'not said' is the literal InviteLeadService substitutes for an
+    // unanswered optional. It is rendered in the muted label colour so it
+    // reads as an absent answer rather than as something they typed —
+    // the row still shows, because "we did not ask" and "you skipped it"
+    // are different facts and the recipient is the one who can correct it.
+    htmlBodyTemplate: `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f4f6fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2937;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f6fa;padding:40px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border-radius:10px;border:1px solid #e5e7eb;max-width:560px;width:100%;box-shadow:0 1px 2px rgba(15,23,42,0.04);">
+            <tr>
+              <td style="padding:28px 32px 0 32px;">
+                <div style="font-size:16px;font-weight:600;color:#0f172a;letter-spacing:-0.01em;">Skydrop</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px 32px 0 32px;">
+                <h1 style="margin:0 0 14px 0;font-size:20px;font-weight:600;color:#0f172a;letter-spacing:-0.015em;line-height:1.35;">We have your invite request</h1>
+                <p style="margin:0 0 12px 0;font-size:14px;line-height:1.65;color:#4b5563;">
+                  Thanks {{ full_name }} — we have your request for a Skydrop invite.
+                </p>
+                <p style="margin:0 0 22px 0;font-size:14px;line-height:1.65;color:#4b5563;">
+                  Someone will read it properly and get back to you within one working day, on this address or on <strong style="color:#1f2937;white-space:nowrap;">{{ phone }}</strong>.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 32px;">
+                <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#6b7280;padding-bottom:8px;">
+                  What you told us
+                </div>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background:#fafbfc;border:1px solid #e5e7eb;border-radius:8px;">
+                  <tr>
+                    <td width="42%" style="padding:10px 14px;font-size:13px;line-height:1.5;color:#6b7280;border-bottom:1px solid #eceff3;vertical-align:top;">Company</td>
+                    <td style="padding:10px 14px;font-size:14px;line-height:1.5;color:#0f172a;font-weight:500;border-bottom:1px solid #eceff3;vertical-align:top;">{{ company_name }}</td>
+                  </tr>
+                  <tr>
+                    <td width="42%" style="padding:10px 14px;font-size:13px;line-height:1.5;color:#6b7280;border-bottom:1px solid #eceff3;vertical-align:top;">Delivering to</td>
+                    <td style="padding:10px 14px;font-size:14px;line-height:1.5;color:#0f172a;font-weight:500;border-bottom:1px solid #eceff3;vertical-align:top;">{% if direction == 'not said' %}<span style="color:#9ca3af;font-weight:400;">not said</span>{% else %}{{ direction }}{% endif %}</td>
+                  </tr>
+                  <tr>
+                    <td width="42%" style="padding:10px 14px;font-size:13px;line-height:1.5;color:#6b7280;border-bottom:1px solid #eceff3;vertical-align:top;">Sells</td>
+                    <td style="padding:10px 14px;font-size:14px;line-height:1.5;color:#0f172a;font-weight:500;border-bottom:1px solid #eceff3;vertical-align:top;">{% if product_types == 'not said' %}<span style="color:#9ca3af;font-weight:400;">not said</span>{% else %}{{ product_types }}{% endif %}</td>
+                  </tr>
+                  <tr>
+                    <td width="42%" style="padding:10px 14px;font-size:13px;line-height:1.5;color:#6b7280;vertical-align:top;">Orders a month</td>
+                    <td style="padding:10px 14px;font-size:14px;line-height:1.5;color:#0f172a;font-weight:500;vertical-align:top;">{% if monthly_orders == 'not said' %}<span style="color:#9ca3af;font-weight:400;">not said</span>{% else %}{{ monthly_orders }}{% endif %}</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:18px 32px 0 32px;">
+                <p style="margin:0;font-size:14px;line-height:1.65;color:#4b5563;">
+                  If any of that is wrong, just reply to this email and we will fix it before we call.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px 32px 28px 32px;">
+                <div style="border-top:1px solid #e5e7eb;padding-top:16px;">
+                  <p style="margin:0;font-size:14px;line-height:1.6;color:#4b5563;">— The Skydrop team</p>{% if support_email %}
+                  <p style="margin:4px 0 0 0;font-size:13px;line-height:1.6;">
+                    <a href="mailto:{{ support_email }}" style="color:#4566e6;text-decoration:none;">{{ support_email }}</a>
+                  </p>{% endif %}
+                </div>
+              </td>
+            </tr>
+          </table>
+          <p style="font-size:11px;color:#9ca3af;margin:18px 0 0 0;max-width:560px;line-height:1.6;">
+            You're receiving this because you asked Skydrop for an invite. Skydrop — cross-border courier &amp; warehouse aggregator.
+          </p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`,
   },
   {
     code: 'staff.invite_lead.email',

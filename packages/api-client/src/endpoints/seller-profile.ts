@@ -27,6 +27,7 @@ export interface SellerProfileView {
   readonly countryCode: string;
   readonly emailVerifiedAt: string | null;
   readonly bankName: string | null;
+  readonly bankBranchName: string | null;
   readonly bankAccountName: string | null;
   readonly bankAccountNumber: string | null;
   readonly bankRoutingNumber: string | null;
@@ -46,8 +47,15 @@ export interface UpdateSellerProfileRequest {
   readonly displayCurrency?: 'INR' | 'BDT';
 }
 
+/**
+ * A PATCH: omit a field to leave it alone, pass null to clear it. The
+ * six bank fields are ALL-OR-NOTHING on the server — a patch that would
+ * leave the stored row partially filled is refused with
+ * `BANK_DETAILS_INCOMPLETE`, naming the fields still needed.
+ */
 export interface UpdateSellerBankDetailsRequest {
   readonly bankName?: string | null;
+  readonly bankBranchName?: string | null;
   readonly bankAccountName?: string | null;
   readonly bankAccountNumber?: string | null;
   readonly bankRoutingNumber?: string | null;

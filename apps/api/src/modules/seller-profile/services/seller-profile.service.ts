@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import {
   ActorType,
   Currency,
@@ -34,6 +39,7 @@ export interface SellerProfileView {
   countryCode: string;
   emailVerifiedAt: Date | null;
   bankName: string | null;
+  bankBranchName: string | null;
   bankAccountName: string | null;
   /**
    * MASKED display — the plaintext last-4 of the account number (or
@@ -66,6 +72,7 @@ const PROFILE_SELECT = {
   countryCode: true,
   emailVerifiedAt: true,
   bankName: true,
+  bankBranchName: true,
   bankAccountName: true,
   // Plaintext last-4 (or the full value when length <=4). The
   // ENCRYPTED column `bankAccountNumber` is intentionally NOT in
@@ -81,6 +88,31 @@ const PROFILE_SELECT = {
   logoMimeType: true,
   createdAt: true,
 } as const;
+
+/**
+ * The six columns that make up a payable bank account, in the order the
+ * seller sees them on the form — so the "missing: …" list reads down the
+ * card rather than in some internal order.
+ *
+ * They are ALL-OR-NOTHING. Not "a profile cannot be saved without bank
+ * details" — a new seller legitimately has none, and the dashboard
+ * checklist treats adding them as a later step — but "a half-entered
+ * account is not a thing you can have". A payout missing a branch or a
+ * SWIFT code does not fail at save time where someone could fix it; it
+ * fails days later at the bank, and is discovered by whoever is chasing
+ * the money.
+ *
+ * The labels are the seller's words, not the column names: the message
+ * has to be actionable by the person reading it on the form.
+ */
+const BANK_FIELDS = [
+  ['bankName', 'bank name'],
+  ['bankBranchName', 'branch name'],
+  ['bankAccountName', 'account holder name'],
+  ['bankAccountNumber', 'account number'],
+  ['bankRoutingNumber', 'routing number'],
+  ['bankSwiftCode', 'SWIFT code'],
+] as const satisfies ReadonlyArray<readonly [keyof UpdateSellerBankDetailsDto, string]>;
 
 @Injectable()
 export class SellerProfileService {
@@ -126,17 +158,13 @@ export class SellerProfileService {
     const data: Prisma.SellerUpdateInput = {};
     const changes: Record<string, string | null> = {};
 
-    if (input.companyName !== undefined) {
-      data.companyName = input.companyName;
-      changes['companyName'] = input.companyName;
-    }
+    // companyName and phone are not here, and not on the DTO either:
+    // they are the identity the account was approved on, so a seller
+    // cannot rewrite them after the fact. Changing one is a support
+    // request with a record, not a self-service edit.
     if (input.contactPersonName !== undefined) {
       data.contactPersonName = input.contactPersonName;
       changes['contactPersonName'] = input.contactPersonName;
-    }
-    if (input.phone !== undefined) {
-      data.phone = input.phone;
-      changes['phone'] = input.phone;
     }
     if (input.whatsapp !== undefined) {
       data.whatsapp = input.whatsapp;
@@ -194,18 +222,18 @@ export class SellerProfileService {
   ): Promise<SellerProfileView> {
     const data: Prisma.SellerUpdateInput = {};
     const changes: Record<string, string | null> = {};
+    /** The patch, normalised: what each named field will hold after the write. */
+    const patched = new Map<keyof UpdateSellerBankDetailsDto, string | null>();
 
-    const fields: Array<keyof UpdateSellerBankDetailsDto> = [
-      'bankName',
-      'bankAccountName',
-      'bankAccountNumber',
-      'bankRoutingNumber',
-      'bankSwiftCode',
-    ];
-
-    for (const f of fields) {
-      const value = input[f];
-      if (value !== undefined) {
+    for (const [f] of BANK_FIELDS) {
+      const raw = input[f];
+      if (raw !== undefined) {
+        // A whitespace-only value is neither "set" nor "cleared" — it
+        // would satisfy the completeness check below while being useless
+        // to a bank. Collapse it to null so there is one representation
+        // of "this field is empty".
+        const value = raw === null || raw.trim() === '' ? null : raw.trim();
+        patched.set(f, value);
         if (f === 'bankAccountNumber') {
           // Phase 1B #2 — encrypt at rest. The cipher returns a
           // ciphertext blob + plaintext last-4 + key version. We store
@@ -229,14 +257,17 @@ export class SellerProfileService {
       return this.getProfile(sellerId);
     }
 
-    const allRequiredPresentAfterUpdate = await this.prisma.client.$transaction(async (tx) => {
+    await this.prisma.client.$transaction(async (tx) => {
       const existing = await tx.seller.findFirst({
         where: { id: sellerId, deletedAt: null },
         select: {
           id: true,
           bankName: true,
+          bankBranchName: true,
           bankAccountName: true,
           bankAccountNumber: true,
+          bankRoutingNumber: true,
+          bankSwiftCode: true,
         },
       });
       if (!existing) {
@@ -245,6 +276,34 @@ export class SellerProfileService {
           message: 'Seller not found',
         });
       }
+
+      // ALL-OR-NOTHING, checked against the MERGE of this patch onto the
+      // stored row — the request carries only the fields the seller
+      // edited, so the patch alone cannot tell you whether the account
+      // ends up payable. Read inside the same transaction as the write
+      // so a concurrent edit cannot slip a field out between the check
+      // and the UPDATE.
+      //
+      // The rule bites on SAVE, never on LOAD: a seller whose row
+      // already holds partial details (they predate this rule) can still
+      // open and edit their profile — they just cannot leave it partial.
+      const missing = BANK_FIELDS.filter(([f]) => {
+        const effective = patched.has(f) ? (patched.get(f) ?? null) : existing[f];
+        return effective === null || effective === '';
+      });
+      // Nothing filled at all is the valid "remove my account" state;
+      // everything filled is the valid payable state. Only the middle is
+      // refused.
+      if (missing.length > 0 && missing.length < BANK_FIELDS.length) {
+        throw new BadRequestException({
+          code: 'BANK_DETAILS_INCOMPLETE',
+          message:
+            'Bank details are all-or-nothing — a payout missing one field fails at the bank, days after anyone could have fixed it. ' +
+            `Still needed: ${missing.map(([, label]) => label).join(', ')}. ` +
+            'Fill these in, or clear all six fields to remove the account.',
+        });
+      }
+
       const updated = await tx.seller.update({
         where: { id: sellerId },
         data,
@@ -271,6 +330,9 @@ export class SellerProfileService {
         tx,
       );
 
+      // Past the check above these three are non-null only when all six
+      // are, so this is "the account is payable" — which is what the
+      // onboarding checklist means by the step being done.
       const ready = !!updated.bankName && !!updated.bankAccountName && !!updated.bankAccountNumber;
 
       if (ready) {
@@ -282,11 +344,7 @@ export class SellerProfileService {
           tx,
         );
       }
-      return ready;
     });
-
-    // Mark onboarding metadata for future use; no-op for ready=false.
-    void allRequiredPresentAfterUpdate;
 
     return this.getProfile(sellerId);
   }

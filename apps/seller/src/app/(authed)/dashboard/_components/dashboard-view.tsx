@@ -63,11 +63,18 @@ export function DashboardView(): ReactElement {
     profile.data.contactPersonName &&
     profile.data.phone,
   );
+  // All SIX, matching what the server now enforces on save. Checking
+  // three of them would tick this row off for a seller whose next save
+  // the API refuses — a checklist that disagrees with the form it points
+  // at is worse than no checklist.
   const bankDetailsComplete = Boolean(
     profile.data &&
     profile.data.bankName &&
+    profile.data.bankBranchName &&
     profile.data.bankAccountName &&
-    profile.data.bankAccountNumber,
+    profile.data.bankAccountNumber &&
+    profile.data.bankRoutingNumber &&
+    profile.data.bankSwiftCode,
   );
   const hasProduct = (products.data?.total ?? 0) > 0;
   const hasOrder = (recent.data?.total ?? 0) > 0;

@@ -136,10 +136,10 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
     setBusy(true);
     try {
       const body: Record<string, unknown> = {};
-      if (form.companyName !== profile.companyName) body.companyName = form.companyName.trim();
+
       if (form.contactPersonName !== profile.contactPersonName)
         body.contactPersonName = form.contactPersonName.trim();
-      if (form.phone !== profile.phone) body.phone = form.phone.trim();
+
       const ws = form.whatsapp.trim();
       const currentWs = profile.whatsapp ?? '';
       if (ws !== currentWs) body.whatsapp = ws === '' ? null : ws;
@@ -203,14 +203,15 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
           </dl>
         ) : (
           <form className="space-y-3" onSubmit={(e) => void onSubmit(e)}>
-            <FormField label="Company name" required>
-              <Input
-                value={form.companyName}
-                onChange={(e) => setForm({ ...form, companyName: e.target.value })}
-                minLength={2}
-                maxLength={120}
-                required
-              />
+            {/*
+             * Company name and phone are FIXED. They are the identity
+             * the account was approved on, so they are shown here as
+             * facts rather than as inputs — the server drops both from
+             * the update DTO and rejects a request carrying either, so
+             * an editable box would only ever produce a refusal.
+             */}
+            <FormField label="Company name" hint="Fixed — contact support to change it.">
+              <Input value={profile.companyName} disabled readOnly />
             </FormField>
             <FormField label="Contact person" required>
               <Input
@@ -221,13 +222,11 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
                 required
               />
             </FormField>
-            <FormField label="Phone (E.164 BD)" required hint="e.g. +8801712345678">
-              <Input
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                placeholder="+8801712345678"
-                required
-              />
+            <FormField
+              label="Phone (E.164 BD)"
+              hint="Fixed — it is how the call centre reaches you. Contact support to change it."
+            >
+              <Input value={profile.phone} disabled readOnly />
             </FormField>
             <FormField label="WhatsApp" hint="Leave blank to remove">
               <Input
@@ -294,32 +293,57 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
   );
 }
 
+/**
+ * The six fields that make up a payable account, in form order, with the
+ * labels the server uses in its `BANK_DETAILS_INCOMPLETE` message — so
+ * the hint the seller reads before saving and the refusal they read
+ * after are talking about the same things.
+ */
+const BANK_FIELDS = [
+  ['bankName', 'bank name'],
+  ['bankBranchName', 'branch name'],
+  ['bankAccountName', 'account holder name'],
+  ['bankAccountNumber', 'account number'],
+  ['bankRoutingNumber', 'routing number'],
+  ['bankSwiftCode', 'SWIFT code'],
+] as const;
+
+type BankFieldKey = (typeof BANK_FIELDS)[number][0];
+
+function bankFormFrom(profile: SellerProfileView): Record<BankFieldKey, string> {
+  return {
+    bankName: profile.bankName ?? '',
+    bankBranchName: profile.bankBranchName ?? '',
+    bankAccountName: profile.bankAccountName ?? '',
+    bankAccountNumber: profile.bankAccountNumber ?? '',
+    bankRoutingNumber: profile.bankRoutingNumber ?? '',
+    bankSwiftCode: profile.bankSwiftCode ?? '',
+  };
+}
+
 function BankDetailsSection({ profile }: { readonly profile: SellerProfileView }): ReactElement {
   const canManage = can(useSellerIdentity(), 'profile.manage');
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    bankName: profile.bankName ?? '',
-    bankAccountName: profile.bankAccountName ?? '',
-    bankAccountNumber: profile.bankAccountNumber ?? '',
-    bankRoutingNumber: profile.bankRoutingNumber ?? '',
-    bankSwiftCode: profile.bankSwiftCode ?? '',
-  });
+  const [form, setForm] = useState(() => bankFormFrom(profile));
   const update = useUpdateSellerBankDetails();
   const toast = useToast();
 
   useEffect(() => {
     if (!editing) {
-      setForm({
-        bankName: profile.bankName ?? '',
-        bankAccountName: profile.bankAccountName ?? '',
-        bankAccountNumber: profile.bankAccountNumber ?? '',
-        bankRoutingNumber: profile.bankRoutingNumber ?? '',
-        bankSwiftCode: profile.bankSwiftCode ?? '',
-      });
+      setForm(bankFormFrom(profile));
     }
   }, [profile, editing]);
+
+  // FE-2: the SERVER refuses an incomplete account and its words are what
+  // gets surfaced. This is the same rule stated ahead of the round trip
+  // so the seller is told while they are still looking at the fields —
+  // never a substitute for the server's verdict, which is why it only
+  // ever softens a hint and never blocks the submit.
+  const filled = BANK_FIELDS.filter(([k]) => form[k].trim() !== '');
+  const missing = BANK_FIELDS.filter(([k]) => form[k].trim() === '');
+  const incomplete = filled.length > 0 && missing.length > 0;
 
   async function onSubmit(e: FormEvent): Promise<void> {
     e.preventDefault();
@@ -327,16 +351,9 @@ function BankDetailsSection({ profile }: { readonly profile: SellerProfileView }
     setBusy(true);
     try {
       const body: Record<string, unknown> = {};
-      const map: Array<{ key: keyof typeof form; current: string | null }> = [
-        { key: 'bankName', current: profile.bankName },
-        { key: 'bankAccountName', current: profile.bankAccountName },
-        { key: 'bankAccountNumber', current: profile.bankAccountNumber },
-        { key: 'bankRoutingNumber', current: profile.bankRoutingNumber },
-        { key: 'bankSwiftCode', current: profile.bankSwiftCode },
-      ];
-      for (const { key, current } of map) {
+      for (const [key] of BANK_FIELDS) {
         const next = form[key].trim();
-        if (next === (current ?? '')) continue;
+        if (next === (profile[key] ?? '')) continue;
         body[key] = next === '' ? null : next;
       }
       if (Object.keys(body).length === 0) {
@@ -390,6 +407,8 @@ function BankDetailsSection({ profile }: { readonly profile: SellerProfileView }
             <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[180px_1fr] gap-x-3 sm:gap-x-6 gap-y-2 text-sm">
               <dt className="text-text-muted">Bank name</dt>
               <dd className="text-text-body">{profile.bankName ?? '—'}</dd>
+              <dt className="text-text-muted">Branch</dt>
+              <dd className="text-text-body">{profile.bankBranchName ?? '—'}</dd>
               <dt className="text-text-muted">Account holder</dt>
               <dd className="text-text-body">{profile.bankAccountName ?? '—'}</dd>
               <dt className="text-text-muted">Account number</dt>
@@ -407,7 +426,8 @@ function BankDetailsSection({ profile }: { readonly profile: SellerProfileView }
         ) : (
           <form className="space-y-3" onSubmit={(e) => void onSubmit(e)}>
             <p className="text-text-muted text-xs mb-1">
-              Used for remittance payouts. Leave a field blank to remove it.
+              Used for remittance payouts. All six fields are needed together — a payout missing one
+              is rejected at the bank, not here. Clear all six to remove the account.
             </p>
             <FormField label="Bank name">
               <Input
@@ -415,6 +435,14 @@ function BankDetailsSection({ profile }: { readonly profile: SellerProfileView }
                 onChange={(e) => setForm({ ...form, bankName: e.target.value })}
                 maxLength={120}
                 placeholder="e.g. Dutch-Bangla Bank Ltd."
+              />
+            </FormField>
+            <FormField label="Branch name">
+              <Input
+                value={form.bankBranchName}
+                onChange={(e) => setForm({ ...form, bankBranchName: e.target.value })}
+                maxLength={120}
+                placeholder="e.g. Gulshan Circle-1 Branch"
               />
             </FormField>
             <FormField label="Account holder name">
@@ -451,6 +479,20 @@ function BankDetailsSection({ profile }: { readonly profile: SellerProfileView }
                 />
               </FormField>
             </div>
+
+            {incomplete && (
+              <div
+                className="text-xs px-3 py-2 rounded-[5px] bg-[var(--status-pending-bg)] text-[var(--status-pending-fg)] border border-[var(--status-pending-ring)]"
+                // Advisory, not a gate — the submit stays enabled and the
+                // server's refusal is what the seller is finally shown.
+                role="status"
+              >
+                Still needed: {missing.map(([, label]) => label).join(', ')}. Saving without these
+                will be refused — a payout needs the whole account. To remove the account instead,
+                clear the{' '}
+                {filled.length === 1 ? 'one remaining field' : `remaining ${filled.length}`}.
+              </div>
+            )}
 
             {error && (
               <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">

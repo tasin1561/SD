@@ -1,0 +1,20 @@
+-- Seller bank details grow a sixth field: the BRANCH NAME.
+--
+-- Bangladeshi routing is branch-scoped — the same bank name and account
+-- number belong to a different branch depending on the routing number,
+-- and a remittance instruction that names the bank but not the branch is
+-- something an operator has to chase before it can be sent.
+--
+-- NULLABLE, like the five columns beside it, and deliberately not
+-- backfilled. A seller who has not reached the bank-details onboarding
+-- step has none of the six, and inventing a branch for the ones who
+-- already filled the other five would put a guess where a fact belongs.
+--
+-- The all-or-nothing rule ("if any of the six is set, all six must be")
+-- is enforced in the service, NOT as a CHECK constraint here. Two
+-- reasons: existing rows hold partial details and a CHECK would refuse
+-- every subsequent write to them, including the write that completes
+-- them; and a constraint violation surfaces as a Postgres error that
+-- cannot say WHICH field is missing, which is the only part of the
+-- message the seller can act on.
+ALTER TABLE "sellers" ADD COLUMN "bank_branch_name" TEXT;

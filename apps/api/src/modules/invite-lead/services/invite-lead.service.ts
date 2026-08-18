@@ -70,11 +70,39 @@ export interface LeadView {
   readonly updatedAt: Date;
 }
 
-/** How a direction reads in an alert, where an enum name would not. */
+/**
+ * How a direction reads in the STAFF alert, where an enum name would not.
+ *
+ * The parentheticals are a note to ourselves — the lane is not open yet,
+ * so whoever picks the lead up knows before they call.
+ */
 const DIRECTION_LABEL: Record<string, string> = {
   BD_TO_IN: 'Bangladesh → India',
   IN_TO_BD: 'India → Bangladesh (NOT SERVED YET)',
   BOTH: 'Both directions (reverse NOT SERVED YET)',
+  UNSPECIFIED: 'not said',
+};
+
+/**
+ * The same direction, as the REQUESTER should read it back.
+ *
+ * The staff labels shout NOT SERVED YET, which is the right note for our
+ * own queue and the wrong thing to send a stranger. They were reused in
+ * the acknowledgement because both templates read one variables object,
+ * and it was survivable only while that line was buried mid-paragraph in
+ * a run-on block. Now that the block is a real table, it would be the
+ * highest-contrast text in the first email we ever send them — a
+ * confirmation that reads as a rejection, before anyone has looked at
+ * the request.
+ *
+ * Whether we serve the lane is ours to say on the call, not theirs to
+ * infer from an automated receipt. So this echoes back what they chose
+ * and nothing more.
+ */
+const DIRECTION_LABEL_FOR_REQUESTER: Record<string, string> = {
+  BD_TO_IN: 'Bangladesh → India',
+  IN_TO_BD: 'India → Bangladesh',
+  BOTH: 'Both directions',
   UNSPECIFIED: 'not said',
 };
 
@@ -234,8 +262,16 @@ export class InviteLeadService {
           recipient: { type: NotificationRecipientType.SELLER, id: null, email: lead.email },
           variables: {
             ...variables,
+            // Their words, not our internal note about the lane.
+            direction: DIRECTION_LABEL_FOR_REQUESTER[lead.shippingDirection ?? 'UNSPECIFIED'],
             product_types: lead.productTypes ?? 'not said',
             monthly_orders: lead.monthlyOrders ?? 'not said',
+            // Every other transactional email in the estate carries this;
+            // this one omitted it, so the single email a prospective
+            // seller receives was the only one with no way to reply to a
+            // human. The template renders nothing when it is unset, which
+            // is why the omission was invisible.
+            support_email: this.env.supportEmail,
           },
           triggerEvent: 'marketing.invite_lead.acknowledged',
         });

@@ -38,6 +38,7 @@ export class RemittanceService {
       select: {
         id: true,
         bankName: true,
+        bankBranchName: true,
         bankAccountName: true,
         bankAccountNumber: true,
         bankRoutingNumber: true,
@@ -96,6 +97,12 @@ export class RemittanceService {
           fxRateSnapshot: fxRate,
           bankAccountSnapshot: {
             bankName: seller.bankName,
+            // The branch is part of the payout instruction, not decoration.
+            // The seller is now hard-refused on save without it, and that
+            // block is only defensible if the value reaches the thing it
+            // was demanded for — a snapshot missing it would make the
+            // requirement pure ceremony.
+            bankBranchName: seller.bankBranchName,
             bankAccountName: seller.bankAccountName,
             bankAccountNumber: seller.bankAccountNumber,
             bankRoutingNumber: seller.bankRoutingNumber,

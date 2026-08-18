@@ -181,7 +181,18 @@ model Seller {
   status                           SellerStatus @default(PENDING)
   approvedAt                       DateTime?    @map("approved_at") @db.Timestamptz
   approvedById                     String?      @map("approved_by_id") @db.Uuid
+  /// The six bank columns are ALL-OR-NOTHING, enforced in
+  /// `SellerProfileService.updateBankDetails` rather than by the schema:
+  /// a new seller legitimately has none of them (adding them is a later
+  /// onboarding step), so NOT NULL is wrong, and a CHECK constraint would
+  /// refuse the write with a Postgres error nobody can act on instead of
+  /// naming the fields that are missing.
   bankName                         String?      @map("bank_name")
+  /// The branch the account is held at. Bangladeshi routing is
+  /// branch-scoped — the same bank name and account number resolve
+  /// differently per branch — so a payout instruction without it is
+  /// incomplete.
+  bankBranchName                   String?      @map("bank_branch_name")
   bankAccountName                  String?      @map("bank_account_name")
   bankAccountNumber                String?      @map("bank_account_number")
   bankAccountNumberMasked          String?      @map("bank_account_number_masked")
