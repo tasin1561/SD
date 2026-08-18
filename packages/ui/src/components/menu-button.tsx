@@ -212,7 +212,7 @@ export function MenuButton({
               <span className="min-w-0">
                 <span className="block text-sm leading-tight">{item.label}</span>
                 {item.hint !== undefined ? (
-                  <span className="text-text-faint mt-0.5 block text-[11px] leading-tight">
+                  <span className="text-text-faint mt-0.5 block text-xs leading-tight">
                     {item.hint}
                   </span>
                 ) : null}

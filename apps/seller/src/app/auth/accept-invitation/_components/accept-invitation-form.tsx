@@ -127,7 +127,10 @@ export function AcceptInvitationForm({ token }: { readonly token: string }): Rea
           required
           minLength={2}
           maxLength={120}
-          placeholder="Your full name"
+          // Not "your" — this is the company's contact person, who is
+          // often not the person filling in the form (an owner sets the
+          // account up and names whoever answers the phone).
+          placeholder="Contact person's full name"
           value={form.contactPersonName}
           onChange={(e) => set('contactPersonName', e.target.value)}
           disabled={submitting}

@@ -120,7 +120,7 @@ export function THead({
   return (
     <thead
       className={clsx(
-        'bg-surface-raised border-b border-border text-text-muted text-[11px] uppercase tracking-wide',
+        'bg-surface-raised border-b border-border text-text-muted text-xs uppercase tracking-wide',
         className,
       )}
       {...rest}
@@ -314,7 +314,7 @@ export function SortableTh({
         )}
       >
         <span>{label}</span>
-        <span aria-hidden className={clsx('text-[10px]', !active && 'opacity-0')}>
+        <span aria-hidden className={clsx('text-xs', !active && 'opacity-0')}>
           {direction === 'asc' ? '▲' : '▼'}
         </span>
       </button>

@@ -50,6 +50,20 @@
   --color-critical: var(--color-critical);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
+  /*
+   * The TYPE SCALE, which was missing here — so `text-xs` and `text-sm`
+   * used Tailwind's defaults while tokens.css declared its own numbers
+   * that nothing applied. Mapping them makes the token file the single
+   * source it already claimed to be (FE-6), and means the scale can be
+   * tuned in one place instead of across ~890 call sites.
+   */
+  --text-xs: var(--text-xs);
+  --text-sm: var(--text-sm);
+  --text-base: var(--text-base);
+  --text-md: var(--text-md);
+  --text-lg: var(--text-lg);
+  --text-xl: var(--text-xl);
+  --text-2xl: var(--text-2xl);
   --radius-1: var(--radius-1);
   --radius-2: var(--radius-2);
   --radius-3: var(--radius-3);

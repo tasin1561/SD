@@ -208,7 +208,7 @@ function Stat({
     <div className="flex items-baseline justify-between py-1.5">
       <div>
         <div className="text-text-muted text-xs">{label}</div>
-        {hint && <div className="text-text-faint text-[10px] mt-0.5">{hint}</div>}
+        {hint && <div className="text-text-faint text-xs mt-0.5">{hint}</div>}
       </div>
       <div className={`skydrop-tabular ${colorClass}`}>{value}</div>
     </div>

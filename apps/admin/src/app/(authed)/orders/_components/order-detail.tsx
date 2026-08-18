@@ -179,7 +179,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
           <Section title={`Items (${detail.data.items.length})`}>
             <Card>
               <Table wrapperClassName="rounded-none border-0 bg-transparent">
-                <thead className="text-text-muted text-[11px] uppercase tracking-wide bg-surface-raised border-b border-border">
+                <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
                   <tr>
                     <th className="text-left px-3 py-2 font-medium">SKU</th>
                     <th className="text-left px-3 py-2 font-medium">Product</th>
@@ -220,7 +220,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                 <CardBody className="space-y-3">
                   {detail.data.sellerNotes && (
                     <div>
-                      <div className="text-text-faint text-[11px] uppercase tracking-wide mb-0.5">
+                      <div className="text-text-faint text-xs uppercase tracking-wide mb-0.5">
                         From seller
                       </div>
                       <p className="text-text-body text-sm whitespace-pre-wrap">
@@ -230,7 +230,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                   )}
                   {detail.data.callNotes && (
                     <div>
-                      <div className="text-text-faint text-[11px] uppercase tracking-wide mb-0.5">
+                      <div className="text-text-faint text-xs uppercase tracking-wide mb-0.5">
                         Call center
                       </div>
                       <p className="text-text-body text-sm whitespace-pre-wrap">
@@ -240,7 +240,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                   )}
                   {detail.data.internalNotes && (
                     <div>
-                      <div className="text-text-faint text-[11px] uppercase tracking-wide mb-0.5">
+                      <div className="text-text-faint text-xs uppercase tracking-wide mb-0.5">
                         Internal
                       </div>
                       <p className="text-text-body text-sm whitespace-pre-wrap">

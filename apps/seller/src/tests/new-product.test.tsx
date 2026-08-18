@@ -90,7 +90,11 @@ describe('the entry points a seller actually finds', () => {
     const src = read(DASHBOARD);
     const idx = src.indexOf('Add your first product');
     expect(idx).toBeGreaterThan(-1);
-    expect(src.slice(idx, idx + 200)).toContain('href="/catalog/new"');
+    // Matches the href however it is written: the checklist moved from
+    // four hand-written <ChecklistItem href="…"> to a steps array with
+    // `href: '…'`, so the destination is an object property now. The
+    // thing worth pinning is where it POINTS, not the syntax around it.
+    expect(src.slice(idx, idx + 220)).toMatch(/href[:=]\s*['"{]?\/catalog\/new/);
   });
 
   it('a product with no variants offers to add one', () => {

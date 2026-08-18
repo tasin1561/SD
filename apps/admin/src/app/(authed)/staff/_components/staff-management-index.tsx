@@ -140,7 +140,7 @@ export function StaffManagementIndex(): ReactElement {
             </CardBody>
           ) : (
             <Table wrapperClassName="rounded-none border-0 bg-transparent">
-              <thead className="text-text-muted text-[11px] uppercase tracking-wide bg-surface-raised border-b border-border">
+              <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
                 <tr>
                   <th className="text-left px-3 py-2 font-medium">Email</th>
                   <th className="text-left px-3 py-2 font-medium">Role</th>
@@ -155,7 +155,7 @@ export function StaffManagementIndex(): ReactElement {
                     <td className="px-3 py-2 text-text-body font-mono text-xs">
                       {u.emailDisplay}
                       {u.deletedAt && (
-                        <span className="text-critical text-[10px] ml-2 uppercase">
+                        <span className="text-critical text-xs ml-2 uppercase">
                           Deactivated
                         </span>
                       )}
@@ -226,7 +226,7 @@ export function StaffManagementIndex(): ReactElement {
             </CardBody>
           ) : (
             <Table wrapperClassName="rounded-none border-0 bg-transparent">
-              <thead className="text-text-muted text-[11px] uppercase tracking-wide bg-surface-raised border-b border-border">
+              <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
                 <tr>
                   <th className="text-left px-3 py-2 font-medium">Email</th>
                   <th className="text-left px-3 py-2 font-medium">Role</th>

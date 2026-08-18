@@ -85,7 +85,7 @@ function SettingRow({
           {/* `flex-wrap` wraps between items, not inside one — and a key
               like `courier.delhivery_pickup_location` is a single
               unbreakable token wider than a phone. */}
-          <span className="text-text-faint max-w-full font-mono text-[11px] break-all">
+          <span className="text-text-faint max-w-full font-mono text-xs break-all">
             {setting.key}
           </span>
           <StatusBadge
@@ -93,13 +93,13 @@ function SettingRow({
             label={setting.valueType.toLowerCase()}
           />
           {setting.isSensitive && (
-            <span className="text-[11px] uppercase tracking-wide text-pending">Sensitive</span>
+            <span className="text-xs uppercase tracking-wide text-pending">Sensitive</span>
           )}
           {setting.requiresRestart && (
-            <span className="text-[11px] uppercase tracking-wide text-critical">Restart</span>
+            <span className="text-xs uppercase tracking-wide text-critical">Restart</span>
           )}
           {!setting.isEditableByAdmin && (
-            <span className="text-[11px] uppercase tracking-wide text-text-muted">Read-only</span>
+            <span className="text-xs uppercase tracking-wide text-text-muted">Read-only</span>
           )}
         </div>
         {setting.description && (
@@ -109,7 +109,7 @@ function SettingRow({
           {setting.valueDisplay}
         </div>
         {setting.lastEditedAt && (
-          <div className="text-text-faint text-[11px] mt-1 font-mono">
+          <div className="text-text-faint text-xs mt-1 font-mono">
             Last edit: {new Date(setting.lastEditedAt).toISOString().replace('T', ' ').slice(0, 16)}
           </div>
         )}

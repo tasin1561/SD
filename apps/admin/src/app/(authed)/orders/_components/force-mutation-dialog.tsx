@@ -482,7 +482,7 @@ function FieldGroupBlock({
                   <div>
                     <div className="text-text-body text-sm">{f.label}</div>
                     {currentValue !== null && currentValue !== undefined && (
-                      <div className="text-text-faint text-[11px] font-mono truncate">
+                      <div className="text-text-faint text-xs font-mono truncate">
                         was: {String(currentValue)}
                       </div>
                     )}
@@ -652,7 +652,7 @@ function Summary({
 }): ReactElement {
   return (
     <div className="rounded-[5px] border border-border px-3 py-2 bg-bg">
-      <div className="text-text-muted text-[11px] uppercase tracking-wide mb-1.5">{title}</div>
+      <div className="text-text-muted text-xs uppercase tracking-wide mb-1.5">{title}</div>
       <ul className="space-y-1">
         {rows.map((r, i) => (
           <li key={i} className="text-text-body text-sm flex items-start gap-2">

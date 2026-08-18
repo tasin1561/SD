@@ -101,7 +101,7 @@ export function WebhookDeliveriesIndex(): ReactElement {
         ) : (
           <Card>
             <Table wrapperClassName="rounded-none border-0 bg-transparent">
-              <thead className="text-text-muted text-[11px] uppercase tracking-wide bg-surface-raised border-b border-border">
+              <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
                 <tr>
                   <th className="text-left px-3 py-2 font-medium">When</th>
                   <th className="text-left px-3 py-2 font-medium">Seller</th>
@@ -126,7 +126,7 @@ export function WebhookDeliveriesIndex(): ReactElement {
                       </Link>
                     </td>
                     <td className="px-3 py-2 text-text-body font-mono text-xs">{d.eventType}</td>
-                    <td className="px-3 py-2 text-text-muted font-mono text-[11px] max-w-[260px] truncate">
+                    <td className="px-3 py-2 text-text-muted font-mono text-xs max-w-[260px] truncate">
                       {d.endpointUrl}
                     </td>
                     <td className="px-3 py-2 text-right text-text-body font-mono text-xs">

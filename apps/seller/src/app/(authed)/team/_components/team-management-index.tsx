@@ -141,7 +141,7 @@ export function TeamManagementIndex(): ReactElement {
             </CardBody>
           ) : (
             <Table wrapperClassName="rounded-none border-0 bg-transparent">
-              <thead className="text-text-muted text-[11px] uppercase tracking-wide bg-surface-raised border-b border-border">
+              <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
                 <tr>
                   <th className="text-left px-3 py-2 font-medium">Name</th>
                   <th className="text-left px-3 py-2 font-medium">Email</th>
@@ -157,10 +157,10 @@ export function TeamManagementIndex(): ReactElement {
                     <td className="px-3 py-2 text-text-body text-xs">
                       {m.fullName}
                       {m.isYou && (
-                        <span className="text-accent text-[10px] ml-2 uppercase">You</span>
+                        <span className="text-accent text-xs ml-2 uppercase">You</span>
                       )}
                       {m.deletedAt && (
-                        <span className="text-critical text-[10px] ml-2 uppercase">
+                        <span className="text-critical text-xs ml-2 uppercase">
                           Deactivated
                         </span>
                       )}
@@ -235,7 +235,7 @@ export function TeamManagementIndex(): ReactElement {
             </CardBody>
           ) : (
             <Table wrapperClassName="rounded-none border-0 bg-transparent">
-              <thead className="text-text-muted text-[11px] uppercase tracking-wide bg-surface-raised border-b border-border">
+              <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
                 <tr>
                   <th className="text-left px-3 py-2 font-medium">Email</th>
                   <th className="text-left px-3 py-2 font-medium">Role</th>

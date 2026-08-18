@@ -32,7 +32,7 @@ export function OrderTimeline({
                 {formatTimestamp(evt.createdAt)}
               </div>
               <div className="min-w-0 flex-1 flex items-start gap-2 flex-wrap">
-                <div className="text-text-muted text-[11px] uppercase tracking-wide shrink-0 pt-0.5">
+                <div className="text-text-muted text-xs uppercase tracking-wide shrink-0 pt-0.5">
                   {humanizeType(evt.type)}
                 </div>
                 {evt.fromStatus && evt.toStatus && (

@@ -24,8 +24,11 @@ import { test, expect } from '@playwright/test';
  *    running text are exempt — WCAG 2.5.8 exempts inline targets, and
  *    inflating them would break the line box.
  * 3. Inputs render at ≥16px on a touch device. Under 16px, mobile
- *    Safari zooms the page on focus and does not zoom back out; the
- *    apps' `text-sm` is 13px, which is exactly the trigger.
+ *    Safari zooms the page on focus and does not zoom back out. The
+ *    apps' `text-sm` is 15px (13px before the 2026-08-18 scale lift) —
+ *    still under the threshold either way, which is why the coarse-
+ *    pointer rule in tokens.css forces 16px rather than relying on the
+ *    scale being large enough.
  *
  * ── COVERAGE, HONESTLY ───────────────────────────────────────────────
  * Unauthenticated pages only, unless credentials are supplied. Most of

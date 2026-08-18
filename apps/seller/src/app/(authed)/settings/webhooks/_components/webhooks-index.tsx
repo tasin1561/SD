@@ -210,11 +210,11 @@ function EndpointRow({
             <div className="text-text-bright font-medium text-sm">
               {endpoint.name ?? 'Untitled endpoint'}{' '}
               {endpoint.autoDisabledAt ? (
-                <span className="text-critical text-[10px] uppercase ml-2">Auto-disabled</span>
+                <span className="text-critical text-xs uppercase ml-2">Auto-disabled</span>
               ) : endpoint.isActive ? (
-                <span className="text-accent text-[10px] uppercase ml-2">Active</span>
+                <span className="text-accent text-xs uppercase ml-2">Active</span>
               ) : (
-                <span className="text-text-muted text-[10px] uppercase ml-2">Disabled</span>
+                <span className="text-text-muted text-xs uppercase ml-2">Disabled</span>
               )}
             </div>
             <div className="text-text-muted font-mono text-xs mt-0.5 truncate">{endpoint.url}</div>

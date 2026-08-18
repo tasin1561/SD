@@ -90,7 +90,7 @@ export function OrderChargesSection({ orderId }: { orderId: string }): ReactElem
           />
         ) : (
           <Table wrapperClassName="rounded-none border-0 bg-transparent">
-            <thead className="text-text-muted text-[11px] uppercase tracking-wide bg-surface-raised border-b border-border">
+            <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
               <tr>
                 <th className="text-left px-4 py-2 font-medium">Charge</th>
                 <th className="text-left px-4 py-2 font-medium">Visibility</th>
@@ -122,7 +122,7 @@ function ChargeRow({ charge }: { charge: OrderChargeView }): ReactElement {
     <tr>
       <td className="px-4 py-2 text-text-body">
         <div className="text-sm">{charge.description ?? humanizeType(charge.type)}</div>
-        <div className="text-text-faint text-[11px] uppercase tracking-wide mt-0.5">
+        <div className="text-text-faint text-xs uppercase tracking-wide mt-0.5">
           {charge.type.toLowerCase().replace(/_/g, ' ')} · {charge.status.toLowerCase()}
         </div>
       </td>

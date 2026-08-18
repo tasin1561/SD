@@ -133,7 +133,7 @@ export function ApiKeysIndex(): ReactElement {
       ) : (
         <Card>
           <Table wrapperClassName="rounded-none border-0 bg-transparent">
-            <thead className="text-text-muted text-[11px] uppercase tracking-wide bg-surface-raised border-b border-border">
+            <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
               <tr>
                 <th className="text-left px-3 py-2 font-medium">Name</th>
                 <th className="text-left px-3 py-2 font-medium">Prefix</th>

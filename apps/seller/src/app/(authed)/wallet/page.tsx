@@ -149,7 +149,7 @@ export default function WalletPage(): ReactElement {
             </div>
           ) : (
             <Table wrapperClassName="rounded-none border-0 bg-transparent">
-              <thead className="text-text-muted text-[11px] uppercase tracking-wide bg-surface-raised border-b border-border">
+              <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
                 <tr>
                   <th className="text-left px-3 py-2 font-medium">When</th>
                   <th className="text-left px-3 py-2 font-medium">Type</th>
@@ -225,19 +225,19 @@ function LedgerRow({ entry }: { readonly entry: WalletEntryView }): ReactElement
       <td className="px-3 py-2 text-text-body text-xs">
         {humanizeDirection(entry.direction)}
         {entry.note && (
-          <div className="text-text-faint text-[11px] mt-0.5 italic">{entry.note}</div>
+          <div className="text-text-faint text-xs mt-0.5 italic">{entry.note}</div>
         )}
       </td>
       <td className="px-3 py-2 text-text-body text-xs">
         {entry.linkedOrderId ? (
           <Link
             href={`/orders/${entry.linkedOrderId}`}
-            className="text-accent hover:underline font-mono text-[11px]"
+            className="text-accent hover:underline font-mono text-xs"
           >
             Order →
           </Link>
         ) : entry.linkedRemittanceId ? (
-          <span className="text-text-muted text-[11px]">Remittance</span>
+          <span className="text-text-muted text-xs">Remittance</span>
         ) : (
           <span className="text-text-faint">—</span>
         )}

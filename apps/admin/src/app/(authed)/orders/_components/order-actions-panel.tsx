@@ -119,7 +119,7 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
       />
       <CardBody className="space-y-4">
         <div>
-          <div className="text-text-faint text-[11px] uppercase tracking-wide mb-2">
+          <div className="text-text-faint text-xs uppercase tracking-wide mb-2">
             Sane actions
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -152,7 +152,7 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
             border: '1px solid var(--color-critical-ring)',
           }}
         >
-          <div className="flex items-center gap-1.5 text-critical text-[11px] uppercase tracking-wide font-medium">
+          <div className="flex items-center gap-1.5 text-critical text-xs uppercase tracking-wide font-medium">
             <ShieldAlert size={12} />
             God-mode (ORD-2)
           </div>
@@ -323,7 +323,7 @@ function OverrideResultPanel({
       }}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="text-critical text-[11px] uppercase tracking-wide font-medium">
+        <div className="text-critical text-xs uppercase tracking-wide font-medium">
           Force-mutation applied
         </div>
         <button
@@ -351,7 +351,7 @@ function OverrideResultPanel({
 
       {result.reserveOutcomes && result.reserveOutcomes.length > 0 && (
         <div className="mt-2 pt-2 border-t border-[var(--color-critical-ring)]">
-          <div className="text-text-muted text-[11px] uppercase tracking-wide mb-1">
+          <div className="text-text-muted text-xs uppercase tracking-wide mb-1">
             Reserve attempts (attempted, NOT blocking)
           </div>
           <ul className="space-y-0.5">
@@ -369,7 +369,7 @@ function OverrideResultPanel({
               </li>
             ))}
           </ul>
-          <div className="text-text-faint text-[11px] mt-1.5 leading-snug">
+          <div className="text-text-faint text-xs mt-1.5 leading-snug">
             Some attempts may have failed (e.g., insufficient stock); the saga did NOT block or
             compensate. Use the release-reservations action above if cleanup is needed.
           </div>
@@ -389,7 +389,7 @@ function ReleaseResultPanel({
   return (
     <div className="rounded-[5px] px-3 py-3 border border-border bg-bg">
       <div className="flex items-start justify-between gap-2 mb-1">
-        <div className="text-text-bright text-[11px] uppercase tracking-wide font-medium">
+        <div className="text-text-bright text-xs uppercase tracking-wide font-medium">
           Reservations released
         </div>
         <button

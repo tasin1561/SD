@@ -38,7 +38,7 @@ export function OrderTimelineSection({ orderId }: { readonly orderId: string }):
                 {new Date(evt.createdAt).toISOString().slice(0, 16).replace('T', ' ')}
               </div>
               <div className="min-w-0 flex-1 flex items-start gap-2 flex-wrap">
-                <div className="text-text-muted text-[11px] uppercase tracking-wide shrink-0 pt-0.5">
+                <div className="text-text-muted text-xs uppercase tracking-wide shrink-0 pt-0.5">
                   {humanize(evt.type)}
                 </div>
                 {evt.fromStatus && evt.toStatus && (

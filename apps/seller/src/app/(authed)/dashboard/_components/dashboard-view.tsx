@@ -73,6 +73,38 @@ export function DashboardView(): ReactElement {
   const hasOrder = (recent.data?.total ?? 0) > 0;
   const onboardingDone = profileComplete && bankDetailsComplete && hasProduct && hasOrder;
 
+  // One list rather than four hand-written items, so the progress count
+  // and the "which is next" decision cannot drift from what is rendered.
+  const steps = [
+    {
+      done: profileComplete,
+      label: 'Complete your profile',
+      hint: 'Company name, contact person, and phone',
+      href: '/profile',
+    },
+    {
+      done: bankDetailsComplete,
+      label: 'Add bank details',
+      hint: 'Required before we can remit your COD collections',
+      href: '/profile',
+    },
+    {
+      done: hasProduct,
+      label: 'Add your first product',
+      hint: 'At least one ACTIVE product + variant',
+      href: '/catalog/new',
+    },
+    {
+      done: hasOrder,
+      label: 'Place your first order',
+      hint: 'Manually or via CSV upload',
+      href: '/orders/new',
+    },
+  ];
+  const STEPS_TOTAL = steps.length;
+  const completedSteps = steps.filter((s) => s.done).length;
+  const firstIncomplete = steps.findIndex((s) => !s.done);
+
   return (
     <div>
       <PageHeader
@@ -82,39 +114,73 @@ export function DashboardView(): ReactElement {
 
       {canProfile && canCatalog && !onboardingDone && (
         <Section title="Get started">
-          <Card>
-            <CardBody>
-              <p className="text-text-muted text-xs mb-3">
+          {/*
+           * Deliberately NOT another plain card.
+           *
+           * This is the only thing on the page that has to be done, and
+           * it was rendering identically to "Recent orders" and "Next
+           * steps" — same white surface, same heading weight — so the one
+           * section with unfinished work read as furniture. It carries
+           * the accent tint and ring, which nothing else on the dashboard
+           * uses, so it is the first thing the eye lands on.
+           *
+           * It still disappears entirely once the four are done
+           * (`!onboardingDone`), which is what keeps a permanent banner
+           * from becoming the thing people stop seeing.
+           */}
+          <div
+            className="rounded-[10px] border p-4"
+            style={{
+              borderColor: 'var(--color-accent-ring)',
+              background: 'var(--color-accent-tint)',
+            }}
+          >
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-text-body text-sm">
                 Complete these to be ready for your first delivered order.
               </p>
-              <ul className="space-y-1.5">
+              {/* Progress, because "2 of 4" is a reason to finish and a
+                  bare list of circles is not. */}
+              <span className="text-text-muted shrink-0 text-xs">
+                {completedSteps} of {STEPS_TOTAL} done
+              </span>
+            </div>
+
+            <div
+              className="mb-4 h-1 w-full overflow-hidden rounded-full"
+              style={{ background: 'var(--color-border)' }}
+              role="progressbar"
+              aria-valuenow={completedSteps}
+              aria-valuemin={0}
+              aria-valuemax={STEPS_TOTAL}
+              aria-label="Setup progress"
+            >
+              <div
+                className="h-full rounded-full transition-[width] duration-500"
+                style={{
+                  width: `${(completedSteps / STEPS_TOTAL) * 100}%`,
+                  background: 'var(--color-accent)',
+                }}
+              />
+            </div>
+
+            <ul className="space-y-1.5">
+              {steps.map((step, i) => (
                 <ChecklistItem
-                  done={profileComplete}
-                  label="Complete your profile"
-                  hint="Company name, contact person, and phone"
-                  href="/profile"
+                  key={step.href + step.label}
+                  done={step.done}
+                  label={step.label}
+                  hint={step.hint}
+                  href={step.href}
+                  // The FIRST unfinished step gets the button; the rest
+                  // keep the quiet link. Four equally-weighted "Go →"s
+                  // ask the seller to decide where to start, which is a
+                  // decision we can make for them.
+                  isNext={i === firstIncomplete}
                 />
-                <ChecklistItem
-                  done={bankDetailsComplete}
-                  label="Add bank details"
-                  hint="Required before we can remit your COD collections"
-                  href="/profile"
-                />
-                <ChecklistItem
-                  done={hasProduct}
-                  label="Add your first product"
-                  hint="At least one ACTIVE product + variant"
-                  href="/catalog/new"
-                />
-                <ChecklistItem
-                  done={hasOrder}
-                  label="Place your first order"
-                  hint="Manually or via CSV upload"
-                  href="/orders/new"
-                />
-              </ul>
-            </CardBody>
-          </Card>
+              ))}
+            </ul>
+          </div>
         </Section>
       )}
 
@@ -219,19 +285,22 @@ function ChecklistItem({
   label,
   hint,
   href,
+  isNext,
 }: {
   readonly done: boolean;
   readonly label: string;
   readonly hint: string;
   readonly href: string;
+  /** The first unfinished step — the one to actually do next. */
+  readonly isNext: boolean;
 }): ReactElement {
   return (
     <li className="flex items-start gap-3 py-1">
       <div className={done ? 'text-accent mt-0.5' : 'text-text-faint mt-0.5'}>
         {done ? <Check size={16} /> : <Circle size={16} />}
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-baseline justify-between gap-2">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
           <span
             className={
               done ? 'text-text-muted text-sm line-through' : 'text-text-bright text-sm font-medium'
@@ -239,13 +308,24 @@ function ChecklistItem({
           >
             {label}
           </span>
-          {!done && (
-            <Link href={href} className="text-accent hover:underline text-xs shrink-0">
-              Go →
-            </Link>
-          )}
+          {!done &&
+            (isNext ? (
+              // A real button on ONE row. Four identical "Go →" links
+              // hand the seller a decision about where to begin; the
+              // order is already the answer.
+              <Link
+                href={href}
+                className="bg-accent text-accent-fg hover:bg-accent-hover inline-flex shrink-0 items-center rounded-[6px] px-3 py-1 text-xs font-medium transition-colors"
+              >
+                Start
+              </Link>
+            ) : (
+              <Link href={href} className="text-accent shrink-0 text-xs hover:underline">
+                Go →
+              </Link>
+            ))}
         </div>
-        <div className="text-text-faint text-xs mt-0.5">{hint}</div>
+        <div className="text-text-faint mt-0.5 text-xs">{hint}</div>
       </div>
     </li>
   );

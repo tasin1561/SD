@@ -104,9 +104,9 @@ export function EditSettingDialog({
       description={
         detail.data ? (
           <span>
-            <span className="font-mono text-[11px]">{detail.data.key}</span>
+            <span className="font-mono text-xs">{detail.data.key}</span>
             {detail.data.requiresRestart && (
-              <span className="text-critical ml-2 uppercase text-[11px] tracking-wide">
+              <span className="text-critical ml-2 uppercase text-xs tracking-wide">
                 Restart required
               </span>
             )}

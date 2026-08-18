@@ -96,7 +96,7 @@ function MetricCard({ m }: { readonly m: CapacityMetric }): ReactElement {
 
         <Gauge percent={m.percent} status={m.status} />
 
-        <div className="text-text-faint text-[11px]">
+        <div className="text-text-faint text-xs">
           {m.ceilingSource === 'MEASURED'
             ? 'Ceiling read from the system itself.'
             : m.ceilingSource === 'CONFIGURED'

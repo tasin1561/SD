@@ -132,7 +132,7 @@ function NavLinks({
       {groups.map((group, gi) => (
         <div key={group.heading ?? `group-${gi}`} className="mb-1">
           {group.heading !== undefined && (
-            <div className="text-text-faint px-4 pt-3 pb-1 text-[10px] font-semibold tracking-[0.09em] uppercase">
+            <div className="text-text-faint px-4 pt-3 pb-1 text-xs font-semibold tracking-[0.09em] uppercase">
               {group.heading}
             </div>
           )}
@@ -185,10 +185,10 @@ function BrandBlock({
 }): ReactElement {
   return (
     <div className={className}>
-      <div className="text-text-bright text-[15px] leading-tight font-semibold tracking-tight">
+      <div className="text-text-bright text-sm leading-tight font-semibold tracking-tight">
         {brand}
       </div>
-      <div className="text-text-faint mt-0.5 text-[11px] tracking-wide uppercase">{subtitle}</div>
+      <div className="text-text-faint mt-0.5 text-xs tracking-wide uppercase">{subtitle}</div>
     </div>
   );
 }
@@ -305,7 +305,7 @@ export function AppShell({
           <NavLinks groups={navGroups} pathname={pathname} Link={Link} />
         </nav>
         {footerNote !== undefined && (
-          <div className="border-border text-text-faint shrink-0 border-t px-4 py-3 text-[11px]">
+          <div className="border-border text-text-faint shrink-0 border-t px-4 py-3 text-xs">
             {footerNote}
           </div>
         )}
@@ -345,9 +345,9 @@ export function AppShell({
                       needs a ref-forwarding child, and a plain function
                       component silently drops it, leaving the dialog
                       with no accessible name. */}
-                  <Dialog.Title className="text-text-bright text-[15px] leading-tight font-semibold tracking-tight">
+                  <Dialog.Title className="text-text-bright text-sm leading-tight font-semibold tracking-tight">
                     {brand}
-                    <span className="text-text-faint mt-0.5 block text-[11px] font-normal tracking-wide uppercase">
+                    <span className="text-text-faint mt-0.5 block text-xs font-normal tracking-wide uppercase">
                       {subtitle}
                     </span>
                   </Dialog.Title>
@@ -384,7 +384,7 @@ export function AppShell({
                         <div className="text-text-body truncate text-xs font-medium">
                           {identityPrimary}
                         </div>
-                        <div className="text-text-faint truncate text-[11px]">
+                        <div className="text-text-faint truncate text-xs">
                           {identitySecondary}
                         </div>
                       </div>
@@ -398,7 +398,7 @@ export function AppShell({
                         <div className="text-text-body truncate text-xs font-medium">
                           {identityPrimary}
                         </div>
-                        <div className="text-text-faint truncate text-[11px]">
+                        <div className="text-text-faint truncate text-xs">
                           {identitySecondary}
                         </div>
                       </Link>
@@ -419,13 +419,13 @@ export function AppShell({
             <span className="text-text-bright truncate text-sm font-semibold tracking-tight">
               {brand}
             </span>
-            <span className="text-text-faint ml-1.5 text-[11px] tracking-wide uppercase">
+            <span className="text-text-faint ml-1.5 text-xs tracking-wide uppercase">
               {subtitle}
             </span>
           </div>
 
           {/* Desktop: context label + identity + sign out. */}
-          <div className="text-text-faint hidden min-w-0 flex-1 text-[11px] tracking-[0.08em] uppercase lg:block">
+          <div className="text-text-faint hidden min-w-0 flex-1 text-xs tracking-[0.08em] uppercase lg:block">
             {sectionLabel}
           </div>
           <div className="hidden shrink-0 items-center gap-3 lg:flex">
@@ -433,7 +433,7 @@ export function AppShell({
             {identityHref === undefined ? (
               <div className="min-w-0 text-right leading-tight">
                 <div className="text-text-body truncate text-xs">{identityPrimary}</div>
-                <div className="text-text-faint truncate text-[11px]">{identitySecondary}</div>
+                <div className="text-text-faint truncate text-xs">{identitySecondary}</div>
               </div>
             ) : (
               <Link
@@ -443,7 +443,7 @@ export function AppShell({
                 onClick={() => undefined}
               >
                 <div className="text-text-body truncate text-xs">{identityPrimary}</div>
-                <div className="text-text-faint truncate text-[11px]">{identitySecondary}</div>
+                <div className="text-text-faint truncate text-xs">{identitySecondary}</div>
               </Link>
             )}
             <ThemeToggle />

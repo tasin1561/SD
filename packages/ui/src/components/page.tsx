@@ -202,7 +202,7 @@ export function EmptyState({
 export function HasOverrideBadge(): ReactElement {
   return (
     <span
-      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[3px] text-[11px] font-medium uppercase tracking-wide"
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[3px] text-xs font-medium uppercase tracking-wide"
       style={{
         background: 'var(--color-critical-tint)',
         color: 'var(--color-critical)',

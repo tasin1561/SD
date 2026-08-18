@@ -50,7 +50,7 @@ export function FxRatesIndex(): ReactElement {
       ) : (
         <Card>
           <Table wrapperClassName="rounded-none border-0 bg-transparent">
-            <thead className="text-text-muted text-[11px] uppercase tracking-wide bg-surface-raised border-b border-border">
+            <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
               <tr>
                 <th className="text-left px-3 py-2 font-medium">Pair</th>
                 <th className="text-right px-3 py-2 font-medium">Rate</th>
@@ -71,7 +71,7 @@ export function FxRatesIndex(): ReactElement {
                   <td className="px-3 py-2 text-text-body text-xs">
                     {r.source}
                     {r.isManualOverride && (
-                      <span className="text-pending text-[10px] ml-2 uppercase">Manual</span>
+                      <span className="text-pending text-xs ml-2 uppercase">Manual</span>
                     )}
                   </td>
                   <td className="px-3 py-2 text-text-muted font-mono text-xs">
