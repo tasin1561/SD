@@ -80,7 +80,7 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
         href="/catalog"
         className="inline-flex items-center gap-1.5 text-text-muted hover:text-text-body text-xs mb-4 transition-colors"
       >
-        <ArrowLeft size={12} /> Catalog
+        <ArrowLeft size={12} /> Products
       </Link>
 
       {detail.isLoading ? (
@@ -211,8 +211,30 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
                         </Link>
                       </Td>
                       <Td className="text-text-body">{v.variantLabel ?? '—'}</Td>
-                      <Td align="right" className="text-text-muted font-mono text-xs">
-                        {v.weightGrams ?? '—'}
+                      {/*
+                        The EFFECTIVE weight, not the variant's own column.
+                        A blank variant weight means "inherit the product
+                        default" (M4: `variant.weightGrams ??
+                        product.defaultWeightGrams`), so printing the raw
+                        null as "—" told the seller no weight was set while
+                        the courier would in fact bill on the product's
+                        500g. Inherited values are marked as inherited
+                        rather than silently shown as the variant's own.
+                      */}
+                      <Td align="right" className="font-mono text-xs">
+                        {v.weightGrams !== null ? (
+                          <span className="text-text-body">{v.weightGrams}</span>
+                        ) : detail.data?.defaultWeightGrams != null ? (
+                          <span
+                            className="text-text-muted"
+                            title="Inherited from the product default"
+                          >
+                            {detail.data.defaultWeightGrams}
+                            <span className="ml-1 not-italic">(inherited)</span>
+                          </span>
+                        ) : (
+                          <span className="text-text-muted">—</span>
+                        )}
                       </Td>
                       <Td>
                         <StatusBadge
@@ -251,8 +273,6 @@ function ProductReadCard({ product }: { product: SellerProductView }): ReactElem
           )}
           <dt className="text-text-muted">External ref</dt>
           <dd className="text-text-body font-mono text-xs">{product.externalRef ?? '—'}</dd>
-          <dt className="text-text-muted">External SKU</dt>
-          <dd className="text-text-body font-mono text-xs">{product.externalSku ?? '—'}</dd>
           <dt className="text-text-muted">Default weight</dt>
           <dd className="text-text-body font-mono">
             {product.defaultWeightGrams ? `${product.defaultWeightGrams} g` : '—'}
@@ -287,6 +307,14 @@ function ProductEditForm({
     product.defaultWeightGrams === null ? '' : String(product.defaultWeightGrams),
   );
   const [defaultDeclared, setDefaultDeclared] = useState(product.defaultDeclaredValueInr ?? '');
+  // The dimensions were settable at CREATE, shown in the read view, and
+  // absent from this form — so a product created with the wrong box size
+  // could never be corrected from any screen. They come back as fields
+  // rather than being dropped from the read view, because the courier
+  // bills on volumetric weight where it exceeds the actual.
+  const [defaultLength, setDefaultLength] = useState(product.defaultLengthCm ?? '');
+  const [defaultWidth, setDefaultWidth] = useState(product.defaultWidthCm ?? '');
+  const [defaultHeight, setDefaultHeight] = useState(product.defaultHeightCm ?? '');
   const [serverError, setServerError] = useState<string | null>(null);
 
   const update = useUpdateProduct(product.id);
@@ -301,6 +329,9 @@ function ProductEditForm({
         externalRef: externalRef.trim() === '' ? null : externalRef.trim(),
         defaultWeightGrams: defaultWeight === '' ? null : Number(defaultWeight),
         defaultDeclaredValueInr: defaultDeclared === '' ? null : Number(defaultDeclared),
+        defaultLengthCm: defaultLength === '' ? null : Number(defaultLength),
+        defaultWidthCm: defaultWidth === '' ? null : Number(defaultWidth),
+        defaultHeightCm: defaultHeight === '' ? null : Number(defaultHeight),
       });
       onSaved();
     } catch (err) {
@@ -355,6 +386,39 @@ function ProductEditForm({
                 min="0"
                 value={defaultWeight}
                 onChange={(e) => setDefaultWeight(e.target.value)}
+                disabled={update.isPending}
+              />
+            </FormField>
+            <FormField label="Default length (cm)" htmlFor="defaultLength">
+              <Input
+                id="defaultLength"
+                type="number"
+                min="0"
+                step="0.1"
+                value={defaultLength}
+                onChange={(e) => setDefaultLength(e.target.value)}
+                disabled={update.isPending}
+              />
+            </FormField>
+            <FormField label="Default width (cm)" htmlFor="defaultWidth">
+              <Input
+                id="defaultWidth"
+                type="number"
+                min="0"
+                step="0.1"
+                value={defaultWidth}
+                onChange={(e) => setDefaultWidth(e.target.value)}
+                disabled={update.isPending}
+              />
+            </FormField>
+            <FormField label="Default height (cm)" htmlFor="defaultHeight">
+              <Input
+                id="defaultHeight"
+                type="number"
+                min="0"
+                step="0.1"
+                value={defaultHeight}
+                onChange={(e) => setDefaultHeight(e.target.value)}
                 disabled={update.isPending}
               />
             </FormField>

@@ -353,7 +353,7 @@ export function NewOrderForm(): ReactElement {
                   {products.isLoading
                     ? 'Loading products…'
                     : products.data?.items.length === 0
-                      ? 'No products yet — add one in Catalog first.'
+                      ? 'No products yet — add one in Products first.'
                       : 'Select a product'}
                 </option>
                 {products.data?.items.map((p) => (

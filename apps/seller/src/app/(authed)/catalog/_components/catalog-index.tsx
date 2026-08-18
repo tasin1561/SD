@@ -97,7 +97,7 @@ export function CatalogIndex(): ReactElement {
   return (
     <div>
       <PageHeader
-        title="Catalog"
+        title="Products"
         subtitle="Products, variants, images. Click a product to edit or manage its variants."
         action={
           <span className="flex gap-2">

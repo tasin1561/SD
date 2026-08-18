@@ -29,7 +29,6 @@ import { StockConfigPanel } from './stock-config-panel';
  * displays it as read-only.
  *
  * Editable fields: variantLabel, weightGrams, lengthCm, widthCm,
- * heightCm, declaredValueInr, gstRate, barcode, externalSku.
  * Attributes JSON is admin-tooling territory and deferred to a
  * Phase-2 attribute editor.
  *
@@ -136,8 +135,6 @@ function VariantReadCard({ variant }: { variant: SellerVariantView }): ReactElem
           <dd className="text-text-body font-mono">{variant.gstRate ?? '—'}</dd>
           <dt className="text-text-muted">Barcode</dt>
           <dd className="text-text-body font-mono text-xs">{variant.barcode ?? '—'}</dd>
-          <dt className="text-text-muted">External SKU</dt>
-          <dd className="text-text-body font-mono text-xs">{variant.externalSku ?? '—'}</dd>
         </dl>
       </CardBody>
     </Card>
@@ -162,7 +159,6 @@ function VariantEditForm({
   const [declaredValueInr, setDeclaredValueInr] = useState(variant.declaredValueInr ?? '');
   const [gstRate, setGstRate] = useState(variant.gstRate ?? '');
   const [barcode, setBarcode] = useState(variant.barcode ?? '');
-  const [externalSku, setExternalSku] = useState(variant.externalSku ?? '');
   const [serverError, setServerError] = useState<string | null>(null);
 
   const update = useUpdateVariant(productId, variant.id);
@@ -177,7 +173,6 @@ function VariantEditForm({
         declaredValueInr: declaredValueInr === '' ? null : Number(declaredValueInr),
         gstRate: gstRate === '' ? null : Number(gstRate),
         barcode: barcode.trim() === '' ? null : barcode.trim(),
-        externalSku: externalSku.trim() === '' ? null : externalSku.trim(),
       });
       onSaved();
     } catch (err) {
@@ -241,14 +236,6 @@ function VariantEditForm({
                 id="barcode"
                 value={barcode}
                 onChange={(e) => setBarcode(e.target.value)}
-                disabled={update.isPending}
-              />
-            </FormField>
-            <FormField label="External SKU" htmlFor="externalSku">
-              <Input
-                id="externalSku"
-                value={externalSku}
-                onChange={(e) => setExternalSku(e.target.value)}
                 disabled={update.isPending}
               />
             </FormField>
