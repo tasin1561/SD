@@ -174,21 +174,53 @@ function NavLinks({
   );
 }
 
+/**
+ * The brand mark.
+ *
+ * A plain `<img>`, not `next/image`: this package is framework-agnostic
+ * and must not take a Next dependency to draw a logo. The file is an SVG
+ * so one asset is crisp at every size, and `width`/`height` are declared
+ * so the header does not reflow once it loads.
+ *
+ * `logoSrc` is a prop with a default rather than a hard-coded path
+ * because each app serves it from its OWN origin under FE-3 — the
+ * default is simply the path every app happens to use.
+ */
+function BrandMark({ src, height = 22 }: { readonly src: string; readonly height?: number }) {
+  return (
+    <img
+      src={src}
+      alt=""
+      aria-hidden="true"
+      height={height}
+      width={Math.round(height * (1092 / 532))}
+      className="shrink-0 select-none"
+      style={{ height, width: 'auto' }}
+      draggable={false}
+    />
+  );
+}
+
 function BrandBlock({
   brand,
   subtitle,
+  logoSrc,
   className,
 }: {
   readonly brand: string;
   readonly subtitle: string;
+  readonly logoSrc: string;
   readonly className?: string;
 }): ReactElement {
   return (
-    <div className={className}>
-      <div className="text-text-bright text-sm leading-tight font-semibold tracking-tight">
-        {brand}
+    <div className={clsx('flex items-center gap-2.5', className)}>
+      <BrandMark src={logoSrc} height={26} />
+      <div className="min-w-0">
+        <div className="text-text-bright text-sm leading-tight font-semibold tracking-tight">
+          {brand}
+        </div>
+        <div className="text-text-faint mt-0.5 text-xs tracking-wide uppercase">{subtitle}</div>
       </div>
-      <div className="text-text-faint mt-0.5 text-xs tracking-wide uppercase">{subtitle}</div>
     </div>
   );
 }
@@ -219,6 +251,7 @@ function SignOutButton({
 
 export function AppShell({
   brand = 'Skydrop',
+  logoSrc = '/brand/skydrop-icon.svg',
   subtitle,
   sectionLabel,
   navGroups,
@@ -235,6 +268,8 @@ export function AppShell({
   children,
 }: {
   readonly brand?: string;
+  /** Served from the app's own origin (FE-3). */
+  readonly logoSrc?: string;
   /** "Admin" / "Seller" — the line under the wordmark. */
   readonly subtitle: string;
   /** Quiet context label in the desktop top bar. */
@@ -299,6 +334,7 @@ export function AppShell({
         <BrandBlock
           brand={brand}
           subtitle={subtitle}
+          logoSrc={logoSrc}
           className="border-border shrink-0 border-b px-4 py-4"
         />
         <nav className="flex-1 overflow-y-auto py-2" aria-label="Main">
@@ -345,12 +381,15 @@ export function AppShell({
                       needs a ref-forwarding child, and a plain function
                       component silently drops it, leaving the dialog
                       with no accessible name. */}
-                  <Dialog.Title className="text-text-bright text-sm leading-tight font-semibold tracking-tight">
-                    {brand}
-                    <span className="text-text-faint mt-0.5 block text-xs font-normal tracking-wide uppercase">
-                      {subtitle}
-                    </span>
-                  </Dialog.Title>
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <BrandMark src={logoSrc} height={26} />
+                    <Dialog.Title className="text-text-bright text-sm leading-tight font-semibold tracking-tight">
+                      {brand}
+                      <span className="text-text-faint mt-0.5 block text-xs font-normal tracking-wide uppercase">
+                        {subtitle}
+                      </span>
+                    </Dialog.Title>
+                  </div>
                   <Dialog.Close asChild>
                     <button
                       type="button"
@@ -411,7 +450,8 @@ export function AppShell({
             </Dialog.Portal>
           </Dialog.Root>
 
-          <div className="min-w-0 flex-1 lg:hidden">
+          <div className="flex min-w-0 flex-1 items-center gap-2 lg:hidden">
+            <BrandMark src={logoSrc} height={20} />
             <span className="text-text-bright truncate text-sm font-semibold tracking-tight">
               {brand}
             </span>

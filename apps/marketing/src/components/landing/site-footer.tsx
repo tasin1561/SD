@@ -18,7 +18,16 @@ export function SiteFooter(): ReactElement {
       <div className="max-w-7xl mx-auto px-5 sm:px-8 py-12 lg:py-14">
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-10">
           <div>
-            <div className="flex items-baseline gap-3">
+            <div className="flex items-center gap-3">
+              <img
+                src="/brand/skydrop-icon.svg"
+                alt=""
+                aria-hidden="true"
+                width={53}
+                height={26}
+                className="h-6 w-auto shrink-0 select-none"
+                draggable={false}
+              />
               <span className="font-display font-semibold text-fg-strong text-lg">Skydrop</span>
               <span className="telemetry inline-flex items-center gap-1.5 text-fg-muted">
                 <span

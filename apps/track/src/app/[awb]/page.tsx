@@ -53,8 +53,17 @@ const STATUS_TONE: Record<string, string> = {
 
 function Header({ locale }: { locale: Locale }): ReactElement {
   return (
-    <div className="mb-6 flex items-baseline justify-between gap-3">
-      <Link href="/" className="flex items-baseline gap-3">
+    <div className="mb-6 flex items-center justify-between gap-3">
+      <Link href="/" className="flex items-center gap-3">
+        <img
+          src="/brand/skydrop-icon.svg"
+          alt=""
+          aria-hidden="true"
+          width={57}
+          height={28}
+          className="h-7 w-auto shrink-0 select-none"
+          draggable={false}
+        />
         <span className="font-display font-semibold text-lg tracking-tight text-fg-strong">
           {t(locale, 'brand')}
         </span>
@@ -106,8 +115,17 @@ export default async function AwbPage({
           <div className="mb-8 text-center">
             <Link
               href="/"
-              className="font-display font-semibold text-2xl tracking-tight text-fg-strong"
+              className="font-display inline-flex items-center gap-3 text-2xl font-semibold tracking-tight text-fg-strong"
             >
+              <img
+                src="/brand/skydrop-icon.svg"
+                alt=""
+                aria-hidden="true"
+                width={74}
+                height={36}
+                className="h-9 w-auto shrink-0 select-none"
+                draggable={false}
+              />
               {t(locale, 'brand')}
             </Link>
             <div className="telemetry text-fg-muted mt-2">{t(locale, 'tagline')}</div>

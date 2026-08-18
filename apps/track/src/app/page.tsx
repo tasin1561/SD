@@ -47,7 +47,16 @@ export default async function Home(): Promise<ReactElement> {
           {/* Each LINE opts in, not the block. One ellipse centred on the
               whole masthead leaves its bottom edge — the tagline — in the
               falloff, which measured 2.18:1 against a hub marker. */}
-          <div data-map-text className="flex items-baseline justify-center gap-3">
+          <div data-map-text className="flex items-center justify-center gap-3">
+            <img
+              src="/brand/skydrop-icon.svg"
+              alt=""
+              aria-hidden="true"
+              width={74}
+              height={36}
+              className="h-9 w-auto shrink-0 select-none"
+              draggable={false}
+            />
             <span className="font-display font-semibold text-2xl tracking-tight text-fg-strong">
               {t(locale, 'brand')}
             </span>

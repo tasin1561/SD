@@ -102,7 +102,9 @@ const organizationJsonLd = {
   '@type': 'Organization',
   name: 'Skydrop',
   url: siteUrl,
-  logo: `${siteUrl}/og.png`,
+  // The mark itself, not the social card — a search engine rendering a
+  // knowledge panel wants a logo, and the OG image is a 1200x630 poster.
+  logo: `${siteUrl}/brand/skydrop-logo.png`,
   email: 'hello@skydrop.online',
   description:
     'Cross-border courier aggregator + light WMS. Bangladeshi e-commerce sellers ship into India: Skydrop handles warehousing, COD call-confirmation, Delhivery dispatch, RTO, and remittance.',

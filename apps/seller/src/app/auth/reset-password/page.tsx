@@ -25,7 +25,19 @@ export default async function ResetPasswordPage({
     <>
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="text-text-bright font-semibold text-lg tracking-tight">Skydrop</div>
+          <div className="flex items-center justify-center gap-2.5">
+            {/* Decorative — the wordmark beside it already names the brand. */}
+            <img
+              src="/brand/skydrop-icon.svg"
+              alt=""
+              aria-hidden="true"
+              width={53}
+              height={26}
+              className="h-[26px] w-auto shrink-0 select-none"
+              draggable={false}
+            />
+            <span className="text-text-bright font-semibold text-lg tracking-tight">Skydrop</span>
+          </div>
           <div className="text-text-faint text-xs mt-0.5">Seller</div>
         </div>
         <div className="rounded-[7px] border border-border bg-surface p-6">

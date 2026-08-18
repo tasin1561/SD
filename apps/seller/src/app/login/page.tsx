@@ -28,7 +28,17 @@ export default async function LoginPage(): Promise<ReactElement> {
   return (
     <>
       <div className="boot-rise mb-6 text-center">
-        <div className="flex items-baseline justify-center gap-3">
+        <div className="flex items-center justify-center gap-3">
+          {/* Decorative — the wordmark beside it already names the brand. */}
+          <img
+            src="/brand/skydrop-icon.svg"
+            alt=""
+            aria-hidden="true"
+            width={74}
+            height={36}
+            className="h-9 w-auto shrink-0 select-none"
+            draggable={false}
+          />
           <span className="text-text-bright font-semibold text-2xl tracking-tight">Skydrop</span>
           <span className="telemetry inline-flex items-center gap-1.5 text-text-muted">
             <span

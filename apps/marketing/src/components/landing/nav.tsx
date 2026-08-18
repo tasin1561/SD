@@ -57,9 +57,20 @@ export function Nav(): ReactElement {
       <div className="max-w-7xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between">
         <Link
           href="/#top"
-          className="flex items-baseline gap-3 font-display font-semibold text-lg tracking-tight text-fg-strong"
+          className="flex items-center gap-3 font-display font-semibold text-lg tracking-tight text-fg-strong"
           aria-label="Skydrop home"
         >
+          {/* Decorative: the wordmark beside it already names the brand,
+              so announcing the logo too would read it twice. */}
+          <img
+            src="/brand/skydrop-icon.svg"
+            alt=""
+            aria-hidden="true"
+            width={57}
+            height={28}
+            className="h-7 w-auto shrink-0 select-none"
+            draggable={false}
+          />
           Skydrop
           <span className="telemetry hidden sm:inline-flex items-center gap-1.5 text-fg-muted">
             <span aria-hidden className="status-dot inline-block h-1 w-1 rounded-full bg-green" />
