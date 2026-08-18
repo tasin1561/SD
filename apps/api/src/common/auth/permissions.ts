@@ -382,6 +382,14 @@ export const PERMISSIONS = [
     dangerous: true,
   },
   {
+    key: 'sellers.bank_change.approve',
+    label: 'Approve a change of bank account',
+    description:
+      'Decide whether a seller may move where their money is sent. Approving redirects their payouts; rejecting requires a reason the seller reads.',
+    group: 'Sellers',
+    dangerous: true,
+  },
+  {
     key: 'leads.view',
     label: 'View invite requests',
     description: 'People who asked to be let in from the landing page.',

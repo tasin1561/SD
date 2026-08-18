@@ -937,19 +937,64 @@ import type {
   UpdateSellerProfileRequest,
 } from '@skydrop/api-client';
 
+/**
+ * A bank-change request as it rides along on the profile read.
+ *
+ * Bank details are where a seller's money is sent, so a change to an
+ * account that ALREADY exists does not take effect on save — it becomes
+ * a request an admin approves or rejects, and payouts keep going to the
+ * old account meanwhile. A first add has nothing to redirect, so it
+ * writes straight through and no request is created.
+ *
+ * APPROVED never appears here: an approved request has been applied, so
+ * the live fields on the profile are the answer.
+ *
+ * `proposed.bankAccountNumber` is MASKED (last four) exactly like the
+ * live one — the plaintext is encrypted at rest and no seller-facing
+ * read ever returns it.
+ *
+ * Declared here rather than on `SellerProfileView` because
+ * `@skydrop/api-client` is owned by another change this cycle; fold it
+ * into that interface when the package next changes hands.
+ */
+export type SellerBankChangeStatus = 'PENDING' | 'REJECTED';
+
+export interface SellerBankChangeProposedView {
+  readonly bankName: string;
+  readonly bankBranchName: string;
+  readonly bankAccountName: string;
+  readonly bankAccountNumber: string;
+  readonly bankRoutingNumber: string;
+  readonly bankSwiftCode: string;
+}
+
+export interface SellerBankChangeView {
+  readonly id: string;
+  readonly status: SellerBankChangeStatus;
+  readonly submittedAt: string;
+  readonly decidedAt: string | null;
+  /** Why an admin rejected it. Null while pending. */
+  readonly decisionReason: string | null;
+  readonly proposed: SellerBankChangeProposedView;
+}
+
+export type SellerProfileWithBankChange = SellerProfileView & {
+  readonly latestBankChange: SellerBankChangeView | null;
+};
+
 export function useSellerProfile(opts?: {
   readonly enabled?: boolean;
-}): UseQueryResult<SellerProfileView> {
+}): UseQueryResult<SellerProfileWithBankChange> {
   const client = useApiClient();
   return useQuery({
     enabled: opts?.enabled ?? true,
     queryKey: ['seller-profile'],
-    queryFn: () => client.request<SellerProfileView>('/api/seller/profile'),
+    queryFn: () => client.request<SellerProfileWithBankChange>('/api/seller/profile'),
   });
 }
 
 export function useUpdateSellerProfile(): UseMutationResult<
-  SellerProfileView,
+  SellerProfileWithBankChange,
   Error,
   UpdateSellerProfileRequest
 > {
@@ -957,7 +1002,7 @@ export function useUpdateSellerProfile(): UseMutationResult<
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<SellerProfileView>('/api/seller/profile', {
+      client.request<SellerProfileWithBankChange>('/api/seller/profile', {
         method: 'PATCH',
         body,
       }),
@@ -968,7 +1013,7 @@ export function useUpdateSellerProfile(): UseMutationResult<
 }
 
 export function useUpdateSellerBankDetails(): UseMutationResult<
-  SellerProfileView,
+  SellerProfileWithBankChange,
   Error,
   UpdateSellerBankDetailsRequest
 > {
@@ -976,7 +1021,7 @@ export function useUpdateSellerBankDetails(): UseMutationResult<
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<SellerProfileView>('/api/seller/profile/bank-details', {
+      client.request<SellerProfileWithBankChange>('/api/seller/profile/bank-details', {
         method: 'PATCH',
         body,
       }),

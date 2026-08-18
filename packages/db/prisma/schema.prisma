@@ -94,6 +94,7 @@ model StaffUser {
   topupsReviewed             WalletTopupRequest[]          @relation("TopupReviewedBy")
   binCollapseChallenges      BinCollapseChallenge[]        @relation("BinCollapseChallengeStaff")
   courierModeChallenges      CourierModeChallenge[]        @relation("CourierModeChallengeStaff")
+  bankChangesDecided         SellerBankChangeRequest[]     @relation("BankChangeDecidedBy")
 
   @@index([role])
   @@index([deletedAt])
@@ -224,50 +225,51 @@ model Seller {
   updatedAt                        DateTime     @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt                        DateTime?    @map("deleted_at") @db.Timestamptz
 
-  approvedBy              StaffUser?                     @relation("SellerApprovedBy", fields: [approvedById], references: [id])
-  invitations             SellerInvitation[]
-  apiKeys                 SellerApiKey[]
-  notes                   SellerNote[]
-  auditLogsAsSeller       AuditLog[]                     @relation("AuditLogSeller")
-  products                Product[]
-  productVariants         ProductVariant[]
-  productImagesUploaded   ProductImage[]                 @relation("ProductImageUploadedBySeller")
-  stockBatches            StockBatch[]
-  stockLevels             StockLevel[]
-  stockMovements          StockMovement[]
-  stockReservations       StockReservation[]
-  stockAdjustments        StockAdjustment[]
-  goodsReceipts           GoodsReceipt[]
-  customers               Customer[]
-  orders                  Order[]
-  bulkOrderUploads        BulkOrderUpload[]              @relation("BulkUploadSeller")
-  bulkUploadsTriggered    BulkOrderUpload[]              @relation("BulkUploadUploadedBySeller")
-  pricing                 SellerPricing[]
-  webhookEndpoints        SellerWebhookEndpoint[]
-  notificationPreferences SellerNotificationPreference[]
-  onboardingProgress      SellerOnboardingProgress[]
-  sellerCsvMappings       SellerCsvMapping[]
-  bulkProductUploads      BulkProductUpload[]
-  stockAlertStates        StockAlertState[]
-  walletEntries           SellerWalletEntry[]
-  walletBalances          SellerWalletBalance[]
-  remittances             Remittance[]
-  withdrawalRequests      WithdrawalRequest[]
-  topupRequests           WalletTopupRequest[]
-  stagedOrderRows         StagedOrderRow[]
-  gstWithholdings         GstWithholding[]
-  pendingAccruals         PendingAccrual[]
-  tickets                 Ticket[]
-  earlyReservationReviews EarlyReservationReview[]
-  stockUnits              StockUnit[]
-  inboundFreightCharges   InboundFreightCharge[]
-  invoices                Invoice[]
-  users                   SellerUser[]
-  userInvitations         SellerUserInvitation[]
-  settingOverrides        SellerSettingOverride[]
-  courierAccountLinks     SellerCourierAccountLink[]
-  inviteLeads             InviteLead[]                   @relation("InviteLeadConvertedSeller")
-  roles                   SellerRoleDefinition[]
+  approvedBy               StaffUser?                     @relation("SellerApprovedBy", fields: [approvedById], references: [id])
+  invitations              SellerInvitation[]
+  apiKeys                  SellerApiKey[]
+  notes                    SellerNote[]
+  auditLogsAsSeller        AuditLog[]                     @relation("AuditLogSeller")
+  products                 Product[]
+  productVariants          ProductVariant[]
+  productImagesUploaded    ProductImage[]                 @relation("ProductImageUploadedBySeller")
+  stockBatches             StockBatch[]
+  stockLevels              StockLevel[]
+  stockMovements           StockMovement[]
+  stockReservations        StockReservation[]
+  stockAdjustments         StockAdjustment[]
+  goodsReceipts            GoodsReceipt[]
+  customers                Customer[]
+  orders                   Order[]
+  bulkOrderUploads         BulkOrderUpload[]              @relation("BulkUploadSeller")
+  bulkUploadsTriggered     BulkOrderUpload[]              @relation("BulkUploadUploadedBySeller")
+  pricing                  SellerPricing[]
+  webhookEndpoints         SellerWebhookEndpoint[]
+  notificationPreferences  SellerNotificationPreference[]
+  onboardingProgress       SellerOnboardingProgress[]
+  sellerCsvMappings        SellerCsvMapping[]
+  bulkProductUploads       BulkProductUpload[]
+  stockAlertStates         StockAlertState[]
+  walletEntries            SellerWalletEntry[]
+  walletBalances           SellerWalletBalance[]
+  remittances              Remittance[]
+  withdrawalRequests       WithdrawalRequest[]
+  topupRequests            WalletTopupRequest[]
+  stagedOrderRows          StagedOrderRow[]
+  gstWithholdings          GstWithholding[]
+  pendingAccruals          PendingAccrual[]
+  tickets                  Ticket[]
+  earlyReservationReviews  EarlyReservationReview[]
+  stockUnits               StockUnit[]
+  inboundFreightCharges    InboundFreightCharge[]
+  invoices                 Invoice[]
+  users                    SellerUser[]
+  userInvitations          SellerUserInvitation[]
+  settingOverrides         SellerSettingOverride[]
+  courierAccountLinks      SellerCourierAccountLink[]
+  inviteLeads              InviteLead[]                   @relation("InviteLeadConvertedSeller")
+  roles                    SellerRoleDefinition[]
+  sellerBankChangeRequests SellerBankChangeRequest[]
 
   @@index([status])
   @@index([deletedAt])
@@ -3796,6 +3798,16 @@ enum StaffRole {
   @@map("staff_role")
 }
 
+/// Where a proposed change to a seller's payable account has got to.
+/// APPROVED rows are history — the values are already live on `sellers`.
+enum BankChangeStatus {
+  PENDING  @map("pending")
+  APPROVED @map("approved")
+  REJECTED @map("rejected")
+
+  @@map("bank_change_status")
+}
+
 enum SellerStatus {
   PENDING   @map("pending")
   APPROVED  @map("approved")
@@ -5318,6 +5330,63 @@ enum SellerUserRole {
   @@map("seller_user_role")
 }
 
+/// A seller asking to move where their money is sent.
+///
+/// The FIRST set of bank details a seller adds writes straight through —
+/// there is nothing to redirect yet, and making a new seller wait would
+/// be friction for no gain. Every EDIT after that lands here instead:
+/// anyone who got into a seller's account could otherwise point payouts
+/// at their own bank, and the seller would find out when the money did
+/// not arrive.
+///
+/// While a request is PENDING the live columns on `sellers` are
+/// untouched and payouts continue to the existing account — a proposed
+/// change is not yet a fact, and freezing payouts would punish the
+/// seller for asking.
+///
+/// The account number is encrypted with the same cipher as the live
+/// column and carries its own masked copy; a request row must never be
+/// the place plaintext leaks.
+model SellerBankChangeRequest {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId String @map("seller_id") @db.Uuid
+
+  bankName                    String @map("bank_name")
+  bankBranchName              String @map("bank_branch_name")
+  bankAccountName             String @map("bank_account_name")
+  bankAccountNumber           String @map("bank_account_number")
+  bankAccountNumberMasked     String @map("bank_account_number_masked")
+  bankAccountNumberKeyVersion Int?   @map("bank_account_number_key_version") @db.SmallInt
+  bankRoutingNumber           String @map("bank_routing_number")
+  bankSwiftCode               String @map("bank_swift_code")
+
+  status BankChangeStatus @default(PENDING)
+
+  requestedBySellerUserId String?  @map("requested_by_seller_user_id") @db.Uuid
+  submittedAt             DateTime @default(now()) @map("submitted_at") @db.Timestamptz
+
+  decidedByStaffId String?   @map("decided_by_staff_id") @db.Uuid
+  decidedAt        DateTime? @map("decided_at") @db.Timestamptz
+  /// Why it was rejected. The seller reads this verbatim, so it is not
+  /// an internal note — without it they resubmit the same thing.
+  decisionReason   String?   @map("decision_reason") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller         Seller      @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  requestedBy    SellerUser? @relation("BankChangeRequestedBy", fields: [requestedBySellerUserId], references: [id])
+  decidedByStaff StaffUser?  @relation("BankChangeDecidedBy", fields: [decidedByStaffId], references: [id])
+
+  // ONE pending request per seller, as a PARTIAL UNIQUE INDEX rather than
+  // a read-then-write check — two concurrent submissions would both read
+  // "none pending" under READ COMMITTED and both insert. Declared in the
+  // migration: seller_bank_change_requests_one_pending_uq.
+  @@index([sellerId, status])
+  @@index([status, submittedAt])
+  @@map("seller_bank_change_requests")
+}
+
 model SellerUser {
   id              String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
   sellerId        String         @map("seller_id") @db.Uuid
@@ -5349,6 +5418,7 @@ model SellerUser {
   withdrawalRequestsMade          WithdrawalRequest[]
   ticketsOpened                   Ticket[]                       @relation("TicketOpenedBySellerUser")
   earlyReservationReviewsResolved EarlyReservationReview[]       @relation("EarlyReservationReviewResolvedBy")
+  bankChangesRequested            SellerBankChangeRequest[]      @relation("BankChangeRequestedBy")
 
   @@index([sellerId])
   @@index([sellerId, role])

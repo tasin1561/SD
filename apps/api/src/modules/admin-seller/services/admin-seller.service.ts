@@ -421,6 +421,83 @@ export class AdminSellerService {
     return { sellerId, initials: next };
   }
 
+  /**
+   * Correct the company name or phone a seller was approved on.
+   *
+   * These are the two fields a seller may NOT change themselves — an
+   * admin read them and approved that entity, so a seller rewriting
+   * either would turn the approved company into a different one with
+   * nothing marking the moment. That left "we approved a typo" with no
+   * answer at all. This is the answer: a staff act, on request, with a
+   * record.
+   *
+   * Refuses a no-op rather than writing an audit row that says nothing
+   * changed — an audit trail full of empty entries is one nobody reads.
+   *
+   * Audited HIGH, not MEDIUM like the initials: the company name is what
+   * appears on a GST invoice and the phone is how the call centre
+   * reaches whoever answers for these orders. Both are identity, and a
+   * change to either has to be attributable years later.
+   */
+  async updateIdentity(
+    sellerId: string,
+    input: { companyName?: string; phone?: string; reason: string },
+    staffId: string,
+  ): Promise<{ sellerId: string; companyName: string; phone: string }> {
+    const seller = await this.prisma.client.seller.findFirst({
+      where: { id: sellerId, deletedAt: null },
+      select: { id: true, companyName: true, phone: true, email: true },
+    });
+    if (seller === null) {
+      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'No such seller.' });
+    }
+
+    const nextCompany = input.companyName?.trim();
+    const nextPhone = input.phone?.trim();
+    const changes: Record<string, { from: string; to: string }> = {};
+    const data: { companyName?: string; phone?: string } = {};
+
+    if (nextCompany !== undefined && nextCompany !== seller.companyName) {
+      data.companyName = nextCompany;
+      changes['companyName'] = { from: seller.companyName, to: nextCompany };
+    }
+    if (nextPhone !== undefined && nextPhone !== seller.phone) {
+      data.phone = nextPhone;
+      changes['phone'] = { from: seller.phone, to: nextPhone };
+    }
+
+    if (Object.keys(changes).length === 0) {
+      throw new ConflictException({
+        code: 'IDENTITY_NO_CHANGES',
+        message:
+          'Nothing to correct — the values supplied match what is already stored. Change one of them, or cancel.',
+      });
+    }
+
+    await this.prisma.client.seller.update({ where: { id: sellerId }, data });
+
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      staffUserId: staffId,
+      actorId: staffId,
+      action: 'staff.seller.identity_corrected',
+      entityType: 'seller',
+      entityId: sellerId,
+      severity: 'HIGH',
+      changes,
+      // The reason belongs on the row itself, not only in the diff: the
+      // diff says what moved, and this says why anyone was allowed to
+      // move it.
+      metadata: { reason: input.reason.trim(), sellerEmail: seller.email },
+    });
+
+    return {
+      sellerId,
+      companyName: data.companyName ?? seller.companyName,
+      phone: data.phone ?? seller.phone,
+    };
+  }
+
   async updateStatus(
     sellerId: string,
     input: UpdateSellerStatusDto,

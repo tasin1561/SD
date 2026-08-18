@@ -1,11 +1,13 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import {
   ActorType,
+  BankChangeStatus,
   Currency,
   OnboardingStepActor,
   Prisma,
@@ -23,6 +25,24 @@ import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import type { UpdateSellerProfileDto } from '../dto/update-profile.dto';
 import type { UpdateSellerBankDetailsDto } from '../dto/update-bank-details.dto';
 import { BankAccountCipherService } from './bank-account-cipher.service';
+
+/** PENDING or REJECTED only — an APPROVED change IS the live account. */
+export interface SellerBankChangeView {
+  readonly id: string;
+  readonly status: 'PENDING' | 'REJECTED';
+  readonly submittedAt: Date;
+  readonly decidedAt: Date | null;
+  readonly decisionReason: string | null;
+  readonly proposed: {
+    readonly bankName: string;
+    readonly bankBranchName: string;
+    readonly bankAccountName: string;
+    /** MASKED. The encrypted column is unreachable from any read path. */
+    readonly bankAccountNumber: string;
+    readonly bankRoutingNumber: string;
+    readonly bankSwiftCode: string;
+  };
+}
 
 export interface SellerProfileView {
   id: string;
@@ -55,6 +75,7 @@ export interface SellerProfileView {
   logoMimeType: string | null;
   createdAt: Date;
   onboarding: OnboardingProgressView;
+  latestBankChange: SellerBankChangeView | null;
 }
 
 const PROFILE_SELECT = {
@@ -136,6 +157,35 @@ export class SellerProfileService {
       });
     }
     const onboarding = await this.onboarding.getProgress(sellerId);
+
+    // The seller's own view of a change they asked for. PENDING so they
+    // know it is not live and payouts still go to the old account;
+    // REJECTED so they read the reason and can send a corrected one.
+    // APPROVED rows are deliberately absent — the values are simply the
+    // live ones by then, and surfacing them would say "pending" about
+    // something already done.
+    const change = await this.prisma.client.sellerBankChangeRequest.findFirst({
+      where: {
+        sellerId,
+        status: { in: [BankChangeStatus.PENDING, BankChangeStatus.REJECTED] },
+      },
+      orderBy: { submittedAt: 'desc' },
+      select: {
+        id: true,
+        status: true,
+        submittedAt: true,
+        decidedAt: true,
+        decisionReason: true,
+        bankName: true,
+        bankBranchName: true,
+        bankAccountName: true,
+        // MASKED only. The encrypted column is unreachable from any read
+        // path, exactly as it is for the live account above.
+        bankAccountNumberMasked: true,
+        bankRoutingNumber: true,
+        bankSwiftCode: true,
+      },
+    });
     // Surface the masked field as `bankAccountNumber` in the API view.
     // The ENCRYPTED column is intentionally unreachable from the read
     // path; only the cipher service can decrypt it.
@@ -147,6 +197,24 @@ export class SellerProfileService {
       logoUrl: logoStorageKey ? await this.spaces.presignGetUrl(logoStorageKey) : null,
       bankAccountNumber: bankAccountNumberMasked,
       onboarding,
+      latestBankChange:
+        change === null
+          ? null
+          : {
+              id: change.id,
+              status: change.status === BankChangeStatus.PENDING ? 'PENDING' : 'REJECTED',
+              submittedAt: change.submittedAt,
+              decidedAt: change.decidedAt,
+              decisionReason: change.decisionReason,
+              proposed: {
+                bankName: change.bankName,
+                bankBranchName: change.bankBranchName,
+                bankAccountName: change.bankAccountName,
+                bankAccountNumber: change.bankAccountNumberMasked,
+                bankRoutingNumber: change.bankRoutingNumber,
+                bankSwiftCode: change.bankSwiftCode,
+              },
+            },
     };
   }
 
@@ -224,6 +292,15 @@ export class SellerProfileService {
     const changes: Record<string, string | null> = {};
     /** The patch, normalised: what each named field will hold after the write. */
     const patched = new Map<keyof UpdateSellerBankDetailsDto, string | null>();
+    /** The encrypted account number, kept as plain values: `data` is a
+     *  Prisma update input and cannot be read back as a string. */
+    // Nullable throughout: encrypting a cleared field returns nulls,
+    // which is how "remove my account" is expressed.
+    let encAccount: {
+      stored: string | null;
+      masked: string | null;
+      keyVersion: number | null;
+    } | null = null;
 
     for (const [f] of BANK_FIELDS) {
       const raw = input[f];
@@ -240,6 +317,7 @@ export class SellerProfileService {
           // all three; the masked is what reads return, the version is
           // how a future decrypt path picks the right env key.
           const enc = this.bankCipher.encrypt(value);
+          encAccount = { stored: enc.storedValue, masked: enc.masked, keyVersion: enc.keyVersion };
           data.bankAccountNumber = enc.storedValue;
           data.bankAccountNumberMasked = enc.masked;
           data.bankAccountNumberKeyVersion = enc.keyVersion;
@@ -302,6 +380,94 @@ export class SellerProfileService {
             `Still needed: ${missing.map(([, label]) => label).join(', ')}. ` +
             'Fill these in, or clear all six fields to remove the account.',
         });
+      }
+
+      // ── FIRST ADD writes; an EDIT asks ──────────────────────────
+      //
+      // A seller with no account on file has nothing to redirect, so the
+      // first set of details saves straight through. Every change after
+      // that goes to an admin: anyone who got into a seller's account
+      // could otherwise point payouts at their own bank, and the seller
+      // would find out when the money did not arrive.
+      //
+      // "On file" means a payable account exists — all six present. A row
+      // left partial by the pre-rule era is not an account anyone could
+      // have been paid into, so completing it is a first add, not a
+      // redirect.
+      const hadAccountOnFile = BANK_FIELDS.every(([f]) => {
+        const v = existing[f];
+        return v !== null && v !== '';
+      });
+      // Clearing the account is not a redirect either — there is nowhere
+      // for the money to go, so nothing to steal. It writes through.
+      const isRemoval = BANK_FIELDS.every(([f]) => {
+        const effective = patched.has(f) ? (patched.get(f) ?? null) : existing[f];
+        return effective === null || effective === '';
+      });
+
+      if (hadAccountOnFile && !isRemoval) {
+        try {
+          await tx.sellerBankChangeRequest.create({
+            data: {
+              sellerId,
+              bankName: String(patched.get('bankName') ?? existing.bankName ?? ''),
+              bankBranchName: String(
+                patched.get('bankBranchName') ?? existing.bankBranchName ?? '',
+              ),
+              bankAccountName: String(
+                patched.get('bankAccountName') ?? existing.bankAccountName ?? '',
+              ),
+              // Encrypted with the same cipher as the live column, and
+              // carrying its own masked copy — a request row must never
+              // be where plaintext leaks.
+              bankAccountNumber: encAccount?.stored ?? existing.bankAccountNumber ?? '',
+              bankAccountNumberMasked: encAccount?.masked ?? '',
+              ...(encAccount?.keyVersion == null
+                ? {}
+                : { bankAccountNumberKeyVersion: encAccount.keyVersion }),
+              bankRoutingNumber: String(
+                patched.get('bankRoutingNumber') ?? existing.bankRoutingNumber ?? '',
+              ),
+              bankSwiftCode: String(patched.get('bankSwiftCode') ?? existing.bankSwiftCode ?? ''),
+            },
+          });
+        } catch (err) {
+          // The partial unique index is the ONE-AT-A-TIME rule. It is a
+          // constraint rather than a read-then-write check because two
+          // concurrent submissions would both read "none pending" under
+          // READ COMMITTED and both insert — the money-path shape this
+          // codebase has had to fix before.
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+            throw new ConflictException({
+              code: 'BANK_CHANGE_ALREADY_PENDING',
+              message:
+                'You already have a bank change waiting for approval. One can be in review at a time — wait for that one to be approved or rejected before submitting another.',
+            });
+          }
+          throw err;
+        }
+
+        await this.audit.log(
+          {
+            actorType: ActorType.SELLER,
+            sellerId,
+            action: 'seller.bank_details.change_requested',
+            entityType: 'seller',
+            entityId: sellerId,
+            // HIGH: this is the first step of moving where money goes.
+            severity: 'HIGH',
+            changes,
+            metadata: {
+              ipAddress: ctx.ipAddress,
+              userAgent: ctx.userAgent,
+              requestId: ctx.requestId,
+            },
+          },
+          tx,
+        );
+        // Deliberately NO seller.update — the live account is untouched
+        // and payouts continue to it until an admin decides.
+        return;
       }
 
       const updated = await tx.seller.update({

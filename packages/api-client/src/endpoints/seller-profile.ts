@@ -12,6 +12,36 @@ export interface OnboardingProgressView {
   readonly bankDetailsCaptured: boolean;
 }
 
+/** PENDING or REJECTED only — an APPROVED change is simply the live account. */
+export type SellerBankChangeStatus = 'PENDING' | 'REJECTED';
+
+export interface SellerBankChangeProposedView {
+  readonly bankName: string;
+  readonly bankBranchName: string;
+  readonly bankAccountName: string;
+  /** MASKED — last four digits. The real number is never returned. */
+  readonly bankAccountNumber: string;
+  readonly bankRoutingNumber: string;
+  readonly bankSwiftCode: string;
+}
+
+/**
+ * A change of payable account the seller has asked for.
+ *
+ * Present while it is PENDING, so the seller knows the details are not
+ * live and payouts still go to the old account; and while it is the most
+ * recent REJECTED one, so they read the admin's reason instead of
+ * resubmitting the same thing.
+ */
+export interface SellerBankChangeView {
+  readonly id: string;
+  readonly status: SellerBankChangeStatus;
+  readonly submittedAt: string;
+  readonly decidedAt: string | null;
+  readonly decisionReason: string | null;
+  readonly proposed: SellerBankChangeProposedView;
+}
+
 export interface SellerProfileView {
   readonly id: string;
   readonly email: string;
@@ -36,6 +66,7 @@ export interface SellerProfileView {
   readonly logoMimeType: string | null;
   readonly createdAt: string;
   readonly onboarding: OnboardingProgressView;
+  readonly latestBankChange: SellerBankChangeView | null;
 }
 
 export interface UpdateSellerProfileRequest {

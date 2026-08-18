@@ -140,6 +140,52 @@ export function useUpdateSellerStatus(
   });
 }
 
+export interface UpdateSellerIdentityRequest {
+  /** 2..120. Omit to leave unchanged. */
+  readonly companyName?: string;
+  /** E.164 BD — /^\+880\d{9,12}$/. Omit to leave unchanged. */
+  readonly phone?: string;
+  /** REQUIRED, 20..500. The only record of WHY the identity changed. */
+  readonly reason: string;
+}
+
+export interface UpdateSellerIdentityResponse {
+  readonly sellerId: string;
+  readonly companyName: string;
+  readonly phone: string;
+}
+
+/**
+ * Correct the company name / phone a seller was APPROVED under.
+ *
+ * The seller cannot edit either field themselves — they are the identity
+ * an admin approved, and a seller quietly rewriting them turns the
+ * approved entity into a different one. That left "we approved a typo"
+ * with no answer; this is the answer.
+ *
+ * FE-2: nothing here is pre-checked. Whether the phone is a valid BD
+ * number, whether the reason is long enough, whether anything actually
+ * CHANGED (IDENTITY_NO_CHANGES) — all of it is the server's call, and
+ * its refusal is shown verbatim. A client-side mirror of those rules
+ * would go stale the first time one of them moved.
+ */
+export function useUpdateSellerIdentity(
+  sellerId: string,
+): UseMutationResult<UpdateSellerIdentityResponse, Error, UpdateSellerIdentityRequest> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<UpdateSellerIdentityResponse>(`/api/admin/sellers/${sellerId}/identity`, {
+        method: 'PATCH',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-sellers'] });
+    },
+  });
+}
+
 export function useInvitationsList(): UseQueryResult<{
   readonly items: readonly SellerInvitationListItem[];
   readonly total: number;

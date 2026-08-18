@@ -52,6 +52,9 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   ['/withdrawals', 'money.view'],
   ['/topups', 'money.view'],
   ['/remittances', 'money.view'],
+  // A payout destination is money, not seller admin — and the API
+  // guards all three of its endpoints on this one permission.
+  ['/bank-changes', 'sellers.bank_change.approve'],
   ['/freight', 'money.view'],
   ['/margin', 'courier.margin.view'],
   ['/pricing', 'pricing.preview'],

@@ -20,6 +20,7 @@ import {
   SellerStatusBadge,
 } from '@skydrop/ui/components';
 import { StatusActionPanel } from './status-action-panel';
+import { IdentityCorrectionPanel } from './identity-correction-panel';
 import { SellerSettingsSection } from './seller-settings-section';
 import { serverVerdict } from '@/lib/server-verdict';
 
@@ -105,6 +106,25 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
                     {new Date(detail.data.createdAt).toISOString().slice(0, 16)}
                   </dd>
                 </dl>
+              </CardBody>
+            </Card>
+          </Section>
+
+          {/* The approved identity, and the only way it moves. Sits
+              directly under the profile because that is where an operator
+              reads the wrong value and forms the intent to fix it. */}
+          <Section title="Registered identity">
+            <Card>
+              <CardHeader
+                title="Company name and phone"
+                subtitle="What this account was approved as. The seller cannot change either — a staff correction, recorded with a reason, is the only route."
+              />
+              <CardBody>
+                <IdentityCorrectionPanel
+                  sellerId={detail.data.id}
+                  currentCompanyName={detail.data.companyName}
+                  currentPhone={detail.data.phone}
+                />
               </CardBody>
             </Card>
           </Section>

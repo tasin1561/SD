@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
+import { Fragment, useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import { Pencil } from 'lucide-react';
 import { ApiError } from '@skydrop/api-client';
 import type {
@@ -19,6 +19,7 @@ import {
   LoadingState,
   PageHeader,
   Select,
+  StatusBadge,
   useToast,
 } from '@skydrop/ui/components';
 import {
@@ -28,8 +29,10 @@ import {
   useSellerProfile,
   useUpdateSellerBankDetails,
   useUpdateSellerProfile,
+  type SellerProfileWithBankChange,
 } from '@/lib/api-hooks';
 import { can } from '@/lib/page-access';
+import { serverVerdict } from '@/lib/server-verdict';
 import { useSellerIdentity } from '@skydrop/auth/client';
 
 /**
@@ -294,34 +297,110 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
 }
 
 /**
- * The six fields that make up a payable account, in form order, with the
- * labels the server uses in its `BANK_DETAILS_INCOMPLETE` message — so
- * the hint the seller reads before saving and the refusal they read
- * after are talking about the same things.
+ * The six fields that make up a payable account, in form order.
+ *
+ * `serverLabel` is the wording the server uses in its
+ * `BANK_DETAILS_INCOMPLETE` message, so the hint the seller reads before
+ * saving and the refusal they read after are talking about the same
+ * things. `label` is the display wording.
  */
 const BANK_FIELDS = [
-  ['bankName', 'bank name'],
-  ['bankBranchName', 'branch name'],
-  ['bankAccountName', 'account holder name'],
-  ['bankAccountNumber', 'account number'],
-  ['bankRoutingNumber', 'routing number'],
-  ['bankSwiftCode', 'SWIFT code'],
+  { key: 'bankName', serverLabel: 'bank name', label: 'Bank name', mono: false },
+  { key: 'bankBranchName', serverLabel: 'branch name', label: 'Branch', mono: false },
+  {
+    key: 'bankAccountName',
+    serverLabel: 'account holder name',
+    label: 'Account holder',
+    mono: false,
+  },
+  {
+    key: 'bankAccountNumber',
+    serverLabel: 'account number',
+    label: 'Account number',
+    mono: true,
+  },
+  { key: 'bankRoutingNumber', serverLabel: 'routing number', label: 'Routing number', mono: true },
+  { key: 'bankSwiftCode', serverLabel: 'SWIFT code', label: 'SWIFT code', mono: true },
 ] as const;
 
-type BankFieldKey = (typeof BANK_FIELDS)[number][0];
+type BankFieldKey = (typeof BANK_FIELDS)[number]['key'];
+type BankValues = Readonly<Record<BankFieldKey, string | null>>;
 
+/**
+ * The edit form starts from the live values EXCEPT the account number,
+ * which is deliberately blank: what the read returns is the masked form
+ * (`••••••1234`), so prefilling the input would show a number that isn't
+ * one and — worse — save the bullets as the account if the seller
+ * touched any other field. Blank means "keep the stored one"; see the
+ * submit handler.
+ */
 function bankFormFrom(profile: SellerProfileView): Record<BankFieldKey, string> {
   return {
     bankName: profile.bankName ?? '',
     bankBranchName: profile.bankBranchName ?? '',
     bankAccountName: profile.bankAccountName ?? '',
-    bankAccountNumber: profile.bankAccountNumber ?? '',
+    bankAccountNumber: '',
     bankRoutingNumber: profile.bankRoutingNumber ?? '',
     bankSwiftCode: profile.bankSwiftCode ?? '',
   };
 }
 
-function BankDetailsSection({ profile }: { readonly profile: SellerProfileView }): ReactElement {
+function liveBankValues(profile: SellerProfileView): BankValues {
+  return {
+    bankName: profile.bankName,
+    bankBranchName: profile.bankBranchName,
+    bankAccountName: profile.bankAccountName,
+    bankAccountNumber: profile.bankAccountNumber,
+    bankRoutingNumber: profile.bankRoutingNumber,
+    bankSwiftCode: profile.bankSwiftCode,
+  };
+}
+
+function whenLabel(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+/**
+ * The six values as a description list. `compareTo` marks the rows that
+ * differ from another set — used to point at what a pending request
+ * would actually change, so the seller doesn't have to diff two columns
+ * by eye.
+ */
+function BankValuesList({
+  values,
+  compareTo,
+}: {
+  readonly values: BankValues;
+  readonly compareTo?: BankValues;
+}): ReactElement {
+  return (
+    <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[180px_1fr] gap-x-3 sm:gap-x-6 gap-y-2 text-sm">
+      {BANK_FIELDS.map((f) => {
+        const value = values[f.key];
+        const changed = compareTo !== undefined && (compareTo[f.key] ?? '') !== (value ?? '');
+        return (
+          <Fragment key={f.key}>
+            <dt className="text-text-muted">{f.label}</dt>
+            <dd className={f.mono ? 'text-text-body font-mono text-xs' : 'text-text-body'}>
+              {value === null || value === '' ? '—' : value}
+              {changed && (
+                <span className="ml-2 font-sans text-[10px] uppercase tracking-wide text-accent">
+                  changed
+                </span>
+              )}
+            </dd>
+          </Fragment>
+        );
+      })}
+    </dl>
+  );
+}
+
+function BankDetailsSection({
+  profile,
+}: {
+  readonly profile: SellerProfileWithBankChange;
+}): ReactElement {
   const canManage = can(useSellerIdentity(), 'profile.manage');
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -336,13 +415,31 @@ function BankDetailsSection({ profile }: { readonly profile: SellerProfileView }
     }
   }, [profile, editing]);
 
+  // `?? null` so a profile served by an API build that predates this
+  // field degrades to "no request in flight" instead of crashing on it.
+  const change = profile.latestBankChange ?? null;
+  const pending = change?.status === 'PENDING';
+  const live = liveBankValues(profile);
+  // Whether there is anything to redirect is what decides the whole
+  // shape of this card: a first add writes straight through, an edit
+  // becomes a request. The seller with nothing on file is never shown
+  // approval language, because none of it applies to them.
+  const hasAccountOnFile = BANK_FIELDS.some((f) => (live[f.key] ?? '') !== '');
+  const storedAccountNumber = profile.bankAccountNumber !== null;
+
+  // The account number is satisfied by the one already on file — the
+  // input is blank because we are never given the plaintext to prefill,
+  // not because the seller cleared it.
+  const satisfied = (key: BankFieldKey): boolean =>
+    form[key].trim() !== '' || (key === 'bankAccountNumber' && storedAccountNumber);
+
   // FE-2: the SERVER refuses an incomplete account and its words are what
   // gets surfaced. This is the same rule stated ahead of the round trip
   // so the seller is told while they are still looking at the fields —
   // never a substitute for the server's verdict, which is why it only
   // ever softens a hint and never blocks the submit.
-  const filled = BANK_FIELDS.filter(([k]) => form[k].trim() !== '');
-  const missing = BANK_FIELDS.filter(([k]) => form[k].trim() === '');
+  const filled = BANK_FIELDS.filter((f) => satisfied(f.key));
+  const missing = BANK_FIELDS.filter((f) => !satisfied(f.key));
   const incomplete = filled.length > 0 && missing.length > 0;
 
   async function onSubmit(e: FormEvent): Promise<void> {
@@ -351,30 +448,39 @@ function BankDetailsSection({ profile }: { readonly profile: SellerProfileView }
     setBusy(true);
     try {
       const body: Record<string, unknown> = {};
-      for (const [key] of BANK_FIELDS) {
-        const next = form[key].trim();
-        if (next === (profile[key] ?? '')) continue;
-        body[key] = next === '' ? null : next;
+      for (const f of BANK_FIELDS) {
+        const next = form[f.key].trim();
+        if (f.key === 'bankAccountNumber') {
+          // There is nothing to diff against — the read gives us the
+          // masked form only — so blank means "keep what is stored" and
+          // retyping in full is the only way to change it.
+          if (next === '') continue;
+          body[f.key] = next;
+          continue;
+        }
+        if (next === (profile[f.key] ?? '')) continue;
+        body[f.key] = next === '' ? null : next;
       }
       if (Object.keys(body).length === 0) {
         setEditing(false);
         return;
       }
-      await update.mutateAsync(body as UpdateSellerBankDetailsRequest);
-      toast.success('Bank details updated.');
+      const result = await update.mutateAsync(body as UpdateSellerBankDetailsRequest);
       setEditing(false);
+      // Whether this saved or merely asked is the SERVER's answer, read
+      // off what came back — never a client-side re-derivation of the
+      // first-add-vs-edit rule.
+      if (result.latestBankChange?.status === 'PENDING') {
+        toast.info('Sent for approval. Your current account is unchanged.');
+      } else {
+        toast.success('Bank details saved.');
+      }
     } catch (err) {
-      setError(fmtError(err));
+      setError(serverVerdict(err, 'Could not update bank details.'));
     } finally {
       setBusy(false);
     }
   }
-
-  const masked = (v: string | null): string => {
-    if (!v) return '—';
-    if (v.length <= 4) return v;
-    return `${'•'.repeat(Math.min(v.length - 4, 12))}${v.slice(-4)}`;
-  };
 
   return (
     <Card>
@@ -382,7 +488,10 @@ function BankDetailsSection({ profile }: { readonly profile: SellerProfileView }
         title="Bank details"
         action={
           canManage &&
-          !editing && (
+          !editing &&
+          // No Edit while a request is in review: the server allows one
+          // at a time, so the form could only ever produce a refusal.
+          !pending && (
             <Button
               variant="ghost"
               size="sm"
@@ -398,36 +507,83 @@ function BankDetailsSection({ profile }: { readonly profile: SellerProfileView }
       />
       <CardBody>
         {!editing ? (
-          profile.bankName === null && profile.bankAccountNumber === null ? (
+          !hasAccountOnFile && !pending ? (
             <div className="text-text-muted text-sm py-2">
               No bank details captured yet. Remittance requires this; add them before your first
               delivered order.
             </div>
           ) : (
-            <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[180px_1fr] gap-x-3 sm:gap-x-6 gap-y-2 text-sm">
-              <dt className="text-text-muted">Bank name</dt>
-              <dd className="text-text-body">{profile.bankName ?? '—'}</dd>
-              <dt className="text-text-muted">Branch</dt>
-              <dd className="text-text-body">{profile.bankBranchName ?? '—'}</dd>
-              <dt className="text-text-muted">Account holder</dt>
-              <dd className="text-text-body">{profile.bankAccountName ?? '—'}</dd>
-              <dt className="text-text-muted">Account number</dt>
-              <dd className="text-text-body font-mono text-xs">
-                {masked(profile.bankAccountNumber)}
-              </dd>
-              <dt className="text-text-muted">Routing number</dt>
-              <dd className="text-text-body font-mono text-xs">
-                {profile.bankRoutingNumber ?? '—'}
-              </dd>
-              <dt className="text-text-muted">SWIFT code</dt>
-              <dd className="text-text-body font-mono text-xs">{profile.bankSwiftCode ?? '—'}</dd>
-            </dl>
+            <div className="space-y-4">
+              {change !== null && change.status === 'REJECTED' && (
+                <div
+                  role="status"
+                  className="rounded-[5px] px-3 py-2 space-y-1.5 bg-[var(--status-failed-bg)] text-[var(--status-failed-fg)] border border-[var(--status-failed-ring)]"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge kind="failed" label="Change rejected" />
+                    {change.decidedAt !== null && (
+                      <span className="text-xs opacity-80">{whenLabel(change.decidedAt)}</span>
+                    )}
+                  </div>
+                  {/* The admin's own words, verbatim — it is the whole
+                      point of asking them for a reason. */}
+                  <p className="text-xs">
+                    {change.decisionReason ?? 'No reason was recorded with the rejection.'}
+                  </p>
+                  <p className="text-xs opacity-80">
+                    Nothing changed — payouts still go to the account below. Edit it to send a new
+                    request.
+                  </p>
+                </div>
+              )}
+
+              <section className="space-y-2">
+                {pending && (
+                  <h3 className="text-text-muted text-xs uppercase tracking-wide">
+                    Current account · payouts go here
+                  </h3>
+                )}
+                <BankValuesList values={live} />
+              </section>
+
+              {pending && change !== null && (
+                <section className="rounded-[6px] px-3 py-3 space-y-3 bg-[var(--status-pending-bg)] border border-[var(--status-pending-ring)]">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge kind="pending" label="Awaiting approval" />
+                    <span className="text-xs text-[var(--status-pending-fg)] opacity-80">
+                      Sent {whenLabel(change.submittedAt)}
+                    </span>
+                  </div>
+                  <p className="text-sm text-[var(--status-pending-fg)]">
+                    These are the details you asked us to switch to. They are not live yet — an
+                    admin has to approve them, and{' '}
+                    <strong>payouts continue to the current account above until they do</strong>.
+                  </p>
+                  <BankValuesList values={change.proposed} compareTo={live} />
+                  <p className="text-xs text-[var(--status-pending-fg)] opacity-80">
+                    Account numbers are only ever shown as their last four digits. One change can be
+                    in review at a time, so these fields stay locked until this one is approved or
+                    rejected.
+                  </p>
+                </section>
+              )}
+            </div>
           )
         ) : (
           <form className="space-y-3" onSubmit={(e) => void onSubmit(e)}>
             <p className="text-text-muted text-xs mb-1">
-              Used for remittance payouts. All six fields are needed together — a payout missing one
-              is rejected at the bank, not here. Clear all six to remove the account.
+              {hasAccountOnFile ? (
+                <>
+                  Changing a payable account does not take effect on save — it goes to an admin for
+                  approval, and payouts keep going to your current account until then. All six
+                  fields are needed together.
+                </>
+              ) : (
+                <>
+                  Used for remittance payouts. All six fields are needed together — a payout missing
+                  one is rejected at the bank, not here.
+                </>
+              )}
             </p>
             <FormField label="Bank name">
               <Input
@@ -453,12 +609,21 @@ function BankDetailsSection({ profile }: { readonly profile: SellerProfileView }
                 placeholder="As it appears on the bank statement"
               />
             </FormField>
-            <FormField label="Account number">
+            <FormField
+              label="Account number"
+              hint={
+                storedAccountNumber
+                  ? `Only the last four digits are ever shown back (${profile.bankAccountNumber ?? ''}). Leave this blank to keep the account on file, or retype the number in full to change it.`
+                  : undefined
+              }
+            >
               <Input
                 value={form.bankAccountNumber}
                 onChange={(e) => setForm({ ...form, bankAccountNumber: e.target.value })}
                 maxLength={64}
-                placeholder="123-4567-890123"
+                placeholder={
+                  storedAccountNumber ? 'Blank keeps the current number' : '123-4567-890123'
+                }
               />
             </FormField>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -487,10 +652,8 @@ function BankDetailsSection({ profile }: { readonly profile: SellerProfileView }
                 // server's refusal is what the seller is finally shown.
                 role="status"
               >
-                Still needed: {missing.map(([, label]) => label).join(', ')}. Saving without these
-                will be refused — a payout needs the whole account. To remove the account instead,
-                clear the{' '}
-                {filled.length === 1 ? 'one remaining field' : `remaining ${filled.length}`}.
+                Still needed: {missing.map((f) => f.serverLabel).join(', ')}. Submitting without
+                these will be refused — a payout needs the whole account.
               </div>
             )}
 
@@ -510,8 +673,16 @@ function BankDetailsSection({ profile }: { readonly profile: SellerProfileView }
               >
                 Cancel
               </Button>
+              {/* The button says what the click actually does: an edit
+                  raises a request for review, it does not save. */}
               <Button type="submit" variant="primary" size="md" disabled={busy}>
-                {busy ? 'Saving…' : 'Save changes'}
+                {hasAccountOnFile
+                  ? busy
+                    ? 'Sending…'
+                    : 'Send for approval'
+                  : busy
+                    ? 'Saving…'
+                    : 'Save details'}
               </Button>
             </div>
           </form>

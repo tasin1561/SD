@@ -21,6 +21,7 @@ import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../common/types/request';
 import { ListSellersQueryDto } from './dto/list-sellers.dto';
+import { UpdateSellerIdentityDto } from './dto/update-seller-identity.dto';
 import { UpdateSellerInitialsDto } from './dto/update-initials.dto';
 import { UpdateSellerStatusDto } from './dto/update-status.dto';
 import { CreateSellerNoteDto, ListSellerNotesQueryDto, UpdateSellerNoteDto } from './dto/note.dto';
@@ -93,6 +94,29 @@ export class AdminSellerController {
     @CurrentStaff() staff: AuthenticatedStaff,
   ): Promise<{ sellerId: string; initials: string }> {
     return this.svc.updateInitials(id, body.initials, staff.id);
+  }
+
+  @Patch(':id/identity')
+  @RequirePermissions('sellers.approve')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Correct the company name or phone this seller was approved on. The seller cannot change either themselves — an approved identity quietly becoming a different one is the thing that prevents — so this is the only route, and it requires a reason that is kept on the audit row.',
+  })
+  updateIdentity(
+    @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
+    @Body() body: UpdateSellerIdentityDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): Promise<{ sellerId: string; companyName: string; phone: string }> {
+    return this.svc.updateIdentity(
+      id,
+      {
+        ...(body.companyName === undefined ? {} : { companyName: body.companyName }),
+        ...(body.phone === undefined ? {} : { phone: body.phone }),
+        reason: body.reason,
+      },
+      staff.id,
+    );
   }
 
   @Post(':id/bank-account/reveal')

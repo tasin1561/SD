@@ -1701,3 +1701,113 @@ export function useRejectTopup(): UseMutationResult<
     },
   });
 }
+
+// ───────── Seller bank-detail change review ─────────
+
+/**
+ * The queue where a seller's payout destination is allowed to move.
+ *
+ * ── WHY IT IS A QUEUE AND NOT AN EDIT ────────────────────────────────
+ * Bank details are where a seller's money is sent, so whoever gets into
+ * a seller account can redirect the payouts by typing six fields. A
+ * FIRST add writes straight through — there is nothing to steal yet and
+ * making a new seller wait buys nothing. Every EDIT after that becomes
+ * a PENDING request that lands here, and the live details are untouched
+ * until somebody approves it.
+ *
+ * Payouts CONTINUE to the old account while a request waits. A pending
+ * change is not yet a fact, and freezing a seller's money because they
+ * asked a question would punish them for asking.
+ *
+ * ── MASKED ON BOTH SIDES ─────────────────────────────────────────────
+ * The account number arrives masked in `current` AND in `proposed` —
+ * this screen is a review, not a place to read account numbers out of.
+ * The consequence is stated where it bites (see the comparison table):
+ * two different accounts can mask identically, so equal masks are not
+ * evidence the account is unchanged.
+ */
+export interface BankDetailsView {
+  readonly bankName: string;
+  readonly bankBranchName: string;
+  readonly bankAccountName: string;
+  /** MASKED. Never the real number, on either side of the comparison. */
+  readonly bankAccountNumber: string;
+  readonly bankRoutingNumber: string;
+  readonly bankSwiftCode: string;
+}
+
+export interface BankChangeRequestView {
+  readonly id: string;
+  readonly sellerId: string;
+  readonly companyName: string;
+  readonly submittedAt: string;
+  readonly current: BankDetailsView;
+  readonly proposed: BankDetailsView;
+}
+
+export interface BankChangeDecisionResult {
+  readonly id: string;
+  readonly status: 'APPROVED' | 'REJECTED';
+}
+
+export function useBankChangeRequests(
+  status = 'PENDING',
+): UseQueryResult<readonly BankChangeRequestView[]> {
+  const client = useApiClient();
+  const mayReview = usePermission('sellers.bank_change.approve');
+  return useQuery({
+    // Nobody who cannot decide these should be spending the round trip
+    // to fetch them; the boundary hides the page, this stops the query.
+    enabled: mayReview,
+    queryKey: ['admin-bank-changes', 'list', status],
+    // The endpoint wraps its rows in `{ items }`. Unwrapped here so
+    // every consumer holds a list rather than re-deriving the envelope.
+    queryFn: async () => {
+      const page = await client.request<{ items: readonly BankChangeRequestView[] }>(
+        `/api/admin/bank-change-requests${qs({ status })}`,
+      );
+      return page.items;
+    },
+  });
+}
+
+export function useApproveBankChange(): UseMutationResult<
+  BankChangeDecisionResult,
+  Error,
+  { requestId: string }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requestId }) =>
+      client.request<BankChangeDecisionResult>(
+        `/api/admin/bank-change-requests/${requestId}/approve`,
+        { method: 'POST' },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-bank-changes'] });
+      // Approving is the moment the seller's LIVE details change, so
+      // any seller detail pane still showing the old account is stale.
+      void queryClient.invalidateQueries({ queryKey: ['admin-sellers'] });
+    },
+  });
+}
+
+export function useRejectBankChange(): UseMutationResult<
+  BankChangeDecisionResult,
+  Error,
+  { requestId: string; reason: string }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requestId, ...body }) =>
+      client.request<BankChangeDecisionResult>(
+        `/api/admin/bank-change-requests/${requestId}/reject`,
+        { method: 'POST', body },
+      ),
+    // A rejection leaves the live details exactly as they were, so only
+    // this queue moves.
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['admin-bank-changes'] }),
+  });
+}

@@ -63,6 +63,11 @@ function makeService(stored: StoredSeller): {
   });
   const tx = {
     seller: { findFirst: jest.fn().mockResolvedValue(stored), update },
+    // An EDIT of an existing account creates one of these instead of
+    // writing. These tests all exercise a first-add or a removal, so it
+    // is never called — but it has to exist for the code path to compile
+    // through.
+    sellerBankChangeRequest: { create: jest.fn().mockResolvedValue({ id: 'req-1' }) },
   };
   const prisma = {
     client: {
@@ -73,6 +78,9 @@ function makeService(stored: StoredSeller): {
       seller: {
         findFirst: jest.fn().mockResolvedValue({ ...stored, bankAccountNumberMasked: null }),
       },
+      // getProfile now also reads the seller's latest pending/rejected
+      // change so the profile can show it. null = nothing in flight.
+      sellerBankChangeRequest: { findFirst: jest.fn().mockResolvedValue(null) },
     },
   };
   const audit = { log: jest.fn().mockResolvedValue(undefined) };
