@@ -13,6 +13,14 @@ import type { UpdateVariantDto } from '../dto/update-variant.dto';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { deriveThumbnailKey } from '../../catalog-image/image-key';
 
+export interface VariantSearchHit {
+  id: string;
+  productId: string;
+  skuCode: string;
+  variantLabel: string | null;
+  productName: string;
+}
+
 export interface VariantView {
   id: string;
   /** Set only by the LIST — a single thumbnail so a colour is
@@ -169,6 +177,61 @@ export class CatalogVariantService {
         return { ...v, primaryImageUrl: await this.spaces.presignGetUrl(key) };
       }),
     );
+  }
+
+  /**
+   * Every variant this seller has, matched on SKU or product name.
+   *
+   * Exists because a variant is chosen by a HUMAN in three places — an
+   * order line, a consignment line, a stock correction — and the only
+   * way to name one was its uuid. The alternative shape, product select
+   * then variant select, needs the whole product list client-side and
+   * already carries a comment admitting it breaks past a hundred
+   * products.
+   *
+   * Capped rather than paged: this feeds a type-ahead, where the answer
+   * to "too many matches" is a longer query, not a second page.
+   */
+  async searchForSeller(
+    sellerId: string,
+    search: string,
+    limit: number,
+  ): Promise<VariantSearchHit[]> {
+    const q = search.trim();
+    const rows = await this.prisma.client.productVariant.findMany({
+      where: {
+        sellerId,
+        deletedAt: null,
+        status: VariantStatus.ACTIVE,
+        ...(q === ''
+          ? {}
+          : {
+              OR: [
+                { skuCode: { contains: q, mode: 'insensitive' } },
+                { variantLabel: { contains: q, mode: 'insensitive' } },
+                { product: { name: { contains: q, mode: 'insensitive' } } },
+              ],
+            }),
+      },
+      // The product first so a product's variants arrive together, then
+      // the SKU, so the same query always returns the same order.
+      orderBy: [{ product: { name: 'asc' } }, { skuCode: 'asc' }],
+      take: Math.min(Math.max(limit, 1), 50),
+      select: {
+        id: true,
+        skuCode: true,
+        variantLabel: true,
+        productId: true,
+        product: { select: { name: true } },
+      },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      productId: r.productId,
+      skuCode: r.skuCode,
+      variantLabel: r.variantLabel,
+      productName: r.product.name,
+    }));
   }
 
   async getById(sellerId: string, productId: string, variantId: string): Promise<VariantView> {

@@ -3,18 +3,20 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * The switch for a feature that was already enforcing itself.
+ * What a seller may configure on a SKU — and what they may not.
  *
- * R4 shipped per-unit inventory in full — a serial per unit, scan gates
- * at receiving, pick and pack, a discrepancy report — and nothing in the
- * product could turn it on. `PATCH .../inventory-mode` had zero callers,
- * and the variant page carried no stock config at all, so the per-variant
- * low-stock threshold was equally unreachable.
+ * R4 shipped per-unit inventory in full (a serial per unit, scan gates at
+ * receiving, pick and pack, a discrepancy report) with nothing in the
+ * product to turn it on, so this panel was built to close that gap. On
+ * 2026-08-19 the mode HALF was taken back out: it decides whether our
+ * staff must scan a serial for every physical unit, which is our
+ * operating procedure rather than a seller preference. A seller flipping
+ * it changes what the floor must do with every parcel of theirs, and
+ * pins their picks to refusal for SKUs nobody serialised.
  *
- * The sharpest evidence it was a real gap rather than an unfinished
- * nicety: the shipped unit-discrepancy screen tells the seller "only SKUs
- * you have set to strict per-unit tracking appear here", about a setting
- * they had no way to set.
+ * So the tests below pin two different things: that the low-stock
+ * threshold IS still theirs, and that the mode is NOT — in the UI and,
+ * more importantly, on the wire.
  */
 
 const R = (p: string): string => readFileSync(join(__dirname, p), 'utf8');
@@ -26,28 +28,49 @@ const DETAIL = R(
   '../app/(authed)/catalog/products/[id]/variants/[variantId]/_components/variant-detail.tsx',
 );
 const HOOKS = R('../lib/api-hooks.ts');
-const MODE_DTO = R('../../../api/src/modules/inventory-stock/dto/inventory-mode.dto.ts');
 const THRESHOLD_DTO = R('../../../api/src/modules/inventory-stock/dto/threshold.dto.ts');
-const CONTROLLERS =
-  R('../../../api/src/modules/inventory-stock/seller-inventory-mode.controller.ts') +
-  R('../../../api/src/modules/inventory-stock/seller-threshold.controller.ts');
+const MODE_CONTROLLER = R(
+  '../../../api/src/modules/inventory-stock/seller-inventory-mode.controller.ts',
+);
+const THRESHOLD_CONTROLLER = R(
+  '../../../api/src/modules/inventory-stock/seller-threshold.controller.ts',
+);
 
 describe('it is actually reachable', () => {
   it('the panel is mounted on the variant page', () => {
-    // The whole point. A component that exists and nothing renders is
-    // the bug, not the fix.
+    // A component that exists and nothing renders is the bug, not the fix.
     expect(DETAIL).toContain('<StockConfigPanel');
     expect(DETAIL).toContain("from './stock-config-panel'");
   });
 });
 
-describe('the wire body matches the DTOs', () => {
-  it('the mode DTO takes exactly one key, and the client sends that key', () => {
-    expect(MODE_DTO).toMatch(/inventoryMode!: InventoryMode \| null;/);
-    expect(HOOKS).toContain('readonly inventoryMode: SellerInventoryMode | null;');
+describe('unit tracking is not the seller’s to set', () => {
+  it('the panel offers no mode control at all', () => {
+    expect(PANEL).not.toContain('Unit tracking');
+    expect(PANEL).not.toContain('Use catalogue default');
+    expect(PANEL).not.toContain('inventoryMode: value');
   });
 
-  it('the threshold DTO takes exactly one key, and the client sends that key', () => {
+  it('the WRITE is gone from the server, not merely hidden in the UI', () => {
+    // FE-2: the UI is cosmetic and the server is the boundary. Hiding a
+    // control while leaving its endpoint open is a request away from the
+    // old behaviour.
+    expect(MODE_CONTROLLER).not.toContain('@Patch');
+  });
+
+  it('the client keeps no setter for it either', () => {
+    expect(HOOKS).not.toContain('useSetVariantInventoryMode');
+  });
+
+  it('the READ stays — a seller should see when their SKU is on strict', () => {
+    // Knowing why picks demand serials is theirs; choosing it is not.
+    expect(MODE_CONTROLLER).toContain('@Get(');
+    expect(PANEL).toContain('effectiveInventoryMode');
+  });
+});
+
+describe('the low-stock threshold IS the seller’s', () => {
+  it('the DTO takes exactly one key, and the client sends that key', () => {
     expect(THRESHOLD_DTO).toMatch(/lowStockThreshold!: number \| null;/);
     expect(HOOKS).toContain('readonly lowStockThreshold: number | null;');
   });
@@ -55,31 +78,9 @@ describe('the wire body matches the DTOs', () => {
   it('the key is always PRESENT — null clears, undefined is a 400', () => {
     // @IsDefined under @ValidateIf accepts an explicit null and rejects
     // undefined, so "omit it to leave it alone" does not work here.
-    for (const dto of [MODE_DTO, THRESHOLD_DTO]) {
-      expect(dto).toContain('@IsDefined()');
-      expect(dto).toMatch(/@ValidateIf\(\(_o, v\) => v !== null\)/);
-    }
-    expect(PANEL).toContain('inventoryMode: value');
+    expect(THRESHOLD_DTO).toContain('@IsDefined()');
+    expect(THRESHOLD_DTO).toMatch(/@ValidateIf\(\(_o, v\) => v !== null\)/);
     expect(PANEL).toContain('lowStockThreshold: value');
-  });
-});
-
-describe('inherit is a third state, not a synonym for normal', () => {
-  it('offers three options and sends null for the inherit one', () => {
-    // Clearing must be possible: a seller who moves the catalogue to
-    // STRICT has to be able to put one SKU back on "whatever the
-    // catalogue does" rather than pinning it to NORMAL forever.
-    expect(PANEL).toContain('<option value="">Use catalogue default</option>');
-    expect(PANEL).toContain('<option value="NORMAL"');
-    expect(PANEL).toContain('<option value="STRICT"');
-    expect(PANEL).toContain("next === '' ? null");
-  });
-
-  it('says which mode is in force when the answer is inherited', () => {
-    // "Inherit" alone does not tell anyone whether serials are required
-    // today, which is the only thing the warehouse cares about.
-    expect(PANEL).toContain('effectiveInventoryMode');
-    expect(PANEL).toContain('inherited === true');
   });
 
   it('a blank threshold clears rather than meaning zero', () => {
@@ -105,19 +106,16 @@ describe('it shows what is currently set before asking for a new value', () => {
 });
 
 describe('it gates on the permission the server enforces', () => {
-  it('the server requires catalog.manage on both writes', () => {
-    const patches = CONTROLLERS.split('@Patch(').slice(1);
-    const modeOrThreshold = patches.filter(
-      (b) => b.includes('inventory-mode') || b.includes('threshold'),
-    );
-    expect(modeOrThreshold.length).toBeGreaterThanOrEqual(2);
-    for (const b of modeOrThreshold) {
+  it('the threshold write requires catalog.manage', () => {
+    const patches = THRESHOLD_CONTROLLER.split('@Patch(').slice(1);
+    expect(patches.length).toBeGreaterThanOrEqual(1);
+    for (const b of patches) {
       expect(b.slice(0, 400)).toContain("@RequireSellerPermissions('catalog.manage')");
     }
   });
 
   it('the panel asks for catalog.manage, not the page gate', () => {
-    // The route is gated catalog.view; these writes need more.
+    // The route is gated catalog.view; the write needs more.
     expect(PANEL).toContain("can(useSellerIdentity(), 'catalog.manage')");
   });
 

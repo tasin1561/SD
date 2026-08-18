@@ -37,6 +37,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { EditReceiptPanel } from './edit-receipt-panel';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
+import { VariantPicker } from './variant-picker';
 
 const PAGE_SIZE = 25;
 
@@ -75,7 +76,7 @@ export function InboundIndex(): ReactElement {
   return (
     <div>
       <PageHeader
-        title="Inbound stock"
+        title="Add stock"
         subtitle="Consignments you are sending to the Indian warehouse, and what happened when they arrived."
         action={
           canManage ? (
@@ -124,7 +125,7 @@ export function InboundIndex(): ReactElement {
           <ErrorNote message={serverVerdict(list.error)} retry={() => void list.refetch()} />
         ) : items.length === 0 ? (
           <EmptyState
-            title="Nothing inbound"
+            title="No stock announced yet"
             description="Announce a consignment before it ships so receiving knows to expect it."
             action={
               canManage ? (
@@ -274,6 +275,9 @@ function AnnounceConsignment({
   const [sellerReference, setSellerReference] = useState('');
   const [lines, setLines] = useState<DeclareReceiptLine[]>([]);
   const [variantId, setVariantId] = useState('');
+  // What the picked variant is CALLED, so a chosen line reads back as
+  // the item rather than as the uuid that was chosen.
+  const [variantLabel, setVariantLabel] = useState<string | null>(null);
   const [qty, setQty] = useState('');
   const [unitCost, setUnitCost] = useState('');
 
@@ -282,6 +286,7 @@ function AnnounceConsignment({
     setSellerReference('');
     setLines([]);
     setVariantId('');
+    setVariantLabel(null);
     setQty('');
     setUnitCost('');
     create.reset();
@@ -319,12 +324,15 @@ function AnnounceConsignment({
         subtitle="At least one line. Unit cost is optional but makes landed cost and margin accurate."
       >
         <div className="grid gap-3 sm:grid-cols-3">
-          <FormField label="Variant id" htmlFor="gr-variant">
-            <Input
+          <FormField label="Item" htmlFor="gr-variant">
+            <VariantPicker
               id="gr-variant"
               value={variantId}
-              onChange={(e) => setVariantId(e.target.value)}
-              placeholder="From your catalog"
+              label={variantLabel}
+              onPick={(id, shown) => {
+                setVariantId(id);
+                setVariantLabel(shown);
+              }}
             />
           </FormField>
           <FormField label="Quantity" htmlFor="gr-qty">

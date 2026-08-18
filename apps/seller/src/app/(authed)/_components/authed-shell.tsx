@@ -75,7 +75,7 @@ export function AuthedShell({
       items: [
         { href: '/catalog', label: 'Products', icon: <Boxes size={15} /> },
         { href: '/inventory', label: 'Inventory', icon: <Warehouse size={15} /> },
-        { href: '/inbound', label: 'Inbound stock', icon: <PackageOpen size={15} /> },
+        { href: '/inbound', label: 'Add stock', icon: <PackageOpen size={15} /> },
         { href: '/holds', label: 'Held stock', icon: <Lock size={15} /> },
       ],
     },

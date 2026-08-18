@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import { PageHeader } from '@skydrop/ui/components';
-import { Webhook, Bell, Key, ShieldCheck } from 'lucide-react';
+import { Webhook, Bell, Key, ShieldCheck, PackageSearch } from 'lucide-react';
 import { SettingsHub, type SettingsTile } from './_components/settings-hub';
 
 /**
@@ -20,6 +20,13 @@ export default function SettingsPage(): ReactElement {
       title: 'Sign-in & sessions',
       description:
         'Who this browser is signed in as, and a way to end every session for the account at once — for a device you no longer control.',
+    },
+    {
+      href: '/settings/stock',
+      icon: <PackageSearch size={20} />,
+      title: 'Stock alerts',
+      description:
+        'The quantity at which we warn you a SKU is running out. A SKU with its own threshold ignores it.',
     },
     {
       href: '/settings/webhooks',

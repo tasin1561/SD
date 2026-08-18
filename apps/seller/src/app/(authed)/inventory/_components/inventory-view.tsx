@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo, type ReactElement } from 'react';
 import { useStockList, useStockSummary } from '@/lib/api-hooks';
-import { AlertConfigPanel } from './alert-config-panel';
 import {
   Card,
   CardBody,
@@ -88,8 +87,6 @@ export function InventoryView(): ReactElement {
           </Link>
         }
       />
-
-      <AlertConfigPanel />
 
       {cards}
 

@@ -13,6 +13,8 @@ import {
 import { useApiClient } from '@skydrop/auth/client';
 import type {
   ApiClient,
+  CreateSellerProductRequest,
+  CreateSellerVariantRequest,
   ListSellerOrdersQuery,
   ListSellerProductsQuery,
   ListSellerStockQuery,
@@ -24,12 +26,11 @@ import type {
   RegisterVariantImageRequest,
   SellerOrderEventView,
   SellerProductListResponse,
-  CreateSellerProductRequest,
-  CreateSellerVariantRequest,
   SellerProductView,
   SellerStockListResponse,
   SellerStockSummary,
   SellerVariantImageView,
+  SellerVariantSearchHit,
   SellerVariantView,
   UpdateSellerProductRequest,
   UpdateSellerVariantRequest,
@@ -536,6 +537,28 @@ export function useUpdateProduct(
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['seller-catalog'] });
     },
+  });
+}
+
+/**
+ * Type-ahead over this seller's variants.
+ *
+ * `enabled` is the caller's, so a closed picker fetches nothing. The
+ * query key carries the term, so React Query caches per term and typing
+ * backwards is instant.
+ */
+export function useVariantSearch(
+  search: string,
+  opts?: { readonly enabled?: boolean },
+): UseQueryResult<SellerVariantSearchHit[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-catalog', 'variant-search', search],
+    enabled: opts?.enabled ?? true,
+    queryFn: () =>
+      client.request<SellerVariantSearchHit[]>(
+        `/api/seller/variants?search=${encodeURIComponent(search)}&limit=20`,
+      ),
   });
 }
 

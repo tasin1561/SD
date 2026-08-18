@@ -23,6 +23,7 @@ import {
 import { serverVerdict } from '@/lib/server-verdict';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
+import { VariantPicker } from './variant-picker';
 
 /**
  * Correct a consignment that has been declared but not yet received.
@@ -60,7 +61,8 @@ interface LineDraft {
   readonly key: string;
   readonly variantId: string;
   /** SKU + product name for a line that came from the server. Null for a
-   *  line the operator is adding, which has only a variant id to go on. */
+   *  line not yet picked. The picker fills it in, so a chosen line reads
+   *  back as the item rather than as the uuid that was chosen. */
   readonly label: string | null;
   readonly expectedQty: string;
   readonly unitCostInr: string;
@@ -174,18 +176,18 @@ function EditReceiptForm({
             {form.lines.map((line) => (
               <div key={line.key} className="border-border mb-3 rounded-[7px] border p-3">
                 <div className="mb-2 flex items-start justify-between gap-3">
-                  {line.label === null ? (
-                    <FormField label="Variant id" htmlFor={`v-${line.key}`}>
-                      <Input
-                        id={`v-${line.key}`}
-                        value={line.variantId}
-                        onChange={(e) => patchLine(line.key, { variantId: e.target.value })}
-                        placeholder="From your catalog"
-                      />
-                    </FormField>
-                  ) : (
-                    <div className="text-text-bright text-sm">{line.label}</div>
-                  )}
+                  {/* Every line gets the picker, including ones that came
+                      from the server: this panel exists to CORRECT a
+                      consignment, and a line naming the wrong item could
+                      previously only be deleted and retyped. */}
+                  <FormField label="Item" htmlFor={`v-${line.key}`}>
+                    <VariantPicker
+                      id={`v-${line.key}`}
+                      value={line.variantId}
+                      label={line.label}
+                      onPick={(id, shown) => patchLine(line.key, { variantId: id, label: shown })}
+                    />
+                  </FormField>
                   <Button
                     variant="ghost"
                     size="sm"

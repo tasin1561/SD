@@ -60,6 +60,7 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [pattern: string, permissi
   ['/team/roles', 'roles.manage'],
   ['/team', 'team.view'],
   ['/profile', 'profile.view'],
+  ['/settings/stock', 'inventory.view'], // @Controller seller/stock (alert-config)
   ['/settings/api-keys', 'api_keys.manage'], // @Controller seller/api-keys
   ['/settings/webhooks', 'webhooks.manage'], // @Controller seller/webhook-endpoints
   ['/settings/notifications', 'notifications.manage'], // @Controller seller/notification-preferences

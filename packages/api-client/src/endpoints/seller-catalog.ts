@@ -171,3 +171,17 @@ export interface SellerVariantImageView {
   readonly sortOrder: number;
   readonly createdAt: string;
 }
+
+/**
+ * A variant found by searching — enough to name it in a picker and
+ * nothing more. Deliberately not SellerVariantView: a type-ahead does
+ * not need weights, dimensions or timestamps, and sending them makes
+ * every keystroke heavier.
+ */
+export interface SellerVariantSearchHit {
+  readonly id: string;
+  readonly productId: string;
+  readonly skuCode: string;
+  readonly variantLabel: string | null;
+  readonly productName: string;
+}

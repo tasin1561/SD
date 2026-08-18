@@ -13,6 +13,21 @@ export default defineConfig({
     environment: 'happy-dom',
     setupFiles: ['./src/tests/setup.ts'],
     reporters: ['default'],
+    /**
+     * 20s, not the 5s default.
+     *
+     * The god-mode specs drive `user-event`, which types a 30-character
+     * reason and a typed-confirm phrase one keystroke at a time, each
+     * with its own act() flush. Alone they take ~800ms a test; with
+     * eighteen files running in parallel on a loaded runner they went
+     * past 5s and failed — and a timeout reads exactly like a broken
+     * assertion, so the first look is always at code that is fine.
+     *
+     * It cost a red CI run to learn that. The limit is here to catch a
+     * hang, not to police how long a keystroke-by-keystroke form test
+     * takes, so it is set well clear of the real number.
+     */
+    testTimeout: 20_000,
   },
   resolve: {
     alias: {

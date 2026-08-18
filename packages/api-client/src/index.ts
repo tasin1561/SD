@@ -55,6 +55,7 @@ export type {
   PresignVariantImageResponse,
   RegisterVariantImageRequest,
   SellerVariantImageView,
+  SellerVariantSearchHit,
 } from './endpoints/seller-catalog';
 export type {
   PreviewPricingRequest,
