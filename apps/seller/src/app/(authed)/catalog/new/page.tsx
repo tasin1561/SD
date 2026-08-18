@@ -14,7 +14,7 @@ export default function NewProductPage(): ReactElement {
     <div>
       <PageHeader
         title="New product"
-        subtitle="One product and its first variant. Importing a whole catalogue? Use the CSV import instead."
+        subtitle="One product and every variant it ships in. Reusing an existing product ID adds to that product instead. Importing a whole catalogue? Use the CSV import instead."
       />
       <NewProductForm />
     </div>
