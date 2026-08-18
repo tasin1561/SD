@@ -202,7 +202,7 @@ export function NewProductForm(): ReactElement {
             <FormField
               label="Your product ID"
               className="col-span-2"
-              hint="Optional. Your own reference — a CSV re-upload matches on this, so setting it now keeps the two in step."
+              hint="Optional, and only worth setting if you import by CSV. A re-upload matches on the SKU first; this is what tells us a NEW size or colour belongs to this product rather than to a second product with the same name."
             >
               <Input
                 value={form.externalRef}
