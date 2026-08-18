@@ -384,9 +384,7 @@ export function AppShell({
                         <div className="text-text-body truncate text-xs font-medium">
                           {identityPrimary}
                         </div>
-                        <div className="text-text-faint truncate text-xs">
-                          {identitySecondary}
-                        </div>
+                        <div className="text-text-faint truncate text-xs">{identitySecondary}</div>
                       </div>
                     ) : (
                       <Link
@@ -398,9 +396,7 @@ export function AppShell({
                         <div className="text-text-body truncate text-xs font-medium">
                           {identityPrimary}
                         </div>
-                        <div className="text-text-faint truncate text-xs">
-                          {identitySecondary}
-                        </div>
+                        <div className="text-text-faint truncate text-xs">{identitySecondary}</div>
                       </Link>
                     )}
                     <ThemeToggle />

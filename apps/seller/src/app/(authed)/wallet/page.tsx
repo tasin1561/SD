@@ -224,9 +224,7 @@ function LedgerRow({ entry }: { readonly entry: WalletEntryView }): ReactElement
       </td>
       <td className="px-3 py-2 text-text-body text-xs">
         {humanizeDirection(entry.direction)}
-        {entry.note && (
-          <div className="text-text-faint text-xs mt-0.5 italic">{entry.note}</div>
-        )}
+        {entry.note && <div className="text-text-faint text-xs mt-0.5 italic">{entry.note}</div>}
       </td>
       <td className="px-3 py-2 text-text-body text-xs">
         {entry.linkedOrderId ? (

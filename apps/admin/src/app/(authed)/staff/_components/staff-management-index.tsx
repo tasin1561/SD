@@ -155,9 +155,7 @@ export function StaffManagementIndex(): ReactElement {
                     <td className="px-3 py-2 text-text-body font-mono text-xs">
                       {u.emailDisplay}
                       {u.deletedAt && (
-                        <span className="text-critical text-xs ml-2 uppercase">
-                          Deactivated
-                        </span>
+                        <span className="text-critical text-xs ml-2 uppercase">Deactivated</span>
                       )}
                     </td>
                     <td className="px-3 py-2">

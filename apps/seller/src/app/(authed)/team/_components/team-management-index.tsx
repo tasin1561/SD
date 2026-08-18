@@ -156,13 +156,9 @@ export function TeamManagementIndex(): ReactElement {
                   <tr key={m.id} className={m.deletedAt ? 'opacity-50' : undefined}>
                     <td className="px-3 py-2 text-text-body text-xs">
                       {m.fullName}
-                      {m.isYou && (
-                        <span className="text-accent text-xs ml-2 uppercase">You</span>
-                      )}
+                      {m.isYou && <span className="text-accent text-xs ml-2 uppercase">You</span>}
                       {m.deletedAt && (
-                        <span className="text-critical text-xs ml-2 uppercase">
-                          Deactivated
-                        </span>
+                        <span className="text-critical text-xs ml-2 uppercase">Deactivated</span>
                       )}
                     </td>
                     <td className="px-3 py-2 text-text-muted font-mono text-xs">

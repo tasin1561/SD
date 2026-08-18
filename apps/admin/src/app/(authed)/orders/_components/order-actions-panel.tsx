@@ -119,9 +119,7 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
       />
       <CardBody className="space-y-4">
         <div>
-          <div className="text-text-faint text-xs uppercase tracking-wide mb-2">
-            Sane actions
-          </div>
+          <div className="text-text-faint text-xs uppercase tracking-wide mb-2">Sane actions</div>
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="destructive"
