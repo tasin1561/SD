@@ -85,3 +85,70 @@ curl -sI https://skydrop.online/ | grep -i -E 'content-security|strict-transport
 load a broken config and keeps serving the old one, but validating first
 turns "the reload failed and I have to read journalctl" into a one-line
 error at the terminal.
+
+---
+
+## A missing asset must 404, not become the homepage (2026-08-18)
+
+The marketing block served the static export with a single catch-all:
+
+```
+try_files {path} {path}.html {path}/index.html /index.html
+```
+
+That last fallback answers **any** unknown path with the landing page and a
+**200**. It is right for page routes — a static export has no server-side
+router — and wrong for anything that looks like a file.
+
+It cost us the favicons. Before they existed, `GET /favicon.ico` returned
+the homepage HTML with a 200. The cache matcher below it is
+`@html path *.html /`, which does not match `/favicon.ico`, so that
+response carried no `Cache-Control`, and **Cloudflare applied its default
+four-hour TTL and cached the homepage under `/favicon.ico`**. Publishing
+the real icon did not help: the edge kept serving its cached HTML
+(`cf-cache-status: HIT`, `age: 3114`) while the origin returned
+`image/vnd.microsoft.icon` the whole time. The same trap catches any
+mistyped asset path, and it is invisible — a 200 with a body looks fine
+until you check the content type.
+
+The fix splits the two cases. Requests with a file extension are served by
+`file_server` alone, so a miss is a real 404; everything else keeps the
+SPA fallback:
+
+```
+handle {
+    root * /var/www/skydrop-marketing
+
+    @asset path_regexp \.[A-Za-z0-9]+$
+    handle @asset {
+        file_server
+    }
+
+    handle {
+        try_files {path} {path}.html {path}/index.html /index.html
+        file_server
+    }
+}
+```
+
+Nested `handle` blocks are what make this work: Caddy sorts directives by
+type rather than by the order they are written, so two sibling `handle`s
+are mutually exclusive and the asset case genuinely wins for asset paths.
+Same reasoning as the `/api/public/invite-leads` block above it.
+
+**Verify all four, and check the CONTENT TYPE, not the status code:**
+
+```bash
+for u in /favicon.ico /og.png /brand/skydrop-icon.svg /nope.png / /request-invite; do
+  printf '%-28s %s\n' "$u" \
+    "$(curl -s -o /dev/null -w '%{http_code} %{content_type}' \
+       -H 'Host: skydrop.online' --resolve skydrop.online:443:127.0.0.1 \
+       https://skydrop.online$u)"
+done
+# assets: 200 + their real type · /nope.png: 404 · pages: 200 text/html
+```
+
+**The edge cache is separate.** Fixing the origin does not evict what
+Cloudflare already stored — that needs a dashboard purge of the affected
+URLs, or waiting out the remaining TTL. There are still no Cloudflare
+credentials on the droplet or in the repo, so this cannot be scripted.
