@@ -3,6 +3,7 @@ import { ActorType, BankChangeStatus } from '@skydrop/db';
 
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { BankAccountCipherService } from '../../seller-profile/services/bank-account-cipher.service';
 
 export interface BankChangeRequestView {
   readonly id: string;
@@ -22,7 +23,15 @@ export interface BankFieldsView {
   readonly bankName: string;
   readonly bankBranchName: string;
   readonly bankAccountName: string;
-  /** MASKED. The real number is never returned by any read path. */
+  /**
+   * In FULL, on both sides.
+   *
+   * The admin's whole job on this screen is to decide whether the new
+   * destination is one they recognise, against a document the seller
+   * sent. Four digits cannot answer that — two different accounts share
+   * them often enough that a masked comparison is theatre. Reaching this
+   * endpoint already requires `sellers.bank_change.approve`.
+   */
   readonly bankAccountNumber: string;
   readonly bankRoutingNumber: string;
   readonly bankSwiftCode: string;
@@ -40,6 +49,7 @@ export class BankChangeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
+    private readonly cipher: BankAccountCipherService,
   ) {}
 
   async listPending(): Promise<{ items: BankChangeRequestView[] }> {
@@ -53,6 +63,8 @@ export class BankChangeService {
         bankName: true,
         bankBranchName: true,
         bankAccountName: true,
+        bankAccountNumber: true,
+        bankAccountNumberKeyVersion: true,
         bankAccountNumberMasked: true,
         bankRoutingNumber: true,
         bankSwiftCode: true,
@@ -62,6 +74,8 @@ export class BankChangeService {
             bankName: true,
             bankBranchName: true,
             bankAccountName: true,
+            bankAccountNumber: true,
+            bankAccountNumberKeyVersion: true,
             bankAccountNumberMasked: true,
             bankRoutingNumber: true,
             bankSwiftCode: true,
@@ -76,15 +90,16 @@ export class BankChangeService {
         sellerId: r.sellerId,
         companyName: r.seller.companyName,
         submittedAt: r.submittedAt,
-        // Both sides masked. Equal masks are NOT proof the account is
-        // unchanged — two different numbers can end in the same four
-        // digits — which is why the admin screen says so rather than
-        // letting a reader infer it.
+        // Both sides in full, so "did the destination actually move" is
+        // answerable by looking rather than inferred from four digits.
         current: {
           bankName: r.seller.bankName ?? '',
           bankBranchName: r.seller.bankBranchName ?? '',
           bankAccountName: r.seller.bankAccountName ?? '',
-          bankAccountNumber: r.seller.bankAccountNumberMasked ?? '',
+          bankAccountNumber:
+            this.cipher.reveal(r.seller.bankAccountNumber, r.seller.bankAccountNumberKeyVersion) ??
+            r.seller.bankAccountNumberMasked ??
+            '',
           bankRoutingNumber: r.seller.bankRoutingNumber ?? '',
           bankSwiftCode: r.seller.bankSwiftCode ?? '',
         },
@@ -92,7 +107,9 @@ export class BankChangeService {
           bankName: r.bankName,
           bankBranchName: r.bankBranchName,
           bankAccountName: r.bankAccountName,
-          bankAccountNumber: r.bankAccountNumberMasked,
+          bankAccountNumber:
+            this.cipher.reveal(r.bankAccountNumber, r.bankAccountNumberKeyVersion) ??
+            r.bankAccountNumberMasked,
           bankRoutingNumber: r.bankRoutingNumber,
           bankSwiftCode: r.bankSwiftCode,
         },

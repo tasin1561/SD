@@ -181,7 +181,8 @@ export function BankChangesIndex(): ReactElement {
             // accounts can mask to the same string. So equal masks are
             // not evidence the account is unchanged, and saying so is
             // better than letting an admin infer it.
-            const maskedAlike = req.current.bankAccountNumber === req.proposed.bankAccountNumber;
+            const accountNumberUnchanged =
+              req.current.bankAccountNumber === req.proposed.bankAccountNumber;
 
             return (
               <Card key={req.id}>
@@ -189,7 +190,7 @@ export function BankChangesIndex(): ReactElement {
                   title={req.companyName}
                   subtitle={`Submitted ${new Date(req.submittedAt).toISOString().slice(0, 10)} · ${
                     // Zero is possible and is NOT a no-op request: the
-                    // account number is masked on both sides, so a
+                    // account number is shown in full on both sides, so a
                     // change confined to it shows up as no visible
                     // difference. Saying that is better than a bare
                     // "0 of 6" the reader has to explain to themselves.
@@ -241,10 +242,10 @@ export function BankChangesIndex(): ReactElement {
                       })}
                     </TBody>
                   </Table>
-                  {maskedAlike && (
+                  {accountNumberUnchanged && (
                     <p className="text-text-muted border-border border-t px-4 py-2 text-xs leading-relaxed">
-                      Both account numbers are masked, so matching masks do not prove it is the same
-                      account. Read the account name and routing number before deciding.
+                      The account number is unchanged — this request moves something else. Check
+                      what is marked changed above.
                     </p>
                   )}
                 </CardBody>

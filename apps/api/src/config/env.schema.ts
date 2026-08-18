@@ -52,7 +52,26 @@ export const envSchema = z.object({
   // --- DigitalOcean Spaces (S3-compatible object storage) ---------------
   // Credentialed vars are optional so the app boots in DEV_MOCK_SPACES mode
   // without real DO creds (used by e2e + local dev).
-  DEV_MOCK_SPACES: z.coerce.boolean().default(false),
+  // NOT `z.coerce.boolean()`. That coerces with JavaScript truthiness, so
+  // every non-empty string is TRUE — including the string "false", which
+  // is the one value somebody writing this by hand would reach for to
+  // turn it off.
+  //
+  // This ran in PRODUCTION with object storage silently mocked: presigned
+  // upload URLs came back as `mock://…`, so every logo and product image
+  // upload failed in the browser with "Failed to fetch" while the server
+  // looked healthy and every server-side probe passed. It took a long
+  // time to find precisely because nothing was broken except the scheme
+  // of a URL nobody logs.
+  //
+  // Same shape as WORKERS_ENABLED above: an explicit string, and only the
+  // two values that plainly mean yes turn it on. Anything else — absent,
+  // empty, "false", a typo — leaves real storage in use, which is the
+  // safe direction for a production default to fail.
+  DEV_MOCK_SPACES: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true' || v === '1'),
   // Send every outbound email HERE instead of to its real recipient.
   //
   // For staging, where the point is to see real mail arrive — rendered

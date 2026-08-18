@@ -327,19 +327,20 @@ type BankFieldKey = (typeof BANK_FIELDS)[number]['key'];
 type BankValues = Readonly<Record<BankFieldKey, string | null>>;
 
 /**
- * The edit form starts from the live values EXCEPT the account number,
- * which is deliberately blank: what the read returns is the masked form
- * (`••••••1234`), so prefilling the input would show a number that isn't
- * one and — worse — save the bullets as the account if the seller
- * touched any other field. Blank means "keep the stored one"; see the
- * submit handler.
+ * The edit form starts from the live values, account number included.
+ *
+ * It used to leave that field blank because the read returned only the
+ * mask, and prefilling would have shown a number that was not one — and
+ * saved the bullets as the account if any other field was touched. The
+ * read now returns it in full, so it behaves like every other field:
+ * prefilled, and sent only when it actually differs.
  */
 function bankFormFrom(profile: SellerProfileView): Record<BankFieldKey, string> {
   return {
     bankName: profile.bankName ?? '',
     bankBranchName: profile.bankBranchName ?? '',
     bankAccountName: profile.bankAccountName ?? '',
-    bankAccountNumber: '',
+    bankAccountNumber: profile.bankAccountNumber ?? '',
     bankRoutingNumber: profile.bankRoutingNumber ?? '',
     bankSwiftCode: profile.bankSwiftCode ?? '',
   };
@@ -450,14 +451,6 @@ function BankDetailsSection({
       const body: Record<string, unknown> = {};
       for (const f of BANK_FIELDS) {
         const next = form[f.key].trim();
-        if (f.key === 'bankAccountNumber') {
-          // There is nothing to diff against — the read gives us the
-          // masked form only — so blank means "keep what is stored" and
-          // retyping in full is the only way to change it.
-          if (next === '') continue;
-          body[f.key] = next;
-          continue;
-        }
         if (next === (profile[f.key] ?? '')) continue;
         body[f.key] = next === '' ? null : next;
       }
@@ -613,7 +606,7 @@ function BankDetailsSection({
               label="Account number"
               hint={
                 storedAccountNumber
-                  ? `Only the last four digits are ever shown back (${profile.bankAccountNumber ?? ''}). Leave this blank to keep the account on file, or retype the number in full to change it.`
+                  ? 'The account your payouts are sent to. Changing it goes to an admin for approval.'
                   : undefined
               }
             >

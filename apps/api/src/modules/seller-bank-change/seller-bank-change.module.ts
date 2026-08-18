@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { AuthCommonModule } from '../auth-common/auth-common.module';
+import { BankAccountCipherService } from '../seller-profile/services/bank-account-cipher.service';
 import { AdminBankChangeController } from './controllers/admin-bank-change.controller';
 import { BankChangeService } from './services/bank-change.service';
 
@@ -12,6 +13,9 @@ import { BankChangeService } from './services/bank-change.service';
 @Module({
   imports: [AuthCommonModule],
   controllers: [AdminBankChangeController],
-  providers: [BankChangeService],
+  // The cipher is provided here rather than imported from seller-profile:
+  // it is a pure function of env keys with no state, and importing that
+  // module for one stateless helper would drag its whole surface across.
+  providers: [BankChangeService, BankAccountCipherService],
 })
 export class SellerBankChangeModule {}

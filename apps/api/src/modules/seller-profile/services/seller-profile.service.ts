@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -95,10 +96,18 @@ const PROFILE_SELECT = {
   bankName: true,
   bankBranchName: true,
   bankAccountName: true,
-  // Plaintext last-4 (or the full value when length <=4). The
-  // ENCRYPTED column `bankAccountNumber` is intentionally NOT in
-  // the read projection — the masked column is the only thing
-  // clients see.
+  // The seller sees their OWN account number in full.
+  //
+  // It stays ENCRYPTED AT REST — that is what protects it if the
+  // database is ever read directly, and that has not changed. What
+  // changed is who the mask was protecting it from: the person who
+  // typed it. Showing them four digits meant they could not check
+  // their own payout destination was right, which is the one thing
+  // this screen exists for. Both columns are selected: the ciphertext
+  // to reveal, the mask as the fallback when no key version is
+  // recorded.
+  bankAccountNumber: true,
+  bankAccountNumberKeyVersion: true,
   bankAccountNumberMasked: true,
   bankRoutingNumber: true,
   bankSwiftCode: true,
@@ -137,6 +146,8 @@ const BANK_FIELDS = [
 
 @Injectable()
 export class SellerProfileService {
+  private readonly logger = new Logger(SellerProfileService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
@@ -144,6 +155,33 @@ export class SellerProfileService {
     private readonly bankCipher: BankAccountCipherService,
     private readonly spaces: SpacesService,
   ) {}
+
+  /**
+   * Decrypt an account number for the seller who owns it, DEGRADING to the
+   * masked form rather than failing the read.
+   *
+   * A profile GET also feeds the dashboard's onboarding checklist, so a
+   * retired or mis-set `BANK_ACCOUNTS_KEY_V<n>` would otherwise take out
+   * the seller's whole profile page over a value the masked column can
+   * still express truthfully. The misconfiguration is real and must be
+   * seen, so it is logged at WARN — it is just not the seller's problem.
+   */
+  private revealForDisplay(
+    stored: string | null,
+    keyVersion: number | null,
+    masked: string | null,
+  ): string | null {
+    try {
+      return this.bankCipher.reveal(stored, keyVersion) ?? masked;
+    } catch (err) {
+      this.logger.warn(
+        `bank account number could not be decrypted for display (keyVersion=${String(keyVersion)}): ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return masked;
+    }
+  }
 
   async getProfile(sellerId: string): Promise<SellerProfileView> {
     const seller = await this.prisma.client.seller.findFirst({
@@ -179,8 +217,11 @@ export class SellerProfileService {
         bankName: true,
         bankBranchName: true,
         bankAccountName: true,
-        // MASKED only. The encrypted column is unreachable from any read
-        // path, exactly as it is for the live account above.
+        // Shown in full, same as the live account above — a seller
+        // checking a change they asked for needs to see the number they
+        // are switching TO, which four digits cannot tell them.
+        bankAccountNumber: true,
+        bankAccountNumberKeyVersion: true,
         bankAccountNumberMasked: true,
         bankRoutingNumber: true,
         bankSwiftCode: true,
@@ -189,13 +230,24 @@ export class SellerProfileService {
     // Surface the masked field as `bankAccountNumber` in the API view.
     // The ENCRYPTED column is intentionally unreachable from the read
     // path; only the cipher service can decrypt it.
-    const { bankAccountNumberMasked, logoStorageKey, ...rest } = seller;
+    const {
+      bankAccountNumberMasked,
+      bankAccountNumber: bankAccountCipher,
+      bankAccountNumberKeyVersion,
+      logoStorageKey,
+      ...rest
+    } = seller;
+    const revealedAccount = this.revealForDisplay(
+      bankAccountCipher,
+      bankAccountNumberKeyVersion,
+      bankAccountNumberMasked,
+    );
     return {
       ...rest,
       // Minted per request for the authenticated owner of this profile;
       // the column holds a pointer to a private object.
       logoUrl: logoStorageKey ? await this.spaces.presignGetUrl(logoStorageKey) : null,
-      bankAccountNumber: bankAccountNumberMasked,
+      bankAccountNumber: revealedAccount,
       onboarding,
       latestBankChange:
         change === null
@@ -210,7 +262,11 @@ export class SellerProfileService {
                 bankName: change.bankName,
                 bankBranchName: change.bankBranchName,
                 bankAccountName: change.bankAccountName,
-                bankAccountNumber: change.bankAccountNumberMasked,
+                bankAccountNumber:
+                  this.bankCipher.reveal(
+                    change.bankAccountNumber,
+                    change.bankAccountNumberKeyVersion,
+                  ) ?? change.bankAccountNumberMasked,
                 bankRoutingNumber: change.bankRoutingNumber,
                 bankSwiftCode: change.bankSwiftCode,
               },
@@ -340,6 +396,12 @@ export class SellerProfileService {
         where: { id: sellerId, deletedAt: null },
         select: {
           id: true,
+          // Carried onto a change request when the seller edits some
+          // other field and leaves the number alone — without these the
+          // request stored an empty account number and the admin was
+          // asked to approve a blank.
+          bankAccountNumberMasked: true,
+          bankAccountNumberKeyVersion: true,
           bankName: true,
           bankBranchName: true,
           bankAccountName: true,
@@ -420,11 +482,22 @@ export class SellerProfileService {
               // Encrypted with the same cipher as the live column, and
               // carrying its own masked copy — a request row must never
               // be where plaintext leaks.
+              // All three move together: ciphertext, mask and the key
+              // version that decrypts it. Taking the new number's
+              // ciphertext with the old key version would produce a row
+              // nothing can read.
               bankAccountNumber: encAccount?.stored ?? existing.bankAccountNumber ?? '',
-              bankAccountNumberMasked: encAccount?.masked ?? '',
-              ...(encAccount?.keyVersion == null
+              bankAccountNumberMasked: encAccount?.masked ?? existing.bankAccountNumberMasked ?? '',
+              ...((encAccount === null
+                ? existing.bankAccountNumberKeyVersion
+                : encAccount.keyVersion) == null
                 ? {}
-                : { bankAccountNumberKeyVersion: encAccount.keyVersion }),
+                : {
+                    bankAccountNumberKeyVersion:
+                      encAccount === null
+                        ? (existing.bankAccountNumberKeyVersion ?? 0)
+                        : (encAccount.keyVersion ?? 0),
+                  }),
               bankRoutingNumber: String(
                 patched.get('bankRoutingNumber') ?? existing.bankRoutingNumber ?? '',
               ),
