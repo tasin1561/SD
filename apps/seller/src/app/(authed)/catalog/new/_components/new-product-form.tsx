@@ -2,13 +2,23 @@
 
 import { useRouter } from 'next/navigation';
 import { useMemo, useState, type FormEvent, type ReactElement } from 'react';
+import { clsx } from 'clsx';
+import { Plus, X } from 'lucide-react';
 import {
   Button,
   Card,
   CardBody,
+  CardHeader,
   FormField,
   Input,
+  Label,
+  TBody,
+  Table,
+  Td,
+  Th,
+  THead,
   Textarea,
+  Tr,
   useToast,
 } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
@@ -212,6 +222,117 @@ export function buildRows(name: string, options: ProductOption[]): VariantRow[] 
   });
 }
 
+/**
+ * A row of option values as removable chips.
+ *
+ * Chips rather than a line of bare inputs: a value is a small discrete
+ * thing, and giving each its own remove control means a mistyped colour
+ * is deleted rather than blanked — a blank input still occupies the row
+ * and reads as "one more value I have not filled in yet".
+ */
+function ValueChips({
+  values,
+  axisLabel,
+  placeholderFor,
+  onChange,
+  onAdd,
+  onRemove,
+}: {
+  readonly values: readonly string[];
+  readonly axisLabel: string;
+  readonly placeholderFor: (index: number) => string;
+  readonly onChange: (index: number, value: string) => void;
+  readonly onAdd: () => void;
+  readonly onRemove: (index: number) => void;
+}): ReactElement {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {values.map((v, vi) => (
+        <span
+          key={vi}
+          className="border-border bg-surface focus-within:ring-accent inline-flex items-center gap-1 rounded-full border py-0.5 pr-1 pl-2 focus-within:ring-2"
+        >
+          <input
+            value={v}
+            onChange={(e) => onChange(vi, e.target.value)}
+            placeholder={placeholderFor(vi)}
+            aria-label={`${axisLabel} value ${vi + 1}`}
+            maxLength={40}
+            size={Math.max(4, Math.min(14, v.length || 6))}
+            className="text-text-body min-w-0 bg-transparent py-1 text-sm outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => onRemove(vi)}
+            aria-label={`Remove ${v.trim() === '' ? `${axisLabel} value ${vi + 1}` : v.trim()}`}
+            className="text-text-muted hover:bg-surface-hover hover:text-text-bright inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors"
+          >
+            <X size={12} aria-hidden />
+          </button>
+        </span>
+      ))}
+      <Button type="button" variant="ghost" size="sm" onClick={onAdd}>
+        <Plus size={12} aria-hidden />
+        Add value
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * A setting, presented as one.
+ *
+ * The same input a bare checkbox would give, with the explanation moved
+ * OUT of the label: a control whose name is a whole sentence reads as an
+ * afterthought, and the sentence is unclickable weight on the hit area.
+ */
+function Toggle({
+  id,
+  checked,
+  onChange,
+  label,
+  hint,
+}: {
+  readonly id: string;
+  readonly checked: boolean;
+  readonly onChange: (checked: boolean) => void;
+  readonly label: string;
+  readonly hint: string;
+}): ReactElement {
+  return (
+    <div>
+      <div className="flex items-center gap-2.5">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={checked}
+          aria-labelledby={`${id}-label`}
+          onClick={() => onChange(!checked)}
+          className={clsx(
+            'focus-visible:ring-accent relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none',
+            checked ? 'bg-accent' : 'bg-border-strong',
+          )}
+        >
+          <span
+            className={clsx(
+              'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+              checked ? 'translate-x-4' : 'translate-x-0.5',
+            )}
+          />
+        </button>
+        <label
+          id={`${id}-label`}
+          className="text-text-body cursor-pointer text-sm"
+          onClick={() => onChange(!checked)}
+        >
+          {label}
+        </label>
+      </div>
+      <p className="text-text-muted mt-1 ml-[3rem] text-xs">{hint}</p>
+    </div>
+  );
+}
+
 export function NewProductForm(): ReactElement {
   const router = useRouter();
   const toast = useToast();
@@ -256,6 +377,18 @@ export function NewProductForm(): ReactElement {
   );
   const skuFor = (r: VariantRow): string => skuEdits[r.key] ?? r.suggestedSku;
   const active = rows.filter((r) => excluded[r.key] !== true);
+
+  const allIncluded = rows.length > 0 && rows.every((r) => excluded[r.key] !== true);
+
+  /** Include or exclude every generated row at once. */
+  function setAllIncluded(on: boolean): void {
+    setExcluded(() => {
+      if (on) return {};
+      const next: Record<string, true> = {};
+      for (const r of rows) next[r.key] = true;
+      return next;
+    });
+  }
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]): void {
     setForm((p) => ({ ...p, [key]: value }));
@@ -464,6 +597,28 @@ export function NewProductForm(): ReactElement {
   function addOptionValue(i: number): void {
     setOptions((p) => p.map((o, idx) => (idx === i ? { ...o, values: [...o.values, ''] } : o)));
   }
+  function removeOptionValue(i: number, vi: number): void {
+    setOptions((p) =>
+      p.map((o, idx) => {
+        if (idx !== i) return o;
+        // Never leave an option with no input at all — an empty list
+        // gives the seller nothing to type into and no obvious way back.
+        const next = o.values.filter((_, j) => j !== vi);
+        return { ...o, values: next.length === 0 ? [''] : next };
+      }),
+    );
+  }
+
+  function removeParentValue(i: number, parent: string, vi: number): void {
+    setOptions((p) =>
+      p.map((o, idx) => {
+        if (idx !== i || o.perParent === null) return o;
+        const next = (o.perParent[parent] ?? []).filter((_, j) => j !== vi);
+        return { ...o, perParent: { ...o.perParent, [parent]: next } };
+      }),
+    );
+  }
+
   function removeOption(i: number): void {
     setOptions((p) => p.filter((_, idx) => idx !== i));
   }
@@ -588,165 +743,211 @@ export function NewProductForm(): ReactElement {
         </CardBody>
       </Card>
 
+      {/* ── STEP 1 — Options ───────────────────────────────────────── */}
       <Card>
-        <CardBody>
-          <h2 className="text-text-bright text-sm font-medium">Variants</h2>
-          <p className="text-text-muted mt-1 mb-3 text-xs">
-            Stock and orders are counted against a variant, never the product. Add options only if
-            this comes in more than one — a single item needs just the SKU below.
-          </p>
+        <CardHeader
+          title="Options"
+          subtitle="What this product varies by. Names and values only — nothing here is a quantity."
+        />
+        <CardBody className="space-y-3">
+          {options.length === 0 && (
+            <p className="text-text-muted text-sm">
+              A single item needs no options — it gets one SKU below. Add one for a product that
+              comes in more than one colour, size or pack.
+            </p>
+          )}
 
           {options.map((o, i) => {
             // An option only multiplies the variants once it has a name
             // AND at least one value. Until then it is ignored, and
             // saying so is the whole point: a grey placeholder reads as
-            // a filled-in field, so two empty options look exactly like
-            // "Colour: Red" declared twice and the seller is left
-            // wondering why they got one variant.
+            // a filled-in field, so an empty option looks exactly like a
+            // declared one and the seller is left wondering why they got
+            // a single variant.
             const named = o.name.trim() !== '';
             const filled =
               o.perParent === null
                 ? o.values.some((v) => v.trim() !== '')
                 : Object.values(o.perParent).some((vs) => vs.some((v) => v.trim() !== ''));
             const incomplete = !named || !filled;
+            const axisLabel = named ? o.name.trim() : `Option ${i + 1}`;
+
             return (
-              <div key={i} className="border-border mb-3 rounded-md border p-3">
-                <div className="flex flex-wrap items-end gap-2">
-                  <FormField label="Option name" className="w-44">
+              <section
+                key={i}
+                className="border-border bg-surface-raised/40 rounded-[6px] border"
+                aria-label={axisLabel}
+              >
+                <header className="border-border flex items-center justify-between gap-3 border-b px-3 py-2">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <Label htmlFor={`option-${i}-name`} className="shrink-0">
+                      Option
+                    </Label>
                     <Input
+                      id={`option-${i}-name`}
                       value={o.name}
                       onChange={(e) => setOptionName(i, e.target.value)}
                       placeholder="e.g. Colour"
-                      aria-label={`Option ${i + 1} name`}
                       maxLength={40}
+                      className="w-44"
                     />
-                  </FormField>
-                  <Button type="button" variant="ghost" onClick={() => removeOption(i)}>
-                    Remove
-                  </Button>
-                </div>
-                {o.perParent === null ? (
-                  <div className="mt-2 flex flex-wrap items-end gap-2">
-                    {o.values.map((v, vi) => (
-                      <Input
-                        key={vi}
-                        value={v}
-                        onChange={(e) => setOptionValue(i, vi, e.target.value)}
-                        placeholder={vi === 0 ? 'e.g. Red' : 'e.g. Blue'}
-                        aria-label={`${o.name.trim() === '' ? `Option ${i + 1}` : o.name.trim()} value ${vi + 1}`}
-                        maxLength={40}
-                        className="w-28"
-                      />
-                    ))}
-                    <Button type="button" variant="ghost" onClick={() => addOptionValue(i)}>
-                      + value
-                    </Button>
                   </div>
-                ) : (
-                  <div className="mt-2 space-y-2">
-                    {parentValues.length === 0 ? (
-                      <p className="text-text-muted text-xs">
-                        Fill in{' '}
-                        {options[0]?.name.trim() === ''
-                          ? 'the first option'
-                          : options[0]?.name.trim()}{' '}
-                        first — these lists are per one of its values.
-                      </p>
-                    ) : (
-                      parentValues.map((pv) => {
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Remove ${axisLabel}`}
+                    title={`Remove ${axisLabel}`}
+                    onClick={() => removeOption(i)}
+                  >
+                    <X size={14} aria-hidden />
+                    <span className="sr-only sm:not-sr-only">Remove</span>
+                  </Button>
+                </header>
+
+                <div className="p-3">
+                  {o.perParent === null ? (
+                    <ValueChips
+                      values={o.values}
+                      axisLabel={axisLabel}
+                      placeholderFor={(vi) => (vi === 0 ? 'e.g. Red' : 'e.g. Blue')}
+                      onChange={(vi, value) => setOptionValue(i, vi, value)}
+                      onAdd={() => addOptionValue(i)}
+                      onRemove={(vi) => removeOptionValue(i, vi)}
+                    />
+                  ) : parentValues.length === 0 ? (
+                    <p className="text-text-muted text-xs">
+                      Fill in{' '}
+                      {options[0]?.name.trim() === ''
+                        ? 'the first option'
+                        : options[0]?.name.trim()}{' '}
+                      first — these lists are one per value of it.
+                    </p>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {parentValues.map((pv) => {
                         const list = o.perParent?.[pv] ?? [];
                         const any = list.some((v) => v.trim() !== '');
                         return (
-                          <div key={pv} className="flex flex-wrap items-center gap-2">
-                            <span className="text-text-body w-20 shrink-0 text-xs font-medium">
-                              {pv}
-                            </span>
-                            {list.map((v, vi) => (
-                              <Input
-                                key={vi}
-                                value={v}
-                                onChange={(e) => setParentValue(i, pv, vi, e.target.value)}
-                                aria-label={`${o.name.trim() || 'Option'} for ${pv}, value ${vi + 1}`}
-                                maxLength={40}
-                                className="w-20"
+                          <div
+                            key={pv}
+                            className="grid grid-cols-[minmax(4rem,6rem)_1fr] items-start gap-x-3 gap-y-1"
+                          >
+                            <span className="text-text-body pt-1.5 text-xs font-medium">{pv}</span>
+                            <div>
+                              <ValueChips
+                                values={list}
+                                axisLabel={`${axisLabel} for ${pv}`}
+                                placeholderFor={() => '—'}
+                                onChange={(vi, value) => setParentValue(i, pv, vi, value)}
+                                onAdd={() => addParentValue(i, pv)}
+                                onRemove={(vi) => removeParentValue(i, pv, vi)}
                               />
-                            ))}
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              onClick={() => addParentValue(i, pv)}
-                            >
-                              + value
-                            </Button>
-                            {!any && (
-                              <span className="text-text-muted text-xs">
-                                nothing listed — {pv} makes no variant
-                              </span>
-                            )}
+                              {!any && (
+                                <p className="text-text-muted mt-1 text-xs">
+                                  Nothing listed — {pv} will make no variant.
+                                </p>
+                              )}
+                            </div>
                           </div>
                         );
-                      })
-                    )}
-                  </div>
-                )}
+                      })}
+                    </div>
+                  )}
 
-                {i === 1 && (
-                  <label className="text-text-muted mt-3 flex items-center gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={o.perParent !== null}
-                      onChange={(e) => setPerParent(i, e.target.checked, parentValues)}
-                      className="h-4 w-4"
-                    />
-                    Different {o.name.trim() === '' ? 'values' : o.name.trim().toLowerCase()} per{' '}
-                    {options[0]?.name.trim().toLowerCase() === ''
-                      ? 'first option'
-                      : (options[0]?.name.trim().toLowerCase() ?? 'first option')}
-                    {' — '}
-                    tick this when they do not all run the same range.
-                  </label>
-                )}
-                {incomplete && (
-                  <p className="text-text-muted mt-2 text-xs">
-                    Not counted yet —{' '}
-                    {!named && !filled
-                      ? 'type a name and at least one value.'
-                      : !named
-                        ? 'this option needs a name.'
-                        : 'this option needs at least one value.'}{' '}
-                    The greyed-out text is an example, not something you have entered.
-                  </p>
-                )}
-              </div>
+                  {i === 1 && (
+                    <div className="border-border mt-3 border-t pt-3">
+                      <Toggle
+                        id={`option-${i}-per-parent`}
+                        checked={o.perParent !== null}
+                        onChange={(on) => setPerParent(i, on, parentValues)}
+                        label={`Different ${named ? o.name.trim().toLowerCase() : 'values'} per ${
+                          options[0]?.name.trim() === ''
+                            ? 'first option'
+                            : (options[0]?.name.trim().toLowerCase() ?? 'first option')
+                        }`}
+                        hint="Turn on when they do not all run the same range — each gets its own list, seeded from this one so you edit it down rather than type it again."
+                      />
+                    </div>
+                  )}
+
+                  {incomplete && (
+                    <p className="text-text-muted mt-3 text-xs">
+                      Not counted yet —{' '}
+                      {!named && !filled
+                        ? 'type a name and at least one value.'
+                        : !named
+                          ? 'this option needs a name.'
+                          : 'this option needs at least one value.'}{' '}
+                      The greyed-out text is an example, not something you have entered.
+                    </p>
+                  )}
+                </div>
+              </section>
             );
           })}
 
-          <Button type="button" variant="secondary" onClick={addOption}>
-            + Add an option
+          <Button type="button" variant="secondary" size="md" onClick={addOption}>
+            <Plus size={14} aria-hidden />
+            Add an option
           </Button>
+        </CardBody>
+      </Card>
 
-          <div className="mt-4">
-            <div className="text-text-muted mb-2 text-xs">
-              {options.length === 0
-                ? 'One variant'
-                : rows.length === 1 && rows[0]?.label === ''
-                  ? 'One variant — no option is complete yet, so nothing is being multiplied.'
-                  : `${active.length} variant${active.length === 1 ? '' : 's'}${
-                      rows.length !== active.length
-                        ? ` (${rows.length - active.length} excluded)`
-                        : ''
-                    }`}
-            </div>
-            <div className="space-y-2">
+      {/* ── STEP 2 — the variants those options produce ─────────────── */}
+      <Card>
+        <CardHeader
+          title="Variants"
+          subtitle="One row per orderable item. Stock and orders are counted against these, never against the product."
+          action={
+            <span className="border-border text-text-muted rounded-full border px-2 py-0.5 text-xs">
+              {rows.length === 1 && rows[0]?.label === ''
+                ? '1 variant'
+                : `${active.length} of ${rows.length} kept`}
+            </span>
+          }
+        />
+        <CardBody>
+          {options.length > 0 && rows.length === 1 && rows[0]?.label === '' && (
+            <p className="text-text-muted mb-3 text-xs">
+              No option is complete yet, so nothing is being multiplied — this is the single variant
+              the product would ship as.
+            </p>
+          )}
+
+          <Table>
+            <THead>
+              <Tr>
+                <Th className="w-10">
+                  <input
+                    type="checkbox"
+                    aria-label="Include every variant"
+                    checked={allIncluded}
+                    ref={(el) => {
+                      // Neither all nor none: the header box shows the
+                      // in-between state rather than lying in one
+                      // direction, which a plain checked/unchecked would.
+                      if (el) el.indeterminate = !allIncluded && active.length > 0;
+                    }}
+                    onChange={(e) => setAllIncluded(e.target.checked)}
+                    className="h-4 w-4 align-middle"
+                    disabled={rows.length < 2}
+                  />
+                </Th>
+                <Th>Variant</Th>
+                <Th>SKU</Th>
+              </Tr>
+            </THead>
+            <TBody>
               {rows.map((r) => {
                 const on = excluded[r.key] !== true;
                 return (
-                  <div key={r.key} className="flex flex-wrap items-center gap-2">
-                    {options.length > 0 && (
+                  <Tr key={r.key} className={on ? undefined : 'opacity-55'}>
+                    <Td>
                       <input
                         type="checkbox"
                         checked={on}
-                        aria-label={`Stock ${r.label}`}
+                        aria-label={`Include ${r.label === '' ? 'this variant' : r.label}`}
                         onChange={() =>
                           setExcluded((p) => {
                             const next = { ...p };
@@ -755,27 +956,37 @@ export function NewProductForm(): ReactElement {
                             return next;
                           })
                         }
-                        className="h-4 w-4 shrink-0"
+                        className="h-4 w-4 align-middle"
+                        disabled={rows.length < 2}
                       />
-                    )}
-                    <Input
-                      value={skuFor(r)}
-                      onChange={(e) => setSkuEdits((p) => ({ ...p, [r.key]: e.target.value }))}
-                      aria-label={r.label === '' ? 'SKU' : `SKU for ${r.label}`}
-                      maxLength={80}
-                      className="w-56"
-                      disabled={!on}
-                    />
-                    {r.label !== '' && <span className="text-text-muted text-xs">{r.label}</span>}
-                  </div>
+                    </Td>
+                    <Td>
+                      {r.label === '' ? (
+                        <span className="text-text-muted">Single variant</span>
+                      ) : (
+                        <span className="text-text-body">{r.label}</span>
+                      )}
+                    </Td>
+                    <Td>
+                      <Input
+                        value={skuFor(r)}
+                        onChange={(e) => setSkuEdits((p) => ({ ...p, [r.key]: e.target.value }))}
+                        aria-label={r.label === '' ? 'SKU' : `SKU for ${r.label}`}
+                        maxLength={80}
+                        className="w-full max-w-[18rem] font-mono text-xs"
+                        disabled={!on}
+                      />
+                    </Td>
+                  </Tr>
                 );
               })}
-            </div>
-            <p className="text-text-muted mt-2 text-xs">
-              SKUs are suggested from the name — edit any of them. A SKU is permanent once saved,
-              because every order, pick and stock count refers to it.
-            </p>
-          </div>
+            </TBody>
+          </Table>
+
+          <p className="text-text-muted mt-2 text-xs">
+            SKUs are suggested from the product name — edit any of them. A SKU is permanent once
+            saved, because every order, pick and stock count refers to it.
+          </p>
         </CardBody>
       </Card>
 

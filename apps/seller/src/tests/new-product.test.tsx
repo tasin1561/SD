@@ -270,7 +270,9 @@ describe('an incomplete option says so instead of looking filled in', () => {
   });
 
   it('explains a count of one when options exist but none are usable', () => {
-    expect(src).toContain('no option is complete yet');
+    // Case-insensitive: the sentence moved to the start of its own line
+    // in the redesign, and capitalisation is not the behaviour pinned.
+    expect(src.toLowerCase()).toContain('no option is complete yet');
   });
 
   it('refuses two options sharing a name', () => {
@@ -278,5 +280,50 @@ describe('an incomplete option says so instead of looking filled in', () => {
     // first, so the rows multiply while recording only one axis. The
     // SKUs would look right and the data would be wrong.
     expect(src).toContain('Two options share a name');
+  });
+});
+
+/**
+ * The two steps are separate cards for a reason: defining what a product
+ * varies BY is a different question from reviewing what that produces,
+ * and one dense block made the second look like more of the first.
+ */
+describe('options and variants are two steps, not one block', () => {
+  const src = read(FORM);
+
+  it('renders the generated variants through the Table primitive', () => {
+    // Not a stacked list of divs: <Table> carries the header row, the
+    // dividers, and the below-md card layout every other table in the
+    // portal already inherits (FE-7).
+    expect(src).toContain('<THead>');
+    expect(src).toContain('<TBody>');
+    expect(src).toMatch(/<Th[ >]/);
+  });
+
+  it('offers a select-all that reflects a partial selection honestly', () => {
+    // A header box that renders unchecked while four of six rows are on
+    // is telling the seller something untrue.
+    expect(src).toContain('el.indeterminate');
+    expect(src).toContain('setAllIncluded');
+  });
+
+  it('gives every option value its own remove control', () => {
+    // Deleting a mistyped value beats blanking it — a blank input still
+    // occupies the row and reads as one more value left unfilled.
+    expect(src).toContain('removeOptionValue');
+    expect(src).toContain('removeParentValue');
+  });
+
+  it('makes the per-value setting a switch with its explanation outside the label', () => {
+    expect(src).toContain('role="switch"');
+    expect(src).toContain('aria-checked={checked}');
+  });
+
+  it('uses the shared Button for every action — no bare text links', () => {
+    // "+ value" and "Remove" were plain text beside boxed inputs, which
+    // is what made the controls read as unrelated.
+    expect(src).toContain('Add value');
+    expect(src).toContain('variant="ghost"');
+    expect(src).toContain('variant="secondary"');
   });
 });
