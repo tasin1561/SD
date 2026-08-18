@@ -80,10 +80,4 @@ export class CreateVariantDto {
   @IsString()
   @MaxLength(64)
   barcode?: string;
-
-  @ApiProperty({ required: false, maxLength: 120 })
-  @IsOptional()
-  @IsString()
-  @MaxLength(120)
-  externalSku?: string;
 }

@@ -25,7 +25,6 @@ export interface VariantView {
   declaredValueInr: Prisma.Decimal | null;
   gstRate: Prisma.Decimal | null;
   barcode: string | null;
-  externalSku: string | null;
   status: VariantStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -45,7 +44,6 @@ const VIEW_SELECT = {
   declaredValueInr: true,
   gstRate: true,
   barcode: true,
-  externalSku: true,
   status: true,
   createdAt: true,
   updatedAt: true,
@@ -87,7 +85,6 @@ export class CatalogVariantService {
             declaredValueInr: dec(input.declaredValueInr),
             gstRate: dec(input.gstRate),
             barcode: input.barcode ?? null,
-            externalSku: input.externalSku ?? null,
           },
           select: VIEW_SELECT,
         });
@@ -174,10 +171,6 @@ export class CatalogVariantService {
     if (input.barcode !== undefined) {
       data.barcode = input.barcode;
       changes['barcode'] = input.barcode;
-    }
-    if (input.externalSku !== undefined) {
-      data.externalSku = input.externalSku;
-      changes['externalSku'] = input.externalSku;
     }
     if (Object.keys(changes).length === 0) {
       return this.getById(sellerId, productId, variantId);

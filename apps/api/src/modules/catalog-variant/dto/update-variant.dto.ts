@@ -85,11 +85,4 @@ export class UpdateVariantDto {
   @IsString()
   @MaxLength(64)
   barcode?: string | null;
-
-  @ApiProperty({ required: false, nullable: true, maxLength: 120 })
-  @IsOptional()
-  @ValidateIf((_, v) => v !== null)
-  @IsString()
-  @MaxLength(120)
-  externalSku?: string | null;
 }

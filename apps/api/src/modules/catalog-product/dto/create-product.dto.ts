@@ -38,8 +38,6 @@ export class CreateProductDto {
   @IsOptional()
   @IsString()
   @MaxLength(120)
-  externalSku?: string;
-
   @ApiProperty({ required: false, minimum: 0, description: 'Default weight in grams' })
   @IsOptional()
   @IsInt()

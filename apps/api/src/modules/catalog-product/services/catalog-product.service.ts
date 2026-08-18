@@ -18,7 +18,6 @@ export interface ProductView {
   name: string;
   description: string | null;
   externalRef: string | null;
-  externalSku: string | null;
   defaultWeightGrams: number | null;
   defaultLengthCm: Prisma.Decimal | null;
   defaultWidthCm: Prisma.Decimal | null;
@@ -35,7 +34,6 @@ const VIEW_SELECT = {
   name: true,
   description: true,
   externalRef: true,
-  externalSku: true,
   defaultWeightGrams: true,
   defaultLengthCm: true,
   defaultWidthCm: true,
@@ -73,7 +71,6 @@ export class CatalogProductService {
             name: input.name,
             description: input.description ?? null,
             externalRef: input.externalRef ?? null,
-            externalSku: input.externalSku ?? null,
             defaultWeightGrams: input.defaultWeightGrams ?? null,
             defaultLengthCm: dec(input.defaultLengthCm),
             defaultWidthCm: dec(input.defaultWidthCm),
@@ -165,7 +162,6 @@ export class CatalogProductService {
     setStr('name', 'name');
     setStr('description', 'description');
     setStr('externalRef', 'externalRef');
-    setStr('externalSku', 'externalSku');
     if (input.defaultWeightGrams !== undefined) {
       data.defaultWeightGrams = input.defaultWeightGrams;
       changes['defaultWeightGrams'] = input.defaultWeightGrams;

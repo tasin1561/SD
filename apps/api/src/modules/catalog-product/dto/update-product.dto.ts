@@ -42,8 +42,6 @@ export class UpdateProductDto {
   @ValidateIf((_, v) => v !== null)
   @IsString()
   @MaxLength(120)
-  externalSku?: string | null;
-
   @ApiProperty({ required: false, nullable: true, minimum: 0 })
   @IsOptional()
   @ValidateIf((_, v) => v !== null)

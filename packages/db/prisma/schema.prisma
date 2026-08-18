@@ -757,7 +757,6 @@ model Product {
   name                    String
   description             String?       @db.Text
   externalRef             String?       @map("external_ref")
-  externalSku             String?       @map("external_sku")
   defaultWeightGrams      Int?          @map("default_weight_grams")
   defaultLengthCm         Decimal?      @map("default_length_cm") @db.Decimal(6, 2)
   defaultWidthCm          Decimal?      @map("default_width_cm") @db.Decimal(6, 2)
@@ -792,7 +791,6 @@ model ProductVariant {
   declaredValueInr  Decimal?       @map("declared_value_inr") @db.Decimal(12, 2)
   gstRate           Decimal?       @map("gst_rate") @db.Decimal(5, 2)
   barcode           String?
-  externalSku       String?        @map("external_sku")
   status            VariantStatus  @default(ACTIVE)
   // Module 5 — inventory: per-variant low-stock threshold. Wins over
   // sellers.defaultLowStockThreshold; null = fall back to seller default.

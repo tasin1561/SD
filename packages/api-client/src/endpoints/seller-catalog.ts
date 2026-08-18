@@ -34,7 +34,6 @@ export interface SellerProductView {
   readonly name: string;
   readonly description: string | null;
   readonly externalRef: string | null;
-  readonly externalSku: string | null;
   readonly defaultWeightGrams: number | null;
   readonly defaultLengthCm: string | null;
   readonly defaultWidthCm: string | null;
@@ -62,7 +61,6 @@ export interface CreateSellerProductRequest {
   readonly name: string;
   readonly description?: string;
   readonly externalRef?: string;
-  readonly externalSku?: string;
   readonly defaultWeightGrams?: number;
   readonly defaultLengthCm?: number;
   readonly defaultWidthCm?: number;
@@ -84,7 +82,6 @@ export interface CreateSellerVariantRequest {
   readonly declaredValueInr?: number;
   readonly gstRate?: number;
   readonly barcode?: string;
-  readonly externalSku?: string;
   readonly attributes?: Record<string, unknown>;
 }
 
@@ -92,7 +89,6 @@ export interface UpdateSellerProductRequest {
   readonly name?: string;
   readonly description?: string | null;
   readonly externalRef?: string | null;
-  readonly externalSku?: string | null;
   readonly defaultWeightGrams?: number | null;
   readonly defaultLengthCm?: number | null;
   readonly defaultWidthCm?: number | null;
@@ -114,7 +110,6 @@ export interface SellerVariantView {
   readonly declaredValueInr: string | null;
   readonly gstRate: string | null;
   readonly barcode: string | null;
-  readonly externalSku: string | null;
   readonly status: VariantStatus;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -129,7 +124,6 @@ export interface UpdateSellerVariantRequest {
   readonly declaredValueInr?: number | null;
   readonly gstRate?: number | null;
   readonly barcode?: string | null;
-  readonly externalSku?: string | null;
   readonly attributes?: Record<string, unknown>;
 }
 
