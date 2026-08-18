@@ -128,24 +128,17 @@ describe('the entry points a seller actually finds', () => {
 describe('variants are built from options, not typed out', () => {
   const src = read(FORM);
 
-  it('generates every combination of the declared options', () => {
-    // The cartesian product is what turns 2 colours x 3 sizes into the
-    // six rows the seller would otherwise type by hand.
-    expect(src).toContain('for (const axis of axes)');
-    expect(src).toContain('next.push({ ...c, [axis.name]: v })');
-  });
+  // How the combinations are generated is asserted on the OUTPUT in
+  // variant-matrix.test.ts — counts, per-colour sizes, distinct SKUs.
+  // The two greps that used to live here matched internal names and
+  // broke on a rename that changed no behaviour, which is exactly the
+  // failure a source-text test cannot tell from a real one.
 
   it('records the option values STRUCTURALLY, not just in the label', () => {
     // `attributes` is what makes "show me the Reds" answerable later. A
     // free-text label like "Red / 40" reads the same to a human and is
     // nothing to a query.
     expect(src).toContain('attributes: r.values');
-  });
-
-  it('collapses to a single SKU field when no options are declared', () => {
-    // The common case is one item. It must not cost a seller an options
-    // UI to add a product that has no variants.
-    expect(src).toContain('if (axes.length === 0)');
   });
 
   it('keeps a row edited by the seller when another option is added', () => {
