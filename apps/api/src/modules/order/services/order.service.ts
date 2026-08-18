@@ -44,7 +44,6 @@ const ORDER_VIEW_INCLUDE = {
       unitWeightGrams: true,
       unitDeclaredValueInr: true,
       unitPriceInr: true,
-      hsCode: true,
       qtyReserved: true,
     },
   },
@@ -130,7 +129,6 @@ interface ResolvedLine {
   unitWeightGrams: number | null;
   unitDeclaredValueInr: Prisma.Decimal | null;
   unitPriceInr: Prisma.Decimal | null;
-  hsCode: string | null;
 }
 
 export interface CreateOrderOptions {
@@ -392,7 +390,6 @@ export class OrderService {
                 unitWeightGrams: l.unitWeightGrams,
                 unitDeclaredValueInr: l.unitDeclaredValueInr,
                 unitPriceInr: l.unitPriceInr,
-                hsCode: l.hsCode,
               })),
             },
           },
@@ -580,7 +577,6 @@ export class OrderService {
         unitDeclaredValueInr: v.declaredValueInr,
         unitPriceInr:
           item.unitPriceInr !== undefined ? new Prisma.Decimal(item.unitPriceInr) : null,
-        hsCode: v.hsCode,
       };
     });
   }
@@ -872,7 +868,6 @@ export class OrderService {
             unitWeightGrams: l.unitWeightGrams,
             unitDeclaredValueInr: l.unitDeclaredValueInr,
             unitPriceInr: l.unitPriceInr,
-            hsCode: l.hsCode,
           })),
         };
       }
@@ -1234,7 +1229,6 @@ export class OrderService {
         liData.imageUrl = resolved.imageUrl;
         liData.unitWeightGrams = resolved.weightGrams;
         liData.unitDeclaredValueInr = resolved.declaredValueInr;
-        liData.hsCode = resolved.hsCode;
         changed.push('lineVariant');
       }
       if (patch.quantity !== line.quantity) {

@@ -18,7 +18,6 @@ interface ProductRow {
   sellerId: string;
   name: string;
   externalRef: string | null;
-  defaultHsCode: string | null;
   deletedAt: Date | null;
 }
 interface VariantRow {
@@ -28,7 +27,6 @@ interface VariantRow {
   skuCode: string;
   attributes: unknown;
   weightGrams: number | null;
-  hsCode: string | null;
   barcode: string | null;
   deletedAt: Date | null;
 }

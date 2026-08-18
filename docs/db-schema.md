@@ -324,8 +324,9 @@ IN pincode cache (hybrid — grows organically + service area classification).
 > `category_attribute_definitions` and `products.category_id` are gone,
 > along with the `category_proposal_status` and `attribute_value_type`
 > enums. They contributed exactly two things to a live order — a
-> fallback for `hsCode` and one for `gstRate` — and both survive: hsCode
-> falls back to the product, gstRate to `pricing.gst_rate`. The other
+> fallback for `hsCode` and one for `gstRate`. `gstRate` survives and
+> falls back to `pricing.gst_rate`; `hsCode` was itself removed on
+> 2026-08-18 (see below). The other
 > category columns (`default_package_type`, `requires_fragile`,
 > `requires_cold_chain`) were written and never read, and
 > `category_courier_rules` had no reader at all.
@@ -362,7 +363,8 @@ The actual SKUs. **THE most-referenced table — what stock and orders track.**
 - `attributes: Json?` — free-form (size/color/etc.), not validated
 - `variantLabel` (short human-readable)
 - Physical overrides: `weightGrams`, `lengthCm`/`WidthCm`/`HeightCm`, `declaredValueInr` — nullable, fall back to the product defaults
-- `hsCode` (falls back to `products.defaultHsCode`), `gstRate` (falls back to the `pricing.gst_rate` system setting)
+- `gstRate` (falls back to the `pricing.gst_rate` system setting)
+- **`hsCode` was DROPPED on 2026-08-18**, along with `products.defaultHsCode` and the `order_items` / `shipment_items` snapshots of it. It was optional in every DTO and in the Delhivery payload, and printed as `—` on every invoice because production held zero non-null values. An Indian GST invoice does need HSN above the turnover thresholds, so if it returns it should return as an invoice-line concern rather than a number every seller types per variant.
 - `barcode` (indexed for warehouse scanning)
 - `externalSku` (seller's variant code if different from skuCode)
 - `status: VariantStatus`
@@ -697,7 +699,6 @@ Line items with fulfillment-state quantities.
 - Physical (per-unit snapshots): `unitWeightGrams`, `unitDeclaredValueInr`
 - Economic: `unitPriceInr`
 - Fulfillment quantities: `qtyReserved`, `qtyPicked`, `qtyPacked`, `qtyShipped`, `qtyDelivered`, `qtyReturned`
-- Customs: `hsCode`
 - Pick context: `pickedBatchId`, `pickedBinId` (filled at pick time)
 
 **Indexes:** `orderId`, `variantId`, `pickedBatchId`
@@ -925,7 +926,7 @@ Line items in each parcel.
 **Key fields:**
 - `shipmentId` (cascade), `orderItemId`
 - `quantity` (may be < orderItem.quantity if split)
-- Snapshots: `skuCode`, `productName`, `variantLabel`, `unitWeightGrams`, `unitDeclaredValueInr`, `hsCode`, `unitPriceInr`
+- Snapshots: `skuCode`, `productName`, `variantLabel`, `unitWeightGrams`, `unitDeclaredValueInr`, `unitPriceInr`
 - Pick context: `pickedBatchId`, `pickedBinId`
 
 **Indexes:** `shipmentId`, `orderItemId`, `pickedBatchId`

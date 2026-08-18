@@ -438,13 +438,27 @@ export function useCreateProduct(): UseMutationResult<
 /** Create a variant under a product. The SKU is unique per seller and
  *  immutable once set, so a duplicate comes back from the server and is
  *  surfaced verbatim (FE-2) rather than guessed at here. */
-export function useCreateVariant(
-  productId: string,
-): UseMutationResult<SellerVariantView, Error, CreateSellerVariantRequest> {
+/**
+ * The product id is a MUTATION VARIABLE, not a hook argument.
+ *
+ * Bound at render it was a trap: the create-product form does not know
+ * the id until its own first call returns, so it passed `''` and the
+ * POST went to `/seller/products//variants`. Setting the id in state
+ * right before calling does not help — the mutation in that closure was
+ * already built with the old value, so the FIRST save of every new
+ * product failed and only a second attempt worked.
+ *
+ * Taking the id per call removes the shape that allowed it.
+ */
+export function useCreateVariant(): UseMutationResult<
+  SellerVariantView,
+  Error,
+  { productId: string; body: CreateSellerVariantRequest }
+> {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body) =>
+    mutationFn: ({ productId, body }) =>
       client.request<SellerVariantView>(`/api/seller/products/${productId}/variants`, {
         method: 'POST',
         body,

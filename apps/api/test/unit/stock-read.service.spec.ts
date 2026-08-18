@@ -18,7 +18,6 @@ function resolved(over: Record<string, unknown> = {}) {
     widthCm: null,
     heightCm: null,
     declaredValueInr: null,
-    hsCode: null,
     gstRate: { toString: () => '18' },
     lowStockThreshold: null,
     ...over,

@@ -61,7 +61,6 @@ export interface OrderItemView {
   readonly unitWeightGrams: number | null;
   readonly unitDeclaredValueInr: string | null;
   readonly unitPriceInr: string | null;
-  readonly hsCode: string | null;
   readonly qtyReserved: number;
 }
 

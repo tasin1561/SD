@@ -764,7 +764,6 @@ model Product {
   defaultWidthCm          Decimal?      @map("default_width_cm") @db.Decimal(6, 2)
   defaultHeightCm         Decimal?      @map("default_height_cm") @db.Decimal(6, 2)
   defaultDeclaredValueInr Decimal?      @map("default_declared_value_inr") @db.Decimal(12, 2)
-  defaultHsCode           String?       @map("default_hs_code")
   status                  ProductStatus @default(ACTIVE)
   createdAt               DateTime      @default(now()) @map("created_at") @db.Timestamptz
   updatedAt               DateTime      @updatedAt @map("updated_at") @db.Timestamptz
@@ -792,7 +791,6 @@ model ProductVariant {
   widthCm           Decimal?       @map("width_cm") @db.Decimal(6, 2)
   heightCm          Decimal?       @map("height_cm") @db.Decimal(6, 2)
   declaredValueInr  Decimal?       @map("declared_value_inr") @db.Decimal(12, 2)
-  hsCode            String?        @map("hs_code")
   gstRate           Decimal?       @map("gst_rate") @db.Decimal(5, 2)
   barcode           String?
   externalSku       String?        @map("external_sku")
@@ -2469,7 +2467,6 @@ model OrderItem {
   qtyShipped           Int      @default(0) @map("qty_shipped")
   qtyDelivered         Int      @default(0) @map("qty_delivered")
   qtyReturned          Int      @default(0) @map("qty_returned")
-  hsCode               String?  @map("hs_code")
   pickedBatchId        String?  @map("picked_batch_id") @db.Uuid
   pickedBinId          String?  @map("picked_bin_id") @db.Uuid
   createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
@@ -2885,7 +2882,6 @@ model ShipmentItem {
   variantLabel         String?           @map("variant_label")
   unitWeightGrams      Int?              @map("unit_weight_grams")
   unitDeclaredValueInr Decimal?          @map("unit_declared_value_inr") @db.Decimal(12, 2)
-  hsCode               String?           @map("hs_code")
   unitPriceInr         Decimal?          @map("unit_price_inr") @db.Decimal(12, 2)
   pickedBatchId        String?           @map("picked_batch_id") @db.Uuid
   pickedBinId          String?           @map("picked_bin_id") @db.Uuid

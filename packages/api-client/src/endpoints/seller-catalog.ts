@@ -41,7 +41,6 @@ export interface SellerProductView {
   readonly defaultWidthCm: string | null;
   readonly defaultHeightCm: string | null;
   readonly defaultDeclaredValueInr: string | null;
-  readonly defaultHsCode: string | null;
   readonly status: ProductStatus;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -71,7 +70,6 @@ export interface CreateSellerProductRequest {
   readonly defaultWidthCm?: number;
   readonly defaultHeightCm?: number;
   readonly defaultDeclaredValueInr?: number;
-  readonly defaultHsCode?: string;
 }
 
 /**
@@ -86,7 +84,6 @@ export interface CreateSellerVariantRequest {
   readonly widthCm?: number;
   readonly heightCm?: number;
   readonly declaredValueInr?: number;
-  readonly hsCode?: string;
   readonly gstRate?: number;
   readonly barcode?: string;
   readonly externalSku?: string;
@@ -104,7 +101,6 @@ export interface UpdateSellerProductRequest {
   readonly defaultWidthCm?: number | null;
   readonly defaultHeightCm?: number | null;
   readonly defaultDeclaredValueInr?: number | null;
-  readonly defaultHsCode?: string | null;
 }
 
 export interface SellerVariantView {
@@ -119,7 +115,6 @@ export interface SellerVariantView {
   readonly widthCm: string | null;
   readonly heightCm: string | null;
   readonly declaredValueInr: string | null;
-  readonly hsCode: string | null;
   readonly gstRate: string | null;
   readonly barcode: string | null;
   readonly externalSku: string | null;
@@ -135,7 +130,6 @@ export interface UpdateSellerVariantRequest {
   readonly widthCm?: number | null;
   readonly heightCm?: number | null;
   readonly declaredValueInr?: number | null;
-  readonly hsCode?: string | null;
   readonly gstRate?: number | null;
   readonly barcode?: string | null;
   readonly externalSku?: string | null;

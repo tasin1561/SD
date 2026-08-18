@@ -13,7 +13,6 @@ export interface ResolvedOrderItem {
   readonly unitWeightGrams: number | null;
   readonly unitDeclaredValueInr: Prisma.Decimal | null;
   readonly unitPriceInr: Prisma.Decimal | null;
-  readonly hsCode: string | null;
   // Fulfillment progress (owned by Modules 5/8; read-through here).
   readonly qtyReserved: number;
   readonly qtyPicked: number;
@@ -99,7 +98,6 @@ const ORDER_SELECT = {
       unitWeightGrams: true,
       unitDeclaredValueInr: true,
       unitPriceInr: true,
-      hsCode: true,
       qtyReserved: true,
       qtyPicked: true,
       qtyPacked: true,
@@ -219,7 +217,6 @@ export class OrderReadService {
             unitWeightGrams: i.unitWeightGrams,
             unitDeclaredValueInr: i.unitDeclaredValueInr,
             unitPriceInr: i.unitPriceInr,
-            hsCode: i.hsCode,
             qtyReserved: i.qtyReserved,
             qtyPicked: i.qtyPicked,
             qtyPacked: i.qtyPacked,

@@ -72,13 +72,6 @@ export class UpdateVariantDto {
   @Min(0)
   declaredValueInr?: number | null;
 
-  @ApiProperty({ required: false, nullable: true, maxLength: 16 })
-  @IsOptional()
-  @ValidateIf((_, v) => v !== null)
-  @IsString()
-  @MaxLength(16)
-  hsCode?: string | null;
-
   @ApiProperty({ required: false, nullable: true, minimum: 0, maximum: 100 })
   @IsOptional()
   @ValidateIf((_, v) => v !== null)

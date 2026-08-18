@@ -57,11 +57,24 @@ describe('the two-call create is retry-safe', () => {
   });
 
   it('tells the seller the product already exists rather than a bare error', () => {
-    expect(src).toContain('the product was created');
+    // Case-insensitive: the sentence moved to the front of the message
+    // when it grew to name the variants that failed, and capitalisation
+    // is not the behaviour being pinned.
+    expect(src.toLowerCase()).toContain('the product was created');
   });
 
   it('relabels the button once the product is in, so the retry is honest', () => {
-    expect(src).toContain('Retry variant');
+    // "Create product" on a second press would be a lie — the product
+    // exists and only the missing variants are re-sent.
+    expect(src).toContain('Add the missing variants');
+  });
+
+  it('does not re-send variants that already landed', () => {
+    // With N variants a partial failure is normal: three of six saved.
+    // Re-sending the three that worked would fail them all on a
+    // duplicate SKU and strand the product.
+    expect(src).toContain('savedSkus');
+    expect(src).toContain('if (landed[sku] === true) continue');
   });
 
   it('omits blank optional numbers instead of sending 0', () => {
@@ -102,5 +115,139 @@ describe('the entry points a seller actually finds', () => {
     expect(src).toContain('AddVariantPanel');
     // The old empty state pushed the seller to CSV for a single variant.
     expect(src).not.toMatch(/No variants yet[\s\S]{0,300}CSV import/);
+  });
+});
+
+/**
+ * A shoe comes in Red and Blue, in sizes 40-42. That is six orderable
+ * things, six SKUs and six stock counts — not two colours with sizes
+ * hanging off them. Stock is counted against a variant and a picker
+ * picks a physical pair, so "Red" is a VALUE on the row rather than a
+ * level above it.
+ */
+describe('variants are built from options, not typed out', () => {
+  const src = read(FORM);
+
+  it('generates every combination of the declared options', () => {
+    // The cartesian product is what turns 2 colours x 3 sizes into the
+    // six rows the seller would otherwise type by hand.
+    expect(src).toContain('for (const axis of axes)');
+    expect(src).toContain('next.push({ ...c, [axis.name]: v })');
+  });
+
+  it('records the option values STRUCTURALLY, not just in the label', () => {
+    // `attributes` is what makes "show me the Reds" answerable later. A
+    // free-text label like "Red / 40" reads the same to a human and is
+    // nothing to a query.
+    expect(src).toContain('attributes: r.values');
+  });
+
+  it('collapses to a single SKU field when no options are declared', () => {
+    // The common case is one item. It must not cost a seller an options
+    // UI to add a product that has no variants.
+    expect(src).toContain('if (axes.length === 0)');
+  });
+
+  it('keeps a row edited by the seller when another option is added', () => {
+    // Rows are keyed on their VALUES, not their index — otherwise adding
+    // a size renumbers everything and moves the SKUs the seller typed
+    // onto the wrong colours.
+    expect(src).toContain('key: parts.join');
+    expect(src).toContain('skuEdits[r.key]');
+  });
+
+  it('refuses two variants sharing a SKU before the server has to', () => {
+    // Not a client-side mirror of a server rule (FE-2): the server sees
+    // one POST at a time and cannot see the collision inside one form.
+    expect(src).toContain('is used twice');
+  });
+});
+
+describe('the physical block is asked once, at product level', () => {
+  const src = read(FORM);
+
+  it('sends the product defaults rather than stamping every variant', () => {
+    // M4 resolves `variant.field ?? product.defaultField`, so a blank
+    // variant inherits. Six sizes of one shoe share all four fields.
+    for (const f of [
+      'defaultWeightGrams',
+      'defaultLengthCm',
+      'defaultWidthCm',
+      'defaultHeightCm',
+      'defaultDeclaredValueInr',
+    ]) {
+      expect(src).toContain(f);
+    }
+  });
+
+  it('does NOT put physical fields on the variant, so inheritance is live', () => {
+    // Copying the product's values onto each variant would look
+    // identical on screen and freeze them: changing the product default
+    // afterwards would move nothing.
+    expect(src).not.toMatch(/body: \{[^}]*weightGrams:/s);
+  });
+});
+
+/**
+ * The product id reaches useCreateVariant as a MUTATION VARIABLE.
+ *
+ * Bound at render it was a live bug: this form does not know the id
+ * until its own first call returns, so it passed '' and the variant POST
+ * went to `/seller/products//variants`. Setting state right before
+ * calling does not help — the mutation in that closure already captured
+ * the old value — so the FIRST save of every new product failed and only
+ * a second attempt worked.
+ */
+describe('the variant call is bound to a product id that exists', () => {
+  it('takes the product id per call, not per render', () => {
+    const hooks = read(join(__dirname, '../lib/api-hooks.ts'));
+    expect(hooks).toContain('mutationFn: ({ productId, body })');
+    expect(hooks).not.toContain('export function useCreateVariant(\n  productId: string,\n)');
+  });
+
+  it('the form never constructs the hook with a placeholder id', () => {
+    const src = read(FORM);
+    expect(src).toContain('useCreateVariant()');
+    expect(src).not.toContain("useCreateVariant(createdProductId ?? '')");
+  });
+});
+
+/**
+ * Reusing a product code ADDS to that product.
+ *
+ * Before this, the only way to add a colour was to find the product and
+ * use its own Add-variant panel; typing its code here silently created a
+ * SECOND product with the same name, which is exactly the split the code
+ * exists to prevent on a CSV re-upload. The form now follows the same
+ * rule the importer does, where the seller can see it.
+ */
+describe('an existing product code attaches instead of duplicating', () => {
+  const src = read(FORM);
+
+  it('matches the code EXACTLY, not as a search hit', () => {
+    // `search` also matches name and SKU, so a fuzzy hit would attach
+    // variants to whatever product happened to rank first.
+    expect(src).toContain("(p.externalRef ?? '').toLowerCase() === codeQuery.toLowerCase()");
+  });
+
+  it('creates no product when one already carries the code', () => {
+    expect(src).toContain('createdProductId ?? matched?.id ?? null');
+  });
+
+  it('stops demanding a name it is not going to use', () => {
+    expect(src).toContain('matched === null && !form.name.trim()');
+  });
+
+  it('shows the inherited physical values instead of copying them onto the variants', () => {
+    // Copying would look identical and freeze them: changing the product
+    // default afterwards would then move nothing.
+    expect(src).toContain('inherited === null ? form.weightGrams');
+    expect(src).toContain('disabled={inherited !== null}');
+  });
+});
+
+describe('HS code is gone from the form', () => {
+  it('does not ask for it', () => {
+    expect(read(FORM)).not.toContain('hsCode');
   });
 });

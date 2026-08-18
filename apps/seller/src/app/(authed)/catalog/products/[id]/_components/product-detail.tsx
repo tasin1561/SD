@@ -267,8 +267,6 @@ function ProductReadCard({ product }: { product: SellerProductView }): ReactElem
           </dd>
           <dt className="text-text-muted">Default declared (INR)</dt>
           <dd className="text-text-body font-mono">{product.defaultDeclaredValueInr ?? '—'}</dd>
-          <dt className="text-text-muted">Default HS code</dt>
-          <dd className="text-text-body font-mono text-xs">{product.defaultHsCode ?? '—'}</dd>
         </dl>
       </CardBody>
     </Card>
@@ -292,7 +290,6 @@ function ProductEditForm({
     product.defaultWeightGrams === null ? '' : String(product.defaultWeightGrams),
   );
   const [defaultDeclared, setDefaultDeclared] = useState(product.defaultDeclaredValueInr ?? '');
-  const [defaultHsCode, setDefaultHsCode] = useState(product.defaultHsCode ?? '');
   const [serverError, setServerError] = useState<string | null>(null);
 
   const update = useUpdateProduct(product.id);
@@ -308,7 +305,6 @@ function ProductEditForm({
         externalRef: externalRef.trim() === '' ? null : externalRef.trim(),
         defaultWeightGrams: defaultWeight === '' ? null : Number(defaultWeight),
         defaultDeclaredValueInr: defaultDeclared === '' ? null : Number(defaultDeclared),
-        defaultHsCode: defaultHsCode.trim() === '' ? null : defaultHsCode.trim(),
       });
       onSaved();
     } catch (err) {
@@ -385,14 +381,6 @@ function ProductEditForm({
               />
             </FormField>
           </div>
-          <FormField label="Default HS code" htmlFor="defaultHsCode">
-            <Input
-              id="defaultHsCode"
-              value={defaultHsCode}
-              onChange={(e) => setDefaultHsCode(e.target.value)}
-              disabled={update.isPending}
-            />
-          </FormField>
           {serverError && (
             <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-2.5 py-1.5 rounded-[5px]">
               {serverError}

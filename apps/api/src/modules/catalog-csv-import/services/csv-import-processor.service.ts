@@ -236,7 +236,6 @@ export class CsvImportProcessorService {
             widthCm: num(row.widthCm) ?? null,
             heightCm: num(row.heightCm) ?? null,
             declaredValueInr: num(row.declaredValueInr) ?? null,
-            hsCode: row.hsCode ?? null,
             barcode: row.barcode ?? null,
           },
         });
@@ -262,7 +261,6 @@ export class CsvImportProcessorService {
         defaultWidthCm: num(row.widthCm) ?? null,
         defaultHeightCm: num(row.heightCm) ?? null,
         defaultDeclaredValueInr: num(row.declaredValueInr) ?? null,
-        defaultHsCode: row.hsCode ?? null,
       },
       select: { id: true },
     });
@@ -276,13 +274,9 @@ export class CsvImportProcessorService {
   ): Promise<boolean> {
     const cur = await tx.product.findUniqueOrThrow({
       where: { id: productId },
-      select: { name: true, defaultHsCode: true },
     });
     const data: Prisma.ProductUpdateInput = {};
     if (row.productName !== cur.name) data.name = row.productName;
-    if (row.hsCode !== undefined && row.hsCode !== cur.defaultHsCode) {
-      data.defaultHsCode = row.hsCode;
-    }
     if (Object.keys(data).length === 0) return false;
     await tx.product.update({ where: { id: productId }, data });
     return true;
@@ -298,16 +292,12 @@ export class CsvImportProcessorService {
       where: { id: variantId },
       select: {
         weightGrams: true,
-        hsCode: true,
         barcode: true,
       },
     });
     const data: Prisma.ProductVariantUpdateInput = {};
     if (row.weightGrams !== undefined && row.weightGrams !== cur.weightGrams) {
       data.weightGrams = row.weightGrams;
-    }
-    if (row.hsCode !== undefined && row.hsCode !== cur.hsCode) {
-      data.hsCode = row.hsCode;
     }
     if (row.barcode !== undefined && row.barcode !== cur.barcode) {
       data.barcode = row.barcode;

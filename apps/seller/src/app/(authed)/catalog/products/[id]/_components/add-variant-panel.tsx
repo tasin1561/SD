@@ -27,7 +27,7 @@ export function AddVariantPanel({
   readonly onDone: () => void;
 }): ReactElement {
   const toast = useToast();
-  const createVariant = useCreateVariant(productId);
+  const createVariant = useCreateVariant();
   const [skuCode, setSkuCode] = useState('');
   const [variantLabel, setVariantLabel] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -43,8 +43,11 @@ export function AddVariantPanel({
     setBusy(true);
     try {
       await createVariant.mutateAsync({
-        skuCode: skuCode.trim(),
-        ...(variantLabel.trim() ? { variantLabel: variantLabel.trim() } : {}),
+        productId,
+        body: {
+          skuCode: skuCode.trim(),
+          ...(variantLabel.trim() ? { variantLabel: variantLabel.trim() } : {}),
+        },
       });
       toast.success('Variant added.');
       setSkuCode('');

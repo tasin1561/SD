@@ -18,7 +18,6 @@ export interface ProvisionShipmentItemInput {
   variantLabel?: string | null;
   unitWeightGrams?: number | null;
   unitDeclaredValueInr?: DecimalIn | null;
-  hsCode?: string | null;
   unitPriceInr?: DecimalIn | null;
 }
 
@@ -142,7 +141,6 @@ export class ShipmentProvisionService {
               unitWeightGrams: i.unitWeightGrams ?? null,
               unitDeclaredValueInr:
                 i.unitDeclaredValueInr == null ? null : new Prisma.Decimal(i.unitDeclaredValueInr),
-              hsCode: i.hsCode ?? null,
               unitPriceInr: i.unitPriceInr == null ? null : new Prisma.Decimal(i.unitPriceInr),
             })),
           },

@@ -85,11 +85,4 @@ export class UpdateProductDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   defaultDeclaredValueInr?: number | null;
-
-  @ApiProperty({ required: false, nullable: true, maxLength: 16 })
-  @IsOptional()
-  @ValidateIf((_, v) => v !== null)
-  @IsString()
-  @MaxLength(16)
-  defaultHsCode?: string | null;
 }

@@ -76,12 +76,6 @@ export class CreateProductDto {
   @Min(0)
   defaultDeclaredValueInr?: number;
 
-  @ApiProperty({ required: false, maxLength: 16 })
-  @IsOptional()
-  @IsString()
-  @MaxLength(16)
-  defaultHsCode?: string;
-
   @ApiProperty({
     required: false,
     enum: [ProductStatus.ACTIVE, ProductStatus.DRAFT],

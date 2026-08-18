@@ -35,7 +35,6 @@ export interface CoercedVariantRow {
   widthCm?: number;
   heightCm?: number;
   declaredValueInr?: number;
-  hsCode?: string;
   barcode?: string;
   attributes?: Record<string, string | number | boolean>;
 }
@@ -158,8 +157,6 @@ export class CsvParserService {
     if (h !== undefined) row.heightCm = h;
     const dv = num('declaredValueInr');
     if (dv !== undefined) row.declaredValueInr = dv;
-    const hs = get('hsCode');
-    if (hs !== undefined) row.hsCode = hs;
     const bc = get('barcode');
     if (bc !== undefined) row.barcode = bc;
     if (attributes !== undefined) row.attributes = attributes;

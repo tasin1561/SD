@@ -23,7 +23,6 @@ export interface VariantView {
   widthCm: Prisma.Decimal | null;
   heightCm: Prisma.Decimal | null;
   declaredValueInr: Prisma.Decimal | null;
-  hsCode: string | null;
   gstRate: Prisma.Decimal | null;
   barcode: string | null;
   externalSku: string | null;
@@ -44,7 +43,6 @@ const VIEW_SELECT = {
   widthCm: true,
   heightCm: true,
   declaredValueInr: true,
-  hsCode: true,
   gstRate: true,
   barcode: true,
   externalSku: true,
@@ -87,7 +85,6 @@ export class CatalogVariantService {
             widthCm: dec(input.widthCm),
             heightCm: dec(input.heightCm),
             declaredValueInr: dec(input.declaredValueInr),
-            hsCode: input.hsCode ?? null,
             gstRate: dec(input.gstRate),
             barcode: input.barcode ?? null,
             externalSku: input.externalSku ?? null,
@@ -173,10 +170,6 @@ export class CatalogVariantService {
         (data as Record<string, unknown>)[k] = dec(input[k]);
         changes[k] = input[k] ?? null;
       }
-    }
-    if (input.hsCode !== undefined) {
-      data.hsCode = input.hsCode;
-      changes['hsCode'] = input.hsCode;
     }
     if (input.barcode !== undefined) {
       data.barcode = input.barcode;

@@ -24,7 +24,6 @@ export interface ResolvedVariant {
   readonly widthCm: Prisma.Decimal | null;
   readonly heightCm: Prisma.Decimal | null;
   readonly declaredValueInr: Prisma.Decimal | null;
-  readonly hsCode: string | null;
   /** Always resolves: variant → system default (whole percent in Phase
    *  1A — see phase-1a-debt). */
   readonly gstRate: Prisma.Decimal;
@@ -63,7 +62,6 @@ const VARIANT_SELECT = {
   widthCm: true,
   heightCm: true,
   declaredValueInr: true,
-  hsCode: true,
   gstRate: true,
   lowStockThreshold: true,
   images: {
@@ -79,7 +77,6 @@ const VARIANT_SELECT = {
       defaultWidthCm: true,
       defaultHeightCm: true,
       defaultDeclaredValueInr: true,
-      defaultHsCode: true,
     },
   },
 } as const;
@@ -173,7 +170,6 @@ export class CatalogReadService {
       widthCm: row.widthCm ?? product.defaultWidthCm ?? null,
       heightCm: row.heightCm ?? product.defaultHeightCm ?? null,
       declaredValueInr: row.declaredValueInr ?? product.defaultDeclaredValueInr ?? null,
-      hsCode: row.hsCode ?? product.defaultHsCode ?? null,
       gstRate: row.gstRate ?? gstDefault,
       lowStockThreshold: row.lowStockThreshold ?? null,
       productName: product.name,

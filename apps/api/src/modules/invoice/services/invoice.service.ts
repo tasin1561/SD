@@ -112,7 +112,6 @@ export class InvoiceService {
             productName: true,
             variantLabel: true,
             skuCode: true,
-            hsCode: true,
             quantity: true,
             unitPriceInr: true,
           },
@@ -222,7 +221,6 @@ export class InvoiceService {
         description: it.variantLabel
           ? `${it.productName} (${it.variantLabel}) [${it.skuCode}]`
           : `${it.productName} [${it.skuCode}]`,
-        hsnCode: it.hsCode ?? null,
         quantity: it.quantity,
         unitPriceInr: it.unitPriceInr ? new Prisma.Decimal(it.unitPriceInr).toFixed(2) : '0.00',
         lineTotalInr: it.unitPriceInr

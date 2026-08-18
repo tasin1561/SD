@@ -27,7 +27,6 @@ interface VariantShape {
   widthCm: Prisma.Decimal | null;
   heightCm: Prisma.Decimal | null;
   declaredValueInr: Prisma.Decimal | null;
-  hsCode: string | null;
   gstRate: Prisma.Decimal | null;
   deletedAt: Date | null;
   images: { url: string; isPrimary: boolean; displayOrder: number }[];
@@ -60,7 +59,6 @@ function variant(over: Partial<VariantShape> & Pick<VariantShape, 'id'>): Varian
     widthCm: null,
     heightCm: null,
     declaredValueInr: null,
-    hsCode: null,
     gstRate: null,
     deletedAt: null,
     images: [],
@@ -95,33 +93,28 @@ describe('CatalogReadService — property inheritance precedence', () => {
       variant({
         id: 'v1',
         weightGrams: 500,
-        hsCode: 'V-HS',
         gstRate: dec('12'),
         product: product({
           defaultWeightGrams: 999,
-          defaultHsCode: 'P-HS',
         }),
       }),
     ]);
     const r = (await svc.getVariantById('v1'))!;
     expect(r.weightGrams).toBe(500);
-    expect(r.hsCode).toBe('V-HS');
     expect(r.gstRate.toString()).toBe('12');
   });
 
-  it('falls to the product for hsCode; gst falls to the system default', async () => {
+  it('falls to the product for a missing field; gst falls to the system default', async () => {
     const { svc } = makeSut([
       variant({
         id: 'v1',
         product: product({
           defaultWeightGrams: 777,
-          defaultHsCode: 'P-HS',
         }),
       }),
     ]);
     const r = (await svc.getVariantById('v1'))!;
     expect(r.weightGrams).toBe(777); // product default
-    expect(r.hsCode).toBe('P-HS'); // product default
     expect(r.gstRate.toString()).toBe('18'); // system_settings default
   });
 

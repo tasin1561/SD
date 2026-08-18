@@ -47,7 +47,6 @@ function row(over: AnyArgs = {}): AnyArgs {
         unitWeightGrams: 500,
         unitDeclaredValueInr: new Prisma.Decimal(200),
         unitPriceInr: null,
-        hsCode: '6109',
         qtyReserved: 2,
         qtyPicked: 0,
         qtyPacked: 0,

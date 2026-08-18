@@ -64,12 +64,6 @@ export class CreateVariantDto {
   @Min(0)
   declaredValueInr?: number;
 
-  @ApiProperty({ required: false, maxLength: 16 })
-  @IsOptional()
-  @IsString()
-  @MaxLength(16)
-  hsCode?: string;
-
   @ApiProperty({
     required: false,
     minimum: 0,

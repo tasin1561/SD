@@ -58,7 +58,6 @@ export interface DelhiveryAwbRequest {
   sellerInvoiceNumber?: string;
   /** Required for consignments over ₹50 000 (Indian e-way bill rules). */
   ewaybillNumber?: string;
-  hsnCode?: string;
   /** Where a failed delivery returns to, if not the pickup location. */
   returnName?: string;
   returnAddress?: string;

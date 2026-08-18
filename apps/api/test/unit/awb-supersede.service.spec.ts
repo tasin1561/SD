@@ -52,7 +52,6 @@ function oldShipment(over: AnyArgs = {}): AnyArgs {
         variantLabel: null,
         unitWeightGrams: 250,
         unitDeclaredValueInr: '499.50',
-        hsCode: null,
         unitPriceInr: '499.50',
         pickedBatchId: 'bat-1',
         pickedBinId: 'bin-1',

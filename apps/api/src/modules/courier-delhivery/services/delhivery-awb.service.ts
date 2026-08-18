@@ -236,7 +236,6 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
       ...(req.sellerAddress === undefined ? {} : { seller_add: req.sellerAddress }),
       ...(req.sellerInvoiceNumber === undefined ? {} : { seller_inv: req.sellerInvoiceNumber }),
       ...(req.ewaybillNumber === undefined ? {} : { ewbn: req.ewaybillNumber }),
-      ...(req.hsnCode === undefined ? {} : { hsn_code: req.hsnCode }),
       ...(req.returnName === undefined ? {} : { return_name: req.returnName }),
       ...(req.returnAddress === undefined ? {} : { return_add: req.returnAddress }),
       ...(req.returnCity === undefined ? {} : { return_city: req.returnCity }),

@@ -16,7 +16,6 @@ export type CsvTargetField =
   | 'widthCm'
   | 'heightCm'
   | 'declaredValueInr'
-  | 'hsCode'
   | 'barcode'
   | 'variantAttributes';
 
@@ -30,7 +29,6 @@ export const CSV_ALIAS_MAP: Record<CsvTargetField, string[]> = {
   widthCm: ['width', 'width cm', 'width (cm)'],
   heightCm: ['height', 'height cm', 'height (cm)'],
   declaredValueInr: ['price', 'value', 'declared value', 'price inr'],
-  hsCode: ['hs code', 'hs', 'harmonized code'],
   barcode: ['barcode', 'ean', 'upc'],
   variantAttributes: ['attributes', 'variant attributes', 'options'],
 };

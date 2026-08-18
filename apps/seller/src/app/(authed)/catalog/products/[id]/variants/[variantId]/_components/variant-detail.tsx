@@ -29,7 +29,7 @@ import { StockConfigPanel } from './stock-config-panel';
  * displays it as read-only.
  *
  * Editable fields: variantLabel, weightGrams, lengthCm, widthCm,
- * heightCm, declaredValueInr, hsCode, gstRate, barcode, externalSku.
+ * heightCm, declaredValueInr, gstRate, barcode, externalSku.
  * Attributes JSON is admin-tooling territory and deferred to a
  * Phase-2 attribute editor.
  *
@@ -132,8 +132,6 @@ function VariantReadCard({ variant }: { variant: SellerVariantView }): ReactElem
           </dd>
           <dt className="text-text-muted">Declared (INR)</dt>
           <dd className="text-text-body font-mono">{variant.declaredValueInr ?? '—'}</dd>
-          <dt className="text-text-muted">HS code</dt>
-          <dd className="text-text-body font-mono text-xs">{variant.hsCode ?? '—'}</dd>
           <dt className="text-text-muted">GST rate (%)</dt>
           <dd className="text-text-body font-mono">{variant.gstRate ?? '—'}</dd>
           <dt className="text-text-muted">Barcode</dt>
@@ -162,7 +160,6 @@ function VariantEditForm({
     variant.weightGrams === null ? '' : String(variant.weightGrams),
   );
   const [declaredValueInr, setDeclaredValueInr] = useState(variant.declaredValueInr ?? '');
-  const [hsCode, setHsCode] = useState(variant.hsCode ?? '');
   const [gstRate, setGstRate] = useState(variant.gstRate ?? '');
   const [barcode, setBarcode] = useState(variant.barcode ?? '');
   const [externalSku, setExternalSku] = useState(variant.externalSku ?? '');
@@ -178,7 +175,6 @@ function VariantEditForm({
         variantLabel: variantLabel.trim() === '' ? null : variantLabel.trim(),
         weightGrams: weightGrams === '' ? null : Number(weightGrams),
         declaredValueInr: declaredValueInr === '' ? null : Number(declaredValueInr),
-        hsCode: hsCode.trim() === '' ? null : hsCode.trim(),
         gstRate: gstRate === '' ? null : Number(gstRate),
         barcode: barcode.trim() === '' ? null : barcode.trim(),
         externalSku: externalSku.trim() === '' ? null : externalSku.trim(),
@@ -227,14 +223,6 @@ function VariantEditForm({
                 step="0.01"
                 value={declaredValueInr}
                 onChange={(e) => setDeclaredValueInr(e.target.value)}
-                disabled={update.isPending}
-              />
-            </FormField>
-            <FormField label="HS code" htmlFor="hsCode">
-              <Input
-                id="hsCode"
-                value={hsCode}
-                onChange={(e) => setHsCode(e.target.value)}
                 disabled={update.isPending}
               />
             </FormField>

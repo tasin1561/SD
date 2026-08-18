@@ -11,7 +11,7 @@ import PDFDocument from 'pdfkit';
  * Format follows the Indian GST Tax Invoice template:
  *   - Header: "TAX INVOICE" + Skydrop GSTIN + invoice meta
  *   - Bill To: buyer info (recipient)
- *   - Items table: SR / Description / HSN / Qty / Rate / Taxable / GST% / IGST / Total
+ *   - Items table: SR / Description / Qty / Rate / Taxable / GST% / IGST / Total
  *   - Totals row + place of supply + footer
  *
  * Numbers shown in ₹ with comma-separated lakh format.
@@ -40,7 +40,6 @@ export interface InvoicePayload {
   readonly placeOfSupplyState: string;
   readonly items: ReadonlyArray<{
     readonly description: string;
-    readonly hsnCode: string | null;
     readonly quantity: number;
     readonly unitPriceInr: string;
     readonly lineTotalInr: string;
@@ -155,8 +154,10 @@ export class InvoicePdfService {
     }
     const cols: ReadonlyArray<Col> = [
       { label: 'Sr', x: 40, w: 22, align: 'left' },
-      { label: 'Description', x: 62, w: 200, align: 'left' },
-      { label: 'HSN', x: 262, w: 50, align: 'left' },
+      // Description absorbs the 50pt the HSN column used to hold, so
+      // every column after it keeps its original x and the table still
+      // ends at 520.
+      { label: 'Description', x: 62, w: 250, align: 'left' },
       { label: 'Qty', x: 312, w: 38, align: 'right' },
       { label: 'Unit', x: 350, w: 70, align: 'right' },
       { label: 'Amount', x: 420, w: 100, align: 'right' },
@@ -187,13 +188,12 @@ export class InvoicePdfService {
       } else {
         doc.rect(40, y, 480, rowH).stroke('#eeeeee');
       }
-      const [c0, c1, c2, c3, c4, c5] = cols;
+      const [c0, c1, c2, c3, c4] = cols;
       if (c0) writeCell(c0, String(i + 1), y + 6);
       if (c1) writeCell(c1, it.description, y + 6);
-      if (c2) writeCell(c2, it.hsnCode ?? '—', y + 6);
-      if (c3) writeCell(c3, String(it.quantity), y + 6);
-      if (c4) writeCell(c4, it.unitPriceInr, y + 6);
-      if (c5) writeCell(c5, it.lineTotalInr, y + 6);
+      if (c2) writeCell(c2, String(it.quantity), y + 6);
+      if (c3) writeCell(c3, it.unitPriceInr, y + 6);
+      if (c4) writeCell(c4, it.lineTotalInr, y + 6);
       y += rowH;
     }
     doc.y = y;

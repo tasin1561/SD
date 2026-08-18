@@ -24,7 +24,6 @@ function resolvedVariant(over: Partial<Record<string, unknown>> = {}): AnyArgs {
     widthCm: null,
     heightCm: null,
     declaredValueInr: new Prisma.Decimal(200),
-    hsCode: '6109',
     gstRate: new Prisma.Decimal(18),
     lowStockThreshold: null,
     productName: 'Cotton Tee',
@@ -242,7 +241,6 @@ describe('OrderService.create', () => {
       imageUrl: 'https://cdn/x.jpg',
       quantity: 2,
       unitWeightGrams: 500,
-      hsCode: '6109',
     });
     // qtyReserved is NOT set here — it stays at its schema 0 default.
     expect(items[0]).not.toHaveProperty('qtyReserved');

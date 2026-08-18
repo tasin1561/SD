@@ -128,7 +128,6 @@ interface ProvisionableOrder {
     readonly variantLabel: string | null;
     readonly unitWeightGrams: number | null;
     readonly unitDeclaredValueInr: Prisma.Decimal | null;
-    readonly hsCode: string | null;
     readonly unitPriceInr: Prisma.Decimal | null;
   }>;
 }
@@ -319,7 +318,6 @@ export class OrderWriteService {
             variantLabel: true,
             unitWeightGrams: true,
             unitDeclaredValueInr: true,
-            hsCode: true,
             unitPriceInr: true,
           },
         },
@@ -553,7 +551,6 @@ export class OrderWriteService {
             variantLabel: i.variantLabel,
             unitWeightGrams: i.unitWeightGrams,
             unitDeclaredValueInr: i.unitDeclaredValueInr,
-            hsCode: i.hsCode,
             unitPriceInr: i.unitPriceInr,
           })),
         },
