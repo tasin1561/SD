@@ -254,6 +254,20 @@ jobs:
       DO_SPACES_BUCKET: ci-stub
       DO_SPACES_REGION: sgp1
       DO_SPACES_ENDPOINT: https://sgp1.digitaloceanspaces.com
+      # e2e MUST NOT touch live object storage. Without this the suite
+      # builds a real S3 client and calls DigitalOcean with the stub
+      # bucket above, so AWB label upload, the CSV error reports and the
+      # catalog image test all depend on a third party being reachable
+      # and answering the way they did last time. It cost a red run whose
+      # failures (NoSuchBucket, and an AWB job that therefore never
+      # confirmed its manifest) pointed at five unrelated subsystems.
+      # The browser job has always set this; e2e was the gap.
+      #
+      # Note the DO_SPACES_* names above are read by NOTHING — the app
+      # wants SPACES_ACCESS_KEY_ID / SPACES_SECRET_ACCESS_KEY — so they
+      # never stood in for credentials either. Left in place rather than
+      # deleted in the same change that fixes the red.
+      DEV_MOCK_SPACES: 'true'
 
     steps:
       - uses: actions/checkout@v4
