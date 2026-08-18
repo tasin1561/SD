@@ -2364,6 +2364,56 @@ const notificationTemplates: TemplateSeed[] = [
     bodyTemplate:
       'Hi {{ company_name }}, your Skydrop seller account has been suspended. Reason: {{ reason }}. While suspended you can still log in to view your account in read-only mode, but you cannot place new orders or modify your profile. Reach out to {{ support_email }} to resolve.',
   },
+  // ── Bank details ────────────────────────────────────────────────
+  // Where a seller's money goes is the highest-stakes thing they can
+  // change, and the person who most needs to hear about a change is the
+  // one who did NOT make it. Every one of these is sent to the account
+  // owner so an unexpected message is the alarm.
+  {
+    code: 'seller.bank_details_added.email',
+    name: 'Seller bank details added — email',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Bank details added to your Skydrop account',
+    bodyTemplate:
+      'Hi {{ company_name }}, bank details were just added to your Skydrop account. Payouts will go to {{ bank_name }}, account ending {{ account_last4 }}. Any later change to these details has to be approved by our team before it takes effect. If this was not you, contact {{ support_email }} straight away.',
+  },
+  {
+    code: 'seller.bank_details_removed.email',
+    name: 'Seller bank details removed — email',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Bank details removed from your Skydrop account',
+    bodyTemplate:
+      'Hi {{ company_name }}, the bank details on your Skydrop account were just removed, so we have nowhere to send your payouts until you add an account again. You can add one at {{ app_url }}/profile. If this was not you, contact {{ support_email }} straight away.',
+  },
+  {
+    code: 'seller.bank_change_submitted.email',
+    name: 'Seller bank change submitted — email',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'We received your bank detail change request',
+    bodyTemplate:
+      'Hi {{ company_name }}, we received a request to change the bank details on your Skydrop account to {{ bank_name }}, account ending {{ account_last4 }}. Our team reviews this before it takes effect — until then your payouts keep going to the account already on file, and no further change can be submitted. If this was not you, contact {{ support_email }} straight away.',
+  },
+  {
+    code: 'seller.bank_change_approved.email',
+    name: 'Seller bank change approved — email',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Your bank detail change is now live',
+    bodyTemplate:
+      'Hi {{ company_name }}, your bank detail change has been approved. From now on your payouts go to {{ bank_name }}, account ending {{ account_last4 }}. You can see the details at {{ app_url }}/profile. If this was not you, contact {{ support_email }} straight away.',
+  },
+  {
+    code: 'seller.bank_change_rejected.email',
+    name: 'Seller bank change rejected — email',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Your bank detail change was not approved',
+    bodyTemplate:
+      'Hi {{ company_name }}, your bank detail change was not approved. Reason: {{ reason }}. Nothing has moved — your payouts still go to the account already on file. You can correct the details and submit again at {{ app_url }}/profile, or reply to {{ support_email }} if you need a hand.',
+  },
   {
     code: 'seller.account_reapproved.email',
     name: 'Seller account reapproved — email',

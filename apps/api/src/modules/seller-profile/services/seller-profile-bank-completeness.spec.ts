@@ -62,7 +62,11 @@ function makeService(stored: StoredSeller): {
     bankAccountNumber: null,
   });
   const tx = {
-    seller: { findFirst: jest.fn().mockResolvedValue(stored), update },
+    seller: {
+      findFirst: jest.fn().mockResolvedValue(stored),
+      update,
+      findUnique: jest.fn().mockResolvedValue({ email: 's@x.com', companyName: 'Menev Store' }),
+    },
     // An EDIT of an existing account creates one of these instead of
     // writing. These tests all exercise a first-add or a removal, so it
     // is never called — but it has to exist for the code path to compile
@@ -96,6 +100,8 @@ function makeService(stored: StoredSeller): {
     onboarding as never,
     new BankAccountCipherService(makeTestEnv()),
     spaces as never,
+    { enqueue: jest.fn().mockResolvedValue('job-1') } as never,
+    makeTestEnv(),
   );
   return { svc, update };
 }

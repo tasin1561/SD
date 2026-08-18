@@ -25,6 +25,9 @@ import {
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import type { UpdateSellerProfileDto } from '../dto/update-profile.dto';
 import type { UpdateSellerBankDetailsDto } from '../dto/update-bank-details.dto';
+import { NotificationRecipientType } from '@skydrop/db';
+import { EmailQueue } from '../../email/queue/email.queue';
+import { EnvService } from '../../../config/env.service';
 import { accountForDisplay } from './bank-account-carry';
 import { BankAccountCipherService } from './bank-account-cipher.service';
 
@@ -145,6 +148,18 @@ const BANK_FIELDS = [
   ['bankSwiftCode', 'SWIFT code'],
 ] as const satisfies ReadonlyArray<readonly [keyof UpdateSellerBankDetailsDto, string]>;
 
+/**
+ * The last four digits, taken from the stored mask.
+ *
+ * The email says which account it means without putting the number in a
+ * mailbox — four digits are enough for the owner to recognise it and not
+ * enough for anyone reading their mail to use it.
+ */
+function last4(masked: string | null): string {
+  const digits = (masked ?? '').replace(/\D/g, '');
+  return digits.slice(-4);
+}
+
 @Injectable()
 export class SellerProfileService {
   private readonly logger = new Logger(SellerProfileService.name);
@@ -155,7 +170,49 @@ export class SellerProfileService {
     private readonly onboarding: SellerOnboardingService,
     private readonly bankCipher: BankAccountCipherService,
     private readonly spaces: SpacesService,
+    private readonly email: EmailQueue,
+    private readonly env: EnvService,
   ) {}
+
+  /**
+   * Tell the seller their payout destination moved.
+   *
+   * Sent on every one of these events, including the ones the seller
+   * performed themselves: the message is not a receipt, it is the alarm
+   * for the person who did NOT do it. Someone who got into the account
+   * would otherwise redirect the money in silence.
+   *
+   * Enqueued INSIDE the caller's transaction, per this repo's
+   * status-change convention — a rolled-back write must not leave a job
+   * claiming it happened.
+   */
+  private async notifyBank(
+    tx: Prisma.TransactionClient,
+    sellerId: string,
+    templateCode: string,
+    extra: Record<string, string>,
+  ): Promise<void> {
+    const seller = await tx.seller.findUnique({
+      where: { id: sellerId },
+      select: { email: true, companyName: true },
+    });
+    if (seller === null) return;
+    await this.email.enqueue({
+      templateCode,
+      recipient: {
+        type: NotificationRecipientType.SELLER,
+        id: sellerId,
+        email: seller.email,
+      },
+      variables: {
+        company_name: seller.companyName,
+        support_email: this.env.supportEmail,
+        app_url: this.env.sellerAppUrl,
+        ...extra,
+      },
+      triggerEvent: templateCode,
+    });
+  }
 
   /**
    * Decrypt an account number for the seller who owns it, DEGRADING to the
@@ -203,11 +260,18 @@ export class SellerProfileService {
     // APPROVED rows are deliberately absent — the values are simply the
     // live ones by then, and surfacing them would say "pending" about
     // something already done.
-    const change = await this.prisma.client.sellerBankChangeRequest.findFirst({
-      where: {
-        sellerId,
-        status: { in: [BankChangeStatus.PENDING, BankChangeStatus.REJECTED] },
-      },
+    // The LATEST request, whatever became of it — then shown only while
+    // it is still PENDING or was REJECTED.
+    //
+    // Filtering to those two statuses in the QUERY looks equivalent and
+    // is not: once a later change is approved, the most recent
+    // non-approved row is some older rejection, and the seller is told
+    // their change was refused while looking at the details it applied.
+    // For the same reason a second rejection REPLACES the first rather
+    // than joining it — there is one latest request, so there is one
+    // banner and one reason.
+    const latestChange = await this.prisma.client.sellerBankChangeRequest.findFirst({
+      where: { sellerId },
       orderBy: { submittedAt: 'desc' },
       select: {
         id: true,
@@ -228,6 +292,10 @@ export class SellerProfileService {
         bankSwiftCode: true,
       },
     });
+    const change =
+      latestChange !== null && latestChange.status !== BankChangeStatus.APPROVED
+        ? latestChange
+        : null;
     // Surface the masked field as `bankAccountNumber` in the API view.
     // The ENCRYPTED column is intentionally unreachable from the read
     // path; only the cipher service can decrypt it.
@@ -566,6 +634,10 @@ export class SellerProfileService {
           },
           tx,
         );
+        await this.notifyBank(tx, sellerId, 'seller.bank_change_submitted.email', {
+          bank_name: String(patched.get('bankName') ?? existing.bankName ?? ''),
+          account_last4: last4(encAccount?.masked ?? existing.bankAccountNumberMasked),
+        });
         // Deliberately NO seller.update — the live account is untouched
         // and payouts continue to it until an admin decides.
         return;
@@ -578,8 +650,18 @@ export class SellerProfileService {
           bankName: true,
           bankAccountName: true,
           bankAccountNumber: true,
+          bankAccountNumberMasked: true,
         },
       });
+      // The two direct-write outcomes. A removal is announced too: it
+      // leaves us with nowhere to send the money, which the owner should
+      // hear about whether or not they did it.
+      await (isRemoval
+        ? this.notifyBank(tx, sellerId, 'seller.bank_details_removed.email', {})
+        : this.notifyBank(tx, sellerId, 'seller.bank_details_added.email', {
+            bank_name: updated.bankName ?? '',
+            account_last4: last4(updated.bankAccountNumberMasked),
+          }));
       await this.audit.log(
         {
           actorType: ActorType.SELLER,

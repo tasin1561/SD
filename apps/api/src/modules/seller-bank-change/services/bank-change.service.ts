@@ -3,6 +3,9 @@ import { ActorType, BankChangeStatus } from '@skydrop/db';
 
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { NotificationRecipientType } from '@skydrop/db';
+import { EmailQueue } from '../../email/queue/email.queue';
+import { EnvService } from '../../../config/env.service';
 import { accountForDisplay } from '../../seller-profile/services/bank-account-carry';
 import { BankAccountCipherService } from '../../seller-profile/services/bank-account-cipher.service';
 
@@ -51,6 +54,8 @@ export class BankChangeService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
     private readonly cipher: BankAccountCipherService,
+    private readonly email: EmailQueue,
+    private readonly env: EnvService,
   ) {}
 
   async listPending(): Promise<{ items: BankChangeRequestView[] }> {
@@ -281,6 +286,45 @@ export class BankChangeService {
         },
         tx,
       );
+
+      // Tell the seller either way. An approval is the moment their money
+      // starts going somewhere else, and a rejection is the moment they
+      // need to know nothing moved and why — waiting for them to check a
+      // page they have no reason to open is not telling them.
+      //
+      // Enqueued inside the decision tx, per this repo's status-change
+      // convention: a rolled-back decision must not leave a job saying it
+      // was made.
+      const seller = await tx.seller.findUnique({
+        where: { id: req.sellerId },
+        select: { email: true, companyName: true },
+      });
+      if (seller !== null) {
+        await this.email.enqueue({
+          templateCode:
+            status === BankChangeStatus.APPROVED
+              ? 'seller.bank_change_approved.email'
+              : 'seller.bank_change_rejected.email',
+          recipient: {
+            type: NotificationRecipientType.SELLER,
+            id: req.sellerId,
+            email: seller.email,
+          },
+          variables: {
+            company_name: seller.companyName,
+            support_email: this.env.supportEmail,
+            app_url: this.env.sellerAppUrl,
+            bank_name: req.bankName,
+            // From the MASK, so the number itself never lands in a mailbox.
+            account_last4: (req.bankAccountNumberMasked ?? '').replace(/\D/g, '').slice(-4),
+            reason: reason ?? '',
+          },
+          triggerEvent:
+            status === BankChangeStatus.APPROVED
+              ? 'seller.bank_change.approved'
+              : 'seller.bank_change.rejected',
+        });
+      }
 
       return { id, status: status === BankChangeStatus.APPROVED ? 'APPROVED' : 'REJECTED' };
     });

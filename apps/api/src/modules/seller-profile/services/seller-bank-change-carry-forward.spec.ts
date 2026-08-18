@@ -57,7 +57,12 @@ async function submit(
   const create = jest.fn().mockResolvedValue({ id: 'req-1' });
   const update = jest.fn().mockResolvedValue({});
   const tx = {
-    seller: { findFirst: jest.fn().mockResolvedValue(stored), update },
+    seller: {
+      findFirst: jest.fn().mockResolvedValue(stored),
+      update,
+      // The notify helper's lookup, inside the same tx.
+      findUnique: jest.fn().mockResolvedValue({ email: 's@x.com', companyName: 'Menev Store' }),
+    },
     sellerBankChangeRequest: { create },
   };
   const prisma = {
@@ -76,6 +81,8 @@ async function submit(
     } as never,
     cipher,
     { presignGetUrl: jest.fn() } as never,
+    { enqueue: jest.fn().mockResolvedValue('job-1') } as never,
+    makeTestEnv(),
   );
 
   await svc.updateBankDetails('seller-1', patch, CTX);

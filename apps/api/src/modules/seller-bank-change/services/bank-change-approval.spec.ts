@@ -58,13 +58,19 @@ async function approve(reqAccount: {
       }),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
-    seller: { update: sellerUpdate },
+    seller: {
+      update: sellerUpdate,
+      // The email lookup inside the decision tx.
+      findUnique: jest.fn().mockResolvedValue({ email: 's@x.com', companyName: 'Menev Store' }),
+    },
   };
   const prisma = { client: { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) } };
   const svc = new BankChangeService(
     prisma as never,
     { log: jest.fn().mockResolvedValue(undefined) } as never,
     cipher,
+    { enqueue: jest.fn().mockResolvedValue('job-1') } as never,
+    makeTestEnv(),
   );
 
   await svc.approve('req-1', 'staff-1');
