@@ -1,12 +1,12 @@
 import type { SellerMe } from '@skydrop/api-client';
 import type { MenuAction } from '@skydrop/ui/components';
-import { PackagePlus } from 'lucide-react';
+import { PackagePlus, Boxes } from 'lucide-react';
 import { can } from './page-access';
 
 /**
  * What sits behind "Quick actions" in the top bar.
  *
- * One entry today; the shape is a list because more are coming. It
+ * Two entries; the shape is a list because more are coming. It
  * lives here rather than inline in the shell so the permission gating
  * is testable without mounting the whole chrome.
  *
@@ -29,6 +29,24 @@ export function quickActionsFor(
       label: 'New order',
       hint: 'Enter one order manually',
       icon: <PackagePlus size={15} />,
+    });
+  }
+
+  // After the order, deliberately: the menu is ordered by how often a
+  // seller reaches for it, and a catalogue is built once and added to
+  // occasionally while orders come in every day.
+  //
+  // Gated on catalog.manage, the permission POST /seller/products
+  // enforces — NOT the catalog.view that opens the page. Offering an
+  // action that always 403s is worse than not offering it.
+  if (can(identity, 'catalog.manage')) {
+    actions.push({
+      href: '/catalog/new',
+      label: 'New product',
+      hint: 'Add a product and its variants',
+      // The nav's Products icon, so the menu entry and the page it opens
+      // read as the same thing.
+      icon: <Boxes size={15} />,
     });
   }
 

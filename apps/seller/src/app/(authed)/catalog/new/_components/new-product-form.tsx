@@ -1,8 +1,8 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState, type FormEvent, type ReactElement } from 'react';
-import { Plus, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react';
+import { ImagePlus, Plus, X } from 'lucide-react';
 import {
   Button,
   Card,
@@ -21,7 +21,13 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
-import { useCreateProduct, useCreateVariant, useProductsList } from '@/lib/api-hooks';
+import {
+  useCreateProduct,
+  useCreateVariant,
+  usePresignImage,
+  useProductsList,
+  useRegisterImage,
+} from '@/lib/api-hooks';
 
 /**
  * Add a product and every variant it ships in, in one step.
@@ -71,6 +77,10 @@ import { useCreateProduct, useCreateVariant, useProductsList } from '@/lib/api-h
 
 export /** Two axes is the ceiling — see the note beside "Add an option". */
 const MAX_OPTIONS = 2;
+
+/** Matches the variant page's uploader, so the two behave the same. */
+const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_IMAGES_PER_VARIANT = 5;
 
 export interface ProductOption {
   /** Axis name — "Colour", "Size". */
@@ -271,6 +281,81 @@ function ValueChips({
   );
 }
 
+/**
+ * Pick images for a variant that does not exist yet.
+ *
+ * Deliberately NOT the variant page's uploader: that one uploads on drop,
+ * which it can, because its variant already has an id and an image is
+ * stored against one. Here the files are held and sent after the save, so
+ * this shows what is queued and nothing more. Thumbnails come from an
+ * object URL revoked on unmount — without that, every re-pick leaks a
+ * blob for as long as the tab is open.
+ */
+function VariantImagePicker({
+  label,
+  files,
+  onAdd,
+  onRemove,
+}: {
+  readonly label: string;
+  readonly files: readonly File[];
+  readonly onAdd: (files: FileList | null) => void;
+  readonly onRemove: (index: number) => void;
+}): ReactElement {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const previews = useMemo(() => files.map((f) => URL.createObjectURL(f)), [files]);
+  useEffect(() => () => previews.forEach((url) => URL.revokeObjectURL(url)), [previews]);
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {previews.map((url, i) => (
+        <span key={url} className="relative inline-flex">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={url}
+            alt=""
+            className="border-border h-8 w-8 rounded-[4px] border object-cover"
+          />
+          <button
+            type="button"
+            onClick={() => onRemove(i)}
+            aria-label={`Remove image ${i + 1} for ${label}`}
+            className="bg-surface border-border text-text-muted hover:text-text-bright absolute -top-1.5 -right-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full border"
+          >
+            <X size={9} aria-hidden />
+          </button>
+        </span>
+      ))}
+      {files.length < MAX_IMAGES_PER_VARIANT && (
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => inputRef.current?.click()}
+            aria-label={`Add images for ${label}`}
+          >
+            <ImagePlus size={13} aria-hidden />
+            {files.length === 0 ? 'Add' : ''}
+          </Button>
+          <input
+            ref={inputRef}
+            type="file"
+            accept={ACCEPTED_IMAGE_TYPES.join(',')}
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              onAdd(e.target.files);
+              // Clear it, so picking the same file twice still fires.
+              e.target.value = '';
+            }}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
 export function NewProductForm(): ReactElement {
   const router = useRouter();
   const toast = useToast();
@@ -278,11 +363,30 @@ export function NewProductForm(): ReactElement {
   const [options, setOptions] = useState<ProductOption[]>([]);
   /** Per-row SKU overrides and exclusions, keyed by the row key. */
   const [skuEdits, setSkuEdits] = useState<Record<string, string>>({});
+  /**
+   * Images chosen BEFORE the variants exist.
+   *
+   * An image is stored against a variant id — the presigned key is
+   * `sellers/<seller>/variants/<variant>/…` — and on this page no variant
+   * has one yet. So the files are held here in memory, keyed by row, and
+   * uploaded once each variant comes back with its id. Nothing is sent to
+   * storage for a product that is never created.
+   */
+  const [rowImages, setRowImages] = useState<Record<string, File[]>>({});
+  /**
+   * Declared value per row, where a variant is worth something different
+   * from its siblings — a gold-plated frame beside a plastic one. Blank
+   * inherits the product default above, which stays the right answer when
+   * they are all worth the same.
+   */
+  const [rowDeclared, setRowDeclared] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const createProduct = useCreateProduct();
   const createVariant = useCreateVariant();
+  const presignImage = usePresignImage();
+  const registerImage = useRegisterImage();
 
   // Look the code up as it is typed. `search` matches externalRef among
   // other columns, so the exact-match filter below is what makes this an
@@ -339,6 +443,70 @@ export function NewProductForm(): ReactElement {
     });
   }, [options]);
 
+  /**
+   * Upload one row's held files, now that its variant exists.
+   *
+   * The same three steps the variant page uses — presign, PUT straight to
+   * Spaces, register — because they are the same operation and a second
+   * implementation would drift. The PUT deliberately bypasses ApiClient:
+   * the presigned URL points at Spaces, not our origin.
+   *
+   * Returns the failures rather than throwing. A picture that did not
+   * upload must not undo a variant that did: the SKU is the thing orders
+   * and stock hang off, and an image can be added afterwards from the
+   * variant page.
+   */
+  async function uploadImagesFor(
+    variantId: string,
+    files: File[],
+    label: string,
+  ): Promise<string[]> {
+    const failures: string[] = [];
+    for (const file of files) {
+      try {
+        const presigned = await presignImage.mutateAsync({
+          variantId,
+          body: { mimeType: file.type },
+        });
+        const put = await fetch(presigned.uploadUrl, {
+          method: 'PUT',
+          body: file,
+          headers: { 'content-type': file.type },
+        });
+        if (!put.ok) throw new Error(`storage returned ${put.status}`);
+        await registerImage.mutateAsync({
+          variantId,
+          body: {
+            spacesKey: presigned.spacesKey,
+            mimeType: file.type,
+            sizeBytes: file.size,
+          },
+        });
+      } catch (err) {
+        failures.push(`${label === '' ? file.name : `${label}: ${file.name}`} — ${fmtError(err)}`);
+      }
+    }
+    return failures;
+  }
+
+  /** Accept files for one row, filtering the types the API refuses. */
+  function addImages(rowKey: string, incoming: FileList | null): void {
+    if (incoming === null) return;
+    const ok = Array.from(incoming).filter((f) => ACCEPTED_IMAGE_TYPES.includes(f.type));
+    if (ok.length === 0) return;
+    setRowImages((p) => ({
+      ...p,
+      [rowKey]: [...(p[rowKey] ?? []), ...ok].slice(0, MAX_IMAGES_PER_VARIANT),
+    }));
+  }
+
+  function removeImage(rowKey: string, index: number): void {
+    setRowImages((p) => ({
+      ...p,
+      [rowKey]: (p[rowKey] ?? []).filter((_, i) => i !== index),
+    }));
+  }
+
   function set<K extends keyof FormState>(key: K, value: FormState[K]): void {
     setForm((p) => ({ ...p, [key]: value }));
   }
@@ -365,6 +533,13 @@ export function NewProductForm(): ReactElement {
         return `SKU "${sku}" is used twice. Each variant needs its own — it is how stock and orders tell them apart.`;
       }
       seen.add(sku.toLowerCase());
+    }
+
+    for (const r of rows) {
+      const d = (rowDeclared[r.key] ?? '').trim();
+      if (d !== '' && (!Number.isFinite(Number(d)) || Number(d) < 0)) {
+        return `Declared value for ${r.label === '' ? 'the variant' : r.label} must be a number of 0 or more.`;
+      }
     }
 
     for (const [label, v] of [
@@ -440,7 +615,7 @@ export function NewProductForm(): ReactElement {
       const sku = skuFor(r).trim();
       if (landed[sku] === true) continue;
       try {
-        await createVariant.mutateAsync({
+        const created = await createVariant.mutateAsync({
           productId,
           body: {
             skuCode: sku,
@@ -449,9 +624,29 @@ export function NewProductForm(): ReactElement {
             // catalogue answerable by colour or size later. Physical
             // fields are deliberately absent: blank means inherit.
             ...(Object.keys(r.values).length > 0 ? { attributes: r.values } : {}),
+            // Only when this variant differs. Sending the product's own
+            // number here would freeze it: changing the default later
+            // would then move nothing.
+            ...(num(rowDeclared[r.key] ?? '') !== undefined
+              ? { declaredValueInr: num(rowDeclared[r.key] ?? '')! }
+              : {}),
           },
         });
         landed[sku] = true;
+
+        // The variant finally has an id, which is the thing an image is
+        // stored against. Failures are collected, not thrown: a picture
+        // that did not upload must not make a created SKU look failed and
+        // get re-sent on retry.
+        const held = rowImages[r.key] ?? [];
+        if (held.length > 0) {
+          const imageFailures = await uploadImagesFor(created.id, held, r.label);
+          if (imageFailures.length === 0) {
+            setRowImages((p) => ({ ...p, [r.key]: [] }));
+          } else {
+            failures.push(...imageFailures);
+          }
+        }
       } catch (err) {
         failures.push(`${sku}: ${fmtError(err)}`);
       }
@@ -831,6 +1026,8 @@ export function NewProductForm(): ReactElement {
               <Tr>
                 <Th>Variant</Th>
                 <Th>SKU</Th>
+                <Th align="right">Declared (₹)</Th>
+                <Th>Images</Th>
               </Tr>
             </THead>
             <TBody>
@@ -850,6 +1047,26 @@ export function NewProductForm(): ReactElement {
                       aria-label={r.label === '' ? 'SKU' : `SKU for ${r.label}`}
                       maxLength={80}
                       className="w-full max-w-[18rem] font-mono text-xs"
+                    />
+                  </Td>
+                  <Td align="right">
+                    <Input
+                      value={rowDeclared[r.key] ?? ''}
+                      onChange={(e) => setRowDeclared((p) => ({ ...p, [r.key]: e.target.value }))}
+                      aria-label={
+                        r.label === '' ? 'Declared value' : `Declared value for ${r.label}`
+                      }
+                      inputMode="decimal"
+                      placeholder={form.declaredValueInr === '' ? '—' : form.declaredValueInr}
+                      className="w-24 text-right font-mono text-xs"
+                    />
+                  </Td>
+                  <Td>
+                    <VariantImagePicker
+                      label={r.label === '' ? 'this variant' : r.label}
+                      files={rowImages[r.key] ?? []}
+                      onAdd={(files) => addImages(r.key, files)}
+                      onRemove={(index) => removeImage(r.key, index)}
                     />
                   </Td>
                 </Tr>
