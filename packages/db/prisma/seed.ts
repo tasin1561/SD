@@ -989,8 +989,8 @@ const systemSettings: SystemSettingSeed[] = [
     valueString: 'NORMAL',
     displayName: 'Default Inventory Mode',
     description:
-      "Fallback tracking mode for a seller's SKUs that don't set their own: 'NORMAL' (aggregate quantities, today's behaviour) or 'STRICT' (one scanned serial per physical unit at pick/pack/RTO). A variant's own inventory_mode always wins. Per-seller override.",
-    sellerOverridable: true,
+      "Tracking mode for a seller's SKUs: 'NORMAL' (aggregate quantities, today's behaviour) or 'STRICT' (one scanned serial per physical unit at pick/pack/RTO). ADMIN-ONLY — set here, or per seller from the seller's detail page. It decides how the warehouse floor works, so it is our operational call rather than something a seller flips from their own settings.",
+    sellerOverridable: false,
   },
   {
     key: 'inventory.strict_unit_serial_prefix',

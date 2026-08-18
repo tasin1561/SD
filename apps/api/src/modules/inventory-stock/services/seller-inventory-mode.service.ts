@@ -1,10 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ActorType, InventoryMode } from '@skydrop/db';
-import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
-import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 import { InventoryModeService } from '../../inventory-shared/inventory-mode.service';
-import type { ClientContext } from '../../seller-auth/seller-auth.service';
+import { InventoryMode } from '@skydrop/db';
 
 export interface VariantInventoryModeView {
   variantId: string;
@@ -44,8 +41,6 @@ export interface VariantInventoryModeView {
 @Injectable()
 export class SellerInventoryModeService {
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly audit: AuditLogService,
     private readonly catalog: CatalogReadService,
     private readonly modes: InventoryModeService,
   ) {}
@@ -56,57 +51,6 @@ export class SellerInventoryModeService {
     variantId: string,
   ): Promise<VariantInventoryModeView> {
     await this.assertOwnedVariant(sellerId, productId, variantId);
-    return this.view(sellerId, productId, variantId);
-  }
-
-  async setVariantMode(
-    sellerId: string,
-    productId: string,
-    variantId: string,
-    value: InventoryMode | null,
-    ctx: ClientContext,
-  ): Promise<VariantInventoryModeView> {
-    await this.assertOwnedVariant(sellerId, productId, variantId);
-
-    await this.prisma.client.$transaction(async (tx) => {
-      // Read the prior value inside the write tx so the audit's `from`
-      // is the value we actually replaced, not one a concurrent edit
-      // already moved on from.
-      const before = await tx.productVariant.findUnique({
-        where: { id: variantId },
-        select: { inventoryMode: true },
-      });
-      // Inventory writes ONLY its own scalar on the variant row — this is
-      // not a cross-module catalog read (MUST #13 governs reads).
-      await tx.productVariant.update({
-        where: { id: variantId },
-        data: { inventoryMode: value },
-      });
-      await this.audit.log(
-        {
-          actorType: ActorType.SELLER,
-          sellerId,
-          action: 'inventory.mode.variant_updated',
-          entityType: 'product_variant',
-          entityId: variantId,
-          // MEDIUM, not LOW: turning STRICT on makes every subsequent
-          // pick of this SKU refuse without scanned serials, so this is
-          // the row someone reads when a parcel is stuck on the floor.
-          severity: 'MEDIUM',
-          changes: {
-            inventoryMode: { from: before?.inventoryMode ?? null, to: value },
-          },
-          metadata: {
-            productId,
-            ipAddress: ctx.ipAddress,
-            userAgent: ctx.userAgent,
-            requestId: ctx.requestId,
-          },
-        },
-        tx,
-      );
-    });
-
     return this.view(sellerId, productId, variantId);
   }
 

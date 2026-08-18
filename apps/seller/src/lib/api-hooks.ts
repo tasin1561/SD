@@ -805,29 +805,6 @@ export function useVariantInventoryMode(
   });
 }
 
-export function useSetVariantInventoryMode(
-  productId: string,
-  variantId: string,
-): UseMutationResult<VariantInventoryModeView, Error, SetVariantInventoryModeBody> {
-  const client = useApiClient();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (body) =>
-      client.request<VariantInventoryModeView>(
-        `/api/seller/products/${productId}/variants/${variantId}/inventory-mode`,
-        { method: 'PATCH', body },
-      ),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ['seller-catalog', 'variant', variantId, 'inventory-mode'],
-      });
-      // Which SKUs are strict decides what the unit-discrepancy lists
-      // are even about.
-      void queryClient.invalidateQueries({ queryKey: ['seller-stock-units'] });
-    },
-  });
-}
-
 export function useSetVariantThreshold(
   productId: string,
   variantId: string,
