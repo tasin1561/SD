@@ -25,7 +25,7 @@ const CELLS: Cell[] = [
   },
   {
     icon: Truck,
-    title: 'Delhivery + backup couriers',
+    title: 'Courier partner + backups',
     body: 'API-primary; non-serviceable PINs quietly re-routed.',
   },
   {

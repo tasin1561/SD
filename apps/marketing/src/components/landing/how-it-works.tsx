@@ -33,7 +33,7 @@ const PHASES: Phase[] = [
     n: 'PHASE 03',
     icon: Truck,
     title: 'Pick, pack, dispatch',
-    body: 'Confirmed orders ship through Delhivery’s API. Non-serviceable PINs hand off to a backup courier automatically.',
+    body: 'Confirmed orders ship through our courier partner’s API. Non-serviceable PINs hand off to a backup courier automatically.',
   },
   {
     n: 'PHASE 04',

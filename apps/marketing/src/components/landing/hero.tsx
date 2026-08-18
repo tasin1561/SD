@@ -74,7 +74,7 @@ export function Hero(): ReactElement {
 
             <p className="boot-rise boot-rise-3 mt-6 text-fg-body text-base sm:text-lg max-w-[46ch]">
               Skydrop holds your stock in India, confirms every COD buyer by phone, and dispatches
-              through Delhivery. You sell from Bangladesh — this console is what we run for you.
+              through our courier partner. You keep selling — this console is what we run for you.
             </p>
 
             <div className="boot-rise boot-rise-4 mt-8 flex flex-wrap gap-3">

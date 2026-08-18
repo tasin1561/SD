@@ -66,15 +66,15 @@ const siteUrl = 'https://skydrop.online';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: 'Skydrop — Sell to India from Bangladesh | COD fulfillment, warehousing, remittance',
+  title: 'Skydrop — COD fulfillment, warehousing, remittance',
   description:
-    'Selling into India is a six-headed problem. Skydrop holds your stock in India, confirms every order by phone, and dispatches via Delhivery — you just sell.',
+    'Selling into India is a six-headed problem. Skydrop holds your stock in India, confirms every order by phone, and dispatches through our courier partner — you just sell.',
   robots: { index: true, follow: true },
   alternates: { canonical: siteUrl },
   openGraph: {
-    title: 'Skydrop — Sell to India from Bangladesh',
+    title: 'Skydrop — COD fulfillment, warehousing, remittance',
     description:
-      'We hold your stock in India, confirm every order by phone (COD-first), and dispatch via Delhivery. You just sell.',
+      'We hold your stock in India, confirm every order by phone (COD-first), and dispatch through our courier partner. You just sell.',
     url: siteUrl,
     siteName: 'Skydrop',
     type: 'website',
@@ -90,9 +90,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Skydrop — Sell to India from Bangladesh',
+    title: 'Skydrop — COD fulfillment, warehousing, remittance',
     description:
-      'We hold your stock in India, confirm every order by phone, and dispatch via Delhivery.',
+      'We hold your stock in India, confirm every order by phone, and dispatch through our courier partner.',
     images: ['/og.png'],
   },
 };
@@ -107,7 +107,7 @@ const organizationJsonLd = {
   logo: `${siteUrl}/brand/skydrop-logo.png`,
   email: 'hello@skydrop.online',
   description:
-    'Cross-border courier aggregator + light WMS. Bangladeshi e-commerce sellers ship into India: Skydrop handles warehousing, COD call-confirmation, Delhivery dispatch, RTO, and remittance.',
+    'Cross-border courier aggregator + light WMS. Bangladeshi e-commerce sellers ship into India: Skydrop handles warehousing, COD call-confirmation, courier dispatch, RTO, and remittance.',
   areaServed: ['BD', 'IN'],
   sameAs: [],
 };

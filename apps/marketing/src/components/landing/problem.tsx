@@ -37,7 +37,7 @@ const FAULTS: Fault[] = [
     code: 'FAULT 02',
     icon: FileSignature,
     title: 'No courier contract',
-    body: 'Delhivery and Bluedart only sign Indian entities, and price hard on volume you can’t promise.',
+    body: 'Indian carriers only sign Indian entities, and price hard on volume you can’t promise.',
   },
   {
     code: 'FAULT 03',

@@ -22,7 +22,7 @@ const EVENTS: Evt[] = [
   { code: 'STOCK_RECEIVED', detail: 'bin-level put-away' },
   { code: 'ORDER_PICKED', detail: 'FIFO batch allocation' },
   { code: 'ORDER_PACKED', detail: 'manifest attached' },
-  { code: 'AWB_GENERATED', detail: 'Delhivery API' },
+  { code: 'AWB_GENERATED', detail: 'Courier API' },
   { code: 'DISPATCHED', detail: 'handed to courier', tone: 'green' },
   { code: 'NDR_ROUTED', detail: 'unreachable — held, not shipped', tone: 'saffron' },
   { code: 'OUT_FOR_DELIVERY', detail: 'webhook tracking' },
