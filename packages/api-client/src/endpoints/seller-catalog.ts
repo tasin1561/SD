@@ -98,6 +98,12 @@ export interface UpdateSellerProductRequest {
 
 export interface SellerVariantView {
   readonly id: string;
+  /**
+   * One thumbnail for the list, presigned per request. Set by the LIST
+   * endpoint only — a detail read does not carry it, because that page
+   * loads the full image set anyway.
+   */
+  readonly primaryImageUrl?: string | null;
   readonly productId: string;
   readonly sellerId: string;
   readonly skuCode: string;

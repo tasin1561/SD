@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import { ApiError, type SellerVariantView } from '@skydrop/api-client';
-import { useUpdateVariant, useVariantDetail } from '@/lib/api-hooks';
+import type { SellerProductView } from '@skydrop/api-client';
+import { useProductDetail, useUpdateVariant, useVariantDetail } from '@/lib/api-hooks';
 import {
   Button,
   Card,
@@ -44,6 +45,9 @@ export function VariantDetailView({
   variantId: string;
 }): ReactElement {
   const detail = useVariantDetail(productId, variantId);
+  // The product, so a blank variant field can be shown as the value it
+  // actually resolves to rather than as a dash.
+  const product = useProductDetail(productId);
   const [editing, setEditing] = useState(false);
 
   return (
@@ -95,7 +99,7 @@ export function VariantDetailView({
                 onSaved={() => setEditing(false)}
               />
             ) : (
-              <VariantReadCard variant={detail.data} />
+              <VariantReadCard variant={detail.data} product={product.data} />
             )}
           </Section>
 
@@ -110,7 +114,51 @@ export function VariantDetailView({
   );
 }
 
-function VariantReadCard({ variant }: { variant: SellerVariantView }): ReactElement {
+/**
+ * A value the variant does not carry, shown as what it actually resolves
+ * to.
+ *
+ * Blank on a variant means INHERIT the product default (M4:
+ * `variant.field ?? product.defaultField`), so printing the raw null as
+ * "—" said "nothing set" about a variant the courier will happily bill
+ * and customs will happily value. The number shown is the one that gets
+ * used; the label says where it came from.
+ */
+function Inherited({
+  own,
+  fallback,
+  suffix = '',
+}: {
+  readonly own: string | number | null;
+  readonly fallback: string | number | null | undefined;
+  readonly suffix?: string;
+}): ReactElement {
+  if (own !== null && own !== '') {
+    return (
+      <>
+        {own}
+        {suffix}
+      </>
+    );
+  }
+  if (fallback === null || fallback === undefined || fallback === '') return <>—</>;
+  // Shown plainly: this IS the value the variant ships and is valued at.
+  // The tooltip says where it came from for anyone who wonders.
+  return (
+    <span title="From the product default">
+      {fallback}
+      {suffix}
+    </span>
+  );
+}
+
+function VariantReadCard({
+  variant,
+  product,
+}: {
+  variant: SellerVariantView;
+  product: SellerProductView | undefined;
+}): ReactElement {
   return (
     <Card>
       <CardBody>
@@ -121,16 +169,29 @@ function VariantReadCard({ variant }: { variant: SellerVariantView }): ReactElem
           <dd className="text-text-body">{variant.variantLabel ?? '—'}</dd>
           <dt className="text-text-muted">Weight</dt>
           <dd className="text-text-body font-mono">
-            {variant.weightGrams ? `${variant.weightGrams} g` : '—'}
+            <Inherited
+              own={variant.weightGrams}
+              fallback={product?.defaultWeightGrams}
+              suffix=" g"
+            />
           </dd>
           <dt className="text-text-muted">Dims (LxWxH cm)</dt>
           <dd className="text-text-body font-mono text-xs">
-            {variant.lengthCm
-              ? `${variant.lengthCm} × ${variant.widthCm ?? '—'} × ${variant.heightCm ?? '—'}`
-              : '—'}
+            {variant.lengthCm !== null ? (
+              `${variant.lengthCm} × ${variant.widthCm ?? '—'} × ${variant.heightCm ?? '—'}`
+            ) : product?.defaultLengthCm != null ? (
+              <span title="From the product default">
+                {product.defaultLengthCm} × {product.defaultWidthCm ?? '—'} ×{' '}
+                {product.defaultHeightCm ?? '—'}
+              </span>
+            ) : (
+              '—'
+            )}
           </dd>
           <dt className="text-text-muted">Declared (INR)</dt>
-          <dd className="text-text-body font-mono">{variant.declaredValueInr ?? '—'}</dd>
+          <dd className="text-text-body font-mono">
+            <Inherited own={variant.declaredValueInr} fallback={product?.defaultDeclaredValueInr} />
+          </dd>
           <dt className="text-text-muted">GST rate (%)</dt>
           <dd className="text-text-body font-mono">{variant.gstRate ?? '—'}</dd>
           <dt className="text-text-muted">Barcode</dt>
@@ -157,6 +218,13 @@ function VariantEditForm({
     variant.weightGrams === null ? '' : String(variant.weightGrams),
   );
   const [declaredValueInr, setDeclaredValueInr] = useState(variant.declaredValueInr ?? '');
+  // A variant can differ from its siblings in box size as well as in
+  // weight — a 46 comes in a bigger carton — and the courier bills on
+  // volumetric weight wherever it exceeds the actual. Blank still means
+  // inherit the product default.
+  const [lengthCm, setLengthCm] = useState(variant.lengthCm ?? '');
+  const [widthCm, setWidthCm] = useState(variant.widthCm ?? '');
+  const [heightCm, setHeightCm] = useState(variant.heightCm ?? '');
   const [gstRate, setGstRate] = useState(variant.gstRate ?? '');
   const [barcode, setBarcode] = useState(variant.barcode ?? '');
   const [serverError, setServerError] = useState<string | null>(null);
@@ -171,6 +239,9 @@ function VariantEditForm({
         variantLabel: variantLabel.trim() === '' ? null : variantLabel.trim(),
         weightGrams: weightGrams === '' ? null : Number(weightGrams),
         declaredValueInr: declaredValueInr === '' ? null : Number(declaredValueInr),
+        lengthCm: lengthCm === '' ? null : Number(lengthCm),
+        widthCm: widthCm === '' ? null : Number(widthCm),
+        heightCm: heightCm === '' ? null : Number(heightCm),
         gstRate: gstRate === '' ? null : Number(gstRate),
         barcode: barcode.trim() === '' ? null : barcode.trim(),
       });
@@ -208,6 +279,39 @@ function VariantEditForm({
                 min="0"
                 value={weightGrams}
                 onChange={(e) => setWeightGrams(e.target.value)}
+                disabled={update.isPending}
+              />
+            </FormField>
+            <FormField label="Length (cm)" htmlFor="lengthCm">
+              <Input
+                id="lengthCm"
+                type="number"
+                min="0"
+                step="0.1"
+                value={lengthCm}
+                onChange={(e) => setLengthCm(e.target.value)}
+                disabled={update.isPending}
+              />
+            </FormField>
+            <FormField label="Width (cm)" htmlFor="widthCm">
+              <Input
+                id="widthCm"
+                type="number"
+                min="0"
+                step="0.1"
+                value={widthCm}
+                onChange={(e) => setWidthCm(e.target.value)}
+                disabled={update.isPending}
+              />
+            </FormField>
+            <FormField label="Height (cm)" htmlFor="heightCm">
+              <Input
+                id="heightCm"
+                type="number"
+                min="0"
+                step="0.1"
+                value={heightCm}
+                onChange={(e) => setHeightCm(e.target.value)}
                 disabled={update.isPending}
               />
             </FormField>

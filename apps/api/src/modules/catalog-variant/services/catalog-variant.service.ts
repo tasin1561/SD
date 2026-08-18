@@ -10,9 +10,14 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import type { CreateVariantDto } from '../dto/create-variant.dto';
 import type { UpdateVariantDto } from '../dto/update-variant.dto';
+import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
+import { deriveThumbnailKey } from '../../catalog-image/image-key';
 
 export interface VariantView {
   id: string;
+  /** Set only by the LIST — a single thumbnail so a colour is
+   *  recognisable without decoding the SKU. Null when the SKU has none. */
+  primaryImageUrl?: string | null;
   productId: string;
   sellerId: string;
   skuCode: string;
@@ -58,6 +63,9 @@ export class CatalogVariantService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
+    // For the list's per-SKU thumbnail. Every stored object is private,
+    // so a URL is minted per request rather than kept in a column.
+    private readonly spaces: SpacesService,
   ) {}
 
   async create(
@@ -115,11 +123,52 @@ export class CatalogVariantService {
 
   async listForProduct(sellerId: string, productId: string): Promise<VariantView[]> {
     await this.requireProduct(sellerId, productId);
-    return this.prisma.client.productVariant.findMany({
+    const variants = await this.prisma.client.productVariant.findMany({
       where: { productId, sellerId, deletedAt: null },
       orderBy: { createdAt: 'asc' },
       select: VIEW_SELECT,
     });
+    if (variants.length === 0) return [];
+
+    // ONE picture per SKU, for the list.
+    //
+    // A colour is a thing you recognise by looking, and a table of
+    // AVIATO-GREE-BLAC / AVIATO-BLAC-GOLD makes the seller decode the SKU
+    // to find the green one. The image is fetched in a SINGLE query
+    // across every variant of the product rather than one per row —
+    // twelve variants would otherwise be twelve round trips to render a
+    // list nobody has clicked into yet.
+    //
+    // Same ordering as the images page (primary first, then display
+    // order, then age), so the thumbnail here is the one that page calls
+    // primary and the two never disagree.
+    const images = await this.prisma.client.productImage.findMany({
+      where: { variantId: { in: variants.map((v) => v.id) }, deletedAt: null },
+      orderBy: [{ isPrimary: 'desc' }, { displayOrder: 'asc' }, { createdAt: 'asc' }],
+      select: { variantId: true, spacesKey: true, thumbnailUrl: true },
+    });
+
+    const firstFor = new Map<string, (typeof images)[number]>();
+    for (const img of images) {
+      if (!firstFor.has(img.variantId)) firstFor.set(img.variantId, img);
+    }
+
+    return Promise.all(
+      variants.map(async (v) => {
+        const img = firstFor.get(v.id);
+        if (img === undefined) return { ...v, primaryImageUrl: null };
+        // Presigned on read, never a stored URL — every object in the
+        // bucket is private (2026-07-27). Prefer the thumbnail: this is a
+        // 32px cell, and the original can be several megabytes.
+        // `thumbnailUrl` non-null means the thumbnail job ran, so the
+        // derived key exists; otherwise fall back to the original.
+        // deriveThumbnailKey returns null for a key it cannot parse, so
+        // fall back to the original rather than dropping the picture.
+        const key =
+          (img.thumbnailUrl !== null ? deriveThumbnailKey(img.spacesKey) : null) ?? img.spacesKey;
+        return { ...v, primaryImageUrl: await this.spaces.presignGetUrl(key) };
+      }),
+    );
   }
 
   async getById(sellerId: string, productId: string, variantId: string): Promise<VariantView> {

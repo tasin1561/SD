@@ -188,6 +188,7 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
               <Table>
                 <THead>
                   <Tr>
+                    <Th className="w-12" aria-label="Image" />
                     <Th>SKU</Th>
                     <Th>Label</Th>
                     <Th align="right">Weight (g)</Th>
@@ -202,6 +203,24 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
                         router.push(`/catalog/products/${productId}/variants/${v.id}`)
                       }
                     >
+                      <Td>
+                        {/* A colour is something you recognise by looking.
+                            Without this the seller decodes AVIATO-GREE-BLAC
+                            to find the green one. */}
+                        {v.primaryImageUrl != null ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={v.primaryImageUrl}
+                            alt=""
+                            className="border-border h-9 w-9 rounded-[4px] border object-cover"
+                          />
+                        ) : (
+                          <div
+                            className="border-border bg-surface-raised h-9 w-9 rounded-[4px] border"
+                            aria-hidden
+                          />
+                        )}
+                      </Td>
                       <Td>
                         <Link
                           href={`/catalog/products/${productId}/variants/${v.id}`}
@@ -225,12 +244,12 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
                         {v.weightGrams !== null ? (
                           <span className="text-text-body">{v.weightGrams}</span>
                         ) : detail.data?.defaultWeightGrams != null ? (
-                          <span
-                            className="text-text-muted"
-                            title="Inherited from the product default"
-                          >
+                          // The product default, shown plainly. It IS the
+                          // weight this variant ships at, so dressing it up
+                          // as second-class only invites the question the
+                          // dash used to raise.
+                          <span className="text-text-body" title="From the product default">
                             {detail.data.defaultWeightGrams}
-                            <span className="ml-1 not-italic">(inherited)</span>
                           </span>
                         ) : (
                           <span className="text-text-muted">—</span>

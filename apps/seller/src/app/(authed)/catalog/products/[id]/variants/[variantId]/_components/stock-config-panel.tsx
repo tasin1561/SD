@@ -9,20 +9,13 @@ import {
   ErrorNote,
   FormField,
   Input,
-  Select,
   SkeletonRows,
   useToast,
 } from '@skydrop/ui/components';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
 import { serverVerdict } from '@/lib/server-verdict';
-import {
-  useSetVariantInventoryMode,
-  useSetVariantThreshold,
-  useVariantInventoryMode,
-  useVariantStock,
-  type SellerInventoryMode,
-} from '@/lib/api-hooks';
+import { useSetVariantThreshold, useVariantInventoryMode, useVariantStock } from '@/lib/api-hooks';
 
 /**
  * The two per-SKU stock settings, on the SKU.
@@ -34,17 +27,17 @@ import {
  * to strict per-unit tracking appear here" — and nothing in the product
  * could set one. The enforcement existed; the switch did not.
  *
- * ── THREE STATES, NOT TWO ────────────────────────────────────────────
- * `null` is not a synonym for NORMAL. It clears the SKU's own value so
- * it follows the seller default, and a seller who moves their catalogue
- * to STRICT has to be able to put one SKU back on "whatever the
- * catalogue does" rather than pinning it to NORMAL forever. So the
- * control offers Inherit / Normal / Strict, and says which one is
- * actually in force when the answer is inherited.
+ * ── UNIT TRACKING IS NOT THE SELLER'S TO SET (2026-08-19) ────────────
+ * The mode decides whether our staff must scan a serial for every
+ * physical unit at pick, pack and RTO. That is our operating procedure,
+ * not a seller preference: a seller flipping it changes what the floor
+ * must do with every parcel of theirs, and pins picks to refusal for
+ * SKUs nobody serialised. It is shown here when it is on, so a seller
+ * understands why their stock is handled that way, and set by an admin —
+ * per seller from the seller's detail page, or globally in settings.
  *
- * The key is always PRESENT on the wire either way — the DTO's
- * `@IsDefined` under `@ValidateIf` accepts null and rejects undefined,
- * so an omitted key is a 400 rather than a no-op.
+ * What remains here is the LOW-STOCK THRESHOLD, which is genuinely
+ * theirs: it decides when we warn them, and warns nobody else.
  */
 
 export function StockConfigPanel({
@@ -62,7 +55,6 @@ export function StockConfigPanel({
   // projection does not, and a box you type into without seeing what is
   // already set is worse than no box.
   const stock = useVariantStock(variantId);
-  const setMode = useSetVariantInventoryMode(productId, variantId);
   const setThreshold = useSetVariantThreshold(productId, variantId);
 
   // `undefined` means "not seeded from the server yet"; once the seller
@@ -76,24 +68,6 @@ export function StockConfigPanel({
   const [error, setError] = useState<string | null>(null);
 
   if (!mayManage) return null;
-
-  async function onModeChange(next: string): Promise<void> {
-    setError(null);
-    try {
-      // '' is the Inherit option and travels as an explicit null.
-      const value: SellerInventoryMode | null = next === '' ? null : (next as SellerInventoryMode);
-      const result = await setMode.mutateAsync({ inventoryMode: value });
-      toast.success(
-        value === null
-          ? `Following the catalogue default — ${result.effectiveInventoryMode.toLowerCase()} for now.`
-          : value === 'STRICT'
-            ? 'Strict — every unit of this SKU now needs a serial scanned at receiving, pick and pack.'
-            : 'Normal — counted in bulk, no per-unit serials.',
-      );
-    } catch (err) {
-      setError(serverVerdict(err));
-    }
-  }
 
   async function onSaveThreshold(): Promise<void> {
     setError(null);
@@ -134,26 +108,7 @@ export function StockConfigPanel({
         ) : mode.isError ? (
           <ErrorNote message={serverVerdict(mode.error)} retry={() => void mode.refetch()} />
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            <FormField
-              label="Unit tracking"
-              hint={
-                mode.data?.inherited === true
-                  ? `Following your catalogue default, which is ${mode.data.effectiveInventoryMode.toLowerCase()} today.`
-                  : 'Set on this SKU, whatever the catalogue default becomes.'
-              }
-            >
-              <Select
-                value={mode.data?.inventoryMode ?? ''}
-                disabled={setMode.isPending}
-                onChange={(e) => void onModeChange(e.target.value)}
-              >
-                <option value="">Use catalogue default</option>
-                <option value="NORMAL">Normal — count in bulk</option>
-                <option value="STRICT">Strict — a serial per unit</option>
-              </Select>
-            </FormField>
-
+          <div className="grid gap-4">
             <FormField
               label="Low-stock alert at"
               hint="Units. Leave blank to use your default; 0 warns only when it is empty."
@@ -180,9 +135,9 @@ export function StockConfigPanel({
 
         {mode.data?.effectiveInventoryMode === 'STRICT' && (
           <p className="text-text-muted mt-3 text-sm">
-            Strict means the warehouse cannot receive, pick or pack a unit of this SKU without
-            scanning its serial. Every unit needs one on the item itself before the next consignment
-            arrives.
+            This SKU is on strict unit tracking: the warehouse cannot receive, pick or pack a unit
+            without scanning its serial, so every unit needs one on the item itself before the next
+            consignment arrives. We set this — talk to us if it looks wrong for this SKU.
           </p>
         )}
       </CardBody>
