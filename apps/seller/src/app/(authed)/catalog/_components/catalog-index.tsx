@@ -128,7 +128,7 @@ export function CatalogIndex(): ReactElement {
           className="flex items-center gap-2"
         >
           <Input
-            placeholder="Name, ref, brand…"
+            placeholder="Name or ref…"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             className="w-80"
@@ -191,7 +191,6 @@ export function CatalogIndex(): ReactElement {
           <THead>
             <Tr>
               <Th>Name</Th>
-              <Th>Brand</Th>
               <Th>Ref</Th>
               <Th>Status</Th>
               <Th align="right">Weight (g)</Th>
@@ -209,7 +208,6 @@ export function CatalogIndex(): ReactElement {
                     {p.name}
                   </Link>
                 </Td>
-                <Td className="text-text-muted">{p.brand ?? '—'}</Td>
                 <Td className="text-text-muted font-mono text-xs">{p.externalRef ?? '—'}</Td>
                 <Td>
                   <StatusBadge kind={productStatusKind(p.status)} label={p.status.toLowerCase()} />

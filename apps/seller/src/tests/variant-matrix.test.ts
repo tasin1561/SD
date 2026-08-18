@@ -91,20 +91,17 @@ describe('buildRows — the plain cases still behave', () => {
     expect(rows).toHaveLength(6);
   });
 
-  it('a third axis multiplies across everything, ragged second axis included', () => {
-    // 12 ragged pairs x 2 widths. Only the SECOND axis is per-value;
-    // stating the rule is what keeps it predictable.
+  it('ignores anything past the second option — two is the ceiling', () => {
+    // The UI stops offering "Add an option" at two, because only the
+    // SECOND axis can hold a list per value of the first and a third has
+    // no unambiguous place to sit. The generator matches that rather than
+    // silently supporting a shape nobody can enter.
     const rows = buildRows('Runner Shoe', [
-      opt('Colour', ['Red', 'Blue', 'Yellow']),
-      opt('Size', [], {
-        Red: ['38', '39', '40', '41', '42'],
-        Blue: ['40', '41', '42', '43'],
-        Yellow: ['37', '40', '42'],
-      }),
+      opt('Colour', ['Red', 'Blue']),
+      opt('Size', ['40', '41']),
       opt('Width', ['D', 'EE']),
     ]);
-    expect(rows).toHaveLength(24);
-    expect(new Set(rows.map((r) => r.suggestedSku)).size).toBe(24);
+    expect(rows).toHaveLength(4);
   });
 
   it('trims whitespace and ignores blank values', () => {

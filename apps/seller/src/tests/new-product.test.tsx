@@ -300,11 +300,20 @@ describe('options and variants are two steps, not one block', () => {
     expect(src).toMatch(/<Th[ >]/);
   });
 
-  it('offers a select-all that reflects a partial selection honestly', () => {
-    // A header box that renders unchecked while four of six rows are on
-    // is telling the seller something untrue.
-    expect(src).toContain('el.indeterminate');
-    expect(src).toContain('setAllIncluded');
+  it('creates every generated row — no per-row include checkbox', () => {
+    // An option value the seller typed IS a variant they stock; making
+    // them then tick it was asking the same question twice. A row they
+    // do not want is a value they should delete in step 1.
+    expect(src).not.toContain('setExcluded');
+    expect(src).not.toContain('setAllIncluded');
+    expect(src).not.toContain('Include every variant');
+  });
+
+  it('stops offering a third option', () => {
+    // Only the second axis can hold a list per value of the first, so a
+    // third has no unambiguous place to sit.
+    expect(src).toContain('options.length < MAX_OPTIONS');
+    expect(src).toContain('const MAX_OPTIONS = 2');
   });
 
   it('gives every option value its own remove control', () => {
@@ -335,5 +344,28 @@ describe('options and variants are two steps, not one block', () => {
     expect(src).toContain('Add value');
     expect(src).toContain('variant="ghost"');
     expect(src).toContain('variant="secondary"');
+  });
+});
+
+describe('the save action looks like the point of the page', () => {
+  const src = read(FORM);
+
+  it('is the PRIMARY button, not another secondary beside Cancel', () => {
+    // Button defaults to variant 'secondary', size 'sm' — so an unadorned
+    // submit rendered identically to Cancel, reading as a second way to
+    // leave rather than the way to finish.
+    expect(src).toContain('type="submit" variant="primary" size="md"');
+  });
+
+  it('stays reachable on a long form', () => {
+    // A dozen generated rows push the actions well below the fold.
+    expect(src).toContain('sticky bottom-0');
+  });
+
+  it('folds the safe-area inset into one padding declaration', () => {
+    // FE-7: an inline env() style on an element that also carries a
+    // padding utility wins outright and erases it on every phone.
+    expect(src).toContain('pb-[calc(0.75rem+env(safe-area-inset-bottom))]');
+    expect(src).not.toMatch(/style=\{\{[^}]*safe-area-inset/);
   });
 });

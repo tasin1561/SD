@@ -249,8 +249,6 @@ function ProductReadCard({ product }: { product: SellerProductView }): ReactElem
               <dd className="text-text-body whitespace-pre-wrap">{product.description}</dd>
             </>
           )}
-          <dt className="text-text-muted">Brand</dt>
-          <dd className="text-text-body">{product.brand ?? '—'}</dd>
           <dt className="text-text-muted">External ref</dt>
           <dd className="text-text-body font-mono text-xs">{product.externalRef ?? '—'}</dd>
           <dt className="text-text-muted">External SKU</dt>
@@ -284,7 +282,6 @@ function ProductEditForm({
 }): ReactElement {
   const [name, setName] = useState(product.name);
   const [description, setDescription] = useState(product.description ?? '');
-  const [brand, setBrand] = useState(product.brand ?? '');
   const [externalRef, setExternalRef] = useState(product.externalRef ?? '');
   const [defaultWeight, setDefaultWeight] = useState(
     product.defaultWeightGrams === null ? '' : String(product.defaultWeightGrams),
@@ -301,7 +298,6 @@ function ProductEditForm({
       await update.mutateAsync({
         name: name.trim(),
         description: description.trim() === '' ? null : description.trim(),
-        brand: brand.trim() === '' ? null : brand.trim(),
         externalRef: externalRef.trim() === '' ? null : externalRef.trim(),
         defaultWeightGrams: defaultWeight === '' ? null : Number(defaultWeight),
         defaultDeclaredValueInr: defaultDeclared === '' ? null : Number(defaultDeclared),
@@ -330,14 +326,6 @@ function ProductEditForm({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                disabled={update.isPending}
-              />
-            </FormField>
-            <FormField label="Brand" htmlFor="brand">
-              <Input
-                id="brand"
-                value={brand}
-                onChange={(e) => setBrand(e.target.value)}
                 disabled={update.isPending}
               />
             </FormField>

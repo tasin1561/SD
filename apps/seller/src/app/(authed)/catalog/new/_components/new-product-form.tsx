@@ -69,6 +69,9 @@ import { useCreateProduct, useCreateVariant, useProductsList } from '@/lib/api-h
  * product or the rows that landed.
  */
 
+export /** Two axes is the ceiling — see the note beside "Add an option". */
+const MAX_OPTIONS = 2;
+
 export interface ProductOption {
   /** Axis name — "Colour", "Size". */
   name: string;
@@ -178,7 +181,7 @@ export function buildRows(name: string, options: ProductOption[]): VariantRow[] 
   const single = (): VariantRow[] => [{ key: '', values: {}, label: '', suggestedSku: base }];
   if (usable.length === 0) return single();
 
-  const [first, second, ...rest] = usable;
+  const [first, second] = usable;
   if (first === undefined) return single();
   const firstName = first.name.trim();
 
@@ -186,7 +189,7 @@ export function buildRows(name: string, options: ProductOption[]): VariantRow[] 
   // are a plain cartesian on top: only the SECOND axis is per-value,
   // because "per colour, or per colour-and-size?" has no obvious answer,
   // and a rule nobody can predict is worse than one they cannot use.
-  let combos: Array<Record<string, string>> = [];
+  const combos: Array<Record<string, string>> = [];
   for (const v0 of clean(first.values)) {
     if (second === undefined) {
       combos.push({ [firstName]: v0 });
@@ -195,16 +198,6 @@ export function buildRows(name: string, options: ProductOption[]): VariantRow[] 
     const secondValues = secondaryFor(second, v0);
     if (secondValues.length === 0) continue; // this one stocks nothing
     for (const v1 of secondValues) combos.push({ [firstName]: v0, [second.name.trim()]: v1 });
-  }
-
-  for (const axis of rest) {
-    const values = clean(axis.values);
-    if (values.length === 0) continue;
-    const nextCombos: Array<Record<string, string>> = [];
-    for (const c of combos) {
-      for (const v of values) nextCombos.push({ ...c, [axis.name.trim()]: v });
-    }
-    combos = nextCombos;
   }
 
   if (combos.length === 0) return single();
@@ -285,7 +278,6 @@ export function NewProductForm(): ReactElement {
   const [options, setOptions] = useState<ProductOption[]>([]);
   /** Per-row SKU overrides and exclusions, keyed by the row key. */
   const [skuEdits, setSkuEdits] = useState<Record<string, string>>({});
-  const [excluded, setExcluded] = useState<Record<string, true>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -321,7 +313,6 @@ export function NewProductForm(): ReactElement {
     [options],
   );
   const skuFor = (r: VariantRow): string => skuEdits[r.key] ?? r.suggestedSku;
-  const active = rows.filter((r) => excluded[r.key] !== true);
 
   /**
    * Give every value of the first axis a list on the second.
@@ -348,26 +339,13 @@ export function NewProductForm(): ReactElement {
     });
   }, [options]);
 
-  const allIncluded = rows.length > 0 && rows.every((r) => excluded[r.key] !== true);
-
-  /** Include or exclude every generated row at once. */
-  function setAllIncluded(on: boolean): void {
-    setExcluded(() => {
-      if (on) return {};
-      const next: Record<string, true> = {};
-      for (const r of rows) next[r.key] = true;
-      return next;
-    });
-  }
-
   function set<K extends keyof FormState>(key: K, value: FormState[K]): void {
     setForm((p) => ({ ...p, [key]: value }));
   }
 
   function validate(): string | null {
     if (matched === null && !form.name.trim()) return 'Product name is required.';
-    if (active.length === 0)
-      return 'Keep at least one variant — a product with none cannot be sold.';
+    if (rows.length === 0) return 'Keep at least one variant — a product with none cannot be sold.';
 
     const axisNames = options.map((o) => o.name.trim().toLowerCase()).filter((n) => n !== '');
     if (new Set(axisNames).size !== axisNames.length) {
@@ -378,7 +356,7 @@ export function NewProductForm(): ReactElement {
     }
 
     const seen = new Set<string>();
-    for (const r of active) {
+    for (const r of rows) {
       const sku = skuFor(r).trim();
       if (sku === '') {
         return `Every variant needs a SKU${r.label ? ` — ${r.label} has none.` : '.'}`;
@@ -458,7 +436,7 @@ export function NewProductForm(): ReactElement {
 
     const failures: string[] = [];
     const landed: Record<string, true> = { ...savedSkus };
-    for (const r of active) {
+    for (const r of rows) {
       const sku = skuFor(r).trim();
       if (landed[sku] === true) continue;
       try {
@@ -482,9 +460,7 @@ export function NewProductForm(): ReactElement {
 
     if (failures.length === 0) {
       toast.success(
-        active.length === 1
-          ? 'Product created.'
-          : `Product created with ${active.length} variants.`,
+        rows.length === 1 ? 'Product created.' : `Product created with ${rows.length} variants.`,
       );
       router.push(`/catalog/products/${productId}`);
       return;
@@ -817,10 +793,17 @@ export function NewProductForm(): ReactElement {
             );
           })}
 
-          <Button type="button" variant="secondary" size="md" onClick={addOption}>
-            <Plus size={14} aria-hidden />
-            Add an option
-          </Button>
+          {options.length < MAX_OPTIONS ? (
+            <Button type="button" variant="secondary" size="md" onClick={addOption}>
+              <Plus size={14} aria-hidden />
+              Add an option
+            </Button>
+          ) : (
+            <p className="text-text-muted text-xs">
+              Two options is the limit. A third would multiply the rows again — and only the second
+              can hold a list per value of the first, so a third has no unambiguous place to sit.
+            </p>
+          )}
         </CardBody>
       </Card>
 
@@ -831,9 +814,7 @@ export function NewProductForm(): ReactElement {
           subtitle="One row per orderable item. Stock and orders are counted against these, never against the product."
           action={
             <span className="border-border text-text-muted rounded-full border px-2 py-0.5 text-xs">
-              {rows.length === 1 && rows[0]?.label === ''
-                ? '1 variant'
-                : `${active.length} of ${rows.length} kept`}
+              {rows.length === 1 ? '1 variant' : `${rows.length} variants`}
             </span>
           }
         />
@@ -848,68 +829,31 @@ export function NewProductForm(): ReactElement {
           <Table>
             <THead>
               <Tr>
-                <Th className="w-10">
-                  <input
-                    type="checkbox"
-                    aria-label="Include every variant"
-                    checked={allIncluded}
-                    ref={(el) => {
-                      // Neither all nor none: the header box shows the
-                      // in-between state rather than lying in one
-                      // direction, which a plain checked/unchecked would.
-                      if (el) el.indeterminate = !allIncluded && active.length > 0;
-                    }}
-                    onChange={(e) => setAllIncluded(e.target.checked)}
-                    className="h-4 w-4 align-middle"
-                    disabled={rows.length < 2}
-                  />
-                </Th>
                 <Th>Variant</Th>
                 <Th>SKU</Th>
               </Tr>
             </THead>
             <TBody>
-              {rows.map((r) => {
-                const on = excluded[r.key] !== true;
-                return (
-                  <Tr key={r.key} className={on ? undefined : 'opacity-55'}>
-                    <Td>
-                      <input
-                        type="checkbox"
-                        checked={on}
-                        aria-label={`Include ${r.label === '' ? 'this variant' : r.label}`}
-                        onChange={() =>
-                          setExcluded((p) => {
-                            const next = { ...p };
-                            if (on) next[r.key] = true;
-                            else delete next[r.key];
-                            return next;
-                          })
-                        }
-                        className="h-4 w-4 align-middle"
-                        disabled={rows.length < 2}
-                      />
-                    </Td>
-                    <Td>
-                      {r.label === '' ? (
-                        <span className="text-text-muted">Single variant</span>
-                      ) : (
-                        <span className="text-text-body">{r.label}</span>
-                      )}
-                    </Td>
-                    <Td>
-                      <Input
-                        value={skuFor(r)}
-                        onChange={(e) => setSkuEdits((p) => ({ ...p, [r.key]: e.target.value }))}
-                        aria-label={r.label === '' ? 'SKU' : `SKU for ${r.label}`}
-                        maxLength={80}
-                        className="w-full max-w-[18rem] font-mono text-xs"
-                        disabled={!on}
-                      />
-                    </Td>
-                  </Tr>
-                );
-              })}
+              {rows.map((r) => (
+                <Tr key={r.key}>
+                  <Td>
+                    {r.label === '' ? (
+                      <span className="text-text-muted">Single variant</span>
+                    ) : (
+                      <span className="text-text-body">{r.label}</span>
+                    )}
+                  </Td>
+                  <Td>
+                    <Input
+                      value={skuFor(r)}
+                      onChange={(e) => setSkuEdits((p) => ({ ...p, [r.key]: e.target.value }))}
+                      aria-label={r.label === '' ? 'SKU' : `SKU for ${r.label}`}
+                      maxLength={80}
+                      className="w-full max-w-[18rem] font-mono text-xs"
+                    />
+                  </Td>
+                </Tr>
+              ))}
             </TBody>
           </Table>
 
@@ -920,17 +864,41 @@ export function NewProductForm(): ReactElement {
         </CardBody>
       </Card>
 
-      <div className="flex gap-2">
-        <Button type="submit" disabled={busy}>
+      {/*
+        The save action is the point of the page, and it was rendering as
+        a small bordered button identical to Cancel — Button defaults to
+        variant 'secondary', size 'sm', so "Create product" looked like a
+        second way to leave rather than the way to finish.
+
+        Sticky, because the form is long: once options generate a dozen
+        rows the actions sit well below the fold, and a seller who has
+        filled everything in should never have to hunt for Save. The bar
+        spans the card gutter with negative margins so it reads as page
+        chrome rather than one more panel, and its bottom padding folds in
+        the safe-area inset as a single declaration — a separate inline
+        `env()` style would silently erase the padding utility beside it
+        (FE-7).
+      */}
+      <div className="border-border bg-surface/95 sticky bottom-0 -mx-3 mt-2 flex flex-wrap items-center gap-2 border-t px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:-mx-5 sm:px-5">
+        <Button type="submit" variant="primary" size="md" disabled={busy}>
           {busy
             ? 'Creating…'
             : createdProductId === null
               ? 'Create product'
               : 'Add the missing variants'}
         </Button>
-        <Button type="button" variant="secondary" onClick={() => router.push('/catalog')}>
+        <Button
+          type="button"
+          variant="secondary"
+          size="md"
+          onClick={() => router.push('/catalog')}
+          disabled={busy}
+        >
           Cancel
         </Button>
+        <span className="text-text-muted ml-auto hidden text-xs sm:inline">
+          {rows.length === 1 ? 'Creates 1 variant' : `Creates ${rows.length} variants`}
+        </span>
       </div>
     </form>
   );
