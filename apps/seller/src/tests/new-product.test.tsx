@@ -251,3 +251,39 @@ describe('HS code is gone from the form', () => {
     expect(read(FORM)).not.toContain('hsCode');
   });
 });
+
+/**
+ * An option that is only a PLACEHOLDER is not an option.
+ *
+ * Two empty option blocks render as "Colour" and "Red" in grey, which
+ * reads exactly like two declared values — so the form built one variant
+ * and looked like it had ignored the input. The fields are unchanged;
+ * what changed is that the screen now says which ones are not counted
+ * and why.
+ */
+describe('an incomplete option says so instead of looking filled in', () => {
+  const src = read(FORM);
+
+  it('marks an option that has no name or no value as not counted', () => {
+    expect(src).toContain('Not counted yet');
+    expect(src).toContain('const incomplete = !named || !filled');
+  });
+
+  it('says the greyed-out text is an example', () => {
+    // The whole misread. Naming it directly is cheaper than any amount
+    // of restyling the placeholder.
+    expect(src).toContain('an example, not something you have entered');
+    expect(src).toContain('placeholder="e.g. Colour"');
+  });
+
+  it('explains a count of one when options exist but none are usable', () => {
+    expect(src).toContain('no option is complete yet');
+  });
+
+  it('refuses two options sharing a name', () => {
+    // They collide in the attributes map — the second overwrites the
+    // first, so the rows multiply while recording only one axis. The
+    // SKUs would look right and the data would be wrong.
+    expect(src).toContain('Two options share a name');
+  });
+});
