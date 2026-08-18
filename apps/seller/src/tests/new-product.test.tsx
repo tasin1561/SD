@@ -314,9 +314,19 @@ describe('options and variants are two steps, not one block', () => {
     expect(src).toContain('removeParentValue');
   });
 
-  it('makes the per-value setting a switch with its explanation outside the label', () => {
-    expect(src).toContain('role="switch"');
-    expect(src).toContain('aria-checked={checked}');
+  it('has no toggle for per-value lists — the second axis is always per-value', () => {
+    // The answer was predictable often enough that asking was one more
+    // control to understand before the form could be used.
+    expect(src).not.toContain('role="switch"');
+    expect(src).not.toContain('setPerParent');
+    expect(src).toContain('p.length === 1 ? {} : null');
+  });
+
+  it('seeds a new first-axis value from a sibling that already has a list', () => {
+    // Adding Yellow after typing Red 38-42 must hand over 38-42 to edit
+    // down. Without this, always-on per-value lists would mean retyping
+    // the range for every colour — worse than the toggle it replaced.
+    expect(src).toContain(".find((vs) => vs.some((v) => v.trim() !== ''))");
   });
 
   it('uses the shared Button for every action — no bare text links', () => {

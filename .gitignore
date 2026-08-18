@@ -114,3 +114,9 @@ tmp/
 /screenshots/
 .playwright-artifacts/
 __pycache__/
+
+# Browser-session artifacts from the Playwright MCP server (page snapshots,
+# console logs, screenshots). Written into the repo root by a live browsing
+# session, unformatted, and they would fail the format gate on the next
+# commit while telling nobody anything.
+.playwright-mcp/

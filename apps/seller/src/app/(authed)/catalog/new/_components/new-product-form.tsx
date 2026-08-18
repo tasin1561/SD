@@ -1,8 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useMemo, useState, type FormEvent, type ReactElement } from 'react';
-import { clsx } from 'clsx';
+import { useEffect, useMemo, useState, type FormEvent, type ReactElement } from 'react';
 import { Plus, X } from 'lucide-react';
 import {
   Button,
@@ -279,60 +278,6 @@ function ValueChips({
   );
 }
 
-/**
- * A setting, presented as one.
- *
- * The same input a bare checkbox would give, with the explanation moved
- * OUT of the label: a control whose name is a whole sentence reads as an
- * afterthought, and the sentence is unclickable weight on the hit area.
- */
-function Toggle({
-  id,
-  checked,
-  onChange,
-  label,
-  hint,
-}: {
-  readonly id: string;
-  readonly checked: boolean;
-  readonly onChange: (checked: boolean) => void;
-  readonly label: string;
-  readonly hint: string;
-}): ReactElement {
-  return (
-    <div>
-      <div className="flex items-center gap-2.5">
-        <button
-          type="button"
-          role="switch"
-          aria-checked={checked}
-          aria-labelledby={`${id}-label`}
-          onClick={() => onChange(!checked)}
-          className={clsx(
-            'focus-visible:ring-accent relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none',
-            checked ? 'bg-accent' : 'bg-border-strong',
-          )}
-        >
-          <span
-            className={clsx(
-              'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
-              checked ? 'translate-x-4' : 'translate-x-0.5',
-            )}
-          />
-        </button>
-        <label
-          id={`${id}-label`}
-          className="text-text-body cursor-pointer text-sm"
-          onClick={() => onChange(!checked)}
-        >
-          {label}
-        </label>
-      </div>
-      <p className="text-text-muted mt-1 ml-[3rem] text-xs">{hint}</p>
-    </div>
-  );
-}
-
 export function NewProductForm(): ReactElement {
   const router = useRouter();
   const toast = useToast();
@@ -377,6 +322,31 @@ export function NewProductForm(): ReactElement {
   );
   const skuFor = (r: VariantRow): string => skuEdits[r.key] ?? r.suggestedSku;
   const active = rows.filter((r) => excluded[r.key] !== true);
+
+  /**
+   * Give every value of the first axis a list on the second.
+   *
+   * A NEW value is seeded from the first sibling that already has one, so
+   * adding Yellow after typing Red 38-42 hands you 38-42 to edit down
+   * rather than an empty row to retype — which is the whole benefit the
+   * removed toggle used to provide, now unconditional.
+   */
+  useEffect(() => {
+    setOptions((prev) => {
+      const second = prev[1];
+      if (second === undefined || second.perParent === null) return prev;
+      const first = prev[0];
+      const parents = first === undefined ? [] : clean(first.values);
+      const missing = parents.filter((pv) => second.perParent?.[pv] === undefined);
+      if (missing.length === 0) return prev;
+      const template = parents
+        .map((pv) => second.perParent?.[pv] ?? [])
+        .find((vs) => vs.some((v) => v.trim() !== '')) ?? [''];
+      const nextPerParent = { ...second.perParent };
+      for (const pv of missing) nextPerParent[pv] = [...template];
+      return prev.map((o, idx) => (idx === 1 ? { ...o, perParent: nextPerParent } : o));
+    });
+  }, [options]);
 
   const allIncluded = rows.length > 0 && rows.every((r) => excluded[r.key] !== true);
 
@@ -531,35 +501,11 @@ export function NewProductForm(): ReactElement {
   }
 
   function addOption(): void {
-    setOptions((p) => [...p, { name: '', values: [''], perParent: null }]);
-  }
-
-  /**
-   * Switch the second axis between one shared list and a list per value
-   * of the first.
-   *
-   * Turning it ON seeds every parent from the shared list, so a ragged
-   * catalogue is edited DOWN — delete the sizes a colour does not run —
-   * rather than typed out three times. Turning it OFF keeps the longest
-   * list found, because throwing away the sizes somebody just entered to
-   * punish a mis-click is the wrong trade.
-   */
-  function setPerParent(i: number, on: boolean, parentValues: string[]): void {
-    setOptions((p) =>
-      p.map((o, idx) => {
-        if (idx !== i) return o;
-        if (!on) {
-          const longest = Object.values(o.perParent ?? {}).reduce<string[]>(
-            (best, vs) => (vs.filter((v) => v.trim() !== '').length > best.length ? vs : best),
-            o.values,
-          );
-          return { ...o, perParent: null, values: longest.length > 0 ? longest : [''] };
-        }
-        const seeded: Record<string, string[]> = {};
-        for (const pv of parentValues) seeded[pv] = [...o.values];
-        return { ...o, perParent: seeded };
-      }),
-    );
+    // The SECOND axis is always per-value: a size range differs by colour
+    // often enough that asking every time was a question with a
+    // predictable answer, and a toggle for it was one more control to
+    // understand before the form could be used. Axes 3+ stay plain.
+    setOptions((p) => [...p, { name: '', values: [''], perParent: p.length === 1 ? {} : null }]);
   }
 
   function setParentValue(i: number, parent: string, vi: number, value: string): void {
@@ -852,22 +798,6 @@ export function NewProductForm(): ReactElement {
                           </div>
                         );
                       })}
-                    </div>
-                  )}
-
-                  {i === 1 && (
-                    <div className="border-border mt-3 border-t pt-3">
-                      <Toggle
-                        id={`option-${i}-per-parent`}
-                        checked={o.perParent !== null}
-                        onChange={(on) => setPerParent(i, on, parentValues)}
-                        label={`Different ${named ? o.name.trim().toLowerCase() : 'values'} per ${
-                          options[0]?.name.trim() === ''
-                            ? 'first option'
-                            : (options[0]?.name.trim().toLowerCase() ?? 'first option')
-                        }`}
-                        hint="Turn on when they do not all run the same range — each gets its own list, seeded from this one so you edit it down rather than type it again."
-                      />
                     </div>
                   )}
 
