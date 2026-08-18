@@ -380,9 +380,32 @@ jobs:
           # even though nothing else in this job consumes it.
           pnpm --filter @skydrop/marketing build
 
+      # Cache the browser binary. The download is ~120MB and identical
+      # between runs; keyed on the lockfile so a Playwright bump busts it.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
       - name: Install Playwright chromium
-        # Only the browser the config uses, with its OS deps.
-        run: pnpm exec playwright install --with-deps chromium
+        # BOUNDED AND RETRIED, because this step is the one that talks to
+        # the outside world and it has hung twice for 20+ minutes on
+        # `apt-get` against archive.ubuntu.com. Unbounded, it ate the
+        # job's whole 25-minute budget and was then cancelled by the next
+        # push — which reads in the run list as "CI cancelled", tells you
+        # nothing about why, and silently stops the deploy. Two commits
+        # went undeployed that way before anyone looked at the log.
+        #
+        # 8 minutes is several times the normal 40 seconds, so a genuine
+        # slow runner still passes; a stall fails fast and says so. The
+        # retry covers the transient case, which is what this has been
+        # every time so far.
+        timeout-minutes: 8
+        run: |
+          pnpm exec playwright install --with-deps chromium \
+            || { echo "::warning::playwright install failed once, retrying"; \
+                 sleep 5; pnpm exec playwright install --with-deps chromium; }
 
       - name: Start the API
         env:
