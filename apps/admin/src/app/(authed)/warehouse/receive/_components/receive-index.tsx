@@ -21,11 +21,14 @@ import { usePermission } from '@/lib/use-permission';
 import { useRouter } from 'next/navigation';
 
 const PAGE_SIZE = 20;
+// No DISCREPANCY. Nothing writes that status any more (CNS-3): a count
+// variance completes and is recorded on the receipt, so the filter would
+// only ever return the empty set and read as "none of these have a
+// problem" — the opposite of the truth.
 const STATUSES: ReadonlyArray<GoodsReceiptStatus> = [
   'PENDING',
   'ARRIVING',
   'COMPLETED',
-  'DISCREPANCY',
   'CANCELLED',
 ] as GoodsReceiptStatus[];
 

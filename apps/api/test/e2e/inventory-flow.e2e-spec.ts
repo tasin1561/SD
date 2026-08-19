@@ -12,7 +12,8 @@ import {
 /**
  * Module 5 inventory end-to-end. Exercises the data-integrity backbone
  * through the real HTTP surface + in-process workers:
- *  - goods-receipt lifecycle incl. DISCREPANCY → resolve → COMPLETED
+ *  - goods-receipt lifecycle: a count variance in EITHER direction
+ *    completes on what arrived and records the gap (CNS-3)
  *  - concurrent receipts to the same variant (no lost data)
  *  - adjustment above-threshold approval → executor worker → EXECUTED
  *  - cycle count → draft CYCLE_COUNT adjustments per discrepancy
@@ -124,7 +125,14 @@ describe('Inventory flow (e2e)', () => {
     return batch.id;
   }
 
-  it('receipt with discrepancy → DISCREPANCY (no stock) → resolve CORRECT → COMPLETED + movement', async () => {
+  it('a SHORT count completes on what arrived — the variance is a number, not a gate', async () => {
+    // This asserted the opposite until CNS-3. `complete` used to route a
+    // variance to a blocking DISCREPANCY status and write NO stock,
+    // waiting for a human to resolve it. That gate only ever earned its
+    // keep where the withheld stock would become sellable, and under
+    // two-leg consignments it mostly does not: nothing in Bangladesh is
+    // sellable from Bangladesh, so it stranded whole consignments in a
+    // warehouse waiting on an email. `resolveDiscrepancy` went with it.
     const gr = await request(h.baseUrl)
       .post('/seller/goods-receipts')
       .set(sellerAuth)
@@ -142,34 +150,65 @@ describe('Inventory flow (e2e)', () => {
       .send({ lines: [{ lineId, receivedQty: 7, putawayBinId: binId }] })
       .expect(200);
 
-    const disc = await request(h.baseUrl)
+    const done = await request(h.baseUrl)
       .post(`/admin/goods-receipts/${gr.body.id}/complete`)
       .set(staffAuth)
       .expect(200);
-    expect(disc.body.status).toBe('DISCREPANCY');
-    // No stock written while DISCREPANCY.
-    expect(await h.prisma.stockMovement.count({ where: { variantId } })).toBe(0);
+    expect(done.body.status).toBe('COMPLETED');
+    // Recorded, not acted on.
+    expect(done.body.hasDiscrepancies).toBe(true);
+    expect(done.body.discrepancyNotes).toContain('expected 10');
 
-    const resolved = await request(h.baseUrl)
-      .post(`/admin/goods-receipts/${gr.body.id}/resolve-discrepancy`)
-      .set(staffAuth)
-      .send({ mode: 'CORRECT', lines: [{ lineId, receivedQty: 10, putawayBinId: binId }] })
-      .expect(200);
-    expect(resolved.body.status).toBe('COMPLETED');
-
+    // Stock for what ACTUALLY arrived — not zero, and not the declared 10.
     const movements = await h.prisma.stockMovement.findMany({ where: { variantId } });
     expect(movements).toHaveLength(1);
     expect(movements[0]?.type).toBe('RECEIVING');
-    expect(movements[0]?.qtyChange).toBe(10);
+    expect(movements[0]?.qtyChange).toBe(7);
     const level = await h.prisma.stockLevel.findFirstOrThrow({ where: { variantId, binId } });
-    expect(level.qtyOnHand).toBe(10);
+    expect(level.qtyOnHand).toBe(7);
 
+    // Told, not asked: it completed AND it varied, so both mails go out.
     const completedEmail = await waitFor(() =>
       h.prisma.notificationLog.findFirst({
         where: { templateCode: 'seller.goods_receipt_completed.email' },
       }),
     );
     expect(completedEmail).toBeTruthy();
+    const varianceEmail = await waitFor(() =>
+      h.prisma.notificationLog.findFirst({
+        where: { templateCode: 'seller.goods_receipt_discrepancy.email' },
+      }),
+    );
+    expect(varianceEmail).toBeTruthy();
+  });
+
+  it('an OVER count is equally non-blocking — counts move in both directions', async () => {
+    const gr = await request(h.baseUrl)
+      .post('/seller/goods-receipts')
+      .set(sellerAuth)
+      .send({ lines: [{ variantId, expectedQty: 10 }] })
+      .expect(201);
+    const lineId = gr.body.lines[0].id as string;
+
+    await request(h.baseUrl)
+      .post(`/admin/goods-receipts/${gr.body.id}/start-receiving`)
+      .set(staffAuth)
+      .expect(200);
+    await request(h.baseUrl)
+      .post(`/admin/goods-receipts/${gr.body.id}/lines`)
+      .set(staffAuth)
+      .send({ lines: [{ lineId, receivedQty: 12, putawayBinId: binId }] })
+      .expect(200);
+
+    const done = await request(h.baseUrl)
+      .post(`/admin/goods-receipts/${gr.body.id}/complete`)
+      .set(staffAuth)
+      .expect(200);
+    expect(done.body.status).toBe('COMPLETED');
+    expect(done.body.hasDiscrepancies).toBe(true);
+
+    const level = await h.prisma.stockLevel.findFirstOrThrow({ where: { variantId, binId } });
+    expect(level.qtyOnHand).toBe(12);
   });
 
   it('multiple receipts to the same variant do not lose data (own batch + movement each)', async () => {

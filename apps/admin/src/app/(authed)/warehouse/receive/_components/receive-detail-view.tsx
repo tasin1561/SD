@@ -172,9 +172,14 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
         ...(Object.keys(serialsByLineId).length > 0 ? { serialsByLineId } : {}),
       });
       if (result.status === 'COMPLETED') {
-        toast.success('Receipt completed — stock written.');
-      } else if (result.status === 'DISCREPANCY') {
-        toast.error('Marked as DISCREPANCY — expected/received qty mismatch.');
+        // A variance no longer withholds the stock (CNS-3), so this is
+        // not an error — it is a fact about the count, and the goods are
+        // already on the shelf either way.
+        if (result.hasDiscrepancies) {
+          toast.info('Completed — stock written for what arrived, and the difference recorded.');
+        } else {
+          toast.success('Receipt completed — stock written.');
+        }
       } else {
         toast.info(`Status now ${result.status}.`);
       }
