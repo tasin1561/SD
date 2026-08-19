@@ -16,7 +16,7 @@ import { serviceAreaFromPincode } from '../postal-circle';
  *     else { zone: null }.
  *   - Caller treats `zone === null` as "fall back to DEFAULT" string.
  *
- * Phase 1A assumes ORIGIN = METRO (BLR-01 — the single seeded
+ * Phase 1A assumes ORIGIN = METRO (CCU-01 — the single seeded
  * warehouse). The zone matrix is keyed on (courier, origin, dest);
  * a future multi-warehouse setup needs to pass the origin in.
  */

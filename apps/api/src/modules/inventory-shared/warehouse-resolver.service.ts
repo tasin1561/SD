@@ -7,7 +7,7 @@ import {
 import { WarehouseStatus } from '@skydrop/db';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 
-/** system_settings key holding the BLR-01 (Phase 1A single-warehouse) uuid. */
+/** system_settings key holding the CCU-01 (Phase 1A single-warehouse) uuid. */
 const DEFAULT_WAREHOUSE_SETTING_KEY = 'ops.default_warehouse_id';
 /** system_settings key holding the Bangladesh intake warehouse uuid. */
 const BD_INTAKE_WAREHOUSE_SETTING_KEY = 'ops.bd_intake_warehouse_id';

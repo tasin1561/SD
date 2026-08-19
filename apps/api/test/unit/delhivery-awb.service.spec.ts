@@ -120,7 +120,7 @@ describe('DelhiveryAwbService.generateAwb — real mode', () => {
   });
 
   it('marshals the wire envelope + parses a success response', async () => {
-    const { svc, request } = makeServiceWithPickup('Skydrop-BLR-01');
+    const { svc, request } = makeServiceWithPickup('Skydrop-CCU-01');
     request.mockResolvedValueOnce({
       success: true,
       packages: [{ waybill: 'DLV123456789', refnum: 'SH-2026-05-000042' }],
@@ -139,14 +139,14 @@ describe('DelhiveryAwbService.generateAwb — real mode', () => {
         encoding: 'form-data-key',
         body: expect.objectContaining({
           shipments: expect.any(Array),
-          pickup_location: { name: 'Skydrop-BLR-01' },
+          pickup_location: { name: 'Skydrop-CCU-01' },
         }),
       }),
     );
   });
 
   it('maps a non-serviceable rejection to ok:false serviceable:false', async () => {
-    const { svc, request } = makeServiceWithPickup('Skydrop-BLR-01');
+    const { svc, request } = makeServiceWithPickup('Skydrop-CCU-01');
     request.mockResolvedValueOnce({
       success: false,
       rmk: 'ClientWarning : ServiceableArea — pincode not serviceable',
@@ -161,7 +161,7 @@ describe('DelhiveryAwbService.generateAwb — real mode', () => {
   });
 
   it('maps a transport error to ok:false serviceable:true (CUR-2 retryable)', async () => {
-    const { svc, request } = makeServiceWithPickup('Skydrop-BLR-01');
+    const { svc, request } = makeServiceWithPickup('Skydrop-CCU-01');
     request.mockRejectedValueOnce(new Error('socket hang up'));
     const r = await svc.generateAwb(awbReq());
     expect(r).toEqual({

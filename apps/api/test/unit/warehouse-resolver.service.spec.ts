@@ -24,7 +24,7 @@ function makeSut(opts: {
   return { svc: new WarehouseResolverService(prisma), client };
 }
 
-const WH = { id: 'wh-1', code: 'BLR-01', name: 'Bangalore', status: WarehouseStatus.ACTIVE };
+const WH = { id: 'wh-1', code: 'CCU-01', name: 'Bangalore', status: WarehouseStatus.ACTIVE };
 
 describe('WarehouseResolverService', () => {
   it('getDefaultWarehouseId returns the configured, live warehouse id', async () => {
@@ -65,7 +65,7 @@ describe('WarehouseResolverService', () => {
 
   it('requireWarehouse returns the row or throws 404', async () => {
     const { svc } = makeSut({ settingValue: 'wh-1', warehouse: WH });
-    expect(await svc.requireWarehouse('wh-1')).toMatchObject({ code: 'BLR-01' });
+    expect(await svc.requireWarehouse('wh-1')).toMatchObject({ code: 'CCU-01' });
     await expect(svc.requireWarehouse('x')).rejects.toMatchObject({
       response: { code: 'WAREHOUSE_NOT_FOUND' },
     });

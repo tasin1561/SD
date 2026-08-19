@@ -81,7 +81,7 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
 
     const whs = await request(h.baseUrl).get('/admin/warehouses').set(staffAuth).expect(200);
     warehouseId = (whs.body as Array<{ id: string; code: string }>).find(
-      (w) => w.code === 'BLR-01',
+      (w) => w.code === 'CCU-01',
     )!.id;
     const zone = await request(h.baseUrl)
       .post(`/admin/warehouses/${warehouseId}/zones`)

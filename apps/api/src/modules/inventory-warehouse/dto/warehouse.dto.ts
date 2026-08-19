@@ -12,7 +12,7 @@ import {
 } from 'class-validator';
 
 export class CreateWarehouseDto {
-  @ApiProperty({ description: 'Stable natural key, e.g. "BLR-01"', maxLength: 32 })
+  @ApiProperty({ description: 'Stable natural key, e.g. "CCU-01"', maxLength: 32 })
   @IsString()
   @MinLength(2)
   @MaxLength(32)
@@ -57,7 +57,15 @@ export class CreateWarehouseDto {
   fulfilsOrders?: boolean;
 }
 
-/** code is immutable (natural key referenced by ops.default_warehouse_id). */
+/**
+ * code is immutable through the API, and the reason is NOT the one this
+ * comment used to give: `ops.default_warehouse_id` holds the UUID, not
+ * the code. The real reason is the SEED — it upserts on `code`, and
+ * deploy re-runs it whenever seed.ts changes, so a code changed out of
+ * band means the next deploy creates a second warehouse rather than
+ * updating this one. Renaming a code is a migration plus a seed edit in
+ * the same commit; see 20260819160000_rename_indian_warehouse.
+ */
 export class UpdateWarehouseDto {
   @ApiProperty({ required: false, maxLength: 120 })
   @IsOptional()

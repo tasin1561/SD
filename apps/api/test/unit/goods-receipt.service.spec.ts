@@ -88,7 +88,7 @@ function makeSut(receipt: ReturnType<typeof makeReceipt>) {
     seller: {
       findUnique: jest.fn(async () => ({ id: 's1', email: 's@x.io', companyName: 'Acme' })),
     },
-    warehouse: { findUnique: jest.fn(async () => ({ name: 'BLR-01' })) },
+    warehouse: { findUnique: jest.fn(async () => ({ name: 'CCU-01' })) },
     auditLog: { create: jest.fn(async () => ({ id: 'a1' })) },
   };
   const prisma = { client } as unknown as PrismaService;

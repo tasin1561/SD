@@ -304,7 +304,7 @@ export async function resetCatalogState(prisma: PrismaClient): Promise<void> {
  * Must run BEFORE resetCatalogState (stock rows FK product_variants) and
  * BEFORE the seller wipe (stock rows FK sellers). TRUNCATE … CASCADE
  * handles ordering and works on the stock_movements hypertable. Seeded
- * `warehouses` (BLR-01, referenced by ops.default_warehouse_id) are
+ * `warehouses` (CCU-01, referenced by ops.default_warehouse_id) are
  * intentionally NOT truncated — only test-created zones/bins.
  */
 export async function resetInventoryState(prisma: PrismaClient): Promise<void> {

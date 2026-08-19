@@ -59,7 +59,7 @@ function makeSut(opts: {
         valueInt: opts.thresholdInt ?? 50_000,
       })),
     },
-    warehouse: { findUnique: jest.fn(async () => ({ name: 'BLR-01' })) },
+    warehouse: { findUnique: jest.fn(async () => ({ name: 'CCU-01' })) },
     seller: {
       findUnique: jest.fn(async () => ({ id: 's1', email: 's@x.io', companyName: 'Acme' })),
     },

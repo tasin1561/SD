@@ -30,7 +30,7 @@ const PAGE_SIZE = 25;
  *   - On-hand / reserved / available qty per variant
  *   - The seller's effective low-stock threshold (variant override →
  *     seller default → null)
- *   - Warehouse footprint count (Phase 1A always 1 — BLR-01)
+ *   - Warehouse footprint count (Phase 1A always 1 — CCU-01)
  *
  * Out of scope (Phase 1A): per-warehouse breakdown rows, batch / bin
  * detail, stock-movements history.

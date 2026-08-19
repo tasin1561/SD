@@ -190,7 +190,7 @@ export function WarehouseFormPanel({
             hint={
               isEdit
                 ? 'Immutable — the natural key other settings point at.'
-                : 'Uppercase letters, digits and dashes, 2–32 characters. e.g. BLR-01'
+                : 'Uppercase letters, digits and dashes, 2–32 characters. e.g. CCU-01'
             }
             error={
               !isEdit && trimmedCode !== '' && codeBad
@@ -202,7 +202,7 @@ export function WarehouseFormPanel({
               value={isEdit ? warehouse.code : code}
               disabled={isEdit}
               maxLength={32}
-              placeholder="BLR-01"
+              placeholder="CCU-01"
               onChange={(e) => setCode(e.target.value.toUpperCase())}
             />
           </FormField>

@@ -5,7 +5,7 @@
 // (no inserts that would conflict on second run).
 //
 // Scope: only the data the spec lists as required to boot the system —
-// system settings, two seed couriers, fallback FX, the BLR-01 warehouse,
+// system settings, two seed couriers, fallback FX, the CCU-01 warehouse,
 // the default rate card, and 12 stub notification templates. Rate-card
 // items, zone matrix, surcharges, pin codes, and seller data are left to
 // admin UI / runtime to populate.
@@ -405,7 +405,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueString: '',
     displayName: 'Delhivery Pickup Location Name',
     description:
-      "Name of the warehouse pickup location pre-registered in Delhivery's partner portal. Required when real mode is enabled (DelhiveryAwbService passes it as pickup_location.name on create-shipment). Phase-1A is single-warehouse (BLR-01); a multi-warehouse setup adds one key per origin.",
+      "Name of the warehouse pickup location pre-registered in Delhivery's partner portal. Required when real mode is enabled (DelhiveryAwbService passes it as pickup_location.name on create-shipment). Phase-1A is single-warehouse (CCU-01); a multi-warehouse setup adds one key per origin.",
   },
   {
     key: 'courier.delhivery_origin_pincode',
@@ -1079,18 +1079,18 @@ async function seedSystemSettings() {
     });
   }
 
-  // ops.default_warehouse_id resolves to BLR-01's uuid at seed time rather
+  // ops.default_warehouse_id resolves to CCU-01's uuid at seed time rather
   // than a hard-coded literal, so it stays correct across environments
   // (ids are uuidv7, not deterministic). Requires seedWarehouses() to have
   // run first — main() orders it that way. Value is create-only like every
   // other setting: an admin re-pointing the default is preserved on re-seed.
   const blr01 = await prisma.warehouse.findUnique({
-    where: { code: 'BLR-01' },
+    where: { code: 'CCU-01' },
     select: { id: true },
   });
   if (!blr01) {
     throw new Error(
-      'seed: BLR-01 warehouse must exist before system settings — check seed order in main()',
+      'seed: CCU-01 warehouse must exist before system settings — check seed order in main()',
     );
   }
   const defaultWarehouseDesc =
@@ -1215,17 +1215,17 @@ async function seedFxRates() {
 
 async function seedWarehouses() {
   await prisma.warehouse.upsert({
-    where: { code: 'BLR-01' },
+    where: { code: 'CCU-01' },
     create: {
-      code: 'BLR-01',
-      name: 'Bangalore Main',
+      code: 'CCU-01',
+      name: 'Kolkata Main',
       status: WarehouseStatus.ACTIVE,
       countryCode: 'IN',
       timezone: 'Asia/Kolkata',
     },
     update: {},
   });
-  console.log(`  warehouses: 1 upserted (BLR-01)`);
+  console.log(`  warehouses: 1 upserted (CCU-01)`);
 }
 
 async function seedRateCards() {
@@ -1246,12 +1246,12 @@ async function seedRateCards() {
 }
 
 /**
- * Zone matrix: origin METRO (BLR-01) → destination area → letter zone.
+ * Zone matrix: origin METRO (CCU-01) → destination area → letter zone.
  * Same five zones (A..E) for both seeded couriers. The pricing engine
  * looks up (courier, origin, dest) and uses the zone string as part
  * of the RateCardItem key.
  *
- * Phase 1A is single-origin (BLR-01); when multi-warehouse lands the
+ * Phase 1A is single-origin (CCU-01); when multi-warehouse lands the
  * matrix must be regenerated per origin.
  */
 const ZONE_MATRIX_ROWS: ReadonlyArray<{
@@ -2838,7 +2838,7 @@ async function seedCourierMessageTemplates() {
 
 async function main() {
   console.log('Seeding reference data…');
-  // Warehouses first: ops.default_warehouse_id resolves BLR-01's id.
+  // Warehouses first: ops.default_warehouse_id resolves CCU-01's id.
   await seedWarehouses();
   await seedSystemSettings();
   await seedCouriers();

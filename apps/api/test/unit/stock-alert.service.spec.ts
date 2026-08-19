@@ -46,7 +46,7 @@ function makeSut(opts: {
     systemSetting: {
       findUnique: jest.fn(async () => ({ valueInt: opts.cooldownHours ?? 24 })),
     },
-    warehouse: { findUnique: jest.fn(async () => ({ name: 'BLR-01' })) },
+    warehouse: { findUnique: jest.fn(async () => ({ name: 'CCU-01' })) },
   };
   const prisma = { client } as unknown as PrismaService;
   const env = { sellerAppUrl: 'http://app' } as unknown as EnvService;
