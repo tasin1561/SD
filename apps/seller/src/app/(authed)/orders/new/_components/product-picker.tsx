@@ -15,6 +15,14 @@ export interface PickedLine {
   readonly variantLabel: string | null;
   readonly imageUrl: string | null;
   readonly weightGrams: number | null;
+  /**
+   * The CATALOGUE value, kept apart from `unitPriceInr` which the seller
+   * may edit. The server defaults the customs declared value from the
+   * catalogue snapshot, so previewing it needs the catalogue figure — a
+   * preview computed from the edited selling price would show a number
+   * the order would not actually carry.
+   */
+  readonly catalogueValueInr: string | null;
   quantity: string;
   unitPriceInr: string;
 }

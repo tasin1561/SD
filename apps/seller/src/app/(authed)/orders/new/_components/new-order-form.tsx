@@ -214,6 +214,23 @@ export function NewOrderForm(): ReactElement {
   const computedCollectable =
     itemsTotal + num(form.deliveryFeeInr) - num(form.advanceAmountInr) - num(form.discountInr);
 
+  /**
+   * The customs declared value the server would default to: the CATALOGUE
+   * value per line × quantity, matching `Σ(item declared value × qty)`
+   * from the snapshot. Computed from the catalogue figure rather than the
+   * editable selling price, so the preview is what the order would
+   * actually carry.
+   */
+  const computedDeclaredValue = useMemo(
+    () =>
+      items.reduce((n, it) => {
+        const q = Number(it.quantity);
+        const v = Number(it.catalogueValueInr ?? '');
+        return n + (Number.isFinite(v) ? v : 0) * (Number.isFinite(q) && q > 0 ? q : 0);
+      }, 0),
+    [items],
+  );
+
   const stockByVariant = useMemo(() => {
     const m = new Map<string, { available: number; inTransit: number }>();
     for (const r of stock.data?.items ?? []) {
@@ -272,6 +289,7 @@ export function NewOrderForm(): ReactElement {
         variantLabel: hit.variantLabel,
         imageUrl: hit.primaryImageUrl,
         weightGrams: hit.effectiveWeightGrams,
+        catalogueValueInr: hit.effectiveDeclaredValueInr,
         quantity: '1',
         unitPriceInr: hit.effectiveDeclaredValueInr ?? '',
       },
@@ -669,7 +687,11 @@ export function NewOrderForm(): ReactElement {
             )}
             <FormField
               label="Declared value (INR)"
-              hint="The parcel's value for customs — not what is collected."
+              hint={
+                computedDeclaredValue > 0
+                  ? `The parcel's value for customs — not what is collected. Adds up to ₹${computedDeclaredValue.toLocaleString('en-IN')} from the catalogue; type a number to override it.`
+                  : "The parcel's value for customs — not what is collected."
+              }
             >
               <Input
                 type="number"
@@ -677,7 +699,11 @@ export function NewOrderForm(): ReactElement {
                 step="0.01"
                 value={form.declaredValueInr}
                 onChange={(e) => set('declaredValueInr', e.target.value)}
-                placeholder="Defaults to sum of line item values"
+                placeholder={
+                  computedDeclaredValue > 0
+                    ? computedDeclaredValue.toLocaleString('en-IN')
+                    : 'Defaults to sum of line item values'
+                }
               />
             </FormField>
             <FormField
