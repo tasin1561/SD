@@ -997,7 +997,15 @@ export class GoodsReceiptService {
     };
   }
 
-  private async assertVariants(sellerId: string, lines: DeclareReceiptLineDto[]): Promise<void> {
+  /**
+   * PUBLIC so a caller that writes a parent row before declaring the leg
+   * can validate FIRST. `ConsignmentService.declare` creates the
+   * consignment in its own committed transaction and then calls
+   * `declare()`; without this, a bad variant id would leave an orphan
+   * consignment with no leg — a row the panel cannot render and nobody
+   * can act on.
+   */
+  async assertVariants(sellerId: string, lines: DeclareReceiptLineDto[]): Promise<void> {
     const ids = [...new Set(lines.map((l) => l.variantId))];
     const map = await this.catalog.getVariantsByIds(ids);
     for (const id of ids) {

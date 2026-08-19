@@ -115,6 +115,13 @@ export class ConsignmentService {
         ? await this.warehouses.getBdIntakeWarehouseId()
         : await this.warehouses.getDefaultWarehouseId();
 
+    // Validate the LINES before the consignment row exists, for the same
+    // reason as the warehouse above. The consignment is created in its own
+    // committed transaction and the leg is declared afterwards, so a bad
+    // variant id discovered later would leave an orphan consignment with
+    // no leg — a row the panel cannot render and nobody can act on.
+    await this.receipts.assertVariants(sellerId, input.lines);
+
     const consignmentId = await this.prisma.client.$transaction(async (tx) => {
       const number = await this.numbering.nextConsignmentNumber(tx);
       const row = await tx.consignment.create({
