@@ -190,16 +190,36 @@ export function ProductsIndex(): ReactElement {
         <Table>
           <THead>
             <Tr>
+              <Th className="w-14" aria-label="Image" />
               <Th>Name</Th>
               <Th>Ref</Th>
               <Th>Status</Th>
               <Th align="right">Weight (g)</Th>
+              <Th align="right">Declared (₹)</Th>
               <Th>Updated</Th>
             </Tr>
           </THead>
           <TBody>
             {list.data.items.map((p) => (
               <Tr key={p.id} onActivate={() => router.push(`/products/${p.id}`)}>
+                <Td>
+                  {/* The first image of any of its variants. A catalogue
+                      is browsed by eye; a column of names makes the
+                      seller read to find the thing they can see. */}
+                  {p.primaryImageUrl != null ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={p.primaryImageUrl}
+                      alt=""
+                      className="border-border h-9 w-9 rounded-[4px] border object-cover"
+                    />
+                  ) : (
+                    <div
+                      className="border-border bg-surface-raised h-9 w-9 rounded-[4px] border"
+                      aria-hidden
+                    />
+                  )}
+                </Td>
                 <Td>
                   <Link href={`/products/${p.id}`} className="text-text-bright hover:underline">
                     {p.name}
@@ -212,6 +232,9 @@ export function ProductsIndex(): ReactElement {
                 <Td align="right" className="text-text-muted font-mono text-xs">
                   {p.defaultWeightGrams ?? '—'}
                 </Td>
+                <Td align="right" className="text-text-muted font-mono text-xs">
+                  {p.defaultDeclaredValueInr ?? '—'}
+                </Td>
                 <Td className="text-text-muted text-xs font-mono">
                   {new Date(p.updatedAt).toISOString().slice(0, 16).replace('T', ' ')}
                 </Td>
@@ -220,7 +243,7 @@ export function ProductsIndex(): ReactElement {
           </TBody>
           <tfoot>
             <tr>
-              <td colSpan={6} className="p-0">
+              <td colSpan={7} className="p-0">
                 <TablePaginator
                   page={params.page}
                   pageSize={PAGE_SIZE}

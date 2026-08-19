@@ -30,6 +30,12 @@ export interface ListSellerProductsQuery {
 
 export interface SellerProductView {
   readonly id: string;
+  /**
+   * One picture for the list — the first image of any of this product's
+   * variants. Set by the LIST endpoint only; a detail read does not carry
+   * it, because that page loads the variants and their images anyway.
+   */
+  readonly primaryImageUrl?: string | null;
   readonly sellerId: string;
   readonly name: string;
   readonly description: string | null;

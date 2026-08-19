@@ -11,8 +11,13 @@ import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import type { CreateProductDto } from '../dto/create-product.dto';
 import type { UpdateProductDto } from '../dto/update-product.dto';
 import type { ListProductsQueryDto } from '../dto/list-products.dto';
+import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
+import { deriveThumbnailKey } from '../../catalog-image/image-key';
 
 export interface ProductView {
+  /** Set only by the LIST — one picture so a product is recognisable
+   *  without opening it. Null when no variant has an image. */
+  primaryImageUrl?: string | null;
   id: string;
   sellerId: string;
   name: string;
@@ -53,6 +58,9 @@ export class CatalogProductService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
+    // For the list's cover image. Objects are private, so a URL is
+    // minted per request rather than kept in a column.
+    private readonly spaces: SpacesService,
   ) {}
 
   async create(
@@ -129,7 +137,47 @@ export class CatalogProductService {
       }),
       this.prisma.client.product.count({ where }),
     ]);
-    return { items, total, page, pageSize };
+    return { items: await this.withCoverImages(items), total, page, pageSize };
+  }
+
+  /**
+   * One picture per product, for the list.
+   *
+   * A product has no image of its own — images belong to variants — so
+   * the cover is the first image of any of its variants, ordered the same
+   * way the variant's own images page orders them (primary, then display
+   * order, then age). That keeps "the primary picture" meaning one thing
+   * across the three screens that show it.
+   *
+   * ONE query for the whole page rather than one per row: twenty products
+   * would otherwise be twenty round trips to render a list nobody has
+   * clicked into yet.
+   */
+  private async withCoverImages(items: ProductView[]): Promise<ProductView[]> {
+    if (items.length === 0) return items;
+    const images = await this.prisma.client.productImage.findMany({
+      where: { deletedAt: null, variant: { productId: { in: items.map((p) => p.id) } } },
+      orderBy: [{ isPrimary: 'desc' }, { displayOrder: 'asc' }, { createdAt: 'asc' }],
+      select: { spacesKey: true, thumbnailUrl: true, variant: { select: { productId: true } } },
+    });
+
+    const firstFor = new Map<string, (typeof images)[number]>();
+    for (const img of images) {
+      if (!firstFor.has(img.variant.productId)) firstFor.set(img.variant.productId, img);
+    }
+
+    return Promise.all(
+      items.map(async (p) => {
+        const img = firstFor.get(p.id);
+        if (img === undefined) return { ...p, primaryImageUrl: null };
+        // Presigned per request — every object in the bucket is private.
+        // Prefer the thumbnail: this is a 36px cell and the original can
+        // be several megabytes.
+        const key =
+          (img.thumbnailUrl !== null ? deriveThumbnailKey(img.spacesKey) : null) ?? img.spacesKey;
+        return { ...p, primaryImageUrl: await this.spaces.presignGetUrl(key) };
+      }),
+    );
   }
 
   async getById(sellerId: string, id: string): Promise<ProductView> {
