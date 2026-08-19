@@ -19,18 +19,32 @@ import type { ConsignmentLegView, ConsignmentView } from '@skydrop/api-client';
  * `@skydrop/ui/status` (FE-6). This file is words only.
  */
 
-/** How the goods travel, and what it costs, said once. */
-export function routeWords(route: ConsignmentRoute): { title: string; blurb: string } {
+/**
+ * How the goods travel, and what it costs, said once.
+ *
+ * `hint` is what fits on the choice itself — enough to pick correctly
+ * without reading a paragraph. `blurb` is the full answer, shown behind
+ * the info toggle for somebody who wants it. Two sizes rather than one,
+ * because a form that explains everything up front is a form nobody
+ * reads.
+ */
+export function routeWords(route: ConsignmentRoute): {
+  title: string;
+  hint: string;
+  blurb: string;
+} {
   switch (route) {
     case ConsignmentRoute.DIRECT_IN:
       return {
         title: 'Straight to India',
+        hint: 'You ship it there yourself',
         blurb:
           'You ship to our Indian warehouse yourself. One arrival, one count, and no inbound freight from us.',
       };
     case ConsignmentRoute.VIA_BD:
       return {
         title: 'Via our Bangladesh warehouse',
+        hint: 'We move it on, and bill the freight',
         blurb:
           'You ship to Dhaka and we move it to India for you. This is the option we charge inbound freight for — the bill is raised once the forwarder invoices us.',
       };
@@ -108,9 +122,17 @@ export function declaredUnits(leg: ConsignmentLegView): number {
   return leg.lines.reduce((n, l) => n + l.expectedQty, 0);
 }
 
-/** Units counted on this leg, or null while nobody has counted yet. */
+/**
+ * Units counted on this leg, or null while nobody has counted yet.
+ *
+ * The STATUS is what decides, not the quantities. `receivedQty` defaults
+ * to 0 on a line nobody has touched, so summing it returned 0 for a
+ * freshly announced consignment — indistinguishable from a warehouse
+ * that opened the carton and genuinely found nothing. A seller who had
+ * announced 300 units a minute earlier was told 300 were missing.
+ */
 export function countedUnits(leg: ConsignmentLegView): number | null {
-  if (leg.lines.every((l) => l.receivedQty === null)) return null;
+  if (leg.status !== 'COMPLETED') return null;
   return leg.lines.reduce((n, l) => n + (l.receivedQty ?? 0), 0);
 }
 

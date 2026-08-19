@@ -283,9 +283,17 @@ function LegCard({
 }): ReactElement {
   const counted = countedUnits(leg);
   const declared = declaredUnits(leg);
-  const anyVariance = leg.lines.some(
-    (l) => l.receivedQty !== null && l.receivedQty !== l.expectedQty,
-  );
+  /**
+   * NOT COUNTED is not the same as COUNTED ZERO, and `receivedQty`
+   * cannot tell them apart — it defaults to 0 on a line nobody has
+   * touched. Reading it directly told a seller whose consignment had
+   * only just been announced that 300 units were missing.
+   *
+   * The receipt's STATUS is the discriminator: until it is COMPLETED,
+   * nothing here has been counted and there is nothing to compare.
+   */
+  const isCounted = leg.status === 'COMPLETED';
+  const anyVariance = isCounted && leg.lines.some((l) => (l.receivedQty ?? 0) !== l.expectedQty);
 
   return (
     <Card>
@@ -349,7 +357,7 @@ function LegCard({
           ) : (
             <TBody>
               {leg.lines.map((l) => {
-                const diff = l.receivedQty === null ? null : l.receivedQty - l.expectedQty;
+                const diff = isCounted ? (l.receivedQty ?? 0) - l.expectedQty : null;
                 return (
                   <Tr key={l.id}>
                     <Td>
@@ -364,10 +372,10 @@ function LegCard({
                       <Num value={l.expectedQty} />
                     </Td>
                     <Td align="right">
-                      {l.receivedQty === null ? (
+                      {!isCounted ? (
                         <span className="text-text-muted">—</span>
                       ) : (
-                        <Num value={l.receivedQty} />
+                        <Num value={l.receivedQty ?? 0} />
                       )}
                     </Td>
                     <Td align="right">

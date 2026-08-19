@@ -149,11 +149,29 @@ describe('what the seller is told about the contents', () => {
     expect(productCount(c)).toBe(2);
   });
 
-  it('reports "not counted yet" as null rather than as zero', () => {
-    const pending = leg({ lines: [line({ expectedQty: 7 })] });
+  it('the STATUS decides whether anything has been counted, never the quantity', () => {
+    // This asserted the opposite and shipped the bug it was meant to
+    // prevent. `receivedQty` defaults to 0 on a line nobody has touched,
+    // so "counted zero" and "not counted" were the same value — and a
+    // seller who had announced 300 units a minute earlier was shown a
+    // red warning saying 300 were missing.
+    const pending = leg({ lines: [line({ expectedQty: 7, receivedQty: 0 })] });
     expect(declaredUnits(pending)).toBe(7);
     expect(countedUnits(pending)).toBeNull();
-    expect(countedUnits(leg({ lines: [line({ expectedQty: 7, receivedQty: 0 })] }))).toBe(0);
+
+    // A warehouse that genuinely opened the carton and found nothing is
+    // a real zero, and says so.
+    const emptyOnArrival = leg({
+      status: GoodsReceiptStatus.COMPLETED,
+      lines: [line({ expectedQty: 7, receivedQty: 0 })],
+    });
+    expect(countedUnits(emptyOnArrival)).toBe(0);
+
+    const counted = leg({
+      status: GoodsReceiptStatus.COMPLETED,
+      lines: [line({ expectedQty: 7, receivedQty: 5 })],
+    });
+    expect(countedUnits(counted)).toBe(5);
   });
 
   it('numbers the India legs only when there is more than one', () => {

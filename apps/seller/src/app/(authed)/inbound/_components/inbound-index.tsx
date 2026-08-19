@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
+import { Info } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { ConsignmentRoute, ConsignmentStatus } from '@skydrop/db';
 import {
   Button,
@@ -17,7 +19,6 @@ import {
   Section,
   Select,
   SkeletonRows,
-  Stat,
   StatusBadge,
   TBody,
   Table,
@@ -70,6 +71,7 @@ interface StagedLine {
 }
 
 export function InboundIndex(): ReactElement {
+  const router = useRouter();
   const canManage = can(useSellerIdentity(), 'inbound.manage');
   const [status, setStatus] = useState<ConsignmentStatus | ''>('');
   const [route, setRoute] = useState<ConsignmentRoute | ''>('');
@@ -97,20 +99,29 @@ export function InboundIndex(): ReactElement {
         }
       />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <Stat label="Shown" value={<Num value={items.length} />} />
-        <Stat
-          label="Still travelling"
-          hint="Announced, in Dhaka, or in the air"
-          value={<Num value={moving.length} />}
-        />
-        <Stat
-          label="Counted differently"
-          hint="Somebody counted something other than you declared. Nothing is blocked by it."
-          value={<Num value={varied.length} />}
-          tone={varied.length > 0 ? 'warn' : 'neutral'}
-        />
-      </div>
+      {/*
+        One line, not three tiles. Three of them for three small numbers
+        was most of the screen above the fold, and the tallest hint forced
+        the other two to match its height — so a page showing nothing at
+        all opened with a wall of empty boxes.
+
+        "Shown" is gone entirely: the table underneath already says how
+        many rows there are, and a count of the thing directly below it is
+        not a statistic.
+      */}
+      <p className="text-text-muted mb-3 text-sm">
+        <Num value={moving.length} /> still travelling
+        <span className="text-text-faint"> — announced, in Dhaka, or in the air</span>
+        {varied.length > 0 && (
+          <>
+            {' · '}
+            <span className="text-[var(--status-pending-fg)]">
+              <Num value={varied.length} /> counted differently
+            </span>
+            <span className="text-text-faint"> — nothing is blocked by it</span>
+          </>
+        )}
+      </p>
 
       <Toolbar>
         <label className="text-text-muted text-xs" htmlFor="cn-status">
@@ -183,7 +194,14 @@ export function InboundIndex(): ReactElement {
               </THead>
               <TBody>
                 {items.map((c) => (
-                  <Tr key={c.id}>
+                  <Tr
+                    key={c.id}
+                    // `onActivate`, not a raw onClick: it already skips a
+                    // click that landed on a link or button, and one that
+                    // ended a text selection. The <a> below stays — it is
+                    // the keyboard path, and a <tr> has no Enter key.
+                    onActivate={() => router.push(`/inbound/${c.id}`)}
+                  >
                     <Td>
                       <Link
                         href={`/inbound/${c.id}`}
@@ -248,6 +266,8 @@ function AnnounceConsignment({
 }): ReactElement {
   const create = useDeclareConsignment();
   const [route, setRoute] = useState<ConsignmentRoute>(ConsignmentRoute.DIRECT_IN);
+  /** Collapsed by default — see the note on the info toggle below. */
+  const [routeInfo, setRouteInfo] = useState(false);
   const [expectedArrivalAt, setExpectedArrivalAt] = useState('');
   const [sellerReference, setSellerReference] = useState('');
   /**
@@ -339,7 +359,26 @@ function AnnounceConsignment({
       title="Announce a consignment"
       description="Say where you are sending it and what is in it, so receiving knows what to count against."
     >
-      <Section title="Where are you sending it?">
+      <Section
+        title="Where are you sending it?"
+        // The full explanation of each route used to sit inside the two
+        // choices, which made them tall enough to be most of the modal —
+        // and a seller picking the same route for the tenth time read
+        // none of it. It moved behind this toggle: the choice carries
+        // enough to decide, the paragraph is one click away, and neither
+        // is lost.
+        action={
+          <button
+            type="button"
+            onClick={() => setRouteInfo((v) => !v)}
+            aria-expanded={routeInfo}
+            aria-label={routeInfo ? 'Hide what the routes mean' : 'What do the routes mean?'}
+            className="text-text-muted hover:text-text-strong inline-flex h-8 w-8 items-center justify-center rounded-full"
+          >
+            <Info size={16} aria-hidden />
+          </button>
+        }
+      >
         <fieldset className="grid gap-2 sm:grid-cols-2">
           <legend className="sr-only">Route</legend>
           {Object.values(ConsignmentRoute).map((r) => {
@@ -348,7 +387,7 @@ function AnnounceConsignment({
             return (
               <label
                 key={r}
-                className={`border-border flex min-h-[44px] cursor-pointer gap-2.5 rounded-[6px] border p-3 ${
+                className={`border-border flex min-h-[44px] cursor-pointer items-center gap-2.5 rounded-[6px] border px-3 py-2 ${
                   chosen ? 'bg-[var(--color-accent-tint)] border-accent' : 'hover:bg-surface-hover'
                 }`}
               >
@@ -358,23 +397,39 @@ function AnnounceConsignment({
                   value={r}
                   checked={chosen}
                   onChange={() => setRoute(r)}
-                  className="mt-0.5 h-4 w-4 shrink-0"
+                  className="h-4 w-4 shrink-0"
                 />
-                <span className="flex min-w-0 flex-col gap-1">
+                <span className="flex min-w-0 flex-col">
                   <span className="text-text-strong text-sm font-medium">{words.title}</span>
-                  <span className="text-text-muted text-xs leading-snug">{words.blurb}</span>
+                  <span className="text-text-muted text-xs">{words.hint}</span>
                 </span>
               </label>
             );
           })}
         </fieldset>
+        {routeInfo && (
+          <dl className="text-text-muted mt-2 space-y-1.5 text-xs leading-snug">
+            {Object.values(ConsignmentRoute).map((r) => (
+              <div key={r}>
+                <dt className="text-text-strong inline font-medium">{routeWords(r).title}: </dt>
+                <dd className="inline">{routeWords(r).blurb}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
       </Section>
 
       <Section title="What is in it?">
         <p className="text-text-muted mb-3 text-xs">
           At least one product. Unit cost is optional but makes landed cost and margin accurate.
         </p>
-        <div className="grid gap-3 sm:grid-cols-3">
+        {/*
+          Four columns, with the button in the last one. It belongs to
+          the row it adds — parked on a line of its own underneath, it
+          read as a second opinion on the whole form and sat close enough
+          to Announce to be mistaken for it.
+        */}
+        <div className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr_auto]">
           <FormField label="Item" htmlFor="cn-variant">
             <VariantPicker
               id="cn-variant"
@@ -405,6 +460,22 @@ function AnnounceConsignment({
               onChange={(e) => setUnitCost(e.target.value)}
             />
           </FormField>
+          {/*
+            The empty label keeps the button on the same baseline as the
+            three inputs. `sr-only` text rather than nothing, so a screen
+            reader is not handed a bare control in a labelled row.
+          */}
+          <div className="flex flex-col justify-end">
+            <span className="sr-only">Add this product to the consignment</span>
+            <Button
+              variant={lineReady ? 'primary' : 'secondary'}
+              disabled={!lineReady}
+              onClick={addLine}
+              className="h-10 whitespace-nowrap"
+            >
+              Add
+            </Button>
+          </div>
         </div>
 
         <label className="text-text-body mt-2 flex items-center gap-2 text-sm">
@@ -422,9 +493,8 @@ function AnnounceConsignment({
             }}
             className="h-4 w-4"
           />
-          This product has manufacture and expiry dates
+          Has manufacture / expiry dates
         </label>
-
         {hasDates && (
           <div className="mt-2 grid gap-3 sm:grid-cols-2">
             <FormField label="Manufactured" htmlFor="cn-mfg" hint="Optional">
@@ -445,11 +515,14 @@ function AnnounceConsignment({
             </FormField>
           </div>
         )}
-        <Button variant="secondary" size="sm" disabled={!lineReady} onClick={addLine}>
-          Add product
-        </Button>
 
-        {lines.length > 0 && (
+        {/*
+          Always rendered, empty or not. Hidden until the first row went
+          in, the seller had no way to know a list existed — they filled
+          the fields, saw nothing appear anywhere, and reasonably assumed
+          typing them was the whole job. The header IS the instruction.
+        */}
+        <div className="mt-3">
           <Table>
             <THead>
               <Tr>
@@ -478,7 +551,10 @@ function AnnounceConsignment({
                         />
                       )}
                       <span className="flex min-w-0 flex-col">
-                        <span className="text-text-body truncate text-sm">{l.label}</span>
+                        {/* Same reason as the picker: the variant label
+                            is the tail of the string and the thing that
+                            distinguishes one staged row from the next. */}
+                        <span className="text-text-body text-sm leading-snug">{l.label}</span>
                         <span className="text-text-muted font-mono text-xs">{l.skuCode}</span>
                       </span>
                     </span>
@@ -498,9 +574,18 @@ function AnnounceConsignment({
                   </Td>
                 </Tr>
               ))}
+              {lines.length === 0 && (
+                <Tr>
+                  <Td colSpan={4}>
+                    <span className="text-text-muted text-xs">
+                      Nothing added yet. Pick a product above, give it a quantity, then press Add.
+                    </span>
+                  </Td>
+                </Tr>
+              )}
             </TBody>
           </Table>
-        )}
+        </div>
       </Section>
 
       <Section>

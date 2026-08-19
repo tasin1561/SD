@@ -91,7 +91,12 @@ export function VariantPicker({
         <div
           id={`${id}-listbox`}
           role="listbox"
-          className="border-border bg-surface absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-[6px] border shadow-[var(--shadow-2)]"
+          // Wider than the field it hangs off, and free to grow. Bound to
+          // the input's width it truncated every name to "Aviator OG
+          // Sung…", so four variants of one product were four identical
+          // rows and the SKU was the only thing telling them apart —
+          // which is exactly the choice this control exists to make easy.
+          className="border-border bg-surface absolute z-20 mt-1 max-h-72 w-full min-w-[22rem] overflow-auto rounded-[6px] border shadow-[var(--shadow-2)] sm:w-max sm:max-w-[32rem]"
         >
           {!maySearch ? (
             <p className="text-text-muted px-3 py-2 text-xs">
@@ -118,7 +123,7 @@ export function VariantPicker({
                   type="button"
                   role="option"
                   aria-selected={h.id === value}
-                  className="hover:bg-surface-hover flex w-full items-center gap-2.5 px-3 py-2 text-left"
+                  className="hover:bg-surface-hover flex w-full items-start gap-2.5 px-3 py-2 text-left"
                   onClick={() => {
                     onPick(h, shown);
                     setQuery('');
@@ -139,8 +144,10 @@ export function VariantPicker({
                     />
                   )}
                   <span className="flex min-w-0 flex-col gap-0.5">
-                    <span className="text-text-body truncate text-sm">{shown}</span>
-                    <span className="text-text-muted font-mono text-xs">{h.skuCode}</span>
+                    {/* Wraps rather than truncates — the variant label is
+                        the end of the string and the whole point of it. */}
+                    <span className="text-text-body text-sm leading-snug">{shown}</span>
+                    <span className="text-text-muted font-mono text-xs break-all">{h.skuCode}</span>
                   </span>
                 </button>
               );
