@@ -389,23 +389,31 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install Playwright chromium
-        # BOUNDED AND RETRIED, because this step is the one that talks to
-        # the outside world and it has hung twice for 20+ minutes on
-        # `apt-get` against archive.ubuntu.com. Unbounded, it ate the
-        # job's whole 25-minute budget and was then cancelled by the next
-        # push — which reads in the run list as "CI cancelled", tells you
-        # nothing about why, and silently stops the deploy. Two commits
-        # went undeployed that way before anyone looked at the log.
+        # NO `--with-deps`, and that is the fix rather than an omission.
         #
-        # 8 minutes is several times the normal 40 seconds, so a genuine
-        # slow runner still passes; a stall fails fast and says so. The
-        # retry covers the transient case, which is what this has been
-        # every time so far.
-        timeout-minutes: 8
+        # `--with-deps` runs apt, and apt against archive.ubuntu.com is
+        # what hung this job for 20+ minutes twice and then burned the
+        # 8-minute bound the previous attempt added. The bound worked —
+        # it failed fast and named the step — but the cure for a slow
+        # mirror is not to wait for it more politely.
+        #
+        # What that apt run actually did, read off the log: 26 packages
+        # "already the newest version" (every library chromium links
+        # against is in the runner image), and 9 NEW ones that are all
+        # FONTS — CJK, Cyrillic, emoji glyph sets. No spec here renders a
+        # non-Latin script: they visit /login, /dashboard, the marketing
+        # page and the app roots, and each app ships its own committed
+        # latin-subset woff2. So the only thing 21MB of archive was
+        # buying us was glyphs nothing draws.
+        #
+        # If a spec ever does assert on Devanagari — apps/track has a
+        # Hindi locale — install just that font here rather than bringing
+        # the whole apt path back.
+        timeout-minutes: 6
         run: |
-          pnpm exec playwright install --with-deps chromium \
+          pnpm exec playwright install chromium \
             || { echo "::warning::playwright install failed once, retrying"; \
-                 sleep 5; pnpm exec playwright install --with-deps chromium; }
+                 sleep 5; pnpm exec playwright install chromium; }
 
       - name: Start the API
         env:
