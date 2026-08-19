@@ -63,12 +63,28 @@ const RECEIPT_VIEW_INCLUDE = {
           product: { select: { name: true } },
         },
       },
+      // The batch and bin BY CODE. Both are stamped at completion and
+      // both were rendered as uuids, which tells a person at a bench
+      // nothing about which shelf the goods went on.
+      batch: { select: { batchCode: true } },
+      putawayBin: { select: { code: true } },
     },
   },
   // Seller display for the admin list — operator picks a receipt
   // from a queue and needs to know whose parcel this is.
   seller: {
     select: { id: true, companyName: true, email: true },
+  },
+  // The warehouse and the receiver BY NAME. Both were reachable through
+  // relations and neither was selected, so the screen printed their
+  // uuids — the same "a uuid is not an answer" mistake the line rows
+  // used to make. StaffUser has no display name, so the email is the
+  // human-readable handle it does have.
+  warehouse: {
+    select: { id: true, code: true, name: true },
+  },
+  receivedBy: {
+    select: { id: true, email: true, emailDisplay: true },
   },
 } as const;
 

@@ -25,6 +25,9 @@ export interface GoodsReceiptLineView {
     readonly variantLabel: string | null;
     readonly product: { readonly name: string };
   };
+  /** Stamped at completion; null before. Shown by CODE, not id. */
+  readonly batch: { readonly batchCode: string } | null;
+  readonly putawayBin: { readonly code: string } | null;
 }
 
 export interface GoodsReceiptView {
@@ -54,6 +57,18 @@ export interface GoodsReceiptView {
     readonly companyName: string;
     readonly email: string;
   };
+  readonly warehouse: {
+    readonly id: string;
+    readonly code: string;
+    readonly name: string;
+  };
+  /** Null until somebody starts receiving. StaffUser carries no display
+   *  name, so the email is the readable handle. */
+  readonly receivedBy: {
+    readonly id: string;
+    readonly email: string;
+    readonly emailDisplay: string | null;
+  } | null;
   readonly lines: ReadonlyArray<GoodsReceiptLineView>;
 }
 

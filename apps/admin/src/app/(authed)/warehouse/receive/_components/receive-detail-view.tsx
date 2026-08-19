@@ -98,7 +98,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
     setBusy('start');
     try {
       await start.mutateAsync({ id });
-      toast.success('Started receiving — record each line below.');
+      toast.success('Started receiving — record each product below.');
     } catch (e) {
       setError(serverVerdict(e));
     } finally {
@@ -218,7 +218,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
         title={<span className="font-mono">{r.receiptNumber}</span>}
         subtitle={
           <span>
-            {r.seller.companyName} · {r.lines.length} line(s) ·{' '}
+            {r.seller.companyName} · {r.lines.length} product(s) ·{' '}
             <span className="uppercase tracking-wide">{r.status}</span>
           </span>
         }
@@ -242,7 +242,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                   disabled={busy !== null}
                   onClick={() => void onRecordAll()}
                 >
-                  {busy === 'record' ? 'Recording…' : 'Record all lines'}
+                  {busy === 'record' ? 'Recording…' : 'Record all products'}
                 </Button>
                 <Button
                   variant="primary"
@@ -278,12 +278,15 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
               label="Expected arrival"
               value={r.expectedArrivalAt ? new Date(r.expectedArrivalAt).toLocaleDateString() : '—'}
             />
-            <Field label="Warehouse" value={r.warehouseId} />
+            <Field label="Warehouse" value={`${r.warehouse.code} — ${r.warehouse.name}`} />
             <Field label="Declared" value={new Date(r.createdAt).toLocaleString()} />
             {/* `receivedAt` is stamped at completion; the receipt moving
                 to ARRIVING is what "started" means, and the staff id
                 recorded then is who took it on. */}
-            <Field label="Received by" value={r.receivedById ?? '—'} />
+            <Field
+              label="Received by"
+              value={r.receivedBy?.emailDisplay ?? r.receivedBy?.email ?? '—'}
+            />
             <Field
               label="Received at"
               value={r.receivedAt ? new Date(r.receivedAt).toLocaleString() : '—'}
@@ -294,7 +297,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
         </CardBody>
       </Card>
 
-      <h2 className="text-text-bright text-sm font-medium mt-5 mb-2">Lines</h2>
+      <h2 className="text-text-bright text-sm font-medium mt-5 mb-2">Products</h2>
 
       <div className="space-y-2">
         {r.lines.map((line) => (
@@ -347,11 +350,11 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                     <span>
                       Exp {line.expiresAt ? new Date(line.expiresAt).toLocaleDateString() : '—'}
                     </span>
-                    {line.batchId !== null && (
-                      <span className="font-mono">batch {line.batchId}</span>
+                    {line.batch !== null && (
+                      <span className="font-mono">batch {line.batch.batchCode}</span>
                     )}
-                    {line.putawayBinId !== null && (
-                      <span className="font-mono">bin {line.putawayBinId}</span>
+                    {line.putawayBin !== null && (
+                      <span className="font-mono">bin {line.putawayBin.code}</span>
                     )}
                   </div>
                 </div>

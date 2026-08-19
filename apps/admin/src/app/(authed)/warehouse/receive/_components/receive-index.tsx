@@ -130,7 +130,7 @@ export function ReceiveIndex(): ReactElement {
               <Th>Receipt</Th>
               <Th>Seller</Th>
               <Th>Status</Th>
-              <Th className="text-right">Lines</Th>
+              <Th className="text-right">Products</Th>
               <Th>Declared</Th>
               <Th>Last update</Th>
             </Tr>
