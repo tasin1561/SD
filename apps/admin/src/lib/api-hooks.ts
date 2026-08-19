@@ -1329,6 +1329,12 @@ export interface WarehouseSummary {
   readonly timezone: string;
   /** Does this building record WHERE stock sits? Per-warehouse. */
   readonly binTrackingEnabled: boolean;
+  /**
+   * Can customer orders ship FROM here? False for an intake-only site
+   * such as the Bangladesh warehouse: its stock is real and on hand and
+   * sellable from nowhere until it reaches India.
+   */
+  readonly fulfilsOrders: boolean;
 }
 
 export function useWarehouses(): UseQueryResult<ReadonlyArray<WarehouseSummary>> {
@@ -1441,6 +1447,12 @@ export interface CreateWarehouseBody {
   readonly status?: string;
   readonly countryCode?: string;
   readonly timezone?: string;
+  /**
+   * Settable at CREATE deliberately. Creating an intake site as a
+   * fulfilment warehouse and turning the flag off afterwards leaves a
+   * window in which its stock is offered to customers.
+   */
+  readonly fulfilsOrders?: boolean;
 }
 
 /**
@@ -1454,6 +1466,9 @@ export interface UpdateWarehouseBody {
   readonly status?: string;
   readonly countryCode?: string;
   readonly timezone?: string;
+  /** Turning this OFF is refused while the warehouse holds active
+   *  reservations — those orders are committed to ship from here. */
+  readonly fulfilsOrders?: boolean;
 }
 
 export function useCreateWarehouse(): UseMutationResult<

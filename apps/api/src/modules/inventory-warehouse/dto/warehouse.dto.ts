@@ -41,6 +41,20 @@ export class CreateWarehouseDto {
   @IsString()
   @MaxLength(64)
   timezone?: string;
+
+  @ApiProperty({
+    required: false,
+    default: true,
+    description:
+      'Can customer orders ship FROM this building? Set false for an intake-only site ' +
+      'such as the Bangladesh warehouse — its stock is on its way to India and is not ' +
+      'sellable from there. Must be set at CREATE for an intake site: creating it as a ' +
+      'fulfilment warehouse and turning the flag off afterwards leaves a window in which ' +
+      'its stock is offered to customers.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  fulfilsOrders?: boolean;
 }
 
 /** code is immutable (natural key referenced by ops.default_warehouse_id). */
@@ -68,6 +82,20 @@ export class UpdateWarehouseDto {
   @IsString()
   @MaxLength(64)
   timezone?: string;
+
+  @ApiProperty({
+    required: false,
+    default: true,
+    description:
+      'Can customer orders ship FROM this building? Set false for an intake-only site ' +
+      'such as the Bangladesh warehouse — its stock is on its way to India and is not ' +
+      'sellable from there. Must be set at CREATE for an intake site: creating it as a ' +
+      'fulfilment warehouse and turning the flag off afterwards leaves a window in which ' +
+      'its stock is offered to customers.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  fulfilsOrders?: boolean;
 }
 
 export class ListWarehousesQueryDto {

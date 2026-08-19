@@ -1428,16 +1428,19 @@ model GoodsReceipt {
   updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt         DateTime?          @map("deleted_at") @db.Timestamptz
 
-  seller                 Seller                @relation(fields: [sellerId], references: [id])
-  warehouse              Warehouse             @relation(fields: [warehouseId], references: [id])
-  consignment            Consignment?          @relation(fields: [consignmentId], references: [id])
-  receivedBy             StaffUser?            @relation("GoodsReceiptReceivedBy", fields: [receivedById], references: [id])
-  dispatchedBy           StaffUser?            @relation("GoodsReceiptDispatchedBy", fields: [dispatchedById], references: [id])
-  lines                  GoodsReceiptLine[]
-  stockBatches           StockBatch[]
-  // R3 — the BD→India inbound freight bill for this consignment.
-  freightCharge          InboundFreightCharge? @relation(fields: [inboundFreightChargeId], references: [id])
-  inboundFreightChargeId String?               @db.Uuid
+  seller       Seller             @relation(fields: [sellerId], references: [id])
+  warehouse    Warehouse          @relation(fields: [warehouseId], references: [id])
+  consignment  Consignment?       @relation(fields: [consignmentId], references: [id])
+  receivedBy   StaffUser?         @relation("GoodsReceiptReceivedBy", fields: [receivedById], references: [id])
+  dispatchedBy StaffUser?         @relation("GoodsReceiptDispatchedBy", fields: [dispatchedById], references: [id])
+  lines        GoodsReceiptLine[]
+  stockBatches StockBatch[]
+  // The freight bill hangs off the CONSIGNMENT, not a receipt — see
+  // Consignment.freightCharge. There is deliberately NO back-relation
+  // here: leaving one after the FK moved made Prisma invent an implicit
+  // relation with a scalar `inboundFreightChargeId` on this table that no
+  // migration ever created, so `prisma validate` passed on a schema the
+  // database could not satisfy and every goods-receipt insert 500'd.
 
   @@index([sellerId])
   @@index([warehouseId])
@@ -1534,12 +1537,11 @@ model InboundFreightCharge {
   createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz
   updatedAt            DateTime             @updatedAt @map("updated_at") @db.Timestamptz
 
-  seller        Seller                     @relation(fields: [sellerId], references: [id])
-  consignment   Consignment                @relation(fields: [consignmentId], references: [id])
-  allocations   InboundFreightAllocation[]
-  settledBy     StaffUser?                 @relation("InboundFreightSettledBy", fields: [settledByStaffId], references: [id])
-  walletEntry   SellerWalletEntry?         @relation(fields: [walletEntryId], references: [id])
-  goodsReceipts GoodsReceipt[]
+  seller      Seller                     @relation(fields: [sellerId], references: [id])
+  consignment Consignment                @relation(fields: [consignmentId], references: [id])
+  allocations InboundFreightAllocation[]
+  settledBy   StaffUser?                 @relation("InboundFreightSettledBy", fields: [settledByStaffId], references: [id])
+  walletEntry SellerWalletEntry?         @relation(fields: [walletEntryId], references: [id])
 
   @@index([sellerId, status])
   @@index([status])

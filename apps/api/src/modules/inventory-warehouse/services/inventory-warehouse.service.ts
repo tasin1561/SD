@@ -26,6 +26,8 @@ export interface WarehouseView {
   countryCode: string;
   timezone: string;
   binTrackingEnabled: boolean;
+  /** False for an intake-only site: real stock, not sellable from here. */
+  fulfilsOrders: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -64,6 +66,7 @@ const WAREHOUSE_SELECT = {
   countryCode: true,
   timezone: true,
   binTrackingEnabled: true,
+  fulfilsOrders: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -151,6 +154,10 @@ export class InventoryWarehouseService {
             status: input.status ?? WarehouseStatus.ACTIVE,
             countryCode: input.countryCode ?? 'IN',
             timezone: input.timezone ?? 'Asia/Kolkata',
+            // Settable at CREATE on purpose. Creating an intake site as a
+            // fulfilment warehouse and turning the flag off afterwards
+            // leaves a window in which its stock is offered to customers.
+            fulfilsOrders: input.fulfilsOrders ?? true,
           },
           select: WAREHOUSE_SELECT,
         });
@@ -165,6 +172,8 @@ export class InventoryWarehouseService {
           {
             code: row.code,
             status: row.status,
+            countryCode: row.countryCode,
+            fulfilsOrders: row.fulfilsOrders,
           },
         );
         return row;
@@ -203,6 +212,11 @@ export class InventoryWarehouseService {
       data.timezone = input.timezone;
       changes['timezone'] = input.timezone;
     }
+    if (input.fulfilsOrders !== undefined) {
+      await this.assertFulfilmentChangeIsSafe(id, input.fulfilsOrders);
+      data.fulfilsOrders = input.fulfilsOrders;
+      changes['fulfilsOrders'] = String(input.fulfilsOrders);
+    }
     if (Object.keys(changes).length === 0) return this.getWarehouse(id);
 
     return this.prisma.client.$transaction(async (tx) => {
@@ -219,6 +233,38 @@ export class InventoryWarehouseService {
       );
       return row;
     });
+  }
+
+  /**
+   * Turning fulfilment OFF withdraws a whole building from sale.
+   *
+   * Refused while it holds ACTIVE reservations: those orders are already
+   * committed to shipping from here, and flipping the flag would make
+   * their stock unreachable to the allocator — every one of them would
+   * shortfall on the warehouse floor rather than fail where somebody
+   * could see why. Release or dispatch them first.
+   *
+   * Turning it ON is unguarded: it only ever makes more stock sellable.
+   * The dangerous direction is the other one, and only for a site that
+   * already has work in flight.
+   */
+  private async assertFulfilmentChangeIsSafe(
+    warehouseId: string,
+    fulfilsOrders: boolean,
+  ): Promise<void> {
+    if (fulfilsOrders) return;
+    const held = await this.prisma.client.stockReservation.count({
+      where: { warehouseId, status: 'ACTIVE' },
+    });
+    if (held > 0) {
+      throw new ConflictException({
+        code: 'WAREHOUSE_HAS_ACTIVE_RESERVATIONS',
+        message:
+          `This warehouse holds ${held} active reservation(s) for orders that are committed to ` +
+          'ship from here. Turning fulfilment off would leave every one of them to shortfall on ' +
+          'the floor. Dispatch or release them first.',
+      });
+    }
   }
 
   /**

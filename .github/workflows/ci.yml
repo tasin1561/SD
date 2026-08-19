@@ -282,6 +282,27 @@ jobs:
         working-directory: packages/db
         run: pnpm exec prisma migrate deploy
 
+      # Does the SCHEMA agree with the MIGRATIONS? `prisma validate` only
+      # asks whether the schema is internally consistent, and a schema can
+      # be perfectly consistent while describing columns no migration
+      # creates — which is exactly what happened when a dangling relation
+      # made `prisma format` invent an implicit FK on goods_receipts. The
+      # client then expected a column the database did not have, and the
+      # symptom was 80 e2e failures with a stack trace pointing at an
+      # unrelated insert. This asks the question directly and names the
+      # difference in one line.
+      #
+      # --exit-code: 0 = no difference, 2 = drift. It runs BEFORE the
+      # suite so drift is reported as drift rather than as a test failure.
+      - name: Schema matches migrations (no drift)
+        working-directory: packages/db
+        run: |
+          pnpm exec prisma migrate diff \
+            --from-migrations ./prisma/migrations \
+            --to-schema-datamodel ./prisma/schema.prisma \
+            --shadow-database-url "postgresql://skydrop:skydrop@localhost:5432/skydrop_drift_check?schema=public" \
+            --exit-code
+
       # TEST_DB_DOCKER_CONTAINER='' switches the harness from
       # `docker exec skydrop-postgres` (local dev) to a direct TCP psql
       # against the service container above.

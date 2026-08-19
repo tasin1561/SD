@@ -82,6 +82,7 @@ export function WarehouseFormPanel({
   const [status, setStatus] = useState(warehouse?.status ?? 'ACTIVE');
   const [countryCode, setCountryCode] = useState(warehouse?.countryCode ?? 'IN');
   const [timezone, setTimezone] = useState(warehouse?.timezone ?? 'Asia/Kolkata');
+  const [fulfilsOrders, setFulfilsOrders] = useState(warehouse?.fulfilsOrders ?? true);
 
   function reset(): void {
     setCode(warehouse?.code ?? '');
@@ -89,6 +90,7 @@ export function WarehouseFormPanel({
     setStatus(warehouse?.status ?? 'ACTIVE');
     setCountryCode(warehouse?.countryCode ?? 'IN');
     setTimezone(warehouse?.timezone ?? 'Asia/Kolkata');
+    setFulfilsOrders(warehouse?.fulfilsOrders ?? true);
     setError(null);
   }
 
@@ -122,6 +124,7 @@ export function WarehouseFormPanel({
         ...(status !== warehouse.status ? { status } : {}),
         ...(cc !== warehouse.countryCode ? { countryCode: cc } : {}),
         ...(trimmedTz !== warehouse.timezone ? { timezone: trimmedTz } : {}),
+        ...(fulfilsOrders !== warehouse.fulfilsOrders ? { fulfilsOrders } : {}),
       }
     : {};
   const nothingChanged = isEdit && Object.keys(changed).length === 0;
@@ -139,6 +142,7 @@ export function WarehouseFormPanel({
           status,
           countryCode: cc,
           timezone: trimmedTz,
+          fulfilsOrders,
         });
         toast.success(`Warehouse ${row.code} created, with a MAIN zone and a FLOOR bin.`);
       }
@@ -249,6 +253,24 @@ export function WarehouseFormPanel({
               </Select>
             </FormField>
           </div>
+
+          <FormField
+            label="Ships customer orders"
+            hint="Leave this on for a normal warehouse. Turn it OFF for an intake-only site such as our Bangladesh warehouse: stock waiting there is real and on hand, and must not be offered to customers in India until it lands and is counted."
+          >
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={fulfilsOrders}
+                onChange={(e) => setFulfilsOrders(e.target.checked)}
+              />
+              <span>
+                {fulfilsOrders
+                  ? 'Orders can ship from here'
+                  : 'Intake only — stock here is not sellable'}
+              </span>
+            </label>
+          </FormField>
         </div>
 
         <ModalFooter>
