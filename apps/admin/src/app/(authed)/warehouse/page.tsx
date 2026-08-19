@@ -34,13 +34,13 @@ export default function WarehouseHubPage(): ReactElement {
           href="/warehouse/consignments"
           icon={<Ship size={20} />}
           title="Consignments"
-          subtitle="Stock on its way in. Choose where it gets labelled, send a counted Bangladesh intake on to India, and see every leg in one place."
+          subtitle="The journey: where each one is, what each stop counted, and the steps counting has no opinion about — labelling, dispatch to India, cancelling."
         />
         <Tile
           href="/warehouse/receive"
           icon={<Inbox size={20} />}
           title="Receive"
-          subtitle="Count a consignment leg: claim, record qty/damage, putaway, complete (writes stock)."
+          subtitle="Where counting happens. Claim, record qty/damage, putaway, complete — this is the step that writes stock, for consignments and ordinary receipts alike."
         />
         <Tile
           href="/warehouse/pick"

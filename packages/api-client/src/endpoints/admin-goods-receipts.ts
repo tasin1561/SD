@@ -52,6 +52,15 @@ export interface GoodsReceiptView {
   readonly discrepancyNotes: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+  /**
+   * Set when this receipt is a LEG of a two-leg consignment. Null for an
+   * ordinary supplier receipt, and for anything that predates them.
+   */
+  readonly consignment: {
+    readonly id: string;
+    readonly consignmentNumber: string;
+    readonly route: string;
+  } | null;
   readonly seller: {
     readonly id: string;
     readonly companyName: string;

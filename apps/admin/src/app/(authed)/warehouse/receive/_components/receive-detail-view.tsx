@@ -229,6 +229,22 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
           <span>
             {r.seller.companyName} · {r.lines.length} product(s) ·{' '}
             <span className="uppercase tracking-wide">{r.status}</span>
+            {/*
+              Says which consignment this is a leg of, and links back.
+              This page is the BENCH — counting happens here; the
+              consignment panel is where the journey is steered from.
+            */}
+            {r.consignment !== null && (
+              <>
+                {' · leg of '}
+                <Link
+                  href={`/warehouse/consignments/${r.consignment.id}`}
+                  className="text-accent font-mono hover:underline"
+                >
+                  {r.consignment.consignmentNumber}
+                </Link>
+              </>
+            )}
           </span>
         }
         action={

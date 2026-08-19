@@ -131,6 +131,7 @@ export function ReceiveIndex(): ReactElement {
           <THead>
             <Tr>
               <Th>Receipt</Th>
+              <Th>Consignment</Th>
               <Th>Seller</Th>
               <Th>Status</Th>
               <Th className="text-right">Products</Th>
@@ -148,6 +149,25 @@ export function ReceiveIndex(): ReactElement {
                   >
                     {r.receiptNumber}
                   </Link>
+                </Td>
+                {/*
+                  A leg of a consignment says so, and links back to it.
+                  Without this the queue showed a bare GR- number and an
+                  operator had no way to tell it was the same thing as the
+                  consignment open in another tab — two lists of one
+                  parcel with nothing joining them.
+                */}
+                <Td className="font-mono text-xs">
+                  {r.consignment === null ? (
+                    <span className="text-text-faint">—</span>
+                  ) : (
+                    <Link
+                      href={`/warehouse/consignments/${r.consignment.id}`}
+                      className="text-accent hover:underline"
+                    >
+                      {r.consignment.consignmentNumber}
+                    </Link>
+                  )}
                 </Td>
                 <Td>{r.seller.companyName}</Td>
                 <Td className="text-text-muted text-xs uppercase">{r.status}</Td>

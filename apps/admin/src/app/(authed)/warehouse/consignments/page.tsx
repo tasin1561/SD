@@ -7,7 +7,7 @@ export default function ConsignmentsPage(): ReactElement {
     <div>
       <PageHeader
         title="Consignments"
-        subtitle="Stock on its way in. A consignment either ships straight to India or comes through our Bangladesh warehouse first — open one to count a leg, print labels, or send it on."
+        subtitle="The whole journey in one place: where each consignment is, what each stop counted, and the steps the receive station has no opinion about — labelling, dispatch to India, and cancelling. Counting itself happens on the receive station."
       />
       <ConsignmentsIndex />
     </div>

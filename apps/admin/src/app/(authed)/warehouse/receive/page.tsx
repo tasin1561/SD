@@ -7,7 +7,7 @@ export default function ReceivePage(): ReactElement {
     <div>
       <PageHeader
         title="Receive station"
-        subtitle="Goods receipts declared by sellers. Start receiving on the warehouse floor → record each product’s qty + bin → complete to write stock."
+        subtitle="Where counting happens. Start receiving on the warehouse floor → record each product’s qty + bin → complete to write stock. A row belonging to a consignment says which one — open that to label, dispatch or see the whole journey."
       />
       <ReceiveIndex />
     </div>

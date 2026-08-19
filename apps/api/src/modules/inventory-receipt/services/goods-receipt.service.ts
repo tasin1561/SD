@@ -69,6 +69,11 @@ const RECEIPT_VIEW_INCLUDE = {
           product: { select: { name: true } },
         },
       },
+      // Which consignment this receipt is a leg of, BY NUMBER. Without
+      // it the receive station showed a bare GR- number and the operator
+      // had no way to tell that the row in front of them was the same
+      // thing as the consignment they had open in another tab.
+      // (kept above the line fields for readability)
       // The batch and bin BY CODE. Both are stamped at completion and
       // both were rendered as uuids, which tells a person at a bench
       // nothing about which shelf the goods went on.
@@ -76,6 +81,10 @@ const RECEIPT_VIEW_INCLUDE = {
       putawayBin: { select: { code: true } },
     },
   },
+  // The consignment this receipt is a leg of. The receive station shows
+  // a bare GR- number otherwise, and an operator has no way to tell it
+  // is the same thing as the consignment open in another tab.
+  consignment: { select: { id: true, consignmentNumber: true, route: true } },
   // Seller display for the admin list — operator picks a receipt
   // from a queue and needs to know whose parcel this is.
   seller: {
