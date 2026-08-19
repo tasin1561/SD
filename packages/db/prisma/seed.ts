@@ -1246,7 +1246,29 @@ async function seedWarehouses() {
     },
     update: {},
   });
-  console.log(`  warehouses: 1 upserted (CCU-01)`);
+  // The MAIN zone and FLOOR bin, exactly as warehouse CREATION provisions
+  // them. The seed never did, so the one warehouse production ever had
+  // reached live with ZERO bins — the receiving screen's putaway dropdown
+  // was empty and there was no way to book anything in through the UI.
+  // BinPolicyService self-heals a FLOOR on the write path, which is why
+  // this went unnoticed: the API worked and the screen did not.
+  const wh = await prisma.warehouse.findUniqueOrThrow({
+    where: { code: 'CCU-01' },
+    select: { id: true },
+  });
+  const zone = await prisma.warehouseZone.upsert({
+    where: { warehouseId_code: { warehouseId: wh.id, code: 'MAIN' } },
+    create: { warehouseId: wh.id, code: 'MAIN', name: 'Main', pickOrder: 100 },
+    update: {},
+    select: { id: true },
+  });
+  await prisma.warehouseBin.upsert({
+    where: { warehouseId_code: { warehouseId: wh.id, code: 'FLOOR' } },
+    create: { warehouseId: wh.id, zoneId: zone.id, code: 'FLOOR', type: 'STORAGE' },
+    update: {},
+  });
+
+  console.log(`  warehouses: 1 upserted (CCU-01) with MAIN zone + FLOOR bin`);
 }
 
 async function seedRateCards() {

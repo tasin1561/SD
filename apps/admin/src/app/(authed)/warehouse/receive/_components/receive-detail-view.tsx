@@ -81,6 +81,11 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
   const isPending = r.status === 'PENDING';
   const isArriving = r.status === 'ARRIVING';
   const isCompleted = r.status === 'COMPLETED';
+  /** Bins stock can actually be shelved in — never a hold, damaged,
+   *  quarantine or transit location. */
+  const putawayBins = (bins.data ?? []).filter(
+    (b) => b.type === 'STORAGE' || b.type === 'RECEIVING',
+  );
   /**
    * Derived, never read from the stored note. Only meaningful once the
    * receipt is COMPLETED — `receivedQty` is 0 on a line nobody has
@@ -457,15 +462,29 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                     value={binByLine[line.id] ?? line.putawayBinId ?? ''}
                     onChange={(e) => setBinByLine({ ...binByLine, [line.id]: e.target.value })}
                   >
-                    <option value="">— select bin —</option>
-                    {(bins.data ?? [])
-                      .filter((b) => b.type === 'STORAGE' || b.type === 'RECEIVING')
-                      .map((b) => (
-                        <option key={b.id} value={b.id}>
-                          {b.code} ({b.type})
-                        </option>
-                      ))}
+                    <option value="">
+                      {putawayBins.length === 0
+                        ? '— this warehouse has no bin to put stock in —'
+                        : '— select bin —'}
+                    </option>
+                    {putawayBins.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.code} ({b.type})
+                      </option>
+                    ))}
                   </Select>
+                  {putawayBins.length === 0 && (
+                    // An empty REQUIRED dropdown with no explanation is a
+                    // dead end: the operator cannot complete the receipt
+                    // and nothing on the screen says why or what to do.
+                    <p className="text-text-muted mt-1 text-xs">
+                      Its only locations are ones stock cannot be shelved in.{' '}
+                      <Link href="/warehouse/bins" className="text-accent underline">
+                        Add a storage bin
+                      </Link>{' '}
+                      and reload.
+                    </p>
+                  )}
                 </FormField>
               </div>
             )}

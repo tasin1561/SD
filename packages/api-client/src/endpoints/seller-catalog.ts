@@ -211,4 +211,6 @@ export interface SellerVariantSearchHit {
    */
   readonly effectiveDeclaredValueInr: string | null;
   readonly effectiveWeightGrams: number | null;
+  /** Starred by this seller. Favourites sort to the top of a picker. */
+  readonly isFavourite: boolean;
 }

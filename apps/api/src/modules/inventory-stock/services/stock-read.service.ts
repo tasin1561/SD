@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { VariantStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { NON_PICKABLE_BIN_TYPES } from '../../inventory-shared/bin-policy.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 import {
   StockCacheService,
@@ -192,7 +193,24 @@ export class StockReadService {
     const [levels, reservations, sellerDefault] = await Promise.all([
       this.prisma.client.stockLevel.groupBy({
         by: ['variantId'],
-        where: { sellerId, warehouseId },
+        where: {
+          sellerId,
+          warehouseId,
+          // BIN-2, in the DISPLAY path. `StockAvailabilityService` was
+          // taught this when a return restocked into RTO_HOLD showed as
+          // sellable; the cached display beside it never was, so the
+          // seller's own inventory page went on counting hold, damaged
+          // and quarantine stock as available the whole time.
+          //
+          // TRANSIT made it visible: 100 units in the air between two of
+          // our warehouses read as 100 available to sell, AND as 100 in
+          // transit, because two different queries disagreed about
+          // whether a bin type matters.
+          //
+          // Same shared constant as the availability primitive and the
+          // pick allocator, so all three cannot drift apart.
+          bin: { type: { notIn: [...NON_PICKABLE_BIN_TYPES] }, deletedAt: null },
+        },
         _sum: { qtyOnHand: true },
       }),
       this.prisma.client.stockReservation.groupBy({

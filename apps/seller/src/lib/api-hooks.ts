@@ -552,6 +552,32 @@ export function useUpdateProduct(
  * query key carries the term, so React Query caches per term and typing
  * backwards is instant.
  */
+/**
+ * Star or unstar a variant.
+ *
+ * Invalidates the whole `variant-search` prefix rather than one key: the
+ * star changes the ORDER of every result set, not just the row tapped,
+ * so patching one cached list would leave the others sorted wrongly.
+ */
+export function useSetVariantFavourite(): UseMutationResult<
+  { isFavourite: boolean },
+  Error,
+  { variantId: string; isFavourite: boolean }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ variantId, isFavourite }) =>
+      client.request<{ isFavourite: boolean }>(`/api/seller/variants/${variantId}/favourite`, {
+        method: 'PUT',
+        body: { isFavourite },
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-catalog', 'variant-search'] });
+    },
+  });
+}
+
 export function useVariantSearch(
   search: string,
   opts?: { readonly enabled?: boolean },

@@ -167,6 +167,24 @@ describe('INV-3 / pick allocation predicate agreement', () => {
     ]);
   });
 
+  it('the cached DISPLAY path filters the same list — three readers, one constant', async () => {
+    // The availability primitive and the pick allocator agreed; the
+    // seller-facing cached display did not, and went on counting hold,
+    // damaged and quarantine stock as available. TRANSIT made it visible:
+    // 100 units in the air read as 100 available to sell AND 100 in
+    // transit, because two queries disagreed about whether a bin matters.
+    const src = readFileSync(
+      join(__dirname, '../../src/modules/inventory-stock/services/stock-read.service.ts'),
+      'utf8',
+    );
+    expect(src).toContain(
+      "import { NON_PICKABLE_BIN_TYPES } from '../../inventory-shared/bin-policy.service'",
+    );
+    expect(src).toContain('bin: { type: { notIn: [...NON_PICKABLE_BIN_TYPES] }, deletedAt: null }');
+    // Never a local re-listing, which is how the three drift apart.
+    expect(src).not.toMatch(/notIn:\s*\[\s*'RTO_HOLD'/);
+  });
+
   it('the pickable list is the complement, derived rather than re-typed', async () => {
     const { NON_PICKABLE_BIN_TYPES, PICKABLE_BIN_TYPES } =
       await import('../../src/modules/inventory-shared/bin-policy.service');

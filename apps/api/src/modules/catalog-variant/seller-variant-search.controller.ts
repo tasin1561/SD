@@ -1,4 +1,15 @@
-import { Controller, Get, HttpCode, HttpStatus, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentSeller } from '../../common/decorators/current-seller.decorator';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
@@ -6,6 +17,7 @@ import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
 import type { AuthenticatedSeller } from '../../common/types/request';
 import { SearchVariantsDto } from './dto/search-variants.dto';
+import { SetFavouriteVariantDto } from './dto/set-favourite.dto';
 import { CatalogVariantService, type VariantSearchHit } from './services/catalog-variant.service';
 
 /**
@@ -37,5 +49,24 @@ export class SellerVariantSearchController {
     @Query() query: SearchVariantsDto,
   ): Promise<VariantSearchHit[]> {
     return this.svc.searchForSeller(seller.id, query.search ?? '', query.limit ?? 20);
+  }
+
+  @Put(':variantId/favourite')
+  // `catalog.manage`, not `catalog.view`: it writes, and a VIEWER
+  // reordering everyone else's picker is not a read.
+  @RequireSellerPermissions('catalog.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Star or unstar a variant so it comes to the top of a picker',
+    description:
+      'Per SELLER, not per user — the catalogue belongs to the company and two people packing ' +
+      'the same orders want the same shortlist. Idempotent: starring twice changes nothing.',
+  })
+  setFavourite(
+    @CurrentSeller() seller: AuthenticatedSeller,
+    @Param('variantId', new ParseUUIDPipe({ version: '7' })) variantId: string,
+    @Body() body: SetFavouriteVariantDto,
+  ): Promise<{ isFavourite: boolean }> {
+    return this.svc.setFavourite(seller.id, variantId, body.isFavourite);
   }
 }

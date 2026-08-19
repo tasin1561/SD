@@ -3,7 +3,8 @@
 import { useMemo, useState, type ReactElement } from 'react';
 import { Input, Money, Num } from '@skydrop/ui/components';
 import type { SellerVariantSearchHit } from '@skydrop/api-client';
-import { useVariantSearch } from '@/lib/api-hooks';
+import { Star } from 'lucide-react';
+import { useSetVariantFavourite, useVariantSearch } from '@/lib/api-hooks';
 
 export interface PickedLine {
   readonly key: number;
@@ -50,6 +51,10 @@ export function ProductPicker({
 }): ReactElement {
   const [sku, setSku] = useState('');
   const [name, setName] = useState('');
+  /** Show only the starred ones. Off by default — a filter that hides
+   *  most of the catalogue should never be the state you arrive in. */
+  const [favouritesOnly, setFavouritesOnly] = useState(false);
+  const setFavourite = useSetVariantFavourite();
 
   // One query. The endpoint already matches SKU, variant label AND
   // product name, so two boxes searching different columns would be two
@@ -57,7 +62,10 @@ export function ProductPicker({
   // and each still reads as the thing it filters.
   const query = `${sku} ${name}`.trim();
   const results = useVariantSearch(query);
-  const hits = useMemo(() => results.data ?? [], [results.data]);
+  const hits = useMemo(() => {
+    const all = results.data ?? [];
+    return favouritesOnly ? all.filter((h) => h.isFavourite) : all;
+  }, [results.data, favouritesOnly]);
   const chosen = useMemo(() => new Set(lines.map((l) => l.variantId)), [lines]);
 
   return (
@@ -66,19 +74,35 @@ export function ProductPicker({
       <div className="border-border rounded-[8px] border">
         <div className="border-border-subtle border-b p-3">
           <h3 className="text-text-bright mb-2 text-sm font-medium">Click to add products</h3>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="flex items-center gap-2">
             <Input
               value={sku}
               onChange={(e) => setSku(e.target.value)}
               placeholder="Code / SKU"
               aria-label="Search by code or SKU"
+              className="min-w-0 flex-1"
             />
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Name"
               aria-label="Search by product name"
+              className="min-w-0 flex-1"
             />
+            <button
+              type="button"
+              onClick={() => setFavouritesOnly((v) => !v)}
+              aria-pressed={favouritesOnly}
+              aria-label={favouritesOnly ? 'Show all products' : 'Show starred products only'}
+              title={favouritesOnly ? 'Showing starred only' : 'Show starred only'}
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] border ${
+                favouritesOnly
+                  ? 'border-accent bg-[var(--color-accent-tint)] text-accent'
+                  : 'border-border text-text-muted hover:text-text-bright'
+              }`}
+            >
+              <Star size={16} fill={favouritesOnly ? 'currentColor' : 'none'} aria-hidden />
+            </button>
           </div>
         </div>
 
@@ -87,9 +111,11 @@ export function ProductPicker({
             <p className="text-text-muted p-3 text-sm">Searching…</p>
           ) : hits.length === 0 ? (
             <p className="text-text-muted p-3 text-sm">
-              {query === ''
-                ? 'Your active products appear here. Type to narrow them down.'
-                : `Nothing matches “${query}”.`}
+              {favouritesOnly
+                ? 'Nothing starred yet. Tap a star to keep a product at the top of this list.'
+                : query === ''
+                  ? 'Your active products appear here. Type to narrow them down.'
+                  : `Nothing matches “${query}”.`}
             </p>
           ) : (
             <ul>
@@ -97,12 +123,15 @@ export function ProductPicker({
                 const s = stockByVariant.get(h.id);
                 const already = chosen.has(h.id);
                 return (
-                  <li key={h.id} className="border-border-subtle border-b last:border-b-0">
+                  <li
+                    key={h.id}
+                    className="border-border-subtle hover:bg-surface-hover flex items-center border-b last:border-b-0"
+                  >
                     <button
                       type="button"
                       onClick={() => onAdd(h)}
                       disabled={already}
-                      className="hover:bg-surface-hover flex w-full items-center gap-3 p-3 text-left disabled:opacity-50"
+                      className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left disabled:opacity-50"
                     >
                       {h.primaryImageUrl !== null ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -142,6 +171,30 @@ export function ProductPicker({
                         </span>
                       </span>
                       {already && <span className="text-text-faint text-xs">Added</span>}
+                    </button>
+                    {/*
+                      Its OWN button, outside the add button. Nesting it
+                      would make starring add the product too — and a
+                      click that does two things is the one people stop
+                      trusting.
+                    */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void setFavourite.mutateAsync({
+                          variantId: h.id,
+                          isFavourite: !h.isFavourite,
+                        })
+                      }
+                      aria-pressed={h.isFavourite}
+                      aria-label={`${h.isFavourite ? 'Unstar' : 'Star'} ${h.skuCode}`}
+                      className={`mr-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] ${
+                        h.isFavourite
+                          ? 'text-[var(--status-pending-fg)]'
+                          : 'text-text-faint hover:text-text-muted'
+                      }`}
+                    >
+                      <Star size={16} fill={h.isFavourite ? 'currentColor' : 'none'} aria-hidden />
                     </button>
                   </li>
                 );

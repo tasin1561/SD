@@ -29,6 +29,8 @@ export interface VariantSearchHit {
    */
   effectiveDeclaredValueInr: string | null;
   effectiveWeightGrams: number | null;
+  /** Starred by this seller — the picker floats these to the top. */
+  isFavourite: boolean;
 }
 
 export interface VariantView {
@@ -274,6 +276,16 @@ export class CatalogVariantService {
     });
     if (rows.length === 0) return [];
 
+    // One query, not one per row.
+    const favourites = new Set(
+      (
+        await this.prisma.client.sellerFavouriteVariant.findMany({
+          where: { sellerId, variantId: { in: rows.map((r) => r.id) } },
+          select: { variantId: true },
+        })
+      ).map((f) => f.variantId),
+    );
+
     // One query for the whole result set — a type-ahead firing twenty
     // image lookups per keystroke would be worse than no pictures.
     const images = await this.prisma.client.productImage.findMany({
@@ -286,7 +298,7 @@ export class CatalogVariantService {
       if (!firstFor.has(img.variantId)) firstFor.set(img.variantId, img);
     }
 
-    return Promise.all(
+    const hits = await Promise.all(
       rows.map(async (r) => {
         const img = firstFor.get(r.id);
         const key =
@@ -307,9 +319,48 @@ export class CatalogVariantService {
           effectiveDeclaredValueInr:
             (r.declaredValueInr ?? r.product.defaultDeclaredValueInr)?.toString() ?? null,
           effectiveWeightGrams: r.weightGrams ?? r.product.defaultWeightGrams,
+          isFavourite: favourites.has(r.id),
         };
       }),
     );
+
+    // Starred first, then the order the query already established. Sorted
+    // HERE rather than in SQL because the star lives in another table and
+    // a join purely to order 20 rows costs more than sorting them.
+    return hits.sort((a, b) => Number(b.isFavourite) - Number(a.isFavourite));
+  }
+
+  /**
+   * Star or unstar a variant. Idempotent by the unique — a double tap
+   * upserts rather than leaving a variant favourited twice.
+   */
+  async setFavourite(
+    sellerId: string,
+    variantId: string,
+    on: boolean,
+  ): Promise<{ isFavourite: boolean }> {
+    const variant = await this.prisma.client.productVariant.findFirst({
+      where: { id: variantId, sellerId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!variant) {
+      throw new NotFoundException({
+        code: 'VARIANT_NOT_FOUND',
+        message: 'Variant not found',
+      });
+    }
+    if (on) {
+      await this.prisma.client.sellerFavouriteVariant.upsert({
+        where: { sellerId_variantId: { sellerId, variantId } },
+        create: { sellerId, variantId },
+        update: {},
+      });
+    } else {
+      await this.prisma.client.sellerFavouriteVariant.deleteMany({
+        where: { sellerId, variantId },
+      });
+    }
+    return { isFavourite: on };
   }
 
   async getById(sellerId: string, productId: string, variantId: string): Promise<VariantView> {

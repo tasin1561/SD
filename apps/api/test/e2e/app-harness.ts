@@ -289,6 +289,10 @@ export async function resetCatalogState(prisma: PrismaClient): Promise<void> {
     'TRUNCATE TABLE ' +
       [
         'product_images',
+        // Starred variants. CASCADEs off both sellers and variants, so
+        // TRUNCATE ... CASCADE would take it anyway — listed so the
+        // intent reads (MUST #12).
+        'seller_favourite_variants',
         'product_variants',
         'products',
         'bulk_product_uploads',
