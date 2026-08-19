@@ -2036,6 +2036,32 @@ export function useUpdateInviteLead(): UseMutationResult<
  * only `admin-consignments` would leave the receive queue and the stock
  * ledger showing a world that no longer exists.
  */
+/**
+ * Cancel a receipt that should not have been started.
+ *
+ * The seller's own cancel is PENDING-only, so before this an ARRIVING
+ * receipt had no way out through any interface — the only remedy was to
+ * complete it and write stock that never arrived.
+ */
+export function useCancelGoodsReceipt(): UseMutationResult<
+  GoodsReceiptView,
+  Error,
+  { id: string; reason: string }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }) =>
+      client.request<GoodsReceiptView>(`/api/admin/goods-receipts/${id}/cancel`, {
+        method: 'POST',
+        body: { reason },
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-goods-receipts'] });
+    },
+  });
+}
+
 export function useConsignmentsList(
   query: {
     sellerId?: string;

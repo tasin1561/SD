@@ -10,6 +10,8 @@ import {
   ErrorState,
   FormField,
   Input,
+  Modal,
+  ModalFooter,
   LoadingState,
   PageHeader,
   Select,
@@ -17,6 +19,7 @@ import {
 } from '@skydrop/ui/components';
 import type { RecordReceiptLineInput } from '@skydrop/api-client';
 import {
+  useCancelGoodsReceipt,
   useCompleteGoodsReceipt,
   useGoodsReceiptDetail,
   useRecordReceiptLines,
@@ -24,6 +27,7 @@ import {
   useWarehouseBins,
 } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { usePermission } from '@/lib/use-permission';
 import { SerialScanner, scanCountMet } from '@/components/ui/serial-scanner';
 
 /**
@@ -51,7 +55,12 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
   const start = useStartReceiving();
   const record = useRecordReceiptLines();
   const complete = useCompleteGoodsReceipt();
-  const [busy, setBusy] = useState<'start' | 'record' | 'complete' | null>(null);
+  const cancelReceipt = useCancelGoodsReceipt();
+  // Cosmetic only (FE-2) — the server refuses regardless of what shows.
+  const mayManage = usePermission('inventory.goods_receipts.manage');
+  const [busy, setBusy] = useState<'start' | 'record' | 'complete' | 'cancel' | null>(null);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   // Per-line input state — keyed by lineId
@@ -190,6 +199,21 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
     }
   }
 
+  async function onCancel(): Promise<void> {
+    setBusy('cancel');
+    setError(null);
+    try {
+      await cancelReceipt.mutateAsync({ id, reason: cancelReason.trim() });
+      setCancelOpen(false);
+      setCancelReason('');
+      toast.info('Receipt cancelled. Nothing was written to stock.');
+    } catch (e) {
+      setError(serverVerdict(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div>
       <Link
@@ -217,6 +241,16 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                 onClick={() => void onStart()}
               >
                 {busy === 'start' ? 'Starting…' : 'Start receiving'}
+              </Button>
+            )}
+            {(isPending || isArriving) && mayManage && (
+              <Button
+                variant="destructive"
+                size="md"
+                disabled={busy !== null}
+                onClick={() => setCancelOpen(true)}
+              >
+                Cancel receipt
               </Button>
             )}
             {isArriving && (
@@ -416,6 +450,39 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
           ✓ Stock written. This receipt is now history.
         </div>
       )}
+
+      <Modal
+        open={cancelOpen}
+        onOpenChange={setCancelOpen}
+        tone="critical"
+        title={`Cancel ${r.receiptNumber}?`}
+      >
+        <p className="text-text-muted mb-3 text-sm">
+          Nothing has been written to stock yet, so nothing is removed — the receipt simply leaves
+          the queue. A receipt that has already been completed cannot be cancelled; correct that
+          with a stock adjustment, where the movement is visible.
+        </p>
+        <FormField label="Why" required>
+          <Input
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            placeholder="At least 10 characters — recorded on the receipt"
+          />
+        </FormField>
+        <ModalFooter>
+          <Button variant="secondary" size="md" onClick={() => setCancelOpen(false)}>
+            Keep it
+          </Button>
+          <Button
+            variant="destructive"
+            size="md"
+            disabled={busy !== null || cancelReason.trim().length < 10}
+            onClick={() => void onCancel()}
+          >
+            {busy === 'cancel' ? 'Cancelling…' : 'Cancel receipt'}
+          </Button>
+        </ModalFooter>
+      </Modal>
     </div>
   );
 }

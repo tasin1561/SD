@@ -299,6 +299,81 @@ export class GoodsReceiptService {
     });
   }
 
+  /**
+   * Ops cancels a receipt that should not have been started.
+   *
+   * The seller's own cancel is PENDING-only, and rightly so — once a
+   * warehouse has begun counting, it is not the seller's call. But that
+   * left an ARRIVING receipt with NO way out through any interface:
+   * admin had start / record / complete and nothing else, so a receipt
+   * started by mistake sat in the queue forever and the only remedy was
+   * to complete it and write stock that never arrived.
+   *
+   * Allowed from PENDING and ARRIVING — never COMPLETED, which has
+   * written stock and must be corrected with an adjustment, where the
+   * movement is visible, rather than by making the receipt disappear.
+   *
+   * A CONSIGNMENT leg is refused: cancelling one leg would leave its
+   * consignment describing a journey that no longer matches its parts.
+   * The consignment's own cancel is the single authority there, and it
+   * knows how to return stock (CNS-6).
+   */
+  async cancelForAdmin(
+    staffId: string,
+    id: string,
+    reason: string,
+    ctx: ClientContext,
+  ): Promise<GoodsReceiptView> {
+    const existing = await this.getForAdmin(id);
+    if (existing.consignmentId !== null && existing.consignmentId !== undefined) {
+      throw new ConflictException({
+        code: 'RECEIPT_IS_CONSIGNMENT_LEG',
+        message:
+          `${existing.receiptNumber} is a leg of a consignment. Cancel the consignment instead — ` +
+          'it is the one place that knows what to do with stock already counted.',
+      });
+    }
+    this.assertStatus(
+      existing.status,
+      [GoodsReceiptStatus.PENDING, GoodsReceiptStatus.ARRIVING],
+      'cancel',
+    );
+
+    return this.prisma.client.$transaction(async (tx) => {
+      // Guarded on the status we read, so two operators cancelling at
+      // once cannot both proceed on a stale view.
+      const claimed = await tx.goodsReceipt.updateMany({
+        where: { id, status: existing.status },
+        data: { status: GoodsReceiptStatus.CANCELLED, discrepancyNotes: `Cancelled: ${reason}` },
+      });
+      if (claimed.count === 0) {
+        throw new ConflictException({
+          code: 'RECEIPT_ALREADY_MOVED',
+          message: 'Someone else changed this receipt while you were looking at it. Reload it.',
+        });
+      }
+      await this.audit.log(
+        {
+          actorType: ActorType.STAFF,
+          staffUserId: staffId,
+          sellerId: existing.sellerId,
+          action: 'inventory.goods_receipt.cancelled_by_admin',
+          entityType: 'goods_receipt',
+          entityId: id,
+          severity: 'MEDIUM',
+          metadata: {
+            receiptNumber: existing.receiptNumber,
+            fromStatus: existing.status,
+            reason,
+            ...this.ctxMeta(ctx),
+          },
+        },
+        tx,
+      );
+      return tx.goodsReceipt.findUniqueOrThrow({ where: { id }, include: RECEIPT_VIEW_INCLUDE });
+    });
+  }
+
   // ---------------- admin recording ----------------
 
   async listForAdmin(query: {

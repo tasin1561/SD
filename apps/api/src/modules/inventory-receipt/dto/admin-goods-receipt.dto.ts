@@ -14,6 +14,7 @@ import {
   IsUUID,
   Max,
   MaxLength,
+  MinLength,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -140,4 +141,16 @@ export class CompleteGoodsReceiptDto {
   @IsOptional()
   @IsObject()
   readonly serialsByLineId?: Record<string, string[]>;
+}
+
+export class CancelGoodsReceiptDto {
+  @ApiProperty({
+    minLength: 10,
+    maxLength: 500,
+    description: 'Why this receipt is being cancelled. Recorded permanently on the receipt.',
+  })
+  @IsString()
+  @MinLength(10)
+  @MaxLength(500)
+  reason!: string;
 }

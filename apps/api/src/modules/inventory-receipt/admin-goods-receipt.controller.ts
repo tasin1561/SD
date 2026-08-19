@@ -17,6 +17,7 @@ import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../common/types/request';
 import {
+  CancelGoodsReceiptDto,
   ListAdminGoodsReceiptsQueryDto,
   RecordReceiptLinesDto,
   CompleteGoodsReceiptDto,
@@ -99,5 +100,23 @@ export class AdminGoodsReceiptController {
     @Body() body?: CompleteGoodsReceiptDto,
   ): Promise<GoodsReceiptView> {
     return this.svc.complete(staff.id, id, ctx, body?.serialsByLineId);
+  }
+  @Post(':id/cancel')
+  @RequirePermissions('inventory.goods_receipts.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Cancel a receipt that should not have been started',
+    description:
+      'PENDING or ARRIVING only. A COMPLETED receipt has written stock and must be corrected ' +
+      'with an adjustment, where the movement is visible. A consignment leg is refused — ' +
+      'cancel the consignment instead.',
+  })
+  cancel(
+    @Param('id', uuid()) id: string,
+    @Body() body: CancelGoodsReceiptDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<GoodsReceiptView> {
+    return this.svc.cancelForAdmin(staff.id, id, body.reason, ctx);
   }
 }
