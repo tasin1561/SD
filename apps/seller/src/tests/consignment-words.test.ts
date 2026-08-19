@@ -11,6 +11,7 @@ import type { ConsignmentLegView, ConsignmentView } from '@skydrop/api-client';
 import {
   cancellable,
   countedUnits,
+  countingInProgress,
   declaredUnits,
   eventWords,
   indiaLegs,
@@ -172,6 +173,37 @@ describe('what the seller is told about the contents', () => {
       lines: [line({ expectedQty: 7, receivedQty: 5 })],
     });
     expect(countedUnits(counted)).toBe(5);
+  });
+
+  it('tells "being counted now" apart from "not counted yet"', () => {
+    // Three states, not two. The middle one is a warehouse standing at
+    // the bench with numbers already typed but the receipt not yet
+    // completed — recorded, not committed. Collapsing it either way is
+    // wrong: reading the quantities alone reported a shortfall on a
+    // consignment nobody had opened, and ignoring them told the seller
+    // nothing was happening while somebody was actively counting.
+    const untouched = leg({
+      status: GoodsReceiptStatus.ARRIVING,
+      lines: [line({ expectedQty: 200, receivedQty: 0 })],
+    });
+    expect(countingInProgress(untouched)).toBe(false);
+    expect(countedUnits(untouched)).toBeNull();
+
+    const midCount = leg({
+      status: GoodsReceiptStatus.ARRIVING,
+      lines: [line({ expectedQty: 200, receivedQty: 198 })],
+    });
+    expect(countingInProgress(midCount)).toBe(true);
+    // Still null: the numbers are provisional until Complete writes
+    // stock, so no difference is computed against them.
+    expect(countedUnits(midCount)).toBeNull();
+
+    const done = leg({
+      status: GoodsReceiptStatus.COMPLETED,
+      lines: [line({ expectedQty: 200, receivedQty: 198 })],
+    });
+    expect(countingInProgress(done)).toBe(false);
+    expect(countedUnits(done)).toBe(198);
   });
 
   it('numbers the India legs only when there is more than one', () => {

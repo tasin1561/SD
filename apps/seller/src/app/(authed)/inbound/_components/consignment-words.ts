@@ -137,6 +137,25 @@ export function countedUnits(leg: ConsignmentLegView): number | null {
 }
 
 /**
+ * A warehouse is counting this leg RIGHT NOW.
+ *
+ * There are three states, not two, and collapsing the middle one is
+ * wrong in both directions. Reading `receivedQty` alone reported a
+ * shortfall on a consignment nobody had opened; ignoring it entirely
+ * told a seller "not counted yet" while somebody stood at the bench with
+ * the numbers already typed in.
+ *
+ * Recorded quantities are PROVISIONAL until the receipt is completed —
+ * that is the step that writes stock — so this deliberately drives a
+ * "counting now" message and never a difference. A variance shown
+ * against a half-finished count is a shortfall that mostly is not real.
+ */
+export function countingInProgress(leg: ConsignmentLegView): boolean {
+  if (leg.status !== 'ARRIVING') return false;
+  return leg.lines.some((l) => (l.receivedQty ?? 0) > 0);
+}
+
+/**
  * Whether cancelling is worth OFFERING. COSMETIC ONLY (FE-2) — the
  * server owns the window and refuses with
  * `CONSIGNMENT_ALREADY_DISPATCHED` / `CONSIGNMENT_ALREADY_ARRIVED`,

@@ -43,6 +43,7 @@ import { useSellerIdentity } from '@skydrop/auth/client';
 import { EditReceiptPanel } from '../../_components/edit-receipt-panel';
 import {
   cancellable,
+  countingInProgress,
   countedUnits,
   declaredUnits,
   eventWords,
@@ -293,6 +294,7 @@ function LegCard({
    * nothing here has been counted and there is nothing to compare.
    */
   const isCounted = leg.status === 'COMPLETED';
+  const counting = countingInProgress(leg);
   const anyVariance = isCounted && leg.lines.some((l) => (l.receivedQty ?? 0) !== l.expectedQty);
 
   return (
@@ -322,7 +324,9 @@ function LegCard({
               label: 'Counted',
               value:
                 counted === null ? (
-                  <span className="text-text-muted">Not counted yet</span>
+                  <span className="text-text-muted">
+                    {counting ? 'Being counted now' : 'Not counted yet'}
+                  </span>
                 ) : (
                   <Num value={counted} suffix="units" />
                 ),
@@ -372,10 +376,19 @@ function LegCard({
                       <Num value={l.expectedQty} />
                     </Td>
                     <Td align="right">
-                      {!isCounted ? (
-                        <span className="text-text-muted">—</span>
-                      ) : (
+                      {isCounted ? (
                         <Num value={l.receivedQty ?? 0} />
+                      ) : counting ? (
+                        // Provisional. Shown so a seller can see the
+                        // warehouse is working, italic so it does not read
+                        // as the final answer, and with no difference
+                        // beside it — a variance against a half-finished
+                        // count is a shortfall that mostly is not real.
+                        <span className="text-text-muted italic">
+                          <Num value={l.receivedQty ?? 0} /> so far
+                        </span>
+                      ) : (
+                        <span className="text-text-muted">—</span>
                       )}
                     </Td>
                     <Td align="right">
