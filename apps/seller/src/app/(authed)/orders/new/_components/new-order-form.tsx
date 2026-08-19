@@ -2,11 +2,13 @@
 
 import { useRouter } from 'next/navigation';
 import { useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react';
+import type { SellerVariantView } from '@skydrop/api-client';
 import { Button, Card, CardBody, FormField, Input, Select, useToast } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 import {
   useCreateOrder,
   useProductsList,
+  useStockList,
   useProductVariants,
   useSubmitOrder,
 } from '@/lib/api-hooks';
@@ -78,12 +80,23 @@ interface ItemDraft {
   variantId: string;
   quantity: string;
   unitPriceInr: string;
+  /** From the catalogue, for the total-weight sum. Null when unset. */
+  weightGrams: number | null;
+  imageUrl: string | null;
 }
 
 const MAX_ITEMS = 50;
 
 function emptyItem(key: number): ItemDraft {
-  return { key, productId: '', variantId: '', quantity: '1', unitPriceInr: '' };
+  return {
+    key,
+    productId: '',
+    variantId: '',
+    quantity: '1',
+    unitPriceInr: '',
+    weightGrams: null,
+    imageUrl: null,
+  };
 }
 
 const INITIAL: FormState = {
@@ -92,7 +105,10 @@ const INITIAL: FormState = {
   recipientAddressLine1: '',
   recipientAddressLine2: '',
   recipientPostalCode: '',
-  paymentMode: 'PREPAID',
+  // COD is what almost every Indian order is, and it is the reason the
+  // call centre exists. Defaulting to prepaid made the common case the
+  // one that needed a change.
+  paymentMode: 'COD',
   codAmountInr: '',
   declaredValueInr: '',
   totalWeightGrams: '',
@@ -114,6 +130,13 @@ export function NewOrderForm(): ReactElement {
   const [duplicates, setDuplicates] = useState<ReadonlyArray<DuplicateCandidate> | null>(null);
   const [pendingAction, setPendingAction] = useState<'draft' | 'submit' | null>(null);
   const [busy, setBusy] = useState<'draft' | 'submit' | null>(null);
+  /**
+   * Ticked by the seller when they mean to order stock we do not have
+   * yet. Mirrors the duplicate-order acknowledgement already in this
+   * form: the block is real, and getting past it is one deliberate act
+   * rather than a dialog you dismiss without reading.
+   */
+  const [acceptShort, setAcceptShort] = useState(false);
 
   const create = useCreateOrder();
   const submit = useSubmitOrder();
@@ -125,6 +148,65 @@ export function NewOrderForm(): ReactElement {
   // than 100 active products needs a search-as-you-type picker rather
   // than a bigger page — noted rather than papered over.
   const products = useProductsList({ status: 'ACTIVE', page: 1, pageSize: 100 });
+  /**
+   * Availability per variant, indexed once for every row.
+   *
+   * ORD-10 means the server takes an order without checking stock and
+   * catches it at confirmation — so this is ADVISORY, not a mirror of a
+   * server rule (FE-2). It is here because an order placed against stock
+   * that is not there fails hours later, in a phone call, and the seller
+   * had no way to see it coming.
+   */
+  const stock = useStockList({ page: 1, pageSize: 200 });
+  /**
+   * The parcel's weight, added up from the catalogue. A variant with no
+   * recorded weight contributes ZERO rather than making the whole sum
+   * unknown — a missing weight is a gap in the catalogue, and refusing to
+   * show a total because of it helps nobody.
+   */
+  const computedWeight = useMemo(
+    () =>
+      items.reduce((n, it) => {
+        const q = Number(it.quantity);
+        return n + (it.weightGrams ?? 0) * (Number.isFinite(q) && q > 0 ? q : 0);
+      }, 0),
+    [items],
+  );
+
+  const stockByVariant = useMemo(() => {
+    const m = new Map<string, { available: number; inTransit: number }>();
+    for (const r of stock.data?.items ?? []) {
+      m.set(r.variantId, { available: r.qtyAvailable, inTransit: r.qtyInTransit });
+    }
+    return m;
+  }, [stock.data]);
+
+  /**
+   * Lines the warehouse cannot fill today.
+   *
+   * ADVISORY, not a mirror of a server rule (FE-2): ORD-10 means the
+   * server takes the order and catches it at confirmation. And that is
+   * correct — an order placed today against a consignment landing on
+   * Friday is exactly what the inbound flow exists for, so this must not
+   * be a hard refusal.
+   *
+   * What it must not do is let one through SILENTLY. An order that fails
+   * at confirmation fails in a phone call, hours later, in front of a
+   * customer.
+   */
+  const shortLines = useMemo(
+    () =>
+      items
+        .map((it) => {
+          const have = stockByVariant.get(it.variantId)?.available ?? null;
+          const want = Number(it.quantity);
+          return it.variantId !== '' && have !== null && Number.isFinite(want) && want > have
+            ? { variantId: it.variantId, want, have }
+            : null;
+        })
+        .filter((x): x is { variantId: string; want: number; have: number } => x !== null),
+    [items, stockByVariant],
+  );
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]): void {
     setForm((p) => ({ ...p, [key]: value }));
@@ -132,6 +214,34 @@ export function NewOrderForm(): ReactElement {
 
   function patchItem(key: number, patch: Partial<ItemDraft>): void {
     setItems((prev) => prev.map((it) => (it.key === key ? { ...it, ...patch } : it)));
+  }
+
+  /**
+   * Everything the catalogue already knows, filled in.
+   *
+   * The seller typed a price and a weight they had told us months ago
+   * when they created the variant. Prefilled, and still editable — a one
+   * -off discount is a real thing, and the field is the seller's, not
+   * ours.
+   */
+  function onVariantChosen(key: number, v: SellerVariantView | undefined): void {
+    if (v === undefined) return;
+    setItems((prev) =>
+      prev.map((it) =>
+        it.key === key
+          ? {
+              ...it,
+              weightGrams: v.weightGrams,
+              // Only fill an EMPTY price. Overwriting one the seller
+              // typed would undo their edit the moment they corrected
+              // the variant beside it.
+              unitPriceInr:
+                it.unitPriceInr.trim() === '' ? (v.declaredValueInr ?? '') : it.unitPriceInr,
+              imageUrl: v.primaryImageUrl ?? null,
+            }
+          : it,
+      ),
+    );
   }
 
   function addItem(): void {
@@ -159,6 +269,9 @@ export function NewOrderForm(): ReactElement {
       return 'PIN must be 6 digits (first digit 1-9).';
     if (form.paymentMode === 'COD' && (!form.codAmountInr || Number(form.codAmountInr) <= 0))
       return 'COD amount is required when payment mode is COD.';
+    if (shortLines.length > 0 && !acceptShort) {
+      return 'Some products are short of stock — see the note below, and tick the box if you mean to order them anyway.';
+    }
     for (const [i, it] of items.entries()) {
       const n = items.length === 1 ? '' : ` on product ${i + 1}`;
       if (!it.productId) return `Pick a product${n}.`;
@@ -191,7 +304,12 @@ export function NewOrderForm(): ReactElement {
       })),
       ...(form.paymentMode === 'COD' ? { codAmountInr: Number(form.codAmountInr) } : {}),
       ...(form.declaredValueInr.trim() ? { declaredValueInr: Number(form.declaredValueInr) } : {}),
-      ...(form.totalWeightGrams.trim() ? { totalWeightGrams: Number(form.totalWeightGrams) } : {}),
+      // The typed value wins; otherwise the sum we worked out.
+      ...(form.totalWeightGrams.trim()
+        ? { totalWeightGrams: Number(form.totalWeightGrams) }
+        : computedWeight > 0
+          ? { totalWeightGrams: computedWeight }
+          : {}),
       ...(form.sellerOrderRef.trim() ? { sellerOrderRef: form.sellerOrderRef.trim() } : {}),
       ...(form.sellerNotes.trim() ? { sellerNotes: form.sellerNotes.trim() } : {}),
       ...(acknowledgeDuplicate ? { acknowledgeDuplicate: true } : {}),
@@ -374,7 +492,9 @@ export function NewOrderForm(): ReactElement {
             </h2>
             <Button
               type="button"
-              variant="secondary"
+              // Primary: it is how a multi-product order gets made, and as
+              // an outline in the corner it read as decoration.
+              variant="primary"
               onClick={addItem}
               disabled={items.length >= MAX_ITEMS}
             >
@@ -392,11 +512,43 @@ export function NewOrderForm(): ReactElement {
                 productsLoading={products.isLoading}
                 onPatch={patchItem}
                 onRemove={removeItem}
+                onVariantChosen={onVariantChosen}
+                stock={it.variantId === '' ? undefined : stockByVariant.get(it.variantId)}
               />
             ))}
           </div>
         </CardBody>
       </Card>
+
+      {shortLines.length > 0 && (
+        <div className="border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] rounded-[6px] border px-3 py-2.5">
+          <p className="text-critical text-sm font-medium">
+            {shortLines.length === 1
+              ? 'One product is short of stock'
+              : `${shortLines.length} products are short of stock`}
+          </p>
+          <ul className="text-text-muted mt-1 space-y-0.5 text-xs">
+            {shortLines.map((l) => (
+              <li key={l.variantId}>
+                asked for {l.want}, {l.have === 0 ? 'none available' : `only ${l.have} available`}
+              </li>
+            ))}
+          </ul>
+          <p className="text-text-muted mt-1.5 text-xs">
+            You can still place it — stock on its way in will cover it once it lands. But the call
+            centre cannot confirm an order we cannot pick, so it waits until then.
+          </p>
+          <label className="text-text-body mt-2 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={acceptShort}
+              onChange={(e) => setAcceptShort(e.target.checked)}
+              className="h-4 w-4"
+            />
+            Place it anyway
+          </label>
+        </div>
+      )}
 
       {/* Payment + physical */}
       <Card>
@@ -434,13 +586,20 @@ export function NewOrderForm(): ReactElement {
                 placeholder="Defaults to sum of line item values"
               />
             </FormField>
-            <FormField label="Total weight (grams)">
+            <FormField
+              label="Total weight (grams)"
+              hint={
+                computedWeight > 0
+                  ? `Adds up to ${computedWeight.toLocaleString('en-IN')} g from the catalogue. Type a number to override it.`
+                  : 'None of these products has a recorded weight, so this stays 0 unless you set it.'
+              }
+            >
               <Input
                 type="number"
                 min={0}
                 value={form.totalWeightGrams}
                 onChange={(e) => set('totalWeightGrams', e.target.value)}
-                placeholder="Defaults to sum of variant weights"
+                placeholder={computedWeight > 0 ? computedWeight.toLocaleString('en-IN') : '0'}
               />
             </FormField>
           </div>
@@ -536,6 +695,8 @@ function ItemRow({
   productsLoading,
   onPatch,
   onRemove,
+  onVariantChosen,
+  stock,
 }: {
   readonly item: ItemDraft;
   readonly index: number;
@@ -544,6 +705,8 @@ function ItemRow({
   readonly productsLoading: boolean;
   readonly onPatch: (key: number, patch: Partial<ItemDraft>) => void;
   readonly onRemove: (key: number) => void;
+  readonly onVariantChosen: (key: number, v: SellerVariantView | undefined) => void;
+  readonly stock: { readonly available: number; readonly inTransit: number } | undefined;
 }): ReactElement {
   const variants = useProductVariants(item.productId);
   const variantOptions = useMemo(
@@ -553,6 +716,38 @@ function ItemRow({
 
   return (
     <div className="border-border-subtle rounded-[8px] border p-3">
+      {/*
+        The picture and the number, together. A seller choosing between
+        four variants of one product was reading SKU strings; and the
+        stock figure is the one fact that decides whether this order can
+        actually ship.
+      */}
+      {(item.imageUrl !== null || stock !== undefined) && (
+        <div className="mb-2 flex items-center gap-2.5">
+          {item.imageUrl !== null ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={item.imageUrl}
+              alt=""
+              className="border-border h-9 w-9 shrink-0 rounded-[4px] border object-cover"
+            />
+          ) : null}
+          {stock !== undefined && (
+            <span className="text-xs">
+              {stock.available > 0 ? (
+                <span className="text-text-muted">
+                  <span className="text-text-body font-medium">{stock.available}</span> available
+                </span>
+              ) : (
+                <span className="text-critical font-medium">None available to ship</span>
+              )}
+              {stock.inTransit > 0 && (
+                <span className="text-text-faint"> · {stock.inTransit} in transit</span>
+              )}
+            </span>
+          )}
+        </div>
+      )}
       {total > 1 && (
         <div className="mb-2 flex items-center justify-between gap-3">
           <span className="text-text-muted text-xs font-medium">Product {index + 1}</span>
@@ -593,7 +788,13 @@ function ItemRow({
         <FormField label="Variant" required>
           <Select
             value={item.variantId}
-            onChange={(e) => onPatch(item.key, { variantId: e.target.value })}
+            onChange={(e) => {
+              onPatch(item.key, { variantId: e.target.value });
+              onVariantChosen(
+                item.key,
+                variantOptions.find((v) => v.id === e.target.value),
+              );
+            }}
             required
             disabled={!item.productId || variants.isLoading}
           >
