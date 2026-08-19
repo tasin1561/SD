@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { Input } from '@skydrop/ui/components';
+import { useSellerIdentity } from '@skydrop/auth/client';
+import { can } from '@/lib/page-access';
 import { useVariantSearch } from '@/lib/api-hooks';
 
 /**
@@ -37,9 +39,22 @@ export function VariantPicker({
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
-  // Only ask once there is something to match on, and only while the
-  // list is open — a closed picker should cost nothing.
-  const enabled = open && query.trim().length >= 1;
+  /**
+   * Searching the catalogue needs `catalog.view`, and this page is gated
+   * on `inbound.view` — they are different permissions, so a role that
+   * can announce a consignment cannot necessarily read the catalogue.
+   * Without this check the picker would fire a request that role may not
+   * make and show them a 403 for doing nothing but opening a field.
+   *
+   * Cosmetic in the FE-2 sense — the server still refuses — but the point
+   * is not sending a request nobody may make.
+   */
+  const maySearch = can(useSellerIdentity(), 'catalog.view');
+
+  // Only ask once there is something to match on, only while the list is
+  // open — a closed picker should cost nothing — and only if this role
+  // may ask at all.
+  const enabled = maySearch && open && query.trim().length >= 1;
   const results = useVariantSearch(query.trim(), { enabled });
 
   useEffect(() => {
@@ -75,7 +90,12 @@ export function VariantPicker({
           role="listbox"
           className="border-border bg-surface absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-[6px] border shadow-[var(--shadow-2)]"
         >
-          {query.trim() === '' ? (
+          {!maySearch ? (
+            <p className="text-text-muted px-3 py-2 text-xs">
+              Searching the catalogue needs catalogue access, which this account does not have. Ask
+              a colleague who has it to add the lines, or paste the SKU they give you.
+            </p>
+          ) : query.trim() === '' ? (
             <p className="text-text-muted px-3 py-2 text-xs">Type a product name or SKU.</p>
           ) : results.isLoading ? (
             <p className="text-text-muted px-3 py-2 text-xs">Searching…</p>
