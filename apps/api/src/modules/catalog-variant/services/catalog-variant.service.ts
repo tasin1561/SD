@@ -22,6 +22,13 @@ export interface VariantSearchHit {
   /** So a picker can show the thing, not just name it. Null when the
    *  variant has no image. */
   primaryImageUrl: string | null;
+  /**
+   * The EFFECTIVE unit value — the variant's own, or the product default
+   * where it is blank (M4). A picker that shows a price has to show the
+   * one the order would actually use.
+   */
+  effectiveDeclaredValueInr: string | null;
+  effectiveWeightGrams: number | null;
 }
 
 export interface VariantView {
@@ -258,7 +265,11 @@ export class CatalogVariantService {
         skuCode: true,
         variantLabel: true,
         productId: true,
-        product: { select: { name: true } },
+        weightGrams: true,
+        declaredValueInr: true,
+        product: {
+          select: { name: true, defaultWeightGrams: true, defaultDeclaredValueInr: true },
+        },
       },
     });
     if (rows.length === 0) return [];
@@ -290,6 +301,12 @@ export class CatalogVariantService {
           variantLabel: r.variantLabel,
           productName: r.product.name,
           primaryImageUrl: key === null ? null : await this.spaces.presignGetUrl(key),
+          // Resolved here, not by the caller: a blank variant field means
+          // inherit (M4), and every consumer re-deriving that rule is how
+          // one of them forgets and shows nothing.
+          effectiveDeclaredValueInr:
+            (r.declaredValueInr ?? r.product.defaultDeclaredValueInr)?.toString() ?? null,
+          effectiveWeightGrams: r.weightGrams ?? r.product.defaultWeightGrams,
         };
       }),
     );

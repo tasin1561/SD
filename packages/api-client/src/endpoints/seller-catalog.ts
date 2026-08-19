@@ -205,4 +205,10 @@ export interface SellerVariantSearchHit {
   readonly variantLabel: string | null;
   readonly productName: string;
   readonly primaryImageUrl: string | null;
+  /**
+   * The unit value and weight the ORDER would actually use — the
+   * variant's own, or the product default where it is blank (M4).
+   */
+  readonly effectiveDeclaredValueInr: string | null;
+  readonly effectiveWeightGrams: number | null;
 }

@@ -2,15 +2,14 @@
 
 import { useRouter } from 'next/navigation';
 import { useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react';
-import type { SellerVariantView } from '@skydrop/api-client';
+import type { SellerVariantSearchHit } from '@skydrop/api-client';
+import { ProductPicker, type PickedLine } from './product-picker';
 import { Button, Card, CardBody, FormField, Input, Select, useToast } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 import {
   useCreateOrder,
   useCustomerDeliveryFee,
-  useProductsList,
   useStockList,
-  useProductVariants,
   useSubmitOrder,
 } from '@/lib/api-hooks';
 import { useSellerIdentity } from '@skydrop/auth/client';
@@ -78,30 +77,7 @@ interface FormState {
  * because a freshly added row has none yet and two rows may briefly
  * share the empty string.
  */
-interface ItemDraft {
-  readonly key: number;
-  productId: string;
-  variantId: string;
-  quantity: string;
-  unitPriceInr: string;
-  /** From the catalogue, for the total-weight sum. Null when unset. */
-  weightGrams: number | null;
-  imageUrl: string | null;
-}
-
 const MAX_ITEMS = 50;
-
-function emptyItem(key: number): ItemDraft {
-  return {
-    key,
-    productId: '',
-    variantId: '',
-    quantity: '1',
-    unitPriceInr: '',
-    weightGrams: null,
-    imageUrl: null,
-  };
-}
 
 const INITIAL: FormState = {
   recipientName: '',
@@ -128,7 +104,7 @@ export function NewOrderForm(): ReactElement {
   const router = useRouter();
   const toast = useToast();
   const [form, setForm] = useState<FormState>(INITIAL);
-  const [items, setItems] = useState<readonly ItemDraft[]>([emptyItem(0)]);
+  const [items, setItems] = useState<readonly PickedLine[]>([]);
   const nextKey = useRef(1);
   const [error, setError] = useState<string | null>(null);
   // The server decides whether this is a duplicate; the dialog only
@@ -161,7 +137,6 @@ export function NewOrderForm(): ReactElement {
   // the product picker empty with no explanation. A seller with more
   // than 100 active products needs a search-as-you-type picker rather
   // than a bigger page — noted rather than papered over.
-  const products = useProductsList({ status: 'ACTIVE', page: 1, pageSize: 100 });
   /**
    * Availability per variant, indexed once for every row.
    *
@@ -237,15 +212,6 @@ export function NewOrderForm(): ReactElement {
     return m;
   }, [stock.data]);
 
-  /** Per PRODUCT, so the first dropdown can carry a figure too. */
-  const stockByProduct = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const r of stock.data?.items ?? []) {
-      m.set(r.productId, (m.get(r.productId) ?? 0) + r.qtyAvailable);
-    }
-    return m;
-  }, [stock.data]);
-
   /**
    * Lines the warehouse cannot fill today.
    *
@@ -277,52 +243,37 @@ export function NewOrderForm(): ReactElement {
     setForm((p) => ({ ...p, [key]: value }));
   }
 
-  function patchItem(key: number, patch: Partial<ItemDraft>): void {
+  /**
+   * Adding from the catalogue fills everything the catalogue knows —
+   * name, picture, weight and the effective unit value (M4: the
+   * variant's own, or the product default where it is blank).
+   */
+  function addFromCatalogue(hit: SellerVariantSearchHit): void {
+    if (items.length >= MAX_ITEMS) return;
+    if (items.some((i) => i.variantId === hit.id)) return;
+    setItems((prev) => [
+      ...prev,
+      {
+        key: nextKey.current++,
+        variantId: hit.id,
+        productId: hit.productId,
+        skuCode: hit.skuCode,
+        productName: hit.productName,
+        variantLabel: hit.variantLabel,
+        imageUrl: hit.primaryImageUrl,
+        weightGrams: hit.effectiveWeightGrams,
+        quantity: '1',
+        unitPriceInr: hit.effectiveDeclaredValueInr ?? '',
+      },
+    ]);
+  }
+
+  function patchItem(key: number, patch: Partial<PickedLine>): void {
     setItems((prev) => prev.map((it) => (it.key === key ? { ...it, ...patch } : it)));
   }
 
-  /**
-   * Everything the catalogue already knows, filled in.
-   *
-   * The seller typed a price and a weight they had told us months ago
-   * when they created the variant. Prefilled, and still editable — a one
-   * -off discount is a real thing, and the field is the seller's, not
-   * ours.
-   */
-  function onVariantChosen(key: number, v: SellerVariantView | undefined): void {
-    if (v === undefined) return;
-    setItems((prev) =>
-      prev.map((it) =>
-        it.key === key
-          ? {
-              ...it,
-              // EFFECTIVE, not the variant's own column. A blank variant
-              // field means inherit (M4) — the product carries the
-              // answer, and reading the raw column saw null while the
-              // product had said 500 g all along.
-              weightGrams: v.effectiveWeightGrams ?? v.weightGrams,
-              // Only fill an EMPTY price. Overwriting one the seller
-              // typed would undo their edit the moment they corrected
-              // the variant beside it.
-              unitPriceInr:
-                it.unitPriceInr.trim() === ''
-                  ? (v.effectiveDeclaredValueInr ?? v.declaredValueInr ?? '')
-                  : it.unitPriceInr,
-              imageUrl: v.primaryImageUrl ?? null,
-            }
-          : it,
-      ),
-    );
-  }
-
-  function addItem(): void {
-    setItems((prev) => (prev.length >= MAX_ITEMS ? prev : [...prev, emptyItem(nextKey.current++)]));
-  }
-
   function removeItem(key: number): void {
-    // Never below one line. An order with no items is a 400 the seller
-    // would have to decode; an always-present empty row says what to do.
-    setItems((prev) => (prev.length <= 1 ? prev : prev.filter((it) => it.key !== key)));
+    setItems((prev) => prev.filter((it) => it.key !== key));
   }
 
   function validate(): string | null {
@@ -346,20 +297,13 @@ export function NewOrderForm(): ReactElement {
     if (shortLines.length > 0 && !acceptShort) {
       return 'Some products are short of stock — see the note below, and tick the box if you mean to order them anyway.';
     }
-    for (const [i, it] of items.entries()) {
-      const n = items.length === 1 ? '' : ` on product ${i + 1}`;
-      if (!it.productId) return `Pick a product${n}.`;
-      if (!it.variantId) return `Pick a variant${n}.`;
+    // A line cannot exist without a product now — it is created by
+    // clicking one — so the only thing left to check is the quantity.
+    if (items.length === 0) return 'Add at least one product from the list.';
+    for (const it of items) {
       const qty = Number(it.quantity);
-      if (!Number.isFinite(qty) || qty < 1) return `Quantity must be at least 1${n}.`;
+      if (!Number.isFinite(qty) || qty < 1) return `Quantity must be at least 1 for ${it.skuCode}.`;
     }
-    // Advisory, NOT a mirror of a server rule — the API happily accepts
-    // the same variant on two lines. It is here because two lines of one
-    // SKU is a slip in every case we can think of, and the picker has no
-    // other way to say "you already added this".
-    const picked = items.map((it) => it.variantId);
-    if (new Set(picked).size !== picked.length)
-      return 'The same variant is on more than one line — raise its quantity instead.';
     return null;
   }
 
@@ -571,39 +515,13 @@ export function NewOrderForm(): ReactElement {
       {/* Items */}
       <Card>
         <CardBody>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-text-bright text-sm font-medium">
-              {items.length === 1 ? 'Product' : `Products (${items.length})`}
-            </h2>
-            <Button
-              type="button"
-              // Primary: it is how a multi-product order gets made, and as
-              // an outline in the corner it read as decoration.
-              variant="primary"
-              onClick={addItem}
-              disabled={items.length >= MAX_ITEMS}
-            >
-              Add another product
-            </Button>
-          </div>
-          <div className="flex flex-col gap-4">
-            {items.map((it, i) => (
-              <ItemRow
-                key={it.key}
-                item={it}
-                index={i}
-                total={items.length}
-                products={products.data?.items ?? []}
-                productsLoading={products.isLoading}
-                onPatch={patchItem}
-                onRemove={removeItem}
-                onVariantChosen={onVariantChosen}
-                stock={it.variantId === '' ? undefined : stockByVariant.get(it.variantId)}
-                stockByVariant={stockByVariant}
-                stockByProduct={stockByProduct}
-              />
-            ))}
-          </div>
+          <ProductPicker
+            lines={items}
+            stockByVariant={stockByVariant}
+            onAdd={addFromCatalogue}
+            onPatch={patchItem}
+            onRemove={removeItem}
+          />
         </CardBody>
       </Card>
 
@@ -845,184 +763,5 @@ export function NewOrderForm(): ReactElement {
         }}
       />
     </form>
-  );
-}
-
-/**
- * One order line.
- *
- * A component rather than inline JSX because each row needs its OWN
- * variant list, and `useProductVariants` is a hook — it cannot be called
- * inside a map. Lifting one shared list would be wrong anyway: two rows
- * are usually two different products.
- */
-function ItemRow({
-  item,
-  index,
-  total,
-  products,
-  productsLoading,
-  onPatch,
-  onRemove,
-  onVariantChosen,
-  stock,
-  stockByVariant,
-  stockByProduct,
-}: {
-  readonly item: ItemDraft;
-  readonly index: number;
-  readonly total: number;
-  readonly products: ReadonlyArray<{ readonly id: string; readonly name: string }>;
-  readonly productsLoading: boolean;
-  readonly onPatch: (key: number, patch: Partial<ItemDraft>) => void;
-  readonly onRemove: (key: number) => void;
-  readonly onVariantChosen: (key: number, v: SellerVariantView | undefined) => void;
-  readonly stock: { readonly available: number; readonly inTransit: number } | undefined;
-  readonly stockByVariant: ReadonlyMap<string, { available: number; inTransit: number }>;
-  readonly stockByProduct: ReadonlyMap<string, number>;
-}): ReactElement {
-  const variants = useProductVariants(item.productId);
-  const variantOptions = useMemo(
-    () => variants.data?.filter((v) => v.status === 'ACTIVE') ?? [],
-    [variants.data],
-  );
-
-  return (
-    <div className="border-border-subtle rounded-[8px] border p-3">
-      {/*
-        The picture and the number, together. A seller choosing between
-        four variants of one product was reading SKU strings; and the
-        stock figure is the one fact that decides whether this order can
-        actually ship.
-      */}
-      {(item.imageUrl !== null || stock !== undefined) && (
-        <div className="mb-2 flex items-center gap-2.5">
-          {item.imageUrl !== null ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={item.imageUrl}
-              alt=""
-              className="border-border h-9 w-9 shrink-0 rounded-[4px] border object-cover"
-            />
-          ) : null}
-          {stock !== undefined && (
-            <span className="text-xs">
-              {stock.available > 0 ? (
-                <span className="text-text-muted">
-                  <span className="text-text-body font-medium">{stock.available}</span> available
-                </span>
-              ) : (
-                <span className="text-critical font-medium">None available to ship</span>
-              )}
-              {stock.inTransit > 0 && (
-                <span className="text-text-faint"> · {stock.inTransit} in transit</span>
-              )}
-            </span>
-          )}
-        </div>
-      )}
-      {total > 1 && (
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <span className="text-text-muted text-xs font-medium">Product {index + 1}</span>
-          <button
-            type="button"
-            onClick={() => onRemove(item.key)}
-            className="text-text-muted hover:text-status-failed-fg text-xs underline"
-          >
-            Remove
-          </button>
-        </div>
-      )}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <FormField label="Product" required>
-          <Select
-            value={item.productId}
-            // Clearing the variant is the point: a variant belongs to one
-            // product, so keeping the old id would submit a line whose
-            // SKU is not in the product the seller just chose.
-            onChange={(e) => onPatch(item.key, { productId: e.target.value, variantId: '' })}
-            required
-            disabled={productsLoading}
-          >
-            <option value="">
-              {productsLoading
-                ? 'Loading products…'
-                : products.length === 0
-                  ? 'No products yet — add one in Products first.'
-                  : 'Select a product'}
-            </option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-                {stockByProduct.has(p.id) ? ` — ${stockByProduct.get(p.id) ?? 0} available` : ''}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-        <FormField label="Variant" required>
-          <Select
-            value={item.variantId}
-            onChange={(e) => {
-              onPatch(item.key, { variantId: e.target.value });
-              onVariantChosen(
-                item.key,
-                variantOptions.find((v) => v.id === e.target.value),
-              );
-            }}
-            required
-            disabled={!item.productId || variants.isLoading}
-          >
-            <option value="">
-              {!item.productId
-                ? 'Pick a product first'
-                : variants.isLoading
-                  ? 'Loading variants…'
-                  : variantOptions.length === 0
-                    ? 'No active variants'
-                    : 'Select a variant'}
-            </option>
-            {variantOptions.map((v) => {
-              // The number that decides whether this line can ship, on the
-              // option itself — so the choice is made with it in view
-              // rather than discovered after.
-              const s = stockByVariant.get(v.id);
-              return (
-                <option key={v.id} value={v.id}>
-                  {v.skuCode}
-                  {v.variantLabel ? ` — ${v.variantLabel}` : ''}
-                  {s === undefined
-                    ? ''
-                    : s.available > 0
-                      ? ` · ${s.available} available`
-                      : s.inTransit > 0
-                        ? ` · none here, ${s.inTransit} in transit`
-                        : ' · none available'}
-                </option>
-              );
-            })}
-          </Select>
-        </FormField>
-        <FormField label="Quantity" required>
-          <Input
-            type="number"
-            min={1}
-            max={100000}
-            value={item.quantity}
-            onChange={(e) => onPatch(item.key, { quantity: e.target.value })}
-            required
-          />
-        </FormField>
-        <FormField label="Unit price (INR)">
-          <Input
-            type="number"
-            min={0}
-            step="0.01"
-            value={item.unitPriceInr}
-            onChange={(e) => onPatch(item.key, { unitPriceInr: e.target.value })}
-            placeholder="Optional"
-          />
-        </FormField>
-      </div>
-    </div>
   );
 }
