@@ -21,7 +21,6 @@ import {
   RecordReceiptLinesDto,
   CompleteGoodsReceiptDto,
 } from './dto/admin-goods-receipt.dto';
-import { ResolveDiscrepancyDto } from './dto/resolve-discrepancy.dto';
 import {
   GoodsReceiptService,
   type GoodsReceiptDetailView,
@@ -100,20 +99,5 @@ export class AdminGoodsReceiptController {
     @Body() body?: CompleteGoodsReceiptDto,
   ): Promise<GoodsReceiptView> {
     return this.svc.complete(staff.id, id, ctx, body?.serialsByLineId);
-  }
-
-  @Post(':id/resolve-discrepancy')
-  @RequirePermissions('inventory.goods_receipts.manage')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Resolve a DISCREPANCY receipt by correction or force-complete -> COMPLETED',
-  })
-  resolveDiscrepancy(
-    @Param('id', uuid()) id: string,
-    @Body() body: ResolveDiscrepancyDto,
-    @CurrentStaff() staff: AuthenticatedStaff,
-    @ClientInfo() ctx: ClientInfoPayload,
-  ): Promise<GoodsReceiptView> {
-    return this.svc.resolveDiscrepancy(staff.id, id, body, ctx);
   }
 }

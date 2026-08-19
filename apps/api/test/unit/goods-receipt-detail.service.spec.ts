@@ -47,6 +47,13 @@ function makeSut(opts: { modes?: Record<string, InventoryMode>; modeThrows?: boo
     modes,
     noop as StockAlertService,
     noop as BinPolicyService,
+    // Two-leg consignments: an arrival out of TRANSIT, and the R3
+    // consignment-core primitives the completion writes through. Neither
+    // suite exercises a consignment leg, so a bare stub is honest —
+    // transit-arrival.service.spec.ts owns that path.
+    noop as never,
+    { append: async () => ({ id: 'ce1' }) } as never,
+    { recompute: async () => 'PENDING' } as never,
     noop as StockCacheService,
     noop as EmailQueue,
     noop as EnvService,

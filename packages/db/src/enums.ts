@@ -20,6 +20,10 @@ export {
   AddressType,
   WarehouseStatus,
   BinType,
+  ConsignmentEventType,
+  ConsignmentLeg,
+  ConsignmentRoute,
+  ConsignmentStatus,
   ServiceArea,
   PinCodeSource,
   // Layer 3 — Catalog
@@ -97,6 +101,7 @@ export {
   ReservationBookingStage,
   EarlyReservationReviewStatus,
   // R4 — strict-mode per-unit inventory
+  LabellingSite,
   InventoryMode,
   PackBoxStatus,
   StockUnitStatus,

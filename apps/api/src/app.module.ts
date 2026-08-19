@@ -29,6 +29,8 @@ import { InventoryWarehouseModule } from './modules/inventory-warehouse/inventor
 import { InventoryStockModule } from './modules/inventory-stock/inventory-stock.module';
 import { InventoryMovementModule } from './modules/inventory-movement/inventory-movement.module';
 import { InventoryReceiptModule } from './modules/inventory-receipt/inventory-receipt.module';
+import { ConsignmentCoreModule } from './modules/consignment-core/consignment-core.module';
+import { ConsignmentModule } from './modules/consignment/consignment.module';
 import { InventoryAdjustmentModule } from './modules/inventory-adjustment/inventory-adjustment.module';
 import { InventoryCycleCountModule } from './modules/inventory-cycle-count/inventory-cycle-count.module';
 import { InventoryTransferModule } from './modules/inventory-transfer/inventory-transfer.module';
@@ -140,6 +142,8 @@ import { envSchema } from './config/env.schema';
     InventoryStockModule,
     InventoryMovementModule,
     InventoryReceiptModule,
+    ConsignmentCoreModule,
+    ConsignmentModule,
     InventoryAdjustmentModule,
     InventoryCycleCountModule,
     InventoryTransferModule,

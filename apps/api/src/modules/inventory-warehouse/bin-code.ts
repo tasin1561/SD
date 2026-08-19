@@ -42,6 +42,17 @@ export const FLOOR_BIN_CODE = 'FLOOR';
 export const DEFAULT_ZONE_CODE = 'MAIN';
 
 /**
+ * Where goods sit while they are between two of our warehouses.
+ *
+ * Held in the DESTINATION warehouse, and provisioned by the dispatch
+ * rather than by an operator — the other bin types are places inside a
+ * building, and this one is the absence of one, so a hand-made transit
+ * shelf is a category error. Deliberately absent from the bin creator's
+ * type list for that reason.
+ */
+export const TRANSIT_BIN_CODE = 'TRANSIT';
+
+/**
  * Validate the three coordinates, collecting EVERY problem rather than
  * stopping at the first. An agent standing at a shelf with a carton in
  * their hands should be told everything that is wrong in one go.

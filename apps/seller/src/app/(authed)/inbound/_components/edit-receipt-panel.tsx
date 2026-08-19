@@ -26,7 +26,7 @@ import { useSellerIdentity } from '@skydrop/auth/client';
 import { VariantPicker } from './variant-picker';
 
 /**
- * Correct a consignment that has been declared but not yet received.
+ * Correct a declaration that has not yet been received.
  *
  * Without this the only correction is cancel-and-re-declare, which
  * throws away the receipt number receiving is already expecting and
@@ -35,12 +35,17 @@ import { VariantPicker } from './variant-picker';
  * PENDING only, and that is the server's rule (`assertStatus`), not a
  * cosmetic one: once the warehouse is ARRIVING, the count they are
  * checking against must stop moving underneath them.
+ *
+ * Takes only the three fields it reads rather than a whole
+ * `GoodsReceiptView`, so a CONSIGNMENT LEG can be corrected through the
+ * same panel — a leg IS a goods receipt, and a PENDING one is still just
+ * a declaration. The form reloads the receipt fresh by id anyway.
  */
 export function EditReceiptPanel({
   receipt,
   onClose,
 }: {
-  readonly receipt: GoodsReceiptView | null;
+  readonly receipt: Pick<GoodsReceiptView, 'id' | 'status' | 'receiptNumber'> | null;
   readonly onClose: () => void;
 }): ReactElement | null {
   const canManage = can(useSellerIdentity(), 'inbound.manage');
@@ -90,7 +95,7 @@ function EditReceiptForm({
   receipt,
   onClose,
 }: {
-  readonly receipt: GoodsReceiptView;
+  readonly receipt: Pick<GoodsReceiptView, 'id' | 'status' | 'receiptNumber'>;
   readonly onClose: () => void;
 }): ReactElement {
   const toast = useToast();

@@ -14,6 +14,8 @@ import {
 } from '@skydrop/ui/components';
 import { InboundFreightMode } from '@skydrop/db';
 import { useRecordFreight } from '@/lib/ops-hooks';
+import { useConsignmentsList } from '@/lib/api-hooks';
+import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /**
@@ -35,15 +37,36 @@ export function RecordFreightModal({
 }): ReactElement {
   const toast = useToast();
   const record = useRecordFreight();
+  /**
+   * Only a Bangladesh-routed consignment is billable, and only once
+   * something has actually landed — the bill is amortised over the units
+   * that arrived (FRT-1), so splitting it before then would charge a share
+   * to units that may never exist. The server enforces both
+   * (FREIGHT_NOT_BILLABLE / FREIGHT_NOTHING_LANDED); this list is here so
+   * an operator is not typing a uuid to find out.
+   */
+  // This screen is gated on `money.view`; the consignment list needs
+  // `inventory.view`. A finance account may hold one without the other, so
+  // the query is switched OFF rather than firing a 403 on load — and the
+  // field falls back to accepting the id, which keeps the capability
+  // instead of hiding it behind a permission they nearly have.
+  const maySeeConsignments = usePermission('inventory.view');
+  const consignments = useConsignmentsList(
+    { route: 'VIA_BD', pageSize: 100 },
+    { enabled: maySeeConsignments },
+  );
+  const billable = (consignments.data?.items ?? []).filter(
+    (c) => c.status === 'IN_TRANSIT' || c.status === 'COMPLETED' || c.status === 'AT_BD',
+  );
 
-  const [goodsReceiptId, setGoodsReceiptId] = useState('');
+  const [consignmentId, setConsignmentId] = useState('');
   const [amountInr, setAmountInr] = useState('');
   const [mode, setMode] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   function reset(): void {
-    setGoodsReceiptId('');
+    setConsignmentId('');
     setAmountInr('');
     setMode('');
     setNote('');
@@ -54,7 +77,7 @@ export function RecordFreightModal({
     setError(null);
     try {
       await record.mutateAsync({
-        goodsReceiptId: goodsReceiptId.trim(),
+        consignmentId: consignmentId.trim(),
         amountInr: amountInr.trim(),
         ...(mode === '' ? {} : { mode }),
         ...(note.trim() === '' ? {} : { note: note.trim() }),
@@ -80,18 +103,37 @@ export function RecordFreightModal({
     >
       <div className="space-y-3">
         <FormField
-          label="Goods receipt ID"
-          htmlFor="freight-receipt"
-          hint="The receipt this consignment arrived on. One bill per receipt."
+          label="Consignment"
+          htmlFor="freight-consignment"
+          hint="Pick the consignment we carried. Only ones routed through Bangladesh appear — a seller who shipped straight to India paid their own freight, and the server refuses those."
           required
         >
-          <Input
-            id="freight-receipt"
-            value={goodsReceiptId}
-            onChange={(e) => setGoodsReceiptId(e.target.value)}
-            placeholder="0198f3c2-…"
-            autoComplete="off"
-          />
+          {maySeeConsignments ? (
+            <Select
+              id="freight-consignment"
+              value={consignmentId}
+              onChange={(e) => setConsignmentId(e.target.value)}
+            >
+              <option value="">
+                {billable.length === 0
+                  ? 'No Bangladesh-routed consignments yet'
+                  : 'Select a consignment'}
+              </option>
+              {billable.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.consignmentNumber} — {c.seller.companyName}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <Input
+              id="freight-consignment"
+              value={consignmentId}
+              onChange={(e) => setConsignmentId(e.target.value)}
+              placeholder="0198f3c2-…"
+              autoComplete="off"
+            />
+          )}
         </FormField>
 
         <FormField
@@ -140,7 +182,7 @@ export function RecordFreightModal({
         <Button
           variant="primary"
           size="md"
-          disabled={goodsReceiptId.trim() === '' || amountInr.trim() === '' || record.isPending}
+          disabled={consignmentId === '' || amountInr.trim() === '' || record.isPending}
           onClick={() => void submit()}
         >
           {record.isPending ? 'Recording…' : 'Record bill'}

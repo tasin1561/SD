@@ -128,7 +128,7 @@ describe('InboundFreightAmortisationService.planAllocation — the weight split'
       ],
       weights: { 'v-kettle': 2000, 'v-case': 50 },
     });
-    const plan = await sut.svc.planAllocation('gr-1', D('4500'));
+    const plan = await sut.svc.planAllocation(['gr-1'], D('4500'));
 
     expect(plan.totalUnits).toBe(110);
     const kettle = plan.lines.find((l) => l.goodsReceiptLineId === 'l-kettle');
@@ -148,7 +148,7 @@ describe('InboundFreightAmortisationService.planAllocation — the weight split'
       ],
       weights: { 'v-1': null, 'v-2': null },
     });
-    const plan = await sut.svc.planAllocation('gr-1', D('1000'));
+    const plan = await sut.svc.planAllocation(['gr-1'], D('1000'));
     // 1000 / 100 units = 10/unit for both lines.
     for (const line of plan.lines) {
       expect(line.perUnitInr.toString()).toBe('10');
@@ -161,7 +161,7 @@ describe('InboundFreightAmortisationService.planAllocation — the weight split'
       lines: [{ id: 'l-1', variantId: 'v-1', receivedQty: 10 }],
       weights: { 'v-1': 0 },
     });
-    const plan = await sut.svc.planAllocation('gr-1', D('500'));
+    const plan = await sut.svc.planAllocation(['gr-1'], D('500'));
     expect(plan.lines[0]?.unitWeightGrams).toBeNull();
     expect(plan.lines[0]?.perUnitInr.toString()).toBe('50');
   });
@@ -174,7 +174,7 @@ describe('InboundFreightAmortisationService.planAllocation — the weight split'
       ],
       weights: { 'v-w': 100, 'v-u': null },
     });
-    const plan = await sut.svc.planAllocation('gr-1', D('1000'));
+    const plan = await sut.svc.planAllocation(['gr-1'], D('1000'));
     const weighed = plan.lines.find((l) => l.goodsReceiptLineId === 'l-w');
     const unweighed = plan.lines.find((l) => l.goodsReceiptLineId === 'l-u');
     // Units split the bill 50/50 between pools, then weight applies inside.
@@ -190,14 +190,14 @@ describe('InboundFreightAmortisationService.planAllocation — the weight split'
       ],
       weights: { 'v-1': 100, 'v-2': 100 },
     });
-    const plan = await sut.svc.planAllocation('gr-1', D('100'));
+    const plan = await sut.svc.planAllocation(['gr-1'], D('100'));
     expect(plan.lines).toHaveLength(1);
     expect(plan.totalUnits).toBe(10);
   });
 
   it('an empty receipt allocates nothing rather than dividing by zero', async () => {
     const sut = makeSut({ lines: [] });
-    const plan = await sut.svc.planAllocation('gr-1', D('100'));
+    const plan = await sut.svc.planAllocation(['gr-1'], D('100'));
     expect(plan).toEqual({ lines: [], totalUnits: 0 });
   });
 });

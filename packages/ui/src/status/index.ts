@@ -20,6 +20,7 @@
  * every surface updates.
  */
 import {
+  ConsignmentStatus,
   EarlyReservationReviewStatus,
   InboundFreightStatus,
   OrderStatus,
@@ -198,6 +199,34 @@ export function ticketStatusKind(status: TicketStatus): StatusKind {
 }
 
 /**
+ * Two-leg consignment (BD → India) → kind.
+ *
+ * AT_BD is 'confirmed', not 'delivered': the goods are counted and safe,
+ * but they are in the wrong country to sell from — reading them the same
+ * green as arrived-in-India is the one confusion this screen exists to
+ * prevent. IN_TRANSIT is deliberately the same 'in-transit' amber as a
+ * parcel in a van, because it is the same fact.
+ */
+export function consignmentStatusKind(status: ConsignmentStatus): StatusKind {
+  switch (status) {
+    case ConsignmentStatus.PENDING:
+      return 'pending';
+    case ConsignmentStatus.AT_BD:
+      return 'confirmed';
+    case ConsignmentStatus.IN_TRANSIT:
+      return 'in-transit';
+    case ConsignmentStatus.COMPLETED:
+      return 'delivered';
+    case ConsignmentStatus.CANCELLED:
+      return 'cancelled';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled ConsignmentStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/**
  * R3 inbound-freight bill → kind.
  *
  * WAIVED is `cancelled`, not `delivered` — money we chose not to
@@ -269,6 +298,12 @@ export function stockUnitStatusKind(status: StockUnitStatus): StatusKind {
     case StockUnitStatus.RTO_RECEIVED:
       return 'rto';
     case StockUnitStatus.WRITTEN_OFF:
+      return 'cancelled';
+    // Sent home with an abandoned consignment. 'cancelled' rather than
+    // 'failed': nothing went wrong with the unit, the journey was called
+    // off — and somebody knows exactly where it is, which is what
+    // separates it from LOST.
+    case StockUnitStatus.RETURNED_TO_SELLER:
       return 'cancelled';
     case StockUnitStatus.LOST:
       return 'failed';

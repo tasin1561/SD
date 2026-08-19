@@ -158,6 +158,13 @@ function makeSut(receipt: ReturnType<typeof makeReceipt>) {
     modes,
     alerts,
     binPolicy,
+    // Two-leg consignments: an arrival out of TRANSIT, and the R3
+    // consignment-core primitives the completion writes through. None of
+    // these suites exercise a consignment leg, so a bare stub is honest —
+    // transit-arrival.service.spec.ts owns that path.
+    {} as never,
+    { append: async () => ({ id: 'ce1' }) } as never,
+    { recompute: async () => 'PENDING' } as never,
     cache,
     email,
     env,
@@ -192,30 +199,53 @@ describe('GoodsReceiptService.complete', () => {
     expect(sut.emails[0]?.templateCode).toBe('seller.goods_receipt_completed.email');
   });
 
-  it('mismatch -> DISCREPANCY: NO stock written, discrepancy email', async () => {
+  it('a SHORT count no longer blocks: stock is written for what arrived, variance recorded', async () => {
+    // This test used to assert the opposite. The blocking DISCREPANCY
+    // status earned its keep only where the held stock would become
+    // sellable — and a two-unit variance stranding a whole consignment in
+    // a warehouse, waiting on an email, cost more than it ever caught.
+    // The variance is now a number on the line, and the goods carry on.
     const sut = makeSut(
       makeReceipt(GoodsReceiptStatus.ARRIVING, [
         { id: 'ln1', variantId: 'v1', expectedQty: 10, receivedQty: 7 },
       ]),
     );
     const res = await sut.svc.complete('staff1', 'gr1', CTX);
-    expect(res.status).toBe(GoodsReceiptStatus.DISCREPANCY);
+    expect(res.status).toBe(GoodsReceiptStatus.COMPLETED);
     expect(res.hasDiscrepancies).toBe(true);
-    expect(sut.applyCalls).toHaveLength(0);
-    expect(sut.batchCreates).toHaveLength(0);
-    expect(sut.cache.invalidate).not.toHaveBeenCalled();
-    expect(sut.emails[0]?.templateCode).toBe('seller.goods_receipt_discrepancy.email');
+    // Stock for what ACTUALLY arrived — not zero, and not the declared 10.
+    expect(sut.applyCalls).toHaveLength(1);
+    expect(sut.applyCalls[0]?.qtyChange).toBe(7);
+    expect(sut.batchCreates).toHaveLength(1);
+    expect(sut.cache.invalidate).toHaveBeenCalledWith('s1', 'w1');
+    // Told, not asked: both mails go out — it completed AND it varied.
+    expect(sut.emails.map((e) => e.templateCode)).toEqual([
+      'seller.goods_receipt_completed.email',
+      'seller.goods_receipt_discrepancy.email',
+    ]);
   });
 
-  it('damagedQty > 0 alone is a discrepancy (even if received == expected)', async () => {
+  it('an OVER count is equally non-blocking — counts move in both directions', async () => {
+    const sut = makeSut(
+      makeReceipt(GoodsReceiptStatus.ARRIVING, [
+        { id: 'ln1', variantId: 'v1', expectedQty: 10, receivedQty: 12 },
+      ]),
+    );
+    const res = await sut.svc.complete('staff1', 'gr1', CTX);
+    expect(res.status).toBe(GoodsReceiptStatus.COMPLETED);
+    expect(res.hasDiscrepancies).toBe(true);
+    expect(sut.applyCalls[0]?.qtyChange).toBe(12);
+  });
+
+  it('damagedQty > 0 alone is still recorded as a variance', async () => {
     const sut = makeSut(
       makeReceipt(GoodsReceiptStatus.ARRIVING, [
         { id: 'ln1', variantId: 'v1', expectedQty: 10, receivedQty: 10, damagedQty: 2 },
       ]),
     );
     const res = await sut.svc.complete('staff1', 'gr1', CTX);
-    expect(res.status).toBe(GoodsReceiptStatus.DISCREPANCY);
-    expect(sut.applyCalls).toHaveLength(0);
+    expect(res.status).toBe(GoodsReceiptStatus.COMPLETED);
+    expect(res.hasDiscrepancies).toBe(true);
   });
 
   it('rejects completing a non-ARRIVING receipt', async () => {
@@ -223,59 +253,6 @@ describe('GoodsReceiptService.complete', () => {
     await expect(sut.svc.complete('staff1', 'gr1', CTX)).rejects.toMatchObject({
       response: { code: 'INVALID_RECEIPT_STATUS' },
     });
-  });
-});
-
-describe('GoodsReceiptService.resolveDiscrepancy', () => {
-  it('FORCE_COMPLETE: requires a note, completes for actuals, appends permanent note', async () => {
-    const sut = makeSut(
-      makeReceipt(GoodsReceiptStatus.DISCREPANCY, [
-        { id: 'ln1', variantId: 'v1', expectedQty: 10, receivedQty: 8 },
-      ]),
-    );
-    await expect(
-      sut.svc.resolveDiscrepancy('staff1', 'gr1', { mode: 'FORCE_COMPLETE' }, CTX),
-    ).rejects.toMatchObject({ response: { code: 'FORCE_COMPLETE_NOTE_REQUIRED' } });
-
-    const res = await sut.svc.resolveDiscrepancy(
-      'staff1',
-      'gr1',
-      { mode: 'FORCE_COMPLETE', note: 'short shipment accepted' },
-      CTX,
-    );
-    expect(res.status).toBe(GoodsReceiptStatus.COMPLETED);
-    expect(sut.applyCalls.map((c) => c.qtyChange)).toEqual([8]); // actual received
-    expect(res.discrepancyNotes).toContain('FORCE-COMPLETED');
-  });
-
-  it('CORRECT: applies corrected actuals then completes on corrected qty', async () => {
-    const sut = makeSut(
-      makeReceipt(GoodsReceiptStatus.DISCREPANCY, [
-        { id: 'ln1', variantId: 'v1', expectedQty: 10, receivedQty: 7 },
-      ]),
-    );
-    const res = await sut.svc.resolveDiscrepancy(
-      'staff1',
-      'gr1',
-      { mode: 'CORRECT', lines: [{ lineId: 'ln1', receivedQty: 10, putawayBinId: 'bin1' }] },
-      CTX,
-    );
-    expect(res.status).toBe(GoodsReceiptStatus.COMPLETED);
-    expect(sut.applyCalls.map((c) => c.qtyChange)).toEqual([10]); // corrected
-  });
-
-  it('CORRECT without lines is rejected', async () => {
-    const sut = makeSut(makeReceipt(GoodsReceiptStatus.DISCREPANCY, [{}]));
-    await expect(
-      sut.svc.resolveDiscrepancy('staff1', 'gr1', { mode: 'CORRECT' }, CTX),
-    ).rejects.toMatchObject({ response: { code: 'CORRECTION_LINES_REQUIRED' } });
-  });
-
-  it('rejects resolving a receipt that is not in DISCREPANCY', async () => {
-    const sut = makeSut(makeReceipt(GoodsReceiptStatus.COMPLETED, [{}]));
-    await expect(
-      sut.svc.resolveDiscrepancy('staff1', 'gr1', { mode: 'FORCE_COMPLETE', note: 'x' }, CTX),
-    ).rejects.toMatchObject({ response: { code: 'INVALID_RECEIPT_STATUS' } });
   });
 });
 

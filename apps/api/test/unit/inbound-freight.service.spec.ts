@@ -17,13 +17,14 @@ type AnyArgs = Record<string, unknown>;
 const STAFF = 'staff-1';
 const SELLER = 'seller-1';
 const RECEIPT = 'gr-1';
+const CONSIGNMENT = 'cn-1';
 const CHARGE = 'fc-1';
 
 function chargeRow(over: AnyArgs = {}): AnyArgs {
   return {
     id: CHARGE,
     sellerId: SELLER,
-    goodsReceiptId: RECEIPT,
+    consignmentId: CONSIGNMENT,
     amountInr: new Prisma.Decimal('4500.00'),
     mode: InboundFreightMode.PAY_LATER,
     serviceChargePercent: null,
@@ -38,7 +39,7 @@ function chargeRow(over: AnyArgs = {}): AnyArgs {
     walletEntryId: null,
     note: null,
     createdAt: new Date('2026-07-01T00:00:00.000Z'),
-    goodsReceipt: { receiptNumber: 'GR-2026-07-0001' },
+    consignment: { consignmentNumber: 'CN-2026-07-000001' },
     ...over,
   };
 }
@@ -54,9 +55,18 @@ function makeSut(
     claimCount?: number;
   } = {},
 ) {
-  const receiptFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+  // The bill hangs off the CONSIGNMENT now, and only a VIA_BD one is
+  // billable — a seller who shipped straight to India paid their own
+  // freight. The India legs are what the amortisation splits over.
+  const consignmentFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
     opts.receipt === undefined
-      ? { id: RECEIPT, sellerId: SELLER, receiptNumber: 'GR-2026-07-0001' }
+      ? {
+          id: CONSIGNMENT,
+          sellerId: SELLER,
+          consignmentNumber: 'CN-2026-07-000001',
+          route: 'VIA_BD',
+          receipts: [{ id: RECEIPT, leg: 'IN_FINAL' }],
+        }
       : opts.receipt,
   );
   const chargeFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
@@ -66,7 +76,11 @@ function makeSut(
   const chargeCreate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (args) => {
     const data = args['data'] as AnyArgs;
     created.push(data);
-    return { ...chargeRow(), ...data, goodsReceipt: { receiptNumber: 'GR-2026-07-0001' } };
+    return {
+      ...chargeRow(),
+      ...data,
+      consignment: { consignmentNumber: 'CN-2026-07-000001' },
+    };
   });
   const chargeUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async () => ({
     count: opts.claimCount ?? 1,
@@ -81,7 +95,7 @@ function makeSut(
 
   const client: AnyArgs = {
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(client),
-    goodsReceipt: { findFirst: receiptFindFirst },
+    consignment: { findFirst: consignmentFindFirst },
     inboundFreightAllocation: { create: jest.fn(async () => ({ id: 'alloc-1' })) },
     inboundFreightCharge: {
       findUnique: jest.fn(async () =>
@@ -158,7 +172,7 @@ function makeSut(
 }
 
 describe('InboundFreightService.record', () => {
-  const input = { goodsReceiptId: RECEIPT, amountInr: '4500.00' };
+  const input = { consignmentId: CONSIGNMENT, amountInr: '4500.00' };
 
   it('PAY_NOW debits the wallet in the SAME transaction and lands SETTLED', async () => {
     const sut = makeSut({ mode: 'PAY_NOW' });
@@ -222,10 +236,10 @@ describe('InboundFreightService.record', () => {
     expect(sut.applyEntry).not.toHaveBeenCalled();
   });
 
-  it('404s on an unknown goods receipt', async () => {
+  it('404s on an unknown consignment', async () => {
     const sut = makeSut({ receipt: null });
     await expect(sut.svc.record(STAFF, input)).rejects.toMatchObject({
-      response: { code: 'GOODS_RECEIPT_NOT_FOUND' },
+      response: { code: 'CONSIGNMENT_NOT_FOUND' },
     });
   });
 

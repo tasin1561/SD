@@ -1113,7 +1113,34 @@ async function seedSystemSettings() {
     },
   });
 
-  console.log(`  system_settings: ${systemSettings.length + 1} upserted`);
+  // The Bangladesh intake warehouse. Deliberately seeded EMPTY: there is
+  // no such building until somebody creates one, and inventing an id
+  // would point a route at a warehouse that does not exist. A VIA_BD
+  // consignment refuses with BD_WAREHOUSE_NOT_CONFIGURED until this is
+  // set, which is the honest failure — better than silently routing the
+  // seller's stock to India when they said Bangladesh.
+  const bdWarehouseDesc =
+    'Warehouse that receives BD-routed consignments before they travel to India. ' +
+    'Must be a warehouse with fulfilsOrders = false. Empty means VIA_BD routing is unavailable.';
+  await prisma.systemSetting.upsert({
+    where: { key: 'ops.bd_intake_warehouse_id' },
+    create: {
+      key: 'ops.bd_intake_warehouse_id',
+      category: 'ops',
+      valueType: SettingValueType.STRING,
+      valueString: '',
+      displayName: 'Bangladesh Intake Warehouse',
+      description: bdWarehouseDesc,
+    },
+    update: {
+      category: 'ops',
+      valueType: SettingValueType.STRING,
+      displayName: 'Bangladesh Intake Warehouse',
+      description: bdWarehouseDesc,
+    },
+  });
+
+  console.log(`  system_settings: ${systemSettings.length + 2} upserted`);
 }
 
 async function seedCouriers() {
@@ -2440,6 +2467,46 @@ const notificationTemplates: TemplateSeed[] = [
     subject: 'Confirm collapsing {{ warehouse_code }} to one location — code {{ code }}',
     bodyTemplate:
       'Hi {{ staff_name }}, someone signed in as you asked to collapse every bin in {{ warehouse_name }} ({{ warehouse_code }}) into a single FLOOR location. That would merge {{ bins_affected }} bin(s) holding {{ units_affected }} unit(s), and the original placement would survive only in the backup taken alongside it.\n\nReason given: {{ reason }}\n\nYour code is {{ code }}. It expires in {{ expires_minutes }} minutes.\n\nIf this was not you, do not enter the code — tell whoever runs the warehouse, and change your password.',
+  },
+  // ---- Two-leg consignments (docs/consignment-two-leg.md) --------------
+  // The seller asked to know where their stock is in real time. Each
+  // milestone gets a mail; the timeline on the consignment page is the
+  // durable version of the same facts.
+  {
+    code: 'seller.consignment_bd_received.email',
+    name: 'Consignment counted in Bangladesh — email to seller',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: '{{ consignment_number }} has arrived at our Bangladesh warehouse',
+    bodyTemplate:
+      'Hi {{ company_name }}, we have received and counted {{ consignment_number }} at our Bangladesh warehouse: {{ total_received }} unit(s) across {{ line_count }} product(s). {{ variance_note }}\n\nIt is not sellable yet — stock becomes available once it reaches India and is counted there. Watch it move at {{ app_url }}.',
+  },
+  {
+    code: 'seller.consignment_dispatched.email',
+    name: 'Consignment left Bangladesh — email to seller',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: '{{ consignment_number }} is on its way to India',
+    bodyTemplate:
+      'Hi {{ company_name }}, {{ units_dispatched }} unit(s) from {{ consignment_number }} have left our Bangladesh warehouse for India.{{ eta_note }}\n\nThey show as in transit until they land and are counted, and cannot be sold while they are in the air. Track it at {{ app_url }}.',
+  },
+  {
+    code: 'seller.consignment_arrived.email',
+    name: 'Consignment landed in India — email to seller',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: '{{ consignment_number }} has landed — {{ total_received }} unit(s) now sellable',
+    bodyTemplate:
+      'Hi {{ company_name }}, {{ consignment_number }} has arrived at our Indian warehouse and been counted: {{ total_received }} unit(s) across {{ line_count }} product(s) are now available to sell. {{ variance_note }}\n\nSee the full journey at {{ app_url }}.',
+  },
+  {
+    code: 'seller.consignment_cancelled.email',
+    name: 'Consignment cancelled — email to seller',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: '{{ consignment_number }} has been cancelled',
+    bodyTemplate:
+      'Hi {{ company_name }}, {{ consignment_number }} has been cancelled and {{ units_returned }} unit(s) are being returned to you.\n\nReason: {{ reason }}\n\nThose units have been removed from your Skydrop stock. Anything you need, reach us at {{ support_email }}.',
   },
   // ---- Module 5 — Inventory & WMS (sender resolves to hello@) ----------
   {

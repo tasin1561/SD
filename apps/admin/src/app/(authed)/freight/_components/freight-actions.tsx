@@ -103,8 +103,8 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
         description={
           <>
             Debits the seller&apos;s wallet by the outstanding <Money amount={row.outstandingInr} />{' '}
-            for receipt {row.receiptNumber ?? row.goodsReceiptId.slice(0, 8)}. The ledger entry is
-            permanent.
+            for receipt {row.consignmentNumber ?? row.consignmentId.slice(0, 8)}. The ledger entry
+            is permanent.
           </>
         }
         confirmLabel={settle.isPending ? 'Settling…' : 'Settle'}

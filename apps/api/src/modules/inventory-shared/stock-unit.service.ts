@@ -420,6 +420,85 @@ export class StockUnitService {
     return units.length;
   }
 
+  /**
+   * Move units belonging to ONE goods-receipt line — the consignment
+   * gate, where a whole leg moves at once and there is no parcel to key
+   * on.
+   *
+   * `limit` is what makes this usable for a partial dispatch: 300 of the
+   * 500 units a line received go to India and the other 200 stay in
+   * Bangladesh, so the caller asks for exactly as many as it moved in the
+   * aggregate ledger. Oldest first (`createdAt`), which is the unit-level
+   * echo of FEFO — the units that have been sitting longest travel first.
+   *
+   * Guarded on `fromStatus` like `advanceUnitsForShipment`, so a re-run
+   * moves nothing and returns an empty list rather than walking units
+   * forward twice.
+   */
+  async moveUnitsForReceiptLine(
+    tx: Prisma.TransactionClient,
+    input: {
+      readonly goodsReceiptLineId: string;
+      readonly fromStatus: StockUnitStatus;
+      readonly toStatus: StockUnitStatus;
+      readonly limit: number;
+      readonly gate: string;
+      readonly actorType: ActorType;
+      readonly actorId?: string | null;
+      /** Where the units end up. Omit any field to leave it untouched. */
+      readonly warehouseId?: string | undefined;
+      readonly binId?: string | undefined;
+      readonly batchId?: string | undefined;
+      /** Only when the units are leaving inventory for good. */
+      readonly writeOffReason?: string | undefined;
+      readonly note?: string | null;
+      /** Narrow to units currently sitting in one bin — an arrival moves
+       *  what is in TRANSIT, not what has already been shelved. */
+      readonly currentBinId?: string | undefined;
+    },
+  ): Promise<readonly string[]> {
+    if (input.limit <= 0) return [];
+    const candidates = await tx.stockUnit.findMany({
+      where: {
+        goodsReceiptLineId: input.goodsReceiptLineId,
+        status: input.fromStatus,
+        ...(input.currentBinId === undefined ? {} : { binId: input.currentBinId }),
+      },
+      orderBy: { createdAt: 'asc' },
+      take: input.limit,
+      select: { id: true, serialBarcode: true },
+    });
+    if (candidates.length === 0) return [];
+
+    const now = new Date();
+    await tx.stockUnit.updateMany({
+      where: { id: { in: candidates.map((c) => c.id) } },
+      data: {
+        status: input.toStatus,
+        ...(input.warehouseId === undefined ? {} : { warehouseId: input.warehouseId }),
+        ...(input.binId === undefined ? {} : { binId: input.binId }),
+        ...(input.batchId === undefined ? {} : { batchId: input.batchId }),
+        ...(input.writeOffReason === undefined ? {} : { writeOffReason: input.writeOffReason }),
+        lastScanAt: now,
+        ...(input.actorId === undefined || input.actorId === null
+          ? {}
+          : { lastScanByStaffId: input.actorId }),
+      },
+    });
+    for (const c of candidates) {
+      await this.appendEvent(tx, {
+        stockUnitId: c.id,
+        fromStatus: input.fromStatus,
+        toStatus: input.toStatus,
+        gate: input.gate,
+        actorType: input.actorType,
+        actorId: input.actorId ?? null,
+        note: input.note ?? null,
+      });
+    }
+    return candidates.map((c) => c.serialBarcode);
+  }
+
   /** How many units of this SKU sit IN_STOCK at a warehouse. Used to
    *  reconcile against the aggregate, never to replace it. */
   async countInStock(sellerId: string, variantId: string, warehouseId: string): Promise<number> {

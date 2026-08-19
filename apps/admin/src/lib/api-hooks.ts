@@ -11,7 +11,15 @@ import { useApiClient } from '@skydrop/auth/client';
 import type {
   AdminCancelOrderRequest,
   ApiClient,
+  CancelConsignmentResult,
   ComputeOrderChargesResponse,
+  ConsignmentEventView,
+  ConsignmentListResult,
+  ConsignmentView,
+  DispatchResult,
+  DispatchToIndiaBody,
+  LabelPreview,
+  LabelSheet,
   ForceMutationRequest,
   ForceMutationResult,
   ListOrdersQuery,
@@ -30,6 +38,7 @@ import type {
   UpdateSellerStatusResponse,
   UpdateSystemSettingRequest,
 } from '@skydrop/api-client';
+import type { ConsignmentRoute, ConsignmentStatus, LabellingSite } from '@skydrop/db';
 import { usePermission } from './use-permission';
 
 /**
@@ -1236,45 +1245,6 @@ export function useCompleteGoodsReceipt(): UseMutationResult<
   });
 }
 
-/**
- * Closing a DISCREPANCY receipt.
- *
- * A receipt whose counts disagreed with the declaration stops at
- * DISCREPANCY and writes NO stock. Without this the consignment was a
- * dead end: the goods were physically on the floor and the system would
- * never admit they had arrived.
- *
- * Two modes, and the difference is what actually happened:
- *   CORRECT        — we miscounted. Supply the true actuals.
- *   FORCE_COMPLETE — the shortage is real. Accept it with a note that
- *                    stays on the receipt permanently.
- */
-export function useResolveDiscrepancy(): UseMutationResult<
-  GoodsReceiptView,
-  Error,
-  {
-    id: string;
-    mode: 'CORRECT' | 'FORCE_COMPLETE';
-    note?: string;
-    lines?: RecordReceiptLineInput[];
-  }
-> {
-  const client = useApiClient();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, ...body }) =>
-      client.request<GoodsReceiptView>(`/api/admin/goods-receipts/${id}/resolve-discrepancy`, {
-        method: 'POST',
-        body,
-      }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['admin-goods-receipts'] });
-      // Resolving WRITES STOCK — the whole point of unblocking it.
-      void queryClient.invalidateQueries({ queryKey: ['admin-inventory'] });
-    },
-  });
-}
-
 // ───────── Admin: who is on the other end of the call ─────────
 
 export interface CustomerOrderSummary {
@@ -2031,6 +2001,170 @@ export function useUpdateInviteLead(): UseMutationResult<
       client.request<InviteLead>(`/api/admin/invite-leads/${id}`, { method: 'PATCH', body }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-invite-leads'] });
+    },
+  });
+}
+
+// ───────── Two-leg consignments (docs/consignment-two-leg.md) ─────────
+
+/**
+ * The consignment journey — announced, counted at up to two stops,
+ * labelled at ONE of them, landed in India.
+ *
+ * These sit beside the goods-receipt hooks above on purpose: a leg IS a
+ * goods receipt, and the counting screens are the same ones. What the
+ * consignment adds is everything the receiving station has no opinion
+ * about — the route, the labelling station, the dispatch, the cancel.
+ *
+ * Invalidation is deliberately wide. A dispatch writes stock and creates
+ * a receipt; a cancel removes stock and closes a receipt. Invalidating
+ * only `admin-consignments` would leave the receive queue and the stock
+ * ledger showing a world that no longer exists.
+ */
+export function useConsignmentsList(
+  query: {
+    sellerId?: string;
+    route?: ConsignmentRoute;
+    status?: ConsignmentStatus;
+    page?: number;
+    pageSize?: number;
+  },
+  /**
+   * Off for a caller whose page does not carry `inventory.view` — the
+   * finance side's freight screen borrows this list, and a request nobody
+   * may make should never be SENT rather than sent and hidden.
+   */
+  opts: { readonly enabled?: boolean } = {},
+): UseQueryResult<ConsignmentListResult> {
+  const client = useApiClient();
+  return useQuery({
+    enabled: opts.enabled ?? true,
+    queryKey: ['admin-consignments', 'list', query],
+    queryFn: () => {
+      const sp = new URLSearchParams();
+      if (query.sellerId) sp.set('sellerId', query.sellerId);
+      if (query.route) sp.set('route', query.route);
+      if (query.status) sp.set('status', query.status);
+      if (query.page) sp.set('page', String(query.page));
+      if (query.pageSize) sp.set('pageSize', String(query.pageSize));
+      const qs = sp.toString();
+      return client.request<ConsignmentListResult>(`/api/admin/consignments${qs ? `?${qs}` : ''}`);
+    },
+  });
+}
+
+export function useConsignmentDetail(id: string): UseQueryResult<ConsignmentView> {
+  const client = useApiClient();
+  return useQuery({
+    enabled: id !== '',
+    queryKey: ['admin-consignments', 'detail', id],
+    queryFn: () => client.request<ConsignmentView>(`/api/admin/consignments/${id}`),
+  });
+}
+
+/** The FULL timeline — admin sees events the seller never does. */
+export function useConsignmentEvents(id: string): UseQueryResult<readonly ConsignmentEventView[]> {
+  const client = useApiClient();
+  return useQuery({
+    enabled: id !== '',
+    queryKey: ['admin-consignments', 'events', id],
+    queryFn: () =>
+      client.request<readonly ConsignmentEventView[]>(`/api/admin/consignments/${id}/events`),
+  });
+}
+
+/**
+ * What is waiting to be labelled, WITHOUT printing anything.
+ *
+ * Separate from the print call because printing locks the station
+ * permanently — an operator has to be able to see whether there is
+ * anything to print before committing to where it happens.
+ */
+export function useConsignmentLabelPreview(id: string): UseQueryResult<LabelPreview> {
+  const client = useApiClient();
+  return useQuery({
+    enabled: id !== '',
+    queryKey: ['admin-consignments', 'label-preview', id],
+    queryFn: () => client.request<LabelPreview>(`/api/admin/consignments/${id}/labels`),
+  });
+}
+
+export function useSetLabellingSite(): UseMutationResult<
+  ConsignmentView,
+  Error,
+  { id: string; site: LabellingSite }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, site }) =>
+      client.request<ConsignmentView>(`/api/admin/consignments/${id}/labelling-site`, {
+        method: 'PATCH',
+        body: { site },
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-consignments'] });
+    },
+  });
+}
+
+/** Prints AND locks the station. There is no un-print. */
+export function usePrintConsignmentLabels(): UseMutationResult<LabelSheet, Error, { id: string }> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }) =>
+      client.request<LabelSheet>(`/api/admin/consignments/${id}/labels/print`, {
+        method: 'POST',
+        body: {},
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-consignments'] });
+    },
+  });
+}
+
+export function useDispatchConsignment(): UseMutationResult<
+  DispatchResult,
+  Error,
+  { id: string; body: DispatchToIndiaBody }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }) =>
+      client.request<DispatchResult>(`/api/admin/consignments/${id}/dispatch`, {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-consignments'] });
+      // A dispatch is a stock TRANSFER plus a new India leg — both of
+      // those live behind other query keys.
+      void queryClient.invalidateQueries({ queryKey: ['admin-goods-receipts'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-inventory'] });
+    },
+  });
+}
+
+export function useCancelConsignment(): UseMutationResult<
+  CancelConsignmentResult,
+  Error,
+  { id: string; reason: string }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }) =>
+      client.request<CancelConsignmentResult>(`/api/admin/consignments/${id}/cancel`, {
+        method: 'POST',
+        body: { reason },
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-consignments'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-goods-receipts'] });
+      // Cancelling REMOVES stock already booked in.
+      void queryClient.invalidateQueries({ queryKey: ['admin-inventory'] });
     },
   });
 }

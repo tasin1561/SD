@@ -59,6 +59,7 @@ model StaffUser {
   cycleCountsInitiated       CycleCount[]                  @relation("CycleCountInitiatedBy")
   cycleCountItemsCounted     CycleCountItem[]              @relation("CycleCountItemCountedBy")
   goodsReceiptsReceived      GoodsReceipt[]                @relation("GoodsReceiptReceivedBy")
+  goodsReceiptsDispatched    GoodsReceipt[]                @relation("GoodsReceiptDispatchedBy")
   ordersConfirmed            Order[]                       @relation("OrderConfirmedBy")
   ordersCancelled            Order[]                       @relation("OrderCancelledBy")
   bulkUploadsByStaff         BulkOrderUpload[]             @relation("BulkUploadUploadedByStaff")
@@ -270,6 +271,7 @@ model Seller {
   inviteLeads              InviteLead[]                   @relation("InviteLeadConvertedSeller")
   roles                    SellerRoleDefinition[]
   sellerBankChangeRequests SellerBankChangeRequest[]
+  consignments             Consignment[]
 
   @@index([status])
   @@index([deletedAt])
@@ -570,6 +572,7 @@ model Warehouse {
   stockAdjustments       StockAdjustment[]
   cycleCounts            CycleCount[]
   goodsReceipts          GoodsReceipt[]
+  consignments           Consignment[]
   shipmentsAsOrigin      Shipment[]
   // R6: RTO parcels physically RECEIVED here (may differ from the
   // warehouse the shipment originally dispatched from).
@@ -1341,10 +1344,76 @@ model CycleCountItem {
   @@map("cycle_count_items")
 }
 
+/// A seller's stock shipment, from announcement to landed-in-India.
+///
+/// The seller-facing object. It owns the ROUTE, the LABELLING STATION
+/// and the timeline; the counting is done by its `receipts`, which are
+/// ordinary goods receipts and reuse the receiving station unchanged.
+/// See docs/consignment-two-leg.md.
+model Consignment {
+  id                String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId          String            @map("seller_id") @db.Uuid
+  consignmentNumber String            @unique @map("consignment_number")
+  route             ConsignmentRoute
+  status            ConsignmentStatus @default(PENDING)
+  labellingSite     LabellingSite     @default(NONE) @map("labelling_site")
+  /// Set by the first print. While null the site may be changed freely;
+  /// after it, never.
+  labelsPrintedAt   DateTime?         @map("labels_printed_at") @db.Timestamptz
+  expectedArrivalAt DateTime?         @map("expected_arrival_at") @db.Timestamptz
+  sellerReference   String?           @map("seller_reference")
+  cancelledAt       DateTime?         @map("cancelled_at") @db.Timestamptz
+  cancelReason      String?           @map("cancel_reason") @db.Text
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt         DateTime?         @map("deleted_at") @db.Timestamptz
+
+  seller        Seller                @relation(fields: [sellerId], references: [id])
+  receipts      GoodsReceipt[]
+  events        ConsignmentEvent[]
+  freightCharge InboundFreightCharge?
+  warehouse     Warehouse?            @relation(fields: [warehouseId], references: [id])
+  warehouseId   String?               @db.Uuid
+
+  @@index([sellerId, status])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("consignments")
+}
+
+/// APPEND-ONLY, like `order_events`. The seller watches this; there is
+/// no update or delete path by construction.
+model ConsignmentEvent {
+  id                String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  consignmentId     String               @map("consignment_id") @db.Uuid
+  type              ConsignmentEventType
+  description       String?              @db.Text
+  data              Json?
+  actorType         ActorType?           @map("actor_type")
+  actorId           String?              @map("actor_id") @db.Uuid
+  isVisibleToSeller Boolean              @default(true) @map("is_visible_to_seller")
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz
+
+  consignment Consignment @relation(fields: [consignmentId], references: [id], onDelete: Cascade)
+
+  @@index([consignmentId, createdAt])
+  @@index([type])
+  @@map("consignment_events")
+}
+
 model GoodsReceipt {
   id                String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
   sellerId          String             @map("seller_id") @db.Uuid
   warehouseId       String             @map("warehouse_id") @db.Uuid
+  /// The journey this arrival belongs to. Nullable only for receipts
+  /// that predate two-leg consignments.
+  consignmentId     String?            @map("consignment_id") @db.Uuid
+  leg               ConsignmentLeg?
+  /// IN_FINAL legs only: when this shipment left Bangladesh. Its stock
+  /// sits in the destination warehouse's TRANSIT bin from this moment
+  /// until the leg is received.
+  dispatchedAt      DateTime?          @map("dispatched_at") @db.Timestamptz
+  dispatchedById    String?            @map("dispatched_by_id") @db.Uuid
   receiptNumber     String             @unique @map("receipt_number")
   expectedArrivalAt DateTime?          @map("expected_arrival_at") @db.Timestamptz
   sellerReference   String?            @map("seller_reference")
@@ -1359,19 +1428,24 @@ model GoodsReceipt {
   updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt         DateTime?          @map("deleted_at") @db.Timestamptz
 
-  seller        Seller                @relation(fields: [sellerId], references: [id])
-  warehouse     Warehouse             @relation(fields: [warehouseId], references: [id])
-  receivedBy    StaffUser?            @relation("GoodsReceiptReceivedBy", fields: [receivedById], references: [id])
-  lines         GoodsReceiptLine[]
-  stockBatches  StockBatch[]
+  seller                 Seller                @relation(fields: [sellerId], references: [id])
+  warehouse              Warehouse             @relation(fields: [warehouseId], references: [id])
+  consignment            Consignment?          @relation(fields: [consignmentId], references: [id])
+  receivedBy             StaffUser?            @relation("GoodsReceiptReceivedBy", fields: [receivedById], references: [id])
+  dispatchedBy           StaffUser?            @relation("GoodsReceiptDispatchedBy", fields: [dispatchedById], references: [id])
+  lines                  GoodsReceiptLine[]
+  stockBatches           StockBatch[]
   // R3 — the BD→India inbound freight bill for this consignment.
-  freightCharge InboundFreightCharge?
+  freightCharge          InboundFreightCharge? @relation(fields: [inboundFreightChargeId], references: [id])
+  inboundFreightChargeId String?               @db.Uuid
 
   @@index([sellerId])
   @@index([warehouseId])
   @@index([status])
   @@index([expectedArrivalAt])
   @@index([receivedById])
+  @@index([consignmentId])
+  @@index([dispatchedById])
   @@map("goods_receipts")
 }
 
@@ -1426,8 +1500,11 @@ model GoodsReceiptLine {
 model InboundFreightCharge {
   id                   String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
   sellerId             String               @map("seller_id") @db.Uuid
-  /// One bill per consignment.
-  goodsReceiptId       String               @unique @map("goods_receipt_id") @db.Uuid
+  /// One bill per consignment. Was keyed on the goods receipt until
+  /// two-leg consignments arrived: with a BD intake and one or more
+  /// India arrivals, no single receipt is the thing being billed, and
+  /// the per-unit split has to run over the units that ACTUALLY landed.
+  consignmentId        String               @unique @map("consignment_id") @db.Uuid
   /// The freight invoice as recorded by ops, INR canonical.
   amountInr            Decimal              @map("amount_inr") @db.Decimal(12, 2)
   mode                 InboundFreightMode
@@ -1457,11 +1534,12 @@ model InboundFreightCharge {
   createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz
   updatedAt            DateTime             @updatedAt @map("updated_at") @db.Timestamptz
 
-  seller       Seller                     @relation(fields: [sellerId], references: [id])
-  goodsReceipt GoodsReceipt               @relation(fields: [goodsReceiptId], references: [id])
-  allocations  InboundFreightAllocation[]
-  settledBy    StaffUser?                 @relation("InboundFreightSettledBy", fields: [settledByStaffId], references: [id])
-  walletEntry  SellerWalletEntry?         @relation(fields: [walletEntryId], references: [id])
+  seller        Seller                     @relation(fields: [sellerId], references: [id])
+  consignment   Consignment                @relation(fields: [consignmentId], references: [id])
+  allocations   InboundFreightAllocation[]
+  settledBy     StaffUser?                 @relation("InboundFreightSettledBy", fields: [settledByStaffId], references: [id])
+  walletEntry   SellerWalletEntry?         @relation(fields: [walletEntryId], references: [id])
+  goodsReceipts GoodsReceipt[]
 
   @@index([sellerId, status])
   @@index([status])
@@ -3976,6 +4054,17 @@ enum StockMovementReasonCode {
   EXPIRED              @map("expired")
   RECALLED             @map("recalled")
   COUNTING_ERROR       @map("counting_error")
+  /// Counted at the Bangladesh intake, fewer arrived in India. The
+  /// goods really existed and really are gone; this is our dispute with
+  /// the forwarder, never a silent correction of the earlier count.
+  IN_TRANSIT_LOSS      @map("in_transit_loss")
+  /// The reverse — more arrived than were dispatched. Counts move in
+  /// both directions and neither blocks.
+  IN_TRANSIT_SURPLUS   @map("in_transit_surplus")
+  /// A consignment abandoned before it left Bangladesh; the goods went
+  /// back to the seller. Distinct from a write-off — nothing was
+  /// destroyed and somebody has them.
+  RETURNED_TO_SELLER   @map("returned_to_seller")
   OTHER                @map("other")
 
   @@map("stock_movement_reason_code")
@@ -4041,13 +4130,18 @@ enum PackBoxStatus {
 }
 
 enum StockUnitStatus {
-  IN_STOCK     @map("in_stock")
-  PICKED       @map("picked")
-  PACKED       @map("packed")
-  DISPATCHED   @map("dispatched")
-  RTO_RECEIVED @map("rto_received")
-  WRITTEN_OFF  @map("written_off")
-  LOST         @map("lost")
+  IN_STOCK           @map("in_stock")
+  PICKED             @map("picked")
+  PACKED             @map("packed")
+  DISPATCHED         @map("dispatched")
+  RTO_RECEIVED       @map("rto_received")
+  WRITTEN_OFF        @map("written_off")
+  LOST               @map("lost")
+  /// Sent home with an abandoned consignment. Neither destroyed
+  /// (WRITTEN_OFF) nor unaccounted for (LOST) — we know exactly where
+  /// it went, and "how much did we send back" is a question worth being
+  /// able to answer on its own.
+  RETURNED_TO_SELLER @map("returned_to_seller")
 
   @@map("stock_unit_status")
 }
@@ -4111,6 +4205,64 @@ enum CycleCountStatus {
   CANCELLED   @map("cancelled")
 
   @@map("cycle_count_status")
+}
+
+/// Where a consignment travels. Every consignment ends in India; the
+/// question is whether it goes there directly or through our Bangladesh
+/// intake warehouse first. Only VIA_BD incurs a freight bill from us.
+enum ConsignmentRoute {
+  DIRECT_IN @map("direct_in")
+  VIA_BD    @map("via_bd")
+
+  @@map("consignment_route")
+}
+
+/// Coarse enough for a seller to read at a glance. Never hand-set —
+/// `ConsignmentStatusService` recomputes it from the legs after every
+/// change, so it cannot drift from what the receipts actually say.
+enum ConsignmentStatus {
+  PENDING    @map("pending")
+  AT_BD      @map("at_bd")
+  IN_TRANSIT @map("in_transit")
+  COMPLETED  @map("completed")
+  CANCELLED  @map("cancelled")
+
+  @@map("consignment_status")
+}
+
+/// Which stop a goods receipt records. A DIRECT_IN consignment has one
+/// IN_FINAL leg; a VIA_BD consignment has one BD_INTAKE and one or more
+/// IN_FINAL legs, because a large intake often flies in two shipments.
+enum ConsignmentLeg {
+  BD_INTAKE @map("bd_intake")
+  IN_FINAL  @map("in_final")
+
+  @@map("consignment_leg")
+}
+
+/// Barcode labelling happens at ONE station per consignment, chosen by
+/// ops. Locked once the first label is printed: a half-labelled
+/// consignment split across two countries is unrecoverable.
+enum LabellingSite {
+  NONE @map("none")
+  BD   @map("bd")
+  IN   @map("in")
+
+  @@map("labelling_site")
+}
+
+/// The seller-facing timeline vocabulary. Mirrors OrderEventType's role.
+enum ConsignmentEventType {
+  DECLARED          @map("declared")
+  BD_RECEIVED       @map("bd_received")
+  LABELS_PRINTED    @map("labels_printed")
+  DISPATCHED_TO_IN  @map("dispatched_to_in")
+  IN_RECEIVED       @map("in_received")
+  VARIANCE_RECORDED @map("variance_recorded")
+  FREIGHT_RECORDED  @map("freight_recorded")
+  CANCELLED         @map("cancelled")
+
+  @@map("consignment_event_type")
 }
 
 enum GoodsReceiptStatus {

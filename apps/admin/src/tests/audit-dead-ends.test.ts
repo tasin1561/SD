@@ -3,16 +3,19 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Three more capabilities the server had and nothing could reach.
+ * Two more capabilities the server had and nothing could reach.
  *
  * All found by the same sweep, all the same shape: an endpoint shipped,
  * a permission defined for it, and no screen calling it. That combination
  * is invisible to every behavioural test, because no behaviour reaches
  * the code — so these read the source.
  *
- *   DISCREPANCY receipts  — a short consignment wrote NO stock and could
- *                           never be closed. Goods on the floor the
- *                           system would not admit had arrived.
+ * A third — closing a DISCREPANCY receipt — was RETIRED rather than
+ * fixed. A variance no longer blocks: `complete` writes stock for what
+ * was counted and records the gap on the receipt, so there is nothing
+ * left to close and no endpoint to reach. The assertions that pinned it
+ * went with the status (docs/consignment-two-leg.md, decision 5).
+ *
  *   Stock adjustments     — INV-8's approval queue had a reader and no
  *                           writer, so above-threshold stock could not be
  *                           corrected at all.
@@ -22,35 +25,12 @@ import { describe, expect, it } from 'vitest';
 
 const R = (p: string): string => readFileSync(join(__dirname, p), 'utf8');
 
-const RECEIVE = '../app/(authed)/warehouse/receive/_components/receive-detail-view.tsx';
 const ADJ_PANEL = '../app/(authed)/inventory/adjustments/_components/new-adjustment-panel.tsx';
 const ADJ_INDEX = '../app/(authed)/inventory/adjustments/_components/adjustments-index.tsx';
-const ADMIN_HOOKS = '../lib/api-hooks.ts';
 const INV_HOOKS = '../lib/inventory-hooks.ts';
 const SELLER_PRODUCT =
   '../../../seller/src/app/(authed)/products/[id]/_components/product-detail.tsx';
 const SELLER_HOOKS = '../../../seller/src/lib/api-hooks.ts';
-
-describe('a DISCREPANCY receipt can be closed', () => {
-  const src = R(RECEIVE);
-
-  it('the panel renders for DISCREPANCY only', () => {
-    expect(src).toContain("r.status === 'DISCREPANCY'");
-    expect(src).toContain('{isDiscrepancy && (');
-  });
-
-  it('a note is mandatory — it is the only record of why numbers differ', () => {
-    expect(src).toContain("forceNote.trim() === ''");
-    expect(src).toContain('mode: ');
-    expect(src).toContain("'FORCE_COMPLETE'");
-  });
-
-  it('resolving invalidates inventory, because it writes stock', () => {
-    const hooks = R(ADMIN_HOOKS);
-    const hook = hooks.slice(hooks.indexOf('export function useResolveDiscrepancy('));
-    expect(hook.slice(0, 900)).toContain("['admin-inventory']");
-  });
-});
 
 describe('a stock adjustment can be raised', () => {
   const src = R(ADJ_PANEL);

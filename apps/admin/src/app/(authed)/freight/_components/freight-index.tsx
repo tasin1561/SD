@@ -59,7 +59,7 @@ export function FreightIndex(): ReactElement {
     <div>
       <PageHeader
         title="Inbound freight"
-        subtitle="One bill per BD→India consignment. Pay-now debits the wallet at receipt; pay-later leaves a receivable that amortises per unit as the stock sells."
+        subtitle="One bill per BD→India consignment, split over the units that actually landed. Pay-now debits the wallet immediately; pay-later leaves a receivable that amortises per unit as the stock sells."
         action={
           canWrite ? (
             <Button variant="primary" size="md" onClick={() => setRecording(true)}>
@@ -123,7 +123,7 @@ export function FreightIndex(): ReactElement {
           <EmptyState
             bare
             title="No freight bills recorded"
-            description="Record the freight invoice for a consignment after the goods receipt is logged. One bill per receipt — recording it twice is refused."
+            description="Record the freight invoice for a consignment once something has landed in India. One bill per consignment — recording it twice is refused, and a seller who shipped straight to India is refused outright."
             action={
               canWrite ? (
                 <Button variant="primary" size="sm" onClick={() => setRecording(true)}>
@@ -137,7 +137,7 @@ export function FreightIndex(): ReactElement {
         <Table wrapperClassName="rounded-t-none border-t-0">
           <THead>
             <Tr>
-              <Th>Receipt</Th>
+              <Th>Consignment</Th>
               <Th>Mode</Th>
               <Th align="right">Bill</Th>
               <Th align="right">Recovered</Th>
@@ -168,10 +168,10 @@ function FreightRow({ row }: { readonly row: FreightChargeView }): ReactElement 
   return (
     <Tr>
       <Td>
-        {row.receiptNumber === null ? (
-          <Ident value={`${row.goodsReceiptId.slice(0, 8)}…`} />
+        {row.consignmentNumber === null ? (
+          <Ident value={`${row.consignmentId.slice(0, 8)}…`} />
         ) : (
-          <Ident value={row.receiptNumber} />
+          <Ident value={row.consignmentNumber} />
         )}
         <div className="text-text-faint mt-0.5 text-xs">
           {new Date(row.createdAt).toLocaleDateString()}

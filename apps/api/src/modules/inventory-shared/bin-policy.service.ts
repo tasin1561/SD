@@ -1,7 +1,11 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { BinType, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
-import { DEFAULT_ZONE_CODE, FLOOR_BIN_CODE } from '../inventory-warehouse/bin-code';
+import {
+  DEFAULT_ZONE_CODE,
+  FLOOR_BIN_CODE,
+  TRANSIT_BIN_CODE,
+} from '../inventory-warehouse/bin-code';
 
 /**
  * The ONE place `warehouses.bin_tracking_enabled` is read.
@@ -102,6 +106,49 @@ export class BinPolicyService {
         zoneId: zone.id,
         code: FLOOR_BIN_CODE,
         type: BinType.STORAGE,
+        aisle: null,
+        rack: null,
+        shelf: null,
+      },
+      select: { id: true },
+    });
+    return created.id;
+  }
+
+  /**
+   * The TRANSIT bin for a warehouse — find-or-create, like FLOOR.
+   *
+   * Provisioned on demand by the dispatch that needs it rather than at
+   * warehouse creation, because most warehouses never receive an
+   * inter-warehouse shipment and a bin nobody uses is one more row on
+   * every bins screen. It is non-pickable (BIN-2), so stock parked here
+   * is on hand, really ours, and sellable from nowhere.
+   */
+  async transitBinId(warehouseId: string, tx?: Prisma.TransactionClient): Promise<string> {
+    const db = tx ?? this.prisma.client;
+    const existing = await db.warehouseBin.findFirst({
+      where: { warehouseId, code: TRANSIT_BIN_CODE, deletedAt: null },
+      select: { id: true },
+    });
+    if (existing) return existing.id;
+
+    const zone =
+      (await db.warehouseZone.findFirst({
+        where: { warehouseId, deletedAt: null },
+        orderBy: { pickOrder: 'asc' },
+        select: { id: true },
+      })) ??
+      (await db.warehouseZone.create({
+        data: { warehouseId, code: DEFAULT_ZONE_CODE, name: 'Main', pickOrder: 100 },
+        select: { id: true },
+      }));
+
+    const created = await db.warehouseBin.create({
+      data: {
+        warehouseId,
+        zoneId: zone.id,
+        code: TRANSIT_BIN_CODE,
+        type: BinType.TRANSIT,
         aisle: null,
         rack: null,
         shelf: null,

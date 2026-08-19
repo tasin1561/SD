@@ -30,6 +30,8 @@ export const AdvisoryLock = {
   SHIPMENT_NUMBER: 0x05348,
   /** Order number allocation per year (ORD-8). */
   ORDER_NUMBER: 0x04f52,
+  /** 'CN' — consignment number allocation per year. */
+  CONSIGNMENT_NUMBER: 0x0434e,
 } as const;
 
 /**

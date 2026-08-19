@@ -81,6 +81,19 @@ export type {
   RecordReceiptLineInput,
 } from './endpoints/admin-goods-receipts';
 export type {
+  CancelConsignmentResult,
+  ConsignmentEventView,
+  ConsignmentLegLineView,
+  ConsignmentLegView,
+  ConsignmentListResult,
+  ConsignmentView,
+  DeclareConsignmentBody,
+  DispatchResult,
+  DispatchToIndiaBody,
+  LabelPreview,
+  LabelSheet,
+} from './endpoints/consignments';
+export type {
   WebhookEndpointView,
   WebhookEndpointWithSecret,
   CreateWebhookEndpointRequest,

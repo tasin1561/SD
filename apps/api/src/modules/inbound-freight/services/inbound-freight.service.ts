@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import {
   ActorType,
+  ConsignmentLeg,
+  ConsignmentRoute,
   Currency,
   InboundFreightMode,
   InboundFreightStatus,
@@ -21,8 +23,8 @@ import { InboundFreightAmortisationService } from './inbound-freight-amortisatio
 
 export interface FreightChargeView {
   readonly id: string;
-  readonly goodsReceiptId: string;
-  readonly receiptNumber: string | null;
+  readonly consignmentId: string;
+  readonly consignmentNumber: string | null;
   readonly amountInr: string;
   readonly mode: InboundFreightMode;
   readonly serviceChargePercent: string | null;
@@ -40,7 +42,7 @@ export interface FreightChargeView {
 }
 
 export interface RecordFreightInput {
-  readonly goodsReceiptId: string;
+  readonly consignmentId: string;
   readonly amountInr: string;
   /** Overrides the seller's resolved mode for this one consignment. */
   readonly mode?: InboundFreightMode;
@@ -102,71 +104,100 @@ export class InboundFreightService {
   ): Promise<FreightChargeView> {
     const amount = this.parseAmount(input.amountInr);
 
-    const receipt = await this.prisma.client.goodsReceipt.findFirst({
-      where: { id: input.goodsReceiptId, deletedAt: null },
-      select: { id: true, sellerId: true, receiptNumber: true },
+    const consignment = await this.prisma.client.consignment.findFirst({
+      where: { id: input.consignmentId, deletedAt: null },
+      select: {
+        id: true,
+        sellerId: true,
+        consignmentNumber: true,
+        route: true,
+        receipts: { select: { id: true, leg: true } },
+      },
     });
-    if (!receipt) {
+    if (!consignment) {
       throw new NotFoundException({
-        code: 'GOODS_RECEIPT_NOT_FOUND',
-        message: `Goods receipt ${input.goodsReceiptId} not found`,
+        code: 'CONSIGNMENT_NOT_FOUND',
+        message: `Consignment ${input.consignmentId} not found`,
+      });
+    }
+
+    // Only a VIA_BD consignment is billed by us. A seller who shipped
+    // straight to India paid their own freight, and this is enforced
+    // rather than merely practised: a rule that lives in whoever is on
+    // shift eventually bills somebody twice.
+    if (consignment.route !== ConsignmentRoute.VIA_BD) {
+      throw new ConflictException({
+        code: 'FREIGHT_NOT_BILLABLE',
+        message:
+          `${consignment.consignmentNumber} shipped straight to India, so we did not carry it. ` +
+          `Only consignments routed through the Bangladesh warehouse are billed inbound freight.`,
       });
     }
 
     // Idempotency: one bill per consignment. A re-submit returns what is
     // already there instead of billing the seller twice.
     const existing = await this.prisma.client.inboundFreightCharge.findUnique({
-      where: { goodsReceiptId: receipt.id },
-      include: { goodsReceipt: { select: { receiptNumber: true } } },
+      where: { consignmentId: consignment.id },
+      select: { id: true, status: true },
     });
     if (existing) {
       throw new ConflictException({
         code: 'FREIGHT_ALREADY_RECORDED',
-        message: `Goods receipt ${receipt.receiptNumber} already carries a freight bill (${existing.status})`,
+        message: `${consignment.consignmentNumber} already carries a freight bill (${existing.status})`,
         cause: { freightChargeId: existing.id, status: existing.status },
       });
     }
 
-    const mode = input.mode ?? (await this.resolveMode(receipt.sellerId));
+    const mode = input.mode ?? (await this.resolveMode(consignment.sellerId));
     // The service charge is snapshotted at record time and never
     // re-resolved at settlement: the seller owes the rate that applied
     // when their consignment landed, not whatever the setting says weeks
     // later.
     const percent =
       mode === InboundFreightMode.PAY_LATER
-        ? await this.resolveServiceChargePercent(receipt.sellerId)
+        ? await this.resolveServiceChargePercent(consignment.sellerId)
         : null;
     const serviceCharge =
       percent === null || percent.isZero() ? null : amount.mul(percent).div(100).toDecimalPlaces(2);
     const total = serviceCharge === null ? amount : amount.add(serviceCharge);
 
-    // R3 amortisation: split the bill across the consignment's lines by
-    // weight, snapshotted now. PAY_LATER bills are then charged per unit
-    // as units leave; PAY_NOW bills are settled in full below and never
-    // amortised (the allocation is still recorded, as the per-unit landed
-    // cost is useful reporting either way).
-    const plan = await this.amortisation.planAllocation(receipt.id, total);
+    // R3 amortisation, over the INDIA legs only — the units that actually
+    // landed. Splitting over the Bangladesh intake would amortise part of
+    // the bill onto units lost in transit, leaving a remainder nothing
+    // will ever settle and a status stuck at PARTIALLY_SETTLED forever.
+    const finalLegIds = consignment.receipts
+      .filter((r) => r.leg === ConsignmentLeg.IN_FINAL)
+      .map((r) => r.id);
+    if (finalLegIds.length === 0) {
+      throw new ConflictException({
+        code: 'FREIGHT_NOTHING_LANDED',
+        message:
+          `${consignment.consignmentNumber} has not arrived in India yet. ` +
+          `Record the bill once a shipment has been counted, so it is split over units that exist.`,
+      });
+    }
+    const plan = await this.amortisation.planAllocation(finalLegIds, total);
 
     const created = await this.prisma.client.$transaction(async (tx) => {
       const settleNow = mode === InboundFreightMode.PAY_NOW;
       let walletEntryId: string | null = null;
       if (settleNow) {
         const entry = await this.wallet.applyEntry(tx, {
-          sellerId: receipt.sellerId,
+          sellerId: consignment.sellerId,
           currency: Currency.INR,
           direction: WalletEntryDirection.INBOUND_FREIGHT,
           amount: total,
           actorType: ActorType.STAFF,
           actorId: staffId,
-          note: `Inbound freight for ${receipt.receiptNumber}`,
+          note: `Inbound freight for ${consignment.consignmentNumber}`,
         });
         walletEntryId = entry.id;
       }
 
       const row = await tx.inboundFreightCharge.create({
         data: {
-          sellerId: receipt.sellerId,
-          goodsReceiptId: receipt.id,
+          sellerId: consignment.sellerId,
+          consignmentId: consignment.id,
           amountInr: amount,
           mode,
           serviceChargePercent: percent,
@@ -178,7 +209,7 @@ export class InboundFreightService {
           ...(settleNow ? { settledAt: new Date(), settledByStaffId: staffId, walletEntryId } : {}),
           note: input.note ?? null,
         },
-        include: { goodsReceipt: { select: { receiptNumber: true } } },
+        include: { consignment: { select: { consignmentNumber: true } } },
       });
 
       for (const line of plan.lines) {
@@ -204,14 +235,14 @@ export class InboundFreightService {
         {
           actorType: ActorType.STAFF,
           staffUserId: staffId,
-          sellerId: receipt.sellerId,
+          sellerId: consignment.sellerId,
           action: 'wallet.inbound_freight.recorded',
           entityType: 'inbound_freight_charge',
           entityId: row.id,
           severity: 'MEDIUM',
           metadata: {
-            goodsReceiptId: receipt.id,
-            receiptNumber: receipt.receiptNumber,
+            consignmentId: consignment.id,
+            consignmentNumber: consignment.consignmentNumber,
             amountInr: amount.toString(),
             mode,
             serviceChargeInr: serviceCharge?.toString() ?? null,
@@ -294,13 +325,13 @@ export class InboundFreightService {
         amount: outstanding,
         actorType: ActorType.STAFF,
         actorId: staffId,
-        note: `Inbound freight for ${charge.goodsReceipt.receiptNumber}`,
+        note: `Inbound freight for ${charge.consignment.consignmentNumber}`,
       });
 
       const row = await tx.inboundFreightCharge.update({
         where: { id: freightChargeId },
         data: { walletEntryId: entry.id },
-        include: { goodsReceipt: { select: { receiptNumber: true } } },
+        include: { consignment: { select: { consignmentNumber: true } } },
       });
 
       await this.audit.log(
@@ -396,7 +427,7 @@ export class InboundFreightService {
       );
       return tx.inboundFreightCharge.findUniqueOrThrow({
         where: { id: freightChargeId },
-        include: { goodsReceipt: { select: { receiptNumber: true } } },
+        include: { consignment: { select: { consignmentNumber: true } } },
       });
     });
 
@@ -409,7 +440,7 @@ export class InboundFreightService {
   ): Promise<readonly FreightChargeView[]> {
     const rows = await this.prisma.client.inboundFreightCharge.findMany({
       where: { sellerId, ...(status === undefined ? {} : { status }) },
-      include: { goodsReceipt: { select: { receiptNumber: true } } },
+      include: { consignment: { select: { consignmentNumber: true } } },
       orderBy: { createdAt: 'desc' },
     });
     return rows.map((r) => this.toView(r));
@@ -424,7 +455,7 @@ export class InboundFreightService {
         ...(query.sellerId === undefined ? {} : { sellerId: query.sellerId }),
         ...(query.status === undefined ? {} : { status: query.status }),
       },
-      include: { goodsReceipt: { select: { receiptNumber: true } } },
+      include: { consignment: { select: { consignmentNumber: true } } },
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
@@ -455,12 +486,12 @@ export class InboundFreightService {
 
   private async load(id: string): Promise<
     Prisma.InboundFreightChargeGetPayload<{
-      include: { goodsReceipt: { select: { receiptNumber: true } } };
+      include: { consignment: { select: { consignmentNumber: true } } };
     }>
   > {
     const row = await this.prisma.client.inboundFreightCharge.findUnique({
       where: { id },
-      include: { goodsReceipt: { select: { receiptNumber: true } } },
+      include: { consignment: { select: { consignmentNumber: true } } },
     });
     if (!row) {
       throw new NotFoundException({
@@ -518,13 +549,13 @@ export class InboundFreightService {
 
   private toView(
     row: Prisma.InboundFreightChargeGetPayload<{
-      include: { goodsReceipt: { select: { receiptNumber: true } } };
+      include: { consignment: { select: { consignmentNumber: true } } };
     }>,
   ): FreightChargeView {
     return {
       id: row.id,
-      goodsReceiptId: row.goodsReceiptId,
-      receiptNumber: row.goodsReceipt?.receiptNumber ?? null,
+      consignmentId: row.consignmentId,
+      consignmentNumber: row.consignment?.consignmentNumber ?? null,
       amountInr: row.amountInr.toString(),
       mode: row.mode,
       serviceChargePercent: row.serviceChargePercent?.toString() ?? null,

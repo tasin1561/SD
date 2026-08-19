@@ -1,6 +1,6 @@
 # Two-leg consignments (BD → India)
 
-Status: **design agreed 2026-08-19, implementation in progress.**
+Status: **BUILT 2026-08-19.** Backend complete; screens shipped alongside.
 Read with `CLAUDE.md` (INV-*, BIN-*, UNIT-*, FRT-*) and `docs/db-schema.md`.
 
 ---
@@ -188,17 +188,65 @@ already exists. This is the main new code in the leg.
 
 ## Build order
 
-| | Scope |
-|---|---|
-| **a** | `BinType.TRANSIT` + `NON_PICKABLE_BIN_TYPES`; `Warehouse.fulfilsOrders` + its single reader; seller-visible in-transit derived from both |
-| **b** | `Consignment` parent + `GoodsReceipt.leg` + route; the seller announce screen asks the route; retire the `DISCREPANCY` blocking path |
-| **c** | The consignment panel: dispatch-to-India transfer, India receipt out of `TRANSIT`, `IN_TRANSIT_LOSS` reconciliation, multi-shipment India legs |
-| **d** | Labelling site + label printing; strict units created at the chosen station and moved by the transfer; India scan-reconcile; surplus labelling |
-| **e** | Freight bill moves to the consignment; `DIRECT_IN` offers no bill action |
-| **f** | Seller timeline: `consignment_events`, `/inbound/[id]`, milestone notifications |
-| **g** | Cancel before dispatch: return-to-seller movement + unit status; refuse after |
+| | Scope | Where it landed |
+|---|---|---|
+| **a** | `BinType.TRANSIT` + `NON_PICKABLE_BIN_TYPES`; `Warehouse.fulfilsOrders` + its single reader | `bin-policy.service.ts`, `warehouse-resolver.service.ts` |
+| **b** | `Consignment` + `ConsignmentEvent`; `GoodsReceipt.consignmentId/leg/dispatchedAt`; the announce screen asks the route; the `DISCREPANCY` blocking path retired | `consignment-core/`, `consignment/`, `goods-receipt.service.ts` |
+| **c** | Dispatch-to-India transfer, arrival out of `TRANSIT`, `IN_TRANSIT_LOSS`/`_SURPLUS`, multi-shipment India legs | `consignment-dispatch.service.ts`, `transit-arrival.service.ts` |
+| **d** | Labelling site + the label sheet; strict units moved by the dispatch; India scan-reconcile; surplus labelled where found | `consignment-label.service.ts` |
+| **e** | Freight bill keyed on the consignment; `DIRECT_IN` refused as unbillable | `inbound-freight.service.ts` |
+| **f** | `consignment_events` timeline + four milestone email templates | `consignment-event.service.ts`, `seed.ts` |
+| **g** | Cancel before dispatch: `RETURNED_TO_SELLER` movement + unit status; refused after | `consignment-cancel.service.ts` |
 
-`f` is independent of `c`–`e` and can run in parallel.
+## Modules
+
+- **`consignment-core`** — the R3 shared primitive, the EIGHTH extraction of
+  that shape. `ConsignmentNumberingService` (`CN-YYYY-MM-XXXXXX`),
+  `ConsignmentEventService` (append-only), `ConsignmentStatusService` (the
+  sole writer of `consignments.status`, which it always DERIVES). Depends
+  on Prisma alone, so both `consignment` and `inventory-receipt` import it
+  and no cycle exists — `consignment` imports `inventory-receipt`, so the
+  reverse call could not.
+- **`consignment`** — a LEAF module (nothing imports it, it exports
+  nothing). `ConsignmentService` (declare / read / labelling site / the
+  cancel guard), `ConsignmentDispatchService`, `ConsignmentLabelService`,
+  `ConsignmentCancelService`, plus the seller and admin controllers.
+- **`inventory-receipt`** — unchanged as the counting station, called once
+  per leg, plus `TransitArrivalService` for a leg that arrives out of
+  TRANSIT rather than from a supplier.
+
+## Endpoint map
+
+Seller (`inbound.view`, writes `inbound.manage`):
+`POST /seller/consignments`, `GET /seller/consignments`,
+`GET /seller/consignments/:id`, `GET /seller/consignments/:id/events`,
+`POST /seller/consignments/:id/cancel`.
+
+Admin (`inventory.view`; labelling/print/cancel `inventory.goods_receipts.manage`;
+dispatch `inventory.transfers.manage` — moving stock between warehouses is
+what it does, whatever the panel calls it):
+`GET /admin/consignments`, `GET /admin/consignments/:id`,
+`GET /admin/consignments/:id/events`,
+`PATCH /admin/consignments/:id/labelling-site`,
+`GET /admin/consignments/:id/labels`,
+`POST /admin/consignments/:id/labels/print`,
+`POST /admin/consignments/:id/dispatch`,
+`POST /admin/consignments/:id/cancel`.
+
+## Before VIA_BD can be used in production
+
+`ops.bd_intake_warehouse_id` is seeded EMPTY, deliberately: there is no
+Bangladesh building until somebody creates one, and inventing an id would
+point a route at a warehouse that does not exist. Until it is set, a
+VIA_BD declaration is refused with `BD_WAREHOUSE_NOT_CONFIGURED` — the
+honest failure, rather than quietly sending the seller's stock to India
+when they said Bangladesh.
+
+The steps: create the warehouse with **fulfils orders OFF**, then set that
+setting to its id on `/settings`. The resolver re-checks the flag on every
+read and refuses a warehouse that fulfils orders
+(`BD_WAREHOUSE_FULFILS_ORDERS`), because an intake site whose stock is
+sellable defeats the whole route.
 
 ---
 

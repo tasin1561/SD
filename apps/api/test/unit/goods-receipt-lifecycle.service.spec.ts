@@ -89,6 +89,13 @@ function makeSut(opts: {
     noop as InventoryModeService,
     noop as StockAlertService,
     binPolicy,
+    // Two-leg consignments: an arrival out of TRANSIT, and the R3
+    // consignment-core primitives the completion writes through. Neither
+    // suite exercises a consignment leg, so a bare stub is honest —
+    // transit-arrival.service.spec.ts owns that path.
+    noop as never,
+    { append: async () => ({ id: 'ce1' }) } as never,
+    { recompute: async () => 'PENDING' } as never,
     noop as StockCacheService,
     noop as EmailQueue,
     { sellerAppUrl: 'http://a', supportEmail: 'h@x.io' } as unknown as EnvService,

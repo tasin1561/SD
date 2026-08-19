@@ -76,11 +76,18 @@ export class InboundFreightAmortisationService {
    * time; the resulting rates are snapshotted and never recomputed.
    */
   async planAllocation(
-    goodsReceiptId: string,
+    /**
+     * The receipt legs whose COUNTED lines this bill covers. A two-leg
+     * consignment passes its India arrivals, not its Bangladesh intake:
+     * freight has to be amortised over the units that actually landed,
+     * or the share of a unit lost in transit is money nothing will ever
+     * settle.
+     */
+    goodsReceiptIds: readonly string[],
     totalInr: Prisma.Decimal,
   ): Promise<{ lines: readonly AllocationPlanLine[]; totalUnits: number }> {
     const lines = await this.prisma.client.goodsReceiptLine.findMany({
-      where: { receiptId: goodsReceiptId },
+      where: { receiptId: { in: [...goodsReceiptIds] } },
       select: { id: true, variantId: true, receivedQty: true },
     });
     const stocked = lines.filter((l) => l.receivedQty > 0);

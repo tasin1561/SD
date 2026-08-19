@@ -8,7 +8,14 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
-import type { GoodsReceiptStatus } from '@skydrop/db';
+import type { ConsignmentRoute, ConsignmentStatus, GoodsReceiptStatus } from '@skydrop/db';
+import type {
+  CancelConsignmentResult,
+  ConsignmentEventView,
+  ConsignmentListResult,
+  ConsignmentView,
+  DeclareConsignmentBody,
+} from '@skydrop/api-client';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 
@@ -286,6 +293,100 @@ export function useUpdateGoodsReceipt(): UseMutationResult<
     onSuccess: (_r, { id }) => {
       void qc.invalidateQueries({ queryKey: ['seller-goods-receipts'] });
       void qc.invalidateQueries({ queryKey: ['seller-goods-receipt', id] });
+      // A receipt is also a consignment LEG, and the consignment page is
+      // where a seller corrects one. Without this the page it was
+      // corrected from keeps showing the quantity that was just changed.
+      void qc.invalidateQueries({ queryKey: ['seller-consignments'] });
+      void qc.invalidateQueries({ queryKey: ['seller-consignment'] });
+    },
+  });
+}
+
+// ───────── Two-leg consignments ─────────
+
+/**
+ * A consignment is the JOURNEY, not the arrival.
+ *
+ * The goods-receipt hooks above are one stop with one count. A
+ * consignment is up to two of those under one number — counted in Dhaka,
+ * flown, counted again in India — which is why the seller gets a
+ * timeline instead of a status word. See docs/consignment-two-leg.md.
+ */
+export function useConsignments(query: {
+  status?: ConsignmentStatus | '';
+  route?: ConsignmentRoute | '';
+  page?: number;
+  pageSize?: number;
+}): UseQueryResult<ConsignmentListResult> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-consignments', query],
+    queryFn: () => client.request<ConsignmentListResult>(`/api/seller/consignments${qs(query)}`),
+  });
+}
+
+export function useConsignment(id: string): UseQueryResult<ConsignmentView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-consignment', id],
+    enabled: id !== '',
+    queryFn: () => client.request<ConsignmentView>(`/api/seller/consignments/${id}`),
+  });
+}
+
+/**
+ * The timeline, oldest first — the server orders it and filters it to
+ * what a seller may see, so this hook keeps the order it is given.
+ */
+export function useConsignmentEvents(id: string): UseQueryResult<readonly ConsignmentEventView[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-consignment-events', id],
+    enabled: id !== '',
+    queryFn: () =>
+      client.request<readonly ConsignmentEventView[]>(`/api/seller/consignments/${id}/events`),
+  });
+}
+
+export function useDeclareConsignment(): UseMutationResult<
+  ConsignmentView,
+  Error,
+  DeclareConsignmentBody
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<ConsignmentView>('/api/seller/consignments', { method: 'POST', body }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-consignments'] }),
+  });
+}
+
+/**
+ * Cancelling sends the goods back. The window closes at dispatch, and
+ * the server is the one that says so — `CONSIGNMENT_ALREADY_DISPATCHED`
+ * comes back verbatim rather than being guessed at here.
+ *
+ * Every consignment query is invalidated on success, the timeline
+ * included: the cancellation is itself an event on it.
+ */
+export function useCancelConsignment(): UseMutationResult<
+  CancelConsignmentResult,
+  Error,
+  { id: string; reason: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }) =>
+      client.request<CancelConsignmentResult>(`/api/seller/consignments/${id}/cancel`, {
+        method: 'POST',
+        body: { reason },
+      }),
+    onSuccess: (_r, { id }) => {
+      void qc.invalidateQueries({ queryKey: ['seller-consignments'] });
+      void qc.invalidateQueries({ queryKey: ['seller-consignment', id] });
+      void qc.invalidateQueries({ queryKey: ['seller-consignment-events', id] });
     },
   });
 }

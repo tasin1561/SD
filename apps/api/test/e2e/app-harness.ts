@@ -327,6 +327,14 @@ export async function resetInventoryState(prisma: PrismaClient): Promise<void> {
         'cycle_counts',
         'goods_receipt_lines',
         'goods_receipts',
+        // Two-leg consignments. `consignments` FK-RESTRICTS sellers, and
+        // `inbound_freight_charges` FK-RESTRICTS consignments — so both
+        // must go before the seller wipe (MUST #12). consignment_events
+        // cascades, listed anyway so the intent reads.
+        'consignment_events',
+        'inbound_freight_allocations',
+        'inbound_freight_charges',
+        'consignments',
         // Bin-layout backups + the collapse challenges that produce
         // them: both FK warehouses/staff with RESTRICT, so they have to
         // go before the topology they describe (MUST #12).

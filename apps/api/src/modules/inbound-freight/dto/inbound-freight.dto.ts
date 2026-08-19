@@ -13,7 +13,7 @@ import {
 export class RecordInboundFreightDto {
   @ApiProperty({ description: 'UUID v7 of the goods receipt this freight bill covers' })
   @IsUUID('7')
-  readonly goodsReceiptId!: string;
+  readonly consignmentId!: string;
 
   @ApiProperty({
     description: 'Freight invoice amount, INR canonical. Decimal string (e.g. "4500.00").',

@@ -1,6 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
+import { ConsignmentRoute, ConsignmentStatus } from '@skydrop/db';
 import {
   Button,
   Card,
@@ -26,35 +28,31 @@ import {
   Toolbar,
   Tr,
 } from '@skydrop/ui/components';
-import {
-  useCancelGoodsReceipt,
-  useCreateGoodsReceipt,
-  useGoodsReceipts,
-  type GoodsReceiptView,
-} from '@/lib/account-hooks';
+import { consignmentStatusKind } from '@skydrop/ui/status';
+import { useConsignments, useDeclareConsignment } from '@/lib/account-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
-import { EditReceiptPanel } from './edit-receipt-panel';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import type { SellerVariantSearchHit } from '@skydrop/api-client';
 import { VariantPicker } from './variant-picker';
+import { productCount, routeWords, shortDate, statusWords } from './consignment-words';
 
 const PAGE_SIZE = 25;
 
 /**
- * Inbound consignments — stock you are sending to the Indian warehouse.
+ * Inbound consignments — stock on its way to the Indian warehouse.
  *
- * You announce one before it travels; the warehouse marks it received
- * and counts it. That announcement is not paperwork: it is what lets
- * receiving know a box is expected and whose it is, and an unannounced
- * box is one nobody can put away.
+ * A consignment is a JOURNEY now, not an arrival. It has a route, up to
+ * two counts, and a timeline the seller can watch; this screen is the
+ * list, and `/inbound/[id]` is where the movement is visible.
  *
- * The status to watch is DISCREPANCY — it means what arrived and what
- * you said differ, and until someone resolves it the counted stock is
- * not the stock you think you have.
+ * The route is the one question this form asks that the old one did not,
+ * and it is the one that decides what we charge: shipping to Dhaka means
+ * we move the goods across the border and bill the freight, shipping to
+ * India means the seller has already done that themselves.
  */
 /**
- * A consignment row as the SELLER sees it, not as the API takes it.
+ * A consignment line as the SELLER sees it, not as the API takes it.
  *
  * The wire type is `{ variantId, expectedQty, unitCostInr? }` — enough to
  * receive against and nothing anyone can read. These carry the name, SKU
@@ -73,29 +71,25 @@ interface StagedLine {
 
 export function InboundIndex(): ReactElement {
   const canManage = can(useSellerIdentity(), 'inbound.manage');
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState<ConsignmentStatus | ''>('');
+  const [route, setRoute] = useState<ConsignmentRoute | ''>('');
   const [page, setPage] = useState(1);
   const [announcing, setAnnouncing] = useState(false);
-  const [cancelling, setCancelling] = useState<GoodsReceiptView | null>(null);
-  const [editing, setEditing] = useState<GoodsReceiptView | null>(null);
 
-  const list = useGoodsReceipts({
-    ...(status === '' ? {} : { status }),
-    page,
-    pageSize: PAGE_SIZE,
-  });
-  const cancel = useCancelGoodsReceipt();
+  const list = useConsignments({ status, route, page, pageSize: PAGE_SIZE });
 
   const items = list.data?.items ?? [];
   const total = list.data?.total ?? 0;
-  const inFlight = items.filter((r) => r.status === 'PENDING' || r.status === 'ARRIVING');
-  const discrepant = items.filter((r) => r.hasDiscrepancies);
+  const moving = items.filter(
+    (c) => c.status !== ConsignmentStatus.COMPLETED && c.status !== ConsignmentStatus.CANCELLED,
+  );
+  const varied = items.filter((c) => c.receipts.some((r) => r.hasDiscrepancies));
 
   return (
     <div>
       <PageHeader
         title="Add stock"
-        subtitle="Consignments you are sending to the Indian warehouse, and what happened when they arrived."
+        subtitle="Consignments on their way to the Indian warehouse — where each one is now, and what was counted when it got there."
         action={
           canManage ? (
             <Button onClick={() => setAnnouncing(true)}>Announce a consignment</Button>
@@ -105,32 +99,55 @@ export function InboundIndex(): ReactElement {
 
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
         <Stat label="Shown" value={<Num value={items.length} />} />
-        <Stat label="On the way" value={<Num value={inFlight.length} />} />
         <Stat
-          label="With a discrepancy"
-          hint="What arrived differs from what was announced"
-          value={<Num value={discrepant.length} />}
-          tone={discrepant.length > 0 ? 'warn' : 'neutral'}
+          label="Still travelling"
+          hint="Announced, in Dhaka, or in the air"
+          value={<Num value={moving.length} />}
+        />
+        <Stat
+          label="Counted differently"
+          hint="Somebody counted something other than you declared. Nothing is blocked by it."
+          value={<Num value={varied.length} />}
+          tone={varied.length > 0 ? 'warn' : 'neutral'}
         />
       </div>
 
       <Toolbar>
-        <label className="text-text-muted text-xs" htmlFor="gr-status">
-          Status
+        <label className="text-text-muted text-xs" htmlFor="cn-status">
+          Where it is
         </label>
         <Select
-          id="gr-status"
+          id="cn-status"
           value={status}
           onChange={(e) => {
-            setStatus(e.target.value);
+            setStatus(e.target.value as ConsignmentStatus | '');
             setPage(1);
           }}
           className="w-56"
         >
-          <option value="">All statuses</option>
-          {['PENDING', 'ARRIVING', 'COMPLETED', 'DISCREPANCY', 'CANCELLED'].map((s) => (
+          <option value="">Anywhere</option>
+          {Object.values(ConsignmentStatus).map((s) => (
             <option key={s} value={s}>
-              {s.toLowerCase()}
+              {statusWords(s)}
+            </option>
+          ))}
+        </Select>
+        <label className="text-text-muted text-xs" htmlFor="cn-route">
+          Route
+        </label>
+        <Select
+          id="cn-route"
+          value={route}
+          onChange={(e) => {
+            setRoute(e.target.value as ConsignmentRoute | '');
+            setPage(1);
+          }}
+          className="w-56"
+        >
+          <option value="">Either route</option>
+          {Object.values(ConsignmentRoute).map((r) => (
+            <option key={r} value={r}>
+              {routeWords(r).title}
             </option>
           ))}
         </Select>
@@ -144,7 +161,7 @@ export function InboundIndex(): ReactElement {
         ) : items.length === 0 ? (
           <EmptyState
             title="No stock announced yet"
-            description="Announce a consignment before it ships so receiving knows to expect it."
+            description="Announce a consignment before it ships so receiving knows to expect it — and so you can follow it."
             action={
               canManage ? (
                 <Button onClick={() => setAnnouncing(true)}>Announce a consignment</Button>
@@ -156,53 +173,36 @@ export function InboundIndex(): ReactElement {
             <Table>
               <THead>
                 <Tr>
-                  <Th>Receipt</Th>
+                  <Th>Consignment</Th>
+                  <Th>Route</Th>
+                  <Th align="right">Products</Th>
                   <Th>Your reference</Th>
                   <Th>Expected</Th>
-                  <Th align="right">SKUs</Th>
-                  <Th>Received</Th>
-                  <Th>Status</Th>
-                  <Th align="right" />
+                  <Th>Where it is</Th>
                 </Tr>
               </THead>
               <TBody>
-                {items.map((r) => (
-                  <Tr key={r.id}>
+                {items.map((c) => (
+                  <Tr key={c.id}>
                     <Td>
-                      <span className="font-mono text-xs">{r.receiptNumber}</span>
+                      <Link
+                        href={`/inbound/${c.id}`}
+                        className="text-accent hover:underline font-mono text-xs"
+                      >
+                        {c.consignmentNumber}
+                      </Link>
                     </Td>
-                    <Td>{r.sellerReference ?? '—'}</Td>
-                    <Td>
-                      {r.expectedArrivalAt === null
-                        ? '—'
-                        : new Date(r.expectedArrivalAt).toLocaleDateString('en-IN')}
-                    </Td>
+                    <Td>{routeWords(c.route).title}</Td>
                     <Td align="right">
-                      <Num value={r.lines.length} />
+                      <Num value={productCount(c)} />
                     </Td>
+                    <Td>{c.sellerReference ?? '—'}</Td>
+                    <Td>{shortDate(c.expectedArrivalAt)}</Td>
                     <Td>
-                      {r.receivedAt === null
-                        ? '—'
-                        : new Date(r.receivedAt).toLocaleDateString('en-IN')}
-                    </Td>
-                    <Td>
-                      <StatusBadge kind={receiptKind(r.status)} label={r.status.toLowerCase()} />
-                    </Td>
-                    <Td align="right">
-                      <div className="flex items-center justify-end gap-1">
-                        {/* Narrower than Cancel on purpose: `update` refuses
-                            ARRIVING, `cancel` allows it. */}
-                        {canManage && r.status === 'PENDING' && (
-                          <Button variant="ghost" size="sm" onClick={() => setEditing(r)}>
-                            Correct
-                          </Button>
-                        )}
-                        {canManage && (r.status === 'PENDING' || r.status === 'ARRIVING') && (
-                          <Button variant="ghost" size="sm" onClick={() => setCancelling(r)}>
-                            Cancel
-                          </Button>
-                        )}
-                      </div>
+                      <StatusBadge
+                        kind={consignmentStatusKind(c.status)}
+                        label={statusWords(c.status)}
+                      />
                     </Td>
                   </Tr>
                 ))}
@@ -213,73 +213,31 @@ export function InboundIndex(): ReactElement {
         )}
       </Card>
 
-      {discrepant.length > 0 && (
-        <p className="mt-3 text-text-muted text-sm">
-          A consignment marked <strong>discrepancy</strong> means the warehouse counted something
-          different from what you announced. Raise a ticket if the difference is not yours.
-        </p>
-      )}
+      <p className="text-text-muted mt-3 text-sm">
+        Open a consignment to see its timeline, and what each warehouse counted against what you
+        declared.
+      </p>
 
       <AnnounceConsignment open={announcing} onClose={() => setAnnouncing(false)} />
-      <EditReceiptPanel receipt={editing} onClose={() => setEditing(null)} />
-
-      <Modal
-        open={cancelling !== null}
-        onOpenChange={(next) => {
-          if (!next) setCancelling(null);
-        }}
-        title="Cancel this consignment?"
-        description="Only do this if the stock is genuinely not coming. Receiving will stop expecting it."
-      >
-        {cancel.error !== null && <ErrorNote message={serverVerdict(cancel.error)} />}
-        <ModalFooter>
-          <Button variant="ghost" size="md" onClick={() => setCancelling(null)}>
-            Keep it
-          </Button>
-          <Button
-            variant="destructive"
-            size="md"
-            disabled={cancel.isPending}
-            onClick={() => {
-              if (cancelling !== null) {
-                cancel.mutate({ id: cancelling.id }, { onSuccess: () => setCancelling(null) });
-              }
-            }}
-          >
-            {cancel.isPending ? 'Cancelling…' : 'Cancel consignment'}
-          </Button>
-        </ModalFooter>
-      </Modal>
     </div>
   );
 }
 
-function receiptKind(
-  status: string,
-): 'pending' | 'in-transit' | 'delivered' | 'failed' | 'cancelled' {
-  switch (status) {
-    case 'PENDING':
-      return 'pending';
-    case 'ARRIVING':
-      return 'in-transit';
-    case 'COMPLETED':
-      return 'delivered';
-    case 'DISCREPANCY':
-      return 'failed';
-    default:
-      return 'cancelled';
-  }
-}
-
 /**
- * Declaring a consignment means listing what is in it.
+ * Declaring a consignment means saying where it is going and what is in
+ * it.
  *
  * The API requires at least one line, and that is the right shape: a
- * receipt with no contents tells receiving a box is coming but not what
- * to count, which is the same as not declaring it. The warehouse is
- * deliberately NOT asked for — sellers do not choose it, and there is no
- * seller-visible endpoint that lists warehouses; the server puts the
- * consignment where stock for this seller goes.
+ * consignment with no contents tells receiving a box is coming but not
+ * what to count, which is the same as not declaring it. The warehouse is
+ * deliberately NOT asked for — the route decides which building, and
+ * there is no seller-visible endpoint that lists warehouses.
+ *
+ * VIA_BD can be refused outright (`BD_WAREHOUSE_NOT_CONFIGURED`) when no
+ * Bangladesh warehouse exists yet. That refusal is NOT pre-empted here
+ * (FE-2): the option stays offered and the server's verdict is shown
+ * verbatim, because whether a BD warehouse exists is the server's fact
+ * and a hidden option is a fact nobody can act on.
  */
 function AnnounceConsignment({
   open,
@@ -288,7 +246,8 @@ function AnnounceConsignment({
   open: boolean;
   onClose: () => void;
 }): ReactElement {
-  const create = useCreateGoodsReceipt();
+  const create = useDeclareConsignment();
+  const [route, setRoute] = useState<ConsignmentRoute>(ConsignmentRoute.DIRECT_IN);
   const [expectedArrivalAt, setExpectedArrivalAt] = useState('');
   const [sellerReference, setSellerReference] = useState('');
   /**
@@ -313,6 +272,7 @@ function AnnounceConsignment({
   const [expiresAt, setExpiresAt] = useState('');
 
   function close(): void {
+    setRoute(ConsignmentRoute.DIRECT_IN);
     setExpectedArrivalAt('');
     setSellerReference('');
     setLines([]);
@@ -366,7 +326,8 @@ function AnnounceConsignment({
   // Announce takes the row being typed as well, so filling the fields
   // and pressing the button does what it looks like it does. "Add
   // product" is for adding ANOTHER, not a toll on the first.
-  const pendingLines = [...lines, ...(draftLine() === null ? [] : [draftLine()!])];
+  const draft = draftLine();
+  const pendingLines = draft === null ? lines : [...lines, draft];
 
   return (
     <Modal
@@ -376,19 +337,47 @@ function AnnounceConsignment({
       }}
       size="lg"
       title="Announce a consignment"
-      description="List what is in the box so receiving knows what to count against."
+      description="Say where you are sending it and what is in it, so receiving knows what to count against."
     >
-      {/* No section heading: "What is in it" and "When and what you call
-          it" were labels for groups whose own fields already say what
-          they are, and they made a short form read like a questionnaire. */}
-      <Section>
+      <Section title="Where are you sending it?">
+        <fieldset className="grid gap-2 sm:grid-cols-2">
+          <legend className="sr-only">Route</legend>
+          {Object.values(ConsignmentRoute).map((r) => {
+            const words = routeWords(r);
+            const chosen = route === r;
+            return (
+              <label
+                key={r}
+                className={`border-border flex min-h-[44px] cursor-pointer gap-2.5 rounded-[6px] border p-3 ${
+                  chosen ? 'bg-[var(--color-accent-tint)] border-accent' : 'hover:bg-surface-hover'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="cn-route-choice"
+                  value={r}
+                  checked={chosen}
+                  onChange={() => setRoute(r)}
+                  className="mt-0.5 h-4 w-4 shrink-0"
+                />
+                <span className="flex min-w-0 flex-col gap-1">
+                  <span className="text-text-strong text-sm font-medium">{words.title}</span>
+                  <span className="text-text-muted text-xs leading-snug">{words.blurb}</span>
+                </span>
+              </label>
+            );
+          })}
+        </fieldset>
+      </Section>
+
+      <Section title="What is in it?">
         <p className="text-text-muted mb-3 text-xs">
           At least one product. Unit cost is optional but makes landed cost and margin accurate.
         </p>
         <div className="grid gap-3 sm:grid-cols-3">
-          <FormField label="Item" htmlFor="gr-variant">
+          <FormField label="Item" htmlFor="cn-variant">
             <VariantPicker
-              id="gr-variant"
+              id="cn-variant"
               value={picked?.id ?? ''}
               label={variantLabel}
               onPick={(hit, shown) => {
@@ -397,18 +386,18 @@ function AnnounceConsignment({
               }}
             />
           </FormField>
-          <FormField label="Quantity" htmlFor="gr-qty">
+          <FormField label="Quantity" htmlFor="cn-qty">
             <Input
-              id="gr-qty"
+              id="cn-qty"
               type="number"
               min={1}
               value={qty}
               onChange={(e) => setQty(e.target.value)}
             />
           </FormField>
-          <FormField label="Unit cost (₹)" htmlFor="gr-cost" hint="Optional">
+          <FormField label="Unit cost (₹)" htmlFor="cn-cost" hint="Optional">
             <Input
-              id="gr-cost"
+              id="cn-cost"
               type="number"
               min={0}
               step="0.01"
@@ -438,17 +427,17 @@ function AnnounceConsignment({
 
         {hasDates && (
           <div className="mt-2 grid gap-3 sm:grid-cols-2">
-            <FormField label="Manufactured" htmlFor="gr-mfg" hint="Optional">
+            <FormField label="Manufactured" htmlFor="cn-mfg" hint="Optional">
               <Input
-                id="gr-mfg"
+                id="cn-mfg"
                 type="date"
                 value={manufacturedAt}
                 onChange={(e) => setManufacturedAt(e.target.value)}
               />
             </FormField>
-            <FormField label="Expires" htmlFor="gr-exp" hint="Optional">
+            <FormField label="Expires" htmlFor="cn-exp" hint="Optional">
               <Input
-                id="gr-exp"
+                id="cn-exp"
                 type="date"
                 value={expiresAt}
                 onChange={(e) => setExpiresAt(e.target.value)}
@@ -518,19 +507,19 @@ function AnnounceConsignment({
         <div className="grid gap-3 sm:grid-cols-2">
           <FormField
             label="Expected arrival"
-            htmlFor="gr-eta"
+            htmlFor="cn-eta"
             hint="Optional. A rough date beats none."
           >
             <Input
-              id="gr-eta"
+              id="cn-eta"
               type="date"
               value={expectedArrivalAt}
               onChange={(e) => setExpectedArrivalAt(e.target.value)}
             />
           </FormField>
-          <FormField label="Your reference" htmlFor="gr-ref" hint="Optional.">
+          <FormField label="Your reference" htmlFor="cn-ref" hint="Optional.">
             <Input
-              id="gr-ref"
+              id="cn-ref"
               value={sellerReference}
               onChange={(e) => setSellerReference(e.target.value)}
             />
@@ -550,6 +539,7 @@ function AnnounceConsignment({
           onClick={() =>
             create.mutate(
               {
+                route,
                 // Mapped down to the wire shape here — the extra fields
                 // exist so the seller can read the list, not for the API.
                 lines: pendingLines.map((l) => ({
@@ -572,7 +562,7 @@ function AnnounceConsignment({
         >
           {create.isPending
             ? 'Announcing…'
-            : `Announce ${lines.length} product${lines.length === 1 ? '' : 's'}`}
+            : `Announce ${pendingLines.length} product${pendingLines.length === 1 ? '' : 's'}`}
         </Button>
       </ModalFooter>
     </Modal>
