@@ -12,6 +12,7 @@ import {
 } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
 import type {
+  CustomerDeliveryFeeView,
   ApiClient,
   CreateSellerProductRequest,
   CreateSellerVariantRequest,
@@ -133,6 +134,10 @@ export interface CreateOrderInput {
   readonly recipientCountryCode?: string;
   readonly paymentMode: 'COD' | 'PREPAID';
   readonly codAmountInr?: number;
+  /** The three figures the collectable amount is built from. */
+  readonly advanceAmountInr?: number;
+  readonly deliveryFeeInr?: number;
+  readonly discountInr?: number;
   readonly declaredValueInr?: number;
   readonly totalWeightGrams?: number;
   readonly preferredLanguage?: 'en' | 'hi';
@@ -559,6 +564,38 @@ export function useVariantSearch(
       client.request<SellerVariantSearchHit[]>(
         `/api/seller/variants?search=${encodeURIComponent(search)}&limit=20`,
       ),
+  });
+}
+
+/**
+ * The delivery fee pre-filled on a new order. Autofill only — it is not
+ * what Skydrop charges the seller, and it stays editable per order.
+ */
+export function useCustomerDeliveryFee(): UseQueryResult<CustomerDeliveryFeeView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-order-defaults', 'customer-delivery-fee'],
+    queryFn: () =>
+      client.request<CustomerDeliveryFeeView>('/api/seller/order-defaults/customer-delivery-fee'),
+  });
+}
+
+export function useSetCustomerDeliveryFee(): UseMutationResult<
+  CustomerDeliveryFeeView,
+  Error,
+  { amountInr: number }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<CustomerDeliveryFeeView>('/api/seller/order-defaults/customer-delivery-fee', {
+        method: 'PATCH',
+        body,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['seller-order-defaults'] });
+    },
   });
 }
 

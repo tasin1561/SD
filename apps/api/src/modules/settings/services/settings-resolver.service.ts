@@ -131,12 +131,24 @@ export class SettingsResolverService {
    * INT/DECIMAL) the value falls within the system-set min/max bounds
    * if present. Upserts on `(sellerId, key)`.
    */
+  /**
+   * SET-1's sole writer, now reachable by the SELLER for a key they are
+   * allowed to set themselves.
+   *
+   * The actor is a parameter rather than a second write path. A seller
+   * editing their own delivery fee and an admin overriding it are the
+   * same operation with the same clamping and the same audit — and the
+   * moment there are two writers, only one of them keeps the
+   * `sellerOverridable` check and the min/max clamp.
+   */
   async setOverride(
     sellerId: string,
     key: string,
     input: SetSellerSettingOverrideInput,
-    staffId: string,
+    actor: string | { readonly staffId?: string; readonly sellerActor?: true },
   ): Promise<SellerSettingOverrideView> {
+    const staffId = typeof actor === 'string' ? actor : (actor.staffId ?? null);
+    const bySeller = staffId === null;
     return this.prisma.client.$transaction(async (tx) => {
       const system = await tx.systemSetting.findUnique({ where: { key } });
       if (!system) {
@@ -148,9 +160,11 @@ export class SettingsResolverService {
       if (!system.sellerOverridable) {
         await this.audit.log(
           {
-            actorType: ActorType.STAFF,
-            staffUserId: staffId,
-            action: 'staff.seller_setting_override.rejected',
+            actorType: bySeller ? ActorType.SELLER : ActorType.STAFF,
+            ...(staffId === null ? { sellerId } : { staffUserId: staffId }),
+            action: bySeller
+              ? 'seller.setting_override.rejected'
+              : 'staff.seller_setting_override.rejected',
             entityType: 'seller_setting_override',
             entityId: sellerId,
             metadata: { reason: 'NOT_SELLER_OVERRIDABLE', key, sellerId },
@@ -178,6 +192,8 @@ export class SettingsResolverService {
           key,
           valueType: input.valueType,
           note: input.note ?? null,
+          // Null when the seller set it themselves — the audit row says
+          // who, and inventing a staff id would misattribute it.
           setByStaffId: staffId,
           ...this.valueColumns(input.valueType, parsed),
         },
@@ -190,9 +206,9 @@ export class SettingsResolverService {
 
       await this.audit.log(
         {
-          actorType: ActorType.STAFF,
-          staffUserId: staffId,
-          action: 'staff.seller_setting_override.set',
+          actorType: bySeller ? ActorType.SELLER : ActorType.STAFF,
+          ...(staffId === null ? { sellerId } : { staffUserId: staffId }),
+          action: bySeller ? 'seller.setting_override.set' : 'staff.seller_setting_override.set',
           entityType: 'seller_setting_override',
           entityId: updated.id,
           changes: { key, sellerId, value: this.jsonSafe(parsed) },

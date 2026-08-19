@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import { PageHeader } from '@skydrop/ui/components';
-import { Webhook, Bell, Key, ShieldCheck, PackageSearch } from 'lucide-react';
+import { Webhook, Bell, Key, ShieldCheck, PackageSearch, ReceiptText } from 'lucide-react';
 import { SettingsHub, type SettingsTile } from './_components/settings-hub';
 
 /**
@@ -20,6 +20,13 @@ export default function SettingsPage(): ReactElement {
       title: 'Sign-in & sessions',
       description:
         'Who this browser is signed in as, and a way to end every session for the account at once — for a device you no longer control.',
+    },
+    {
+      href: '/settings/orders',
+      icon: <ReceiptText size={20} />,
+      title: 'Order defaults',
+      description:
+        'What a new order starts with — the delivery fee you charge your customer, pre-filled into the collectable amount.',
     },
     {
       href: '/settings/stock',

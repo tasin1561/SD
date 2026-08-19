@@ -63,6 +63,9 @@ const ORDER_LIST_SELECT = {
   recipientStateProvince: true,
   paymentMode: true,
   codAmountInr: true,
+  advanceAmountInr: true,
+  deliveryFeeInr: true,
+  discountInr: true,
   declaredValueInr: true,
   totalWeightGrams: true,
   isUrgent: true,
@@ -372,6 +375,17 @@ export class OrderService {
               input.paymentMode === PaymentMode.COD && input.codAmountInr !== undefined
                 ? new Prisma.Decimal(input.codAmountInr)
                 : null,
+            // The three figures the collectable was built from. Kept
+            // whatever the payment mode: a prepaid order still has an
+            // advance and a delivery fee worth being able to read back.
+            advanceAmountInr:
+              input.advanceAmountInr === undefined
+                ? null
+                : new Prisma.Decimal(input.advanceAmountInr),
+            deliveryFeeInr:
+              input.deliveryFeeInr === undefined ? null : new Prisma.Decimal(input.deliveryFeeInr),
+            discountInr:
+              input.discountInr === undefined ? null : new Prisma.Decimal(input.discountInr),
             declaredValueInr,
             totalWeightGrams,
             packageType: input.packageType ?? null,

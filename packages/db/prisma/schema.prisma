@@ -2456,7 +2456,17 @@ model Order {
   recipientPostalCode     String                   @map("recipient_postal_code")
   recipientCountryCode    String                   @default("IN") @map("recipient_country_code") @db.Char(2)
   paymentMode             PaymentMode              @map("payment_mode")
+  /// What the courier collects at the door. The seller's COLLECTABLE
+  /// AMOUNT — distinct from `declaredValueInr`, which is the customs
+  /// figure sent to Delhivery and the e-waybill trigger above 50,000.
   codAmountInr            Decimal?                 @map("cod_amount_inr") @db.Decimal(12, 2)
+  /// The three seller-supplied figures the collectable is built from.
+  /// Stored rather than computed away so an order can still explain
+  /// itself weeks later — a collectable with no breakdown is a number
+  /// nobody can check against what the customer was told.
+  advanceAmountInr        Decimal?                 @map("advance_amount_inr") @db.Decimal(12, 2)
+  deliveryFeeInr          Decimal?                 @map("delivery_fee_inr") @db.Decimal(12, 2)
+  discountInr             Decimal?                 @map("discount_inr") @db.Decimal(12, 2)
   declaredValueInr        Decimal                  @map("declared_value_inr") @db.Decimal(12, 2)
   totalWeightGrams        Int?                     @map("total_weight_grams")
   packageType             PackageType?             @map("package_type")

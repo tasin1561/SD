@@ -168,8 +168,45 @@ export class CreateOrderDto {
   @ApiProperty({
     required: false,
     minimum: 0,
+    description: 'Money already taken from the customer, deducted from the collectable amount.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  advanceAmountInr?: number;
+
+  @ApiProperty({
+    required: false,
+    minimum: 0,
     description:
-      'Customs declared value (INR). Defaults to Σ(item declared value × qty) from catalog snapshots when omitted.',
+      "What the customer is charged for delivery, added to the collectable amount. The seller's " +
+      'own figure — the platform fee they pay us is separate and unaffected.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  deliveryFeeInr?: number;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Deducted from the collectable amount. May be NEGATIVE, which is a surcharge — the ' +
+      'field absorbs a manual edit of the collectable in either direction.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  discountInr?: number;
+
+  @ApiProperty({
+    required: false,
+    minimum: 0,
+    description:
+      'Customs declared value (INR). NOT the collectable amount — this goes to the courier as ' +
+      'the parcel value and triggers the e-waybill above 50,000. Defaults to Σ(item declared ' +
+      'value × qty) from catalog snapshots when omitted.',
   })
   @IsOptional()
   @Type(() => Number)

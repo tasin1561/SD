@@ -12,6 +12,8 @@ import { SellerOrderController } from './controllers/seller-order.controller';
 import { SellerCustomerController } from './controllers/seller-customer.controller';
 import { SellerRecipientAddressController } from './controllers/seller-recipient-address.controller';
 import { AdminOrderController } from './controllers/admin-order.controller';
+import { SettingsModule } from '../settings/settings.module';
+import { SellerOrderDefaultsController } from './controllers/seller-order-defaults.controller';
 import { OrderReadService } from './services/order-read.service';
 import { OrderWriteService } from './services/order-write.service';
 
@@ -56,6 +58,8 @@ import { OrderWriteService } from './services/order-write.service';
     // fix) issues DISPATCH StockMovements via StockMutationService —
     // the only sanctioned stock writer (INV-1), from inventory-shared.
     InventorySharedModule,
+    // The seller's own default for the delivery-fee field (SET-1).
+    SettingsModule,
     CallQueueModule,
     ShipmentProvisionModule,
     // Module 11 (NOTIF-5): the R3 lifecycle-event primitive — provides
@@ -75,6 +79,7 @@ import { OrderWriteService } from './services/order-write.service';
     SellerCustomerController,
     SellerRecipientAddressController,
     AdminOrderController,
+    SellerOrderDefaultsController,
   ],
   providers: [OrderReadService, OrderWriteService, SellerJwtGuard, StaffJwtGuard],
   exports: [OrderReadService, OrderWriteService],

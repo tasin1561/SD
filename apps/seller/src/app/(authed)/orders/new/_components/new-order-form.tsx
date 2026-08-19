@@ -7,6 +7,7 @@ import { Button, Card, CardBody, FormField, Input, Select, useToast } from '@sky
 import { ApiError } from '@skydrop/api-client';
 import {
   useCreateOrder,
+  useCustomerDeliveryFee,
   useProductsList,
   useStockList,
   useProductVariants,
@@ -62,6 +63,9 @@ interface FormState {
   recipientPostalCode: string;
   paymentMode: 'COD' | 'PREPAID';
   codAmountInr: string;
+  advanceAmountInr: string;
+  deliveryFeeInr: string;
+  discountInr: string;
   declaredValueInr: string;
   totalWeightGrams: string;
   sellerOrderRef: string;
@@ -110,6 +114,9 @@ const INITIAL: FormState = {
   // one that needed a change.
   paymentMode: 'COD',
   codAmountInr: '',
+  advanceAmountInr: '',
+  deliveryFeeInr: '',
+  discountInr: '',
   declaredValueInr: '',
   totalWeightGrams: '',
   sellerOrderRef: '',
@@ -139,6 +146,7 @@ export function NewOrderForm(): ReactElement {
   const [acceptShort, setAcceptShort] = useState(false);
 
   const create = useCreateOrder();
+  const feePrefilled = useRef(false);
   const submit = useSubmitOrder();
 
   // Load a large-enough product page for picker UX. Sellers with
@@ -172,6 +180,44 @@ export function NewOrderForm(): ReactElement {
       }, 0),
     [items],
   );
+
+  const feeDefault = useCustomerDeliveryFee();
+
+  /**
+   * The collectable amount, and where it comes from.
+   *
+   *   items + delivery fee − advance − discount
+   *
+   * `codAmountInr` is the field the courier actually collects against.
+   * It is NOT `declaredValueInr`, which is the customs figure sent to
+   * Delhivery and the trigger for an e-waybill above ₹50,000 — putting a
+   * discounted total there would quietly change whether a legal document
+   * is required.
+   */
+  const itemsTotal = useMemo(
+    () =>
+      items.reduce((n, it) => {
+        const price = Number(it.unitPriceInr);
+        const qty = Number(it.quantity);
+        return n + (Number.isFinite(price) ? price : 0) * (Number.isFinite(qty) ? qty : 0);
+      }, 0),
+    [items],
+  );
+  const num = (v: string): number => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+  // Pre-fill ONCE, and only while the field is untouched. Re-applying it
+  // on every render would overwrite a seller who deliberately zeroed it.
+  if (!feePrefilled.current && feeDefault.data !== undefined && form.deliveryFeeInr.trim() === '') {
+    feePrefilled.current = true;
+    setForm((p) =>
+      p.deliveryFeeInr.trim() === '' ? { ...p, deliveryFeeInr: feeDefault.data.amountInr } : p,
+    );
+  }
+
+  const computedCollectable =
+    itemsTotal + num(form.deliveryFeeInr) - num(form.advanceAmountInr) - num(form.discountInr);
 
   const stockByVariant = useMemo(() => {
     const m = new Map<string, { available: number; inTransit: number }>();
@@ -303,6 +349,11 @@ export function NewOrderForm(): ReactElement {
         ...(it.unitPriceInr.trim() ? { unitPriceInr: Number(it.unitPriceInr) } : {}),
       })),
       ...(form.paymentMode === 'COD' ? { codAmountInr: Number(form.codAmountInr) } : {}),
+      // Kept whatever the payment mode — a prepaid order still has an
+      // advance and a delivery fee worth reading back later.
+      ...(form.advanceAmountInr.trim() ? { advanceAmountInr: Number(form.advanceAmountInr) } : {}),
+      ...(form.deliveryFeeInr.trim() ? { deliveryFeeInr: Number(form.deliveryFeeInr) } : {}),
+      ...(form.discountInr.trim() ? { discountInr: Number(form.discountInr) } : {}),
       ...(form.declaredValueInr.trim() ? { declaredValueInr: Number(form.declaredValueInr) } : {}),
       // The typed value wins; otherwise the sum we worked out.
       ...(form.totalWeightGrams.trim()
@@ -564,19 +615,90 @@ export function NewOrderForm(): ReactElement {
                 <option value="COD">Cash on Delivery</option>
               </Select>
             </FormField>
+            <FormField
+              label="Delivery fee (INR)"
+              hint={
+                feeDefault.data === undefined
+                  ? 'Added to the collectable amount.'
+                  : `Added to the collectable amount. Pre-filled from your default of ₹${feeDefault.data.amountInr} — change it here, or change the default in Settings.`
+              }
+            >
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.deliveryFeeInr}
+                onChange={(e) => set('deliveryFeeInr', e.target.value)}
+              />
+            </FormField>
+            <FormField label="Advance already paid (INR)" hint="Deducted from the collectable.">
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.advanceAmountInr}
+                onChange={(e) => set('advanceAmountInr', e.target.value)}
+                placeholder="0"
+              />
+            </FormField>
+            <FormField label="Discount (INR)" hint="Deducted from the collectable.">
+              <Input
+                type="number"
+                step="0.01"
+                value={form.discountInr}
+                onChange={(e) => set('discountInr', e.target.value)}
+                placeholder="0"
+              />
+            </FormField>
             {form.paymentMode === 'COD' && (
-              <FormField label="COD amount (INR)" required>
+              <FormField
+                label="Collectable amount (INR)"
+                required
+                hint={
+                  // The arithmetic, spelled out. A number the call centre
+                  // reads to a customer should be checkable at a glance.
+                  `${itemsTotal.toLocaleString('en-IN')} of goods${
+                    num(form.deliveryFeeInr) !== 0
+                      ? ` + ${num(form.deliveryFeeInr).toLocaleString('en-IN')} delivery`
+                      : ''
+                  }${
+                    num(form.advanceAmountInr) !== 0
+                      ? ` − ${num(form.advanceAmountInr).toLocaleString('en-IN')} advance`
+                      : ''
+                  }${
+                    num(form.discountInr) !== 0
+                      ? ` − ${num(form.discountInr).toLocaleString('en-IN')} discount`
+                      : ''
+                  } = ${computedCollectable.toLocaleString('en-IN')}`
+                }
+              >
                 <Input
                   type="number"
                   min={0.01}
                   step="0.01"
                   value={form.codAmountInr}
-                  onChange={(e) => set('codAmountInr', e.target.value)}
+                  // Typing here moves the DISCOUNT, so the four numbers
+                  // still add up. A collectable that silently disagrees
+                  // with its own breakdown is worse than no breakdown.
+                  onChange={(e) => {
+                    const typed = e.target.value;
+                    setForm((p) => {
+                      const target = Number(typed);
+                      if (typed.trim() === '' || !Number.isFinite(target)) {
+                        return { ...p, codAmountInr: typed };
+                      }
+                      const before = itemsTotal + num(p.deliveryFeeInr) - num(p.advanceAmountInr);
+                      return { ...p, codAmountInr: typed, discountInr: String(before - target) };
+                    });
+                  }}
                   required
                 />
               </FormField>
             )}
-            <FormField label="Declared value (INR)">
+            <FormField
+              label="Declared value (INR)"
+              hint="The parcel's value for customs — not what is collected."
+            >
               <Input
                 type="number"
                 min={0}

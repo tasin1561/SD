@@ -140,6 +140,27 @@ const systemSettings: SystemSettingSeed[] = [
     overrideMaxDecimal: '100000',
   },
   {
+    // DELIBERATELY NOT `pricing.flat_delivery_fee_inr`. That one is what
+    // WE charge the seller to move a parcel, and it feeds the pricing
+    // engine. This is what the SELLER charges their customer, and it
+    // feeds nothing at all — it is a default for one field on the order
+    // form, which the seller overwrites whenever they like. Sharing one
+    // key would mean a seller adjusting their customer price quietly
+    // changed our invoice to them.
+    key: 'orders.default_customer_delivery_fee_inr',
+    category: 'ops',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '200.00',
+    displayName: 'Customer Delivery Fee (INR, default)',
+    description:
+      'Pre-filled into the delivery fee on a new order, where it is added to the collectable ' +
+      'amount. Used for that autofill and nothing else — it does not affect what Skydrop ' +
+      'charges the seller, and the seller can change the figure on any order.',
+    sellerOverridable: true,
+    overrideMinDecimal: '0',
+    overrideMaxDecimal: '100000',
+  },
+  {
     key: 'pricing.flat_rto_fee_inr',
     category: 'pricing',
     valueType: SettingValueType.DECIMAL,

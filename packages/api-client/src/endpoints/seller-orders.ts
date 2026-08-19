@@ -36,3 +36,10 @@ export interface SellerOrderEventView {
   readonly actorType: ActorType | null;
   readonly createdAt: string;
 }
+
+/** The seller's own default for the delivery-fee field on a new order. */
+export interface CustomerDeliveryFeeView {
+  readonly amountInr: string;
+  /** true when the seller set it; false when it is the platform default. */
+  readonly isOwnValue: boolean;
+}
