@@ -28,7 +28,7 @@ const ADJ_INDEX = '../app/(authed)/inventory/adjustments/_components/adjustments
 const ADMIN_HOOKS = '../lib/api-hooks.ts';
 const INV_HOOKS = '../lib/inventory-hooks.ts';
 const SELLER_PRODUCT =
-  '../../../seller/src/app/(authed)/catalog/products/[id]/_components/product-detail.tsx';
+  '../../../seller/src/app/(authed)/products/[id]/_components/product-detail.tsx';
 const SELLER_HOOKS = '../../../seller/src/lib/api-hooks.ts';
 
 describe('a DISCREPANCY receipt can be closed', () => {

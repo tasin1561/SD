@@ -41,7 +41,7 @@ export function quickActionsFor(
   // action that always 403s is worse than not offering it.
   if (can(identity, 'catalog.manage')) {
     actions.push({
-      href: '/catalog/new',
+      href: '/products/new',
       label: 'New product',
       hint: 'Add a product and its variants',
       // The nav's Products icon, so the menu entry and the page it opens

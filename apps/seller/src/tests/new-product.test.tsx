@@ -6,7 +6,7 @@ import { permissionForPath, canSeePath } from '@/lib/page-access';
 /**
  * Adding a product by hand.
  *
- * Until now the only way in was a CSV, and `/catalog`'s empty state told
+ * Until now the only way in was a CSV, and `/products`'s empty state told
  * sellers to email their account manager. The endpoints existed the
  * whole time; there was no screen calling them.
  *
@@ -17,32 +17,32 @@ import { permissionForPath, canSeePath } from '@/lib/page-access';
  * visible later as two identical products in the catalogue.
  */
 
-const FORM = join(__dirname, '../app/(authed)/catalog/new/_components/new-product-form.tsx');
-const CATALOG_INDEX = join(__dirname, '../app/(authed)/catalog/_components/catalog-index.tsx');
+const FORM = join(__dirname, '../app/(authed)/products/new/_components/new-product-form.tsx');
+const CATALOG_INDEX = join(__dirname, '../app/(authed)/products/_components/products-index.tsx');
 const PRODUCT_DETAIL = join(
   __dirname,
-  '../app/(authed)/catalog/products/[id]/_components/product-detail.tsx',
+  '../app/(authed)/products/[id]/_components/product-detail.tsx',
 );
 const DASHBOARD = join(__dirname, '../app/(authed)/dashboard/_components/dashboard-view.tsx');
 
 const read = (p: string): string => readFileSync(p, 'utf8');
 
 describe('the route is reachable and gated on what the server enforces', () => {
-  it('/catalog/new needs catalog.manage, not merely catalog.view', () => {
+  it('/products/new needs catalog.manage, not merely catalog.view', () => {
     // POST /seller/products is guarded by catalog.manage. Resolving this
     // page to catalog.view would open a form that 403s on save.
-    expect(permissionForPath('/catalog/new')).toBe('catalog.manage');
+    expect(permissionForPath('/products/new')).toBe('catalog.manage');
   });
 
   it('a read-only catalogue role cannot open it, but can still browse', () => {
     const viewer = { permissions: ['catalog.view'] };
-    expect(canSeePath(viewer, '/catalog/new')).toBe(false);
-    expect(canSeePath(viewer, '/catalog')).toBe(true);
+    expect(canSeePath(viewer, '/products/new')).toBe(false);
+    expect(canSeePath(viewer, '/products')).toBe(true);
   });
 
   it('the wildcard rule does not swallow it', () => {
-    // '/catalog/new' must not be mistaken for a product id.
-    expect(permissionForPath('/catalog/products/abc-123')).toBe('catalog.view');
+    // '/products/new' must not be mistaken for a product id.
+    expect(permissionForPath('/products/abc-123')).toBe('catalog.view');
   });
 });
 
@@ -88,9 +88,9 @@ describe('the two-call create is retry-safe', () => {
 });
 
 describe('the entry points a seller actually finds', () => {
-  it('/catalog offers New product in the toolbar AND the empty state', () => {
+  it('/products offers New product in the toolbar AND the empty state', () => {
     const src = read(CATALOG_INDEX);
-    const hits = src.match(/href="\/catalog\/new"/g) ?? [];
+    const hits = src.match(/href="\/products\/new"/g) ?? [];
     expect(hits.length).toBe(2);
   });
 
@@ -107,7 +107,7 @@ describe('the entry points a seller actually finds', () => {
     // four hand-written <ChecklistItem href="…"> to a steps array with
     // `href: '…'`, so the destination is an object property now. The
     // thing worth pinning is where it POINTS, not the syntax around it.
-    expect(src.slice(idx, idx + 220)).toMatch(/href[:=]\s*['"{]?\/catalog\/new/);
+    expect(src.slice(idx, idx + 220)).toMatch(/href[:=]\s*['"{]?\/products\/new/);
   });
 
   it('a product with no variants offers to add one', () => {

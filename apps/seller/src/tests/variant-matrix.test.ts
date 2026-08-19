@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildRows,
   type ProductOption,
-} from '@/app/(authed)/catalog/new/_components/new-product-form';
+} from '@/app/(authed)/products/new/_components/new-product-form';
 
 /**
  * Real catalogues are RAGGED. A shoe runs Red 38-42, Blue 40-43 and

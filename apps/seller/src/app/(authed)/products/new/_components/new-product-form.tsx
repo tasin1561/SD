@@ -657,7 +657,7 @@ export function NewProductForm(): ReactElement {
       toast.success(
         rows.length === 1 ? 'Product created.' : `Product created with ${rows.length} variants.`,
       );
-      router.push(`/catalog/products/${productId}`);
+      router.push(`/products/${productId}`);
       return;
     }
 
@@ -1108,7 +1108,7 @@ export function NewProductForm(): ReactElement {
           type="button"
           variant="secondary"
           size="md"
-          onClick={() => router.push('/catalog')}
+          onClick={() => router.push('/products')}
           disabled={busy}
         >
           Cancel

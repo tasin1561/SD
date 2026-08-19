@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { CatalogIndex } from './_components/catalog-index';
+import { ProductsIndex } from './_components/products-index';
 
 /**
  * Catalog — CP2.B pattern-setter (write-heavy: product list at top
@@ -8,5 +8,5 @@ import { CatalogIndex } from './_components/catalog-index';
  * drill into its detail + variants.
  */
 export default function CatalogPage(): ReactElement {
-  return <CatalogIndex />;
+  return <ProductsIndex />;
 }

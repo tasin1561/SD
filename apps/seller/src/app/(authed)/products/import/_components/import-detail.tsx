@@ -209,7 +209,7 @@ const OUTCOME_COPY: Readonly<Record<BulkUploadStatus, string>> = {
 function BackLink(): ReactElement {
   return (
     <Link
-      href="/catalog/import/jobs"
+      href="/products/import/jobs"
       className="text-text-muted hover:text-text-bright mb-3 inline-flex items-center gap-1.5 text-xs"
     >
       <ArrowLeft size={13} />

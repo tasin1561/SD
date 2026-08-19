@@ -22,10 +22,10 @@ import { describe, expect, it } from 'vitest';
 const R = (p: string): string => readFileSync(join(__dirname, p), 'utf8');
 
 const PANEL = R(
-  '../app/(authed)/catalog/products/[id]/variants/[variantId]/_components/stock-config-panel.tsx',
+  '../app/(authed)/products/[id]/variants/[variantId]/_components/stock-config-panel.tsx',
 );
 const DETAIL = R(
-  '../app/(authed)/catalog/products/[id]/variants/[variantId]/_components/variant-detail.tsx',
+  '../app/(authed)/products/[id]/variants/[variantId]/_components/variant-detail.tsx',
 );
 const HOOKS = R('../lib/api-hooks.ts');
 const THRESHOLD_DTO = R('../../../api/src/modules/inventory-stock/dto/threshold.dto.ts');

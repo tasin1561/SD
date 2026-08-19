@@ -43,7 +43,7 @@ describe('a single-purpose page takes the permission of its purpose', () => {
     ['/orders/new', 'orders.create'],
     ['/orders/import', 'orders.import'],
     ['/orders/pending', 'orders.pending.manage'],
-    ['/catalog/import', 'catalog.import'],
+    ['/products/import', 'catalog.import'],
     ['/settings/api-keys', 'api_keys.manage'],
     ['/settings/webhooks', 'webhooks.manage'],
     ['/settings/notifications', 'notifications.manage'],
@@ -56,7 +56,7 @@ describe('a single-purpose page takes the permission of its purpose', () => {
   it('leaves the read surfaces alone', () => {
     expect(permissionForPath('/orders')).toBe('orders.view');
     expect(permissionForPath('/orders/abc-123')).toBe('orders.view');
-    expect(permissionForPath('/catalog')).toBe('catalog.view');
+    expect(permissionForPath('/products')).toBe('catalog.view');
     expect(permissionForPath('/settings')).toBe('profile.view');
     // The seller's OWN addresses screen was removed: nothing in the
     // system read a seller address, and the page nagged for one with a

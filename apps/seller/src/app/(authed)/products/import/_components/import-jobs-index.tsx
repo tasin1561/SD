@@ -25,7 +25,7 @@ import { ImportStatusBadge } from './import-status';
 /**
  * Every catalog import this seller has sent.
  *
- * The panel on /catalog/import shows the last ten and polls them while
+ * The panel on /products/import shows the last ten and polls them while
  * they run — the right thing for the file you just uploaded, and no help
  * at all for the one from March that a stock discrepancy has just made
  * relevant. This is the full list, and it is the only route into an
@@ -46,13 +46,13 @@ export function ImportJobsIndex(): ReactElement {
   const list = useCsvImports(page, PAGE_SIZE);
 
   function goToPage(next: number): void {
-    router.replace(next === 1 ? '/catalog/import/jobs' : `/catalog/import/jobs?page=${next}`);
+    router.replace(next === 1 ? '/products/import/jobs' : `/products/import/jobs?page=${next}`);
   }
 
   return (
     <div>
       <Link
-        href="/catalog/import"
+        href="/products/import"
         className="text-text-muted hover:text-text-bright mb-3 inline-flex items-center gap-1.5 text-xs"
       >
         <ArrowLeft size={13} />
@@ -63,7 +63,7 @@ export function ImportJobsIndex(): ReactElement {
         title="Import history"
         subtitle="Every CSV you have sent, newest first. Open one to see what it wrote and what it refused."
         action={
-          <Link href="/catalog/import">
+          <Link href="/products/import">
             <Button variant="ghost" size="md">
               <Upload size={14} /> New import
             </Button>
@@ -83,7 +83,7 @@ export function ImportJobsIndex(): ReactElement {
           title="No imports yet"
           description="Nothing has been uploaded from this account. The import screen has the template to start from."
           action={
-            <Link href="/catalog/import">
+            <Link href="/products/import">
               <Button variant="primary" size="md">
                 <Upload size={14} /> Import a CSV
               </Button>
@@ -105,10 +105,10 @@ export function ImportJobsIndex(): ReactElement {
           </THead>
           <TBody>
             {list.data.items.map((job) => (
-              <Tr key={job.id} onActivate={() => router.push(`/catalog/import/jobs/${job.id}`)}>
+              <Tr key={job.id} onActivate={() => router.push(`/products/import/jobs/${job.id}`)}>
                 <Td>
                   <Link
-                    href={`/catalog/import/jobs/${job.id}`}
+                    href={`/products/import/jobs/${job.id}`}
                     className="text-text-bright font-mono text-xs hover:underline"
                   >
                     {job.fileName}

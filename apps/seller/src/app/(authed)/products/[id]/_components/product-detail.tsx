@@ -77,7 +77,7 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
   return (
     <div>
       <Link
-        href="/catalog"
+        href="/products"
         className="inline-flex items-center gap-1.5 text-text-muted hover:text-text-body text-xs mb-4 transition-colors"
       >
         <ArrowLeft size={12} /> Products
@@ -199,9 +199,7 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
                   {variants.data.map((v) => (
                     <Tr
                       key={v.id}
-                      onActivate={() =>
-                        router.push(`/catalog/products/${productId}/variants/${v.id}`)
-                      }
+                      onActivate={() => router.push(`/products/${productId}/variants/${v.id}`)}
                     >
                       <Td>
                         {/* A colour is something you recognise by looking.
@@ -223,7 +221,7 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
                       </Td>
                       <Td>
                         <Link
-                          href={`/catalog/products/${productId}/variants/${v.id}`}
+                          href={`/products/${productId}/variants/${v.id}`}
                           className="text-text-bright hover:underline font-mono text-xs"
                         >
                           {v.skuCode}

@@ -31,7 +31,7 @@ import {
  *
  * MAX is hardcoded to 5 for Phase 1A (matches the system_setting
  * default seeded in the M4 catalog work); a future iteration can read
- * the live value via a dedicated /seller/catalog/settings endpoint.
+ * the live value via a dedicated /seller/products/settings endpoint.
  */
 
 const MAX_UPLOAD_BATCH = 5;

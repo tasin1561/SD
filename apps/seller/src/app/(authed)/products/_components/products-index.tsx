@@ -66,7 +66,7 @@ function productStatusKind(status: ProductStatus): 'confirmed' | 'cancelled' | '
   }
 }
 
-export function CatalogIndex(): ReactElement {
+export function ProductsIndex(): ReactElement {
   const identity = useSellerIdentity();
   const router = useRouter();
   const sp = useSearchParams();
@@ -82,7 +82,7 @@ export function CatalogIndex(): ReactElement {
       if (merged.search) nextSp.set('search', merged.search);
       if (merged.page !== 1) nextSp.set('page', String(merged.page));
       const qs = nextSp.toString();
-      router.replace(qs ? `/catalog?${qs}` : '/catalog');
+      router.replace(qs ? `/products?${qs}` : '/products');
     },
     [params, router],
   );
@@ -101,15 +101,15 @@ export function CatalogIndex(): ReactElement {
         subtitle="Products, variants, images. Click a product to edit or manage its variants."
         action={
           <span className="flex gap-2">
-            {canSeePath(identity, '/catalog/import') && (
-              <Link href="/catalog/import">
+            {canSeePath(identity, '/products/import') && (
+              <Link href="/products/import">
                 <Button variant="ghost" size="md">
                   CSV import
                 </Button>
               </Link>
             )}
-            {canSeePath(identity, '/catalog/new') && (
-              <Link href="/catalog/new">
+            {canSeePath(identity, '/products/new') && (
+              <Link href="/products/new">
                 <Button variant="primary" size="md">
                   <Plus size={14} /> New product
                 </Button>
@@ -177,8 +177,8 @@ export function CatalogIndex(): ReactElement {
           title="No products yet"
           description="Add one by hand, or bring a whole catalogue in with the CSV import."
           action={
-            canSeePath(identity, '/catalog/new') ? (
-              <Link href="/catalog/new">
+            canSeePath(identity, '/products/new') ? (
+              <Link href="/products/new">
                 <Button variant="primary" size="md">
                   <Plus size={14} /> New product
                 </Button>
@@ -199,12 +199,9 @@ export function CatalogIndex(): ReactElement {
           </THead>
           <TBody>
             {list.data.items.map((p) => (
-              <Tr key={p.id} onActivate={() => router.push(`/catalog/products/${p.id}`)}>
+              <Tr key={p.id} onActivate={() => router.push(`/products/${p.id}`)}>
                 <Td>
-                  <Link
-                    href={`/catalog/products/${p.id}`}
-                    className="text-text-bright hover:underline"
-                  >
+                  <Link href={`/products/${p.id}`} className="text-text-bright hover:underline">
                     {p.name}
                   </Link>
                 </Td>

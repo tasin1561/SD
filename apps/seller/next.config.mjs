@@ -21,6 +21,26 @@ const nextConfig = {
   async headers() {
     return allRoutes(staticSecurityHeaders);
   },
+  /**
+   * /catalog moved to /products (2026-08-19).
+   *
+   * The section was renamed to what a seller calls it, and the address
+   * followed. This keeps the old one working: a bookmark, a link in an
+   * email we already sent, or a browser autocompleting the URL somebody
+   * typed for weeks. Permanent, so it is cached and search engines stop
+   * asking — nothing here is coming back to /catalog.
+   *
+   * Path-preserving, so a deep link lands on the same page it used to:
+   * /catalog/products/<id> is the one exception, because the redundant
+   * "products" segment was dropped in the same move.
+   */
+  async redirects() {
+    return [
+      { source: '/catalog/products/:path*', destination: '/products/:path*', permanent: true },
+      { source: '/catalog', destination: '/products', permanent: true },
+      { source: '/catalog/:path*', destination: '/products/:path*', permanent: true },
+    ];
+  },
   // Do not advertise the framework.
   poweredByHeader: false,
   // Server external packages: we don't bundle prisma/argon2 etc.

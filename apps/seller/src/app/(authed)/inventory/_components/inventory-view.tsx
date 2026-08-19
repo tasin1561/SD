@@ -119,12 +119,12 @@ export function InventoryView(): ReactElement {
               <Tr
                 key={row.variantId}
                 onActivate={() =>
-                  router.push(`/catalog/products/${row.productId}/variants/${row.variantId}`)
+                  router.push(`/products/${row.productId}/variants/${row.variantId}`)
                 }
               >
                 <Td className="font-mono text-xs">
                   <Link
-                    href={`/catalog/products/${row.productId}/variants/${row.variantId}`}
+                    href={`/products/${row.productId}/variants/${row.variantId}`}
                     className="text-text-bright hover:underline"
                   >
                     {row.skuCode}

@@ -10,7 +10,7 @@ import { SavedMappings } from './_components/saved-mappings';
  * import — template, upload, process, poll.
  *
  * The panel's table below is the last ten imports, live while they run.
- * Anything older is on /catalog/import/jobs, which is also the only way
+ * Anything older is on /products/import/jobs, which is also the only way
  * into a single import — the panel's rows do not open.
  */
 export default function CatalogImportPage(): ReactElement {
@@ -20,7 +20,7 @@ export default function CatalogImportPage(): ReactElement {
         title="Bulk catalog import"
         subtitle="Upload a CSV of products + variants. Re-uploading updates existing rows (dedup by (sellerId, externalRef) for products and (sellerId, skuCode) for variants)."
         action={
-          <Link href="/catalog/import/jobs">
+          <Link href="/products/import/jobs">
             <Button variant="ghost" size="md">
               <History size={14} /> Import history
             </Button>

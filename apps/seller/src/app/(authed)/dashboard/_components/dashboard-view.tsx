@@ -99,7 +99,7 @@ export function DashboardView(): ReactElement {
       done: hasProduct,
       label: 'Add your first product',
       hint: 'At least one ACTIVE product + variant',
-      href: '/catalog/new',
+      href: '/products/new',
     },
     {
       done: hasOrder,
@@ -251,7 +251,7 @@ export function DashboardView(): ReactElement {
       <Section title="Next steps">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <NavCard
-            href="/catalog"
+            href="/products"
             title="Manage catalog"
             description="Products + variants + images. CP2.B."
           />

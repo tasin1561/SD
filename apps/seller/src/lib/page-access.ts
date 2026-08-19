@@ -49,9 +49,9 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [pattern: string, permissi
   ['/tracking', 'orders.view'],
   ['/customers', 'customers.view'],
   ['/tickets', 'tickets.view'],
-  ['/catalog/new', 'catalog.manage'], // POST /seller/products (+ /variants)
-  ['/catalog/import', 'catalog.import'], // @Controller seller/csv-imports
-  ['/catalog', 'catalog.view'],
+  ['/products/new', 'catalog.manage'], // POST /seller/products (+ /variants)
+  ['/products/import', 'catalog.import'], // @Controller seller/csv-imports
+  ['/products', 'catalog.view'],
   ['/inventory', 'inventory.view'],
   ['/inbound', 'inbound.view'],
   ['/holds', 'holds.manage'],

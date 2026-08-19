@@ -53,7 +53,7 @@ export function VariantDetailView({
   return (
     <div>
       <Link
-        href={`/catalog/products/${productId}`}
+        href={`/products/${productId}`}
         className="inline-flex items-center gap-1.5 text-text-muted hover:text-text-body text-xs mb-4 transition-colors"
       >
         <ArrowLeft size={12} /> Product
