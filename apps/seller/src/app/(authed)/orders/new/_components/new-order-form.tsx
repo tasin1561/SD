@@ -296,12 +296,18 @@ export function NewOrderForm(): ReactElement {
         it.key === key
           ? {
               ...it,
-              weightGrams: v.weightGrams,
+              // EFFECTIVE, not the variant's own column. A blank variant
+              // field means inherit (M4) — the product carries the
+              // answer, and reading the raw column saw null while the
+              // product had said 500 g all along.
+              weightGrams: v.effectiveWeightGrams ?? v.weightGrams,
               // Only fill an EMPTY price. Overwriting one the seller
               // typed would undo their edit the moment they corrected
               // the variant beside it.
               unitPriceInr:
-                it.unitPriceInr.trim() === '' ? (v.declaredValueInr ?? '') : it.unitPriceInr,
+                it.unitPriceInr.trim() === ''
+                  ? (v.effectiveDeclaredValueInr ?? v.declaredValueInr ?? '')
+                  : it.unitPriceInr,
               imageUrl: v.primaryImageUrl ?? null,
             }
           : it,

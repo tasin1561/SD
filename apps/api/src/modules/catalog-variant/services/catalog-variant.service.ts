@@ -141,6 +141,39 @@ export class CatalogVariantService {
     });
     if (variants.length === 0) return [];
 
+    /**
+     * The EFFECTIVE physical properties, resolved once for the product.
+     *
+     * A blank field on a variant means INHERIT (M4), not "unset" — the
+     * product carries the answer. Exposing only the variant's own column
+     * made every consumer implement the `?? product default` fallback
+     * itself, or forget to: the order form read `weightGrams` straight
+     * off the variant, saw null, and filled nothing, while the product
+     * had said 500 g all along.
+     *
+     * Both are returned. The raw value is what an EDIT form needs (blank
+     * has to stay blank, or saving would silently pin the inherited
+     * number onto the variant); the effective value is what everything
+     * else wants.
+     */
+    const parent = await this.prisma.client.product.findUniqueOrThrow({
+      where: { id: productId },
+      select: {
+        defaultWeightGrams: true,
+        defaultLengthCm: true,
+        defaultWidthCm: true,
+        defaultHeightCm: true,
+        defaultDeclaredValueInr: true,
+      },
+    });
+    const effective = (v: (typeof variants)[number]) => ({
+      effectiveWeightGrams: v.weightGrams ?? parent.defaultWeightGrams,
+      effectiveLengthCm: v.lengthCm ?? parent.defaultLengthCm,
+      effectiveWidthCm: v.widthCm ?? parent.defaultWidthCm,
+      effectiveHeightCm: v.heightCm ?? parent.defaultHeightCm,
+      effectiveDeclaredValueInr: v.declaredValueInr ?? parent.defaultDeclaredValueInr,
+    });
+
     // ONE picture per SKU, for the list.
     //
     // A colour is a thing you recognise by looking, and a table of
@@ -167,7 +200,7 @@ export class CatalogVariantService {
     return Promise.all(
       variants.map(async (v) => {
         const img = firstFor.get(v.id);
-        if (img === undefined) return { ...v, primaryImageUrl: null };
+        if (img === undefined) return { ...v, ...effective(v), primaryImageUrl: null };
         // Presigned on read, never a stored URL — every object in the
         // bucket is private (2026-07-27). Prefer the thumbnail: this is a
         // 32px cell, and the original can be several megabytes.
@@ -177,7 +210,7 @@ export class CatalogVariantService {
         // fall back to the original rather than dropping the picture.
         const key =
           (img.thumbnailUrl !== null ? deriveThumbnailKey(img.spacesKey) : null) ?? img.spacesKey;
-        return { ...v, primaryImageUrl: await this.spaces.presignGetUrl(key) };
+        return { ...v, ...effective(v), primaryImageUrl: await this.spaces.presignGetUrl(key) };
       }),
     );
   }

@@ -120,6 +120,20 @@ export interface SellerVariantView {
   readonly widthCm: string | null;
   readonly heightCm: string | null;
   readonly declaredValueInr: string | null;
+  /**
+   * What this variant ACTUALLY weighs / is worth, after the product
+   * default fills in a blank (M4 inheritance).
+   *
+   * Use these everywhere except an EDIT form, which needs the raw values
+   * — showing the inherited number in an editable box and saving it back
+   * would silently pin it to the variant and break the inheritance the
+   * seller was relying on. Set by the LIST endpoint.
+   */
+  readonly effectiveWeightGrams?: number | null;
+  readonly effectiveLengthCm?: string | null;
+  readonly effectiveWidthCm?: string | null;
+  readonly effectiveHeightCm?: string | null;
+  readonly effectiveDeclaredValueInr?: string | null;
   readonly gstRate: string | null;
   readonly barcode: string | null;
   readonly status: VariantStatus;
