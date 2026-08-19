@@ -921,6 +921,30 @@ export class OrderService {
   }
 
   /** Seller-scoped load (ownership + soft-delete guard). */
+  /**
+   * The seller's order detail, with each line's picture resolved LIVE.
+   *
+   * `order_items.imageUrl` is part of the ORD-6 snapshot and stores the
+   * canonical object URL, which has resolved for nobody since the bucket
+   * went private (2026-07-28) — rendering it gives a broken image on
+   * every order. A presigned URL expires in minutes and so cannot be
+   * snapshotted; minting one at read time is the only correct shape.
+   * See `CatalogReadService.thumbnailUrlsByVariant` for what that means
+   * (the photograph is current; every other field stays immutable).
+   *
+   * Separate from `loadOwned` on purpose: the mutators call that one and
+   * have no use for a picture, and presigning on a write path would be
+   * work nobody reads.
+   */
+  async loadOwnedForDisplay(sellerId: string, id: string): Promise<OrderView> {
+    const order = await this.loadOwned(sellerId, id);
+    const thumbs = await this.catalog.thumbnailUrlsByVariant(order.items.map((i) => i.variantId));
+    return {
+      ...order,
+      items: order.items.map((i) => ({ ...i, imageUrl: thumbs.get(i.variantId) ?? null })),
+    };
+  }
+
   async loadOwned(sellerId: string, id: string): Promise<OrderView> {
     const order = await this.prisma.client.order.findFirst({
       where: { id, sellerId, deletedAt: null },

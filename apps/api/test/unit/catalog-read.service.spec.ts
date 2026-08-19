@@ -83,7 +83,10 @@ function makeSut(
       systemSetting: { findUnique },
     },
   } as unknown as PrismaService;
-  const svc = new CatalogReadService(prisma);
+  // Only the image-thumbnail path touches Spaces; these tests are all
+  // about inheritance precedence and never reach it.
+  const spaces = { presignGetUrl: jest.fn() } as never;
+  const svc = new CatalogReadService(prisma, spaces);
   return { svc, findMany, findUnique };
 }
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { ProductThumb } from '@/components/product-thumb';
 import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import {
   Button,
@@ -254,7 +255,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
   }
 
   const economicsLocked = !isDraft;
-  const firstItem = detail.data.items[0];
+  const items = detail.data.items;
 
   return (
     <form className="space-y-4" onSubmit={(e) => void onSave(e)}>
@@ -268,26 +269,38 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
         )}
       </div>
 
-      {/* Read-only line (any swap requires discard + recreate) */}
-      {firstItem && (
+      {/* Read-only lines (any swap requires discard + recreate).
+          Renders EVERY line: this block used to show only the first,
+          from when an order was single-line, so a two-product order
+          looked like a one-product order on the page you edit it from. */}
+      {items.length > 0 && (
         <Card>
           <CardBody>
             <h2 className="text-text-bright text-sm font-medium mb-2">
-              Item{' '}
+              {items.length === 1 ? 'Item' : `Items (${items.length})`}{' '}
               <span className="text-text-muted text-xs ml-2">
                 (read-only — discard &amp; recreate to swap)
               </span>
             </h2>
-            <div className="text-text-body text-sm">
-              {firstItem.productName}
-              {firstItem.variantLabel && (
-                <span className="text-text-muted"> · {firstItem.variantLabel}</span>
-              )}
-            </div>
-            <div className="text-text-faint text-xs mt-0.5 font-mono">
-              {firstItem.skuCode} · qty {firstItem.quantity}
-              {firstItem.unitPriceInr ? ` · ₹${firstItem.unitPriceInr}/unit` : ''}
-            </div>
+            <ul className="space-y-2">
+              {items.map((it) => (
+                <li key={it.id} className="flex items-center gap-3">
+                  <ProductThumb src={it.imageUrl} size={40} />
+                  <div className="min-w-0">
+                    <div className="text-text-body text-sm">
+                      {it.productName}
+                      {it.variantLabel && (
+                        <span className="text-text-muted"> · {it.variantLabel}</span>
+                      )}
+                    </div>
+                    <div className="text-text-faint text-xs mt-0.5 font-mono">
+                      {it.skuCode} · qty {it.quantity}
+                      {it.unitPriceInr ? ` · ₹${it.unitPriceInr}/unit` : ''}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </CardBody>
         </Card>
       )}

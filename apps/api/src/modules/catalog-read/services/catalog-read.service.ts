@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, VariantStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
+import { displayImageKey } from '../../catalog-image/image-key';
 
 const GST_SETTING_KEY = 'pricing.gst_rate';
 /** Used only if the system_settings row is missing — schema seeds 18.00. */
@@ -102,7 +104,60 @@ type VariantWithChain = Prisma.ProductVariantGetPayload<{
 export class CatalogReadService {
   private readonly logger = new Logger(CatalogReadService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly spaces: SpacesService,
+  ) {}
+
+  /**
+   * A presigned thumbnail per variant, for showing the picture next to a
+   * line a consumer already holds (an order's items, a picking list).
+   *
+   * This is a LIVE lookup, deliberately NOT part of the ORD-6 snapshot.
+   * The snapshot's `imageUrl` column stores the canonical object URL,
+   * and since the bucket went private (2026-07-28) that URL resolves for
+   * nobody — every order placed since then carries a dead link. A
+   * presigned URL expires in minutes, so it cannot be snapshotted
+   * either; the only correct shape is to mint one at read time.
+   *
+   * The consequence, stated rather than discovered later: an order line
+   * shows the product's CURRENT primary picture, not the one that was
+   * primary the day it was ordered. The name, SKU, weight and value stay
+   * snapshotted and immutable — only the photograph is live. That is the
+   * right trade for a thumbnail whose job is "which of my products is
+   * this"; a picture is how the seller recognises the line, and a broken
+   * image tells them nothing at all.
+   *
+   * One query for every variant asked about, never one per line.
+   */
+  async thumbnailUrlsByVariant(
+    variantIds: readonly string[],
+  ): Promise<ReadonlyMap<string, string>> {
+    const ids = [...new Set(variantIds)];
+    if (ids.length === 0) return new Map();
+
+    // Same ordering as the images page and the variant list (primary
+    // first, then display order, then age), so all three agree on which
+    // picture is "the" picture.
+    const images = await this.prisma.client.productImage.findMany({
+      where: { variantId: { in: ids }, deletedAt: null },
+      orderBy: [{ isPrimary: 'desc' }, { displayOrder: 'asc' }, { createdAt: 'asc' }],
+      select: { variantId: true, spacesKey: true, thumbnailUrl: true },
+    });
+
+    const firstFor = new Map<string, (typeof images)[number]>();
+    for (const img of images) {
+      if (!firstFor.has(img.variantId)) firstFor.set(img.variantId, img);
+    }
+
+    const out = new Map<string, string>();
+    await Promise.all(
+      [...firstFor.entries()].map(async ([variantId, img]) => {
+        out.set(variantId, await this.spaces.presignGetUrl(displayImageKey(img)));
+      }),
+    );
+    return out;
+  }
 
   async getVariantById(variantId: string): Promise<ResolvedVariant | null> {
     const map = await this.getVariantsByIds([variantId]);

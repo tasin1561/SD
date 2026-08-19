@@ -65,3 +65,27 @@ export function deriveThumbnailKey(originalKey: string): string | null {
 export function variantImagePrefix(sellerId: string, variantId: string): string {
   return `sellers/${sellerId}/variants/${variantId}/`;
 }
+
+/**
+ * The key to presign when showing a picture in a LIST CELL — a picker
+ * row, an order line, a thumbnail grid.
+ *
+ * Prefer the thumbnail: these are 32-40px cells and an original can be
+ * several megabytes. A non-null `thumbnailUrl` means the thumbnail job
+ * ran, so the derived key exists; `deriveThumbnailKey` still returns
+ * null for a key it cannot parse, and either way we fall back to the
+ * original rather than dropping the picture entirely.
+ *
+ * Extracted because this exact expression had been written out three
+ * times (variant list, variant search, image detail) and a fourth was
+ * about to be added for order lines — the kind of duplication that ends
+ * with one call site quietly serving full-size originals.
+ */
+export function displayImageKey(image: {
+  readonly spacesKey: string;
+  readonly thumbnailUrl: string | null;
+}): string {
+  return (
+    (image.thumbnailUrl !== null ? deriveThumbnailKey(image.spacesKey) : null) ?? image.spacesKey
+  );
+}

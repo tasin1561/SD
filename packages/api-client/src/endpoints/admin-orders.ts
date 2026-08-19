@@ -32,6 +32,8 @@ export interface OrderListItem {
   readonly status: OrderStatus;
   readonly source: OrderSource;
   readonly recipientName: string;
+  readonly recipientPhoneE164: string;
+  /** Blank on every order placed since the form stopped asking (ORD-5). */
   readonly recipientCity: string;
   readonly recipientStateProvince: string;
   readonly codAmountInr: string | null;

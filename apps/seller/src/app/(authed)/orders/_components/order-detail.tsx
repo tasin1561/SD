@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { ProductThumb } from '@/components/product-thumb';
 import { ArrowLeft, Pencil, XCircle } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import type { OrderStatus } from '@skydrop/db';
@@ -217,6 +218,9 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               <Table wrapperClassName="rounded-none border-0 bg-transparent">
                 <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
                   <tr>
+                    <th className="px-3 py-2 font-medium w-px">
+                      <span className="sr-only">Image</span>
+                    </th>
                     <th className="text-left px-3 py-2 font-medium">SKU</th>
                     <th className="text-left px-3 py-2 font-medium">Product</th>
                     <th className="text-right px-3 py-2 font-medium">Qty</th>
@@ -226,6 +230,12 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                 <tbody className="divide-y divide-border">
                   {detail.data.items.map((item) => (
                     <tr key={item.id}>
+                      <td className="px-3 py-2 w-px">
+                        {/* Live presigned thumbnail, NOT the snapshot's
+                            stored url — that one has resolved for nobody
+                            since the bucket went private. */}
+                        <ProductThumb src={item.imageUrl} size={36} />
+                      </td>
                       <td className="px-3 py-2 font-mono text-xs text-text-body">{item.skuCode}</td>
                       <td className="px-3 py-2 text-text-body">
                         {item.productName}

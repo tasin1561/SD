@@ -184,7 +184,7 @@ export function OrdersIndex(): ReactElement {
             <Tr>
               <Th>Order #</Th>
               <Th>Recipient</Th>
-              <Th>City</Th>
+              <Th>Phone</Th>
               <Th>Status</Th>
               <Th align="right">COD (INR)</Th>
               <Th>Placed</Th>
@@ -209,12 +209,13 @@ export function OrdersIndex(): ReactElement {
                 <Td>
                   <div className="text-text-body">{o.recipientName}</div>
                 </Td>
-                <Td className="text-text-muted">
-                  {/* Both are empty for orders placed since the form
-                      stopped asking — Delhivery resolves the locality
-                      from the PIN. Joining only what exists avoids a
-                      row that reads as a bare comma. */}
-                  {[o.recipientCity, o.recipientStateProvince].filter(Boolean).join(', ') || '—'}
+                <Td className="text-text-muted font-mono text-xs">
+                  {/* Was City, which is blank on every order placed since
+                      the form stopped asking for it (ORD-5: Delhivery
+                      resolves the locality from the PIN) — a column of
+                      dashes. The phone is what identifies a recipient
+                      here, and it is what the search box matches on. */}
+                  {o.recipientPhoneE164 || '—'}
                 </Td>
                 <Td>
                   <OrderStatusBadge status={o.status} />

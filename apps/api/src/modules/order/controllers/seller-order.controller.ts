@@ -128,7 +128,7 @@ export class SellerOrderController {
     @CurrentSeller() seller: AuthenticatedSeller,
     @Param('id', uuid()) id: string,
   ): Promise<OrderView> {
-    return this.svc.loadOwned(seller.id, id);
+    return this.svc.loadOwnedForDisplay(seller.id, id);
   }
 
   @Get(':id/events')

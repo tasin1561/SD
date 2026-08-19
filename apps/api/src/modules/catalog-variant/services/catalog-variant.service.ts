@@ -11,7 +11,7 @@ import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import type { CreateVariantDto } from '../dto/create-variant.dto';
 import type { UpdateVariantDto } from '../dto/update-variant.dto';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
-import { deriveThumbnailKey } from '../../catalog-image/image-key';
+import { displayImageKey } from '../../catalog-image/image-key';
 
 export interface VariantSearchHit {
   id: string;
@@ -211,15 +211,12 @@ export class CatalogVariantService {
         const img = firstFor.get(v.id);
         if (img === undefined) return { ...v, ...effective(v), primaryImageUrl: null };
         // Presigned on read, never a stored URL — every object in the
-        // bucket is private (2026-07-27). Prefer the thumbnail: this is a
-        // 32px cell, and the original can be several megabytes.
-        // `thumbnailUrl` non-null means the thumbnail job ran, so the
-        // derived key exists; otherwise fall back to the original.
-        // deriveThumbnailKey returns null for a key it cannot parse, so
-        // fall back to the original rather than dropping the picture.
-        const key =
-          (img.thumbnailUrl !== null ? deriveThumbnailKey(img.spacesKey) : null) ?? img.spacesKey;
-        return { ...v, ...effective(v), primaryImageUrl: await this.spaces.presignGetUrl(key) };
+        // bucket is private (2026-07-27).
+        return {
+          ...v,
+          ...effective(v),
+          primaryImageUrl: await this.spaces.presignGetUrl(displayImageKey(img)),
+        };
       }),
     );
   }
@@ -301,11 +298,7 @@ export class CatalogVariantService {
     const hits = await Promise.all(
       rows.map(async (r) => {
         const img = firstFor.get(r.id);
-        const key =
-          img === undefined
-            ? null
-            : ((img.thumbnailUrl !== null ? deriveThumbnailKey(img.spacesKey) : null) ??
-              img.spacesKey);
+        const key = img === undefined ? null : displayImageKey(img);
         return {
           id: r.id,
           productId: r.productId,

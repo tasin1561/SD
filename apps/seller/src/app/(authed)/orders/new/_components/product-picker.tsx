@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState, type ReactElement } from 'react';
+import { ProductThumb } from '@/components/product-thumb';
 import { Input, Money, Num } from '@skydrop/ui/components';
 import type { SellerVariantSearchHit } from '@skydrop/api-client';
 import { Star } from 'lucide-react';
@@ -141,19 +142,7 @@ export function ProductPicker({
                       disabled={already}
                       className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left disabled:opacity-50"
                     >
-                      {h.primaryImageUrl !== null ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={h.primaryImageUrl}
-                          alt=""
-                          className="border-border h-11 w-11 shrink-0 rounded-[4px] border object-cover"
-                        />
-                      ) : (
-                        <span
-                          className="border-border bg-surface-raised h-11 w-11 shrink-0 rounded-[4px] border"
-                          aria-hidden
-                        />
-                      )}
+                      <ProductThumb src={h.primaryImageUrl} />
                       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                         <span className="text-text-body text-sm leading-snug">
                           {h.productName}
@@ -235,19 +224,7 @@ export function ProductPicker({
               return (
                 <li key={l.key} className="border-border-subtle border-b p-3 last:border-b-0">
                   <div className="flex items-start gap-3">
-                    {l.imageUrl !== null ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={l.imageUrl}
-                        alt=""
-                        className="border-border h-11 w-11 shrink-0 rounded-[4px] border object-cover"
-                      />
-                    ) : (
-                      <span
-                        className="border-border bg-surface-raised h-11 w-11 shrink-0 rounded-[4px] border"
-                        aria-hidden
-                      />
-                    )}
+                    <ProductThumb src={l.imageUrl} />
                     <div className="min-w-0 flex-1">
                       <p className="text-text-body text-sm leading-snug">
                         {l.productName}
