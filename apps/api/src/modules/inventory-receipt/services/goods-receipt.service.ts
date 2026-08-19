@@ -813,9 +813,17 @@ export class GoodsReceiptService {
 
         // A variance is a RECORDED NUMBER, not a blocking state. Counts
         // move in both directions — a line can arrive over as easily as
-        // under — and the note says which, in both cases.
+        // under.
+        //
+        // The per-line variance is NOT written here any more. Every
+        // screen that shows this note also shows the lines, with names
+        // and both quantities, so the sentence only ever duplicated
+        // them — and being a STORED string it kept whatever wording it
+        // was written with, which is how raw variant uuids were still on
+        // screen hours after they stopped being generated. What stays is
+        // what the lines cannot say: a transit loss, an operator's note.
+        const varianceLine = variances.length > 0 ? this.emailVarianceSummary(variances) : '';
         const notes = [
-          variances.length > 0 ? this.formatDiscrepancyNotes(variances) : null,
           transitVariance.some((v) => v.lost > 0 || v.surplus > 0)
             ? this.formatTransitNotes(transitVariance)
             : null,
@@ -910,7 +918,7 @@ export class GoodsReceiptService {
               // Told, not asked — the variance needs no decision from the
               // seller and nothing waits on their reply. Empty when the
               // count matched, so the sentence simply is not there.
-              variance_note: notes.length > 0 ? `Note: ${notes}` : '',
+              variance_note: varianceLine === '' ? '' : `Note: ${varianceLine}`,
               app_url: this.env.sellerAppUrl,
             },
           );
@@ -922,11 +930,15 @@ export class GoodsReceiptService {
             line_count: receipt.lines.length,
             app_url: this.env.sellerAppUrl,
           });
-          if (notes.length > 0) {
+          // Gated on the VARIANCE, not on whether a note happened to be
+          // written. The per-line detail no longer goes into the note, so
+          // gating on the note would have silently stopped telling
+          // sellers about a short count at all.
+          if (varianceLine !== '' || notes.length > 0) {
             await this.enqueueReceiptEmail(tx, EMAIL_DISCREPANCY, receipt.sellerId, {
               receipt_number: receipt.receiptNumber,
               warehouse_name: warehouseName,
-              discrepancy_notes: notes,
+              discrepancy_notes: [varianceLine, notes].filter((x) => x !== '').join(' '),
               support_email: this.env.supportEmail,
             });
           }
@@ -1012,26 +1024,15 @@ export class GoodsReceiptService {
 
   /** Plain prose, both directions. "3 short" and "2 over" are different
    *  facts and the note says which. */
-  private formatTransitNotes(rows: ReadonlyArray<{ lost: number; surplus: number }>): string {
-    const lost = rows.reduce((n, r) => n + r.lost, 0);
-    const surplus = rows.reduce((n, r) => n + r.surplus, 0);
-    const parts: string[] = [];
-    if (lost > 0) parts.push(`${lost} unit(s) dispatched from Bangladesh did not arrive`);
-    if (surplus > 0) parts.push(`${surplus} unit(s) arrived that were not dispatched`);
-    return parts.join('; ');
-  }
-
   /**
-   * Names the product, in both directions, and says nothing it does not
-   * have to.
+   * The variance, for the EMAIL only.
    *
-   * This printed the raw variant UUID — into a note the SELLER reads on
-   * their consignment page and into the variance email. "variant
-   * 01a015ae-3c46-…: expected 200, received 198, damaged 0" told them
-   * nothing they could act on, and the "damaged 0" was noise on every
-   * line that had none.
+   * Generated at send time rather than stored, which is the whole point:
+   * an email is a snapshot of a moment and is never re-read, so it can
+   * name the SKU without the wording being frozen into a column that
+   * later screens have to keep displaying.
    */
-  private formatDiscrepancyNotes(
+  private emailVarianceSummary(
     d: ReadonlyArray<{
       skuCode?: string;
       variantId: string;
@@ -1055,6 +1056,15 @@ export class GoodsReceiptService {
           : `${name}: ${count}`;
       })
       .join('; ');
+  }
+
+  private formatTransitNotes(rows: ReadonlyArray<{ lost: number; surplus: number }>): string {
+    const lost = rows.reduce((n, r) => n + r.lost, 0);
+    const surplus = rows.reduce((n, r) => n + r.surplus, 0);
+    const parts: string[] = [];
+    if (lost > 0) parts.push(`${lost} unit(s) dispatched from Bangladesh did not arrive`);
+    if (surplus > 0) parts.push(`${surplus} unit(s) arrived that were not dispatched`);
+    return parts.join('; ');
   }
 
   private async warehouseName(tx: Prisma.TransactionClient, warehouseId: string): Promise<string> {

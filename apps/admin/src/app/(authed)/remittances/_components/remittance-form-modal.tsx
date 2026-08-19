@@ -34,7 +34,10 @@ export function RemittanceFormModal({
   readonly onClose: () => void;
   readonly onSuccess: () => void;
 }): ReactElement {
-  const sellers = useSellersList({ status: 'APPROVED', page: 1, pageSize: 200 });
+  // 100 is the endpoint's MAXIMUM (@Max(100) on the query DTO); asking
+  // for 200 is a 400 and this select renders empty, which reads as "there
+  // are no approved sellers".
+  const sellers = useSellersList({ status: 'APPROVED', page: 1, pageSize: 100 });
   const create = useCreateRemittance();
 
   const [sellerId, setSellerId] = useState(initialSellerId ?? '');

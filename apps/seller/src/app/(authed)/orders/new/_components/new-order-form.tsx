@@ -147,6 +147,12 @@ export function NewOrderForm(): ReactElement {
 
   const create = useCreateOrder();
   const feePrefilled = useRef(false);
+  /**
+   * Until the seller types in the collectable field, it SHOWS the sum and
+   * follows every change to the four inputs. The moment they type, their
+   * number stands and the discount absorbs the difference.
+   */
+  const [collectableTouched, setCollectableTouched] = useState(false);
   const submit = useSubmitOrder();
 
   // Load a large-enough product page for picker UX. Sellers with
@@ -165,7 +171,11 @@ export function NewOrderForm(): ReactElement {
    * that is not there fails hours later, in a phone call, and the seller
    * had no way to see it coming.
    */
-  const stock = useStockList({ page: 1, pageSize: 200 });
+  // 100 is the endpoint's MAXIMUM; asking for 200 is a 400 and the whole
+  // lookup comes back empty — which reads as "this product has no stock"
+  // rather than as a failed request. Exactly the trap that once left the
+  // product picker blank with no explanation.
+  const stock = useStockList({ page: 1, pageSize: 100 });
   /**
    * The parcel's weight, added up from the catalogue. A variant with no
    * recorded weight contributes ZERO rather than making the whole sum
@@ -223,6 +233,15 @@ export function NewOrderForm(): ReactElement {
     const m = new Map<string, { available: number; inTransit: number }>();
     for (const r of stock.data?.items ?? []) {
       m.set(r.variantId, { available: r.qtyAvailable, inTransit: r.qtyInTransit });
+    }
+    return m;
+  }, [stock.data]);
+
+  /** Per PRODUCT, so the first dropdown can carry a figure too. */
+  const stockByProduct = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of stock.data?.items ?? []) {
+      m.set(r.productId, (m.get(r.productId) ?? 0) + r.qtyAvailable);
     }
     return m;
   }, [stock.data]);
@@ -313,8 +332,11 @@ export function NewOrderForm(): ReactElement {
       return DUPLICATE_LINES_ERROR;
     if (!/^[1-9]\d{5}$/.test(form.recipientPostalCode.trim()))
       return 'PIN must be 6 digits (first digit 1-9).';
-    if (form.paymentMode === 'COD' && (!form.codAmountInr || Number(form.codAmountInr) <= 0))
-      return 'COD amount is required when payment mode is COD.';
+    const effectiveCollectable = collectableTouched
+      ? Number(form.codAmountInr)
+      : computedCollectable;
+    if (form.paymentMode === 'COD' && !(effectiveCollectable > 0))
+      return 'The collectable amount must be more than zero for a cash-on-delivery order.';
     if (shortLines.length > 0 && !acceptShort) {
       return 'Some products are short of stock — see the note below, and tick the box if you mean to order them anyway.';
     }
@@ -348,7 +370,13 @@ export function NewOrderForm(): ReactElement {
         quantity: Number(it.quantity),
         ...(it.unitPriceInr.trim() ? { unitPriceInr: Number(it.unitPriceInr) } : {}),
       })),
-      ...(form.paymentMode === 'COD' ? { codAmountInr: Number(form.codAmountInr) } : {}),
+      ...(form.paymentMode === 'COD'
+        ? {
+            codAmountInr: collectableTouched
+              ? Number(form.codAmountInr)
+              : Number(computedCollectable.toFixed(2)),
+          }
+        : {}),
       // Kept whatever the payment mode — a prepaid order still has an
       // advance and a delivery fee worth reading back later.
       ...(form.advanceAmountInr.trim() ? { advanceAmountInr: Number(form.advanceAmountInr) } : {}),
@@ -565,6 +593,8 @@ export function NewOrderForm(): ReactElement {
                 onRemove={removeItem}
                 onVariantChosen={onVariantChosen}
                 stock={it.variantId === '' ? undefined : stockByVariant.get(it.variantId)}
+                stockByVariant={stockByVariant}
+                stockByProduct={stockByProduct}
               />
             ))}
           </div>
@@ -676,12 +706,23 @@ export function NewOrderForm(): ReactElement {
                   type="number"
                   min={0.01}
                   step="0.01"
-                  value={form.codAmountInr}
+                  // The one figure the customer is asked for at the door,
+                  // and the one the call centre reads out. It looked
+                  // exactly like the three inputs feeding it.
+                  className="border-accent text-base font-medium ring-1 ring-[var(--color-accent-tint)]"
+                  value={
+                    collectableTouched
+                      ? form.codAmountInr
+                      : computedCollectable > 0
+                        ? String(computedCollectable)
+                        : ''
+                  }
                   // Typing here moves the DISCOUNT, so the four numbers
                   // still add up. A collectable that silently disagrees
                   // with its own breakdown is worse than no breakdown.
                   onChange={(e) => {
                     const typed = e.target.value;
+                    setCollectableTouched(true);
                     setForm((p) => {
                       const target = Number(typed);
                       if (typed.trim() === '' || !Number.isFinite(target)) {
@@ -819,6 +860,8 @@ function ItemRow({
   onRemove,
   onVariantChosen,
   stock,
+  stockByVariant,
+  stockByProduct,
 }: {
   readonly item: ItemDraft;
   readonly index: number;
@@ -829,6 +872,8 @@ function ItemRow({
   readonly onRemove: (key: number) => void;
   readonly onVariantChosen: (key: number, v: SellerVariantView | undefined) => void;
   readonly stock: { readonly available: number; readonly inTransit: number } | undefined;
+  readonly stockByVariant: ReadonlyMap<string, { available: number; inTransit: number }>;
+  readonly stockByProduct: ReadonlyMap<string, number>;
 }): ReactElement {
   const variants = useProductVariants(item.productId);
   const variantOptions = useMemo(
@@ -903,6 +948,7 @@ function ItemRow({
             {products.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
+                {stockByProduct.has(p.id) ? ` — ${stockByProduct.get(p.id) ?? 0} available` : ''}
               </option>
             ))}
           </Select>
@@ -929,12 +975,25 @@ function ItemRow({
                     ? 'No active variants'
                     : 'Select a variant'}
             </option>
-            {variantOptions.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.skuCode}
-                {v.variantLabel ? ` — ${v.variantLabel}` : ''}
-              </option>
-            ))}
+            {variantOptions.map((v) => {
+              // The number that decides whether this line can ship, on the
+              // option itself — so the choice is made with it in view
+              // rather than discovered after.
+              const s = stockByVariant.get(v.id);
+              return (
+                <option key={v.id} value={v.id}>
+                  {v.skuCode}
+                  {v.variantLabel ? ` — ${v.variantLabel}` : ''}
+                  {s === undefined
+                    ? ''
+                    : s.available > 0
+                      ? ` · ${s.available} available`
+                      : s.inTransit > 0
+                        ? ` · none here, ${s.inTransit} in transit`
+                        : ' · none available'}
+                </option>
+              );
+            })}
           </Select>
         </FormField>
         <FormField label="Quantity" required>

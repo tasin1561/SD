@@ -81,6 +81,20 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
   const isPending = r.status === 'PENDING';
   const isArriving = r.status === 'ARRIVING';
   const isCompleted = r.status === 'COMPLETED';
+  /**
+   * Derived, never read from the stored note. Only meaningful once the
+   * receipt is COMPLETED — `receivedQty` is 0 on a line nobody has
+   * touched, so before that it would report every line as short.
+   */
+  const variance = isCompleted
+    ? r.lines
+        .filter((l) => (l.receivedQty ?? 0) !== l.expectedQty || (l.damagedQty ?? 0) > 0)
+        .map((l) => ({
+          sku: l.variant.skuCode,
+          want: l.expectedQty,
+          got: l.receivedQty ?? 0,
+        }))
+    : [];
 
   async function onStart(): Promise<void> {
     setError(null);
@@ -327,7 +341,22 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
               value={r.receivedAt ? new Date(r.receivedAt).toLocaleString() : '—'}
             />
             <Field label="Discrepancy" value={r.hasDiscrepancies ? 'YES' : 'no'} />
-            {r.discrepancyNotes && <Field label="Discrepancy notes" value={r.discrepancyNotes} />}
+            {/*
+              Computed from the LINES, which carry the sku. The stored
+              `discrepancyNotes` is still shown beneath when it holds
+              something the lines cannot say — a transit loss, an
+              operator's note — but the per-line variance is derived, so
+              it can never go stale the way a stored sentence does.
+            */}
+            {variance.length > 0 && (
+              <Field
+                label="Counted differently"
+                value={variance
+                  .map((v) => `${v.sku}: counted ${v.got} against ${v.want} expected`)
+                  .join('; ')}
+              />
+            )}
+            {r.discrepancyNotes && <Field label="Notes" value={r.discrepancyNotes} />}
           </div>
         </CardBody>
       </Card>
