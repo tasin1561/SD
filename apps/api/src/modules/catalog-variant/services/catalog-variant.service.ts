@@ -19,6 +19,9 @@ export interface VariantSearchHit {
   skuCode: string;
   variantLabel: string | null;
   productName: string;
+  /** So a picker can show the thing, not just name it. Null when the
+   *  variant has no image. */
+  primaryImageUrl: string | null;
 }
 
 export interface VariantView {
@@ -225,13 +228,38 @@ export class CatalogVariantService {
         product: { select: { name: true } },
       },
     });
-    return rows.map((r) => ({
-      id: r.id,
-      productId: r.productId,
-      skuCode: r.skuCode,
-      variantLabel: r.variantLabel,
-      productName: r.product.name,
-    }));
+    if (rows.length === 0) return [];
+
+    // One query for the whole result set — a type-ahead firing twenty
+    // image lookups per keystroke would be worse than no pictures.
+    const images = await this.prisma.client.productImage.findMany({
+      where: { variantId: { in: rows.map((r) => r.id) }, deletedAt: null },
+      orderBy: [{ isPrimary: 'desc' }, { displayOrder: 'asc' }, { createdAt: 'asc' }],
+      select: { variantId: true, spacesKey: true, thumbnailUrl: true },
+    });
+    const firstFor = new Map<string, (typeof images)[number]>();
+    for (const img of images) {
+      if (!firstFor.has(img.variantId)) firstFor.set(img.variantId, img);
+    }
+
+    return Promise.all(
+      rows.map(async (r) => {
+        const img = firstFor.get(r.id);
+        const key =
+          img === undefined
+            ? null
+            : ((img.thumbnailUrl !== null ? deriveThumbnailKey(img.spacesKey) : null) ??
+              img.spacesKey);
+        return {
+          id: r.id,
+          productId: r.productId,
+          skuCode: r.skuCode,
+          variantLabel: r.variantLabel,
+          productName: r.product.name,
+          primaryImageUrl: key === null ? null : await this.spaces.presignGetUrl(key),
+        };
+      }),
+    );
   }
 
   async getById(sellerId: string, productId: string, variantId: string): Promise<VariantView> {

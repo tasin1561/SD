@@ -190,4 +190,5 @@ export interface SellerVariantSearchHit {
   readonly skuCode: string;
   readonly variantLabel: string | null;
   readonly productName: string;
+  readonly primaryImageUrl: string | null;
 }

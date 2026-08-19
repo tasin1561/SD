@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { Input } from '@skydrop/ui/components';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
+import type { SellerVariantSearchHit } from '@skydrop/api-client';
 import { useVariantSearch } from '@/lib/api-hooks';
 
 /**
@@ -33,7 +34,9 @@ export function VariantPicker({
   readonly value: string;
   /** What to show once picked; null while nothing is. */
   readonly label: string | null;
-  readonly onPick: (variantId: string, label: string) => void;
+  /** The whole hit, not just an id — the caller needs the SKU and the
+   *  picture to show what was chosen instead of a uuid. */
+  readonly onPick: (hit: SellerVariantSearchHit, label: string) => void;
 }): ReactElement {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -93,7 +96,7 @@ export function VariantPicker({
           {!maySearch ? (
             <p className="text-text-muted px-3 py-2 text-xs">
               Searching the catalogue needs catalogue access, which this account does not have. Ask
-              a colleague who has it to add the lines, or paste the SKU they give you.
+              a colleague who has it to add the products, or paste the SKU they give you.
             </p>
           ) : query.trim() === '' ? (
             <p className="text-text-muted px-3 py-2 text-xs">Type a product name or SKU.</p>
@@ -115,15 +118,30 @@ export function VariantPicker({
                   type="button"
                   role="option"
                   aria-selected={h.id === value}
-                  className="hover:bg-surface-hover flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left"
+                  className="hover:bg-surface-hover flex w-full items-center gap-2.5 px-3 py-2 text-left"
                   onClick={() => {
-                    onPick(h.id, shown);
+                    onPick(h, shown);
                     setQuery('');
                     setOpen(false);
                   }}
                 >
-                  <span className="text-text-body text-sm">{shown}</span>
-                  <span className="text-text-muted font-mono text-xs">{h.skuCode}</span>
+                  {h.primaryImageUrl !== null ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={h.primaryImageUrl}
+                      alt=""
+                      className="border-border h-8 w-8 shrink-0 rounded-[4px] border object-cover"
+                    />
+                  ) : (
+                    <div
+                      className="border-border bg-surface-raised h-8 w-8 shrink-0 rounded-[4px] border"
+                      aria-hidden
+                    />
+                  )}
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="text-text-body truncate text-sm">{shown}</span>
+                    <span className="text-text-muted font-mono text-xs">{h.skuCode}</span>
+                  </span>
                 </button>
               );
             })

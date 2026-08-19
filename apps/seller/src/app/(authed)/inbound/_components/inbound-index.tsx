@@ -30,13 +30,13 @@ import {
   useCancelGoodsReceipt,
   useCreateGoodsReceipt,
   useGoodsReceipts,
-  type DeclareReceiptLine,
   type GoodsReceiptView,
 } from '@/lib/account-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { EditReceiptPanel } from './edit-receipt-panel';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
+import type { SellerVariantSearchHit } from '@skydrop/api-client';
 import { VariantPicker } from './variant-picker';
 
 const PAGE_SIZE = 25;
@@ -53,6 +53,24 @@ const PAGE_SIZE = 25;
  * you said differ, and until someone resolves it the counted stock is
  * not the stock you think you have.
  */
+/**
+ * A consignment row as the SELLER sees it, not as the API takes it.
+ *
+ * The wire type is `{ variantId, expectedQty, unitCostInr? }` — enough to
+ * receive against and nothing anyone can read. These carry the name, SKU
+ * and picture too, and are mapped down at submit.
+ */
+interface StagedLine {
+  variantId: string;
+  label: string;
+  skuCode: string;
+  imageUrl: string | null;
+  expectedQty: number;
+  unitCostInr?: number;
+  manufacturedAt?: string;
+  expiresAt?: string;
+}
+
 export function InboundIndex(): ReactElement {
   const canManage = can(useSellerIdentity(), 'inbound.manage');
   const [status, setStatus] = useState('');
@@ -160,7 +178,7 @@ export function InboundIndex(): ReactElement {
                         : new Date(r.expectedArrivalAt).toLocaleDateString('en-IN')}
                     </Td>
                     <Td align="right">
-                      {r.expectedSkus === null ? '—' : <Num value={r.expectedSkus} />}
+                      <Num value={r.lines.length} />
                     </Td>
                     <Td>
                       {r.receivedAt === null
@@ -273,41 +291,82 @@ function AnnounceConsignment({
   const create = useCreateGoodsReceipt();
   const [expectedArrivalAt, setExpectedArrivalAt] = useState('');
   const [sellerReference, setSellerReference] = useState('');
-  const [lines, setLines] = useState<DeclareReceiptLine[]>([]);
-  const [variantId, setVariantId] = useState('');
-  // What the picked variant is CALLED, so a chosen line reads back as
-  // the item rather than as the uuid that was chosen.
+  /**
+   * Staged rows carry what the seller needs to SEE, not just what the
+   * API needs to receive. The list used to print `variantId`, which is a
+   * uuid — the seller had just chosen "Aviator OG Sunglass — Black" and
+   * got back 01a015ae-3efe-… as confirmation.
+   */
+  const [lines, setLines] = useState<StagedLine[]>([]);
+  const [picked, setPicked] = useState<SellerVariantSearchHit | null>(null);
   const [variantLabel, setVariantLabel] = useState<string | null>(null);
   const [qty, setQty] = useState('');
   const [unitCost, setUnitCost] = useState('');
+  /**
+   * Most goods are not dated. Asking every consignment for a manufacture
+   * and expiry date puts two empty boxes in front of someone shipping
+   * sunglasses, so the dates are opt-in per product — ticked when the
+   * thing in the box actually carries them.
+   */
+  const [hasDates, setHasDates] = useState(false);
+  const [manufacturedAt, setManufacturedAt] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
 
   function close(): void {
     setExpectedArrivalAt('');
     setSellerReference('');
     setLines([]);
-    setVariantId('');
+    setPicked(null);
     setVariantLabel(null);
     setQty('');
     setUnitCost('');
+    setHasDates(false);
+    setManufacturedAt('');
+    setExpiresAt('');
     create.reset();
     onClose();
   }
 
-  function addLine(): void {
-    setLines((ls) => [
-      ...ls,
-      {
-        variantId: variantId.trim(),
-        expectedQty: Number(qty),
-        ...(unitCost.trim() === '' ? {} : { unitCostInr: Number(unitCost) }),
-      },
-    ]);
-    setVariantId('');
-    setQty('');
-    setUnitCost('');
+  /** The row being typed, if it is complete enough to stand as one. */
+  function draftLine(): StagedLine | null {
+    if (picked === null || !(Number(qty) > 0)) return null;
+    return {
+      variantId: picked.id,
+      label: variantLabel ?? picked.productName,
+      skuCode: picked.skuCode,
+      imageUrl: picked.primaryImageUrl,
+      expectedQty: Number(qty),
+      ...(unitCost.trim() === '' ? {} : { unitCostInr: Number(unitCost) }),
+      // Only when the box is ticked AND a date was entered — an unticked
+      // row must not carry a stale date somebody typed then hid.
+      ...(hasDates && manufacturedAt !== ''
+        ? { manufacturedAt: new Date(manufacturedAt).toISOString() }
+        : {}),
+      ...(hasDates && expiresAt !== '' ? { expiresAt: new Date(expiresAt).toISOString() } : {}),
+    };
   }
 
-  const lineReady = variantId.trim() !== '' && Number(qty) > 0;
+  function addLine(): void {
+    const draft = draftLine();
+    if (draft === null) return;
+    setLines((ls) => [...ls, draft]);
+    // Clearing the LABEL too is what lets a second product be added at
+    // all: leaving it made the picker keep showing the last choice, so
+    // the form looked stuck on one item.
+    setPicked(null);
+    setVariantLabel(null);
+    setQty('');
+    setUnitCost('');
+    setHasDates(false);
+    setManufacturedAt('');
+    setExpiresAt('');
+  }
+
+  const lineReady = draftLine() !== null;
+  // Announce takes the row being typed as well, so filling the fields
+  // and pressing the button does what it looks like it does. "Add
+  // product" is for adding ANOTHER, not a toll on the first.
+  const pendingLines = [...lines, ...(draftLine() === null ? [] : [draftLine()!])];
 
   return (
     <Modal
@@ -319,18 +378,21 @@ function AnnounceConsignment({
       title="Announce a consignment"
       description="List what is in the box so receiving knows what to count against."
     >
-      <Section
-        title="What is in it"
-        subtitle="At least one line. Unit cost is optional but makes landed cost and margin accurate."
-      >
+      {/* No section heading: "What is in it" and "When and what you call
+          it" were labels for groups whose own fields already say what
+          they are, and they made a short form read like a questionnaire. */}
+      <Section>
+        <p className="text-text-muted mb-3 text-xs">
+          At least one product. Unit cost is optional but makes landed cost and margin accurate.
+        </p>
         <div className="grid gap-3 sm:grid-cols-3">
           <FormField label="Item" htmlFor="gr-variant">
             <VariantPicker
               id="gr-variant"
-              value={variantId}
+              value={picked?.id ?? ''}
               label={variantLabel}
-              onPick={(id, shown) => {
-                setVariantId(id);
+              onPick={(hit, shown) => {
+                setPicked(hit);
                 setVariantLabel(shown);
               }}
             />
@@ -355,15 +417,54 @@ function AnnounceConsignment({
             />
           </FormField>
         </div>
+
+        <label className="text-text-body mt-2 flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={hasDates}
+            onChange={(e) => {
+              setHasDates(e.target.checked);
+              if (!e.target.checked) {
+                // Clear on untick, so a hidden field cannot travel with
+                // the row it is no longer shown on.
+                setManufacturedAt('');
+                setExpiresAt('');
+              }
+            }}
+            className="h-4 w-4"
+          />
+          This product has manufacture and expiry dates
+        </label>
+
+        {hasDates && (
+          <div className="mt-2 grid gap-3 sm:grid-cols-2">
+            <FormField label="Manufactured" htmlFor="gr-mfg" hint="Optional">
+              <Input
+                id="gr-mfg"
+                type="date"
+                value={manufacturedAt}
+                onChange={(e) => setManufacturedAt(e.target.value)}
+              />
+            </FormField>
+            <FormField label="Expires" htmlFor="gr-exp" hint="Optional">
+              <Input
+                id="gr-exp"
+                type="date"
+                value={expiresAt}
+                onChange={(e) => setExpiresAt(e.target.value)}
+              />
+            </FormField>
+          </div>
+        )}
         <Button variant="secondary" size="sm" disabled={!lineReady} onClick={addLine}>
-          Add line
+          Add product
         </Button>
 
         {lines.length > 0 && (
           <Table>
             <THead>
               <Tr>
-                <Th>Variant</Th>
+                <Th>Product</Th>
                 <Th align="right">Qty</Th>
                 <Th align="right">Unit cost</Th>
                 <Th align="right" />
@@ -373,7 +474,25 @@ function AnnounceConsignment({
               {lines.map((l, i) => (
                 <Tr key={`${l.variantId}-${i}`}>
                   <Td>
-                    <span className="font-mono text-xs">{l.variantId}</span>
+                    <span className="flex items-center gap-2.5">
+                      {l.imageUrl !== null ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={l.imageUrl}
+                          alt=""
+                          className="border-border h-8 w-8 shrink-0 rounded-[4px] border object-cover"
+                        />
+                      ) : (
+                        <span
+                          className="border-border bg-surface-raised h-8 w-8 shrink-0 rounded-[4px] border"
+                          aria-hidden
+                        />
+                      )}
+                      <span className="flex min-w-0 flex-col">
+                        <span className="text-text-body truncate text-sm">{l.label}</span>
+                        <span className="text-text-muted font-mono text-xs">{l.skuCode}</span>
+                      </span>
+                    </span>
                   </Td>
                   <Td align="right">
                     <Num value={l.expectedQty} />
@@ -395,7 +514,7 @@ function AnnounceConsignment({
         )}
       </Section>
 
-      <Section title="When and what you call it">
+      <Section>
         <div className="grid gap-3 sm:grid-cols-2">
           <FormField
             label="Expected arrival"
@@ -427,11 +546,19 @@ function AnnounceConsignment({
         </Button>
         <Button
           size="md"
-          disabled={lines.length === 0 || create.isPending}
+          disabled={pendingLines.length === 0 || create.isPending}
           onClick={() =>
             create.mutate(
               {
-                lines,
+                // Mapped down to the wire shape here — the extra fields
+                // exist so the seller can read the list, not for the API.
+                lines: pendingLines.map((l) => ({
+                  variantId: l.variantId,
+                  expectedQty: l.expectedQty,
+                  ...(l.unitCostInr === undefined ? {} : { unitCostInr: l.unitCostInr }),
+                  ...(l.manufacturedAt === undefined ? {} : { manufacturedAt: l.manufacturedAt }),
+                  ...(l.expiresAt === undefined ? {} : { expiresAt: l.expiresAt }),
+                })),
                 ...(expectedArrivalAt === ''
                   ? {}
                   : { expectedArrivalAt: new Date(expectedArrivalAt).toISOString() }),
@@ -445,7 +572,7 @@ function AnnounceConsignment({
         >
           {create.isPending
             ? 'Announcing…'
-            : `Announce ${lines.length} line${lines.length === 1 ? '' : 's'}`}
+            : `Announce ${lines.length} product${lines.length === 1 ? '' : 's'}`}
         </Button>
       </ModalFooter>
     </Modal>

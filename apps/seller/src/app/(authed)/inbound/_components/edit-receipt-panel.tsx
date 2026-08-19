@@ -59,6 +59,9 @@ export function EditReceiptPanel({
  *  and coercing on every keystroke makes "" and 0 indistinguishable. */
 interface LineDraft {
   readonly key: string;
+  /** Whether this product carries dates at all. Most do not, and two
+   *  empty date boxes on every row is a form nobody reads. */
+  readonly hasDates: boolean;
   readonly variantId: string;
   /** SKU + product name for a line that came from the server. Null for a
    *  line not yet picked. The picker fills it in, so a chosen line reads
@@ -169,10 +172,10 @@ function EditReceiptForm({
         <ErrorNote message={serverVerdict(detail.error)} retry={() => void detail.refetch()} />
       ) : (
         <>
-          <Section
-            title="What is in it"
-            subtitle="Replacing a line replaces the whole list, so leave the ones that are right alone."
-          >
+          <Section>
+            <p className="text-text-muted mb-3 text-xs">
+              Replacing a product replaces the whole list, so leave the ones that are right alone.
+            </p>
             {form.lines.map((line) => (
               <div key={line.key} className="border-border mb-3 rounded-[7px] border p-3">
                 <div className="mb-2 flex items-start justify-between gap-3">
@@ -185,7 +188,9 @@ function EditReceiptForm({
                       id={`v-${line.key}`}
                       value={line.variantId}
                       label={line.label}
-                      onPick={(id, shown) => patchLine(line.key, { variantId: id, label: shown })}
+                      onPick={(hit, shown) =>
+                        patchLine(line.key, { variantId: hit.id, label: shown })
+                      }
                     />
                   </FormField>
                   <Button
@@ -217,25 +222,45 @@ function EditReceiptForm({
                       onChange={(e) => patchLine(line.key, { unitCostInr: e.target.value })}
                     />
                   </FormField>
-                  <FormField label="Manufactured" htmlFor={`m-${line.key}`} hint="Optional">
-                    <Input
-                      id={`m-${line.key}`}
-                      type="date"
-                      value={line.manufacturedAt}
-                      onChange={(e) => patchLine(line.key, { manufacturedAt: e.target.value })}
+                  <label className="text-text-body col-span-2 mt-1 flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={line.hasDates}
+                      onChange={(e) =>
+                        patchLine(line.key, {
+                          hasDates: e.target.checked,
+                          // Clear on untick: a hidden date must not travel
+                          // with the correction it is no longer shown on.
+                          ...(e.target.checked ? {} : { manufacturedAt: '', expiresAt: '' }),
+                        })
+                      }
+                      className="h-4 w-4"
                     />
-                  </FormField>
-                  {/* Carried even when unedited: a line sent back without
-                      its expiry loses it, and FEFO picking is decided on
-                      exactly this date. */}
-                  <FormField label="Expires" htmlFor={`e-${line.key}`} hint="Optional">
-                    <Input
-                      id={`e-${line.key}`}
-                      type="date"
-                      value={line.expiresAt}
-                      onChange={(e) => patchLine(line.key, { expiresAt: e.target.value })}
-                    />
-                  </FormField>
+                    This product has manufacture and expiry dates
+                  </label>
+                  {line.hasDates && (
+                    <>
+                      <FormField label="Manufactured" htmlFor={`m-${line.key}`} hint="Optional">
+                        <Input
+                          id={`m-${line.key}`}
+                          type="date"
+                          value={line.manufacturedAt}
+                          onChange={(e) => patchLine(line.key, { manufacturedAt: e.target.value })}
+                        />
+                      </FormField>
+                      {/* Carried even when unedited: a line sent back without
+                        its expiry loses it, and FEFO picking is decided on
+                        exactly this date. */}
+                      <FormField label="Expires" htmlFor={`e-${line.key}`} hint="Optional">
+                        <Input
+                          id={`e-${line.key}`}
+                          type="date"
+                          value={line.expiresAt}
+                          onChange={(e) => patchLine(line.key, { expiresAt: e.target.value })}
+                        />
+                      </FormField>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
@@ -255,16 +280,17 @@ function EditReceiptForm({
                       unitCostInr: '',
                       manufacturedAt: '',
                       expiresAt: '',
+                      hasDates: false,
                     },
                   ],
                 })
               }
             >
-              Add a line
+              Add a product
             </Button>
           </Section>
 
-          <Section title="When and what you call it">
+          <Section>
             <div className="grid gap-3 sm:grid-cols-2">
               <FormField
                 label="Expected arrival"
@@ -328,6 +354,9 @@ function seedForm(d: GoodsReceiptDetailView): FormState {
       unitCostInr: l.unitCostInr ?? '',
       manufacturedAt: dayOf(l.manufacturedAt),
       expiresAt: dayOf(l.expiresAt),
+      // Ticked when the line already HAS a date — otherwise correcting a
+      // dated consignment would hide the dates it was announced with.
+      hasDates: l.manufacturedAt !== null || l.expiresAt !== null,
     })),
   };
 }
@@ -361,7 +390,7 @@ function toLinePayload(l: LineDraft): DeclareReceiptLine {
 function firstProblem(f: FormState): string | null {
   if (f.lines.length === 0) return 'A consignment needs at least one line. Cancel it instead.';
   for (const l of f.lines) {
-    if (l.variantId.trim() === '') return 'Every line needs a variant id.';
+    if (l.variantId.trim() === '') return 'Every row needs a product — pick one from the list.';
     const qty = Number(l.expectedQty);
     if (!Number.isInteger(qty) || qty < QTY_MIN || qty > QTY_MAX) {
       return `Quantity must be a whole number between ${QTY_MIN} and ${QTY_MAX}.`;

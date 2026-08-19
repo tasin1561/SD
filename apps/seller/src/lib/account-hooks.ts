@@ -139,7 +139,16 @@ export interface GoodsReceiptView {
   status: GoodsReceiptStatus;
   expectedArrivalAt: string | null;
   sellerReference: string | null;
-  expectedSkus: number | null;
+  /**
+   * The lines, as the API has always sent them.
+   *
+   * There used to be an `expectedSkus: number | null` here instead, and
+   * nothing produced it — the API never had such a field, so the column
+   * that read it printed "—" for every consignment ever announced. The
+   * count is `lines.length`, and the lines carry the SKU and product
+   * name besides.
+   */
+  lines: readonly GoodsReceiptLineView[];
   receivedAt: string | null;
   hasDiscrepancies: boolean;
   discrepancyNotes: string | null;
