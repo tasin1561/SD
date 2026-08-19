@@ -60,12 +60,24 @@ export function InventoryView(): ReactElement {
     const s = summary.data;
     return (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
-        <SummaryCard label="SKUs" value={s.totalSkus.toLocaleString()} />
         <SummaryCard label="On hand" value={s.totalQtyOnHand.toLocaleString()} />
         <SummaryCard
           label="Available"
           value={s.totalQtyAvailable.toLocaleString()}
           hint={`${s.totalQtyReserved.toLocaleString()} reserved`}
+        />
+        {/*
+          Its own number, never folded into the two beside it. Summed in,
+          301 units sitting in Dhaka read as 301 available to sell — and
+          an order taken against them would have failed at confirmation,
+          which is the expensive place to find out.
+        */}
+        <SummaryCard
+          label="In transit"
+          value={s.totalQtyInTransit.toLocaleString()}
+          {...(s.totalQtyInTransit > 0
+            ? { hint: 'In Dhaka or in the air — not sellable yet' }
+            : {})}
         />
         <SummaryCard
           label="Low stock"
@@ -111,6 +123,7 @@ export function InventoryView(): ReactElement {
               <Th className="text-right">On hand</Th>
               <Th className="text-right">Reserved</Th>
               <Th className="text-right">Available</Th>
+              <Th className="text-right">In transit</Th>
               <Th className="text-right">Low-stock</Th>
             </Tr>
           </THead>
@@ -141,6 +154,9 @@ export function InventoryView(): ReactElement {
                   >
                     {row.qtyAvailable.toLocaleString()}
                   </span>
+                </Td>
+                <Td className="text-right font-mono text-text-muted">
+                  {row.qtyInTransit > 0 ? row.qtyInTransit.toLocaleString() : '—'}
                 </Td>
                 <Td className="text-right text-text-muted text-xs">
                   {row.lowStockThreshold !== null ? row.lowStockThreshold.toLocaleString() : '—'}

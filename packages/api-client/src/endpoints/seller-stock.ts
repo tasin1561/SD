@@ -15,6 +15,12 @@ export interface SellerStockRow {
   readonly qtyOnHand: number;
   readonly qtyReserved: number;
   readonly qtyAvailable: number;
+  /**
+   * On hand, really yours, and sellable from nowhere yet — sitting in
+   * our Bangladesh intake or in transit between our warehouses.
+   * Deliberately NOT part of qtyOnHand or qtyAvailable.
+   */
+  readonly qtyInTransit: number;
   readonly lowStockThreshold: number | null;
   readonly isLowStock: boolean;
   readonly warehouseCount: number;
@@ -32,6 +38,7 @@ export interface SellerStockSummary {
   readonly totalQtyOnHand: number;
   readonly totalQtyReserved: number;
   readonly totalQtyAvailable: number;
+  readonly totalQtyInTransit: number;
   readonly lowStockSkus: number;
 }
 

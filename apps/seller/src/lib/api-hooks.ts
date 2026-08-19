@@ -791,6 +791,8 @@ export interface VariantStockRow {
   readonly qtyOnHand: number;
   readonly qtyReserved: number;
   readonly qtyAvailable: number;
+  /** On hand somewhere it cannot be sold from — Dhaka, or in transit. */
+  readonly qtyInTransit: number;
   readonly lowStockThreshold: number | null;
   readonly isLowStock: boolean;
   readonly warehouseCount: number;

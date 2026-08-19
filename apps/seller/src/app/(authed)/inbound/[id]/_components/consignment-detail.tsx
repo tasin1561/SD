@@ -349,10 +349,17 @@ function LegCard({
         />
 
         {anyVariance && (
+          // Deliberately does NOT print `discrepancyNotes`. That is a
+          // stored string written at completion — so a note written
+          // before a wording fix keeps its old wording forever, which is
+          // how raw variant uuids were still on this page hours after
+          // they stopped being generated. The table below already says
+          // every line, by name, with the difference; the banner only has
+          // to say what it MEANS.
           <p className="text-critical mt-3 rounded-[5px] border border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] px-3 py-2 text-xs">
-            Something was counted differently here. Nothing is blocked by it — your stock is what
-            was counted. Raise an issue if the difference is not yours.
-            {leg.discrepancyNotes !== null && ` ${leg.discrepancyNotes}`}
+            Some lines were counted differently — the per-product figures are below. Nothing is
+            blocked by it: your stock is what was counted. Raise an issue if the difference is not
+            yours.
           </p>
         )}
 
