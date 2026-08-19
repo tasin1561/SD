@@ -572,7 +572,6 @@ model Warehouse {
   stockAdjustments       StockAdjustment[]
   cycleCounts            CycleCount[]
   goodsReceipts          GoodsReceipt[]
-  consignments           Consignment[]
   shipmentsAsOrigin      Shipment[]
   // R6: RTO parcels physically RECEIVED here (may differ from the
   // warehouse the shipment originally dispatched from).
@@ -1372,8 +1371,6 @@ model Consignment {
   receipts      GoodsReceipt[]
   events        ConsignmentEvent[]
   freightCharge InboundFreightCharge?
-  warehouse     Warehouse?            @relation(fields: [warehouseId], references: [id])
-  warehouseId   String?               @db.Uuid
 
   @@index([sellerId, status])
   @@index([status])

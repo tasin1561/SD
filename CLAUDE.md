@@ -964,6 +964,34 @@ slow CI — which has no problem — to accommodate one laptop, and a slower gat
 is a gate people skip. An exit 137 with no test failures above it is the OOM,
 not a red suite; check for `Tests:` output before assuming otherwise.
 
+**A one-sided Prisma relation is an invented COLUMN, and `prisma validate`
+passes on it (2026-08-19).** Leave a relation field pointing at a model that
+does not point back, and `prisma format` makes it legal the only way it can: it
+adds the missing back-relation, and on the side needing a foreign key it INVENTS
+a scalar. The schema is then internally consistent — it just describes a column
+no migration ever created. The client asks for it, Postgres refuses, and the
+symptom is dozens of e2e failures with a stack trace pointing at whatever insert
+happened to run first, nowhere near the relation. It happened three times in one
+afternoon while the freight bill moved from the goods receipt to the
+consignment, and twice the two sides REGENERATED EACH OTHER, so deleting one
+alone did nothing.
+
+**Unit tests cannot see it** — a mocked Prisma has no columns to be missing —
+and neither can typecheck. Two gates now do: `schema-relation-hygiene.spec.ts`
+in the unit suite (the fingerprint is a scalar `*Id` with NO `@map`, because
+every FK written on purpose carries one, plus a check that every relation LIST
+is pointed back at), and CI's `Schema matches migrations (no drift)` step, which
+runs `prisma migrate diff --exit-code` against a shadow database BEFORE the e2e
+suite so drift is reported as one line naming the column rather than as eighty
+failures. **After ANY relation change, run the unit suite — not just
+`prisma validate`, which is asking a different question.**
+
+**Watch the count on a schema `str.replace(...)`.** The misplaced relation that
+started this was a single-occurrence replace anchored on
+`goodsReceipts GoodsReceipt[]`, which appears on BOTH `Seller` and `Warehouse`.
+It landed on the wrong model, and everything after was `prisma format` being
+helpful.
+
 **A local `tsc --noEmit` is NOT a gate on its own (2026-07-27).** `apps/api` typechecks incrementally, and a stale `tsconfig.build.tsbuildinfo` will happily skip re-checking a newly-added file: commit `2347b29` was reported as passing typecheck locally and CI then found eight errors in a spec written minutes earlier. **Delete the `.tsbuildinfo` before the pre-commit typecheck**, or treat CI as the only typecheck that counts. Same failure class as the e2e gap above — a gate that did not run looks identical to a gate that passed.
 
 Below: remaining frontends + module-level fast-follows + Phase-1B prerequisites.
