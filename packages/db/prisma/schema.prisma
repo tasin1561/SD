@@ -1399,31 +1399,36 @@ model ConsignmentEvent {
 }
 
 model GoodsReceipt {
-  id                String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  sellerId          String             @map("seller_id") @db.Uuid
-  warehouseId       String             @map("warehouse_id") @db.Uuid
+  id                    String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId              String             @map("seller_id") @db.Uuid
+  warehouseId           String             @map("warehouse_id") @db.Uuid
   /// The journey this arrival belongs to. Nullable only for receipts
   /// that predate two-leg consignments.
-  consignmentId     String?            @map("consignment_id") @db.Uuid
-  leg               ConsignmentLeg?
+  consignmentId         String?            @map("consignment_id") @db.Uuid
+  leg                   ConsignmentLeg?
   /// IN_FINAL legs only: when this shipment left Bangladesh. Its stock
   /// sits in the destination warehouse's TRANSIT bin from this moment
   /// until the leg is received.
-  dispatchedAt      DateTime?          @map("dispatched_at") @db.Timestamptz
-  dispatchedById    String?            @map("dispatched_by_id") @db.Uuid
-  receiptNumber     String             @unique @map("receipt_number")
-  expectedArrivalAt DateTime?          @map("expected_arrival_at") @db.Timestamptz
-  sellerReference   String?            @map("seller_reference")
-  expectedSkus      Json?              @map("expected_skus")
-  receivedAt        DateTime?          @map("received_at") @db.Timestamptz
-  receivedById      String?            @map("received_by_id") @db.Uuid
-  status            GoodsReceiptStatus @default(PENDING)
-  hasDiscrepancies  Boolean            @default(false) @map("has_discrepancies")
-  discrepancyNotes  String?            @map("discrepancy_notes") @db.Text
-  photoSpacesKeys   String[]           @default([]) @map("photo_spaces_keys")
-  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt         DateTime?          @map("deleted_at") @db.Timestamptz
+  dispatchedAt          DateTime?          @map("dispatched_at") @db.Timestamptz
+  dispatchedById        String?            @map("dispatched_by_id") @db.Uuid
+  /// The Bangladesh stop handled this consignment and sent it on WITHOUT
+  /// opening it. Not the same as a count of zero, and not a discrepancy:
+  /// nobody looked, so there is no number and no difference to report.
+  /// India becomes the first and only count.
+  forwardedWithoutCount Boolean            @default(false) @map("forwarded_without_count")
+  receiptNumber         String             @unique @map("receipt_number")
+  expectedArrivalAt     DateTime?          @map("expected_arrival_at") @db.Timestamptz
+  sellerReference       String?            @map("seller_reference")
+  expectedSkus          Json?              @map("expected_skus")
+  receivedAt            DateTime?          @map("received_at") @db.Timestamptz
+  receivedById          String?            @map("received_by_id") @db.Uuid
+  status                GoodsReceiptStatus @default(PENDING)
+  hasDiscrepancies      Boolean            @default(false) @map("has_discrepancies")
+  discrepancyNotes      String?            @map("discrepancy_notes") @db.Text
+  photoSpacesKeys       String[]           @default([]) @map("photo_spaces_keys")
+  createdAt             DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt             DateTime?          @map("deleted_at") @db.Timestamptz
 
   seller       Seller             @relation(fields: [sellerId], references: [id])
   warehouse    Warehouse          @relation(fields: [warehouseId], references: [id])

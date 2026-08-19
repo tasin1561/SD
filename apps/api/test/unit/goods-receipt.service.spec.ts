@@ -48,6 +48,13 @@ function makeReceipt(status: GoodsReceiptStatus, lines: Partial<Line>[]) {
       expiresAt: null,
       unitCostInr: null,
       batchId: null as string | null,
+      // The real include always carries this. The fixture omitted it,
+      // which is how the note printed a uuid to sellers unnoticed.
+      variant: {
+        skuCode: l.variantId === 'v2' ? 'SKU-TWO' : 'SKU-ONE',
+        variantLabel: null,
+        product: { name: 'Test Product' },
+      },
     })),
   };
 }
@@ -213,6 +220,12 @@ describe('GoodsReceiptService.complete', () => {
     const res = await sut.svc.complete('staff1', 'gr1', CTX);
     expect(res.status).toBe(GoodsReceiptStatus.COMPLETED);
     expect(res.hasDiscrepancies).toBe(true);
+    // The note NAMES the sku and says which direction. It printed the
+    // raw variant uuid until 2026-08-19 — into this note, which the
+    // seller reads, and into the variance email.
+    expect(res.discrepancyNotes).toContain('SKU-ONE');
+    expect(res.discrepancyNotes).toContain('3 short of the 10 declared');
+    expect(res.discrepancyNotes).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-/);
     // Stock for what ACTUALLY arrived — not zero, and not the declared 10.
     expect(sut.applyCalls).toHaveLength(1);
     expect(sut.applyCalls[0]?.qtyChange).toBe(7);

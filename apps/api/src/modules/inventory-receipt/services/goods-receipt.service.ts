@@ -659,6 +659,7 @@ export class GoodsReceiptService {
     serialsByLineId?: Readonly<Record<string, readonly string[]>>,
     variances: ReadonlyArray<{
       variantId: string;
+      skuCode?: string;
       expectedQty: number;
       receivedQty: number;
       damagedQty: number;
@@ -987,6 +988,9 @@ export class GoodsReceiptService {
   private detectDiscrepancies(receipt: GoodsReceiptView): Array<{
     lineId: string;
     variantId: string;
+    /** The SKU, carried so the note can NAME the product. */
+    skuCode: string;
+    productName: string;
     expectedQty: number;
     receivedQty: number;
     damagedQty: number;
@@ -996,6 +1000,10 @@ export class GoodsReceiptService {
       .map((l) => ({
         lineId: l.id,
         variantId: l.variantId,
+        // Defensive: a display name must never be able to break a
+        // completion that writes stock.
+        skuCode: l.variant?.skuCode ?? l.variantId,
+        productName: l.variant?.product.name ?? '',
         expectedQty: l.expectedQty,
         receivedQty: l.receivedQty,
         damagedQty: l.damagedQty,
@@ -1013,8 +1021,19 @@ export class GoodsReceiptService {
     return parts.join('; ');
   }
 
+  /**
+   * Names the product, in both directions, and says nothing it does not
+   * have to.
+   *
+   * This printed the raw variant UUID — into a note the SELLER reads on
+   * their consignment page and into the variance email. "variant
+   * 01a015ae-3c46-…: expected 200, received 198, damaged 0" told them
+   * nothing they could act on, and the "damaged 0" was noise on every
+   * line that had none.
+   */
   private formatDiscrepancyNotes(
     d: ReadonlyArray<{
+      skuCode?: string;
       variantId: string;
       expectedQty: number;
       receivedQty: number;
@@ -1022,10 +1041,19 @@ export class GoodsReceiptService {
     }>,
   ): string {
     return d
-      .map(
-        (x) =>
-          `variant ${x.variantId}: expected ${x.expectedQty}, received ${x.receivedQty}, damaged ${x.damagedQty}`,
-      )
+      .map((x) => {
+        const name = x.skuCode ?? x.variantId;
+        const diff = x.receivedQty - x.expectedQty;
+        const count =
+          diff === 0
+            ? `counted ${x.receivedQty}`
+            : diff < 0
+              ? `counted ${x.receivedQty}, ${Math.abs(diff)} short of the ${x.expectedQty} declared`
+              : `counted ${x.receivedQty}, ${diff} more than the ${x.expectedQty} declared`;
+        return x.damagedQty > 0
+          ? `${name}: ${count}, ${x.damagedQty} damaged`
+          : `${name}: ${count}`;
+      })
       .join('; ');
   }
 

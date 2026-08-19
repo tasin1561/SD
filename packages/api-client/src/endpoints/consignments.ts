@@ -36,6 +36,12 @@ export interface ConsignmentLegView {
   readonly warehouseId: string;
   /** Set on an India leg once it has left Bangladesh. */
   readonly dispatchedAt: string | null;
+  /**
+   * The Bangladesh stop handled this and sent it on WITHOUT opening it.
+   * Not a count of zero and not a discrepancy — nobody looked, so there
+   * is no number and no difference. India becomes the first count.
+   */
+  readonly forwardedWithoutCount: boolean;
   readonly receivedAt: string | null;
   readonly hasDiscrepancies: boolean;
   readonly discrepancyNotes: string | null;
@@ -97,7 +103,10 @@ export interface DeclareConsignmentBody {
 }
 
 export interface DispatchToIndiaBody {
-  readonly lines: ReadonlyArray<{ readonly lineId: string; readonly quantity: number }>;
+  /** Omit when `withoutCounting` — the whole declaration travels. */
+  readonly lines?: ReadonlyArray<{ readonly lineId: string; readonly quantity: number }>;
+  /** Forward it on the declared quantities, without opening it. */
+  readonly withoutCounting?: boolean;
   readonly etaAt?: string;
   readonly reference?: string;
 }

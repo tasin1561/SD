@@ -6,6 +6,7 @@ import {
   IsArray,
   IsDateString,
   IsEnum,
+  IsBoolean,
   IsInt,
   IsNumber,
   IsOptional,
@@ -134,18 +135,30 @@ export class DispatchLineDto {
 }
 
 export class DispatchToIndiaDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
+    default: false,
+    description:
+      'Send it on WITHOUT counting in Bangladesh. The carton is forwarded on the ' +
+      "seller's declared quantities and India becomes the first and only count. " +
+      'Omit `lines` when using this — the declaration is what travels.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  withoutCounting?: boolean;
+
+  @ApiPropertyOptional({
     type: [DispatchLineDto],
-    minItems: 1,
     description:
       'What is physically leaving. A consignment may be dispatched in several ' +
-      'shipments — each becomes its own India leg with its own arrival count.',
+      'shipments — each becomes its own India leg with its own arrival count. ' +
+      'Required unless `withoutCounting` is set, in which case the whole ' +
+      'declaration travels and there is nothing to choose from.',
   })
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => DispatchLineDto)
-  lines!: DispatchLineDto[];
+  lines?: DispatchLineDto[];
 
   @ApiPropertyOptional({ description: 'Expected arrival in India' })
   @IsOptional()

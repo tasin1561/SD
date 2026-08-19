@@ -41,6 +41,7 @@ function leg(over: Partial<ConsignmentLegView> = {}): ConsignmentLegView {
     status: GoodsReceiptStatus.PENDING,
     warehouseId: 'wh-1',
     dispatchedAt: null,
+    forwardedWithoutCount: false,
     receivedAt: null,
     hasDiscrepancies: false,
     discrepancyNotes: null,

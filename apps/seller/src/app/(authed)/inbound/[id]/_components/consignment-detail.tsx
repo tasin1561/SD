@@ -44,6 +44,7 @@ import { EditReceiptPanel } from '../../_components/edit-receipt-panel';
 import {
   cancellable,
   countingInProgress,
+  legProgress,
   countedUnits,
   declaredUnits,
   eventWords,
@@ -306,7 +307,17 @@ function LegCard({
             <span className="text-text-muted font-mono text-xs">{leg.receiptNumber}</span>
           </span>
         }
-        subtitle={`${leg.warehouse.name} · ${leg.warehouse.countryCode}`}
+        // What is happening here, said plainly. `ARRIVING` means "we
+        // have it" and nobody outside a warehouse reads it that way.
+        subtitle={
+          <span className="flex flex-col gap-0.5">
+            <span>
+              {leg.warehouse.name} · {leg.warehouse.countryCode} —{' '}
+              <span className="text-text-body">{legProgress(leg).headline}</span>
+            </span>
+            <span className="text-text-faint text-xs">{legProgress(leg).detail}</span>
+          </span>
+        }
         action={
           canManage && leg.status === 'PENDING' ? (
             <Button variant="secondary" size="sm" onClick={onCorrect}>
@@ -324,9 +335,7 @@ function LegCard({
               label: 'Counted',
               value:
                 counted === null ? (
-                  <span className="text-text-muted">
-                    {counting ? 'Being counted now' : 'Not counted yet'}
-                  </span>
+                  <span className="text-text-muted">{legProgress(leg).headline}</span>
                 ) : (
                   <Num value={counted} suffix="units" />
                 ),

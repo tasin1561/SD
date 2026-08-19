@@ -29,6 +29,7 @@ const CONSIGNMENT_INCLUDE = {
       status: true,
       warehouseId: true,
       dispatchedAt: true,
+      forwardedWithoutCount: true,
       receivedAt: true,
       hasDiscrepancies: true,
       discrepancyNotes: true,

@@ -157,7 +157,11 @@ describe('Inventory flow (e2e)', () => {
     expect(done.body.status).toBe('COMPLETED');
     // Recorded, not acted on.
     expect(done.body.hasDiscrepancies).toBe(true);
-    expect(done.body.discrepancyNotes).toContain('expected 10');
+    // Names the SKU and says the direction. Never the variant uuid —
+    // the seller reads this note on their consignment page and gets it
+    // in the variance email.
+    expect(done.body.discrepancyNotes).toContain('3 short of the 10 declared');
+    expect(done.body.discrepancyNotes).not.toMatch(/variant [0-9a-f]{8}-/);
 
     // Stock for what ACTUALLY arrived — not zero, and not the declared 10.
     const movements = await h.prisma.stockMovement.findMany({ where: { variantId } });

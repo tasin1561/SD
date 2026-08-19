@@ -127,6 +127,34 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
     }
   }
 
+  /**
+   * Send it on WITHOUT opening it. A sealed carton going straight to
+   * India can travel on the seller's declared quantities and be counted
+   * once, when it lands — counting it twice is hours the Dhaka bench may
+   * not have. Its own action rather than a fallback for an uncounted
+   * leg, because it is a decision somebody makes on purpose.
+   */
+  async function onForwardUncounted(): Promise<void> {
+    setError(null);
+    try {
+      const result = await dispatch.mutateAsync({
+        id,
+        body: {
+          withoutCounting: true,
+          ...(etaAt === '' ? {} : { etaAt: new Date(etaAt).toISOString() }),
+          ...(reference.trim() === '' ? {} : { reference: reference.trim() }),
+        },
+      });
+      setEtaAt('');
+      setReference('');
+      toast.success(
+        `Sent on unopened — ${result.unitsDispatched} declared unit(s) on ${result.legReceiptNumber}`,
+      );
+    } catch (e) {
+      setError(serverVerdict(e));
+    }
+  }
+
   async function onDispatch(): Promise<void> {
     setError(null);
     if (!bdLeg) return;
@@ -243,13 +271,17 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                 bdLeg === null
                   ? 'No intake leg — this should not happen; check the consignment was declared as VIA_BD.'
                   : bdLeg.status === 'COMPLETED'
-                    ? `Counted ${dt(bdLeg.receivedAt)} at ${bdLeg.warehouse.name}`
+                    ? bdLeg.forwardedWithoutCount
+                      ? `Handled at ${bdLeg.warehouse.name} and sent on unopened — India is the only count`
+                      : `Counted ${dt(bdLeg.receivedAt)} at ${bdLeg.warehouse.name}`
                     : `Waiting to be counted at ${bdLeg.warehouse.name}`
               }
             >
               {bdLeg !== null && (
                 <div>
-                  <LegLines leg={bdLeg} shortWord="short of declared" overWord="over declared" />
+                  {!bdLeg.forwardedWithoutCount && (
+                    <LegLines leg={bdLeg} shortWord="short of declared" overWord="over declared" />
+                  )}
                   {bdLeg.status !== 'COMPLETED' && (
                     <Link
                       href={`/warehouse/receive/${bdLeg.id}`}
@@ -382,11 +414,52 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                     </Button>
                   </div>
                 </div>
+              ) : !mayDispatch ? (
+                <p className="text-text-muted text-sm">
+                  You do not have permission to move stock between warehouses.
+                </p>
+              ) : bdLeg !== null && bdLeg.status !== 'COMPLETED' ? (
+                // The uncounted option lives HERE, where somebody is
+                // deciding what to do with a carton in front of them —
+                // not as a checkbox on the counted form, where it would
+                // be an easy misclick with no way back.
+                <div className="flex flex-col gap-3">
+                  <p className="text-text-muted text-sm">
+                    It has not been counted in Bangladesh. Count it first if you want a number from
+                    that stop — or send it on unopened, in which case it travels on the
+                    seller&apos;s declared quantities and India is the only count.
+                  </p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <FormField label="Expected arrival in India">
+                      <Input type="date" value={etaAt} onChange={(e) => setEtaAt(e.target.value)} />
+                    </FormField>
+                    <FormField label="Forwarder reference">
+                      <Input
+                        value={reference}
+                        onChange={(e) => setReference(e.target.value)}
+                        placeholder="Optional"
+                      />
+                    </FormField>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      href={`/warehouse/receive/${bdLeg.id}`}
+                      className="text-accent text-sm underline"
+                    >
+                      Count it first →
+                    </Link>
+                    <Button
+                      variant="secondary"
+                      onClick={() => void onForwardUncounted()}
+                      disabled={dispatch.isPending}
+                    >
+                      {dispatch.isPending ? 'Sending…' : 'Send on without counting'}
+                    </Button>
+                  </div>
+                </div>
               ) : (
                 <p className="text-text-muted text-sm">
-                  {bdLeg === null || bdLeg.status !== 'COMPLETED'
-                    ? 'Count the Bangladesh intake first — we can only forward what we know we have.'
-                    : 'You do not have permission to move stock between warehouses.'}
+                  There is no Bangladesh intake on this consignment.
                 </p>
               )}
             </Step>

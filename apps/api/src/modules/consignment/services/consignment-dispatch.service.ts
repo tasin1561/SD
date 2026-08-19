@@ -6,10 +6,12 @@ import {
   ConsignmentRoute,
   GoodsReceiptStatus,
   LabellingSite,
+  Prisma,
   StockMovementType,
   StockUnitStatus,
 } from '@skydrop/db';
 import { randomUUID } from 'node:crypto';
+import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { ConsignmentEventService } from '../../consignment-core/services/consignment-event.service';
 import { ConsignmentStatusService } from '../../consignment-core/services/consignment-status.service';
@@ -61,6 +63,7 @@ export class ConsignmentDispatchService {
   private readonly logger = new Logger(ConsignmentDispatchService.name);
 
   constructor(
+    private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
     private readonly consignments: ConsignmentService,
     private readonly events: ConsignmentEventService,
@@ -74,13 +77,157 @@ export class ConsignmentDispatchService {
     private readonly env: EnvService,
   ) {}
 
+  /**
+   * Forward the consignment from Bangladesh WITHOUT counting it.
+   *
+   * Nothing was ever booked into stock in Dhaka, so there is nothing to
+   * transfer: no movements, no batches, no TRANSIT bin. The India leg is
+   * created from the seller's DECLARED quantities and behaves exactly
+   * like a direct arrival — its lines carry no batch, which is what makes
+   * the arrival take the ordinary RECEIVING path and create stock rather
+   * than move it out of transit.
+   *
+   * The Bangladesh leg is closed and flagged. It is NOT completed with
+   * zeroes: a count of zero is a warehouse that opened the carton and
+   * found nothing, and rendering that here would invent a 300-unit
+   * shortfall out of a decision not to look.
+   */
+  private async forwardWithoutCounting(
+    staffId: string,
+    consignment: Awaited<ReturnType<ConsignmentService['requireById']>>,
+    bdLeg: Awaited<ReturnType<ConsignmentService['requireById']>>['receipts'][number],
+    input: { etaAt?: string | undefined; reference?: string | undefined },
+    ctx: ClientContext,
+  ): Promise<DispatchResult> {
+    if (bdLeg.status === GoodsReceiptStatus.COMPLETED) {
+      throw new ConflictException({
+        code: 'BD_LEG_ALREADY_COUNTED',
+        message:
+          `${consignment.consignmentNumber} has already been counted in Bangladesh. ` +
+          'Dispatch the counted quantities instead — the count is the better number.',
+      });
+    }
+    if (consignment.labellingSite === LabellingSite.BD) {
+      throw new ConflictException({
+        code: 'LABELLING_NEEDS_A_COUNT',
+        message:
+          `${consignment.consignmentNumber} is set to be labelled in Bangladesh, which cannot ` +
+          'happen without opening it. Count it there, or move the labelling station to India.',
+      });
+    }
+
+    const destWarehouseId = await this.warehouses.getDefaultWarehouseId();
+
+    const result = await this.prisma.client.$transaction(async (tx: Prisma.TransactionClient) => {
+      const legNumber = await this.numbering.nextShipmentNumber(tx);
+      const receiptNumber = `${consignment.consignmentNumber}-${legNumber.slice(-6)}`;
+      const legReceipt = await tx.goodsReceipt.create({
+        data: {
+          sellerId: consignment.sellerId,
+          warehouseId: destWarehouseId,
+          consignmentId: consignment.id,
+          leg: ConsignmentLeg.IN_FINAL,
+          receiptNumber,
+          status: GoodsReceiptStatus.ARRIVING,
+          dispatchedAt: new Date(),
+          dispatchedById: staffId,
+          ...(input.etaAt === undefined ? {} : { expectedArrivalAt: new Date(input.etaAt) }),
+          sellerReference: input.reference ?? consignment.sellerReference,
+        },
+        select: { id: true, receiptNumber: true },
+      });
+
+      let units = 0;
+      for (const line of bdLeg.lines) {
+        // batchId stays NULL — there is no Bangladesh batch to carry
+        // across, and its absence is exactly what routes the arrival
+        // through the ordinary RECEIVING path.
+        await tx.goodsReceiptLine.create({
+          data: {
+            receiptId: legReceipt.id,
+            variantId: line.variantId,
+            expectedQty: line.expectedQty,
+          },
+        });
+        units += line.expectedQty;
+      }
+
+      await tx.goodsReceipt.update({
+        where: { id: bdLeg.id },
+        data: {
+          status: GoodsReceiptStatus.COMPLETED,
+          forwardedWithoutCount: true,
+          receivedAt: new Date(),
+          receivedById: staffId,
+          discrepancyNotes:
+            'Handled in Bangladesh and sent on without opening. India is the first count.',
+        },
+      });
+
+      await this.events.append(
+        {
+          consignmentId: consignment.id,
+          type: ConsignmentEventType.DISPATCHED_TO_IN,
+          description: `Sent on to India without counting — ${units} declared unit(s)`,
+          data: {
+            legReceiptId: legReceipt.id,
+            legReceiptNumber: legReceipt.receiptNumber,
+            withoutCounting: true,
+            declaredUnits: units,
+            etaAt: input.etaAt ?? null,
+            reference: input.reference ?? null,
+          },
+          actorType: ActorType.STAFF,
+          actorId: staffId,
+        },
+        tx,
+      );
+
+      await this.audit.log(
+        {
+          actorType: ActorType.STAFF,
+          staffUserId: staffId,
+          sellerId: consignment.sellerId,
+          action: 'inventory.consignment.forwarded_without_count',
+          entityType: 'consignment',
+          entityId: consignment.id,
+          severity: 'MEDIUM',
+          metadata: {
+            consignmentNumber: consignment.consignmentNumber,
+            legReceiptId: legReceipt.id,
+            declaredUnits: units,
+            ipAddress: ctx.ipAddress ?? null,
+            userAgent: ctx.userAgent ?? null,
+          },
+        },
+        tx,
+      );
+
+      return {
+        legReceiptId: legReceipt.id,
+        legReceiptNumber: legReceipt.receiptNumber,
+        unitsDispatched: units,
+        lines: bdLeg.lines.map((l) => ({ variantId: l.variantId, quantity: l.expectedQty })),
+      };
+    });
+
+    await this.status.recompute(consignment.id);
+    this.logger.log(
+      { consignmentId: consignment.id, legReceiptId: result.legReceiptId },
+      'Consignment forwarded from Bangladesh without counting',
+    );
+    return result;
+  }
+
   async dispatchToIndia(
     staffId: string,
     consignmentId: string,
     input: {
-      lines: Array<{ lineId: string; quantity: number }>;
-      etaAt?: string;
-      reference?: string;
+      lines?: Array<{ lineId: string; quantity: number }> | undefined;
+      etaAt?: string | undefined;
+      reference?: string | undefined;
+      /** Send it on WITHOUT opening it — see `forwardWithoutCounting`. */
+      withoutCounting?: boolean | undefined;
     },
     ctx: ClientContext,
   ): Promise<DispatchResult> {
@@ -104,12 +251,29 @@ export class ConsignmentDispatchService {
         message: `${consignment.consignmentNumber} has no Bangladesh intake to dispatch from`,
       });
     }
+    // Sending it on WITHOUT opening it. A sealed carton going straight to
+    // India can travel on the seller's declared quantities and be counted
+    // once, when it lands — counting it twice is hours the Dhaka bench
+    // may not have. It is a deliberate choice, never a fallback for a
+    // count somebody forgot, which is why it takes its own flag rather
+    // than happening whenever the leg is uncounted.
+    if (input.withoutCounting === true) {
+      return this.forwardWithoutCounting(staffId, consignment, bdLeg, input, ctx);
+    }
+
     if (bdLeg.status !== GoodsReceiptStatus.COMPLETED) {
       throw new ConflictException({
         code: 'BD_LEG_NOT_COUNTED',
         message:
           `${consignment.consignmentNumber} has not been counted in Bangladesh yet. ` +
-          'Finish receiving it there first — we can only forward what we know we have.',
+          'Finish receiving it there, or send it on without counting — but say which.',
+      });
+    }
+    const requestedLines = input.lines ?? [];
+    if (requestedLines.length === 0) {
+      throw new BadRequestException({
+        code: 'DISPATCH_NOTHING_SELECTED',
+        message: 'Choose how many of each product are leaving on this shipment.',
       });
     }
     // Strict SKUs labelled in Bangladesh must actually be labelled before
@@ -126,7 +290,7 @@ export class ConsignmentDispatchService {
 
     const destWarehouseId = await this.warehouses.getDefaultWarehouseId();
     const byLineId = new Map(bdLeg.lines.map((l) => [l.id, l]));
-    for (const req of input.lines) {
+    for (const req of requestedLines) {
       if (!byLineId.has(req.lineId)) {
         throw new BadRequestException({
           code: 'DISPATCH_LINE_UNKNOWN',
@@ -159,7 +323,7 @@ export class ConsignmentDispatchService {
       let unitsDispatched = 0;
       const dispatchedLines: Array<{ variantId: string; quantity: number }> = [];
 
-      for (const req of input.lines) {
+      for (const req of requestedLines) {
         const source = byLineId.get(req.lineId);
         if (source === undefined || source.batchId === null) {
           throw new ConflictException({
@@ -354,7 +518,7 @@ export class ConsignmentDispatchService {
             consignmentNumber: consignment.consignmentNumber,
             legReceiptId: legReceipt.id,
             unitsDispatched,
-            lineCount: input.lines.length,
+            lineCount: requestedLines.length,
             ipAddress: ctx.ipAddress ?? null,
             userAgent: ctx.userAgent ?? null,
           },

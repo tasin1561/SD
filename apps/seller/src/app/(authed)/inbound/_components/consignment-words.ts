@@ -132,6 +132,9 @@ export function declaredUnits(leg: ConsignmentLegView): number {
  * announced 300 units a minute earlier was told 300 were missing.
  */
 export function countedUnits(leg: ConsignmentLegView): number | null {
+  // Sent on unopened: there is no count, and a zero here would read as
+  // a warehouse that looked and found nothing.
+  if (leg.forwardedWithoutCount) return null;
   if (leg.status !== 'COMPLETED') return null;
   return leg.lines.reduce((n, l) => n + (l.receivedQty ?? 0), 0);
 }
@@ -153,6 +156,46 @@ export function countedUnits(leg: ConsignmentLegView): number | null {
 export function countingInProgress(leg: ConsignmentLegView): boolean {
   if (leg.status !== 'ARRIVING') return false;
   return leg.lines.some((l) => (l.receivedQty ?? 0) > 0);
+}
+
+/**
+ * What is happening at this stop, in the seller's terms.
+ *
+ * A seller who has sent goods to another country wants to know four
+ * things and they are genuinely different: has it got there, is anyone
+ * looking at it, did anyone look at all, and what did they find. The
+ * status alone answers none of them — `ARRIVING` means "we have it", and
+ * nobody outside a warehouse reads it that way.
+ */
+export function legProgress(leg: ConsignmentLegView): { headline: string; detail: string } {
+  if (leg.forwardedWithoutCount) {
+    return {
+      headline: 'Received and sent straight on',
+      detail:
+        'We had it and forwarded it without opening it, so it travels on the quantities you ' +
+        'declared. It gets counted once, when it lands.',
+    };
+  }
+  if (leg.status === 'COMPLETED') {
+    return { headline: 'Counted', detail: 'This is what we found when we opened it.' };
+  }
+  if (leg.status === 'CANCELLED') {
+    return { headline: 'Cancelled', detail: 'This stop was called off.' };
+  }
+  if (leg.status === 'ARRIVING') {
+    return countingInProgress(leg)
+      ? {
+          headline: 'Being counted now',
+          detail:
+            'We have it and we are going through it. The numbers below are what we have reached ' +
+            'so far, not the final answer.',
+        }
+      : {
+          headline: 'Received — not opened yet',
+          detail: 'It has arrived and we have it. Counting has not started.',
+        };
+  }
+  return { headline: 'Not arrived yet', detail: 'We are expecting it.' };
 }
 
 /**
