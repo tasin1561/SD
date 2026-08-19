@@ -34,6 +34,8 @@ import type {
   UpdateGoodsReceiptDto,
 } from '../dto/goods-receipt.dto';
 import type { DiscrepancyResolutionMode } from '../dto/resolve-discrepancy.dto';
+import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
+import { deriveThumbnailKey } from '../../catalog-image/image-key';
 
 const EMAIL_COMPLETED = 'seller.goods_receipt_completed.email';
 const EMAIL_DISCREPANCY = 'seller.goods_receipt_discrepancy.email';
@@ -83,7 +85,11 @@ export type GoodsReceiptView = Prisma.GoodsReceiptGetPayload<{
  * question the list never asks).
  */
 export type GoodsReceiptDetailView = Omit<GoodsReceiptView, 'lines'> & {
-  lines: Array<GoodsReceiptView['lines'][number] & { inventoryMode: InventoryMode }>;
+  lines: Array<
+    GoodsReceiptView['lines'][number] & { primaryImageUrl: string | null } & {
+      inventoryMode: InventoryMode;
+    }
+  >;
 };
 
 const MAX_RECEIPT_NUMBER_ATTEMPTS = 5;
@@ -112,6 +118,9 @@ export class GoodsReceiptService {
     private readonly cache: StockCacheService,
     private readonly email: EmailQueue,
     private readonly env: EnvService,
+    // For the per-line thumbnail on the receiving screen; objects are
+    // private, so URLs are minted per request.
+    private readonly spaces: SpacesService,
   ) {}
 
   // ---------------- seller declaration ----------------
@@ -312,13 +321,50 @@ export class GoodsReceiptService {
   async getDetailForAdmin(id: string): Promise<GoodsReceiptDetailView> {
     const receipt = await this.getForAdmin(id);
     const modes = await this.lineModes(receipt);
+    const images = await this.lineImages(receipt);
     return {
       ...receipt,
       lines: receipt.lines.map((l) => ({
         ...l,
+        primaryImageUrl: images.get(l.variantId) ?? null,
         inventoryMode: modes.get(l.variantId) ?? InventoryMode.NORMAL,
       })),
     };
+  }
+
+  /**
+   * A picture per line, for the receiving screen.
+   *
+   * Somebody is standing at a bench with a carton open, matching what is
+   * in front of them against what was declared. A SKU string is a poor
+   * way to do that and a photograph is the obvious one.
+   *
+   * One query for the whole receipt, and FAIL-OPEN like `lineModes`: a
+   * storage hiccup must not stop a parcel being booked in, so a failure
+   * means no thumbnails rather than no screen.
+   */
+  private async lineImages(receipt: GoodsReceiptView): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    if (receipt.lines.length === 0) return out;
+    try {
+      const images = await this.prisma.client.productImage.findMany({
+        where: { variantId: { in: receipt.lines.map((l) => l.variantId) }, deletedAt: null },
+        orderBy: [{ isPrimary: 'desc' }, { displayOrder: 'asc' }, { createdAt: 'asc' }],
+        select: { variantId: true, spacesKey: true, thumbnailUrl: true },
+      });
+      for (const img of images) {
+        if (out.has(img.variantId)) continue;
+        const key =
+          (img.thumbnailUrl !== null ? deriveThumbnailKey(img.spacesKey) : null) ?? img.spacesKey;
+        out.set(img.variantId, await this.spaces.presignGetUrl(key));
+      }
+    } catch (err) {
+      this.logger.warn(
+        { receiptId: receipt.id, err: (err as Error).message },
+        'Goods-receipt line images unavailable; rendering without them (fail-open)',
+      );
+    }
+    return out;
   }
 
   /** FAIL-OPEN to NORMAL (UNIT-2): an unreadable mode must not stop a

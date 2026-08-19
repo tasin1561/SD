@@ -16,7 +16,8 @@ import {
   Tr,
   TablePaginator,
 } from '@skydrop/ui/components';
-import { useGoodsReceiptsList } from '@/lib/api-hooks';
+import { useGoodsReceiptsList, useSellersList, useWarehouses } from '@/lib/api-hooks';
+import { usePermission } from '@/lib/use-permission';
 import { useRouter } from 'next/navigation';
 
 const PAGE_SIZE = 20;
@@ -31,10 +32,25 @@ const STATUSES: ReadonlyArray<GoodsReceiptStatus> = [
 export function ReceiveIndex(): ReactElement {
   const router = useRouter();
   const [status, setStatus] = useState<GoodsReceiptStatus | ''>('PENDING');
+  const [sellerId, setSellerId] = useState('');
+  const [warehouseId, setWarehouseId] = useState('');
   const [page, setPage] = useState(1);
+
+  /**
+   * The seller list needs `sellers.view`; this page needs
+   * `warehouse.view`. They are different permissions, so a warehouse
+   * account may well have one and not the other — the hook self-gates
+   * and the control is hidden rather than shown empty, which would read
+   * as "no sellers exist".
+   */
+  const maySeeSellers = usePermission('sellers.view');
+  const sellers = useSellersList({ page: 1, pageSize: 100 });
+  const warehouses = useWarehouses();
 
   const list = useGoodsReceiptsList({
     ...(status ? { status: status as GoodsReceiptStatus } : {}),
+    ...(sellerId === '' ? {} : { sellerId }),
+    ...(warehouseId === '' ? {} : { warehouseId }),
     page,
     pageSize: PAGE_SIZE,
   });
@@ -54,6 +70,42 @@ export function ReceiveIndex(): ReactElement {
           {STATUSES.map((s) => (
             <option key={s} value={s}>
               {s}
+            </option>
+          ))}
+        </Select>
+
+        {maySeeSellers && (
+          <Select
+            value={sellerId}
+            aria-label="Filter by seller"
+            onChange={(e) => {
+              setSellerId(e.target.value);
+              setPage(1);
+            }}
+            className="max-w-[220px]"
+          >
+            <option value="">All sellers</option>
+            {(sellers.data?.items ?? []).map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.companyName}
+              </option>
+            ))}
+          </Select>
+        )}
+
+        <Select
+          value={warehouseId}
+          aria-label="Filter by warehouse"
+          onChange={(e) => {
+            setWarehouseId(e.target.value);
+            setPage(1);
+          }}
+          className="max-w-[200px]"
+        >
+          <option value="">All warehouses</option>
+          {(warehouses.data ?? []).map((w) => (
+            <option key={w.id} value={w.id}>
+              {w.code}
             </option>
           ))}
         </Select>

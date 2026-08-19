@@ -12,6 +12,7 @@ import type { BinPolicyService } from '../../src/modules/inventory-shared/bin-po
 import type { StockCacheService } from '../../src/modules/inventory-shared/stock-cache.service';
 import type { EmailQueue } from '../../src/modules/email/queue/email.queue';
 import type { EnvService } from '../../src/config/env.service';
+import type { SpacesService } from '../../src/infrastructure/spaces/spaces.service';
 
 const RECEIPT = {
   id: 'gr-1',
@@ -49,6 +50,9 @@ function makeSut(opts: { modes?: Record<string, InventoryMode>; modeThrows?: boo
     noop as StockCacheService,
     noop as EmailQueue,
     noop as EnvService,
+    // Only the per-line thumbnail uses this; a stub keeps the
+    // receiving tests about receiving.
+    { presignGetUrl: async () => 'https://example.test/img' } as unknown as SpacesService,
   );
   return { svc, resolveForVariants, findFirst };
 }

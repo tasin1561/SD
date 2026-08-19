@@ -18,6 +18,8 @@ export interface GoodsReceiptLineView {
   readonly manufacturedAt: string | null;
   readonly expiresAt: string | null;
   readonly putawayBinId: string | null;
+  /** First image of the variant, presigned. Null when it has none. */
+  readonly primaryImageUrl: string | null;
   readonly variant: {
     readonly skuCode: string;
     readonly variantLabel: string | null;
@@ -33,9 +35,17 @@ export interface GoodsReceiptView {
   readonly warehouseId: string;
   readonly expectedArrivalAt: string | null;
   readonly sellerReference: string | null;
-  readonly startedReceivingAt: string | null;
-  readonly completedAt: string | null;
-  readonly receivingStaffId: string | null;
+  /**
+   * The REAL columns. This carried `startedReceivingAt`, `completedAt`
+   * and `receivingStaffId` — three names the goods_receipts table has
+   * never had, so the detail page's "Started" and "Completed" fields
+   * read `undefined` and printed "—" on every receipt, finished ones
+   * included. `receivedAt` is stamped at completion and `receivedById`
+   * at start-receiving, which is the pair that actually exists.
+   */
+  readonly receivedAt: string | null;
+  readonly receivedById: string | null;
+  readonly hasDiscrepancies: boolean;
   readonly discrepancyNotes: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;

@@ -14,6 +14,7 @@ import type { StockAlertService } from '../../src/modules/inventory-shared/stock
 import type { StockCacheService } from '../../src/modules/inventory-shared/stock-cache.service';
 import type { EmailQueue } from '../../src/modules/email/queue/email.queue';
 import type { EnvService } from '../../src/config/env.service';
+import type { SpacesService } from '../../src/infrastructure/spaces/spaces.service';
 
 interface Line {
   id: string;
@@ -160,6 +161,9 @@ function makeSut(receipt: ReturnType<typeof makeReceipt>) {
     cache,
     email,
     env,
+    // Only the per-line thumbnail uses this; a stub keeps the
+    // receiving tests about receiving.
+    { presignGetUrl: async () => 'https://example.test/img' } as unknown as SpacesService,
   );
   return { svc, receipt, applyCalls, batchCreates, emails, mutation, alerts, cache };
 }

@@ -266,17 +266,29 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
 
       <Card>
         <CardBody>
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <Field label="Declared" value={new Date(r.createdAt).toLocaleString()} />
-            <Field
-              label="Started"
-              value={r.startedReceivingAt ? new Date(r.startedReceivingAt).toLocaleString() : '—'}
-            />
-            <Field
-              label="Completed"
-              value={r.completedAt ? new Date(r.completedAt).toLocaleString() : '—'}
-            />
+          {/* Everything the receipt carries. Somebody at a bench deciding
+              whether a carton matches its paperwork should not have to
+              open another screen for a field the API already sent. */}
+          <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
+            <Field label="Seller" value={r.seller.companyName} />
+            <Field label="Seller email" value={r.seller.email} />
             <Field label="Seller ref" value={r.sellerReference ?? '—'} />
+            <Field label="Status" value={r.status} />
+            <Field
+              label="Expected arrival"
+              value={r.expectedArrivalAt ? new Date(r.expectedArrivalAt).toLocaleDateString() : '—'}
+            />
+            <Field label="Warehouse" value={r.warehouseId} />
+            <Field label="Declared" value={new Date(r.createdAt).toLocaleString()} />
+            {/* `receivedAt` is stamped at completion; the receipt moving
+                to ARRIVING is what "started" means, and the staff id
+                recorded then is who took it on. */}
+            <Field label="Received by" value={r.receivedById ?? '—'} />
+            <Field
+              label="Received at"
+              value={r.receivedAt ? new Date(r.receivedAt).toLocaleString() : '—'}
+            />
+            <Field label="Discrepancy" value={r.hasDiscrepancies ? 'YES' : 'no'} />
             {r.discrepancyNotes && <Field label="Discrepancy notes" value={r.discrepancyNotes} />}
           </div>
         </CardBody>
@@ -296,16 +308,52 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
             }
           >
             <div className="flex items-baseline justify-between mb-2">
-              <div>
-                <div className="text-text-bright text-sm">
-                  {line.variant.product.name}
-                  {line.variant.variantLabel ? (
-                    <span className="text-text-muted"> · {line.variant.variantLabel}</span>
-                  ) : null}
-                </div>
-                <div className="text-text-faint text-xs mt-0.5 font-mono">
-                  {line.variant.skuCode} · expected {line.expectedQty}
-                  {line.inventoryMode === 'STRICT' ? ' · per-unit tracked' : ''}
+              <div className="flex items-start gap-3">
+                {/* The carton is open on the bench; a photograph settles
+                    "is this the right thing" faster than a SKU string. */}
+                {line.primaryImageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={line.primaryImageUrl}
+                    alt=""
+                    className="border-border h-12 w-12 shrink-0 rounded-[4px] border object-cover"
+                  />
+                ) : (
+                  <div
+                    className="border-border bg-surface-raised h-12 w-12 shrink-0 rounded-[4px] border"
+                    aria-hidden
+                  />
+                )}
+                <div>
+                  <div className="text-text-bright text-sm">
+                    {line.variant.product.name}
+                    {line.variant.variantLabel ? (
+                      <span className="text-text-muted"> · {line.variant.variantLabel}</span>
+                    ) : null}
+                  </div>
+                  <div className="text-text-faint text-xs mt-0.5 font-mono">
+                    {line.variant.skuCode} · expected {line.expectedQty}
+                    {line.inventoryMode === 'STRICT' ? ' · per-unit tracked' : ''}
+                  </div>
+                  <div className="text-text-muted mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
+                    <span>Unit cost {line.unitCostInr ?? '—'}</span>
+                    <span>Damaged {line.damagedQty ?? 0}</span>
+                    <span>
+                      Mfg{' '}
+                      {line.manufacturedAt
+                        ? new Date(line.manufacturedAt).toLocaleDateString()
+                        : '—'}
+                    </span>
+                    <span>
+                      Exp {line.expiresAt ? new Date(line.expiresAt).toLocaleDateString() : '—'}
+                    </span>
+                    {line.batchId !== null && (
+                      <span className="font-mono">batch {line.batchId}</span>
+                    )}
+                    {line.putawayBinId !== null && (
+                      <span className="font-mono">bin {line.putawayBinId}</span>
+                    )}
+                  </div>
                 </div>
               </div>
               {line.receivedQty !== null && (

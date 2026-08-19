@@ -13,6 +13,7 @@ import type { StockAlertService } from '../../src/modules/inventory-shared/stock
 import type { StockCacheService } from '../../src/modules/inventory-shared/stock-cache.service';
 import type { EmailQueue } from '../../src/modules/email/queue/email.queue';
 import type { EnvService } from '../../src/config/env.service';
+import type { SpacesService } from '../../src/infrastructure/spaces/spaces.service';
 
 const clone = <T>(o: T): T => JSON.parse(JSON.stringify(o)) as T;
 
@@ -91,6 +92,9 @@ function makeSut(opts: {
     noop as StockCacheService,
     noop as EmailQueue,
     { sellerAppUrl: 'http://a', supportEmail: 'h@x.io' } as unknown as EnvService,
+    // Only the per-line thumbnail uses this; a stub keeps the
+    // receiving tests about receiving.
+    { presignGetUrl: async () => 'https://example.test/img' } as unknown as SpacesService,
   );
   return { svc, created, client };
 }
