@@ -124,11 +124,21 @@ export function NewOrderForm(): ReactElement {
   const create = useCreateOrder();
   const feePrefilled = useRef(false);
   /**
-   * Until the seller types in the collectable field, it SHOWS the sum and
-   * follows every change to the four inputs. The moment they type, their
-   * number stands and the discount absorbs the difference.
+   * The collectable is ALWAYS the sum. There is no override state.
+   *
+   * It used to have one, and the four numbers stopped adding up: a
+   * seller typed 1,300, the discount absorbed it, and then they changed
+   * the discount by hand — the field kept showing 1,300 while its own
+   * arithmetic underneath said 1,260. A total that disagrees with the
+   * breakdown printed beneath it is worse than no breakdown.
+   *
+   * Typing into the field is a SHORTCUT for setting the discount, which
+   * is why it still behaves like an editable total. This holds the raw
+   * keystrokes only while the field has focus — without it, clearing the
+   * box would immediately refill with the computed value and nothing
+   * could be retyped.
    */
-  const [collectableTouched, setCollectableTouched] = useState(false);
+  const [collectableDraft, setCollectableDraft] = useState<string | null>(null);
   const submit = useSubmitOrder();
 
   // Load a large-enough product page for picker UX. Sellers with
@@ -289,9 +299,7 @@ export function NewOrderForm(): ReactElement {
       return DUPLICATE_LINES_ERROR;
     if (!/^[1-9]\d{5}$/.test(form.recipientPostalCode.trim()))
       return 'PIN must be 6 digits (first digit 1-9).';
-    const effectiveCollectable = collectableTouched
-      ? Number(form.codAmountInr)
-      : computedCollectable;
+    const effectiveCollectable = computedCollectable;
     if (form.paymentMode === 'COD' && !(effectiveCollectable > 0))
       return 'The collectable amount must be more than zero for a cash-on-delivery order.';
     if (shortLines.length > 0 && !acceptShort) {
@@ -322,9 +330,7 @@ export function NewOrderForm(): ReactElement {
       })),
       ...(form.paymentMode === 'COD'
         ? {
-            codAmountInr: collectableTouched
-              ? Number(form.codAmountInr)
-              : Number(computedCollectable.toFixed(2)),
+            codAmountInr: Number(computedCollectable.toFixed(2)),
           }
         : {}),
       // Kept whatever the payment mode — a prepaid order still has an
@@ -620,9 +626,14 @@ export function NewOrderForm(): ReactElement {
                       ? ` − ${num(form.advanceAmountInr).toLocaleString('en-IN')} advance`
                       : ''
                   }${
-                    num(form.discountInr) !== 0
+                    // A NEGATIVE discount is a surcharge, and reads as one.
+                    // "− -40 discount" is arithmetic nobody should have to
+                    // parse to check their own total.
+                    num(form.discountInr) > 0
                       ? ` − ${num(form.discountInr).toLocaleString('en-IN')} discount`
-                      : ''
+                      : num(form.discountInr) < 0
+                        ? ` + ${Math.abs(num(form.discountInr)).toLocaleString('en-IN')} surcharge`
+                        : ''
                   } = ${computedCollectable.toLocaleString('en-IN')}`
                 }
               >
@@ -635,25 +646,21 @@ export function NewOrderForm(): ReactElement {
                   // exactly like the three inputs feeding it.
                   className="border-accent text-base font-medium ring-1 ring-[var(--color-accent-tint)]"
                   value={
-                    collectableTouched
-                      ? form.codAmountInr
-                      : computedCollectable > 0
-                        ? String(computedCollectable)
-                        : ''
+                    collectableDraft ??
+                    (computedCollectable === 0 ? '' : String(computedCollectable))
                   }
+                  onBlur={() => setCollectableDraft(null)}
                   // Typing here moves the DISCOUNT, so the four numbers
                   // still add up. A collectable that silently disagrees
                   // with its own breakdown is worse than no breakdown.
                   onChange={(e) => {
                     const typed = e.target.value;
-                    setCollectableTouched(true);
+                    setCollectableDraft(typed);
+                    const target = Number(typed);
+                    if (typed.trim() === '' || !Number.isFinite(target)) return;
                     setForm((p) => {
-                      const target = Number(typed);
-                      if (typed.trim() === '' || !Number.isFinite(target)) {
-                        return { ...p, codAmountInr: typed };
-                      }
                       const before = itemsTotal + num(p.deliveryFeeInr) - num(p.advanceAmountInr);
-                      return { ...p, codAmountInr: typed, discountInr: String(before - target) };
+                      return { ...p, discountInr: String(before - target) };
                     });
                   }}
                   required
