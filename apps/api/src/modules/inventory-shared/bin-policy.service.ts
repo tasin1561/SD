@@ -33,14 +33,22 @@ export const NON_PICKABLE_BIN_TYPES: readonly BinType[] = [
   BinType.RTO_HOLD,
   BinType.DAMAGED,
   BinType.QUARANTINE,
+  // Goods in the air between two of our warehouses. On hand, really
+  // ours, and not sellable from anywhere until they land and are
+  // counted — see docs/consignment-two-leg.md.
+  BinType.TRANSIT,
 ];
 
-export const PICKABLE_BIN_TYPES: readonly BinType[] = [
-  BinType.STORAGE,
-  BinType.PICKING,
-  BinType.RECEIVING,
-  BinType.PACKING,
-];
+/**
+ * DERIVED, deliberately: the complement of the list above rather than a
+ * second hand-written list. Two hand-maintained lists that must stay
+ * complementary is the same drift hazard the comment above describes,
+ * one level up — adding a bin type to the enum and remembering only one
+ * of them would silently make it both pickable and not.
+ */
+export const PICKABLE_BIN_TYPES: readonly BinType[] = Object.values(BinType).filter(
+  (t) => !NON_PICKABLE_BIN_TYPES.includes(t),
+);
 
 @Injectable()
 export class BinPolicyService {

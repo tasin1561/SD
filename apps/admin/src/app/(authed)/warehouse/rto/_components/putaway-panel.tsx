@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type ReactElement } from 'react';
 import { Button, Card, CardBody, Select, useToast } from '@skydrop/ui/components';
 import { serverVerdict } from '@/lib/server-verdict';
+import { NON_PICKABLE_BIN_TYPES as NON_PICKABLE } from '@/lib/bin-policy';
 import {
   useRtoPutaway,
   useRtoPutawayPending,
@@ -38,10 +39,6 @@ import {
  * changes nothing. The server refuses them too — this only keeps the
  * operator from having to find that out.
  */
-
-/** Mirrors NON_PICKABLE_BIN_TYPES in inventory-shared/bin-policy. Kept
- *  as a display filter only; the server is the boundary. */
-const NON_PICKABLE = new Set(['RTO_HOLD', 'DAMAGED', 'QUARANTINE']);
 
 const REASON_LABEL: Record<string, string> = {
   PICKED_FROM: 'picked from here',

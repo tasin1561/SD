@@ -37,6 +37,7 @@ import {
 import { WarehouseFormPanel } from '../../_components/warehouse-form-panel';
 import { BinOpsPanel } from './bin-ops-panel';
 import { serverVerdict } from '@/lib/server-verdict';
+import { NON_PICKABLE_BIN_TYPES as NON_PICKABLE } from '@/lib/bin-policy';
 
 /**
  * Where things go.
@@ -75,8 +76,6 @@ const BIN_TYPES = [
   { value: 'DAMAGED', label: 'Damaged — not pickable' },
   { value: 'QUARANTINE', label: 'Quarantine — not pickable' },
 ] as const;
-
-const NON_PICKABLE = new Set(['RTO_HOLD', 'DAMAGED', 'QUARANTINE']);
 
 export function BinsIndex(): ReactElement {
   const toast = useToast();

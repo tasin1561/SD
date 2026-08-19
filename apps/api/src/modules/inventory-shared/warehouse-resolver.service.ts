@@ -10,6 +10,9 @@ export interface WarehouseRef {
   code: string;
   name: string;
   status: WarehouseStatus;
+  /** Can customer orders ship FROM here? False for an intake-only site
+   *  such as the Bangladesh warehouse. */
+  fulfilsOrders: boolean;
 }
 
 /**
@@ -70,11 +73,34 @@ export class WarehouseResolverService {
     return this.getDefaultWarehouseId();
   }
 
+  /**
+   * THE one reader of `warehouses.fulfils_orders`.
+   *
+   * Our Bangladesh warehouse takes stock in and never ships an order
+   * out — the goods there are on their way to India and are not
+   * sellable from Dhaka. Every surface that needs to know asks here and
+   * does not test `countryCode` itself; five call sites each deciding
+   * what "an Indian warehouse" means is exactly how they come to
+   * disagree (the same argument that put bin tracking behind
+   * BinPolicyService).
+   *
+   * Defaults TRUE on a missing row: a warehouse that cannot be read is
+   * somebody else's error to raise, and answering "this building does
+   * not fulfil orders" would quietly take a live site out of service.
+   */
+  async fulfilsOrders(id: string): Promise<boolean> {
+    const wh = await this.prisma.client.warehouse.findFirst({
+      where: { id, deletedAt: null },
+      select: { fulfilsOrders: true },
+    });
+    return wh?.fulfilsOrders ?? true;
+  }
+
   /** A non-soft-deleted warehouse, or 404. */
   async requireWarehouse(id: string): Promise<WarehouseRef> {
     const wh = await this.prisma.client.warehouse.findFirst({
       where: { id, deletedAt: null },
-      select: { id: true, code: true, name: true, status: true },
+      select: { id: true, code: true, name: true, status: true, fulfilsOrders: true },
     });
     if (!wh) {
       throw new NotFoundException({

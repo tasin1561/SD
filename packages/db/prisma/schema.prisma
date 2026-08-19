@@ -543,6 +543,12 @@ model Warehouse {
   status             WarehouseStatus @default(ACTIVE)
   countryCode        String          @default("IN") @map("country_code") @db.Char(2)
   timezone           String          @default("Asia/Kolkata")
+  /// Can customer orders ship FROM this building? Our Bangladesh intake
+  /// warehouse holds real stock that is on its way to India and is not
+  /// sellable from there. Read in exactly ONE place
+  /// (WarehouseResolverService) — five call sites each testing
+  /// `countryCode == 'IN'` is how they come to disagree.
+  fulfilsOrders      Boolean         @default(true) @map("fulfils_orders")
   /// Does this building track WHERE stock sits? Per-warehouse on purpose:
   /// a mature site can run binned while a newly-opened one does not.
   /// OFF means every putaway resolves to the warehouse's FLOOR bin —
@@ -3872,6 +3878,12 @@ enum BinType {
   RTO_HOLD   @map("rto_hold")
   DAMAGED    @map("damaged")
   QUARANTINE @map("quarantine")
+  /// Goods that have left one warehouse and not yet arrived at the next.
+  /// Held in the DESTINATION warehouse: for the days a consignment is in
+  /// the air it is in neither building, and booking it to either one
+  /// makes that building's cycle count find it missing. Non-pickable, so
+  /// availability and the pick allocator both refuse it.
+  TRANSIT    @map("transit")
 
   @@map("bin_type")
 }

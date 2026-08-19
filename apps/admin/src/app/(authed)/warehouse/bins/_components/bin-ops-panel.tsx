@@ -30,6 +30,7 @@ import {
 } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import { NON_PICKABLE_BIN_TYPES as NON_PICKABLE } from '@/lib/bin-policy';
 
 /**
  * Re-shelving.
@@ -63,11 +64,6 @@ import { usePermission } from '@/lib/use-permission';
  * was and is meant to be hard to reach; putting it beside a routine
  * re-shelving button is exactly how it gets clicked by accident.
  */
-
-/** BIN-2: stock in these can be counted but never picked, so moving into
- *  one silently removes it from what is sellable. Worth saying out loud —
- *  it is the difference between "moved" and "withdrawn from sale". */
-const NON_PICKABLE = new Set(['RTO_HOLD', 'DAMAGED', 'QUARANTINE']);
 
 interface DraftLine {
   readonly key: number;

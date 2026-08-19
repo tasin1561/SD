@@ -20,6 +20,9 @@ import { describe, expect, it } from 'vitest';
 const PANEL = join(__dirname, '../app/(authed)/warehouse/rto/_components/putaway-panel.tsx');
 const STATION = join(__dirname, '../app/(authed)/warehouse/rto/_components/rto-station.tsx');
 const HOOKS = join(__dirname, '../lib/api-hooks.ts');
+const UI_BIN_POLICY = join(__dirname, '../lib/bin-policy.ts');
+const BINS_INDEX = join(__dirname, '../app/(authed)/warehouse/bins/_components/bins-index.tsx');
+const BIN_OPS = join(__dirname, '../app/(authed)/warehouse/bins/_components/bin-ops-panel.tsx');
 const BIN_POLICY = join(
   __dirname,
   '../../../api/src/modules/inventory-shared/bin-policy.service.ts',
@@ -34,7 +37,7 @@ describe('a hold bin can never be offered as a destination', () => {
     expect(src).toMatch(/\.filter\(\(b\) => !NON_PICKABLE\.has\(b\.type\)\)/);
   });
 
-  it('its list matches the API definition exactly', () => {
+  it('its list matches the API definition exactly, and lives in ONE place', () => {
     // Two copies of this set exist because the client cannot import from
     // apps/api. Same idiom as the wallet CREDIT_DIRECTIONS cross-check:
     // read both and fail if they disagree, rather than trusting a
@@ -48,15 +51,26 @@ describe('a hold bin can never be offered as a destination', () => {
     const block = api.slice(from, api.indexOf(']', from));
     const apiTypes = Array.from(block.matchAll(/BinType\.([A-Z_]+)/g), (m) => m[1]).sort();
 
-    const ui = read(PANEL);
-    const uiSet = ui.slice(ui.indexOf('const NON_PICKABLE'));
+    const ui = read(UI_BIN_POLICY);
     const uiTypes = Array.from(
-      uiSet.slice(0, uiSet.indexOf(']')).matchAll(/'([A-Z_]+)'/g),
+      ui.slice(ui.indexOf('= new Set(')).matchAll(/'([A-Z_]+)'/g),
       (m) => m[1],
     ).sort();
 
     expect(apiTypes.length).toBeGreaterThan(0);
     expect(uiTypes).toEqual(apiTypes);
+  });
+
+  it('no screen re-declares its own copy', () => {
+    // There WERE three, and this test guarded exactly one of them. Adding
+    // TRANSIT is what showed the cost: the guarded copy failed while the
+    // other two silently went on offering a bin type the allocator now
+    // refuses. A local re-declaration is invisible to the cross-check
+    // above, so it has to be refused directly.
+    for (const p of [PANEL, BINS_INDEX, BIN_OPS]) {
+      expect(read(p)).not.toMatch(/const NON_PICKABLE\s*=\s*new Set\(/);
+      expect(read(p)).toContain("from '@/lib/bin-policy'");
+    }
   });
 });
 

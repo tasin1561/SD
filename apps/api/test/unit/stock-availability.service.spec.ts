@@ -57,7 +57,7 @@ describe('StockAvailabilityService.compute (INV-3 scalar)', () => {
       // INV-3 counts only what a picker could reach. This predicate must
       // stay identical to StockPickAllocationService's; both derive from
       // NON_PICKABLE_BIN_TYPES so they cannot drift apart again.
-      bin: { type: { notIn: ['RTO_HOLD', 'DAMAGED', 'QUARANTINE'] }, deletedAt: null },
+      bin: { type: { notIn: ['RTO_HOLD', 'DAMAGED', 'QUARANTINE', 'TRANSIT'] }, deletedAt: null },
     });
     expect(resvAgg.mock.calls[0]?.[0].where).toEqual({
       sellerId: 's1',
@@ -156,6 +156,30 @@ describe('INV-3 / pick allocation predicate agreement', () => {
       "import { NON_PICKABLE_BIN_TYPES as SHARED_NON_PICKABLE_BIN_TYPES } from '../../inventory-shared/bin-policy.service'",
     );
     expect(allocatorSource).not.toMatch(/const NON_PICKABLE_BIN_TYPES[^=]*=\s*\[\s*BinType\./);
-    expect([...NON_PICKABLE_BIN_TYPES]).toEqual(['RTO_HOLD', 'DAMAGED', 'QUARANTINE']);
+    expect([...NON_PICKABLE_BIN_TYPES]).toEqual([
+      'RTO_HOLD',
+      'DAMAGED',
+      'QUARANTINE',
+      // Goods in the air between two of our warehouses. On hand, ours,
+      // and sellable from nowhere until they land — the whole point of
+      // the two-leg consignment flow.
+      'TRANSIT',
+    ]);
+  });
+
+  it('the pickable list is the complement, derived rather than re-typed', async () => {
+    const { NON_PICKABLE_BIN_TYPES, PICKABLE_BIN_TYPES } =
+      await import('../../src/modules/inventory-shared/bin-policy.service');
+    const { BinType } = await import('@skydrop/db');
+
+    // Every bin type is in exactly one of the two lists. A hand-written
+    // second list drifts the moment somebody adds an enum value and
+    // remembers only one of them — which would make a bin type both
+    // pickable and not, and the disagreement would surface as a
+    // shortfall on the warehouse floor rather than as a failing test.
+    const all = Object.values(BinType).sort();
+    expect([...PICKABLE_BIN_TYPES, ...NON_PICKABLE_BIN_TYPES].sort()).toEqual(all);
+    expect(PICKABLE_BIN_TYPES.some((t) => NON_PICKABLE_BIN_TYPES.includes(t))).toBe(false);
+    expect(PICKABLE_BIN_TYPES).not.toContain('TRANSIT');
   });
 });
