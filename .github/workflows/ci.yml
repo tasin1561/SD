@@ -296,12 +296,37 @@ jobs:
       # suite so drift is reported as drift rather than as a test failure.
       - name: Schema matches migrations (no drift)
         working-directory: packages/db
+        # `migrate diff --from-migrations` REPLAYS every migration into the
+        # shadow database, and it does not create that database itself —
+        # a missing one is P1003, not a clean answer. The harness already
+        # proves psql is on the runner (test-database.ts talks to it over
+        # TCP), and POSTGRES_USER owns the cluster, so it may create one.
         run: |
+          # skydrop_test, not `postgres`: this image has surprised us once
+          # already by not provisioning a default `postgres` role, and
+          # POSTGRES_DB is the one database we know exists.
+          psql "postgresql://skydrop:skydrop@localhost:5432/skydrop_test" \
+            -v ON_ERROR_STOP=1 \
+            -c 'DROP DATABASE IF EXISTS skydrop_drift_check' \
+            -c 'CREATE DATABASE skydrop_drift_check'
+          set +e
           pnpm exec prisma migrate diff \
             --from-migrations ./prisma/migrations \
             --to-schema-datamodel ./prisma/schema.prisma \
             --shadow-database-url "postgresql://skydrop:skydrop@localhost:5432/skydrop_drift_check?schema=public" \
             --exit-code
+          code=$?
+          set -e
+          # 0 = agree, 2 = real drift, anything else = the check itself
+          # broke. Saying which costs five lines and saves reading a log
+          # to find out whether the schema is wrong or the gate is.
+          if [ "$code" = 2 ]; then
+            echo "::error::Schema and migrations DISAGREE. The diff above is the missing migration."
+            exit 1
+          elif [ "$code" != 0 ]; then
+            echo "::error::The drift check itself failed (exit $code) — this is not a schema problem."
+            exit 1
+          fi
 
       # TEST_DB_DOCKER_CONTAINER='' switches the harness from
       # `docker exec skydrop-postgres` (local dev) to a direct TCP psql
