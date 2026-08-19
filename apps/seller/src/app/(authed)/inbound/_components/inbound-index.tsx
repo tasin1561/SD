@@ -94,7 +94,13 @@ export function InboundIndex(): ReactElement {
         subtitle="Consignments on their way to the Indian warehouse — where each one is now, and what was counted when it got there."
         action={
           canManage ? (
-            <Button onClick={() => setAnnouncing(true)}>Announce a consignment</Button>
+            // PRIMARY, and the larger size. `Button` defaults to
+            // secondary, so the one action this page exists for was
+            // rendering as an outline in the corner — quieter than the
+            // filters below it.
+            <Button variant="primary" size="md" onClick={() => setAnnouncing(true)}>
+              Announce a consignment
+            </Button>
           ) : undefined
         }
       />
@@ -175,7 +181,9 @@ export function InboundIndex(): ReactElement {
             description="Announce a consignment before it ships so receiving knows to expect it — and so you can follow it."
             action={
               canManage ? (
-                <Button onClick={() => setAnnouncing(true)}>Announce a consignment</Button>
+                <Button variant="primary" size="md" onClick={() => setAnnouncing(true)}>
+                  Announce a consignment
+                </Button>
               ) : undefined
             }
           />
@@ -429,7 +437,7 @@ function AnnounceConsignment({
           read as a second opinion on the whole form and sat close enough
           to Announce to be mistaken for it.
         */}
-        <div className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr_auto]">
+        <div className="grid items-start gap-3 sm:grid-cols-[2fr_1fr_1fr_auto]">
           <FormField label="Item" htmlFor="cn-variant">
             <VariantPicker
               id="cn-variant"
@@ -461,21 +469,28 @@ function AnnounceConsignment({
             />
           </FormField>
           {/*
-            The empty label keeps the button on the same baseline as the
-            three inputs. `sr-only` text rather than nothing, so a screen
-            reader is not handed a bare control in a labelled row.
+            Inside a FormField with an INVISIBLE label, so it inherits the
+            same vertical rhythm as the three inputs and lands on their
+            baseline. Aligning the column with `justify-end` instead put
+            it at the bottom of the tallest column — and "Unit cost"
+            carries an "Optional" hint, so the button sat a line low.
+
+            Always PRIMARY, never dimmed to secondary while incomplete.
+            The disabled state already reads as not-yet (50% opacity, no
+            pointer); switching colour as well made it recede exactly when
+            somebody is looking for what to press next.
           */}
-          <div className="flex flex-col justify-end">
+          <FormField label={<span aria-hidden>&nbsp;</span>}>
             <span className="sr-only">Add this product to the consignment</span>
             <Button
-              variant={lineReady ? 'primary' : 'secondary'}
+              variant="primary"
               disabled={!lineReady}
               onClick={addLine}
-              className="h-10 whitespace-nowrap"
+              className="h-10 w-full whitespace-nowrap sm:w-auto sm:px-6"
             >
               Add
             </Button>
-          </div>
+          </FormField>
         </div>
 
         <label className="text-text-body mt-2 flex items-center gap-2 text-sm">
