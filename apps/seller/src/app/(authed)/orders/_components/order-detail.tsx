@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 
-import { ArrowLeft, Pencil, XCircle } from 'lucide-react';
+import { ArrowLeft, Pencil, PhoneCall, XCircle } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import type { OrderStatus } from '@skydrop/db';
 import { ApiError } from '@skydrop/api-client';
@@ -29,6 +29,7 @@ import {
 } from '@skydrop/ui/components';
 import { OrderTimeline } from './order-timeline';
 import { CancelOrderDialog } from './cancel-order-dialog';
+import { ReattemptRequestDialog } from './reattempt-request-dialog';
 import { OrderChargesSection } from './order-charges';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
@@ -76,6 +77,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
   const events = useOrderEvents(orderId);
   const identity = useSellerIdentity();
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [reattemptOpen, setReattemptOpen] = useState(false);
 
   return (
     <div>
@@ -116,6 +118,16 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                     </Button>
                   </Link>
                 )}
+                {/* The customer declined, so nothing calls this order
+                    again on its own. Asking is the only path — and it is
+                    an ASK: an admin decides. */}
+                {detail.data.status === 'REJECTED_BY_CUSTOMER' &&
+                  identity !== null &&
+                  can(identity, 'orders.create') && (
+                    <Button variant="secondary" size="sm" onClick={() => setReattemptOpen(true)}>
+                      <PhoneCall size={12} /> Ask us to call again
+                    </Button>
+                  )}
                 {CANCELLABLE.has(detail.data.status) &&
                   identity !== null &&
                   can(identity, 'orders.cancel') && (
@@ -296,6 +308,11 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             Updated {new Date(detail.data.updatedAt).toISOString().replace('T', ' ').slice(0, 16)}
           </div>
 
+          <ReattemptRequestDialog
+            orderId={orderId}
+            open={reattemptOpen}
+            onOpenChange={setReattemptOpen}
+          />
           <CancelOrderDialog
             open={cancelOpen}
             orderId={orderId}

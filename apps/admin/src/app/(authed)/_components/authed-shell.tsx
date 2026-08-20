@@ -37,6 +37,7 @@ import {
   Wallet,
   Warehouse,
   Webhook,
+  PhoneForwarded,
 } from 'lucide-react';
 import { canSeePath } from '@/lib/page-access';
 import { PermissionBoundary } from './permission-boundary';
@@ -94,6 +95,11 @@ export function AuthedShell({
         { href: '/orders', label: 'Orders', icon: <Package size={15} /> },
         { href: '/call-center', label: 'Call centre', icon: <Headphones size={15} /> },
         { href: '/call-center/queue', label: 'Call queue', icon: <PhoneCall size={15} /> },
+        {
+          href: '/reattempt-requests',
+          label: 'Re-attempt requests',
+          icon: <PhoneForwarded size={15} />,
+        },
         { href: '/call-center/agents', label: 'Call agents', icon: <Users size={15} /> },
         { href: '/warehouse', label: 'Warehouse', icon: <Warehouse size={15} /> },
         { href: '/tickets', label: 'Tickets', icon: <LifeBuoy size={15} /> },

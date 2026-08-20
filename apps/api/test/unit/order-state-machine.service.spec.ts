@@ -4,6 +4,12 @@ import {
   OrderStateMachineService,
 } from '../../src/modules/order/services/order-state-machine.service';
 
+// REJECTED_BY_CUSTOMER is NO LONGER terminal: it has exactly one edge
+// out, back to PENDING_CONFIRMATION, and the only thing that can take it
+// is an ADMIN-APPROVED seller request (OrderReattemptService). Nothing
+// reaches it unaided — the customer said no, and a seller who could
+// requeue that alone is a seller who can have somebody rung repeatedly
+// after they refused.
 const TERMINAL: OrderStatus[] = [
   OrderStatus.DELIVERED,
   OrderStatus.RTO_RESTOCKED,
@@ -12,7 +18,6 @@ const TERMINAL: OrderStatus[] = [
   OrderStatus.CANCELLED,
   OrderStatus.CANCELLED_BY_ADMIN,
   OrderStatus.REJECTED,
-  OrderStatus.REJECTED_BY_CUSTOMER,
   OrderStatus.REJECTED_NDR,
 ];
 
@@ -168,7 +173,20 @@ describe('OrderStateMachineService', () => {
       }
     });
 
-    it.each([OrderStatus.REJECTED_BY_CUSTOMER, OrderStatus.REJECTED_NDR])('%s is terminal', (s) => {
+    it('REJECTED_BY_CUSTOMER has exactly ONE way back, and only that one', () => {
+      // The edge exists so an approved seller request has somewhere to
+      // go. Anything else out of a refusal would be a way to ring a
+      // customer who declined without a human agreeing to it first.
+      const outbound = Object.values(OrderStatus).filter((to) =>
+        sm.isValidTransition(OrderStatus.REJECTED_BY_CUSTOMER, to),
+      );
+      expect(outbound).toEqual([OrderStatus.PENDING_CONFIRMATION]);
+      expect(
+        sm.requiredSideEffects(OrderStatus.REJECTED_BY_CUSTOMER, OrderStatus.PENDING_CONFIRMATION),
+      ).toEqual([]);
+    });
+
+    it.each([OrderStatus.REJECTED_NDR])('%s is terminal', (s) => {
       expect(sm.isTerminal(s)).toBe(true);
       expect(sm.getAllowedTransitions(s)).toEqual([]);
     });

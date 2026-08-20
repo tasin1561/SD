@@ -55,6 +55,7 @@ export {
   AssignmentMethod,
   QueueClosureReason,
   CallHoldOutcome,
+  ReattemptRequestStatus,
   CallOutcome,
   // Layer 7 — Shipments & Tracking
   ShipmentStatus,

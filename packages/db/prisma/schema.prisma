@@ -65,6 +65,7 @@ model StaffUser {
   bulkUploadsByStaff         BulkOrderUpload[]             @relation("BulkUploadUploadedByStaff")
   callQueueAssigned          CallQueueEntry[]              @relation("CallQueueAssignedAgent")
   callHolds                  CallAssignmentHold[]          @relation("CallHoldAgent")
+  reattemptRequestsDecided   OrderReattemptRequest[]       @relation("ReattemptDecidedBy")
   callAttempts               CallAttempt[]
   callSettings               AgentCallSettings?
   awbLabelsGenerated         AwbLabel[]                    @relation("AwbLabelGeneratedBy")
@@ -262,6 +263,7 @@ model Seller {
   pendingAccruals          PendingAccrual[]
   tickets                  Ticket[]
   earlyReservationReviews  EarlyReservationReview[]
+  reattemptRequests        OrderReattemptRequest[]
   stockUnits               StockUnit[]
   inboundFreightCharges    InboundFreightCharge[]
   invoices                 Invoice[]
@@ -2533,6 +2535,7 @@ model Order {
   // one is OPEN at a time (partial unique call_queue_entries_open_order_uq).
   callQueueEntries       CallQueueEntry[]
   callAttempts           CallAttempt[]
+  reattemptRequests      OrderReattemptRequest[]
   orderShipments         OrderShipment[]
   charges                OrderCharge[]
   notificationLogs       NotificationLog[]
@@ -5483,6 +5486,60 @@ model TicketEvent {
 /// reserved") stays true for every seller who has NOT opted into
 /// at-placement booking — overloading the order status would change
 /// semantics for them too.
+/// Where a seller's plea to ring a declined customer again has got to.
+enum ReattemptRequestStatus {
+  PENDING  @map("pending")
+  APPROVED @map("approved")
+  REJECTED @map("rejected")
+
+  @@map("reattempt_request_status")
+}
+
+/// A seller ASKING for one more call on an order the customer refused.
+///
+/// A request, deliberately not a right. `REJECTED_BY_CUSTOMER` is
+/// terminal because the customer said no, and a seller who could put
+/// that order back in the queue unaided is a seller who can have someone
+/// rung repeatedly after they refused — which in a COD market costs the
+/// customer, not just the parcel. So a human stands between "the seller
+/// wants another go" and "we ring somebody who declined".
+///
+/// Contrast the R5b `AWAITING_SELLER_DECISION` pause, where the seller
+/// DOES decide unaided: nobody there ever answered the phone, so there
+/// is no refusal to override.
+model OrderReattemptRequest {
+  id             String                 @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  orderId        String                 @map("order_id") @db.Uuid
+  sellerId       String                 @map("seller_id") @db.Uuid
+  /// Which team member asked. Null for a request raised by an API key.
+  requestedById  String?                @map("requested_by_id") @db.Uuid
+  /// The seller's case for calling again — required, because "why" is
+  /// the whole basis on which someone approves it.
+  reason         String                 @db.Text
+  status         ReattemptRequestStatus @default(PENDING)
+  decidedById    String?                @map("decided_by_id") @db.Uuid
+  decidedAt      DateTime?              @map("decided_at") @db.Timestamptz
+  decisionNote   String?                @map("decision_note") @db.Text
+  /// What the order was in when the request was raised. Snapshotted so a
+  /// later god-mode move cannot make an old decision unreadable.
+  orderStatusAtRequest String            @map("order_status_at_request")
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime               @updatedAt @map("updated_at") @db.Timestamptz
+
+  order       Order       @relation(fields: [orderId], references: [id])
+  seller      Seller      @relation(fields: [sellerId], references: [id])
+  requestedBy SellerUser? @relation("ReattemptRequestedBy", fields: [requestedById], references: [id])
+  decidedBy   StaffUser?  @relation("ReattemptDecidedBy", fields: [decidedById], references: [id])
+
+  @@index([sellerId, status])
+  @@index([status, createdAt])
+  @@index([orderId])
+  /// At most one UNDECIDED request per order — migration-managed, Prisma
+  /// cannot declare a filtered unique. Partial on purpose: a REJECTED
+  /// request must not stop a seller asking again on new grounds.
+  @@map("order_reattempt_requests")
+}
+
 model EarlyReservationReview {
   id               String                       @id @default(dbgenerated("uuidv7()")) @db.Uuid
   orderId          String                       @unique @map("order_id") @db.Uuid
@@ -5685,6 +5742,7 @@ model SellerUser {
   withdrawalRequestsMade          WithdrawalRequest[]
   ticketsOpened                   Ticket[]                       @relation("TicketOpenedBySellerUser")
   earlyReservationReviewsResolved EarlyReservationReview[]       @relation("EarlyReservationReviewResolvedBy")
+  reattemptRequestsRaised         OrderReattemptRequest[]        @relation("ReattemptRequestedBy")
   bankChangesRequested            SellerBankChangeRequest[]      @relation("BankChangeRequestedBy")
 
   @@index([sellerId])

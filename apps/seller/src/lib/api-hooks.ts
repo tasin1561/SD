@@ -84,6 +84,55 @@ export function useOrderDetail(id: string): UseQueryResult<OrderView> {
   });
 }
 
+export interface ReattemptRequestView {
+  readonly id: string;
+  readonly orderId: string;
+  readonly orderNumber: string | null;
+  readonly reason: string;
+  readonly status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  readonly decisionNote: string | null;
+  readonly decidedAt: string | null;
+  readonly createdAt: string;
+}
+
+/**
+ * Ask for one more call on a declined order. A request, not a right —
+ * an admin decides, and only then does the order return to the queue.
+ */
+export function useRequestReattempt(): UseMutationResult<
+  ReattemptRequestView,
+  Error,
+  { orderId: string; reason: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, reason }) =>
+      client.request<ReattemptRequestView>(`/api/seller/orders/${orderId}/reattempt-request`, {
+        method: 'POST',
+        body: { reason },
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['seller-orders'] });
+    },
+  });
+}
+
+export function useOrderReattemptRequests(
+  orderId: string,
+  opts?: { readonly enabled?: boolean },
+): UseQueryResult<readonly ReattemptRequestView[]> {
+  const client = useApiClient();
+  return useQuery({
+    enabled: opts?.enabled ?? true,
+    queryKey: ['seller-orders', 'reattempt', orderId],
+    queryFn: () =>
+      client.request<readonly ReattemptRequestView[]>(
+        `/api/seller/orders/${orderId}/reattempt-requests`,
+      ),
+  });
+}
+
 export function useOrderEvents(id: string): UseQueryResult<readonly SellerOrderEventView[]> {
   const client = useApiClient();
   return useQuery({

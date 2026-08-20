@@ -93,6 +93,59 @@ export function useCallQueueStats(): UseQueryResult<CallQueueStats> {
  * Timing only — it never touches the attempt count, because this is
  * about scheduling, not about pretending a call was or was not made.
  */
+export interface AdminReattemptRequest {
+  id: string;
+  orderId: string;
+  orderNumber: string | null;
+  sellerId: string;
+  reason: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  decisionNote: string | null;
+  decidedAt: string | null;
+  orderStatusAtRequest: string;
+  createdAt: string;
+}
+
+/** Sellers asking to ring a customer who declined. */
+export function useReattemptRequests(
+  status?: string,
+): UseQueryResult<readonly AdminReattemptRequest[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-reattempt-requests', status ?? 'ALL'],
+    queryFn: () =>
+      client.request<readonly AdminReattemptRequest[]>(
+        `/api/admin/reattempt-requests${status === undefined ? '' : `?status=${status}`}`,
+      ),
+  });
+}
+
+/**
+ * Approve (order returns to the call queue) or decline (it stays
+ * rejected). One hook for both, because they are the same decision with
+ * opposite answers and splitting them invites one to drift.
+ */
+export function useDecideReattempt(): UseMutationResult<
+  AdminReattemptRequest,
+  Error,
+  { requestId: string; approve: boolean; note: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requestId, approve, note }) =>
+      client.request<AdminReattemptRequest>(
+        `/api/admin/reattempt-requests/${requestId}/${approve ? 'approve' : 'reject'}`,
+        { method: 'POST', body: { note } },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-reattempt-requests'] });
+      void qc.invalidateQueries({ queryKey: ['admin-call-queue'] });
+      void qc.invalidateQueries({ queryKey: ['admin-orders'] });
+    },
+  });
+}
+
 export function useRescheduleQueueEntry(): UseMutationResult<
   { id: string; availableAt: string; status: string },
   Error,

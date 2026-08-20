@@ -28,6 +28,9 @@ import type { StaffMe } from '@skydrop/api-client';
 export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permission: string]> = [
   ['/orders', 'orders.view'],
   ['/call-center/queue', 'callcenter.queue.view'],
+  // Approving one is what returns a declined order to the queue, so it
+  // is gated on the same permission that manages the queue itself.
+  ['/reattempt-requests', 'callcenter.queue.manage'],
   // READING the agent list is `callcenter.queue.view`; only changing
   // somebody's settings is `callcenter.agents.manage`. Gating the page
   // on the write permission meant a role that could manage agents but

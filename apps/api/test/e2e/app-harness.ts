@@ -368,6 +368,11 @@ export async function resetOrderState(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(
     'TRUNCATE TABLE ' +
       [
+        // FKs orders AND sellers with RESTRICT — named explicitly rather
+        // than left to TRUNCATE ... CASCADE (MUST #12), because relying
+        // on a cascade is how a table survives a reset the day somebody
+        // changes the FK.
+        'order_reattempt_requests',
         'order_events',
         'order_recipient_address_cache',
         'order_items',

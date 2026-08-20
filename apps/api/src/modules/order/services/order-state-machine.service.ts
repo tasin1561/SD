@@ -134,6 +134,18 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
     ],
   ],
 
+  // A declined order can be re-opened, but ONLY through an approved
+  // seller request (OrderReattemptRequestService). The edge exists so
+  // the approval has somewhere to go; nothing else in the system uses
+  // it, and no seller-facing path reaches it unaided — the customer
+  // said no, and a seller who could requeue that alone is a seller who
+  // can have somebody rung repeatedly after they refused.
+  //
+  // Empty side-effects: entry to PENDING_CONFIRMATION re-enqueues for
+  // calling through the existing CC-6 post-commit hook, and nothing was
+  // reserved to release (ORD-10 — reservation is LATE).
+  [OrderStatus.REJECTED_BY_CUSTOMER, [{ to: OrderStatus.PENDING_CONFIRMATION, sideEffects: [] }]],
+
   // R5b — the seller's answer resolves the pause. REQUEST_MORE_ATTEMPTS
   // goes back to PENDING_CONFIRMATION, which re-enqueues the order for
   // calling through the existing CC-6 post-commit hook (no new wiring).
