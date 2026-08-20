@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { CALL_QUEUE_VIEW_OPEN } from '../dto/admin-call-queue.dto';
 import { ActorType, CallQueueStatus, Prisma, QueueClosureReason } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -66,7 +67,7 @@ export class AdminCallQueueService {
   ) {}
 
   async listQueue(filters: {
-    status?: CallQueueStatus;
+    status?: CallQueueStatus | typeof CALL_QUEUE_VIEW_OPEN;
     sellerId?: string;
     agentId?: string;
     page: number;
@@ -78,7 +79,13 @@ export class AdminCallQueueService {
     pageSize: number;
   }> {
     const where: Prisma.CallQueueEntryWhereInput = {};
-    if (filters.status) where.status = filters.status;
+    // OPEN is the two live statuses together — see the DTO for why it is
+    // not a CallQueueStatus.
+    if (filters.status === CALL_QUEUE_VIEW_OPEN) {
+      where.status = { in: OPEN_STATUSES };
+    } else if (filters.status) {
+      where.status = filters.status;
+    }
     if (filters.agentId) where.assignedAgentId = filters.agentId;
     if (filters.sellerId) where.order = { sellerId: filters.sellerId };
 

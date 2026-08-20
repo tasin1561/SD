@@ -7,14 +7,21 @@ import type { AuditLogService } from '../../src/modules/auth-common/services/aud
 
 type AnyArgs = Record<string, unknown>;
 
+/** Mirrors agent_call_settings.maxActiveCalls @default(1). */
+const DEFAULT_MAX_ACTIVE_IN_TEST = 1;
+
 function makeService(
   opts: {
     activeCount?: number;
     maxActive?: number | null; // null → no settings row
+    /** Whether the agent is on the roster. Default true. */
+    available?: boolean;
     picked?: { id: string; orderId: string } | null;
     order?: AnyArgs | null;
     /** Rows the seller lookup returns (the agent's "ordered from" line). */
     sellers?: AnyArgs[];
+    /** This order's logged calls, newest first. */
+    priorAttempts?: AnyArgs[];
     currentRows?: AnyArgs[];
     releaseEntry?: AnyArgs | null; // findUnique for release(); undefined → default ASSIGNED owned
     releaseUpdateCount?: number;
@@ -24,10 +31,16 @@ function makeService(
   } = {},
 ) {
   const count = jest.fn<Promise<number>, [AnyArgs]>(async () => opts.activeCount ?? 0);
+  // A settings row now carries availability too. Default TRUE here so
+  // these tests stay about FIFO and capacity; `available: false` and
+  // `maxActive: null` (no row at all) exercise the roster guard.
   const agentSettingsFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
-    opts.maxActive === null || opts.maxActive === undefined
+    opts.maxActive === null
       ? null
-      : { maxActiveCalls: opts.maxActive },
+      : {
+          maxActiveCalls: opts.maxActive ?? DEFAULT_MAX_ACTIVE_IN_TEST,
+          isAvailable: opts.available ?? true,
+        },
   );
   let lockClaimed = false;
   const queryRawUnsafe = jest.fn<Promise<Array<{ id: string }>>, [string]>(async () => {
@@ -71,6 +84,9 @@ function makeService(
     callQueueEntry: { count, findMany, findUnique, updateMany },
     agentCallSettings: { findUnique: agentSettingsFindUnique },
     seller: { findMany: sellerFindMany },
+    // This order's previous calls — the context an agent opens with.
+    // Empty by default; a test that cares supplies rows.
+    callAttempt: { findMany: jest.fn(async () => opts.priorAttempts ?? []) },
   } as {
     callQueueEntry: {
       count: typeof count;
@@ -80,6 +96,7 @@ function makeService(
     };
     agentCallSettings: { findUnique: typeof agentSettingsFindUnique };
     seller: { findMany: typeof sellerFindMany };
+    callAttempt: { findMany: jest.Mock };
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
   };
   client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient);
@@ -158,12 +175,37 @@ describe('CallAssignmentService.pullNext', () => {
     expect(r!.order).toMatchObject({ orderId: 'o1' });
   });
 
-  it('throws 409 AGENT_AT_CAPACITY at the cap (default 1, no settings)', async () => {
-    const { svc, queryRawUnsafe } = makeService({ activeCount: 1, maxActive: null });
+  it('throws 409 AGENT_AT_CAPACITY at the cap (default 1)', async () => {
+    const { svc, queryRawUnsafe } = makeService({ activeCount: 1 });
     await expect(svc.pullNext('agent-1')).rejects.toMatchObject({
       response: { code: 'AGENT_AT_CAPACITY' },
     });
     expect(queryRawUnsafe).not.toHaveBeenCalled(); // cap checked before locking
+  });
+
+  it('refuses an agent who is not taking calls — the SERVER decides', async () => {
+    // "Stop taking calls" used to be cosmetic: the station gated its own
+    // auto-advance on the flag, but this endpoint handed a customer's
+    // order to anyone who asked — including an agent the presence sweep
+    // had just stood down for being absent, which is the exact case the
+    // sweep exists to stop (FE-2: the server is the boundary).
+    const { svc, queryRawUnsafe } = makeService({ available: false });
+    await expect(svc.pullNext('agent-1')).rejects.toMatchObject({
+      response: { code: 'AGENT_NOT_AVAILABLE' },
+    });
+    expect(queryRawUnsafe).not.toHaveBeenCalled();
+  });
+
+  it('fails CLOSED for an agent with no settings row at all', async () => {
+    // No row means someone who has never opened the station. isAvailable
+    // defaults to FALSE in the column for a reason — being logged in is
+    // not being at the desk — so "no row" must agree with the default
+    // rather than become a way to take work without claiming presence.
+    // Nobody is locked out: "Start taking calls" upserts the row.
+    const { svc } = makeService({ maxActive: null });
+    await expect(svc.pullNext('agent-1')).rejects.toMatchObject({
+      response: { code: 'AGENT_NOT_AVAILABLE' },
+    });
   });
 
   it('honors a raised per-agent cap (maxActiveCalls=3)', async () => {

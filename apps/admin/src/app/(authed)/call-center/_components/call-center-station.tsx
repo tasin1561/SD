@@ -396,6 +396,10 @@ export function CallCenterStation(): ReactElement {
               seller={assignment.seller}
               itemDisplay={assignment.itemDisplay}
             />
+            {/* Above the outcome form on purpose: the agent needs the
+                last conversation BEFORE they dial, not after they have
+                opened with the wrong sentence. */}
+            <PriorAttempts attempts={assignment.priorAttempts} />
 
             <div className="grid grid-cols-1 gap-3 mt-4">
               <FormField label="Outcome" required>
@@ -582,6 +586,70 @@ function RecipientPanel({
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * What happened the last times this order was called.
+ *
+ * Distinct from "My calls" at the bottom of the page, which is the
+ * AGENT's own log across every order — useful for reviewing your shift,
+ * useless for the customer in front of you. This is the customer's
+ * thread: attempt two should open where attempt one left off.
+ */
+function PriorAttempts({
+  attempts,
+}: {
+  readonly attempts: PulledAssignment['priorAttempts'];
+}): ReactElement | null {
+  // A first call has no history, and an empty box saying so is noise on
+  // the screen an agent uses most.
+  if (attempts.length === 0) return null;
+
+  return (
+    <div className="border-border rounded-[6px] border p-3">
+      <div className="text-text-faint mb-2 text-[11px] tracking-wide uppercase">
+        Previous calls on this order ({attempts.length})
+      </div>
+      <ul className="space-y-2">
+        {attempts.map((a) => (
+          <li key={a.attemptId} className="border-border/60 border-l-2 pl-3">
+            <div className="flex flex-wrap items-baseline gap-x-2 text-sm">
+              <span className="text-text-bright font-medium">
+                {OUTCOME_OPTIONS.find((o) => o.value === a.outcome)?.label ?? a.outcome}
+              </span>
+              <span className="text-text-faint text-xs">
+                {new Date(a.startedAt).toLocaleString('en-IN', {
+                  day: '2-digit',
+                  month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
+              {a.agentEmail !== null && (
+                <span className="text-text-faint text-xs">· {a.agentEmail}</span>
+              )}
+            </div>
+            {a.rescheduledFor !== null && (
+              // The promise the customer was given. Breaking it is worse
+              // than never having made it.
+              <div className="text-pending mt-0.5 text-xs">
+                Agreed callback:{' '}
+                {new Date(a.rescheduledFor).toLocaleString('en-IN', {
+                  day: '2-digit',
+                  month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </div>
+            )}
+            {a.notes !== null && a.notes !== '' && (
+              <p className="text-text-body mt-0.5 text-sm leading-snug">{a.notes}</p>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, CallHoldOutcome, CallQueueStatus } from '@skydrop/db';
+import { ActorType, CallHoldOutcome, CallOutcome, CallQueueStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CallHoldService } from './call-hold.service';
@@ -52,6 +52,27 @@ export interface PulledAssignment {
    * does not answer that.
    */
   itemDisplay: Record<string, { thumbnailUrl: string | null; description: string | null }>;
+  /**
+   * What happened the LAST times this order was called, newest first.
+   *
+   * An agent on attempt two opening with "hello, calling about your
+   * order" — when attempt one already agreed to ring back after six —
+   * is how a customer decides we are not paying attention. The notes an
+   * agent typed are the whole point: the outcome enum says NO_ANSWER,
+   * the note says "husband answered, said she is at work until 7".
+   *
+   * Per ORDER, not per queue entry: a re-queue creates a new entry
+   * (locked decision #2), so an entry-scoped history would be empty on
+   * exactly the attempt that needs it most.
+   */
+  priorAttempts: ReadonlyArray<{
+    attemptId: string;
+    outcome: CallOutcome;
+    notes: string | null;
+    startedAt: Date;
+    agentEmail: string | null;
+    rescheduledFor: Date | null;
+  }>;
 }
 
 /**
@@ -88,12 +109,28 @@ export class CallAssignmentService {
    *  entry is currently pickable (QUEUE_EMPTY). Throws 409
    *  AGENT_AT_CAPACITY when the agent is already at their cap. */
   async pullNext(agentId: string, _ctx?: ClientContext): Promise<PulledAssignment | null> {
-    const [activeCount, maxActive] = await Promise.all([
+    const [activeCount, roster] = await Promise.all([
       this.prisma.client.callQueueEntry.count({
         where: { assignedAgentId: agentId, status: CallQueueStatus.ASSIGNED },
       }),
-      this.effectiveMaxActive(agentId),
+      this.rosterState(agentId),
     ]);
+
+    // The SERVER decides who may take work (FE-2). "Stop taking calls"
+    // used to be cosmetic: the station gated its own auto-advance on the
+    // flag, but the endpoint handed a customer's order to anyone who
+    // asked — including an agent the presence sweep had just stood down
+    // for being absent, which is precisely the case the sweep exists to
+    // stop. Checked BEFORE the cap so an unavailable agent gets the
+    // reason that applies to them.
+    if (!roster.available) {
+      throw new ConflictException({
+        code: 'AGENT_NOT_AVAILABLE',
+        message: 'You are marked as not taking calls. Start taking calls to be handed work.',
+      });
+    }
+
+    const maxActive = roster.maxActive;
     if (activeCount >= maxActive) {
       throw new ConflictException({
         code: 'AGENT_AT_CAPACITY',
@@ -175,7 +212,51 @@ export class CallAssignmentService {
       order,
       seller: order ? await this.loadSeller(order.sellerId) : null,
       itemDisplay: await this.loadItemDisplay(order),
+      priorAttempts: await this.loadPriorAttempts(picked.orderId),
     };
+  }
+
+  /** This order's logged calls, newest first. */
+  private async loadPriorAttempts(orderId: string): Promise<PulledAssignment['priorAttempts']> {
+    return (await this.loadPriorAttemptsForOrders([orderId])).get(orderId) ?? [];
+  }
+
+  /** Batch form — one query however many assignments are in flight. */
+  private async loadPriorAttemptsForOrders(
+    orderIds: string[],
+  ): Promise<ReadonlyMap<string, PulledAssignment['priorAttempts']>> {
+    const ids = [...new Set(orderIds)];
+    const out = new Map<string, PulledAssignment['priorAttempts']>();
+    if (ids.length === 0) return out;
+    const rows = await this.prisma.client.callAttempt.findMany({
+      where: { orderId: { in: ids } },
+      orderBy: { startedAt: 'desc' },
+      select: {
+        id: true,
+        orderId: true,
+        outcome: true,
+        outcomeNotes: true,
+        startedAt: true,
+        rescheduledFor: true,
+        // Staff carry no name; emailDisplay IS the human identity.
+        agent: { select: { emailDisplay: true } },
+      },
+    });
+    for (const r of rows) {
+      const list = out.get(r.orderId) ?? [];
+      out.set(r.orderId, [
+        ...list,
+        {
+          attemptId: r.id,
+          outcome: r.outcome,
+          notes: r.outcomeNotes,
+          startedAt: r.startedAt,
+          agentEmail: r.agent?.emailDisplay ?? null,
+          rescheduledFor: r.rescheduledFor,
+        },
+      ]);
+    }
+    return out;
   }
 
   /**
@@ -262,6 +343,7 @@ export class CallAssignmentService {
       }
       displayByOrder.set(o.orderId, forOrder);
     }
+    const attemptsByOrder = await this.loadPriorAttemptsForOrders(rows.map((r) => r.orderId));
     return rows.map((r) => {
       const order = orders.get(r.orderId) ?? null;
       return {
@@ -272,6 +354,7 @@ export class CallAssignmentService {
         order,
         seller: order ? (sellers.get(order.sellerId) ?? null) : null,
         itemDisplay: displayByOrder.get(r.orderId) ?? {},
+        priorAttempts: attemptsByOrder.get(r.orderId) ?? [],
       };
     });
   }
@@ -346,11 +429,25 @@ export class CallAssignmentService {
 
   /** agent_call_settings.maxActiveCalls (locked decision 10a cap),
    *  defaulting to 1 when the agent has no settings row. */
-  private async effectiveMaxActive(agentId: string): Promise<number> {
+  /**
+   * The agent's cap AND whether they are on the roster at all.
+   *
+   * Read together because pullNext needs both and they live in one row.
+   *
+   * A MISSING settings row means an agent who has never opened the
+   * station. `isAvailable` defaults to FALSE for a reason — being logged
+   * in is not being at the desk — so the absent-row case must agree with
+   * the column default rather than fall open, or "no row" would become a
+   * way to take work without ever claiming to be present.
+   */
+  private async rosterState(agentId: string): Promise<{ maxActive: number; available: boolean }> {
     const settings = await this.prisma.client.agentCallSettings.findUnique({
       where: { agentId },
-      select: { maxActiveCalls: true },
+      select: { maxActiveCalls: true, isAvailable: true },
     });
-    return settings?.maxActiveCalls ?? DEFAULT_MAX_ACTIVE;
+    return {
+      maxActive: settings?.maxActiveCalls ?? DEFAULT_MAX_ACTIVE,
+      available: settings?.isAvailable ?? false,
+    };
   }
 }

@@ -74,6 +74,22 @@ export interface PulledAssignment {
     string,
     { readonly thumbnailUrl: string | null; readonly description: string | null }
   >;
+  /**
+   * What happened the last times THIS ORDER was called, newest first.
+   *
+   * The notes are the point: the outcome enum says NO_ANSWER, the note
+   * says "husband answered, she is at work until 7". An agent opening
+   * attempt two as though it were attempt one is how a customer decides
+   * we are not paying attention.
+   */
+  readonly priorAttempts: ReadonlyArray<{
+    readonly attemptId: string;
+    readonly outcome: CallOutcome;
+    readonly notes: string | null;
+    readonly startedAt: string;
+    readonly agentEmail: string | null;
+    readonly rescheduledFor: string | null;
+  }>;
 }
 
 export interface RecordAttemptRequest {

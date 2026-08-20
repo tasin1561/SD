@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { CallQueueStatus } from '@skydrop/db';
 import {
-  IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -13,11 +13,28 @@ import {
   MinLength,
 } from 'class-validator';
 
+/**
+ * `OPEN` is not a CallQueueStatus — it is "waiting or assigned, not yet
+ * resolved", the two statuses together.
+ *
+ * It exists because the page's own subtitle is "what is waiting to be
+ * confirmed, and who is holding it", and a COMPLETED row is neither. An
+ * order that has been retried shows one row per attempt cycle (locked
+ * decision #2), so listing every status by default put the history
+ * beside the live entry and made a working retry look like a duplicate.
+ */
+export const CALL_QUEUE_VIEW_OPEN = 'OPEN' as const;
+
 export class ListCallQueueQueryDto {
-  @ApiProperty({ required: false, enum: CallQueueStatus })
+  @ApiProperty({
+    required: false,
+    enum: [...Object.values(CallQueueStatus), CALL_QUEUE_VIEW_OPEN],
+    description:
+      'A single status, or OPEN for pending+assigned together. Omitted returns every status, history included.',
+  })
   @IsOptional()
-  @IsEnum(CallQueueStatus)
-  status?: CallQueueStatus;
+  @IsIn([...Object.values(CallQueueStatus), CALL_QUEUE_VIEW_OPEN])
+  status?: CallQueueStatus | typeof CALL_QUEUE_VIEW_OPEN;
 
   @ApiProperty({ required: false, description: 'Filter by the order’s seller' })
   @IsOptional()

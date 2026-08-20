@@ -57,6 +57,17 @@ describe('Call center flow (e2e)', () => {
       .expect(200);
     staffAuth = { Authorization: `Bearer ${sLogin.body.accessToken}` };
 
+    // Claim presence. `agent_call_settings.is_available` defaults to
+    // FALSE — being logged in is not being at the desk — and pullNext
+    // now enforces it server-side rather than trusting the station's own
+    // gate (FE-2). Done through the real endpoint rather than a direct
+    // write, so the "Start taking calls" path is exercised too.
+    await request(h.baseUrl)
+      .patch('/agent/settings')
+      .set(staffAuth)
+      .send({ isAvailable: true })
+      .expect(200);
+
     const email = `cc-seller-${Date.now()}@brand.com`;
     const invite = await request(h.baseUrl)
       .post('/admin/seller-invitations')

@@ -55,7 +55,13 @@ const PAGE_SIZE = 25;
  */
 export function QueueIndex(): ReactElement {
   const router = useRouter();
-  const [status, setStatus] = useState('');
+  // Defaults to OPEN, matching this page's own subtitle: "what is
+  // waiting to be confirmed, and who is holding it". A COMPLETED row is
+  // neither — it is the record of a finished attempt. An order that has
+  // been retried has one row per attempt cycle (locked decision #2), so
+  // listing every status by default put the history beside the live
+  // entry and made a working retry look like a duplicate.
+  const [status, setStatus] = useState('OPEN');
   const [agentId, setAgentId] = useState('');
   const [page, setPage] = useState(1);
   const [reassigning, setReassigning] = useState<CallQueueRow | null>(null);
@@ -114,7 +120,8 @@ export function QueueIndex(): ReactElement {
             value={status}
             onChange={(e) => change(() => setStatus(e.target.value))}
           >
-            <option value="">All statuses</option>
+            <option value="OPEN">Open — waiting or assigned</option>
+            <option value="">All, including finished attempts</option>
             {['PENDING', 'ASSIGNED', 'COMPLETED', 'EXPIRED'].map((s) => (
               <option key={s} value={s}>
                 {s.toLowerCase()}
