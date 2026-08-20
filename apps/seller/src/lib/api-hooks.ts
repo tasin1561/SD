@@ -113,6 +113,9 @@ export function useRequestReattempt(): UseMutationResult<
         body: { reason },
       }),
     onSuccess: () => {
+      // Covers both the detail and the ['seller-orders','reattempt',id]
+      // list below, which is what makes the banner appear without a
+      // reload.
       void qc.invalidateQueries({ queryKey: ['seller-orders'] });
     },
   });

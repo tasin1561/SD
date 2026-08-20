@@ -1,7 +1,15 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { Button, ErrorNote, FormField, Modal, ModalFooter, Textarea } from '@skydrop/ui/components';
+import {
+  Button,
+  ErrorNote,
+  FormField,
+  Modal,
+  ModalFooter,
+  Textarea,
+  useToast,
+} from '@skydrop/ui/components';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useRequestReattempt } from '@/lib/api-hooks';
 
@@ -25,6 +33,7 @@ export function ReattemptRequestDialog({
   readonly onOpenChange: (next: boolean) => void;
 }): ReactElement {
   const request = useRequestReattempt();
+  const toast = useToast();
   const [reason, setReason] = useState('');
   const typed = reason.trim().length;
   const remaining = Math.max(0, MIN_REASON - typed);
@@ -82,7 +91,20 @@ export function ReattemptRequestDialog({
         <Button
           size="md"
           disabled={remaining > 0 || request.isPending}
-          onClick={() => request.mutate({ orderId, reason: reason.trim() }, { onSuccess: close })}
+          onClick={() =>
+            request.mutate(
+              { orderId, reason: reason.trim() },
+              {
+                onSuccess: () => {
+                  // The banner behind the dialog says the same thing and
+                  // persists; this is the acknowledgement for the moment
+                  // the dialog disappears.
+                  toast.success('Request sent — we will review it and let you know.');
+                  close();
+                },
+              },
+            )
+          }
         >
           {request.isPending ? 'Sending…' : 'Send request'}
         </Button>

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 
-import { ArrowLeft, Pencil, PhoneCall, XCircle } from 'lucide-react';
+import { ArrowLeft, Clock, Pencil, PhoneCall, XCircle } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import type { OrderStatus } from '@skydrop/db';
 import { ApiError } from '@skydrop/api-client';
@@ -10,6 +10,7 @@ import type { SellerOrderEventView } from '@skydrop/api-client';
 import {
   useGenerateInvoice,
   useOrderDetail,
+  useOrderReattemptRequests,
   useOrderEvents,
   useOrderInvoice,
 } from '@/lib/api-hooks';
@@ -74,6 +75,13 @@ const CANCELLABLE: ReadonlySet<string> = new Set([
 
 export function OrderDetailView({ orderId }: { orderId: string }): ReactElement {
   const detail = useOrderDetail(orderId);
+  // Only for a declined order — nothing else can carry a request, and
+  // asking on every order detail would be a query per page view for a
+  // list that is empty in all but one status.
+  const declined = detail.data?.status === 'REJECTED_BY_CUSTOMER';
+  const reattempts = useOrderReattemptRequests(orderId, { enabled: declined });
+  const pendingRequest = (reattempts.data ?? []).find((r) => r.status === 'PENDING') ?? null;
+  const lastDecided = (reattempts.data ?? []).find((r) => r.status !== 'PENDING') ?? null;
   const events = useOrderEvents(orderId);
   const identity = useSellerIdentity();
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -121,11 +129,16 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                 {/* The customer declined, so nothing calls this order
                     again on its own. Asking is the only path — and it is
                     an ASK: an admin decides. */}
-                {detail.data.status === 'REJECTED_BY_CUSTOMER' &&
+                {/* Offering "ask again" while a request is already open
+                    is an invitation to a 409 — the server allows exactly
+                    one undecided request per order. */}
+                {declined &&
+                  pendingRequest === null &&
                   identity !== null &&
                   can(identity, 'orders.create') && (
                     <Button variant="secondary" size="sm" onClick={() => setReattemptOpen(true)}>
-                      <PhoneCall size={12} /> Ask us to call again
+                      <PhoneCall size={12} />{' '}
+                      {lastDecided === null ? 'Ask us to call again' : 'Ask again'}
                     </Button>
                   )}
                 {CANCELLABLE.has(detail.data.status) &&
@@ -139,6 +152,54 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               </div>
             }
           />
+
+          {pendingRequest !== null && (
+            // The ORDER is still REJECTED_BY_CUSTOMER and the badge above
+            // says so, because that is what it is until somebody
+            // approves. This says what is ALSO true: a request is with
+            // us. Two facts, not one overwritten by the other.
+            <Card>
+              <CardBody>
+                <div className="flex items-start gap-3">
+                  <Clock size={16} className="text-pending mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-text-bright text-sm font-medium">
+                      We are reviewing your request to call this customer again
+                    </p>
+                    <p className="text-text-muted mt-0.5 text-sm">
+                      Sent {new Date(pendingRequest.createdAt).toLocaleString('en-IN')}. The order
+                      stays rejected until we decide. If we approve it, it goes back into the call
+                      queue and you will see the status change here.
+                    </p>
+                    <p className="text-text-faint mt-1.5 text-sm italic">
+                      “{pendingRequest.reason}”
+                    </p>
+                  </div>
+                </div>
+              </CardBody>
+            </Card>
+          )}
+
+          {pendingRequest === null && lastDecided !== null && lastDecided.status === 'REJECTED' && (
+            <Card>
+              <CardBody>
+                <div className="flex items-start gap-3">
+                  <XCircle size={16} className="text-failed mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-text-bright text-sm font-medium">
+                      We reviewed your request and did not call again
+                    </p>
+                    {lastDecided.decisionNote !== null && lastDecided.decisionNote !== '' && (
+                      <p className="text-text-muted mt-0.5 text-sm">{lastDecided.decisionNote}</p>
+                    )}
+                    <p className="text-text-faint mt-0.5 text-sm">
+                      You can ask again if something changes.
+                    </p>
+                  </div>
+                </div>
+              </CardBody>
+            </Card>
+          )}
 
           <Section title="Recipient">
             <Card>
