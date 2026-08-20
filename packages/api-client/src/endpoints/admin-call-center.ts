@@ -89,6 +89,9 @@ export interface PulledAssignment {
     readonly startedAt: string;
     readonly agentEmail: string | null;
     readonly rescheduledFor: string | null;
+    readonly orderNumber: string;
+    /** False when it was a DIFFERENT order by the same customer. */
+    readonly isThisOrder: boolean;
   }>;
 }
 

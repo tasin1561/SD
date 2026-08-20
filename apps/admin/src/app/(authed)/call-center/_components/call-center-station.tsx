@@ -607,49 +607,89 @@ function PriorAttempts({
   // the screen an agent uses most.
   if (attempts.length === 0) return null;
 
+  const thisOrder = attempts.filter((a) => a.isThisOrder);
+  const earlier = attempts.filter((a) => !a.isThisOrder);
+
+  function Entry({ a }: { readonly a: (typeof attempts)[number] }): ReactElement {
+    return (
+      <li className="border-border bg-surface-raised rounded-[4px] border p-2.5">
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <span className="text-text-bright text-sm font-semibold">
+            {OUTCOME_OPTIONS.find((o) => o.value === a.outcome)?.label ?? a.outcome}
+          </span>
+          <span className="text-text-muted text-xs">
+            {new Date(a.startedAt).toLocaleString('en-IN', {
+              day: '2-digit',
+              month: 'short',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </span>
+          {!a.isThisOrder && (
+            <span className="text-text-faint font-mono text-xs">on {a.orderNumber}</span>
+          )}
+          {a.agentEmail !== null && (
+            <span className="text-text-faint ml-auto text-xs">{a.agentEmail}</span>
+          )}
+        </div>
+        {a.rescheduledFor !== null && (
+          // The promise the customer was given. Breaking it is worse
+          // than never having made it.
+          <div className="text-pending mt-1 text-sm font-medium">
+            Promised callback:{' '}
+            {new Date(a.rescheduledFor).toLocaleString('en-IN', {
+              day: '2-digit',
+              month: 'short',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </div>
+        )}
+        {a.notes !== null && a.notes !== '' ? (
+          <p className="text-text-body mt-1 text-sm leading-snug">{a.notes}</p>
+        ) : (
+          // Said out loud rather than left blank: "nobody wrote anything
+          // down" and "the notes failed to load" look identical
+          // otherwise, and only one of them means stop looking.
+          <p className="text-text-faint mt-1 text-xs italic">No notes recorded</p>
+        )}
+      </li>
+    );
+  }
+
   return (
     <div className="border-border rounded-[6px] border p-3">
-      <div className="text-text-faint mb-2 text-[11px] tracking-wide uppercase">
-        Previous calls on this order ({attempts.length})
-      </div>
-      <ul className="space-y-2">
-        {attempts.map((a) => (
-          <li key={a.attemptId} className="border-border/60 border-l-2 pl-3">
-            <div className="flex flex-wrap items-baseline gap-x-2 text-sm">
-              <span className="text-text-bright font-medium">
-                {OUTCOME_OPTIONS.find((o) => o.value === a.outcome)?.label ?? a.outcome}
-              </span>
-              <span className="text-text-faint text-xs">
-                {new Date(a.startedAt).toLocaleString('en-IN', {
-                  day: '2-digit',
-                  month: 'short',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </span>
-              {a.agentEmail !== null && (
-                <span className="text-text-faint text-xs">· {a.agentEmail}</span>
-              )}
-            </div>
-            {a.rescheduledFor !== null && (
-              // The promise the customer was given. Breaking it is worse
-              // than never having made it.
-              <div className="text-pending mt-0.5 text-xs">
-                Agreed callback:{' '}
-                {new Date(a.rescheduledFor).toLocaleString('en-IN', {
-                  day: '2-digit',
-                  month: 'short',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </div>
-            )}
-            {a.notes !== null && a.notes !== '' && (
-              <p className="text-text-body mt-0.5 text-sm leading-snug">{a.notes}</p>
-            )}
-          </li>
-        ))}
-      </ul>
+      <h3 className="text-text-bright mb-2 text-sm font-semibold">
+        What this customer was told before
+        <span className="text-text-muted ml-2 text-xs font-normal">
+          {attempts.length} previous {attempts.length === 1 ? 'call' : 'calls'}
+        </span>
+      </h3>
+
+      {thisOrder.length > 0 && (
+        <ul className="space-y-2">
+          {thisOrder.map((a) => (
+            <Entry key={a.attemptId} a={a} />
+          ))}
+        </ul>
+      )}
+
+      {earlier.length > 0 && (
+        <>
+          {/* Kept separate and clearly labelled: a call about a
+              different parcel is still context — "she always asks for
+              after seven" — but it is not about the one being discussed,
+              and an agent must not confuse the two on the phone. */}
+          <div className="text-text-faint mt-3 mb-1.5 text-[11px] tracking-wide uppercase">
+            Earlier orders by the same customer
+          </div>
+          <ul className="space-y-2">
+            {earlier.map((a) => (
+              <Entry key={a.attemptId} a={a} />
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }

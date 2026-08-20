@@ -18,6 +18,9 @@ import { AssignmentExpirationService } from './assignment-expiration.service';
  *  row — mirrors agent_call_settings.maxActiveCalls @default(1). */
 const DEFAULT_MAX_ACTIVE = 1;
 
+/** Context is the last few conversations, not a transcript of forty. */
+const PRIOR_ATTEMPT_LIMIT = 8;
+
 export interface PulledAssignment {
   assignmentId: string;
   orderId: string;
@@ -72,6 +75,12 @@ export interface PulledAssignment {
     startedAt: Date;
     agentEmail: string | null;
     rescheduledFor: Date | null;
+    /** Which order this call was about. */
+    orderNumber: string;
+    /** False when it was a DIFFERENT order by the same customer — still
+     *  context ("she always asks for evening delivery"), but not about
+     *  the parcel being discussed. */
+    isThisOrder: boolean;
   }>;
 }
 
@@ -212,49 +221,72 @@ export class CallAssignmentService {
       order,
       seller: order ? await this.loadSeller(order.sellerId) : null,
       itemDisplay: await this.loadItemDisplay(order),
-      priorAttempts: await this.loadPriorAttempts(picked.orderId),
+      priorAttempts: await this.loadPriorAttempts(order),
     };
   }
 
-  /** This order's logged calls, newest first. */
-  private async loadPriorAttempts(orderId: string): Promise<PulledAssignment['priorAttempts']> {
-    return (await this.loadPriorAttemptsForOrders([orderId])).get(orderId) ?? [];
+  /** This customer's logged calls, newest first — this order first. */
+  private async loadPriorAttempts(
+    order: ResolvedOrder | null,
+  ): Promise<PulledAssignment['priorAttempts']> {
+    if (order === null) return [];
+    return (await this.loadPriorAttemptsForOrders([order])).get(order.orderId) ?? [];
   }
 
-  /** Batch form — one query however many assignments are in flight. */
+  /**
+   * The CUSTOMER's call history, not just this order's.
+   *
+   * Asked for as "the history and notes of the customer's previous
+   * calls": someone who asked last month to be rung after seven is
+   * telling us something about this month's parcel too, and an agent who
+   * cannot see that opens every call as though it were the first.
+   *
+   * Scoped by customerId when the order has one, falling back to the
+   * order alone — a CSV row that never matched a customer record still
+   * deserves its own history. Capped, because context is the last few
+   * conversations; a customer with forty attempts does not need all
+   * forty read before dialling.
+   */
   private async loadPriorAttemptsForOrders(
-    orderIds: string[],
+    orders: ResolvedOrder[],
   ): Promise<ReadonlyMap<string, PulledAssignment['priorAttempts']>> {
-    const ids = [...new Set(orderIds)];
     const out = new Map<string, PulledAssignment['priorAttempts']>();
-    if (ids.length === 0) return out;
-    const rows = await this.prisma.client.callAttempt.findMany({
-      where: { orderId: { in: ids } },
-      orderBy: { startedAt: 'desc' },
-      select: {
-        id: true,
-        orderId: true,
-        outcome: true,
-        outcomeNotes: true,
-        startedAt: true,
-        rescheduledFor: true,
-        // Staff carry no name; emailDisplay IS the human identity.
-        agent: { select: { emailDisplay: true } },
-      },
-    });
-    for (const r of rows) {
-      const list = out.get(r.orderId) ?? [];
-      out.set(r.orderId, [
-        ...list,
-        {
+    if (orders.length === 0) return out;
+
+    for (const order of orders) {
+      const where =
+        order.customerId === null
+          ? { orderId: order.orderId }
+          : { order: { customerId: order.customerId } };
+      const rows = await this.prisma.client.callAttempt.findMany({
+        where,
+        orderBy: { startedAt: 'desc' },
+        take: PRIOR_ATTEMPT_LIMIT,
+        select: {
+          id: true,
+          orderId: true,
+          outcome: true,
+          outcomeNotes: true,
+          startedAt: true,
+          rescheduledFor: true,
+          // Staff carry no name; emailDisplay IS the human identity.
+          agent: { select: { emailDisplay: true } },
+          order: { select: { orderNumber: true } },
+        },
+      });
+      out.set(
+        order.orderId,
+        rows.map((r) => ({
           attemptId: r.id,
           outcome: r.outcome,
           notes: r.outcomeNotes,
           startedAt: r.startedAt,
           agentEmail: r.agent?.emailDisplay ?? null,
           rescheduledFor: r.rescheduledFor,
-        },
-      ]);
+          orderNumber: r.order.orderNumber,
+          isThisOrder: r.orderId === order.orderId,
+        })),
+      );
     }
     return out;
   }
@@ -343,7 +375,7 @@ export class CallAssignmentService {
       }
       displayByOrder.set(o.orderId, forOrder);
     }
-    const attemptsByOrder = await this.loadPriorAttemptsForOrders(rows.map((r) => r.orderId));
+    const attemptsByOrder = await this.loadPriorAttemptsForOrders([...orders.values()]);
     return rows.map((r) => {
       const order = orders.get(r.orderId) ?? null;
       return {

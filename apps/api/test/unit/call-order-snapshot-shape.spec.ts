@@ -80,3 +80,40 @@ describe('agent call order snapshot', () => {
     expect(src).toMatch(/readonly phoneE164: string/);
   });
 });
+
+/**
+ * The customer's call history on the agent's card.
+ *
+ * Asked for as "the history and notes of the customer's previous calls":
+ * someone who asked last month to be rung after seven is telling us
+ * something about this month's parcel too. Scoped to the CUSTOMER, not
+ * the order — an order-scoped history is empty on exactly the attempt
+ * that needs it, because a re-queue creates a new entry and a repeat
+ * buyer's context lives on their other orders.
+ */
+describe('agent call history scope', () => {
+  const src = readFileSync(
+    join(__dirname, '../../src/modules/call-center/services/call-assignment.service.ts'),
+    'utf8',
+  );
+
+  it('queries by customer when the order has one', () => {
+    expect(src).toMatch(/order: \{ customerId: order\.customerId \}/);
+  });
+
+  it('falls back to the order for a customer-less order', () => {
+    // A CSV row that never matched a customer record still deserves its
+    // own history rather than none.
+    expect(src).toMatch(/order\.customerId === null\s*\?\s*\{ orderId: order\.orderId \}/);
+  });
+
+  it('marks which calls were about THIS order', () => {
+    // An agent must not confuse a call about a different parcel with
+    // one about the parcel being discussed.
+    expect(src).toMatch(/isThisOrder: r\.orderId === order\.orderId/);
+  });
+
+  it('caps the history rather than reading forty calls before dialling', () => {
+    expect(src).toMatch(/take: PRIOR_ATTEMPT_LIMIT/);
+  });
+});
