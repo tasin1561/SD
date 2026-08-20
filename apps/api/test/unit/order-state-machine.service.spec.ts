@@ -4,12 +4,15 @@ import {
   OrderStateMachineService,
 } from '../../src/modules/order/services/order-state-machine.service';
 
-// REJECTED_BY_CUSTOMER is NO LONGER terminal: it has exactly one edge
-// out, back to PENDING_CONFIRMATION, and the only thing that can take it
-// is an ADMIN-APPROVED seller request (OrderReattemptService). Nothing
-// reaches it unaided — the customer said no, and a seller who could
-// requeue that alone is a seller who can have somebody rung repeatedly
-// after they refused.
+// Neither REJECTED_BY_CUSTOMER nor REJECTED_NDR is terminal any more.
+// Each has exactly ONE edge out, back to PENDING_CONFIRMATION, and the
+// only thing that can take it is an ADMIN-APPROVED seller request
+// (OrderReattemptService). Nothing reaches either unaided.
+//
+// REJECTED_NDR's edge is OFF by default: reaching it also requires the
+// status to be named in `orders.reattempt_requestable_statuses`, which
+// is seeded with REJECTED_BY_CUSTOMER alone. The edge existing is what
+// lets an operator turn it on; it is not what turns it on.
 const TERMINAL: OrderStatus[] = [
   OrderStatus.DELIVERED,
   OrderStatus.RTO_RESTOCKED,
@@ -18,7 +21,6 @@ const TERMINAL: OrderStatus[] = [
   OrderStatus.CANCELLED,
   OrderStatus.CANCELLED_BY_ADMIN,
   OrderStatus.REJECTED,
-  OrderStatus.REJECTED_NDR,
 ];
 
 describe('OrderStateMachineService', () => {
@@ -173,23 +175,17 @@ describe('OrderStateMachineService', () => {
       }
     });
 
-    it('REJECTED_BY_CUSTOMER has exactly ONE way back, and only that one', () => {
-      // The edge exists so an approved seller request has somewhere to
-      // go. Anything else out of a refusal would be a way to ring a
-      // customer who declined without a human agreeing to it first.
-      const outbound = Object.values(OrderStatus).filter((to) =>
-        sm.isValidTransition(OrderStatus.REJECTED_BY_CUSTOMER, to),
-      );
-      expect(outbound).toEqual([OrderStatus.PENDING_CONFIRMATION]);
-      expect(
-        sm.requiredSideEffects(OrderStatus.REJECTED_BY_CUSTOMER, OrderStatus.PENDING_CONFIRMATION),
-      ).toEqual([]);
-    });
-
-    it.each([OrderStatus.REJECTED_NDR])('%s is terminal', (s) => {
-      expect(sm.isTerminal(s)).toBe(true);
-      expect(sm.getAllowedTransitions(s)).toEqual([]);
-    });
+    it.each([OrderStatus.REJECTED_BY_CUSTOMER, OrderStatus.REJECTED_NDR])(
+      '%s has exactly ONE way back, and only that one',
+      (s) => {
+        // The edge exists so an approved re-attempt request has
+        // somewhere to go. Anything else out of a rejection would be a
+        // way to ring a customer again without a human agreeing to it.
+        expect(sm.isTerminal(s)).toBe(false);
+        expect(sm.getAllowedTransitions(s)).toEqual([OrderStatus.PENDING_CONFIRMATION]);
+        expect(sm.requiredSideEffects(s, OrderStatus.PENDING_CONFIRMATION)).toEqual([]);
+      },
+    );
 
     it.each([OrderStatus.CALL_NO_RESPONSE, OrderStatus.CALL_RESCHEDULED])(
       '%s has an EXPLICIT self-loop (same state, attempt logged), no side-effects',
