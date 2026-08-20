@@ -144,6 +144,8 @@ function makeService(
     mapping,
     earlyReservations as unknown as EarlyReservationService,
     settings,
+    // Evaluation record; the close is covered by its own spec.
+    { close: jest.fn(), closeAllForAgent: jest.fn() } as never,
   );
   return {
     svc,
@@ -350,7 +352,7 @@ describe('CallAttemptService.recordAttempt — outcome flows', () => {
     expect(enqueueAgain).toHaveBeenCalled();
   });
 
-  it('NO_ANSWER below cap → CALL_NO_RESPONSE, requeue immediate (~now)', async () => {
+  it('NO_ANSWER below cap → CALL_NO_RESPONSE, requeue after the no-response delay', async () => {
     const { svc, transitionStatus, enqueueAgain } = makeService({ priorCount: 0 });
     const r = await svc.recordAttempt({ ...BASE, outcome: CallOutcome.NO_ANSWER });
     expect(transitionStatus).toHaveBeenCalledWith(
@@ -359,7 +361,12 @@ describe('CallAttemptService.recordAttempt — outcome flows', () => {
     expect(enqueueAgain).toHaveBeenCalled();
     expect(enqueueAgain.mock.calls[0]![0]).toBe('o1');
     const at = enqueueAgain.mock.calls[0]![1] as Date;
-    expect(Math.abs(at.getTime() - Date.now())).toBeLessThan(5_000);
+    // Was ~now. A customer who did not answer must not be redialled on
+    // the spot: that spent all three cap attempts inside a minute. The
+    // delay is ops.call_retry_interval_hours (seeded 4), which existed
+    // and described exactly this and was read by nothing.
+    const fourHours = 4 * 60 * 60 * 1000;
+    expect(Math.abs(at.getTime() - (Date.now() + fourHours))).toBeLessThan(5_000);
     expect(r.requeued).toBe(true);
   });
 
@@ -440,7 +447,7 @@ describe('CallAttemptService.recordAttempt — terminal & remaining outcomes', (
     expect(enqueueAgain).not.toHaveBeenCalled();
   });
 
-  it('VOICEMAIL_LEFT below cap → CALL_NO_RESPONSE, requeue immediate', async () => {
+  it('VOICEMAIL_LEFT below cap → CALL_NO_RESPONSE, requeue after the no-response delay', async () => {
     const { svc, transitionStatus, enqueueAgain } = makeService({ priorCount: 0 });
     const r = await svc.recordAttempt({
       ...BASE,
@@ -451,7 +458,9 @@ describe('CallAttemptService.recordAttempt — terminal & remaining outcomes', (
     );
     expect(enqueueAgain).toHaveBeenCalled();
     const at = enqueueAgain.mock.calls[0]![1] as Date;
-    expect(Math.abs(at.getTime() - Date.now())).toBeLessThan(5_000);
+    // Same reasoning as NO_ANSWER: a voicemail means they did not pick
+    // up, so the redial waits.
+    expect(Math.abs(at.getTime() - (Date.now() + 4 * 60 * 60 * 1000))).toBeLessThan(5_000);
     expect(r.requeued).toBe(true);
   });
 

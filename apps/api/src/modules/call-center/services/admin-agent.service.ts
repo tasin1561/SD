@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { CallQueueStatus, StaffRole } from '@skydrop/db';
+import { CallHoldOutcome, CallQueueStatus, StaffRole } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AgentSettingsService, type AgentSettingsView } from './agent-settings.service';
 
@@ -16,6 +16,28 @@ export interface AgentMetrics {
   byOutcome: Record<string, number>;
   confirmedCount: number;
   currentAssigned: number;
+  /**
+   * How this agent USES the time they hold a customer's order.
+   *
+   * `totalAttempts` says how much work they did; these say what happened
+   * to the work they took and did not do. A high `holdsDropped` is an
+   * agent claiming orders and letting them rot — invisible in an attempt
+   * count, because the whole point is that no attempt was ever logged.
+   */
+  holds: {
+    /** Closed holds that produced a logged call. */
+    holdsCompleted: number;
+    /** Closed holds that produced NOTHING — released, expired, or the
+     *  agent turned out not to be at the desk. */
+    holdsDropped: number;
+    dropsByReason: Record<string, number>;
+    /** Mean seconds from claiming a call to logging its outcome. Over
+     *  completed holds only: averaging in a 15-minute expiry would make
+     *  an agent who abandons calls look merely slow. */
+    avgSecondsToOutcome: number | null;
+    /** The longest single hold that ended in nothing. */
+    longestDroppedSeconds: number | null;
+  };
 }
 
 export interface AgentDetail {
@@ -112,6 +134,45 @@ export class AdminAgentService {
       byOutcome,
       confirmedCount: byOutcome['CONFIRMED'] ?? 0,
       currentAssigned,
+      holds: await this.holdMetrics(staffUserId),
+    };
+  }
+
+  /**
+   * Read over `call_assignment_holds` — what became of the time this
+   * agent spent holding other people's orders.
+   */
+  private async holdMetrics(agentId: string): Promise<AgentMetrics['holds']> {
+    const closed = await this.prisma.client.callAssignmentHold.findMany({
+      where: { agentId, endedAt: { not: null } },
+      select: { outcome: true, heldSeconds: true },
+    });
+
+    const dropsByReason: Record<string, number> = {};
+    let completed = 0;
+    let completedSeconds = 0;
+    let dropped = 0;
+    let longestDropped: number | null = null;
+
+    for (const h of closed) {
+      if (h.outcome === CallHoldOutcome.COMPLETED) {
+        completed += 1;
+        completedSeconds += h.heldSeconds ?? 0;
+        continue;
+      }
+      dropped += 1;
+      const reason = h.outcome ?? 'UNKNOWN';
+      dropsByReason[reason] = (dropsByReason[reason] ?? 0) + 1;
+      const secs = h.heldSeconds ?? 0;
+      if (longestDropped === null || secs > longestDropped) longestDropped = secs;
+    }
+
+    return {
+      holdsCompleted: completed,
+      holdsDropped: dropped,
+      dropsByReason,
+      avgSecondsToOutcome: completed === 0 ? null : Math.round(completedSeconds / completed),
+      longestDroppedSeconds: longestDropped,
     };
   }
 

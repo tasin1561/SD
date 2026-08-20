@@ -479,13 +479,13 @@ function RecipientPanel({
   return (
     <div className="rounded-[6px] border border-border p-3 text-sm">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <span className="text-text-bright font-medium">{order.orderNumber}</span>
+        <span className="text-text-bright text-base font-semibold">{order.orderNumber}</span>
         {seller !== null && (
           // The agent opens with this: "calling about your order from
           // <store>". A customer phoned by a company they do not
           // recognise hangs up, and in a COD market that is a refusal.
-          <span className="text-text-muted text-xs">
-            Ordered from <span className="text-text-bright">{seller.companyName}</span>
+          <span className="text-text-muted text-sm">
+            Ordered from <span className="text-text-bright font-medium">{seller.companyName}</span>
           </span>
         )}
       </div>
@@ -494,7 +494,10 @@ function RecipientPanel({
         <PhoneToCall phone={r.phoneE164} altPhone={r.altPhoneE164} />
       </div>
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+      {/* text-sm, not text-xs: an agent reads this card for a whole
+          shift while talking, and 12px of grey is where a digit or a
+          house number gets misread. */}
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
         <Field label="Name" value={r.name || '—'} />
         <Field
           label="Address"
@@ -535,7 +538,7 @@ function RecipientPanel({
         />
       </div>
       {order.items.length > 0 && (
-        <div className="mt-2 pt-2 border-t border-border text-xs">
+        <div className="border-border mt-3 border-t pt-2 text-sm">
           <div className="text-text-faint mb-1">Items</div>
           <ul className="space-y-0.5">
             {order.items.map((it, idx) => (
@@ -544,7 +547,7 @@ function RecipientPanel({
                   {it.productName}
                   {it.variantLabel ? ` · ${it.variantLabel}` : ''}
                 </span>{' '}
-                <span className="text-text-faint font-mono">
+                <span className="text-text-faint font-mono text-xs">
                   ×{it.quantity} · {it.skuCode}
                 </span>
               </li>
@@ -564,9 +567,11 @@ function Field({
   readonly value: ReactNode;
 }): ReactElement {
   return (
-    <div>
+    <div className="leading-relaxed">
       <span className="text-text-faint">{label}:</span>{' '}
-      <span className="text-text-body">{value}</span>
+      {/* The VALUE is what gets read aloud, so it carries the weight;
+          the label only has to be findable. */}
+      <span className="text-text-bright font-medium">{value}</span>
     </div>
   );
 }

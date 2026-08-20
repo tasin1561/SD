@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { CallQueueStatus, SettingValueType } from '@skydrop/db';
+import { CallHoldOutcome, CallQueueStatus, SettingValueType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { CallHoldService } from './call-hold.service';
 
 /** Effective window when ops.agent_presence_timeout_minutes is unset. */
 const DEFAULT_TIMEOUT_MINUTES = 10;
@@ -35,6 +36,7 @@ export class AgentPresenceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
+    private readonly holds: CallHoldService,
   ) {}
 
   /** Effective window (minutes): the ops setting, else the default. */
@@ -107,6 +109,11 @@ export class AgentPresenceService {
         },
       });
       released += back.count;
+
+      // Distinct from EXPIRED on purpose: "held past the timeout" and
+      // "was not at the desk at all" are different findings about an
+      // agent, and collapsing them would hide the worse one.
+      await this.holds.closeAllForAgent(agent.agentId, CallHoldOutcome.AGENT_ABSENT);
 
       await this.audit.log({
         actorType: 'SYSTEM',

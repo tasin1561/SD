@@ -64,6 +64,7 @@ model StaffUser {
   ordersCancelled            Order[]                       @relation("OrderCancelledBy")
   bulkUploadsByStaff         BulkOrderUpload[]             @relation("BulkUploadUploadedByStaff")
   callQueueAssigned          CallQueueEntry[]              @relation("CallQueueAssignedAgent")
+  callHolds                  CallAssignmentHold[]          @relation("CallHoldAgent")
   callAttempts               CallAttempt[]
   callSettings               AgentCallSettings?
   awbLabelsGenerated         AwbLabel[]                    @relation("AwbLabelGeneratedBy")
@@ -2770,9 +2771,10 @@ model CallQueueEntry {
   createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz
   updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz
 
-  order         Order         @relation(fields: [orderId], references: [id])
-  assignedAgent StaffUser?    @relation("CallQueueAssignedAgent", fields: [assignedAgentId], references: [id])
+  order         Order                @relation(fields: [orderId], references: [id])
+  assignedAgent StaffUser?           @relation("CallQueueAssignedAgent", fields: [assignedAgentId], references: [id])
   attempts      CallAttempt[]
+  holds         CallAssignmentHold[]
 
   @@index([assignedAgentId, status])
   @@index([status, availableAt, priority])
@@ -2814,6 +2816,62 @@ model CallAttempt {
   @@index([startedAt])
   @@index([flaggedAsSuspicious])
   @@map("call_attempts")
+}
+
+/// How an agent's hold on a queue entry ended. Evaluation data: a
+/// COMPLETED hold is work done, an EXPIRED or ABANDONED one is a
+/// customer who waited for nothing.
+enum CallHoldOutcome {
+  /// The agent logged a call outcome — the hold did its job.
+  COMPLETED       @map("completed")
+  /// The agent handed it back deliberately, without calling.
+  RELEASED        @map("released")
+  /// CC-7: held past the assignment timeout without acting.
+  EXPIRED         @map("expired")
+  /// The presence sweep found the agent was not at the desk at all.
+  AGENT_ABSENT    @map("agent_absent")
+  /// A supervisor moved it to somebody else.
+  REASSIGNED      @map("reassigned")
+
+  @@map("call_hold_outcome")
+}
+
+/// One agent's hold on one queue entry, from pull to resolution.
+///
+/// APPEND-ONLY, and deliberately its own table rather than columns on
+/// `call_queue_entries`: an entry is pulled many times over its life, so
+/// a single row could only ever remember the last agent to touch it —
+/// which is exactly the history worth keeping. Written once at pull with
+/// no end, closed once when the hold resolves.
+///
+/// This is the evaluation record: who was holding, for how long, and
+/// whether a customer got a call out of it.
+model CallAssignmentHold {
+  id           String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  queueEntryId String           @map("queue_entry_id") @db.Uuid
+  orderId      String           @map("order_id") @db.Uuid
+  agentId      String           @map("agent_id") @db.Uuid
+  startedAt    DateTime         @default(now()) @map("started_at") @db.Timestamptz
+  endedAt      DateTime?        @map("ended_at") @db.Timestamptz
+  /// Null while the hold is open.
+  outcome      CallHoldOutcome? 
+  /// Stored rather than derived: the arithmetic is trivial but every
+  /// report would otherwise repeat it, and a report that computes its
+  /// own duration is a report that can disagree with the next one.
+  heldSeconds  Int?             @map("held_seconds")
+  /// The attempt logged against this hold, when there was one.
+  attemptId    String?          @map("attempt_id") @db.Uuid
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  queueEntry CallQueueEntry @relation(fields: [queueEntryId], references: [id], onDelete: Cascade)
+  agent      StaffUser      @relation("CallHoldAgent", fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, startedAt])
+  @@index([queueEntryId])
+  /// The open-hold lookup: closing a hold finds it by (entry, still open).
+  @@index([queueEntryId, endedAt])
+  @@index([outcome, startedAt])
+  @@map("call_assignment_holds")
 }
 
 model AgentCallSettings {

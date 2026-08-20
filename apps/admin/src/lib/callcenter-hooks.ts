@@ -145,6 +145,16 @@ export interface AgentMetrics {
   byOutcome: Record<string, number>;
   confirmedCount: number;
   currentAssigned: number;
+  /** What became of the time this agent spent HOLDING orders — a
+   *  dropped hold logs no attempt, so it is invisible in the counts
+   *  above by construction. */
+  holds: {
+    holdsCompleted: number;
+    holdsDropped: number;
+    dropsByReason: Record<string, number>;
+    avgSecondsToOutcome: number | null;
+    longestDroppedSeconds: number | null;
+  };
 }
 
 export interface AgentListRow {

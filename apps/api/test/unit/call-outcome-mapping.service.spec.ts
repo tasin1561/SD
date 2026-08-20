@@ -10,9 +10,14 @@ describe('CallOutcomeMappingService', () => {
       [CallOutcome.CONFIRMED, OrderStatus.CONFIRMED, true, false, 'NONE'],
       [CallOutcome.CUSTOMER_DECLINED, OrderStatus.REJECTED_BY_CUSTOMER, true, false, 'NONE'],
       [CallOutcome.WRONG_NUMBER, OrderStatus.REJECTED_BY_CUSTOMER, true, false, 'NONE'],
-      [CallOutcome.NO_ANSWER, OrderStatus.CALL_NO_RESPONSE, true, true, 'IMMEDIATE'],
+      // NO_RESPONSE_DELAY, not IMMEDIATE: these two mean the CUSTOMER
+      // did not pick up, and they are also the two that count toward the
+      // NDR cap — so an instant redial spent a customer's three chances
+      // inside a minute. The IMMEDIATE rows below are ours to retry (a
+      // technical failure, a language mismatch): nobody was disturbed.
+      [CallOutcome.NO_ANSWER, OrderStatus.CALL_NO_RESPONSE, true, true, 'NO_RESPONSE_DELAY'],
       [CallOutcome.BUSY, OrderStatus.CALL_NO_RESPONSE, true, true, 'BUSY_DELAY'],
-      [CallOutcome.VOICEMAIL_LEFT, OrderStatus.CALL_NO_RESPONSE, true, true, 'IMMEDIATE'],
+      [CallOutcome.VOICEMAIL_LEFT, OrderStatus.CALL_NO_RESPONSE, true, true, 'NO_RESPONSE_DELAY'],
       [CallOutcome.CALLBACK_REQUESTED, OrderStatus.CALL_RESCHEDULED, false, true, 'AGENT_PROVIDED'],
       [CallOutcome.TECHNICAL_FAILURE, null, false, true, 'IMMEDIATE'],
       [CallOutcome.LANGUAGE_BARRIER, null, false, true, 'IMMEDIATE'],

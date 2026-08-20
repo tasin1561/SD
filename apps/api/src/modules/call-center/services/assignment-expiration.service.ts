@@ -1,12 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ActorType, CallQueueStatus } from '@skydrop/db';
+import { CallHoldService } from './call-hold.service';
+import { ActorType, CallHoldOutcome, CallQueueStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { AssignmentExpirationQueue } from '../queue/assignment-expiration.queue';
 
 /** Effective timeout when ops.call_assignment_timeout_minutes is unset —
  *  mirrors the seeded default. */
-const DEFAULT_TIMEOUT_MINUTES = 30;
+const DEFAULT_TIMEOUT_MINUTES = 15;
 const TIMEOUT_SETTING_KEY = 'ops.call_assignment_timeout_minutes';
 
 export interface ExpireResult {
@@ -43,6 +44,7 @@ export class AssignmentExpirationService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
     private readonly queue: AssignmentExpirationQueue,
+    private readonly holds: CallHoldService,
   ) {}
 
   /** Effective timeout (minutes): ops.call_assignment_timeout_minutes,
@@ -108,6 +110,10 @@ export class AssignmentExpirationService {
       },
     });
     if (count === 0) return { expired: false }; // lost the race — no-op
+
+    // Held past the timeout without a call being logged: the evaluation
+    // record every bit as much as a completed one is.
+    await this.holds.close(assignmentId, CallHoldOutcome.EXPIRED);
 
     await this.audit.log({
       actorType: ActorType.SYSTEM,

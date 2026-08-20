@@ -9,7 +9,24 @@ import { CallOutcome, OrderStatus } from '@skydrop/db';
  *  - BUSY_DELAY    : availableAt = now + ops.call_busy_retry_delay_hours
  *  - AGENT_PROVIDED: availableAt = agent-supplied scheduledFor (bounds-checked)
  */
-export type RescheduleKind = 'NONE' | 'IMMEDIATE' | 'BUSY_DELAY' | 'AGENT_PROVIDED';
+/**
+ * When a re-queued order becomes callable again.
+ *
+ * `NO_RESPONSE_DELAY` exists because IMMEDIATE was wrong for the two
+ * outcomes that mean the CUSTOMER did not pick up: it made the order
+ * callable the instant the agent logged it, so a quiet queue redialled
+ * somebody seconds after they ignored the phone, and three attempts —
+ * the whole NDR cap — could be burned inside a minute. IMMEDIATE remains
+ * correct for the outcomes that are about US (a technical failure, an
+ * agent who does not speak the language): there the customer was never
+ * disturbed, and neither of those counts toward the cap.
+ */
+export type RescheduleKind =
+  | 'NONE'
+  | 'IMMEDIATE'
+  | 'NO_RESPONSE_DELAY'
+  | 'BUSY_DELAY'
+  | 'AGENT_PROVIDED';
 
 interface OutcomeRule {
   /** Order status to transition to. `null` = leave order status
@@ -82,7 +99,7 @@ export class CallOutcomeMappingService {
       targetStatus: OrderStatus.CALL_NO_RESPONSE,
       countsTowardCap: true,
       requeue: true,
-      reschedule: 'IMMEDIATE',
+      reschedule: 'NO_RESPONSE_DELAY',
     },
     [CallOutcome.BUSY]: {
       targetStatus: OrderStatus.CALL_NO_RESPONSE,
@@ -94,7 +111,7 @@ export class CallOutcomeMappingService {
       targetStatus: OrderStatus.CALL_NO_RESPONSE,
       countsTowardCap: true,
       requeue: true,
-      reschedule: 'IMMEDIATE',
+      reschedule: 'NO_RESPONSE_DELAY',
     },
     [CallOutcome.CALLBACK_REQUESTED]: {
       targetStatus: OrderStatus.CALL_RESCHEDULED,

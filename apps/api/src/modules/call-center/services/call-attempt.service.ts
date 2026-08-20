@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import {
   ActorType,
+  CallHoldOutcome,
   CallOutcome,
   CallQueueStatus,
   OrderStatus,
@@ -15,6 +16,7 @@ import {
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { CallHoldService } from './call-hold.service';
 import { OrderReadService } from '../../order/services/order-read.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
 import { CallQueueService } from '../../call-queue/services/call-queue.service';
@@ -31,10 +33,19 @@ const SETTING_MAX_ATTEMPTS = 'ops.call_max_attempts_before_ndr';
 const SETTING_RESCHEDULE_MIN_HOURS = 'ops.call_reschedule_min_hours';
 const SETTING_RESCHEDULE_MAX_DAYS = 'ops.call_reschedule_max_days';
 const SETTING_BUSY_DELAY_HOURS = 'ops.call_busy_retry_delay_hours';
+/**
+ * Seeded at 4 and described as "hours between no-response retries" — and
+ * read by NOTHING until now. NO_ANSWER and VOICEMAIL_LEFT re-queued with
+ * `IMMEDIATE`, so the setting was visible in the settings UI, editable,
+ * and inert: the same shape of bug as the seller NDR-cap override
+ * documented on effectiveMaxAttempts below.
+ */
+const SETTING_NO_RESPONSE_DELAY_HOURS = 'ops.call_retry_interval_hours';
 const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_RESCHEDULE_MIN_HOURS = 1;
 const DEFAULT_RESCHEDULE_MAX_DAYS = 7;
 const DEFAULT_BUSY_DELAY_HOURS = 1;
+const DEFAULT_NO_RESPONSE_DELAY_HOURS = 4;
 
 const MS_PER_HOUR = 3_600_000;
 const MS_PER_DAY = 86_400_000;
@@ -122,6 +133,7 @@ export class CallAttemptService {
     private readonly mapping: CallOutcomeMappingService,
     private readonly earlyReservations: EarlyReservationService,
     private readonly settings: SettingsResolverService,
+    private readonly holds: CallHoldService,
   ) {
     this.countingOutcomes = (Object.values(CallOutcome) as CallOutcome[]).filter((o) =>
       mapping.countsTowardCap(o),
@@ -275,6 +287,16 @@ export class CallAttemptService {
             closedAt: now,
             closureReason: this.closureReasonFor(r),
           },
+        });
+
+        // The hold ends here, in the SAME tx as the attempt (CC-4): a
+        // logged call and the hold that produced it are one fact. This
+        // is the only close that carries an attemptId, which is exactly
+        // what separates "held and worked" from "held and dropped".
+        await this.holds.close(entry.id, CallHoldOutcome.COMPLETED, {
+          attemptId: attempt.id,
+          tx,
+          endedAt: now,
         });
 
         await this.audit.log(
@@ -523,6 +545,13 @@ export class CallAttemptService {
         const hours = await this.busyDelayHours();
         return new Date(now.getTime() + hours * MS_PER_HOUR);
       }
+      case 'NO_RESPONSE_DELAY': {
+        // The customer did not pick up. Redialling them seconds later is
+        // how three attempts get spent in a minute and a real customer
+        // is annoyed into refusing the parcel.
+        const hours = await this.noResponseDelayHours();
+        return new Date(now.getTime() + hours * MS_PER_HOUR);
+      }
       case 'AGENT_PROVIDED':
         return agentScheduledFor ?? now; // validated upstream; defensive
       case 'IMMEDIATE':
@@ -575,6 +604,14 @@ export class CallAttemptService {
       minHours: minRow?.valueInt ?? DEFAULT_RESCHEDULE_MIN_HOURS,
       maxDays: maxRow?.valueInt ?? DEFAULT_RESCHEDULE_MAX_DAYS,
     };
+  }
+
+  private async noResponseDelayHours(): Promise<number> {
+    const row = await this.prisma.client.systemSetting.findUnique({
+      where: { key: SETTING_NO_RESPONSE_DELAY_HOURS },
+      select: { valueInt: true },
+    });
+    return row?.valueInt ?? DEFAULT_NO_RESPONSE_DELAY_HOURS;
   }
 
   private async busyDelayHours(): Promise<number> {

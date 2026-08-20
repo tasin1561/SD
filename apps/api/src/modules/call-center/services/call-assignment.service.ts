@@ -5,9 +5,10 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, CallQueueStatus } from '@skydrop/db';
+import { ActorType, CallHoldOutcome, CallQueueStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { CallHoldService } from './call-hold.service';
 import { OrderReadService, type ResolvedOrder } from '../../order/services/order-read.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { AssignmentExpirationService } from './assignment-expiration.service';
@@ -62,6 +63,7 @@ export class CallAssignmentService {
     private readonly prisma: PrismaService,
     private readonly orders: OrderReadService,
     private readonly expiration: AssignmentExpirationService,
+    private readonly holds: CallHoldService,
     private readonly audit: AuditLogService,
   ) {}
 
@@ -86,16 +88,33 @@ export class CallAssignmentService {
     const picked = await this.prisma.client.$transaction(async (tx) => {
       // FIFO, only currently-pickable PENDING rows; SKIP LOCKED so
       // concurrent pulls never collide. status literal is not user input.
+      // A RETURNED entry goes to the front.
+      //
+      // `scheduled_attempts > 0` on a PENDING row means it was pulled by
+      // an agent and came back without a call being logged — expired,
+      // released, or its agent stood down as absent. That customer has
+      // already waited through an agent claiming their order and doing
+      // nothing with it, so queueing them again behind fresh orders
+      // makes them pay twice for our failure.
+      //
+      // This CANNOT cause redial loops, and the reason is structural: a
+      // re-queue after a real attempt creates a BRAND NEW entry (locked
+      // decision #2 — the completed row is the attempt history), so it
+      // starts at scheduled_attempts = 0 and sorts as the fresh entry it
+      // is. Only never-called holds jump the queue.
+      //
+      // Within each group it is still strict FIFO, so "the oldest
+      // returned call first" holds.
       const rows = await tx.$queryRawUnsafe<Array<{ id: string }>>(
         `SELECT id FROM call_queue_entries
            WHERE status = 'pending' AND available_at <= now()
-           ORDER BY available_at ASC, created_at ASC
+           ORDER BY (scheduled_attempts > 0) DESC, available_at ASC, created_at ASC
            FOR UPDATE SKIP LOCKED
            LIMIT 1`,
       );
       const id = rows[0]?.id;
       if (id === undefined) return null;
-      return tx.callQueueEntry.update({
+      const entry = await tx.callQueueEntry.update({
         where: { id },
         data: {
           status: CallQueueStatus.ASSIGNED,
@@ -105,6 +124,17 @@ export class CallAssignmentService {
         },
         select: { id: true, orderId: true, assignedAt: true, scheduledAttempts: true },
       });
+      // Open the hold in the SAME tx as the claim, so a hold can never
+      // exist for a claim that did not happen, nor a claim go unrecorded.
+      await tx.callAssignmentHold.create({
+        data: {
+          queueEntryId: entry.id,
+          orderId: entry.orderId,
+          agentId,
+          startedAt: entry.assignedAt ?? now,
+        },
+      });
+      return entry;
     });
 
     if (!picked) return null; // QUEUE_EMPTY
@@ -242,6 +272,10 @@ export class CallAssignmentService {
       },
     });
     if (count === 0) return { released: false }; // lost a race — no-op
+
+    // The agent handed it back without calling. Recorded before the
+    // audit so the evaluation trail cannot be the thing that is missing.
+    await this.holds.close(assignmentId, CallHoldOutcome.RELEASED);
 
     await this.audit.log({
       actorType: ActorType.STAFF,

@@ -33,7 +33,14 @@ describe('AgentPresenceService', () => {
       },
     } as never;
     return {
-      svc: new AgentPresenceService(prisma, { log } as never),
+      svc: new AgentPresenceService(
+        prisma,
+        { log } as never,
+        {
+          close: jest.fn(),
+          closeAllForAgent: jest.fn().mockResolvedValue(0),
+        } as never,
+      ),
       settingsUpdateMany,
       queueUpdateMany,
       log,

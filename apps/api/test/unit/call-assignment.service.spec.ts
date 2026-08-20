@@ -57,7 +57,13 @@ function makeService(
   const updateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async () => ({
     count: opts.releaseUpdateCount ?? 1,
   }));
-  const txClient = { $queryRawUnsafe: queryRawUnsafe, callQueueEntry: { update } };
+  // The hold opens in the SAME tx as the claim, so the tx fake needs it.
+  const holdCreate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({ id: 'hold-1' }));
+  const txClient = {
+    $queryRawUnsafe: queryRawUnsafe,
+    callQueueEntry: { update },
+    callAssignmentHold: { create: holdCreate },
+  };
   // The assignment carries WHO the customer bought from — the agent's
   // opening line. Empty by default; a test that cares supplies rows.
   const sellerFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => opts.sellers ?? []);
@@ -90,10 +96,13 @@ function makeService(
     { client } as unknown as PrismaService,
     orders as unknown as OrderReadService,
     expiration as unknown as AssignmentExpirationService,
+    // Evaluation record; closing is covered by call-hold.service.spec.
+    { close: jest.fn(), closeAllForAgent: jest.fn() } as never,
     audit as unknown as AuditLogService,
   );
   return {
     svc,
+    holdCreate,
     count,
     agentSettingsFindUnique,
     queryRawUnsafe,
@@ -125,7 +134,12 @@ describe('CallAssignmentService.pullNext', () => {
     expect(scheduleExpiration).toHaveBeenCalledWith('q1', new Date('2026-05-18T10:00:00Z'));
     const sql = queryRawUnsafe.mock.calls[0]![0];
     expect(sql).toContain('FOR UPDATE SKIP LOCKED');
-    expect(sql).toContain('ORDER BY available_at ASC, created_at ASC');
+    // Returned-without-a-call entries jump the queue; strict FIFO within
+    // each group. See call-queue-priority.spec for why this cannot cause
+    // a redial loop.
+    expect(sql).toContain(
+      'ORDER BY (scheduled_attempts > 0) DESC, available_at ASC, created_at ASC',
+    );
     expect(sql).toContain("status = 'pending'");
     expect(sql).toContain('available_at <= now()');
     const data = update.mock.calls[0]![0].data as AnyArgs;

@@ -185,6 +185,7 @@ function AgentDetail({
   const outcomes = Object.entries(metrics.data?.byOutcome ?? {}).sort((a, b) => b[1] - a[1]);
   const attempts = metrics.data?.totalAttempts ?? 0;
   const confirmed = metrics.data?.confirmedCount ?? 0;
+  const holds = metrics.data?.holds;
 
   return (
     <Modal
@@ -221,6 +222,46 @@ function AgentDetail({
               },
             ]}
           />
+
+          {holds !== undefined && (holds.holdsCompleted > 0 || holds.holdsDropped > 0) && (
+            <Section
+              title="Time holding calls"
+              // An attempt count says how much work an agent DID. This
+              // says what became of the work they TOOK — a dropped hold
+              // logs no attempt, so it is invisible above by
+              // construction.
+              subtitle={
+                holds.holdsDropped === 0
+                  ? 'Every call this agent picked up ended in a logged outcome.'
+                  : `${holds.holdsDropped} of ${holds.holdsCompleted + holds.holdsDropped} calls picked up ended without a call being logged.`
+              }
+            >
+              <DescriptionList
+                items={[
+                  { label: 'Calls worked', value: <Num value={holds.holdsCompleted} /> },
+                  { label: 'Picked up then dropped', value: <Num value={holds.holdsDropped} /> },
+                  {
+                    label: 'Average time to log an outcome',
+                    value:
+                      holds.avgSecondsToOutcome === null
+                        ? '—'
+                        : formatDuration(holds.avgSecondsToOutcome),
+                  },
+                  {
+                    label: 'Longest hold that went nowhere',
+                    value:
+                      holds.longestDroppedSeconds === null
+                        ? '—'
+                        : formatDuration(holds.longestDroppedSeconds),
+                  },
+                  ...Object.entries(holds.dropsByReason).map(([reason, n]) => ({
+                    label: DROP_REASON_LABELS[reason] ?? reason,
+                    value: <Num value={n} />,
+                  })),
+                ]}
+              />
+            </Section>
+          )}
 
           <Section
             title="Attempts"
@@ -322,3 +363,22 @@ const DAY_NAMES: Record<number, string> = {
   5: 'Fri',
   6: 'Sat',
 };
+
+/** Why a hold ended with nothing to show for it, in words an operator
+ *  can act on rather than an enum. */
+const DROP_REASON_LABELS: Record<string, string> = {
+  RELEASED: 'Handed back without calling',
+  EXPIRED: 'Held past the timeout',
+  AGENT_ABSENT: 'Agent was not at the desk',
+  REASSIGNED: 'Moved to someone else',
+};
+
+/** Seconds → the coarsest unit that still says something. A hold is
+ *  minutes long; rendering 450 helps nobody. */
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const mins = Math.round(seconds / 60);
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  return `${hours}h ${mins % 60}m`;
+}

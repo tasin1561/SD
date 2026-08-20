@@ -28,6 +28,8 @@ function makeService(
     assignedGroup?: AnyArgs[];
     outcomeGroup?: AnyArgs[];
     currentAssigned?: number;
+    /** Closed holds, for the evaluation metrics. */
+    holds?: AnyArgs[];
   } = {},
 ) {
   const staffFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => opts.agents ?? []);
@@ -43,6 +45,9 @@ function makeService(
     staffUser: { findMany: staffFindMany, findFirst: staffFindFirst },
     callQueueEntry: { groupBy: queueGroupBy, count: queueCount },
     callAttempt: { groupBy: attemptGroupBy },
+    // Hold history — evaluation data, covered by its own spec. Empty
+    // here so these tests stay about attempt aggregation.
+    callAssignmentHold: { findMany: jest.fn(async () => opts.holds ?? []) },
   };
   const get = jest.fn<Promise<AgentSettingsView>, [string]>(async () => SETTINGS);
   const settings = { get };

@@ -312,7 +312,7 @@ const systemSettings: SystemSettingSeed[] = [
     key: 'ops.call_assignment_timeout_minutes',
     category: 'ops',
     valueType: SettingValueType.INT,
-    valueInt: 30,
+    valueInt: 15,
     displayName: 'Call Assignment Timeout (minutes)',
     description:
       'A pulled queue entry the agent does not act on within this window is auto-returned to PENDING by the BullMQ expiration worker',

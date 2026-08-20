@@ -5,6 +5,7 @@ import { CallQueueModule } from '../call-queue/call-queue.module';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { CallOutcomeMappingService } from './services/call-outcome-mapping.service';
 import { AgentPresenceService } from './services/agent-presence.service';
+import { CallHoldService } from './services/call-hold.service';
 import { AgentPresenceQueue } from './queue/agent-presence.queue';
 import { AgentPresenceWorker } from './queue/agent-presence.worker';
 import { CallAssignmentService } from './services/call-assignment.service';
@@ -50,6 +51,7 @@ import { EarlyReservationModule } from '../early-reservation/early-reservation.m
   providers: [
     CallOutcomeMappingService,
     AgentPresenceService,
+    CallHoldService,
     AgentPresenceQueue,
     AgentPresenceWorker,
     CallAssignmentService,

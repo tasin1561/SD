@@ -46,17 +46,19 @@ function makeService(
     { client } as unknown as PrismaService,
     audit as unknown as AuditLogService,
     queue as unknown as AssignmentExpirationQueue,
+    // Evaluation record; not what these tests are about.
+    { close: jest.fn(), closeAllForAgent: jest.fn() } as never,
   );
   return { svc, settingFindUnique, entryFindUnique, updateMany, auditLog, enqueueExpiration };
 }
 
 describe('AssignmentExpirationService.scheduleExpiration', () => {
-  it('defaults to 30 min (no settings row) and carries assignedAt ISO', async () => {
+  it('defaults to 15 min (no settings row) and carries assignedAt ISO', async () => {
     const { svc, enqueueExpiration } = makeService({ timeoutValueInt: null });
     await svc.scheduleExpiration('q1', ASSIGNED_AT);
     expect(enqueueExpiration).toHaveBeenCalledWith(
       { assignmentId: 'q1', assignedAtIso: ASSIGNED_AT.toISOString() },
-      30 * 60_000,
+      15 * 60_000,
     );
   });
 
