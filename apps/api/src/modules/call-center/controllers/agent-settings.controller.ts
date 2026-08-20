@@ -1,5 +1,15 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Patch, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AgentPresenceService } from '../services/agent-presence.service';
 import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
 import {
   ClientInfo,
@@ -26,7 +36,19 @@ import { RequirePermissions } from '../../../common/auth/require-permissions.dec
 @RequirePermissions('callcenter.work')
 @Controller('agent/settings')
 export class AgentSettingsController {
-  constructor(private readonly svc: AgentSettingsService) {}
+  constructor(
+    private readonly svc: AgentSettingsService,
+    private readonly presence: AgentPresenceService,
+  ) {}
+
+  @Post('heartbeat')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Agent is still at the desk — renews presence, never grants it',
+  })
+  async heartbeat(@CurrentStaff() staff: AuthenticatedStaff): Promise<void> {
+    await this.presence.touch(staff.id);
+  }
 
   @Get()
   @ApiOperation({ summary: "The calling agent's effective call settings" })

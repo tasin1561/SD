@@ -4,6 +4,9 @@ import { OrderModule } from '../order/order.module';
 import { CallQueueModule } from '../call-queue/call-queue.module';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { CallOutcomeMappingService } from './services/call-outcome-mapping.service';
+import { AgentPresenceService } from './services/agent-presence.service';
+import { AgentPresenceQueue } from './queue/agent-presence.queue';
+import { AgentPresenceWorker } from './queue/agent-presence.worker';
 import { CallAssignmentService } from './services/call-assignment.service';
 import { CallAttemptService } from './services/call-attempt.service';
 import { AgentSettingsService } from './services/agent-settings.service';
@@ -46,6 +49,9 @@ import { EarlyReservationModule } from '../early-reservation/early-reservation.m
   ],
   providers: [
     CallOutcomeMappingService,
+    AgentPresenceService,
+    AgentPresenceQueue,
+    AgentPresenceWorker,
     CallAssignmentService,
     CallAttemptService,
     AgentSettingsService,

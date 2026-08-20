@@ -17,6 +17,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
 import { ApiError } from '@skydrop/api-client';
 import type { CallOrderSnapshot, PulledAssignment } from '@skydrop/api-client';
+import { PhoneToCall } from '@/components/phone-to-call';
 import {
   usePullNextCall,
   useRecordCallAttempt,
@@ -65,6 +66,10 @@ const OUTCOME_OPTIONS: ReadonlyArray<{
 
 /** How long to wait before looking again when the queue came back empty. */
 const EMPTY_QUEUE_RETRY_MS = 15_000;
+
+/** Comfortably inside the shortest sensible presence window, so a
+ *  present agent is never stood down between two beats. */
+const HEARTBEAT_MS = 60_000;
 
 export function CallCenterStation(): ReactElement {
   const toast = useToast();
@@ -184,6 +189,38 @@ export function CallCenterStation(): ReactElement {
   const advanceRef = useRef(advance);
   advanceRef.current = advance;
 
+  /**
+   * "I am still here."
+   *
+   * Availability is a claim about being AT the desk, and a boolean in a
+   * table cannot go stale on its own — an agent who marked themselves
+   * available and walked away kept claiming orders, because this
+   * component's auto-advance needs no human present. The server stands
+   * down anyone it has not heard from; this is the hearing.
+   *
+   * Gated on `document.visibilityState`, which is the whole point: a
+   * backgrounded or forgotten tab must NOT keep someone on the roster.
+   * Browsers also throttle timers in hidden tabs, so an ungated
+   * heartbeat would be unreliable exactly when it mattered.
+   */
+  useEffect(() => {
+    if (!isAvailable) return;
+    const beat = (): void => {
+      if (document.visibilityState !== 'visible') return;
+      void client.request('/api/agent/settings/heartbeat', { method: 'POST' }).catch(() => {
+        // Best-effort: a missed beat costs at most one sweep window, and
+        // failing loudly here would interrupt a live call for nothing.
+      });
+    };
+    beat();
+    const id = setInterval(beat, HEARTBEAT_MS);
+    document.addEventListener('visibilitychange', beat);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', beat);
+    };
+  }, [isAvailable, client]);
+
   // Adopt whatever this agent is already holding, ONCE, before any
   // pulling starts. Runs on the query settling either way: an agent
   // holding nothing still needs the gate opened, or the station would
@@ -206,19 +243,27 @@ export function CallCenterStation(): ReactElement {
   const idleRef = useRef(false);
   idleRef.current = isAvailable && bootstrapped && assignment === null && !pull.isPending;
 
+  /** Nobody is reading a hidden tab, so it must not take work. Without
+   *  this the auto-advance re-claims an order every 15s for as long as a
+   *  forgotten tab stays open, which is precisely how the CC-7 expiry
+   *  was defeated: it handed the order back and the tab took it again. */
+  const humanPresent = (): boolean =>
+    typeof document === 'undefined' || document.visibilityState === 'visible';
+
   // First look, the moment the held-call check clears and there is
   // nothing to hold. Separate from the interval below because that one
   // depends ONLY on availability on purpose (see above) — folding
   // `bootstrapped` into its deps would rebuild the timer.
   useEffect(() => {
     if (!isAvailable || !bootstrapped) return;
-    if (idleRef.current) void advanceRef.current(false);
+    if (idleRef.current && humanPresent()) void advanceRef.current(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAvailable, bootstrapped]);
 
   useEffect(() => {
     if (!isAvailable) return;
     const id = setInterval(() => {
-      if (idleRef.current) void advanceRef.current(false);
+      if (idleRef.current && humanPresent()) void advanceRef.current(false);
     }, EMPTY_QUEUE_RETRY_MS);
     return () => clearInterval(id);
   }, [isAvailable]);
@@ -345,7 +390,7 @@ export function CallCenterStation(): ReactElement {
                 call has started. Renders nothing for a first-time
                 customer. */}
             <CustomerRiskStrip orderId={assignment.orderId} />
-            <RecipientPanel order={assignment.order} />
+            <RecipientPanel order={assignment.order} seller={assignment.seller} />
 
             <div className="grid grid-cols-1 gap-3 mt-4">
               <FormField label="Outcome" required>
@@ -408,7 +453,13 @@ export function CallCenterStation(): ReactElement {
   );
 }
 
-function RecipientPanel({ order }: { readonly order: CallOrderSnapshot | null }): ReactElement {
+function RecipientPanel({
+  order,
+  seller,
+}: {
+  readonly order: CallOrderSnapshot | null;
+  readonly seller: PulledAssignment['seller'];
+}): ReactElement {
   if (order === null) {
     // listCurrent/pullNext log this server-side; the agent still needs
     // to be told rather than shown a card of dashes.
@@ -427,15 +478,24 @@ function RecipientPanel({ order }: { readonly order: CallOrderSnapshot | null })
 
   return (
     <div className="rounded-[6px] border border-border p-3 text-sm">
-      <div className="text-text-bright font-medium mb-1">{order.orderNumber}</div>
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <span className="text-text-bright font-medium">{order.orderNumber}</span>
+        {seller !== null && (
+          // The agent opens with this: "calling about your order from
+          // <store>". A customer phoned by a company they do not
+          // recognise hangs up, and in a COD market that is a refusal.
+          <span className="text-text-muted text-xs">
+            Ordered from <span className="text-text-bright">{seller.companyName}</span>
+          </span>
+        )}
+      </div>
+
+      <div className="mb-2">
+        <PhoneToCall phone={r.phoneE164} altPhone={r.altPhoneE164} />
+      </div>
+
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
         <Field label="Name" value={r.name || '—'} />
-        <Field
-          label="Phone"
-          value={
-            r.altPhoneE164 ? `${r.phoneE164 || '—'} (alt ${r.altPhoneE164})` : r.phoneE164 || '—'
-          }
-        />
         <Field
           label="Address"
           value={[r.addressLine1, r.addressLine2, r.landmark].filter(Boolean).join(', ') || '—'}
@@ -450,6 +510,15 @@ function RecipientPanel({ order }: { readonly order: CallOrderSnapshot | null })
             '—'
           }
         />
+        {seller !== null && (
+          <Field
+            label="Seller contact"
+            // For the questions an agent cannot answer — a substitution,
+            // a discount the customer says they were promised. Reaching
+            // the shop takes a call, not a support ticket.
+            value={`${seller.contactPersonName} · ${seller.phone}`}
+          />
+        )}
         <Field
           label="Payment"
           value={

@@ -24,6 +24,17 @@ export interface PulledAssignment {
   /** Order snapshot for the agent's call (recipient + items). null only
    *  if the referenced order vanished (data anomaly — logged). */
   order: ResolvedOrder | null;
+  /**
+   * WHO the customer bought from. The agent's opening line is "calling
+   * about your order from <store>" — a customer who ordered from a shop
+   * they recognise and is phoned by a company they have never heard of
+   * hangs up, and in a COD market that hang-up is a refused parcel.
+   *
+   * Live, not snapshotted: it identifies a company that still exists and
+   * can still be phoned, so the current name is the correct one — unlike
+   * the recipient block, which must stay as it was at order time.
+   */
+  seller: { id: string; companyName: string; contactPersonName: string; phone: string } | null;
 }
 
 /**
@@ -115,7 +126,44 @@ export class CallAssignmentService {
       assignedAt: picked.assignedAt ?? now,
       scheduledAttempts: picked.scheduledAttempts,
       order,
+      seller: order ? await this.loadSeller(order.sellerId) : null,
     };
+  }
+
+  /**
+   * The seller behind an order, for the agent's opening line.
+   *
+   * Read here rather than through a catalog/order boundary because it is
+   * about the COMPANY, not the order — `call-attempt.service` already
+   * reads sellers the same way for the same reason.
+   */
+  private async loadSeller(
+    sellerId: string,
+  ): Promise<{ id: string; companyName: string; contactPersonName: string; phone: string } | null> {
+    return (await this.loadSellers([sellerId])).get(sellerId) ?? null;
+  }
+
+  /** Batch form — one query however many assignments are in flight. */
+  private async loadSellers(
+    sellerIds: string[],
+  ): Promise<
+    ReadonlyMap<
+      string,
+      { id: string; companyName: string; contactPersonName: string; phone: string }
+    >
+  > {
+    const ids = [...new Set(sellerIds)];
+    const out = new Map<
+      string,
+      { id: string; companyName: string; contactPersonName: string; phone: string }
+    >();
+    if (ids.length === 0) return out;
+    const rows = await this.prisma.client.seller.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, companyName: true, contactPersonName: true, phone: true },
+    });
+    for (const r of rows) out.set(r.id, r);
+    return out;
   }
 
   /** The agent's in-flight ASSIGNED entries (+ order snapshots).
@@ -134,13 +182,18 @@ export class CallAssignmentService {
     });
     if (rows.length === 0) return [];
     const orders = await this.orders.getManyByIds(rows.map((r) => r.orderId));
-    return rows.map((r) => ({
-      assignmentId: r.id,
-      orderId: r.orderId,
-      assignedAt: r.assignedAt ?? new Date(),
-      scheduledAttempts: r.scheduledAttempts,
-      order: orders.get(r.orderId) ?? null,
-    }));
+    const sellers = await this.loadSellers([...orders.values()].map((o) => o.sellerId));
+    return rows.map((r) => {
+      const order = orders.get(r.orderId) ?? null;
+      return {
+        assignmentId: r.id,
+        orderId: r.orderId,
+        assignedAt: r.assignedAt ?? new Date(),
+        scheduledAttempts: r.scheduledAttempts,
+        order,
+        seller: order ? (sellers.get(order.sellerId) ?? null) : null,
+      };
+    });
   }
 
   /**

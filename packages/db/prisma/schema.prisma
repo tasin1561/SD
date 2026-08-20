@@ -2822,7 +2822,17 @@ model AgentCallSettings {
   // Module 7 (locked decision 10a): reused as the concurrent-assignment
   // cap; default migrated 20 → 1.
   maxActiveCalls      Int      @default(1) @map("max_active_calls")
-  isAvailable         Boolean  @default(true) @map("is_available")
+  // Default FALSE: an agent who is logged in is not necessarily at
+  // their desk, and a queue that hands work to an empty chair holds the
+  // customer's order hostage. Presence is claimed, never assumed.
+  isAvailable         Boolean  @default(false) @map("is_available")
+  /// Last time this agent proved they were AT the desk — a foreground
+  /// station tab or an action taken. `isAvailable` alone is a boolean
+  /// that cannot go stale on its own: an agent who marks available and
+  /// walks away keeps claiming orders forever, because the station's
+  /// auto-advance needs no human present. The presence sweep reads this
+  /// and stands them down.
+  lastSeenAt          DateTime? @map("last_seen_at") @db.Timestamptz
   workingHoursStart   String   @default("09:00") @map("working_hours_start")
   workingHoursEnd     String   @default("18:00") @map("working_hours_end")
   workingDays         Int[]    @default([1, 2, 3, 4, 5, 6]) @map("working_days")
@@ -2838,6 +2848,9 @@ model AgentCallSettings {
   agent StaffUser @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
   @@index([isAvailable])
+  /// The presence sweep's predicate: available agents ordered by how
+  /// long ago they were last seen.
+  @@index([isAvailable, lastSeenAt], map: "agent_call_settings_available_last_seen_idx")
   @@index([agentId])
   @@map("agent_call_settings")
 }

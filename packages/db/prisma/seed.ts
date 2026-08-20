@@ -318,6 +318,15 @@ const systemSettings: SystemSettingSeed[] = [
       'A pulled queue entry the agent does not act on within this window is auto-returned to PENDING by the BullMQ expiration worker',
   },
   {
+    key: 'ops.agent_presence_timeout_minutes',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 10,
+    displayName: 'Agent Presence Timeout (minutes)',
+    description:
+      'An agent marked available who has not been seen at the station for this long is stood down automatically and anything they hold returns to the queue. Availability is a claim about being AT the desk; without an expiry a stored true holds a customer order for as long as the tab stays open.',
+  },
+  {
     key: 'ops.call_reschedule_min_hours',
     category: 'ops',
     valueType: SettingValueType.INT,

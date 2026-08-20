@@ -50,6 +50,15 @@ export interface PulledAssignment {
   readonly scheduledAttempts: number;
   /** Null when the order vanished under the entry (logged server-side). */
   readonly order: CallOrderSnapshot | null;
+  /** The company the customer bought from — the agent's opening line.
+   *  Live rather than snapshotted: it names a business that still exists
+   *  and can still be phoned. */
+  readonly seller: {
+    readonly id: string;
+    readonly companyName: string;
+    readonly contactPersonName: string;
+    readonly phone: string;
+  } | null;
 }
 
 export interface RecordAttemptRequest {

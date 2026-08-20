@@ -13,6 +13,8 @@ function makeService(
     maxActive?: number | null; // null → no settings row
     picked?: { id: string; orderId: string } | null;
     order?: AnyArgs | null;
+    /** Rows the seller lookup returns (the agent's "ordered from" line). */
+    sellers?: AnyArgs[];
     currentRows?: AnyArgs[];
     releaseEntry?: AnyArgs | null; // findUnique for release(); undefined → default ASSIGNED owned
     releaseUpdateCount?: number;
@@ -56,9 +58,13 @@ function makeService(
     count: opts.releaseUpdateCount ?? 1,
   }));
   const txClient = { $queryRawUnsafe: queryRawUnsafe, callQueueEntry: { update } };
+  // The assignment carries WHO the customer bought from — the agent's
+  // opening line. Empty by default; a test that cares supplies rows.
+  const sellerFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => opts.sellers ?? []);
   const client = {
     callQueueEntry: { count, findMany, findUnique, updateMany },
     agentCallSettings: { findUnique: agentSettingsFindUnique },
+    seller: { findMany: sellerFindMany },
   } as {
     callQueueEntry: {
       count: typeof count;
@@ -67,6 +73,7 @@ function makeService(
       updateMany: typeof updateMany;
     };
     agentCallSettings: { findUnique: typeof agentSettingsFindUnique };
+    seller: { findMany: typeof sellerFindMany };
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
   };
   client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient);
