@@ -85,7 +85,11 @@ function makeService(
   client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient);
 
   const orders = {
-    getById: jest.fn(async () => (opts.order === undefined ? { orderId: 'o1' } : opts.order)),
+    // `items` is always present on a real ResolvedOrder — the
+    // assignment reads it to fetch each line's picture and description.
+    getById: jest.fn(async () =>
+      opts.order === undefined ? { orderId: 'o1', sellerId: 's1', items: [] } : opts.order,
+    ),
     getManyByIds: jest.fn(async () => new Map((opts.currentRows ?? []).map((r) => [r.orderId, r]))),
   };
   const scheduleExpiration = jest.fn<Promise<void>, [string, Date]>(async () => {});
@@ -98,6 +102,9 @@ function makeService(
     expiration as unknown as AssignmentExpirationService,
     // Evaluation record; closing is covered by call-hold.service.spec.
     { close: jest.fn(), closeAllForAgent: jest.fn() } as never,
+    // Picture + description are live catalogue reads; empty here so
+    // these tests stay about FIFO, capacity and enrichment.
+    { displayInfoByVariant: jest.fn(async () => new Map()) } as never,
     audit as unknown as AuditLogService,
   );
   return {
@@ -127,7 +134,7 @@ describe('CallAssignmentService.pullNext', () => {
   it('locks FIFO + assigns + enriches via OrderReadService', async () => {
     const { svc, queryRawUnsafe, update, orders, scheduleExpiration } = makeService({
       picked: { id: 'q1', orderId: 'o1' },
-      order: { orderId: 'o1', recipient: { name: 'Asha' } },
+      order: { orderId: 'o1', sellerId: 's1', items: [], recipient: { name: 'Asha' } },
     });
     const r = await svc.pullNext('agent-1');
     expect(r).not.toBeNull();
@@ -195,6 +202,12 @@ describe('CallAssignmentService.listCurrent', () => {
           orderId: 'o1',
           assignedAt: new Date('2026-05-18T10:00:00Z'),
           scheduledAttempts: 1,
+          // This fixture doubles as the resolved ORDER (getManyByIds
+          // maps it by orderId), so it carries what the enrichment
+          // reads: the seller for the agent's opening line, and the
+          // lines whose pictures and descriptions it fetches.
+          sellerId: 's1',
+          items: [],
         },
       ],
     });

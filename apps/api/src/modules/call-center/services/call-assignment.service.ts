@@ -9,6 +9,7 @@ import { ActorType, CallHoldOutcome, CallQueueStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CallHoldService } from './call-hold.service';
+import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 import { OrderReadService, type ResolvedOrder } from '../../order/services/order-read.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { AssignmentExpirationService } from './assignment-expiration.service';
@@ -36,6 +37,21 @@ export interface PulledAssignment {
    * the recipient block, which must stay as it was at order time.
    */
   seller: { id: string; companyName: string; contactPersonName: string; phone: string } | null;
+  /**
+   * Picture and description per variant on the order, keyed by
+   * variantId.
+   *
+   * Kept BESIDE the order rather than merged into its items, because
+   * these are LIVE catalogue reads and the item snapshot is ORD-6
+   * immutable — folding them in would make a live value look
+   * snapshotted to every future reader. `order_items.imageUrl` holds a
+   * canonical object URL that has resolved for nobody since the bucket
+   * went private, so a presigned one is minted per request.
+   *
+   * An agent is asked "what is it, exactly?" mid-call, and a SKU code
+   * does not answer that.
+   */
+  itemDisplay: Record<string, { thumbnailUrl: string | null; description: string | null }>;
 }
 
 /**
@@ -64,6 +80,7 @@ export class CallAssignmentService {
     private readonly orders: OrderReadService,
     private readonly expiration: AssignmentExpirationService,
     private readonly holds: CallHoldService,
+    private readonly catalog: CatalogReadService,
     private readonly audit: AuditLogService,
   ) {}
 
@@ -157,7 +174,23 @@ export class CallAssignmentService {
       scheduledAttempts: picked.scheduledAttempts,
       order,
       seller: order ? await this.loadSeller(order.sellerId) : null,
+      itemDisplay: await this.loadItemDisplay(order),
     };
+  }
+
+  /**
+   * Picture + description per variant on this order. Live catalogue
+   * reads (see the field's own note on why they stay beside the ORD-6
+   * snapshot rather than inside it).
+   */
+  private async loadItemDisplay(
+    order: ResolvedOrder | null,
+  ): Promise<Record<string, { thumbnailUrl: string | null; description: string | null }>> {
+    if (order === null) return {};
+    const map = await this.catalog.displayInfoByVariant(order.items.map((i) => i.variantId));
+    const out: Record<string, { thumbnailUrl: string | null; description: string | null }> = {};
+    for (const [variantId, d] of map) out[variantId] = d;
+    return out;
   }
 
   /**
@@ -213,6 +246,22 @@ export class CallAssignmentService {
     if (rows.length === 0) return [];
     const orders = await this.orders.getManyByIds(rows.map((r) => r.orderId));
     const sellers = await this.loadSellers([...orders.values()].map((o) => o.sellerId));
+    // One catalogue read for every in-flight assignment, not one each.
+    const allVariantIds = [...orders.values()].flatMap((o) => o.items.map((i) => i.variantId));
+    const displayByVariant = await this.catalog.displayInfoByVariant(allVariantIds);
+    const displayByOrder = new Map<
+      string,
+      Record<string, { thumbnailUrl: string | null; description: string | null }>
+    >();
+    for (const o of orders.values()) {
+      const forOrder: Record<string, { thumbnailUrl: string | null; description: string | null }> =
+        {};
+      for (const i of o.items) {
+        const d = displayByVariant.get(i.variantId);
+        if (d) forOrder[i.variantId] = d;
+      }
+      displayByOrder.set(o.orderId, forOrder);
+    }
     return rows.map((r) => {
       const order = orders.get(r.orderId) ?? null;
       return {
@@ -222,6 +271,7 @@ export class CallAssignmentService {
         scheduledAttempts: r.scheduledAttempts,
         order,
         seller: order ? (sellers.get(order.sellerId) ?? null) : null,
+        itemDisplay: displayByOrder.get(r.orderId) ?? {},
       };
     });
   }

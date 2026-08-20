@@ -1,8 +1,8 @@
 'use client';
 
 import { useMemo, useState, type ReactElement } from 'react';
-import { ProductThumb } from '@/components/product-thumb';
-import { Input, Money, Num } from '@skydrop/ui/components';
+
+import { Input, Money, Num, ProductThumb } from '@skydrop/ui/components';
 import type { SellerVariantSearchHit } from '@skydrop/api-client';
 import { Star } from 'lucide-react';
 import { useSetVariantFavourite, useVariantSearch } from '@/lib/api-hooks';

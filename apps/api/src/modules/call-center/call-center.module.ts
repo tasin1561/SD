@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { CatalogReadModule } from '../catalog-read/catalog-read.module';
 import { SettingsModule } from '../settings/settings.module';
 import { OrderModule } from '../order/order.module';
 import { CallQueueModule } from '../call-queue/call-queue.module';
@@ -41,7 +42,17 @@ import { EarlyReservationModule } from '../early-reservation/early-reservation.m
  * only for intra-module use by later call-center services.
  */
 @Module({
-  imports: [OrderModule, CallQueueModule, EarlyReservationModule, SettingsModule],
+  // CatalogReadModule: the sanctioned cross-module catalog read
+  // boundary (MUST #13) — the agent's card shows the product picture and
+  // description, which the ORD-6 order snapshot deliberately does not
+  // carry.
+  imports: [
+    OrderModule,
+    CallQueueModule,
+    EarlyReservationModule,
+    SettingsModule,
+    CatalogReadModule,
+  ],
   controllers: [
     AgentSettingsController,
     AgentCallController,

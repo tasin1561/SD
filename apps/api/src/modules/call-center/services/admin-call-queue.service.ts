@@ -26,7 +26,8 @@ export interface CallQueueAdminRow {
    *  the row, before any call is made, and again on a re-pull after an
    *  expiry. It is NOT the NDR cap counter. */
   scheduledAttempts: number;
-  /** Calls actually LOGGED against this entry (call_attempts rows). */
+  /** Calls logged against this ORDER (not this entry — a re-queue makes
+   *  a new entry, and the cap does not reset with it). */
   attemptsLogged: number;
   /** Of those, the ones that count toward the NDR cap (CC-5's 6 of 9
    *  outcomes). This is the number the cap is judged on, so it is the
@@ -104,11 +105,38 @@ export class AdminCallQueueService {
           // Without this the column rendered a raw uuid, which tells an
           // operator nothing about who to go and ask.
           assignedAgent: { select: { id: true, emailDisplay: true } },
-          attempts: { select: { outcome: true } },
         },
       }),
       this.prisma.client.callQueueEntry.count({ where }),
     ]);
+
+    // Attempts are counted PER ORDER, not per entry.
+    //
+    // A re-queue creates a NEW entry (locked decision #2), so a
+    // per-entry count resets to 0 on every retry — and the cap column
+    // then reads "0/3" for an order already on its second attempt,
+    // which makes a working retry chain look like an infinite loop.
+    // CC-5 counts `call_attempts` by orderId, so this must too: every
+    // row for the same order shows the same figure, because there IS
+    // only one figure.
+    const orderIds = [...new Set(rows.map((r) => r.orderId))];
+    const attemptRows =
+      orderIds.length === 0
+        ? []
+        : await this.prisma.client.callAttempt.groupBy({
+            by: ['orderId', 'outcome'],
+            where: { orderId: { in: orderIds } },
+            _count: { _all: true },
+          });
+    const logged = new Map<string, number>();
+    const counting = new Map<string, number>();
+    for (const a of attemptRows) {
+      const n = a._count._all;
+      logged.set(a.orderId, (logged.get(a.orderId) ?? 0) + n);
+      if (this.mapping.countsTowardCap(a.outcome)) {
+        counting.set(a.orderId, (counting.get(a.orderId) ?? 0) + n);
+      }
+    }
     return {
       items: rows.map((r) => ({
         id: r.id,
@@ -118,10 +146,10 @@ export class AdminCallQueueService {
         assignedAt: r.assignedAt,
         availableAt: r.availableAt,
         scheduledAttempts: r.scheduledAttempts,
-        attemptsLogged: r.attempts.length,
+        attemptsLogged: logged.get(r.orderId) ?? 0,
         // Derived from the mapping service rather than a second copy of
         // the 6-of-9 list (CC-2: the table lives in one place).
-        attemptsCounting: r.attempts.filter((a) => this.mapping.countsTowardCap(a.outcome)).length,
+        attemptsCounting: counting.get(r.orderId) ?? 0,
         maxAttempts: r.maxAttempts,
         createdAt: r.createdAt,
         order: r.order

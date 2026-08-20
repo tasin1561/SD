@@ -27,12 +27,22 @@ describe('CatalogReadService.thumbnailUrlsByVariant', () => {
 
   function make(images: ReturnType<typeof image>[]) {
     const findMany = jest.fn().mockResolvedValue(images);
+    // The description lives on the PRODUCT (variants have none), so the
+    // resolver reads both tables — one pair of queries for the whole
+    // order, never one per line.
+    const variantFindMany = jest
+      .fn()
+      .mockImplementation(async ({ where }: { where: { id: { in: string[] } } }) =>
+        where.id.in.map((id) => ({ id, product: { description: `about ${id}` } })),
+      );
     const presignGetUrl = jest.fn((key: string) => Promise.resolve(`signed:${key}`));
     const svc = new CatalogReadService(
-      { client: { productImage: { findMany } } } as never,
+      {
+        client: { productImage: { findMany }, productVariant: { findMany: variantFindMany } },
+      } as never,
       { presignGetUrl } as never,
     );
-    return { svc, findMany, presignGetUrl };
+    return { svc, findMany, variantFindMany, presignGetUrl };
   }
 
   it('presigns the THUMBNAIL key, never the original, when a thumbnail exists', async () => {
@@ -61,10 +71,21 @@ describe('CatalogReadService.thumbnailUrlsByVariant', () => {
     expect(out.size).toBe(2);
   });
 
-  it('omits a variant with no image, so the caller renders a blank tile', async () => {
+  it('returns the product description beside the picture', async () => {
+    // An agent mid-call is asked "what is it, exactly?", and a SKU code
+    // does not answer that.
+    const { svc } = make([image()]);
+    const info = await svc.displayInfoByVariant(['v1']);
+    expect(info.get('v1')?.description).toBe('about v1');
+    expect(info.get('v1')?.thumbnailUrl).toContain('thumbnails');
+  });
+
+  it('omits the URL for a variant with no image, so the caller renders a blank tile', async () => {
     const { svc } = make([]);
-    const out = await svc.thumbnailUrlsByVariant(['v1']);
-    expect(out.get('v1')).toBeUndefined();
+    expect((await svc.thumbnailUrlsByVariant(['v1'])).get('v1')).toBeUndefined();
+    // The row still exists — a described product with no photograph is
+    // normal, and dropping it would lose the description too.
+    expect((await svc.displayInfoByVariant(['v1'])).get('v1')?.thumbnailUrl).toBeNull();
   });
 
   it('asks nothing at all for an empty order', async () => {

@@ -23,6 +23,7 @@ export * from './form';
 export * from './modal';
 export * from './menu-button';
 export * from './page';
+export * from './product-thumb';
 export * from './status-badge';
 export * from './theme-init';
 export * from './theme-toggle';

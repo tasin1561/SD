@@ -36,6 +36,9 @@ export interface CallOrderSnapshot {
   readonly paymentMode: string;
   readonly codAmountInr: string | null;
   readonly items: ReadonlyArray<{
+    /** Keys into `PulledAssignment.itemDisplay` for the live picture
+     *  and description. */
+    readonly variantId: string;
     readonly skuCode: string;
     readonly productName: string;
     readonly variantLabel: string | null;
@@ -59,6 +62,18 @@ export interface PulledAssignment {
     readonly contactPersonName: string;
     readonly phone: string;
   } | null;
+  /**
+   * Picture and description per variant, keyed by variantId.
+   *
+   * Beside the order rather than inside its items, because these are
+   * LIVE catalogue reads while the item snapshot is ORD-6 immutable —
+   * folding them in would make a live value look snapshotted. The agent
+   * is asked "what is it, exactly?" mid-call and a SKU does not answer.
+   */
+  readonly itemDisplay: Record<
+    string,
+    { readonly thumbnailUrl: string | null; readonly description: string | null }
+  >;
 }
 
 export interface RecordAttemptRequest {

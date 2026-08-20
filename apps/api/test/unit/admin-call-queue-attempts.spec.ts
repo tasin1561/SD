@@ -19,6 +19,14 @@ import { CallOutcomeMappingService } from '../../src/modules/call-center/service
  */
 describe('AdminCallQueueService — attempts vs pulls', () => {
   function make(attempts: Array<{ outcome: CallOutcome }>, scheduledAttempts: number) {
+    // Grouped per order, mirroring the groupBy the service runs.
+    const grouped = new Map<CallOutcome, number>();
+    for (const a of attempts) grouped.set(a.outcome, (grouped.get(a.outcome) ?? 0) + 1);
+    const attemptGroups = [...grouped].map(([outcome, n]) => ({
+      orderId: 'o1',
+      outcome,
+      _count: { _all: n },
+    }));
     const row = {
       id: 'q1',
       orderId: 'o1',
@@ -31,7 +39,6 @@ describe('AdminCallQueueService — attempts vs pulls', () => {
       createdAt: new Date(),
       order: { orderNumber: 'SD-1', sellerId: 's1', status: 'pending_confirmation' },
       assignedAgent: { id: 'a1', emailDisplay: 'agent@skydrop.online' },
-      attempts,
     };
     const prisma = {
       client: {
@@ -39,6 +46,7 @@ describe('AdminCallQueueService — attempts vs pulls', () => {
           findMany: jest.fn().mockResolvedValue([row]),
           count: jest.fn().mockResolvedValue(1),
         },
+        callAttempt: { groupBy: jest.fn().mockResolvedValue(attemptGroups) },
       },
     } as never;
     const svc = new AdminCallQueueService(
@@ -75,6 +83,20 @@ describe('AdminCallQueueService — attempts vs pulls', () => {
     const { items } = await svc.listQueue({ page: 1, pageSize: 20 } as never);
     expect(items[0]?.attemptsLogged).toBe(4);
     expect(items[0]?.attemptsCounting).toBe(2);
+  });
+
+  it('counts per ORDER, so a re-queued entry does not read as a fresh start', async () => {
+    // The retry lives on a NEW entry with zero attempts of its own
+    // (locked decision #2). Counting per entry showed "0/3" for an order
+    // already on its second attempt, which makes a working retry chain
+    // look like it can loop forever. CC-5 counts by orderId; so does
+    // this.
+    const svc = make([{ outcome: CallOutcome.NO_ANSWER }], 0);
+    const { items } = await svc.listQueue({ page: 1, pageSize: 20 } as never);
+    // The entry itself has been pulled zero times and holds no attempts;
+    // the ORDER has one against the cap.
+    expect(items[0]?.scheduledAttempts).toBe(0);
+    expect(items[0]?.attemptsCounting).toBe(1);
   });
 
   it('resolves the holding agent to a human identity, never a bare id', async () => {

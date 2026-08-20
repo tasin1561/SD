@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { ProductThumb } from '@/components/product-thumb';
+
 import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import {
   Button,
@@ -14,6 +14,7 @@ import {
   Select,
   Textarea,
   useToast,
+  ProductThumb,
 } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 import {

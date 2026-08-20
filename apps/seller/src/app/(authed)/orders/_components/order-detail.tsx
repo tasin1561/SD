@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ProductThumb } from '@/components/product-thumb';
+
 import { ArrowLeft, Pencil, XCircle } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import type { OrderStatus } from '@skydrop/db';
@@ -25,6 +25,7 @@ import {
   Section,
   Table,
   useToast,
+  ProductThumb,
 } from '@skydrop/ui/components';
 import { OrderTimeline } from './order-timeline';
 import { CancelOrderDialog } from './cancel-order-dialog';

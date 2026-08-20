@@ -18,6 +18,7 @@ import { useApiClient } from '@skydrop/auth/client';
 import { ApiError } from '@skydrop/api-client';
 import type { CallOrderSnapshot, PulledAssignment } from '@skydrop/api-client';
 import { PhoneToCall } from '@/components/phone-to-call';
+import { ProductThumb } from '@skydrop/ui/components';
 import {
   usePullNextCall,
   useRecordCallAttempt,
@@ -390,7 +391,11 @@ export function CallCenterStation(): ReactElement {
                 call has started. Renders nothing for a first-time
                 customer. */}
             <CustomerRiskStrip orderId={assignment.orderId} />
-            <RecipientPanel order={assignment.order} seller={assignment.seller} />
+            <RecipientPanel
+              order={assignment.order}
+              seller={assignment.seller}
+              itemDisplay={assignment.itemDisplay}
+            />
 
             <div className="grid grid-cols-1 gap-3 mt-4">
               <FormField label="Outcome" required>
@@ -456,9 +461,11 @@ export function CallCenterStation(): ReactElement {
 function RecipientPanel({
   order,
   seller,
+  itemDisplay,
 }: {
   readonly order: CallOrderSnapshot | null;
   readonly seller: PulledAssignment['seller'];
+  readonly itemDisplay: PulledAssignment['itemDisplay'];
 }): ReactElement {
   if (order === null) {
     // listCurrent/pullNext log this server-side; the agent still needs
@@ -541,17 +548,37 @@ function RecipientPanel({
         <div className="border-border mt-3 border-t pt-2 text-sm">
           <div className="text-text-faint mb-1">Items</div>
           <ul className="space-y-0.5">
-            {order.items.map((it, idx) => (
-              <li key={`${it.skuCode}-${idx}`}>
-                <span className="text-text-bright">
-                  {it.productName}
-                  {it.variantLabel ? ` · ${it.variantLabel}` : ''}
-                </span>{' '}
-                <span className="text-text-faint font-mono text-xs">
-                  ×{it.quantity} · {it.skuCode}
-                </span>
-              </li>
-            ))}
+            {order.items.map((it, idx) => {
+              // Live catalogue read, keyed on variant — the snapshot's
+              // own imageUrl is a canonical object URL that has resolved
+              // for nobody since the bucket went private.
+              const display = itemDisplay[it.variantId];
+              return (
+                <li key={`${it.skuCode}-${idx}`} className="flex items-start gap-3 py-1">
+                  <ProductThumb src={display?.thumbnailUrl ?? null} size={44} />
+                  <div className="min-w-0">
+                    <div>
+                      <span className="text-text-bright font-medium">
+                        {it.productName}
+                        {it.variantLabel ? ` · ${it.variantLabel}` : ''}
+                      </span>{' '}
+                      <span className="text-text-faint font-mono text-xs">
+                        ×{it.quantity} · {it.skuCode}
+                      </span>
+                    </div>
+                    {display?.description !== null && display?.description !== undefined && (
+                      // Clamped: a product description can run to
+                      // paragraphs, and the agent needs the gist while
+                      // the customer is on the line, not an essay
+                      // pushing the outcome form off the screen.
+                      <p className="text-text-muted mt-0.5 line-clamp-2 text-xs leading-snug">
+                        {display.description}
+                      </p>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

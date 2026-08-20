@@ -275,6 +275,19 @@ describe('Call center flow (e2e)', () => {
     expect(again.body.assignment.assignmentId).toBe(futureEntry.id);
   });
 
+  /** Fast-forward a re-queued entry so the next pull can see it. */
+  async function makePickableNow(orderId: string): Promise<void> {
+    const entry = await h.prisma.callQueueEntry.findFirst({
+      where: { orderId, status: CallQueueStatus.PENDING },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!entry) return;
+    await h.prisma.callQueueEntry.update({
+      where: { id: entry.id },
+      data: { availableAt: new Date(Date.now() - 60_000) },
+    });
+  }
+
   it('4. NDR cap: 3 NO_ANSWER attempts → 3rd is REJECTED_NDR, no re-queue', async () => {
     await receiveStock(10);
     const orderId = await createSubmitted(1);
@@ -287,6 +300,13 @@ describe('Call center flow (e2e)', () => {
       expect(r.body.finalOrderStatus).toBe(OrderStatus.CALL_NO_RESPONSE);
       expect(r.body.requeued).toBe(true);
       expect(r.body.hitCap).toBe(false);
+      // Advance the clock (simulated), same idiom as test 3 above. A
+      // NO_ANSWER re-queue is now future-dated by
+      // ops.call_retry_interval_hours — a customer who did not pick up
+      // must not be redialled on the spot. This test is about the CAP
+      // being counted per ORDER, not about the wait, so it fast-forwards
+      // rather than encoding a redial delay it does not care about.
+      await makePickableNow(orderId);
     }
 
     const p3 = await pullNext(staffAuth).expect(200);

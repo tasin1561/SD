@@ -133,27 +133,62 @@ export class CatalogReadService {
   async thumbnailUrlsByVariant(
     variantIds: readonly string[],
   ): Promise<ReadonlyMap<string, string>> {
+    const info = await this.displayInfoByVariant(variantIds);
+    const out = new Map<string, string>();
+    for (const [id, v] of info) if (v.thumbnailUrl !== null) out.set(id, v.thumbnailUrl);
+    return out;
+  }
+
+  /**
+   * Thumbnail + product description for a set of variants, in ONE pair
+   * of queries however many lines are asked about.
+   *
+   * The description is the PRODUCT's (variants have none) and is LIVE,
+   * like the picture and for the same reason — it describes an item that
+   * still exists and is still being sold, so the current text is the
+   * correct one. The ORD-6 snapshot keeps name, SKU, weight and value;
+   * these two are display sugar that must never be read back as what was
+   * ordered.
+   *
+   * Exists because a call-centre agent is asked "what is it?" mid-call
+   * and a SKU code does not answer that.
+   */
+  async displayInfoByVariant(
+    variantIds: readonly string[],
+  ): Promise<ReadonlyMap<string, { thumbnailUrl: string | null; description: string | null }>> {
     const ids = [...new Set(variantIds)];
-    if (ids.length === 0) return new Map();
+    const empty = new Map<string, { thumbnailUrl: string | null; description: string | null }>();
+    if (ids.length === 0) return empty;
 
-    // Same ordering as the images page and the variant list (primary
-    // first, then display order, then age), so all three agree on which
-    // picture is "the" picture.
-    const images = await this.prisma.client.productImage.findMany({
-      where: { variantId: { in: ids }, deletedAt: null },
-      orderBy: [{ isPrimary: 'desc' }, { displayOrder: 'asc' }, { createdAt: 'asc' }],
-      select: { variantId: true, spacesKey: true, thumbnailUrl: true },
-    });
+    const [variants, images] = await Promise.all([
+      this.prisma.client.productVariant.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, product: { select: { description: true } } },
+      }),
+      // Same ordering as the images page and the variant list (primary
+      // first, then display order, then age), so all three agree on
+      // which picture is "the" picture.
+      this.prisma.client.productImage.findMany({
+        where: { variantId: { in: ids }, deletedAt: null },
+        orderBy: [{ isPrimary: 'desc' }, { displayOrder: 'asc' }, { createdAt: 'asc' }],
+        select: { variantId: true, spacesKey: true, thumbnailUrl: true },
+      }),
+    ]);
 
-    const firstFor = new Map<string, (typeof images)[number]>();
+    const firstImage = new Map<string, (typeof images)[number]>();
     for (const img of images) {
-      if (!firstFor.has(img.variantId)) firstFor.set(img.variantId, img);
+      if (!firstImage.has(img.variantId)) firstImage.set(img.variantId, img);
     }
 
-    const out = new Map<string, string>();
+    const out = new Map<string, { thumbnailUrl: string | null; description: string | null }>();
     await Promise.all(
-      [...firstFor.entries()].map(async ([variantId, img]) => {
-        out.set(variantId, await this.spaces.presignGetUrl(displayImageKey(img)));
+      variants.map(async (v) => {
+        const img = firstImage.get(v.id);
+        out.set(v.id, {
+          thumbnailUrl:
+            img === undefined ? null : await this.spaces.presignGetUrl(displayImageKey(img)),
+          description: v.product.description,
+        });
       }),
     );
     return out;

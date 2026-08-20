@@ -43,6 +43,9 @@ function makeService(
   );
   const client = {
     callQueueEntry: { findMany, count, groupBy, findUnique, update },
+    // Attempts are counted PER ORDER (a re-queue makes a new entry and
+    // the cap does not reset with it) — see admin-call-queue-attempts.
+    callAttempt: { groupBy: jest.fn(async () => []) },
     staffUser: { findFirst: staffFindFirst },
   };
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs]>(async () => 'a1');
@@ -95,7 +98,6 @@ describe('AdminCallQueueService.listQueue', () => {
           createdAt: new Date(),
           order: { orderNumber: 'SD-1', sellerId: 's1', status: 'pending_confirmation' },
           assignedAgent: null,
-          attempts: [],
         },
       ],
       total: 1,
