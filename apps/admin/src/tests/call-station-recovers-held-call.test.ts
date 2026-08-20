@@ -40,6 +40,16 @@ describe('call-centre station', () => {
     expect(src).toMatch(/isAvailable && bootstrapped && assignment === null/);
   });
 
+  it('reads the recipient from the NESTED block the server sends', () => {
+    // The panel used to cast an `unknown` payload to the flat DATABASE
+    // COLUMN names (recipientName, recipientPhoneE164), which exist on
+    // no payload the server has ever sent — so the one screen whose
+    // purpose is phoning customers showed no phone number.
+    expect(src).toMatch(/order\.recipient/);
+    expect(src).not.toMatch(/recipientPhoneE164\?:/);
+    expect(src).not.toMatch(/readonly order: unknown/);
+  });
+
   it('does not add 1 to a counter pullNext already incremented', () => {
     // pullNext returns the post-update row, so `+ 1` displayed
     // "attempt #2" on an agent's first call.

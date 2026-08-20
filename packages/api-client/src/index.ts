@@ -159,6 +159,7 @@ export type {
   RevealBankAccountResponse,
 } from './endpoints/admin-bank-reveal';
 export type {
+  CallOrderSnapshot,
   PulledAssignment,
   RecordAttemptRequest,
   RecordAttemptResult,

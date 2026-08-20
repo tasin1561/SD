@@ -16,7 +16,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
 import { ApiError } from '@skydrop/api-client';
-import type { PulledAssignment } from '@skydrop/api-client';
+import type { CallOrderSnapshot, PulledAssignment } from '@skydrop/api-client';
 import {
   usePullNextCall,
   useRecordCallAttempt,
@@ -408,82 +408,68 @@ export function CallCenterStation(): ReactElement {
   );
 }
 
-function RecipientPanel({ order }: { readonly order: unknown }): ReactElement {
-  // The order payload is the ResolvedOrder snapshot; we read defensively
-  // and only show fields when present (the API may evolve).
-  const o = (order ?? {}) as {
-    orderNumber?: string;
-    recipientName?: string;
-    recipientPhoneE164?: string;
-    recipientAltPhoneE164?: string | null;
-    recipientAddressLine1?: string;
-    recipientAddressLine2?: string | null;
-    recipientLandmark?: string | null;
-    recipientCity?: string;
-    recipientStateProvince?: string;
-    recipientPostalCode?: string;
-    paymentMode?: string;
-    codAmountInr?: string | number | null;
-    items?: ReadonlyArray<{
-      productName: string;
-      variantLabel: string | null;
-      quantity: number;
-      skuCode: string;
-    }>;
-  };
+function RecipientPanel({ order }: { readonly order: CallOrderSnapshot | null }): ReactElement {
+  if (order === null) {
+    // listCurrent/pullNext log this server-side; the agent still needs
+    // to be told rather than shown a card of dashes.
+    return (
+      <div className="rounded-[6px] border border-border p-3 text-sm text-text-muted">
+        This order could not be loaded. Release the call and tell a supervisor.
+      </div>
+    );
+  }
+
+  // The recipient block is NESTED (`recipient.name`, not
+  // `recipientName`). This panel used to cast an `unknown` payload to
+  // the flat column names, so every field here rendered "—" and an
+  // agent was asked to phone a number the screen would not show.
+  const r = order.recipient;
 
   return (
     <div className="rounded-[6px] border border-border p-3 text-sm">
-      <div className="text-text-bright font-medium mb-1">{o.orderNumber ?? 'Order'}</div>
+      <div className="text-text-bright font-medium mb-1">{order.orderNumber}</div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-        <Field label="Name" value={o.recipientName ?? '—'} />
+        <Field label="Name" value={r.name || '—'} />
         <Field
           label="Phone"
           value={
-            o.recipientAltPhoneE164
-              ? `${o.recipientPhoneE164 ?? '—'} (alt ${o.recipientAltPhoneE164})`
-              : (o.recipientPhoneE164 ?? '—')
+            r.altPhoneE164 ? `${r.phoneE164 || '—'} (alt ${r.altPhoneE164})` : r.phoneE164 || '—'
           }
         />
         <Field
           label="Address"
-          value={
-            [o.recipientAddressLine1, o.recipientAddressLine2, o.recipientLandmark]
-              .filter(Boolean)
-              .join(', ') || '—'
-          }
+          value={[r.addressLine1, r.addressLine2, r.landmark].filter(Boolean).join(', ') || '—'}
         />
         <Field
           label="City / state / PIN"
-          // `?? '—'` does not catch an EMPTY STRING, and city/state are
-          // stored as '' for orders whose seller never supplied them.
-          // An agent reading "· · 560001" aloud is the failure here.
+          // Filtering on EMPTY STRING, not nullishness: city/state are
+          // stored as '' for orders whose seller never supplied them
+          // (ORD-5). An agent reading "· · 560001" aloud is the failure.
           value={
-            [o.recipientCity, o.recipientStateProvince, o.recipientPostalCode]
-              .filter((v) => (v ?? '').trim() !== '')
-              .join(' · ') || '—'
+            [r.city, r.stateProvince, r.postalCode].filter((v) => v.trim() !== '').join(' · ') ||
+            '—'
           }
         />
         <Field
           label="Payment"
           value={
-            o.paymentMode === 'COD' && o.codAmountInr != null ? (
+            order.paymentMode === 'COD' && order.codAmountInr !== null ? (
               // The agent reads this figure aloud to the customer, so it
               // is grouped the way they expect to hear it: ₹12,34,567.
               <span>
-                COD <Money amount={o.codAmountInr} />
+                COD <Money amount={order.codAmountInr} />
               </span>
             ) : (
-              (o.paymentMode ?? '—')
+              order.paymentMode || '—'
             )
           }
         />
       </div>
-      {o.items && o.items.length > 0 && (
+      {order.items.length > 0 && (
         <div className="mt-2 pt-2 border-t border-border text-xs">
           <div className="text-text-faint mb-1">Items</div>
           <ul className="space-y-0.5">
-            {o.items.map((it, idx) => (
+            {order.items.map((it, idx) => (
               <li key={`${it.skuCode}-${idx}`}>
                 <span className="text-text-bright">
                   {it.productName}
