@@ -83,6 +83,17 @@ describe('OrderReattemptService', () => {
     expect(transitionStatus).not.toHaveBeenCalled();
   });
 
+  it('guards on the status the request was RAISED from, not a fixed one', async () => {
+    // Hardcoding REJECTED_BY_CUSTOMER broke every NDR approval the
+    // moment that status was enabled in settings: ask, read, approve —
+    // 409 STALE_ORDER_STATUS, with nothing on screen explaining why.
+    const ndr = make({
+      row: { ...PENDING_ROW, orderStatusAtRequest: OrderStatus.REJECTED_NDR },
+    });
+    await ndr.svc.approve('r1', 'staff-1', null, 1);
+    expect(ndr.transitionStatus.mock.calls[0]?.[0]?.expectedFrom).toBe(OrderStatus.REJECTED_NDR);
+  });
+
   it('guards the transition on the order still being REJECTED_BY_CUSTOMER', async () => {
     const { svc, transitionStatus } = make();
     await svc.approve('r1', 'staff-1', null, 1);

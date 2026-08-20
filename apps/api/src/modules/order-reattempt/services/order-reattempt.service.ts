@@ -149,10 +149,18 @@ export class OrderReattemptService {
         orderId: row.orderId,
         to: OrderStatus.PENDING_CONFIRMATION,
         actor: { type: ActorType.STAFF, id: staffId },
-        // Guarded: refuse if the order moved since the request was
-        // raised — a god-mode edit or a later transition means the
+        // Guarded on the status the request was RAISED from, not on a
+        // fixed one. The intent is "nothing has moved since the seller
+        // asked" — a god-mode edit or a later transition means the
         // decision was made about a different situation.
-        expectedFrom: OrderStatus.REJECTED_BY_CUSTOMER,
+        //
+        // This was hardcoded to REJECTED_BY_CUSTOMER, written when that
+        // was the only requestable status. The moment REJECTED_NDR was
+        // enabled in settings, every NDR approval failed with
+        // STALE_ORDER_STATUS: the seller could ask, the admin could
+        // read it, and the approve button simply did not work. The
+        // snapshot exists for precisely this, so use it.
+        expectedFrom: row.orderStatusAtRequest as OrderStatus,
         reason: `Re-attempt approved: ${note ?? 'no note'}`,
       });
     } catch (e) {
