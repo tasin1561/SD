@@ -271,6 +271,41 @@ export function NewOrderForm(): ReactElement {
   }
 
   /**
+   * Fill the recipient block from where this seller last sent to this
+   * number.
+   *
+   * OVERWRITES rather than filling only the blanks: the seller clicked a
+   * button that says "use these details", and half-applying it would
+   * leave a mix of two addresses — which is worse than either, and
+   * invisible until a parcel goes to the wrong door.
+   *
+   * The PHONE is untouched. It is what the lookup was keyed on, so it
+   * already matches, and rewriting the field someone is typing in is how
+   * a cursor jumps mid-digit.
+   *
+   * Landmark folds into line 2 when line 2 is empty, because line 2 IS
+   * the landmark on this form now (ORD-5) and an older order may have
+   * carried it in the separate column.
+   */
+  function useLastDetails(r: {
+    name: string;
+    addressLine1: string;
+    addressLine2: string | null;
+    landmark: string | null;
+    postalCode: string;
+  }): void {
+    setForm((p) => ({
+      ...p,
+      recipientName: r.name,
+      recipientAddressLine1: r.addressLine1,
+      recipientAddressLine2:
+        r.addressLine2 !== null && r.addressLine2 !== '' ? r.addressLine2 : (r.landmark ?? ''),
+      recipientPostalCode: r.postalCode,
+    }));
+    toast.success('Filled from their last order — check it is still right.');
+  }
+
+  /**
    * Adding from the catalogue fills everything the catalogue knows —
    * name, picture, weight and the effective unit value (M4: the
    * variant's own, or the product default where it is blank).
@@ -426,7 +461,7 @@ export function NewOrderForm(): ReactElement {
       {/* Who they are shipping to — rendered ABOVE the form, because a
           warning read after the address has been typed is a warning read
           too late. Renders nothing for a first-time customer. */}
-      <CustomerHistoryPanel phoneE164={form.recipientPhoneE164} />
+      <CustomerHistoryPanel phoneE164={form.recipientPhoneE164} onUseLastDetails={useLastDetails} />
 
       {/* Recipient */}
       <Card>

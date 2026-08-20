@@ -116,6 +116,17 @@ export interface CustomerReputation {
     readonly recentOrders: readonly CustomerOrderSummary[];
     /** Not yet packed — the ones a new order might duplicate. */
     readonly openOrders: readonly CustomerOrderSummary[];
+    /** Where this seller last sent something to this number. Null if
+     *  they never have. Seller-scoped by construction. */
+    readonly lastKnownRecipient: {
+      readonly name: string;
+      readonly addressLine1: string;
+      readonly addressLine2: string | null;
+      readonly landmark: string | null;
+      readonly postalCode: string;
+      readonly fromOrderNumber: string;
+      readonly placedAt: Date;
+    } | null;
   };
   /** A human's verdict, if one has been recorded. Never derived. */
   readonly riskLevel: CustomerRiskLevel;
@@ -156,6 +167,16 @@ export class CustomerReputationService {
           status: true,
           createdAt: true,
           declaredValueInr: true,
+          // The recipient block, for the "use last known details" fill on
+          // the new-order form. SELLER-SCOPED by the where above and
+          // deliberately never taken from the platform-wide query — a
+          // seller typing phone numbers must not be able to harvest
+          // addresses they were never given.
+          recipientName: true,
+          recipientAddressLine1: true,
+          recipientAddressLine2: true,
+          recipientLandmark: true,
+          recipientPostalCode: true,
           _count: { select: { items: true } },
         },
       }),
@@ -218,6 +239,23 @@ export class CustomerReputationService {
         openOrders: ownOrders
           .filter((o) => UNPACKED_OPEN_STATUSES.includes(o.status))
           .map(summarise),
+        // From the seller's MOST RECENT order to this number — where
+        // they last actually sent something, which is the address worth
+        // offering. Null when they have never ordered from this seller,
+        // in which case there is nothing to fill and the form says so by
+        // not offering.
+        lastKnownRecipient:
+          ownOrders[0] === undefined
+            ? null
+            : {
+                name: ownOrders[0].recipientName,
+                addressLine1: ownOrders[0].recipientAddressLine1,
+                addressLine2: ownOrders[0].recipientAddressLine2,
+                landmark: ownOrders[0].recipientLandmark,
+                postalCode: ownOrders[0].recipientPostalCode,
+                fromOrderNumber: ownOrders[0].orderNumber,
+                placedAt: ownOrders[0].createdAt,
+              },
       },
       riskLevel: customer?.riskLevel ?? CustomerRiskLevel.NONE,
       riskNotes: customer?.riskNotes ?? null,

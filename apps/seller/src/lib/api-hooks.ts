@@ -223,6 +223,18 @@ export interface CustomerReputation {
     readonly returned: number;
     readonly recentOrders: ReadonlyArray<CustomerOrderSummary>;
     readonly openOrders: ReadonlyArray<CustomerOrderSummary>;
+    /** Where this seller last sent to this number — the "use these
+     *  details" fill on the new-order form. Seller-scoped by
+     *  construction; null if they have never ordered from you. */
+    readonly lastKnownRecipient: {
+      readonly name: string;
+      readonly addressLine1: string;
+      readonly addressLine2: string | null;
+      readonly landmark: string | null;
+      readonly postalCode: string;
+      readonly fromOrderNumber: string;
+      readonly placedAt: string;
+    } | null;
   };
   readonly riskLevel: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'BLOCKED';
   readonly riskNotes: string | null;

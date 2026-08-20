@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { Copy } from 'lucide-react';
 import type { ReactElement } from 'react';
-import { Card, CardBody, Skeleton } from '@skydrop/ui/components';
+import { Card, CardBody, Skeleton, Button } from '@skydrop/ui/components';
 import { useCustomerLookup, type CustomerOrderSummary } from '@/lib/api-hooks';
 
 /**
@@ -51,8 +52,18 @@ function OrderLine({ o }: { readonly o: CustomerOrderSummary }): ReactElement {
 
 export function CustomerHistoryPanel({
   phoneE164,
+  onUseLastDetails,
 }: {
   readonly phoneE164: string;
+  /** Fill the recipient block from where this seller last sent to this
+   *  number. Absent when the form has nothing to fill. */
+  readonly onUseLastDetails?: (r: {
+    name: string;
+    addressLine1: string;
+    addressLine2: string | null;
+    landmark: string | null;
+    postalCode: string;
+  }) => void;
 }): ReactElement | null {
   const q = useCustomerLookup(phoneE164);
 
@@ -76,8 +87,14 @@ export function CustomerHistoryPanel({
   const pct = platform.returnRatePercent === null ? null : Number(platform.returnRatePercent);
   const tone = pct === null ? null : rateTone(pct);
 
+  const last = yours.lastKnownRecipient;
+
   return (
-    <Card>
+    // Ringed and tinted: a match is a FINDING, and the panel appears
+    // mid-form where a plain card reads as more chrome. The accent is
+    // the neutral one — a returning customer is not a warning, and the
+    // risk tone below is what carries alarm when there is any.
+    <Card className="border-accent/40 bg-accent/5 border">
       <CardBody className="space-y-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <span className="text-text-bright text-sm font-medium">
@@ -140,6 +157,35 @@ export function CustomerHistoryPanel({
                 <OrderLine key={o.orderId} o={o} />
               ))}
             </ul>
+          </div>
+        )}
+
+        {last !== null && onUseLastDetails !== undefined && (
+          // Offered only when there IS something to fill: a customer who
+          // has ordered across Skydrop but never from this seller has no
+          // address we may hand over.
+          <div className="border-border/60 flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-3">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() =>
+                onUseLastDetails({
+                  name: last.name,
+                  addressLine1: last.addressLine1,
+                  addressLine2: last.addressLine2,
+                  landmark: last.landmark,
+                  postalCode: last.postalCode,
+                })
+              }
+            >
+              <Copy size={12} /> Use these delivery details
+            </Button>
+            <span className="text-text-muted text-xs">
+              {last.addressLine1}
+              {last.postalCode === '' ? '' : ` · ${last.postalCode}`} — from {last.fromOrderNumber},{' '}
+              {new Date(last.placedAt).toLocaleDateString('en-IN')}
+            </span>
           </div>
         )}
       </CardBody>
