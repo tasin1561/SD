@@ -1,4 +1,5 @@
 import { CallQueueStatus, QueueClosureReason } from '@skydrop/db';
+import { CallOutcomeMappingService } from '../../src/modules/call-center/services/call-outcome-mapping.service';
 import { AdminCallQueueService } from '../../src/modules/call-center/services/admin-call-queue.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
@@ -59,6 +60,9 @@ function makeService(
     attempts as unknown as CallAttemptService,
     queue as unknown as CallQueueService,
     expiration as unknown as AssignmentExpirationService,
+    // Real instance: it is pure logic with no Prisma, and the row's
+    // counting-attempt total is derived through it (CC-2).
+    new CallOutcomeMappingService(),
   );
   return {
     svc,
@@ -87,8 +91,11 @@ describe('AdminCallQueueService.listQueue', () => {
           assignedAt: null,
           availableAt: new Date(),
           scheduledAttempts: 0,
+          maxAttempts: 3,
           createdAt: new Date(),
           order: { orderNumber: 'SD-1', sellerId: 's1', status: 'pending_confirmation' },
+          assignedAgent: null,
+          attempts: [],
         },
       ],
       total: 1,
@@ -111,7 +118,16 @@ describe('AdminCallQueueService.listQueue', () => {
       take: 10,
     });
     expect(r).toMatchObject({ total: 1, page: 2, pageSize: 10 });
-    expect(r.items[0]).toMatchObject({ id: 'q1', order: { orderNumber: 'SD-1' } });
+    expect(r.items[0]).toMatchObject({
+      id: 'q1',
+      order: { orderNumber: 'SD-1' },
+      // A queued entry nobody has pulled or phoned: every count zero,
+      // and no agent to name.
+      attemptsLogged: 0,
+      attemptsCounting: 0,
+      scheduledAttempts: 0,
+      agent: null,
+    });
   });
 });
 

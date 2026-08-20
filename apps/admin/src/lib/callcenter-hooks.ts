@@ -45,9 +45,18 @@ export interface CallQueueRow {
   assignedAgentId: string | null;
   assignedAt: string | null;
   availableAt: string;
+  /** Times PULLED into a station — claims, not conversations. */
   scheduledAttempts: number;
+  /** Calls actually logged against this entry. */
+  attemptsLogged: number;
+  /** Of those, the ones the NDR cap is judged on (CC-5's 6 of 9). */
+  attemptsCounting: number;
+  maxAttempts: number;
   createdAt: string;
   order: { orderNumber: string; sellerId: string; status: string } | null;
+  /** Resolved server-side — staff carry no name, so this is their
+   *  display email. Null when unassigned. */
+  agent: { id: string; name: string } | null;
 }
 
 export interface CallQueueStats {

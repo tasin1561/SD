@@ -10,6 +10,7 @@ import {
   type RecordAttemptResult,
 } from './call-attempt.service';
 import { AssignmentExpirationService } from './assignment-expiration.service';
+import { CallOutcomeMappingService } from './call-outcome-mapping.service';
 
 const OPEN_STATUSES: CallQueueStatus[] = [CallQueueStatus.PENDING, CallQueueStatus.ASSIGNED];
 
@@ -20,9 +21,23 @@ export interface CallQueueAdminRow {
   assignedAgentId: string | null;
   assignedAt: Date | null;
   availableAt: Date;
+  /** Times this entry has been PULLED into an agent's station. Counts
+   *  claims, not conversations — it increments the moment an agent takes
+   *  the row, before any call is made, and again on a re-pull after an
+   *  expiry. It is NOT the NDR cap counter. */
   scheduledAttempts: number;
+  /** Calls actually LOGGED against this entry (call_attempts rows). */
+  attemptsLogged: number;
+  /** Of those, the ones that count toward the NDR cap (CC-5's 6 of 9
+   *  outcomes). This is the number the cap is judged on, so it is the
+   *  one an operator deciding whether an order is nearly out of chances
+   *  needs to see. */
+  attemptsCounting: number;
+  /** The effective cap this entry was created under. */
+  maxAttempts: number;
   createdAt: Date;
   order: { orderNumber: string; sellerId: string; status: string } | null;
+  agent: { id: string; name: string } | null;
 }
 
 export interface CallQueueStats {
@@ -46,6 +61,7 @@ export class AdminCallQueueService {
     private readonly attempts: CallAttemptService,
     private readonly queue: CallQueueService,
     private readonly expiration: AssignmentExpirationService,
+    private readonly mapping: CallOutcomeMappingService,
   ) {}
 
   async listQueue(filters: {
@@ -79,10 +95,16 @@ export class AdminCallQueueService {
           assignedAt: true,
           availableAt: true,
           scheduledAttempts: true,
+          maxAttempts: true,
           createdAt: true,
           order: {
             select: { orderNumber: true, sellerId: true, status: true },
           },
+          // Staff carry no name — emailDisplay IS the human identity.
+          // Without this the column rendered a raw uuid, which tells an
+          // operator nothing about who to go and ask.
+          assignedAgent: { select: { id: true, emailDisplay: true } },
+          attempts: { select: { outcome: true } },
         },
       }),
       this.prisma.client.callQueueEntry.count({ where }),
@@ -96,6 +118,11 @@ export class AdminCallQueueService {
         assignedAt: r.assignedAt,
         availableAt: r.availableAt,
         scheduledAttempts: r.scheduledAttempts,
+        attemptsLogged: r.attempts.length,
+        // Derived from the mapping service rather than a second copy of
+        // the 6-of-9 list (CC-2: the table lives in one place).
+        attemptsCounting: r.attempts.filter((a) => this.mapping.countsTowardCap(a.outcome)).length,
+        maxAttempts: r.maxAttempts,
         createdAt: r.createdAt,
         order: r.order
           ? {
@@ -103,6 +130,9 @@ export class AdminCallQueueService {
               sellerId: r.order.sellerId,
               status: r.order.status,
             }
+          : null,
+        agent: r.assignedAgent
+          ? { id: r.assignedAgent.id, name: r.assignedAgent.emailDisplay }
           : null,
       })),
       total,

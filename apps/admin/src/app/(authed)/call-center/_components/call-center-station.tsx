@@ -17,7 +17,12 @@ import { useQuery } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
 import { ApiError } from '@skydrop/api-client';
 import type { PulledAssignment } from '@skydrop/api-client';
-import { usePullNextCall, useRecordCallAttempt, useReleaseCall } from '@/lib/api-hooks';
+import {
+  usePullNextCall,
+  useRecordCallAttempt,
+  useReleaseCall,
+  useCurrentCalls,
+} from '@/lib/api-hooks';
 import { CallOutcome } from '@skydrop/db';
 import { MyAvailability } from './my-availability';
 import { MyCallHistory } from './my-call-history';
@@ -77,7 +82,27 @@ export function CallCenterStation(): ReactElement {
   });
   const isAvailable = settings.data?.isAvailable ?? false;
 
+  /**
+   * What this agent is ALREADY holding, per the database.
+   *
+   * The held call used to live only in React state seeded from the pull
+   * response, so a reload — or navigating away and back — lost it while
+   * the queue entry stayed ASSIGNED to them in the database. The station
+   * then showed "Waiting for the next call" over a call they were still
+   * holding, every pull came back AGENT_AT_CAPACITY, and there was no
+   * way to record an outcome or release it from any screen. The only
+   * escapes were the CC-7 expiry timer or an admin reassigning it.
+   *
+   * The endpoint and this hook both already existed and nothing called
+   * them; adopting the row on mount is the whole fix.
+   */
+  const current = useCurrentCalls();
+
   const [assignment, setAssignment] = useState<PulledAssignment | null>(null);
+  /** Whether the held-call check has answered — the auto-advance must
+   *  not pull before it has, or the first tick races it to a certain
+   *  AGENT_AT_CAPACITY. */
+  const [bootstrapped, setBootstrapped] = useState(false);
   /** Last look found nothing — drives the copy, not the schedule. */
   const [queueEmpty, setQueueEmpty] = useState(false);
   const [outcome, setOutcome] = useState<CallOutcome | ''>('');
@@ -159,12 +184,39 @@ export function CallCenterStation(): ReactElement {
   const advanceRef = useRef(advance);
   advanceRef.current = advance;
 
+  // Adopt whatever this agent is already holding, ONCE, before any
+  // pulling starts. Runs on the query settling either way: an agent
+  // holding nothing still needs the gate opened, or the station would
+  // never advance at all.
+  const adoptedRef = useRef(false);
+  useEffect(() => {
+    if (adoptedRef.current) return;
+    if (!current.isSuccess) return;
+    adoptedRef.current = true;
+    // Cap is 1 at the Phase-1A default; take the oldest if that ever
+    // rises, which is the order listCurrent already returns them in.
+    const held = current.data.assignments[0];
+    if (held) {
+      setAssignment(held);
+      setQueueEmpty(false);
+    }
+    setBootstrapped(true);
+  }, [current.isSuccess, current.data]);
+
   const idleRef = useRef(false);
-  idleRef.current = isAvailable && assignment === null && !pull.isPending;
+  idleRef.current = isAvailable && bootstrapped && assignment === null && !pull.isPending;
+
+  // First look, the moment the held-call check clears and there is
+  // nothing to hold. Separate from the interval below because that one
+  // depends ONLY on availability on purpose (see above) — folding
+  // `bootstrapped` into its deps would rebuild the timer.
+  useEffect(() => {
+    if (!isAvailable || !bootstrapped) return;
+    if (idleRef.current) void advanceRef.current(false);
+  }, [isAvailable, bootstrapped]);
 
   useEffect(() => {
     if (!isAvailable) return;
-    if (idleRef.current) void advanceRef.current(false);
     const id = setInterval(() => {
       if (idleRef.current) void advanceRef.current(false);
     }, EMPTY_QUEUE_RETRY_MS);
@@ -277,7 +329,13 @@ export function CallCenterStation(): ReactElement {
                 Assignment {assignment.assignmentId.slice(0, 8)}
               </div>
               <div className="text-text-faint text-xs mt-0.5">
-                Order {assignment.orderId} · attempt #{assignment.scheduledAttempts + 1}
+                {/* NOT +1: scheduledAttempts is incremented by pullNext
+                    itself, so it already counts this claim. The old
+                    expression said "attempt #2" on an agent's first
+                    call. It counts claims rather than conversations —
+                    an expiry and re-pull raises it without anyone
+                    having phoned — so it is worded as such. */}
+                Order {assignment.orderId} · pull #{assignment.scheduledAttempts}
               </div>
             </div>
 

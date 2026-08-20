@@ -156,7 +156,8 @@ export function QueueIndex(): ReactElement {
                   <Th>Order</Th>
                   <Th>Waiting since</Th>
                   <Th>Available</Th>
-                  <Th align="right">Attempts</Th>
+                  <Th align="right">Calls</Th>
+                  <Th align="right">Pulls</Th>
                   <Th>Assigned to</Th>
                   <Th>Status</Th>
                   <Th align="right" />
@@ -181,10 +182,29 @@ export function QueueIndex(): ReactElement {
                         : 'now'}
                     </Td>
                     <Td align="right">
+                      {/* Calls LOGGED, and of those the ones the NDR cap
+                          is judged on. This column used to show the pull
+                          counter, which reads 1 the moment an agent
+                          claims the row — so an order nobody had phoned
+                          yet showed "Attempts 1". */}
+                      <span className="tabular-nums">
+                        {e.attemptsCounting}
+                        <span className="text-text-faint">/{e.maxAttempts}</span>
+                        {e.attemptsLogged > e.attemptsCounting && (
+                          <span className="text-text-faint text-xs">
+                            {' '}
+                            ({e.attemptsLogged} logged)
+                          </span>
+                        )}
+                      </span>
+                    </Td>
+                    <Td align="right">
                       <Num value={e.scheduledAttempts} />
                     </Td>
                     <Td>
-                      {e.assignedAgentId === null ? (
+                      {e.agent !== null ? (
+                        <span>{e.agent.name}</span>
+                      ) : e.assignedAgentId === null ? (
                         <span className="text-text-faint">—</span>
                       ) : (
                         agentEmail(agents.data, e.assignedAgentId)
