@@ -4,6 +4,7 @@ import { CallQueueStatus } from '@skydrop/db';
 import {
   IsIn,
   IsInt,
+  IsISO8601,
   IsOptional,
   IsString,
   IsUUID,
@@ -66,6 +67,24 @@ export class ReassignDto {
   @ApiProperty({ description: 'StaffUser id to reassign the entry to' })
   @IsUUID('7')
   toAgentId!: string;
+}
+
+export class RescheduleQueueEntryDto {
+  @ApiProperty({
+    description:
+      'When this call becomes callable again (ISO 8601). A time in the past means "now" — that is how a call is brought forward.',
+  })
+  @IsISO8601()
+  availableAt!: string;
+
+  @ApiProperty({
+    description:
+      'Why. Moving when a customer gets called is a decision someone should be able to account for later.',
+  })
+  @IsString()
+  @MinLength(5)
+  @MaxLength(300)
+  reason!: string;
 }
 
 export class BulkDequeueDto {

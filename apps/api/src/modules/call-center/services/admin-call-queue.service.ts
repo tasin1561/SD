@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CALL_QUEUE_VIEW_OPEN } from '../dto/admin-call-queue.dto';
 import { ActorType, CallQueueStatus, Prisma, QueueClosureReason } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -14,6 +19,13 @@ import { AssignmentExpirationService } from './assignment-expiration.service';
 import { CallOutcomeMappingService } from './call-outcome-mapping.service';
 
 const OPEN_STATUSES: CallQueueStatus[] = [CallQueueStatus.PENDING, CallQueueStatus.ASSIGNED];
+
+/**
+ * How far ahead a supervisor may push a call. A year out is a typo, not
+ * an intention, and an entry parked past every retention sweep is a
+ * customer who silently never gets called.
+ */
+const MAX_RESCHEDULE_DAYS = 90;
 
 export interface CallQueueAdminRow {
   id: string;
@@ -200,6 +212,83 @@ export class AdminCallQueueService {
 
   /** Hard-reassign an OPEN entry to a specific agent (decision 11).
    *  Arms a fresh expiration timer so the reassignment can't strand. */
+  /**
+   * Move WHEN a queued call becomes callable again.
+   *
+   * The only thing that set `available_at` was the re-queue after an
+   * attempt, computed from the outcome — so a supervisor watching an
+   * order sit four hours out had no way to bring it forward when the
+   * customer rang back, or to push it when they asked for tomorrow.
+   * Force-outcome was the only lever, and it works by RECORDING a
+   * conversation that did not happen.
+   *
+   * Deliberately does NOT touch the attempt count: this is about timing,
+   * not about pretending a call was or was not made. The cap still
+   * decides when the order is out of chances.
+   *
+   * Allowed on an ASSIGNED entry as well as a PENDING one. It has no
+   * effect while an agent holds it — `available_at` is only read when
+   * choosing what to hand out — but it is the right value for when the
+   * entry returns, and refusing would force a supervisor to wait for an
+   * expiry before they could act.
+   */
+  async reschedule(
+    entryId: string,
+    availableAt: Date,
+    reason: string,
+    adminStaffId: string,
+    ctx?: ClientContext,
+  ): Promise<{ id: string; availableAt: Date; status: CallQueueStatus }> {
+    const entry = await this.prisma.client.callQueueEntry.findUnique({
+      where: { id: entryId },
+      select: { id: true, orderId: true, status: true, availableAt: true },
+    });
+    if (!entry) {
+      throw new NotFoundException(`Queue entry ${entryId} not found`);
+    }
+    if (!OPEN_STATUSES.includes(entry.status)) {
+      throw new ConflictException({
+        code: 'ENTRY_NOT_OPEN',
+        message: `Entry is ${entry.status} (closed); cannot reschedule`,
+      });
+    }
+
+    const ceiling = new Date(Date.now() + MAX_RESCHEDULE_DAYS * 24 * 60 * 60_000);
+    if (availableAt > ceiling) {
+      throw new BadRequestException({
+        code: 'RESCHEDULE_TOO_FAR',
+        message: `Cannot schedule more than ${MAX_RESCHEDULE_DAYS} days ahead`,
+      });
+    }
+
+    // A past time is ALLOWED and means "callable now" — that is the
+    // whole point of bringing a call forward, and clamping it to now
+    // would differ only in a value nobody reads.
+    const updated = await this.prisma.client.callQueueEntry.update({
+      where: { id: entryId },
+      data: { availableAt },
+      select: { id: true, availableAt: true, status: true },
+    });
+
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      actorId: adminStaffId,
+      action: 'call_queue.rescheduled',
+      entityType: 'call_queue_entry',
+      entityId: entryId,
+      severity: 'MEDIUM',
+      metadata: {
+        orderId: entry.orderId,
+        from: entry.availableAt.toISOString(),
+        to: updated.availableAt.toISOString(),
+        reason,
+        ...(ctx?.ipAddress !== undefined ? { ipAddress: ctx.ipAddress } : {}),
+      },
+    });
+
+    return updated;
+  }
+
   async reassign(
     entryId: string,
     toAgentId: string,

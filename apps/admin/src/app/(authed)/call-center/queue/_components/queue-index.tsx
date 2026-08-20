@@ -9,6 +9,7 @@ import {
   ErrorNote,
   FormField,
   Ident,
+  Input,
   Modal,
   ModalFooter,
   Num,
@@ -31,6 +32,7 @@ import {
   useCallQueue,
   useCallQueueStats,
   useReassignQueueEntry,
+  useRescheduleQueueEntry,
   type CallQueueRow,
 } from '@/lib/callcenter-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -65,6 +67,7 @@ export function QueueIndex(): ReactElement {
   const [agentId, setAgentId] = useState('');
   const [page, setPage] = useState(1);
   const [reassigning, setReassigning] = useState<CallQueueRow | null>(null);
+  const [rescheduling, setRescheduling] = useState<CallQueueRow | null>(null);
 
   const stats = useCallQueueStats();
   const list = useCallQueue({
@@ -227,6 +230,13 @@ export function QueueIndex(): ReactElement {
                             Reassign
                           </Button>
                         )}
+                        {/* Timing, not outcome. Force-outcome was the
+                            only lever on a call parked hours out, and it
+                            works by RECORDING a conversation that did
+                            not happen. */}
+                        <Button variant="ghost" size="sm" onClick={() => setRescheduling(e)}>
+                          Reschedule
+                        </Button>
                         <ForceOutcomePanel
                           entryId={e.id}
                           entryStatus={e.status}
@@ -244,6 +254,7 @@ export function QueueIndex(): ReactElement {
       </Card>
 
       <Reassign entry={reassigning} onClose={() => setReassigning(null)} />
+      <Reschedule entry={rescheduling} onClose={() => setRescheduling(null)} />
     </div>
   );
 }
@@ -277,6 +288,139 @@ function queueKind(status: string): 'pending' | 'confirmed' | 'delivered' | 'fai
     default:
       return 'failed';
   }
+}
+
+/**
+ * Move when a queued call becomes callable.
+ *
+ * Timing only. It never touches the attempt count, because this is about
+ * scheduling, not about pretending a call was or was not made — that is
+ * force-outcome, and reaching for it to move a call records a
+ * conversation nobody had.
+ */
+function Reschedule({
+  entry,
+  onClose,
+}: {
+  entry: CallQueueRow | null;
+  onClose: () => void;
+}): ReactElement {
+  const reschedule = useRescheduleQueueEntry();
+  const [when, setWhen] = useState('');
+  const [reason, setReason] = useState('');
+
+  function close(): void {
+    setWhen('');
+    setReason('');
+    reschedule.reset();
+    onClose();
+  }
+
+  /** `datetime-local` wants local wall-clock with no zone, so the ISO
+   *  string cannot be sliced — it is UTC and would shift the time. */
+  function toLocalInput(iso: string): string {
+    const d = new Date(iso);
+    const pad = (n: number): string => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  return (
+    <Modal
+      open={entry !== null}
+      onOpenChange={(next) => {
+        if (!next) close();
+      }}
+      title="When should this call become callable?"
+      description="Timing only — the attempt count and the order are untouched. A time in the past means it can be picked up straight away."
+    >
+      <FormField
+        label="Callable from"
+        htmlFor="q-when"
+        hint={
+          entry === null
+            ? undefined
+            : `Currently ${new Date(entry.availableAt).toLocaleString('en-IN')}`
+        }
+      >
+        <Input
+          id="q-when"
+          type="datetime-local"
+          value={when}
+          onChange={(e) => setWhen(e.target.value)}
+        />
+      </FormField>
+
+      <div className="mt-2 flex flex-wrap gap-2">
+        {/* The two real cases: the customer rang back, or they asked for
+            later. Typing a datetime for "now" is friction on the more
+            urgent of the two. */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setWhen(toLocalInput(new Date().toISOString()))}
+        >
+          Now
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setWhen(toLocalInput(new Date(Date.now() + 60 * 60_000).toISOString()))}
+        >
+          In 1 hour
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() =>
+            setWhen(toLocalInput(new Date(Date.now() + 24 * 60 * 60_000).toISOString()))
+          }
+        >
+          Tomorrow
+        </Button>
+      </div>
+
+      <FormField
+        label="Why"
+        htmlFor="q-why"
+        hint="Moving when a customer gets called is a decision someone should be able to account for later."
+      >
+        <Input
+          id="q-why"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Customer rang back and asked to be called now"
+        />
+      </FormField>
+
+      {reschedule.error !== null && <ErrorNote message={serverVerdict(reschedule.error)} />}
+
+      <ModalFooter>
+        <Button variant="ghost" size="md" onClick={close}>
+          Cancel
+        </Button>
+        <Button
+          size="md"
+          disabled={when === '' || reason.trim().length < 5 || reschedule.isPending}
+          onClick={() => {
+            if (entry !== null) {
+              reschedule.mutate(
+                {
+                  entryId: entry.id,
+                  // `datetime-local` has no zone; the Date constructor
+                  // reads it as LOCAL, which is what the operator typed.
+                  availableAt: new Date(when).toISOString(),
+                  reason: reason.trim(),
+                },
+                { onSuccess: close },
+              );
+            }
+          }}
+        >
+          {reschedule.isPending ? 'Rescheduling…' : 'Reschedule'}
+        </Button>
+      </ModalFooter>
+    </Modal>
+  );
 }
 
 function Reassign({

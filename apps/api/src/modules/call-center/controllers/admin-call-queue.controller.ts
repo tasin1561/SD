@@ -25,7 +25,12 @@ import {
   type CallQueueAdminRow,
   type CallQueueStats,
 } from '../services/admin-call-queue.service';
-import { BulkDequeueDto, ListCallQueueQueryDto, ReassignDto } from '../dto/admin-call-queue.dto';
+import {
+  BulkDequeueDto,
+  ListCallQueueQueryDto,
+  ReassignDto,
+  RescheduleQueueEntryDto,
+} from '../dto/admin-call-queue.dto';
 import { RecordCallAttemptDto } from '../dto/record-call-attempt.dto';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
@@ -78,6 +83,21 @@ export class AdminCallQueueController {
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<{ id: string; assignedAgentId: string; status: string }> {
     return this.svc.reassign(entryId, body.toAgentId, staff.id, ctx);
+  }
+
+  @Post(':entryId/reschedule')
+  @RequirePermissions('callcenter.queue.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Move when a queued call becomes callable — timing only, never the attempt count',
+  })
+  reschedule(
+    @Param('entryId', new ParseUUIDPipe({ version: '7' })) entryId: string,
+    @Body() body: RescheduleQueueEntryDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<{ id: string; availableAt: Date; status: string }> {
+    return this.svc.reschedule(entryId, new Date(body.availableAt), body.reason, staff.id, ctx);
   }
 
   @Post(':entryId/force-outcome')

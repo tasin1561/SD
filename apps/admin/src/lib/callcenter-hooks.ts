@@ -87,6 +87,31 @@ export function useCallQueueStats(): UseQueryResult<CallQueueStats> {
   });
 }
 
+/**
+ * Move WHEN a queued call becomes callable.
+ *
+ * Timing only — it never touches the attempt count, because this is
+ * about scheduling, not about pretending a call was or was not made.
+ */
+export function useRescheduleQueueEntry(): UseMutationResult<
+  { id: string; availableAt: string; status: string },
+  Error,
+  { entryId: string; availableAt: string; reason: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ entryId, availableAt, reason }) =>
+      client.request<{ id: string; availableAt: string; status: string }>(
+        `/api/admin/call-queue/${entryId}/reschedule`,
+        { method: 'POST', body: { availableAt, reason } },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-call-queue'] });
+    },
+  });
+}
+
 export function useReassignQueueEntry(): UseMutationResult<
   { id: string; assignedAgentId: string; status: string },
   Error,
