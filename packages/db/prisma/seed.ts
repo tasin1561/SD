@@ -211,7 +211,11 @@ const systemSettings: SystemSettingSeed[] = [
     valueType: SettingValueType.INT,
     valueInt: 4,
     displayName: 'Call Retry Interval (hours)',
-    description: 'Hours between no-response retries',
+    description:
+      "How long before an order whose customer did not pick up (NO_ANSWER / VOICEMAIL_LEFT) becomes callable again. Per-seller overridable: how hard we chase a customer is a decision about that seller's business. The minimum of 1 hour is deliberate — 0 would redial someone seconds after they ignored the phone and spend all their cap attempts in a minute.",
+    sellerOverridable: true,
+    overrideMinInt: 1,
+    overrideMaxInt: 72,
   },
   {
     key: 'ops.stock_reservation_ttl_hours',

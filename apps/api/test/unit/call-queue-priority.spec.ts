@@ -65,6 +65,30 @@ describe('re-queue cooldown', () => {
     expect(rule.reschedule).toBe('BUSY_DELAY');
   });
 
+  it('resolves the delay PER SELLER, not globally', () => {
+    const src = readFileSync(
+      join(__dirname, '../../src/modules/call-center/services/call-attempt.service.ts'),
+      'utf8',
+    );
+    // Through SettingsResolverService (SET-1), never a bare
+    // systemSetting lookup — how hard we chase a customer is a decision
+    // about that seller's business, exactly like the NDR cap beside it.
+    expect(src).toMatch(/noResponseDelayHours\(sellerId\)/);
+    expect(src).toMatch(/resolveIntWithLegacy\([\s\S]{0,120}SETTING_NO_RESPONSE_DELAY_HOURS/);
+  });
+
+  it('cannot be overridden back to an instant redial', () => {
+    const seed = readFileSync(join(__dirname, '../../../../packages/db/prisma/seed.ts'), 'utf8');
+    const block = seed.slice(seed.indexOf("key: 'ops.call_retry_interval_hours'"));
+    const entry = block.slice(0, block.indexOf('},'));
+    // SET-1 clamps overrides AT WRITE TIME, so a minimum of 1 hour makes
+    // the bug this delay exists to fix unrepresentable per seller —
+    // nobody reintroduces it by typing 0 into a form.
+    expect(entry).toMatch(/sellerOverridable: true/);
+    expect(entry).toMatch(/overrideMinInt: 1\b/);
+    expect(entry).toMatch(/overrideMaxInt: 72\b/);
+  });
+
   it('reads the setting that was written for it', () => {
     const src = readFileSync(
       join(__dirname, '../../src/modules/call-center/services/call-attempt.service.ts'),

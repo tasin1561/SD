@@ -391,7 +391,13 @@ export async function resetOrderState(prisma: PrismaClient): Promise<void> {
 export async function resetCallCenterState(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(
     'TRUNCATE TABLE ' +
-      ['call_attempts', 'call_queue_entries', 'agent_call_settings'].join(', ') +
+      // call_assignment_holds FKs call_queue_entries with CASCADE, so
+      // the truncate below would take it — named explicitly anyway
+      // (MUST #12), because relying on a CASCADE is how a table stays
+      // populated across suites the day someone changes the FK.
+      ['call_assignment_holds', 'call_attempts', 'call_queue_entries', 'agent_call_settings'].join(
+        ', ',
+      ) +
       ' RESTART IDENTITY CASCADE',
   );
 }

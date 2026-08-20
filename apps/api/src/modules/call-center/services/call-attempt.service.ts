@@ -425,6 +425,7 @@ export class CallAttemptService {
         resolved.reschedule,
         now,
         agentScheduledFor,
+        order.sellerId,
       );
       try {
         await this.queue.enqueueAgain(entry.orderId, availableAt, input.ctx);
@@ -539,6 +540,7 @@ export class CallAttemptService {
     kind: RescheduleKind,
     now: Date,
     agentScheduledFor: Date | null,
+    sellerId: string,
   ): Promise<Date> {
     switch (kind) {
       case 'BUSY_DELAY': {
@@ -549,7 +551,7 @@ export class CallAttemptService {
         // The customer did not pick up. Redialling them seconds later is
         // how three attempts get spent in a minute and a real customer
         // is annoyed into refusing the parcel.
-        const hours = await this.noResponseDelayHours();
+        const hours = await this.noResponseDelayHours(sellerId);
         return new Date(now.getTime() + hours * MS_PER_HOUR);
       }
       case 'AGENT_PROVIDED':
@@ -606,12 +608,26 @@ export class CallAttemptService {
     };
   }
 
-  private async noResponseDelayHours(): Promise<number> {
-    const row = await this.prisma.client.systemSetting.findUnique({
-      where: { key: SETTING_NO_RESPONSE_DELAY_HOURS },
-      select: { valueInt: true },
-    });
-    return row?.valueInt ?? DEFAULT_NO_RESPONSE_DELAY_HOURS;
+  /**
+   * Per-seller override ?? global default (SET-1).
+   *
+   * Seller-overridable for the same reason the NDR cap is: how hard we
+   * chase a customer is a decision about that seller's business, not
+   * about ours. A ₹300 impulse buy and a ₹15,000 order do not deserve
+   * the same patience.
+   *
+   * The write-time clamp is the load-bearing part: the minimum is ONE
+   * hour, so the instant-redial bug this delay exists to fix cannot be
+   * reintroduced one seller at a time by someone typing 0 into a form.
+   */
+  private async noResponseDelayHours(sellerId: string): Promise<number> {
+    return this.settings.resolveIntWithLegacy(
+      sellerId,
+      SETTING_NO_RESPONSE_DELAY_HOURS,
+      // No legacy column for this key — it has only ever been global.
+      null,
+      DEFAULT_NO_RESPONSE_DELAY_HOURS,
+    );
   }
 
   private async busyDelayHours(): Promise<number> {

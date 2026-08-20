@@ -24,10 +24,15 @@ CREATE TABLE "call_assignment_holds" (
   "held_seconds"   INTEGER,
   "attempt_id"     UUID,
   "created_at"     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- ON UPDATE CASCADE is not optional decoration: Prisma emits it for
+  -- every relation, so omitting it leaves the column NO ACTION and the
+  -- drift check fails on a foreign key that otherwise looks identical.
   CONSTRAINT "call_assignment_holds_queue_entry_id_fkey"
-    FOREIGN KEY ("queue_entry_id") REFERENCES "call_queue_entries"("id") ON DELETE CASCADE,
+    FOREIGN KEY ("queue_entry_id") REFERENCES "call_queue_entries"("id")
+    ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT "call_assignment_holds_agent_id_fkey"
-    FOREIGN KEY ("agent_id") REFERENCES "staff_users"("id") ON DELETE CASCADE
+    FOREIGN KEY ("agent_id") REFERENCES "staff_users"("id")
+    ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE INDEX "call_assignment_holds_agent_id_started_at_idx"
