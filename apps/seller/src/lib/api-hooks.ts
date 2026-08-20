@@ -121,16 +121,23 @@ export function useRequestReattempt(): UseMutationResult<
   });
 }
 
+/**
+ * This order's re-attempt requests, and whether another may be raised.
+ *
+ * `canRequest` comes from the SERVER: which statuses qualify is a
+ * per-seller setting now, and a client guessing from the status would
+ * offer a button the server refuses (FE-2).
+ */
 export function useOrderReattemptRequests(
   orderId: string,
   opts?: { readonly enabled?: boolean },
-): UseQueryResult<readonly ReattemptRequestView[]> {
+): UseQueryResult<{ requests: readonly ReattemptRequestView[]; canRequest: boolean }> {
   const client = useApiClient();
   return useQuery({
     enabled: opts?.enabled ?? true,
     queryKey: ['seller-orders', 'reattempt', orderId],
     queryFn: () =>
-      client.request<readonly ReattemptRequestView[]>(
+      client.request<{ requests: readonly ReattemptRequestView[]; canRequest: boolean }>(
         `/api/seller/orders/${orderId}/reattempt-requests`,
       ),
   });

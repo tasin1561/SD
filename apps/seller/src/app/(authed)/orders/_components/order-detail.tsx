@@ -59,6 +59,20 @@ import { useSellerIdentity } from '@skydrop/auth/client';
  * SELLER_CANCELLABLE_STATES; if the two ever drift the seller sees a
  * verbatim refusal rather than a wrong outcome.
  */
+/**
+ * Statuses worth ASKING the server about a re-attempt on.
+ *
+ * Only a gate on the round trip, never the answer: which of these
+ * actually qualifies is a per-seller setting, and the server returns
+ * `canRequest`. Deliberately wider than the current default, so turning
+ * REJECTED_NDR on in settings needs no frontend change.
+ */
+const FAILED_STATUSES: ReadonlySet<string> = new Set([
+  'REJECTED_BY_CUSTOMER',
+  'REJECTED_NDR',
+  'REJECTED',
+]);
+
 const CANCELLABLE: ReadonlySet<string> = new Set([
   'DRAFT',
   'PENDING_CONFIRMATION',
@@ -75,13 +89,16 @@ const CANCELLABLE: ReadonlySet<string> = new Set([
 
 export function OrderDetailView({ orderId }: { orderId: string }): ReactElement {
   const detail = useOrderDetail(orderId);
-  // Only for a declined order — nothing else can carry a request, and
-  // asking on every order detail would be a query per page view for a
-  // list that is empty in all but one status.
-  const declined = detail.data?.status === 'REJECTED_BY_CUSTOMER';
-  const reattempts = useOrderReattemptRequests(orderId, { enabled: declined });
-  const pendingRequest = (reattempts.data ?? []).find((r) => r.status === 'PENDING') ?? null;
-  const lastDecided = (reattempts.data ?? []).find((r) => r.status !== 'PENDING') ?? null;
+  // Asked for any FAILED status, because which of them qualifies is a
+  // per-seller setting the server owns — not something to guess here.
+  // Still not asked on a healthy order: that would be a round trip per
+  // page view for a list that is always empty.
+  const failed = detail.data !== undefined && FAILED_STATUSES.has(detail.data.status);
+  const reattempts = useOrderReattemptRequests(orderId, { enabled: failed });
+  const requests = reattempts.data?.requests ?? [];
+  const canRequest = reattempts.data?.canRequest ?? false;
+  const pendingRequest = requests.find((r) => r.status === 'PENDING') ?? null;
+  const lastDecided = requests.find((r) => r.status !== 'PENDING') ?? null;
   const events = useOrderEvents(orderId);
   const identity = useSellerIdentity();
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -129,18 +146,16 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                 {/* The customer declined, so nothing calls this order
                     again on its own. Asking is the only path — and it is
                     an ASK: an admin decides. */}
-                {/* Offering "ask again" while a request is already open
-                    is an invitation to a 409 — the server allows exactly
-                    one undecided request per order. */}
-                {declined &&
-                  pendingRequest === null &&
-                  identity !== null &&
-                  can(identity, 'orders.create') && (
-                    <Button variant="secondary" size="sm" onClick={() => setReattemptOpen(true)}>
-                      <PhoneCall size={12} />{' '}
-                      {lastDecided === null ? 'Ask us to call again' : 'Ask again'}
-                    </Button>
-                  )}
+                {/* `canRequest` is the SERVER's answer — which statuses
+                    qualify is a per-seller setting, and it already
+                    accounts for the one-open-request rule. Guessing here
+                    would show a button the server refuses. */}
+                {canRequest && identity !== null && can(identity, 'orders.create') && (
+                  <Button variant="secondary" size="sm" onClick={() => setReattemptOpen(true)}>
+                    <PhoneCall size={12} />{' '}
+                    {lastDecided === null ? 'Ask us to call again' : 'Ask again'}
+                  </Button>
+                )}
                 {CANCELLABLE.has(detail.data.status) &&
                   identity !== null &&
                   can(identity, 'orders.cancel') && (

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { OrderModule } from '../order/order.module';
+import { SettingsModule } from '../settings/settings.module';
 import { OrderReattemptService } from './services/order-reattempt.service';
 import { AdminReattemptController } from './controllers/admin-reattempt.controller';
 import { SellerReattemptController } from './controllers/seller-reattempt.controller';
@@ -11,7 +12,7 @@ import { SellerReattemptController } from './controllers/seller-reattempt.contro
  * OrderWriteService.transitionStatus, ORD-3) like every other domain.
  */
 @Module({
-  imports: [OrderModule],
+  imports: [OrderModule, SettingsModule],
   controllers: [AdminReattemptController, SellerReattemptController],
   providers: [OrderReattemptService],
 })

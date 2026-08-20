@@ -322,6 +322,16 @@ const systemSettings: SystemSettingSeed[] = [
       'A pulled queue entry the agent does not act on within this window is auto-returned to PENDING by the BullMQ expiration worker',
   },
   {
+    key: 'orders.reattempt_requestable_statuses',
+    category: 'ops',
+    valueType: SettingValueType.JSON,
+    valueJson: ['REJECTED_BY_CUSTOMER'],
+    displayName: 'Statuses a seller may request another call on',
+    description:
+      'Which failed statuses show the seller an "ask us to call again" button. REJECTED_BY_CUSTOMER by default: they answered and said no, so a human weighs the seller\'s new information against a refusal. Adding REJECTED_NDR is possible and is a REAL trade — nobody ever answered those, so there is no refusal to override, but un-rejecting an order corrupts NDR reporting. For that case prefer inventory.early_reservation_ndr_action = MANUAL_REVIEW, which asks the seller BEFORE the order is rejected. A status the state machine cannot leave is ignored, so this list can never produce a button that fails on approval.',
+    sellerOverridable: true,
+  },
+  {
     key: 'ops.agent_presence_timeout_minutes',
     category: 'ops',
     valueType: SettingValueType.INT,

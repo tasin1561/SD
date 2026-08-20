@@ -146,6 +146,22 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
   // reserved to release (ORD-10 — reservation is LATE).
   [OrderStatus.REJECTED_BY_CUSTOMER, [{ to: OrderStatus.PENDING_CONFIRMATION, sideEffects: [] }]],
 
+  // REJECTED_NDR has the same single edge, and it is OFF by default.
+  //
+  // The AWAITING_SELLER_DECISION doc above says this status exists
+  // "instead of un-terminaling REJECTED_NDR", because an order that says
+  // rejected and is then un-rejected corrupts NDR reporting. That
+  // objection stands and is why MANUAL_REVIEW remains the better answer:
+  // it asks the seller BEFORE the order is marked rejected, so nothing
+  // has to be un-rejected.
+  //
+  // The edge exists anyway because the choice belongs to whoever runs
+  // the operation, not to the schema — but reaching it needs someone to
+  // add the status to `orders.reattempt_requestable_statuses`, where the
+  // description states this trade. The seeded default names only
+  // REJECTED_BY_CUSTOMER.
+  [OrderStatus.REJECTED_NDR, [{ to: OrderStatus.PENDING_CONFIRMATION, sideEffects: [] }]],
+
   // R5b — the seller's answer resolves the pause. REQUEST_MORE_ATTEMPTS
   // goes back to PENDING_CONFIRMATION, which re-enqueues the order for
   // calling through the existing CC-6 post-commit hook (no new wiring).

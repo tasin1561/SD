@@ -285,6 +285,23 @@ export class OrderWriteService {
    * ONE sanctioned bypass of this engine and explicitly opts OUT of the
    * compensation guarantee.
    */
+  /**
+   * Would this transition be allowed? A READ over the same matrix
+   * `transitionStatus` enforces.
+   *
+   * On the write boundary rather than by exporting the state machine,
+   * because MUST #16 keeps the order module's cross-module surface to
+   * these two services — and "would this write be accepted" is a
+   * question about writes. It exists so a caller can offer an action
+   * only where it can actually succeed: the re-attempt request filters
+   * its settings-driven status list through this, so a list naming a
+   * status with no edge is inert rather than producing a button whose
+   * approval 409s.
+   */
+  canTransition(from: OrderStatus, to: OrderStatus): boolean {
+    return this.stateMachine.isValidTransition(from, to);
+  }
+
   async transitionStatus(input: TransitionStatusInput): Promise<TransitionStatusResult> {
     const order = await this.prisma.client.order.findFirst({
       where: { id: input.orderId, deletedAt: null },

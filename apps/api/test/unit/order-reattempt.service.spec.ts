@@ -51,7 +51,13 @@ describe('OrderReattemptService', () => {
       { client: { orderReattemptRequest: { findUnique, updateMany, create: jest.fn() } } } as never,
       { log } as never,
       {} as never,
-      { transitionStatus } as never,
+      { transitionStatus, canTransition: () => true } as never,
+      // Which statuses qualify is a per-seller setting; the default
+      // names REJECTED_BY_CUSTOMER and these tests are about the
+      // approval, not the list.
+      {
+        resolve: jest.fn(async () => ({ value: ['REJECTED_BY_CUSTOMER'] })),
+      } as never,
     );
     return { svc, updateMany, transitionStatus, log };
   }
@@ -115,6 +121,53 @@ describe('OrderReattemptService', () => {
     // Leaving it set would quietly raise the cap on an order that never
     // returned to the queue.
     expect(updateMany.mock.calls[1]?.[0].data.extraAttempts).toBe(0);
+  });
+
+  describe('which statuses may be asked about', () => {
+    function capable(configured: string[], canTransition = true) {
+      const svc = new OrderReattemptService(
+        { client: { orderReattemptRequest: {} } } as never,
+        { log: jest.fn() } as never,
+        {} as never,
+        { canTransition: () => canTransition } as never,
+        { resolve: jest.fn(async () => ({ value: configured })) } as never,
+      );
+      return svc;
+    }
+
+    it('reads the per-seller setting', async () => {
+      const svc = capable(['REJECTED_BY_CUSTOMER', 'REJECTED_NDR']);
+      expect(await svc.requestableStatuses('s1')).toEqual([
+        OrderStatus.REJECTED_BY_CUSTOMER,
+        OrderStatus.REJECTED_NDR,
+      ]);
+    });
+
+    it('IGNORES a status the state machine cannot leave', async () => {
+      // The safety property. A list naming a status with no edge back to
+      // PENDING_CONFIRMATION would give the seller a button whose
+      // approval then 409s — a control that looks like it works.
+      const svc = capable(['REJECTED_BY_CUSTOMER'], false);
+      expect(await svc.requestableStatuses('s1')).toEqual([]);
+    });
+
+    it('ignores a value that is not an OrderStatus at all', async () => {
+      const svc = capable(['REJECTED_BY_CUSTOMER', 'NOT_A_STATUS', 42 as never]);
+      expect(await svc.requestableStatuses('s1')).toEqual([OrderStatus.REJECTED_BY_CUSTOMER]);
+    });
+
+    it('falls back to the default when the setting is missing', async () => {
+      const svc = new OrderReattemptService(
+        { client: { orderReattemptRequest: {} } } as never,
+        { log: jest.fn() } as never,
+        {} as never,
+        { canTransition: () => true } as never,
+        { resolve: jest.fn(async () => ({ value: null })) } as never,
+      );
+      // A settings outage must not silently withdraw the one status the
+      // flow was built for.
+      expect(await svc.requestableStatuses('s1')).toEqual([OrderStatus.REJECTED_BY_CUSTOMER]);
+    });
   });
 
   it('audits an approval at MEDIUM — it rings someone who said no', async () => {

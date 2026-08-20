@@ -4,9 +4,12 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderReadService } from '../../order/services/order-read.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
+import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
 
-/** The only status a re-attempt may be requested from. */
-const REQUESTABLE_FROM: OrderStatus[] = [OrderStatus.REJECTED_BY_CUSTOMER];
+const SETTING_REQUESTABLE = 'orders.reattempt_requestable_statuses';
+
+/** Named when the setting is missing or unreadable. */
+const DEFAULT_REQUESTABLE: OrderStatus[] = [OrderStatus.REJECTED_BY_CUSTOMER];
 
 export interface ReattemptRequestView {
   id: string;
@@ -45,6 +48,7 @@ export class OrderReattemptService {
     private readonly audit: AuditLogService,
     private readonly orders: OrderReadService,
     private readonly orderWrites: OrderWriteService,
+    private readonly settings: SettingsResolverService,
   ) {}
 
   async request(input: {
@@ -59,10 +63,11 @@ export class OrderReattemptService {
       // seller an order id is real but somebody else's is a disclosure.
       throw new NotFoundException(`Order ${input.orderId} not found`);
     }
-    if (!REQUESTABLE_FROM.includes(order.status)) {
+    const requestable = await this.requestableStatuses(input.sellerId);
+    if (!requestable.includes(order.status)) {
       throw new ConflictException({
         code: 'NOT_REQUESTABLE',
-        message: `An order in ${order.status} does not need a re-attempt request`,
+        message: `An order in ${order.status} cannot be re-attempted`,
       });
     }
 
@@ -235,6 +240,32 @@ export class OrderReattemptService {
     );
   }
 
+  /**
+   * This order's requests, plus whether another may be raised.
+   *
+   * Computed here, not inferred by the client: which statuses qualify is
+   * a per-seller setting, and a UI guessing from the status would offer
+   * a button the server refuses.
+   */
+  async listForOrderWithEligibility(
+    sellerId: string,
+    orderId: string,
+  ): Promise<{ requests: ReattemptRequestView[]; canRequest: boolean }> {
+    const [requests, order, requestable] = await Promise.all([
+      this.listForSeller(sellerId, orderId),
+      this.orders.getById(orderId),
+      this.requestableStatuses(sellerId),
+    ]);
+    const owned = order !== null && order.sellerId === sellerId;
+    const hasOpen = requests.some((r) => r.status === ReattemptRequestStatus.PENDING);
+    return {
+      requests,
+      // One undecided request at a time — the same rule the partial
+      // unique enforces, so the button and the server agree.
+      canRequest: owned && !hasOpen && requestable.includes(order.status),
+    };
+  }
+
   async listForSeller(sellerId: string, orderId?: string): Promise<ReattemptRequestView[]> {
     const rows = await this.prisma.client.orderReattemptRequest.findMany({
       where: { sellerId, ...(orderId === undefined ? {} : { orderId }) },
@@ -252,6 +283,28 @@ export class OrderReattemptService {
       take: 200,
     });
     return rows.map((r) => this.toView(r, r.order.orderNumber));
+  }
+
+  /**
+   * Which failed statuses this seller may ask about — the per-seller
+   * override, else the global default (SET-1).
+   *
+   * FILTERED to statuses the state machine can actually leave. That
+   * derivation is the safety property: a settings list naming a status
+   * with no edge back to PENDING_CONFIRMATION would give the seller a
+   * button whose approval then 409s at transition time — a control that
+   * looks like it works and does not. Adding an edge later makes the
+   * status selectable with no change here, and removing one disables it
+   * everywhere at once.
+   */
+  async requestableStatuses(sellerId: string): Promise<OrderStatus[]> {
+    const resolved = await this.settings.resolve(sellerId, SETTING_REQUESTABLE).catch(() => null);
+    const raw = resolved?.value;
+    const named: unknown[] = Array.isArray(raw) ? raw : DEFAULT_REQUESTABLE;
+    const valid = new Set<string>(Object.values(OrderStatus));
+    return named
+      .filter((v): v is OrderStatus => typeof v === 'string' && valid.has(v))
+      .filter((st) => this.orderWrites.canTransition(st, OrderStatus.PENDING_CONFIRMATION));
   }
 
   private async requirePending(requestId: string) {

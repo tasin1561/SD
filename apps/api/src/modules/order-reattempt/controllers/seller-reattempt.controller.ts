@@ -63,11 +63,17 @@ export class SellerReattemptController {
 
   @Get(':orderId/reattempt-requests')
   @RequireSellerPermissions('orders.view')
-  @ApiOperation({ summary: 'This order’s re-attempt requests and how they were decided' })
+  @ApiOperation({
+    summary: 'This order’s re-attempt requests, and whether another may be raised',
+  })
+  // Returns `canRequest` rather than leaving the UI to decide from the
+  // status: which statuses qualify is a SETTING now, per seller, and a
+  // client that made its own guess would show a button on an order the
+  // server refuses (FE-2 — the server is the boundary).
   listForOrder(
     @CurrentSeller() seller: AuthenticatedSeller,
     @Param('orderId', new ParseUUIDPipe({ version: '7' })) orderId: string,
-  ): Promise<ReattemptRequestView[]> {
-    return this.svc.listForSeller(seller.id, orderId);
+  ): Promise<{ requests: ReattemptRequestView[]; canRequest: boolean }> {
+    return this.svc.listForOrderWithEligibility(seller.id, orderId);
   }
 }
