@@ -202,11 +202,44 @@ jobs:
   # cross-lifecycle invariants (stock conservation through RTO, order
   # lifecycle, seller RBAC on real requests) enforced rather than assumed.
   e2e:
-    name: e2e — API
+    name: e2e — API (${{ matrix.shard }}/4)
     needs: changes
     if: needs.changes.outputs.api == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
+
+    # SHARDED because the suite is ~250s of test time spread flat across
+    # 29 files — the slowest single suite is 25s, so there is no hot spec
+    # to optimise, only serialism to remove.
+    #
+    # The sharding is at the JOB level, deliberately, and NOT jest
+    # workers inside one job. The suites share one test database and the
+    # global setup DROPS and recreates it, so concurrent workers destroy
+    # each other's data — making that safe would mean per-worker
+    # databases, touching global setup, the reset-helper chain and the
+    # Prisma singleton, which is real flakiness risk for the same payoff.
+    # A matrix job already gets its OWN Postgres service container, so
+    # every shard has a private database and total isolation for free,
+    # and each still runs --runInBand within itself.
+    #
+    # FOUR, measured rather than guessed. Jest shards by FILE, not by
+    # duration, so the split is only as even as the files happen to be:
+    # against the real per-suite timings, 3 shards leaves one holding
+    # 124s while its siblings do ~78s, and FIVE is WORSE than four
+    # (96s vs 88s critical path) because one heavy clump still dominates
+    # and the extra job only adds its own overhead. Re-measure before
+    # changing this number; the intuition that "more shards is faster"
+    # is wrong here.
+    #
+    # Cost: each shard pays the container + workspace setup again (~60s).
+    # That is the same runner-minutes-for-wall-clock trade this workflow
+    # already makes by having each job rebuild the workspace.
+    strategy:
+      # One shard's failure must not cancel the others: a red run should
+      # report every broken suite, not just whichever tripped first.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     services:
       # The M0 migration needs (a) the timescaledb extension AND
@@ -295,6 +328,9 @@ jobs:
       # --exit-code: 0 = no difference, 2 = drift. It runs BEFORE the
       # suite so drift is reported as drift rather than as a test failure.
       - name: Schema matches migrations (no drift)
+        # Once, not once per shard — it asks about the schema, which is
+        # identical across them.
+        if: matrix.shard == 1
         working-directory: packages/db
         # `migrate diff --from-migrations` REPLAYS every migration into the
         # shadow database, and it does not create that database itself —
@@ -331,10 +367,16 @@ jobs:
       # TEST_DB_DOCKER_CONTAINER='' switches the harness from
       # `docker exec skydrop-postgres` (local dev) to a direct TCP psql
       # against the service container above.
-      - name: E2E tests — API (jest, runInBand)
+      - name: E2E tests — API (jest, runInBand, shard ${{ matrix.shard }}/4)
         env:
           TEST_DB_DOCKER_CONTAINER: ''
-        run: pnpm --filter @skydrop/api test:e2e
+        # --shard splits by test FILE, so a suite is never torn in half.
+        #
+        # NO `--` before the flag: pnpm forwards it literally, jest then
+        # reads it as a positional and treats everything after as a
+        # test-name PATTERN — "0 matches", exit 1, on a suite that is
+        # perfectly fine. Verified locally with --listTests (10/10/9).
+        run: pnpm --filter @skydrop/api test:e2e --shard=${{ matrix.shard }}/4
 
   # ── Browser specs ────────────────────────────────────────────────────
   # Its own job, not a step alongside the API e2e, for one concrete
@@ -414,6 +456,30 @@ jobs:
         run: |
           pnpm exec prisma migrate deploy
           pnpm run seed
+
+      # Next's incremental build cache. 165s of this job's ~300s was
+      # rebuilding four apps from scratch every run, most of which had
+      # not changed. Keyed on the lockfile plus the app sources, with a
+      # restore-fallback so a source change still starts from the last
+      # good cache rather than from nothing.
+      #
+      # ONLY .next/cache — never .next itself. The output directory
+      # carries a build manifest tied to the commit that produced it, and
+      # restoring a stale one gives you a server booting against a build
+      # it did not make. The cache subdirectory is the part Next itself
+      # documents as safe to carry between builds.
+      - name: Cache Next build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            apps/admin/.next/cache
+            apps/seller/.next/cache
+            apps/track/.next/cache
+            apps/marketing/.next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/*/src/**', 'packages/ui/src/**') }}
+          restore-keys: |
+            next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+            next-${{ runner.os }}-
 
       - name: Build the API and the four frontends
         run: |
