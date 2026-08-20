@@ -54,7 +54,7 @@ export class AdminReattemptController {
     @Body() body: DecideReattemptRequestDto,
     @CurrentStaff() staff: AuthenticatedStaff,
   ): Promise<ReattemptRequestView> {
-    return this.svc.approve(requestId, staff.id, body.note ?? null);
+    return this.svc.approve(requestId, staff.id, body.note ?? null, body.extraAttempts ?? 1);
   }
 
   @Post(':requestId/reject')

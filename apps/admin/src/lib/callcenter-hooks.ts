@@ -102,6 +102,8 @@ export interface AdminReattemptRequest {
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   decisionNote: string | null;
   decidedAt: string | null;
+  /** Extra calls this approval granted, above the seller's cap. */
+  extraAttempts: number;
   orderStatusAtRequest: string;
   createdAt: string;
 }
@@ -128,15 +130,17 @@ export function useReattemptRequests(
 export function useDecideReattempt(): UseMutationResult<
   AdminReattemptRequest,
   Error,
-  { requestId: string; approve: boolean; note: string }
+  { requestId: string; approve: boolean; note: string; extraAttempts?: number }
 > {
   const client = useApiClient();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ requestId, approve, note }) =>
+    mutationFn: ({ requestId, approve, note, extraAttempts }) =>
       client.request<AdminReattemptRequest>(
         `/api/admin/reattempt-requests/${requestId}/${approve ? 'approve' : 'reject'}`,
-        { method: 'POST', body: { note } },
+        // extraAttempts only means anything on an approval; the reject
+        // endpoint ignores it and the DTO leaves it optional.
+        { method: 'POST', body: approve ? { note, extraAttempts } : { note } },
       ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['admin-reattempt-requests'] });

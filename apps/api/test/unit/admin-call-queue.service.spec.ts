@@ -66,6 +66,12 @@ function makeService(
     // Real instance: it is pure logic with no Prisma, and the row's
     // counting-attempt total is derived through it (CC-2).
     new CallOutcomeMappingService(),
+    // Cap resolution lives in CallCapService; these tests are about
+    // the queue's shape, not the number.
+    {
+      grantedExtraByOrder: jest.fn(async () => new Map()),
+      baseForSeller: jest.fn(async () => 3),
+    } as never,
   );
   return {
     svc,

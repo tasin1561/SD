@@ -56,6 +56,12 @@ describe('AdminCallQueueService — attempts vs pulls', () => {
       {} as never,
       {} as never,
       new CallOutcomeMappingService(),
+      // Cap resolution lives in CallCapService; these tests are about
+      // the queue's shape, not the number.
+      {
+        grantedExtraByOrder: jest.fn(async () => new Map()),
+        baseForSeller: jest.fn(async () => 3),
+      } as never,
     );
     return svc;
   }

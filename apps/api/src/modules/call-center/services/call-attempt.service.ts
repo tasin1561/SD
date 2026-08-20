@@ -17,6 +17,7 @@ import {
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CallHoldService } from './call-hold.service';
+import { CallCapService } from './call-cap.service';
 import { OrderReadService } from '../../order/services/order-read.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
 import { CallQueueService } from '../../call-queue/services/call-queue.service';
@@ -29,7 +30,6 @@ import {
   type ResolvedOutcome,
 } from './call-outcome-mapping.service';
 
-const SETTING_MAX_ATTEMPTS = 'ops.call_max_attempts_before_ndr';
 const SETTING_RESCHEDULE_MIN_HOURS = 'ops.call_reschedule_min_hours';
 const SETTING_RESCHEDULE_MAX_DAYS = 'ops.call_reschedule_max_days';
 const SETTING_BUSY_DELAY_HOURS = 'ops.call_busy_retry_delay_hours';
@@ -41,7 +41,6 @@ const SETTING_BUSY_DELAY_HOURS = 'ops.call_busy_retry_delay_hours';
  * documented on effectiveMaxAttempts below.
  */
 const SETTING_NO_RESPONSE_DELAY_HOURS = 'ops.call_retry_interval_hours';
-const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_RESCHEDULE_MIN_HOURS = 1;
 const DEFAULT_RESCHEDULE_MAX_DAYS = 7;
 const DEFAULT_BUSY_DELAY_HOURS = 1;
@@ -134,6 +133,7 @@ export class CallAttemptService {
     private readonly earlyReservations: EarlyReservationService,
     private readonly settings: SettingsResolverService,
     private readonly holds: CallHoldService,
+    private readonly caps: CallCapService,
   ) {
     this.countingOutcomes = (Object.values(CallOutcome) as CallOutcome[]).filter((o) =>
       mapping.countsTowardCap(o),
@@ -215,7 +215,10 @@ export class CallAttemptService {
     if (!order) {
       throw new NotFoundException(`Order ${entry.orderId} not found for assignment`);
     }
-    const maxAttempts = await this.effectiveMaxAttempts(order.sellerId);
+    // Seller cap PLUS whatever an approved re-attempt request granted
+    // this order. Without the grant, an approved order came back already
+    // at 3 of 3 and the next unanswered ring re-rejected it.
+    const maxAttempts = await this.caps.effectiveForOrder(order.sellerId, order.orderId);
     // R5b — what "at cap" means for THIS seller. Resolved here (it is a
     // settings read) and handed to the mapping service, which still owns
     // the resulting status so CC-2 keeps exactly one place that turns
@@ -561,31 +564,6 @@ export class CallAttemptService {
       default:
         return now;
     }
-  }
-
-  /**
-   * seller_setting_overrides ?? sellers.callMaxAttemptsBeforeNdrOverride
-   * ?? ops.call_max_attempts_before_ndr ?? hard default.
-   *
-   * The first term used to be missing. The key is marked
-   * `sellerOverridable`, so it appeared in the per-seller settings UI and
-   * an admin could set it — and this method never looked at
-   * `seller_setting_overrides`, so the value saved, displayed, and did
-   * nothing. A seller configured for five call attempts kept getting
-   * three, and the only symptom was orders rejecting earlier than
-   * someone expected.
-   */
-  private async effectiveMaxAttempts(sellerId: string): Promise<number> {
-    const seller = await this.prisma.client.seller.findUnique({
-      where: { id: sellerId },
-      select: { callMaxAttemptsBeforeNdrOverride: true },
-    });
-    return this.settings.resolveIntWithLegacy(
-      sellerId,
-      SETTING_MAX_ATTEMPTS,
-      seller?.callMaxAttemptsBeforeNdrOverride,
-      DEFAULT_MAX_ATTEMPTS,
-    );
   }
 
   private async rescheduleBounds(): Promise<{

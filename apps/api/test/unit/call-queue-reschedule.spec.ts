@@ -41,6 +41,11 @@ describe('AdminCallQueueService.reschedule', () => {
       {} as never,
       {} as never,
       new CallOutcomeMappingService(),
+      // Cap resolution is CallCapService's job and irrelevant here.
+      {
+        grantedExtraByOrder: jest.fn(async () => new Map()),
+        baseForSeller: jest.fn(async () => 3),
+      } as never,
     );
     return { svc, update, log };
   }

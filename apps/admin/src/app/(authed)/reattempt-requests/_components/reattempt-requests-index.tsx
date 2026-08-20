@@ -100,6 +100,13 @@ export function ReattemptRequestsIndex(): ReactElement {
                     not truncated into a column. */}
                 <p className="text-text-body text-sm leading-relaxed">{r.reason}</p>
 
+                {r.status === 'APPROVED' && r.extraAttempts > 0 && (
+                  <p className="text-text-muted text-sm">
+                    <span className="text-text-faint">Granted:</span> {r.extraAttempts} extra{' '}
+                    {r.extraAttempts === 1 ? 'call' : 'calls'}
+                  </p>
+                )}
+
                 {r.decisionNote !== null && r.decisionNote !== '' && (
                   <p className="text-text-muted text-sm">
                     <span className="text-text-faint">Decision note:</span> {r.decisionNote}
@@ -140,9 +147,11 @@ function Decide({
 }): ReactElement {
   const decide = useDecideReattempt();
   const [note, setNote] = useState('');
+  const [extra, setExtra] = useState('1');
 
   function close(): void {
     setNote('');
+    setExtra('1');
     decide.reset();
     onClose();
   }
@@ -160,10 +169,26 @@ function Decide({
       }
       description={
         target?.approve === true
-          ? 'The order returns to PENDING_CONFIRMATION and is queued for calling. Its attempt count is unchanged — the customer already declined once, so the next call is the one that has to land.'
+          ? 'The order returns to PENDING_CONFIRMATION and is queued for calling. Its attempt count is unchanged; choose how many extra calls to allow, or it comes back already at its cap.'
           : 'The order stays rejected. The seller can ask again if something changes.'
       }
     >
+      {target?.approve === true && (
+        <FormField
+          label="Extra calls to allow"
+          htmlFor="ra-extra"
+          hint="On top of the seller's normal cap. One is usually right — an approval that grants none puts the order back already out of chances, so the first unanswered ring rejects it again."
+        >
+          <Select id="ra-extra" value={extra} onChange={(e) => setExtra(e.target.value)}>
+            {['1', '2', '3', '4', '5'].map((n) => (
+              <option key={n} value={n}>
+                {n} more {n === '1' ? 'call' : 'calls'}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+      )}
+
       <FormField label="Note" htmlFor="ra-note" hint="Optional — recorded with the decision.">
         <Input id="ra-note" value={note} onChange={(e) => setNote(e.target.value)} />
       </FormField>
@@ -180,7 +205,12 @@ function Decide({
           onClick={() => {
             if (target !== null) {
               decide.mutate(
-                { requestId: target.row.id, approve: target.approve, note: note.trim() },
+                {
+                  requestId: target.row.id,
+                  approve: target.approve,
+                  note: note.trim(),
+                  extraAttempts: Number(extra),
+                },
                 { onSuccess: close },
               );
             }

@@ -17,6 +17,7 @@ import {
 } from './call-attempt.service';
 import { AssignmentExpirationService } from './assignment-expiration.service';
 import { CallOutcomeMappingService } from './call-outcome-mapping.service';
+import { CallCapService } from './call-cap.service';
 
 const OPEN_STATUSES: CallQueueStatus[] = [CallQueueStatus.PENDING, CallQueueStatus.ASSIGNED];
 
@@ -26,6 +27,9 @@ const OPEN_STATUSES: CallQueueStatus[] = [CallQueueStatus.PENDING, CallQueueStat
  * customer who silently never gets called.
  */
 const MAX_RESCHEDULE_DAYS = 90;
+
+/** Only for a row whose order vanished — mirrors the seeded default. */
+const DEFAULT_DISPLAY_CAP = 3;
 
 export interface CallQueueAdminRow {
   id: string;
@@ -76,6 +80,7 @@ export class AdminCallQueueService {
     private readonly queue: CallQueueService,
     private readonly expiration: AssignmentExpirationService,
     private readonly mapping: CallOutcomeMappingService,
+    private readonly caps: CallCapService,
   ) {}
 
   async listQueue(filters: {
@@ -115,7 +120,6 @@ export class AdminCallQueueService {
           assignedAt: true,
           availableAt: true,
           scheduledAttempts: true,
-          maxAttempts: true,
           createdAt: true,
           order: {
             select: { orderNumber: true, sellerId: true, status: true },
@@ -147,6 +151,24 @@ export class AdminCallQueueService {
             where: { orderId: { in: orderIds } },
             _count: { _all: true },
           });
+    // The EFFECTIVE cap, not `call_queue_entries.max_attempts` — that
+    // column is a per-entry default predating both the per-seller
+    // override and re-attempt grants, and nothing enforces against it. A
+    // screen reading 3/3 beside an order the server will happily call
+    // twice more is a number people stop trusting.
+    const grantedExtra = await this.caps.grantedExtraByOrder(orderIds);
+    const sellerIds = [
+      ...new Set(
+        rows.map((r) => r.order?.sellerId).filter((x): x is string => typeof x === 'string'),
+      ),
+    ];
+    const baseCaps = new Map<string, number>();
+    await Promise.all(
+      sellerIds.map(async (sid) => {
+        baseCaps.set(sid, await this.caps.baseForSeller(sid));
+      }),
+    );
+
     const logged = new Map<string, number>();
     const counting = new Map<string, number>();
     for (const a of attemptRows) {
@@ -169,7 +191,11 @@ export class AdminCallQueueService {
         // Derived from the mapping service rather than a second copy of
         // the 6-of-9 list (CC-2: the table lives in one place).
         attemptsCounting: counting.get(r.orderId) ?? 0,
-        maxAttempts: r.maxAttempts,
+        maxAttempts:
+          (r.order === null
+            ? DEFAULT_DISPLAY_CAP
+            : (baseCaps.get(r.order.sellerId) ?? DEFAULT_DISPLAY_CAP)) +
+          (grantedExtra.get(r.orderId) ?? 0),
         createdAt: r.createdAt,
         order: r.order
           ? {

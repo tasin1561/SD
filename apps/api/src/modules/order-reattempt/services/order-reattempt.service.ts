@@ -17,6 +17,8 @@ export interface ReattemptRequestView {
   status: ReattemptRequestStatus;
   decisionNote: string | null;
   decidedAt: Date | null;
+  /** Extra calls this approval granted, on top of the seller's cap. */
+  extraAttempts: number;
   orderStatusAtRequest: string;
   createdAt: Date;
 }
@@ -113,6 +115,7 @@ export class OrderReattemptService {
     requestId: string,
     staffId: string,
     note: string | null,
+    extraAttempts: number,
   ): Promise<ReattemptRequestView> {
     const row = await this.requirePending(requestId);
 
@@ -123,6 +126,10 @@ export class OrderReattemptService {
         decidedById: staffId,
         decidedAt: new Date(),
         decisionNote: note,
+        // Headroom, not just an unlock. Without it the order comes back
+        // already at its cap and the next unanswered ring re-rejects it,
+        // so the whole approval is spent on a customer who was not in.
+        extraAttempts,
       },
     });
     if (claimed.count === 0) {
@@ -153,6 +160,7 @@ export class OrderReattemptService {
           decidedById: null,
           decidedAt: null,
           decisionNote: null,
+          extraAttempts: 0,
         },
       });
       this.logger.error(
@@ -269,6 +277,7 @@ export class OrderReattemptService {
       status: ReattemptRequestStatus;
       decisionNote: string | null;
       decidedAt: Date | null;
+      extraAttempts: number;
       orderStatusAtRequest: string;
       createdAt: Date;
     },
@@ -283,6 +292,7 @@ export class OrderReattemptService {
       status: row.status,
       decisionNote: row.decisionNote,
       decidedAt: row.decidedAt,
+      extraAttempts: row.extraAttempts,
       orderStatusAtRequest: row.orderStatusAtRequest,
       createdAt: row.createdAt,
     };

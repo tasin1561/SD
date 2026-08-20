@@ -146,6 +146,10 @@ function makeService(
     settings,
     // Evaluation record; the close is covered by its own spec.
     { close: jest.fn(), closeAllForAgent: jest.fn() } as never,
+    // The cap the attempt is judged against: the seller's, plus any
+    // headroom an approved re-attempt granted this order. Fixed at the
+    // seeded default here so these tests stay about outcome mapping.
+    { effectiveForOrder: jest.fn(async () => opts.maxAttemptsSetting ?? 3) } as never,
   );
   return {
     svc,

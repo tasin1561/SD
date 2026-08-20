@@ -5517,6 +5517,18 @@ model OrderReattemptRequest {
   /// the whole basis on which someone approves it.
   reason         String                 @db.Text
   status         ReattemptRequestStatus @default(PENDING)
+  /// How many EXTRA calls the approval grants, on top of the seller's
+  /// normal cap. Zero on a pending or rejected request.
+  ///
+  /// Unlocking the queue is not enough on its own: an order that reached
+  /// the cap comes back already at 3 of 3, so the very next unanswered
+  /// ring re-rejects it and the whole approval is spent on a customer
+  /// who was not in. Headroom is granted explicitly and BOUNDED rather
+  /// than resetting the count, because the count is the record that this
+  /// customer has already refused three times — an order that could be
+  /// called indefinitely through repeated requests is the thing this
+  /// whole flow exists to prevent.
+  extraAttempts  Int                    @default(0) @map("extra_attempts")
   decidedById    String?                @map("decided_by_id") @db.Uuid
   decidedAt      DateTime?              @map("decided_at") @db.Timestamptz
   decisionNote   String?                @map("decision_note") @db.Text
