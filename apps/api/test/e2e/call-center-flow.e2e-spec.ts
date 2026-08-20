@@ -355,6 +355,14 @@ describe('Call center flow (e2e)', () => {
       .send({ email: agent2.email, password: agent2.password })
       .expect(200);
     const agent2Auth = { Authorization: `Bearer ${a2Login.body.accessToken}` };
+    // The second agent has to claim presence too — availability is
+    // per agent and enforced server-side, so a fresh login is off the
+    // roster until it says otherwise.
+    await request(h.baseUrl)
+      .patch('/agent/settings')
+      .set(agent2Auth)
+      .send({ isAvailable: true })
+      .expect(200);
 
     const [a, b] = await Promise.all([pullNext(staffAuth), pullNext(agent2Auth)]);
     expect(a.status).toBe(200);
