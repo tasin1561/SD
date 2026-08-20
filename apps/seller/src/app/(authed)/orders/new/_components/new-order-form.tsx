@@ -19,7 +19,7 @@ import {
   DUPLICATE_LINES_ERROR,
   linesAreDuplicated,
 } from '@/lib/address-guidance';
-import { prefixHint } from '@/lib/seller-prefix';
+import { prefixHint, stripSellerPrefix } from '@/lib/seller-prefix';
 import { CustomerHistoryPanel } from './customer-history-panel';
 import { DuplicateOrderDialog, type DuplicateCandidate } from './duplicate-order-dialog';
 import {
@@ -296,7 +296,16 @@ export function NewOrderForm(): ReactElement {
   }): void {
     setForm((p) => ({
       ...p,
-      recipientName: r.name,
+      // The STORED name carries the seller code ("MSt Tasin") because
+      // that is what goes on a label; this input sits behind a fixed
+      // prefix box, so filling it raw showed "MSt MSt Tasin". Strip it,
+      // exactly as the edit form does when round-tripping an order.
+      //
+      // Display-only either way: the server's compose is idempotent, so
+      // the double prefix could never reach the database. It could
+      // certainly reach a seller's eyes and make them edit the name to
+      // fix something that was not broken.
+      recipientName: stripSellerPrefix(sellerInitials, r.name),
       recipientAddressLine1: r.addressLine1,
       recipientAddressLine2:
         r.addressLine2 !== null && r.addressLine2 !== '' ? r.addressLine2 : (r.landmark ?? ''),
