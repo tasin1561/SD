@@ -26,6 +26,8 @@ export function ReattemptRequestDialog({
 }): ReactElement {
   const request = useRequestReattempt();
   const [reason, setReason] = useState('');
+  const typed = reason.trim().length;
+  const remaining = Math.max(0, MIN_REASON - typed);
 
   function close(): void {
     setReason('');
@@ -45,14 +47,29 @@ export function ReattemptRequestDialog({
       <FormField
         label="Why should we call again?"
         htmlFor="ra-reason"
-        hint="What do you know that the last call did not? A wrong price quoted, the wrong item described, a message from the customer since."
+        // The counter is part of the hint, not a separate line: the
+        // minimum is only interesting while you are short of it, and the
+        // send button gives no clue why it is disabled.
+        hint={
+          <>
+            What do you know that the last call did not? A wrong price quoted, the wrong item
+            described, a message from the customer since.{' '}
+            {remaining > 0 ? (
+              <span className="text-pending">
+                {remaining} more {remaining === 1 ? 'character' : 'characters'} needed.
+              </span>
+            ) : (
+              <span className="text-text-faint">{typed} characters.</span>
+            )}
+          </>
+        }
       >
         <Textarea
           id="ra-reason"
           rows={4}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="Customer messaged us afterwards saying the agent quoted the wrong price — they still want the order at ₹2,300."
+          placeholder={`At least ${MIN_REASON} characters — e.g. the customer messaged us afterwards saying the agent quoted the wrong price, and they still want the order.`}
         />
       </FormField>
 
@@ -64,7 +81,7 @@ export function ReattemptRequestDialog({
         </Button>
         <Button
           size="md"
-          disabled={reason.trim().length < MIN_REASON || request.isPending}
+          disabled={remaining > 0 || request.isPending}
           onClick={() => request.mutate({ orderId, reason: reason.trim() }, { onSuccess: close })}
         >
           {request.isPending ? 'Sending…' : 'Send request'}

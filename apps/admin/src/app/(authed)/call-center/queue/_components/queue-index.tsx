@@ -41,6 +41,9 @@ import { useRouter } from 'next/navigation';
 
 const PAGE_SIZE = 25;
 
+/** Mirrors the server's MinLength on RescheduleQueueEntryDto.reason. */
+const MIN_RESCHEDULE_REASON = 5;
+
 /**
  * The call queue, from a supervisor's side.
  *
@@ -308,6 +311,7 @@ function Reschedule({
   const reschedule = useRescheduleQueueEntry();
   const [when, setWhen] = useState('');
   const [reason, setReason] = useState('');
+  const reasonShort = Math.max(0, MIN_RESCHEDULE_REASON - reason.trim().length);
 
   function close(): void {
     setWhen('');
@@ -382,7 +386,20 @@ function Reschedule({
       <FormField
         label="Why"
         htmlFor="q-why"
-        hint="Moving when a customer gets called is a decision someone should be able to account for later."
+        // Same reasoning as the seller's re-attempt dialog: a disabled
+        // button with no stated minimum leaves someone typing and
+        // guessing.
+        hint={
+          <>
+            Moving when a customer gets called is a decision someone should be able to account for
+            later.{' '}
+            {reasonShort > 0 && (
+              <span className="text-pending">
+                {reasonShort} more {reasonShort === 1 ? 'character' : 'characters'} needed.
+              </span>
+            )}
+          </>
+        }
       >
         <Input
           id="q-why"
@@ -400,7 +417,7 @@ function Reschedule({
         </Button>
         <Button
           size="md"
-          disabled={when === '' || reason.trim().length < 5 || reschedule.isPending}
+          disabled={when === '' || reasonShort > 0 || reschedule.isPending}
           onClick={() => {
             if (entry !== null) {
               reschedule.mutate(
