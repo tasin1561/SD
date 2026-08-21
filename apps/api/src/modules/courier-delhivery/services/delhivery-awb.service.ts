@@ -57,6 +57,28 @@ interface DelhiveryCreateResponse {
 }
 
 /**
+ * Characters Delhivery's create API rejects outright.
+ *
+ * Their docs: "The raw JSON body does not accept special characters:
+ * &, #, %, ;, \". A payload carrying one comes back as their generic
+ * "An internal Error has occurred" — no named field, nothing pointing at
+ * the character — so this is a failure that is very expensive to
+ * diagnose and trivial to prevent.
+ *
+ * Replaced with a space rather than deleted: "Shirt&Tie" becoming
+ * "ShirtTie" is a different product name, while "Shirt Tie" is the same
+ * one written plainly. A courier label is read by a human.
+ */
+const DELHIVERY_FORBIDDEN = /[&#%;\\]/g;
+
+export function sanitiseForDelhivery(value: string): string {
+  return value
+    .replace(DELHIVERY_FORBIDDEN, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+/**
  * `+919876543210` → `9876543210`.
  *
  * Delhivery's B2C create API takes the national number. Ours are stored
@@ -276,9 +298,9 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
       // not worth the round trip that fetched it. The pool still fills;
       // nothing consumes it here. See phase-1a-debt.
       waybill: '',
-      order: req.shipmentNumber,
-      name: req.recipientName,
-      add: [req.addressLine1, req.addressLine2].filter(Boolean).join(', '),
+      order: sanitiseForDelhivery(req.shipmentNumber),
+      name: sanitiseForDelhivery(req.recipientName),
+      add: sanitiseForDelhivery([req.addressLine1, req.addressLine2].filter(Boolean).join(', ')),
       pin: req.postalCode,
       city: req.city !== '' ? req.city : resolved.city,
       state: req.stateProvince !== '' ? req.stateProvince : resolved.state,
@@ -298,7 +320,7 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
       payment_mode: isCod ? 'COD' : 'Prepaid',
       cod_amount: isCod ? str(req.codAmountInr) : '',
       total_amount: str(req.declaredValueInr),
-      products_desc: req.itemDescription.slice(0, 250),
+      products_desc: sanitiseForDelhivery(req.itemDescription).slice(0, 250),
       quantity: String(req.quantity ?? 1),
       weight: str(req.totalWeightGrams),
       // Present-but-empty, exactly as their sample does it. Their

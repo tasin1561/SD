@@ -234,7 +234,12 @@ export class AwbGenerationService {
       totalWeightGrams: shipment.totalWeightGrams,
       declaredValueInr: shipment.declaredValueInr.toString(),
       codAmountInr: shipment.codAmountInr?.toString() ?? null,
-      itemDescription: shipment.items.map((i) => `${i.productName} x${i.quantity}`).join('; '),
+      // Comma, not semicolon: ';' is on Delhivery's rejected-character
+      // list, so a two-item order would have failed with their generic
+      // internal error and nothing pointing at the separator. The
+      // sanitiser in the adapter is the backstop; this is not writing
+      // the problem in the first place.
+      itemDescription: shipment.items.map((i) => `${i.productName} x${i.quantity}`).join(', '),
     };
 
     const awb = await this.delhiveryAwb.generateAwb(
