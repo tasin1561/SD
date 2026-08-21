@@ -11,8 +11,13 @@
 -- Safe as a NOT NULL add: inbound_freight_charges is empty in every
 -- environment (verified on production, 0 rows, 0 allocations).
 
-ALTER TABLE "inbound_freight_charges"
-  DROP CONSTRAINT IF EXISTS "inbound_freight_charges_consignment_id_key";
+-- DROP INDEX, not DROP CONSTRAINT: Prisma emits `@unique` as
+-- `CREATE UNIQUE INDEX "<table>_<col>_key"`, so there is no constraint
+-- of that name to drop. Written as DROP CONSTRAINT IF EXISTS first,
+-- which `IF EXISTS` turned into a silent no-op — the unique survived and
+-- CI's drift gate caught it. A DROP you EXPECT to succeed should not
+-- carry IF EXISTS; it converts a loud failure into a quiet wrong result.
+DROP INDEX IF EXISTS "inbound_freight_charges_consignment_id_key";
 
 ALTER TABLE "inbound_freight_charges"
   ADD COLUMN "goods_receipt_id" UUID NOT NULL;
