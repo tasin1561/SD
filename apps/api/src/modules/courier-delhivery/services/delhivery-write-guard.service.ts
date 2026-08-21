@@ -153,9 +153,9 @@ export class DelhiveryWriteGuardService {
         actorType: ActorType.SYSTEM,
         action: 'courier.delhivery.live_write_to_production',
         entityType: 'courier',
-        entityId: 'delhivery',
+        entityId: null,
         severity: 'HIGH',
-        metadata: { operation, host: target.host, ...context },
+        metadata: { courierCode: 'delhivery', operation, host: target.host, ...context },
       });
       this.logger.warn(
         { operation, host: target.host, ...context },
@@ -172,9 +172,9 @@ export class DelhiveryWriteGuardService {
       actorType: ActorType.SYSTEM,
       action: 'courier.delhivery.live_write_blocked',
       entityType: 'courier',
-      entityId: 'delhivery',
+      entityId: null,
       severity: 'HIGH',
-      metadata: { operation, ...context },
+      metadata: { courierCode: 'delhivery', operation, ...context },
     });
 
     throw new ForbiddenException({

@@ -244,7 +244,18 @@ export class AwbGenerationService {
     );
     if (!awb.ok) {
       this.logger.warn(
-        { shipmentId, errorCode: awb.errorCode, serviceable: awb.serviceable },
+        {
+          shipmentId,
+          errorCode: awb.errorCode,
+          serviceable: awb.serviceable,
+          // Delhivery's OWN words for the refusal — their `rmk` or the
+          // per-package `remarks`. It was computed and then dropped,
+          // which left the log saying only DELHIVERY_CREATE_FAILED: true
+          // but useless, because every interesting failure here is a
+          // different sentence from them. Found during the first live
+          // write, where the reason was the entire thing we needed.
+          errorMessage: awb.errorMessage,
+        },
         'AWB generation failed',
       );
       return {

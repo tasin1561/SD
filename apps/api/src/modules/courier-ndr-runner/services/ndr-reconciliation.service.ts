@@ -140,11 +140,11 @@ export class NdrReconciliationService {
       actorType: ActorType.SYSTEM,
       action: 'courier.ndr.reconciliation_alert',
       entityType: 'courier',
-      entityId: 'delhivery',
+      entityId: null,
       // CRITICAL: this is the signal that a courier is accepting our
       // instructions and not acting on them. Nothing else detects it.
       severity: 'CRITICAL',
-      metadata: { ...s },
+      metadata: { courierCode: 'delhivery', ...s },
     });
 
     const to = await this.settings.alertEmail();

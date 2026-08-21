@@ -186,12 +186,12 @@ export class PortalCanaryService {
       actorType: ActorType.SYSTEM,
       action: 'courier.portal.canary_failed',
       entityType: 'courier',
-      entityId: 'delhivery',
+      entityId: null,
       // The portal is now writing into customer-visible threads without
       // a working verification path, or not writing at all. Either way a
       // human needs to look before it runs again.
       severity: 'CRITICAL',
-      metadata: { reason, steps, mode },
+      metadata: { courierCode: 'delhivery', reason, steps, mode },
     });
     this.logger.error({ reason, steps }, 'Portal canary FAILED — write channel paused for 24h');
     return { ran: true, ok: false, steps, disabledChannel: true, reason };

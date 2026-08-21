@@ -352,9 +352,10 @@ export class NdrRunnerService {
       actorType: ActorType.SYSTEM,
       action: dryRun ? 'courier.ndr.batch_dry_run' : 'courier.ndr.batch_completed',
       entityType: 'courier',
-      entityId: 'delhivery',
+      entityId: null,
       severity: submitted > 0 ? 'HIGH' : 'LOW',
       metadata: {
+        courierCode: 'delhivery',
         ...summary,
         reasons: summary.reasons as Prisma.InputJsonValue,
         plan: plan as unknown as Prisma.InputJsonValue,

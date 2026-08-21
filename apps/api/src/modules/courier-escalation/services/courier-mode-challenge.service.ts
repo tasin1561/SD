@@ -110,9 +110,10 @@ export class CourierModeChallengeService {
       actorId: staff.id,
       action: 'courier.channel.mode_change_requested',
       entityType: 'courier',
-      entityId: courierCode,
+      entityId: null,
       severity: 'HIGH',
       metadata: {
+        courierCode,
         requestedMode: input.writeMode,
         requestedCategories: input.autoCategories,
         reason: input.reason.trim(),

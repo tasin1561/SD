@@ -278,9 +278,9 @@ export class CourierChannelSettingsService {
       actorId: input.staffId ?? null,
       action: 'courier.channel.paused',
       entityType: 'courier',
-      entityId: courierCode,
+      entityId: null,
       severity: 'HIGH',
-      metadata: { until: input.until.toISOString(), reason: input.reason },
+      metadata: { courierCode, until: input.until.toISOString(), reason: input.reason },
     });
     this.logger.warn(
       { courierCode, until: input.until, reason: input.reason },
@@ -303,9 +303,9 @@ export class CourierChannelSettingsService {
       actorId: input.staffId,
       action: 'courier.channel.resumed',
       entityType: 'courier',
-      entityId: courierCode,
+      entityId: null,
       severity: 'MEDIUM',
-      metadata: {},
+      metadata: { courierCode },
     });
     return this.get(courierCode);
   }

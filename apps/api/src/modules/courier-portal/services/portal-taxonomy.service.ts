@@ -164,11 +164,12 @@ export class PortalTaxonomyService {
       actorType: ActorType.SYSTEM,
       action: 'courier.portal.taxonomy_changed',
       entityType: 'courier',
-      entityId: 'delhivery',
+      entityId: null,
       // A new category is something nobody has decided about; a
       // disappeared one may be a lock that just stopped existing.
       severity: 'HIGH',
       metadata: {
+        courierCode: 'delhivery',
         fetched: r.fetched,
         created: r.created,
         changed: r.changed,

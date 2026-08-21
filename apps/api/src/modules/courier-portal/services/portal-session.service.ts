@@ -281,9 +281,9 @@ export class PortalSessionService {
       actorType: ActorType.SYSTEM,
       action: 'courier.portal.challenge_frozen',
       entityType: 'courier',
-      entityId: 'delhivery',
+      entityId: null,
       severity: 'CRITICAL',
-      metadata: { challenge, url: page.url(), artifactPath },
+      metadata: { courierCode: 'delhivery', challenge, url: page.url(), artifactPath },
     });
 
     const to = await this.settings.alertEmailForPortal();
