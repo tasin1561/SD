@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   ActorType,
   Currency,
+  InboundFreightBasis,
   InboundFreightMode,
   InboundFreightStatus,
   Prisma,
@@ -11,11 +12,24 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 
+export interface PricedLineInput {
+  readonly goodsReceiptLineId: string;
+  readonly basis: InboundFreightBasis;
+  /** Per kg, or per piece — whichever the basis says. */
+  readonly rateInr: Prisma.Decimal;
+  /** Required for PER_KG, refused for PER_PIECE. */
+  readonly chargeableWeightKg: Prisma.Decimal | null;
+}
+
 export interface AllocationPlanLine {
   readonly goodsReceiptLineId: string;
   readonly variantId: string;
   readonly units: number;
   readonly unitWeightGrams: number | null;
+  readonly basis: InboundFreightBasis;
+  readonly rateInr: Prisma.Decimal;
+  readonly chargeableWeightKg: Prisma.Decimal | null;
+  readonly lineTotalInr: Prisma.Decimal;
   readonly perUnitInr: Prisma.Decimal;
 }
 
@@ -72,89 +86,123 @@ export class InboundFreightAmortisationService {
   ) {}
 
   /**
-   * Split a bill across the receipt's lines by weight. Called at record
-   * time; the resulting rates are snapshotted and never recomputed.
+   * Price the arrival from the forwarder's own invoice lines.
+   *
+   * This REPLACED a weight-based split: one total apportioned across the
+   * receipt's lines by recorded SKU weight, with a count fallback for
+   * anything unweighed. That was an inference standing in for a document
+   * ops already has in front of them, and it disagreed with the invoice
+   * whenever the forwarder used volumetric weight, rounded up to the next
+   * half kilo, or priced part of the shipment per piece — all routine.
+   * The old code also had to reconcile a weighed pool against an
+   * unweighed one, arithmetic that existed only to paper over the guess.
+   *
+   * Every counted line must be priced. Silently skipping one would make
+   * those units free forever: a unit's freight is charged from its
+   * allocation row as it leaves, and the charge path skips a unit that
+   * has none.
    */
-  async planAllocation(
-    /**
-     * The receipt legs whose COUNTED lines this bill covers. A two-leg
-     * consignment passes its India arrivals, not its Bangladesh intake:
-     * freight has to be amortised over the units that actually landed,
-     * or the share of a unit lost in transit is money nothing will ever
-     * settle.
-     */
-    goodsReceiptIds: readonly string[],
-    totalInr: Prisma.Decimal,
-  ): Promise<{ lines: readonly AllocationPlanLine[]; totalUnits: number }> {
+  async planFromPricedLines(
+    goodsReceiptId: string,
+    priced: readonly PricedLineInput[],
+  ): Promise<{
+    lines: readonly AllocationPlanLine[];
+    totalUnits: number;
+    totalInr: Prisma.Decimal;
+  }> {
     const lines = await this.prisma.client.goodsReceiptLine.findMany({
-      where: { receiptId: { in: [...goodsReceiptIds] } },
+      where: { receiptId: goodsReceiptId },
       select: { id: true, variantId: true, receivedQty: true },
     });
     const stocked = lines.filter((l) => l.receivedQty > 0);
-    const totalUnits = stocked.reduce((sum, l) => sum + l.receivedQty, 0);
-    if (stocked.length === 0 || totalUnits === 0) {
-      return { lines: [], totalUnits: 0 };
+    if (stocked.length === 0) {
+      throw new BadRequestException({
+        code: 'FREIGHT_NOTHING_COUNTED',
+        message: 'This arrival has no counted units, so there is nothing to price.',
+      });
+    }
+
+    const byId = new Map(priced.map((p) => [p.goodsReceiptLineId, p]));
+    const missing = stocked.filter((l) => !byId.has(l.id));
+    if (missing.length > 0) {
+      throw new BadRequestException({
+        code: 'FREIGHT_LINE_MISSING',
+        message:
+          `Every counted product needs a price — ${missing.length} ` +
+          `${missing.length === 1 ? 'is' : 'are'} unpriced. A product left out would ship ` +
+          `freight-free permanently, because a unit with no allocation is skipped when it leaves.`,
+      });
+    }
+    const known = new Set(stocked.map((l) => l.id));
+    const stray = priced.filter((p) => !known.has(p.goodsReceiptLineId));
+    if (stray.length > 0) {
+      throw new BadRequestException({
+        code: 'FREIGHT_LINE_UNKNOWN',
+        message: `${stray.length} priced line(s) are not counted products on this arrival.`,
+      });
     }
 
     const variants = await this.catalog.getVariantsByIds(stocked.map((l) => l.variantId));
 
-    // Weight basis per line. A line with no usable weight contributes
-    // nothing to the weight pool and is handled by the count fallback.
-    const weightByLine = new Map<string, number | null>();
-    let weightPool = 0;
-    let countPoolUnits = 0;
-    for (const line of stocked) {
-      const grams = variants.get(line.variantId)?.weightGrams ?? null;
-      const usable = grams !== null && grams > 0 ? grams : null;
-      weightByLine.set(line.id, usable);
-      if (usable === null) {
-        countPoolUnits += line.receivedQty;
-      } else {
-        weightPool += usable * line.receivedQty;
-      }
-    }
-
-    // When SOME lines have weights and others don't, the two pools have to
-    // share the bill. Split it in proportion to units first (the only
-    // common denominator available), then apply weight WITHIN the weighted
-    // pool. Fully-weighed and fully-unweighed consignments — the normal
-    // cases — reduce to a pure weight or pure count split.
-    const weightedUnits = totalUnits - countPoolUnits;
-    const weightPoolShare =
-      countPoolUnits === 0
-        ? totalInr
-        : weightedUnits === 0
-          ? ZERO
-          : totalInr.mul(weightedUnits).div(totalUnits);
-    const countPoolShare = totalInr.sub(weightPoolShare);
-
     const out: AllocationPlanLine[] = [];
+    let totalInr = ZERO;
+    let totalUnits = 0;
     for (const line of stocked) {
-      const grams = weightByLine.get(line.id) ?? null;
-      let perUnit: Prisma.Decimal;
-      if (grams === null) {
-        perUnit =
-          countPoolUnits === 0 ? ZERO : countPoolShare.div(countPoolUnits).toDecimalPlaces(4);
-      } else {
-        const lineWeight = grams * line.receivedQty;
-        perUnit =
-          weightPool === 0
-            ? ZERO
-            : weightPoolShare
-                .mul(lineWeight)
-                .div(weightPool)
-                .div(line.receivedQty)
-                .toDecimalPlaces(4);
+      const p = byId.get(line.id);
+      /* istanbul ignore next — the missing check above already proved it */
+      if (p === undefined) continue;
+
+      if (p.rateInr.lt(0)) {
+        throw new BadRequestException({
+          code: 'FREIGHT_RATE_INVALID',
+          message: 'A freight rate cannot be negative.',
+        });
       }
+
+      let lineTotal: Prisma.Decimal;
+      if (p.basis === InboundFreightBasis.PER_KG) {
+        if (p.chargeableWeightKg === null || p.chargeableWeightKg.lte(0)) {
+          throw new BadRequestException({
+            code: 'FREIGHT_WEIGHT_REQUIRED',
+            message:
+              'A per-kg line needs the chargeable weight the forwarder billed for. ' +
+              'Use their figure — volumetric weight and rounding up are both normal, so a ' +
+              'weight worked out from the catalogue would not match the invoice.',
+          });
+        }
+        lineTotal = p.rateInr.mul(p.chargeableWeightKg).toDecimalPlaces(2);
+      } else {
+        lineTotal = p.rateInr.mul(line.receivedQty).toDecimalPlaces(2);
+      }
+
       out.push({
         goodsReceiptLineId: line.id,
         variantId: line.variantId,
         units: line.receivedQty,
-        unitWeightGrams: grams,
-        perUnitInr: perUnit,
+        unitWeightGrams: variants.get(line.variantId)?.weightGrams ?? null,
+        basis: p.basis,
+        rateInr: p.rateInr,
+        chargeableWeightKg: p.basis === InboundFreightBasis.PER_KG ? p.chargeableWeightKg : null,
+        lineTotalInr: lineTotal,
+        // The per-unit share is what the charge path actually reads as a
+        // unit leaves. 4dp so a line spread over many units does not
+        // drift visibly.
+        perUnitInr: lineTotal.div(line.receivedQty).toDecimalPlaces(4),
+      });
+      totalInr = totalInr.add(lineTotal);
+      totalUnits += line.receivedQty;
+    }
+
+    if (totalInr.lte(0)) {
+      throw new BadRequestException({
+        code: 'FREIGHT_AMOUNT_INVALID',
+        message:
+          'The priced lines come to zero. A freight bill of nothing is not a bill — leave it ' +
+          'unrecorded rather than recording a zero.',
       });
     }
-    return { lines: out, totalUnits };
+
+    return { lines: out, totalUnits, totalInr };
   }
 
   /**

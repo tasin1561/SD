@@ -1,4 +1,5 @@
 import {
+  InboundFreightBasis,
   InboundFreightMode,
   InboundFreightStatus,
   Prisma,
@@ -155,20 +156,27 @@ function makeSut(
 
   // R3 amortisation: a single 10-unit line at 45/unit, so `record` writes
   // one allocation row and totalUnits 10.
-  const planAllocation = jest.fn(async () => ({
+  const planFromPricedLines = jest.fn(async () => ({
     lines: [
       {
         goodsReceiptLineId: 'grl-1',
         variantId: 'v-1',
         units: 10,
         unitWeightGrams: 500,
+        basis: InboundFreightBasis.PER_KG,
+        rateInr: new Prisma.Decimal('900'),
+        chargeableWeightKg: new Prisma.Decimal('5'),
+        lineTotalInr: new Prisma.Decimal('4500.00'),
         perUnitInr: new Prisma.Decimal('450.0000'),
       },
     ],
     totalUnits: 10,
+    // The bill total is the SUM of the lines, computed here rather than
+    // typed by the operator.
+    totalInr: new Prisma.Decimal('4500.00'),
   }));
   const amortisation = {
-    planAllocation,
+    planFromPricedLines,
   } as unknown as InboundFreightAmortisationService;
 
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown?]>(async () => 'a1');
@@ -176,7 +184,7 @@ function makeSut(
 
   return {
     svc: new InboundFreightService(prisma, audit, settings, wallet, amortisation),
-    planAllocation,
+    planFromPricedLines,
     applyEntry,
     auditLog,
     created,
@@ -185,7 +193,17 @@ function makeSut(
 }
 
 describe('InboundFreightService.record', () => {
-  const input = { goodsReceiptId: RECEIPT, amountInr: '4500.00' };
+  const input = {
+    goodsReceiptId: RECEIPT,
+    lines: [
+      {
+        goodsReceiptLineId: 'grl-1',
+        basis: InboundFreightBasis.PER_KG,
+        rateInr: '900',
+        chargeableWeightKg: '5',
+      },
+    ],
+  };
 
   it('PAY_NOW debits the wallet in the SAME transaction and lands SETTLED', async () => {
     const sut = makeSut({ mode: 'PAY_NOW' });
@@ -265,7 +283,7 @@ describe('InboundFreightService.record', () => {
     // forwarder invoice could not be entered at all.
     const sut = makeSut();
     await sut.svc.record(STAFF, input);
-    expect(sut.planAllocation).toHaveBeenCalledWith([RECEIPT], expect.anything());
+    expect(sut.planFromPricedLines).toHaveBeenCalledWith(RECEIPT, expect.anything());
   });
 
   it('refuses to bill the Bangladesh intake', async () => {
@@ -294,11 +312,16 @@ describe('InboundFreightService.record', () => {
     });
   });
 
-  it.each(['0', '-5', 'abc'])('rejects the invalid amount %s', async (amt) => {
+  it.each(['-5', 'abc'])('rejects the invalid rate %s', async (rate) => {
+    // Zero is deliberately NOT here: a single waived line is real, and
+    // the whole-bill-is-zero case is refused downstream on the total.
     const sut = makeSut();
-    await expect(sut.svc.record(STAFF, { ...input, amountInr: amt })).rejects.toMatchObject({
-      response: { code: 'FREIGHT_AMOUNT_INVALID' },
-    });
+    await expect(
+      sut.svc.record(STAFF, {
+        ...input,
+        lines: [{ ...input.lines[0]!, rateInr: rate }],
+      }),
+    ).rejects.toMatchObject({ response: { code: 'FREIGHT_AMOUNT_INVALID' } });
   });
 
   it('unreadable settings degrade to PAY_NOW with NO service charge, never a surprise fee', async () => {

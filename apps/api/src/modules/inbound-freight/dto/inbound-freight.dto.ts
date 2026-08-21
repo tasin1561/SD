@@ -1,6 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { InboundFreightMode, InboundFreightStatus } from '@skydrop/db';
+import { InboundFreightBasis, InboundFreightMode, InboundFreightStatus } from '@skydrop/db';
+import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsEnum,
   IsNumberString,
   IsOptional,
@@ -8,7 +12,39 @@ import {
   IsUUID,
   MaxLength,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+
+/**
+ * One line off the forwarder's invoice.
+ *
+ * Freight is quoted either by weight or by the piece, and both appear on
+ * the same invoice — air freight per kilo, a consolidator's handling per
+ * carton — so the basis is per LINE rather than per bill.
+ */
+export class InboundFreightLineDto {
+  @ApiProperty({ description: 'UUID v7 of the counted goods-receipt line being priced' })
+  @IsUUID('7')
+  readonly goodsReceiptLineId!: string;
+
+  @ApiProperty({ enum: InboundFreightBasis })
+  @IsEnum(InboundFreightBasis)
+  readonly basis!: InboundFreightBasis;
+
+  @ApiProperty({ description: 'Rate as invoiced — per kg, or per piece. Decimal string.' })
+  @IsNumberString()
+  readonly rateInr!: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Chargeable weight in kg, REQUIRED for PER_KG and ignored otherwise. Use the ' +
+      "forwarder's figure: volumetric weight and rounding up to the next half-kilo are both " +
+      'normal, so a weight worked out from the catalogue would not match the invoice.',
+  })
+  @IsOptional()
+  @IsNumberString()
+  readonly chargeableWeightKg?: string;
+}
 
 export class RecordInboundFreightDto {
   @ApiProperty({
@@ -20,10 +56,18 @@ export class RecordInboundFreightDto {
   readonly goodsReceiptId!: string;
 
   @ApiProperty({
-    description: 'Freight invoice amount, INR canonical. Decimal string (e.g. "4500.00").',
+    type: [InboundFreightLineDto],
+    description:
+      "The forwarder's invoice, line by line. EVERY counted product on the arrival must " +
+      'appear: one left out would ship freight-free permanently, because a unit with no ' +
+      'allocation row is skipped when it leaves. The bill total is the sum of these lines.',
   })
-  @IsNumberString()
-  readonly amountInr!: string;
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => InboundFreightLineDto)
+  readonly lines!: readonly InboundFreightLineDto[];
 
   @ApiPropertyOptional({
     enum: InboundFreightMode,

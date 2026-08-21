@@ -108,6 +108,7 @@ export {
   PackBoxStatus,
   StockUnitStatus,
   // R3 — BD→India inbound freight billing
+  InboundFreightBasis,
   InboundFreightMode,
   InboundFreightStatus,
   // D3 — pre-fetched courier AWB pool

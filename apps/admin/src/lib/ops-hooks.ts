@@ -260,7 +260,17 @@ export function useFreightList(query: {
 export function useRecordFreight(): UseMutationResult<
   FreightChargeView,
   Error,
-  { goodsReceiptId: string; amountInr: string; mode?: string; note?: string }
+  {
+    goodsReceiptId: string;
+    lines: ReadonlyArray<{
+      goodsReceiptLineId: string;
+      basis: string;
+      rateInr: string;
+      chargeableWeightKg?: string;
+    }>;
+    mode?: string;
+    note?: string;
+  }
 > {
   const client = useApiClient();
   const qc = useQueryClient();

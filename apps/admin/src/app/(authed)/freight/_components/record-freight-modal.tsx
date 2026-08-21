@@ -85,14 +85,59 @@ export function RecordFreightModal({
   );
 
   const [goodsReceiptId, setGoodsReceiptId] = useState('');
-  const [amountInr, setAmountInr] = useState('');
+  /**
+   * Per-product pricing, keyed by goods-receipt-line id. Every counted
+   * product must be priced before this can be submitted — one left out
+   * would ship freight-free permanently, because a unit with no
+   * allocation row is skipped when it leaves.
+   */
+  const [priced, setPriced] = useState<
+    Record<string, { basis: string; rate: string; weightKg: string }>
+  >({});
+  const selected = (consignments.data?.items ?? [])
+    .flatMap((c) => c.receipts.map((r) => ({ c, r })))
+    .find((x) => x.r.id === goodsReceiptId);
+  const products = (selected?.r.lines ?? []).filter((l) => (l.receivedQty ?? 0) > 0);
+
+  function priceOf(id: string): { basis: string; rate: string; weightKg: string } {
+    return priced[id] ?? { basis: 'PER_KG', rate: '', weightKg: '' };
+  }
+  function setPrice(id: string, patch: Partial<{ basis: string; rate: string; weightKg: string }>) {
+    setPriced((prev) => ({ ...prev, [id]: { ...priceOf(id), ...patch } }));
+  }
+  /** rate x weight, or rate x units — the same arithmetic the server does. */
+  function lineTotal(l: { readonly id: string; readonly receivedQty: number | null }): number {
+    const p = priceOf(l.id);
+    const rate = Number(p.rate);
+    if (!Number.isFinite(rate) || p.rate.trim() === '') return 0;
+    if (p.basis === 'PER_KG') {
+      const kg = Number(p.weightKg);
+      return Number.isFinite(kg) ? rate * kg : 0;
+    }
+    return rate * (l.receivedQty ?? 0);
+  }
+  const grandTotal = products.reduce((sum, l) => sum + lineTotal(l), 0);
+  /**
+   * Cosmetic completeness only (FE-2) — the server refuses a missing or
+   * weightless line itself with FREIGHT_LINE_MISSING /
+   * FREIGHT_WEIGHT_REQUIRED. This just stops the operator submitting a
+   * form they can see is half-filled.
+   */
+  const allPriced =
+    products.length > 0 &&
+    products.every((l) => {
+      const p = priceOf(l.id);
+      if (p.rate.trim() === '') return false;
+      return p.basis !== 'PER_KG' || p.weightKg.trim() !== '';
+    });
+
   const [mode, setMode] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   function reset(): void {
     setGoodsReceiptId('');
-    setAmountInr('');
+    setPriced({});
     setMode('');
     setNote('');
     setError(null);
@@ -103,7 +148,15 @@ export function RecordFreightModal({
     try {
       await record.mutateAsync({
         goodsReceiptId: goodsReceiptId.trim(),
-        amountInr: amountInr.trim(),
+        lines: products.map((l) => {
+          const p = priceOf(l.id);
+          return {
+            goodsReceiptLineId: l.id,
+            basis: p.basis,
+            rateInr: p.rate.trim(),
+            ...(p.basis === 'PER_KG' ? { chargeableWeightKg: p.weightKg.trim() } : {}),
+          };
+        }),
         ...(mode === '' ? {} : { mode }),
         ...(note.trim() === '' ? {} : { note: note.trim() }),
       });
@@ -160,20 +213,110 @@ export function RecordFreightModal({
           )}
         </FormField>
 
-        <FormField
-          label="Freight amount (INR)"
-          htmlFor="freight-amount"
-          hint="What the freight forwarder billed, before any pay-later service charge."
-          required
-        >
-          <Input
-            id="freight-amount"
-            inputMode="decimal"
-            value={amountInr}
-            onChange={(e) => setAmountInr(e.target.value)}
-            placeholder="18500.00"
-          />
-        </FormField>
+        {goodsReceiptId !== '' && (
+          <div>
+            <div className="mb-1 flex items-baseline justify-between">
+              <span className="text-text-secondary text-sm font-medium">
+                What the forwarder charged
+              </span>
+              <span className="text-text-faint text-xs">
+                {products.length} product{products.length === 1 ? '' : 's'}
+              </span>
+            </div>
+            <p className="text-text-muted mb-2 text-xs">
+              Price each product the way the invoice does — per kg or per piece, at its own rate. A
+              per-kg line needs the chargeable weight from the invoice, not one worked out from the
+              catalogue: volumetric weight and rounding up to the next half-kilo are both normal.
+              Every product must be priced.
+            </p>
+
+            {products.length === 0 ? (
+              <p className="text-text-muted text-sm">This arrival has no counted products.</p>
+            ) : (
+              <div className="border-border overflow-x-auto rounded-lg border">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-border text-text-muted border-b text-left text-xs">
+                      <th className="px-2 py-1.5 font-medium">Product</th>
+                      <th className="px-2 py-1.5 text-right font-medium">Units</th>
+                      <th className="px-2 py-1.5 font-medium">Priced</th>
+                      <th className="px-2 py-1.5 text-right font-medium">Rate ₹</th>
+                      <th className="px-2 py-1.5 text-right font-medium">Kg</th>
+                      <th className="px-2 py-1.5 text-right font-medium">Line ₹</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {products.map((l) => {
+                      const p = priceOf(l.id);
+                      const perKg = p.basis === 'PER_KG';
+                      return (
+                        <tr key={l.id} className="border-border/60 border-b last:border-0">
+                          <td className="px-2 py-1.5">
+                            <div className="text-text-primary">{l.variant.product.name}</div>
+                            <div className="text-text-faint font-mono text-xs">
+                              {l.variant.skuCode}
+                              {l.variant.variantLabel === null
+                                ? ''
+                                : ` · ${l.variant.variantLabel}`}
+                            </div>
+                          </td>
+                          <td className="px-2 py-1.5 text-right tabular-nums">{l.receivedQty}</td>
+                          <td className="px-2 py-1.5">
+                            <Select
+                              aria-label={`Basis for ${l.variant.skuCode}`}
+                              value={p.basis}
+                              onChange={(e) => setPrice(l.id, { basis: e.target.value })}
+                            >
+                              <option value="PER_KG">per kg</option>
+                              <option value="PER_PIECE">per pcs</option>
+                            </Select>
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <Input
+                              aria-label={`Rate for ${l.variant.skuCode}`}
+                              inputMode="decimal"
+                              className="text-right"
+                              value={p.rate}
+                              onChange={(e) => setPrice(l.id, { rate: e.target.value })}
+                              placeholder={perKg ? '300' : '40'}
+                            />
+                          </td>
+                          <td className="px-2 py-1.5">
+                            {perKg ? (
+                              <Input
+                                aria-label={`Chargeable weight for ${l.variant.skuCode}`}
+                                inputMode="decimal"
+                                className="text-right"
+                                value={p.weightKg}
+                                onChange={(e) => setPrice(l.id, { weightKg: e.target.value })}
+                                placeholder="12.5"
+                              />
+                            ) : (
+                              <span className="text-text-faint block text-right">—</span>
+                            )}
+                          </td>
+                          <td className="px-2 py-1.5 text-right tabular-nums">
+                            {lineTotal(l).toFixed(2)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-border border-t">
+                      <td className="text-text-muted px-2 py-1.5 text-xs" colSpan={5}>
+                        Freight total, before any pay-later service charge
+                      </td>
+                      <td className="text-text-primary px-2 py-1.5 text-right font-medium tabular-nums">
+                        ₹{grandTotal.toFixed(2)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
 
         <FormField
           label="Mode"
@@ -206,7 +349,7 @@ export function RecordFreightModal({
         <Button
           variant="primary"
           size="md"
-          disabled={goodsReceiptId === '' || amountInr.trim() === '' || record.isPending}
+          disabled={goodsReceiptId === '' || !allPriced || record.isPending}
           onClick={() => void submit()}
         >
           {record.isPending ? 'Recording…' : 'Record bill'}

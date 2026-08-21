@@ -10,6 +10,7 @@ import {
   ConsignmentRoute,
   Currency,
   GoodsReceiptStatus,
+  InboundFreightBasis,
   InboundFreightMode,
   InboundFreightStatus,
   Prisma,
@@ -52,7 +53,17 @@ export interface RecordFreightInput {
    * that can disagree.
    */
   readonly goodsReceiptId: string;
-  readonly amountInr: string;
+  /**
+   * The forwarder's invoice, line by line. Every counted product on the
+   * arrival must appear: one left out would ship freight-free forever,
+   * because a unit with no allocation row is skipped when it leaves.
+   */
+  readonly lines: readonly {
+    readonly goodsReceiptLineId: string;
+    readonly basis: InboundFreightBasis;
+    readonly rateInr: string;
+    readonly chargeableWeightKg?: string | null;
+  }[];
   /** Overrides the seller's resolved mode for this one arrival. */
   readonly mode?: InboundFreightMode;
   readonly note?: string | null;
@@ -116,8 +127,6 @@ export class InboundFreightService {
     input: RecordFreightInput,
     ctx?: ClientContext,
   ): Promise<FreightChargeView> {
-    const amount = this.parseAmount(input.amountInr);
-
     const receipt = await this.prisma.client.goodsReceipt.findFirst({
       where: { id: input.goodsReceiptId, deletedAt: null },
       select: {
@@ -196,6 +205,25 @@ export class InboundFreightService {
       });
     }
 
+    // The forwarder's invoice, priced line by line — the bill total is
+    // the SUM of its lines rather than a figure typed once and split by
+    // guesswork. Scoping to the one arrival is what lets a consignment be
+    // billed as it lands: the September shipment gets its own invoice
+    // over its own units.
+    const plan = await this.amortisation.planFromPricedLines(
+      receipt.id,
+      input.lines.map((l) => ({
+        goodsReceiptLineId: l.goodsReceiptLineId,
+        basis: l.basis,
+        rateInr: this.parseRate(l.rateInr),
+        chargeableWeightKg:
+          l.chargeableWeightKg === undefined || l.chargeableWeightKg === null
+            ? null
+            : this.parseRate(l.chargeableWeightKg),
+      })),
+    );
+    const amount = plan.totalInr;
+
     const mode = input.mode ?? (await this.resolveMode(consignment.sellerId));
     // The service charge is snapshotted at record time and never
     // re-resolved at settlement: the seller owes the rate that applied
@@ -208,12 +236,6 @@ export class InboundFreightService {
     const serviceCharge =
       percent === null || percent.isZero() ? null : amount.mul(percent).div(100).toDecimalPlaces(2);
     const total = serviceCharge === null ? amount : amount.add(serviceCharge);
-
-    // R3 amortisation over THIS arrival's counted lines. Scoping to the
-    // one leg is what lets a consignment be billed as it arrives: the
-    // September shipment gets its own invoice split over its own units,
-    // instead of inheriting an allocation computed before it existed.
-    const plan = await this.amortisation.planAllocation([receipt.id], total);
 
     const created = await this.prisma.client.$transaction(async (tx) => {
       const settleNow = mode === InboundFreightMode.PAY_NOW;
@@ -261,13 +283,12 @@ export class InboundFreightService {
             variantId: line.variantId,
             units: line.units,
             unitWeightGrams: line.unitWeightGrams,
+            basis: line.basis,
+            rateInr: line.rateInr,
+            chargeableWeightKg: line.chargeableWeightKg,
+            lineTotalInr: line.lineTotalInr,
             perUnitInr: line.perUnitInr,
-            ...(settleNow
-              ? {
-                  unitsSettled: line.units,
-                  amountSettledInr: line.perUnitInr.mul(line.units).toDecimalPlaces(2),
-                }
-              : {}),
+            ...(settleNow ? { unitsSettled: line.units, amountSettledInr: line.lineTotalInr } : {}),
           },
         });
       }
@@ -563,23 +584,33 @@ export class InboundFreightService {
     return row;
   }
 
-  private parseAmount(raw: string): Prisma.Decimal {
-    let amount: Prisma.Decimal;
+  /**
+   * A rate or a weight off the invoice. Kept at 4dp rather than money's
+   * 2dp: a per-piece rate on a cheap item is often fractions of a rupee,
+   * and rounding it before multiplying by the unit count would move the
+   * bill total away from what the forwarder charged.
+   *
+   * Zero is allowed HERE and refused later on the total. A single free
+   * line is real — a consolidator waiving one carton — but a whole bill
+   * of nothing is not a bill.
+   */
+  private parseRate(raw: string): Prisma.Decimal {
+    let value: Prisma.Decimal;
     try {
-      amount = new Prisma.Decimal(raw);
+      value = new Prisma.Decimal(raw);
     } catch {
       throw new BadRequestException({
         code: 'FREIGHT_AMOUNT_INVALID',
-        message: `'${raw}' is not a valid amount`,
+        message: `'${raw}' is not a valid number`,
       });
     }
-    if (!amount.isFinite() || amount.lte(0)) {
+    if (!value.isFinite() || value.lt(0)) {
       throw new BadRequestException({
         code: 'FREIGHT_AMOUNT_INVALID',
-        message: 'Freight amount must be greater than zero',
+        message: 'A rate or weight cannot be negative',
       });
     }
-    return amount.toDecimalPlaces(2);
+    return value.toDecimalPlaces(4);
   }
 
   /** Defaults to PAY_NOW — the simpler money flow — on any doubt. */

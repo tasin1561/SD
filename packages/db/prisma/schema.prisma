@@ -1616,23 +1616,40 @@ model InboundFreightCharge {
 /// so a later catalog weight edit cannot retro-price goods that have
 /// already landed.
 model InboundFreightAllocation {
-  id                 String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  freightChargeId    String   @map("freight_charge_id") @db.Uuid
+  id                 String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  freightChargeId    String              @map("freight_charge_id") @db.Uuid
   /// The consignment line. UNIQUE — one allocation per line, which is
   /// also what makes re-recording idempotent.
-  goodsReceiptLineId String   @unique @map("goods_receipt_line_id") @db.Uuid
-  variantId          String   @map("variant_id") @db.Uuid
+  goodsReceiptLineId String              @unique @map("goods_receipt_line_id") @db.Uuid
+  variantId          String              @map("variant_id") @db.Uuid
   units              Int
-  /// Effective per-unit weight used for the split (null ⇒ this line fell
-  /// back to a count-based share).
-  unitWeightGrams    Int?     @map("unit_weight_grams")
+  /// Effective per-unit weight, informational only since the bill stopped
+  /// being split by weight.
+  unitWeightGrams    Int?                @map("unit_weight_grams")
+  /// How this line was priced by the forwarder. Freight is quoted either
+  /// by weight or by the piece, and which one it was is part of the
+  /// record: a rate of 300 means nothing without knowing whether it was
+  /// per kilo or per sunglass.
+  basis              InboundFreightBasis
+  /// The rate as invoiced — per kg, or per piece. 4dp because a
+  /// per-piece rate on a cheap item is often fractions of a rupee.
+  rateInr            Decimal             @map("rate_inr") @db.Decimal(12, 4)
+  /// Only for PER_KG: the chargeable weight the forwarder billed for
+  /// this line. Their figure, not ours — volumetric weight and rounding
+  /// up to the next half-kilo are both normal, so a weight computed from
+  /// the catalogue would disagree with the invoice.
+  chargeableWeightKg Decimal?            @map("chargeable_weight_kg") @db.Decimal(12, 3)
+  /// rate x weight, or rate x units. Stored rather than recomputed: it
+  /// is what the invoice says, and a later rounding change must not
+  /// restate a bill the seller has already been charged for.
+  lineTotalInr       Decimal             @map("line_total_inr") @db.Decimal(12, 2)
   /// 4dp: a bill divided across many units needs more precision than the
   /// 2dp money columns, or the rounding drift becomes visible.
-  perUnitInr         Decimal  @map("per_unit_inr") @db.Decimal(12, 4)
-  unitsSettled       Int      @default(0) @map("units_settled")
-  amountSettledInr   Decimal  @default(0) @map("amount_settled_inr") @db.Decimal(12, 2)
-  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  perUnitInr         Decimal             @map("per_unit_inr") @db.Decimal(12, 4)
+  unitsSettled       Int                 @default(0) @map("units_settled")
+  amountSettledInr   Decimal             @default(0) @map("amount_settled_inr") @db.Decimal(12, 2)
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz
 
   freightCharge    InboundFreightCharge @relation(fields: [freightChargeId], references: [id], onDelete: Cascade)
   goodsReceiptLine GoodsReceiptLine     @relation(fields: [goodsReceiptLineId], references: [id])
@@ -4945,6 +4962,16 @@ enum OnboardingStepActor {
 // on INR, REMITTANCE_FX credit on BDT) so both ledgers conserve.
 
 /// R3 — who fronts the BD→India freight bill.
+/// How the forwarder priced a freight line. Air freight is quoted by
+/// weight; courier and consolidator lines are often per piece. Both
+/// appear on the same invoice, so this is per LINE, not per bill.
+enum InboundFreightBasis {
+  PER_KG    @map("per_kg")
+  PER_PIECE @map("per_piece")
+
+  @@map("inbound_freight_basis")
+}
+
 enum InboundFreightMode {
   /// Settled against the wallet the moment ops records the bill.
   PAY_NOW   @map("pay_now")

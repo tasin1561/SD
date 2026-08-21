@@ -1,4 +1,5 @@
 import {
+  InboundFreightBasis,
   InboundFreightMode,
   InboundFreightStatus,
   Prisma,
@@ -116,11 +117,23 @@ function makeSut(
   };
 }
 
-describe('InboundFreightAmortisationService.planAllocation — the weight split', () => {
-  it('splits by WEIGHT, so a heavy SKU carries more of the bill than a light one', async () => {
-    // 10 kettles @ 2000g = 20 000g; 100 cases @ 50g = 5000g. Total 25 000g.
-    // Kettle pool = 4500 × 20/25 = 3600 ⇒ 360/unit.
-    // Case pool   = 4500 ×  5/25 =  900 ⇒   9/unit.
+describe('InboundFreightAmortisationService.planFromPricedLines', () => {
+  const perKg = (id: string, rate: string, kg: string) => ({
+    goodsReceiptLineId: id,
+    basis: InboundFreightBasis.PER_KG,
+    rateInr: D(rate),
+    chargeableWeightKg: D(kg),
+  });
+  const perPiece = (id: string, rate: string) => ({
+    goodsReceiptLineId: id,
+    basis: InboundFreightBasis.PER_PIECE,
+    rateInr: D(rate),
+    chargeableWeightKg: null,
+  });
+
+  it('prices per kg and per piece on the SAME invoice, each at its own rate', async () => {
+    // Air freight on the kettles at 300/kg for 20kg = 6000 over 10 units.
+    // Handling on the cases at 9/piece for 100 = 900 over 100 units.
     const sut = makeSut({
       lines: [
         { id: 'l-kettle', variantId: 'v-kettle', receivedQty: 10 },
@@ -128,61 +141,104 @@ describe('InboundFreightAmortisationService.planAllocation — the weight split'
       ],
       weights: { 'v-kettle': 2000, 'v-case': 50 },
     });
-    const plan = await sut.svc.planAllocation(['gr-1'], D('4500'));
+    const plan = await sut.svc.planFromPricedLines('gr-1', [
+      perKg('l-kettle', '300', '20'),
+      perPiece('l-case', '9'),
+    ]);
 
     expect(plan.totalUnits).toBe(110);
+    expect(plan.totalInr.toString()).toBe('6900');
     const kettle = plan.lines.find((l) => l.goodsReceiptLineId === 'l-kettle');
     const kase = plan.lines.find((l) => l.goodsReceiptLineId === 'l-case');
-    expect(kettle?.perUnitInr.toString()).toBe('360');
+    expect(kettle?.lineTotalInr.toString()).toBe('6000');
+    expect(kettle?.perUnitInr.toString()).toBe('600');
+    expect(kase?.lineTotalInr.toString()).toBe('900');
     expect(kase?.perUnitInr.toString()).toBe('9');
-    // Sanity: the split adds back up to the bill.
-    const total = plan.lines.reduce((sum, l) => sum.add(l.perUnitInr.mul(l.units)), D('0'));
-    expect(total.toString()).toBe('4500');
   });
 
-  it('falls back to a COUNT split when no SKU has a weight — never treats freight as free', async () => {
+  it('the bill total is the SUM of its lines — never a figure typed separately', async () => {
     const sut = makeSut({
       lines: [
-        { id: 'l-1', variantId: 'v-1', receivedQty: 60 },
-        { id: 'l-2', variantId: 'v-2', receivedQty: 40 },
+        { id: 'l-1', variantId: 'v-1', receivedQty: 5 },
+        { id: 'l-2', variantId: 'v-2', receivedQty: 5 },
       ],
-      weights: { 'v-1': null, 'v-2': null },
+      weights: { 'v-1': 100, 'v-2': 100 },
     });
-    const plan = await sut.svc.planAllocation(['gr-1'], D('1000'));
-    // 1000 / 100 units = 10/unit for both lines.
-    for (const line of plan.lines) {
-      expect(line.perUnitInr.toString()).toBe('10');
-      expect(line.unitWeightGrams).toBeNull();
-    }
+    const plan = await sut.svc.planFromPricedLines('gr-1', [
+      perPiece('l-1', '12.50'),
+      perKg('l-2', '200', '1.5'),
+    ]);
+    const summed = plan.lines.reduce((sum, l) => sum.add(l.lineTotalInr), D('0'));
+    expect(plan.totalInr.toString()).toBe(summed.toString());
+    expect(plan.totalInr.toString()).toBe('362.5');
   });
 
-  it('a zero weight is treated as MISSING, not as weightless', async () => {
+  it('REFUSES an unpriced product — the failure mode the per-line model exists to prevent', async () => {
+    // A product left out gets no allocation row, and the charge path
+    // skips a unit that has none. Those units would ship freight-free
+    // forever, and nothing would ever report it.
+    const sut = makeSut({
+      lines: [
+        { id: 'l-1', variantId: 'v-1', receivedQty: 10 },
+        { id: 'l-2', variantId: 'v-2', receivedQty: 10 },
+      ],
+      weights: { 'v-1': 100, 'v-2': 100 },
+    });
+    await expect(
+      sut.svc.planFromPricedLines('gr-1', [perPiece('l-1', '10')]),
+    ).rejects.toMatchObject({ response: { code: 'FREIGHT_LINE_MISSING' } });
+  });
+
+  it('refuses a per-kg line with no weight', async () => {
     const sut = makeSut({
       lines: [{ id: 'l-1', variantId: 'v-1', receivedQty: 10 }],
-      weights: { 'v-1': 0 },
+      weights: { 'v-1': 100 },
     });
-    const plan = await sut.svc.planAllocation(['gr-1'], D('500'));
-    expect(plan.lines[0]?.unitWeightGrams).toBeNull();
-    expect(plan.lines[0]?.perUnitInr.toString()).toBe('50');
+    await expect(
+      sut.svc.planFromPricedLines('gr-1', [
+        {
+          goodsReceiptLineId: 'l-1',
+          basis: InboundFreightBasis.PER_KG,
+          rateInr: D('300'),
+          chargeableWeightKg: null,
+        },
+      ]),
+    ).rejects.toMatchObject({ response: { code: 'FREIGHT_WEIGHT_REQUIRED' } });
   });
 
-  it('mixed: a weighed line and an unweighed line each get a share', async () => {
+  it('refuses a priced line that is not on this arrival', async () => {
+    const sut = makeSut({
+      lines: [{ id: 'l-1', variantId: 'v-1', receivedQty: 10 }],
+      weights: { 'v-1': 100 },
+    });
+    await expect(
+      sut.svc.planFromPricedLines('gr-1', [perPiece('l-1', '10'), perPiece('l-stray', '10')]),
+    ).rejects.toMatchObject({ response: { code: 'FREIGHT_LINE_UNKNOWN' } });
+  });
+
+  it('a single free line is fine; a whole bill of nothing is not', async () => {
+    // A consolidator waiving one carton is real. A zero-rupee freight
+    // bill is not a bill, and recording one would say the shipment was
+    // carried for free.
     const sut = makeSut({
       lines: [
-        { id: 'l-w', variantId: 'v-w', receivedQty: 50 },
-        { id: 'l-u', variantId: 'v-u', receivedQty: 50 },
+        { id: 'l-1', variantId: 'v-1', receivedQty: 10 },
+        { id: 'l-2', variantId: 'v-2', receivedQty: 10 },
       ],
-      weights: { 'v-w': 100, 'v-u': null },
+      weights: { 'v-1': 100, 'v-2': 100 },
     });
-    const plan = await sut.svc.planAllocation(['gr-1'], D('1000'));
-    const weighed = plan.lines.find((l) => l.goodsReceiptLineId === 'l-w');
-    const unweighed = plan.lines.find((l) => l.goodsReceiptLineId === 'l-u');
-    // Units split the bill 50/50 between pools, then weight applies inside.
-    expect(weighed?.perUnitInr.toString()).toBe('10');
-    expect(unweighed?.perUnitInr.toString()).toBe('10');
+    const ok = await sut.svc.planFromPricedLines('gr-1', [
+      perPiece('l-1', '0'),
+      perPiece('l-2', '10'),
+    ]);
+    expect(ok.totalInr.toString()).toBe('100');
+
+    await expect(
+      sut.svc.planFromPricedLines('gr-1', [perPiece('l-1', '0'), perPiece('l-2', '0')]),
+    ).rejects.toMatchObject({ response: { code: 'FREIGHT_AMOUNT_INVALID' } });
   });
 
-  it('ignores lines that received nothing', async () => {
+  it('ignores lines that received nothing, and does not demand a price for them', async () => {
     const sut = makeSut({
       lines: [
         { id: 'l-1', variantId: 'v-1', receivedQty: 10 },
@@ -190,15 +246,16 @@ describe('InboundFreightAmortisationService.planAllocation — the weight split'
       ],
       weights: { 'v-1': 100, 'v-2': 100 },
     });
-    const plan = await sut.svc.planAllocation(['gr-1'], D('100'));
+    const plan = await sut.svc.planFromPricedLines('gr-1', [perPiece('l-1', '10')]);
     expect(plan.lines).toHaveLength(1);
     expect(plan.totalUnits).toBe(10);
   });
 
-  it('an empty receipt allocates nothing rather than dividing by zero', async () => {
+  it('an arrival with nothing counted is refused rather than dividing by zero', async () => {
     const sut = makeSut({ lines: [] });
-    const plan = await sut.svc.planAllocation(['gr-1'], D('100'));
-    expect(plan).toEqual({ lines: [], totalUnits: 0 });
+    await expect(sut.svc.planFromPricedLines('gr-1', [])).rejects.toMatchObject({
+      response: { code: 'FREIGHT_NOTHING_COUNTED' },
+    });
   });
 });
 

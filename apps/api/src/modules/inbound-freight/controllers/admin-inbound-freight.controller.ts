@@ -70,7 +70,7 @@ export class AdminInboundFreightController {
       staff.id,
       {
         goodsReceiptId: body.goodsReceiptId,
-        amountInr: body.amountInr,
+        lines: body.lines,
         ...(body.mode === undefined ? {} : { mode: body.mode }),
         ...(body.note === undefined ? {} : { note: body.note }),
       },
