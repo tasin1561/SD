@@ -1106,3 +1106,34 @@ irreversible act — and would give the D3 pool the consumer it lacks. Not
 done now because changing the live AWB path immediately before the
 first-parcel test is the wrong trade.
 **Pick up:** with MPS, which needs the pool anyway.
+
+## A god-moded recipient never reaches the shipment (2026-08-21, MEDIUM)
+
+`OrderAdminOverrideService.forceMutate` can change `recipientName`,
+`recipientPhoneE164` and the whole address block on the order. The
+shipment's `dest*` snapshot is NOT updated, and nothing else updates it
+either: `provisionFromSnapshot` fires only on entry to CONFIRMED and
+no-ops while a non-cancelled shipment exists, and `AwbSupersedeService`
+copies the destination from the OLD shipment, so every replacement
+inherits the stale values forever.
+
+The immutability is correct (ORD-6 / WMS-9) — the point of the snapshot
+is that a later catalog or customer edit cannot restate what was
+dispatched. The gap is that **god mode is the sanctioned way to fix a
+genuinely wrong recipient, and it cannot fix the copy that actually
+reaches the courier.** An admin who corrects a mistyped phone on a
+PICKED order sees the order update, sees no error, and the parcel still
+ships to the wrong number.
+
+Found during the Delhivery go-live test, where a test-shaped consignee
+had to be replaced and could not be.
+
+Worth considering (NOT implemented — it narrows an invariant and wants
+a deliberate decision): propagate recipient `fieldChanges` to a live
+shipment that is still `CREATED` **and carries no `awbNumber`**. Such a
+shipment has been communicated to nobody — no label printed, no courier
+told — so its snapshot has made no external commitment yet. Once an AWB
+exists the courier holds the address and the correction belongs at
+`courier-ops`' `edit` endpoint instead, which is where it already lives.
+
+Today's workaround is a fresh order.
