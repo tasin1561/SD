@@ -289,24 +289,29 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
     return {
       // EMPTY — Delhivery assigns, and the number it returns is the AWB.
       //
-      // We used to send a pre-allocated waybill from the pool, and every
-      // live create then failed: the envelope came back with their
-      // generic "An internal Error has occurred", and their staging tier
-      // gave the raw form, `'NoneType' object has no attribute
-      // 'end_date'`. A probe identical except for sending an empty
-      // waybill got materially further — package_count 1 and a named
-      // per-package error rather than a crash.
+      // This was changed while chasing a create that failed five times,
+      // on the theory that the pooled pre-allocated waybill was the
+      // cause: their staging tier rendered the crash as `'NoneType'
+      // object has no attribute 'end_date'`, which reads like a lookup
+      // of a waybill SERIES validity window returning None.
       //
-      // `end_date` is a validity window on a waybill SERIES: passing a
-      // waybill makes their handler look up its allocation record, and
-      // ours resolves to None. The bulk-fetched numbers are evidently
-      // not usable on create for this account, whatever the pool
-      // believes.
+      // THAT THEORY WAS NEVER CONFIRMED, and is recorded here as an
+      // open question rather than a finding. The actual cause of all
+      // five failures was a fraud heuristic on the consignee (ER0005,
+      // "suspicious order/consignee" — a test-shaped name on the
+      // canonical fake number 9876543210), which refused the create
+      // whatever the waybill field held. Every payload theory tested
+      // that day looked confirmed-negative for the same reason.
       //
-      // Pre-allocation is forfeited, deliberately, until a pooled
-      // waybill is PROVEN usable — a number we cannot manifest with is
-      // not worth the round trip that fetched it. The pool still fills;
-      // nothing consumes it here. See phase-1a-debt.
+      // So: an empty waybill is PROVEN to work — a create with one was
+      // accepted on 2026-08-21 and issued 38061110517624. Whether a
+      // POOLED waybill also works is untested. Until someone tests it
+      // with a consignee that passes the filter, empty is the option we
+      // have evidence for.
+      //
+      // The pool still refills and nothing consumes it here. Do not
+      // delete it on the strength of a theory this comment no longer
+      // makes; see phase-1a-debt.
       waybill: '',
       order: sanitiseForDelhivery(req.shipmentNumber),
       name: sanitiseForDelhivery(req.recipientName),

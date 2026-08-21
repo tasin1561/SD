@@ -379,7 +379,7 @@ refusal. Fixed — per-package remarks now win, prefixed with `err_code`.
 | `+91` phone prefix | Was genuinely wrong, fixed, insufficient alone |
 | Content-type urlencoded vs json | No — byte-identical responses |
 | Missing optional keys | No — added, insufficient alone |
-| Pooled pre-allocated waybill | No — `waybill: ""` behaves the same |
+| Pooled pre-allocated waybill | **Untested** — the filter refused both, so this was never isolated. Empty is proven to work; pooled is an open question |
 | Declared value ≫ COD (₹1050 vs ₹10) | No — matched them, same refusal |
 
 ### Two real bugs the test found
@@ -393,7 +393,27 @@ refusal. Fixed — per-package remarks now win, prefixed with `err_code`.
    which is why this test never hit it — every two-item order would have
    failed with the same nameless error.
 
-### Blocked on
+### First successful write — 2026-08-21
+
+With a plausible consignee name and a real phone number, the SAME
+payload was accepted:
+
+```
+waybill 38061110517624   status Success   COD 10.0   sort_code KLT/MDH
+cancel -> "Shipment has been cancelled."
+```
+
+**The wire contract is proven**: real credential, real account, real
+waybill, clean cancel, nothing left moving. What is NOT yet proven is
+our own path around it — preflight, build, parse, persist the AWB,
+upload the label, flip the manifest to CONFIRMED — because that create
+was made by a probe that bypassed all of it. Completing that needs a
+fresh order carrying a consignee the filter accepts; the existing test
+order's shipment snapshot holds the refused number, and
+`AwbSupersedeService` copies the snapshot forward, so every replacement
+inherits it.
+
+### Still open
 
 A **real Indian phone number we control** for the consignee. Inventing
 one points a courier's confirmation call at a stranger. Until then the
