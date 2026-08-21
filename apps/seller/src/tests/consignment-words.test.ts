@@ -80,7 +80,7 @@ function consignment(over: Partial<ConsignmentView> = {}): ConsignmentView {
     createdAt: '2026-08-01T00:00:00.000Z',
     seller: { id: 's-1', companyName: 'Acme', emailDisplay: 'a@b.c' },
     receipts: [],
-    freightCharge: null,
+    freightCharges: [],
     ...over,
   };
 }

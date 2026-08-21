@@ -9,6 +9,7 @@ import {
   ConsignmentLeg,
   ConsignmentRoute,
   Currency,
+  GoodsReceiptStatus,
   InboundFreightMode,
   InboundFreightStatus,
   Prisma,
@@ -25,6 +26,9 @@ export interface FreightChargeView {
   readonly id: string;
   readonly consignmentId: string;
   readonly consignmentNumber: string | null;
+  /** The arrival this bill covers — one forwarder invoice per shipment. */
+  readonly goodsReceiptId: string;
+  readonly receiptNumber: string | null;
   readonly amountInr: string;
   readonly mode: InboundFreightMode;
   readonly serviceChargePercent: string | null;
@@ -42,9 +46,14 @@ export interface FreightChargeView {
 }
 
 export interface RecordFreightInput {
-  readonly consignmentId: string;
+  /**
+   * The India arrival being billed. The consignment is DERIVED from it
+   * rather than supplied alongside: two ids that must agree are two ids
+   * that can disagree.
+   */
+  readonly goodsReceiptId: string;
   readonly amountInr: string;
-  /** Overrides the seller's resolved mode for this one consignment. */
+  /** Overrides the seller's resolved mode for this one arrival. */
   readonly mode?: InboundFreightMode;
   readonly note?: string | null;
 }
@@ -94,8 +103,13 @@ export class InboundFreightService {
   ) {}
 
   /**
-   * Ops records the freight invoice for a consignment. PAY_NOW settles in
+   * Ops records the freight invoice for ONE ARRIVAL. PAY_NOW settles in
    * the same transaction; PAY_LATER leaves a visible receivable.
+   *
+   * Per-arrival, not per-consignment: a forwarder invoices a shipment,
+   * and a consignment arrives in as many shipments as it takes. The
+   * split runs over the units on THIS arrival, so a later shipment gets
+   * its own bill over its own units rather than landing freight-free.
    */
   async record(
     staffId: string,
@@ -104,20 +118,52 @@ export class InboundFreightService {
   ): Promise<FreightChargeView> {
     const amount = this.parseAmount(input.amountInr);
 
-    const consignment = await this.prisma.client.consignment.findFirst({
-      where: { id: input.consignmentId, deletedAt: null },
+    const receipt = await this.prisma.client.goodsReceipt.findFirst({
+      where: { id: input.goodsReceiptId, deletedAt: null },
       select: {
         id: true,
-        sellerId: true,
-        consignmentNumber: true,
-        route: true,
-        receipts: { select: { id: true, leg: true } },
+        receiptNumber: true,
+        leg: true,
+        status: true,
+        consignment: {
+          select: {
+            id: true,
+            sellerId: true,
+            consignmentNumber: true,
+            route: true,
+            deletedAt: true,
+          },
+        },
       },
     });
-    if (!consignment) {
+    if (!receipt || receipt.consignment === null || receipt.consignment.deletedAt !== null) {
       throw new NotFoundException({
-        code: 'CONSIGNMENT_NOT_FOUND',
-        message: `Consignment ${input.consignmentId} not found`,
+        code: 'ARRIVAL_NOT_FOUND',
+        message: `Arrival ${input.goodsReceiptId} not found, or not part of a consignment`,
+      });
+    }
+    const consignment = receipt.consignment;
+
+    // The BD intake is not an arrival — it is the goods being handed to
+    // us. Amortising over it would charge freight to units that never
+    // flew, leaving a remainder nothing settles and a bill stuck at
+    // PARTIALLY_SETTLED forever.
+    if (receipt.leg !== ConsignmentLeg.IN_FINAL) {
+      throw new ConflictException({
+        code: 'FREIGHT_NOT_AN_ARRIVAL',
+        message:
+          `${receipt.receiptNumber} is the Bangladesh intake, not an arrival in India. ` +
+          `Freight is billed against the shipment that actually flew.`,
+      });
+    }
+
+    // Counted, or the split runs over numbers that are still guesses.
+    if (receipt.status !== GoodsReceiptStatus.COMPLETED) {
+      throw new ConflictException({
+        code: 'FREIGHT_ARRIVAL_NOT_COUNTED',
+        message:
+          `${receipt.receiptNumber} is ${receipt.status}. Count the arrival first, so the bill ` +
+          `is split over units that are known to exist.`,
       });
     }
 
@@ -134,16 +180,18 @@ export class InboundFreightService {
       });
     }
 
-    // Idempotency: one bill per consignment. A re-submit returns what is
-    // already there instead of billing the seller twice.
+    // Idempotency: one bill per ARRIVAL. A re-submit is refused rather
+    // than billing the seller twice for the same shipment; a DIFFERENT
+    // arrival on the same consignment is a different invoice and is
+    // allowed, which is the whole point of the key.
     const existing = await this.prisma.client.inboundFreightCharge.findUnique({
-      where: { consignmentId: consignment.id },
+      where: { goodsReceiptId: receipt.id },
       select: { id: true, status: true },
     });
     if (existing) {
       throw new ConflictException({
         code: 'FREIGHT_ALREADY_RECORDED',
-        message: `${consignment.consignmentNumber} already carries a freight bill (${existing.status})`,
+        message: `${receipt.receiptNumber} already carries a freight bill (${existing.status})`,
         cause: { freightChargeId: existing.id, status: existing.status },
       });
     }
@@ -161,22 +209,11 @@ export class InboundFreightService {
       percent === null || percent.isZero() ? null : amount.mul(percent).div(100).toDecimalPlaces(2);
     const total = serviceCharge === null ? amount : amount.add(serviceCharge);
 
-    // R3 amortisation, over the INDIA legs only — the units that actually
-    // landed. Splitting over the Bangladesh intake would amortise part of
-    // the bill onto units lost in transit, leaving a remainder nothing
-    // will ever settle and a status stuck at PARTIALLY_SETTLED forever.
-    const finalLegIds = consignment.receipts
-      .filter((r) => r.leg === ConsignmentLeg.IN_FINAL)
-      .map((r) => r.id);
-    if (finalLegIds.length === 0) {
-      throw new ConflictException({
-        code: 'FREIGHT_NOTHING_LANDED',
-        message:
-          `${consignment.consignmentNumber} has not arrived in India yet. ` +
-          `Record the bill once a shipment has been counted, so it is split over units that exist.`,
-      });
-    }
-    const plan = await this.amortisation.planAllocation(finalLegIds, total);
+    // R3 amortisation over THIS arrival's counted lines. Scoping to the
+    // one leg is what lets a consignment be billed as it arrives: the
+    // September shipment gets its own invoice split over its own units,
+    // instead of inheriting an allocation computed before it existed.
+    const plan = await this.amortisation.planAllocation([receipt.id], total);
 
     const created = await this.prisma.client.$transaction(async (tx) => {
       const settleNow = mode === InboundFreightMode.PAY_NOW;
@@ -189,7 +226,7 @@ export class InboundFreightService {
           amount: total,
           actorType: ActorType.STAFF,
           actorId: staffId,
-          note: `Inbound freight for ${consignment.consignmentNumber}`,
+          note: `Inbound freight for ${receipt.receiptNumber} (${consignment.consignmentNumber})`,
         });
         walletEntryId = entry.id;
       }
@@ -198,6 +235,7 @@ export class InboundFreightService {
         data: {
           sellerId: consignment.sellerId,
           consignmentId: consignment.id,
+          goodsReceiptId: receipt.id,
           amountInr: amount,
           mode,
           serviceChargePercent: percent,
@@ -209,7 +247,10 @@ export class InboundFreightService {
           ...(settleNow ? { settledAt: new Date(), settledByStaffId: staffId, walletEntryId } : {}),
           note: input.note ?? null,
         },
-        include: { consignment: { select: { consignmentNumber: true } } },
+        include: {
+          consignment: { select: { consignmentNumber: true } },
+          goodsReceipt: { select: { receiptNumber: true } },
+        },
       });
 
       for (const line of plan.lines) {
@@ -243,6 +284,8 @@ export class InboundFreightService {
           metadata: {
             consignmentId: consignment.id,
             consignmentNumber: consignment.consignmentNumber,
+            goodsReceiptId: receipt.id,
+            receiptNumber: receipt.receiptNumber,
             amountInr: amount.toString(),
             mode,
             serviceChargeInr: serviceCharge?.toString() ?? null,
@@ -331,7 +374,10 @@ export class InboundFreightService {
       const row = await tx.inboundFreightCharge.update({
         where: { id: freightChargeId },
         data: { walletEntryId: entry.id },
-        include: { consignment: { select: { consignmentNumber: true } } },
+        include: {
+          consignment: { select: { consignmentNumber: true } },
+          goodsReceipt: { select: { receiptNumber: true } },
+        },
       });
 
       await this.audit.log(
@@ -427,7 +473,10 @@ export class InboundFreightService {
       );
       return tx.inboundFreightCharge.findUniqueOrThrow({
         where: { id: freightChargeId },
-        include: { consignment: { select: { consignmentNumber: true } } },
+        include: {
+          consignment: { select: { consignmentNumber: true } },
+          goodsReceipt: { select: { receiptNumber: true } },
+        },
       });
     });
 
@@ -440,7 +489,10 @@ export class InboundFreightService {
   ): Promise<readonly FreightChargeView[]> {
     const rows = await this.prisma.client.inboundFreightCharge.findMany({
       where: { sellerId, ...(status === undefined ? {} : { status }) },
-      include: { consignment: { select: { consignmentNumber: true } } },
+      include: {
+        consignment: { select: { consignmentNumber: true } },
+        goodsReceipt: { select: { receiptNumber: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
     return rows.map((r) => this.toView(r));
@@ -455,7 +507,10 @@ export class InboundFreightService {
         ...(query.sellerId === undefined ? {} : { sellerId: query.sellerId }),
         ...(query.status === undefined ? {} : { status: query.status }),
       },
-      include: { consignment: { select: { consignmentNumber: true } } },
+      include: {
+        consignment: { select: { consignmentNumber: true } },
+        goodsReceipt: { select: { receiptNumber: true } },
+      },
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
@@ -486,12 +541,18 @@ export class InboundFreightService {
 
   private async load(id: string): Promise<
     Prisma.InboundFreightChargeGetPayload<{
-      include: { consignment: { select: { consignmentNumber: true } } };
+      include: {
+        consignment: { select: { consignmentNumber: true } };
+        goodsReceipt: { select: { receiptNumber: true } };
+      };
     }>
   > {
     const row = await this.prisma.client.inboundFreightCharge.findUnique({
       where: { id },
-      include: { consignment: { select: { consignmentNumber: true } } },
+      include: {
+        consignment: { select: { consignmentNumber: true } },
+        goodsReceipt: { select: { receiptNumber: true } },
+      },
     });
     if (!row) {
       throw new NotFoundException({
@@ -549,13 +610,18 @@ export class InboundFreightService {
 
   private toView(
     row: Prisma.InboundFreightChargeGetPayload<{
-      include: { consignment: { select: { consignmentNumber: true } } };
+      include: {
+        consignment: { select: { consignmentNumber: true } };
+        goodsReceipt: { select: { receiptNumber: true } };
+      };
     }>,
   ): FreightChargeView {
     return {
       id: row.id,
       consignmentId: row.consignmentId,
       consignmentNumber: row.consignment?.consignmentNumber ?? null,
+      goodsReceiptId: row.goodsReceiptId,
+      receiptNumber: row.goodsReceipt?.receiptNumber ?? null,
       amountInr: row.amountInr.toString(),
       mode: row.mode,
       serviceChargePercent: row.serviceChargePercent?.toString() ?? null,

@@ -1395,10 +1395,10 @@ model Consignment {
   updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt         DateTime?         @map("deleted_at") @db.Timestamptz
 
-  seller        Seller                @relation(fields: [sellerId], references: [id])
-  receipts      GoodsReceipt[]
-  events        ConsignmentEvent[]
-  freightCharge InboundFreightCharge?
+  seller         Seller                 @relation(fields: [sellerId], references: [id])
+  receipts       GoodsReceipt[]
+  events         ConsignmentEvent[]
+  freightCharges InboundFreightCharge[]
 
   @@index([sellerId, status])
   @@index([status])
@@ -1458,19 +1458,22 @@ model GoodsReceipt {
   updatedAt             DateTime           @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt             DateTime?          @map("deleted_at") @db.Timestamptz
 
-  seller       Seller             @relation(fields: [sellerId], references: [id])
-  warehouse    Warehouse          @relation(fields: [warehouseId], references: [id])
-  consignment  Consignment?       @relation(fields: [consignmentId], references: [id])
-  receivedBy   StaffUser?         @relation("GoodsReceiptReceivedBy", fields: [receivedById], references: [id])
-  dispatchedBy StaffUser?         @relation("GoodsReceiptDispatchedBy", fields: [dispatchedById], references: [id])
-  lines        GoodsReceiptLine[]
-  stockBatches StockBatch[]
-  // The freight bill hangs off the CONSIGNMENT, not a receipt — see
-  // Consignment.freightCharge. There is deliberately NO back-relation
-  // here: leaving one after the FK moved made Prisma invent an implicit
-  // relation with a scalar `inboundFreightChargeId` on this table that no
-  // migration ever created, so `prisma validate` passed on a schema the
-  // database could not satisfy and every goods-receipt insert 500'd.
+  seller        Seller                @relation(fields: [sellerId], references: [id])
+  warehouse     Warehouse             @relation(fields: [warehouseId], references: [id])
+  consignment   Consignment?          @relation(fields: [consignmentId], references: [id])
+  receivedBy    StaffUser?            @relation("GoodsReceiptReceivedBy", fields: [receivedById], references: [id])
+  dispatchedBy  StaffUser?            @relation("GoodsReceiptDispatchedBy", fields: [dispatchedById], references: [id])
+  lines         GoodsReceiptLine[]
+  stockBatches  StockBatch[]
+  // The freight bill for THIS arrival. One forwarder invoice per
+  // shipment; a consignment accumulates as many as it has arrivals.
+  //
+  // Both sides are declared on purpose. A one-sided relation is how this
+  // model previously grew a phantom column: `prisma format` makes a
+  // dangling relation legal the only way it can, by inventing the
+  // missing scalar, so `validate` passes on a schema no migration ever
+  // created and every insert 500s at runtime.
+  freightCharge InboundFreightCharge?
 
   @@index([sellerId])
   @@index([warehouseId])
@@ -1533,11 +1536,29 @@ model GoodsReceiptLine {
 model InboundFreightCharge {
   id                   String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
   sellerId             String               @map("seller_id") @db.Uuid
-  /// One bill per consignment. Was keyed on the goods receipt until
-  /// two-leg consignments arrived: with a BD intake and one or more
-  /// India arrivals, no single receipt is the thing being billed, and
-  /// the per-unit split has to run over the units that ACTUALLY landed.
-  consignmentId        String               @unique @map("consignment_id") @db.Uuid
+  /// The consignment this bill belongs to — for grouping and reporting.
+  /// NOT unique: a consignment arrives in as many shipments as it takes.
+  consignmentId        String               @map("consignment_id") @db.Uuid
+  /// ONE BILL PER ARRIVAL, and this is the idempotency key.
+  ///
+  /// It was `consignmentId @unique` — one bill for the whole
+  /// consignment — which assumed a consignment arrives once. It does
+  /// not: `IN_FINAL` is a list precisely because 300 units can leave
+  /// Dhaka as 100 now and 200 in September, and the status derivation
+  /// already handles "some landed, some still in BD".
+  ///
+  /// Under the old key both choices lost money silently. Bill early and
+  /// the split ran over the units that had landed SO FAR; the later
+  /// arrivals got no allocation row, and the charge path skips a unit
+  /// with no allocation (`if (!alloc) continue`), so they shipped
+  /// freight-free forever — and the forwarder's invoice for that second
+  /// shipment could not be entered at all. Bill late and freight is
+  /// charged as a unit LEAVES, so anything that sold before the bill
+  /// existed was never charged either.
+  ///
+  /// Per-arrival also matches the paperwork: a forwarder invoices a
+  /// shipment, not a commercial arrangement spanning months.
+  goodsReceiptId       String               @unique @map("goods_receipt_id") @db.Uuid
   /// The freight invoice as recorded by ops, INR canonical.
   amountInr            Decimal              @map("amount_inr") @db.Decimal(12, 2)
   mode                 InboundFreightMode
@@ -1567,12 +1588,14 @@ model InboundFreightCharge {
   createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz
   updatedAt            DateTime             @updatedAt @map("updated_at") @db.Timestamptz
 
-  seller      Seller                     @relation(fields: [sellerId], references: [id])
-  consignment Consignment                @relation(fields: [consignmentId], references: [id])
-  allocations InboundFreightAllocation[]
-  settledBy   StaffUser?                 @relation("InboundFreightSettledBy", fields: [settledByStaffId], references: [id])
-  walletEntry SellerWalletEntry?         @relation(fields: [walletEntryId], references: [id])
+  seller       Seller                     @relation(fields: [sellerId], references: [id])
+  consignment  Consignment                @relation(fields: [consignmentId], references: [id])
+  goodsReceipt GoodsReceipt               @relation(fields: [goodsReceiptId], references: [id])
+  allocations  InboundFreightAllocation[]
+  settledBy    StaffUser?                 @relation("InboundFreightSettledBy", fields: [settledByStaffId], references: [id])
+  walletEntry  SellerWalletEntry?         @relation(fields: [walletEntryId], references: [id])
 
+  @@index([consignmentId])
   @@index([sellerId, status])
   @@index([status])
   @@index([settledByStaffId])
@@ -2826,15 +2849,15 @@ model CallAttempt {
 /// customer who waited for nothing.
 enum CallHoldOutcome {
   /// The agent logged a call outcome — the hold did its job.
-  COMPLETED       @map("completed")
+  COMPLETED    @map("completed")
   /// The agent handed it back deliberately, without calling.
-  RELEASED        @map("released")
+  RELEASED     @map("released")
   /// CC-7: held past the assignment timeout without acting.
-  EXPIRED         @map("expired")
+  EXPIRED      @map("expired")
   /// The presence sweep found the agent was not at the desk at all.
-  AGENT_ABSENT    @map("agent_absent")
+  AGENT_ABSENT @map("agent_absent")
   /// A supervisor moved it to somebody else.
-  REASSIGNED      @map("reassigned")
+  REASSIGNED   @map("reassigned")
 
   @@map("call_hold_outcome")
 }
@@ -2857,7 +2880,7 @@ model CallAssignmentHold {
   startedAt    DateTime         @default(now()) @map("started_at") @db.Timestamptz
   endedAt      DateTime?        @map("ended_at") @db.Timestamptz
   /// Null while the hold is open.
-  outcome      CallHoldOutcome? 
+  outcome      CallHoldOutcome?
   /// Stored rather than derived: the arithmetic is trivial but every
   /// report would otherwise repeat it, and a report that computes its
   /// own duration is a report that can disagree with the next one.
@@ -2878,15 +2901,15 @@ model CallAssignmentHold {
 }
 
 model AgentCallSettings {
-  id                  String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  agentId             String   @unique @map("agent_id") @db.Uuid
+  id                  String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  agentId             String    @unique @map("agent_id") @db.Uuid
   // Module 7 (locked decision 10a): reused as the concurrent-assignment
   // cap; default migrated 20 → 1.
-  maxActiveCalls      Int      @default(1) @map("max_active_calls")
+  maxActiveCalls      Int       @default(1) @map("max_active_calls")
   // Default FALSE: an agent who is logged in is not necessarily at
   // their desk, and a queue that hands work to an empty chair holds the
   // customer's order hostage. Presence is claimed, never assumed.
-  isAvailable         Boolean  @default(false) @map("is_available")
+  isAvailable         Boolean   @default(false) @map("is_available")
   /// Last time this agent proved they were AT the desk — a foreground
   /// station tab or an action taken. `isAvailable` alone is a boolean
   /// that cannot go stale on its own: an agent who marks available and
@@ -2894,17 +2917,17 @@ model AgentCallSettings {
   /// auto-advance needs no human present. The presence sweep reads this
   /// and stands them down.
   lastSeenAt          DateTime? @map("last_seen_at") @db.Timestamptz
-  workingHoursStart   String   @default("09:00") @map("working_hours_start")
-  workingHoursEnd     String   @default("18:00") @map("working_hours_end")
-  workingDays         Int[]    @default([1, 2, 3, 4, 5, 6]) @map("working_days")
-  timezone            String   @default("Asia/Kolkata")
-  languages           String[] @default(["en", "hi"])
-  canHandleHighRisk   Boolean  @default(false) @map("can_handle_high_risk")
-  canHandleHighValue  Boolean  @default(false) @map("can_handle_high_value")
-  totalCallsToday     Int      @default(0) @map("total_calls_today")
-  confirmedTodayCount Int      @default(0) @map("confirmed_today_count")
-  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  workingHoursStart   String    @default("09:00") @map("working_hours_start")
+  workingHoursEnd     String    @default("18:00") @map("working_hours_end")
+  workingDays         Int[]     @default([1, 2, 3, 4, 5, 6]) @map("working_days")
+  timezone            String    @default("Asia/Kolkata")
+  languages           String[]  @default(["en", "hi"])
+  canHandleHighRisk   Boolean   @default(false) @map("can_handle_high_risk")
+  canHandleHighValue  Boolean   @default(false) @map("can_handle_high_value")
+  totalCallsToday     Int       @default(0) @map("total_calls_today")
+  confirmedTodayCount Int       @default(0) @map("confirmed_today_count")
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
   agent StaffUser @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
@@ -5508,15 +5531,15 @@ enum ReattemptRequestStatus {
 /// DOES decide unaided: nobody there ever answered the phone, so there
 /// is no refusal to override.
 model OrderReattemptRequest {
-  id             String                 @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  orderId        String                 @map("order_id") @db.Uuid
-  sellerId       String                 @map("seller_id") @db.Uuid
+  id                   String                 @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  orderId              String                 @map("order_id") @db.Uuid
+  sellerId             String                 @map("seller_id") @db.Uuid
   /// Which team member asked. Null for a request raised by an API key.
-  requestedById  String?                @map("requested_by_id") @db.Uuid
+  requestedById        String?                @map("requested_by_id") @db.Uuid
   /// The seller's case for calling again — required, because "why" is
   /// the whole basis on which someone approves it.
-  reason         String                 @db.Text
-  status         ReattemptRequestStatus @default(PENDING)
+  reason               String                 @db.Text
+  status               ReattemptRequestStatus @default(PENDING)
   /// How many EXTRA calls the approval grants, on top of the seller's
   /// normal cap. Zero on a pending or rejected request.
   ///
@@ -5528,15 +5551,15 @@ model OrderReattemptRequest {
   /// customer has already refused three times — an order that could be
   /// called indefinitely through repeated requests is the thing this
   /// whole flow exists to prevent.
-  extraAttempts  Int                    @default(0) @map("extra_attempts")
-  decidedById    String?                @map("decided_by_id") @db.Uuid
-  decidedAt      DateTime?              @map("decided_at") @db.Timestamptz
-  decisionNote   String?                @map("decision_note") @db.Text
+  extraAttempts        Int                    @default(0) @map("extra_attempts")
+  decidedById          String?                @map("decided_by_id") @db.Uuid
+  decidedAt            DateTime?              @map("decided_at") @db.Timestamptz
+  decisionNote         String?                @map("decision_note") @db.Text
   /// What the order was in when the request was raised. Snapshotted so a
   /// later god-mode move cannot make an old decision unreadable.
-  orderStatusAtRequest String            @map("order_status_at_request")
-  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt      DateTime               @updatedAt @map("updated_at") @db.Timestamptz
+  orderStatusAtRequest String                 @map("order_status_at_request")
+  createdAt            DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime               @updatedAt @map("updated_at") @db.Timestamptz
 
   order       Order       @relation(fields: [orderId], references: [id])
   seller      Seller      @relation(fields: [sellerId], references: [id])

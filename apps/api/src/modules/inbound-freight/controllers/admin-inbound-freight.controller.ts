@@ -69,7 +69,7 @@ export class AdminInboundFreightController {
     return this.svc.record(
       staff.id,
       {
-        consignmentId: body.consignmentId,
+        goodsReceiptId: body.goodsReceiptId,
         amountInr: body.amountInr,
         ...(body.mode === undefined ? {} : { mode: body.mode }),
         ...(body.note === undefined ? {} : { note: body.note }),

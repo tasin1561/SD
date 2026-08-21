@@ -236,13 +236,19 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
               { label: 'Their reference', value: c.sellerReference ?? '—' },
               { label: 'Expected arrival', value: dt(c.expectedArrivalAt) },
               {
-                label: 'Freight bill',
+                // One bill per ARRIVAL, so this is a total across however
+                // many shipments have landed — a consignment arriving in
+                // two parts carries two forwarder invoices.
+                label:
+                  c.freightCharges.length > 1
+                    ? `Freight bills (${c.freightCharges.length})`
+                    : 'Freight bill',
                 value:
-                  c.freightCharge === null
+                  c.freightCharges.length === 0
                     ? viaBd
                       ? 'Not recorded yet'
                       : 'Not billable — they shipped it themselves'
-                    : `₹${c.freightCharge.totalInr} · ${c.freightCharge.status}`,
+                    : c.freightCharges.map((f) => `₹${f.totalInr} · ${f.status}`).join('  ·  '),
               },
               ...(c.cancelledAt === null
                 ? []

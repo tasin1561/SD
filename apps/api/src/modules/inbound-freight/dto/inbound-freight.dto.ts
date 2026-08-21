@@ -11,9 +11,13 @@ import {
 } from 'class-validator';
 
 export class RecordInboundFreightDto {
-  @ApiProperty({ description: 'UUID v7 of the goods receipt this freight bill covers' })
+  @ApiProperty({
+    description:
+      'UUID v7 of the INDIA ARRIVAL (goods receipt, leg IN_FINAL) this freight bill covers. ' +
+      'One forwarder invoice per shipment; the consignment is derived from it.',
+  })
   @IsUUID('7')
-  readonly consignmentId!: string;
+  readonly goodsReceiptId!: string;
 
   @ApiProperty({
     description: 'Freight invoice amount, INR canonical. Decimal string (e.g. "4500.00").',
@@ -24,7 +28,7 @@ export class RecordInboundFreightDto {
   @ApiPropertyOptional({
     enum: InboundFreightMode,
     description:
-      "Overrides the seller's resolved payment mode for this one consignment. Omit to use `wallet.inbound_freight_mode`.",
+      "Overrides the seller's resolved payment mode for this one arrival. Omit to use `wallet.inbound_freight_mode`.",
   })
   @IsOptional()
   @IsEnum(InboundFreightMode)

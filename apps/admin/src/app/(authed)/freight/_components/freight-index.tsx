@@ -173,6 +173,12 @@ function FreightRow({ row }: { readonly row: FreightChargeView }): ReactElement 
         ) : (
           <Ident value={row.consignmentNumber} />
         )}
+        {/* Which ARRIVAL this bill covers. A consignment can carry more
+            than one, so the consignment number alone no longer says
+            which shipment was invoiced. */}
+        {row.receiptNumber !== null && (
+          <div className="text-text-faint mt-0.5 text-xs">{row.receiptNumber}</div>
+        )}
         <div className="text-text-faint mt-0.5 text-xs">
           {new Date(row.createdAt).toLocaleDateString()}
         </div>

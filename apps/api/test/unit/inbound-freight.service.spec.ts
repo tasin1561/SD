@@ -25,6 +25,7 @@ function chargeRow(over: AnyArgs = {}): AnyArgs {
     id: CHARGE,
     sellerId: SELLER,
     consignmentId: CONSIGNMENT,
+    goodsReceiptId: RECEIPT,
     amountInr: new Prisma.Decimal('4500.00'),
     mode: InboundFreightMode.PAY_LATER,
     serviceChargePercent: null,
@@ -40,6 +41,7 @@ function chargeRow(over: AnyArgs = {}): AnyArgs {
     note: null,
     createdAt: new Date('2026-07-01T00:00:00.000Z'),
     consignment: { consignmentNumber: 'CN-2026-07-000001' },
+    goodsReceipt: { receiptNumber: 'CN-2026-07-000001-000002' },
     ...over,
   };
 }
@@ -47,6 +49,9 @@ function chargeRow(over: AnyArgs = {}): AnyArgs {
 function makeSut(
   opts: {
     receipt?: AnyArgs | null;
+    leg?: string;
+    receiptStatus?: string;
+    route?: string;
     existing?: AnyArgs | null;
     mode?: string;
     servicePercent?: string;
@@ -55,17 +60,23 @@ function makeSut(
     claimCount?: number;
   } = {},
 ) {
-  // The bill hangs off the CONSIGNMENT now, and only a VIA_BD one is
-  // billable — a seller who shipped straight to India paid their own
-  // freight. The India legs are what the amortisation splits over.
-  const consignmentFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+  // The bill hangs off ONE ARRIVAL, and the consignment is derived from
+  // it. Only a VIA_BD consignment is billable — a seller who shipped
+  // straight to India paid their own freight.
+  const receiptFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
     opts.receipt === undefined
       ? {
-          id: CONSIGNMENT,
-          sellerId: SELLER,
-          consignmentNumber: 'CN-2026-07-000001',
-          route: 'VIA_BD',
-          receipts: [{ id: RECEIPT, leg: 'IN_FINAL' }],
+          id: RECEIPT,
+          receiptNumber: 'CN-2026-07-000001-000002',
+          leg: opts.leg ?? 'IN_FINAL',
+          status: opts.receiptStatus ?? 'COMPLETED',
+          consignment: {
+            id: CONSIGNMENT,
+            sellerId: SELLER,
+            consignmentNumber: 'CN-2026-07-000001',
+            route: opts.route ?? 'VIA_BD',
+            deletedAt: null,
+          },
         }
       : opts.receipt,
   );
@@ -80,6 +91,7 @@ function makeSut(
       ...chargeRow(),
       ...data,
       consignment: { consignmentNumber: 'CN-2026-07-000001' },
+      goodsReceipt: { receiptNumber: 'CN-2026-07-000001-000002' },
     };
   });
   const chargeUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async () => ({
@@ -95,7 +107,7 @@ function makeSut(
 
   const client: AnyArgs = {
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(client),
-    consignment: { findFirst: consignmentFindFirst },
+    goodsReceipt: { findFirst: receiptFindFirst },
     inboundFreightAllocation: { create: jest.fn(async () => ({ id: 'alloc-1' })) },
     inboundFreightCharge: {
       findUnique: jest.fn(async () =>
@@ -164,6 +176,7 @@ function makeSut(
 
   return {
     svc: new InboundFreightService(prisma, audit, settings, wallet, amortisation),
+    planAllocation,
     applyEntry,
     auditLog,
     created,
@@ -172,7 +185,7 @@ function makeSut(
 }
 
 describe('InboundFreightService.record', () => {
-  const input = { consignmentId: CONSIGNMENT, amountInr: '4500.00' };
+  const input = { goodsReceiptId: RECEIPT, amountInr: '4500.00' };
 
   it('PAY_NOW debits the wallet in the SAME transaction and lands SETTLED', async () => {
     const sut = makeSut({ mode: 'PAY_NOW' });
@@ -228,7 +241,7 @@ describe('InboundFreightService.record', () => {
     expect(sut.applyEntry).not.toHaveBeenCalled();
   });
 
-  it('is idempotent per consignment: a second record is a 409, never a second bill', async () => {
+  it('is idempotent per ARRIVAL: a second record is a 409, never a second bill', async () => {
     const sut = makeSut({ existing: chargeRow() });
     await expect(sut.svc.record(STAFF, input)).rejects.toMatchObject({
       response: { code: 'FREIGHT_ALREADY_RECORDED' },
@@ -236,10 +249,48 @@ describe('InboundFreightService.record', () => {
     expect(sut.applyEntry).not.toHaveBeenCalled();
   });
 
-  it('404s on an unknown consignment', async () => {
+  it('404s on an unknown arrival', async () => {
     const sut = makeSut({ receipt: null });
     await expect(sut.svc.record(STAFF, input)).rejects.toMatchObject({
-      response: { code: 'CONSIGNMENT_NOT_FOUND' },
+      response: { code: 'ARRIVAL_NOT_FOUND' },
+    });
+  });
+
+  it('SPLITS OVER THIS ARRIVAL ONLY — the reason the key moved', async () => {
+    // 300 units can leave Dhaka as 100 now and 200 in September. Under
+    // the old per-consignment key the first bill's split ran over the
+    // units that had landed so far, the September units got no
+    // allocation row, and the charge path skips a unit with no
+    // allocation — so they shipped freight-free forever, and the second
+    // forwarder invoice could not be entered at all.
+    const sut = makeSut();
+    await sut.svc.record(STAFF, input);
+    expect(sut.planAllocation).toHaveBeenCalledWith([RECEIPT], expect.anything());
+  });
+
+  it('refuses to bill the Bangladesh intake', async () => {
+    // The BD leg is goods being handed to us, not a shipment that flew.
+    // Amortising over it would charge freight to units that never left,
+    // leaving a remainder nothing settles and a bill stuck at
+    // PARTIALLY_SETTLED forever.
+    const sut = makeSut({ leg: 'BD_INTAKE' });
+    await expect(sut.svc.record(STAFF, input)).rejects.toMatchObject({
+      response: { code: 'FREIGHT_NOT_AN_ARRIVAL' },
+    });
+    expect(sut.applyEntry).not.toHaveBeenCalled();
+  });
+
+  it('refuses an arrival that has not been counted', async () => {
+    const sut = makeSut({ receiptStatus: 'IN_PROGRESS' });
+    await expect(sut.svc.record(STAFF, input)).rejects.toMatchObject({
+      response: { code: 'FREIGHT_ARRIVAL_NOT_COUNTED' },
+    });
+  });
+
+  it('refuses a consignment that never went through Bangladesh', async () => {
+    const sut = makeSut({ route: 'DIRECT_IN' });
+    await expect(sut.svc.record(STAFF, input)).rejects.toMatchObject({
+      response: { code: 'FREIGHT_NOT_BILLABLE' },
     });
   });
 

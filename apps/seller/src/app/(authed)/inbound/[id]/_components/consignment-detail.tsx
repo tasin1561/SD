@@ -150,15 +150,24 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
                 { label: 'Your reference', value: consignment.sellerReference ?? '—' },
                 { label: 'Products', value: <Num value={productCount(consignment)} /> },
                 {
+                  // Billed per arrival: a consignment that lands in two
+                  // shipments carries two forwarder invoices, so the
+                  // seller sees the sum rather than one of them.
                   label: 'Inbound freight',
                   value:
-                    consignment.freightCharge === null ? (
+                    consignment.freightCharges.length === 0 ? (
                       <span className="text-text-muted">Not billed</span>
                     ) : (
                       <span className="flex items-center gap-2">
-                        <Money amount={consignment.freightCharge.totalInr} />
+                        <Money
+                          amount={consignment.freightCharges
+                            .reduce((sum, f) => sum + Number(f.totalInr), 0)
+                            .toFixed(2)}
+                        />
                         <span className="text-text-muted text-xs">
-                          {consignment.freightCharge.status.toLowerCase()}
+                          {consignment.freightCharges.length === 1
+                            ? consignment.freightCharges[0]?.status.toLowerCase()
+                            : `${consignment.freightCharges.length} bills`}
                         </span>
                       </span>
                     ),

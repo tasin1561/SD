@@ -53,7 +53,12 @@ const CONSIGNMENT_INCLUDE = {
       },
     },
   },
-  freightCharge: { select: { id: true, status: true, totalInr: true } },
+  // A consignment carries one freight bill PER ARRIVAL, not one overall
+  // — a shipment that lands in September is invoiced separately from one
+  // that landed in August.
+  freightCharges: {
+    select: { id: true, status: true, totalInr: true, goodsReceiptId: true },
+  },
 } satisfies Prisma.ConsignmentInclude;
 
 export type ConsignmentView = Prisma.ConsignmentGetPayload<{

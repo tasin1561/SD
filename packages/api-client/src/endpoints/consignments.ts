@@ -74,11 +74,16 @@ export interface ConsignmentView {
     readonly emailDisplay: string;
   };
   readonly receipts: readonly ConsignmentLegView[];
-  readonly freightCharge: {
+  /**
+   * One freight bill per ARRIVAL — a consignment that lands in two
+   * shipments is invoiced twice, because that is how a forwarder bills.
+   */
+  readonly freightCharges: readonly {
     readonly id: string;
     readonly status: string;
     readonly totalInr: string;
-  } | null;
+    readonly goodsReceiptId: string;
+  }[];
 }
 
 export interface ConsignmentEventView {

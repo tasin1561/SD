@@ -75,6 +75,8 @@ export interface TicketEventView {
 export interface FreightChargeView {
   readonly id: string;
   readonly consignmentId: string;
+  readonly goodsReceiptId: string;
+  readonly receiptNumber: string | null;
   readonly consignmentNumber: string | null;
   readonly amountInr: string;
   readonly mode: InboundFreightMode;
@@ -258,7 +260,7 @@ export function useFreightList(query: {
 export function useRecordFreight(): UseMutationResult<
   FreightChargeView,
   Error,
-  { consignmentId: string; amountInr: string; mode?: string; note?: string }
+  { goodsReceiptId: string; amountInr: string; mode?: string; note?: string }
 > {
   const client = useApiClient();
   const qc = useQueryClient();

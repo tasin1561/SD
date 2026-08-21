@@ -1146,3 +1146,39 @@ signal that the correction belongs at `courier-ops`' edit endpoint
 instead. Five unit tests pin the mapping, the WHERE clause, the
 no-recipient-change case, the already-has-AWB case and the audit
 record.
+
+## Inbound freight was billed per consignment, not per arrival — FIXED 2026-08-21
+
+`inbound_freight_charges.consignment_id` was UNIQUE: one bill for the
+whole consignment, split at record time over the India legs that existed
+then. That assumed a consignment arrives once. It does not — `IN_FINAL`
+is a list precisely because 300 units can leave Dhaka as 100 in August
+and 200 in September, and `ConsignmentStatusService` already derives
+"some landed, some still in BD" correctly. Only the billing missed it.
+
+Under the old key BOTH choices lost money, silently:
+
+- **Bill early** — the split ran over the units that had landed so far.
+  The September units got no `inbound_freight_allocations` row, and the
+  charge path skips a unit with no allocation (`if (!alloc) continue`),
+  so they shipped **freight-free forever**. Worse, the forwarder's
+  invoice for that second shipment could not be entered at all:
+  `FREIGHT_ALREADY_RECORDED`.
+- **Bill late** — freight is charged as a unit LEAVES, so any of the
+  first 100 that sold before the bill existed were never charged either.
+
+Neither errored. Both just under-billed.
+
+**FIXED**: the key is now `goods_receipt_id UNIQUE` — one bill per
+ARRIVAL, which is also how a forwarder actually invoices (per shipment,
+not per commercial arrangement). `consignment_id` stays as a non-unique
+FK for grouping. `record` takes the arrival and DERIVES the consignment
+from it (two ids that must agree are two ids that can disagree), refuses
+the BD intake (`FREIGHT_NOT_AN_ARRIVAL` — it never flew) and refuses an
+uncounted arrival (`FREIGHT_ARRIVAL_NOT_COUNTED` — the split would run
+over guesses). The admin modal now picks a shipment, showing its unit
+count and marking ones already billed. Amortisation, attribution and
+settlement are unchanged.
+
+Found because a live consignment was standing in it: CN-2026-08-000003,
+100 units landed in Kolkata and 201 still in Dhaka.
