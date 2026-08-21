@@ -107,11 +107,11 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
     // the authority, which is the old reactive behaviour and the right
     // fallback when the pre-flight is the thing that is broken.
     const preflight = await this.preflightServiceability(req);
-    if (preflight !== null) return preflight;
+    if ('blocked' in preflight) return preflight.blocked;
 
     const pickupLocationName = await this.resolvePickupLocationName(courierAccountId ?? null);
     const envelope = {
-      shipments: [this.buildShipment(req)],
+      shipments: [this.buildShipment(req, preflight)],
       pickup_location: { name: pickupLocationName },
     };
 
@@ -156,7 +156,7 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
    */
   private async preflightServiceability(
     req: DelhiveryAwbRequest,
-  ): Promise<DelhiveryAwbResult | null> {
+  ): Promise<{ blocked: DelhiveryAwbResult } | { city: string; state: string }> {
     try {
       const check = await this.serviceability.canShip({
         pincode: req.postalCode,
@@ -174,7 +174,11 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
             'Destination is Out of Delivery Area — slower and surcharged',
           );
         }
-        return null;
+        // Their own answer for this PIN, used to fill city/state below.
+        return {
+          city: check.detail.district ?? '',
+          state: check.detail.stateCode ?? '',
+        };
       }
 
       this.logger.warn(
@@ -185,17 +189,21 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
       // to handle: supersede the shipment and route the order to manual
       // placement (CUR-7), no retry.
       return {
-        ok: false,
-        serviceable: false,
-        errorCode: 'DELHIVERY_NOT_SERVICEABLE',
-        errorMessage: check.reason ?? 'Destination not serviceable',
+        blocked: {
+          ok: false,
+          serviceable: false,
+          errorCode: 'DELHIVERY_NOT_SERVICEABLE',
+          errorMessage: check.reason ?? 'Destination not serviceable',
+        },
       };
     } catch (err) {
       this.logger.warn(
         { shipmentNumber: req.shipmentNumber, err: (err as Error).message },
         'Pre-flight serviceability check failed; falling back to the reactive path',
       );
-      return null;
+      // The pre-flight being broken must not stop the shipment; we lose
+      // only the resolved locality, and city/state are optional.
+      return { city: '', state: '' };
     }
   }
 
@@ -220,8 +228,32 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
    * because it is exactly the kind of property a future "simplify the
    * encoding" refactor would quietly break.
    */
-  private buildShipment(req: DelhiveryAwbRequest): Record<string, unknown> {
+  /**
+   * The per-shipment payload.
+   *
+   * Shaped to match Delhivery's own documented sample, which carries
+   * EVERY optional key — as an empty string when it has no value —
+   * rather than omitting them. Our version omitted most of them, and the
+   * first live creates came back with an envelope-level "An internal
+   * Error has occurred" and, on their staging tier, a raw Python
+   * `'NoneType' object has no attribute 'end_date'`. A probe using their
+   * sample shape got materially further: package_count 1 and a per-
+   * package err_code instead of a crash, with the account and routing
+   * resolving fine. Absent keys, not wrong values.
+   *
+   * `resolved` is Delhivery's OWN answer for this pincode, from the
+   * pre-flight serviceability call we already make. ORD-5 stopped asking
+   * sellers for city and state because the courier routes on the PIN and
+   * knows the locality better than they do — this is where that decision
+   * gets paid for, by filling the fields from the source of truth
+   * instead of sending blanks.
+   */
+  private buildShipment(
+    req: DelhiveryAwbRequest,
+    resolved: { city: string; state: string },
+  ): Record<string, unknown> {
     const isCod = req.codAmountInr !== null;
+    const str = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
     return {
       // A pooled waybill when we have one; empty lets Delhivery assign,
       // which works but forfeits pre-allocation.
@@ -230,8 +262,8 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
       name: req.recipientName,
       add: [req.addressLine1, req.addressLine2].filter(Boolean).join(', '),
       pin: req.postalCode,
-      city: req.city,
-      state: req.stateProvince,
+      city: req.city !== '' ? req.city : resolved.city,
+      state: req.stateProvince !== '' ? req.stateProvince : resolved.state,
       country: req.countryCode === 'IN' ? 'India' : req.countryCode,
       // Delhivery wants the NATIONAL number, not E.164. Every sample in
       // their own docs sends "9999999999"; we were sending
@@ -246,11 +278,24 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
       // parcel that is manifested and undeliverable.
       phone: toNationalPhone(req.recipientPhoneE164),
       payment_mode: isCod ? 'COD' : 'Prepaid',
-      cod_amount: req.codAmountInr ?? '0',
-      total_amount: req.declaredValueInr,
+      cod_amount: isCod ? str(req.codAmountInr) : '',
+      total_amount: str(req.declaredValueInr),
       products_desc: req.itemDescription.slice(0, 250),
       quantity: String(req.quantity ?? 1),
-      weight: String(req.totalWeightGrams),
+      weight: str(req.totalWeightGrams),
+      // Present-but-empty, exactly as their sample does it. Their
+      // handler reaches for these keys whether or not we have a value.
+      hsn_code: '',
+      return_pin: '',
+      return_city: '',
+      return_phone: '',
+      return_add: '',
+      return_state: '',
+      return_country: '',
+      seller_add: '',
+      seller_name: '',
+      seller_inv: '',
+      address_type: '',
       order_date: new Date().toISOString().slice(0, 10),
       shipping_mode: req.shippingMode ?? 'Surface',
       ...(req.transportSpeed === undefined ? {} : { transport_speed: req.transportSpeed }),
