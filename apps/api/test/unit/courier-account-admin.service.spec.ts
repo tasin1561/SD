@@ -440,3 +440,27 @@ describe('CourierAccountAdminService.createAccount — adopting a credential', (
     });
   });
 });
+
+describe('CourierAccountAdminService.updateAccount — pickup location', () => {
+  it('stores a blank name as NULL, which is how "use the global" is spelled', async () => {
+    // '' works by accident: the AWB path trims and falls through. But it
+    // leaves a value whose meaning only the reader knows, and the list
+    // renders a blank cell instead of "global setting".
+    const { svc, accountUpdate } = makeService();
+    await svc.updateAccount('acct-1', { pickupLocationName: '   ' } as never, 'staff-1');
+    expect(accountUpdate.mock.calls[0]?.[0]).toMatchObject({
+      data: { pickupLocationName: null },
+    });
+  });
+
+  it('stores a real name UNTRIMMED — Delhivery matches it exactly', async () => {
+    // Silently trimming would produce a name that does not match the
+    // registration, which fails as "ClientWarehouse matching query does
+    // not exist" on the create call and reads like a data problem.
+    const { svc, accountUpdate } = makeService();
+    await svc.updateAccount('acct-1', { pickupLocationName: ' MSEXPORT ' } as never, 'staff-1');
+    expect(accountUpdate.mock.calls[0]?.[0]).toMatchObject({
+      data: { pickupLocationName: ' MSEXPORT ' },
+    });
+  });
+});

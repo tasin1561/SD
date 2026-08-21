@@ -252,9 +252,22 @@ export class CourierAccountAdminService {
           ...(dto.label === undefined ? {} : { label: dto.label }),
           ...(dto.isActive === undefined ? {} : { isActive: dto.isActive }),
           ...(dto.isDefault === undefined ? {} : { isDefault: dto.isDefault }),
+          // Empty means "fall back to the global setting", and NULL is
+          // how that is spelled. Storing '' works by accident — the AWB
+          // path trims and falls through — but leaves a value whose
+          // meaning only the reader knows, and the list then renders a
+          // blank cell instead of saying "global setting". Whitespace
+          // alone is the same intent typed less carefully.
+          //
+          // A REAL name is stored untrimmed on purpose: Delhivery
+          // matches it exactly, and silently trimming would produce a
+          // name that does not match the registration.
           ...(dto.pickupLocationName === undefined
             ? {}
-            : { pickupLocationName: dto.pickupLocationName }),
+            : {
+                pickupLocationName:
+                  dto.pickupLocationName.trim() === '' ? null : dto.pickupLocationName,
+              }),
           ...(dto.notes === undefined ? {} : { notes: dto.notes }),
         },
       });

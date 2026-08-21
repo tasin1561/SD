@@ -24,6 +24,7 @@ import {
   type CourierAccountView,
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { EditCourierAccountModal } from './edit-courier-account-modal';
 import { CreateCourierAccountModal } from './create-courier-account-modal';
 import { usePermission } from '@/lib/use-permission';
 
@@ -116,6 +117,7 @@ export function CourierAccountsIndex(): ReactElement {
 function AccountRow({ account }: { readonly account: CourierAccountView }): ReactElement {
   const toast = useToast();
   const update = useUpdateCourierAccount();
+  const [editing, setEditing] = useState(false);
 
   async function run(
     patch: { isActive?: boolean; isDefault?: boolean },
@@ -179,6 +181,9 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
               Make default
             </Button>
           )}
+          <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+            Edit
+          </Button>
           <Button
             variant="secondary"
             size="sm"
@@ -195,6 +200,7 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
             {account.isActive ? 'Deactivate' : 'Reactivate'}
           </Button>
         </div>
+        <EditCourierAccountModal account={account} open={editing} onOpenChange={setEditing} />
       </Td>
     </Tr>
   );
