@@ -1761,16 +1761,28 @@ export function useFxRateHistory(
 
 // ───────── Admin: seller wallet balance (for the remittance form) ─────────
 
-export function useSellerWalletBalance(
-  sellerId: string,
-): UseQueryResult<{ balances: Array<{ currency: string; balance: string }> }> {
+export function useSellerWalletBalance(sellerId: string): UseQueryResult<{
+  balances: Array<{
+    currency: string;
+    balance: string;
+    /** True when the figure is the INR balance shown in another currency. */
+    isConverted: boolean;
+    fxRate: string | null;
+  }>;
+}> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-remittance', 'seller-balance', sellerId],
     queryFn: () =>
-      client.request<{ balances: Array<{ currency: string; balance: string }> }>(
-        `/api/admin/remittances/seller/${sellerId}/balance`,
-      ),
+      client.request<{
+        balances: Array<{
+          currency: string;
+          balance: string;
+          /** True when the figure is the INR balance shown in another currency. */
+          isConverted: boolean;
+          fxRate: string | null;
+        }>;
+      }>(`/api/admin/remittances/seller/${sellerId}/balance`),
     enabled: Boolean(sellerId),
   });
 }

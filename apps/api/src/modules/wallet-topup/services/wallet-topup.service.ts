@@ -9,6 +9,7 @@ import { ActorType, Currency, Prisma, TopupRequestStatus, WalletEntryDirection }
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { FxRateService } from '../../fx/services/fx-rate.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
@@ -70,6 +71,7 @@ export class WalletTopupService {
     private readonly spaces: SpacesService,
     private readonly audit: AuditLogService,
     private readonly wallet: WalletService,
+    private readonly fx: FxRateService,
   ) {}
 
   /** The accounts a seller may send money to. */
@@ -265,14 +267,43 @@ export class WalletTopupService {
         });
       }
 
+      // Credited in INR whatever was wired.
+      //
+      // The wallet is INR-canonical — every other entry the system
+      // writes is INR, and BDT is shown as a conversion of it rather
+      // than a pot of its own. A taka top-up credited to a BDT wallet
+      // would land in a balance nothing displays: the seller would send
+      // real money, see it accepted, and watch their balance not move.
+      //
+      // What they actually sent is not lost — the request keeps its own
+      // currency and amount, and the entry note carries both. This is
+      // the same reasoning as the remittance fix: the wallet records
+      // what is OWED, in one currency; the bank movement is recorded
+      // where it happened.
+      const credited =
+        existing.currency === Currency.INR
+          ? existing.amount
+          : new Prisma.Decimal(
+              (
+                await this.fx.convert({
+                  amount: existing.amount.toFixed(2),
+                  from: existing.currency,
+                  to: Currency.INR,
+                })
+              ).amount,
+            );
       const entry = await this.wallet.applyEntry(tx, {
         sellerId: existing.sellerId,
-        currency: existing.currency,
+        currency: Currency.INR,
         direction: WalletEntryDirection.TOPUP,
-        amount: existing.amount,
+        amount: credited,
         actorType: ActorType.STAFF,
         actorId: staffId,
-        note: `Top-up verified — ${existing.transactionRef ?? 'proof on file'}`,
+        note:
+          existing.currency === Currency.INR
+            ? `Top-up verified — ${existing.transactionRef ?? 'proof on file'}`
+            : `Top-up verified — ${existing.currency} ${existing.amount.toFixed(2)} converted — ` +
+              `${existing.transactionRef ?? 'proof on file'}`,
       });
 
       return tx.walletTopupRequest.update({
@@ -283,7 +314,7 @@ export class WalletTopupService {
 
     await this.wallet.recomputeCacheAfterCommit(
       existing.sellerId,
-      existing.currency,
+      Currency.INR,
       'post-topup-accept',
     );
     await this.audit.log({

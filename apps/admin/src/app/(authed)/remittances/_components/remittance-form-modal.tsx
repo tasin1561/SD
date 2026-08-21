@@ -42,7 +42,10 @@ export function RemittanceFormModal({
 
   const [sellerId, setSellerId] = useState(initialSellerId ?? '');
   const balance = useSellerWalletBalance(sellerId);
-  const [sourceCurrency, setSourceCurrency] = useState<'INR' | 'BDT'>('INR');
+  // Fixed, not chosen: the wallet is INR-canonical. Every entry the
+  // system writes is INR, and taka is a conversion of the balance rather
+  // than a pot that could be debited.
+  const sourceCurrency = 'INR' as const;
   const [currency, setCurrency] = useState<'INR' | 'BDT'>('BDT');
   const [sourceAmount, setSourceAmount] = useState('');
   const [fxRate, setFxRate] = useState('1.38'); // sensible BDT/INR seed
@@ -161,25 +164,37 @@ export function RemittanceFormModal({
               <div className="flex items-center gap-4 font-mono">
                 {(balance.data?.balances ?? []).map((b) => {
                   const amt = Number(b.balance);
+                  const money = `${b.currency === 'INR' ? '₹' : '৳'} ${amt.toLocaleString(
+                    undefined,
+                    { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+                  )}`;
+                  // A converted figure is the same money in another
+                  // currency, so it cannot be clicked to fill a wallet
+                  // debit — there is no taka pot to debit from.
                   return (
                     <div key={b.currency} className="flex items-baseline gap-1">
-                      <span className="text-text-muted">{b.currency}:</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSourceCurrency(b.currency as 'INR' | 'BDT');
-                          setSourceAmount(b.balance);
-                        }}
-                        disabled={amt <= 0}
-                        className={amt > 0 ? 'text-accent hover:underline' : 'text-text-muted'}
-                        title={amt > 0 ? 'Click to fill source amount' : ''}
-                      >
-                        {b.currency === 'INR' ? '₹' : '৳'}{' '}
-                        {amt.toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </button>
+                      <span className="text-text-muted">
+                        {b.currency}
+                        {b.isConverted ? ' (≈)' : ''}:
+                      </span>
+                      {b.isConverted ? (
+                        <span
+                          className="text-text-muted"
+                          title={b.fxRate === null ? '' : `Converted at ₹1 = ৳${b.fxRate}`}
+                        >
+                          {money}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setSourceAmount(b.balance)}
+                          disabled={amt <= 0}
+                          className={amt > 0 ? 'text-accent hover:underline' : 'text-text-muted'}
+                          title={amt > 0 ? 'Click to fill source amount' : ''}
+                        >
+                          {money}
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -189,14 +204,11 @@ export function RemittanceFormModal({
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <FormField label="Wallet currency (debit)" required>
-            <Select
-              value={sourceCurrency}
-              onChange={(e) => setSourceCurrency(e.target.value as 'INR' | 'BDT')}
-            >
-              <option value="INR">INR</option>
-              <option value="BDT">BDT</option>
-            </Select>
+          <FormField
+            label="Wallet currency (debit)"
+            hint="The wallet is kept in rupees; taka is a conversion of it, not a second pot."
+          >
+            <Input value="INR" disabled readOnly />
           </FormField>
           <FormField label="Bank currency (credit hit account)" required>
             <Select value={currency} onChange={(e) => setCurrency(e.target.value as 'INR' | 'BDT')}>

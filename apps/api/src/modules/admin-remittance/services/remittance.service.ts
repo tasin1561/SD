@@ -129,20 +129,26 @@ export class RemittanceService {
         fxRateSnapshot: fxRate,
       });
 
-      if (input.sourceCurrency !== input.currency) {
-        // Paired credit on the destination wallet — conserves ledger.
-        await this.wallet.applyEntry(tx, {
-          sellerId: input.sellerId,
-          currency: input.currency,
-          direction: WalletEntryDirection.REMITTANCE_FX,
-          amount,
-          linkedRemittanceId: remittance.id,
-          reasonCode: 'REMITTANCE_FX_CONVERT',
-          actorType: ActorType.STAFF,
-          actorId: actor.staffId,
-          fxRateSnapshot: fxRate,
-        });
-      }
+      // NO paired credit on the destination currency.
+      //
+      // This used to write a REMITTANCE_FX credit for the converted
+      // amount, described as conserving the ledger. That is a
+      // double-entry instinct applied where it does not hold: the money
+      // did not move between two pots we keep, it LEFT the business into
+      // the seller's bank. Crediting the destination wallet left every
+      // seller reading "you are owed ৳12,300" immediately after being
+      // paid ৳12,300, and nothing ever debited it back — so the phantom
+      // balance grew by the size of every payout, forever.
+      //
+      // What was actually wired is not lost: `remittances` records the
+      // destination currency, the amount and the FX rate snapshot. That
+      // is the record of the payment. The wallet's job is what is still
+      // OWED, and after a remittance that is the source debit alone.
+      //
+      // Safe to change: production carries zero remittances, so there is
+      // no phantom balance to unwind. If one ever appears in a restored
+      // environment, it is an ADJUSTMENT_DEBIT with a reason, never a
+      // deletion — the ledger is append-only.
 
       return remittance;
     });
@@ -172,13 +178,7 @@ export class RemittanceService {
       input.sourceCurrency,
       'post-remittance',
     );
-    if (input.sourceCurrency !== input.currency) {
-      await this.wallet.recomputeCacheAfterCommit(
-        input.sellerId,
-        input.currency,
-        'post-remittance-fx',
-      );
-    }
+    // No destination-currency recompute: nothing was written there.
 
     return { id: result.id };
   }

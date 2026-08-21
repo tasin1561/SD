@@ -5,6 +5,7 @@ import { CurrentSeller } from '../../common/decorators/current-seller.decorator'
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { SellerAuthAllowSuspended } from '../../common/decorators/seller-auth-allow-suspended.decorator';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
+import { FxRateService } from '../fx/services/fx-rate.service';
 import type { AuthenticatedSeller } from '../../common/types/request';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { WalletService } from '../seller-wallet/services/wallet.service';
@@ -13,6 +14,18 @@ import { RequireSellerPermissions } from '../../common/auth/require-seller-permi
 interface WalletBalanceView {
   readonly currency: Currency;
   readonly balance: string;
+  /**
+   * True when this figure is the INR balance expressed in another
+   * currency rather than a balance of its own. INR is canonical (every
+   * entry is written in it); BDT is a VIEW of it at the current rate.
+   *
+   * Flagged rather than left to the reader, because the two are worth
+   * very different things: a second balance is money you could withdraw
+   * separately, a conversion is the same money counted again.
+   */
+  readonly isConverted: boolean;
+  /** The rate used, when converted — so the figure can be checked. */
+  readonly fxRate: string | null;
 }
 
 interface WalletEntryView {
@@ -64,6 +77,7 @@ export class SellerWalletController {
   constructor(
     private readonly wallet: WalletService,
     private readonly prisma: PrismaService,
+    private readonly fx: FxRateService,
   ) {}
 
   @Get()
@@ -73,14 +87,43 @@ export class SellerWalletController {
   async balances(
     @CurrentSeller() seller: AuthenticatedSeller,
   ): Promise<{ balances: WalletBalanceView[] }> {
-    const [inr, bdt] = await Promise.all([
-      this.wallet.balanceCached(seller.id, Currency.INR),
-      this.wallet.balanceCached(seller.id, Currency.BDT),
-    ]);
+    const inr = await this.wallet.balanceCached(seller.id, Currency.INR);
+
+    // BDT is a CONVERSION of the INR balance, not a second wallet.
+    //
+    // It used to read the BDT ledger, which is always empty — every
+    // entry the system writes is INR — so a Bangladeshi seller saw
+    // "৳0.00, no activity yet" next to what they were actually owed.
+    // That is a true statement about a pot nobody uses, and a useless
+    // one about their money.
+    //
+    // A missing rate yields null rather than zero. Zero is a number a
+    // seller would act on; "we cannot convert right now" is the truth.
+    let bdt: { balance: string; rate: string } | null = null;
+    try {
+      const converted = await this.fx.convert({
+        amount: inr.toFixed(2),
+        from: Currency.INR,
+        to: Currency.BDT,
+      });
+      bdt = { balance: converted.amount, rate: converted.rate };
+    } catch {
+      bdt = null;
+    }
+
     return {
       balances: [
-        { currency: Currency.INR, balance: inr.toFixed(2) },
-        { currency: Currency.BDT, balance: bdt.toFixed(2) },
+        { currency: Currency.INR, balance: inr.toFixed(2), isConverted: false, fxRate: null },
+        ...(bdt === null
+          ? []
+          : [
+              {
+                currency: Currency.BDT,
+                balance: bdt.balance,
+                isConverted: true,
+                fxRate: bdt.rate,
+              },
+            ]),
       ],
     };
   }

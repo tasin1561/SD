@@ -22,17 +22,16 @@ import type { WalletEntryView } from '@skydrop/api-client';
 
 /**
  * Phase 1B M24 — seller wallet. Top: balance cards (INR + BDT).
- * Below: paginated ledger with filter chips. Each entry's
+ * Below: the paginated ledger. Each entry's
  * linkedOrder column is a click-through to the order detail.
  *
  * No mutation surface here — sellers can't initiate remits (admin
  * does it). They just see the books.
  */
 export default function WalletPage(): ReactElement {
-  const [filter, setFilter] = useState<'all' | 'INR' | 'BDT'>('all');
   const [exporting, setExporting] = useState(false);
   const balances = useWalletBalances();
-  const entries = useInfiniteWalletEntries(filter === 'all' ? undefined : filter);
+  const entries = useInfiniteWalletEntries();
   const accumulated = entries.data?.pages.flatMap((p) => p.items) ?? [];
 
   async function exportAll(): Promise<void> {
@@ -85,11 +84,17 @@ export default function WalletPage(): ReactElement {
                   />
                 </div>
                 <div className="text-text-muted text-xs mt-1">
-                  {Number(b.balance) === 0
-                    ? 'No activity yet'
-                    : Number(b.balance) > 0
-                      ? 'Owed to you'
-                      : 'You owe'}
+                  {/* A converted figure is the SAME money counted in
+                      another currency, not a second balance — saying
+                      "owed to you" on both would read as twice as much
+                      money. */}
+                  {b.isConverted
+                    ? `Your rupee balance in taka${b.fxRate === null ? '' : ` · ₹1 = ৳${Number(b.fxRate).toFixed(2)}`}`
+                    : Number(b.balance) === 0
+                      ? 'No activity yet'
+                      : Number(b.balance) > 0
+                        ? 'Owed to you'
+                        : 'You owe'}
                 </div>
               </CardBody>
             </Card>
@@ -102,26 +107,12 @@ export default function WalletPage(): ReactElement {
           title="Ledger"
           action={
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 text-xs">
-                {(['all', 'INR', 'BDT'] as const).map((f) => (
-                  <button
-                    key={f}
-                    type="button"
-                    onClick={() => setFilter(f)}
-                    aria-pressed={filter === f}
-                    className={
-                      // A segmented filter is a real control, not a
-                      // caption — it was 30×19px, well under a finger.
-                      'inline-flex min-h-[32px] items-center rounded-[4px] px-2.5 transition-colors ' +
-                      (filter === f
-                        ? 'bg-surface border-border text-text-bright border'
-                        : 'text-text-muted hover:text-text-body')
-                    }
-                  >
-                    {f}
-                  </button>
-                ))}
-              </div>
+              {/* The all/INR/BDT segmented filter is gone. Every entry the
+                  system writes is INR — BDT is a conversion of the
+                  balance, not a pot with its own entries — so 'BDT'
+                  selected an always-empty ledger while 'all' and 'INR'
+                  were the same list. A control with one real setting is
+                  not a control. */}
               <Button
                 type="button"
                 variant="ghost"

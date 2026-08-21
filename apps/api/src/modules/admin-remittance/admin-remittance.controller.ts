@@ -16,6 +16,7 @@ import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/clie
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../common/types/request';
+import { FxRateService } from '../fx/services/fx-rate.service';
 import { WalletService } from '../seller-wallet/services/wallet.service';
 import { CreateRemittanceDto } from './dto/create-remittance.dto';
 import { RemittanceService } from './services/remittance.service';
@@ -31,6 +32,7 @@ export class AdminRemittanceController {
   constructor(
     private readonly svc: RemittanceService,
     private readonly wallet: WalletService,
+    private readonly fx: FxRateService,
   ) {}
 
   @Post()
@@ -67,17 +69,48 @@ export class AdminRemittanceController {
   @ApiOperation({
     summary: 'Wallet balances per currency for a seller (admin remittance form pre-fill)',
   })
-  async sellerBalances(
-    @Param('sellerId') sellerId: string,
-  ): Promise<{ balances: Array<{ currency: Currency; balance: string }> }> {
-    const [inr, bdt] = await Promise.all([
-      this.wallet.balanceCached(sellerId, Currency.INR),
-      this.wallet.balanceCached(sellerId, Currency.BDT),
-    ]);
+  async sellerBalances(@Param('sellerId') sellerId: string): Promise<{
+    balances: Array<{
+      currency: Currency;
+      balance: string;
+      isConverted: boolean;
+      fxRate: string | null;
+    }>;
+  }> {
+    const inr = await this.wallet.balanceCached(sellerId, Currency.INR);
+
+    // INR is the wallet; BDT is that same money in taka.
+    //
+    // This used to read the BDT ledger, which is always empty, so the
+    // remittance form offered a BDT source pot holding ৳0 — a choice
+    // that could never be taken. The converted figure answers the
+    // question an operator actually has: what is this seller worth in
+    // the currency we are about to wire?
+    let bdt: { balance: string; rate: string } | null = null;
+    try {
+      const converted = await this.fx.convert({
+        amount: inr.toFixed(2),
+        from: Currency.INR,
+        to: Currency.BDT,
+      });
+      bdt = { balance: converted.amount, rate: converted.rate };
+    } catch {
+      bdt = null;
+    }
+
     return {
       balances: [
-        { currency: Currency.INR, balance: inr.toFixed(2) },
-        { currency: Currency.BDT, balance: bdt.toFixed(2) },
+        { currency: Currency.INR, balance: inr.toFixed(2), isConverted: false, fxRate: null },
+        ...(bdt === null
+          ? []
+          : [
+              {
+                currency: Currency.BDT,
+                balance: bdt.balance,
+                isConverted: true,
+                fxRate: bdt.rate,
+              },
+            ]),
       ],
     };
   }
