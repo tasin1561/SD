@@ -255,9 +255,27 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
     const isCod = req.codAmountInr !== null;
     const str = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
     return {
-      // A pooled waybill when we have one; empty lets Delhivery assign,
-      // which works but forfeits pre-allocation.
-      waybill: req.waybill ?? '',
+      // EMPTY — Delhivery assigns, and the number it returns is the AWB.
+      //
+      // We used to send a pre-allocated waybill from the pool, and every
+      // live create then failed: the envelope came back with their
+      // generic "An internal Error has occurred", and their staging tier
+      // gave the raw form, `'NoneType' object has no attribute
+      // 'end_date'`. A probe identical except for sending an empty
+      // waybill got materially further — package_count 1 and a named
+      // per-package error rather than a crash.
+      //
+      // `end_date` is a validity window on a waybill SERIES: passing a
+      // waybill makes their handler look up its allocation record, and
+      // ours resolves to None. The bulk-fetched numbers are evidently
+      // not usable on create for this account, whatever the pool
+      // believes.
+      //
+      // Pre-allocation is forfeited, deliberately, until a pooled
+      // waybill is PROVEN usable — a number we cannot manifest with is
+      // not worth the round trip that fetched it. The pool still fills;
+      // nothing consumes it here. See phase-1a-debt.
+      waybill: '',
       order: req.shipmentNumber,
       name: req.recipientName,
       add: [req.addressLine1, req.addressLine2].filter(Boolean).join(', '),
