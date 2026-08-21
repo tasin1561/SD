@@ -175,7 +175,7 @@ export function RecordFreightModal({
         onOpenChange(next);
         if (!next) reset();
       }}
-      size="md"
+      size="xl"
       title="Record a freight bill"
       description="The BD→India cost for one arrival. Pay-now debits the seller's wallet immediately; pay-later leaves a receivable that amortises as the stock sells."
     >
@@ -234,7 +234,19 @@ export function RecordFreightModal({
               <p className="text-text-muted text-sm">This arrival has no counted products.</p>
             ) : (
               <div className="border-border overflow-x-auto rounded-lg border">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[42rem] text-sm">
+                  {/* Explicit widths: without them the product column takes
+                      whatever is left after the inputs, and the name wraps to
+                      three lines while a <select> renders blank because its
+                      label no longer fits. */}
+                  <colgroup>
+                    <col />
+                    <col className="w-16" />
+                    <col className="w-28" />
+                    <col className="w-28" />
+                    <col className="w-24" />
+                    <col className="w-28" />
+                  </colgroup>
                   <thead>
                     <tr className="border-border text-text-muted border-b text-left text-xs">
                       <th className="px-2 py-1.5 font-medium">Product</th>
@@ -253,7 +265,7 @@ export function RecordFreightModal({
                         <tr key={l.id} className="border-border/60 border-b last:border-0">
                           <td className="px-2 py-1.5">
                             <div className="text-text-primary">{l.variant.product.name}</div>
-                            <div className="text-text-faint font-mono text-xs">
+                            <div className="text-text-faint truncate font-mono text-xs">
                               {l.variant.skuCode}
                               {l.variant.variantLabel === null
                                 ? ''
@@ -264,6 +276,7 @@ export function RecordFreightModal({
                           <td className="px-2 py-1.5">
                             <Select
                               aria-label={`Basis for ${l.variant.skuCode}`}
+                              className="w-full"
                               value={p.basis}
                               onChange={(e) => setPrice(l.id, { basis: e.target.value })}
                             >
@@ -275,7 +288,7 @@ export function RecordFreightModal({
                             <Input
                               aria-label={`Rate for ${l.variant.skuCode}`}
                               inputMode="decimal"
-                              className="text-right"
+                              className="w-full text-right"
                               value={p.rate}
                               onChange={(e) => setPrice(l.id, { rate: e.target.value })}
                               placeholder={perKg ? '300' : '40'}
@@ -286,7 +299,7 @@ export function RecordFreightModal({
                               <Input
                                 aria-label={`Chargeable weight for ${l.variant.skuCode}`}
                                 inputMode="decimal"
-                                className="text-right"
+                                className="w-full text-right"
                                 value={p.weightKg}
                                 onChange={(e) => setPrice(l.id, { weightKg: e.target.value })}
                                 placeholder="12.5"

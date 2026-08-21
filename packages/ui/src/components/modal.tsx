@@ -31,9 +31,21 @@ export function Modal({
   readonly description?: ReactNode;
   readonly children: ReactNode;
   readonly tone?: 'default' | 'critical';
-  readonly size?: 'sm' | 'md' | 'lg';
+  readonly size?: 'sm' | 'md' | 'lg' | 'xl';
 }): ReactElement {
-  const widthClass = size === 'sm' ? 'max-w-sm' : size === 'lg' ? 'max-w-2xl' : 'max-w-md';
+  // `xl` exists for a modal that carries a TABLE. A six-column entry
+  // grid inside max-w-2xl squeezes every control below its own text
+  // width — a <select> renders visibly blank because its option label no
+  // longer fits — so the width is a correctness concern there, not a
+  // preference.
+  const widthClass =
+    size === 'sm'
+      ? 'max-w-sm'
+      : size === 'xl'
+        ? 'max-w-4xl'
+        : size === 'lg'
+          ? 'max-w-2xl'
+          : 'max-w-md';
   const borderClass = tone === 'critical' ? 'border-[var(--color-critical-ring)]' : 'border-border';
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
