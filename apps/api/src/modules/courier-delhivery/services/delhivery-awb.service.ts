@@ -56,6 +56,24 @@ interface DelhiveryCreateResponse {
   packages?: DelhiveryCreatePackage[];
 }
 
+/**
+ * `+919876543210` → `9876543210`.
+ *
+ * Delhivery's B2C create API takes the national number. Ours are stored
+ * E.164 (validated at the app boundary), so the prefix has to come off
+ * at the wire, not in the database — the stored value is still the one
+ * an agent dials and the one a webhook matches on.
+ *
+ * Deliberately conservative: anything that is not +91 followed by
+ * exactly ten digits is returned unchanged, because a refused shipment
+ * is recoverable and a mangled phone number on a manifested parcel is
+ * not.
+ */
+export function toNationalPhone(e164: string): string {
+  const m = /^\+91(\d{10})$/.exec(e164.trim());
+  return m?.[1] ?? e164.trim();
+}
+
 @Injectable()
 export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'> {
   private readonly logger = new Logger(DelhiveryAwbService.name);
@@ -215,7 +233,18 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
       city: req.city,
       state: req.stateProvince,
       country: req.countryCode === 'IN' ? 'India' : req.countryCode,
-      phone: req.recipientPhoneE164,
+      // Delhivery wants the NATIONAL number, not E.164. Every sample in
+      // their own docs sends "9999999999"; we were sending
+      // "+919876543210", and the first real create came back with their
+      // generic "An internal Error has occurred" — no named field, which
+      // is how a parser choking on an unexpected prefix presents.
+      //
+      // Only the +91 prefix is stripped, and only when what remains is a
+      // plain 10-digit number. A number we cannot confidently reduce is
+      // passed through untouched: sending E.164 and being refused is a
+      // visible failure, while silently mangling a number produces a
+      // parcel that is manifested and undeliverable.
+      phone: toNationalPhone(req.recipientPhoneE164),
       payment_mode: isCod ? 'COD' : 'Prepaid',
       cod_amount: req.codAmountInr ?? '0',
       total_amount: req.declaredValueInr,
