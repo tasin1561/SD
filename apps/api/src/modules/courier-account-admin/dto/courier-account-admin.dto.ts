@@ -11,6 +11,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  IsUUID,
 } from 'class-validator';
 
 export class CreateCourierAccountDto {
@@ -35,8 +36,18 @@ export class CreateCourierAccountDto {
     description:
       'Raw credential fields to encrypt at rest (e.g. { apiKey, clientId }). Field NAMES are audited on every decrypt; values never are.',
   })
+  @IsOptional()
   @IsObject()
-  credentialFields!: Record<string, unknown>;
+  credentialFields?: Record<string, unknown>;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Reuse an EXISTING active credential for this courier and environment instead of supplying a token. Use this when the credential is already in production: re-typing it mints a second active row, and because the HTTP layer resolves through the default account once accounts exist, that silently swaps which credential authenticates — from a proven one to a freshly typed one. Mutually exclusive with credentialFields.',
+  })
+  @IsOptional()
+  @IsUUID('7')
+  adoptCredentialId?: string;
 
   @ApiPropertyOptional({
     description:

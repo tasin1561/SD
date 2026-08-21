@@ -14,6 +14,8 @@ function makeService(
     existingAccount?: AnyArgs | null;
     existingSeller?: AnyArgs | null;
     existingLink?: AnyArgs | null;
+    /** The credential an adopt call finds; null = none adoptable. */
+    adoptable?: AnyArgs | null;
     keyV1?: string;
   } = {},
 ) {
@@ -24,6 +26,13 @@ function makeService(
     id: 'cred-new',
     ...(a.data as AnyArgs),
   }));
+  // Adopting an EXISTING credential rather than minting one. Null means
+  // "no such adoptable credential" — the not-found path.
+  const credentialFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+    opts.adoptable === undefined
+      ? { id: 'cred-existing', fieldNames: ['apiToken'] }
+      : opts.adoptable,
+  );
   const accountFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
     opts.existingAccount === undefined
       ? {
@@ -88,7 +97,7 @@ function makeService(
 
   const tx = {
     courier: { findUnique: courierFindUnique },
-    courierCredential: { create: credentialCreate },
+    courierCredential: { create: credentialCreate, findFirst: credentialFindFirst },
     courierAccount: {
       findUnique: accountFindUnique,
       create: accountCreate,
@@ -123,6 +132,7 @@ function makeService(
   );
   return {
     svc,
+    credentialFindFirst,
     courierFindUnique,
     credentialCreate,
     accountFindUnique,
@@ -358,5 +368,75 @@ describe('CourierAccountAdminService.unlinkSeller', () => {
     await svc.unlinkSeller('seller-1', 'acct-1', 'staff-1');
     expect(linkDelete).toHaveBeenCalledTimes(1);
     expect(auditLog.mock.calls[0]![0]!.action).toBe('staff.seller_courier_account_link.removed');
+  });
+});
+
+/**
+ * Creating an account for a credential ALREADY IN USE.
+ *
+ * There was no path: the only way to make an account was to re-type the
+ * token, which mints a second active credential for the same courier and
+ * environment. And because DelhiveryHttpService resolves through the
+ * DEFAULT ACCOUNT once accounts exist, that silently SWAPS which
+ * credential authenticates — from one proven against the live API to one
+ * just typed into a form. Adoption removes the swap.
+ */
+describe('CourierAccountAdminService.createAccount — adopting a credential', () => {
+  const base = {
+    courierCode: 'delhivery',
+    environment: 'PRODUCTION' as never,
+    label: 'Delhivery — primary',
+  };
+
+  it('links the EXISTING credential and mints no new one', async () => {
+    // existingAccount: null — nothing has claimed this credential yet,
+    // which is the whole point of adopting it.
+    const { svc, credentialCreate, accountCreate } = makeService({ existingAccount: null });
+    await svc.createAccount(
+      { ...base, adoptCredentialId: '019f999c-f4cb-7b48-b27f-28ff63444963' } as never,
+      'staff-1',
+    );
+    expect(credentialCreate).not.toHaveBeenCalled();
+    const created = accountCreate.mock.calls[0]?.[0] as { data: { credentialId: string } };
+    expect(created.data.credentialId).toBe('cred-existing');
+  });
+
+  it('scopes the lookup to this courier, environment and active only', async () => {
+    // Adopting another courier's credential, or a deactivated one, would
+    // authenticate as somebody the operator did not choose.
+    const { svc, credentialFindFirst } = makeService({ existingAccount: null });
+    await svc.createAccount({ ...base, adoptCredentialId: 'cred-x' } as never, 'staff-1');
+    const where = credentialFindFirst.mock.calls[0]?.[0].where;
+    expect(where).toMatchObject({
+      courierId: 'courier-1',
+      environment: 'PRODUCTION',
+      isActive: true,
+      deletedAt: null,
+    });
+  });
+
+  it('refuses a credential that is not adoptable', async () => {
+    const { svc } = makeService({ adoptable: null });
+    await expect(
+      svc.createAccount({ ...base, adoptCredentialId: 'cred-x' } as never, 'staff-1'),
+    ).rejects.toMatchObject({ response: { code: 'CREDENTIAL_NOT_ADOPTABLE' } });
+  });
+
+  it('refuses a credential another account already carries', async () => {
+    // courier_accounts.credential_id is UNIQUE; this is the readable
+    // error in front of the constraint.
+    const { svc } = makeService({
+      existingAccount: { id: 'acct-9', label: 'Delhivery — old' },
+    });
+    await expect(
+      svc.createAccount({ ...base, adoptCredentialId: 'cred-x' } as never, 'staff-1'),
+    ).rejects.toMatchObject({ response: { code: 'CREDENTIAL_ALREADY_LINKED' } });
+  });
+
+  it('still requires a token when NOT adopting', async () => {
+    const { svc } = makeService();
+    await expect(svc.createAccount({ ...base } as never, 'staff-1')).rejects.toMatchObject({
+      response: { code: 'INVALID_CREDENTIAL_FIELDS' },
+    });
   });
 });

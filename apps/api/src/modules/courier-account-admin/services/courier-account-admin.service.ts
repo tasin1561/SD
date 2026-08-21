@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { ActorType, CredentialEnvironment, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { EnvService } from '../../../config/env.service';
@@ -57,21 +62,38 @@ export class CourierAccountAdminService {
   ) {}
 
   async createAccount(dto: CreateCourierAccountDto, staffId: string): Promise<CourierAccountView> {
-    const key = this.env.courierCredentialsKey(CURRENT_KEY_VERSION);
-    if (key === '') {
-      throw new BadRequestException({
-        code: 'COURIER_CREDENTIALS_UNAVAILABLE',
-        message: `COURIER_CREDENTIALS_KEY_V${CURRENT_KEY_VERSION} is not configured — cannot encrypt a new credential`,
-      });
+    // ADOPTING an existing credential, or minting a new one.
+    //
+    // Adoption exists because an account created for a credential
+    // ALREADY IN USE had no path: the only route was re-typing the
+    // token, which mints a second active row for the same courier and
+    // environment — and because the HTTP layer resolves through the
+    // DEFAULT ACCOUNT once accounts exist, that silently SWAPS which
+    // credential authenticates, from a proven one to a freshly typed
+    // one. That is a bad trade at the best of times and a genuinely
+    // dangerous one immediately before a first live write.
+    const adopting = dto.adoptCredentialId !== undefined;
+
+    let encryptedPayload = '';
+    let fieldNames: string[] = [];
+    if (!adopting) {
+      const key = this.env.courierCredentialsKey(CURRENT_KEY_VERSION);
+      if (key === '') {
+        throw new BadRequestException({
+          code: 'COURIER_CREDENTIALS_UNAVAILABLE',
+          message: `COURIER_CREDENTIALS_KEY_V${CURRENT_KEY_VERSION} is not configured — cannot encrypt a new credential`,
+        });
+      }
+      const fields = dto.credentialFields ?? {};
+      fieldNames = Object.keys(fields);
+      if (fieldNames.length === 0) {
+        throw new BadRequestException({
+          code: 'INVALID_CREDENTIAL_FIELDS',
+          message: 'Provide credentialFields, or adoptCredentialId to reuse an existing credential',
+        });
+      }
+      encryptedPayload = encryptCredential(JSON.stringify(fields), key);
     }
-    const fieldNames = Object.keys(dto.credentialFields);
-    if (fieldNames.length === 0) {
-      throw new BadRequestException({
-        code: 'INVALID_CREDENTIAL_FIELDS',
-        message: 'credentialFields must contain at least one field',
-      });
-    }
-    const encryptedPayload = encryptCredential(JSON.stringify(dto.credentialFields), key);
 
     return this.prisma.client.$transaction(async (tx) => {
       const courier = await tx.courier.findUnique({
@@ -85,17 +107,58 @@ export class CourierAccountAdminService {
         });
       }
 
-      const credential = await tx.courierCredential.create({
-        data: {
-          courierId: courier.id,
-          environment: dto.environment,
-          encryptedPayload,
-          encryptionKeyVersion: CURRENT_KEY_VERSION,
-          fieldNames,
-          isActive: true,
-          createdByStaffId: staffId,
-        },
-      });
+      let credential: { id: string };
+      if (dto.adoptCredentialId !== undefined) {
+        const existing = await tx.courierCredential.findFirst({
+          where: {
+            id: dto.adoptCredentialId,
+            courierId: courier.id,
+            environment: dto.environment,
+            isActive: true,
+            deletedAt: null,
+          },
+          select: { id: true, fieldNames: true },
+        });
+        if (!existing) {
+          // Deliberately one message for "no such row", "wrong courier",
+          // "wrong environment" and "inactive": all four mean the same
+          // thing to the caller — this is not a credential you may adopt
+          // here — and enumerating which would let someone probe for
+          // credential ids that exist.
+          throw new NotFoundException({
+            code: 'CREDENTIAL_NOT_ADOPTABLE',
+            message: 'No active credential with that id for this courier and environment',
+          });
+        }
+        // `courier_accounts.credential_id` is UNIQUE, so a credential
+        // already carried by an account is refused by the database
+        // rather than by a check that could race one.
+        const taken = await tx.courierAccount.findUnique({
+          where: { credentialId: existing.id },
+          select: { id: true, label: true },
+        });
+        if (taken) {
+          throw new ConflictException({
+            code: 'CREDENTIAL_ALREADY_LINKED',
+            message: `That credential already belongs to the account "${taken.label}"`,
+          });
+        }
+        fieldNames = existing.fieldNames;
+        credential = { id: existing.id };
+      } else {
+        credential = await tx.courierCredential.create({
+          data: {
+            courierId: courier.id,
+            environment: dto.environment,
+            encryptedPayload,
+            encryptionKeyVersion: CURRENT_KEY_VERSION,
+            fieldNames,
+            isActive: true,
+            createdByStaffId: staffId,
+          },
+          select: { id: true },
+        });
+      }
 
       if (dto.isDefault) {
         await this.clearOtherDefaults(tx, courier.id, dto.environment, null);
@@ -131,6 +194,11 @@ export class CourierAccountAdminService {
             label: dto.label,
             isDefault: account.isDefault,
             fieldNames,
+            // Which of the two paths ran. "Where did this account's
+            // credential come from" is the first question asked when an
+            // auth failure is traced back here.
+            credentialSource: adopting ? 'ADOPTED_EXISTING' : 'NEW',
+            credentialId: credential.id,
           },
           severity: 'MEDIUM',
         },
