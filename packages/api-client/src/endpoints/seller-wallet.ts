@@ -13,6 +13,13 @@ export interface WalletEntryView {
   readonly runningBalanceAfter: string;
   readonly linkedOrderId: string | null;
   readonly linkedRemittanceId: string | null;
+  /**
+   * Set on an INBOUND_FREIGHT debit. Freight belongs to a CONSIGNMENT
+   * rather than an order, so this is the only thing that lets the ledger
+   * point at what the seller was charged for.
+   */
+  readonly linkedConsignmentId: string | null;
+  readonly linkedConsignmentNumber: string | null;
   readonly reasonCode: string | null;
   readonly note: string | null;
   readonly createdAt: string;

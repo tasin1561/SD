@@ -23,6 +23,15 @@ interface WalletEntryView {
   readonly runningBalanceAfter: string;
   readonly linkedOrderId: string | null;
   readonly linkedRemittanceId: string | null;
+  /**
+   * Present on an INBOUND_FREIGHT debit, resolved from the freight
+   * charge's UNIQUE walletEntryId. Freight belongs to a consignment
+   * rather than an order, so without this the Linked column was empty on
+   * the one entry type where the seller most needs to see what they were
+   * charged for.
+   */
+  readonly linkedConsignmentId: string | null;
+  readonly linkedConsignmentNumber: string | null;
   readonly reasonCode: string | null;
   readonly note: string | null;
   readonly createdAt: string;
@@ -117,18 +126,56 @@ export class SellerWalletController {
       },
     });
     const hasMore = rows.length > lim;
-    const items = (hasMore ? rows.slice(0, lim) : rows).map((r) => ({
-      id: r.id,
-      currency: r.currency,
-      direction: r.direction,
-      amount: r.amount.toFixed(2),
-      runningBalanceAfter: r.runningBalanceAfter.toFixed(2),
-      linkedOrderId: r.linkedOrderId,
-      linkedRemittanceId: r.linkedRemittanceId,
-      reasonCode: r.reasonCode,
-      note: r.note,
-      createdAt: r.createdAt.toISOString(),
-    }));
+    const page = hasMore ? rows.slice(0, lim) : rows;
+
+    // An INBOUND_FREIGHT debit has no linkedOrderId — it belongs to a
+    // consignment, not an order — so the Linked column had nothing to
+    // show and the seller could read "you were charged ₹3,000" with no
+    // way to reach what they were charged FOR.
+    //
+    // Resolved by REVERSE LOOKUP rather than a new column:
+    // `inbound_freight_charges.wallet_entry_id` is already UNIQUE (it is
+    // the charged-exactly-once evidence), so it answers this without
+    // widening the ledger. The ledger stays append-only and unchanged.
+    const freightEntryIds = page
+      .filter((r) => r.direction === WalletEntryDirection.INBOUND_FREIGHT)
+      .map((r) => r.id);
+    const freightByEntry = new Map<string, { id: string; number: string }>();
+    if (freightEntryIds.length > 0) {
+      const charges = await this.prisma.client.inboundFreightCharge.findMany({
+        where: { walletEntryId: { in: freightEntryIds } },
+        select: {
+          walletEntryId: true,
+          consignmentId: true,
+          consignment: { select: { consignmentNumber: true } },
+        },
+      });
+      for (const c of charges) {
+        if (c.walletEntryId === null) continue;
+        freightByEntry.set(c.walletEntryId, {
+          id: c.consignmentId,
+          number: c.consignment.consignmentNumber,
+        });
+      }
+    }
+
+    const items = page.map((r) => {
+      const freight = freightByEntry.get(r.id) ?? null;
+      return {
+        id: r.id,
+        currency: r.currency,
+        direction: r.direction,
+        amount: r.amount.toFixed(2),
+        runningBalanceAfter: r.runningBalanceAfter.toFixed(2),
+        linkedOrderId: r.linkedOrderId,
+        linkedRemittanceId: r.linkedRemittanceId,
+        linkedConsignmentId: freight?.id ?? null,
+        linkedConsignmentNumber: freight?.number ?? null,
+        reasonCode: r.reasonCode,
+        note: r.note,
+        createdAt: r.createdAt.toISOString(),
+      };
+    });
     return {
       items,
       nextCursor: hasMore ? (items[items.length - 1]?.createdAt ?? null) : null,

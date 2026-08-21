@@ -234,6 +234,13 @@ function LedgerRow({ entry }: { readonly entry: WalletEntryView }): ReactElement
           >
             Order →
           </Link>
+        ) : entry.linkedConsignmentId ? (
+          <Link
+            href={`/inbound/${entry.linkedConsignmentId}`}
+            className="text-accent hover:underline font-mono text-xs"
+          >
+            {entry.linkedConsignmentNumber ?? 'Consignment'} →
+          </Link>
         ) : entry.linkedRemittanceId ? (
           <span className="text-text-muted text-xs">Remittance</span>
         ) : (

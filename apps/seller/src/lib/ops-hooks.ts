@@ -52,6 +52,8 @@ export interface FreightChargeView {
   readonly id: string;
   readonly goodsReceiptId: string;
   readonly receiptNumber: string | null;
+  readonly consignmentId: string;
+  readonly consignmentNumber: string | null;
   readonly amountInr: string;
   readonly mode: InboundFreightMode;
   readonly serviceChargePercent: string | null;
@@ -75,6 +77,9 @@ export interface WithdrawalRequestView {
   readonly status: WithdrawalRequestStatus;
   readonly requestedBy: WithdrawalRequestedBy;
   readonly linkedRemittanceId: string | null;
+  /** Set on an INBOUND_FREIGHT debit — freight belongs to a consignment. */
+  readonly linkedConsignmentId: string | null;
+  readonly linkedConsignmentNumber: string | null;
   readonly rejectionReason: string | null;
   readonly note: string | null;
   readonly createdAt: string;

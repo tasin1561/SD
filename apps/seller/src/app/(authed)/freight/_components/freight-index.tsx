@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useState, type ReactElement } from 'react';
 import {
   Card,
@@ -118,7 +120,13 @@ export function SellerFreightIndex(): ReactElement {
             {rows.map((r) => (
               <Tr key={r.id}>
                 <Td>
-                  <Ident value={r.receiptNumber ?? `${r.goodsReceiptId.slice(0, 8)}…`} />
+                  {/* The bill is for one ARRIVAL, but the details a seller
+                      wants — what was declared, what was counted, where it
+                      is — live on the consignment, so that is where this
+                      goes. */}
+                  <Link href={`/inbound/${r.consignmentId}`} className="hover:underline">
+                    <Ident value={r.receiptNumber ?? `${r.goodsReceiptId.slice(0, 8)}…`} />
+                  </Link>
                   <div className="text-text-faint mt-0.5 text-xs">
                     {new Date(r.createdAt).toLocaleDateString()}
                   </div>

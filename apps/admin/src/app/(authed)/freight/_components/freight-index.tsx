@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useMemo, useState, type ReactElement } from 'react';
 import {
   Button,
@@ -168,11 +170,11 @@ function FreightRow({ row }: { readonly row: FreightChargeView }): ReactElement 
   return (
     <Tr>
       <Td>
-        {row.consignmentNumber === null ? (
-          <Ident value={`${row.consignmentId.slice(0, 8)}…`} />
-        ) : (
-          <Ident value={row.consignmentNumber} />
-        )}
+        {/* Straight to the consignment: a freight bill on its own says
+            what was charged, not what arrived. */}
+        <Link href={`/warehouse/consignments/${row.consignmentId}`} className="hover:underline">
+          <Ident value={row.consignmentNumber ?? `${row.consignmentId.slice(0, 8)}…`} />
+        </Link>
         {/* Which ARRIVAL this bill covers. A consignment can carry more
             than one, so the consignment number alone no longer says
             which shipment was invoiced. */}
