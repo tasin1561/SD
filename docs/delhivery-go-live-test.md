@@ -1,6 +1,8 @@
 # Delhivery go-live test — one real parcel, then cancelled
 
-**Status:** not yet performed.
+**Status: PERFORMED 2026-08-21.** One real consignment was manifested
+end-to-end through our own system and cancelled with the courier. See
+the attempt log at the bottom for what it cost and what it found.
 **Who runs it:** the founder, or a SUPER_ADMIN sitting next to them.
 **How long:** about 40 minutes, most of it waiting.
 
@@ -404,18 +406,65 @@ cancel -> "Shipment has been cancelled."
 ```
 
 **The wire contract is proven**: real credential, real account, real
-waybill, clean cancel, nothing left moving. What is NOT yet proven is
-our own path around it — preflight, build, parse, persist the AWB,
-upload the label, flip the manifest to CONFIRMED — because that create
-was made by a probe that bypassed all of it. Completing that needs a
-fresh order carrying a consignee the filter accepts; the existing test
-order's shipment snapshot holds the refused number, and
-`AwbSupersedeService` copies the snapshot forward, so every replacement
-inherits it.
+waybill, clean cancel, nothing left moving. That create was made by a
+probe, so it proved Delhivery's side only.
+
+### Then through OUR system — the actual go-live
+
+Manifest `MF-2026-08-000007` closed, and the whole chain ran:
+
+```
+manifest close -> AWB saga -> CONFIRMED
+SH-2026-08-000011   AWB 38061110518534
+label  -> awb-labels/<shipmentId>/v1-38061110518534.pdf  (our Spaces bucket)
+audit  -> courier.delhivery.live_write_to_production
+cancel -> success: true
+```
+
+Preflight, payload build, response parse, AWB persist, label upload to
+our own bucket, manifest CONFIRMED, and the credential decrypt audited —
+all exercised against the live API. **`audit_logs` mattered most: that
+row had NEVER been written before this test.** Ten call sites were
+passing `entityId: 'delhivery'` into a UUID column and
+`AuditLogService.log` swallows its own failures, so CUR-1 was silently
+unenforced in production while every document said otherwise.
+
+The intermediate failure is worth keeping too. The first close after the
+consignee fix returned **"Duplicate order id"** — precise, actionable,
+diagnosed in one look — because the probe had already claimed
+`SH-2026-08-000010` at Delhivery and **cancelling does not release an
+order reference**. An hour earlier that same failure would have been
+indistinguishable from the other five.
+
+### What this test found that nothing else would have
+
+1. **The courier audit trail had never written** (above).
+2. **`products_desc` joined multi-item orders with `;`**, a character
+   Delhivery rejects — every 2+ item order would have failed with their
+   nameless error.
+3. **A god-moded recipient never reached the shipment snapshot** — an
+   admin fixing a mistyped phone saw no error and the parcel still
+   shipped to the wrong number. Fixed; see phase-1a-debt.
 
 ### Still open
 
-A **real Indian phone number we control** for the consignee. Inventing
-one points a courier's confirmation call at a stranger. Until then the
-first successful write has not been made and
-`courier.delhivery_live_writes_enabled` should be **OFF**.
+- **Whether a POOLED waybill works on create.** An empty waybill is
+  proven; a pooled one was never isolated, because the fraud filter
+  refused everything regardless. The pool still refills and nothing
+  consumes it.
+- **The two Delhivery-side unknowns** behind the remaining
+  `TODO(delhivery-api)` markers: the webhook payload field/header naming
+  and the NDR `failureReason` vocabulary. Both need Delhivery, not code.
+- **A staging credential.** `staging-express.delhivery.com` exists and
+  returns real tracebacks where production returns boilerplate; our
+  production token is refused there. It is the difference between an
+  afternoon and five minutes.
+
+### Standing condition (2026-08-21)
+
+`courier.delhivery_live_writes_enabled` is deliberately left **ON** for
+continued testing, at the operator's request. While it is on, **any**
+order reaching CONFIRMED requests a real AWB within milliseconds —
+`OrderConfirmedAwbListener` cannot tell a test order from a real one. A
+throwaway order manifests a real consignment that needs cancelling.
+`courier.delhivery_waybill_pool_refill_batch` is 1 (was 500).
