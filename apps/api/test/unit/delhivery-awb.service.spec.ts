@@ -160,6 +160,45 @@ describe('DelhiveryAwbService.generateAwb — real mode', () => {
     });
   });
 
+  it('surfaces the PER-PACKAGE remarks, not the generic envelope rmk', async () => {
+    // This is the exact response the production API returned on
+    // 2026-08-21, five times, while the log said only "An internal
+    // Error has occurred". `rmk` is that same sentence for every kind
+    // of refusal; `remarks` is where Delhivery says what was actually
+    // wrong. Reading `rmk` first threw the answer away and sent the
+    // go-live test chasing payload theories for an afternoon.
+    const { svc, request } = makeServiceWithPickup('Skydrop-CCU-01');
+    request.mockResolvedValueOnce({
+      success: false,
+      rmk: 'An internal Error has occurred, Please get in touch with client.support@delhivery.com',
+      packages: [
+        {
+          waybill: '',
+          refnum: 'SH-2026-08-000010',
+          status: 'Fail',
+          serviceable: true,
+          err_code: 'ER0005',
+          remarks: ['Crashing while saving package due to exception suspicious order/consignee.'],
+        },
+      ],
+    });
+    const r = await svc.generateAwb(awbReq());
+    expect(r.ok).toBe(false);
+    expect(r.errorMessage).toContain('suspicious order/consignee');
+    expect(r.errorMessage).toContain('ER0005');
+    expect(r.errorMessage).not.toContain('internal Error has occurred');
+  });
+
+  it('falls back to rmk when the refusal carries no package at all', async () => {
+    // An envelope-level rejection (auth, malformed body) has no
+    // packages array, and there `rmk` is the only thing that says
+    // anything — so it stays as the fallback rather than being dropped.
+    const { svc, request } = makeServiceWithPickup('Skydrop-CCU-01');
+    request.mockResolvedValueOnce({ success: false, rmk: 'Invalid token' });
+    const r = await svc.generateAwb(awbReq());
+    expect(r.errorMessage).toBe('Invalid token');
+  });
+
   it('maps a transport error to ok:false serviceable:true (CUR-2 retryable)', async () => {
     const { svc, request } = makeServiceWithPickup('Skydrop-CCU-01');
     request.mockRejectedValueOnce(new Error('socket hang up'));

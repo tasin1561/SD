@@ -38,8 +38,10 @@ import type {
  * Response success: `{ success: true, packages: [{ waybill, refnum, ... }] }`
  * Response failure: `{ success: false, rmk: "ServiceableArea: ...", ... }`
  *
- * Wire-format unverified against the live sandbox; the sandbox-smoke
- * will surface any field-name drift as a normal HTTP error in the log.
+ * Shape CONFIRMED against the production API on 2026-08-21, from a
+ * refused create: the envelope carries `success`, `rmk` and
+ * `upload_wbn`; each package carries `waybill`, `refnum`, `status`,
+ * `serviceable`, `sort_code`, `err_code` and `remarks`.
  */
 
 interface DelhiveryCreatePackage {
@@ -47,6 +49,14 @@ interface DelhiveryCreatePackage {
   refnum?: string;
   status?: string;
   remarks?: string[];
+  /**
+   * Their machine-readable refusal code, e.g. `ER0005` alongside
+   * "suspicious order/consignee". Captured because the prose in
+   * `remarks` is theirs to reword and this is not.
+   */
+  err_code?: string;
+  serviceable?: boolean;
+  sort_code?: string;
   pdf_download_link?: string;
 }
 
@@ -408,9 +418,31 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
         labelUrl: pkg.pdf_download_link ?? null,
       };
     }
+    // PER-PACKAGE FIRST, and it is not a style preference.
+    //
+    // Delhivery answers a refused create with BOTH an envelope `rmk` and
+    // a per-package `remarks`. The envelope one is always the same
+    // sentence — "An internal Error has occurred, Please get in touch
+    // with client.support@delhivery.com" — regardless of what was
+    // actually wrong. The per-package one is the answer: "suspicious
+    // order/consignee", "pincode not serviceable", and so on, with an
+    // `err_code` beside it.
+    //
+    // This read `rmk || remarks`, so the boilerplate always won and the
+    // reason was computed and thrown away. That cost five live attempts
+    // against a real courier account during the go-live test, each one
+    // re-theorising a payload that was never the problem, because the
+    // log said only "An internal Error has occurred". The real reason
+    // was sitting in the same response the whole time.
+    //
+    // `rmk` is kept as the fallback for a refusal that carries no
+    // package at all (an envelope-level auth or format rejection),
+    // which is the one case where it says something specific.
     const rmk = (response.rmk ?? '').toString();
     const remarks = (pkg?.remarks ?? []).join(' | ');
-    const message = rmk || remarks || 'Delhivery did not return a waybill';
+    const errCode = (pkg?.err_code ?? '').toString();
+    const detail = remarks === '' ? '' : errCode === '' ? remarks : `[${errCode}] ${remarks}`;
+    const message = detail || rmk || 'Delhivery did not return a waybill';
     const isNonServiceable = /serviceab|non-?serviceab|service not avail|pincode.*not.*serv/i.test(
       message,
     );
