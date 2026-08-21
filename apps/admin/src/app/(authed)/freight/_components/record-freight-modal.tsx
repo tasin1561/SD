@@ -189,6 +189,13 @@ export function RecordFreightModal({
           {maySeeConsignments ? (
             <Select
               id="freight-arrival"
+              /* max-w-none: `.sd-field` caps a control at 32rem so a
+                 full-width card cannot produce an absurd input. That cap
+                 lives in Tailwind's `base` layer precisely so a call site
+                 can beat it when a control needs the room — and this one
+                 sits above a full-width pricing table in an xl modal,
+                 where a half-width select reads as unfinished. */
+              className="max-w-none"
               value={goodsReceiptId}
               onChange={(e) => setGoodsReceiptId(e.target.value)}
             >
@@ -205,6 +212,7 @@ export function RecordFreightModal({
           ) : (
             <Input
               id="freight-arrival"
+              className="max-w-none"
               value={goodsReceiptId}
               onChange={(e) => setGoodsReceiptId(e.target.value)}
               placeholder="0198f3c2-…"
@@ -336,7 +344,12 @@ export function RecordFreightModal({
           htmlFor="freight-mode"
           hint="Leave on the seller's default unless this consignment is an exception."
         >
-          <Select id="freight-mode" value={mode} onChange={(e) => setMode(e.target.value)}>
+          <Select
+            id="freight-mode"
+            className="max-w-none"
+            value={mode}
+            onChange={(e) => setMode(e.target.value)}
+          >
             <option value="">Use the seller&apos;s configured mode</option>
             <option value={InboundFreightMode.PAY_NOW}>Pay now — debit the wallet on record</option>
             <option value={InboundFreightMode.PAY_LATER}>Pay later — leave a receivable</option>
@@ -346,6 +359,7 @@ export function RecordFreightModal({
         <FormField label="Note" htmlFor="freight-note" hint="Optional.">
           <Textarea
             id="freight-note"
+            className="max-w-none"
             rows={2}
             value={note}
             onChange={(e) => setNote(e.target.value)}
