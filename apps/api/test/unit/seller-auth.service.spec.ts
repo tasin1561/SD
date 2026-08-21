@@ -5,6 +5,7 @@ import { PasswordService } from '../../src/modules/auth-common/services/password
 import { JwtService } from '../../src/modules/auth-common/services/jwt.service';
 import { TokenHashService } from '../../src/modules/auth-common/services/token-hash.service';
 import { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
+import type { FxRateService } from '../../src/modules/fx/services/fx-rate.service';
 import { RefreshTokenService } from '../../src/modules/auth-common/services/refresh-token.service';
 import type { EnvService } from '../../src/config/env.service';
 import { makeTestEnv } from '../helpers/env';
@@ -504,6 +505,12 @@ function makeSut(): Sut {
     email,
     onboarding,
     notificationPreferences,
+    // Sign-in must not depend on the FX table having a row: a rate that
+    // cannot be resolved is a display inconvenience, never a reason a
+    // seller cannot reach their account. Throwing here proves it.
+    {
+      getRate: jest.fn().mockRejectedValue(new Error('FX_RATE_NOT_FOUND')),
+    } as unknown as FxRateService,
   );
   return { svc, client, enqueueMock, password, hashes };
 }

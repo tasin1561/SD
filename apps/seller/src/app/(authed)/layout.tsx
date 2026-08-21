@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import type { ReactNode, ReactElement } from 'react';
 import { resolveSellerSsrIdentity } from '@skydrop/auth/server';
 import { AuthProvider } from '@skydrop/auth/client';
+import { MoneyDisplayProvider } from '@skydrop/ui/components';
 import type { SellerMe } from '@skydrop/api-client';
 import { QueryProvider } from '@/components/query-provider';
 import { apiOrigin } from '@/lib/api-origin';
@@ -57,13 +58,28 @@ export default async function AuthedLayout({
   return (
     <QueryProvider>
       <AuthProvider<SellerMe> identityKind="seller" initialIdentity={identity}>
-        <AuthedShell identity={identity}>
-          {/* Cosmetic permission gating (FE-2) — the API refuses the
+        {/* Every figure in the app is rendered in the money this seller
+            thinks in. INR stays canonical everywhere it is STORED and
+            everywhere it is TYPED — this turns the display over, and
+            only the display. A null rate keeps rupees, because a wrong
+            rate is worse than the wrong currency.
+
+            Mounted here, from the SSR-resolved identity, so the app
+            never paints rupees and then flips them to taka. */}
+        <MoneyDisplayProvider
+          value={{
+            currency: identity.displayCurrency === 'BDT' ? 'BDT' : 'INR',
+            rate: identity.displayFxRate,
+          }}
+        >
+          <AuthedShell identity={identity}>
+            {/* Cosmetic permission gating (FE-2) — the API refuses the
               requests regardless; this stops somebody being shown a
               page they cannot use. Wraps the whole tree so no page can
               be forgotten. */}
-          <RoleBoundary permissions={identity.permissions}>{children}</RoleBoundary>
-        </AuthedShell>
+            <RoleBoundary permissions={identity.permissions}>{children}</RoleBoundary>
+          </AuthedShell>
+        </MoneyDisplayProvider>
       </AuthProvider>
     </QueryProvider>
   );

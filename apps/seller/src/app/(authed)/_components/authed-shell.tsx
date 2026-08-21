@@ -133,6 +133,17 @@ export function AuthedShell({
         }}
         signingOut={loggingOut}
       >
+        {/* Said ONCE, not on every figure. When the whole app is in
+            taka, marking each amount as converted is noise; what a
+            reader needs is to know the ground they are standing on and
+            the rate it was worked out at. */}
+        {identity.displayCurrency === 'BDT' && identity.displayFxRate !== null && (
+          <p className="text-text-muted border-border bg-surface-raised mb-4 rounded-lg border px-3 py-2 text-xs">
+            Amounts are shown in taka, converted from rupees at ₹1 = ৳
+            {Number(identity.displayFxRate).toFixed(2)}. Your account is kept in rupees — payout
+            requests are made in rupees.
+          </p>
+        )}
         {children}
       </AppShell>
     </Toaster>

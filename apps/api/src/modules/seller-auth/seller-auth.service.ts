@@ -25,6 +25,7 @@ import {
   type IssuedRefresh,
 } from '../auth-common/services/refresh-token.service';
 import { AuditLogService } from '../auth-common/services/audit-log.service';
+import { FxRateService } from '../fx/services/fx-rate.service';
 import { EmailQueue } from '../email/queue/email.queue';
 import { SellerOnboardingService } from '../seller-onboarding/services/seller-onboarding.service';
 import { SellerNotificationPreferenceService } from '../seller-notification-preference/services/seller-notification-preference.service';
@@ -82,6 +83,7 @@ export interface SellerMe {
   status: SellerStatus;
   approvedAt: Date | null;
   displayCurrency: Currency;
+  displayFxRate: string | null;
   displayLanguage: string;
   countryCode: string;
   emailVerifiedAt: Date | null;
@@ -110,7 +112,26 @@ export class SellerAuthService {
     private readonly email: EmailQueue,
     private readonly onboarding: SellerOnboardingService,
     private readonly notificationPreferences: SellerNotificationPreferenceService,
+    private readonly fx: FxRateService,
   ) {}
+
+  /**
+   * Rupees to the seller's display currency.
+   *
+   * Never throws: a missing rate returns null and the app keeps showing
+   * rupees. Sign-in must not depend on the FX table having a row — an
+   * unresolvable rate is a display inconvenience, not a reason a seller
+   * cannot reach their account.
+   */
+  private async resolveDisplayFxRate(display: Currency): Promise<string | null> {
+    if (display === Currency.INR) return null;
+    try {
+      const rate = await this.fx.getRate(Currency.INR, display);
+      return rate.toString();
+    } catch {
+      return null;
+    }
+  }
 
   // ---------- REGISTER VIA INVITATION ----------
 
@@ -943,6 +964,18 @@ export class SellerAuthService {
       status: user.seller.status,
       approvedAt: user.seller.approvedAt,
       displayCurrency: user.seller.displayCurrency,
+      /**
+       * Rupees to the seller's display currency, so the app can show
+       * every figure in the money they think in. Null when they already
+       * work in rupees, or when no rate exists — and null means "keep
+       * showing rupees", because a wrong rate is worse than the wrong
+       * currency.
+       *
+       * Carried on /me rather than fetched per page: the identity is
+       * already resolved server-side before first paint, so the app
+       * never renders rupees and then flips them to taka.
+       */
+      displayFxRate: await this.resolveDisplayFxRate(user.seller.displayCurrency),
       displayLanguage: user.seller.displayLanguage,
       countryCode: user.seller.countryCode,
       emailVerifiedAt: user.emailVerifiedAt,

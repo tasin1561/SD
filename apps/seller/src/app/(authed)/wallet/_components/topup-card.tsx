@@ -241,7 +241,15 @@ export function TopupCard(): ReactElement | null {
               </div>
             )}
 
-            <FormField label="Amount" required>
+            {/* The amount is in the currency of the account they are
+                wiring TO — that is the number on their bank transfer.
+                Naming it stops a seller typing rupees against a taka
+                account. We convert it to rupees when we credit it. */}
+            <FormField
+              label={`Amount (${selectedBank?.currency === 'BDT' ? '৳' : '₹'})`}
+              hint="What you are transferring, in the currency of the account above."
+              required
+            >
               <Input
                 inputMode="decimal"
                 value={amount}

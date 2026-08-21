@@ -1,5 +1,50 @@
-import type { ReactElement } from 'react';
+'use client';
+
+import { createContext, useContext, type ReactElement, type ReactNode } from 'react';
 import clsx from 'clsx';
+
+/**
+ * What currency money should be SHOWN in, and at what rate.
+ *
+ * INR is canonical — every amount the system stores and every string
+ * that reaches a component is rupees. A seller who works in taka should
+ * not have to convert in their head, so this turns the whole app's
+ * figures over at once rather than asking ~90 call sites to opt in.
+ *
+ * Deliberately a CONTEXT rather than a prop: a display preference is
+ * ambient, and threading it through every table cell is how half of
+ * them end up still showing rupees.
+ *
+ * No provider (admin, marketing, tests) means no conversion. Admin is
+ * an operational console reading a canonical ledger; showing an operator
+ * a converted figure would put them and the seller on different numbers
+ * during the same phone call.
+ */
+export interface MoneyDisplay {
+  readonly currency: 'INR' | 'BDT';
+  /**
+   * Rupees to `currency`. Null means we could not resolve one, and the
+   * only honest response is to keep showing rupees — a wrong rate is
+   * worse than the wrong currency.
+   */
+  readonly rate: string | null;
+}
+
+const MoneyDisplayContext = createContext<MoneyDisplay>({ currency: 'INR', rate: null });
+
+export function MoneyDisplayProvider({
+  value,
+  children,
+}: {
+  readonly value: MoneyDisplay;
+  readonly children: ReactNode;
+}): ReactElement {
+  return <MoneyDisplayContext.Provider value={value}>{children}</MoneyDisplayContext.Provider>;
+}
+
+export function useMoneyDisplay(): MoneyDisplay {
+  return useContext(MoneyDisplayContext);
+}
 
 export type MoneyDirection = 'credit' | 'debit' | 'neutral';
 
@@ -12,7 +57,7 @@ export type MoneyDirection = 'credit' | 'debit' | 'neutral';
  * it wrong is the kind of detail that quietly signals "built by someone
  * who does not operate in this market".
  */
-function formatInr(value: string | number, opts: { decimals: boolean }): string {
+function formatAmount(value: string | number, opts: { decimals: boolean }): string {
   const n = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(n)) return String(value);
   return new Intl.NumberFormat('en-IN', {
@@ -57,7 +102,22 @@ export function Money({
   size = 'sm',
   className,
 }: MoneyProps): ReactElement {
-  const n = typeof amount === 'number' ? amount : Number(amount);
+  const display = useMoneyDisplay();
+
+  /**
+   * Convert only when the caller handed us the canonical currency and
+   * the display asks for a different one at a rate we actually have.
+   *
+   * A component that explicitly says `currency="BDT"` is stating a fact
+   * about that figure (the taka we wired), not asking to be converted —
+   * converting it again would multiply by the rate twice.
+   */
+  const convert = currency === 'INR' && display.currency !== 'INR' && display.rate !== null;
+  const shownCurrency = convert ? display.currency : currency;
+  const rawN = typeof amount === 'number' ? amount : Number(amount);
+  const shown = convert && Number.isFinite(rawN) ? rawN * Number(display.rate) : amount;
+
+  const n = typeof shown === 'number' ? shown : Number(shown);
   const negative = Number.isFinite(n) && n < 0;
   // An explicit direction wins; otherwise a negative number is a debit.
   const effective: MoneyDirection =
@@ -81,11 +141,11 @@ export function Money({
       // reads as a number, "debit ₹1,200" reads as a fact.
       aria-label={`${
         effective === 'credit' ? 'credit' : effective === 'debit' ? 'debit' : ''
-      } ${formatInr(amount, { decimals })} ${currency}`.trim()}
+      } ${formatAmount(shown, { decimals })} ${shownCurrency}`.trim()}
     >
       {sign}
-      {SYMBOL[currency]}
-      {formatInr(amount, { decimals })}
+      {SYMBOL[shownCurrency]}
+      {formatAmount(shown, { decimals })}
     </span>
   );
 }

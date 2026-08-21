@@ -69,6 +69,14 @@ export interface SellerMe {
   readonly status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
   readonly approvedAt: string | null;
   readonly displayCurrency: string;
+  /**
+   * Rupees to `displayCurrency`, so every figure in the app can be shown
+   * in the money this seller thinks in. Null when they already work in
+   * rupees, or when no rate could be resolved — and null means KEEP
+   * SHOWING RUPEES, because a wrong rate is worse than the wrong
+   * currency.
+   */
+  readonly displayFxRate: string | null;
   readonly displayLanguage: string;
   readonly countryCode: string;
   readonly emailVerifiedAt: string | null;

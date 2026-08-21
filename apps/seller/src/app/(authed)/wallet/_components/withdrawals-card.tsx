@@ -12,7 +12,6 @@ import {
   Modal,
   ModalFooter,
   Money,
-  Select,
   SkeletonRows,
   TBody,
   Table,
@@ -122,7 +121,9 @@ function RequestWithdrawalModal({
   const toast = useToast();
   const request = useRequestWithdrawal();
 
-  const [currency, setCurrency] = useState('INR');
+  // Fixed: every wallet entry is INR (see the wallet's own note), so a
+  // payout is requested against the rupee balance.
+  const currency = 'INR';
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -156,17 +157,14 @@ function RequestWithdrawalModal({
       description="We will review this and transfer to the bank account on your profile. Your balance changes when the transfer is recorded, not when you request it."
     >
       <div className="space-y-3">
-        <FormField label="Currency" htmlFor="wd-currency" required>
-          <Select id="wd-currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>
-            <option value="INR">INR</option>
-            <option value="BDT">BDT</option>
-          </Select>
-        </FormField>
-
+        {/* No currency choice: the wallet is kept in rupees, and taka is
+            a conversion of that balance rather than a second pot. The
+            option was always going to be refused — there is nothing to
+            withdraw from a currency nothing is ever credited in. */}
         <FormField
-          label="Amount"
+          label="Amount (₹)"
           htmlFor="wd-amount"
-          hint="Cannot exceed your available balance in that currency."
+          hint="In rupees, whatever currency the page shows figures in — this is the number we pay out against your balance, so it is not converted for you."
           required
         >
           <Input
