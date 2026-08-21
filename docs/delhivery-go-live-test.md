@@ -341,3 +341,61 @@ remaining rate budget before trying again.
 first, diagnose second. The guard is the emergency stop, and every blocked
 attempt while it is off writes a HIGH audit row — so you will be able to see
 exactly what tried to fire.
+
+---
+
+## Attempt log — 2026-08-21 (five refusals, one cause)
+
+Five live creates were made against the production account. All five
+failed identically, and **none of the payload theories was ever right.**
+
+What the log said, every time:
+
+> `DELHIVERY_CREATE_FAILED` — "An internal Error has occurred, Please get
+> in touch with client.support@delhivery.com"
+
+What Delhivery actually said, in the same response body:
+
+> `err_code: ER0005`
+> `remarks: ["Crashing while saving package due to exception suspicious
+> order/consignee. Package might have been partially saved."]`
+
+**It is a fraud heuristic on the CONSIGNEE, not a payload defect.** The
+test order was addressed to `MSt Delhivery go-live test` on phone
+`9876543210` — the canonical fake Indian number. Their filter refused
+the consignee; the envelope never mentioned it.
+
+The reason was invisible because `parseCreateResponse` read
+`rmk || remarks`, and `rmk` is that same boilerplate for every kind of
+refusal. Fixed — per-package remarks now win, prefixed with `err_code`.
+**If a future create fails, the log now carries their words.**
+
+### Eliminated along the way (each cost a live attempt)
+
+| Theory | Verdict |
+|---|---|
+| Pickup location wrong | No — `MSEXPORT` resolves, `client: 3cf165-MSEXPORTS-do` |
+| Empty `city`/`state` | No — optional in their spec, and we fill from serviceability |
+| `+91` phone prefix | Was genuinely wrong, fixed, insufficient alone |
+| Content-type urlencoded vs json | No — byte-identical responses |
+| Missing optional keys | No — added, insufficient alone |
+| Pooled pre-allocated waybill | No — `waybill: ""` behaves the same |
+| Declared value ≫ COD (₹1050 vs ₹10) | No — matched them, same refusal |
+
+### Two real bugs the test found
+
+1. **The courier audit trail had never written.** Ten sites passed
+   `entityId: 'delhivery'` into a UUID column; `AuditLogService.log`
+   swallows its own failures, so every courier decrypt went unaudited
+   and nothing complained. CUR-1 was not being honoured in production.
+2. **`products_desc` joined multi-item orders with `"; "`**, and `;` is
+   on Delhivery's rejected-character list. Single-item orders were fine,
+   which is why this test never hit it — every two-item order would have
+   failed with the same nameless error.
+
+### Blocked on
+
+A **real Indian phone number we control** for the consignee. Inventing
+one points a courier's confirmation call at a stranger. Until then the
+first successful write has not been made and
+`courier.delhivery_live_writes_enabled` should be **OFF**.
