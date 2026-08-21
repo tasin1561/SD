@@ -183,7 +183,9 @@ describe('DelhiveryAwbService.generateAwb — real mode', () => {
       ],
     });
     const r = await svc.generateAwb(awbReq());
-    expect(r.ok).toBe(false);
+    // Narrowing, not decoration: DelhiveryAwbResult is a discriminated
+    // union and `errorMessage` only exists on the refusal arm.
+    if (r.ok) throw new Error('expected Delhivery to refuse this create');
     expect(r.errorMessage).toContain('suspicious order/consignee');
     expect(r.errorMessage).toContain('ER0005');
     expect(r.errorMessage).not.toContain('internal Error has occurred');
@@ -196,6 +198,7 @@ describe('DelhiveryAwbService.generateAwb — real mode', () => {
     const { svc, request } = makeServiceWithPickup('Skydrop-CCU-01');
     request.mockResolvedValueOnce({ success: false, rmk: 'Invalid token' });
     const r = await svc.generateAwb(awbReq());
+    if (r.ok) throw new Error('expected Delhivery to refuse this create');
     expect(r.errorMessage).toBe('Invalid token');
   });
 
