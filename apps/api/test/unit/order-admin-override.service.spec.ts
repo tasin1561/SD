@@ -12,6 +12,7 @@ function makeService(
   opts: {
     order?: AnyArgs | null;
     reserveThrows?: boolean;
+    shipmentsMatched?: number;
     active?: Array<{ id: string; orderItemId: string; qtyReserved: number }>;
   } = {},
 ) {
@@ -27,7 +28,13 @@ function makeService(
       : opts.order;
 
   const orderUpdate = jest.fn(async (a: { data: AnyArgs }) => ({ id: 'o1', ...a.data }));
-  const txClient = { order: { update: orderUpdate } };
+  const shipmentUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async () => ({
+    count: opts.shipmentsMatched ?? 1,
+  }));
+  const txClient = {
+    order: { update: orderUpdate },
+    shipment: { updateMany: shipmentUpdateMany },
+  };
   const orderFindFirst = jest.fn(async () => order);
   const systemSettingFindUnique = jest.fn(async () => ({ valueString: 'wh-1' }));
 
@@ -70,6 +77,7 @@ function makeService(
   return {
     svc,
     orderUpdate,
+    shipmentUpdateMany,
     orderFindFirst,
     events,
     audit,
@@ -233,5 +241,94 @@ describe('OrderAdminOverrideService.releaseReservations', () => {
     await expect(
       svc.releaseReservations({ orderId: 'gone', actorStaffId: 'staff-1' }),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('forceMutate — recipient changes reach the shipment snapshot', () => {
+  it('syncs the dest* snapshot of a live shipment, in the same tx', async () => {
+    const { svc, shipmentUpdateMany } = makeService();
+    const r = await svc.forceMutate({
+      orderId: 'o1',
+      reason: LONG_REASON,
+      acknowledgeDataIntegrityRisk: true,
+      fieldChanges: { recipientPhoneE164: '+919860028043', recipientName: 'Rahul Sharma' },
+      actorStaffId: 'st1',
+    });
+    expect(r.shipmentsSynced).toBe(1);
+    expect(shipmentUpdateMany).toHaveBeenCalledTimes(1);
+    const call = shipmentUpdateMany.mock.calls[0]?.[0] as unknown as {
+      where: AnyArgs;
+      data: AnyArgs;
+    };
+    expect(call.data).toEqual({
+      destRecipientPhoneE164: '+919860028043',
+      destRecipientName: 'Rahul Sharma',
+    });
+  });
+
+  it('GUARDS on the three conditions that mean nobody has been told yet', async () => {
+    // The whole safety of this propagation is the WHERE clause, not a
+    // prior read — so it is asserted directly. A shipment that gains an
+    // AWB concurrently simply stops matching.
+    const { svc, shipmentUpdateMany } = makeService();
+    await svc.forceMutate({
+      orderId: 'o1',
+      reason: LONG_REASON,
+      acknowledgeDataIntegrityRisk: true,
+      fieldChanges: { recipientPhoneE164: '+919860028043' },
+      actorStaffId: 'st1',
+    });
+    const call = shipmentUpdateMany.mock.calls[0]?.[0] as unknown as { where: AnyArgs };
+    expect(call.where).toMatchObject({
+      status: 'CREATED',
+      awbNumber: null,
+      supersededAt: null,
+      deletedAt: null,
+      orderShipments: { some: { orderId: 'o1' } },
+    });
+  });
+
+  it('does NOT touch shipments when no recipient field changed', async () => {
+    // A COD-amount correction has nothing to do with the destination;
+    // firing an updateMany for it would bump updatedAt on a parcel
+    // nobody edited.
+    const { svc, shipmentUpdateMany } = makeService();
+    const r = await svc.forceMutate({
+      orderId: 'o1',
+      reason: LONG_REASON,
+      acknowledgeDataIntegrityRisk: true,
+      fieldChanges: { codAmountInr: 250 },
+      actorStaffId: 'st1',
+    });
+    expect(shipmentUpdateMany).not.toHaveBeenCalled();
+    expect(r.shipmentsSynced).toBe(0);
+  });
+
+  it('reports 0 rather than failing when the parcel already has an AWB', async () => {
+    // Zero is the CORRECT answer once a courier holds the address, and
+    // it is the signal that the correction now belongs at courier-ops'
+    // edit endpoint. It must be visible, not swallowed.
+    const { svc } = makeService({ shipmentsMatched: 0 });
+    const r = await svc.forceMutate({
+      orderId: 'o1',
+      reason: LONG_REASON,
+      acknowledgeDataIntegrityRisk: true,
+      fieldChanges: { recipientPhoneE164: '+919860028043' },
+      actorStaffId: 'st1',
+    });
+    expect(r.shipmentsSynced).toBe(0);
+  });
+
+  it('records the sync count on the audit row', async () => {
+    const { svc, audit } = makeService();
+    await svc.forceMutate({
+      orderId: 'o1',
+      reason: LONG_REASON,
+      acknowledgeDataIntegrityRisk: true,
+      fieldChanges: { recipientCity: 'Kolkata' },
+      actorStaffId: 'st1',
+    });
+    const entry = audit.log.mock.calls[0]?.[0] as unknown as { changes: AnyArgs };
+    expect(entry.changes).toMatchObject({ shipmentsSynced: 1 });
   });
 });

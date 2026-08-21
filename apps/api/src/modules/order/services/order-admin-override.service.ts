@@ -5,7 +5,13 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, OrderStatus, Prisma, ReservationReleaseReason } from '@skydrop/db';
+import {
+  ActorType,
+  OrderStatus,
+  Prisma,
+  ReservationReleaseReason,
+  ShipmentStatus,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { StockReservationService } from '../../inventory-stock/services/stock-reservation.service';
@@ -19,6 +25,24 @@ const MIN_REASON_LEN = 30;
 /** The ONLY god-mode-mutable scalar columns. Identity / system-managed
  *  fields are absent by construction (see ForceMutationFieldsDto). */
 const DECIMAL_FIELDS = new Set(['codAmountInr', 'declaredValueInr']);
+
+/**
+ * Order recipient field -> the shipment destination column that mirrors
+ * it. `recipientEmail` and `recipientAltPhoneE164` are absent on
+ * purpose: the shipment snapshot does not carry them, so there is
+ * nothing to keep in step.
+ */
+const RECIPIENT_TO_DEST: Readonly<Record<string, string>> = {
+  recipientName: 'destRecipientName',
+  recipientPhoneE164: 'destRecipientPhoneE164',
+  recipientAddressLine1: 'destAddressLine1',
+  recipientAddressLine2: 'destAddressLine2',
+  recipientLandmark: 'destLandmark',
+  recipientCity: 'destCity',
+  recipientStateProvince: 'destStateProvince',
+  recipientPostalCode: 'destPostalCode',
+  recipientCountryCode: 'destCountryCode',
+};
 
 const CANCEL_FAMILY: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.CANCELLED,
@@ -49,6 +73,14 @@ export interface ForceMutateResult {
   status: OrderStatus;
   hasAdminOverride: true;
   fieldChangesApplied: string[];
+  /**
+   * How many live shipments had their destination snapshot brought in
+   * step with the corrected recipient. Surfaced rather than silent: 0
+   * on an order whose parcel already carries an AWB is the correct
+   * answer AND the signal that the courier's copy still needs fixing
+   * through `courier-ops`' edit endpoint.
+   */
+  shipmentsSynced: number;
   reserveOutcomes: ReserveAttemptOutcome[] | null;
 }
 
@@ -144,9 +176,27 @@ export class OrderAdminOverrideService {
     }
 
     const { data, applied } = this.buildUpdate(input.fieldChanges, input.targetStatus);
+    const destData = this.buildShipmentDestUpdate(input.fieldChanges);
 
+    let shipmentsSynced = 0;
     await this.prisma.client.$transaction(async (tx) => {
       await tx.order.update({ where: { id: order.id }, data });
+
+      // Same tx as the order write: a corrected recipient and the copy
+      // the courier is handed must not be able to disagree.
+      if (destData !== null) {
+        const synced = await tx.shipment.updateMany({
+          where: {
+            orderShipments: { some: { orderId: order.id } },
+            status: ShipmentStatus.CREATED,
+            awbNumber: null,
+            supersededAt: null,
+            deletedAt: null,
+          },
+          data: destData,
+        });
+        shipmentsSynced = synced.count;
+      }
 
       await this.events.adminAction(tx, {
         orderId: order.id,
@@ -157,6 +207,7 @@ export class OrderAdminOverrideService {
         actorId: input.actorStaffId,
         data: {
           fieldChangesApplied: applied,
+          shipmentsSynced,
           targetStatus: input.targetStatus ?? null,
           reserveOutcomes,
           ipAddress: input.ctx?.ipAddress ?? null,
@@ -175,7 +226,12 @@ export class OrderAdminOverrideService {
           entityType: 'order',
           entityId: order.id,
           severity: 'CRITICAL',
-          changes: { fieldChangesApplied: applied, fromStatus: from, toStatus: to },
+          changes: {
+            fieldChangesApplied: applied,
+            shipmentsSynced,
+            fromStatus: from,
+            toStatus: to,
+          },
           metadata: {
             orderNumber: order.orderNumber,
             reason: input.reason.trim(),
@@ -195,6 +251,7 @@ export class OrderAdminOverrideService {
       status: to,
       hasAdminOverride: true,
       fieldChangesApplied: applied,
+      shipmentsSynced,
       reserveOutcomes,
     };
   }
@@ -307,6 +364,48 @@ export class OrderAdminOverrideService {
       }
     }
     return outcomes;
+  }
+
+  /**
+   * God mode can correct a genuinely wrong recipient on the ORDER. The
+   * courier is handed the SHIPMENT's `dest*` snapshot, and nothing
+   * propagated the correction to it: `provisionFromSnapshot` fires only
+   * on entry to CONFIRMED and no-ops while a live shipment exists, and
+   * `AwbSupersedeService` copies the destination from the OLD shipment,
+   * so every replacement inherited the stale values indefinitely. The
+   * admin fixed a mistyped phone, saw no error, and the parcel still
+   * shipped to the wrong number.
+   *
+   * The snapshot's immutability is right (ORD-6 / WMS-9) — its whole
+   * purpose is that a later edit cannot restate what was dispatched. So
+   * this is deliberately the NARROWEST propagation that closes the gap:
+   *
+   *   status CREATED  — not picked-into, not packed, not dispatched
+   *   awbNumber null  — no waybill exists, so no courier holds it
+   *   supersededAt null — not a retired shipment in a chain
+   *
+   * A shipment meeting all three has been communicated to NOBODY: no
+   * label printed, no manifest confirmed, no courier told. Its snapshot
+   * has made no external commitment yet, so correcting it restates
+   * nothing. The moment an AWB exists the courier holds the address and
+   * the correction belongs at `courier-ops`' edit endpoint instead,
+   * which is where it already lives.
+   *
+   * A guarded `updateMany`, never read-then-write: the three conditions
+   * are the WHERE, so a shipment that acquires an AWB concurrently is
+   * simply not matched rather than raced.
+   */
+  private buildShipmentDestUpdate(
+    fieldChanges: ForceMutationFieldsDto | undefined,
+  ): Prisma.ShipmentUpdateManyMutationInput | null {
+    if (!fieldChanges) return null;
+    const data: Record<string, unknown> = {};
+    for (const [orderField, destField] of Object.entries(RECIPIENT_TO_DEST)) {
+      const value = (fieldChanges as Record<string, unknown>)[orderField];
+      if (value === undefined) continue;
+      data[destField] = value;
+    }
+    return Object.keys(data).length === 0 ? null : (data as Prisma.ShipmentUpdateManyMutationInput);
   }
 
   private buildUpdate(

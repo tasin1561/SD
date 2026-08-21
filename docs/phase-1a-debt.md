@@ -1107,7 +1107,7 @@ done now because changing the live AWB path immediately before the
 first-parcel test is the wrong trade.
 **Pick up:** with MPS, which needs the pool anyway.
 
-## A god-moded recipient never reaches the shipment (2026-08-21, MEDIUM)
+## A god-moded recipient never reaches the shipment — FIXED 2026-08-21
 
 `OrderAdminOverrideService.forceMutate` can change `recipientName`,
 `recipientPhoneE164` and the whole address block on the order. The
@@ -1136,4 +1136,13 @@ told — so its snapshot has made no external commitment yet. Once an AWB
 exists the courier holds the address and the correction belongs at
 `courier-ops`' `edit` endpoint instead, which is where it already lives.
 
-Today's workaround is a fresh order.
+**FIXED.** `forceMutate` now propagates recipient `fieldChanges` to the
+shipment's `dest*` snapshot in the SAME transaction, via a guarded
+`updateMany` restricted to `status=CREATED AND awbNumber IS NULL AND
+supersededAt IS NULL` — a shipment nobody has been told about. The count
+is returned as `shipmentsSynced` and recorded on the audit row; `0` on
+a parcel that already carries an AWB is the correct answer and the
+signal that the correction belongs at `courier-ops`' edit endpoint
+instead. Five unit tests pin the mapping, the WHERE clause, the
+no-recipient-change case, the already-has-AWB case and the audit
+record.
