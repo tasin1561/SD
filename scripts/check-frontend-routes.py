@@ -273,6 +273,14 @@ EXPECTED_ORPHANS = {
     # Indian warehouse, and the pickup location is ours). The endpoints
     # are kept for the existing rows; nothing should call them.
     'seller/addresses',
+    # A RECOVERY endpoint, reached from an incident runbook rather than a
+    # screen. It puts a CUR-7 supersede replacement back on a DRAFT
+    # manifest — the shipment copies the original's pick/pack timestamps,
+    # so it is invisible to both warehouse queues and this is its only
+    # door. Found stranded during the first live Delhivery write, which
+    # is exactly the situation where somebody is already in a terminal.
+    # A screen for it is worth building the day a second one strands.
+    'admin/warehouse/shipments/:shipmentId/attach',
     # Superseded, not missing: GET /admin/courier-escalation/channel
     # already returns the same OpsQueueCounts, and the console reads it
     # from there. A second caller for the same five numbers would be a
