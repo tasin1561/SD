@@ -196,6 +196,26 @@ export function useSellerWithdrawals(): UseQueryResult<readonly WithdrawalReques
   });
 }
 
+export interface WithdrawalEligibility {
+  readonly withdrawableInr: string;
+  readonly balanceInr: string;
+  readonly minimumBalanceInr: string;
+  readonly hasBankAccount: boolean;
+}
+
+/**
+ * What the payout form needs before a seller starts typing: how much
+ * they can actually take, and whether we have anywhere to send it.
+ */
+export function useWithdrawalEligibility(): UseQueryResult<WithdrawalEligibility> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-withdrawals', 'eligibility'],
+    queryFn: () =>
+      client.request<WithdrawalEligibility>('/api/seller/wallet/withdrawal-requests/eligibility'),
+  });
+}
+
 export function useRequestWithdrawal(): UseMutationResult<
   WithdrawalRequestView,
   Error,

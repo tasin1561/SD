@@ -93,7 +93,7 @@ export default function WalletPage(): ReactElement {
                 setTopupOpen(true);
               }}
             >
-              Record a top-up
+              Top-up wallet
             </Button>
           )}
           {mayWithdraw && (

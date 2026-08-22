@@ -91,6 +91,37 @@ export class WithdrawalRequestService {
     return available.isNegative() ? new Prisma.Decimal(0) : available;
   }
 
+  /**
+   * What the seller needs to know BEFORE filling in the form: how much
+   * they can actually take, and whether we have anywhere to send it.
+   *
+   * Both facts come from the same places the guards read, so the form
+   * cannot promise something the server then refuses. It is still only a
+   * courtesy — `createInternal` re-checks each one inside the write
+   * transaction, because a balance read outside it is already stale
+   * (WAL-7).
+   */
+  async eligibility(sellerId: string): Promise<{
+    withdrawableInr: string;
+    balanceInr: string;
+    minimumBalanceInr: string;
+    hasBankAccount: boolean;
+  }> {
+    const balance = await this.wallet.balanceLive(sellerId, Currency.INR);
+    const withdrawable = await this.withdrawableBalance(sellerId, Currency.INR, balance);
+    const floor = await this.settings.resolve(sellerId, MIN_BALANCE_KEY);
+    const seller = await this.prisma.client.seller.findUnique({
+      where: { id: sellerId },
+      select: { bankAccountNumber: true },
+    });
+    return {
+      withdrawableInr: withdrawable.toFixed(2),
+      balanceInr: balance.toFixed(2),
+      minimumBalanceInr: new Prisma.Decimal(String(floor.value ?? 0)).toFixed(2),
+      hasBankAccount: seller?.bankAccountNumber != null && seller.bankAccountNumber.trim() !== '',
+    };
+  }
+
   async create(
     sellerId: string,
     requestedByUserId: string,
@@ -183,6 +214,31 @@ export class WithdrawalRequestService {
         throw new ConflictException({
           code: 'WITHDRAWAL_MONTHLY_LIMIT_REACHED',
           message: `Already submitted ${monthCount} withdrawal request(s) in the last 30 days (limit ${maxPerMonth.value})`,
+        });
+      }
+
+      // Somewhere to pay it TO.
+      //
+      // A payout request with no bank details on file is a promise
+      // nobody can keep: an operator picks it up, has no account to wire
+      // to, and it sits in the queue while the seller waits. Refused
+      // here rather than only hidden in the UI — the server is the
+      // boundary (FE-2), and the nightly auto-sweep raises requests
+      // through this same path with no screen in front of it.
+      //
+      // The profile enforces bank details all-or-nothing, so the account
+      // number standing in for "has details" is exact rather than a
+      // sample: a seller cannot have saved it without the rest.
+      const seller = await tx.seller.findUnique({
+        where: { id: sellerId },
+        select: { bankAccountNumber: true },
+      });
+      if (seller?.bankAccountNumber == null || seller.bankAccountNumber.trim() === '') {
+        throw new BadRequestException({
+          code: 'NO_BANK_ACCOUNT_ON_FILE',
+          message:
+            'Add your bank details on your profile before requesting a payout — without them ' +
+            'there is nowhere for us to send the money.',
         });
       }
 

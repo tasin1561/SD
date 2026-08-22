@@ -34,6 +34,8 @@ function makeService(
     todayCount?: number;
     existingRequest?: AnyArgs | null;
     remittance?: AnyArgs | null;
+    /** null / '' ⇒ the seller has no bank details on file. */
+    bankAccountNumber?: string | null;
     /** Simulate another admin resolving the request first — the guarded
      *  claim then matches 0 rows. */
     claimLoses?: boolean;
@@ -80,9 +82,19 @@ function makeService(
   // itself is proven in wallet-concurrency.e2e-spec against a real
   // database rather than here.
   const executeRaw = jest.fn(async () => 1);
-  const txClient = { withdrawalRequest, $executeRaw: executeRaw };
+  // Somewhere to pay it to. The create path refuses a request from a
+  // seller with no bank details on file — an operator would pick it up,
+  // have no account to wire to, and it would sit in the queue while the
+  // seller waited.
+  const sellerFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () => ({
+    bankAccountNumber:
+      opts.bankAccountNumber === undefined ? '2303101640001' : opts.bankAccountNumber,
+  }));
+  const seller = { findUnique: sellerFindUnique };
+  const txClient = { withdrawalRequest, seller, $executeRaw: executeRaw };
   const client = {
     withdrawalRequest,
+    seller,
     remittance: { findUnique: remittanceFindUnique },
     $transaction: <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient),
   };
@@ -197,6 +209,25 @@ describe('WithdrawalRequestService.create', () => {
       svc.create('seller-1', 'user-1', { currency: Currency.INR, amount: '1000.00' }),
     ).rejects.toMatchObject({ response: { code: 'WITHDRAWAL_DAILY_LIMIT_REACHED' } });
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('refuses a seller with no bank details on file', async () => {
+    // A payout request with nowhere to send it is a promise nobody can
+    // keep. Refused on the SERVER, not merely hidden in the UI: the
+    // nightly auto-sweep raises requests through this same path with no
+    // screen in front of it.
+    const { svc, create } = makeService({ bankAccountNumber: null });
+    await expect(
+      svc.create('seller-1', 'user-1', { currency: Currency.INR, amount: '1000.00' }),
+    ).rejects.toMatchObject({ response: { code: 'NO_BANK_ACCOUNT_ON_FILE' } });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('treats a blank bank account as absent', async () => {
+    const { svc } = makeService({ bankAccountNumber: '   ' });
+    await expect(
+      svc.create('seller-1', 'user-1', { currency: Currency.INR, amount: '1000.00' }),
+    ).rejects.toMatchObject({ response: { code: 'NO_BANK_ACCOUNT_ON_FILE' } });
   });
 
   it('refuses when the wallet is short', async () => {

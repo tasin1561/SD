@@ -53,4 +53,14 @@ describe('Money — display currency', () => {
     expect(screen.getByText(/−/)).toBeInTheDocument();
     expect(screen.getByText(/10,00,000/)).toBeInTheDocument();
   });
+
+  it('honours convert={false} for a figure beside a rupee input', () => {
+    // "Available to withdraw" sits above a box that takes rupees. Showing
+    // it in taka would invite someone to type the converted number, and
+    // the request would be refused — or worse, quietly smaller than they
+    // meant.
+    inTaka(<Money amount="1000.00" convert={false} />);
+    expect(screen.getByText(/₹/)).toBeInTheDocument();
+    expect(screen.getByText(/1,000/)).toBeInTheDocument();
+  });
 });

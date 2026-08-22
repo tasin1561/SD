@@ -42,6 +42,21 @@ export class SellerWithdrawalRequestController {
     return this.svc.create(seller.id, seller.userId, body);
   }
 
+  @Get('eligibility')
+  @SellerAuthAllowSuspended()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'How much can be withdrawn, and whether bank details are on file',
+  })
+  eligibility(@CurrentSeller() seller: AuthenticatedSeller): Promise<{
+    withdrawableInr: string;
+    balanceInr: string;
+    minimumBalanceInr: string;
+    hasBankAccount: boolean;
+  }> {
+    return this.svc.eligibility(seller.id);
+  }
+
   @Get()
   @SellerAuthAllowSuspended()
   @HttpCode(HttpStatus.OK)

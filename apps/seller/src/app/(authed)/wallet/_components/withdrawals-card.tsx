@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useState, type ReactElement } from 'react';
 import {
   Button,
@@ -22,7 +24,11 @@ import {
   useToast,
   WithdrawalStatusBadge,
 } from '@skydrop/ui/components';
-import { useRequestWithdrawal, useSellerWithdrawals } from '@/lib/ops-hooks';
+import {
+  useRequestWithdrawal,
+  useSellerWithdrawals,
+  useWithdrawalEligibility,
+} from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /**
@@ -122,6 +128,7 @@ function RequestWithdrawalModal({
 }): ReactElement {
   const toast = useToast();
   const request = useRequestWithdrawal();
+  const eligibility = useWithdrawalEligibility();
 
   // Fixed: every wallet entry is INR (see the wallet's own note), so a
   // payout is requested against the rupee balance.
@@ -159,6 +166,46 @@ function RequestWithdrawalModal({
       description="We will review this and transfer to the bank account on your profile. Your balance changes when the transfer is recorded, not when you request it."
     >
       <div className="space-y-3">
+        {/* Without bank details there is nowhere to send the money, and
+            the request would sit in the queue while the seller waited.
+            The server refuses it either way (NO_BANK_ACCOUNT_ON_FILE);
+            this stops them filling in a form that cannot succeed, and
+            says where to go instead. */}
+        {eligibility.data?.hasBankAccount === false && (
+          <div className="border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] text-critical rounded-md border px-3 py-2 text-sm">
+            Add your bank details before requesting a payout — without them there is nowhere for us
+            to send the money.{' '}
+            <Link href="/profile" className="underline">
+              Go to your profile
+            </Link>
+            .
+          </div>
+        )}
+
+        {/* The number that matters: what can actually be taken, not the
+            balance. The two differ by the minimum this account must
+            leave behind, and a seller who does not know that reads a
+            refusal as a bug. */}
+        {eligibility.data !== undefined && (
+          <div className="border-border text-text-muted rounded-md border px-3 py-2 text-sm">
+            <div>
+              Available to withdraw:{' '}
+              <span className="text-text-bright">
+                <Money amount={eligibility.data.withdrawableInr} currency="INR" convert={false} />
+              </span>
+            </div>
+            {Number(eligibility.data.minimumBalanceInr) > 0 && (
+              <div className="text-text-faint mt-0.5 text-xs">
+                Your balance is{' '}
+                <Money amount={eligibility.data.balanceInr} currency="INR" convert={false} />, of
+                which{' '}
+                <Money amount={eligibility.data.minimumBalanceInr} currency="INR" convert={false} />{' '}
+                must stay in the account.
+              </div>
+            )}
+          </div>
+        )}
+
         {/* No currency choice: the wallet is kept in rupees, and taka is
             a conversion of that balance rather than a second pot. The
             option was always going to be refused — there is nothing to
@@ -192,7 +239,9 @@ function RequestWithdrawalModal({
         <Button
           variant="primary"
           size="md"
-          disabled={amount.trim() === '' || request.isPending}
+          disabled={
+            amount.trim() === '' || request.isPending || eligibility.data?.hasBankAccount === false
+          }
           onClick={() => void submit()}
         >
           {request.isPending ? 'Requesting…' : 'Request payout'}

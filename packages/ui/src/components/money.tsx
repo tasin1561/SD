@@ -77,6 +77,16 @@ export interface MoneyProps {
   readonly direction?: MoneyDirection;
   /** Currency label. INR is canonical; BDT appears in seller views. */
   readonly currency?: 'INR' | 'BDT';
+  /**
+   * Opt OUT of the display-currency conversion for one figure.
+   *
+   * For a number that has to agree with a rupee INPUT sitting beside it
+   * — "available to withdraw" above a box you type rupees into. Showing
+   * that figure in taka while the field expects rupees invites someone
+   * to type the converted number, and the request is then refused or,
+   * worse, quietly smaller than they meant.
+   */
+  readonly convert?: boolean;
   /** Hide the paise when a column is all round numbers. */
   readonly decimals?: boolean;
   /** Bigger, for a headline figure rather than a table cell. */
@@ -98,6 +108,7 @@ export function Money({
   amount,
   direction = 'neutral',
   currency = 'INR',
+  convert: allowConvert = true,
   decimals = true,
   size = 'sm',
   className,
@@ -112,7 +123,8 @@ export function Money({
    * about that figure (the taka we wired), not asking to be converted —
    * converting it again would multiply by the rate twice.
    */
-  const convert = currency === 'INR' && display.currency !== 'INR' && display.rate !== null;
+  const convert =
+    allowConvert && currency === 'INR' && display.currency !== 'INR' && display.rate !== null;
   const shownCurrency = convert ? display.currency : currency;
   const rawN = typeof amount === 'number' ? amount : Number(amount);
   const shown = convert && Number.isFinite(rawN) ? rawN * Number(display.rate) : amount;
