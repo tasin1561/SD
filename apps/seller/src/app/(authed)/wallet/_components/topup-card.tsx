@@ -215,16 +215,29 @@ export function TopupCard(): ReactElement | null {
           )}
 
           <div className="space-y-3">
-            <FormField label="Which account you paid into" required>
-              <Select value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)}>
-                <option value="">Choose an account…</option>
-                {(banks.data ?? []).map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.label} — {b.bankName} ({b.currency})
+            {/* A dropdown with nothing in it is a dead end: the seller
+                cannot proceed and is told nothing about why. This is not
+                their mistake to fix, so it says who has to. */}
+            {!banks.isLoading && (banks.data ?? []).length === 0 ? (
+              <div className="border-border text-text-muted rounded-md border px-3 py-2 text-sm">
+                We have not published a transfer account yet, so there is nowhere to send money.
+                Please contact support before transferring anything — a payment we have not
+                published an account for is one we cannot match to you.
+              </div>
+            ) : (
+              <FormField label="Which account you paid into" required>
+                <Select value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)}>
+                  <option value="">
+                    {banks.isLoading ? 'Loading accounts…' : 'Choose an account…'}
                   </option>
-                ))}
-              </Select>
-            </FormField>
+                  {(banks.data ?? []).map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.label} — {b.bankName} ({b.currency})
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+            )}
 
             {/* Shown after choosing, so the seller can check they sent it
                 to the right place before claiming it. */}
