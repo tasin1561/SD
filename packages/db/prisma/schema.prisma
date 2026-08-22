@@ -5147,9 +5147,21 @@ model PlatformBankAccount {
   bankName      String    @map("bank_name")
   accountName   String    @map("account_name")
   accountNumber String    @map("account_number")
-  /// IFSC (India) or routing/SWIFT (Bangladesh) — free-form because the
-  /// two countries do not share a format.
+  /// IFSC (India) or SWIFT — free-form because the formats differ by
+  /// country. NOT the Bangladeshi routing number; that has its own
+  /// column, because a BEFTN transfer needs both and putting them in one
+  /// field means whoever fills it in has to choose which one to lose.
   branchCode    String?   @map("branch_code")
+  /// The branch the account is held at. A Bangladeshi routing number is
+  /// branch-specific, so the two are read together — and a seller
+  /// standing at a counter is asked for the branch by name.
+  branchName    String?   @map("branch_name")
+  /// The district the branch is in. Bank forms in Bangladesh ask for it,
+  /// and several banks have a branch of the same name in more than one.
+  district      String?
+  /// The 9-digit BEFTN routing number. Kept as text, not an integer:
+  /// leading zeros are significant and an integer silently eats them.
+  routingNumber String?   @map("routing_number")
   currency      Currency
   instructions  String?   @db.Text
   isActive      Boolean   @default(true) @map("is_active")

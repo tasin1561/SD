@@ -100,6 +100,9 @@ export function BankAccountsPanel(): ReactElement | null {
       accountName: a.accountName,
       accountNumber: a.accountNumber,
       ...(a.branchCode === null ? {} : { branchCode: a.branchCode }),
+      ...(a.branchName === null ? {} : { branchName: a.branchName }),
+      ...(a.district === null ? {} : { district: a.district }),
+      ...(a.routingNumber === null ? {} : { routingNumber: a.routingNumber }),
       currency: a.currency,
       ...(a.instructions === null ? {} : { instructions: a.instructions }),
       isActive: a.isActive,
@@ -128,6 +131,15 @@ export function BankAccountsPanel(): ReactElement | null {
       currency: form.currency,
       isActive: form.isActive ?? true,
       displayOrder: form.displayOrder ?? 100,
+      ...(form.branchName !== undefined && form.branchName.trim() !== ''
+        ? { branchName: form.branchName.trim() }
+        : {}),
+      ...(form.district !== undefined && form.district.trim() !== ''
+        ? { district: form.district.trim() }
+        : {}),
+      ...(form.routingNumber !== undefined && form.routingNumber.trim() !== ''
+        ? { routingNumber: form.routingNumber.trim() }
+        : {}),
       ...(form.branchCode !== undefined && form.branchCode.trim() !== ''
         ? { branchCode: form.branchCode.trim() }
         : {}),
@@ -210,6 +222,12 @@ export function BankAccountsPanel(): ReactElement | null {
                     <Td>{a.bankName}</Td>
                     <Td>
                       <span className="font-mono text-xs">{a.accountNumber}</span>
+                      {(a.branchName !== null || a.routingNumber !== null) && (
+                        <div className="text-text-faint text-xs">
+                          {[a.branchName, a.district].filter(Boolean).join(' · ')}
+                          {a.routingNumber === null ? '' : ` · ${a.routingNumber}`}
+                        </div>
+                      )}
                       {a.branchCode !== null && (
                         <span className="text-text-faint ml-2 font-mono text-xs">
                           {a.branchCode}
@@ -285,6 +303,33 @@ export function BankAccountsPanel(): ReactElement | null {
               <Input
                 value={form.branchCode ?? ''}
                 onChange={(e) => set('branchCode', e.target.value)}
+              />
+            </FormField>
+          </div>
+          {/* A Bangladeshi transfer is made against the BRANCH: the
+              routing number is branch-specific, several banks have a
+              branch of the same name in more than one district, and the
+              counter asks for all three. They used to share one
+              "IFSC / SWIFT" box, so whoever filled it in had to choose
+              which one to lose. */}
+          <div className="grid grid-cols-3 gap-3">
+            <FormField label="Branch" hint="Optional">
+              <Input
+                value={form.branchName ?? ''}
+                onChange={(e) => set('branchName', e.target.value)}
+              />
+            </FormField>
+            <FormField label="District" hint="Optional">
+              <Input
+                value={form.district ?? ''}
+                onChange={(e) => set('district', e.target.value)}
+              />
+            </FormField>
+            <FormField label="Routing number" hint="9 digits (Bangladesh)">
+              <Input
+                inputMode="numeric"
+                value={form.routingNumber ?? ''}
+                onChange={(e) => set('routingNumber', e.target.value)}
               />
             </FormField>
           </div>

@@ -83,6 +83,9 @@ export class WalletTopupService {
       accountName: string;
       accountNumber: string;
       branchCode: string | null;
+      branchName: string | null;
+      district: string | null;
+      routingNumber: string | null;
       currency: Currency;
       instructions: string | null;
     }>
@@ -97,6 +100,9 @@ export class WalletTopupService {
         accountName: true,
         accountNumber: true,
         branchCode: true,
+        branchName: true,
+        district: true,
+        routingNumber: true,
         currency: true,
         instructions: true,
       },

@@ -243,11 +243,30 @@ export function TopupCard(): ReactElement | null {
                 to the right place before claiming it. */}
             {selectedBank !== undefined && (
               <div className="border-border text-text-muted rounded-md border px-3 py-2 text-xs">
+                {/* Everything the seller has to type into their bank.
+                    They read it off this screen, so a missing branch or
+                    routing number is a transfer that goes nowhere — or
+                    worse, somewhere we cannot match to them. */}
                 <div className="text-text-body font-mono">{selectedBank.accountNumber}</div>
-                <div>
-                  {selectedBank.accountName}
-                  {selectedBank.branchCode !== null ? ` · ${selectedBank.branchCode}` : ''}
-                </div>
+                <div>{selectedBank.accountName}</div>
+                {(selectedBank.branchName !== null || selectedBank.district !== null) && (
+                  <div>
+                    {[selectedBank.branchName, selectedBank.district].filter(Boolean).join(' · ')}
+                    {selectedBank.branchName !== null ? ' branch' : ''}
+                  </div>
+                )}
+                {selectedBank.routingNumber !== null && (
+                  <div>
+                    Routing{' '}
+                    <span className="text-text-body font-mono">{selectedBank.routingNumber}</span>
+                  </div>
+                )}
+                {selectedBank.branchCode !== null && (
+                  <div>
+                    IFSC/SWIFT{' '}
+                    <span className="text-text-body font-mono">{selectedBank.branchCode}</span>
+                  </div>
+                )}
                 {selectedBank.instructions !== null && (
                   <div className="mt-1">{selectedBank.instructions}</div>
                 )}

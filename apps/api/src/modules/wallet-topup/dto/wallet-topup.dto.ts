@@ -98,11 +98,33 @@ export class UpsertPlatformBankAccountDto {
   @MaxLength(64)
   accountNumber!: string;
 
-  @ApiPropertyOptional({ description: 'IFSC, routing number or SWIFT' })
+  @ApiPropertyOptional({ description: 'IFSC (India) or SWIFT — NOT the BEFTN routing number' })
   @IsOptional()
   @IsString()
   @MaxLength(40)
   branchCode?: string;
+
+  @ApiPropertyOptional({ description: 'Branch the account is held at' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  branchName?: string;
+
+  @ApiPropertyOptional({ description: 'District the branch is in' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  district?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'BEFTN routing number (Bangladesh), 9 digits. Text, not a number — a leading zero is ' +
+      'significant and an integer would eat it.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  routingNumber?: string;
 
   @ApiProperty({ enum: Currency })
   @IsEnum(Currency)

@@ -31,6 +31,9 @@ export interface PlatformBankAccountView {
   readonly accountName: string;
   readonly accountNumber: string;
   readonly branchCode: string | null;
+  readonly branchName: string | null;
+  readonly district: string | null;
+  readonly routingNumber: string | null;
   readonly currency: string;
   readonly instructions: string | null;
   readonly isActive: boolean;
@@ -47,6 +50,9 @@ export interface UpsertBankAccountBody {
   readonly accountName: string;
   readonly accountNumber: string;
   readonly branchCode?: string;
+  readonly branchName?: string;
+  readonly district?: string;
+  readonly routingNumber?: string;
   readonly currency: string;
   readonly instructions?: string;
   readonly isActive?: boolean;
