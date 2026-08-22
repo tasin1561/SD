@@ -210,12 +210,11 @@ function RequestWithdrawalModal({
             a conversion of that balance rather than a second pot. The
             option was always going to be refused — there is nothing to
             withdraw from a currency nothing is ever credited in. */}
-        <FormField
-          label="Amount (₹)"
-          htmlFor="wd-amount"
-          hint="In rupees, whatever currency the page shows figures in — this is the number we pay out against your balance, so it is not converted for you."
-          required
-        >
+        {/* No hint: the ₹ in the label and the rupee figure in the
+            availability box above already say which currency this is,
+            and a sentence explaining it a third time is noise on a form
+            with two fields. */}
+        <FormField label="Amount (₹)" htmlFor="wd-amount" required>
           <Input
             id="wd-amount"
             inputMode="decimal"
