@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useState, type ReactElement } from 'react';
 import {
   Button,
@@ -23,7 +25,6 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import { serverVerdict } from '@/lib/server-verdict';
-import { BankAccountsPanel } from './bank-accounts-panel';
 import { usePermission } from '@/lib/use-permission';
 import {
   useAcceptTopup,
@@ -115,6 +116,15 @@ export function TopupsIndex(): ReactElement {
       <PageHeader
         title="Wallet top-ups"
         subtitle="Sellers telling us they have sent money. Accepting one credits their wallet — check it against the statement first."
+        action={
+          // The accounts moved to their own page. A pointer stays,
+          // because with none configured nothing can ever arrive here,
+          // and an empty queue would otherwise look like quiet demand
+          // rather than a missing setup step.
+          <Link href="/transfer-accounts" className="text-accent text-sm hover:underline">
+            Transfer accounts →
+          </Link>
+        }
       />
 
       <div className="mb-3">
@@ -274,9 +284,6 @@ export function TopupsIndex(): ReactElement {
           </Button>
         </ModalFooter>
       </Modal>
-
-      {/* What the seller was reading when they made the transfer above. */}
-      <BankAccountsPanel />
     </div>
   );
 }

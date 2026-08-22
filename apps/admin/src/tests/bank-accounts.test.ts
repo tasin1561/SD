@@ -20,7 +20,7 @@ import { describe, expect, it } from 'vitest';
 
 const R = (p: string): string => readFileSync(join(__dirname, p), 'utf8');
 
-const PANEL = R('../app/(authed)/topups/_components/bank-accounts-panel.tsx');
+const PANEL = R('../app/(authed)/transfer-accounts/_bank-accounts-panel.tsx');
 const HOOKS = R('../lib/bank-account-hooks.ts');
 const DTO = R('../../../api/src/modules/wallet-topup/dto/wallet-topup.dto.ts');
 const CONTROLLER = R(
