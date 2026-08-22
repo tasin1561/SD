@@ -5,7 +5,6 @@ import {
   Button,
   Card,
   CardBody,
-  CardHeader,
   ErrorNote,
   FormField,
   Input,
@@ -25,8 +24,6 @@ import {
 } from '@skydrop/ui/components';
 import { useRequestWithdrawal, useSellerWithdrawals } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
-import { can } from '@/lib/page-access';
-import { useSellerIdentity } from '@skydrop/auth/client';
 
 /**
  * Payout requests, on the wallet page because that is where the balance
@@ -37,24 +34,29 @@ import { useSellerIdentity } from '@skydrop/auth/client';
  * impossible for a request alone to debit anything, and the copy says so
  * rather than leaving a seller to wonder why the balance has not moved.
  */
-export function WithdrawalsCard(): ReactElement {
-  const canWrite = can(useSellerIdentity(), 'wallet.withdraw');
-  const [requesting, setRequesting] = useState(false);
+/**
+ * Every payout the seller has asked for, whatever became of it.
+ *
+ * The action lives up in the balance row — a seller reaches for it while
+ * looking at what they are owed, not while reading the history of what
+ * they already asked for.
+ *
+ * A request never writes a wallet entry. The balance moves when the
+ * remittance is actually paid, so pending and rejected requests only
+ * exist here, and the ledger only ever shows money that really left.
+ */
+export function WithdrawalsCard({
+  requesting,
+  onRequestingChange,
+}: {
+  readonly requesting: boolean;
+  readonly onRequestingChange: (open: boolean) => void;
+}): ReactElement {
   const list = useSellerWithdrawals();
   const rows = list.data ?? [];
 
   return (
     <Card>
-      <CardHeader
-        title="Payout requests"
-        action={
-          canWrite ? (
-            <Button variant="primary" size="sm" onClick={() => setRequesting(true)}>
-              Request a payout
-            </Button>
-          ) : null
-        }
-      />
       <CardBody>
         {list.isError ? (
           <ErrorNote
@@ -106,7 +108,7 @@ export function WithdrawalsCard(): ReactElement {
         )}
       </CardBody>
 
-      <RequestWithdrawalModal open={requesting} onOpenChange={setRequesting} />
+      <RequestWithdrawalModal open={requesting} onOpenChange={onRequestingChange} />
     </Card>
   );
 }

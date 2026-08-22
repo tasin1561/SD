@@ -19,6 +19,8 @@ import { useInfiniteWalletEntries, useWalletBalances } from '@/lib/api-hooks';
 import { TopupCard } from './_components/topup-card';
 import { WithdrawalsCard } from './_components/withdrawals-card';
 import type { WalletEntryView } from '@skydrop/api-client';
+import { useSellerIdentity } from '@skydrop/auth/client';
+import { can } from '@/lib/page-access';
 
 /**
  * Phase 1B M24 — seller wallet. Top: balance cards (INR + BDT).
@@ -30,6 +32,21 @@ import type { WalletEntryView } from '@skydrop/api-client';
  */
 export default function WalletPage(): ReactElement {
   const [exporting, setExporting] = useState(false);
+  /**
+   * Three views of the same money, switched in place rather than split
+   * across pages: the ledger is what HAPPENED, the other two are what
+   * was ASKED FOR and has not landed yet. A seller checking "did my
+   * transfer go through" should not have to know which page that lives
+   * on.
+   */
+  const [tab, setTab] = useState<'ledger' | 'payouts' | 'topups'>('ledger');
+  // The modals are driven from the balance row, so their open state
+  // lives here rather than inside the list that shows their history.
+  const [topupOpen, setTopupOpen] = useState(false);
+  const [payoutOpen, setPayoutOpen] = useState(false);
+  const identity = useSellerIdentity();
+  const mayTopup = can(identity, 'wallet.topup');
+  const mayWithdraw = can(identity, 'wallet.withdraw');
   const balances = useWalletBalances();
   const entries = useInfiniteWalletEntries();
   const accumulated = entries.data?.pages.flatMap((p) => p.items) ?? [];
@@ -57,6 +74,42 @@ export default function WalletPage(): ReactElement {
         title="Wallet"
         subtitle="What's owed to you. COD net of charges per delivered order; remittances debit as we pay you out."
       />
+
+      {/* The two ways money moves, beside the number they move. They
+          used to sit at the bottom of the page, each heading its own
+          card of history — so the button a seller came for was below the
+          record of what they had already done. */}
+      {(mayTopup || mayWithdraw) && (
+        <div className="flex flex-wrap gap-2">
+          {mayTopup && (
+            <Button
+              variant="primary"
+              size="md"
+              onClick={() => {
+                // Switch to the tab as well as opening the modal, so the
+                // seller lands where the request they are about to make
+                // will appear.
+                setTab('topups');
+                setTopupOpen(true);
+              }}
+            >
+              Tell us about a transfer
+            </Button>
+          )}
+          {mayWithdraw && (
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => {
+                setTab('payouts');
+                setPayoutOpen(true);
+              }}
+            >
+              Request a payout
+            </Button>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         {balances.isLoading ? (
@@ -102,79 +155,123 @@ export default function WalletPage(): ReactElement {
         )}
       </div>
 
-      <Card>
-        <CardHeader
-          title="Ledger"
-          action={
-            <div className="flex items-center gap-2">
-              {/* The all/INR/BDT segmented filter is gone. Every entry the
+      {/* One switcher, three views of the same money. Building these as
+          separate pages would make "did my transfer go through?" a
+          navigation problem. */}
+      <div className="border-border flex flex-wrap gap-1 border-b">
+        {(
+          [
+            ['ledger', 'Ledger'],
+            ['payouts', 'Payout requests'],
+            ['topups', 'Transfers sent'],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setTab(key)}
+            aria-current={tab === key ? 'true' : undefined}
+            className={
+              'inline-flex min-h-[36px] items-center rounded-t-[4px] px-3 text-sm transition-colors ' +
+              (tab === key
+                ? 'border-accent text-text-bright border-b-2 font-medium'
+                : 'text-text-muted hover:text-text-body border-b-2 border-transparent')
+            }
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'ledger' && (
+        <Card>
+          <CardHeader
+            title="Ledger"
+            action={
+              <div className="flex items-center gap-2">
+                {/* The all/INR/BDT segmented filter is gone. Every entry the
                   system writes is INR — BDT is a conversion of the
                   balance, not a pot with its own entries — so 'BDT'
                   selected an always-empty ledger while 'all' and 'INR'
                   were the same list. A control with one real setting is
                   not a control. */}
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={accumulated.length === 0 || exporting}
-                onClick={() => void exportAll()}
-              >
-                <Download size={12} /> {exporting ? 'Loading all…' : 'Export CSV'}
-              </Button>
-            </div>
-          }
-        />
-        <CardBody>
-          {entries.isLoading ? (
-            <SkeletonRows rows={6} cols={5} />
-          ) : entries.isError ? (
-            <ErrorState
-              message={entries.error?.message ?? 'Failed.'}
-              retry={() => void entries.refetch()}
-            />
-          ) : accumulated.length === 0 ? (
-            <div className="text-text-muted text-sm py-4">
-              No ledger entries yet. Once an order delivers (COD), your wallet will accrue (COD
-              amount − shipping + GST).
-            </div>
-          ) : (
-            <Table wrapperClassName="rounded-none border-0 bg-transparent">
-              <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
-                <tr>
-                  <th className="text-left px-3 py-2 font-medium">When</th>
-                  <th className="text-left px-3 py-2 font-medium">Type</th>
-                  <th className="text-left px-3 py-2 font-medium">Linked</th>
-                  <th className="text-right px-3 py-2 font-medium">Amount</th>
-                  <th className="text-right px-3 py-2 font-medium">Balance after</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {accumulated.map((e) => (
-                  <LedgerRow key={e.id} entry={e} />
-                ))}
-              </tbody>
-            </Table>
-          )}
-          {entries.hasNextPage && (
-            <div className="flex justify-center mt-3">
-              <Button
-                type="button"
-                variant="ghost"
-                size="md"
-                disabled={entries.isFetchingNextPage}
-                onClick={() => void entries.fetchNextPage()}
-              >
-                {entries.isFetchingNextPage ? 'Loading…' : 'Load more'}
-              </Button>
-            </div>
-          )}
-        </CardBody>
-      </Card>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={accumulated.length === 0 || exporting}
+                  onClick={() => void exportAll()}
+                >
+                  <Download size={12} /> {exporting ? 'Loading all…' : 'Export CSV'}
+                </Button>
+              </div>
+            }
+          />
+          <CardBody>
+            {entries.isLoading ? (
+              <SkeletonRows rows={6} cols={5} />
+            ) : entries.isError ? (
+              <ErrorState
+                message={entries.error?.message ?? 'Failed.'}
+                retry={() => void entries.refetch()}
+              />
+            ) : accumulated.length === 0 ? (
+              <div className="text-text-muted text-sm py-4">
+                No ledger entries yet. Once an order delivers (COD), your wallet will accrue (COD
+                amount − shipping + GST).
+              </div>
+            ) : (
+              <Table wrapperClassName="rounded-none border-0 bg-transparent">
+                <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
+                  <tr>
+                    <th className="text-left px-3 py-2 font-medium">When</th>
+                    <th className="text-left px-3 py-2 font-medium">Type</th>
+                    <th className="text-left px-3 py-2 font-medium">Linked</th>
+                    <th className="text-right px-3 py-2 font-medium">Amount</th>
+                    <th className="text-right px-3 py-2 font-medium">Balance after</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {accumulated.map((e) => (
+                    <LedgerRow key={e.id} entry={e} />
+                  ))}
+                </tbody>
+              </Table>
+            )}
+            {entries.hasNextPage && (
+              <div className="flex justify-center mt-3">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="md"
+                  disabled={entries.isFetchingNextPage}
+                  onClick={() => void entries.fetchNextPage()}
+                >
+                  {entries.isFetchingNextPage ? 'Loading…' : 'Load more'}
+                </Button>
+              </div>
+            )}
+          </CardBody>
+        </Card>
+      )}
 
-      <TopupCard />
+      {tab === 'payouts' &&
+        (mayWithdraw ? (
+          <WithdrawalsCard requesting={payoutOpen} onRequestingChange={setPayoutOpen} />
+        ) : (
+          <p className="text-text-muted text-sm">
+            Payout requests are handled by an owner or finance account.
+          </p>
+        ))}
 
-      <WithdrawalsCard />
+      {tab === 'topups' &&
+        (mayTopup ? (
+          <TopupCard open={topupOpen} onOpenChange={setTopupOpen} />
+        ) : (
+          <p className="text-text-muted text-sm">
+            Transfers are recorded by an owner or finance account.
+          </p>
+        ))}
 
       <div className="text-text-faint text-xs">
         Remittances are paid to the bank account on your profile. Update your bank details on{' '}

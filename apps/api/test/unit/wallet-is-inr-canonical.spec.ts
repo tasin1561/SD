@@ -67,3 +67,35 @@ describe('the wallet is INR-canonical', () => {
     }
   });
 });
+
+describe('a claim is not a ledger entry', () => {
+  // The seller's wallet page shows pending and rejected requests in
+  // their own sections, and the ledger only ever shows money that
+  // actually moved. That is not a UI filter — it holds because no entry
+  // is written until the money is real, and these assertions are what
+  // keep it that way.
+  it('a top-up writes its entry ONLY on accept, never on submit', () => {
+    const src = read('wallet-topup/services/wallet-topup.service.ts');
+    const writes = src.split('applyEntry').length - 1;
+    expect(writes).toBe(1);
+
+    // ...and that one call sits after accept(), not in submit() or
+    // reject(). Crediting on submission would let anyone raise their
+    // balance with a form, and the reversal would land after they had
+    // withdrawn against it (WAL-2).
+    const accept = src.indexOf('async accept(');
+    const reject = src.indexOf('async reject(');
+    const write = src.indexOf('applyEntry');
+    expect(accept).toBeGreaterThan(-1);
+    expect(write).toBeGreaterThan(accept);
+    expect(write).toBeLessThan(reject);
+  });
+
+  it('a withdrawal REQUEST writes no entry at all', () => {
+    // The balance moves when the remittance is actually paid. A request
+    // is a request; treating it as a debit would take money from a
+    // seller for a transfer nobody had made yet.
+    const src = read('seller-wallet-withdrawal/services/withdrawal-request.service.ts');
+    expect(src).not.toMatch(/this\.wallet\.applyEntry\(/);
+  });
+});

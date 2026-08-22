@@ -52,7 +52,26 @@ import {
  * only way a balance could rise, while order charges, RTO fees and
  * inbound freight all debited it.
  */
-export function TopupCard(): ReactElement | null {
+/**
+ * Every top-up the seller has claimed, whatever became of it.
+ *
+ * The modal is driven from OUTSIDE — the action lives up in the balance
+ * row, where a seller looks when they want to move money, rather than
+ * buried beside the list of what they already sent.
+ *
+ * Pending and rejected claims live HERE and never in the ledger. That
+ * is not a filter: a claim is not a payment, so no wallet entry exists
+ * until an operator matches it against the statement. The ledger showing
+ * only accepted top-ups is a property of when the entry is written, not
+ * something this view chooses.
+ */
+export function TopupCard({
+  open,
+  onOpenChange,
+}: {
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+}): ReactElement | null {
   const identity = useSellerIdentity();
   const toast = useToast();
   const banks = useTopupBankAccounts();
@@ -60,7 +79,6 @@ export function TopupCard(): ReactElement | null {
   const presign = usePresignTopupProof();
   const submit = useSubmitTopup();
 
-  const [open, setOpen] = useState(false);
   const [bankAccountId, setBankAccountId] = useState('');
   const [amount, setAmount] = useState('');
   const [transactionRef, setTransactionRef] = useState('');
@@ -119,7 +137,7 @@ export function TopupCard(): ReactElement | null {
           ? { proofSpacesKey, proofMimeType }
           : {}),
       });
-      setOpen(false);
+      onOpenChange(false);
       reset();
       // "Recorded", never "credited" — the balance has not moved.
       toast.success('Transfer recorded. We will credit it once we see it on our statement.');
@@ -139,22 +157,14 @@ export function TopupCard(): ReactElement | null {
   const selectedBank = (banks.data ?? []).find((b) => b.id === bankAccountId);
 
   return (
-    <Card className="mb-4">
+    <Card>
       <CardBody>
-        <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <h2 className="text-text-bright text-sm font-medium">Add money</h2>
-            <p className="text-text-muted mt-0.5 text-xs">
-              Transfer to one of our accounts, then tell us here. We credit it once it shows on our
-              statement — it is not instant.
-            </p>
-          </div>
-          <Button variant="primary" size="md" onClick={() => setOpen(true)}>
-            Tell us about a transfer
-          </Button>
-        </div>
-
-        {rows.length > 0 && (
+        {rows.length === 0 ? (
+          <p className="text-text-muted py-2 text-sm">
+            No transfers recorded yet. Send money to one of our accounts, then tell us here — we
+            credit it once it shows on our statement, so it is not instant.
+          </p>
+        ) : (
           <Table>
             <THead>
               <Tr>
@@ -197,7 +207,7 @@ export function TopupCard(): ReactElement | null {
           open={open}
           onOpenChange={(next) => {
             if (!next) {
-              setOpen(false);
+              onOpenChange(false);
               reset();
             }
           }}
@@ -323,7 +333,7 @@ export function TopupCard(): ReactElement | null {
               variant="secondary"
               size="md"
               onClick={() => {
-                setOpen(false);
+                onOpenChange(false);
                 reset();
               }}
             >
