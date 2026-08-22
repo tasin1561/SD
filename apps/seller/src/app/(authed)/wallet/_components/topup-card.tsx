@@ -39,7 +39,7 @@ import {
  * against it.
  *
  * So the screen must never imply the money has arrived. The button says
- * "Tell us about a transfer", the toast says recorded rather than
+ * "Record a top-up", the toast says recorded rather than
  * credited, and the balance above deliberately does not move.
  *
  * ── A REFERENCE IS MANDATORY ─────────────────────────────────────────
@@ -140,7 +140,7 @@ export function TopupCard({
       onOpenChange(false);
       reset();
       // "Recorded", never "credited" — the balance has not moved.
-      toast.success('Transfer recorded. We will credit it once we see it on our statement.');
+      toast.success('Top-up recorded. We will credit it once we see it on our statement.');
     } catch (err) {
       if (err instanceof ApiError) {
         const body = err.body as { code?: string; message?: string } | undefined;
@@ -161,8 +161,8 @@ export function TopupCard({
       <CardBody>
         {rows.length === 0 ? (
           <p className="text-text-muted py-2 text-sm">
-            No transfers recorded yet. Send money to one of our accounts, then tell us here — we
-            credit it once it shows on our statement, so it is not instant.
+            No top-ups yet. Send money to one of our accounts, then record it here — we credit it
+            once it shows on our statement, so it is not instant.
           </p>
         ) : (
           <Table>
@@ -211,7 +211,7 @@ export function TopupCard({
               reset();
             }
           }}
-          title="Tell us about a transfer"
+          title="Record a top-up"
         >
           <p className="text-text-muted mb-3 text-sm">
             Send the money first, then record it here. Nothing is added to your balance until we
@@ -345,7 +345,7 @@ export function TopupCard({
               disabled={!canSubmit}
               onClick={() => void onSubmit()}
             >
-              {busy ? 'Recording…' : 'Record this transfer'}
+              {busy ? 'Recording…' : 'Record top-up'}
             </Button>
           </ModalFooter>
         </Modal>

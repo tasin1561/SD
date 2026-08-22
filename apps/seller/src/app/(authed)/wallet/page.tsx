@@ -93,7 +93,7 @@ export default function WalletPage(): ReactElement {
                 setTopupOpen(true);
               }}
             >
-              Tell us about a transfer
+              Record a top-up
             </Button>
           )}
           {mayWithdraw && (
@@ -162,8 +162,10 @@ export default function WalletPage(): ReactElement {
         {(
           [
             ['ledger', 'Ledger'],
+            // Money in before money out: a seller whose balance is short
+            // needs the top-up, not the payout form.
+            ['topups', 'Top-ups'],
             ['payouts', 'Payout requests'],
-            ['topups', 'Transfers sent'],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -255,21 +257,20 @@ export default function WalletPage(): ReactElement {
         </Card>
       )}
 
+      {tab === 'topups' &&
+        (mayTopup ? (
+          <TopupCard open={topupOpen} onOpenChange={setTopupOpen} />
+        ) : (
+          <p className="text-text-muted text-sm">
+            Top-ups are recorded by an owner or finance account.
+          </p>
+        ))}
       {tab === 'payouts' &&
         (mayWithdraw ? (
           <WithdrawalsCard requesting={payoutOpen} onRequestingChange={setPayoutOpen} />
         ) : (
           <p className="text-text-muted text-sm">
             Payout requests are handled by an owner or finance account.
-          </p>
-        ))}
-
-      {tab === 'topups' &&
-        (mayTopup ? (
-          <TopupCard open={topupOpen} onOpenChange={setTopupOpen} />
-        ) : (
-          <p className="text-text-muted text-sm">
-            Transfers are recorded by an owner or finance account.
           </p>
         ))}
 

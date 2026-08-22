@@ -31,13 +31,16 @@ const SUBMIT_DTO = '../../../api/src/modules/wallet-topup/dto/wallet-topup.dto.t
 describe('WAL-2 — the seller is never told the money arrived', () => {
   const src = R(SELLER_CARD);
 
-  it('the button asks to RECORD a transfer, it does not promise credit', () => {
-    expect(src).toContain('Tell us about a transfer');
+  it('the wording asks to RECORD a top-up, it never promises credit', () => {
+    // The verb is the whole point (WAL-2): a seller is telling us what
+    // they sent, not adding money. The negative list is what the copy
+    // must never drift into.
+    expect(src).toContain('Record a top-up');
     expect(src).not.toMatch(/Add funds|Top up now|credited instantly/i);
   });
 
   it('the success message says recorded, not credited', () => {
-    expect(src).toContain('Transfer recorded');
+    expect(src).toContain('Top-up recorded');
     expect(src).toContain('once we see it on our statement');
   });
 
@@ -111,12 +114,14 @@ describe('the admin side can actually accept one', () => {
 });
 
 describe('the seller card is reachable', () => {
-  it('is mounted on the wallet page, above withdrawals', () => {
+  it('is mounted on the wallet page, before withdrawals', () => {
     const page = R(SELLER_PAGE);
-    expect(page).toContain('<TopupCard />');
+    expect(page).toContain('<TopupCard');
     // Money in before money out: a seller whose balance is short needs
-    // the top-up, not the payout form.
-    expect(page.indexOf('<TopupCard />')).toBeLessThan(page.indexOf('<WithdrawalsCard />'));
+    // the top-up, not the payout form. Still true now the two are tabs
+    // rather than stacked cards — the tab order carries it.
+    expect(page.indexOf("['topups'")).toBeLessThan(page.indexOf("['payouts'"));
+    expect(page.indexOf('<TopupCard')).toBeLessThan(page.indexOf('<WithdrawalsCard'));
   });
 
   it('is hidden from roles that cannot top up', () => {
