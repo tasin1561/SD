@@ -178,7 +178,7 @@ export function BankAccountsPanel(): ReactElement | null {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Transfer accounts"
+        title="Bank accounts"
         subtitle="Our own bank accounts — where a seller sends money to top up their wallet. A seller reads these details off their screen and types them into their bank, so anything wrong here becomes a payment nobody can match against a statement."
       />
       <Card>
@@ -218,8 +218,8 @@ export function BankAccountsPanel(): ReactElement | null {
               <TBody>
                 {rows.length === 0 ? (
                   <TableEmpty colSpan={mayManage ? 6 : 5}>
-                    No transfer accounts. Until one exists a seller has nowhere to send money and
-                    cannot top up at all.
+                    No bank accounts. Until one exists a seller has nowhere to send money and cannot
+                    top up at all.
                   </TableEmpty>
                 ) : (
                   rows.map((a) => (
@@ -277,7 +277,7 @@ export function BankAccountsPanel(): ReactElement | null {
           onOpenChange={(next) => {
             if (!next) setOpen(false);
           }}
-          title={editing === null ? 'Add a transfer account' : `Edit ${editing.label}`}
+          title={editing === null ? 'Add a bank account' : `Edit ${editing.label}`}
         >
           <p className="text-text-muted mb-3 text-sm">
             Sellers read these details off their own screen and type them into their bank. Anything

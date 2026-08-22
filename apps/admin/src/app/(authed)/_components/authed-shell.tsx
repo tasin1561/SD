@@ -125,7 +125,7 @@ export function AuthedShell({
         { href: '/settlements', label: 'Settlements', icon: <Banknote size={15} /> },
         { href: '/withdrawals', label: 'Withdrawals', icon: <Wallet size={15} /> },
         { href: '/topups', label: 'Top-ups', icon: <Wallet size={15} /> },
-        { href: '/transfer-accounts', label: 'Transfer accounts', icon: <Landmark size={15} /> },
+        { href: '/bank-accounts', label: 'Bank accounts', icon: <Landmark size={15} /> },
         { href: '/remittances', label: 'Remittances', icon: <Send size={15} /> },
         { href: '/bank-changes', label: 'Bank changes', icon: <Landmark size={15} /> },
         { href: '/freight', label: 'Inbound freight', icon: <Truck size={15} /> },

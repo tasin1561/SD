@@ -20,7 +20,19 @@ import { describe, expect, it } from 'vitest';
 
 const R = (p: string): string => readFileSync(join(__dirname, p), 'utf8');
 
-const PANEL = R('../app/(authed)/transfer-accounts/_bank-accounts-panel.tsx');
+/**
+ * The same source with its whitespace collapsed, for assertions about a
+ * SENTENCE rather than about structure.
+ *
+ * Prettier rewraps JSX text whenever a line grows, so a phrase can end
+ * up split across two lines without anybody editing it — renaming
+ * "transfer accounts" to "bank accounts" did exactly that and failed a
+ * test whose subject had not changed. The structural assertions keep
+ * reading the raw text, because those DO care about line shape.
+ */
+const flat = (src: string): string => src.replace(/\s+/g, ' ');
+
+const PANEL = R('../app/(authed)/bank-accounts/_bank-accounts-panel.tsx');
 const HOOKS = R('../lib/bank-account-hooks.ts');
 const DTO = R('../../../api/src/modules/wallet-topup/dto/wallet-topup.dto.ts');
 const CONTROLLER = R(
@@ -105,7 +117,7 @@ describe('retiring says what it does and does not do', () => {
   it('the wording promises exactly that', () => {
     // "Delete" would read as though the history went with it.
     expect(PANEL).toContain('Retire');
-    expect(PANEL).toContain('Past top-ups keep it');
+    expect(flat(PANEL)).toContain('Past top-ups keep it');
     expect(PANEL).not.toMatch(/>\s*Delete\s*</);
   });
 });
@@ -113,6 +125,6 @@ describe('retiring says what it does and does not do', () => {
 describe('the empty state states the consequence', () => {
   it('says a seller cannot top up at all until one exists', () => {
     // "No accounts" is a fact; this is what the fact costs.
-    expect(PANEL).toContain('cannot top up at all');
+    expect(flat(PANEL)).toContain('cannot top up at all');
   });
 });

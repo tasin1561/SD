@@ -121,8 +121,8 @@ export function TopupsIndex(): ReactElement {
           // because with none configured nothing can ever arrive here,
           // and an empty queue would otherwise look like quiet demand
           // rather than a missing setup step.
-          <Link href="/transfer-accounts" className="text-accent text-sm hover:underline">
-            Transfer accounts →
+          <Link href="/bank-accounts" className="text-accent text-sm hover:underline">
+            Bank accounts →
           </Link>
         }
       />

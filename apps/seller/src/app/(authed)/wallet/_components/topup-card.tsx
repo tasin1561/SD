@@ -220,9 +220,9 @@ export function TopupCard(): ReactElement | null {
                 their mistake to fix, so it says who has to. */}
             {!banks.isLoading && (banks.data ?? []).length === 0 ? (
               <div className="border-border text-text-muted rounded-md border px-3 py-2 text-sm">
-                We have not published a transfer account yet, so there is nowhere to send money.
-                Please contact support before transferring anything — a payment we have not
-                published an account for is one we cannot match to you.
+                We have not published a bank account yet, so there is nowhere to send money. Please
+                contact support before transferring anything — a payment we have not published an
+                account for is one we cannot match to you.
               </div>
             ) : (
               <FormField label="Which account you paid into" required>

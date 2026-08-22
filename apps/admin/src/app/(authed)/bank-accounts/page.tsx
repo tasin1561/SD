@@ -11,6 +11,6 @@ import { BankAccountsPanel } from './_bank-accounts-panel';
  * worklist makes the page read as two half-finished screens, and buries
  * the thing you only come looking for deliberately.
  */
-export default function TransferAccountsPage(): ReactElement {
+export default function BankAccountsPage(): ReactElement {
   return <BankAccountsPanel />;
 }
