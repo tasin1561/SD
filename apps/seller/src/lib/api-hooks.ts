@@ -1228,6 +1228,10 @@ export interface PlatformBankAccountView {
 export interface TopupRequestView {
   readonly id: string;
   readonly bankLabel: string;
+  /** The account they actually paid into, for checking against a statement. */
+  readonly bankName: string;
+  readonly bankAccountNumber: string;
+  readonly bankBranchName: string | null;
   readonly currency: string;
   readonly amount: string;
   readonly transactionRef: string | null;
@@ -1264,6 +1268,22 @@ export function useTopupBankAccounts(): UseQueryResult<TopupBankAccountsResponse
     queryKey: ['seller-wallet', 'topup-banks'],
     queryFn: () =>
       client.request<TopupBankAccountsResponse>('/api/seller/wallet/topups/bank-accounts'),
+  });
+}
+
+/**
+ * A short-lived link to the receipt the seller uploaded.
+ *
+ * Fetched on demand rather than listed with every row: the URL is a
+ * presigned Spaces link with a 15-minute life, so minting one per row on
+ * every page load hands out links nobody asked for and most of which
+ * expire unused.
+ */
+export function useTopupProofUrl(): UseMutationResult<{ url: string }, Error, string> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: (topupId) =>
+      client.request<{ url: string }>(`/api/seller/wallet/topups/${topupId}/proof-url`),
   });
 }
 

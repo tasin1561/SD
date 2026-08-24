@@ -63,6 +63,16 @@ export interface TopupRequestView {
   readonly sellerId: string;
   readonly bankAccountId: string;
   readonly bankLabel: string;
+  /**
+   * The account they actually paid into, not just what we called it.
+   *
+   * A label is our filing name for an account; a seller checking a
+   * transfer against their bank statement needs the bank and the number
+   * they typed. "Tasin City" tells them nothing they can compare.
+   */
+  readonly bankName: string;
+  readonly bankAccountNumber: string;
+  readonly bankBranchName: string | null;
   readonly currency: Currency;
   readonly amount: string;
   readonly transactionRef: string | null;
@@ -212,7 +222,14 @@ export class WalletTopupService {
 
     const bank = await this.prisma.client.platformBankAccount.findFirst({
       where: { id: input.bankAccountId, isActive: true, deletedAt: null },
-      select: { id: true, label: true, currency: true },
+      select: {
+        id: true,
+        label: true,
+        currency: true,
+        bankName: true,
+        accountNumber: true,
+        branchName: true,
+      },
     });
     if (!bank) {
       throw new NotFoundException({
@@ -258,7 +275,7 @@ export class WalletTopupService {
       reference: ref.length > 0 ? ref : 'receipt uploaded',
     });
 
-    return this.toView(row, bank.label);
+    return this.toView(row, bank);
   }
 
   /**
@@ -437,7 +454,7 @@ export class WalletTopupService {
       reference: existing.transactionRef ?? 'receipt on file',
     });
 
-    return this.toView(updated, existing.bankLabel);
+    return this.toView(updated, existing.bank);
   }
 
   /** Reject: the money is not on the statement, or does not match. */
@@ -492,16 +509,20 @@ export class WalletTopupService {
     });
 
     const row = await this.requireRequest(topupId);
-    return this.toView(row, row.bankLabel);
+    return this.toView(row, row.bank);
   }
 
   async listForSeller(sellerId: string, status?: TopupRequestStatus): Promise<TopupRequestView[]> {
     const rows = await this.prisma.client.walletTopupRequest.findMany({
       where: { sellerId, ...(status ? { status } : {}) },
       orderBy: { createdAt: 'desc' },
-      include: { bankAccount: { select: { label: true } } },
+      include: {
+        bankAccount: {
+          select: { label: true, bankName: true, accountNumber: true, branchName: true },
+        },
+      },
     });
-    return rows.map((r) => this.toView(r, r.bankAccount.label));
+    return rows.map((r) => this.toView(r, r.bankAccount));
   }
 
   async listForAdmin(status?: TopupRequestStatus): Promise<TopupRequestView[]> {
@@ -511,19 +532,30 @@ export class WalletTopupService {
       // and a seller waiting on money should not be overtaken.
       orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
       take: 200,
-      include: { bankAccount: { select: { label: true } } },
+      include: {
+        bankAccount: {
+          select: { label: true, bankName: true, accountNumber: true, branchName: true },
+        },
+      },
     });
-    return rows.map((r) => this.toView(r, r.bankAccount.label));
+    return rows.map((r) => this.toView(r, r.bankAccount));
   }
 
   // ── internal ──────────────────────────────────────────────────────
 
-  private async requireRequest(
-    topupId: string,
-  ): Promise<Prisma.WalletTopupRequestGetPayload<Record<string, never>> & { bankLabel: string }> {
+  private async requireRequest(topupId: string): Promise<
+    Prisma.WalletTopupRequestGetPayload<Record<string, never>> & {
+      bankLabel: string;
+      bank: { label: string; bankName: string; accountNumber: string; branchName: string | null };
+    }
+  > {
     const row = await this.prisma.client.walletTopupRequest.findUnique({
       where: { id: topupId },
-      include: { bankAccount: { select: { label: true } } },
+      include: {
+        bankAccount: {
+          select: { label: true, bankName: true, accountNumber: true, branchName: true },
+        },
+      },
     });
     if (!row) {
       throw new NotFoundException({
@@ -532,7 +564,7 @@ export class WalletTopupService {
       });
     }
     const { bankAccount, ...rest } = row;
-    return { ...rest, bankLabel: bankAccount.label };
+    return { ...rest, bankLabel: bankAccount.label, bank: bankAccount };
   }
 
   private toView(
@@ -549,13 +581,16 @@ export class WalletTopupService {
       reviewedAt: Date | null;
       createdAt: Date;
     },
-    bankLabel: string,
+    bank: { label: string; bankName: string; accountNumber: string; branchName: string | null },
   ): TopupRequestView {
     return {
       id: row.id,
       sellerId: row.sellerId,
       bankAccountId: row.bankAccountId,
-      bankLabel,
+      bankLabel: bank.label,
+      bankName: bank.bankName,
+      bankAccountNumber: bank.accountNumber,
+      bankBranchName: bank.branchName,
       currency: row.currency,
       amount: row.amount.toFixed(2),
       transactionRef: row.transactionRef,

@@ -4,7 +4,7 @@ import type { ReactElement } from 'react';
 import { Card, CardBody, TBody, THead, Table, Td, Th, Tr } from '@skydrop/ui/components';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
-import { useTopupBankAccounts, useTopupRequests } from '@/lib/api-hooks';
+import { useTopupBankAccounts, useTopupProofUrl, useTopupRequests } from '@/lib/api-hooks';
 import { TopupWizard } from './topup-wizard';
 
 /**
@@ -59,12 +59,29 @@ export function TopupCard({
                   <Td className="text-text-muted text-xs">
                     {new Date(r.createdAt).toISOString().slice(0, 10)}
                   </Td>
-                  <Td className="text-text-body">{r.bankLabel}</Td>
+                  <Td className="text-text-body">
+                    {/* The account, not our filing name for it. A seller
+                        checking this against their bank statement needs
+                        the bank and the number they typed; "Tasin City"
+                        is nothing they can compare. */}
+                    <div>{r.bankName}</div>
+                    <div className="text-text-faint font-mono text-xs">{r.bankAccountNumber}</div>
+                    {r.bankBranchName !== null && (
+                      <div className="text-text-faint text-xs">{r.bankBranchName}</div>
+                    )}
+                  </Td>
                   <Td align="right" className="font-mono">
                     {r.amount}
                   </Td>
-                  <Td className="text-text-faint font-mono text-xs">
-                    {r.transactionRef ?? (r.hasProof ? 'proof attached' : '—')}
+                  <Td className="text-xs">
+                    {r.transactionRef !== null && (
+                      <div className="text-text-faint font-mono">{r.transactionRef}</div>
+                    )}
+                    {r.hasProof ? (
+                      <ProofLink topupId={r.id} />
+                    ) : (
+                      r.transactionRef === null && <span className="text-text-faint">—</span>
+                    )}
                   </Td>
                   <Td>
                     <span className="text-text-body text-xs">{r.status}</span>
@@ -91,5 +108,33 @@ export function TopupCard({
         />
       </CardBody>
     </Card>
+  );
+}
+
+/**
+ * Opens the receipt the seller uploaded.
+ *
+ * The link is minted when they ask for it: it is a presigned Spaces URL
+ * with a 15-minute life, so putting one on every row of every page load
+ * hands out links nobody clicked and most of which expire unused.
+ *
+ * Opened via a click handler rather than an <a download>: the file lives
+ * behind a signed URL that does not exist until this runs.
+ */
+function ProofLink({ topupId }: { readonly topupId: string }): ReactElement {
+  const proof = useTopupProofUrl();
+  return (
+    <button
+      type="button"
+      className="text-accent min-h-[28px] underline"
+      disabled={proof.isPending}
+      onClick={() => {
+        proof.mutate(topupId, {
+          onSuccess: ({ url }) => window.open(url, '_blank', 'noopener,noreferrer'),
+        });
+      }}
+    >
+      {proof.isPending ? 'Opening…' : 'View receipt'}
+    </button>
   );
 }
