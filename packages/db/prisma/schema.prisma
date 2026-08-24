@@ -99,6 +99,9 @@ model StaffUser {
   courierModeChallenges      CourierModeChallenge[]        @relation("CourierModeChallengeStaff")
   bankChangesDecided         SellerBankChangeRequest[]     @relation("BankChangeDecidedBy")
 
+  sellerRestrictionsCreated SellerRestriction[] @relation("SellerRestrictionCreatedBy")
+  sellerRestrictionsLifted  SellerRestriction[] @relation("SellerRestrictionLiftedBy")
+
   @@index([role])
   @@index([deletedAt])
   @@index([roleId], map: "staff_users_role_id_idx")
@@ -273,6 +276,7 @@ model Seller {
   courierAccountLinks      SellerCourierAccountLink[]
   inviteLeads              InviteLead[]                   @relation("InviteLeadConvertedSeller")
   roles                    SellerRoleDefinition[]
+  restrictions             SellerRestriction[]
   sellerBankChangeRequests SellerBankChangeRequest[]
   consignments             Consignment[]
   sellerFavouriteVariants  SellerFavouriteVariant[]
@@ -4036,6 +4040,82 @@ enum BankChangeStatus {
   REJECTED @map("rejected")
 
   @@map("bank_change_status")
+}
+
+/// What a seller is stopped from STARTING while they owe us money.
+///
+/// Every value is an ENTRY POINT on purpose. Blocking something already
+/// in flight does not protect the money — a parcel with the courier
+/// still has to be delivered, tracked and returned, and stopping that
+/// halfway leaves goods stranded that we are still paying to move. The
+/// three that DO touch moving work are offered anyway, because an
+/// operator sometimes needs them, and the admin screen says what they
+/// cost rather than the model pretending they are the same as the rest.
+enum SellerCapability {
+  /// Placing an order — the main lever, and the safe one.
+  ORDER_CREATE       @map("order_create")
+  /// Confirming one. Stops stock being committed to a seller who owes.
+  ORDER_CONFIRM      @map("order_confirm")
+  /// Declaring new inbound stock.
+  CONSIGNMENT_CREATE @map("consignment_create")
+  /// Asking for money out while they owe money in.
+  PAYOUT_REQUEST     @map("payout_request")
+  /// MOVING WORK — handing parcels to the courier.
+  SHIPMENT_DISPATCH  @map("shipment_dispatch")
+  /// MOVING WORK — the seller's view of parcels already travelling.
+  TRACKING_VIEW      @map("tracking_view")
+  /// MOVING WORK — booking a return back into the warehouse.
+  RTO_RECEIVE        @map("rto_receive")
+
+  @@map("seller_capability")
+}
+
+/// A restriction placed on a seller by a person, lifted by their money.
+///
+/// Deliberately asymmetric: applying one is a human decision — an
+/// automatic block at 2am over a rounding error is discovered by a
+/// failed order — but CLEARING one is not. The seller tops up past
+/// `clearAtBalanceInr` and the next thing they do simply works, without
+/// waiting for anyone to notice.
+///
+/// Never blocks the wallet. A seller who cannot see what they owe or
+/// pay it has been removed from the only path back to paying us.
+model SellerRestriction {
+  id                  String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId            String             @map("seller_id") @db.Uuid
+  /// Chosen per seller — what one owes for is not what another does.
+  blockedCapabilities SellerCapability[] @map("blocked_capabilities")
+  /// Lift automatically once the wallet reaches this. The banner counts
+  /// down to it, so the seller always knows the exact number.
+  clearAtBalanceInr   Decimal            @map("clear_at_balance_inr") @db.Decimal(14, 2)
+  /// Shown to the SELLER, not just logged. A block whose reason they
+  /// cannot read is one they will phone about instead of fixing.
+  reason              String             @db.Text
+  createdByStaffId    String             @map("created_by_staff_id") @db.Uuid
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  /// Null while in force. Set by the balance being reached, or by hand.
+  liftedAt            DateTime?          @map("lifted_at") @db.Timestamptz
+  /// Null when the balance lifted it — nobody did, so nobody is named.
+  liftedByStaffId     String?            @map("lifted_by_staff_id") @db.Uuid
+  liftReason          String?            @map("lift_reason") @db.Text
+  updatedAt           DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller         Seller     @relation(fields: [sellerId], references: [id])
+  createdByStaff StaffUser  @relation("SellerRestrictionCreatedBy", fields: [createdByStaffId], references: [id])
+  liftedByStaff  StaffUser? @relation("SellerRestrictionLiftedBy", fields: [liftedByStaffId], references: [id])
+
+  /// At most ONE restriction in force per seller — a migration-only
+  /// PARTIAL unique (seller_restrictions_one_active_per_seller, WHERE
+  /// lifted_at IS NULL), because Prisma cannot express one and an
+  /// unconditional unique would be wrong: a seller blocked, cleared, and
+  /// blocked again next month has three rows and should.
+  ///
+  /// Two live rows would mean two answers to "is this blocked", and the
+  /// guard would have to pick one. An application-level check would not
+  /// hold either — read-then-write under READ COMMITTED lets two
+  /// operators both see none and both insert.
+  @@index([sellerId, liftedAt])
+  @@map("seller_restrictions")
 }
 
 enum SellerStatus {

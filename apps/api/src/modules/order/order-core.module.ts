@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { SellerRestrictionModule } from '../seller-restriction/seller-restriction.module';
 import { CatalogReadModule } from '../catalog-read/catalog-read.module';
 import { InventoryStockModule } from '../inventory-stock/inventory-stock.module';
 import { CallQueueModule } from '../call-queue/call-queue.module';
@@ -44,6 +45,7 @@ import { OrderAdminOverrideService } from './services/order-admin-override.servi
     // persistForOrderSystem() — best-effort, never rolls back.
     OrderChargesModule,
     EarlyReservationModule,
+    SellerRestrictionModule,
   ],
   providers: [
     OrderNumberingService,

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { SellerRestrictionModule } from '../seller-restriction/seller-restriction.module';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
@@ -17,7 +18,7 @@ import { WithdrawalRequestService } from './services/withdrawal-request.service'
  * admin's job via its own controller here).
  */
 @Module({
-  imports: [AuthCommonModule, SellerWalletModule, SettingsModule],
+  imports: [AuthCommonModule, SellerWalletModule, SettingsModule, SellerRestrictionModule],
   controllers: [SellerWithdrawalRequestController, AdminWithdrawalRequestController],
   providers: [
     WithdrawalRequestService,

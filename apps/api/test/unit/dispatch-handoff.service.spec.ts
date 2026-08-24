@@ -27,7 +27,8 @@ function makeService(
           status: opts.manifestStatus ?? ManifestStatus.CONFIRMED,
           shipments: ships.map((s) => ({
             id: s.id,
-            orderShipments: s.orderId === null ? [] : [{ orderId: s.orderId }],
+            orderShipments:
+              s.orderId === null ? [] : [{ orderId: s.orderId, order: { sellerId: 'seller-1' } }],
           })),
         }
       : opts.manifest,
@@ -59,6 +60,9 @@ function makeService(
   };
   const svc = new DispatchHandoffService(
     { client } as unknown as PrismaService,
+    // Not on hold. A restricted seller is covered in
+    // seller-restriction.service.spec.
+    { assertAllowed: async () => undefined } as never,
     audit as unknown as AuditLogService,
     orderWrite as unknown as OrderWriteService,
     unitLedger as unknown as StockUnitService,

@@ -1,5 +1,7 @@
+import { ForbiddenException } from '@nestjs/common';
 import { Currency, Prisma, WithdrawalRequestedBy, WithdrawalRequestStatus } from '@skydrop/db';
 import { WithdrawalRequestService } from '../../src/modules/seller-wallet-withdrawal/services/withdrawal-request.service';
+import type { SellerRestrictionService } from '../../src/modules/seller-restriction/services/seller-restriction.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
@@ -36,6 +38,8 @@ function makeService(
     remittance?: AnyArgs | null;
     /** null / '' ⇒ the seller has no bank details on file. */
     bankAccountNumber?: string | null;
+    /** Simulate a seller placed on hold by an admin. */
+    restricted?: boolean;
     /** Simulate another admin resolving the request first — the guarded
      *  claim then matches 0 rows. */
     claimLoses?: boolean;
@@ -147,6 +151,15 @@ function makeService(
 
   const svc = new WithdrawalRequestService(
     prisma,
+    // Not on hold, unless a case says otherwise. A restricted seller is
+    // covered in seller-restriction.service.spec.
+    {
+      assertAllowed: jest.fn(async () => {
+        if (opts.restricted === true) {
+          throw new ForbiddenException({ code: 'SELLER_RESTRICTED', message: 'on hold' });
+        }
+      }),
+    } as unknown as SellerRestrictionService,
     audit as unknown as AuditLogService,
     wallet as unknown as WalletService,
     settings as unknown as SettingsResolverService,

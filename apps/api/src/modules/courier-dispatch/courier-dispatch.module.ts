@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { SellerRestrictionModule } from '../seller-restriction/seller-restriction.module';
 import { OrderModule } from '../order/order.module';
 import { DispatchHandoffService } from './services/dispatch-handoff.service';
 import { DispatchController } from './controllers/dispatch.controller';
@@ -20,7 +21,7 @@ import { InventorySharedModule } from '../inventory-shared/inventory-shared.modu
  * LEAF consumer — nothing imports `courier-dispatch`.
  */
 @Module({
-  imports: [OrderModule, InventorySharedModule],
+  imports: [OrderModule, InventorySharedModule, SellerRestrictionModule],
   controllers: [DispatchController],
   providers: [DispatchHandoffService, StaffJwtGuard],
   exports: [DispatchHandoffService],

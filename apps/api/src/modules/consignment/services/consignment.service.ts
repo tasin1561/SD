@@ -8,8 +8,10 @@ import {
   GoodsReceiptStatus,
   LabellingSite,
   Prisma,
+  SellerCapability,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { SellerRestrictionService } from '../../seller-restriction/services/seller-restriction.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { ConsignmentEventService } from '../../consignment-core/services/consignment-event.service';
 import { ConsignmentNumberingService } from '../../consignment-core/services/consignment-numbering.service';
@@ -81,6 +83,7 @@ export type ConsignmentView = Prisma.ConsignmentGetPayload<{
 export class ConsignmentService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly restrictions: SellerRestrictionService,
     private readonly audit: AuditLogService,
     private readonly numbering: ConsignmentNumberingService,
     private readonly events: ConsignmentEventService,
@@ -113,6 +116,8 @@ export class ConsignmentService {
     },
     ctx: ClientContext,
   ): Promise<ConsignmentView> {
+    await this.restrictions.assertAllowed(sellerId, SellerCapability.CONSIGNMENT_CREATE);
+
     // Resolved BEFORE anything is written. A VIA_BD declaration with no
     // Bangladesh warehouse configured must fail with nothing created,
     // rather than leaving a consignment that can never take a leg.

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { SellerRestrictionModule } from '../seller-restriction/seller-restriction.module';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { ConsignmentCoreModule } from '../consignment-core/consignment-core.module';
@@ -29,6 +30,7 @@ import { ConsignmentService } from './services/consignment.service';
     InventorySharedModule,
     ShipmentProvisionModule,
     EmailModule,
+    SellerRestrictionModule,
   ],
   controllers: [SellerConsignmentController, AdminConsignmentController],
   providers: [

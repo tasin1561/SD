@@ -26,6 +26,9 @@ function svcWith(row: Any) {
   const noop = {} as unknown;
   const svc = new ConsignmentService(
     { client } as unknown as PrismaService,
+    // Not on hold. A restricted seller is covered in
+    // seller-restriction.service.spec.
+    { assertAllowed: async () => undefined } as never,
     { log: async () => undefined } as unknown as AuditLogService,
     noop as ConsignmentNumberingService,
     { append: async () => ({ id: 'ce1' }) } as unknown as ConsignmentEventService,

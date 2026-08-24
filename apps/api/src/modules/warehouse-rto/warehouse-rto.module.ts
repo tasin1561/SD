@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { SellerRestrictionModule } from '../seller-restriction/seller-restriction.module';
 import { OrderModule } from '../order/order.module';
 import { InventorySharedModule } from '../inventory-shared/inventory-shared.module';
 import { RtoReceiptService } from './services/rto-receipt.service';
@@ -49,6 +50,7 @@ import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-walle
     InventoryTransferModule,
     // A returned parcel is charged delivery + RTO fee at receive.
     SellerWalletAccrualModule,
+    SellerRestrictionModule,
   ],
   controllers: [WarehouseRtoController],
   providers: [

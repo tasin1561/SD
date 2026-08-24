@@ -5,8 +5,10 @@ import {
   ShipmentStatus,
   StockUnitStatus,
   WarehouseStatus,
+  SellerCapability,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { SellerRestrictionService } from '../../seller-restriction/services/seller-restriction.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderReadService } from '../../order/services/order-read.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
@@ -52,6 +54,7 @@ export class RtoReceiptService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly restrictions: SellerRestrictionService,
     private readonly orders: OrderReadService,
     private readonly orderWrite: OrderWriteService,
     private readonly audit: AuditLogService,
@@ -83,12 +86,24 @@ export class RtoReceiptService {
         originWarehouseId: true,
         rtoReceivedWarehouseId: true,
         orderShipments: {
-          select: { orderId: true },
+          // The seller comes through the ORDER — a shipment has none.
+          select: { orderId: true, order: { select: { sellerId: true } } },
           orderBy: { shipmentSequence: 'asc' },
           take: 1,
         },
       },
     });
+    if (shipment !== null) {
+      // A hold can cover booking returns back in. Offered because an
+      // operator occasionally needs it, and it is the one that costs
+      // the most: goods physically arrive whether or not we record
+      // them, so a blocked return is a carton on the bench with no row
+      // behind it. The admin screen says so before it is chosen.
+      const sellerId = shipment.orderShipments[0]?.order.sellerId ?? null;
+      if (sellerId !== null) {
+        await this.restrictions.assertAllowed(sellerId, SellerCapability.RTO_RECEIVE);
+      }
+    }
     if (!shipment) {
       throw new NotFoundException({
         code: 'SHIPMENT_NOT_FOUND',

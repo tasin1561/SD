@@ -33,7 +33,7 @@ function makeService(
     rtoReceivedAt: null,
     originWarehouseId: ORIGIN_WH,
     rtoReceivedWarehouseId: null,
-    orderShipments: [{ orderId: ORDER }],
+    orderShipments: [{ orderId: ORDER, order: { sellerId: 'seller-1' } }],
   };
   const shipmentFindFirst = jest.fn(async () =>
     opts.shipment === undefined ? defaultShipment : opts.shipment,
@@ -81,6 +81,8 @@ function makeService(
   };
   const svc = new RtoReceiptService(
     { client } as unknown as PrismaService,
+    // Not on hold — see seller-restriction.service.spec.
+    { assertAllowed: async () => undefined } as never,
     orders as unknown as OrderReadService,
     orderWrite as unknown as OrderWriteService,
     audit as unknown as AuditLogService,
@@ -151,7 +153,7 @@ describe('RtoReceiptService.receive', () => {
         rtoReceivedAt: stampedAt,
         originWarehouseId: ORIGIN_WH,
         rtoReceivedWarehouseId: null,
-        orderShipments: [{ orderId: ORDER }],
+        orderShipments: [{ orderId: ORDER, order: { sellerId: 'seller-1' } }],
       },
     });
     const r = await svc.receive(AWB, STAFF);
@@ -199,7 +201,7 @@ describe('RtoReceiptService.receive', () => {
         rtoReceivedAt: prior,
         originWarehouseId: ORIGIN_WH,
         rtoReceivedWarehouseId: null,
-        orderShipments: [{ orderId: ORDER }],
+        orderShipments: [{ orderId: ORDER, order: { sellerId: 'seller-1' } }],
       },
       orderStatus: OrderStatus.RTO_IN_TRANSIT,
     });
@@ -286,7 +288,7 @@ describe('RtoReceiptService.receive', () => {
         rtoReceivedAt: stampedAt,
         originWarehouseId: ORIGIN_WH,
         rtoReceivedWarehouseId: OTHER_WH,
-        orderShipments: [{ orderId: ORDER }],
+        orderShipments: [{ orderId: ORDER, order: { sellerId: 'seller-1' } }],
       },
       warehouse: { id: ORIGIN_WH, status: WarehouseStatus.ACTIVE },
     });

@@ -5,8 +5,10 @@ import {
   OrderStatus,
   ShipmentStatus,
   StockUnitStatus,
+  SellerCapability,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { SellerRestrictionService } from '../../seller-restriction/services/seller-restriction.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
 import { StockUnitService } from '../../inventory-shared/stock-unit.service';
@@ -59,6 +61,7 @@ export class DispatchHandoffService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly restrictions: SellerRestrictionService,
     private readonly audit: AuditLogService,
     private readonly orderWrite: OrderWriteService,
     private readonly units: StockUnitService,
@@ -86,7 +89,9 @@ export class DispatchHandoffService {
           select: {
             id: true,
             orderShipments: {
-              select: { orderId: true },
+              // The seller comes through the ORDER — a shipment has no
+              // seller of its own.
+              select: { orderId: true, order: { select: { sellerId: true } } },
               orderBy: { shipmentSequence: 'asc' },
               take: 1,
             },
@@ -136,6 +141,18 @@ export class DispatchHandoffService {
         continue;
       }
       try {
+        // A seller on hold has THEIR parcels skipped — the manifest is
+        // not abandoned. One manifest can carry several sellers, and
+        // refusing the whole handoff over one of them would strand
+        // everybody else's parcels at the counter with the van waiting.
+        //
+        // Recorded as a failure rather than passed over silently: an
+        // operator handing over a stack needs to know which ones came
+        // back, and the courier is standing there.
+        const sellerId = ship.orderShipments[0]?.order.sellerId ?? null;
+        if (sellerId !== null) {
+          await this.restrictions.assertAllowed(sellerId, SellerCapability.SHIPMENT_DISPATCH);
+        }
         await this.orderWrite.transitionStatus({
           orderId,
           to: OrderStatus.DISPATCHED,

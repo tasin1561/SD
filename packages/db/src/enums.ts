@@ -6,6 +6,7 @@ export {
   // Layer 1 — Identity & Access
   StaffRole,
   BankChangeStatus,
+  SellerCapability,
   SellerStatus,
   Currency,
   TopupRequestStatus,

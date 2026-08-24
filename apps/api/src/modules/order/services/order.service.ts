@@ -12,8 +12,10 @@ import {
   PaymentMode,
   Prisma,
   VariantStatus,
+  SellerCapability,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { SellerRestrictionService } from '../../seller-restriction/services/seller-restriction.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
@@ -177,6 +179,7 @@ export class OrderService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly restrictions: SellerRestrictionService,
     private readonly numbering: OrderNumberingService,
     private readonly customers: CustomerService,
     private readonly reputation: CustomerReputationService,
@@ -280,6 +283,12 @@ export class OrderService {
     ctx: ClientContext,
     options: CreateOrderOptions = {},
   ): Promise<OrderView> {
+    // A seller on hold cannot start new work. Checked here rather than
+    // in the controller so the CSV importer — which reaches this same
+    // method with no screen in front of it — is covered by the same
+    // line.
+    await this.restrictions.assertAllowed(sellerId, SellerCapability.ORDER_CREATE);
+
     const source = options.source ?? OrderSource.MANUAL;
     const initialStatus = options.initialStatus ?? OrderStatus.DRAFT;
     if (initialStatus !== OrderStatus.DRAFT && initialStatus !== OrderStatus.PENDING_CONFIRMATION) {

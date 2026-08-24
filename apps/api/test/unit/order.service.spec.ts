@@ -155,6 +155,9 @@ function makeService(
 
   const svc = new OrderService(
     { client } as unknown as PrismaService,
+    // Not on hold. A restricted seller is covered in
+    // seller-restriction.service.spec.
+    { assertAllowed: async () => undefined } as never,
     numbering as never,
     customers as never,
     reputation as never,

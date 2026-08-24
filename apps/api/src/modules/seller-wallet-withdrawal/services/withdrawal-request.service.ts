@@ -10,9 +10,11 @@ import {
   Prisma,
   WithdrawalRequestedBy,
   WithdrawalRequestStatus,
+  SellerCapability,
 } from '@skydrop/db';
 import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { SellerRestrictionService } from '../../seller-restriction/services/seller-restriction.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
@@ -61,6 +63,7 @@ const RESOLVED_STATUSES: WithdrawalRequestStatus[] = [
 export class WithdrawalRequestService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly restrictions: SellerRestrictionService,
     private readonly audit: AuditLogService,
     private readonly wallet: WalletService,
     private readonly settings: SettingsResolverService,
@@ -216,6 +219,14 @@ export class WithdrawalRequestService {
           message: `Already submitted ${monthCount} withdrawal request(s) in the last 30 days (limit ${maxPerMonth.value})`,
         });
       }
+
+      // A seller on hold cannot take money out.
+      //
+      // Inside the transaction with the other guards, and reached by
+      // BOTH the manual request and the nightly sweep — an automatic
+      // path that could move money a manual one could not is backwards
+      // (WAL-3).
+      await this.restrictions.assertAllowed(sellerId, SellerCapability.PAYOUT_REQUEST);
 
       // Somewhere to pay it TO.
       //
