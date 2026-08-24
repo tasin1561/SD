@@ -43,8 +43,6 @@ const ADMIN_GATE = '../lib/page-access.ts';
 const SUBMIT_DTO = '../../../api/src/modules/wallet-topup/dto/wallet-topup.dto.ts';
 
 describe('WAL-2 — the seller is never told the money arrived', () => {
-  const src = R(SELLER_CARD);
-
   it('the wording never promises credit (WAL-2)', () => {
     // A seller is telling us what they SENT, not adding money. The
     // wizard says so at both ends — before they pay and after they
