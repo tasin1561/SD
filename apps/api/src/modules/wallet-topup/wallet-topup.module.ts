@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { EmailModule } from '../email/email.module';
 import { FxModule } from '../fx/fx.module';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
@@ -16,7 +17,7 @@ import { AdminPlatformBankAccountController } from './controllers/admin-platform
  * after an operator has confirmed the transfer against a bank statement.
  */
 @Module({
-  imports: [SellerWalletModule, FxModule],
+  imports: [SellerWalletModule, FxModule, EmailModule],
   controllers: [SellerTopupController, AdminTopupController, AdminPlatformBankAccountController],
   providers: [WalletTopupService, SellerJwtGuard, StaffJwtGuard],
 })

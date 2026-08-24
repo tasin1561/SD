@@ -3,12 +3,21 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, Currency, Prisma, TopupRequestStatus, WalletEntryDirection } from '@skydrop/db';
+import {
+  ActorType,
+  Currency,
+  NotificationRecipientType,
+  Prisma,
+  TopupRequestStatus,
+  WalletEntryDirection,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { EmailQueue } from '../../email/queue/email.queue';
 import { FxRateService } from '../../fx/services/fx-rate.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
@@ -72,11 +81,28 @@ export class WalletTopupService {
     private readonly audit: AuditLogService,
     private readonly wallet: WalletService,
     private readonly fx: FxRateService,
+    private readonly email: EmailQueue,
   ) {}
 
+  private readonly logger = new Logger(WalletTopupService.name);
+
   /** The accounts a seller may send money to. */
-  async listBankAccounts(): Promise<
-    Array<{
+  /**
+   * The accounts a seller may send money to, each carrying the rate that
+   * turns what they paid into what lands in their wallet.
+   *
+   * The rate comes from the SERVER rather than being worked out in the
+   * browser. A seller paying in taka sees the rupee figure that will be
+   * credited before they commit, and that figure has to come from the
+   * same table the credit will use — two independent conversions
+   * eventually disagree, and the one the seller was shown is the one
+   * they will quote back.
+   *
+   * A rate that cannot be resolved is null, not 1. Silently treating
+   * 100 taka as 100 rupees is the worst possible failure here.
+   */
+  async listBankAccounts(): Promise<{
+    accounts: Array<{
       id: string;
       label: string;
       bankName: string;
@@ -88,9 +114,12 @@ export class WalletTopupService {
       routingNumber: string | null;
       currency: Currency;
       instructions: string | null;
-    }>
-  > {
-    return this.prisma.client.platformBankAccount.findMany({
+      rateToInr: string | null;
+    }>;
+    /** For showing the taka equivalent of a rupee amount. */
+    inrToBdt: string | null;
+  }> {
+    const rows = await this.prisma.client.platformBankAccount.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: [{ displayOrder: 'asc' }, { label: 'asc' }],
       select: {
@@ -107,6 +136,20 @@ export class WalletTopupService {
         instructions: true,
       },
     });
+
+    const rate = async (from: Currency, to: Currency): Promise<string | null> => {
+      if (from === to) return '1';
+      try {
+        return (await this.fx.getRate(from, to)).toString();
+      } catch {
+        return null;
+      }
+    };
+    const inrToBdt = await rate(Currency.INR, Currency.BDT);
+    const accounts = await Promise.all(
+      rows.map(async (r) => ({ ...r, rateToInr: await rate(r.currency, Currency.INR) })),
+    );
+    return { accounts, inrToBdt };
   }
 
   /**
@@ -209,7 +252,51 @@ export class WalletTopupService {
       },
     });
 
+    await this.notifySeller(sellerId, 'seller.topup_submitted.email', {
+      amount: `${bank.currency} ${amount.toFixed(2)}`,
+      bank_label: bank.label,
+      reference: ref.length > 0 ? ref : 'receipt uploaded',
+    });
+
     return this.toView(row, bank.label);
+  }
+
+  /**
+   * Tell the seller what happened to their money.
+   *
+   * BEST-EFFORT and deliberately so: a seller has already sent real
+   * money, and an email provider being down must never undo the record
+   * of it or block an operator from crediting a wallet. The audit row
+   * and the request row are the durable facts; this is the courtesy.
+   *
+   * Legacy fire-once caller (no `eventId`) — see the two idempotency
+   * regimes in CLAUDE.md. These fire on state changes that are
+   * themselves guarded, so a duplicate needs a duplicate transition
+   * first.
+   */
+  private async notifySeller(
+    sellerId: string,
+    templateCode: string,
+    variables: Record<string, string>,
+  ): Promise<void> {
+    try {
+      const seller = await this.prisma.client.seller.findUnique({
+        where: { id: sellerId },
+        select: { email: true, companyName: true },
+      });
+      if (seller === null) return;
+      await this.email.enqueue({
+        templateCode,
+        recipient: { type: NotificationRecipientType.SELLER, id: sellerId, email: seller.email },
+        variables: { company_name: seller.companyName, ...variables },
+        triggerEvent: templateCode,
+      });
+    } catch (e) {
+      this.logger.warn(
+        { sellerId, templateCode, err: (e as Error).message },
+        'Top-up notification failed to enqueue; the request itself is unaffected',
+      );
+    }
   }
 
   /**
@@ -255,6 +342,10 @@ export class WalletTopupService {
         message: `This request is already ${existing.status.toLowerCase()}`,
       });
     }
+    // Hoisted so the acceptance email can quote what actually
+    // reached the wallet, which is not what the seller sent when they
+    // paid in taka.
+    let credited = new Prisma.Decimal(0);
 
     const updated = await this.prisma.client.$transaction(async (tx) => {
       const claimed = await tx.walletTopupRequest.updateMany({
@@ -286,7 +377,7 @@ export class WalletTopupService {
       // the same reasoning as the remittance fix: the wallet records
       // what is OWED, in one currency; the bank movement is recorded
       // where it happened.
-      const credited =
+      credited =
         existing.currency === Currency.INR
           ? existing.amount
           : new Prisma.Decimal(
@@ -339,6 +430,13 @@ export class WalletTopupService {
         requestId: ctx?.requestId,
       },
     });
+    await this.notifySeller(existing.sellerId, 'seller.topup_accepted.email', {
+      amount: `${existing.currency} ${existing.amount.toFixed(2)}`,
+      credited: `INR ${credited.toFixed(2)}`,
+      bank_label: existing.bankLabel,
+      reference: existing.transactionRef ?? 'receipt on file',
+    });
+
     return this.toView(updated, existing.bankLabel);
   }
 
@@ -386,6 +484,13 @@ export class WalletTopupService {
         requestId: ctx?.requestId,
       },
     });
+    await this.notifySeller(existing.sellerId, 'seller.topup_rejected.email', {
+      amount: `${existing.currency} ${existing.amount.toFixed(2)}`,
+      bank_label: existing.bankLabel,
+      reference: existing.transactionRef ?? 'no reference given',
+      reason: reason.trim(),
+    });
+
     const row = await this.requireRequest(topupId);
     return this.toView(row, row.bankLabel);
   }

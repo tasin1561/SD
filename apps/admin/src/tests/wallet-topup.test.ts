@@ -19,7 +19,21 @@ import { describe, expect, it } from 'vitest';
 
 const R = (p: string): string => readFileSync(join(__dirname, p), 'utf8');
 
+/**
+ * The same source with whitespace collapsed, for assertions about a
+ * SENTENCE rather than structure. Prettier rewraps JSX text whenever a
+ * line grows, so a phrase can end up split across two lines without
+ * anybody editing it.
+ */
+const flat = (src: string): string => src.replace(/\s+/g, ' ');
+
 const SELLER_CARD = '../../../seller/src/app/(authed)/wallet/_components/topup-card.tsx';
+/**
+ * The FORM. It left the card when recording a transfer became a
+ * three-step wizard — the card is now only the history of what was
+ * claimed, so the wording and evidence assertions belong here.
+ */
+const SELLER_FORM = '../../../seller/src/app/(authed)/wallet/_components/topup-wizard.tsx';
 const SELLER_PAGE = '../../../seller/src/app/(authed)/wallet/page.tsx';
 const SELLER_HOOKS = '../../../seller/src/lib/api-hooks.ts';
 const ADMIN_INDEX = '../app/(authed)/topups/_components/topups-index.tsx';
@@ -31,17 +45,21 @@ const SUBMIT_DTO = '../../../api/src/modules/wallet-topup/dto/wallet-topup.dto.t
 describe('WAL-2 — the seller is never told the money arrived', () => {
   const src = R(SELLER_CARD);
 
-  it('the wording asks to RECORD a top-up, it never promises credit', () => {
-    // The verb is the whole point (WAL-2): a seller is telling us what
-    // they sent, not adding money. The negative list is what the copy
-    // must never drift into.
-    expect(src).toContain('Record a top-up');
-    expect(src).not.toMatch(/Add funds|Top up now|credited instantly/i);
+  it('the wording never promises credit (WAL-2)', () => {
+    // A seller is telling us what they SENT, not adding money. The
+    // wizard says so at both ends — before they pay and after they
+    // submit — and the negative list is what the copy must never drift
+    // into.
+    const form = R(SELLER_FORM);
+    expect(flat(form)).toContain('Nothing reaches your balance until we match it');
+    expect(flat(form)).toContain('Nothing has been added to your balance yet');
+    expect(form).not.toMatch(/Add funds|Top up now|credited instantly/i);
   });
 
   it('the success message says recorded, not credited', () => {
-    expect(src).toContain('Top-up recorded');
-    expect(src).toContain('once we see it on our statement');
+    const form = R(SELLER_FORM);
+    expect(form).toContain('Top-up recorded');
+    expect(form).toContain('24');
   });
 
   it('submitting does NOT invalidate the balance, because nothing moved', () => {
@@ -58,9 +76,9 @@ describe('a claim without evidence cannot be submitted', () => {
   it('the form requires a reference OR a receipt, mirroring the server', () => {
     // Without one there is nothing to match against the statement, so
     // the claim could never be resolved either way.
-    const src = R(SELLER_CARD);
+    const src = R(SELLER_FORM);
     expect(src).toContain("transactionRef.trim() !== '' || proof !== null");
-    expect(src).toMatch(/canSubmit =[\s\S]{0,120}hasReference/);
+    expect(src).toMatch(/canSubmit=\{[\s\S]{0,120}hasEvidence/);
   });
 
   it('the server agrees that both are optional individually', () => {

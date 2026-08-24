@@ -1987,6 +1987,33 @@ function autoHtmlFromText(subject: string, body: string): string {
 // the customer apps land).
 const notificationTemplates: TemplateSeed[] = [
   {
+    code: 'seller.topup_submitted.email',
+    name: 'Top-up recorded — awaiting verification',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'We have your top-up of {{ amount }} — checking our statement now',
+    bodyTemplate:
+      'Thanks {{ company_name }} — we have recorded your transfer.\n\nAmount: {{ amount }}\nPaid into: {{ bank_label }}\nReference: {{ reference }}\n\nNothing has been added to your balance yet. We check this against our bank statement by hand, which usually takes 24-48 hours, and your wallet is credited the moment it is matched. We will email you either way.\n\nIf you sent the money but the details above look wrong, reply to this email before the 24 hours are up — it is much easier to fix now than after.',
+  },
+  {
+    code: 'seller.topup_accepted.email',
+    name: 'Top-up verified — wallet credited',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Your top-up of {{ amount }} is in — wallet credited',
+    bodyTemplate:
+      'We found your payment on our statement and credited your wallet.\n\nAmount: {{ amount }}\nCredited: {{ credited }}\nPaid into: {{ bank_label }}\nReference: {{ reference }}\n\nIt is available to spend now. You can see the entry on your wallet ledger.',
+  },
+  {
+    code: 'seller.topup_rejected.email',
+    name: 'Top-up could not be verified',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'We could not verify your top-up of {{ amount }}',
+    bodyTemplate:
+      'We were not able to match your transfer against our bank statement, so nothing has been added to your balance.\n\nAmount: {{ amount }}\nPaid into: {{ bank_label }}\nReference: {{ reference }}\n\nWhy: {{ reason }}\n\nThis is usually a reference we could not find, an amount that does not match, or a payment that has not cleared yet. If the money did leave your account, reply to this email with the transaction reference or a receipt and we will look again — your money is not lost, we just cannot see it from here yet.',
+  },
+  {
     code: 'ops.courier_portal_challenge.email',
     name: 'Courier portal challenge — a human must sign in',
     channel: NotificationChannel.EMAIL,

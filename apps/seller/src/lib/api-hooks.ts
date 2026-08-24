@@ -1214,6 +1214,13 @@ export interface PlatformBankAccountView {
   readonly branchName: string | null;
   readonly district: string | null;
   readonly routingNumber: string | null;
+  /**
+   * This account's currency to INR. Server-computed so the figure the
+   * seller is shown before paying is the same one that will be credited
+   * — two independent conversions eventually disagree, and the one they
+   * were shown is the one they will quote back. Null if unresolvable.
+   */
+  readonly rateToInr: string | null;
   readonly currency: string;
   readonly instructions: string | null;
 }
@@ -1245,12 +1252,18 @@ export interface SubmitTopupInput {
   readonly proofMimeType?: string;
 }
 
-export function useTopupBankAccounts(): UseQueryResult<readonly PlatformBankAccountView[]> {
+export interface TopupBankAccountsResponse {
+  readonly accounts: readonly PlatformBankAccountView[];
+  /** For showing the taka equivalent of a rupee amount. Null if unknown. */
+  readonly inrToBdt: string | null;
+}
+
+export function useTopupBankAccounts(): UseQueryResult<TopupBankAccountsResponse> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['seller-wallet', 'topup-banks'],
     queryFn: () =>
-      client.request<readonly PlatformBankAccountView[]>('/api/seller/wallet/topups/bank-accounts'),
+      client.request<TopupBankAccountsResponse>('/api/seller/wallet/topups/bank-accounts'),
   });
 }
 
