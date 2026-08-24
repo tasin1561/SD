@@ -403,13 +403,46 @@ function PaymentDetails(props: {
         htmlFor="tw-proof"
         hint="A screenshot or PDF of the transfer (JPG, PNG, WEBP, PDF)."
       >
-        <input
-          id="tw-proof"
-          type="file"
-          accept="image/jpeg,image/png,image/webp,application/pdf"
-          className="text-text-body text-sm"
-          onChange={(e) => props.onProof(e.target.files?.[0] ?? null)}
-        />
+        {/* A bare file input renders as unstyled system text — "Choose
+            File No file chosen" — which does not read as a control at
+            all, on a step where uploading a receipt is one of only two
+            ways to proceed. The `file:` variants style the button the
+            browser draws for us; the filename is echoed separately
+            because the native one truncates and cannot be cleared. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            id="tw-proof"
+            /* Remounts on clear, which resets the NATIVE value too.
+               Without it the element still holds the file after Remove,
+               so re-picking the same one fires no change event and the
+               seller is stuck with a field that ignores them. */
+            key={props.proof === null ? 'empty' : 'chosen'}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,application/pdf"
+            className={
+              'text-text-muted min-h-[36px] max-w-full text-sm ' +
+              'file:border-border file:bg-surface-raised file:text-text-body ' +
+              'file:mr-3 file:cursor-pointer file:rounded-md file:border file:px-3 file:py-1.5 ' +
+              'file:text-sm file:font-medium file:transition-colors ' +
+              'hover:file:border-accent hover:file:text-accent'
+            }
+            onChange={(e) => props.onProof(e.target.files?.[0] ?? null)}
+          />
+          {props.proof !== null && (
+            <button
+              type="button"
+              className="text-text-muted hover:text-text-body min-h-[32px] text-xs underline"
+              onClick={() => props.onProof(null)}
+            >
+              Remove
+            </button>
+          )}
+        </div>
+        {props.proof !== null && (
+          <p className="text-text-faint mt-1 text-xs">
+            {props.proof.name} · {(props.proof.size / 1024).toFixed(0)} KB
+          </p>
+        )}
       </FormField>
 
       {/* Either identifies the payment on a statement; neither leaves us
