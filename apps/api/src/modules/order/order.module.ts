@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { SellerRestrictionModule } from '../seller-restriction/seller-restriction.module';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { InventoryStockModule } from '../inventory-stock/inventory-stock.module';
@@ -73,6 +74,7 @@ import { OrderWriteService } from './services/order-write.service';
     // pricing / inbound-freight and none of them reach back here, so
     // this does not close a cycle.
     SellerWalletAccrualModule,
+    SellerRestrictionModule,
   ],
   controllers: [
     SellerOrderController,

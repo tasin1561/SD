@@ -19,6 +19,7 @@ import {
   Section,
   SellerStatusBadge,
 } from '@skydrop/ui/components';
+import { RestrictionPanel } from './restriction-panel';
 import { StatusActionPanel } from './status-action-panel';
 import { IdentityCorrectionPanel } from './identity-correction-panel';
 import { SellerSettingsSection } from './seller-settings-section';
@@ -143,6 +144,10 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
                 />
               </CardBody>
             </Card>
+          </Section>
+
+          <Section title="Account hold">
+            <RestrictionPanel sellerId={detail.data.id} canManage={canChangeStatus} />
           </Section>
 
           <Section title="Bank account">

@@ -121,6 +121,8 @@ function makeService(
 
   const svc = new OrderWriteService(
     { client } as unknown as PrismaService,
+    // Not on hold — see seller-restriction.service.spec.
+    { assertAllowed: async () => undefined } as never,
     stateMachine,
     events as never,
     audit as never,

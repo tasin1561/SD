@@ -15,8 +15,10 @@ import {
   ReservationReleaseReason,
   ShipmentStatus,
   StockMovementType,
+  SellerCapability,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { SellerRestrictionService } from '../../seller-restriction/services/seller-restriction.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { StockMutationService } from '../../inventory-shared/stock-mutation.service';
 import {
@@ -233,6 +235,7 @@ export class OrderWriteService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly restrictions: SellerRestrictionService,
     private readonly stateMachine: OrderStateMachineService,
     private readonly events: OrderEventWriterService,
     private readonly audit: AuditLogService,
@@ -346,6 +349,20 @@ export class OrderWriteService {
 
     const from = order.status;
     const { to } = input;
+
+    // A seller on hold does not get stock committed to them.
+    //
+    // Here rather than at the call-centre screen because every path to
+    // CONFIRMED runs through this method (ORD-3) — an agent's outcome, a
+    // re-attempt approval, an admin action. The agent sees the refusal
+    // mid-call, which is the right moment: the alternative is reserving
+    // stock for an account we have already decided to stop.
+    //
+    // God mode is exempt by construction — it does not come through
+    // here (ORD-2).
+    if (to === OrderStatus.CONFIRMED && from !== OrderStatus.CONFIRMED) {
+      await this.restrictions.assertAllowed(order.sellerId, SellerCapability.ORDER_CONFIRM);
+    }
 
     if (input.expectedFrom !== undefined && input.expectedFrom !== from) {
       throw new ConflictException({

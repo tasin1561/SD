@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { SellerWalletModule } from '../seller-wallet/seller-wallet.module';
+import { AdminSellerRestrictionController } from './controllers/admin-seller-restriction.controller';
+import { SellerRestrictionController } from './controllers/seller-restriction.controller';
 import { SellerRestrictionService } from './services/seller-restriction.service';
 
 /**
@@ -11,6 +13,7 @@ import { SellerRestrictionService } from './services/seller-restriction.service'
  */
 @Module({
   imports: [AuthCommonModule, SellerWalletModule],
+  controllers: [AdminSellerRestrictionController, SellerRestrictionController],
   providers: [SellerRestrictionService],
   exports: [SellerRestrictionService],
 })

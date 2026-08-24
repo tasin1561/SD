@@ -6,6 +6,7 @@ import { useState, type ReactNode, type ReactElement } from 'react';
 import { useApiClient } from '@skydrop/auth/client';
 import type { SellerMe } from '@skydrop/api-client';
 import { AppShell, MenuButton, Toaster, type NavGroup } from '@skydrop/ui/components';
+import { RestrictionBanner } from './restriction-banner';
 import { canSeePath } from '@/lib/page-access';
 import { quickActionsFor } from '@/lib/quick-actions';
 import {
@@ -133,6 +134,9 @@ export function AuthedShell({
         }}
         signingOut={loggingOut}
       >
+        {/* A hold changes what the whole portal will do, so it is said
+            on every page rather than discovered by a refusal. */}
+        <RestrictionBanner />
         {/* Said ONCE, not on every figure. When the whole app is in
             taka, marking each amount as converted is noise; what a
             reader needs is to know the ground they are standing on and

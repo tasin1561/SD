@@ -196,6 +196,31 @@ export function useSellerWithdrawals(): UseQueryResult<readonly WithdrawalReques
   });
 }
 
+export interface ActiveRestrictionView {
+  readonly id: string;
+  readonly blockedCapabilities: readonly string[];
+  readonly clearAtBalanceInr: string;
+  readonly balanceInr: string;
+  readonly shortfallInr: string;
+  readonly reason: string;
+  readonly createdAt: string;
+}
+
+/**
+ * The hold on this account, if any.
+ *
+ * Its own query rather than a field on /me: /me is resolved once on the
+ * server per page load, and a seller who tops up needs the banner to go
+ * away without navigating.
+ */
+export function useSellerRestriction(): UseQueryResult<ActiveRestrictionView | null> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-restriction'],
+    queryFn: () => client.request<ActiveRestrictionView | null>('/api/seller/restriction'),
+  });
+}
+
 export interface WithdrawalEligibility {
   readonly withdrawableInr: string;
   readonly balanceInr: string;
