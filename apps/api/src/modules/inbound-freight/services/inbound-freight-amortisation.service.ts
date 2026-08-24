@@ -311,13 +311,39 @@ export class InboundFreightAmortisationService {
       const alloc = await this.resolveAllocation(tx, item.pickedBatchId);
       if (!alloc) continue;
 
-      const amount = alloc.perUnitInr.mul(item.quantity).toDecimalPlaces(2);
+      // Charged by RUNNING TOTAL, not per-unit rate x quantity.
+      //
+      // `perUnitInr` is a 4dp division and the parts do not add back up:
+      // ₹1,000 over 3 units is 333.3333 each, which charges 999.99 and
+      // leaves the bill a paisa short of SETTLED forever; over 7 units
+      // it is 142.8571, which charges 1,000.02 and takes two paise that
+      // were never owed. It drifts in BOTH directions, so it is not even
+      // consistently in anyone's favour.
+      //
+      // Instead: work out what SHOULD have been charged once these units
+      // are gone — the exact proportion of the line total — and charge
+      // the difference from what has been charged so far. Every payment
+      // is within a paisa of the true share, and the LAST unit lands the
+      // running total exactly on the line total by construction. No
+      // remainder to track, and nothing to reconcile later.
+      //
+      // Clamped at `units` because a shipment item claiming more than
+      // the line received would otherwise charge past the whole bill.
+      const settledUnits = Math.min(alloc.unitsSettled + item.quantity, alloc.units);
+      const shouldHaveCharged =
+        alloc.units === 0
+          ? ZERO
+          : alloc.lineTotalInr.mul(settledUnits).div(alloc.units).toDecimalPlaces(2);
+      const amount = shouldHaveCharged.sub(alloc.amountSettledInr);
       if (amount.lte(0)) continue;
 
       await tx.inboundFreightAllocation.update({
         where: { id: alloc.id },
         data: {
-          unitsSettled: { increment: item.quantity },
+          // Absolute, not an increment: `settledUnits` is already the
+          // clamped running count, and incrementing by the raw quantity
+          // is what would let it walk past the line's own unit count.
+          unitsSettled: settledUnits,
           amountSettledInr: { increment: amount },
         },
       });
@@ -327,7 +353,7 @@ export class InboundFreightAmortisationService {
         amount: (prior?.amount ?? ZERO).add(amount),
       });
       total = total.add(amount);
-      unitsCharged += item.quantity;
+      unitsCharged += settledUnits - alloc.unitsSettled;
     }
 
     if (total.lte(0)) {
@@ -364,7 +390,15 @@ export class InboundFreightAmortisationService {
   private async resolveAllocation(
     tx: Prisma.TransactionClient,
     batchId: string,
-  ): Promise<{ id: string; freightChargeId: string; perUnitInr: Prisma.Decimal } | null> {
+  ): Promise<{
+    id: string;
+    freightChargeId: string;
+    perUnitInr: Prisma.Decimal;
+    units: number;
+    unitsSettled: number;
+    lineTotalInr: Prisma.Decimal;
+    amountSettledInr: Prisma.Decimal;
+  } | null> {
     const batch = await tx.stockBatch.findUnique({
       where: { id: batchId },
       select: { id: true, parentBatchId: true },
@@ -381,6 +415,10 @@ export class InboundFreightAmortisationService {
               id: true,
               freightChargeId: true,
               perUnitInr: true,
+              units: true,
+              unitsSettled: true,
+              lineTotalInr: true,
+              amountSettledInr: true,
               freightCharge: { select: { mode: true, status: true } },
             },
           },
@@ -396,6 +434,10 @@ export class InboundFreightAmortisationService {
         id: alloc.id,
         freightChargeId: alloc.freightChargeId,
         perUnitInr: alloc.perUnitInr,
+        units: alloc.units,
+        unitsSettled: alloc.unitsSettled,
+        lineTotalInr: alloc.lineTotalInr,
+        amountSettledInr: alloc.amountSettledInr,
       };
     }
     return null;

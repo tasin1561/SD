@@ -32,7 +32,15 @@ function makeSut(
     /** lineId → allocation */
     allocations?: Record<
       string,
-      { perUnitInr: string; mode?: InboundFreightMode; status?: InboundFreightStatus }
+      {
+        perUnitInr: string;
+        mode?: InboundFreightMode;
+        status?: InboundFreightStatus;
+        units?: number;
+        unitsSettled?: number;
+        lineTotalInr?: string;
+        amountSettledInr?: string;
+      }
     >;
     existingEntry?: boolean;
     chargeAfterUpdate?: { unitsSettled: number; totalUnits: number; status: InboundFreightStatus };
@@ -56,6 +64,12 @@ function makeSut(
         id: `alloc-${targetLine}`,
         freightChargeId: 'fc-1',
         perUnitInr: D(alloc.perUnitInr),
+        // The running-total charge reads the line total and what has
+        // been settled so far, not the per-unit rate.
+        units: alloc.units ?? 100,
+        unitsSettled: alloc.unitsSettled ?? 0,
+        lineTotalInr: D(alloc.lineTotalInr ?? '4500.00'),
+        amountSettledInr: D(alloc.amountSettledInr ?? '0'),
         freightCharge: {
           mode: alloc.mode ?? InboundFreightMode.PAY_LATER,
           status: alloc.status ?? InboundFreightStatus.PENDING,
@@ -259,11 +273,58 @@ describe('InboundFreightAmortisationService.planFromPricedLines', () => {
   });
 });
 
+describe('the running-total charge loses nothing', () => {
+  // perUnitInr is a 4dp division and its parts do not add back up. The
+  // charge is worked out as "what SHOULD have been charged once these
+  // units are gone, minus what has been charged so far", so every
+  // payment is within a paisa of the true share and the LAST unit lands
+  // the running total exactly on the line total.
+  const line = (over: Record<string, unknown>) => ({
+    items: [{ id: 'si-1', quantity: 1, pickedBatchId: 'batch-1' }],
+    batches: { 'batch-1': { lineId: 'l-1', parentBatchId: null } },
+    allocations: { 'l-1': { perUnitInr: '333.3333', ...over } },
+  });
+
+  it('the FINAL unit lands exactly on the line total, never a paisa short', async () => {
+    // ₹1,000 over 3. Per-unit rate x quantity charges 333.33 three
+    // times = 999.99, and the bill sits a paisa from SETTLED forever.
+    const sut = makeSut(
+      line({ units: 3, unitsSettled: 2, lineTotalInr: '1000.00', amountSettledInr: '666.67' }),
+    );
+    const r = await sut.svc.debitForDeliveredOrder(sut.tx, ORDER, SELLER);
+    expect(r.amountInr).toBe('333.33');
+    // 666.67 + 333.33 = 1000.00 exactly.
+  });
+
+  it('never charges PAST the line total either', async () => {
+    // ₹1,000 over 7 is 142.8571 each; charging the rate seven times
+    // takes 1,000.02 — two paise nobody owed. The drift goes both ways,
+    // so it is not even consistently in anyone's favour.
+    const sut = makeSut(
+      line({ units: 7, unitsSettled: 6, lineTotalInr: '1000.00', amountSettledInr: '857.14' }),
+    );
+    const r = await sut.svc.debitForDeliveredOrder(sut.tx, ORDER, SELLER);
+    expect(r.amountInr).toBe('142.86');
+    // 857.14 + 142.86 = 1000.00 exactly.
+  });
+
+  it('charges nothing once the whole line has been paid for', async () => {
+    const sut = makeSut(
+      line({ units: 3, unitsSettled: 3, lineTotalInr: '1000.00', amountSettledInr: '1000.00' }),
+    );
+    const r = await sut.svc.debitForDeliveredOrder(sut.tx, ORDER, SELLER);
+    expect(r).toMatchObject({ amountInr: '0', unitsCharged: 0 });
+    expect(sut.applyEntry).not.toHaveBeenCalled();
+  });
+});
+
 describe('InboundFreightAmortisationService.debitForDeliveredOrder', () => {
   const base = {
     items: [{ id: 'si-1', quantity: 1, pickedBatchId: 'batch-1' }],
     batches: { 'batch-1': { lineId: 'l-1', parentBatchId: null } },
-    allocations: { 'l-1': { perUnitInr: '45.0000' } },
+    // ₹4,500 over 100 units — a clean ₹45 each, so the arithmetic in
+    // the older assertions still reads the same.
+    allocations: { 'l-1': { perUnitInr: '45.0000', units: 100, lineTotalInr: '4500.00' } },
   };
 
   it("charges ONLY the delivered unit's share — the rest of the consignment still owes", async () => {
@@ -278,7 +339,8 @@ describe('InboundFreightAmortisationService.debitForDeliveredOrder', () => {
     // The line and the bill both record what has been consumed.
     expect(sut.allocUpdate.mock.calls[0]![0]).toMatchObject({
       data: {
-        unitsSettled: { increment: 1 },
+        // Absolute — the running count, not a delta.
+        unitsSettled: 1,
         amountSettledInr: { increment: expect.anything() },
       },
     });
