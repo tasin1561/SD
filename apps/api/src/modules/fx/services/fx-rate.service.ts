@@ -140,6 +140,48 @@ export class FxRateService {
         },
       });
 
+      // The OTHER direction, in the same transaction, as the exact
+      // reciprocal.
+      //
+      // The two directions were independent rows and nothing kept them
+      // consistent: INR->BDT 1.23 sat beside BDT->INR 0.813, when the
+      // true inverse is 0.813008. A round trip then lost a paisa —
+      // ₹1,000 became ৳1,230 became ₹999.99 — and it lost it in OUR
+      // favour every time, which is worse than losing it randomly. A
+      // seller topping up ৳1,230 was credited a paisa short of what
+      // they paid.
+      //
+      // Six decimal places is enough to make the round trip exact at
+      // the 2dp money columns actually care about: 1,230 x 0.813008 =
+      // 999.99984, which is ₹1,000.00. Storing the pair as one edit is
+      // what keeps it that way — two people setting two directions by
+      // hand is how they drifted apart in the first place.
+      const inverse = new Prisma.Decimal(1).div(parsed).toDecimalPlaces(6);
+      const inverseReason = `Reciprocal of ${input.from}->${input.to} ${parsed.toString()} — set together so a round trip does not lose money. ${input.reason}`;
+      await tx.fxRate.upsert({
+        where: {
+          fromCurrency_toCurrency: { fromCurrency: input.to, toCurrency: input.from },
+        },
+        create: {
+          fromCurrency: input.to,
+          toCurrency: input.from,
+          rate: inverse,
+          source: FxRateSource.MANUAL,
+          isManualOverride: true,
+          overrideByStaffId: input.staffId,
+          overrideReason: inverseReason,
+          fetchedAt: new Date(),
+        },
+        update: {
+          rate: inverse,
+          source: FxRateSource.MANUAL,
+          isManualOverride: true,
+          overrideByStaffId: input.staffId,
+          overrideReason: inverseReason,
+          fetchedAt: new Date(),
+        },
+      });
+
       // Phase 1B — record an append-only history row in the same tx
       // so the timeline can never disagree with the live FxRate row.
       await tx.fxRateHistory.create({

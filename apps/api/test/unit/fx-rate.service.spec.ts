@@ -97,6 +97,34 @@ describe('FxRateService', () => {
     expect(out.rate).toBe('1.320000');
   });
 
+  it('writes the OTHER direction as the exact reciprocal', async () => {
+    // The two directions used to be independent rows with nothing
+    // keeping them consistent: INR->BDT 1.23 beside BDT->INR 0.813,
+    // when the true inverse is 0.813008. A round trip then lost a
+    // paisa — ₹1,000 -> ৳1,230 -> ₹999.99 — and lost it in OUR favour
+    // every time, so a seller topping up ৳1,230 was credited short.
+    const { svc, upsert } = makeSut();
+    await svc.setManualRate({
+      from: 'INR' as never,
+      to: 'BDT' as never,
+      rate: '1.23',
+      staffId: 'st-1',
+      reason: 'market move this morning',
+    });
+    const inverse = upsert.mock.calls[1]![0]! as {
+      where: { fromCurrency_toCurrency: { fromCurrency: string; toCurrency: string } };
+      create: { rate: unknown };
+    };
+    expect(inverse.where.fromCurrency_toCurrency).toEqual({
+      fromCurrency: 'BDT',
+      toCurrency: 'INR',
+    });
+    expect(String(inverse.create.rate)).toBe('0.813008');
+    // The round trip now lands back where it started at 2dp, which is
+    // all the money columns keep.
+    expect(Number((1230 * 0.813008).toFixed(2))).toBe(1000);
+  });
+
   it('setManualRate upserts MANUAL source + audits MEDIUM with before/after', async () => {
     const { svc, upsert, auditLog } = makeSut();
     const out = await svc.setManualRate({
@@ -106,7 +134,9 @@ describe('FxRateService', () => {
       staffId: 'staff-1',
       reason: 'Quarterly review per finance team',
     });
-    expect(upsert).toHaveBeenCalledTimes(1);
+    // BOTH directions, in one transaction — see the reciprocal test
+    // below for why.
+    expect(upsert).toHaveBeenCalledTimes(2);
     const arg = upsert.mock.calls[0]![0]!;
     expect((arg.create as AnyArgs).source).toBe(FxRateSource.MANUAL);
     expect((arg.create as AnyArgs).isManualOverride).toBe(true);
