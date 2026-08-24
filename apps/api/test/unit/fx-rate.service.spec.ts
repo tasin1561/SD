@@ -97,6 +97,24 @@ describe('FxRateService', () => {
     expect(out.rate).toBe('1.320000');
   });
 
+  it('REFUSES the derived direction — one number decides both', async () => {
+    // Refused rather than discouraged: let someone type the inverse by
+    // hand and the pair drifts apart again, which is exactly how
+    // INR->BDT 1.23 came to sit beside BDT->INR 0.813 and short every
+    // taka top-up by a paisa.
+    const { svc, upsert } = makeSut();
+    await expect(
+      svc.setManualRate({
+        from: 'BDT' as never,
+        to: 'INR' as never,
+        rate: '0.813',
+        staffId: 'st-1',
+        reason: 'trying to set the way back by hand',
+      }),
+    ).rejects.toMatchObject({ response: { code: 'FX_DERIVED_DIRECTION' } });
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
   it('writes the OTHER direction as the exact reciprocal', async () => {
     // The two directions used to be independent rows with nothing
     // keeping them consistent: INR->BDT 1.23 beside BDT->INR 0.813,

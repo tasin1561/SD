@@ -69,9 +69,19 @@ export function FxRatesIndex(): ReactElement {
                     {Number(r.rate).toFixed(6)}
                   </td>
                   <td className="px-3 py-2 text-text-body text-xs">
-                    {r.source}
-                    {r.isManualOverride && (
-                      <span className="text-pending text-xs ml-2 uppercase">Manual</span>
+                    {/* A rate OUT of INR is set by hand; the way back is
+                        generated from it. Saying so here is what stops
+                        someone treating the pair as two numbers to keep
+                        in step by eye — which is how they drifted. */}
+                    {r.fromCurrency === 'INR' ? (
+                      <>
+                        {r.source}
+                        {r.isManualOverride && (
+                          <span className="text-pending text-xs ml-2 uppercase">Manual</span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-text-muted">Derived — exact inverse</span>
                     )}
                   </td>
                   <td className="px-3 py-2 text-text-muted font-mono text-xs">
@@ -91,11 +101,20 @@ export function FxRatesIndex(): ReactElement {
                       >
                         Timeline
                       </Button>
-                      {canWrite && (
-                        <Button variant="ghost" size="sm" onClick={() => setEditing(r)}>
-                          Override
-                        </Button>
-                      )}
+                      {canWrite &&
+                        (r.fromCurrency === 'INR' ? (
+                          <Button variant="ghost" size="sm" onClick={() => setEditing(r)}>
+                            Override
+                          </Button>
+                        ) : (
+                          // Not offered, because the server refuses it
+                          // (FX_DERIVED_DIRECTION). One number decides
+                          // both directions; a second one typed by hand
+                          // is how a round trip starts losing a paisa.
+                          <span className="text-text-faint px-2 text-xs">
+                            Set {r.toCurrency} → {r.fromCurrency}
+                          </span>
+                        ))}
                     </div>
                   </td>
                 </tr>

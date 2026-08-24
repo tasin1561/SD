@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ActorType, Currency, FxRateSource, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -100,7 +100,33 @@ export class FxRateService {
         message: 'Cannot set a rate for same-currency conversion',
       });
     }
+
+    // Only OUT of the canonical currency is settable. The other
+    // direction is derived below as the exact reciprocal.
+    //
+    // Refused rather than merely discouraged: the whole point is that
+    // one number decides both directions. Let someone type the inverse
+    // by hand and the pair drifts apart again — which is exactly how
+    // INR->BDT 1.23 came to sit beside BDT->INR 0.813 when the true
+    // inverse is 0.813008, quietly shorting every taka top-up by a
+    // paisa in our favour.
+    if (input.from !== Currency.INR) {
+      throw new BadRequestException({
+        code: 'FX_DERIVED_DIRECTION',
+        message:
+          `${input.from} → ${input.to} is generated from ${input.to} → ${input.from} and cannot ` +
+          `be set on its own. Set the rate out of INR and this one follows exactly, so a round ` +
+          `trip cannot lose money.`,
+      });
+    }
+
     const parsed = new Prisma.Decimal(input.rate);
+    if (!parsed.isFinite() || parsed.lte(0)) {
+      throw new BadRequestException({
+        code: 'FX_RATE_INVALID',
+        message: 'A rate must be greater than zero',
+      });
+    }
     if (parsed.lessThanOrEqualTo(0)) {
       throw new NotFoundException({
         code: 'INVALID_RATE',
