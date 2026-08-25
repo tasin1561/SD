@@ -14,7 +14,9 @@ import { WebhookRetentionQueue } from './queue/webhook-retention.queue';
 import { WebhookRetentionWorker } from './queue/webhook-retention.worker';
 import { TrackingWebhookQueue } from './queue/tracking-webhook.queue';
 import { TrackingWebhookWorker } from './queue/tracking-webhook.worker';
+import { PublicDocumentWebhookController } from './controllers/public-document-webhook.controller';
 import { PublicWebhookController } from './controllers/public-webhook.controller';
+import { CourierDocumentIngestService } from './services/courier-document-ingest.service';
 
 /**
  * Module 10 — tracking-ingestion. M10 commit 4 added the auth skeleton;
@@ -46,9 +48,10 @@ import { PublicWebhookController } from './controllers/public-webhook.controller
     CourierSharedModule,
     OrderModule,
   ],
-  controllers: [PublicWebhookController],
+  controllers: [PublicWebhookController, PublicDocumentWebhookController],
   providers: [
     WebhookAuthService,
+    CourierDocumentIngestService,
     WebhookIngestService,
     WebhookProcessorService,
     TrackingWebhookQueue,

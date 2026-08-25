@@ -8,6 +8,7 @@ export {
   BankChangeStatus,
   SellerCapability,
   SellerStatus,
+  CourierDocumentType,
   Currency,
   TopupRequestStatus,
   StagedRowStatus,

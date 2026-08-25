@@ -3062,6 +3062,7 @@ model Shipment {
   packBoxes            PackBox[]
   awbLabels            AwbLabel[]
   trackingEvents       TrackingEvent[]
+  courierDocuments     CourierDocument[]
   webhooks             CourierWebhook[]
   deliveryAttempts     DeliveryAttempt[]
   stockMovements       StockMovement[]
@@ -3280,6 +3281,66 @@ model TrackingEvent {
 
 // trackingEventId is intentionally a soft scalar — tracking_events has a
 // composite PK and can't be FK'd by a single column.
+/// A document a courier PUSHED to us — proof of delivery, a sorter
+/// weight image, a reverse-pickup QC photo.
+///
+/// Distinct from `awb_labels`, which is paperwork WE generate and print.
+/// This is evidence THEY produce, and it is the thing that settles a
+/// dispute: when a customer says "I never received it" and the courier
+/// says delivered, the EPOD decides who absorbs the loss.
+///
+/// Pushed rather than pulled on purpose. The document service can fetch
+/// these on demand, but an EPOD chased six months later may simply be
+/// gone from their side — receiving it at the moment it exists is the
+/// only way to be sure we still have it when the argument happens.
+model CourierDocument {
+  id            String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courierCode   String              @map("courier_code")
+  docType       CourierDocumentType @map("doc_type")
+  awbNumber     String              @map("awb_number")
+  /// Null when the AWB reaches us before the shipment does, or for a
+  /// consignment that is not ours. The row is kept either way — an
+  /// orphan document is evidence we were sent something, and throwing
+  /// it away because we could not match it is how evidence disappears.
+  shipmentId    String?             @map("shipment_id") @db.Uuid
+  /// Their reference for the order or return, as sent.
+  externalRef   String?             @map("external_ref")
+  /// Where WE put it. Their URLs expire; ours does not.
+  spacesKey     String?             @map("spaces_key")
+  spacesBucket  String?             @map("spaces_bucket")
+  mimeType      String?             @map("mime_type")
+  fileSizeBytes Int?                @map("file_size_bytes")
+  /// Set when the payload arrived but could not be stored — kept so a
+  /// failure is visible rather than looking like nothing was sent.
+  storeError    String?             @map("store_error") @db.Text
+  webhookId     String?             @map("webhook_id") @db.Uuid
+  receivedAt    DateTime            @default(now()) @map("received_at") @db.Timestamptz
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+
+  shipment Shipment?       @relation(fields: [shipmentId], references: [id])
+  webhook  CourierWebhook? @relation(fields: [webhookId], references: [id])
+
+  /// One document of each kind per AWB. A courier that re-sends the same
+  /// EPOD must not leave two rows and two files in Spaces; the second
+  /// arrival updates the first.
+  @@unique([courierCode, awbNumber, docType])
+  @@index([shipmentId])
+  @@index([receivedAt])
+  @@map("courier_documents")
+}
+
+enum CourierDocumentType {
+  /// Electronic proof of delivery.
+  EPOD         @map("epod")
+  /// Weight/dimension capture from their sorter.
+  SORTER_IMAGE @map("sorter_image")
+  /// Photos taken during a reverse-pickup quality check.
+  QC_IMAGE     @map("qc_image")
+
+  @@map("courier_document_type")
+}
+
 model CourierWebhook {
   id              String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
   courierCode     String        @map("courier_code")
@@ -3308,6 +3369,7 @@ model CourierWebhook {
   courier          Courier           @relation(fields: [courierCode], references: [code])
   shipment         Shipment?         @relation(fields: [shipmentId], references: [id])
   trackingEvents   TrackingEvent[]
+  courierDocuments CourierDocument[]
   deliveryAttempts DeliveryAttempt[]
 
   @@index([courierCode])
