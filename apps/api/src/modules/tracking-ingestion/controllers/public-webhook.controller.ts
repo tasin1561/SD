@@ -12,7 +12,9 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import type { Prisma } from '@skydrop/db';
+import { Throttle } from '@nestjs/throttler';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
+import { minutes } from '../../../common/throttler/throttler.module';
 import { WebhookIngestService, type IngestOutcome } from '../services/webhook-ingest.service';
 
 interface AckResponse {
@@ -47,8 +49,24 @@ interface AckResponse {
  * out the courier's legitimate delivery IPs which arrive from many
  * machines).
  */
+/**
+ * Delhivery pushes every one of our scans from a handful of fixed source
+ * IPs, so the per-IP bucket is not "one caller" — it is our entire
+ * tracking throughput. At the 100/min baseline, a burst of pushes gets a
+ * 429, and their own requirement document says a webhook we do not
+ * answer means the scan is MISSED. A lost scan is silent: the parcel
+ * simply stops updating and nothing anywhere records why.
+ *
+ * So the ceiling is raised to something a real day cannot reach while
+ * still being a ceiling. It stays a bound rather than an exemption
+ * because the route is public and an unauthenticated caller still costs
+ * us two queries before the 401.
+ */
+const WEBHOOK_RATE_LIMIT_PER_MIN = 3000;
+
 @ApiTags('public-tracking-webhooks')
 @ThrottleKey('ip')
+@Throttle({ default: { limit: WEBHOOK_RATE_LIMIT_PER_MIN, ttl: minutes(1) } })
 @Controller('public/tracking/webhooks')
 export class PublicWebhookController {
   constructor(private readonly ingest: WebhookIngestService) {}

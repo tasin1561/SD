@@ -315,7 +315,11 @@ describe('parseScanPayload — the real Delhivery Shipment envelope', () => {
 
   it('keeps the scan timestamp and location', () => {
     const p = parseScanPayload(envelope());
-    expect(p?.eventAtIso).toBe('2019-01-09T17:10:42.767');
+    // Their timestamp carries no offset and is IST — the parser now
+    // stamps it, so this asserts the instant rather than the string it
+    // arrived as (it used to assert the unzoned string, which was the
+    // bug: read as UTC the scan landed 5h30m in the future).
+    expect(p?.eventAtIso).toBe('2019-01-09T17:10:42.767+05:30');
     expect(p?.locationName).toBe('Chandigarh_Raiprkln_C (Chandigarh)');
     expect(p?.description).toBe('Manifest uploaded');
   });
@@ -335,5 +339,48 @@ describe('parseScanPayload — the real Delhivery Shipment envelope', () => {
 
   it('still returns null when the envelope lacks an AWB or a timestamp', () => {
     expect(parseScanPayload({ Shipment: { Status: { Status: 'In Transit' } } })).toBeNull();
+  });
+});
+
+describe('raw-scan-parser — Delhivery sends IST with no offset', () => {
+  const envelope = (statusDateTime: string): unknown => ({
+    Shipment: {
+      AWB: '38061110518534',
+      NSLCode: 'X-UCI',
+      Status: {
+        Status: 'In Transit',
+        StatusType: 'UD',
+        StatusDateTime: statusDateTime,
+        StatusLocation: 'Chandigarh_Raiprkln_C (Chandigarh)',
+        Instructions: 'Manifest uploaded',
+      },
+    },
+  });
+
+  it('reads an unzoned timestamp as IST, not as UTC', () => {
+    const parsed = parseScanPayload(envelope('2026-01-09T17:10:42.767'));
+    expect(parsed).not.toBeNull();
+    // 17:10 IST is 11:40 UTC. Read as UTC it would land 5h30m in the
+    // future and the timeline would show a scan that has not happened.
+    expect(new Date(parsed!.eventAtIso).toISOString()).toBe('2026-01-09T11:40:42.767Z');
+  });
+
+  it('leaves an already-zoned timestamp alone', () => {
+    const parsed = parseScanPayload(envelope('2026-01-09T17:10:42.767Z'));
+    expect(new Date(parsed!.eventAtIso).toISOString()).toBe('2026-01-09T17:10:42.767Z');
+
+    const offset = parseScanPayload(envelope('2026-01-09T17:10:42.767+05:30'));
+    expect(new Date(offset!.eventAtIso).toISOString()).toBe('2026-01-09T11:40:42.767Z');
+  });
+
+  it('agrees with the polling path on the same scan', async () => {
+    // The two ingest routes wrote different times for one event until
+    // they shared this helper; TRK-3 orders every read on eventAt, so
+    // the disagreement decided what the customer saw.
+    const { toIsoWithIst } =
+      await import('../../src/modules/tracking-events/services/courier-time');
+    const raw = '2026-01-09T17:10:42.767';
+    const viaWebhook = parseScanPayload(envelope(raw))!.eventAtIso;
+    expect(new Date(viaWebhook).getTime()).toBe(new Date(toIsoWithIst(raw)).getTime());
   });
 });

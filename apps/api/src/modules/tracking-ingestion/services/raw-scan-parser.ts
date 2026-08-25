@@ -1,4 +1,5 @@
 import { DeliveryFailureReason } from '@skydrop/db';
+import { toIsoWithIst } from '../../tracking-events/services/courier-time';
 
 /**
  * Parsed shape the M10 processor needs from a courier webhook body —
@@ -62,7 +63,9 @@ export function parseScanPayload(parsedBody: unknown): ParsedScanPayload | null 
     const statusType = pickString(status, ['StatusType']);
     // NSL sits on the Shipment, not inside Status.
     const nslCode = pickString(s, ['NSLCode', 'nsl_code']) ?? pickString(status, ['NSLCode']);
-    const eventAtIso = pickString(status, ['StatusDateTime', 'StatusDate', 'EventDateTime']);
+    // Their timestamps carry no offset and are IST — see toIsoWithIst.
+    const rawEventAt = pickString(status, ['StatusDateTime', 'StatusDate', 'EventDateTime']);
+    const eventAtIso = rawEventAt === null ? null : toIsoWithIst(rawEventAt);
     if (
       awbNumber === null ||
       rawStatus === null ||

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { CourierCredentialActor } from '../../courier-shared/services/courier-credential.service';
+import { toIsoWithIst } from '../../tracking-events/services/courier-time';
 import { DelhiveryHttpService } from './delhivery-http.service';
 import type {
   CourierTrackingResult,
@@ -73,13 +74,6 @@ interface DelhiveryTrackResponse {
 /** Delhivery scan timestamps are IST without a zone offset — the
  *  courier operates in India. Append the IST offset when the string
  *  carries none so Date parses to the correct instant. */
-function toIsoWithIst(raw: string): string {
-  const s = raw.trim();
-  if (s === '') return s;
-  // Already zoned (…Z or …+HH:MM / …-HH:MM after the time part)?
-  if (/[zZ]$/.test(s) || /T.*[+-]\d{2}:?\d{2}$/.test(s)) return s;
-  return `${s}+05:30`;
-}
 
 @Injectable()
 export class DelhiveryTrackingFetchService implements Pick<DelhiveryClient, 'fetchTracking'> {

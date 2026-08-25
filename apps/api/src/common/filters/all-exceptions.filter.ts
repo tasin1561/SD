@@ -56,6 +56,23 @@ export class AllExceptionsFilter implements ExceptionFilter {
       };
     }
 
+    // body-parser rejects an oversize body by throwing a plain Error
+    // carrying `status`/`type`, NOT an HttpException — so without this it
+    // presented as a 500. That matters more than the status code: a
+    // courier reading 500 retries forever and we investigate a phantom
+    // server fault, where 413 says plainly that they sent more than we
+    // accept.
+    if (isPayloadTooLarge(exception)) {
+      return {
+        status: HttpStatus.PAYLOAD_TOO_LARGE,
+        body: {
+          code: 'PAYLOAD_TOO_LARGE',
+          message: 'Request body is larger than this endpoint accepts',
+          requestId,
+        },
+      };
+    }
+
     return {
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       body: {
@@ -102,4 +119,11 @@ function defaultCodeFor(status: number): string {
 function defaultMessageFor(status: number): string {
   if (status >= 500) return 'Internal server error';
   return 'Request failed';
+}
+
+/** body-parser's `entity.too.large`, which is not an HttpException. */
+function isPayloadTooLarge(e: unknown): boolean {
+  if (typeof e !== 'object' || e === null) return false;
+  const err = e as { type?: unknown; status?: unknown; statusCode?: unknown };
+  return err.type === 'entity.too.large' || err.status === 413 || err.statusCode === 413;
 }
