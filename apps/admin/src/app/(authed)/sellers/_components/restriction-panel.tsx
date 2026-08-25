@@ -40,13 +40,13 @@ const SAFE = [
   ['PAYOUT_REQUEST', 'Requesting payouts'],
 ] as const;
 
-// TRACKING_VIEW exists in the enum but is deliberately NOT offered: the
-// seller tracking page is still a placeholder, so there is nothing to
-// enforce it on. A checkbox that silently does nothing is worse than an
-// absent one — it tells an operator they have stopped something they
-// have not. It gets added here in the same change that adds the guard.
 const IN_FLIGHT = [
   ['SHIPMENT_DISPATCH', 'Handing their parcels to the courier'],
+  // Offered from the change that BUILT the seller tracking page and
+  // guarded it in the same commit. It was held back while the page was
+  // a placeholder: a checkbox that ticks and stops nothing tells an
+  // operator they have blocked something they have not.
+  ['TRACKING_VIEW', 'Seeing where their parcels are'],
   ['RTO_RECEIVE', 'Booking their returns back in'],
 ] as const;
 

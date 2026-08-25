@@ -28,6 +28,7 @@ import {
   useToast,
   ProductThumb,
 } from '@skydrop/ui/components';
+import { OrderParcelTracking } from './order-parcel-tracking';
 import { OrderTimeline } from './order-timeline';
 import { CancelOrderDialog } from './cancel-order-dialog';
 import { ReattemptRequestDialog } from './reattempt-request-dialog';
@@ -369,6 +370,13 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
 
           <Section title="Invoice">
             <OrderInvoiceSection orderId={orderId} status={detail.data.status} />
+          </Section>
+
+          {/* Where the parcel physically IS, above the order's own
+              status history. A seller asking "where is it" should not
+              have to find an AWB and go somewhere else to answer it. */}
+          <Section title="Parcel tracking">
+            <OrderParcelTracking orderId={orderId} />
           </Section>
 
           <Section title="Timeline">

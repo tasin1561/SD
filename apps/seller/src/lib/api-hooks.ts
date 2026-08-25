@@ -1265,6 +1265,83 @@ export interface TopupBankAccountsResponse {
   readonly inrToBdt: string | null;
 }
 
+export interface TrackedShipmentRow {
+  readonly shipmentId: string;
+  readonly shipmentNumber: string;
+  readonly awbNumber: string | null;
+  readonly courierCode: string;
+  readonly status: string;
+  readonly orderId: string;
+  readonly orderNumber: string;
+  readonly recipientName: string;
+  readonly recipientCity: string;
+  readonly lastScanAt: string | null;
+  readonly lastScanStatus: string | null;
+  readonly lastScanDescription: string | null;
+  readonly lastScanLocation: string | null;
+  readonly failedAttempts: number;
+  readonly createdAt: string;
+}
+
+export interface TrackedShipmentDetail extends TrackedShipmentRow {
+  readonly events: ReadonlyArray<{
+    id: string;
+    eventAt: string;
+    status: string;
+    description: string | null;
+    location: string | null;
+    source: string;
+  }>;
+  readonly attempts: ReadonlyArray<{
+    id: string;
+    attemptNumber: number;
+    attemptedAt: string;
+    outcome: string;
+    failureReason: string | null;
+    failureNotes: string | null;
+    nextAttemptScheduledAt: string | null;
+  }>;
+}
+
+export function useTrackedShipments(query: {
+  status?: string;
+  search?: string;
+}): UseQueryResult<{ items: TrackedShipmentRow[] }> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-tracking', 'list', query],
+    queryFn: () => {
+      const sp = new URLSearchParams();
+      if (query.status !== undefined && query.status !== '') sp.set('status', query.status);
+      if (query.search !== undefined && query.search !== '') sp.set('search', query.search);
+      const qs = sp.toString();
+      return client.request<{ items: TrackedShipmentRow[] }>(
+        `/api/seller/tracking${qs === '' ? '' : `?${qs}`}`,
+      );
+    },
+  });
+}
+
+export function useTrackedShipment(shipmentId: string): UseQueryResult<TrackedShipmentDetail> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-tracking', shipmentId],
+    queryFn: () => client.request<TrackedShipmentDetail>(`/api/seller/tracking/${shipmentId}`),
+  });
+}
+
+/** Every parcel on one order — so the seller never needs the AWB. */
+export function useOrderTracking(
+  orderId: string,
+): UseQueryResult<{ items: TrackedShipmentDetail[] }> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-tracking', 'order', orderId],
+    queryFn: () =>
+      client.request<{ items: TrackedShipmentDetail[] }>(`/api/seller/tracking/order/${orderId}`),
+  });
+}
+
 export function useTopupBankAccounts(): UseQueryResult<TopupBankAccountsResponse> {
   const client = useApiClient();
   return useQuery({
