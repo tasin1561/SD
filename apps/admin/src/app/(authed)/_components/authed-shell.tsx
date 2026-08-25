@@ -122,6 +122,7 @@ export function AuthedShell({
     {
       heading: 'Money',
       items: [
+        { href: '/seller-wallets', label: 'Seller wallets', icon: <Wallet size={15} /> },
         { href: '/settlements', label: 'Settlements', icon: <Banknote size={15} /> },
         { href: '/withdrawals', label: 'Withdrawals', icon: <Wallet size={15} /> },
         { href: '/topups', label: 'Top-ups', icon: <Wallet size={15} /> },

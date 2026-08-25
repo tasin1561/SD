@@ -20,5 +20,6 @@ import { AdminPlatformBankAccountController } from './controllers/admin-platform
   imports: [SellerWalletModule, FxModule, EmailModule],
   controllers: [SellerTopupController, AdminTopupController, AdminPlatformBankAccountController],
   providers: [WalletTopupService, SellerJwtGuard, StaffJwtGuard],
+  exports: [WalletTopupService],
 })
 export class WalletTopupModule {}

@@ -225,6 +225,8 @@ export interface WithdrawalEligibility {
   readonly withdrawableInr: string;
   readonly balanceInr: string;
   readonly minimumBalanceInr: string;
+  /** Already asked for and not yet paid — held out of what is available. */
+  readonly pendingWithdrawalInr: string;
   readonly hasBankAccount: boolean;
 }
 

@@ -40,6 +40,8 @@ function makeService(
     bankAccountNumber?: string | null;
     /** Simulate a seller placed on hold by an admin. */
     restricted?: boolean;
+    /** Sum of PENDING requests already raised. */
+    pendingWithdrawals?: string;
     /** Simulate another admin resolving the request first — the guarded
      *  claim then matches 0 rows. */
     claimLoses?: boolean;
@@ -69,6 +71,12 @@ function makeService(
   const remittanceFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
     opts.remittance === undefined ? { id: 'rem-1', sellerId: 'seller-1' } : opts.remittance,
   );
+  // Money already asked for is held out of what is available — the
+  // guard subtracts PENDING requests so the same rupees cannot be
+  // requested twice.
+  const aggregate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({
+    _sum: { amountRequested: new Prisma.Decimal(opts.pendingWithdrawals ?? '0') },
+  }));
   const withdrawalRequest = {
     create,
     findMany,
@@ -77,6 +85,7 @@ function makeService(
     update,
     updateMany,
     findUniqueOrThrow,
+    aggregate,
   };
   // The create path now runs its limit checks, its balance read and the
   // insert inside ONE transaction holding the seller's wallet lock —

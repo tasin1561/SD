@@ -194,15 +194,38 @@ function RequestWithdrawalModal({
                 <Money amount={eligibility.data.withdrawableInr} currency="INR" convert={false} />
               </span>
             </div>
-            {Number(eligibility.data.minimumBalanceInr) > 0 && (
-              <div className="text-text-faint mt-0.5 text-xs">
-                Your balance is{' '}
-                <Money amount={eligibility.data.balanceInr} currency="INR" convert={false} />, of
-                which{' '}
-                <Money amount={eligibility.data.minimumBalanceInr} currency="INR" convert={false} />{' '}
-                must stay in the account.
+            {/* The three figures that make up the one above, so a
+                refusal is never a surprise. */}
+            <div className="text-text-faint mt-1 space-y-0.5 text-xs">
+              <div>
+                Balance{' '}
+                <Money amount={eligibility.data.balanceInr} currency="INR" convert={false} />
               </div>
-            )}
+              {Number(eligibility.data.minimumBalanceInr) > 0 && (
+                <div>
+                  Must stay in the account{' '}
+                  <Money
+                    amount={eligibility.data.minimumBalanceInr}
+                    currency="INR"
+                    convert={false}
+                  />
+                </div>
+              )}
+              {/* Money already asked for is HELD, not spent. The balance
+                  still shows it because no transfer has been made yet,
+                  but it cannot be requested a second time — otherwise the
+                  same rupees go out twice. */}
+              {Number(eligibility.data.pendingWithdrawalInr) > 0 && (
+                <div>
+                  On hold for a payout you already requested{' '}
+                  <Money
+                    amount={eligibility.data.pendingWithdrawalInr}
+                    currency="INR"
+                    convert={false}
+                  />
+                </div>
+              )}
+            </div>
           </div>
         )}
 

@@ -85,12 +85,34 @@ export class WithdrawalRequestService {
     sellerId: string,
     currency: Currency,
     knownBalance?: Prisma.Decimal,
+    tx?: Prisma.TransactionClient,
   ): Promise<Prisma.Decimal> {
     const balance = knownBalance ?? (await this.wallet.balanceLive(sellerId, currency));
     if (currency !== Currency.INR) return balance;
     const floor = await this.settings.resolve(sellerId, MIN_BALANCE_KEY);
     const min = new Prisma.Decimal(String(floor.value ?? 0));
-    const available = balance.minus(min);
+
+    // Money already asked for is NOT available again.
+    //
+    // A request writes no wallet entry — the balance only moves when the
+    // remittance is actually paid (WAL-6) — so without this subtraction
+    // the same rupees can be requested twice. A seller with ₹10,000
+    // could raise two ₹10,000 requests on consecutive days, both pass
+    // this guard, and both be payable: ₹20,000 out of a ₹10,000 wallet.
+    // The daily and monthly caps limit how OFTEN, never how much.
+    //
+    // Held rather than debited on purpose. A request is not a payment,
+    // and debiting one would take money from a seller for a transfer
+    // nobody has made — the same reasoning that keeps a top-up out of
+    // the balance until an operator has seen it.
+    const db = tx ?? this.prisma.client;
+    const pending = await db.withdrawalRequest.aggregate({
+      where: { sellerId, currency, status: WithdrawalRequestStatus.PENDING },
+      _sum: { amountRequested: true },
+    });
+    const held = pending._sum.amountRequested ?? new Prisma.Decimal(0);
+
+    const available = balance.minus(min).minus(held);
     return available.isNegative() ? new Prisma.Decimal(0) : available;
   }
 
@@ -108,6 +130,8 @@ export class WithdrawalRequestService {
     withdrawableInr: string;
     balanceInr: string;
     minimumBalanceInr: string;
+    /** Already asked for and not yet paid — held out of what is available. */
+    pendingWithdrawalInr: string;
     hasBankAccount: boolean;
   }> {
     const balance = await this.wallet.balanceLive(sellerId, Currency.INR);
@@ -117,10 +141,16 @@ export class WithdrawalRequestService {
       where: { id: sellerId },
       select: { bankAccountNumber: true },
     });
+    const pending = await this.prisma.client.withdrawalRequest.aggregate({
+      where: { sellerId, currency: Currency.INR, status: WithdrawalRequestStatus.PENDING },
+      _sum: { amountRequested: true },
+    });
+
     return {
       withdrawableInr: withdrawable.toFixed(2),
       balanceInr: balance.toFixed(2),
       minimumBalanceInr: new Prisma.Decimal(String(floor.value ?? 0)).toFixed(2),
+      pendingWithdrawalInr: (pending._sum.amountRequested ?? new Prisma.Decimal(0)).toFixed(2),
       hasBankAccount: seller?.bankAccountNumber != null && seller.bankAccountNumber.trim() !== '',
     };
   }
@@ -260,7 +290,7 @@ export class WithdrawalRequestService {
       // prepaid seller, whose wallet is the only security we hold. Raising
       // their floor is how a credit limit is expressed here.
       const balance = await this.wallet.balanceLive(sellerId, input.currency, tx);
-      const withdrawable = await this.withdrawableBalance(sellerId, input.currency, balance);
+      const withdrawable = await this.withdrawableBalance(sellerId, input.currency, balance, tx);
       if (withdrawable.lt(amount)) {
         throw new BadRequestException({
           code: 'INSUFFICIENT_WITHDRAWABLE_BALANCE',

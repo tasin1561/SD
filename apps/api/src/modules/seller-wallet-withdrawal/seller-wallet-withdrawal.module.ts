@@ -27,5 +27,6 @@ import { WithdrawalRequestService } from './services/withdrawal-request.service'
     SellerJwtGuard,
     StaffJwtGuard,
   ],
+  exports: [WithdrawalRequestService],
 })
 export class SellerWalletWithdrawalModule {}
