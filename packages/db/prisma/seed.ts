@@ -844,7 +844,13 @@ const systemSettings: SystemSettingSeed[] = [
     key: 'wallet.settlement_shortfall_alert_percent',
     category: 'wallet',
     valueType: SettingValueType.DECIMAL,
-    valueDecimal: '5.00',
+    // 1%, not 5%. This is the point at which absorbing a courier's
+    // under-payment stops being a rounding error and starts being a
+    // subsidy — and at our margins 5% of a settlement is a lot of money
+    // to write off before anyone is asked to look at it. Tightening it
+    // costs nothing but an audit row and an error log; the seller is
+    // credited in full either way (WAL-6).
+    valueDecimal: '1.00',
     displayName: 'Settlement Shortfall Alert (%)',
     description:
       'A seller is credited what the order was WORTH, not what the courier remitted — a short payment is our dispute with the courier, not a clawback from a seller paid in good faith. This is the circuit breaker: a settlement short by more than this percentage audits CRITICAL and asks for a human, so we absorb the occasional error without quietly funding a systematic one.',

@@ -196,6 +196,27 @@ export function useSellerWithdrawals(): UseQueryResult<readonly WithdrawalReques
   });
 }
 
+export interface WalletTerm {
+  readonly key: string;
+  readonly label: string;
+  readonly kind: string;
+  readonly hint: string;
+  readonly value: string;
+}
+
+/**
+ * The rules this wallet runs on. Read-only by design — there is no
+ * seller-facing writer, because a seller who could raise their own
+ * withdrawal cap would not have one.
+ */
+export function useWalletTerms(): UseQueryResult<{ items: WalletTerm[] }> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-wallet', 'terms'],
+    queryFn: () => client.request<{ items: WalletTerm[] }>('/api/seller/wallet/settings'),
+  });
+}
+
 export interface ActiveRestrictionView {
   readonly id: string;
   readonly blockedCapabilities: readonly string[];

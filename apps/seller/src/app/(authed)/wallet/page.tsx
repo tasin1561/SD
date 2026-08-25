@@ -17,6 +17,7 @@ import {
 } from '@skydrop/ui/components';
 import { useInfiniteWalletEntries, useWalletBalances } from '@/lib/api-hooks';
 import { TopupCard } from './_components/topup-card';
+import { WalletTermsCard } from './_components/wallet-terms-card';
 import { WithdrawalsCard } from './_components/withdrawals-card';
 import type { WalletEntryView } from '@skydrop/api-client';
 import { useSellerIdentity } from '@skydrop/auth/client';
@@ -273,6 +274,8 @@ export default function WalletPage(): ReactElement {
             Payout requests are handled by an owner or finance account.
           </p>
         ))}
+
+      <WalletTermsCard />
 
       <div className="text-text-faint text-xs">
         Remittances are paid to the bank account on your profile. Update your bank details on{' '}

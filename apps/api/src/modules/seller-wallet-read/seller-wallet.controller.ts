@@ -6,10 +6,101 @@ import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { SellerAuthAllowSuspended } from '../../common/decorators/seller-auth-allow-suspended.decorator';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import { FxRateService } from '../fx/services/fx-rate.service';
+import { SettingsResolverService } from '../settings/services/settings-resolver.service';
 import type { AuthenticatedSeller } from '../../common/types/request';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { WalletService } from '../seller-wallet/services/wallet.service';
 import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
+
+/**
+ * The terms this seller's wallet runs on, in their words.
+ *
+ * READ ONLY, and there is no seller-facing writer anywhere — these are
+ * set by us, globally or per seller (SET-1). A seller cannot raise their
+ * own withdrawal cap or waive their own minimum balance, which is the
+ * entire point of having them.
+ *
+ * Shown anyway, because every one of these decides an outcome the seller
+ * experiences: how much they can take out, how often, when COD lands,
+ * what is charged. A rule that only appears as a refusal is one they
+ * have to discover by being refused.
+ *
+ * RESOLVED values (their override if they have one, else the default) —
+ * an operator and a seller reading different numbers for the same rule
+ * is how a support call starts.
+ *
+ * `wallet.settlement_shortfall_alert_percent` is deliberately NOT here.
+ * It decides when OUR dispute with a courier gets escalated internally:
+ * a payout short by more than that fraction audits CRITICAL instead of
+ * MEDIUM. The seller is credited what the order was worth either way
+ * (WAL-6), so the number changes nothing they experience — it would only
+ * invite a question about a process they are not part of.
+ */
+const SELLER_WALLET_TERMS = [
+  [
+    'wallet.minimum_balance_inr',
+    'Minimum balance',
+    'INR',
+    'Must stay in your wallet — it is not available to withdraw.',
+  ],
+  [
+    'wallet.withdrawal_min_threshold_inr',
+    'Smallest payout',
+    'INR',
+    'A request below this is refused.',
+  ],
+  [
+    'wallet.withdrawal_max_per_day',
+    'Payouts per day',
+    'COUNT',
+    'How often you can ask, not how much.',
+  ],
+  ['wallet.withdrawal_max_per_month', 'Payouts per month', 'COUNT', 'Rolling 30 days.'],
+  [
+    'wallet.auto_withdraw_enabled',
+    'Automatic payouts',
+    'BOOL',
+    'We raise the request for you on a schedule.',
+  ],
+  ['wallet.auto_withdraw_hour_local', 'Automatic payout hour', 'HOUR', 'In your own timezone.'],
+  [
+    'wallet.cod_credit_mode',
+    'COD credited',
+    'TEXT',
+    'On settlement when the courier pays us, or instantly at delivery.',
+  ],
+  [
+    'wallet.instant_pay_fee_percent',
+    'Instant-pay fee',
+    'PERCENT',
+    'Only if you are on instant COD credit.',
+  ],
+  [
+    'wallet.cod_gst_percent',
+    'GST withheld on COD',
+    'PERCENT',
+    'Taken out of the collected amount, not added on top. We file it.',
+  ],
+  ['wallet.cod_collection_fee_percent', 'COD collection fee', 'PERCENT', ''],
+  [
+    'wallet.courier_fee_deduction_timing',
+    'Delivery fee charged',
+    'TEXT',
+    'When the AWB is made, or when the parcel is delivered.',
+  ],
+  [
+    'wallet.inbound_freight_mode',
+    'Inbound freight terms',
+    'TEXT',
+    'Paid on arrival, or spread over the units as they sell.',
+  ],
+  [
+    'wallet.inbound_freight_service_charge_percent',
+    'Pay-later service charge',
+    'PERCENT',
+    'Only applies to pay-as-it-sells freight.',
+  ],
+] as const;
 
 interface WalletBalanceView {
   readonly currency: Currency;
@@ -78,6 +169,7 @@ export class SellerWalletController {
     private readonly wallet: WalletService,
     private readonly prisma: PrismaService,
     private readonly fx: FxRateService,
+    private readonly settings: SettingsResolverService,
   ) {}
 
   @Get()
@@ -126,6 +218,30 @@ export class SellerWalletController {
             ]),
       ],
     };
+  }
+
+  @Get('settings')
+  @SellerAuthAllowSuspended()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'The terms this wallet runs on. Read-only — sellers cannot change them.',
+  })
+  async terms(@CurrentSeller() seller: AuthenticatedSeller): Promise<{
+    items: Array<{ key: string; label: string; kind: string; hint: string; value: string }>;
+  }> {
+    const items = await Promise.all(
+      SELLER_WALLET_TERMS.map(async ([key, label, kind, hint]) => {
+        try {
+          const r = await this.settings.resolve(seller.id, key);
+          return { key, label, kind, hint, value: String(r.value ?? '') };
+        } catch {
+          // Unknown rather than defaulted: showing a seller a number we
+          // did not read is worse than showing them nothing.
+          return { key, label, kind, hint, value: '' };
+        }
+      }),
+    );
+    return { items };
   }
 
   @Get('entries')
