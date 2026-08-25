@@ -1232,6 +1232,8 @@ export interface TopupRequestView {
   readonly bankName: string;
   readonly bankAccountNumber: string;
   readonly bankBranchName: string | null;
+  readonly sellerCompanyName: string | null;
+  readonly reviewedByEmail: string | null;
   readonly currency: string;
   readonly amount: string;
   readonly transactionRef: string | null;

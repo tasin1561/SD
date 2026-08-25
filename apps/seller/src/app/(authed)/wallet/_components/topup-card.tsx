@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactElement } from 'react';
-import { Card, CardBody, TBody, THead, Table, Td, Th, Tr } from '@skydrop/ui/components';
+import { Card, CardBody, Money, TBody, THead, Table, Td, Th, Tr } from '@skydrop/ui/components';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
 import { useTopupBankAccounts, useTopupProofUrl, useTopupRequests } from '@/lib/api-hooks';
@@ -70,8 +70,19 @@ export function TopupCard({
                       <div className="text-text-faint text-xs">{r.bankBranchName}</div>
                     )}
                   </Td>
-                  <Td align="right" className="font-mono">
-                    {r.amount}
+                  <Td align="right">
+                    {/* In the currency they SENT, and never converted:
+                        this is a record of a bank transfer that already
+                        happened, so restating it in another currency
+                        would stop it matching their statement. A bare
+                        1000.00 does not say whether that was taka or
+                        rupees, which is the one thing they need to
+                        recognise the payment. */}
+                    <Money
+                      amount={r.amount}
+                      currency={r.currency === 'BDT' ? 'BDT' : 'INR'}
+                      convert={false}
+                    />
                   </Td>
                   <Td className="text-xs">
                     {r.transactionRef !== null && (
@@ -85,6 +96,13 @@ export function TopupCard({
                   </Td>
                   <Td>
                     <span className="text-text-body text-xs">{r.status}</span>
+                    {/* When it was decided. "REJECTED" with no date leaves
+                        a seller unsure whether anyone has looked yet. */}
+                    {r.reviewedAt !== null && (
+                      <div className="text-text-faint mt-0.5 text-xs">
+                        {new Date(r.reviewedAt).toLocaleString()}
+                      </div>
+                    )}
                     {/* A rejection is only useful if the reason travels
                         with it — otherwise the seller resubmits the same
                         thing. */}

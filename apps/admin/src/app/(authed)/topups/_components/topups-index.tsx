@@ -170,8 +170,24 @@ export function TopupsIndex(): ReactElement {
                     <Td className="text-text-muted text-xs">
                       {new Date(t.createdAt).toISOString().slice(0, 10)}
                     </Td>
-                    <Td className="text-text-body">{t.sellerName ?? t.sellerId.slice(0, 8)}</Td>
-                    <Td className="text-text-muted">{t.bankLabel}</Td>
+                    {/* The company, not the uuid. An operator matching
+                        this against a bank statement needs the name the
+                        money came from. */}
+                    <Td className="text-text-body">
+                      {t.sellerCompanyName ?? t.sellerName ?? t.sellerId.slice(0, 8)}
+                    </Td>
+                    <Td className="text-text-muted text-xs">
+                      {/* The label is our filing name; the account is what
+                          appears on the statement being checked. Both,
+                          because the label is how the account is chosen
+                          and the number is how it is verified. */}
+                      <div className="text-text-body">{t.bankLabel}</div>
+                      <div>{t.bankName}</div>
+                      <div className="text-text-faint font-mono">{t.bankAccountNumber}</div>
+                      {t.bankBranchName !== null && (
+                        <div className="text-text-faint">{t.bankBranchName}</div>
+                      )}
+                    </Td>
                     <Td align="right" className="font-mono">
                       {t.currency} {t.amount}
                     </Td>
@@ -196,6 +212,15 @@ export function TopupsIndex(): ReactElement {
                       {t.status}
                       {t.reviewNote !== null && t.reviewNote !== '' && (
                         <div className="text-text-faint mt-0.5">{t.reviewNote}</div>
+                      )}
+                      {/* WHO and WHEN. A decision about somebody's money
+                          with no name against it is one nobody can be
+                          asked about later. */}
+                      {t.reviewedAt !== null && (
+                        <div className="text-text-faint mt-0.5">
+                          {new Date(t.reviewedAt).toLocaleString()}
+                          {t.reviewedByEmail !== null ? ` · ${t.reviewedByEmail}` : ''}
+                        </div>
                       )}
                     </Td>
                     <Td align="right">

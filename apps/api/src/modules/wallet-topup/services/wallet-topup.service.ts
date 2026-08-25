@@ -73,6 +73,16 @@ export interface TopupRequestView {
   readonly bankName: string;
   readonly bankAccountNumber: string;
   readonly bankBranchName: string | null;
+  /**
+   * Who claimed it. A uuid identifies a row; an operator checking a
+   * bank statement needs the name the money came from.
+   */
+  readonly sellerCompanyName: string | null;
+  /**
+   * Who accepted or rejected it. Staff have no display name, so this is
+   * the address — enough to walk over and ask, which is the point.
+   */
+  readonly reviewedByEmail: string | null;
   readonly currency: Currency;
   readonly amount: string;
   readonly transactionRef: string | null;
@@ -454,7 +464,10 @@ export class WalletTopupService {
       reference: existing.transactionRef ?? 'receipt on file',
     });
 
-    return this.toView(updated, existing.bank);
+    return this.toView(updated, existing.bank, {
+      sellerCompanyName: existing.sellerCompanyName,
+      reviewedByEmail: existing.reviewedByEmail,
+    });
   }
 
   /** Reject: the money is not on the statement, or does not match. */
@@ -509,7 +522,10 @@ export class WalletTopupService {
     });
 
     const row = await this.requireRequest(topupId);
-    return this.toView(row, row.bank);
+    return this.toView(row, row.bank, {
+      sellerCompanyName: row.sellerCompanyName,
+      reviewedByEmail: row.reviewedByEmail,
+    });
   }
 
   async listForSeller(sellerId: string, status?: TopupRequestStatus): Promise<TopupRequestView[]> {
@@ -520,9 +536,16 @@ export class WalletTopupService {
         bankAccount: {
           select: { label: true, bankName: true, accountNumber: true, branchName: true },
         },
+        seller: { select: { companyName: true } },
+        reviewedByStaff: { select: { emailDisplay: true } },
       },
     });
-    return rows.map((r) => this.toView(r, r.bankAccount));
+    return rows.map((r) =>
+      this.toView(r, r.bankAccount, {
+        sellerCompanyName: r.seller.companyName,
+        reviewedByEmail: r.reviewedByStaff?.emailDisplay ?? null,
+      }),
+    );
   }
 
   async listForAdmin(status?: TopupRequestStatus): Promise<TopupRequestView[]> {
@@ -536,9 +559,16 @@ export class WalletTopupService {
         bankAccount: {
           select: { label: true, bankName: true, accountNumber: true, branchName: true },
         },
+        seller: { select: { companyName: true } },
+        reviewedByStaff: { select: { emailDisplay: true } },
       },
     });
-    return rows.map((r) => this.toView(r, r.bankAccount));
+    return rows.map((r) =>
+      this.toView(r, r.bankAccount, {
+        sellerCompanyName: r.seller.companyName,
+        reviewedByEmail: r.reviewedByStaff?.emailDisplay ?? null,
+      }),
+    );
   }
 
   // ── internal ──────────────────────────────────────────────────────
@@ -547,6 +577,8 @@ export class WalletTopupService {
     Prisma.WalletTopupRequestGetPayload<Record<string, never>> & {
       bankLabel: string;
       bank: { label: string; bankName: string; accountNumber: string; branchName: string | null };
+      sellerCompanyName: string;
+      reviewedByEmail: string | null;
     }
   > {
     const row = await this.prisma.client.walletTopupRequest.findUnique({
@@ -555,6 +587,8 @@ export class WalletTopupService {
         bankAccount: {
           select: { label: true, bankName: true, accountNumber: true, branchName: true },
         },
+        seller: { select: { companyName: true } },
+        reviewedByStaff: { select: { emailDisplay: true } },
       },
     });
     if (!row) {
@@ -563,8 +597,14 @@ export class WalletTopupService {
         message: 'Top-up request not found',
       });
     }
-    const { bankAccount, ...rest } = row;
-    return { ...rest, bankLabel: bankAccount.label, bank: bankAccount };
+    const { bankAccount, seller, reviewedByStaff, ...rest } = row;
+    return {
+      ...rest,
+      bankLabel: bankAccount.label,
+      bank: bankAccount,
+      sellerCompanyName: seller.companyName,
+      reviewedByEmail: reviewedByStaff?.emailDisplay ?? null,
+    };
   }
 
   private toView(
@@ -582,6 +622,7 @@ export class WalletTopupService {
       createdAt: Date;
     },
     bank: { label: string; bankName: string; accountNumber: string; branchName: string | null },
+    extra: { sellerCompanyName?: string | null; reviewedByEmail?: string | null } = {},
   ): TopupRequestView {
     return {
       id: row.id,
@@ -591,6 +632,8 @@ export class WalletTopupService {
       bankName: bank.bankName,
       bankAccountNumber: bank.accountNumber,
       bankBranchName: bank.branchName,
+      sellerCompanyName: extra.sellerCompanyName ?? null,
+      reviewedByEmail: extra.reviewedByEmail ?? null,
       currency: row.currency,
       amount: row.amount.toFixed(2),
       transactionRef: row.transactionRef,
