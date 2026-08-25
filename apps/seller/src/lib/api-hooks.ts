@@ -1230,6 +1230,7 @@ export interface TopupRequestView {
   readonly bankLabel: string;
   /** The account they actually paid into, for checking against a statement. */
   readonly bankName: string;
+  readonly bankAccountName: string;
   readonly bankAccountNumber: string;
   readonly bankBranchName: string | null;
   readonly sellerCompanyName: string | null;

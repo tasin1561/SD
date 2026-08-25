@@ -1644,6 +1644,7 @@ export interface AdminTopupView {
   readonly sellerName: string | null;
   readonly bankLabel: string;
   readonly bankName: string;
+  readonly bankAccountName: string;
   readonly bankAccountNumber: string;
   readonly bankBranchName: string | null;
   readonly sellerCompanyName: string | null;

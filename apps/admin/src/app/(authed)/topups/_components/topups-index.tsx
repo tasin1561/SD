@@ -183,6 +183,7 @@ export function TopupsIndex(): ReactElement {
                           and the number is how it is verified. */}
                       <div className="text-text-body">{t.bankLabel}</div>
                       <div>{t.bankName}</div>
+                      <div className="text-text-faint">{t.bankAccountName}</div>
                       <div className="text-text-faint font-mono">{t.bankAccountNumber}</div>
                       {t.bankBranchName !== null && (
                         <div className="text-text-faint">{t.bankBranchName}</div>

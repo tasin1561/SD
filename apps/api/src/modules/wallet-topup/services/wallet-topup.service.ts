@@ -71,6 +71,8 @@ export interface TopupRequestView {
    * they typed. "Tasin City" tells them nothing they can compare.
    */
   readonly bankName: string;
+  /** Whose account it is — the name on the transfer, not ours for it. */
+  readonly bankAccountName: string;
   readonly bankAccountNumber: string;
   readonly bankBranchName: string | null;
   /**
@@ -237,6 +239,7 @@ export class WalletTopupService {
         label: true,
         currency: true,
         bankName: true,
+        accountName: true,
         accountNumber: true,
         branchName: true,
       },
@@ -534,7 +537,13 @@ export class WalletTopupService {
       orderBy: { createdAt: 'desc' },
       include: {
         bankAccount: {
-          select: { label: true, bankName: true, accountNumber: true, branchName: true },
+          select: {
+            label: true,
+            bankName: true,
+            accountName: true,
+            accountNumber: true,
+            branchName: true,
+          },
         },
         seller: { select: { companyName: true } },
         reviewedByStaff: { select: { emailDisplay: true } },
@@ -557,7 +566,13 @@ export class WalletTopupService {
       take: 200,
       include: {
         bankAccount: {
-          select: { label: true, bankName: true, accountNumber: true, branchName: true },
+          select: {
+            label: true,
+            bankName: true,
+            accountName: true,
+            accountNumber: true,
+            branchName: true,
+          },
         },
         seller: { select: { companyName: true } },
         reviewedByStaff: { select: { emailDisplay: true } },
@@ -576,7 +591,13 @@ export class WalletTopupService {
   private async requireRequest(topupId: string): Promise<
     Prisma.WalletTopupRequestGetPayload<Record<string, never>> & {
       bankLabel: string;
-      bank: { label: string; bankName: string; accountNumber: string; branchName: string | null };
+      bank: {
+        label: string;
+        bankName: string;
+        accountName: string;
+        accountNumber: string;
+        branchName: string | null;
+      };
       sellerCompanyName: string;
       reviewedByEmail: string | null;
     }
@@ -585,7 +606,13 @@ export class WalletTopupService {
       where: { id: topupId },
       include: {
         bankAccount: {
-          select: { label: true, bankName: true, accountNumber: true, branchName: true },
+          select: {
+            label: true,
+            bankName: true,
+            accountName: true,
+            accountNumber: true,
+            branchName: true,
+          },
         },
         seller: { select: { companyName: true } },
         reviewedByStaff: { select: { emailDisplay: true } },
@@ -621,7 +648,13 @@ export class WalletTopupService {
       reviewedAt: Date | null;
       createdAt: Date;
     },
-    bank: { label: string; bankName: string; accountNumber: string; branchName: string | null },
+    bank: {
+      label: string;
+      bankName: string;
+      accountName: string;
+      accountNumber: string;
+      branchName: string | null;
+    },
     extra: { sellerCompanyName?: string | null; reviewedByEmail?: string | null } = {},
   ): TopupRequestView {
     return {
@@ -630,6 +663,7 @@ export class WalletTopupService {
       bankAccountId: row.bankAccountId,
       bankLabel: bank.label,
       bankName: bank.bankName,
+      bankAccountName: bank.accountName,
       bankAccountNumber: bank.accountNumber,
       bankBranchName: bank.branchName,
       sellerCompanyName: extra.sellerCompanyName ?? null,
