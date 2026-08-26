@@ -3,6 +3,7 @@
 import type { ReactElement } from 'react';
 import Link from 'next/link';
 import {
+  Button,
   Card,
   CardBody,
   ErrorState,
@@ -17,8 +18,11 @@ import {
   Td,
   Th,
   Tr,
+  useToast,
 } from '@skydrop/ui/components';
-import { useSellerWalletOverview } from '@/lib/seller-wallet-hooks';
+import { useReconcileSellerWallets, useSellerWalletOverview } from '@/lib/seller-wallet-hooks';
+import { usePermission } from '@/lib/use-permission';
+import { serverVerdict } from '@/lib/server-verdict';
 
 /**
  * Every seller's wallet in one place.
@@ -31,12 +35,52 @@ import { useSellerWalletOverview } from '@/lib/seller-wallet-hooks';
  */
 export function SellerWalletsIndex(): ReactElement {
   const overview = useSellerWalletOverview();
+  const toast = useToast();
+  const mayReconcile = usePermission('money.wallets.reconcile');
+  const reconcile = useReconcileSellerWallets();
+
+  async function runReconcile(): Promise<void> {
+    try {
+      const r = await reconcile.mutateAsync();
+      if (r.drifted.length > 0) {
+        // The serious outcome, and it must not read like a success. A
+        // ledger disagreeing with itself is reported, never quietly
+        // corrected — correcting it would erase the evidence.
+        toast.error(
+          `${r.drifted.length} wallet(s) do NOT add up: ${r.drifted
+            .map((d) => `${d.companyName} (running ${d.running} vs entries ${d.summed})`)
+            .join('; ')}. Nothing was changed — this needs investigating.`,
+        );
+        return;
+      }
+      toast.success(
+        r.repaired === 0
+          ? `Checked ${r.checked} wallet(s). Every one agrees with its ledger; nothing needed repair.`
+          : `Checked ${r.checked} wallet(s), repaired ${r.repaired} cached balance(s).`,
+      );
+    } catch (err) {
+      toast.error(serverVerdict(err));
+    }
+  }
 
   return (
     <div className="space-y-4">
       <PageHeader
         title="Seller wallets"
         subtitle="What we owe sellers, what they owe us, and every ledger behind those two numbers."
+        action={
+          mayReconcile ? (
+            <Button
+              variant="secondary"
+              size="md"
+              disabled={reconcile.isPending}
+              onClick={() => void runReconcile()}
+              title="Re-check every wallet against its own ledger. Balances update as money moves, so this is a verification rather than a refresh."
+            >
+              {reconcile.isPending ? 'Checking…' : 'Re-check against ledgers'}
+            </Button>
+          ) : undefined
+        }
       />
 
       {overview.isLoading ? (

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { SellerWalletModule } from '../seller-wallet/seller-wallet.module';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { SellerWalletWithdrawalModule } from '../seller-wallet-withdrawal/seller-wallet-withdrawal.module';
 import { SettingsModule } from '../settings/settings.module';
@@ -13,7 +14,16 @@ import { AdminSellerWalletService } from './services/admin-seller-wallet.service
  * outcome a finance screen must never produce.
  */
 @Module({
-  imports: [AuthCommonModule, SettingsModule, WalletTopupModule, SellerWalletWithdrawalModule],
+  imports: [
+    AuthCommonModule,
+    SettingsModule,
+    WalletTopupModule,
+    SellerWalletWithdrawalModule,
+    // For verifyBalance — the reconcile action asks the ledger whether
+    // it still adds up. WalletService stays the only wallet writer
+    // (WAL-1); nothing here writes an entry.
+    SellerWalletModule,
+  ],
   controllers: [AdminSellerWalletController],
   providers: [AdminSellerWalletService],
 })

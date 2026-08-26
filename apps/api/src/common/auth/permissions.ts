@@ -418,6 +418,13 @@ export const PERMISSIONS = [
     group: 'Money',
   },
   {
+    key: 'money.wallets.reconcile',
+    label: 'Reconcile seller wallets',
+    description:
+      'Re-check every wallet against its own ledger and repair the cached balance. Reads and repairs only — it never changes a balance, so it cannot move money.',
+    group: 'Money',
+  },
+  {
     key: 'money.topups.review',
     label: 'Accept or reject a top-up',
     description:

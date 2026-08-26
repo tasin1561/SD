@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
-import { Download } from 'lucide-react';
+import { ArrowRight, Download } from 'lucide-react';
 import {
   Button,
   Card,
@@ -17,7 +17,6 @@ import {
 } from '@skydrop/ui/components';
 import { useInfiniteWalletEntries, useWalletBalances } from '@/lib/api-hooks';
 import { TopupCard } from './_components/topup-card';
-import { WalletTermsCard } from './_components/wallet-terms-card';
 import { WithdrawalsCard } from './_components/withdrawals-card';
 import type { WalletEntryView } from '@skydrop/api-client';
 import { useSellerIdentity } from '@skydrop/auth/client';
@@ -80,37 +79,47 @@ export default function WalletPage(): ReactElement {
           used to sit at the bottom of the page, each heading its own
           card of history — so the button a seller came for was below the
           record of what they had already done. */}
-      {(mayTopup || mayWithdraw) && (
-        <div className="flex flex-wrap gap-2">
-          {mayTopup && (
-            <Button
-              variant="primary"
-              size="md"
-              onClick={() => {
-                // Switch to the tab as well as opening the modal, so the
-                // seller lands where the request they are about to make
-                // will appear.
-                setTab('topups');
-                setTopupOpen(true);
-              }}
-            >
-              Top-up wallet
-            </Button>
-          )}
-          {mayWithdraw && (
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={() => {
-                setTab('payouts');
-                setPayoutOpen(true);
-              }}
-            >
-              Request a payout
-            </Button>
-          )}
-        </div>
-      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {mayTopup && (
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => {
+              // Switch to the tab as well as opening the modal, so the
+              // seller lands where the request they are about to make
+              // will appear.
+              setTab('topups');
+              setTopupOpen(true);
+            }}
+          >
+            Top-up wallet
+          </Button>
+        )}
+        {mayWithdraw && (
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={() => {
+              setTab('payouts');
+              setPayoutOpen(true);
+            }}
+          >
+            Request a payout
+          </Button>
+        )}
+
+        {/* On the right of the same row, because the question these
+              answer — "why was that refused", "when does COD land" —
+              arrives while looking at the buttons, not at the bottom of
+              the ledger where they used to live. */}
+        <Link
+          href="/wallet/limits"
+          className="text-text-muted hover:text-text-bright ml-auto inline-flex items-center gap-1.5 text-sm underline underline-offset-4"
+        >
+          Wallet limits and settings
+          <ArrowRight size={14} aria-hidden />
+        </Link>
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         {balances.isLoading ? (
@@ -282,8 +291,6 @@ export default function WalletPage(): ReactElement {
             Payout requests are handled by an owner or finance account.
           </p>
         ))}
-
-      <WalletTermsCard />
 
       <div className="text-text-faint text-xs">
         Remittances are paid to the bank account on your profile. Update your bank details on{' '}

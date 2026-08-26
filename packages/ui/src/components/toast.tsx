@@ -53,14 +53,35 @@ export function useToast(): ToastApi {
 export function Toaster({ children }: { readonly children: ReactNode }): ReactElement {
   const [items, setItems] = useState<readonly ToastItem[]>([]);
   const counterRef = useRef(0);
+  /**
+   * Pending auto-dismiss timers, so unmounting cancels them.
+   *
+   * Each toast used to schedule a bare setTimeout that nothing cleared:
+   * navigate away within the few seconds it lives and the callback still
+   * fires, setting state on a component that is gone. In tests that is
+   * loud — the timer outlives the environment and throws "window is not
+   * defined", attributed to whichever unrelated file happens to be
+   * running, which is how it read as an unrelated flaky test.
+   */
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      for (const t of pending) clearTimeout(t);
+      pending.clear();
+    };
+  }, []);
 
   const push = useCallback((kind: ToastKind, message: string): void => {
     counterRef.current += 1;
     const id = counterRef.current;
     setItems((prev) => [...prev, { id, kind, message }]);
-    setTimeout(() => {
+    const timer = setTimeout(() => {
+      timers.current.delete(timer);
       setItems((prev) => prev.filter((t) => t.id !== id));
     }, TOAST_TTL_MS);
+    timers.current.add(timer);
   }, []);
 
   const api: ToastApi = {

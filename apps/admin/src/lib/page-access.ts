@@ -14,7 +14,7 @@ import type { StaffMe } from '@skydrop/api-client';
  * The nav filter and the route boundary both read from HERE. Two lists
  * drift, and both failure modes are ugly: a menu link to a page that
  * refuses to render, or a reachable page with no way to navigate to it.
- * `apps/seller/src/lib/role-access.ts` is the same pattern for the
+ * `apps/seller/src/lib/page-access.ts` is the same pattern for the
  * seller app; this is its permission-shaped equivalent.
  *
  * ── MATCHING ─────────────────────────────────────────────────────────

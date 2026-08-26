@@ -1,6 +1,12 @@
 'use client';
 
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseMutationResult,
+  type UseQueryResult,
+} from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
 
 export interface SellerWalletRow {
@@ -50,6 +56,30 @@ export interface AdminWalletEntry {
   readonly reasonCode: string | null;
   readonly note: string | null;
   readonly createdAt: string;
+}
+
+export interface WalletReconcileResult {
+  readonly checked: number;
+  readonly repaired: number;
+  readonly drifted: ReadonlyArray<{
+    readonly sellerId: string;
+    readonly companyName: string;
+    readonly currency: string;
+    readonly running: string;
+    readonly summed: string;
+  }>;
+}
+
+export function useReconcileSellerWallets(): UseMutationResult<WalletReconcileResult, Error, void> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      client.request<WalletReconcileResult>('/api/admin/seller-wallets/reconcile', {
+        method: 'POST',
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-seller-wallets'] }),
+  });
 }
 
 export function useSellerWalletOverview(): UseQueryResult<{

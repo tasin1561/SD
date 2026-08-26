@@ -5,6 +5,7 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -42,6 +43,17 @@ export class AdminSellerWalletController {
   @ApiOperation({ summary: 'Every seller wallet, with what we owe and what is owed to us' })
   overview(): ReturnType<AdminSellerWalletService['overview']> {
     return this.svc.overview();
+  }
+
+  @Post('reconcile')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('money.wallets.reconcile')
+  @ApiOperation({
+    summary:
+      'Re-check every wallet against its own ledger and repair the cached balance. Reports a ledger that does not add up; never corrects one, because that would destroy the evidence.',
+  })
+  reconcile(): ReturnType<AdminSellerWalletService['reconcile']> {
+    return this.svc.reconcile();
   }
 
   @Get(':sellerId')

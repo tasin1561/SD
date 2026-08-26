@@ -1,7 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Currency, Prisma, TopupRequestStatus, WithdrawalRequestStatus } from '@skydrop/db';
+import {
+  ActorType,
+  Currency,
+  Prisma,
+  TopupRequestStatus,
+  WithdrawalRequestStatus,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
+import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { WalletService } from '../../seller-wallet/services/wallet.service';
 
 const ZERO = new Prisma.Decimal(0);
 const MIN_BALANCE_KEY = 'wallet.minimum_balance_inr';
@@ -106,6 +114,8 @@ export class AdminSellerWalletService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settings: SettingsResolverService,
+    private readonly wallet: WalletService,
+    private readonly audit: AuditLogService,
   ) {}
 
   async overview(): Promise<{ totals: SellerWalletTotals; rows: SellerWalletRow[] }> {
@@ -326,5 +336,118 @@ export class AdminSellerWalletService {
       pendingWithdrawalInr: (out._sum.amountRequested ?? ZERO).toFixed(2),
       pendingTopupInr: (incoming._sum.amount ?? ZERO).toFixed(2),
     };
+  }
+
+  /**
+   * Re-check every wallet against its own ledger, and repair the cache.
+   *
+   * Worth being precise about what this is FOR, because "refresh the
+   * cache" is no longer the interesting question: `applyEntry` writes
+   * the cached balance inside the same transaction as the entry, so it
+   * cannot drift going forward. A button that only refreshed it would
+   * do nothing on a healthy system and, worse, would imply the cache is
+   * something an operator has to keep an eye on.
+   *
+   * What it actually answers is DOES THE LEDGER STILL ADD UP: it
+   * compares the O(1) running balance every read relies on against the
+   * full sum of the entries it was built from. Those can only disagree
+   * if something wrote history it should not have, which is the failure
+   * nobody would otherwise notice.
+   *
+   * The repair half still earns its place — rows written before the
+   * cache became transactional do not exist, and this is what fills
+   * them.
+   *
+   * Read-and-repair only. It never writes a wallet ENTRY, so it cannot
+   * move money: a mismatch is REPORTED, never silently corrected. The
+   * ledger is append-only, and quietly rewriting a cached number to
+   * match a total we do not trust would destroy the evidence that
+   * something is wrong.
+   */
+  async reconcile(): Promise<{
+    checked: number;
+    repaired: number;
+    drifted: Array<{
+      sellerId: string;
+      companyName: string;
+      currency: string;
+      running: string;
+      summed: string;
+    }>;
+  }> {
+    const sellers = await this.prisma.client.seller.findMany({
+      where: { deletedAt: null },
+      select: { id: true, companyName: true },
+    });
+
+    let checked = 0;
+    let repaired = 0;
+    const drifted: Array<{
+      sellerId: string;
+      companyName: string;
+      currency: string;
+      running: string;
+      summed: string;
+    }> = [];
+
+    for (const seller of sellers) {
+      for (const currency of [Currency.INR, Currency.BDT]) {
+        const last = await this.prisma.client.sellerWalletEntry.findFirst({
+          where: { sellerId: seller.id, currency },
+          orderBy: { id: 'desc' },
+          select: { id: true, runningBalanceAfter: true },
+        });
+        // No entries: nothing to verify and nothing to cache.
+        if (!last) continue;
+        checked += 1;
+
+        const verdict = await this.wallet.verifyBalance(seller.id, currency);
+        if (!verdict.agrees) {
+          drifted.push({
+            sellerId: seller.id,
+            companyName: seller.companyName,
+            currency,
+            running: verdict.running.toFixed(2),
+            summed: verdict.summed.toFixed(2),
+          });
+        }
+
+        const cached = await this.prisma.client.sellerWalletBalance.findUnique({
+          where: { sellerId_currency: { sellerId: seller.id, currency } },
+          select: { lastEntryId: true, balance: true },
+        });
+        const stale =
+          !cached ||
+          cached.lastEntryId !== last.id ||
+          !cached.balance.equals(last.runningBalanceAfter);
+        if (stale) {
+          await this.prisma.client.sellerWalletBalance.upsert({
+            where: { sellerId_currency: { sellerId: seller.id, currency } },
+            create: {
+              sellerId: seller.id,
+              currency,
+              balance: last.runningBalanceAfter,
+              lastEntryId: last.id,
+            },
+            update: { balance: last.runningBalanceAfter, lastEntryId: last.id },
+          });
+          repaired += 1;
+        }
+      }
+    }
+
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      actorId: null,
+      action: 'staff.seller_wallets.reconciled',
+      entityType: 'seller_wallet',
+      entityId: null,
+      // A ledger that does not add up is the most serious thing this
+      // system can discover about itself.
+      severity: drifted.length > 0 ? 'CRITICAL' : 'LOW',
+      metadata: { checked, repaired, driftedCount: drifted.length, drifted },
+    });
+
+    return { checked, repaired, drifted };
   }
 }

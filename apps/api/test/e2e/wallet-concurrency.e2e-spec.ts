@@ -326,4 +326,65 @@ describe('Wallet concurrency (e2e)', () => {
       expect(new Set(seen).size).toBe(2);
     });
   });
+
+  describe('reconcile — asking the ledger whether it still adds up', () => {
+    it('reports a healthy wallet as needing nothing', async () => {
+      await credit();
+      const admin = h.app.get(AdminSellerWalletService);
+
+      const r = await admin.reconcile();
+      expect(r.checked).toBeGreaterThanOrEqual(1);
+      // applyEntry writes the cache in the same transaction, so on a
+      // healthy system there is nothing left to repair. A button that
+      // always "fixed" something would be reporting its own noise.
+      expect(r.repaired).toBe(0);
+      expect(r.drifted).toHaveLength(0);
+    });
+
+    it('repairs a cache row that was deleted behind its back', async () => {
+      await credit();
+      await h.prisma.sellerWalletBalance.deleteMany({ where: { sellerId } });
+
+      const admin = h.app.get(AdminSellerWalletService);
+      const r = await admin.reconcile();
+
+      expect(r.repaired).toBeGreaterThanOrEqual(1);
+      const cache = await h.prisma.sellerWalletBalance.findUnique({
+        where: { sellerId_currency: { sellerId, currency: Currency.INR } },
+        select: { balance: true },
+      });
+      expect(cache?.balance.toFixed(2)).toBe(AMOUNT.toFixed(2));
+    });
+
+    it('REPORTS a ledger that disagrees with itself, and changes nothing', async () => {
+      await credit();
+      // Corrupt the running balance directly — the one thing applyEntry
+      // would never do — so the O(1) answer and the summed entries
+      // disagree.
+      const entry = await h.prisma.sellerWalletEntry.findFirstOrThrow({
+        where: { sellerId },
+        orderBy: { id: 'desc' },
+        select: { id: true },
+      });
+      await h.prisma.sellerWalletEntry.update({
+        where: { id: entry.id },
+        data: { runningBalanceAfter: new Prisma.Decimal(999999) },
+      });
+
+      const admin = h.app.get(AdminSellerWalletService);
+      const r = await admin.reconcile();
+
+      expect(r.drifted).toHaveLength(1);
+      expect(r.drifted[0]?.running).toBe('999999.00');
+      expect(r.drifted[0]?.summed).toBe(AMOUNT.toFixed(2));
+
+      // Left as found. Quietly rewriting it to match would destroy the
+      // evidence that something wrote history it should not have.
+      const after = await h.prisma.sellerWalletEntry.findUniqueOrThrow({
+        where: { id: entry.id },
+        select: { runningBalanceAfter: true },
+      });
+      expect(after.runningBalanceAfter.toFixed(2)).toBe('999999.00');
+    });
+  });
 });
