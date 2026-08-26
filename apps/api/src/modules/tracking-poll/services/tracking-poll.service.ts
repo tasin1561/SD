@@ -35,9 +35,20 @@ const IN_FLIGHT_ORDER_STATUSES: readonly OrderStatus[] = [
   OrderStatus.RTO_IN_TRANSIT,
 ];
 
-/** Max shipments pulled into one poll cycle (bounds the work; the cron
- *  re-fires so a backlog drains across cycles). */
-const MAX_SHIPMENTS_PER_CYCLE = 1000;
+/**
+ * Max shipments pulled into one poll cycle.
+ *
+ * Sized against Delhivery's actual tracking limit — 750 requests per 5
+ * minutes per IP, 50 waybills per request, so 37 500 waybills per 5
+ * minutes. At the default 20-minute cron, 10 000 shipments is 200 calls
+ * a cycle, or roughly 50 per 5 minutes: about 7% of the budget. The old
+ * value of 1 000 was ~13x more conservative than the constraint it was
+ * protecting against.
+ *
+ * That mattered more than it looks, because the cap is not just work-
+ * shedding when webhooks are absent — see the ordering note below.
+ */
+const MAX_SHIPMENTS_PER_CYCLE = 10_000;
 
 export interface PollCycleSummary {
   stubMode: boolean;
@@ -182,6 +193,25 @@ export class TrackingPollService {
         status: true,
         orderShipments: { select: { orderId: true }, take: 1 },
       },
+      // STALE FIRST, and this is load-bearing rather than a nicety.
+      //
+      // With no ordering, `take` hands back whatever the plan yields —
+      // in practice the same rows every time. Above the cap that means
+      // one arbitrary subset is polled forever and every other parcel
+      // is never updated at all: not delayed, never. The comment on the
+      // cap used to claim a backlog "drains across cycles", which is
+      // only true if the selection rotates, and it did not.
+      //
+      // It is worth being blunt about the consequence: Delhivery B2C
+      // pushes no webhooks, so this poller IS tracking. A silent
+      // coverage hole here is a parcel whose customer is told nothing
+      // while the parcel beside it updates normally.
+      //
+      // `updatedAt` ascending puts the shipments we have heard about
+      // least recently at the front. Applying a scan touches the row,
+      // which sends it to the back — so attention rotates by
+      // construction, without another column to maintain.
+      orderBy: { updatedAt: 'asc' },
       take: MAX_SHIPMENTS_PER_CYCLE,
     });
 
