@@ -68,6 +68,52 @@ forever** — there is no manual re-push. Even with webhooks live, the
 Track API is the only recovery path. The poller was never going to be
 retired.
 
+## What happens at volume
+
+Arithmetic, not a guess. Delhivery takes 50 waybills per call and allows
+750 calls per 5 minutes; their published latency is 130ms average, 529ms
+P99.
+
+| In flight | Calls / cycle | Rate budget used | Cycle duration |
+|---|---|---|---|
+| 500 | 10 | ~0.3% | a few seconds |
+| 3 000 | 60 | ~2% | ~30-60 s |
+| 10 000 | 200 | ~7% | ~2-4 min |
+
+Every in-flight parcel is polled every cycle up to the 10 000 cap, so at
+3 000 nothing waits its turn — all 3 000 statuses advance as fast as
+Delhivery reports them, up to 20 minutes late.
+
+The per-parcel cost is one tracking-API slot plus one watermark read,
+which happens even when nothing changed. The binding constraint is
+neither the rate limit nor the database but **cycle duration against the
+cron interval**: worker concurrency is 1, so a cycle running longer than
+its interval queues the next one. At the measured per-parcel cost that is
+somewhere around 40 000-60 000 in-flight parcels — far past the point
+other things would need attention.
+
+## Four layers over "the poller stopped"
+
+Each covers the one before's blind spot. No single guard is enough,
+because the interesting failures take out the guard as well.
+
+| # | Layer | Covers | Blind to |
+|---|---|---|---|
+| 1 | The poller alarms on itself | A cycle that runs and fails: every batch failing, or stub mode with parcels in flight | A cycle that never starts |
+| 2 | Heartbeat → `/system/capacity` | A cron that never fires | Nobody opening the page |
+| 3 | External watchdog (GitHub Actions, every 30 min → `GET /health/tracking`, 503 when stale) | The app being down entirely — nothing in-process can report its own absence | GitHub disabling the schedule after 60 days of repo inactivity; scheduled runs are best-effort |
+| 4 | A human: live status + **Run a cycle now** on `/delhivery` | Everything above, once someone is looking | Nobody being on shift |
+
+Layer 4 closed a real hole rather than adding polish: `pollAll()` was
+public and documented as the manual trigger and had **no caller at all**,
+so recovery meant an SSH session and a hand-written script at exactly the
+moment somebody is under pressure. Pressing the button repeatedly is
+safe — a cycle applies only scans newer than each parcel's watermark.
+
+The recovery checklist lives in `.github/workflows/tracking-watchdog.yml`
+and prints on a failed run, so it arrives with the alert rather than
+having to be found.
+
 ## The forms — filled, ready, not sent
 
 Status as of 2026-08-25: the four requirement documents are filled and
