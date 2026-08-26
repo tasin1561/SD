@@ -609,11 +609,15 @@ export interface TrackingPollRunView {
  * It is also the only part of the system that can stop without anything
  * failing — hence a live reading rather than a page you refresh.
  */
-export function useTrackingPollHealth(): UseQueryResult<TrackingPollHealthView> {
+export function useTrackingPollHealth(enabled = true): UseQueryResult<TrackingPollHealthView> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-tracking-poll', 'health'],
     queryFn: () => client.request<TrackingPollHealthView>('/api/admin/tracking/poll/health'),
+    // Gated by the caller's permission: this page's own gate is about
+    // waybills, so a viewer without the tracking permission must not
+    // fire this on load and collect a 403 for doing nothing.
+    enabled,
     refetchInterval: 60_000,
   });
 }

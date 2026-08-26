@@ -13,6 +13,7 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import { useRunTrackingPoll, useTrackingPollHealth } from '@/lib/ops-hooks';
+import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /**
@@ -28,10 +29,18 @@ import { serverVerdict } from '@/lib/server-verdict';
  * Recovery previously meant an SSH session and a hand-written script, at
  * exactly the moment somebody is under pressure.
  */
-export function TrackingPollPanel(): ReactElement {
+export function TrackingPollPanel(): ReactElement | null {
   const toast = useToast();
-  const health = useTrackingPollHealth();
+  // This page is gated on managing waybills, which is a different job
+  // from running tracking — so the panel checks its own permission
+  // rather than inheriting the page's. The query is gated too, not just
+  // the markup: a request nobody may make should never be sent, rather
+  // than sent and its 403 hidden.
+  const mayRun = usePermission('orders.tracking.run_poll');
+  const health = useTrackingPollHealth(mayRun);
   const run = useRunTrackingPoll();
+
+  if (!mayRun) return null;
 
   const minutes = health.data?.minutesSinceLastRun ?? null;
   const stale = health.data?.stale === true;
