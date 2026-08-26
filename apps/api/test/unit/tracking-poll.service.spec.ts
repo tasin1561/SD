@@ -292,15 +292,19 @@ describe('TrackingPollService — coverage must rotate', () => {
 
     await svc.pollAll();
 
-    const args = mocks.shipmentFindMany.mock.calls[0]?.[0];
+    // The mock carries no arg types, so the call tuple is typed empty.
+    const calls = mocks.shipmentFindMany.mock.calls as unknown as Array<
+      [{ orderBy?: { updatedAt?: string }; take?: number }]
+    >;
+    const args = calls[0]?.[0];
     expect(args).toBeDefined();
     // Applying a scan touches the row, sending it to the back — so
     // attention rotates without another column to maintain.
-    expect(args.orderBy).toEqual({ updatedAt: 'asc' });
+    expect(args?.orderBy).toEqual({ updatedAt: 'asc' });
 
     // Their tracking limit is 750 requests / 5 min at 50 waybills each,
     // so the cap should be sized against that rather than set low out of
     // caution — a cap below real volume is the coverage hole above.
-    expect(args.take).toBeGreaterThanOrEqual(10_000);
+    expect(args?.take ?? 0).toBeGreaterThanOrEqual(10_000);
   });
 });
