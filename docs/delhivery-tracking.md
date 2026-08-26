@@ -1,4 +1,74 @@
-# Delhivery webhooks — what we asked for and what we answer with
+# Delhivery tracking — the API is the path, webhooks are parked
+
+**Decision, 2026-08-26: we track by POLLING the Track API. The webhook
+requirement documents are filled and ready but are NOT being chased.**
+The founder's tolerance is an hour for a status update; the poller runs
+every 20 minutes, so webhooks buy latency we do not need. What they would
+still buy is automatic capture of EPOD / QC / sorter images, which arrive
+by push and no other way — see "What parking them costs" below.
+
+This is not a workaround. **Delhivery B2C accounts push no webhooks at
+all** (validated live 2026-07), which is why `TrackingPollService` was
+built in the first place. Polling is the designed path; webhooks were
+always the upgrade.
+
+## What parking them costs
+
+1. **Latency** — up to 20 minutes instead of near-instant, tunable via
+   `courier.tracking_poll_cron`. Well inside the hour.
+2. **Documents** — EPOD, QC and sorter images arrive ONLY by push.
+   Without them nothing is archived automatically. They remain fetchable
+   per shipment through courier-ops, with the caveat that Delhivery
+   serves them from URLs that expire: the one wanted six months into a
+   dispute may be gone. This is the real cost and the reason the forms
+   stay ready rather than being deleted.
+
+Nothing else. The poller uses the same mapping, the same
+monotonic-forward guard, the same NDR saga with the NSL code and the same
+stock-neutrality at DELIVERED — it is the same code past the point a scan
+is parsed.
+
+## Capacity is not the constraint
+
+Their tracking limit is **750 requests / 5 minutes / IP at 50 waybills a
+request** — 37 500 waybills per 5 minutes. At the 20-minute cadence and a
+10 000-shipment cap, a cycle is about 50 calls per 5 minutes: roughly 7%
+of the budget. Their published latency is 130ms average, 529ms P99.
+
+## The worst case, and why it is not the obvious one
+
+The obvious worry is a missed scan. That is not it: a poll returns the
+FULL scan history every cycle and dedups on the scan-time watermark, so a
+scan cannot be missed, only seen late.
+
+The real worst case is that **the poller stops and nothing says so.**
+Every other failure in this system announces itself — a full disk refuses
+writes, a connection ceiling returns errors, a courier rejection lands in
+audit_logs. This one is silent: the app keeps serving, no request fails,
+the logs look ordinary, and the first person to notice is a seller asking
+why a parcel has not moved since Tuesday. Orders never reach DELIVERED,
+so COD is never credited and payouts stop with it.
+
+Three ways it goes quiet, each now covered:
+
+| How it stops | What it looked like | What happens now |
+|---|---|---|
+| Every batch fails (expired credential, suspended account, their API down) | Each failure caught and logged at warn — correctly, since one failing is a blip. All failing repeated every 20 min forever. | Audits HIGH `tracking.poll_all_batches_failed` |
+| `courier.delhivery_api_base_url` cleared | Cycle returns early. No error, no failed request, tracking simply off. | Audits HIGH `tracking.poll_stub_mode_with_inflight` (silent when nothing is in flight — that is dev and CI) |
+| The cron never fires (Redis lost the repeatable job, `WORKERS_ENABLED` off) | Nothing inside a cycle can detect a cycle that never ran. | Each cycle stamps `courier.tracking_poll_last_run_at`; `/system/capacity` reads it as tracking freshness, ceiling 45 minutes |
+
+A fourth, fixed the same day: the poller took 1 000 rows with **no
+ordering**, so above that cap an arbitrary subset was polled forever and
+every other parcel never at all. Now ordered least-recently-touched
+first, cap raised to 10 000 against the arithmetic above.
+
+One more from their own docs, worth knowing even though it now costs us
+nothing: **a failed scan push is retried once, immediately, then dropped
+forever** — there is no manual re-push. Even with webhooks live, the
+Track API is the only recovery path. The poller was never going to be
+retired.
+
+## The forms — filled, ready, not sent
 
 Status as of 2026-08-25: the four requirement documents are filled and
 ready to send. **Nothing has been provisioned at Delhivery's end yet**,
