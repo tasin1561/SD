@@ -16,16 +16,27 @@ import { useWalletTerms, type WalletTerm } from '@/lib/ops-hooks';
  * globally or per seller. A seller who could raise their own withdrawal
  * cap would not have one.
  */
+/**
+ * The two the seller OWNS, shown by PayoutScheduleCard as controls
+ * rather than as facts. Listing them here as well would put a read-only
+ * copy of a value directly below the switch that changes it — and the
+ * two would disagree for as long as a refetch takes.
+ */
+const OWNED_BY_SELLER = new Set([
+  'wallet.auto_withdraw_enabled',
+  'wallet.auto_withdraw_hour_local',
+]);
+
 export function WalletTermsCard(): ReactElement | null {
   const terms = useWalletTerms();
-  const items = terms.data?.items ?? [];
+  const items = (terms.data?.items ?? []).filter((t) => !OWNED_BY_SELLER.has(t.key));
   if (items.length === 0) return null;
 
   return (
     <Card>
       <CardHeader
-        title="Your wallet terms"
-        subtitle="Set by Skydrop — shown so a limit is never a surprise. Ask us if one looks wrong for your account."
+        title="Your limits"
+        subtitle="Set by Skydrop and not editable here — shown so a limit is never a surprise. Ask us if one looks wrong for your account."
       />
       <CardBody>
         <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">

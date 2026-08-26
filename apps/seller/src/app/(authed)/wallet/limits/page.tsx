@@ -4,6 +4,7 @@ import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { PageHeader } from '@skydrop/ui/components';
+import { PayoutScheduleCard } from '../_components/payout-schedule-card';
 import { WalletTermsCard } from '../_components/wallet-terms-card';
 
 /**
@@ -31,6 +32,10 @@ export default function WalletLimitsPage(): ReactElement {
         subtitle="Every rule that decides what you can take out, when COD reaches you, and what is charged. Set by Skydrop — ask us if one looks wrong for your account."
       />
 
+      {/* What you can change, then what you cannot. Mixing the two was
+          the old shape: a list of eighteen facts where two happened to
+          be adjustable, which is not discoverable. */}
+      <PayoutScheduleCard />
       <WalletTermsCard />
     </div>
   );

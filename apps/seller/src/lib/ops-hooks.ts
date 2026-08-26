@@ -205,9 +205,16 @@ export interface WalletTerm {
 }
 
 /**
- * The rules this wallet runs on. Read-only by design — there is no
- * seller-facing writer, because a seller who could raise their own
- * withdrawal cap would not have one.
+ * The rules this wallet runs on.
+ *
+ * Read-only EXCEPT the two payout-schedule ones, which the seller owns
+ * (usePayoutSchedule writes those). Everything else is what Skydrop
+ * charges and allows: a seller who could raise their own withdrawal cap
+ * would not have one.
+ *
+ * The schedule is safe to hand over because an automatic request passes
+ * the identical guard chain as a manual one (WAL-3) — turning it on
+ * cannot take money a manual request could not.
  */
 export function useWalletTerms(): UseQueryResult<{ items: WalletTerm[] }> {
   const client = useApiClient();

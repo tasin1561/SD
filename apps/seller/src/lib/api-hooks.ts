@@ -1741,3 +1741,43 @@ export function useDeactivateTeamMember(): UseMutationResult<void, Error, { id: 
     },
   });
 }
+
+// ───────── Payout schedule — the two wallet terms a seller owns ─────────
+
+export interface PayoutScheduleView {
+  readonly autoEnabled: boolean;
+  readonly hourLocal: number;
+  readonly timezone: string;
+  readonly isOwnValue: boolean;
+}
+
+export function usePayoutSchedule(enabled = true): UseQueryResult<PayoutScheduleView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-payout-schedule'],
+    queryFn: () => client.request<PayoutScheduleView>('/api/seller/wallet/payout-schedule'),
+    enabled,
+  });
+}
+
+export function useSetPayoutSchedule(): UseMutationResult<
+  PayoutScheduleView,
+  Error,
+  { autoEnabled?: boolean; hourLocal?: number }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<PayoutScheduleView>('/api/seller/wallet/payout-schedule', {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['seller-payout-schedule'] });
+      // The terms list shows the same two values, so it must not keep
+      // showing the old ones beside the control that just changed them.
+      void qc.invalidateQueries({ queryKey: ['seller-wallet', 'terms'] });
+    },
+  });
+}
