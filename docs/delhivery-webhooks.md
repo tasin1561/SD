@@ -52,13 +52,55 @@ buys defence in depth at the cost of every scan silently failing the day
 they add a PoP. Their published production ranges are recorded in the
 documents if we ever change our mind.
 
+## What was wrong before any of this was sent
+
+Five defects, found by attacking the path rather than confirming it, all
+silent. Recorded because the shape repeats: **not one of them threw
+anywhere we were watching.**
+
+1. **Every real document push was refused.** Express defaults to a 100kb
+   body; an EPOD is a photo, base64, a third bigger again. It came back
+   as a 500, not a 413, so a courier would have retried forever while we
+   chased a phantom fault. The 12MB allowance is scoped to the three
+   document routes — granting it globally is a cheap way to exhaust a
+   4GB box, because the body is buffered before any guard runs.
+2. **The rate limit was a ceiling on our whole tracking throughput.**
+   100/min per IP, and Delhivery pushes every one of our scans from a
+   handful of fixed IPs. Measured: exactly 100 through, then 429.
+3. **Every webhook scan was 5h30m in the future.** Their timestamps
+   carry no offset and are IST; unzoned means LOCAL, and our servers are
+   UTC. The poller already corrected this and the webhook path did not,
+   so one scan had two times depending on how it arrived.
+4. **The document controller wrote the shared secret into the database**
+   on every push, against CUR-1.
+5. **…and the full base64 into `raw_body`**, which on a 10GB managed
+   disk is a few weeks of runway for bytes already in Spaces.
+
+`main.ts` is the reason the first one survived: the unit suite builds
+services directly and the e2e harness builds its own Nest app, so
+**nothing in CI executes that file.** `bootstrap-body-limits.spec.ts` is
+a structural spec covering it — the only kind of gate that can.
+
 ## Response time
 
-Measured 2026-08-25, 300 samples over the public internet:
-P50 66 ms, P99 270 ms end-to-end; server-side processing P99 22 ms.
-Their budget is 500 ms, after which they time out and we lose the scan.
-The margin is almost entirely network, so if it ever tightens the lever
-is the region, not the handler.
+Measured 2026-08-25 against production.
+
+- **Scan push**, 300 samples over the public internet: P50 66 ms, P99
+  270 ms end-to-end; server-side P99 22 ms. The margin is almost
+  entirely network, so if it ever tightens the lever is the region, not
+  the handler.
+- **Document push**, a realistic 2 MB EPOD, 15 samples: P50 112 ms, max
+  161 ms server-side — decode and Spaces upload included. The upload is
+  synchronous on purpose: it fits the budget four times over, and
+  deferring it would mean holding megabytes in a job payload to save
+  nothing.
+
+Their budget is 500 ms, after which they time out and the scan is lost.
+**It is not lost for long:** `TrackingPollService` runs every 20 minutes
+against their tracking API and fills any gap, so a missed push is a
+delay rather than a hole. That backstop does NOT cover documents, which
+arrive only by push — a missed one is re-fetched by hand through
+courier-ops.
 
 ## What the document push does with what arrives
 
