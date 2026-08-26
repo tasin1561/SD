@@ -110,6 +110,13 @@ export const PERMISSIONS = [
     group: 'Orders',
   },
   {
+    key: 'orders.tracking.run_poll',
+    label: 'Run the tracking poll now',
+    description:
+      'Force a tracking cycle instead of waiting for the next scheduled one. Safe to press repeatedly — a cycle only applies scans newer than what each parcel already has.',
+    group: 'Orders',
+  },
+  {
     key: 'orders.tracking.manual_scan',
     label: 'Record a tracking scan by hand',
     description:

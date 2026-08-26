@@ -382,3 +382,39 @@ describe('TrackingPollService — silence is the failure mode', () => {
     expect(mocks.audit.log).not.toHaveBeenCalled();
   });
 });
+
+describe('TrackingPollService.health — the number every layer reads', () => {
+  function withSetting(valueDate: Date | null, cron = '*/20 * * * *') {
+    const { svc } = makeSvc({});
+    const client = (
+      svc as unknown as {
+        prisma: { client: { systemSetting: { findUnique: jest.Mock } } };
+      }
+    ).prisma.client;
+    client.systemSetting.findUnique = jest.fn(async (args: { where: { key: string } }) =>
+      args.where.key.endsWith('cron') ? { valueString: cron } : { valueDate },
+    );
+    return svc;
+  }
+
+  it('is fresh just after a cycle', async () => {
+    const svc = withSetting(new Date(Date.now() - 5 * 60_000));
+    const h = await svc.health();
+    expect(h.stale).toBe(false);
+    expect(h.minutesSinceLastRun).toBe(5);
+  });
+
+  it('is stale after two missed cycles', async () => {
+    const svc = withSetting(new Date(Date.now() - 50 * 60_000));
+    expect((await svc.health()).stale).toBe(true);
+  });
+
+  it('counts "never ran" as stale — it is indistinguishable from stopped', async () => {
+    const svc = withSetting(null);
+    const h = await svc.health();
+    // Both need the same person to look, so they must not report
+    // differently.
+    expect(h.stale).toBe(true);
+    expect(h.lastRunAtIso).toBeNull();
+  });
+});

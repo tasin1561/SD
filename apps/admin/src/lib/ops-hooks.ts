@@ -589,6 +589,45 @@ export interface DelhiveryOpsStatusView {
   readonly rateBudgets: readonly DelhiveryRateBudgetView[];
 }
 
+export interface TrackingPollHealthView {
+  lastRunAtIso: string | null;
+  minutesSinceLastRun: number | null;
+  cronPattern: string;
+  stale: boolean;
+}
+
+export interface TrackingPollRunView {
+  stubMode: boolean;
+  shipmentsExamined: number;
+  scansApplied: number;
+  transitions: number;
+}
+
+/**
+ * Delhivery pushes us no webhooks, so the poll cron is the only thing
+ * moving an order through IN_TRANSIT, OUT_FOR_DELIVERY and DELIVERED.
+ * It is also the only part of the system that can stop without anything
+ * failing — hence a live reading rather than a page you refresh.
+ */
+export function useTrackingPollHealth(): UseQueryResult<TrackingPollHealthView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-tracking-poll', 'health'],
+    queryFn: () => client.request<TrackingPollHealthView>('/api/admin/tracking/poll/health'),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useRunTrackingPoll(): UseMutationResult<TrackingPollRunView, Error, void> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      client.request<TrackingPollRunView>('/api/admin/tracking/poll/run', { method: 'POST' }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-tracking-poll'] }),
+  });
+}
+
 export function useDelhiveryStatus(): UseQueryResult<DelhiveryOpsStatusView> {
   const client = useApiClient();
   return useQuery({

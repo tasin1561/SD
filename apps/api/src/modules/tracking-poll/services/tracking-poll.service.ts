@@ -51,6 +51,20 @@ const IN_FLIGHT_ORDER_STATUSES: readonly OrderStatus[] = [
  */
 const MAX_SHIPMENTS_PER_CYCLE = 10_000;
 
+export interface PollHealth {
+  /** null when no cycle has ever completed. */
+  lastRunAtIso: string | null;
+  minutesSinceLastRun: number | null;
+  cronPattern: string;
+  stale: boolean;
+}
+
+/**
+ * Two missed cycles at the 20-minute default. One late cycle is
+ * ordinary; two in a row is worth a person looking.
+ */
+export const TRACKING_STALE_AFTER_MINUTES = 45;
+
 export interface PollCycleSummary {
   stubMode: boolean;
   shipmentsExamined: number;
@@ -466,6 +480,34 @@ export class TrackingPollService {
       if (isUniqueViolation(err)) return; // lost the race — fine
       throw err;
     }
+  }
+
+  /**
+   * How long since a cycle completed. Read by the admin endpoint, the
+   * capacity page and the public liveness probe — one computation, so
+   * they cannot disagree about whether tracking is healthy.
+   */
+  async health(): Promise<PollHealth> {
+    const [beat, cron] = await Promise.all([
+      this.prisma.client.systemSetting.findUnique({
+        where: { key: TrackingPollService.HEARTBEAT_KEY },
+        select: { valueDate: true },
+      }),
+      this.prisma.client.systemSetting.findUnique({
+        where: { key: 'courier.tracking_poll_cron' },
+        select: { valueString: true },
+      }),
+    ]);
+    const last = beat?.valueDate ?? null;
+    const minutes = last === null ? null : Math.floor((Date.now() - last.getTime()) / 60_000);
+    return {
+      lastRunAtIso: last === null ? null : last.toISOString(),
+      minutesSinceLastRun: minutes,
+      cronPattern: (cron?.valueString ?? '').trim() || '*/20 * * * *',
+      // Never having run counts as stale: it is indistinguishable from
+      // having stopped, and both need the same person to look.
+      stale: minutes === null || minutes > TRACKING_STALE_AFTER_MINUTES,
+    };
   }
 
   /** In-flight count without loading the rows — for the stub-mode alarm. */

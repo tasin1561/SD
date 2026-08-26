@@ -1,0 +1,78 @@
+name: Tracking watchdog
+
+# The layer that does not share fate with the app.
+#
+# Delhivery pushes us no webhooks, so the tracking poller is the only
+# thing moving an order through IN_TRANSIT, OUT_FOR_DELIVERY and
+# DELIVERED. If it stops, nothing breaks loudly: the site stays up, no
+# request fails, and the first person to notice is a seller asking why a
+# parcel has not moved since Tuesday. Orders never reach DELIVERED, so
+# COD is never credited and payouts stop with it.
+#
+# The app now alarms on itself when a cycle RUNS and fails. Nothing
+# inside the app can report a cycle that never started, or an app that is
+# not running at all — which is exactly what this job is for. It runs on
+# GitHub's infrastructure, needs nothing from our droplet, and a failed
+# run emails the repository owner without any alerting stack to maintain.
+#
+# Two honest limits, stated rather than discovered later:
+#   1. GitHub disables scheduled workflows after 60 days of repository
+#      inactivity. If this repo goes quiet, re-enable it in the Actions
+#      tab. A watchdog that silently switched itself off is worse than
+#      none, so check it is still listed as active when you return.
+#   2. Scheduled runs are best-effort and can be delayed under load, so
+#      treat this as a safety net rather than a stopwatch. The in-app
+#      alarms and /system/capacity are the precise instruments.
+
+on:
+  schedule:
+    # Every 30 minutes. The staleness threshold is 45, so a genuinely
+    # stopped poller is caught inside an hour without this job being
+    # noisy about one late cycle.
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Is tracking still moving?
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask the API whether a poll cycle completed recently
+        run: |
+          set -uo pipefail
+          URL="https://api.skydrop.online/health/tracking"
+
+          # Two attempts, because a single failed request is a network
+          # blip and paging a human for one is how alerts get ignored.
+          for attempt in 1 2; do
+            body=$(curl -sS --max-time 20 -w '\n%{http_code}' "$URL" || echo $'\n000')
+            code=$(printf '%s' "$body" | tail -n1)
+            payload=$(printf '%s' "$body" | sed '$d')
+
+            if [ "$code" = "200" ]; then
+              echo "Tracking is moving: $payload"
+              exit 0
+            fi
+
+            echo "Attempt $attempt: HTTP $code — $payload"
+            [ "$attempt" = "1" ] && sleep 60
+          done
+
+          echo
+          echo "::error::Tracking has not completed a poll cycle recently (HTTP $code)."
+          echo "What this means: no parcel is updating. Orders will not reach DELIVERED,"
+          echo "so COD is not being credited and payouts have stopped with it."
+          echo
+          echo "Check, in order:"
+          echo "  1. Is the API up at all?  curl -s https://api.skydrop.online/health/live"
+          echo "  2. Is the worker running? pm2 list on the droplet; WORKERS_ENABLED must not be false."
+          echo "  3. Did Redis lose the repeatable job? Restarting the API re-adds it on boot."
+          echo "  4. Is courier.delhivery_api_base_url still set? Empty means stub mode — the"
+          echo "     poller returns immediately and does nothing."
+          echo "  5. Recent audit_logs: tracking.poll_all_batches_failed (credential or their API)"
+          echo "     or tracking.poll_stub_mode_with_inflight (setting cleared)."
+          echo
+          echo "To recover without waiting for the cron: POST /admin/tracking/poll/run"
+          echo "It is safe to press repeatedly — only scans newer than each parcel already"
+          echo "has are applied."
+          exit 1
