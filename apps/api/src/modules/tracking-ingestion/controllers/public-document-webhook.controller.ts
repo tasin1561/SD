@@ -20,9 +20,8 @@ import { Throttle } from '@nestjs/throttler';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import { minutes } from '../../../common/throttler/throttler.module';
 import { CourierDocumentIngestService } from '../services/courier-document-ingest.service';
+import { redactAuthHeaders } from '../services/webhook-headers';
 import { WebhookAuthService } from '../services/webhook-auth.service';
-
-const SIGNATURE_HEADER = 'x-skydrop-signature';
 
 interface DocumentAck {
   readonly received: true;
@@ -123,6 +122,28 @@ export class PublicDocumentWebhookController {
     const courierCode = courierCodeRaw.toLowerCase();
     const rawBody = req.rawBody?.toString('utf8') ?? '';
 
+    // Validate the courier against the registry BEFORE authenticating —
+    // the same guard the scan ingest applies, and for the same reason.
+    // Without it the code in the URL is whatever the caller typed, and
+    // an unknown one would store documents under a courier that does not
+    // exist. It happened to be refused anyway, but only because the
+    // GLOBAL auth scheme is HMAC and a static secret fails that format
+    // check: protection that evaporates the day someone flips that
+    // setting or onboards a second SHARED_SECRET courier. A guard that
+    // works by accident is not a guard.
+    const courier = await this.prisma.client.courier.findUnique({
+      where: { code: courierCode },
+      select: { deletedAt: true },
+    });
+    if (!courier || courier.deletedAt !== null) {
+      // Same wording as an auth failure: probing the surface should not
+      // reveal which couriers we integrate with.
+      throw new UnauthorizedException({
+        code: 'WEBHOOK_UNAUTHENTICATED',
+        message: 'Signature missing or invalid',
+      });
+    }
+
     // Verify BEFORE storing. Same discipline as TRK-1.
     const auth = await this.auth.verify({
       courierCode,
@@ -136,20 +157,9 @@ export class PublicDocumentWebhookController {
       });
     }
 
-    // The auth header is REDACTED out of the stored copy. Under
-    // SHARED_SECRET its value IS the credential, so keeping it would
-    // write the secret into the database on every push — the exact thing
-    // CUR-1 exists to prevent (key in env, never in a row).
-    const headers: Prisma.InputJsonValue = Object.fromEntries(
-      Object.entries(req.headers).map(([k, v]) => [
-        k,
-        k.toLowerCase() === SIGNATURE_HEADER
-          ? '[redacted]'
-          : Array.isArray(v)
-            ? v.join(',')
-            : (v ?? ''),
-      ]),
-    );
+    // The auth header is REDACTED out of the stored copy — under
+    // SHARED_SECRET its value IS the credential (CUR-1).
+    const headers: Prisma.InputJsonValue = redactAuthHeaders(req.headers);
 
     // The raw payload lands in the SAME ledger as scans. A document that
     // fails to store can then be replayed from what actually arrived,

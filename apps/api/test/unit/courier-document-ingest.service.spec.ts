@@ -143,3 +143,34 @@ describe('CourierDocumentIngestService', () => {
     });
   });
 });
+
+describe('CourierDocumentIngestService — never throws at the courier', () => {
+  it('survives a database error on the shipment lookup', async () => {
+    const { service, upsert, prisma } = make();
+    prisma.client.shipment.findFirst.mockRejectedValueOnce(new Error('connection reset'));
+    const out = await service.ingest({
+      courierCode: 'delhivery',
+      docType: CourierDocumentType.EPOD,
+      body: { waybill: '123', EPOD: JPEG },
+      webhookId: null,
+    });
+    // The link is lost, the evidence is not.
+    expect(out.awbNumber).toBe('123');
+    expect(upsert.mock.calls[0][0].create.shipmentId).toBeNull();
+  });
+
+  it('survives a database error on the write itself', async () => {
+    const { service, upsert } = make();
+    upsert.mockRejectedValueOnce(new Error('deadlock detected'));
+    // A 500 here means the courier retries — the outcome this design
+    // exists to avoid. The raw payload is already in courier_webhooks.
+    await expect(
+      service.ingest({
+        courierCode: 'delhivery',
+        docType: CourierDocumentType.EPOD,
+        body: { waybill: '123', EPOD: JPEG },
+        webhookId: null,
+      }),
+    ).resolves.toEqual({ stored: false, awbNumber: '123' });
+  });
+});

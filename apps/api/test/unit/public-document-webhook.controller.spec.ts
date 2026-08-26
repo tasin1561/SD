@@ -11,7 +11,12 @@ function make(valid = true) {
   const controller = new PublicDocumentWebhookController(
     { verify: jest.fn().mockResolvedValue({ valid, reason: valid ? undefined : 'X' }) } as never,
     { ingest } as never,
-    { client: { courierWebhook: { create } } } as never,
+    {
+      client: {
+        courierWebhook: { create },
+        courier: { findUnique: jest.fn().mockResolvedValue({ deletedAt: null }) },
+      },
+    } as never,
   );
   const req = {
     method: 'POST',
@@ -82,5 +87,35 @@ describe('PublicDocumentWebhookController', () => {
     await controller.qc('delhivery', req as never, { waybill: '1' }, SECRET);
     expect(ingest.mock.calls[0][0].docType).toBe(CourierDocumentType.SORTER_IMAGE);
     expect(ingest.mock.calls[1][0].docType).toBe(CourierDocumentType.QC_IMAGE);
+  });
+});
+
+describe('PublicDocumentWebhookController — courier registry', () => {
+  it('refuses a courier code that is not registered, before authenticating', async () => {
+    const create = jest.fn();
+    const ingest = jest.fn();
+    const controller = new PublicDocumentWebhookController(
+      { verify: jest.fn().mockResolvedValue({ valid: true }) } as never,
+      { ingest } as never,
+      {
+        client: {
+          courierWebhook: { create },
+          courier: { findUnique: jest.fn().mockResolvedValue(null) },
+        },
+      } as never,
+    );
+    const req = {
+      method: 'POST',
+      originalUrl: '/x',
+      ip: '1.1.1.1',
+      headers: {},
+      rawBody: Buffer.from('{}'),
+    };
+
+    await expect(
+      controller.epod('not-a-real-courier', req as never, { waybill: '1' }, SECRET),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(create).not.toHaveBeenCalled();
+    expect(ingest).not.toHaveBeenCalled();
   });
 });

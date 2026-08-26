@@ -13,6 +13,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import type { Prisma } from '@skydrop/db';
 import { Throttle } from '@nestjs/throttler';
+import { redactAuthHeaders } from '../services/webhook-headers';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import { minutes } from '../../../common/throttler/throttler.module';
 import { WebhookIngestService, type IngestOutcome } from '../services/webhook-ingest.service';
@@ -92,9 +93,10 @@ export class PublicWebhookController {
     // equal the supplied header).
     const rawBody = req.rawBody?.toString('utf8') ?? '';
 
-    const headersJson: Prisma.InputJsonValue = Object.fromEntries(
-      Object.entries(req.headers).map(([k, v]) => [k, Array.isArray(v) ? v.join(',') : (v ?? '')]),
-    );
+    // The auth header is REDACTED — under SHARED_SECRET its value IS the
+    // credential, so storing it verbatim wrote the secret into a row on
+    // every push (CUR-1).
+    const headersJson: Prisma.InputJsonValue = redactAuthHeaders(req.headers);
 
     const parsedBodyJson: Prisma.InputJsonValue | null = isJsonValue(parsedBody)
       ? (parsedBody as Prisma.InputJsonValue)

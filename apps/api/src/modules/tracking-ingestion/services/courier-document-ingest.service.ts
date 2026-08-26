@@ -93,10 +93,25 @@ export class CourierDocumentIngestService {
 
     // Matched where we can, kept where we cannot. An orphan document is
     // still evidence we were sent something.
-    const shipment = await this.prisma.client.shipment.findFirst({
-      where: { awbNumber: fields.awbNumber, deletedAt: null },
-      select: { id: true },
-    });
+    // Both database calls below are guarded. The class promises never to
+    // throw at the courier and, until this, did not keep that promise:
+    // the Spaces upload was wrapped and the queries were not, so a
+    // transient database error became a 500 and a retry storm — the very
+    // outcome the design was chosen to avoid.
+    let shipment: { id: string } | null = null;
+    try {
+      shipment = await this.prisma.client.shipment.findFirst({
+        where: { awbNumber: fields.awbNumber, deletedAt: null },
+        select: { id: true },
+      });
+    } catch (e) {
+      // Not fatal: an unmatched document is still kept (see below), so a
+      // lookup failure costs the link, not the evidence.
+      this.logger.warn(
+        { awbNumber: fields.awbNumber, error: (e as Error).message },
+        'Could not look up the shipment for a courier document',
+      );
+    }
 
     let spacesKey: string | null = null;
     let mimeType: string | null = null;
@@ -142,22 +157,32 @@ export class CourierDocumentIngestService {
 
     // Upsert on the natural key: a courier re-sending the same EPOD must
     // update the row it already has rather than leaving two.
-    await this.prisma.client.courierDocument.upsert({
-      where: {
-        courierCode_awbNumber_docType: {
+    try {
+      await this.prisma.client.courierDocument.upsert({
+        where: {
+          courierCode_awbNumber_docType: {
+            courierCode: input.courierCode,
+            awbNumber: fields.awbNumber,
+            docType: input.docType,
+          },
+        },
+        create: {
           courierCode: input.courierCode,
           awbNumber: fields.awbNumber,
           docType: input.docType,
+          ...data,
         },
-      },
-      create: {
-        courierCode: input.courierCode,
-        awbNumber: fields.awbNumber,
-        docType: input.docType,
-        ...data,
-      },
-      update: data,
-    });
+        update: data,
+      });
+    } catch (e) {
+      // The bytes may already be in Spaces; the raw payload is in
+      // courier_webhooks either way, so this replays from the ledger.
+      this.logger.error(
+        { awbNumber: fields.awbNumber, docType: input.docType, error: (e as Error).message },
+        'Could not record a courier document — the raw webhook row is the fallback',
+      );
+      return { stored: false, awbNumber: fields.awbNumber };
+    }
 
     if (storeError !== null) {
       this.logger.warn(
