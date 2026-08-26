@@ -139,16 +139,49 @@ export class AdminSellerWalletService {
       },
     });
 
+    // The balance comes from the LEDGER, not the cache table.
+    //
+    // sellerWalletBalance is refreshed by each money path calling
+    // recomputeCacheAfterCommit, and only 6 of the 14 services that
+    // write entries actually do — so the row is missing or stale more
+    // often than not. Reading it raw showed a seller who owes ₹3,000 as
+    // ₹0.00, and the estate total as "0 in debt". A wrong number is
+    // worse here than a missing screen: nobody chases a debt the system
+    // says does not exist.
+    //
+    // WAL-7 defines the balance as the LAST entry's running balance, so
+    // that is what this reads. Two queries whatever the seller count:
+    // the newest entry id per seller (ids are uuidv7, so max id IS the
+    // latest), then those rows.
+    const ids = sellers.map((x) => x.id);
+    const newest =
+      ids.length === 0
+        ? []
+        : await this.prisma.client.sellerWalletEntry.groupBy({
+            by: ['sellerId'],
+            where: { sellerId: { in: ids }, currency: Currency.INR },
+            _max: { id: true },
+          });
+    const newestIds = newest.map((n) => n._max.id).filter((v): v is string => v !== null);
+    const latestEntries =
+      newestIds.length === 0
+        ? []
+        : await this.prisma.client.sellerWalletEntry.findMany({
+            where: { id: { in: newestIds } },
+            select: { sellerId: true, runningBalanceAfter: true, createdAt: true },
+          });
+    const ledger = new Map(latestEntries.map((e) => [e.sellerId, e]));
+
     const balances = sellers.map((x) => {
-      const held = x.walletBalances[0];
+      const last = ledger.get(x.id);
       return {
         sellerId: x.id,
-        // No row yet means nothing has moved, which is a balance of
+        // No entries yet means nothing has moved, which is a balance of
         // zero — not an absence.
-        balance: held?.balance ?? ZERO,
+        balance: last?.runningBalanceAfter ?? ZERO,
         // Falls back to when the seller was created, so the column reads
         // as "nothing since then" rather than as a blank.
-        updatedAt: held?.updatedAt ?? x.createdAt,
+        updatedAt: last?.createdAt ?? x.createdAt,
         seller: { companyName: x.companyName, email: x.email, status: x.status },
       };
     });
@@ -243,11 +276,18 @@ export class AdminSellerWalletService {
       throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'Seller not found' });
     }
 
-    const row = await this.prisma.client.sellerWalletBalance.findUnique({
-      where: { sellerId_currency: { sellerId, currency: Currency.INR } },
-      select: { balance: true },
+    // Same reasoning as the list: the ledger is authoritative, the cache
+    // table is only as fresh as whichever path last remembered to
+    // refresh it.
+    const last = await this.prisma.client.sellerWalletEntry.findFirst({
+      where: { sellerId, currency: Currency.INR },
+      // uuidv7 ids are monotonic and, unlike createdAt, distinct within
+      // one transaction — so this is the last entry, not merely one of
+      // the last (WAL-7).
+      orderBy: { id: 'desc' },
+      select: { runningBalanceAfter: true },
     });
-    const balance = row?.balance ?? ZERO;
+    const balance = last?.runningBalanceAfter ?? ZERO;
 
     const floor = await this.settings.resolve(sellerId, MIN_BALANCE_KEY);
     const min = new Prisma.Decimal(String(floor.value ?? 0));

@@ -131,9 +131,17 @@ export default function WalletPage(): ReactElement {
                   {b.currency}
                 </div>
                 <div className="text-text-bright">
+                  {/* convert={false} because THIS card names its own
+                      currency in the heading above. Left to convert, the
+                      INR card rendered the taka figure under an "INR"
+                      label — the same number as the BDT card beside it,
+                      so the page showed one balance twice and neither
+                      of them in rupees. The API already returns both
+                      currencies; converting here did it a second time. */}
                   <Money
                     amount={b.balance}
                     currency={b.currency === 'BDT' ? 'BDT' : 'INR'}
+                    convert={false}
                     size="lg"
                   />
                 </div>

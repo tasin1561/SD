@@ -247,12 +247,41 @@ export class WalletService {
    * row doesn't exist yet (new wallet).
    */
   async balanceCached(sellerId: string, currency: Currency): Promise<Prisma.Decimal> {
-    const cached = await this.prisma.client.sellerWalletBalance.findUnique({
-      where: { sellerId_currency: { sellerId, currency } },
-      select: { balance: true },
-    });
-    if (cached) return cached.balance;
-    return this.balanceLive(sellerId, currency);
+    // The cache is checked AGAINST THE LEDGER before it is trusted.
+    //
+    // Refreshing it is each money path's own responsibility — 14
+    // services write wallet entries and only 6 call
+    // recomputeCacheAfterCommit — so "the row exists" was never
+    // evidence that it is current. A stale row is worse than a missing
+    // one: the missing case already fell back to the ledger and was
+    // right, while a stale row is confidently wrong and stays wrong.
+    //
+    // The check is one indexed lookup of the newest entry, which is the
+    // same lookup the authoritative answer needs anyway — so on a miss
+    // this costs nothing extra, and on a hit it costs one cheap query
+    // to be sure. For money that is the right trade.
+    const [cached, last] = await Promise.all([
+      this.prisma.client.sellerWalletBalance.findUnique({
+        where: { sellerId_currency: { sellerId, currency } },
+        select: { balance: true, lastEntryId: true },
+      }),
+      this.prisma.client.sellerWalletEntry.findFirst({
+        where: { sellerId, currency },
+        orderBy: { id: 'desc' },
+        select: { id: true, runningBalanceAfter: true },
+      }),
+    ]);
+
+    // No entries at all: nothing has moved, so the balance is zero.
+    if (!last) return cached?.balance ?? new Prisma.Decimal(0);
+
+    // Current cache — use it.
+    if (cached && cached.lastEntryId === last.id) return cached.balance;
+
+    // Missing or stale. The ledger's last running balance IS the
+    // balance (WAL-7); return that rather than a number we cannot
+    // vouch for.
+    return last.runningBalanceAfter;
   }
 
   /**
