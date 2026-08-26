@@ -99,6 +99,38 @@ function makeScanBody(opts: {
   return JSON.stringify(obj);
 }
 
+/**
+ * Delhivery's REAL documented Status-Push envelope — the shape in the
+ * requirement document they provision from, not our stub codes.
+ *
+ * `StatusDateTime` deliberately carries NO timezone, because theirs does
+ * not: their own sample reads "2019-01-09T17:10:42.767". It is IST.
+ */
+function makeDelhiveryScanBody(opts: {
+  awbNumber: string;
+  status: string;
+  statusType: string;
+  statusDateTimeIst: string;
+  nslCode?: string;
+  instructions?: string;
+}): string {
+  return JSON.stringify({
+    Shipment: {
+      AWB: opts.awbNumber,
+      NSLCode: opts.nslCode ?? 'X-UCI',
+      Sortcode: 'IXC/MDP',
+      ReferenceNo: '28',
+      Status: {
+        Status: opts.status,
+        StatusType: opts.statusType,
+        StatusDateTime: opts.statusDateTimeIst,
+        StatusLocation: 'Chandigarh_Raiprkln_C (Chandigarh)',
+        Instructions: opts.instructions ?? 'Manifest uploaded',
+      },
+    },
+  });
+}
+
 describe('M10 Tracking — webhook lifecycle e2e (TRK-1..9)', () => {
   let h: AppHarness;
   let staffAuth: { Authorization: string };
@@ -347,6 +379,111 @@ describe('M10 Tracking — webhook lifecycle e2e (TRK-1..9)', () => {
     }
     return { webhookId, httpStatus: res.status, result, webhook };
   }
+
+  // ── Scenario: THE REAL DELHIVERY PAYLOAD ───────────────────────────
+  //
+  // Everything else here drives stub `DLV-*` codes in a flat body. That
+  // covers our machinery and proves nothing about the payload Delhivery
+  // will actually send, which is a different shape with a different
+  // vocabulary and timestamps in a different timezone. This is the one
+  // that would have caught the two defects the stub tests could not see:
+  // the (StatusType, Status) pair table, and the unzoned IST timestamp.
+  it('REAL PAYLOAD: their documented envelope drives the order, and the scan time is IST', async () => {
+    await receiveStock(10);
+    const { orderId, awbNumber } = await driveToDispatched(2);
+
+    // "In Transit" on the forward leg.
+    const r1 = await sendWebhookAndWait(
+      makeDelhiveryScanBody({
+        awbNumber,
+        status: 'In Transit',
+        statusType: 'UD',
+        statusDateTimeIst: '2026-05-20T17:10:42.767',
+      }),
+    );
+    expect(r1.webhook.status).toBe(WebhookStatus.PROCESSED);
+    expect(r1.webhook.trackingEventId).not.toBeNull();
+    let order = await h.prisma.order.findUniqueOrThrow({ where: { id: orderId } });
+    expect(order.status).toBe(OrderStatus.IN_TRANSIT);
+
+    // 17:10 IST is 11:40 UTC. Read as UTC — which is what an unzoned
+    // string means by default, on servers that run UTC — the scan would
+    // sit 5h30m in the future and the timeline would show an event that
+    // has not happened.
+    const ev = await h.prisma.trackingEvent.findFirstOrThrow({
+      where: { id: r1.webhook.trackingEventId ?? '' },
+    });
+    expect(ev.eventAt.toISOString()).toBe('2026-05-20T11:40:42.767Z');
+
+    // Their "Dispatched" on a forward leg is our OUT_FOR_DELIVERY — the
+    // same word on a RETURN leg means the parcel is coming back to us,
+    // which is why the mapping is keyed on the pair and not the status.
+    await sendWebhookAndWait(
+      makeDelhiveryScanBody({
+        awbNumber,
+        status: 'Dispatched',
+        statusType: 'UD',
+        statusDateTimeIst: '2026-05-22T07:00:00.000',
+      }),
+    );
+    order = await h.prisma.order.findUniqueOrThrow({ where: { id: orderId } });
+    expect(order.status).toBe(OrderStatus.OUT_FOR_DELIVERY);
+
+    await sendWebhookAndWait(
+      makeDelhiveryScanBody({
+        awbNumber,
+        status: 'Delivered',
+        statusType: 'DL',
+        statusDateTimeIst: '2026-05-22T15:30:00.000',
+      }),
+    );
+    order = await h.prisma.order.findUniqueOrThrow({ where: { id: orderId } });
+    expect(order.status).toBe(OrderStatus.DELIVERED);
+
+    // TRK-7 again, but reached through the real vocabulary this time.
+    const level = await h.prisma.stockLevel.findFirstOrThrow({ where: { variantId, binId } });
+    expect(level.qtyOnHand).toBe(8);
+    expect(level.qtyReserved).toBe(0);
+  });
+
+  it('REAL PAYLOAD: an EOD-* NSL on the forward leg is a failed delivery, not ordinary transit', async () => {
+    await receiveStock(10);
+    const { orderId, awbNumber } = await driveToDispatched(2);
+
+    await sendWebhookAndWait(
+      makeDelhiveryScanBody({
+        awbNumber,
+        status: 'In Transit',
+        statusType: 'UD',
+        statusDateTimeIst: '2026-05-20T17:10:42.767',
+      }),
+    );
+
+    // The status itself is an unremarkable "Pending"; the NSL is the
+    // only thing that says a delivery was attempted and failed. Without
+    // reading it this lands as ordinary transit and the customer is
+    // never told.
+    const ndr = await sendWebhookAndWait(
+      makeDelhiveryScanBody({
+        awbNumber,
+        status: 'Pending',
+        statusType: 'UD',
+        nslCode: 'EOD-74',
+        statusDateTimeIst: '2026-05-22T18:00:00.000',
+        instructions: 'Consignee not available',
+      }),
+    );
+    expect(ndr.webhook.status).toBe(WebhookStatus.PROCESSED);
+
+    const order = await h.prisma.order.findUniqueOrThrow({ where: { id: orderId } });
+    expect(order.status).toBe(OrderStatus.DELIVERY_FAILED);
+
+    const attempts = await h.prisma.deliveryAttempt.findMany({
+      where: { webhookId: ndr.webhookId },
+    });
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0]?.courierNslCode).toBe('EOD-74');
+  });
 
   // ── Scenario 1: HAPPY PATH ──────────────────────────────────────────
 
