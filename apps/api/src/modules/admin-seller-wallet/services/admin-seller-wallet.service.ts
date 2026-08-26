@@ -109,17 +109,48 @@ export class AdminSellerWalletService {
   ) {}
 
   async overview(): Promise<{ totals: SellerWalletTotals; rows: SellerWalletRow[] }> {
-    // The cached balance table rather than a balance call per seller:
-    // one query for the whole estate instead of N, and it is the same
-    // number the seller is shown (WAL-7 keeps it in step).
-    const balances = await this.prisma.client.sellerWalletBalance.findMany({
-      where: { currency: Currency.INR, seller: { deletedAt: null } },
+    // Driven from SELLERS, not from balance rows.
+    //
+    // A balance row is only written once money has moved, so listing
+    // balances hid every seller who has not transacted yet — which, on a
+    // young system, is all of them. The page then said "No seller
+    // wallets yet" while three approved sellers existed, and an admin
+    // looking for one of them reasonably concludes the wallet is broken
+    // or the seller is missing.
+    //
+    // A seller with no movement does not have "no wallet". They have an
+    // empty one, and that is a different sentence.
+    const sellers = await this.prisma.client.seller.findMany({
+      where: { deletedAt: null },
       select: {
-        sellerId: true,
-        balance: true,
-        updatedAt: true,
-        seller: { select: { companyName: true, email: true, status: true } },
+        id: true,
+        companyName: true,
+        email: true,
+        status: true,
+        createdAt: true,
+        // The cached balance rather than a balance call per seller: one
+        // query for the whole estate instead of N, and it is the same
+        // number the seller is shown (WAL-7 keeps it in step).
+        walletBalances: {
+          where: { currency: Currency.INR },
+          select: { balance: true, updatedAt: true },
+          take: 1,
+        },
       },
+    });
+
+    const balances = sellers.map((x) => {
+      const held = x.walletBalances[0];
+      return {
+        sellerId: x.id,
+        // No row yet means nothing has moved, which is a balance of
+        // zero — not an absence.
+        balance: held?.balance ?? ZERO,
+        // Falls back to when the seller was created, so the column reads
+        // as "nothing since then" rather than as a blank.
+        updatedAt: held?.updatedAt ?? x.createdAt,
+        seller: { companyName: x.companyName, email: x.email, status: x.status },
+      };
     });
 
     const [withdrawals, topups] = await Promise.all([

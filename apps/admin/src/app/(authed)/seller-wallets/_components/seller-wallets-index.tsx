@@ -89,7 +89,10 @@ export function SellerWalletsIndex(): ReactElement {
                 </THead>
                 <TBody>
                   {overview.data.rows.length === 0 ? (
-                    <TableEmpty colSpan={5}>No seller wallets yet.</TableEmpty>
+                    <TableEmpty colSpan={5}>
+                      No sellers yet. Every approved seller appears here, whether or not money has
+                      moved.
+                    </TableEmpty>
                   ) : (
                     overview.data.rows.map((r) => (
                       <Tr key={r.sellerId}>

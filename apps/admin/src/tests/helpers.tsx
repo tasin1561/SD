@@ -104,6 +104,28 @@ export interface TestRenderResult extends RenderResult {
   readonly fetchImpl: ReturnType<typeof vi.fn>;
 }
 
+/** Every QueryClient this helper has made, pending teardown. */
+const TEST_QUERY_CLIENTS = new Set<QueryClient>();
+
+/**
+ * Shut down the query clients a test created.
+ *
+ * Called from the global afterEach. `cleanup()` unmounts React but the
+ * QueryClient is not React — its timers and its focus/online listeners
+ * are its own, and nothing was stopping them.
+ */
+export async function destroyTestQueryClients(): Promise<void> {
+  for (const client of TEST_QUERY_CLIENTS) {
+    // Cancel in-flight work FIRST: clearing a client with a request
+    // still resolving leaves the resolution looking for state that is
+    // no longer there.
+    await client.cancelQueries();
+    client.unmount();
+    client.clear();
+  }
+  TEST_QUERY_CLIENTS.clear();
+}
+
 export function renderWithProviders(
   ui: ReactElement,
   opts: {
@@ -126,6 +148,13 @@ export function renderWithProviders(
       mutations: { retry: false },
     },
   });
+  // Handed to the global afterEach so it can be shut down. Without this
+  // the client outlives the test: gcTime 0 schedules a collection just
+  // after unmount, and if the environment has gone by the time it fires
+  // it touches `window` and throws. Vitest reports that as an unhandled
+  // error attributed to whichever file happened to be running, so it
+  // presents as an unrelated test being flaky.
+  TEST_QUERY_CLIENTS.add(queryClient);
 
   function Wrapper({ children }: { children: ReactNode }): ReactElement {
     return (
