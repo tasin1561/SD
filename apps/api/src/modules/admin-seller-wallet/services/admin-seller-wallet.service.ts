@@ -139,49 +139,48 @@ export class AdminSellerWalletService {
       },
     });
 
-    // The balance comes from the LEDGER, not the cache table.
+    // The cached balance, which `applyEntry` now writes inside the same
+    // transaction as the entry — so it cannot lag, and there is no
+    // caller left who could forget to refresh it.
     //
-    // sellerWalletBalance is refreshed by each money path calling
-    // recomputeCacheAfterCommit, and only 6 of the 14 services that
-    // write entries actually do — so the row is missing or stale more
-    // often than not. Reading it raw showed a seller who owes ₹3,000 as
-    // ₹0.00, and the estate total as "0 in debt". A wrong number is
-    // worse here than a missing screen: nobody chases a debt the system
-    // says does not exist.
+    // The previous attempt here derived the balance with
+    // `groupBy({ _max: { id: true } })`, which Postgres refuses outright:
+    // there is no max() aggregate for uuid. Prisma's types allow it, the
+    // unit tests mock Prisma, and no e2e covers this page — so nothing
+    // could catch it before the page 500'd. A mocked client has no
+    // database to refuse a query.
     //
-    // WAL-7 defines the balance as the LAST entry's running balance, so
-    // that is what this reads. Two queries whatever the seller count:
-    // the newest entry id per seller (ids are uuidv7, so max id IS the
-    // latest), then those rows.
-    const ids = sellers.map((x) => x.id);
-    const newest =
-      ids.length === 0
-        ? []
-        : await this.prisma.client.sellerWalletEntry.groupBy({
-            by: ['sellerId'],
-            where: { sellerId: { in: ids }, currency: Currency.INR },
-            _max: { id: true },
-          });
-    const newestIds = newest.map((n) => n._max.id).filter((v): v is string => v !== null);
-    const latestEntries =
-      newestIds.length === 0
-        ? []
-        : await this.prisma.client.sellerWalletEntry.findMany({
-            where: { id: { in: newestIds } },
-            select: { sellerId: true, runningBalanceAfter: true, createdAt: true },
-          });
-    const ledger = new Map(latestEntries.map((e) => [e.sellerId, e]));
+    // A seller with no row at all still falls back, because rows written
+    // before this change do not exist and a missing row must never
+    // render as a real ₹0.00.
+    const cached = await this.prisma.client.sellerWalletBalance.findMany({
+      where: { currency: Currency.INR, sellerId: { in: sellers.map((x) => x.id) } },
+      select: { sellerId: true, balance: true, updatedAt: true },
+    });
+    const cachedBy = new Map(cached.map((c) => [c.sellerId, c]));
+
+    const missing = sellers.filter((x) => !cachedBy.has(x.id));
+    const legacy = new Map<string, { balance: Prisma.Decimal; updatedAt: Date }>();
+    for (const x of missing) {
+      const last = await this.prisma.client.sellerWalletEntry.findFirst({
+        where: { sellerId: x.id, currency: Currency.INR },
+        // uuidv7 ids are monotonic and, unlike createdAt, distinct
+        // within one transaction (WAL-7).
+        orderBy: { id: 'desc' },
+        select: { runningBalanceAfter: true, createdAt: true },
+      });
+      if (last) legacy.set(x.id, { balance: last.runningBalanceAfter, updatedAt: last.createdAt });
+    }
 
     const balances = sellers.map((x) => {
-      const last = ledger.get(x.id);
+      const held = cachedBy.get(x.id) ?? legacy.get(x.id);
       return {
         sellerId: x.id,
-        // No entries yet means nothing has moved, which is a balance of
-        // zero — not an absence.
-        balance: last?.runningBalanceAfter ?? ZERO,
+        // Nothing has moved, which is a balance of zero — not an absence.
+        balance: held?.balance ?? ZERO,
         // Falls back to when the seller was created, so the column reads
         // as "nothing since then" rather than as a blank.
-        updatedAt: last?.createdAt ?? x.createdAt,
+        updatedAt: held?.updatedAt ?? x.createdAt,
         seller: { companyName: x.companyName, email: x.email, status: x.status },
       };
     });

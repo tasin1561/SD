@@ -166,6 +166,41 @@ export class WalletService {
       select: { id: true, runningBalanceAfter: true },
     });
 
+    // ── The cache is written HERE, in the same transaction ────────────
+    //
+    // It used to be each caller's job, post-commit, via
+    // recomputeCacheAfterCommit — and of the 14 services that write
+    // wallet entries, 6 remembered. A seller carried an INBOUND_FREIGHT
+    // debit of ₹3,000 with no cache row at all, so the admin wallets
+    // page reported ₹0.00 and "0 in debt" while the seller's own page
+    // showed the debt.
+    //
+    // Patching the other 8 would leave the trap set for the 15th. This
+    // cannot be forgotten: there is no caller to forget it.
+    //
+    // In-transaction rather than post-commit, and that is the important
+    // part. The original deferral mirrored INV-5, where the cache is
+    // REDIS and writing an external system inside a database
+    // transaction is genuinely wrong. This cache is a table in the same
+    // database, so the reason does not transfer — and post-commit left a
+    // real window: the entry commits, the refresh fails, and the cache
+    // is silently stale with nothing to reconcile it. Here it commits
+    // or rolls back WITH the entry.
+    //
+    // Free of races because the advisory lock above serialises every
+    // write to this wallet, and `next` is the balance that lock exists
+    // to compute.
+    await tx.sellerWalletBalance.upsert({
+      where: { sellerId_currency: { sellerId: input.sellerId, currency: input.currency } },
+      create: {
+        sellerId: input.sellerId,
+        currency: input.currency,
+        balance: next,
+        lastEntryId: created.id,
+      },
+      update: { balance: next, lastEntryId: created.id },
+    });
+
     return { id: created.id, runningBalanceAfter: created.runningBalanceAfter };
   }
 
