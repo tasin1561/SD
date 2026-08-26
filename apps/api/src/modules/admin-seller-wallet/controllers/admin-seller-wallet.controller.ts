@@ -1,4 +1,13 @@
-import { Controller, Get, HttpCode, HttpStatus, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Currency, TopupRequestStatus } from '@skydrop/db';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
@@ -38,7 +47,9 @@ export class AdminSellerWalletController {
   @Get(':sellerId')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "One seller's wallet position" })
-  detail(@Param('sellerId') sellerId: string): ReturnType<AdminSellerWalletService['detail']> {
+  detail(
+    @Param('sellerId', new ParseUUIDPipe({ version: '7' })) sellerId: string,
+  ): ReturnType<AdminSellerWalletService['detail']> {
     return this.svc.detail(sellerId);
   }
 
@@ -46,7 +57,7 @@ export class AdminSellerWalletController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "One seller's ledger, newest first" })
   async entries(
-    @Param('sellerId') sellerId: string,
+    @Param('sellerId', new ParseUUIDPipe({ version: '7' })) sellerId: string,
     @Query('limit') limit?: string,
   ): Promise<{
     items: Array<{
@@ -63,7 +74,15 @@ export class AdminSellerWalletController {
   }> {
     const rows = await this.prisma.client.sellerWalletEntry.findMany({
       where: { sellerId },
-      orderBy: { createdAt: 'desc' },
+      // By ID, not createdAt. Postgres fixes CURRENT_TIMESTAMP for a
+      // whole transaction, so two entries written together — a COD
+      // credit and its charges debit, say — carry the SAME createdAt and
+      // come back in arbitrary order. This is the one screen where
+      // somebody reads the running-balance column down the page, and it
+      // would appear to go backwards. uuidv7 ids are monotonic and
+      // distinct within a transaction (WAL-7), which is why the balance
+      // itself is derived from them.
+      orderBy: { id: 'desc' },
       take: Math.min(500, Math.max(1, Number(limit) || 100)),
       select: {
         id: true,
@@ -90,7 +109,7 @@ export class AdminSellerWalletController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "One seller's top-up claims, whatever became of them" })
   sellerTopups(
-    @Param('sellerId') sellerId: string,
+    @Param('sellerId', new ParseUUIDPipe({ version: '7' })) sellerId: string,
     @Query('status') status?: TopupRequestStatus,
   ): ReturnType<WalletTopupService['listForSeller']> {
     return this.topups.listForSeller(sellerId, status);
@@ -100,7 +119,7 @@ export class AdminSellerWalletController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "One seller's payout requests" })
   sellerWithdrawals(
-    @Param('sellerId') sellerId: string,
+    @Param('sellerId', new ParseUUIDPipe({ version: '7' })) sellerId: string,
   ): ReturnType<WithdrawalRequestService['listForSeller']> {
     return this.withdrawals.listForSeller(sellerId);
   }

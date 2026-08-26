@@ -36,6 +36,7 @@ import {
 describe('Wallet concurrency (e2e)', () => {
   let h: AppHarness;
   let sellerId: string;
+  let sellerEmail: string;
   let wallet: WalletService;
 
   const CONCURRENT = 12;
@@ -60,10 +61,11 @@ describe('Wallet concurrency (e2e)', () => {
       .expect(200);
     const staffAuth = { Authorization: `Bearer ${login.body.accessToken}` };
 
+    sellerEmail = `wallet-conc-${Date.now()}@brand.com`;
     const invite = await request(h.baseUrl)
       .post('/admin/seller-invitations')
       .set(staffAuth)
-      .send({ email: `wallet-conc-${Date.now()}@brand.com` })
+      .send({ email: sellerEmail })
       .expect(201);
     const reg = await request(h.baseUrl)
       .post('/auth/seller/register/invite')
@@ -245,6 +247,67 @@ describe('Wallet concurrency (e2e)', () => {
       // And the per-seller detail, which had the same flaw.
       const detail = await admin.detail(sellerId);
       expect(detail.balanceInr).toBe('-3000.00');
+    });
+  });
+
+  describe('the ledger reads in a stable order', () => {
+    /** Two entries in ONE transaction — so they share a createdAt exactly. */
+    async function twoInOneTransaction(): Promise<void> {
+      await h.prisma.$transaction(async (tx) => {
+        await wallet.applyEntry(tx, {
+          sellerId,
+          currency: Currency.INR,
+          direction: WalletEntryDirection.TOPUP,
+          amount: new Prisma.Decimal(100),
+          actorType: ActorType.SYSTEM,
+        });
+        await wallet.applyEntry(tx, {
+          sellerId,
+          currency: Currency.INR,
+          direction: WalletEntryDirection.ORDER_CHARGES,
+          amount: new Prisma.Decimal(40),
+          actorType: ActorType.SYSTEM,
+        });
+      });
+    }
+
+    it('entries written together really do share a timestamp', async () => {
+      await twoInOneTransaction();
+      const rows = await h.prisma.sellerWalletEntry.findMany({
+        where: { sellerId },
+        select: { createdAt: true },
+      });
+      const stamps = new Set(rows.map((r) => r.createdAt.toISOString()));
+      // Postgres fixes CURRENT_TIMESTAMP per transaction. This is the
+      // premise the two bugs below rest on, so it is asserted rather
+      // than assumed.
+      expect(rows).toHaveLength(2);
+      expect(stamps.size).toBe(1);
+    });
+
+    it('paging by cursor reaches EVERY entry, one at a time', async () => {
+      await twoInOneTransaction();
+
+      const login = await request(h.baseUrl)
+        .post('/auth/seller/login')
+        .send({ email: sellerEmail, password: 'SellerPass-1234' })
+        .expect(200);
+      const auth = { Authorization: `Bearer ${login.body.accessToken as string}` };
+
+      const seen: string[] = [];
+      let cursor: string | null = null;
+      for (let i = 0; i < 5; i += 1) {
+        const url: string = `/seller/wallet/entries?limit=1${cursor === null ? '' : `&cursor=${cursor}`}`;
+        const page = await request(h.baseUrl).get(url).set(auth).expect(200);
+        for (const item of page.body.items as Array<{ id: string }>) seen.push(item.id);
+        cursor = (page.body.nextCursor as string | null) ?? null;
+        if (cursor === null) break;
+      }
+
+      // Paged on createdAt, the second entry of the pair was skipped:
+      // `createdAt < cursor` excludes its own sibling, so an entry
+      // vanished from the seller's ledger and nothing said so.
+      expect(new Set(seen).size).toBe(2);
     });
   });
 });

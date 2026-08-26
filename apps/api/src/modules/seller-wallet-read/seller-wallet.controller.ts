@@ -255,21 +255,33 @@ export class SellerWalletController {
     @Query('limit') limit?: string,
   ): Promise<WalletEntriesPage> {
     const lim = Math.min(200, Math.max(1, Number(limit) || 50));
-    const where: { sellerId: string; currency?: Currency; createdAt?: { lt: Date } } = {
+    // Paginated by ID, not by createdAt.
+    //
+    // Postgres fixes CURRENT_TIMESTAMP for a whole transaction, so
+    // entries written together — a COD credit and its charges debit —
+    // share a createdAt exactly. A cursor of `createdAt < that` then
+    // SKIPS the siblings: entries vanished from the seller's own ledger
+    // at a page boundary, and nothing about the page said so.
+    //
+    // uuidv7 ids are monotonic, so `id < cursor` means "older" while
+    // being unique — which is why the balance is derived from them
+    // (WAL-7). The ordering matches, so a page can neither skip nor
+    // repeat a row.
+    const where: { sellerId: string; currency?: Currency; id?: { lt: string } } = {
       sellerId: seller.id,
     };
     if (currency === Currency.INR || currency === Currency.BDT) {
       where.currency = currency;
     }
     if (cursor) {
-      const cursorDate = new Date(cursor);
-      if (!Number.isNaN(cursorDate.getTime())) {
-        where.createdAt = { lt: cursorDate };
-      }
+      // Ignore a cursor that is not an id — including a createdAt one
+      // saved by an older client, which would otherwise be compared as
+      // a uuid and throw.
+      if (/^[0-9a-fA-F-]{36}$/.test(cursor)) where.id = { lt: cursor };
     }
     const rows = await this.prisma.client.sellerWalletEntry.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { id: 'desc' },
       take: lim + 1,
       select: {
         id: true,
@@ -337,7 +349,7 @@ export class SellerWalletController {
     });
     return {
       items,
-      nextCursor: hasMore ? (items[items.length - 1]?.createdAt ?? null) : null,
+      nextCursor: hasMore ? (items[items.length - 1]?.id ?? null) : null,
     };
   }
 }
