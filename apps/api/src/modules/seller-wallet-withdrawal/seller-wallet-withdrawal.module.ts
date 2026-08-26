@@ -6,7 +6,7 @@ import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { SellerWalletModule } from '../seller-wallet/seller-wallet.module';
 import { SettingsModule } from '../settings/settings.module';
 import { AdminWithdrawalRequestController } from './controllers/admin-withdrawal-request.controller';
-import { SellerPayoutScheduleController } from './controllers/seller-payout-schedule.controller';
+import { SellerWithdrawalScheduleController } from './controllers/seller-withdrawal-schedule.controller';
 import { SellerWithdrawalRequestController } from './controllers/seller-withdrawal-request.controller';
 import { AutoWithdrawalSweepService } from './services/auto-withdrawal-sweep.service';
 import { AutoWithdrawalQueue } from './queue/auto-withdrawal.queue';
@@ -22,7 +22,7 @@ import { WithdrawalRequestService } from './services/withdrawal-request.service'
   imports: [AuthCommonModule, SellerWalletModule, SettingsModule, SellerRestrictionModule],
   controllers: [
     SellerWithdrawalRequestController,
-    SellerPayoutScheduleController,
+    SellerWithdrawalScheduleController,
     AdminWithdrawalRequestController,
   ],
   providers: [

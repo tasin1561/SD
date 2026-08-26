@@ -10,7 +10,7 @@
  *
  * Both readers and the approval path need this answer, and they must agree.
  * If a screen says "unchanged" while approval writes something different,
- * the seller's payout destination moves without anyone having read it.
+ * the seller's withdrawal destination moves without anyone having read it.
  *
  * Requests written before 2026-08-18 carry the right ciphertext but lost
  * the mask and key version on the way (`?? ''` / omitted), so a naive

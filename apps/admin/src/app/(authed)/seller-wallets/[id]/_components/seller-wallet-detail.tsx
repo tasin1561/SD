@@ -40,7 +40,7 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
   const entries = useSellerWalletEntries(sellerId);
   const topups = useSellerWalletTopups(sellerId);
   const withdrawals = useSellerWalletWithdrawals(sellerId);
-  const [tab, setTab] = useState<'ledger' | 'topups' | 'payouts'>('ledger');
+  const [tab, setTab] = useState<'ledger' | 'topups' | 'withdrawals'>('ledger');
 
   if (detail.isLoading) return <LoadingState />;
   if (detail.isError || detail.data === undefined) {
@@ -139,7 +139,7 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
           [
             ['ledger', 'Ledger'],
             ['topups', 'Top-ups'],
-            ['payouts', 'Payout requests'],
+            ['withdrawals', 'Withdrawal requests'],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -215,14 +215,14 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
         </Card>
       )}
 
-      {tab === 'payouts' && (
+      {tab === 'withdrawals' && (
         <Card>
           <CardHeader
-            title="Payout requests"
+            title="Withdrawal requests"
             subtitle="A request never moves the balance — the remittance does."
           />
           <CardBody>
-            <RawList rows={withdrawals.data ?? []} empty="No payout requests." />
+            <RawList rows={withdrawals.data ?? []} empty="No withdrawal requests." />
           </CardBody>
         </Card>
       )}
@@ -231,7 +231,7 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
 }
 
 /**
- * Top-up and payout rows differ in shape, and both already have a
+ * Top-up and withdrawal rows differ in shape, and both already have a
  * rendered view on their own admin pages. Rather than clone those two
  * tables here — where they would drift the moment either changes — this
  * shows the fields both actually carry, and links to the page that owns

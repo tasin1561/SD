@@ -102,7 +102,7 @@ describe('dashboard — permission gating', () => {
     // And the panels that are not theirs are absent rather than empty.
     expect(screen.queryByText('Last 30 days')).not.toBeInTheDocument();
     expect(screen.queryByText('Open tickets')).not.toBeInTheDocument();
-    expect(screen.queryByText('Payout requests')).not.toBeInTheDocument();
+    expect(screen.queryByText('Withdrawal requests')).not.toBeInTheDocument();
   });
 
   it('a super admin still gets the whole page', async () => {
@@ -122,7 +122,7 @@ describe('dashboard — permission gating', () => {
     // first one to resolve would assert against the others mid-flight.
     expect(await screen.findByText('Last 30 days')).toBeInTheDocument();
     expect(await screen.findByText('Open tickets')).toBeInTheDocument();
-    expect(await screen.findByText('Payout requests')).toBeInTheDocument();
+    expect(await screen.findByText('Withdrawal requests')).toBeInTheDocument();
     await waitFor(() =>
       expect(urls(fetchImpl).some((u) => u.includes('/admin/reports'))).toBe(true),
     );

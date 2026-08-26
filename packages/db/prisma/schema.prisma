@@ -197,7 +197,7 @@ model Seller {
   bankName                         String?      @map("bank_name")
   /// The branch the account is held at. Bangladeshi routing is
   /// branch-scoped — the same bank name and account number resolve
-  /// differently per branch — so a payout instruction without it is
+  /// differently per branch — so a withdrawal instruction without it is
   /// incomplete.
   bankBranchName                   String?      @map("bank_branch_name")
   bankAccountName                  String?      @map("bank_account_name")
@@ -2372,7 +2372,7 @@ enum CourierWaybillStatus {
 /// the customer on delivery and settles with Skydrop 5-10 days later; up
 /// to now nothing in the system recorded that inbound payment, so "have we
 /// actually been paid for the orders we already credited sellers for?" was
-/// unanswerable. Every payout is recorded here and allocated to the orders
+/// unanswerable. Every withdrawal is recorded here and allocated to the orders
 /// it covers, which is what turns "we can't lose a rupee" from an
 /// assertion into a number.
 ///
@@ -2382,13 +2382,13 @@ enum CourierWaybillStatus {
 model CourierSettlement {
   id                String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
   courierAccountId  String   @map("courier_account_id") @db.Uuid
-  /// The courier's own payout/UTR reference. UNIQUE per account — the
+  /// The courier's own withdrawal/UTR reference. UNIQUE per account — the
   /// idempotency gate against recording the same bank credit twice.
   reference         String
   /// What actually landed in the bank, INR.
   amountInr         Decimal  @map("amount_inr") @db.Decimal(14, 2)
   /// Sum of this settlement's allocated lines. Kept alongside amountInr
-  /// so an under- or over-allocated payout is visible without a join.
+  /// so an under- or over-allocated withdrawal is visible without a join.
   allocatedInr      Decimal  @default(0) @map("allocated_inr") @db.Decimal(14, 2)
   receivedAt        DateTime @map("received_at") @db.Timestamptz
   recordedByStaffId String?  @map("recorded_by_staff_id") @db.Uuid
@@ -2407,7 +2407,7 @@ model CourierSettlement {
   @@map("courier_settlements")
 }
 
-/// R2c — how much of a payout belongs to ONE order.
+/// R2c — how much of a withdrawal belongs to ONE order.
 ///
 /// `expectedInr` is snapshotted from the order's COD amount at allocation
 /// time, so `settledInr - expectedInr` is the short-payment (or overpay)
@@ -2418,7 +2418,7 @@ model CourierSettlementLine {
   orderId      String   @map("order_id") @db.Uuid
   /// What the courier should have remitted for this order (its COD amount).
   expectedInr  Decimal  @map("expected_inr") @db.Decimal(12, 2)
-  /// What this payout actually attributed to it.
+  /// What this withdrawal actually attributed to it.
   settledInr   Decimal  @map("settled_inr") @db.Decimal(12, 2)
   note         String?  @db.Text
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
@@ -2426,7 +2426,7 @@ model CourierSettlementLine {
   settlement CourierSettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
   order      Order             @relation(fields: [orderId], references: [id])
 
-  /// One line per order per settlement — a payout cannot pay the same
+  /// One line per order per settlement — a withdrawal cannot pay the same
   /// order twice. An order CAN legitimately appear across settlements
   /// (a part-payment then a top-up), which is why this is not unique on
   /// orderId alone.
@@ -4121,7 +4121,7 @@ enum SellerCapability {
   /// Declaring new inbound stock.
   CONSIGNMENT_CREATE @map("consignment_create")
   /// Asking for money out while they owe money in.
-  PAYOUT_REQUEST     @map("payout_request")
+  WITHDRAWAL_REQUEST @map("withdrawal_request")
   /// MOVING WORK — handing parcels to the courier.
   SHIPMENT_DISPATCH  @map("shipment_dispatch")
   /// MOVING WORK — the seller's view of parcels already travelling.
@@ -5144,7 +5144,7 @@ enum WalletEntryDirection {
   // M22 — sum of order's BASE_SHIPPING + surcharges + GST debits the
   // seller wallet on DELIVERED. Always DEBIT.
   ORDER_CHARGES        @map("order_charges")
-  // M23 — admin records a payout to the seller. DEBIT on the wallet
+  // M23 — admin records a withdrawal to the seller. DEBIT on the wallet
   // matching the bank-account currency.
   REMITTANCE_OUT       @map("remittance_out")
   // M23 — paired with REMITTANCE_OUT for cross-currency: the BD seller
@@ -5455,19 +5455,19 @@ model Remittance {
   sourceAmount        Decimal  @map("source_amount") @db.Decimal(14, 2)
   // FX rate snapshot used at remittance time. 1 for same-currency.
   fxRateSnapshot      Decimal  @map("fx_rate_snapshot") @db.Decimal(18, 6)
-  // Bank account that received the payout. Snapshotted on the seller
+  // Bank account that received the withdrawal. Snapshotted on the seller
   // row in Phase 1A schema; future-proofing for the multi-bank-account
   // refactor.
   bankAccountSnapshot Json     @map("bank_account_snapshot")
   // Bank reference for ops reconciliation. The seller sees this — it is
-  // how they match our payout against their own statement.
+  // how they match our withdrawal against their own statement.
   bankReference       String   @map("bank_reference")
   /// Spaces KEY of the transfer screenshot, never a URL (reads are
   /// presigned on demand). Evidence for the seller that the transfer
   /// left our account, and for us when they say it never arrived.
   proofSpacesKey      String?  @map("proof_spaces_key")
   proofMimeType       String?  @map("proof_mime_type")
-  // When the bank confirmed the payout (operator enters this).
+  // When the bank confirmed the withdrawal (operator enters this).
   paidAt              DateTime @map("paid_at") @db.Timestamptz
   // Audit + ops.
   staffId             String   @map("staff_id") @db.Uuid
@@ -5504,7 +5504,7 @@ enum WithdrawalRequestedBy {
 /// R2 (revised-plan roadmap) — a seller's (or, later, an auto-withdraw
 /// cycle's) REQUEST to withdraw wallet balance. Never itself moves
 /// money — `RemittanceService.create()` (the existing admin-manual-
-/// payout flow, W-6) remains the sole executor; an admin resolving a
+/// withdrawal flow, W-6) remains the sole executor; an admin resolving a
 /// request creates the actual Remittance separately and links it here
 /// via `linkedRemittanceId`. This preserves "no seller-initiated
 /// direct debit" — the wallet ledger is only ever touched by
@@ -5875,13 +5875,13 @@ enum SellerUserRole {
 /// The FIRST set of bank details a seller adds writes straight through —
 /// there is nothing to redirect yet, and making a new seller wait would
 /// be friction for no gain. Every EDIT after that lands here instead:
-/// anyone who got into a seller's account could otherwise point payouts
+/// anyone who got into a seller's account could otherwise point withdrawals
 /// at their own bank, and the seller would find out when the money did
 /// not arrive.
 ///
 /// While a request is PENDING the live columns on `sellers` are
-/// untouched and payouts continue to the existing account — a proposed
-/// change is not yet a fact, and freezing payouts would punish the
+/// untouched and withdrawals continue to the existing account — a proposed
+/// change is not yet a fact, and freezing withdrawals would punish the
 /// seller for asking.
 ///
 /// The account number is encrypted with the same cipher as the live

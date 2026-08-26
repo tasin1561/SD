@@ -152,12 +152,12 @@ describe('EmptyState', () => {
     render(
       <EmptyState
         title="No settlements recorded"
-        description="Enter Delhivery's weekly payout to start reconciling."
-        action={<button type="button">Record a payout</button>}
+        description="Enter Delhivery's weekly withdrawal to start reconciling."
+        action={<button type="button">Record a withdrawal</button>}
       />,
     );
     expect(screen.getByText(/No settlements recorded/)).toBeTruthy();
-    expect(screen.getByRole('button', { name: /record a payout/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /record a withdrawal/i })).toBeTruthy();
   });
 
   it('can drop its card chrome for use inside an already-bordered table', () => {

@@ -135,7 +135,7 @@ export class AdminSellerService {
    * is never logged anywhere except the response body.
    *
    * Use: admin clicks "Reveal" on the seller detail page to copy
-   * the full account number into a bank portal for a manual payout.
+   * the full account number into a bank portal for a manual withdrawal.
    * Each click is auditable to the staff user.
    */
   async revealBankAccount(

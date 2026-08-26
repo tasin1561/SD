@@ -31,7 +31,7 @@ import { RequireSellerPermissions } from '../../common/auth/require-seller-permi
  *
  * `wallet.settlement_shortfall_alert_percent` is deliberately NOT here.
  * It decides when OUR dispute with a courier gets escalated internally:
- * a payout short by more than that fraction audits CRITICAL instead of
+ * a withdrawal short by more than that fraction audits CRITICAL instead of
  * MEDIUM. The seller is credited what the order was worth either way
  * (WAL-6), so the number changes nothing they experience — it would only
  * invite a question about a process they are not part of.
@@ -45,24 +45,24 @@ const SELLER_WALLET_TERMS = [
   ],
   [
     'wallet.withdrawal_min_threshold_inr',
-    'Smallest payout',
+    'Smallest withdrawal',
     'INR',
     'A request below this is refused.',
   ],
   [
     'wallet.withdrawal_max_per_day',
-    'Payouts per day',
+    'Withdrawals per day',
     'COUNT',
     'How often you can ask, not how much.',
   ],
-  ['wallet.withdrawal_max_per_month', 'Payouts per month', 'COUNT', 'Rolling 30 days.'],
+  ['wallet.withdrawal_max_per_month', 'Withdrawals per month', 'COUNT', 'Rolling 30 days.'],
   [
     'wallet.auto_withdraw_enabled',
-    'Automatic payouts',
+    'Automatic withdrawals',
     'BOOL',
     'We raise the request for you on a schedule.',
   ],
-  ['wallet.auto_withdraw_hour_local', 'Automatic payout hour', 'HOUR', 'In your own timezone.'],
+  ['wallet.auto_withdraw_hour_local', 'Automatic withdrawal hour', 'HOUR', 'In your own timezone.'],
   [
     'wallet.cod_credit_mode',
     'COD credited',

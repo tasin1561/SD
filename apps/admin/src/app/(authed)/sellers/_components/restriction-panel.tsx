@@ -37,7 +37,7 @@ const SAFE = [
   ['ORDER_CREATE', 'Placing new orders'],
   ['ORDER_CONFIRM', 'Confirming orders'],
   ['CONSIGNMENT_CREATE', 'Declaring new inbound stock'],
-  ['PAYOUT_REQUEST', 'Requesting payouts'],
+  ['WITHDRAWAL_REQUEST', 'Requesting withdrawals'],
 ] as const;
 
 const IN_FLIGHT = [

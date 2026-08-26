@@ -134,9 +134,9 @@ describe('the seller card is reachable', () => {
     const page = R(SELLER_PAGE);
     expect(page).toContain('<TopupCard');
     // Money in before money out: a seller whose balance is short needs
-    // the top-up, not the payout form. Still true now the two are tabs
+    // the top-up, not the withdrawal form. Still true now the two are tabs
     // rather than stacked cards — the tab order carries it.
-    expect(page.indexOf("['topups'")).toBeLessThan(page.indexOf("['payouts'"));
+    expect(page.indexOf("['topups'")).toBeLessThan(page.indexOf("['withdrawals'"));
     expect(page.indexOf('<TopupCard')).toBeLessThan(page.indexOf('<WithdrawalsCard'));
   });
 

@@ -7,7 +7,7 @@ import { makeTestEnv } from '../../../../test/helpers/env';
  * account, so every move is announced — including the ones they made
  * themselves. The message is not a receipt; it is the alarm for the
  * person who did NOT do it. Someone who got into a seller's account
- * would otherwise redirect the payouts in silence.
+ * would otherwise redirect the withdrawals in silence.
  *
  * Also pinned here: the banner shows the LATEST request and only while
  * it is unresolved. Filtering to PENDING/REJECTED in the query looks

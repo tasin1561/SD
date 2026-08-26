@@ -60,7 +60,7 @@ export function WithdrawalsIndex(): ReactElement {
     <div>
       <PageHeader
         title="Withdrawals"
-        subtitle="Seller payout requests, and the ones the auto-withdraw cycle raised. Approving one does not move money — record the remittance, then link it here."
+        subtitle="Seller withdrawal requests, and the ones the auto-withdraw cycle raised. Approving one does not move money — record the remittance, then link it here."
       />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
@@ -126,7 +126,7 @@ export function WithdrawalsIndex(): ReactElement {
             }
             description={
               status === WithdrawalRequestStatus.PENDING
-                ? 'Nothing is waiting on a payout decision.'
+                ? 'Nothing is waiting on a withdrawal decision.'
                 : 'Try widening the status filter.'
             }
           />
@@ -151,7 +151,7 @@ export function WithdrawalsIndex(): ReactElement {
                 </Td>
                 {/* Deliberately NOT a clickable row. The link goes to the
                     SELLER, which is an attribute of this row rather than
-                    its subject — the row is a payout request. Sending the whole row
+                    its subject — the row is a withdrawal request. Sending the whole row
                     to the seller would take somebody somewhere they did
                     not ask to go, so the link stays a link. */}
                 <Td>

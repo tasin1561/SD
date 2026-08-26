@@ -106,7 +106,7 @@ export function SellerWalletsIndex(): ReactElement {
               tone="bad"
             />
             <Stat
-              label="Requested for payout"
+              label="Requested for withdrawal"
               value={<Money amount={overview.data.totals.pendingWithdrawalInr} currency="INR" />}
               hint="Held out of what those sellers can request again"
               tone="neutral"

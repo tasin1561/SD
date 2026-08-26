@@ -10,7 +10,7 @@ import { makeTestEnv } from '../../../../test/helpers/env';
  * row they approve has to describe the whole destination — including the
  * fields the seller never retyped. Before this was fixed, editing (say)
  * the branch name stored an EMPTY account number on the request and the
- * review queue rendered a dash in the one column that decides the payout.
+ * review queue rendered a dash in the one column that decides the withdrawal.
  *
  * What is pinned:
  *  - an untouched account number carries forward as ciphertext, mask AND

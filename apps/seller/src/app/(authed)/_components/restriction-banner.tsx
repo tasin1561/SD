@@ -12,7 +12,7 @@ import { useSellerRestriction } from '@/lib/ops-hooks';
  * Leads with the NUMBER, not the refusal. A seller who is blocked and
  * told only that they are blocked has been given a problem; one who is
  * told exactly what to top up has been given a task. The amount is in
- * rupees and deliberately not converted — it has to match the payout and
+ * rupees and deliberately not converted — it has to match the withdrawal and
  * top-up screens, where the figures are rupees too.
  */
 export function RestrictionBanner(): ReactElement | null {

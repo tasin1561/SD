@@ -39,11 +39,11 @@ export default function WalletPage(): ReactElement {
    * transfer go through" should not have to know which page that lives
    * on.
    */
-  const [tab, setTab] = useState<'ledger' | 'payouts' | 'topups'>('ledger');
+  const [tab, setTab] = useState<'ledger' | 'withdrawals' | 'topups'>('ledger');
   // The modals are driven from the balance row, so their open state
   // lives here rather than inside the list that shows their history.
   const [topupOpen, setTopupOpen] = useState(false);
-  const [payoutOpen, setPayoutOpen] = useState(false);
+  const [withdrawalOpen, setWithdrawalOpen] = useState(false);
   const identity = useSellerIdentity();
   const mayTopup = can(identity, 'wallet.topup');
   const mayWithdraw = can(identity, 'wallet.withdraw');
@@ -100,11 +100,11 @@ export default function WalletPage(): ReactElement {
             variant="secondary"
             size="md"
             onClick={() => {
-              setTab('payouts');
-              setPayoutOpen(true);
+              setTab('withdrawals');
+              setWithdrawalOpen(true);
             }}
           >
-            Request a payout
+            Request a withdrawal
           </Button>
         )}
 
@@ -186,9 +186,9 @@ export default function WalletPage(): ReactElement {
           [
             ['ledger', 'Ledger'],
             // Money in before money out: a seller whose balance is short
-            // needs the top-up, not the payout form.
+            // needs the top-up, not the withdrawal form.
             ['topups', 'Top-ups'],
-            ['payouts', 'Payout requests'],
+            ['withdrawals', 'Withdrawal requests'],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -288,12 +288,12 @@ export default function WalletPage(): ReactElement {
             Top-ups are recorded by an owner or finance account.
           </p>
         ))}
-      {tab === 'payouts' &&
+      {tab === 'withdrawals' &&
         (mayWithdraw ? (
-          <WithdrawalsCard requesting={payoutOpen} onRequestingChange={setPayoutOpen} />
+          <WithdrawalsCard requesting={withdrawalOpen} onRequestingChange={setWithdrawalOpen} />
         ) : (
           <p className="text-text-muted text-sm">
-            Payout requests are handled by an owner or finance account.
+            Withdrawal requests are handled by an owner or finance account.
           </p>
         ))}
 
@@ -302,7 +302,7 @@ export default function WalletPage(): ReactElement {
         <Link href="/profile" className="text-accent hover:underline">
           /profile
         </Link>{' '}
-        before requesting your first payout.
+        before requesting your first withdrawal.
       </div>
     </div>
   );

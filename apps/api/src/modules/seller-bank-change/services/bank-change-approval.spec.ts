@@ -5,13 +5,13 @@ import { makeTestEnv } from '../../../../test/helpers/env';
 
 /**
  * Approving a bank change is the one place a request reaches the live
- * payout columns. What it writes there is where the seller's money goes.
+ * withdrawal columns. What it writes there is where the seller's money goes.
  *
  * The account number is a TRIPLE — ciphertext, mask, key version — and
  * the three only mean anything together. Requests written before
  * 2026-08-18 carry the ciphertext but lost the other two, so copying the
  * request's own columns across would leave a live account that decrypts
- * to nothing and renders as a dash. The seller finds out when a payout
+ * to nothing and renders as a dash. The seller finds out when a withdrawal
  * fails, days later, and the number they had is gone.
  *
  * What is pinned:
@@ -106,7 +106,7 @@ describe('BankChangeService.approve — the account number moves as a triple or 
 
   it('REFUSES a request whose new number has no mask, rather than writing an unreadable account', async () => {
     // A new ciphertext with no mask cannot have come from the write path.
-    // Approving costs the seller their payouts; rejecting costs them one
+    // Approving costs the seller their withdrawals; rejecting costs them one
     // resubmission.
     await expect(
       approve({

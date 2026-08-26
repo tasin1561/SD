@@ -174,7 +174,7 @@ export const SELLER_PERMISSIONS = [
   },
   {
     key: 'wallet.withdraw',
-    label: 'Request a payout',
+    label: 'Request a withdrawal',
     description: 'Ask for money to be sent to your bank account.',
     group: 'Money',
     sensitive: true,
@@ -218,7 +218,7 @@ export const SELLER_PERMISSIONS = [
   {
     key: 'profile.manage',
     label: 'Edit the company profile',
-    description: 'Company details and the bank account payouts are sent to.',
+    description: 'Company details and the bank account withdrawals are sent to.',
     group: 'Company',
     sensitive: true,
   },
@@ -361,7 +361,7 @@ export const DEFAULT_SELLER_ROLES: ReadonlyArray<{
   {
     key: 'finance',
     name: 'Finance',
-    description: 'The wallet, payouts, charges and freight.',
+    description: 'The wallet, withdrawals, charges and freight.',
     permissions: [
       'orders.view',
       'charges.view',

@@ -109,7 +109,7 @@ export interface SettlementView {
   readonly reference: string;
   readonly amountInr: string;
   readonly allocatedInr: string;
-  /** amount − allocated. Non-zero ⇒ the payout isn't fully explained. */
+  /** amount − allocated. Non-zero ⇒ the withdrawal isn't fully explained. */
   readonly unallocatedInr: string;
   readonly receivedAt: string;
   readonly note: string | null;
@@ -1766,17 +1766,17 @@ export function useRejectTopup(): UseMutationResult<
 // ───────── Seller bank-detail change review ─────────
 
 /**
- * The queue where a seller's payout destination is allowed to move.
+ * The queue where a seller's withdrawal destination is allowed to move.
  *
  * ── WHY IT IS A QUEUE AND NOT AN EDIT ────────────────────────────────
  * Bank details are where a seller's money is sent, so whoever gets into
- * a seller account can redirect the payouts by typing six fields. A
+ * a seller account can redirect the withdrawals by typing six fields. A
  * FIRST add writes straight through — there is nothing to steal yet and
  * making a new seller wait buys nothing. Every EDIT after that becomes
  * a PENDING request that lands here, and the live details are untouched
  * until somebody approves it.
  *
- * Payouts CONTINUE to the old account while a request waits. A pending
+ * Withdrawals CONTINUE to the old account while a request waits. A pending
  * change is not yet a fact, and freezing a seller's money because they
  * asked a question would punish them for asking.
  *

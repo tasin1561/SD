@@ -3,7 +3,7 @@ import { carriesAccountForward, accountForDisplay } from './bank-account-carry';
 /**
  * The rule three places depend on: the seller's profile, the admin
  * review queue, and approval itself. They must agree — a screen that
- * says "unchanged" while approval writes something else moves a payout
+ * says "unchanged" while approval writes something else moves a withdrawal
  * destination nobody read.
  */
 

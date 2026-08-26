@@ -56,7 +56,7 @@ export class AccrualExecutionService {
       // COD is credited HERE only for a seller on INSTANT_PAY — that is
       // what they pay the fee for. On SETTLEMENT (the default) delivery
       // is not the trigger: the money has not reached us yet, and the
-      // credit waits for the courier's payout. Crediting at delivery for
+      // credit waits for the courier's withdrawal. Crediting at delivery for
       // everyone is what made Skydrop front 5-10 days of every seller's
       // COD and absorb any short payment.
       if (order.paymentMode === PaymentMode.COD) {

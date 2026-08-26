@@ -132,7 +132,7 @@ export class AdminSellerWalletController {
 
   @Get(':sellerId/withdrawals')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "One seller's payout requests" })
+  @ApiOperation({ summary: "One seller's withdrawal requests" })
   sellerWithdrawals(
     @Param('sellerId', new ParseUUIDPipe({ version: '7' })) sellerId: string,
   ): ReturnType<WithdrawalRequestService['listForSeller']> {

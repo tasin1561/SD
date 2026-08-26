@@ -27,7 +27,7 @@ import {
  * Deciding whether a seller may move where their money is sent.
  *
  * Gated on its own permission rather than a general seller-admin one:
- * approving redirects a seller's payouts, which is a different act from
+ * approving redirects a seller's withdrawals, which is a different act from
  * editing their profile, and the people who should hold it are the ones
  * already trusted with remittances.
  */
@@ -54,7 +54,7 @@ export class AdminBankChangeController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      "Apply the proposed details to the seller's live account. From this moment their payouts go to the new destination.",
+      "Apply the proposed details to the seller's live account. From this moment their withdrawals go to the new destination.",
   })
   approve(
     @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,

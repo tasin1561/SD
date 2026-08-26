@@ -10,7 +10,7 @@ import { SettingsResolverService } from '../../settings/services/settings-resolv
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 
 /**
- * The two payout-schedule keys, hardcoded.
+ * The two withdrawal-schedule keys, hardcoded.
  *
  * `sellerOverridable` means a key SUPPORTS a per-seller value — usually
  * one an admin negotiates. It does NOT mean the seller may set it: the
@@ -24,7 +24,7 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 const ENABLED_KEY = 'wallet.auto_withdraw_enabled';
 const HOUR_KEY = 'wallet.auto_withdraw_hour_local';
 
-class SetPayoutScheduleDto {
+class SetWithdrawalScheduleDto {
   @IsOptional()
   @IsBoolean()
   autoEnabled?: boolean;
@@ -37,7 +37,7 @@ class SetPayoutScheduleDto {
   hourLocal?: number;
 }
 
-interface PayoutScheduleView {
+interface WithdrawalScheduleView {
   readonly autoEnabled: boolean;
   readonly hourLocal: number;
   /** IANA zone the hour is interpreted in — never a stored offset. */
@@ -47,11 +47,11 @@ interface PayoutScheduleView {
 }
 
 /**
- * Whether we raise payout requests on a schedule, and at what hour.
+ * Whether we raise withdrawal requests on a schedule, and at what hour.
  *
  * Safe for a seller to own because an automatic request goes through the
  * IDENTICAL guard chain as a manual one (WAL-3) — the minimum balance,
- * the smallest payout, the per-day and per-month caps all still apply.
+ * the smallest withdrawal, the per-day and per-month caps all still apply.
  * Turning it on cannot take money a manual request could not.
  *
  * The remaining wallet terms stay read-only: they are what Skydrop
@@ -62,16 +62,16 @@ interface PayoutScheduleView {
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @RequireSellerPermissions('wallet.view')
-@Controller('seller/wallet/payout-schedule')
-export class SellerPayoutScheduleController {
+@Controller('seller/wallet/withdrawal-schedule')
+export class SellerWithdrawalScheduleController {
   constructor(
     private readonly settings: SettingsResolverService,
     private readonly prisma: PrismaService,
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Whether automatic payouts are on, and the hour they run' })
-  async get(@CurrentSeller() seller: AuthenticatedSeller): Promise<PayoutScheduleView> {
+  @ApiOperation({ summary: 'Whether automatic withdrawals are on, and the hour they run' })
+  async get(@CurrentSeller() seller: AuthenticatedSeller): Promise<WithdrawalScheduleView> {
     const [enabled, hour, row] = await Promise.all([
       this.settings.resolve(seller.id, ENABLED_KEY),
       this.settings.resolve(seller.id, HOUR_KEY),
@@ -96,14 +96,14 @@ export class SellerPayoutScheduleController {
   @RequireSellerPermissions('wallet.withdraw')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Turn automatic payouts on or off, and set the hour they run',
+    summary: 'Turn automatic withdrawals on or off, and set the hour they run',
     description:
-      'An automatic request passes exactly the same guards as one you make by hand — minimum balance, smallest payout, and the per-day and per-month caps.',
+      'An automatic request passes exactly the same guards as one you make by hand — minimum balance, smallest withdrawal, and the per-day and per-month caps.',
   })
   async set(
     @CurrentSeller() seller: AuthenticatedSeller,
-    @Body() body: SetPayoutScheduleDto,
-  ): Promise<PayoutScheduleView> {
+    @Body() body: SetWithdrawalScheduleDto,
+  ): Promise<WithdrawalScheduleView> {
     if (body.autoEnabled !== undefined) {
       await this.settings.setOverride(
         seller.id,

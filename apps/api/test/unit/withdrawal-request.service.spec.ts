@@ -234,7 +234,7 @@ describe('WithdrawalRequestService.create', () => {
   });
 
   it('refuses a seller with no bank details on file', async () => {
-    // A payout request with nowhere to send it is a promise nobody can
+    // A withdrawal request with nowhere to send it is a promise nobody can
     // keep. Refused on the SERVER, not merely hidden in the UI: the
     // nightly auto-sweep raises requests through this same path with no
     // screen in front of it.

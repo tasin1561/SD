@@ -39,7 +39,7 @@ import { InboundFreightModule } from '../inbound-freight/inbound-freight.module'
  * auto-release cron). RedisService is global.
  *
  * Following modules in this batch:
- *   - M23 RemittanceService — DEBITs the wallet when an admin records a payout
+ *   - M23 RemittanceService — DEBITs the wallet when an admin records a withdrawal
  *   - M24 SellerWalletController — exposes balance + ledger to /seller/wallet
  */
 @Module({

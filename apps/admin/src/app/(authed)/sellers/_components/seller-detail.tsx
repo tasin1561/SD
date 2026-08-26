@@ -154,7 +154,7 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
             <Card>
               <CardHeader
                 title="Reveal bank account number"
-                subtitle="Decrypts + audits HIGH. Use only when copying into a bank portal for a manual payout."
+                subtitle="Decrypts + audits HIGH. Use only when copying into a bank portal for a manual withdrawal."
               />
               <CardBody>
                 <RevealBankAccountPanel sellerId={detail.data.id} />
@@ -227,7 +227,7 @@ function RevealBankAccountPanel({ sellerId }: { readonly sellerId: string }): Re
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           maxLength={200}
-          placeholder="e.g. manual payout via DBBL portal — TRF-2026-06-03"
+          placeholder="e.g. manual withdrawal via DBBL portal — TRF-2026-06-03"
           disabled={reveal.isPending || !canReveal}
         />
       </FormField>

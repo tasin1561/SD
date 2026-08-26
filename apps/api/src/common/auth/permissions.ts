@@ -392,7 +392,7 @@ export const PERMISSIONS = [
     key: 'sellers.bank_change.approve',
     label: 'Approve a change of bank account',
     description:
-      'Decide whether a seller may move where their money is sent. Approving redirects their payouts; rejecting requires a reason the seller reads.',
+      'Decide whether a seller may move where their money is sent. Approving redirects their withdrawals; rejecting requires a reason the seller reads.',
     group: 'Sellers',
     dangerous: true,
   },
@@ -435,7 +435,7 @@ export const PERMISSIONS = [
   {
     key: 'money.withdrawals.review',
     label: 'Resolve a withdrawal request',
-    description: 'Approve a seller’s payout request by linking the remittance that paid it.',
+    description: 'Approve a seller’s withdrawal request by linking the remittance that paid it.',
     group: 'Money',
     dangerous: true,
   },

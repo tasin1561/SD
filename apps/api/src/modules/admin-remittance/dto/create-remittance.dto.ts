@@ -65,7 +65,7 @@ export class CreateRemittanceDto {
   @ApiProperty({
     minLength: 1,
     maxLength: 120,
-    description: 'Bank reference / payout id from the operator',
+    description: 'Bank reference / withdrawal id from the operator',
   })
   @IsString()
   @MinLength(1)

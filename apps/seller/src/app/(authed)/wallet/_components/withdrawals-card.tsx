@@ -32,7 +32,7 @@ import {
 import { serverVerdict } from '@/lib/server-verdict';
 
 /**
- * Payout requests, on the wallet page because that is where the balance
+ * Withdrawal requests, on the wallet page because that is where the balance
  * being drawn against is.
  *
  * A request does not move money. Skydrop records the bank transfer as a
@@ -41,7 +41,7 @@ import { serverVerdict } from '@/lib/server-verdict';
  * rather than leaving a seller to wonder why the balance has not moved.
  */
 /**
- * Every payout the seller has asked for, whatever became of it.
+ * Every withdrawal the seller has asked for, whatever became of it.
  *
  * The action lives up in the balance row — a seller reaches for it while
  * looking at what they are owed, not while reading the history of what
@@ -66,15 +66,15 @@ export function WithdrawalsCard({
       <CardBody>
         {list.isError ? (
           <ErrorNote
-            message={list.error?.message ?? 'Failed to load payout requests.'}
+            message={list.error?.message ?? 'Failed to load withdrawal requests.'}
             retry={() => void list.refetch()}
           />
         ) : list.isLoading ? (
           <SkeletonRows rows={3} cols={4} />
         ) : rows.length === 0 ? (
           <p className="text-text-muted py-2 text-sm">
-            No payout requests yet. Request one when you want your balance transferred; we will pay
-            it to the bank account on your profile.
+            No withdrawal requests yet. Request one when you want your balance transferred; we will
+            pay it to the bank account on your profile.
           </p>
         ) : (
           <Table>
@@ -131,7 +131,7 @@ function RequestWithdrawalModal({
   const eligibility = useWithdrawalEligibility();
 
   // Fixed: every wallet entry is INR (see the wallet's own note), so a
-  // payout is requested against the rupee balance.
+  // withdrawal is requested against the rupee balance.
   const currency = 'INR';
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
@@ -145,7 +145,7 @@ function RequestWithdrawalModal({
         amount: amount.trim(),
         ...(note.trim() === '' ? {} : { note: note.trim() }),
       });
-      toast.success('Payout requested.');
+      toast.success('Withdrawal requested.');
       setAmount('');
       setNote('');
       onOpenChange(false);
@@ -162,7 +162,7 @@ function RequestWithdrawalModal({
         if (!next) setError(null);
       }}
       size="sm"
-      title="Request a payout"
+      title="Request a withdrawal"
       description="We will review this and transfer to the bank account on your profile. Your balance changes when the transfer is recorded, not when you request it."
     >
       <div className="space-y-3">
@@ -173,8 +173,8 @@ function RequestWithdrawalModal({
             says where to go instead. */}
         {eligibility.data?.hasBankAccount === false && (
           <div className="border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] text-critical rounded-md border px-3 py-2 text-sm">
-            Add your bank details before requesting a payout — without them there is nowhere for us
-            to send the money.{' '}
+            Add your bank details before requesting a withdrawal — without them there is nowhere for
+            us to send the money.{' '}
             <Link href="/profile" className="underline">
               Go to your profile
             </Link>
@@ -217,7 +217,7 @@ function RequestWithdrawalModal({
                   same rupees go out twice. */}
               {Number(eligibility.data.pendingWithdrawalInr) > 0 && (
                 <div>
-                  On hold for a payout you already requested{' '}
+                  On hold for a withdrawal you already requested{' '}
                   <Money
                     amount={eligibility.data.pendingWithdrawalInr}
                     currency="INR"
@@ -266,7 +266,7 @@ function RequestWithdrawalModal({
           }
           onClick={() => void submit()}
         >
-          {request.isPending ? 'Requesting…' : 'Request payout'}
+          {request.isPending ? 'Requesting…' : 'Request withdrawal'}
         </Button>
       </ModalFooter>
     </Modal>

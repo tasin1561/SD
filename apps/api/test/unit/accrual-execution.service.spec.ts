@@ -102,7 +102,7 @@ describe('AccrualExecutionService.executeAccrual', () => {
     // Delivery is not when the money reaches us. Crediting here for
     // every seller is what made Skydrop front 5-10 days of everyone's
     // COD and absorb any short payment; the credit now waits for the
-    // courier's payout. INSTANT_PAY is the paid opt-out.
+    // courier's withdrawal. INSTANT_PAY is the paid opt-out.
     const { svc, applyEntry, recomputeCacheAfterCommit } = makeService({
       charges: [{ type: 'BASE_SHIPPING', amountInr: new Prisma.Decimal('80') }],
     });

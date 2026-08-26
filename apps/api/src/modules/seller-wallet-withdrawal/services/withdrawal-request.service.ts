@@ -47,7 +47,7 @@ export interface CreateWithdrawalRequestInput {
 /**
  * R2 (revised-plan roadmap) — seller-initiated withdrawal requests.
  * NEVER moves money itself: `RemittanceService.create()` (W-6, admin-
- * manual-payout) is the sole executor; `markPaid` only LINKS an
+ * manual-withdrawal) is the sole executor; `markPaid` only LINKS an
  * already-created Remittance to a request. This preserves "no
  * seller-initiated direct debit" — the ledger is only ever touched by
  * `WalletService.applyEntry`.
@@ -256,11 +256,11 @@ export class WithdrawalRequestService {
       // BOTH the manual request and the nightly sweep — an automatic
       // path that could move money a manual one could not is backwards
       // (WAL-3).
-      await this.restrictions.assertAllowed(sellerId, SellerCapability.PAYOUT_REQUEST);
+      await this.restrictions.assertAllowed(sellerId, SellerCapability.WITHDRAWAL_REQUEST);
 
       // Somewhere to pay it TO.
       //
-      // A payout request with no bank details on file is a promise
+      // A withdrawal request with no bank details on file is a promise
       // nobody can keep: an operator picks it up, has no account to wire
       // to, and it sits in the queue while the seller waits. Refused
       // here rather than only hidden in the UI — the server is the
@@ -278,7 +278,7 @@ export class WithdrawalRequestService {
         throw new BadRequestException({
           code: 'NO_BANK_ACCOUNT_ON_FILE',
           message:
-            'Add your bank details on your profile before requesting a payout — without them ' +
+            'Add your bank details on your profile before requesting a withdrawal — without them ' +
             'there is nowhere for us to send the money.',
         });
       }
@@ -414,7 +414,7 @@ export class WithdrawalRequestService {
     // same request would both write and the last would win — silently
     // detaching one of the two remittances from the request it paid, so a
     // real bank transfer ends up accounted to nothing. No money is
-    // duplicated (the remittance moves it, not this row), but a payout
+    // duplicated (the remittance moves it, not this row), but a withdrawal
     // that cannot be traced back to its request is its own problem.
     const claimed = await this.prisma.client.withdrawalRequest.updateMany({
       where: { id: requestId, status: { notIn: RESOLVED_STATUSES } },

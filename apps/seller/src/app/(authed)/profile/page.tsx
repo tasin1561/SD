@@ -524,8 +524,8 @@ function BankDetailsSection({
                     {change.decisionReason ?? 'No reason was recorded with the rejection.'}
                   </p>
                   <p className="text-xs opacity-80">
-                    Nothing changed — payouts still go to the account below. Edit it to send a new
-                    request.
+                    Nothing changed — withdrawals still go to the account below. Edit it to send a
+                    new request.
                   </p>
                 </div>
               )}
@@ -533,7 +533,7 @@ function BankDetailsSection({
               <section className="space-y-2">
                 {pending && (
                   <h3 className="text-text-muted text-xs uppercase tracking-wide">
-                    Current account · payouts go here
+                    Current account · withdrawals go here
                   </h3>
                 )}
                 <BankValuesList values={live} />
@@ -550,7 +550,8 @@ function BankDetailsSection({
                   <p className="text-sm text-[var(--status-pending-fg)]">
                     These are the details you asked us to switch to. They are not live yet — an
                     admin has to approve them, and{' '}
-                    <strong>payouts continue to the current account above until they do</strong>.
+                    <strong>withdrawals continue to the current account above until they do</strong>
+                    .
                   </p>
                   <BankValuesList values={change.proposed} compareTo={live} />
                   <p className="text-xs text-[var(--status-pending-fg)] opacity-80">
@@ -568,13 +569,13 @@ function BankDetailsSection({
               {hasAccountOnFile ? (
                 <>
                   Changing a payable account does not take effect on save — it goes to an admin for
-                  approval, and payouts keep going to your current account until then. All six
+                  approval, and withdrawals keep going to your current account until then. All six
                   fields are needed together.
                 </>
               ) : (
                 <>
-                  Used for remittance payouts. All six fields are needed together — a payout missing
-                  one is rejected at the bank, not here.
+                  Used for remittance withdrawals. All six fields are needed together — a withdrawal
+                  missing one is rejected at the bank, not here.
                 </>
               )}
             </p>
@@ -606,7 +607,7 @@ function BankDetailsSection({
               label="Account number"
               hint={
                 storedAccountNumber
-                  ? 'The account your payouts are sent to. Changing it goes to an admin for approval.'
+                  ? 'The account your withdrawals are sent to. Changing it goes to an admin for approval.'
                   : undefined
               }
             >
@@ -646,7 +647,7 @@ function BankDetailsSection({
                 role="status"
               >
                 Still needed: {missing.map((f) => f.serverLabel).join(', ')}. Submitting without
-                these will be refused — a payout needs the whole account.
+                these will be refused — a withdrawal needs the whole account.
               </div>
             )}
 

@@ -204,7 +204,7 @@ export function DashboardView(): ReactElement {
           {canMoney && (
             <QueueTile
               href="/withdrawals"
-              label="Payout requests"
+              label="Withdrawal requests"
               count={pendingWithdrawals.data?.total}
               loading={pendingWithdrawals.isLoading}
               hint="Awaiting a remittance"

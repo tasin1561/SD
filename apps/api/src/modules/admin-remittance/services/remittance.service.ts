@@ -97,7 +97,7 @@ export class RemittanceService {
           fxRateSnapshot: fxRate,
           bankAccountSnapshot: {
             bankName: seller.bankName,
-            // The branch is part of the payout instruction, not decoration.
+            // The branch is part of the withdrawal instruction, not decoration.
             // The seller is now hard-refused on save without it, and that
             // block is only defensible if the value reaches the thing it
             // was demanded for — a snapshot missing it would make the
@@ -138,7 +138,7 @@ export class RemittanceService {
       // the seller's bank. Crediting the destination wallet left every
       // seller reading "you are owed ৳12,300" immediately after being
       // paid ৳12,300, and nothing ever debited it back — so the phantom
-      // balance grew by the size of every payout, forever.
+      // balance grew by the size of every withdrawal, forever.
       //
       // What was actually wired is not lost: `remittances` records the
       // destination currency, the amount and the FX rate snapshot. That

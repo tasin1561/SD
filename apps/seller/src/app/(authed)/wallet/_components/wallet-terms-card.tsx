@@ -17,7 +17,7 @@ import { useWalletTerms, type WalletTerm } from '@/lib/ops-hooks';
  * cap would not have one.
  */
 /**
- * The two the seller OWNS, shown by PayoutScheduleCard as controls
+ * The two the seller OWNS, shown by WithdrawalScheduleCard as controls
  * rather than as facts. Listing them here as well would put a read-only
  * copy of a value directly below the switch that changes it — and the
  * two would disagree for as long as a refetch takes.

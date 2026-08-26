@@ -41,7 +41,7 @@ export default function SettingsPage(): ReactElement {
       // who could not open the page anyway.
       //
       // Listed here as well as on the wallet page because the two ways
-      // in are for different moments: from the wallet when a payout was
+      // in are for different moments: from the wallet when a withdrawal was
       // just refused, and from here when somebody is working through
       // what their account is set to.
       href: '/wallet/limits',

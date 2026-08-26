@@ -241,7 +241,7 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         'courier_escalations',
         'ticket_events',
         'tickets',
-        // Wallet + payouts (M21-M24)
+        // Wallet + withdrawals (M21-M24)
         // Staged CSV rows FK sellers + bulk uploads with RESTRICT.
         // Marketing leads FK sellers (converted_seller_id, SET NULL) —
         // explicit clearing keeps suites independent (MUST #12).

@@ -1,0 +1,13 @@
+-- One word for one thing: "withdrawal".
+--
+-- The product used "payout" and "withdrawal" interchangeably for the
+-- seller taking money out, which made a screen hard to read and a
+-- support conversation harder. "Payout" is kept ONLY where it means the
+-- courier paying US — a settlement — because that is a different flow
+-- with a different counterparty, and collapsing the two would be worse
+-- than the inconsistency it fixes.
+--
+-- RENAME VALUE rather than add-and-migrate: no row uses this value
+-- (checked against production — seller_restrictions is empty), so there
+-- is nothing to rewrite and the old name has no reader left.
+ALTER TYPE "seller_capability" RENAME VALUE 'payout_request' TO 'withdrawal_request';

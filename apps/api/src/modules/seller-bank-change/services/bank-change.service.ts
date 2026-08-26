@@ -216,7 +216,7 @@ export class BankChangeService {
         // copy would be right for the ciphertext and wrong for the other
         // two on any request written before 2026-08-18, which lost them
         // on the way in. That writes a live account nothing can decrypt
-        // and no screen can show, discovered when a payout fails.
+        // and no screen can show, discovered when a withdrawal fails.
         const live = {
           stored: req.seller.bankAccountNumber,
           masked: req.seller.bankAccountNumberMasked,
@@ -235,7 +235,7 @@ export class BankChangeService {
         // both together, so one without the other means the row was
         // assembled by something that no longer exists. Refuse rather
         // than guess — rejecting costs the seller one resubmission, and
-        // approving costs them their payouts.
+        // approving costs them their withdrawals.
         // A null key version is legitimate — it means the number predates
         // encryption and is stored as plaintext — so it is NOT part of
         // this check.
@@ -243,7 +243,7 @@ export class BankChangeService {
           throw new ConflictException({
             code: 'BANK_CHANGE_UNAPPROVABLE',
             message:
-              'This request does not carry a complete account number, so approving it would leave the seller with payout details nobody can read. Reject it and ask the seller to submit the change again.',
+              'This request does not carry a complete account number, so approving it would leave the seller with withdrawal details nobody can read. Reject it and ask the seller to submit the change again.',
           });
         }
 

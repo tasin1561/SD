@@ -36,14 +36,14 @@ import {
 } from '@/lib/ops-hooks';
 
 /**
- * The review queue for a seller's payout destination.
+ * The review queue for a seller's withdrawal destination.
  *
  * ── WHAT THE HUMAN IS ACTUALLY FOR ───────────────────────────────────
  * A seller's bank details are where their money is sent, so anyone who
- * gets into a seller account could redirect the payouts by editing six
+ * gets into a seller account could redirect the withdrawals by editing six
  * fields. The first add writes straight through; every edit after that
  * stops HERE, and the live details do not move until somebody on this
- * page says so. Payouts keep flowing to the old account in the
+ * page says so. Withdrawals keep flowing to the old account in the
  * meantime — a pending change is not yet a fact.
  *
  * That makes this screen's whole job the COMPARISON. An admin scanning
@@ -151,7 +151,7 @@ export function BankChangesIndex(): ReactElement {
     <div>
       <PageHeader
         title="Bank detail changes"
-        subtitle="Sellers asking us to send their payouts somewhere new. Their money keeps going to the account already on file until you approve one."
+        subtitle="Sellers asking us to send their withdrawals somewhere new. Their money keeps going to the account already on file until you approve one."
       />
 
       {list.isLoading ? (
@@ -270,8 +270,8 @@ export function BankChangesIndex(): ReactElement {
         {intent === 'APPROVE' ? (
           <>
             <p className="text-text-muted mb-3 text-sm leading-relaxed">
-              From this moment every payout to {reviewing?.companyName ?? 'this seller'} goes to the
-              account below, and the one they had before stops receiving money. Undoing it takes
+              From this moment every withdrawal to {reviewing?.companyName ?? 'this seller'} goes to
+              the account below, and the one they had before stops receiving money. Undoing it takes
               another change request and another approval — so approve it because you recognise the
               account, not because the form was filled in.
             </p>
@@ -294,7 +294,7 @@ export function BankChangesIndex(): ReactElement {
         ) : (
           <>
             <p className="text-text-muted mb-3 text-sm leading-relaxed">
-              Nothing moves — their payouts carry on to the account already on file. The seller
+              Nothing moves — their withdrawals carry on to the account already on file. The seller
               reads your reason word for word, so write what did not match or what you need from
               them; “rejected” on its own just sends the same request back.
             </p>

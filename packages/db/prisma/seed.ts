@@ -1100,7 +1100,7 @@ const systemSettings: SystemSettingSeed[] = [
     // 7 days: Delhivery's stated settlement window is 5-10 days, so this
     // covers the typical case. The R2c settlement ledger is what will
     // tell you the REAL distribution — raise this if the reconciliation
-    // report shows payouts routinely landing later than 7 days.
+    // report shows withdrawals routinely landing later than 7 days.
     valueInt: 7,
     displayName: 'Accrual Delay (days)',
     description:
@@ -2070,7 +2070,7 @@ const notificationTemplates: TemplateSeed[] = [
     recipientType: NotificationRecipientType.STAFF,
     subject: 'Tracking has not moved for {{ minutes }} minutes',
     bodyTemplate:
-      'No tracking cycle has completed successfully in {{ minutes }} minutes (threshold {{ threshold }}).\n\nDelhivery sends us no webhooks, so this poll is the only thing that moves an order to delivered. While it is stopped, no parcel updates, no order reaches DELIVERED, and COD is not credited — so seller payouts stop with it.\n\nAutomatic recovery: {{ recovery }}\n\nIf that did not fix it, check in order: is the API up ({{ health_url }}); is the worker running (pm2, WORKERS_ENABLED); did Redis lose the repeatable job (restarting the API re-adds it); is courier.delhivery_api_base_url still set (empty means stub mode, where the poller does nothing).\n\nYou can also run a cycle by hand from the Delhivery page in admin. It is safe to press repeatedly.',
+      'No tracking cycle has completed successfully in {{ minutes }} minutes (threshold {{ threshold }}).\n\nDelhivery sends us no webhooks, so this poll is the only thing that moves an order to delivered. While it is stopped, no parcel updates, no order reaches DELIVERED, and COD is not credited — so seller withdrawals stop with it.\n\nAutomatic recovery: {{ recovery }}\n\nIf that did not fix it, check in order: is the API up ({{ health_url }}); is the worker running (pm2, WORKERS_ENABLED); did Redis lose the repeatable job (restarting the API re-adds it); is courier.delhivery_api_base_url still set (empty means stub mode, where the poller does nothing).\n\nYou can also run a cycle by hand from the Delhivery page in admin. It is safe to press repeatedly.',
   },
   {
     code: 'ops.ndr_reconciliation_alert.email',
@@ -2528,7 +2528,7 @@ const notificationTemplates: TemplateSeed[] = [
     recipientType: NotificationRecipientType.SELLER,
     subject: 'Bank details added to your Skydrop account',
     bodyTemplate:
-      'Hi {{ company_name }}, bank details were just added to your Skydrop account. Payouts will go to {{ bank_name }}, account ending {{ account_last4 }}. Any later change to these details has to be approved by our team before it takes effect. If this was not you, contact {{ support_email }} straight away.',
+      'Hi {{ company_name }}, bank details were just added to your Skydrop account. Withdrawals will go to {{ bank_name }}, account ending {{ account_last4 }}. Any later change to these details has to be approved by our team before it takes effect. If this was not you, contact {{ support_email }} straight away.',
   },
   {
     code: 'seller.bank_details_removed.email',
@@ -2537,7 +2537,7 @@ const notificationTemplates: TemplateSeed[] = [
     recipientType: NotificationRecipientType.SELLER,
     subject: 'Bank details removed from your Skydrop account',
     bodyTemplate:
-      'Hi {{ company_name }}, the bank details on your Skydrop account were just removed, so we have nowhere to send your payouts until you add an account again. You can add one at {{ app_url }}/profile. If this was not you, contact {{ support_email }} straight away.',
+      'Hi {{ company_name }}, the bank details on your Skydrop account were just removed, so we have nowhere to send your withdrawals until you add an account again. You can add one at {{ app_url }}/profile. If this was not you, contact {{ support_email }} straight away.',
   },
   {
     code: 'seller.bank_change_submitted.email',
@@ -2546,7 +2546,7 @@ const notificationTemplates: TemplateSeed[] = [
     recipientType: NotificationRecipientType.SELLER,
     subject: 'We received your bank detail change request',
     bodyTemplate:
-      'Hi {{ company_name }}, we received a request to change the bank details on your Skydrop account to {{ bank_name }}, account ending {{ account_last4 }}. Our team reviews this before it takes effect — until then your payouts keep going to the account already on file, and no further change can be submitted. If this was not you, contact {{ support_email }} straight away.',
+      'Hi {{ company_name }}, we received a request to change the bank details on your Skydrop account to {{ bank_name }}, account ending {{ account_last4 }}. Our team reviews this before it takes effect — until then your withdrawals keep going to the account already on file, and no further change can be submitted. If this was not you, contact {{ support_email }} straight away.',
   },
   {
     code: 'seller.bank_change_approved.email',
@@ -2555,7 +2555,7 @@ const notificationTemplates: TemplateSeed[] = [
     recipientType: NotificationRecipientType.SELLER,
     subject: 'Your bank detail change is now live',
     bodyTemplate:
-      'Hi {{ company_name }}, your bank detail change has been approved. From now on your payouts go to {{ bank_name }}, account ending {{ account_last4 }}. You can see the details at {{ app_url }}/profile. If this was not you, contact {{ support_email }} straight away.',
+      'Hi {{ company_name }}, your bank detail change has been approved. From now on your withdrawals go to {{ bank_name }}, account ending {{ account_last4 }}. You can see the details at {{ app_url }}/profile. If this was not you, contact {{ support_email }} straight away.',
   },
   {
     code: 'seller.bank_change_rejected.email',
@@ -2564,7 +2564,7 @@ const notificationTemplates: TemplateSeed[] = [
     recipientType: NotificationRecipientType.SELLER,
     subject: 'Your bank detail change was not approved',
     bodyTemplate:
-      'Hi {{ company_name }}, your bank detail change was not approved. Reason: {{ reason }}. Nothing has moved — your payouts still go to the account already on file. You can correct the details and submit again at {{ app_url }}/profile, or reply to {{ support_email }} if you need a hand.',
+      'Hi {{ company_name }}, your bank detail change was not approved. Reason: {{ reason }}. Nothing has moved — your withdrawals still go to the account already on file. You can correct the details and submit again at {{ app_url }}/profile, or reply to {{ support_email }} if you need a hand.',
   },
   {
     code: 'seller.account_reapproved.email',

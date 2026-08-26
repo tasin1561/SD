@@ -4,7 +4,7 @@ import type { SettingsResolverService } from '../../src/modules/settings/service
 import type { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
 
 /**
- * The COD payout arithmetic.
+ * The COD withdrawal arithmetic.
  *
  * This is the file to read before changing any of it, because the two
  * mistakes available here are both silent and both expensive.

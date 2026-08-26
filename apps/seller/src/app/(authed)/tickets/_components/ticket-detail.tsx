@@ -180,7 +180,7 @@ function RefundBanner({ ticket }: { readonly ticket: TicketView }): ReactElement
               {ticket.resolvedAt === null
                 ? 'Credited to your Skydrop wallet.'
                 : `Credited to your Skydrop wallet on ${formatDateTime(ticket.resolvedAt)}.`}{' '}
-              It is part of your balance now and goes out with your next payout.
+              It is part of your balance now and goes out with your next withdrawal.
             </p>
             {ticket.resolutionWalletEntryId !== null && (
               <p className="text-text-faint mt-1 text-xs">

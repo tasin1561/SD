@@ -207,8 +207,8 @@ export interface WalletTerm {
 /**
  * The rules this wallet runs on.
  *
- * Read-only EXCEPT the two payout-schedule ones, which the seller owns
- * (usePayoutSchedule writes those). Everything else is what Skydrop
+ * Read-only EXCEPT the two withdrawal-schedule ones, which the seller owns
+ * (useWithdrawalSchedule writes those). Everything else is what Skydrop
  * charges and allows: a seller who could raise their own withdrawal cap
  * would not have one.
  *
@@ -259,7 +259,7 @@ export interface WithdrawalEligibility {
 }
 
 /**
- * What the payout form needs before a seller starts typing: how much
+ * What the withdrawal form needs before a seller starts typing: how much
  * they can actually take, and whether we have anywhere to send it.
  */
 export function useWithdrawalEligibility(): UseQueryResult<WithdrawalEligibility> {

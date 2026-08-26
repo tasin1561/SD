@@ -144,7 +144,7 @@ export function AuthedShell({
         {identity.displayCurrency === 'BDT' && identity.displayFxRate !== null && (
           <p className="text-text-muted border-border bg-surface-raised mb-4 rounded-lg border px-3 py-2 text-xs">
             Amounts are shown in taka, converted from rupees at ₹1 = ৳
-            {Number(identity.displayFxRate).toFixed(2)}. Your account is kept in rupees — payout
+            {Number(identity.displayFxRate).toFixed(2)}. Your account is kept in rupees — withdrawal
             requests are made in rupees.
           </p>
         )}

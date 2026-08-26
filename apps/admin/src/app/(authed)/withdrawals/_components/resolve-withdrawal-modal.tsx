@@ -33,7 +33,7 @@ type Mode = 'paid' | 'reject';
  * "Mark paid" deliberately asks for a remittance ID rather than an
  * amount: the money must already have been recorded as a remittance
  * (which is what actually debited the wallet). Asking for the link
- * makes it impossible to close a request without the payout existing.
+ * makes it impossible to close a request without the withdrawal existing.
  */
 export function ResolveWithdrawalModal({
   request,

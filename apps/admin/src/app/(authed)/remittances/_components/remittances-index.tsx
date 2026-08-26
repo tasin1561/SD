@@ -32,7 +32,7 @@ export function RemittancesIndex(): ReactElement {
     <div>
       <PageHeader
         title="Remittances"
-        subtitle="Recorded payouts to sellers. Each entry debits the seller's wallet (and writes a paired FX credit for cross-currency)."
+        subtitle="Recorded withdrawals to sellers. Each entry debits the seller's wallet (and writes a paired FX credit for cross-currency)."
         action={
           canWrite ? (
             <Button variant="primary" size="md" onClick={() => setCreating(true)}>

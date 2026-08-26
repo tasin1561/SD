@@ -1092,7 +1092,7 @@ import type {
  *
  * Bank details are where a seller's money is sent, so a change to an
  * account that ALREADY exists does not take effect on save — it becomes
- * a request an admin approves or rejects, and payouts keep going to the
+ * a request an admin approves or rejects, and withdrawals keep going to the
  * old account meanwhile. A first add has nothing to redirect, so it
  * writes straight through and no request is created.
  *
@@ -1742,26 +1742,26 @@ export function useDeactivateTeamMember(): UseMutationResult<void, Error, { id: 
   });
 }
 
-// ───────── Payout schedule — the two wallet terms a seller owns ─────────
+// ───────── Withdrawal schedule — the two wallet terms a seller owns ─────────
 
-export interface PayoutScheduleView {
+export interface WithdrawalScheduleView {
   readonly autoEnabled: boolean;
   readonly hourLocal: number;
   readonly timezone: string;
   readonly isOwnValue: boolean;
 }
 
-export function usePayoutSchedule(enabled = true): UseQueryResult<PayoutScheduleView> {
+export function useWithdrawalSchedule(enabled = true): UseQueryResult<WithdrawalScheduleView> {
   const client = useApiClient();
   return useQuery({
-    queryKey: ['seller-payout-schedule'],
-    queryFn: () => client.request<PayoutScheduleView>('/api/seller/wallet/payout-schedule'),
+    queryKey: ['seller-withdrawal-schedule'],
+    queryFn: () => client.request<WithdrawalScheduleView>('/api/seller/wallet/withdrawal-schedule'),
     enabled,
   });
 }
 
-export function useSetPayoutSchedule(): UseMutationResult<
-  PayoutScheduleView,
+export function useSetWithdrawalSchedule(): UseMutationResult<
+  WithdrawalScheduleView,
   Error,
   { autoEnabled?: boolean; hourLocal?: number }
 > {
@@ -1769,12 +1769,12 @@ export function useSetPayoutSchedule(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<PayoutScheduleView>('/api/seller/wallet/payout-schedule', {
+      client.request<WithdrawalScheduleView>('/api/seller/wallet/withdrawal-schedule', {
         method: 'PATCH',
-        body: JSON.stringify(body),
+        body,
       }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['seller-payout-schedule'] });
+      void qc.invalidateQueries({ queryKey: ['seller-withdrawal-schedule'] });
       // The terms list shows the same two values, so it must not keep
       // showing the old ones beside the control that just changed them.
       void qc.invalidateQueries({ queryKey: ['seller-wallet', 'terms'] });

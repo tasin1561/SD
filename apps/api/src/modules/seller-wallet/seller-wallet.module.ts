@@ -7,7 +7,7 @@ import { WalletService } from './services/wallet.service';
  * Exports `WalletService` as the SOLE WRITER of
  * seller_wallet_entries (W-2). Consumed by:
  *   - M22 OrderDeliveredWalletListener (COD accrual on DELIVERED)
- *   - M23 RemittanceService (admin payout)
+ *   - M23 RemittanceService (admin withdrawal)
  *   - M24 SellerWalletController (balance + ledger reads)
  *
  * No HTTP endpoint at this layer — that's M24's job.

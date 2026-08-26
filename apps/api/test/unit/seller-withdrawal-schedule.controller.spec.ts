@@ -1,4 +1,4 @@
-import { SellerPayoutScheduleController } from '../../src/modules/seller-wallet-withdrawal/controllers/seller-payout-schedule.controller';
+import { SellerWithdrawalScheduleController } from '../../src/modules/seller-wallet-withdrawal/controllers/seller-withdrawal-schedule.controller';
 
 function make() {
   const setOverride = jest.fn().mockResolvedValue({});
@@ -10,13 +10,16 @@ function make() {
   const prisma = {
     client: { seller: { findUnique: jest.fn(async () => ({ timezone: 'Asia/Dhaka' })) } },
   };
-  const c = new SellerPayoutScheduleController({ resolve, setOverride } as never, prisma as never);
+  const c = new SellerWithdrawalScheduleController(
+    { resolve, setOverride } as never,
+    prisma as never,
+  );
   return { c, setOverride, resolve };
 }
 
 const SELLER = { id: 's1' } as never;
 
-describe('SellerPayoutScheduleController', () => {
+describe('SellerWithdrawalScheduleController', () => {
   it('reports the schedule with the zone the hour is read in', async () => {
     const { c } = make();
     await expect(c.get(SELLER)).resolves.toEqual({

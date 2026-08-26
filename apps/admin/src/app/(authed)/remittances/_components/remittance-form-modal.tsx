@@ -280,7 +280,7 @@ export function RemittanceFormModal({
             value={note}
             onChange={(e) => setNote(e.target.value)}
             maxLength={2000}
-            placeholder="Anything ops should know about this payout"
+            placeholder="Anything ops should know about this withdrawal"
           />
         </FormField>
 

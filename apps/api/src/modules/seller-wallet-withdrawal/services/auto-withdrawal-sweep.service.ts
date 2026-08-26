@@ -138,7 +138,7 @@ export class AutoWithdrawalSweepService {
    * before) and hard-coding one is how a scheduled job silently drifts
    * an hour twice a year. An unknown zone falls back to UTC and is
    * logged rather than throwing — a typo in one seller's profile must
-   * not stop everyone else's payout.
+   * not stop everyone else's withdrawal.
    */
   private localHour(now: Date, timezone: string): number {
     try {

@@ -106,7 +106,7 @@ const PROFILE_SELECT = {
   // database is ever read directly, and that has not changed. What
   // changed is who the mask was protecting it from: the person who
   // typed it. Showing them four digits meant they could not check
-  // their own payout destination was right, which is the one thing
+  // their own withdrawal destination was right, which is the one thing
   // this screen exists for. Both columns are selected: the ciphertext
   // to reveal, the mask as the fallback when no key version is
   // recorded.
@@ -131,7 +131,7 @@ const PROFILE_SELECT = {
  * They are ALL-OR-NOTHING. Not "a profile cannot be saved without bank
  * details" — a new seller legitimately has none, and the dashboard
  * checklist treats adding them as a later step — but "a half-entered
- * account is not a thing you can have". A payout missing a branch or a
+ * account is not a thing you can have". A withdrawal missing a branch or a
  * SWIFT code does not fail at save time where someone could fix it; it
  * fails days later at the bank, and is discovered by whoever is chasing
  * the money.
@@ -175,7 +175,7 @@ export class SellerProfileService {
   ) {}
 
   /**
-   * Tell the seller their payout destination moved.
+   * Tell the seller their withdrawal destination moved.
    *
    * Sent on every one of these events, including the ones the seller
    * performed themselves: the message is not a receipt, it is the alarm
@@ -255,7 +255,7 @@ export class SellerProfileService {
     const onboarding = await this.onboarding.getProgress(sellerId);
 
     // The seller's own view of a change they asked for. PENDING so they
-    // know it is not live and payouts still go to the old account;
+    // know it is not live and withdrawals still go to the old account;
     // REJECTED so they read the reason and can send a corrected one.
     // APPROVED rows are deliberately absent — the values are simply the
     // live ones by then, and surfacing them would say "pending" about
@@ -534,7 +534,7 @@ export class SellerProfileService {
         throw new BadRequestException({
           code: 'BANK_DETAILS_INCOMPLETE',
           message:
-            'Bank details are all-or-nothing — a payout missing one field fails at the bank, days after anyone could have fixed it. ' +
+            'Bank details are all-or-nothing — a withdrawal missing one field fails at the bank, days after anyone could have fixed it. ' +
             `Still needed: ${missing.map(([, label]) => label).join(', ')}. ` +
             'Fill these in, or clear all six fields to remove the account.',
         });
@@ -545,7 +545,7 @@ export class SellerProfileService {
       // A seller with no account on file has nothing to redirect, so the
       // first set of details saves straight through. Every change after
       // that goes to an admin: anyone who got into a seller's account
-      // could otherwise point payouts at their own bank, and the seller
+      // could otherwise point withdrawals at their own bank, and the seller
       // would find out when the money did not arrive.
       //
       // "On file" means a payable account exists — all six present. A row
@@ -639,7 +639,7 @@ export class SellerProfileService {
           account_last4: last4(encAccount?.masked ?? existing.bankAccountNumberMasked),
         });
         // Deliberately NO seller.update — the live account is untouched
-        // and payouts continue to it until an admin decides.
+        // and withdrawals continue to it until an admin decides.
         return;
       }
 
