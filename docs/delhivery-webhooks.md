@@ -76,6 +76,33 @@ anywhere we were watching.**
 5. **…and the full base64 into `raw_body`**, which on a 10GB managed
    disk is a few weeks of runway for bytes already in Spaces.
 
+A second pass, after those five, found three more — by reading a stored
+row and by asking what each guard actually depends on, rather than by
+re-reading the code:
+
+6. **The scan webhook persisted the shared secret on every push.** It
+   stored the request headers verbatim, and under SHARED_SECRET the
+   header VALUE is the credential. The column is called `headers`, the
+   value looks like a signature, and nothing about the row says a secret
+   is in it. The redaction is now one shared function used by both
+   controllers — two copies is how one gets fixed and the other does not.
+7. **The document routes never checked the courier registry.** An
+   unknown code was refused anyway, but only because the GLOBAL auth
+   scheme is HMAC and a static secret fails that format check. That
+   evaporates the day someone flips the global setting or onboards a
+   second SHARED_SECRET courier. A guard that works by accident is not a
+   guard.
+8. **The ingest service promised never to throw and did not keep it.**
+   Its own comment explains that a 500 makes the courier retry — then it
+   wrapped the Spaces upload and left both database calls bare.
+
+Two things were checked and found already correct, which is worth
+recording so nobody re-opens them: ten concurrent pushes for one AWB
+produce exactly one row (Prisma issues a native upsert, so the
+read-then-write race does not exist here), and a real-format scan for an
+AWB we do not hold lands `IGNORED` / `NO_MATCHING_SHIPMENT` in 20ms with
+no event and no retry.
+
 `main.ts` is the reason the first one survived: the unit suite builds
 services directly and the e2e harness builds its own Nest app, so
 **nothing in CI executes that file.** `bootstrap-body-limits.spec.ts` is
@@ -132,6 +159,22 @@ own bucket at the moment they exist.
 - Upsert on `(courierCode, awbNumber, docType)` — a re-send updates the
   row it already has.
 
+## The test that was missing
+
+Every webhook e2e drove flat `DLV-*` stub codes. That exercises our
+machinery and says nothing about the payload Delhivery actually sends —
+a different shape, a different vocabulary, timestamps in a different
+timezone. Precisely the three things that were wrong, and the three
+nothing was looking at.
+
+`tracking-flow.e2e-spec.ts` now drives their documented envelope end to
+end: the forward lifecycle (In Transit / Dispatched / Delivered on their
+real legs, with stock asserted unchanged at DELIVERED), and an `EOD-*`
+NSL on a forward leg — where the status itself is an unremarkable
+"Pending" and the NSL is the only thing saying a delivery was attempted
+and failed. It asserts a 17:10 IST scan stores as 11:40Z, so reverting
+the timezone fix fails a test rather than a customer's timeline.
+
 ## Still open
 
 - **The escalation matrix** in all four documents carries `<FILL: name>`
@@ -141,6 +184,12 @@ own bucket at the moment they exist.
   images and there is nowhere to look at one. Worth a link on the order
   detail panel once the first real document arrives — until then there is
   nothing to render.
+- **Rotate `TRACKING_WEBHOOK_SECRET_DELHIVERY` before sending it.** It
+  was being written into `courier_webhooks.headers` in plaintext until
+  the fix above, and it was read out of a stored row during that
+  investigation. Nothing has used it yet, so rotating costs nothing —
+  and the value Delhivery is given should be one that has never sat in a
+  database column.
 - **The scan payload's field naming is still theirs to confirm.** Two
   `TODO(delhivery-api)` markers remain on exactly this: the webhook
   payload field/header naming and the NDR `failureReason` vocabulary.
