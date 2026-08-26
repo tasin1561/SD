@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import { PageHeader } from '@skydrop/ui/components';
-import { Webhook, Bell, Key, ShieldCheck, PackageSearch, ReceiptText } from 'lucide-react';
+import { Webhook, Bell, Key, ShieldCheck, PackageSearch, ReceiptText, Wallet } from 'lucide-react';
 import { SettingsHub, type SettingsTile } from './_components/settings-hub';
 
 /**
@@ -36,6 +36,21 @@ export default function SettingsPage(): ReactElement {
         'The quantity at which we warn you a SKU is running out. A SKU with its own threshold ignores it.',
     },
     {
+      // Lives under /wallet rather than /settings, so it is gated on
+      // wallet.view and the hub's own filter hides this tile from anyone
+      // who could not open the page anyway.
+      //
+      // Listed here as well as on the wallet page because the two ways
+      // in are for different moments: from the wallet when a payout was
+      // just refused, and from here when somebody is working through
+      // what their account is set to.
+      href: '/wallet/limits',
+      icon: <Wallet size={20} />,
+      title: 'Wallet limits and settings',
+      description:
+        'Withdrawal limits, when COD reaches you, and what is charged. Set by Skydrop and shown read-only, so a limit is never a surprise.',
+    },
+    {
       href: '/settings/webhooks',
       icon: <Webhook size={20} />,
       title: 'Outbound webhooks',
@@ -60,7 +75,7 @@ export default function SettingsPage(): ReactElement {
     <div>
       <PageHeader
         title="Settings"
-        subtitle="Sign-in and sessions, webhooks, notifications, API keys."
+        subtitle="Sign-in and sessions, order and stock defaults, wallet limits, webhooks, notifications, API keys."
       />
       <SettingsHub items={items} />
     </div>
