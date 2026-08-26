@@ -112,9 +112,14 @@ export default function WalletPage(): ReactElement {
               answer — "why was that refused", "when does COD land" —
               arrives while looking at the buttons, not at the bottom of
               the ledger where they used to live. */}
+        {/* Given weight, but deliberately NOT a third button: the two on
+            the left move money and this one explains the rules, so
+            matching their shape would invite the same click. An
+            accent-tinted pill reads as "worth noticing" without reading
+            as "press me to do something". */}
         <Link
           href="/wallet/limits"
-          className="text-text-muted hover:text-text-bright ml-auto inline-flex items-center gap-1.5 text-sm underline underline-offset-4"
+          className="text-accent ml-auto inline-flex min-h-[38px] items-center gap-1.5 rounded-[5px] border border-[var(--color-accent-ring)] bg-[var(--color-accent-tint)] px-3 py-1.5 text-sm font-medium transition-colors hover:border-accent"
         >
           Wallet limits and settings
           <ArrowRight size={14} aria-hidden />
