@@ -74,10 +74,13 @@ export class AdminSellerWalletController {
   }> {
     const rows = await this.prisma.client.sellerWalletEntry.findMany({
       where: { sellerId },
-      // By ID, not createdAt. Postgres fixes CURRENT_TIMESTAMP for a
-      // whole transaction, so two entries written together — a COD
-      // credit and its charges debit, say — carry the SAME createdAt and
-      // come back in arbitrary order. This is the one screen where
+      // By ID, not createdAt. Ordering on a column that is not unique
+      // returns ties in arbitrary order, and this is the one screen
+      // where somebody reads the running-balance column down the page —
+      // a tie makes the balance look like it went backwards. Today the
+      // timestamps happen not to tie (Prisma stamps each row itself),
+      // but the column's DB default is CURRENT_TIMESTAMP, so that is a
+      // property of the client rather than of the data. This is the one screen where
       // somebody reads the running-balance column down the page, and it
       // would appear to go backwards. uuidv7 ids are monotonic and
       // distinct within a transaction (WAL-7), which is why the balance

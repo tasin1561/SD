@@ -257,11 +257,15 @@ export class SellerWalletController {
     const lim = Math.min(200, Math.max(1, Number(limit) || 50));
     // Paginated by ID, not by createdAt.
     //
-    // Postgres fixes CURRENT_TIMESTAMP for a whole transaction, so
-    // entries written together — a COD credit and its charges debit —
-    // share a createdAt exactly. A cursor of `createdAt < that` then
-    // SKIPS the siblings: entries vanished from the seller's own ledger
-    // at a page boundary, and nothing about the page said so.
+    // A cursor of `createdAt < <last row's createdAt>` excludes EVERY
+    // row sharing that timestamp, not only the ones already seen — so
+    // any collision drops entries silently at a page boundary.
+    //
+    // Measured, not assumed: today they do not collide, because Prisma
+    // stamps `@default(now())` in its query engine per row. The column's
+    // Postgres default is CURRENT_TIMESTAMP, which IS fixed per
+    // transaction, so this is one raw insert or one Prisma change away —
+    // and it would arrive as a ledger that quietly stops adding up.
     //
     // uuidv7 ids are monotonic, so `id < cursor` means "older" while
     // being unique — which is why the balance is derived from them

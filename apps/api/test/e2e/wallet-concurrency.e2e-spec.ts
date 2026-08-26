@@ -271,18 +271,35 @@ describe('Wallet concurrency (e2e)', () => {
       });
     }
 
-    it('entries written together really do share a timestamp', async () => {
+    it('records what createdAt actually does here — the reason not to key on it', async () => {
       await twoInOneTransaction();
       const rows = await h.prisma.sellerWalletEntry.findMany({
         where: { sellerId },
-        select: { createdAt: true },
+        select: { id: true, createdAt: true },
       });
-      const stamps = new Set(rows.map((r) => r.createdAt.toISOString()));
-      // Postgres fixes CURRENT_TIMESTAMP per transaction. This is the
-      // premise the two bugs below rest on, so it is asserted rather
-      // than assumed.
       expect(rows).toHaveLength(2);
-      expect(stamps.size).toBe(1);
+
+      // I expected these to COLLIDE. The column's Postgres default is
+      // CURRENT_TIMESTAMP, which is fixed for a whole transaction — but
+      // Prisma stamps `@default(now())` in its query engine per row, so
+      // the default never applies and the two differ. This test asserted
+      // a collision and failed, which is the only reason that is known
+      // rather than assumed.
+      //
+      // So the skip this file guards against is LATENT, not active: it
+      // needs two entries to share a timestamp, which today they do not.
+      // It would activate the moment anything inserts through the DB
+      // default instead — a backfill, raw SQL, a Prisma change — and it
+      // would do so silently.
+      //
+      // Keying on id costs nothing and removes the question. This test
+      // is here so that if the stamping ever moves to the database,
+      // somebody reads this note rather than rediscovering it from a
+      // seller's ledger not adding up.
+      const stamps = new Set(rows.map((r) => r.createdAt.toISOString()));
+      expect(stamps.size).toBe(2);
+      // Ids are distinct and ordered whatever the clock does.
+      expect(new Set(rows.map((r) => r.id)).size).toBe(2);
     });
 
     it('paging by cursor reaches EVERY entry, one at a time', async () => {
@@ -304,9 +321,8 @@ describe('Wallet concurrency (e2e)', () => {
         if (cursor === null) break;
       }
 
-      // Paged on createdAt, the second entry of the pair was skipped:
-      // `createdAt < cursor` excludes its own sibling, so an entry
-      // vanished from the seller's ledger and nothing said so.
+      // Holds whatever the timestamps do, which is the point of paging
+      // on a key that is unique by construction.
       expect(new Set(seen).size).toBe(2);
     });
   });
