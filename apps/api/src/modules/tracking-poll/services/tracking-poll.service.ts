@@ -14,6 +14,7 @@ import { DelhiveryTrackingService } from '../../courier-delhivery/services/delhi
 import type { DelhiveryRawScan } from '../../courier-delhivery/types/delhivery.types';
 import { TrackingStatusMappingService } from '../../tracking-events/services/tracking-status-mapping.service';
 import { TrackingEventAppendService } from '../../tracking-events/services/tracking-event-append.service';
+import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
 import { courierActor } from '../../courier-shared/services/courier-credential.service';
 
@@ -105,7 +106,15 @@ export class TrackingPollService {
     private readonly mapping: TrackingStatusMappingService,
     private readonly append: TrackingEventAppendService,
     private readonly orderWrite: OrderWriteService,
+    private readonly audit: AuditLogService,
   ) {}
+
+  /**
+   * Where the last completed cycle is recorded, so "has tracking stopped"
+   * is answerable without reading logs. A system_setting rather than a
+   * new table: one row, written once a cycle, read by the ops page.
+   */
+  private static readonly HEARTBEAT_KEY = 'courier.tracking_poll_last_run_at';
 
   async pollAll(): Promise<PollCycleSummary> {
     const summary: PollCycleSummary = {
@@ -117,19 +126,43 @@ export class TrackingPollService {
 
     if (await this.http.isStubMode()) {
       summary.stubMode = true;
+      // Stub mode is correct in dev and CI. In production it means
+      // somebody cleared `courier.delhivery_api_base_url`, and because
+      // this poller IS tracking, that turns tracking OFF — with no
+      // error, no failed request and nothing in the logs but a quiet
+      // early return. The first symptom would be a seller asking why a
+      // parcel has not moved in three days.
+      //
+      // So it announces itself, but only when there is something it
+      // should have been polling: in dev there never is, so this stays
+      // silent where stub mode is the intended state.
+      const inFlight = await this.countInFlight();
+      if (inFlight > 0) {
+        await this.alarm('tracking.poll_stub_mode_with_inflight', {
+          inFlightShipments: inFlight,
+          remedy: 'Set courier.delhivery_api_base_url — tracking is not running.',
+        });
+      }
+      await this.stampHeartbeat();
       return summary;
     }
 
     const shipments = await this.loadInFlightShipments();
     summary.shipmentsExamined = shipments.length;
-    if (shipments.length === 0) return summary;
+    if (shipments.length === 0) {
+      await this.stampHeartbeat();
+      return summary;
+    }
 
     const byAwb = new Map<string, InFlightShipment>();
     for (const s of shipments) byAwb.set(s.awbNumber, s);
 
     // Batch the tracking fetch (Delhivery caps at 50 waybills/call).
     const batchSize = DelhiveryTrackingFetchService.MAX_WAYBILLS_PER_CALL;
+    let batchesAttempted = 0;
+    let batchesFailed = 0;
     for (let i = 0; i < shipments.length; i += batchSize) {
+      batchesAttempted += 1;
       const batch = shipments.slice(i, i + batchSize);
       let results;
       try {
@@ -140,6 +173,7 @@ export class TrackingPollService {
       } catch (err) {
         // A transient fetch failure for one batch never aborts the
         // cycle — the next cron run retries. Log and continue.
+        batchesFailed += 1;
         this.logger.warn(
           { err: errMsg(err), batchStart: i, batchSize: batch.length },
           'Delhivery fetchTracking batch failed; skipping this batch',
@@ -165,6 +199,23 @@ export class TrackingPollService {
         }
       }
     }
+
+    // EVERY batch failing is a different animal from one failing. One is
+    // a blip the next cycle fixes; all of them means the credential
+    // expired, the account was suspended, or their API is down — and
+    // because each failure is caught and logged at warn, that state
+    // repeats every 20 minutes forever without anything escalating.
+    // Tracking is simply frozen and the logs look ordinary.
+    if (batchesAttempted > 0 && batchesFailed === batchesAttempted) {
+      await this.alarm('tracking.poll_all_batches_failed', {
+        batchesAttempted,
+        shipmentsExamined: summary.shipmentsExamined,
+        remedy:
+          'Check the Delhivery credential and their API status — no parcel has updated this cycle.',
+      });
+    }
+
+    await this.stampHeartbeat();
 
     this.logger.log(
       {
@@ -414,6 +465,53 @@ export class TrackingPollService {
     } catch (err) {
       if (isUniqueViolation(err)) return; // lost the race — fine
       throw err;
+    }
+  }
+
+  /** In-flight count without loading the rows — for the stub-mode alarm. */
+  private async countInFlight(): Promise<number> {
+    return this.prisma.client.shipment.count({
+      where: {
+        courierCode: COURIER_CODE,
+        awbNumber: { not: null },
+        deletedAt: null,
+        orderShipments: {
+          some: { order: { status: { in: [...IN_FLIGHT_ORDER_STATUSES] } } },
+        },
+      },
+    });
+  }
+
+  /**
+   * Record that a cycle completed. Best-effort on purpose: a heartbeat
+   * that could fail the thing it measures would be worse than none.
+   */
+  private async stampHeartbeat(): Promise<void> {
+    try {
+      await this.prisma.client.systemSetting.updateMany({
+        where: { key: TrackingPollService.HEARTBEAT_KEY },
+        data: { valueDate: new Date() },
+      });
+    } catch (err) {
+      this.logger.warn({ err: errMsg(err) }, 'Could not stamp the tracking-poll heartbeat');
+    }
+  }
+
+  /** Audit HIGH, swallowed — an alarm must never break the cycle. */
+  private async alarm(action: string, metadata: Record<string, unknown>): Promise<void> {
+    try {
+      await this.audit.log({
+        actorType: ActorType.SYSTEM,
+        actorId: null,
+        action,
+        entityType: 'tracking_poll',
+        entityId: null,
+        severity: 'HIGH',
+        metadata,
+      });
+      this.logger.error({ action, ...metadata }, 'Tracking poll alarm');
+    } catch (err) {
+      this.logger.warn({ err: errMsg(err), action }, 'Could not record a tracking-poll alarm');
     }
   }
 }

@@ -1,4 +1,5 @@
 import { OrderStatus, ShipmentStatus, TrackingEventSource } from '@skydrop/db';
+import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import { TrackingPollService } from '../../src/modules/tracking-poll/services/tracking-poll.service';
 import { DelhiveryTrackingService } from '../../src/modules/courier-delhivery/services/delhivery-tracking.service';
 import { TrackingStatusMappingService } from '../../src/modules/tracking-events/services/tracking-status-mapping.service';
@@ -106,7 +107,8 @@ function makeSvc(
   );
 
   const client = {
-    shipment: { findMany: shipmentFindMany },
+    shipment: { findMany: shipmentFindMany, count: jest.fn(async () => 0) },
+    systemSetting: { updateMany: jest.fn(async () => ({ count: 1 })) },
     order: { findUnique: orderFindUnique },
     deliveryAttempt: {
       findFirst: deliveryAttemptFindFirst,
@@ -148,6 +150,8 @@ function makeSvc(
     }),
   };
 
+  const audit = { log: jest.fn(async () => undefined) };
+
   const svc = new TrackingPollService(
     { client } as unknown as PrismaService,
     http as unknown as DelhiveryHttpService,
@@ -156,12 +160,13 @@ function makeSvc(
     mapping,
     append as unknown as TrackingEventAppendService,
     orderWrite as unknown as OrderWriteService,
+    audit as unknown as AuditLogService,
   );
 
   return {
     svc,
     state: { attempts, appendCalls, transitionCalls, orderStatus },
-    mocks: { shipmentFindMany, fetch, append, orderWrite, deliveryAttemptCreate },
+    mocks: { shipmentFindMany, fetch, append, orderWrite, deliveryAttemptCreate, audit },
   };
 }
 
@@ -306,5 +311,74 @@ describe('TrackingPollService — coverage must rotate', () => {
     // so the cap should be sized against that rather than set low out of
     // caution — a cap below real volume is the coverage hole above.
     expect(args?.take ?? 0).toBeGreaterThanOrEqual(10_000);
+  });
+});
+
+describe('TrackingPollService — silence is the failure mode', () => {
+  it('alarms when every batch fails, because one failing is a blip and all failing is frozen tracking', async () => {
+    const { svc, mocks } = makeSvc({ fetchThrows: true });
+    mocks.shipmentFindMany.mockResolvedValue([
+      {
+        id: 'sh-1',
+        awbNumber: AWB,
+        status: ShipmentStatus.IN_TRANSIT,
+        orderShipments: [{ orderId: ORDER }],
+      },
+    ]);
+
+    await svc.pollAll();
+
+    // Each failure is caught and logged at warn, so an expired
+    // credential repeats every cycle forever while the logs look
+    // ordinary and no parcel ever moves.
+    const actions = (mocks.audit.log.mock.calls as unknown as Array<[{ action: string }]>).map(
+      (c) => c[0].action,
+    );
+    expect(actions).toContain('tracking.poll_all_batches_failed');
+  });
+
+  it('does NOT alarm when only some batches fail', async () => {
+    const { svc, mocks } = makeSvc({});
+    mocks.shipmentFindMany.mockResolvedValue([
+      {
+        id: 'sh-1',
+        awbNumber: AWB,
+        status: ShipmentStatus.IN_TRANSIT,
+        orderShipments: [{ orderId: ORDER }],
+      },
+    ]);
+
+    await svc.pollAll();
+
+    const actions = (mocks.audit.log.mock.calls as unknown as Array<[{ action: string }]>).map(
+      (c) => c[0].action,
+    );
+    expect(actions).not.toContain('tracking.poll_all_batches_failed');
+  });
+
+  it('alarms when stub mode is on but parcels are in flight — tracking is simply OFF', async () => {
+    const { svc, mocks } = makeSvc({ stub: true });
+    // Somebody cleared courier.delhivery_api_base_url. The cycle returns
+    // early with no error, no failed request, nothing in the logs.
+    mocks.audit.log.mockClear();
+    const client = (svc as unknown as { prisma: { client: { shipment: { count: jest.Mock } } } })
+      .prisma.client;
+    client.shipment.count.mockResolvedValue(7);
+
+    await svc.pollAll();
+
+    const actions = (mocks.audit.log.mock.calls as unknown as Array<[{ action: string }]>).map(
+      (c) => c[0].action,
+    );
+    expect(actions).toContain('tracking.poll_stub_mode_with_inflight');
+  });
+
+  it('stays quiet in stub mode when there is nothing to poll — dev and CI live here', async () => {
+    const { svc, mocks } = makeSvc({ stub: true });
+    mocks.audit.log.mockClear();
+
+    await svc.pollAll();
+
+    expect(mocks.audit.log).not.toHaveBeenCalled();
   });
 });

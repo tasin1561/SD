@@ -192,7 +192,10 @@ export class CapacityService {
     const perInstancePool = 5;
     const projected = usedConn + perInstancePool;
 
+    const tracking = await this.trackingFreshness();
+
     return [
+      tracking,
       {
         key: 'db_connections',
         label: 'Database connections',
@@ -485,6 +488,54 @@ export class CapacityService {
       dbPlanLabel: get(CAPACITY_SETTING_KEYS.dbPlanLabel)?.valueString ?? 'not recorded',
       redisMaxMemoryMb: num(CAPACITY_SETTING_KEYS.redisMaxMemoryMb, 0),
       apiInstances: num(CAPACITY_SETTING_KEYS.apiInstances, 1),
+    };
+  }
+
+  /**
+   * How long since the tracking poller last completed a cycle.
+   *
+   * This is the metric that matters most on this page, because Delhivery
+   * B2C accounts push no webhooks: the poller IS tracking. Every other
+   * failure here announces itself — a full disk refuses writes, a
+   * connection ceiling returns errors. This one is silent. The cron
+   * simply stops, every request the app serves keeps working, and the
+   * first person to notice is a seller asking why a parcel has not moved
+   * since Tuesday.
+   *
+   * The poller alarms on its own when a cycle runs and fails. Nothing
+   * inside a cycle can detect a cycle that never started, which is what
+   * this is for.
+   */
+  private async trackingFreshness(): Promise<CapacityMetric> {
+    const row = await this.prisma.client.systemSetting.findUnique({
+      where: { key: 'courier.tracking_poll_last_run_at' },
+      select: { valueDate: true },
+    });
+    const last = row?.valueDate ?? null;
+    const minutes = last === null ? null : Math.floor((Date.now() - last.getTime()) / 60_000);
+
+    // Two missed cycles at the 20-minute default. One late cycle is
+    // ordinary; two in a row is something to look at.
+    const ceilingMinutes = 45;
+    const percent = minutes === null ? null : Math.min(100, (minutes / ceilingMinutes) * 100);
+
+    return {
+      key: 'tracking_freshness',
+      label: 'Tracking — minutes since the last poll cycle',
+      current: minutes ?? 0,
+      ceiling: ceilingMinutes,
+      unit: 'minutes',
+      percent: percent === null ? null : Math.round(percent * 10) / 10,
+      status: statusFor(percent),
+      ceilingSource: last === null ? 'UNKNOWN' : 'MEASURED',
+      consequence:
+        'Delhivery pushes us no webhooks, so this poller is the only thing that moves an order through IN_TRANSIT, OUT_FOR_DELIVERY and DELIVERED. If it stops, tracking freezes silently: the app keeps serving, no error appears, and orders never reach DELIVERED — which also means COD is never credited and sellers stop being paid. Nothing else on this page fails quietly like this one.',
+      remedy:
+        'Check that the API process is running with WORKERS_ENABLED and that the repeatable BullMQ job survived the last Redis restart (it is re-added on boot, so restarting the API restores it). Then check courier.delhivery_api_base_url is still set — clearing it puts the poller in stub mode, where it returns immediately and does nothing. Recent audit_logs under tracking.poll_all_batches_failed or tracking.poll_stub_mode_with_inflight will say which.',
+      detail:
+        last === null
+          ? 'No cycle has ever been recorded. Either the poller has not run since this metric was added, or it is not running at all.'
+          : `Last completed cycle ${last.toISOString()}. The cron default is every 20 minutes (courier.tracking_poll_cron).`,
     };
   }
 }

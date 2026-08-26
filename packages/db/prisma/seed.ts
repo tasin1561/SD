@@ -420,6 +420,14 @@ const systemSettings: SystemSettingSeed[] = [
   },
   // Module 9 — Courier Integration.
   {
+    key: 'courier.tracking_poll_last_run_at',
+    category: 'courier',
+    valueType: SettingValueType.DATE,
+    displayName: 'Tracking poll — last completed cycle',
+    description:
+      'Stamped by TrackingPollService at the end of every cycle. Delhivery B2C pushes no webhooks, so the poller IS tracking: if this stops advancing, no parcel is updating and nothing else will say so. Read by /system/capacity as the tracking-freshness metric. Written by the system, not by hand.',
+  },
+  {
     key: 'courier.delhivery_api_base_url',
     category: 'courier',
     valueType: SettingValueType.STRING,

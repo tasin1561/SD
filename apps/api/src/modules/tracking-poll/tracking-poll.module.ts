@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { PrismaModule } from '../../infrastructure/prisma/prisma.module';
 import { CourierDelhiveryModule } from '../courier-delhivery/courier-delhivery.module';
 import { TrackingEventsModule } from '../tracking-events/tracking-events.module';
@@ -26,7 +27,13 @@ import { TrackingPollWorker } from './queue/tracking-poll.worker';
  * ops can trigger a manual cycle.
  */
 @Module({
-  imports: [PrismaModule, CourierDelhiveryModule, TrackingEventsModule, OrderModule],
+  imports: [
+    PrismaModule,
+    CourierDelhiveryModule,
+    TrackingEventsModule,
+    OrderModule,
+    AuthCommonModule,
+  ],
   providers: [TrackingPollService, TrackingPollQueue, TrackingPollWorker],
   exports: [],
 })
