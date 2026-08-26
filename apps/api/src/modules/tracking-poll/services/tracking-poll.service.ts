@@ -220,7 +220,8 @@ export class TrackingPollService {
     // because each failure is caught and logged at warn, that state
     // repeats every 20 minutes forever without anything escalating.
     // Tracking is simply frozen and the logs look ordinary.
-    if (batchesAttempted > 0 && batchesFailed === batchesAttempted) {
+    const totalFailure = batchesAttempted > 0 && batchesFailed === batchesAttempted;
+    if (totalFailure) {
       await this.alarm('tracking.poll_all_batches_failed', {
         batchesAttempted,
         shipmentsExamined: summary.shipmentsExamined,
@@ -229,7 +230,17 @@ export class TrackingPollService {
       });
     }
 
-    await this.stampHeartbeat();
+    // The heartbeat means "tracking is MOVING", not "the cron fired".
+    //
+    // Stamping it after a cycle where every batch failed would be the
+    // worst of both: the watchdog reads a fresh timestamp and reports
+    // healthy, while not one parcel has updated. Everyone reading this
+    // number assumes it means the former, so it has to mean the former.
+    //
+    // The consequence is deliberate: if Delhivery's API is down, we go
+    // stale and alarm. That is not our fault, but it IS parcels not
+    // updating, which is the thing worth being told about.
+    if (!totalFailure) await this.stampHeartbeat();
 
     this.logger.log(
       {

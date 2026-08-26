@@ -3,7 +3,12 @@ import { Worker, type Job } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { TrackingPollService } from '../services/tracking-poll.service';
-import { JOB_POLL_TRACKING, TRACKING_POLL_QUEUE_NAME } from './tracking-poll.queue';
+import {
+  JOB_POLL_TRACKING,
+  JOB_TRACKING_WATCHDOG,
+  TRACKING_POLL_QUEUE_NAME,
+} from './tracking-poll.queue';
+import { TrackingRecoveryService } from '../services/tracking-recovery.service';
 
 /**
  * Module 10 (poll) — in-process BullMQ worker for the Delhivery
@@ -20,6 +25,7 @@ export class TrackingPollWorker implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly redis: RedisService,
     private readonly poll: TrackingPollService,
+    private readonly recovery: TrackingRecoveryService,
     private readonly workerRole: WorkerRoleService,
   ) {}
 
@@ -32,6 +38,13 @@ export class TrackingPollWorker implements OnModuleInit, OnModuleDestroy {
       async (job: Job): Promise<void> => {
         if (job.name === JOB_POLL_TRACKING) {
           await this.poll.pollAll();
+          return;
+        }
+        if (job.name === JOB_TRACKING_WATCHDOG) {
+          const outcome = await this.recovery.check();
+          if (!outcome.healthy) {
+            this.logger.error({ ...outcome }, 'Tracking watchdog found a stall');
+          }
           return;
         }
         this.logger.warn({ name: job.name }, 'Unknown tracking-poll job; ignoring');

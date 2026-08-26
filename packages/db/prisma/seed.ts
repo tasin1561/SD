@@ -420,6 +420,15 @@ const systemSettings: SystemSettingSeed[] = [
   },
   // Module 9 — Courier Integration.
   {
+    key: 'courier.tracking_poll_auto_recover_enabled',
+    category: 'courier',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: true,
+    displayName: 'Tracking — recover automatically when the poll stalls',
+    description:
+      'When a watchdog finds no successful tracking cycle in 45 minutes: re-arm the schedule (in case the repeatable job was lost) and run one cycle immediately, rather than waiting for a human. Safe by construction — a cycle only applies scans newer than each parcel already has. Turn OFF to require a person to press "Run a cycle now"; the alert still fires either way.',
+  },
+  {
     key: 'courier.tracking_poll_last_run_at',
     category: 'courier',
     valueType: SettingValueType.DATE,
@@ -2053,6 +2062,15 @@ const notificationTemplates: TemplateSeed[] = [
     subject: 'Confirm the {{ courier_code }} write-mode change: {{ code }}',
     bodyTemplate:
       'Someone (you, we hope) asked to set the {{ courier_code }} courier write channel to {{ requested_mode }}.\n\nConfirmation code: {{ code }}\n\nReason given: {{ reason }}\n\nThis widens what the system may do WITHOUT a human — including posting into threads customers read. If this was not you, do not share the code, and tell someone.\n\nThe code expires in 10 minutes.',
+  },
+  {
+    code: 'ops.tracking_stalled.email',
+    name: 'Tracking poll stalled — email to ops',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STAFF,
+    subject: 'Tracking has not moved for {{ minutes }} minutes',
+    bodyTemplate:
+      'No tracking cycle has completed successfully in {{ minutes }} minutes (threshold {{ threshold }}).\n\nDelhivery sends us no webhooks, so this poll is the only thing that moves an order to delivered. While it is stopped, no parcel updates, no order reaches DELIVERED, and COD is not credited — so seller payouts stop with it.\n\nAutomatic recovery: {{ recovery }}\n\nIf that did not fix it, check in order: is the API up ({{ health_url }}); is the worker running (pm2, WORKERS_ENABLED); did Redis lose the repeatable job (restarting the API re-adds it); is courier.delhivery_api_base_url still set (empty means stub mode, where the poller does nothing).\n\nYou can also run a cycle by hand from the Delhivery page in admin. It is safe to press repeatedly.',
   },
   {
     code: 'ops.ndr_reconciliation_alert.email',

@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { AdminTrackingPollController } from './controllers/admin-tracking-poll.controller';
+import { EmailModule } from '../email/email.module';
+import { TrackingRecoveryService } from './services/tracking-recovery.service';
 import { PrismaModule } from '../../infrastructure/prisma/prisma.module';
 import { CourierDelhiveryModule } from '../courier-delhivery/courier-delhivery.module';
 import { TrackingEventsModule } from '../tracking-events/tracking-events.module';
@@ -34,9 +36,12 @@ import { TrackingPollWorker } from './queue/tracking-poll.worker';
     TrackingEventsModule,
     OrderModule,
     AuthCommonModule,
+    // For the stall alert — reuses the existing email substrate rather
+    // than adding a second way to send a message.
+    EmailModule,
   ],
   controllers: [AdminTrackingPollController],
-  providers: [TrackingPollService, TrackingPollQueue, TrackingPollWorker],
+  providers: [TrackingPollService, TrackingRecoveryService, TrackingPollQueue, TrackingPollWorker],
   exports: [TrackingPollService],
 })
 export class TrackingPollModule {}
