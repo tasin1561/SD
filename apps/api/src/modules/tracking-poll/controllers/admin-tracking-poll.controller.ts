@@ -1,9 +1,10 @@
-import { Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
+import { LookupTrackingDto } from '../dto/lookup-tracking.dto';
 import {
   TrackingPollService,
   type PollCycleSummary,
@@ -44,6 +45,17 @@ export class AdminTrackingPollController {
   })
   health(): Promise<PollHealth> {
     return this.poll.health();
+  }
+
+  @Post('lookup')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('orders.tracking.run_poll')
+  @ApiOperation({
+    summary:
+      'Ask Delhivery what it knows about specific AWBs, and show what we would make of it. Reads only — writes no tracking event and moves no order.',
+  })
+  lookup(@Body() body: LookupTrackingDto): ReturnType<TrackingPollService['lookup']> {
+    return this.poll.lookup(body.awbNumbers);
   }
 
   @Post('run')

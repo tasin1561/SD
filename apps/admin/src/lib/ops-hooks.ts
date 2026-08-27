@@ -609,6 +609,40 @@ export interface TrackingPollRunView {
  * It is also the only part of the system that can stop without anything
  * failing — hence a live reading rather than a page you refresh.
  */
+export interface TrackingLookupScan {
+  readonly rawStatus: string;
+  readonly statusType: string | null;
+  readonly nslCode: string | null;
+  readonly courierTimestamp: string;
+  readonly eventAtIso: string;
+  readonly location: string | null;
+  readonly description: string | null;
+  readonly normalisedTo: string;
+}
+
+export interface TrackingLookupResult {
+  readonly awbNumber: string;
+  readonly known: boolean;
+  readonly ourShipmentId: string | null;
+  readonly latest: TrackingLookupScan | null;
+  readonly scans: readonly TrackingLookupScan[];
+}
+
+export function useTrackingLookup(): UseMutationResult<
+  { results: TrackingLookupResult[]; stubMode: boolean },
+  Error,
+  string[]
+> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: (awbNumbers) =>
+      client.request<{ results: TrackingLookupResult[]; stubMode: boolean }>(
+        '/api/admin/tracking/poll/lookup',
+        { method: 'POST', body: { awbNumbers } },
+      ),
+  });
+}
+
 export function useTrackingPollHealth(enabled = true): UseQueryResult<TrackingPollHealthView> {
   const client = useApiClient();
   return useQuery({

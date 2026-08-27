@@ -51,6 +51,30 @@ const IN_FLIGHT_ORDER_STATUSES: readonly OrderStatus[] = [
  */
 const MAX_SHIPMENTS_PER_CYCLE = 10_000;
 
+export interface TrackingLookupScan {
+  readonly rawStatus: string;
+  readonly statusType: string | null;
+  readonly nslCode: string | null;
+  /** As Delhivery sent it — no offset, IST. */
+  readonly courierTimestamp: string;
+  /** What we would store on tracking_events.eventAt (TRK-3), zoned. */
+  readonly eventAtIso: string;
+  readonly location: string | null;
+  readonly description: string | null;
+  /** What our mapper makes of it, or why it makes nothing. */
+  readonly normalisedTo: string;
+}
+
+export interface TrackingLookupResult {
+  readonly awbNumber: string;
+  /** Delhivery returned nothing for this waybill. */
+  readonly known: boolean;
+  /** Whether WE hold a shipment for it — a lookup works either way. */
+  readonly ourShipmentId: string | null;
+  readonly latest: TrackingLookupScan | null;
+  readonly scans: readonly TrackingLookupScan[];
+}
+
 export interface PollHealth {
   /** null when no cycle has ever completed. */
   lastRunAtIso: string | null;
@@ -519,6 +543,75 @@ export class TrackingPollService {
       // having stopped, and both need the same person to look.
       stale: minutes === null || minutes > TRACKING_STALE_AFTER_MINUTES,
     };
+  }
+
+  /**
+   * What does Delhivery say about these AWBs, and what would we do with
+   * it — WITHOUT doing any of it.
+   *
+   * A poll cycle answers the same question but only for parcels we
+   * already hold, and it acts on the answer: writes tracking events,
+   * moves orders, credits money downstream. That makes it the wrong
+   * instrument for "is realtime status working", because to use it you
+   * must first have real parcels in flight.
+   *
+   * This reads any waybill and writes nothing. It exercises the whole
+   * chain that actually breaks — credential decrypt, their wire format,
+   * the unzoned IST timestamps, and the (leg, status) mapping — against
+   * real data, which is the part no stub can tell you about.
+   *
+   * Reads are free and side-effect-free at Delhivery's end (unlike a
+   * manifest, a cancel or an NDR action), so this is safe to point at a
+   * waybill that is not ours.
+   */
+  async lookup(awbNumbers: readonly string[]): Promise<{
+    results: TrackingLookupResult[];
+    stubMode: boolean;
+  }> {
+    const stubMode = await this.http.isStubMode();
+    const awbs = awbNumbers.map((a) => a.trim()).filter((a) => a !== '');
+    if (awbs.length === 0) return { results: [], stubMode };
+
+    const [fetched, ours] = await Promise.all([
+      this.fetch.fetchTracking([...awbs], courierActor.runner('tracking-lookup')),
+      this.prisma.client.shipment.findMany({
+        where: { awbNumber: { in: [...awbs] }, deletedAt: null },
+        select: { id: true, awbNumber: true },
+      }),
+    ]);
+    const oursByAwb = new Map(ours.map((s) => [s.awbNumber ?? '', s.id]));
+    const byAwb = new Map(fetched.map((f) => [f.awbNumber, f]));
+
+    const results: TrackingLookupResult[] = awbs.map((awb) => {
+      const found = byAwb.get(awb);
+      const scans = (found?.scans ?? []).map((raw) => {
+        const decision = this.normalizer.normalizeScan(raw);
+        return {
+          rawStatus: raw.rawStatus,
+          statusType: raw.statusType ?? null,
+          nslCode: raw.nslCode ?? null,
+          courierTimestamp: raw.eventAtIso,
+          eventAtIso: new Date(raw.eventAtIso).toISOString(),
+          location: raw.locationName ?? null,
+          description: raw.description ?? null,
+          normalisedTo:
+            decision.kind === 'NORMALIZED'
+              ? decision.shipmentStatus
+              : // Worth surfacing rather than hiding: an unmappable scan
+                // is exactly the finding this tool exists to produce.
+                `UNMAPPABLE (${raw.statusType ?? '?'} | ${raw.rawStatus})`,
+        };
+      });
+      return {
+        awbNumber: awb,
+        known: found !== undefined && scans.length > 0,
+        ourShipmentId: oursByAwb.get(awb) ?? null,
+        latest: scans.length > 0 ? (scans[scans.length - 1] ?? null) : null,
+        scans,
+      };
+    });
+
+    return { results, stubMode };
   }
 
   /** In-flight count without loading the rows — for the stub-mode alarm. */
