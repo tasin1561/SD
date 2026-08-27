@@ -400,6 +400,29 @@ export class WebhookProcessorService {
         actor: { type: ActorType.SYSTEM },
         reason: `Courier scan ${normalized.shipmentStatus} via ${wh.courierCode}`,
       });
+      // The shipment row follows the parcel, not just the order.
+      //
+      // Nothing advanced it from a scan — nine writers, all of them
+      // warehouse or courier ACTIONS — so it froze at HANDED_TO_COURIER
+      // while the order moved. The public tracking page projects from
+      // this field, and that value maps to "processing": a customer
+      // whose parcel was out for delivery was told we were still
+      // preparing it.
+      //
+      // After the transition, so the order's monotonic-forward guard
+      // (TRK-4) governs this too — one ordering, not two. Best-effort:
+      // the event and the order are the durable record.
+      try {
+        await this.prisma.client.shipment.update({
+          where: { id: ship.id },
+          data: { status: normalized.shipmentStatus },
+        });
+      } catch (e) {
+        this.logger.warn(
+          { shipmentId: ship.id, status: normalized.shipmentStatus, err: String(e) },
+          'Could not advance the shipment status; the order and the scan are recorded',
+        );
+      }
       await this.markProcessed(webhookId, trackingEvent.id);
       return {
         kind:

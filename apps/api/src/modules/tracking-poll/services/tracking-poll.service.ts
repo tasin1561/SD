@@ -449,6 +449,7 @@ export class TrackingPollService {
         actor: { type: ActorType.SYSTEM },
         reason: `Courier poll scan ${normalized.shipmentStatus} via ${COURIER_CODE}`,
       });
+      await this.advanceShipmentStatus(shipment.id, normalized.shipmentStatus);
       return true;
     } catch (err) {
       if (err instanceof ConflictException) {
@@ -607,6 +608,45 @@ export class TrackingPollService {
     });
 
     return { results, stubMode };
+  }
+
+  /**
+   * Move the SHIPMENT row to where the parcel actually is.
+   *
+   * Nine services write shipment.status and every one of them is a
+   * warehouse or courier ACTION — pick, pack, manifest, handoff. Not one
+   * is a scan. So after handoff the row froze at HANDED_TO_COURIER while
+   * scans moved the ORDER, and the two disagreed for the rest of the
+   * parcel's life.
+   *
+   * That is not cosmetic. The public tracking page projects from
+   * ShipmentStatus, and HANDED_TO_COURIER maps to "processing" — so a
+   * customer tracking a parcel that was out for delivery, or delivered,
+   * was told we were still preparing it. Found by running ten real
+   * waybills through, which is the only way it could have been found:
+   * every test until now dispatched and asserted on the ORDER.
+   *
+   * Called only AFTER the order transition succeeded, so the
+   * monotonic-forward guard that protects the order (TRK-4) protects
+   * this too — a stale scan that cannot move the order cannot move the
+   * shipment either. No second ordering to invent, and none to drift.
+   *
+   * Best-effort: the tracking event and the order are the durable
+   * record. A failure here must not undo them, and the next scan
+   * corrects it.
+   */
+  private async advanceShipmentStatus(shipmentId: string, status: ShipmentStatus): Promise<void> {
+    try {
+      await this.prisma.client.shipment.update({
+        where: { id: shipmentId },
+        data: { status },
+      });
+    } catch (err) {
+      this.logger.warn(
+        { shipmentId, status, err: errMsg(err) },
+        'Could not advance the shipment status; the order and the scan are recorded',
+      );
+    }
   }
 
   /** In-flight count without loading the rows — for the stub-mode alarm. */

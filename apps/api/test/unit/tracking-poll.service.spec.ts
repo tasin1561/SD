@@ -107,7 +107,11 @@ function makeSvc(
   );
 
   const client = {
-    shipment: { findMany: shipmentFindMany, count: jest.fn(async () => 0) },
+    shipment: {
+      findMany: shipmentFindMany,
+      count: jest.fn(async () => 0),
+      update: jest.fn(async () => ({})),
+    },
     systemSetting: { updateMany: jest.fn(async () => ({ count: 1 })) },
     order: { findUnique: orderFindUnique },
     deliveryAttempt: {
@@ -457,5 +461,59 @@ describe('lookup labelling — a deliberate no-op is not a defect', () => {
     const out = await svc.lookup([AWB]);
     // 15:54 IST is 10:24 UTC — verified against real Delhivery data.
     expect(out.results[0]?.scans[0]?.eventAtIso).toBe('2026-08-27T10:24:07.000Z');
+  });
+});
+
+describe('the shipment row follows the parcel, not only the order', () => {
+  it('advances shipment.status when a scan moves the order', async () => {
+    const { svc, mocks } = makeSvc({
+      scans: [scan('DLV-IN-TRANSIT', '2026-08-27T10:00:00.000Z')],
+    });
+    mocks.shipmentFindMany.mockResolvedValue([
+      {
+        id: 'sh-1',
+        awbNumber: AWB,
+        status: ShipmentStatus.HANDED_TO_COURIER,
+        orderShipments: [{ orderId: ORDER }],
+      },
+    ]);
+
+    await svc.pollAll();
+
+    // Nine services write this column and all of them are warehouse or
+    // courier ACTIONS — so it used to freeze at HANDED_TO_COURIER while
+    // the order moved. The public tracking page projects from this
+    // field, and that value reads as "processing": a customer whose
+    // parcel was out for delivery was told we were still preparing it.
+    const update = (svc as unknown as { prisma: { client: { shipment: { update: jest.Mock } } } })
+      .prisma.client.shipment.update;
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'sh-1' },
+      data: { status: ShipmentStatus.IN_TRANSIT },
+    });
+  });
+
+  it('leaves the shipment alone when the order did not move', async () => {
+    // A stale or repeat scan is skipped by the monotonic-forward guard.
+    // Advancing only AFTER a successful transition means that one guard
+    // protects both rows — there is no second ordering to drift.
+    const { svc, mocks } = makeSvc({
+      scans: [scan('DLV-IN-TRANSIT', '2026-08-27T10:00:00.000Z')],
+      orderStatus: OrderStatus.DELIVERED,
+    });
+    mocks.shipmentFindMany.mockResolvedValue([
+      {
+        id: 'sh-1',
+        awbNumber: AWB,
+        status: ShipmentStatus.DELIVERED,
+        orderShipments: [{ orderId: ORDER }],
+      },
+    ]);
+
+    await svc.pollAll();
+
+    const update = (svc as unknown as { prisma: { client: { shipment: { update: jest.Mock } } } })
+      .prisma.client.shipment.update;
+    expect(update).not.toHaveBeenCalled();
   });
 });

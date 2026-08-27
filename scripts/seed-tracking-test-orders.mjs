@@ -62,8 +62,17 @@ async function main() {
     where: { id: SELLER_ID },
     select: { id: true, companyName: true },
   });
+  // Stock in a warehouse that FULFILS orders (CNS-2). The dry run first
+  // picked DAC-01 purely because it held the most units — but that is
+  // the Bangladesh intake warehouse, and a parcel to Bengaluru cannot
+  // originate there. Sorting by quantity alone silently chose the wrong
+  // country.
   const level = await prisma.stockLevel.findFirstOrThrow({
-    where: { variant: { product: { sellerId: SELLER_ID } }, qtyOnHand: { gt: 0 } },
+    where: {
+      variant: { product: { sellerId: SELLER_ID } },
+      qtyOnHand: { gt: 0 },
+      warehouse: { fulfilsOrders: true, status: 'ACTIVE', deletedAt: null },
+    },
     select: { variantId: true, qtyOnHand: true, warehouseId: true },
     orderBy: { qtyOnHand: 'desc' },
   });
