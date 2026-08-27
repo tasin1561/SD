@@ -537,10 +537,12 @@ describe('the shipment row follows the parcel, not only the order', () => {
         orderShipments: [{ orderId: ORDER }],
       },
     ]);
+    // Only the two fields the reconcile reads; the row type carries
+    // seventeen more that this case does not exercise.
     mocks.append.latestForShipment.mockResolvedValue({
       eventAt: new Date('2026-08-27T10:00:00.000Z'),
       status: ShipmentStatus.IN_TRANSIT,
-    });
+    } as never);
 
     await svc.pollAll();
 
