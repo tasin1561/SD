@@ -57,4 +57,23 @@ describe('SellerWithdrawalScheduleController', () => {
       'wallet.auto_withdraw_hour_local',
     );
   });
+
+  it('sends VALUES of the right type, not stringified ones', async () => {
+    const { c, setOverride } = make();
+    await c.set(SELLER, { autoEnabled: true, hourLocal: 9 });
+
+    const calls = setOverride.mock.calls as unknown as Array<
+      [string, string, { valueType: string; value: unknown }]
+    >;
+    // The resolver's BOOLEAN branch takes nothing but a real boolean,
+    // unlike INT and DECIMAL which both accept a numeric string. This
+    // spec previously asserted only WHICH keys were written, so passing
+    // String(true) sailed through it and failed in production with
+    // INVALID_VALUE "expected a boolean". A mock validates nothing on
+    // its own — assert the value, not just the call.
+    expect(calls[0]?.[2]).toEqual({ valueType: 'BOOLEAN', value: true });
+    expect(typeof calls[0]?.[2].value).toBe('boolean');
+    expect(calls[1]?.[2]).toEqual({ valueType: 'INT', value: 9 });
+    expect(typeof calls[1]?.[2].value).toBe('number');
+  });
 });

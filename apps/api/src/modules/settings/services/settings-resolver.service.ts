@@ -338,9 +338,25 @@ export class SettingsResolverService {
         }
         return d;
       }
-      case SettingValueType.BOOLEAN:
-        if (typeof input !== 'boolean') return reject('expected a boolean');
-        return input;
+      case SettingValueType.BOOLEAN: {
+        if (typeof input === 'boolean') return input;
+        // 'true' / 'false' accepted for the same reason INT and DECIMAL
+        // accept a numeric string: these values arrive from forms, query
+        // strings and hand-written calls where everything is text. Being
+        // the ONE type that refused made "stringify the value" work for
+        // three settings and fail on the fourth — which is precisely how
+        // the automatic-withdrawal toggle shipped broken.
+        //
+        // Exact and lowercase after trimming, deliberately NOT truthiness:
+        // treating "no" or "0" as false is where a guess becomes a
+        // silently wrong setting.
+        if (typeof input === 'string') {
+          const t = input.trim().toLowerCase();
+          if (t === 'true') return true;
+          if (t === 'false') return false;
+        }
+        return reject('expected a boolean');
+      }
       case SettingValueType.JSON:
         if (input === null || typeof input !== 'object')
           return reject('expected a JSON object or array');

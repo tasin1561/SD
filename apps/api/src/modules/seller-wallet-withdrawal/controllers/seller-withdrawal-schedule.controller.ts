@@ -108,7 +108,11 @@ export class SellerWithdrawalScheduleController {
       await this.settings.setOverride(
         seller.id,
         ENABLED_KEY,
-        { valueType: 'BOOLEAN', value: String(body.autoEnabled) },
+        // The real boolean, not String(...): the resolver's BOOLEAN branch
+        // accepts nothing else, unlike INT and DECIMAL which both take a
+        // numeric string. Stringifying here is what produced
+        // INVALID_VALUE "expected a boolean".
+        { valueType: 'BOOLEAN', value: body.autoEnabled },
         { sellerActor: true },
       );
     }
@@ -116,7 +120,7 @@ export class SellerWithdrawalScheduleController {
       await this.settings.setOverride(
         seller.id,
         HOUR_KEY,
-        { valueType: 'INT', value: String(body.hourLocal) },
+        { valueType: 'INT', value: body.hourLocal },
         { sellerActor: true },
       );
     }

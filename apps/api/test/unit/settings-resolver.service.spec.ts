@@ -333,3 +333,58 @@ describe('SettingsResolverService.listForSeller', () => {
     expect(plain.source).toBe('SYSTEM_DEFAULT');
   });
 });
+
+describe('SET-1 parseAndClamp — BOOLEAN accepts what the other types accept', () => {
+  /** parseAndClamp is private; exercised through the public entry point. */
+  function parse(valueType: string, value: unknown, overrides: Record<string, unknown> = {}) {
+    const svc = new SettingsResolverService(
+      {
+        client: {
+          $transaction: async (fn: (tx: unknown) => unknown) =>
+            fn({
+              systemSetting: {
+                findUnique: async () => ({
+                  key: 'k',
+                  valueType,
+                  sellerOverridable: true,
+                  overrideMinInt: null,
+                  overrideMaxInt: null,
+                  overrideMinDecimal: null,
+                  overrideMaxDecimal: null,
+                  ...overrides,
+                }),
+              },
+              sellerSettingOverride: {
+                upsert: async (args: { create: Record<string, unknown> }) => args.create,
+              },
+            }),
+        },
+      } as never,
+      { log: async () => undefined } as never,
+    );
+    return svc.setOverride('s1', 'k', { valueType, value } as never, { sellerActor: true });
+  }
+
+  it('takes a real boolean', async () => {
+    await expect(parse('BOOLEAN', true)).resolves.toBeDefined();
+    await expect(parse('BOOLEAN', false)).resolves.toBeDefined();
+  });
+
+  it("takes 'true' / 'false' as text", async () => {
+    // INT and DECIMAL already accept their string forms, because these
+    // values arrive from forms and hand-written calls where everything
+    // is text. BOOLEAN being the one exception made "stringify the
+    // value" work for three settings and fail on the fourth — which is
+    // how the automatic-withdrawal toggle shipped broken.
+    await expect(parse('BOOLEAN', 'true')).resolves.toBeDefined();
+    await expect(parse('BOOLEAN', ' FALSE ')).resolves.toBeDefined();
+  });
+
+  it('refuses anything else rather than guessing', async () => {
+    // Deliberately not truthiness: reading "no" or "0" as false is where
+    // a guess becomes a silently wrong setting.
+    for (const bad of ['yes', 'no', '1', '0', 'on', '', 2, null]) {
+      await expect(parse('BOOLEAN', bad)).rejects.toThrow();
+    }
+  });
+});
