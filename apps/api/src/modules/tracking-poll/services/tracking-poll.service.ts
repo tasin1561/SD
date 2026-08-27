@@ -594,12 +594,7 @@ export class TrackingPollService {
           eventAtIso: new Date(raw.eventAtIso).toISOString(),
           location: raw.locationName ?? null,
           description: raw.description ?? null,
-          normalisedTo:
-            decision.kind === 'NORMALIZED'
-              ? decision.shipmentStatus
-              : // Worth surfacing rather than hiding: an unmappable scan
-                // is exactly the finding this tool exists to produce.
-                `UNMAPPABLE (${raw.statusType ?? '?'} | ${raw.rawStatus})`,
+          normalisedTo: describeDecision(decision, raw),
         };
       });
       return {
@@ -669,4 +664,27 @@ function errMsg(err: unknown): string {
 function isUniqueViolation(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) return false;
   return (err as { code?: unknown }).code === 'P2002';
+}
+
+/**
+ * What the mapper did, in words a person can act on.
+ *
+ * "Manifested" normalises to nothing on purpose — a label exists, the
+ * parcel has not moved, and the order must not advance. Reporting that
+ * as UNMAPPABLE alongside a genuinely unknown pair told the reader a
+ * working system was broken, which is worse than saying nothing: every
+ * real waybill starts with a manifest scan, so the screen was mostly
+ * red by design.
+ */
+function describeDecision(
+  decision: ReturnType<DelhiveryTrackingService['normalizeScan']>,
+  raw: DelhiveryRawScan,
+): string {
+  if (decision.kind === 'NORMALIZED') return decision.shipmentStatus;
+  const pair = `${(raw.statusType ?? '').toUpperCase()}|${raw.rawStatus.toUpperCase()}`;
+  if (DelhiveryTrackingService.INFORMATIONAL_PAIRS.has(pair)) {
+    return 'recorded only — parcel has not moved yet';
+  }
+  // The genuine finding: a pair the table has never seen.
+  return `UNKNOWN PAIR (${raw.statusType ?? '?'} | ${raw.rawStatus}) — needs mapping`;
 }

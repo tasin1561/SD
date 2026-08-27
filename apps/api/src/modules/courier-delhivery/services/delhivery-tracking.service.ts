@@ -87,6 +87,21 @@ export class DelhiveryTrackingService implements Pick<DelhiveryClient, 'normaliz
    * nothing: they are audited as tracking_events but must not fire a
    * lifecycle transition, because the parcel has not moved.
    */
+  /**
+   * Pairs we KNOW and deliberately do nothing with.
+   *
+   * A manifest scan means a label exists, not that a parcel moved — the
+   * lifecycle must not advance on it. That is a decision, and it is
+   * worth being able to tell apart from a pair we have simply never
+   * seen: one needs nobody, the other needs the table extending. Both
+   * normalise to UNMAPPABLE, so without this list a diagnostic screen
+   * reports a correct system as broken.
+   */
+  static readonly INFORMATIONAL_PAIRS: ReadonlySet<string> = new Set([
+    'UD|MANIFESTED',
+    'UD|NOT PICKED',
+  ]);
+
   private static readonly PAIR_TABLE: ReadonlyMap<string, ShipmentStatus> = new Map([
     // ── UD: forward leg ──────────────────────────────────────────
     // "Manifested" / "Not Picked" → intentionally unmapped.

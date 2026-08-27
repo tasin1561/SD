@@ -418,3 +418,44 @@ describe('TrackingPollService.health — the number every layer reads', () => {
     expect(h.lastRunAtIso).toBeNull();
   });
 });
+
+describe('lookup labelling — a deliberate no-op is not a defect', () => {
+  it('separates "recorded only" from a pair we have never seen', async () => {
+    const { svc, mocks } = makeSvc({});
+    mocks.shipmentFindMany.mockResolvedValue([]);
+    mocks.fetch.fetchTracking.mockResolvedValue([
+      {
+        awbNumber: AWB,
+        scans: [
+          // Every real waybill starts with this one. It normalises to
+          // nothing ON PURPOSE — a label exists, the parcel has not
+          // moved — so calling it UNMAPPABLE made a working system read
+          // as broken on its own diagnostic screen.
+          scan('Manifested', '2026-08-27T12:39:22.470+05:30', 'UD'),
+          scan('In Transit', '2026-08-27T15:54:07.000+05:30', 'UD'),
+          scan('Teleported', '2026-08-27T16:00:00.000+05:30', 'UD'),
+        ],
+      },
+    ]);
+
+    const out = await svc.lookup([AWB]);
+    const labels = out.results[0]?.scans.map((s) => s.normalisedTo) ?? [];
+
+    expect(labels[0]).toBe('recorded only — parcel has not moved yet');
+    expect(labels[1]).toBe(ShipmentStatus.IN_TRANSIT);
+    // The genuine finding still shouts, and names the pair to add.
+    expect(labels[2]).toContain('UNKNOWN PAIR');
+    expect(labels[2]).toContain('Teleported');
+  });
+
+  it('stores the IST instant, not the wall clock', async () => {
+    const { svc, mocks } = makeSvc({});
+    mocks.shipmentFindMany.mockResolvedValue([]);
+    mocks.fetch.fetchTracking.mockResolvedValue([
+      { awbNumber: AWB, scans: [scan('In Transit', '2026-08-27T15:54:07.000+05:30', 'UD')] },
+    ]);
+    const out = await svc.lookup([AWB]);
+    // 15:54 IST is 10:24 UTC — verified against real Delhivery data.
+    expect(out.results[0]?.scans[0]?.eventAtIso).toBe('2026-08-27T10:24:07.000Z');
+  });
+});
