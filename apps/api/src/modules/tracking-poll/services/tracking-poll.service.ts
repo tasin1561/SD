@@ -437,7 +437,23 @@ export class TrackingPollService {
     });
     if (!order) return false;
 
-    if (this.shouldSkipTransition(order.status, decision) !== null) {
+    const skip = this.shouldSkipTransition(order.status, decision);
+    if (skip !== null) {
+      // ALREADY_AT_TARGET means the ORDER is already where this scan
+      // says — but the shipment row may not be, and until now nothing
+      // ever moved it. That is not hypothetical: ten parcels sat with
+      // orders at IN_TRANSIT and shipments still at HANDED_TO_COURIER,
+      // and because every further scan also said IN_TRANSIT they could
+      // never catch up. Advancing only on a successful transition left
+      // exactly this hole.
+      //
+      // Safe because it copies a status the order already holds — no new
+      // claim about the parcel. A stale backward scan
+      // (CURRENT_NOT_IN_ALLOWED_FROM) is still refused, so this cannot
+      // walk a shipment backwards.
+      if (skip === 'ALREADY_AT_TARGET' && shipment.shipmentStatus !== normalized.shipmentStatus) {
+        await this.advanceShipmentStatus(shipment.id, normalized.shipmentStatus);
+      }
       return false;
     }
 

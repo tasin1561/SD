@@ -379,6 +379,25 @@ export class WebhookProcessorService {
         },
         'Monotonic-forward guard: skipping transition (event recorded)',
       );
+      // The ORDER is already there; the shipment row may not be, and
+      // nothing else ever moves it. Without this a parcel whose order
+      // reached a status before this code existed can never catch up,
+      // because every later scan reports the same status and skips here.
+      // Copying a status the order already holds makes no new claim; a
+      // stale backward scan is still refused.
+      if (skipReason === 'ALREADY_AT_TARGET' && ship.status !== normalized.shipmentStatus) {
+        try {
+          await this.prisma.client.shipment.update({
+            where: { id: ship.id },
+            data: { status: normalized.shipmentStatus },
+          });
+        } catch (e) {
+          this.logger.warn(
+            { shipmentId: ship.id, status: normalized.shipmentStatus, err: String(e) },
+            'Could not reconcile the shipment status; the scan is recorded',
+          );
+        }
+      }
       await this.markProcessed(webhookId, trackingEvent.id);
       return {
         kind:

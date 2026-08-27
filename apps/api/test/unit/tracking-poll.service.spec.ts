@@ -493,10 +493,40 @@ describe('the shipment row follows the parcel, not only the order', () => {
     });
   });
 
+  it('lets the shipment CATCH UP when the order is already at target', async () => {
+    // The hole in the first version of this fix, found in production:
+    // ten orders reached IN_TRANSIT before it shipped, so every later
+    // scan said IN_TRANSIT, skipped as ALREADY_AT_TARGET, and the
+    // shipment could never catch up — it would have read
+    // HANDED_TO_COURIER until the parcel went out for delivery, and
+    // forever for one that never moved again.
+    const { svc, mocks } = makeSvc({
+      scans: [scan('DLV-IN-TRANSIT', '2026-08-27T10:00:00.000Z')],
+      orderStatus: OrderStatus.IN_TRANSIT,
+    });
+    mocks.shipmentFindMany.mockResolvedValue([
+      {
+        id: 'sh-1',
+        awbNumber: AWB,
+        status: ShipmentStatus.HANDED_TO_COURIER,
+        orderShipments: [{ orderId: ORDER }],
+      },
+    ]);
+
+    await svc.pollAll();
+
+    const update = (svc as unknown as { prisma: { client: { shipment: { update: jest.Mock } } } })
+      .prisma.client.shipment.update;
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'sh-1' },
+      data: { status: ShipmentStatus.IN_TRANSIT },
+    });
+  });
+
   it('leaves the shipment alone when the order did not move', async () => {
-    // A stale or repeat scan is skipped by the monotonic-forward guard.
-    // Advancing only AFTER a successful transition means that one guard
-    // protects both rows — there is no second ordering to drift.
+    // A STALE BACKWARD scan: the order is past this point, so the guard
+    // returns CURRENT_NOT_IN_ALLOWED_FROM and the shipment must not be
+    // walked backwards. Only ALREADY_AT_TARGET reconciles.
     const { svc, mocks } = makeSvc({
       scans: [scan('DLV-IN-TRANSIT', '2026-08-27T10:00:00.000Z')],
       orderStatus: OrderStatus.DELIVERED,
