@@ -523,6 +523,35 @@ describe('the shipment row follows the parcel, not only the order', () => {
     });
   });
 
+  it('repairs a stale shipment even when NO new scan arrived', async () => {
+    // The opportunistic version fixed only parcels that happened to
+    // have a fresh scan — two of ten in one cycle. The other eight
+    // waited on the courier, and one that stops scanning would have
+    // waited for ever with the public page still reading "processing".
+    const { svc, mocks } = makeSvc({ scans: [] });
+    mocks.shipmentFindMany.mockResolvedValue([
+      {
+        id: 'sh-1',
+        awbNumber: AWB,
+        status: ShipmentStatus.HANDED_TO_COURIER,
+        orderShipments: [{ orderId: ORDER }],
+      },
+    ]);
+    mocks.append.latestForShipment.mockResolvedValue({
+      eventAt: new Date('2026-08-27T10:00:00.000Z'),
+      status: ShipmentStatus.IN_TRANSIT,
+    });
+
+    await svc.pollAll();
+
+    const update = (svc as unknown as { prisma: { client: { shipment: { update: jest.Mock } } } })
+      .prisma.client.shipment.update;
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'sh-1' },
+      data: { status: ShipmentStatus.IN_TRANSIT },
+    });
+  });
+
   it('leaves the shipment alone when the order did not move', async () => {
     // A STALE BACKWARD scan: the order is past this point, so the guard
     // returns CURRENT_NOT_IN_ALLOWED_FROM and the shipment must not be

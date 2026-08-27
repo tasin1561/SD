@@ -342,6 +342,24 @@ export class TrackingPollService {
     const latest = await this.append.latestForShipment(shipment.id);
     const watermarkMs = latest ? latest.eventAt.getTime() : -Infinity;
 
+    // Reconcile the shipment row against what we already know, BEFORE
+    // looking at anything new.
+    //
+    // Doing it only when a scan is applied made the repair opportunistic:
+    // of ten parcels needing it, one cycle fixed two — the two that
+    // happened to have a fresh scan. The other eight would have waited
+    // on the courier, and a parcel that stops scanning would have waited
+    // for ever, with the public page still saying "processing".
+    //
+    // The watermark read already carries the status, so this is a
+    // comparison rather than a query: deterministic, every cycle, every
+    // in-flight parcel, at no extra cost. The latest tracking event IS
+    // the record of where the parcel is; the shipment row should say the
+    // same thing.
+    if (latest !== null && latest.status !== shipment.shipmentStatus) {
+      await this.advanceShipmentStatus(shipment.id, latest.status);
+    }
+
     let scansApplied = 0;
     let transitions = 0;
     for (const scan of scans) {
