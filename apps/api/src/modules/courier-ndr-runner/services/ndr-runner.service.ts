@@ -316,7 +316,20 @@ export class NdrRunnerService {
             courierMessage: result.message,
             // A submit that came back unsuccessful is FAILED now, not
             // something to poll: there is no UPL to ask about.
-            ...(result.success ? {} : { status: NdrRequestStatus.FAILED }),
+            //
+            // A SUCCESSFUL submit with no UPL is CONFIRMED, not left
+            // SUBMITTED. Delhivery answers asynchronously and hands
+            // back a handle to poll; Shiprocket answers synchronously,
+            // so its reply IS the outcome and there is nothing to ask
+            // later. Leaving it SUBMITTED sent it to the UPL poller,
+            // which reads a missing handle as "the submit produced
+            // nothing", marks it FAILED and escalates to a human — for
+            // a re-attempt that actually worked.
+            ...(result.success
+              ? result.uplId === null
+                ? { status: NdrRequestStatus.CONFIRMED }
+                : {}
+              : { status: NdrRequestStatus.FAILED }),
           },
         });
 

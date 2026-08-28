@@ -30,6 +30,7 @@ function make(ctx: Ctx = {}) {
     if (ctx.trackingThrows === true) throw new Error('network');
     return Promise.resolve([{ awbNumber: 'AWB1', scans: ctx.scans ?? [{ nslCode: 'EOD-74' }] }]);
   });
+  const updates: { data: Record<string, unknown> }[] = [];
   const created: unknown[] = [];
 
   const prisma = {
@@ -51,7 +52,10 @@ function make(ctx: Ctx = {}) {
           created.push(args.data);
           return Promise.resolve({ id: 'req-1' });
         }),
-        update: jest.fn().mockResolvedValue({}),
+        update: jest.fn().mockImplementation((args: { data: unknown }) => {
+          updates.push(args as { data: Record<string, unknown> });
+          return Promise.resolve({});
+        }),
       },
     },
   };
@@ -92,7 +96,7 @@ function make(ctx: Ctx = {}) {
     { log: jest.fn().mockResolvedValue(undefined) } as never,
   );
 
-  return { svc, takeAction, fetchTracking, created, listNdr };
+  return { svc, takeAction, fetchTracking, created, listNdr, updates };
 }
 
 describe('NdrRunnerService — the gates', () => {
@@ -289,5 +293,51 @@ describe('NdrRunnerService — Shiprocket parcels are swept too', () => {
     expect(listNdr).not.toHaveBeenCalled();
     expect(takeAction).not.toHaveBeenCalled();
     expect(out.skipped).toBe(1);
+  });
+});
+
+/**
+ * Delhivery answers asynchronously and hands back a UPL id to poll;
+ * Shiprocket answers synchronously, so its reply IS the outcome. The
+ * row has to record that difference at submit time, because the UPL
+ * poller reads a missing handle as "the submit produced nothing" —
+ * marking a re-attempt that actually worked as FAILED and escalating it
+ * to a human.
+ */
+describe('NdrRunnerService — a synchronous courier has nothing to poll', () => {
+  const SR = {
+    id: 'ship-sr',
+    awbNumber: 'SR1',
+    courierCode: 'shiprocket',
+    courierAccountId: 'sr-1',
+  };
+
+  it('CONFIRMS a successful submit that returned no UPL id', async () => {
+    const { svc, takeAction, listNdr, updates } = make({ candidates: [SR] });
+    listNdr.mockResolvedValue([{ awbNumber: 'SR1', attemptCount: 1, reason: null }]);
+    takeAction.mockResolvedValue({ success: true, awbNumber: 'SR1', uplId: null, message: 'ok' });
+
+    const out = await svc.run();
+
+    expect(out.submitted).toBe(1);
+    const written = updates.find((u) => u.data['uplId'] === null);
+    expect(written?.data['status']).toBe('CONFIRMED');
+  });
+
+  it('leaves a Delhivery submit SUBMITTED, because its UPL is real and pollable', async () => {
+    const { svc, takeAction, updates } = make({});
+    takeAction.mockResolvedValue({
+      success: true,
+      awbNumber: 'AWB1',
+      uplId: 'UPL-1',
+      message: null,
+    });
+
+    const out = await svc.run();
+
+    expect(out.submitted).toBe(1);
+    const written = updates.find((u) => u.data['uplId'] === 'UPL-1');
+    // No status change: the poller owns the outcome from here.
+    expect(written?.data['status']).toBeUndefined();
   });
 });

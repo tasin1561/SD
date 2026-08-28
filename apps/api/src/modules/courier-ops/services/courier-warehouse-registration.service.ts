@@ -94,13 +94,30 @@ export class CourierWarehouseRegistrationService {
     return { success: result.success, name: input.name, message: result.message };
   }
 
+  /**
+   * Amend a registered location.
+   *
+   * DELHIVERY ONLY, deliberately and by name: Shiprocket's API has an
+   * add-pickup-location endpoint and no edit. Silently routing an update
+   * to `addpickup` would create a SECOND location with the same name —
+   * and the name is what every manifest matches on, so which one a
+   * parcel books against becomes unanswerable.
+   */
   async update(
     staffId: string,
     input: DelhiveryWarehouseInput,
     ctx: ClientInfoPayload,
     courierAccountId: string | null = null,
+    courierCode = 'delhivery',
   ): Promise<WarehouseRegistrationOutcome> {
     this.assertExactName(input.name);
+    if (courierCode !== 'delhivery') {
+      return {
+        success: false,
+        name: input.name,
+        message: `${courierCode} cannot amend a registered pickup location — add a new one with a new name, or change it in their panel.`,
+      };
+    }
     const result = await this.warehouses.update(
       input,
       courierActor.operator(staffId),
