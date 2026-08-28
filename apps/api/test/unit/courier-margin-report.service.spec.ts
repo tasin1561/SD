@@ -15,6 +15,8 @@ function shipment(over: Record<string, unknown> = {}) {
     declaredWeightGrams: null,
     chargeableWeightGrams: null,
     codAmountInr: new Prisma.Decimal('2400'),
+    courierCode: 'delhivery',
+    courierAccountId: 'dl-1',
     orderShipments: [{ orderId: 'order-1' }],
     ...over,
   };
@@ -73,8 +75,16 @@ function makeReport(
   const context = {
     originPin: jest.fn(async () => (opts.originPin === undefined ? '110042' : opts.originPin)),
   };
-  const svc = new CourierMarginReportService(prisma as never, context as never, { check } as never);
-  return { svc, check, chargeFindMany, shipmentUpdate };
+  const estimateLane = jest.fn();
+  const svc = new CourierMarginReportService(
+    prisma as never,
+    context as never,
+    { check } as never,
+    // Shiprocket rows are priced against Shiprocket. Every fixture here
+    // is Delhivery, so this double asserts by never being called.
+    { estimateLane } as never,
+  );
+  return { svc, check, chargeFindMany, shipmentUpdate, estimateLane };
 }
 
 const WINDOW = {
@@ -287,5 +297,71 @@ describe('CourierMarginReportService — the cost it learns is kept', () => {
     expect(r.sampledShipments).toBe(1);
     expect(r.skipped).toHaveLength(0);
     expect(r.rows[0]?.actualCourierCostInr).toBe('176.29');
+  });
+});
+
+/**
+ * The report sweeps every non-manual shipment and asks what each one
+ * cost. Asking one courier about another's parcel does not fail — it
+ * returns a plausible number for a lane that company never carried, and
+ * the margin computed from it is fiction that accumulates into the P&L.
+ */
+describe('CourierMarginReportService — each row is priced by the courier that carried it', () => {
+  it('prices a Shiprocket parcel against Shiprocket, never against Delhivery', async () => {
+    const { svc, check, estimateLane } = makeReport({
+      shipments: [shipment({ id: 'ship-sr', courierCode: 'shiprocket', courierAccountId: 'sr-1' })],
+      charges: [{ type: ChargeType.BASE_SHIPPING, totalAmountInr: new Prisma.Decimal('120') }],
+    });
+    (estimateLane as jest.Mock).mockResolvedValue({
+      etdDays: 3,
+      totalInr: 90,
+      carrierName: 'Delhivery Surface via SR',
+      fromLiveApi: true,
+    });
+
+    const report = await svc.report('staff-1', WINDOW);
+
+    expect(estimateLane).toHaveBeenCalledTimes(1);
+    expect(check).not.toHaveBeenCalled();
+    expect(report.rows).toHaveLength(1);
+    expect(report.rows[0]?.actualCourierCostInr).toBe('90');
+    expect(report.rows[0]?.marginInr).toBe('30');
+    // Their quote has no rate-card assumption to drift against. Zero
+    // would claim the card is exactly right about a courier it has
+    // never priced.
+    expect(report.rows[0]?.assumedCostInr).toBeNull();
+    expect(report.rows[0]?.assumptionDriftInr).toBeNull();
+  });
+
+  it('SKIPS a Shiprocket parcel with no rate rather than counting it as free', async () => {
+    const { svc, estimateLane } = makeReport({
+      shipments: [shipment({ id: 'ship-sr', courierCode: 'shiprocket', courierAccountId: 'sr-1' })],
+      charges: [{ type: ChargeType.BASE_SHIPPING, totalAmountInr: new Prisma.Decimal('120') }],
+    });
+    (estimateLane as jest.Mock).mockResolvedValue({
+      etdDays: null,
+      totalInr: null,
+      carrierName: null,
+      fromLiveApi: true,
+    });
+
+    const report = await svc.report('staff-1', WINDOW);
+
+    // A zero cost would make the parcel look perfectly profitable and
+    // drag the report's average with it.
+    expect(report.rows).toHaveLength(0);
+    expect(report.skipped).toHaveLength(1);
+  });
+
+  it('skips, rather than mis-prices, a Shiprocket parcel with no account recorded', async () => {
+    const { svc, estimateLane } = makeReport({
+      shipments: [shipment({ id: 'ship-sr', courierCode: 'shiprocket', courierAccountId: null })],
+      charges: [{ type: ChargeType.BASE_SHIPPING, totalAmountInr: new Prisma.Decimal('120') }],
+    });
+
+    const report = await svc.report('staff-1', WINDOW);
+
+    expect(estimateLane).not.toHaveBeenCalled();
+    expect(report.skipped).toHaveLength(1);
   });
 });

@@ -1,7 +1,11 @@
+import { ShiprocketClientService } from '../../courier-shiprocket/services/shiprocket-client.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { ChargeType, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
-import { DelhiveryMarginReconciliationService } from '../../courier-delhivery/services/delhivery-margin-reconciliation.service';
+import {
+  DelhiveryMarginReconciliationService,
+  type MarginCheck,
+} from '../../courier-delhivery/services/delhivery-margin-reconciliation.service';
 import { ShipmentCourierContextService } from './shipment-courier-context.service';
 import { courierActor } from '../../courier-shared/services/courier-credential.service';
 
@@ -83,6 +87,7 @@ export class CourierMarginReportService {
     private readonly prisma: PrismaService,
     private readonly context: ShipmentCourierContextService,
     private readonly reconciliation: DelhiveryMarginReconciliationService,
+    private readonly shiprocket: ShiprocketClientService,
   ) {}
 
   async report(
@@ -110,6 +115,8 @@ export class CourierMarginReportService {
         declaredWeightGrams: true,
         chargeableWeightGrams: true,
         codAmountInr: true,
+        courierCode: true,
+        courierAccountId: true,
         orderShipments: { select: { orderId: true }, take: 1 },
       },
     });
@@ -154,18 +161,31 @@ export class CourierMarginReportService {
         continue;
       }
 
+      const isCod = s.codAmountInr !== null && s.codAmountInr.greaterThan(0);
+      const weightGrams = s.chargeableWeightGrams ?? s.declaredWeightGrams ?? s.totalWeightGrams;
+
       try {
-        const check = await this.reconciliation.check(
-          {
-            originPin,
-            destinationPin: s.destPostalCode,
-            chargeableWeightGrams:
-              s.chargeableWeightGrams ?? s.declaredWeightGrams ?? s.totalWeightGrams,
-            isCod: s.codAmountInr !== null && s.codAmountInr.greaterThan(0),
-            billedToSellerInr: billed.toString(),
-          },
-          courierActor.operator(staffId),
-        );
+        // ── PRICE IT AGAINST THE COURIER THAT CARRIED IT ─────────────
+        // This swept every non-manual shipment and asked Delhivery what
+        // each one cost, which was correct while there was one courier
+        // and became a money error the moment there were two: a
+        // Shiprocket parcel's "actual courier cost" would be a
+        // Delhivery quote for a parcel Delhivery never touched, and the
+        // margin computed from it is fiction that accumulates into the
+        // P&L.
+        const check =
+          s.courierCode === 'shiprocket'
+            ? await this.shiprocketCheck(s, originPin, weightGrams, isCod, billed)
+            : await this.reconciliation.check(
+                {
+                  originPin,
+                  destinationPin: s.destPostalCode,
+                  chargeableWeightGrams: weightGrams,
+                  isCod,
+                  billedToSellerInr: billed.toString(),
+                },
+                courierActor.operator(staffId),
+              );
         rows.push({
           shipmentId: s.id,
           shipmentNumber: s.shipmentNumber,
@@ -253,5 +273,64 @@ export class CourierMarginReportService {
     });
     if (charges.length === 0) return null;
     return charges.reduce((sum, c) => sum.add(c.totalAmountInr), new Prisma.Decimal(0));
+  }
+  /**
+   * The same margin arithmetic, against Shiprocket's quote.
+   *
+   * Deliberately NOT a second copy of the reconciliation service: what
+   * differs is only where the cost number comes from, and the
+   * comparison, the loss-making threshold and the returned shape stay
+   * identical — otherwise the report would mean two different things
+   * depending on which courier a row happens to be.
+   *
+   * Their quote has no rate-card assumption to drift against, so the
+   * drift columns are null rather than zero. Zero would claim the rate
+   * card is exactly right about a courier it has never priced.
+   */
+  private async shiprocketCheck(
+    s: {
+      destPostalCode: string;
+      courierAccountId: string | null;
+    },
+    originPin: string,
+    weightGrams: number,
+    isCod: boolean,
+    billed: Prisma.Decimal,
+  ): Promise<MarginCheck> {
+    const lane = `${originPin}→${s.destPostalCode}`;
+    if (s.courierAccountId === null) {
+      throw new Error('No Shiprocket account recorded on this parcel, so it cannot be priced.');
+    }
+    const quote = await this.shiprocket.estimateLane(
+      {
+        pickupPincode: originPin,
+        deliveryPincode: s.destPostalCode,
+        weightGrams,
+        isCod,
+      },
+      s.courierAccountId,
+    );
+    if (quote.totalInr === null) {
+      // Skipped rather than counted as free. A zero cost would make
+      // every such parcel look perfectly profitable and drag the
+      // report's average with it.
+      throw new Error('Shiprocket returned no rate for this lane.');
+    }
+    const actualCost = new Prisma.Decimal(quote.totalInr.toFixed(2));
+    const margin = billed.sub(actualCost);
+    const marginPercent = billed.isZero()
+      ? new Prisma.Decimal(0)
+      : margin.div(billed).mul(100).toDecimalPlaces(2);
+
+    return {
+      lane,
+      billedToSellerInr: billed.toString(),
+      actualCourierCostInr: actualCost.toString(),
+      marginInr: margin.toString(),
+      marginPercent: marginPercent.toString(),
+      lossMaking: margin.lt(0),
+      assumedCostInr: null,
+      assumptionDriftInr: null,
+    };
   }
 }
