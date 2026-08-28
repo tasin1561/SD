@@ -472,6 +472,18 @@ function RecipientPanel({
   readonly seller: PulledAssignment['seller'];
   readonly itemDisplay: PulledAssignment['itemDisplay'];
 }): ReactElement {
+  // ABOVE the early return. A hook called after one runs in a different
+  // order on the render where the order failed to load, which React
+  // refuses outright. The query is disabled on a missing pin anyway, so
+  // asking here costs nothing.
+  //
+  // Asked while the agent has the customer on the line — the last
+  // moment a bad address is cheap to fix. Cached server-side for a day.
+  const serviceability = useServiceabilityCheck(
+    order?.recipient.postalCode ?? null,
+    order?.paymentMode === 'PREPAID' ? 'PREPAID' : 'COD',
+  );
+
   if (order === null) {
     // listCurrent/pullNext log this server-side; the agent still needs
     // to be told rather than shown a card of dashes.
@@ -487,12 +499,6 @@ function RecipientPanel({
   // the flat column names, so every field here rendered "—" and an
   // agent was asked to phone a number the screen would not show.
   const r = order.recipient;
-  // Asked while the agent has the customer on the line — the last
-  // moment a bad address is cheap to fix. Cached server-side for a day.
-  const serviceability = useServiceabilityCheck(
-    r.postalCode,
-    order.paymentMode === 'PREPAID' ? 'PREPAID' : 'COD',
-  );
 
   return (
     <div className="rounded-[6px] border border-border p-3 text-sm">
