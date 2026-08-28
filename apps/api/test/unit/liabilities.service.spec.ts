@@ -16,7 +16,8 @@ function makeSut(opts: {
     qtyOnHand: number;
     batch: { unitCostInr: Prisma.Decimal | null } | null;
   }>;
-  lastSolventEntryId?: { id: string } | null;
+  lastSolventEntryId?: { id: string; runningBalanceAfter: Prisma.Decimal } | null;
+  paidSince?: Prisma.Decimal | null;
   causes?: Array<{ direction: string; _sum: { amount: Prisma.Decimal | null } }>;
 }) {
   const client = {
@@ -51,6 +52,7 @@ function makeSut(opts: {
       // they have never been solvent, so the whole ledger counts.
       findFirst: async () => opts.lastSolventEntryId ?? null,
       groupBy: async () => opts.causes ?? [],
+      aggregate: async () => ({ _sum: { amount: opts.paidSince ?? null } }),
     },
     stockLevel: { findMany: async () => opts.stock ?? [] },
   };
@@ -185,5 +187,45 @@ describe('LiabilitiesService', () => {
       ],
     }).report();
     expect(r.sellerDebts[0]?.causes).toHaveLength(1);
+  });
+
+  it('the causes RECONCILE with the balance — opening − charges + paid = −owed', async () => {
+    // Charges alone can exceed the debt, and left unexplained that reads
+    // as an error. Two things account for the gap: what the seller had
+    // in hand when the run of debt started, and what they have paid
+    // since. Neither is netted off a particular cause — a top-up does
+    // not pay the freight rather than the fees — but both have to be
+    // visible or the parts do not add up to the total beside them.
+    const r = await makeSut({
+      balances: [{ sellerId: 's1', balance: D('-9000') }],
+      sellers: [{ id: 's1', companyName: 'Co' }],
+      lastSolventEntryId: { id: 'e1', runningBalanceAfter: D('5000') },
+      causes: [
+        { direction: 'INBOUND_FREIGHT', _sum: { amount: D('15200') } },
+        { direction: 'ORDER_CHARGES', _sum: { amount: D('600') } },
+        { direction: 'RTO_FEE', _sum: { amount: D('200') } },
+      ],
+      paidSince: D('2000'),
+    }).report();
+
+    const d = r.sellerDebts[0];
+    const charges = (d?.causes ?? []).reduce((a, c) => a + Number(c.amountInr), 0);
+    expect(charges).toBe(16000);
+    expect(d?.openingBalanceInr).toBe('5000.00');
+    expect(d?.paidSinceInr).toBe('2000.00');
+    expect(Number(d?.openingBalanceInr) - charges + Number(d?.paidSinceInr)).toBe(
+      -Number(d?.owedInr),
+    );
+  });
+
+  it('a seller who was never solvent opens at zero, not at their first charge', async () => {
+    const r = await makeSut({
+      balances: [{ sellerId: 's1', balance: D('-3200') }],
+      sellers: [{ id: 's1', companyName: 'Co' }],
+      lastSolventEntryId: null,
+      causes: [{ direction: 'INBOUND_FREIGHT', _sum: { amount: D('3200') } }],
+    }).report();
+    expect(r.sellerDebts[0]?.openingBalanceInr).toBe('0.00');
+    expect(r.sellerDebts[0]?.paidSinceInr).toBe('0.00');
   });
 });

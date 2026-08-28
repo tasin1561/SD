@@ -1015,6 +1015,10 @@ export interface SellerDebtView {
   readonly covered: boolean;
   /** What the debt is for, since the balance last went below zero. */
   readonly causes: ReadonlyArray<{ direction: string; amountInr: string }>;
+  /** Paid in that same window — why the causes can exceed the balance. */
+  readonly paidSinceInr: string;
+  /** What they held when the run of debt started. opening − charges + paid = −owed. */
+  readonly openingBalanceInr: string;
 }
 
 export interface LiabilitiesView {

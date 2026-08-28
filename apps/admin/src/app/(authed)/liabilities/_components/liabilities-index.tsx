@@ -230,6 +230,32 @@ export function LiabilitiesIndex(): ReactElement {
                               <Money amount={c.amountInr} currency="INR" convert={false} />
                             </li>
                           ))}
+                          {/* Without this the charges can add up to more
+                              than the balance and read as an error. They
+                              are not netted off any one cause — a top-up
+                              does not pay the freight rather than the
+                              fees — but the reader has to see that money
+                              came in. */}
+                          {(Number(s.paidSinceInr) > 0 || Number(s.openingBalanceInr) > 0) && (
+                            <li className="text-text-faint border-border mt-1 space-y-0.5 border-t pt-1 text-xs">
+                              {Number(s.openingBalanceInr) > 0 && (
+                                <div>
+                                  started with{' '}
+                                  <Money
+                                    amount={s.openingBalanceInr}
+                                    currency="INR"
+                                    convert={false}
+                                  />
+                                </div>
+                              )}
+                              {Number(s.paidSinceInr) > 0 && (
+                                <div>
+                                  paid since{' '}
+                                  <Money amount={s.paidSinceInr} currency="INR" convert={false} />
+                                </div>
+                              )}
+                            </li>
+                          )}
                         </ul>
                       )}
                     </Td>

@@ -27,6 +27,20 @@ const DEBT_CAUSES = [
   WalletEntryDirection.ADJUSTMENT_DEBIT,
 ] as const;
 
+/**
+ * Money arriving in the same window — what has already been paid against
+ * those charges. A remittance is NOT here: it is money going OUT, and
+ * counting it as a payment would say a seller reduced their debt by
+ * being paid.
+ */
+const DEBT_PAYMENTS = [
+  WalletEntryDirection.TOPUP,
+  WalletEntryDirection.COD_COLLECTION,
+  WalletEntryDirection.ORDER_CHARGES_REFUND,
+  WalletEntryDirection.SCRAP_REFUND,
+  WalletEntryDirection.ADJUSTMENT_CREDIT,
+] as const;
+
 export interface LedgerLine {
   readonly key: string;
   readonly label: string;
@@ -53,6 +67,29 @@ export interface SellerDebt {
    * delivered orders do not.
    */
   readonly causes: ReadonlyArray<{ direction: string; amountInr: string }>;
+  /**
+   * What they have PAID in that same window.
+   *
+   * Reported because without it the charges add up to more than the debt
+   * and look like an error. They are not netted off any particular
+   * cause — a top-up does not pay off the freight rather than the
+   * delivery fees, and choosing one would invent an allocation the
+   * seller never made — but the reader has to see that money came in.
+   */
+  readonly paidSinceInr: string;
+  /**
+   * What they held when this run of debt started.
+   *
+   * Without it the figures do not close: charges minus payments is not
+   * the debt, because the seller began the window in credit and spent
+   * that first. The balance crossed zero part-way through a single
+   * charge and an entry cannot be split, so the honest presentation is
+   * to show what they started with rather than to pick an anchor that
+   * makes the subtraction look tidy.
+   *
+   *   opening − charges + paid = −owed
+   */
+  readonly openingBalanceInr: string;
 }
 
 export interface LiabilitiesReport {
@@ -294,7 +331,9 @@ export class LiabilitiesService {
           owedInr: owed.toFixed(2),
           stockValueInr: cover.toFixed(2),
           covered: cover.greaterThanOrEqualTo(owed),
-          causes: causesById.get(id) ?? [],
+          causes: causesById.get(id)?.causes ?? [],
+          paidSinceInr: causesById.get(id)?.paidSinceInr ?? '0.00',
+          openingBalanceInr: causesById.get(id)?.openingBalanceInr ?? '0.00',
         };
       })
       .sort((a, b) => Number(b.owedInr) - Number(a.owedInr));
@@ -314,9 +353,11 @@ export class LiabilitiesService {
    * of fees does not pay off one of them, and choosing which to reduce
    * would be inventing an allocation the seller never made.
    */
-  private async causesOfDebt(
-    sellerId: string,
-  ): Promise<Array<{ direction: string; amountInr: string }>> {
+  private async causesOfDebt(sellerId: string): Promise<{
+    causes: Array<{ direction: string; amountInr: string }>;
+    paidSinceInr: string;
+    openingBalanceInr: string;
+  }> {
     const lastSolvent = await this.prisma.client.sellerWalletEntry.findFirst({
       where: {
         sellerId,
@@ -324,26 +365,37 @@ export class LiabilitiesService {
         runningBalanceAfter: { gte: 0 },
       },
       orderBy: { id: 'desc' },
-      select: { id: true },
+      select: { id: true, runningBalanceAfter: true },
     });
 
-    const debits = await this.prisma.client.sellerWalletEntry.groupBy({
-      by: ['direction'],
-      where: {
-        sellerId,
-        currency: Currency.INR,
-        ...(lastSolvent === null ? {} : { id: { gt: lastSolvent.id } }),
-        direction: { in: [...DEBT_CAUSES] },
-      },
-      _sum: { amount: true },
-    });
+    const window = {
+      sellerId,
+      currency: Currency.INR,
+      ...(lastSolvent === null ? {} : { id: { gt: lastSolvent.id } }),
+    } as const;
 
-    return debits
-      .map((d) => ({
-        direction: d.direction,
-        amountInr: (d._sum.amount ?? ZERO).toFixed(2),
-      }))
-      .filter((d) => Number(d.amountInr) > 0)
-      .sort((a, b) => Number(b.amountInr) - Number(a.amountInr));
+    const [debits, credits] = await Promise.all([
+      this.prisma.client.sellerWalletEntry.groupBy({
+        by: ['direction'],
+        where: { ...window, direction: { in: [...DEBT_CAUSES] } },
+        _sum: { amount: true },
+      }),
+      this.prisma.client.sellerWalletEntry.aggregate({
+        where: { ...window, direction: { in: [...DEBT_PAYMENTS] } },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    return {
+      causes: debits
+        .map((d) => ({
+          direction: d.direction,
+          amountInr: (d._sum.amount ?? ZERO).toFixed(2),
+        }))
+        .filter((d) => Number(d.amountInr) > 0)
+        .sort((a, b) => Number(b.amountInr) - Number(a.amountInr)),
+      paidSinceInr: (credits._sum.amount ?? ZERO).toFixed(2),
+      openingBalanceInr: (lastSolvent?.runningBalanceAfter ?? ZERO).toFixed(2),
+    };
   }
 }
