@@ -101,6 +101,8 @@ model StaffUser {
 
   sellerRestrictionsCreated SellerRestriction[] @relation("SellerRestrictionCreatedBy")
   sellerRestrictionsLifted  SellerRestriction[] @relation("SellerRestrictionLiftedBy")
+  bankEntriesCreated        BankEntry[]         @relation("BankEntryCreatedBy")
+  bankTransfersCreated      BankTransfer[]      @relation("BankTransferCreatedBy")
 
   @@index([role])
   @@index([deletedAt])
@@ -258,6 +260,8 @@ model Seller {
   stockAlertStates         StockAlertState[]
   walletEntries            SellerWalletEntry[]
   walletBalances           SellerWalletBalance[]
+  bankEntries              BankEntry[]
+  bankTransfers            BankTransfer[]
   remittances              Remittance[]
   withdrawalRequests       WithdrawalRequest[]
   topupRequests            WalletTopupRequest[]
@@ -3538,6 +3542,7 @@ model CourierAccount {
   shipments       Shipment[]
   settlements     CourierSettlement[]
   courierWaybills CourierWaybill[]
+  bankAccounts    PlatformBankAccount[]
 
   // Exactly one DEFAULT active account per (courier_id, environment) —
   // partial unique index courier_accounts_default_uq
@@ -5284,35 +5289,47 @@ enum TopupRequestStatus {
 /// on a screen would be theatre. `isActive` retires an account without
 /// deleting it — a past top-up must still name the account it went to.
 model PlatformBankAccount {
-  id            String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  label         String
-  bankName      String    @map("bank_name")
-  accountName   String    @map("account_name")
-  accountNumber String    @map("account_number")
+  id               String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  label            String
+  bankName         String          @map("bank_name")
+  accountName      String          @map("account_name")
+  accountNumber    String          @map("account_number")
   /// IFSC (India) or SWIFT — free-form because the formats differ by
   /// country. NOT the Bangladeshi routing number; that has its own
   /// column, because a BEFTN transfer needs both and putting them in one
   /// field means whoever fills it in has to choose which one to lose.
-  branchCode    String?   @map("branch_code")
+  branchCode       String?         @map("branch_code")
   /// The branch the account is held at. A Bangladeshi routing number is
   /// branch-specific, so the two are read together — and a seller
   /// standing at a counter is asked for the branch by name.
-  branchName    String?   @map("branch_name")
+  branchName       String?         @map("branch_name")
   /// The district the branch is in. Bank forms in Bangladesh ask for it,
   /// and several banks have a branch of the same name in more than one.
-  district      String?
+  district         String?
   /// The 9-digit BEFTN routing number. Kept as text, not an integer:
   /// leading zeros are significant and an integer silently eats them.
-  routingNumber String?   @map("routing_number")
-  currency      Currency
-  instructions  String?   @db.Text
-  isActive      Boolean   @default(true) @map("is_active")
-  displayOrder  Int       @default(100) @map("display_order")
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz
+  routingNumber    String?         @map("routing_number")
+  currency         Currency
+  instructions     String?         @db.Text
+  /// What this account is FOR, in one line, so a transfer is not made
+  /// into the wrong pocket. Free text on purpose: the shape of an
+  /// account estate changes faster than an enum can be migrated.
+  purpose          String?
+  /// Which courier account settles into here. Multiple Delhivery
+  /// accounts settle to different banks, and "whose money is in which
+  /// account" starts with knowing which pipe fills it.
+  courierAccountId String?         @map("courier_account_id") @db.Uuid
+  courierAccount   CourierAccount? @relation(fields: [courierAccountId], references: [id])
+  isActive         Boolean         @default(true) @map("is_active")
+  displayOrder     Int             @default(100) @map("display_order")
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt        DateTime?       @map("deleted_at") @db.Timestamptz
 
   topupRequests WalletTopupRequest[]
+  entries       BankEntry[]
+  transfersFrom BankTransfer[]       @relation("BankTransferFrom")
+  transfersTo   BankTransfer[]       @relation("BankTransferTo")
 
   @@index([isActive, displayOrder])
   @@map("platform_bank_accounts")
@@ -6223,4 +6240,184 @@ model InviteLead {
   @@index([status, createdAt])
   @@index([createdAt])
   @@map("invite_leads")
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Treasury — our own money, and whose it is
+//
+// The seller wallet answers "what do we OWE this seller". It says
+// nothing about whether the cash exists, or where. These models answer
+// the other half: which account holds what, and how much of it is spoken
+// for.
+//
+// Every balance here is DERIVED by summing entries. No cached running
+// balance, deliberately: the wallet cache taught us that a number
+// refreshed by whoever remembers is a number that is eventually wrong,
+// and money read wrong is worse than money read slowly. Add a cache when
+// a report is actually slow, with the entry id as its staleness gate.
+// ─────────────────────────────────────────────────────────────────────
+
+/// Whose money a bank entry moves. A seller's cash is held ON BEHALF OF
+/// them; capital is ours. The split is what makes "is Bank X solvent for
+/// what it holds" answerable at all.
+enum BankOwnerKind {
+  SELLER  @map("seller")
+  CAPITAL @map("capital")
+
+  @@map("bank_owner_kind")
+}
+
+/// What a movement WAS. Kept coarse on purpose — a category that names
+/// the business event survives a reorganisation of the code that caused
+/// it, where a name copied from a service does not.
+enum BankEntryType {
+  OPENING_BALANCE           @map("opening_balance")
+  /// Courier paying us COD they collected.
+  COURIER_SETTLEMENT        @map("courier_settlement")
+  /// A seller funding their wallet.
+  SELLER_TOPUP              @map("seller_topup")
+  /// Money leaving to a seller.
+  SELLER_WITHDRAWAL         @map("seller_withdrawal")
+  TRANSFER_IN               @map("transfer_in")
+  TRANSFER_OUT              @map("transfer_out")
+  EXPENSE                   @map("expense")
+  INVESTMENT_OUT            @map("investment_out")
+  INVESTMENT_RETURN         @map("investment_return")
+  /// What we keep (or pay) on a cross-currency transfer — the gap
+  /// between the rate quoted to the seller and the rate we achieved.
+  FX_SPREAD                 @map("fx_spread")
+  /// A human correcting the book against a real statement. Posted as an
+  /// ENTRY, never as an overwrite, so the correction is visible.
+  RECONCILIATION_ADJUSTMENT @map("reconciliation_adjustment")
+
+  @@map("bank_entry_type")
+}
+
+model ExpenseCategory {
+  id        String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  code      String    @unique
+  name      String
+  /// What belongs here, so two people file the same cost the same way.
+  hint      String?   @db.Text
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  entries BankEntry[]
+
+  @@index([isActive])
+  @@map("expense_categories")
+}
+
+/// A short-term placement of our own money. Principal out, return in —
+/// nothing more, per the founder's scope.
+model Investment {
+  id           String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  label        String
+  counterparty String
+  currency     Currency
+  /// Sum of INVESTMENT_OUT entries; the return is whatever comes back.
+  placedInr    Decimal   @default(0) @map("placed_inr") @db.Decimal(14, 2)
+  returnedInr  Decimal   @default(0) @map("returned_inr") @db.Decimal(14, 2)
+  closedAt     DateTime? @map("closed_at") @db.Timestamptz
+  note         String?   @db.Text
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  entries BankEntry[]
+
+  @@map("investments")
+}
+
+/// Two entries and the rate between them.
+///
+/// Both amounts are recorded because on a cross-currency move they are
+/// two independent facts, not one amount and a rate: the rate moves
+/// hour to hour, and storing it instead of the received figure means the
+/// book disagrees with the statement.
+model BankTransfer {
+  id               String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  fromAccountId    String   @map("from_account_id") @db.Uuid
+  toAccountId      String   @map("to_account_id") @db.Uuid
+  amountOut        Decimal  @map("amount_out") @db.Decimal(14, 2)
+  currencyOut      Currency @map("currency_out")
+  amountIn         Decimal  @map("amount_in") @db.Decimal(14, 2)
+  currencyIn       Currency @map("currency_in")
+  /// The rate the SELLER was shown. Their sub-balance is credited at
+  /// this rate, so they receive what they were promised.
+  quotedRate       Decimal? @map("quoted_rate") @db.Decimal(18, 6)
+  /// amountIn / amountOut — what the bank actually gave us. The gap
+  /// against the quote is ours to keep or to cover.
+  achievedRate     Decimal? @map("achieved_rate") @db.Decimal(18, 6)
+  /// Whose money moved. Null for a pure capital / liquidity move.
+  sellerId         String?  @map("seller_id") @db.Uuid
+  reference        String?
+  note             String?  @db.Text
+  movedAt          DateTime @map("moved_at") @db.Timestamptz
+  createdByStaffId String?  @map("created_by_staff_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  fromAccount PlatformBankAccount @relation("BankTransferFrom", fields: [fromAccountId], references: [id])
+  toAccount   PlatformBankAccount @relation("BankTransferTo", fields: [toAccountId], references: [id])
+  seller      Seller?             @relation(fields: [sellerId], references: [id])
+  createdBy   StaffUser?          @relation("BankTransferCreatedBy", fields: [createdByStaffId], references: [id])
+  entries     BankEntry[]
+
+  @@index([fromAccountId])
+  @@index([toAccountId])
+  @@index([sellerId])
+  @@index([movedAt])
+  @@map("bank_transfers")
+}
+
+/// One movement of money in one account. APPEND-ONLY.
+///
+/// `signedAmount` carries its own direction rather than a separate
+/// column: a balance is then a SUM, and a sum cannot disagree with
+/// itself the way a debit/credit pair plus a direction flag can.
+model BankEntry {
+  id           String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  accountId    String        @map("account_id") @db.Uuid
+  type         BankEntryType
+  /// Negative for money leaving. Always in the ACCOUNT's currency —
+  /// never converted, so the column always matches the statement.
+  signedAmount Decimal       @map("signed_amount") @db.Decimal(14, 2)
+  currency     Currency
+
+  ownerKind BankOwnerKind
+  /// Set when ownerKind is SELLER. The pair is what lets one account
+  /// report how much of itself is spoken for, and by whom.
+  sellerId  String?       @map("seller_id") @db.Uuid
+
+  transferId          String? @map("transfer_id") @db.Uuid
+  expenseCategoryId   String? @map("expense_category_id") @db.Uuid
+  investmentId        String? @map("investment_id") @db.Uuid
+  /// The settlement / topup / withdrawal this entry settles, so a bank
+  /// line can be walked back to the business event that caused it.
+  settlementId        String? @map("settlement_id") @db.Uuid
+  topupRequestId      String? @map("topup_request_id") @db.Uuid
+  withdrawalRequestId String? @map("withdrawal_request_id") @db.Uuid
+
+  /// The bank's own reference, so a line can be matched to a statement.
+  reference  String?
+  note       String?  @db.Text
+  occurredAt DateTime @map("occurred_at") @db.Timestamptz
+
+  createdByStaffId String?  @map("created_by_staff_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  account         PlatformBankAccount @relation(fields: [accountId], references: [id])
+  seller          Seller?             @relation(fields: [sellerId], references: [id])
+  transfer        BankTransfer?       @relation(fields: [transferId], references: [id])
+  expenseCategory ExpenseCategory?    @relation(fields: [expenseCategoryId], references: [id])
+  investment      Investment?         @relation(fields: [investmentId], references: [id])
+  createdBy       StaffUser?          @relation("BankEntryCreatedBy", fields: [createdByStaffId], references: [id])
+
+  @@index([accountId, occurredAt])
+  @@index([accountId, ownerKind, sellerId])
+  @@index([sellerId])
+  @@index([type])
+  @@index([transferId])
+  @@map("bank_entries")
 }

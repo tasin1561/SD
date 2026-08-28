@@ -643,6 +643,82 @@ export function useTrackingLookup(): UseMutationResult<
   });
 }
 
+// ───────── Treasury — our own money ─────────
+
+export interface TreasuryAccountView {
+  readonly accountId: string;
+  readonly label: string;
+  readonly bankName: string;
+  readonly purpose: string | null;
+  readonly courierAccountLabel: string | null;
+  readonly currency: 'INR' | 'BDT';
+  readonly total: string;
+  readonly capital: string;
+  readonly sellerHeld: string;
+  readonly bySeller: ReadonlyArray<{
+    readonly sellerId: string;
+    readonly companyName: string;
+    readonly amount: string;
+  }>;
+}
+
+export interface TreasuryOverviewView {
+  readonly accounts: readonly TreasuryAccountView[];
+  readonly totals: {
+    readonly byCurrency: ReadonlyArray<{
+      readonly currency: 'INR' | 'BDT';
+      readonly total: string;
+      readonly capital: string;
+      readonly sellerHeld: string;
+    }>;
+  };
+  readonly clientMoney: {
+    readonly owedToSellersInr: string;
+    readonly heldForSellersInr: string;
+    readonly gapInr: string;
+    readonly covered: boolean;
+  };
+}
+
+export function useTreasuryOverview(enabled = true): UseQueryResult<TreasuryOverviewView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-treasury', 'overview'],
+    queryFn: () => client.request<TreasuryOverviewView>('/api/admin/treasury/overview'),
+    enabled,
+  });
+}
+
+export interface BankEntryView {
+  readonly id: string;
+  readonly accountLabel: string;
+  readonly type: string;
+  readonly signedAmount: string;
+  readonly currency: 'INR' | 'BDT';
+  readonly ownerKind: 'SELLER' | 'CAPITAL';
+  readonly sellerName: string | null;
+  readonly categoryName: string | null;
+  readonly reference: string | null;
+  readonly note: string | null;
+  readonly occurredAt: string;
+}
+
+export function useBankEntries(
+  params: { accountId?: string; limit?: number },
+  enabled = true,
+): UseQueryResult<{ items: BankEntryView[] }> {
+  const client = useApiClient();
+  const sp = new URLSearchParams();
+  if (params.accountId) sp.set('accountId', params.accountId);
+  if (params.limit) sp.set('limit', String(params.limit));
+  return useQuery({
+    queryKey: ['admin-treasury', 'entries', params],
+    queryFn: () =>
+      client.request<{ items: BankEntryView[] }>(`/api/admin/treasury/entries?${sp.toString()}`),
+    enabled,
+  });
+}
+
 export function useTrackingPollHealth(enabled = true): UseQueryResult<TrackingPollHealthView> {
   const client = useApiClient();
   return useQuery({

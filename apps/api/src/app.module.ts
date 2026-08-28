@@ -85,6 +85,7 @@ import { SellerWalletReadModule } from './modules/seller-wallet-read/seller-wall
 import { SellerWalletWithdrawalModule } from './modules/seller-wallet-withdrawal/seller-wallet-withdrawal.module';
 import { AdminSellerWalletModule } from './modules/admin-seller-wallet/admin-seller-wallet.module';
 import { SellerTrackingModule } from './modules/seller-tracking/seller-tracking.module';
+import { TreasuryModule } from './modules/treasury/treasury.module';
 import { AdminRemittanceModule } from './modules/admin-remittance/admin-remittance.module';
 import { AdminReportsModule } from './modules/admin-reports/admin-reports.module';
 import { AdminWebhookDeliveriesModule } from './modules/admin-webhook-deliveries/admin-webhook-deliveries.module';
@@ -200,6 +201,7 @@ import { envSchema } from './config/env.schema';
     SellerWalletReadModule,
     SellerWalletWithdrawalModule,
     AdminRemittanceModule,
+    TreasuryModule,
     AdminSellerWalletModule,
     SellerTrackingModule,
     AdminReportsModule,

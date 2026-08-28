@@ -56,6 +56,9 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   ['/seller-wallets', 'money.view'],
   ['/topups', 'money.view'],
   ['/bank-accounts', 'money.view'],
+  // Seeing what we hold is an ordinary finance question; recording a
+  // movement is gated separately on money.treasury.manage at the API.
+  ['/treasury', 'money.treasury.view'],
   ['/remittances', 'money.view'],
   // A withdrawal destination is money, not seller admin — and the API
   // guards all three of its endpoints on this one permission.

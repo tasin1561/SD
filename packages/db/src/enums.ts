@@ -128,3 +128,4 @@ export {
   InviteLeadStatus,
   ShippingDirection,
 } from '@prisma/client';
+export { BankOwnerKind, BankEntryType } from '@prisma/client';

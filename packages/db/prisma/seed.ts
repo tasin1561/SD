@@ -2961,12 +2961,68 @@ async function seedCourierMessageTemplates() {
   console.log(`  ${courierMessageTemplates.length} courier message templates`);
 }
 
+/**
+ * Expense categories somebody can file a cost against on day one.
+ *
+ * Seeded rather than left empty because an empty category list means the
+ * first expense gets filed under whatever the person types, and two
+ * people type two things for the same cost. Admins add their own on top;
+ * these are only a floor.
+ */
+async function seedExpenseCategories(): Promise<void> {
+  const rows = [
+    ['warehouse_rent', 'Warehouse rent', 'Rent and utilities for a warehouse we occupy.'],
+    ['salaries', 'Salaries & wages', 'Staff pay, including the call centre and warehouse floor.'],
+    [
+      'courier_charges',
+      'Courier charges',
+      'What a courier bills us, beyond what is recovered per order.',
+    ],
+    [
+      'freight_forwarder',
+      'Freight forwarder',
+      'BD to India movement — the cost side of inbound freight.',
+    ],
+    ['customs_duty', 'Customs & duty', 'Duty, clearing agents and border charges.'],
+    [
+      'software',
+      'Software & hosting',
+      'Servers, SaaS, domains, and anything billed monthly to run the system.',
+    ],
+    [
+      'bank_charges',
+      'Bank & payment charges',
+      'Wire fees, gateway fees, and what a bank takes to move money.',
+    ],
+    ['marketing', 'Marketing', 'Acquiring sellers — ads, content, commissions.'],
+    ['professional_fees', 'Professional fees', 'Legal, accounting, audit, compliance.'],
+    ['office', 'Office & admin', 'Everything that keeps the office running and fits nowhere else.'],
+    [
+      'other',
+      'Other',
+      'Deliberately last and deliberately vague — a cost with no home belongs here rather than in the wrong one.',
+    ],
+  ] as const;
+
+  for (const [code, name, hint] of rows) {
+    await prisma.expenseCategory.upsert({
+      where: { code },
+      // Name and hint are refreshed; is_active is NOT, so an admin who
+      // retires a category keeps it retired across a re-seed.
+      update: { name, hint },
+      create: { code, name, hint },
+    });
+  }
+  console.log(`  expense categories: ${rows.length}`);
+}
+
 async function main() {
   console.log('Seeding reference data…');
   // Warehouses first: ops.default_warehouse_id resolves CCU-01's id.
   await seedWarehouses();
   await seedSystemSettings();
   await seedCouriers();
+  await seedExpenseCategories();
   await seedFxRates();
   await seedRateCards();
   // M15 pricing data: depends on rate-card + couriers.

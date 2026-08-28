@@ -462,6 +462,21 @@ export const PERMISSIONS = [
     dangerous: true,
   },
   {
+    key: 'money.treasury.view',
+    label: 'See the treasury',
+    description:
+      'Bank balances, whose money is in which account, transfers, expenses and investments — read only.',
+    group: 'Money',
+  },
+  {
+    key: 'money.treasury.manage',
+    label: 'Record treasury movements',
+    description:
+      'Transfers between our accounts, expenses, investments, and correcting a balance against a statement. It never moves money at a bank — it records money that moved.',
+    group: 'Money',
+    dangerous: true,
+  },
+  {
     key: 'money.bank_accounts.manage',
     label: 'Manage our bank accounts',
     description: 'The accounts sellers are told to transfer their top-ups into.',
