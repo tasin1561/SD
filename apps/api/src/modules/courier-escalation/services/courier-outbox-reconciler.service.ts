@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ActorType, CourierOutboxStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
-import { DelhiverySupportAdapterService } from '../../courier-delhivery/services/delhivery-support-adapter.service';
+import { CourierSupportRegistryService } from './courier-support-registry.service';
 import { CourierMessageClassifierService } from './courier-message-classifier.service';
 import { CourierOutboxService, CLAIM_LEASE_MS } from './courier-outbox.service';
 
@@ -49,14 +49,13 @@ export class CourierOutboxReconcilerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly outbox: CourierOutboxService,
-    private readonly adapter: DelhiverySupportAdapterService,
+    private readonly registry: CourierSupportRegistryService,
     private readonly classifier: CourierMessageClassifierService,
   ) {}
 
   /** Public so it doubles as the manual ops trigger. */
   async reconcile(): Promise<ReconcileSummary> {
     const leasesReclaimed = await this.reclaimExpiredLeases();
-    const canRead = this.adapter.capabilities().getThread;
 
     const items = await this.prisma.client.courierOutboxItem.findMany({
       where: { status: CourierOutboxStatus.SENT_UNCONFIRMED },
@@ -64,7 +63,7 @@ export class CourierOutboxReconcilerService {
         id: true,
         body: true,
         externalRef: true,
-        escalation: { select: { externalTicketId: true } },
+        escalation: { select: { externalTicketId: true, courierCode: true } },
       },
       orderBy: { dispatchedAt: 'asc' },
       take: 100,
@@ -102,7 +101,11 @@ export class CourierOutboxReconcilerService {
         continue;
       }
 
-      if (!canRead) {
+      // PER ITEM, because read-back availability is per courier: one
+      // desk becoming readable must not make us try to read a ticket
+      // that lives at the other.
+      const adapter = this.registry.for(item.escalation.courierCode);
+      if (adapter === null || !adapter.capabilities().getThread) {
         // No read-back available. Leave it. See the class doc — every
         // alternative is a guess, and both guesses are worse than a wait.
         stillUnknown += 1;
@@ -110,7 +113,7 @@ export class CourierOutboxReconcilerService {
       }
 
       try {
-        const thread = await this.adapter.getThread(ticketId);
+        const thread = await adapter.getThread(ticketId);
         const target = this.classifier.hashBody(item.body);
         const present = thread.some((m) => this.classifier.hashBody(m.body) === target);
         if (present) {
@@ -153,7 +156,13 @@ export class CourierOutboxReconcilerService {
       returnedToQueue,
       stillUnknown,
       leasesReclaimed,
-      readBackUnavailable: !canRead,
+      // TRUE when NO courier we know of can read a thread back. With
+      // one readable and one not, read-back IS available — the items it
+      // cannot cover are counted in stillUnknown, which is where a
+      // reader would look for them.
+      readBackUnavailable: !this.registry
+        .known()
+        .some((code) => this.registry.for(code)?.capabilities().getThread === true),
     };
     if (items.length > 0 || leasesReclaimed > 0) {
       this.logger.log(summary, 'Courier outbox reconciliation complete');

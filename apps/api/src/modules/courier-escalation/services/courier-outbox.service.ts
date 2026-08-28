@@ -30,6 +30,10 @@ export interface ClaimedItem {
   readonly categoryId: string | null;
   readonly routedMode: CourierWriteMode;
   readonly claimExpiresAt: Date;
+  /** Which courier's support desk this belongs to. Carried so the
+   *  dispatcher picks THAT courier's adapter rather than a default —
+   *  a message filed with the wrong company is not recoverable. */
+  readonly courierCode: string;
 }
 
 /**
@@ -187,10 +191,12 @@ export class CourierOutboxService {
 
       const row = await this.prisma.client.courierOutboxItem.findUniqueOrThrow({
         where: { id: c.id },
+        include: { escalation: { select: { courierCode: true } } },
       });
       return {
         id: row.id,
         escalationId: row.escalationId,
+        courierCode: row.escalation.courierCode,
         kind: row.kind,
         body: row.body,
         categoryId: row.categoryId,
@@ -229,10 +235,12 @@ export class CourierOutboxService {
     }
     const row = await this.prisma.client.courierOutboxItem.findUniqueOrThrow({
       where: { id: itemId },
+      include: { escalation: { select: { courierCode: true } } },
     });
     return {
       id: row.id,
       escalationId: row.escalationId,
+      courierCode: row.escalation.courierCode,
       kind: row.kind,
       body: row.body,
       categoryId: row.categoryId,

@@ -35,6 +35,9 @@ function make(opts: { mode?: CourierWriteMode; paused?: boolean; mayAuto?: boole
           kind: 'COMMENT',
           body: 'hello',
           categoryId: 'cat-1',
+          // The claim carries WHICH courier's desk this belongs to, so
+          // the dispatcher picks that adapter rather than a default.
+          escalation: { courierCode: 'delhivery' },
         }),
         updateMany: jest
           .fn()

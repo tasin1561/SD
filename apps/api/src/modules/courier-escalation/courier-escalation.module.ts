@@ -1,4 +1,9 @@
 import { Module } from '@nestjs/common';
+import { CourierShiprocketModule } from '../courier-shiprocket/courier-shiprocket.module';
+import { DelhiverySupportAdapterService } from '../courier-delhivery/services/delhivery-support-adapter.service';
+import { ShiprocketSupportAdapterService } from '../courier-shiprocket/services/shiprocket-support-adapter.service';
+import { COURIER_SUPPORT_ADAPTERS } from '../courier-shared/services/courier-support-adapter';
+import { CourierSupportRegistryService } from './services/courier-support-registry.service';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { CourierSharedModule } from '../courier-shared/courier-shared.module';
 import { CourierDelhiveryModule } from '../courier-delhivery/courier-delhivery.module';
@@ -54,6 +59,7 @@ import { InboundEmailAuthService } from './services/inbound-email-auth.service';
  */
 @Module({
   imports: [
+    CourierShiprocketModule,
     CourierSharedModule, // the MCP reader (R3: dependency-free, shared)
     CourierDelhiveryModule, // the support adapter + its capability flags
     EmailModule, // the 2FA code for a write-mode change
@@ -65,6 +71,18 @@ import { InboundEmailAuthService } from './services/inbound-email-auth.service';
     SellerCourierEscalationController,
   ],
   providers: [
+    {
+      // Every courier support desk. Adding one means implementing
+      // CourierSupportAdapter and appending it HERE — the outbox, the
+      // routing, the reconciler and the console do not change.
+      provide: COURIER_SUPPORT_ADAPTERS,
+      inject: [DelhiverySupportAdapterService, ShiprocketSupportAdapterService],
+      useFactory: (
+        delhivery: DelhiverySupportAdapterService,
+        shiprocket: ShiprocketSupportAdapterService,
+      ) => [delhivery, shiprocket],
+    },
+    CourierSupportRegistryService,
     InboundEmailAuthService,
     InboundEmailGuard,
     CourierMessageClassifierService,

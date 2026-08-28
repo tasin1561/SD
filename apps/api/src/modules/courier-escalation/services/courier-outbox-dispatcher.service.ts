@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ActorType, CourierOutboxKind } from '@skydrop/db';
-import { DelhiverySupportAdapterService } from '../../courier-delhivery/services/delhivery-support-adapter.service';
+import { CourierSupportRegistryService } from './courier-support-registry.service';
 import { CourierCapabilityUnsupportedError } from '../../courier-shared/services/courier-support-adapter';
 import { CourierOutboxService, classifyDispatchError } from './courier-outbox.service';
 
@@ -47,7 +47,7 @@ export class CourierOutboxDispatcherService {
 
   constructor(
     private readonly outbox: CourierOutboxService,
-    private readonly adapter: DelhiverySupportAdapterService,
+    private readonly registry: CourierSupportRegistryService,
   ) {}
 
   /** Public so it doubles as the manual ops trigger. */
@@ -66,11 +66,24 @@ export class CourierOutboxDispatcherService {
       claimed += 1;
 
       try {
+        // THAT courier's desk, not a default one. The registry returns
+        // null for a courier with no adapter, and the throw below routes
+        // the item to a human exactly as an unsupported capability does.
+        const adapter = this.registry.for(item.courierCode);
+        if (adapter === null) {
+          // Same treatment as an unsupported capability, because it is
+          // the same situation: this channel cannot carry this message,
+          // so it goes back to the queue for a person rather than
+          // burning an attempt or being marked failed.
+          throw new CourierCapabilityUnsupportedError(
+            item.kind === CourierOutboxKind.COMMENT ? 'postComment' : 'raiseTicket',
+          );
+        }
         if (item.kind === CourierOutboxKind.COMMENT) {
           const ticketId = await this.resolveTicketId(item.escalationId);
-          await this.adapter.postComment(ticketId ?? '', item.body);
+          await adapter.postComment(ticketId ?? '', item.body);
         } else {
-          await this.adapter.raiseTicket({
+          await adapter.raiseTicket({
             awbNumber: '',
             categoryId: item.categoryId ?? '',
             body: item.body,

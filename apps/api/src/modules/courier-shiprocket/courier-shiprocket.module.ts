@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { RedisModule } from '../../infrastructure/redis/redis.module';
 import { CourierSharedModule } from '../courier-shared/courier-shared.module';
+import { ShiprocketSupportAdapterService } from './services/shiprocket-support-adapter.service';
 import { ShiprocketTrackingSourceService } from './services/shiprocket-tracking-source.service';
 import { ShiprocketNdrService } from './services/shiprocket-ndr.service';
 import { ShiprocketClientService } from './services/shiprocket-client.service';
@@ -29,7 +30,13 @@ import { ShiprocketHttpService } from './services/shiprocket-http.service';
     ShiprocketClientService,
     ShiprocketNdrService,
     ShiprocketTrackingSourceService,
+    ShiprocketSupportAdapterService,
   ],
-  exports: [ShiprocketClientService, ShiprocketNdrService, ShiprocketTrackingSourceService],
+  exports: [
+    ShiprocketClientService,
+    ShiprocketNdrService,
+    ShiprocketTrackingSourceService,
+    ShiprocketSupportAdapterService,
+  ],
 })
 export class CourierShiprocketModule {}

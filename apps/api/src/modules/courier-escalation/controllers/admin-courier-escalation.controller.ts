@@ -17,7 +17,8 @@ import { CurrentStaff } from '../../../common/decorators/current-staff.decorator
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
-import { DelhiverySupportAdapterService } from '../../courier-delhivery/services/delhivery-support-adapter.service';
+import { CourierSupportRegistryService } from '../services/courier-support-registry.service';
+import type { CapabilityFlags } from '../../courier-shared/services/courier-support-adapter';
 import {
   ConfirmModeChangeDto,
   ListOutboxQueryDto,
@@ -80,7 +81,7 @@ export class AdminCourierEscalationController {
     private readonly settings: CourierChannelSettingsService,
     private readonly challenges: CourierModeChallengeService,
     private readonly reconciler: CourierOutboxReconcilerService,
-    private readonly adapter: DelhiverySupportAdapterService,
+    private readonly registry: CourierSupportRegistryService,
     private readonly escalations: CourierEscalationService,
     private readonly templates: CourierTemplateReviewService,
     private readonly prisma: PrismaService,
@@ -171,7 +172,10 @@ export class AdminCourierEscalationController {
   })
   async channel(): Promise<{
     readonly settings: ChannelSettingsView;
-    readonly capabilities: ReturnType<DelhiverySupportAdapterService['capabilities']>;
+    readonly capabilities: CapabilityFlags;
+    /** Every courier's, so the console can say which desk is readable
+     *  rather than implying one answer covers both. */
+    readonly capabilitiesByCourier: Readonly<Record<string, CapabilityFlags | null>>;
     readonly lockedCategoryLabels: readonly string[];
     readonly counts: OpsQueueCounts;
   }> {
@@ -180,7 +184,23 @@ export class AdminCourierEscalationController {
       settings,
       // Surfaced so the console can explain WHY nothing is automated:
       // with every write capability false, AUTO would change nothing.
-      capabilities: this.adapter.capabilities(),
+      // Delhivery's, because the settings block above is Delhivery's:
+      // this endpoint answers about ONE channel and the console reads it
+      // that way. The per-courier view is `capabilitiesByCourier`, kept
+      // as a separate field so the existing shape does not change
+      // meaning under a caller that has not been updated.
+      capabilities: this.registry.for('delhivery')?.capabilities() ?? {
+        getThread: false,
+        listUpdatedSince: false,
+        getTaxonomy: false,
+        postComment: false,
+        raiseTicket: false,
+      },
+      capabilitiesByCourier: Object.fromEntries(
+        this.registry
+          .known()
+          .map((code) => [code, this.registry.for(code)?.capabilities() ?? null]),
+      ),
       lockedCategoryLabels: HUMAN_ONLY_CATEGORY_LABELS,
       counts,
     };

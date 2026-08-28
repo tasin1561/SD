@@ -108,3 +108,6 @@ export interface CourierSupportAdapter {
   postComment(externalTicketId: string, body: string): Promise<void>;
   listUpdatedSince(since: Date): Promise<readonly { externalTicketId: string; updatedAt: Date }[]>;
 }
+
+/** DI token — every registered courier support adapter. */
+export const COURIER_SUPPORT_ADAPTERS = Symbol('COURIER_SUPPORT_ADAPTERS');

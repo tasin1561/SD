@@ -201,7 +201,7 @@ describe('the reconciler leaves unknowns alone when it cannot read', () => {
                 id: 'i1',
                 body: 'x',
                 externalRef: 'TKT1',
-                escalation: { externalTicketId: 'TKT1' },
+                escalation: { externalTicketId: 'TKT1', courierCode: 'delhivery' },
               },
             ]),
           updateMany: jest.fn().mockResolvedValue({ count: 0 }),
@@ -211,7 +211,13 @@ describe('the reconciler leaves unknowns alone when it cannot read', () => {
     const svc = new CourierOutboxReconcilerService(
       prisma as never,
       { release: jest.fn(), confirmFromReadBack: jest.fn() } as never,
-      { capabilities: () => ({ getThread: false }) } as never,
+      // A registry now, because read-back availability is per courier:
+      // Delhivery's MCP coming up must not make us try to read a ticket
+      // that lives at Shiprocket.
+      {
+        for: () => ({ capabilities: () => ({ getThread: false }) }),
+        known: () => ['delhivery'],
+      } as never,
       { hashBody: (b: string) => b } as never,
     );
     const out = await svc.reconcile();
@@ -232,7 +238,12 @@ describe('the reconciler leaves unknowns alone when it cannot read', () => {
             .fn()
             .mockResolvedValueOnce([])
             .mockResolvedValueOnce([
-              { id: 'i1', body: 'x', externalRef: null, escalation: { externalTicketId: null } },
+              {
+                id: 'i1',
+                body: 'x',
+                externalRef: null,
+                escalation: { externalTicketId: null, courierCode: 'delhivery' },
+              },
             ]),
           updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         },
@@ -241,7 +252,13 @@ describe('the reconciler leaves unknowns alone when it cannot read', () => {
     const svc = new CourierOutboxReconcilerService(
       prisma as never,
       { release, confirmFromReadBack: jest.fn() } as never,
-      { capabilities: () => ({ getThread: false }) } as never,
+      // A registry now, because read-back availability is per courier:
+      // Delhivery's MCP coming up must not make us try to read a ticket
+      // that lives at Shiprocket.
+      {
+        for: () => ({ capabilities: () => ({ getThread: false }) }),
+        known: () => ['delhivery'],
+      } as never,
       { hashBody: (b: string) => b } as never,
     );
     const out = await svc.reconcile();
