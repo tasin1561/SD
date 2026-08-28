@@ -16,6 +16,8 @@ function makeSut(opts: {
     qtyOnHand: number;
     batch: { unitCostInr: Prisma.Decimal | null } | null;
   }>;
+  lastSolventEntryId?: { id: string } | null;
+  causes?: Array<{ direction: string; _sum: { amount: Prisma.Decimal | null } }>;
 }) {
   const client = {
     sellerWalletBalance: { findMany: async () => opts.balances ?? [] },
@@ -34,6 +36,12 @@ function makeSut(opts: {
     inboundFreightCharge: { findMany: async () => opts.freight ?? [] },
     order: { findMany: async () => opts.cod ?? [] },
     seller: { findMany: async () => opts.sellers ?? [] },
+    sellerWalletEntry: {
+      // The last point the seller stood at zero or above; null means
+      // they have never been solvent, so the whole ledger counts.
+      findFirst: async () => opts.lastSolventEntryId ?? null,
+      groupBy: async () => opts.causes ?? [],
+    },
     stockLevel: { findMany: async () => opts.stock ?? [] },
   };
   return new LiabilitiesService({ client } as unknown as PrismaService);
@@ -134,5 +142,38 @@ describe('LiabilitiesService', () => {
   it('every line carries what it means — a bare number moves the problem to the reader', async () => {
     const r = await makeSut({}).report();
     for (const l of [...r.owed, ...r.due]) expect(l.meaning.length).toBeGreaterThan(20);
+  });
+
+  it('says what the debt is FOR, largest cause first', async () => {
+    // A total says a seller owes ₹9,000. This says it is ₹8,200 of
+    // inbound freight and ₹800 of delivery fees — the difference
+    // between chasing them and understanding them. Freight on stock that
+    // has not sold clears itself; delivery fees on delivered orders do
+    // not.
+    const r = await makeSut({
+      balances: [{ sellerId: 's1', balance: D('-9000') }],
+      sellers: [{ id: 's1', companyName: 'Indebted Co' }],
+      causes: [
+        { direction: 'ORDER_CHARGES', _sum: { amount: D('800') } },
+        { direction: 'INBOUND_FREIGHT', _sum: { amount: D('8200') } },
+      ],
+    }).report();
+
+    expect(r.sellerDebts[0]?.causes).toEqual([
+      { direction: 'INBOUND_FREIGHT', amountInr: '8200.00' },
+      { direction: 'ORDER_CHARGES', amountInr: '800.00' },
+    ]);
+  });
+
+  it('drops a cause that nets to nothing rather than listing a zero', async () => {
+    const r = await makeSut({
+      balances: [{ sellerId: 's1', balance: D('-100') }],
+      sellers: [{ id: 's1', companyName: 'Co' }],
+      causes: [
+        { direction: 'RTO_FEE', _sum: { amount: D('100') } },
+        { direction: 'COD_COLLECTION_FEE', _sum: { amount: null } },
+      ],
+    }).report();
+    expect(r.sellerDebts[0]?.causes).toHaveLength(1);
   });
 });

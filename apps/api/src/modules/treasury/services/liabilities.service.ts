@@ -1,8 +1,31 @@
 import { Injectable } from '@nestjs/common';
-import { Currency, InboundFreightStatus, Prisma, WithdrawalRequestStatus } from '@skydrop/db';
+import {
+  Currency,
+  InboundFreightStatus,
+  Prisma,
+  WalletEntryDirection,
+  WithdrawalRequestStatus,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 
 const ZERO = new Prisma.Decimal(0);
+
+/**
+ * The directions that can put a wallet in the red.
+ *
+ * Every one of them is money we spent or earned on the seller's behalf.
+ * A remittance is deliberately absent: paying a seller what they asked
+ * for cannot make them a debtor, and listing it as a cause of debt would
+ * read as blaming them for being paid.
+ */
+const DEBT_CAUSES = [
+  WalletEntryDirection.ORDER_CHARGES,
+  WalletEntryDirection.RTO_FEE,
+  WalletEntryDirection.INBOUND_FREIGHT,
+  WalletEntryDirection.INSTANT_PAY_FEE,
+  WalletEntryDirection.COD_COLLECTION_FEE,
+  WalletEntryDirection.ADJUSTMENT_DEBIT,
+] as const;
 
 export interface LedgerLine {
   readonly key: string;
@@ -20,6 +43,16 @@ export interface SellerDebt {
   /** Value of their stock sitting in our warehouse, at cost. */
   readonly stockValueInr: string;
   readonly covered: boolean;
+  /**
+   * What the debt is FOR, since the balance last went below zero.
+   *
+   * A total tells you a seller owes ₹9,000; this tells you it is
+   * ₹8,200 of inbound freight and ₹800 of delivery fees, which is the
+   * difference between chasing them and understanding them. Freight on
+   * stock that has not sold yet clears itself; delivery fees on
+   * delivered orders do not.
+   */
+  readonly causes: ReadonlyArray<{ direction: string; amountInr: string }>;
 }
 
 export interface LiabilitiesReport {
@@ -241,6 +274,10 @@ export class LiabilitiesService {
       );
     }
 
+    const causesById = new Map(
+      await Promise.all(sellerIds.map(async (id) => [id, await this.causesOfDebt(id)] as const)),
+    );
+
     return sellerIds
       .map((id) => {
         const owed = owedById.get(id) ?? ZERO;
@@ -251,8 +288,56 @@ export class LiabilitiesService {
           owedInr: owed.toFixed(2),
           stockValueInr: cover.toFixed(2),
           covered: cover.greaterThanOrEqualTo(owed),
+          causes: causesById.get(id) ?? [],
         };
       })
       .sort((a, b) => Number(b.owedInr) - Number(a.owedInr));
+  }
+
+  /**
+   * What put this seller in the red, by cause.
+   *
+   * Read from the point their balance last stood at zero or above — not
+   * over their whole history, which would list charges they have long
+   * since paid for and make an old account look far worse than a new
+   * one. Everything after that moment is what the current debt is
+   * actually made of.
+   *
+   * Credits in that window are deliberately NOT netted off any
+   * particular cause: a ₹500 top-up against ₹8,000 of freight and ₹800
+   * of fees does not pay off one of them, and choosing which to reduce
+   * would be inventing an allocation the seller never made.
+   */
+  private async causesOfDebt(
+    sellerId: string,
+  ): Promise<Array<{ direction: string; amountInr: string }>> {
+    const lastSolvent = await this.prisma.client.sellerWalletEntry.findFirst({
+      where: {
+        sellerId,
+        currency: Currency.INR,
+        runningBalanceAfter: { gte: 0 },
+      },
+      orderBy: { id: 'desc' },
+      select: { id: true },
+    });
+
+    const debits = await this.prisma.client.sellerWalletEntry.groupBy({
+      by: ['direction'],
+      where: {
+        sellerId,
+        currency: Currency.INR,
+        ...(lastSolvent === null ? {} : { id: { gt: lastSolvent.id } }),
+        direction: { in: [...DEBT_CAUSES] },
+      },
+      _sum: { amount: true },
+    });
+
+    return debits
+      .map((d) => ({
+        direction: d.direction,
+        amountInr: (d._sum.amount ?? ZERO).toFixed(2),
+      }))
+      .filter((d) => Number(d.amountInr) > 0)
+      .sort((a, b) => Number(b.amountInr) - Number(a.amountInr));
   }
 }

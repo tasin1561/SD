@@ -1012,6 +1012,8 @@ export interface SellerDebtView {
   readonly owedInr: string;
   readonly stockValueInr: string;
   readonly covered: boolean;
+  /** What the debt is for, since the balance last went below zero. */
+  readonly causes: ReadonlyArray<{ direction: string; amountInr: string }>;
 }
 
 export interface LiabilitiesView {

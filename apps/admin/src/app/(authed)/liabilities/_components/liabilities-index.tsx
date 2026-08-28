@@ -75,6 +75,33 @@ function LineTable({
   );
 }
 
+/**
+ * The ledger's own vocabulary, in words.
+ *
+ * Not an exhaustive mapper: this list is the debt-causing directions
+ * only, and an unrecognised one falls back to its own name rather than
+ * being hidden — a cause we cannot label is still a cause, and dropping
+ * it would make the parts stop adding up to the total beside them.
+ */
+function humanCause(direction: string): string {
+  switch (direction) {
+    case 'ORDER_CHARGES':
+      return 'Delivery fees';
+    case 'RTO_FEE':
+      return 'Return fees';
+    case 'INBOUND_FREIGHT':
+      return 'Inbound freight';
+    case 'INSTANT_PAY_FEE':
+      return 'Instant-pay fees';
+    case 'COD_COLLECTION_FEE':
+      return 'COD collection';
+    case 'ADJUSTMENT_DEBIT':
+      return 'Manual adjustment';
+    default:
+      return direction.replaceAll('_', ' ').toLowerCase();
+  }
+}
+
 export function LiabilitiesIndex(): ReactElement {
   const q = useLiabilities();
 
@@ -169,6 +196,7 @@ export function LiabilitiesIndex(): ReactElement {
                 <Tr>
                   <Th>Seller</Th>
                   <Th align="right">Owes</Th>
+                  <Th>What for</Th>
                   <Th align="right">Stock held (at cost)</Th>
                   <Th>Cover</Th>
                 </Tr>
@@ -186,6 +214,24 @@ export function LiabilitiesIndex(): ReactElement {
                     </Td>
                     <Td align="right">
                       <Money amount={s.owedInr} currency="INR" convert={false} direction="debit" />
+                    </Td>
+                    <Td>
+                      {/* A total says they owe ₹9,000; this says it is
+                          freight on stock that has not sold, which
+                          clears itself, or delivery fees on delivered
+                          orders, which do not. */}
+                      {s.causes.length === 0 ? (
+                        <span className="text-text-faint text-xs">—</span>
+                      ) : (
+                        <ul className="space-y-0.5">
+                          {s.causes.map((c) => (
+                            <li key={c.direction} className="text-xs">
+                              <span className="text-text-muted">{humanCause(c.direction)}</span>{' '}
+                              <Money amount={c.amountInr} currency="INR" convert={false} />
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </Td>
                     <Td align="right">
                       <Money amount={s.stockValueInr} currency="INR" convert={false} />
