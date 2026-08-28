@@ -885,6 +885,28 @@ const systemSettings: SystemSettingSeed[] = [
     overrideMaxDecimal: '10000000',
   },
   {
+    key: 'wallet.negative_balance_limit_inr',
+    category: 'wallet',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '0.00',
+    displayName: 'How far below zero a seller may go (INR)',
+    description:
+      'A wallet goes negative when charges land with nothing behind them — an RTO fee on a seller who has not topped up, freight on stock that has not sold. Some slack is correct: their goods are in our warehouse and the debt clears as those goods sell. Past this, new orders are refused, because every further order spends money we are already owed. Seller-overridable, for an account we know and want to carry.',
+    sellerOverridable: true,
+    overrideMinDecimal: '0',
+    overrideMaxDecimal: '10000000',
+  },
+  {
+    key: 'wallet.negative_balance_stock_backed',
+    category: 'wallet',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: true,
+    displayName: 'Let stock in our warehouse raise that limit',
+    description:
+      'When on, a seller may go negative up to the limit above PLUS the cost value of their stock sitting in our warehouse — the thing that actually secures the debt. When off, the flat limit is the whole allowance, whatever they are holding. On is the honest default: refusing an order from a seller with a warehouse full of their goods protects nothing.',
+    sellerOverridable: false,
+  },
+  {
     key: 'wallet.withdrawal_max_per_month',
     category: 'wallet',
     valueType: SettingValueType.INT,

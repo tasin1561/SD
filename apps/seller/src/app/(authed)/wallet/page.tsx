@@ -21,6 +21,7 @@ import { WithdrawalsCard } from './_components/withdrawals-card';
 import type { WalletEntryView } from '@skydrop/api-client';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
+import { CreditStandingCard } from './_components/credit-standing-card';
 
 /**
  * Phase 1B M24 — seller wallet. Top: balance cards (INR + BDT).
@@ -74,6 +75,11 @@ export default function WalletPage(): ReactElement {
         title="Wallet"
         subtitle="What's owed to you. COD net of charges per delivered order; remittances debit as we pay you out."
       />
+
+      {/* Above everything, and only when it applies. A seller who is
+          about to be refused should learn it here rather than at the
+          moment they try to place an order. */}
+      <CreditStandingCard />
 
       {/* The two ways money moves, beside the number they move. They
           used to sit at the bottom of the page, each heading its own

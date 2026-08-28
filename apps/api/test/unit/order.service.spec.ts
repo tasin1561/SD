@@ -53,6 +53,7 @@ function makeService(
     existing?: AnyArgs | null;
     openOrders?: AnyArgs[];
     sellerInitials?: string | null;
+    overdrawn?: boolean;
   } = {},
 ) {
   const orderCreate = jest.fn(async (args: { data: AnyArgs }) => ({
@@ -153,6 +154,12 @@ function makeService(
   const findOpenOrdersForPhone = jest.fn(async () => opts.openOrders ?? []);
   const reputation = { findOpenOrdersForPhone };
 
+  const assertCanPlaceOrder = jest.fn(async () => {
+    if (opts.overdrawn === true) {
+      throw new BadRequestException({ code: 'WALLET_OVERDRAWN', message: 'Overdrawn' });
+    }
+  });
+
   const svc = new OrderService(
     { client } as unknown as PrismaService,
     // Not on hold. A restricted seller is covered in
@@ -170,10 +177,14 @@ function makeService(
     callQueue as never,
     orderCharges as never,
     earlyReservations as never,
+    // In credit. The overdrawn path is covered in
+    // seller-credit.service.spec, where the allowance maths lives.
+    { assertCanPlaceOrder: assertCanPlaceOrder } as never,
   );
   return {
     svc,
     findOpenOrdersForPhone,
+    assertCanPlaceOrder,
     enqueueOrder,
     orderCreate,
     orderUpdate,
@@ -217,6 +228,28 @@ describe('OrderService.create — the seller code on the recipient name', () => 
     const { svc, orderCreate } = makeService({ sellerInitials: null });
     await svc.create('s1', baseDto(), ACTOR, CTX);
     expect((orderCreate.mock.calls[0]![0].data as AnyArgs).recipientName).toBe('Asha');
+  });
+});
+
+describe('OrderService.create — the credit gate', () => {
+  it('refuses an overdrawn seller BEFORE anything is written', async () => {
+    // Checked at create because it is the last point where nothing is
+    // committed: at confirmation an agent finds out with the customer on
+    // the line, at dispatch the goods are already picked.
+    const { svc, orderCreate } = makeService({ overdrawn: true });
+
+    await expect(svc.create('s1', baseDto(), ACTOR, CTX)).rejects.toMatchObject({
+      response: { code: 'WALLET_OVERDRAWN' },
+    });
+    expect(orderCreate).not.toHaveBeenCalled();
+  });
+
+  it('asks about credit on every create, so the CSV path is covered too', async () => {
+    // The importer reaches this same method with no screen in front of
+    // it. A gate in the controller would have missed it entirely.
+    const { svc, assertCanPlaceOrder } = makeService();
+    await svc.create('s1', baseDto(), ACTOR, CTX);
+    expect(assertCanPlaceOrder).toHaveBeenCalledWith('s1');
   });
 });
 

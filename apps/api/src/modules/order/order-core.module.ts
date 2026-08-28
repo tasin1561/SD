@@ -12,6 +12,7 @@ import { CustomerReputationService } from './services/customer-reputation.servic
 import { CustomerService } from './services/customer.service';
 import { RecipientAddressCacheService } from './services/recipient-address-cache.service';
 import { AddressValidationService } from './services/address-validation.service';
+import { SellerCreditModule } from '../seller-credit/seller-credit.module';
 import { OrderService } from './services/order.service';
 import { OrderAdminOverrideService } from './services/order-admin-override.service';
 
@@ -46,6 +47,9 @@ import { OrderAdminOverrideService } from './services/order-admin-override.servi
     OrderChargesModule,
     EarlyReservationModule,
     SellerRestrictionModule,
+    // A wallet too deep in the red stops new orders, checked beside the
+    // restriction so the CSV path is covered by the same line.
+    SellerCreditModule,
   ],
   providers: [
     OrderNumberingService,

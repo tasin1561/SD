@@ -11,6 +11,7 @@ import type { AuthenticatedSeller } from '../../common/types/request';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { WalletService } from '../seller-wallet/services/wallet.service';
 import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
+import { SellerCreditService } from '../seller-credit/services/seller-credit.service';
 
 /**
  * The terms this seller's wallet runs on, in their words.
@@ -170,6 +171,7 @@ export class SellerWalletController {
     private readonly prisma: PrismaService,
     private readonly fx: FxRateService,
     private readonly settings: SettingsResolverService,
+    private readonly credit: SellerCreditService,
   ) {}
 
   @Get()
@@ -242,6 +244,19 @@ export class SellerWalletController {
       }),
     );
     return { items };
+  }
+
+  @Get('credit')
+  @SellerAuthAllowSuspended()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'How far into the red this wallet may go, and whether it is past it. Shown BEFORE an order is refused, not after.',
+  })
+  creditStanding(
+    @CurrentSeller() seller: AuthenticatedSeller,
+  ): ReturnType<SellerCreditService['standing']> {
+    return this.credit.standing(seller.id);
   }
 
   @Get('entries')

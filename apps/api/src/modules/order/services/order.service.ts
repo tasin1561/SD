@@ -32,6 +32,7 @@ import { EarlyReservationService } from '../../early-reservation/services/early-
 import { composeSellerPrefixedName, stripSellerPrefix } from '../../../common/text/recipient-name';
 import type { CreateOrderDto } from '../dto/create-order.dto';
 import type { UpdateOrderDto } from '../dto/update-order.dto';
+import { SellerCreditService } from '../../seller-credit/services/seller-credit.service';
 
 const ORDER_VIEW_INCLUDE = {
   items: {
@@ -192,6 +193,7 @@ export class OrderService {
     private readonly callQueue: CallQueueService,
     private readonly orderCharges: OrderChargesService,
     private readonly earlyReservations: EarlyReservationService,
+    private readonly credit: SellerCreditService,
   ) {}
 
   /**
@@ -288,6 +290,14 @@ export class OrderService {
     // method with no screen in front of it — is covered by the same
     // line.
     await this.restrictions.assertAllowed(sellerId, SellerCapability.ORDER_CREATE);
+    // And a seller too deep in the red cannot start new work either.
+    // Checked at CREATE on purpose: it is the last point where nothing
+    // has been committed. At confirmation an agent would find out with
+    // the customer on the line; at dispatch the goods are already
+    // picked. Sits beside the restriction check so the CSV importer,
+    // which reaches this method with no screen in front of it, is
+    // covered by the same line.
+    await this.credit.assertCanPlaceOrder(sellerId);
 
     const source = options.source ?? OrderSource.MANUAL;
     const initialStatus = options.initialStatus ?? OrderStatus.DRAFT;

@@ -216,6 +216,23 @@ export interface WalletTerm {
  * the identical guard chain as a manual one (WAL-3) — turning it on
  * cannot take money a manual request could not.
  */
+export interface CreditStandingView {
+  readonly balanceInr: string;
+  readonly stockValueInr: string;
+  readonly allowanceInr: string;
+  readonly headroomInr: string;
+  readonly blocked: boolean;
+  readonly reason: string | null;
+}
+
+export function useCreditStanding(): UseQueryResult<CreditStandingView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-wallet', 'credit'],
+    queryFn: () => client.request<CreditStandingView>('/api/seller/wallet/credit'),
+  });
+}
+
 export function useWalletTerms(): UseQueryResult<{ items: WalletTerm[] }> {
   const client = useApiClient();
   return useQuery({
