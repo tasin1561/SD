@@ -10,6 +10,7 @@ import { CourierPickupService } from './services/courier-pickup.service';
 import { CourierWarehouseRegistrationService } from './services/courier-warehouse-registration.service';
 import { CourierShiprocketModule } from '../courier-shiprocket/courier-shiprocket.module';
 import { CourierNdrDispatchService } from './services/courier-ndr-dispatch.service';
+import { CourierOpsDispatchService } from './services/courier-ops-dispatch.service';
 import { CourierShipmentActionService } from './services/courier-shipment-action.service';
 import { CourierShipmentInsightService } from './services/courier-shipment-insight.service';
 import { ShipmentCourierContextService } from './services/shipment-courier-context.service';
@@ -40,6 +41,7 @@ import { ShipmentCourierContextService } from './services/shipment-courier-conte
     ShipmentCourierContextService,
     CourierShipmentInsightService,
     CourierNdrDispatchService,
+    CourierOpsDispatchService,
     CourierShipmentActionService,
     CourierPickupService,
     CourierMarginReportService,

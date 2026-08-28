@@ -52,12 +52,14 @@ function make(
     message: 'ok',
     raw: null,
   }));
-  const cancel = jest.fn(async () => ({
-    success: true,
-    awbNumber: AWB,
-    message: 'cancelled',
-    raw: null,
-  }));
+  const cancel = jest.fn<Promise<{ success: boolean; message: string | null }>, [string, unknown]>(
+    async () => ({
+      success: true,
+      awbNumber: AWB,
+      message: 'cancelled',
+      raw: null,
+    }),
+  );
   const ndrTakeAction = jest.fn(async () => ({
     success: true,
     awbNumber: AWB,
@@ -93,6 +95,18 @@ function make(
     { log: audit } as never,
     contextSvc as never,
     { edit, cancel } as never,
+    // Cancel now goes through the courier-agnostic dispatcher. The
+    // double forwards to the SAME `cancel` mock so every existing
+    // assertion keeps meaning what it did — including the ones that
+    // assert the courier was never called at all.
+    {
+      cancel: (
+        _courierCode: string,
+        _accountId: string | null,
+        awbNumber: string,
+        actor: unknown,
+      ) => cancel(awbNumber, actor),
+    } as never,
     { requiresEwaybill: (v: number) => v > 50_000, update: ewaybillUpdate } as never,
     ndr as never,
   );

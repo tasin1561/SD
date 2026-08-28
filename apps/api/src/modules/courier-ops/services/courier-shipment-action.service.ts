@@ -10,6 +10,7 @@ import {
 } from '../../courier-delhivery/services/delhivery-ewaybill.service';
 import { type NdrAction } from '../../courier-delhivery/services/delhivery-ndr.service';
 import { CourierNdrDispatchService } from './courier-ndr-dispatch.service';
+import { CourierOpsDispatchService } from './courier-ops-dispatch.service';
 import { ShipmentCourierContextService } from './shipment-courier-context.service';
 import { courierActor } from '../../courier-shared/services/courier-credential.service';
 
@@ -75,6 +76,7 @@ export class CourierShipmentActionService {
     private readonly audit: AuditLogService,
     private readonly context: ShipmentCourierContextService,
     private readonly editSvc: DelhiveryShipmentEditService,
+    private readonly opsDispatch: CourierOpsDispatchService,
     private readonly ewaybill: DelhiveryEwaybillService,
     private readonly ndr: CourierNdrDispatchService,
   ) {}
@@ -161,7 +163,12 @@ export class CourierShipmentActionService {
   ): Promise<ActionOutcome> {
     const shipment = await this.requireAwb(shipmentId);
 
-    const result = await this.editSvc.cancel(shipment.awbNumber, courierActor.operator(staffId));
+    const result = await this.opsDispatch.cancel(
+      shipment.courierCode,
+      shipment.courierAccountId,
+      shipment.awbNumber,
+      courierActor.operator(staffId),
+    );
 
     await this.audit.log({
       actorType: ActorType.STAFF,

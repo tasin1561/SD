@@ -14,6 +14,9 @@ export interface DelhiveryWarehouseInput {
   readonly pin: string;
   readonly address?: string;
   readonly city?: string;
+  /** Shiprocket requires it; Delhivery derives it from the pin and
+   *  ignores what it is sent. Optional so no existing caller changes. */
+  readonly state?: string;
   readonly country?: string;
   readonly email?: string;
   readonly registeredName?: string;

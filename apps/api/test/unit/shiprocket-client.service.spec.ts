@@ -1,3 +1,4 @@
+import type { CourierWriteGuardService } from '../../src/modules/courier-shared/services/courier-write-guard.service';
 import { ShiprocketClientService } from '../../src/modules/courier-shiprocket/services/shiprocket-client.service';
 import type { ShiprocketHttpService } from '../../src/modules/courier-shiprocket/services/shiprocket-http.service';
 import type { ShiprocketAwbRequest } from '../../src/modules/courier-shiprocket/types/shiprocket.types';
@@ -24,7 +25,13 @@ function makeSut(
       return hit?.[1] ?? {};
     },
   } as unknown as ShiprocketHttpService;
-  return { svc: new ShiprocketClientService(http), calls };
+  // Every write now passes the courier write guard, exactly as the
+  // Delhivery paths do. These tests exercise the wire marshalling with
+  // the guard permitting — a guard-refuses case belongs with the guard's
+  // own suite, which already covers it for both couriers.
+  const assertWritable = jest.fn(async () => undefined);
+  const writeGuard = { assertWritable } as unknown as CourierWriteGuardService;
+  return { svc: new ShiprocketClientService(http, writeGuard), calls, assertWritable };
 }
 
 const REQ: ShiprocketAwbRequest = {

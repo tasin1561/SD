@@ -37,7 +37,10 @@ const CONSUMERS = [
   'courier-ops/services/courier-shipment-action.service.ts',
   'courier-ops/services/courier-shipment-insight.service.ts',
   'courier-ops/services/courier-warehouse-registration.service.ts',
-  'courier-ops/services/courier-pickup.service.ts',
+  // Pickup, cancel and warehouse registration all reach their courier
+  // through the ops dispatcher now, which is where the actor must be
+  // threaded. courier-pickup itself no longer talks to a courier.
+  'courier-ops/services/courier-ops-dispatch.service.ts',
   'courier-ops/services/courier-margin-report.service.ts',
   // The AWB saga no longer calls a courier itself — multi-courier
   // failover moved that behind the dispatcher, which is now the thing

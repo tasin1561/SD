@@ -198,6 +198,16 @@ describe('CourierWarehouseRegistrationService — the exact-name guard', () => {
     const svc = new CourierWarehouseRegistrationService(
       { log: audit } as never,
       { register, update: register } as never,
+      // Registration now goes through the courier-agnostic dispatcher.
+      // The double forwards to the SAME `register` mock, so the
+      // exact-name assertions below keep testing what they did — the
+      // name guard is the point of this suite, not the transport.
+      {
+        registerWarehouse: async (input: { name: string }) => {
+          const r = await register();
+          return { success: r.success, message: r.message, name: input.name };
+        },
+      } as never,
     );
     return { svc, register, audit };
   }

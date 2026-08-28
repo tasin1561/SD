@@ -1,14 +1,20 @@
+import { CourierOpsDispatchService } from './courier-ops-dispatch.service';
 import {
   BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, PickupRequestStatus, Prisma, WarehouseStatus } from '@skydrop/db';
+import {
+  ActorType,
+  PickupRequestStatus,
+  Prisma,
+  WarehouseStatus,
+  ShipmentStatus,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { ClientInfoPayload } from '../../../common/decorators/client-info.decorator';
-import { DelhiveryPickupService } from '../../courier-delhivery/services/delhivery-pickup.service';
 import { courierActor } from '../../courier-shared/services/courier-credential.service';
 
 const COURIER_CODE = 'delhivery';
@@ -31,6 +37,17 @@ export interface PickupRequestView {
 
 export interface RaisePickupInput {
   readonly warehouseId: string;
+  /**
+   * Which courier is being asked to collect. Defaults to Delhivery so
+   * every existing caller is unchanged; the one-open-request-per-
+   * (courier, warehouse, day) unique already had the courier in it, so
+   * a Delhivery van and a Shiprocket van on the same day at the same
+   * warehouse were always two separate rows — which is correct, because
+   * they are two separate vans.
+   */
+  readonly courierCode?: string;
+  /** Which of that courier's accounts. Delhivery ignores it. */
+  readonly courierAccountId?: string | null;
   /** YYYY-MM-DD, local to the warehouse. */
   readonly pickupDate: string;
   /** HH:mm:ss. */
@@ -81,7 +98,7 @@ export class CourierPickupService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
-    private readonly pickup: DelhiveryPickupService,
+    private readonly opsDispatch: CourierOpsDispatchService,
   ) {}
 
   async list(query: {
@@ -128,6 +145,7 @@ export class CourierPickupService {
       });
     }
 
+    const courierCode = input.courierCode ?? COURIER_CODE;
     const pickupLocationName = await this.pickupLocationName();
     const pickupDate = parseDate(input.pickupDate);
 
@@ -137,7 +155,7 @@ export class CourierPickupService {
     try {
       row = await this.prisma.client.courierPickupRequest.create({
         data: {
-          courierCode: COURIER_CODE,
+          courierCode,
           warehouseId: warehouse.id,
           pickupLocationName,
           pickupDate,
@@ -158,14 +176,24 @@ export class CourierPickupService {
       throw err;
     }
 
-    let result: Awaited<ReturnType<DelhiveryPickupService['requestPickup']>>;
+    let result: Awaited<ReturnType<CourierOpsDispatchService['requestPickup']>>;
     try {
-      result = await this.pickup.requestPickup(
+      result = await this.opsDispatch.requestPickup(
         {
+          courierCode,
+          courierAccountId: input.courierAccountId ?? null,
           pickupLocation: pickupLocationName,
           pickupDate: input.pickupDate,
           pickupTime: input.pickupTime,
           expectedPackageCount: input.expectedPackageCount,
+          // Shiprocket schedules per PARCEL rather than per location and
+          // day, so it needs the day's parcels. Resolved here rather
+          // than in the dispatcher: which parcels are waiting at this
+          // warehouse is our question, not the courier adapter's.
+          courierShipmentIds:
+            courierCode === COURIER_CODE
+              ? []
+              : await this.awaitingPickup(warehouse.id, courierCode),
         },
         courierActor.operator(staffId),
       );
@@ -300,6 +328,37 @@ export class CourierPickupService {
   }
 
   // ── internal ────────────────────────────────────────────────────────
+
+  /**
+   * The parcels standing at this warehouse that the courier has not
+   * collected: an AWB issued, and not yet handed over.
+   *
+   * Only Shiprocket needs this — Delhivery's request covers the whole
+   * location — and it is answered from OUR records rather than theirs
+   * because a parcel we have not handed over is our fact, not a
+   * question about their system.
+   */
+  private async awaitingPickup(warehouseId: string, courierCode: string): Promise<string[]> {
+    const rows = await this.prisma.client.shipment.findMany({
+      where: {
+        courierCode,
+        originWarehouseId: warehouseId,
+        deletedAt: null,
+        awbNumber: { not: null },
+        courierShipmentId: { not: null },
+        // Not yet with the courier. Once handed over, a second pickup
+        // request for the same parcel is a van sent for nothing.
+        status: { in: [ShipmentStatus.CREATED, ShipmentStatus.AWB_GENERATED] },
+      },
+      select: { courierShipmentId: true },
+      // A day's collection, not a backlog sweep: an unbounded list here
+      // would be one HTTP call per parcel to their API.
+      take: 200,
+    });
+    const out: string[] = [];
+    for (const r of rows) if (r.courierShipmentId !== null) out.push(r.courierShipmentId);
+    return out;
+  }
 
   private async pickupLocationName(): Promise<string> {
     const row = await this.prisma.client.systemSetting.findUnique({

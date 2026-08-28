@@ -1,3 +1,4 @@
+import { CourierOpsDispatchService } from './courier-ops-dispatch.service';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ActorType } from '@skydrop/db';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -47,6 +48,7 @@ export class CourierWarehouseRegistrationService {
   constructor(
     private readonly audit: AuditLogService,
     private readonly warehouses: DelhiveryWarehouseService,
+    private readonly opsDispatch: CourierOpsDispatchService,
   ) {}
 
   /**
@@ -64,15 +66,32 @@ export class CourierWarehouseRegistrationService {
     input: DelhiveryWarehouseInput,
     ctx: ClientInfoPayload,
     courierAccountId: string | null = null,
+    /** Defaults to Delhivery so existing callers are unchanged. A
+     *  building known to both couriers needs registering with BOTH —
+     *  they each keep their own list and neither can see the other's. */
+    courierCode = 'delhivery',
   ): Promise<WarehouseRegistrationOutcome> {
     this.assertExactName(input.name);
-    const result = await this.warehouses.register(
-      input,
+    const result = await this.opsDispatch.registerWarehouse(
+      {
+        courierCode,
+        courierAccountId,
+        name: input.name,
+        phone: input.phone,
+        pin: input.pin,
+        address: input.address ?? '',
+        city: input.city ?? '',
+        // Shiprocket requires a state; Delhivery derives it from the
+        // pin and ignores what it is sent.
+        state: input.state ?? '',
+        country: input.country ?? 'India',
+        email: input.email ?? '',
+        returnAddress: input.returnAddress,
+      },
       courierActor.operator(staffId),
-      courierAccountId,
     );
     await this.auditIt(staffId, 'registered', input.name, result, ctx);
-    return { success: result.success, name: result.name, message: result.message };
+    return { success: result.success, name: input.name, message: result.message };
   }
 
   async update(

@@ -18,6 +18,7 @@ import {
   type ShiprocketTrackingResponse,
 } from '../types/shiprocket.types';
 import { toIsoWithIst } from '../../tracking-events/services/courier-time';
+import { CourierWriteGuardService } from '../../courier-shared/services/courier-write-guard.service';
 import { ShiprocketHttpService } from './shiprocket-http.service';
 
 /** Their refusals that mean "not this address", as opposed to "not now". */
@@ -47,7 +48,10 @@ const NON_SERVICEABLE_HINTS = [
 export class ShiprocketClientService {
   private readonly logger = new Logger(ShiprocketClientService.name);
 
-  constructor(private readonly http: ShiprocketHttpService) {}
+  constructor(
+    private readonly http: ShiprocketHttpService,
+    private readonly writeGuard: CourierWriteGuardService,
+  ) {}
 
   private actor(): CourierCredentialActor {
     return { type: ActorType.SYSTEM };
@@ -70,6 +74,16 @@ export class ShiprocketClientService {
     courierAccountId: string,
   ): Promise<ShiprocketAwbResult> {
     if (await this.http.isStubMode()) return this.stubAwb(req);
+
+    // Manifests a real parcel Shiprocket now expects to collect. The
+    // guard sits before createOrder rather than before the AWB assign,
+    // because the ORDER is the thing that becomes real — a created
+    // order with no AWB is still a row on their side that somebody has
+    // to go and cancel.
+    await this.writeGuard.assertWritable('shiprocket', 'shipment.create', {
+      shipmentId: req.shipmentId,
+      orderNumber: req.orderNumber,
+    });
 
     const created = await this.createOrder(req, courierAccountId);
     if (!created.ok) return created;
@@ -311,6 +325,8 @@ export class ShiprocketClientService {
     courierAccountId: string,
   ): Promise<{ ok: boolean; message: string | null }> {
     if (await this.http.isStubMode()) return { ok: true, message: 'stub' };
+    // Turns a moving parcel into a return, and reaches the customer.
+    await this.writeGuard.assertWritable('shiprocket', 'shipment.cancel', { awbNumber });
     const res = await this.http.request<{ message?: string }>({
       method: 'POST',
       path: '/v1/external/orders/cancel/shipment/awbs',
@@ -329,6 +345,8 @@ export class ShiprocketClientService {
     courierAccountId: string,
   ): Promise<{ ok: boolean; message: string | null }> {
     if (await this.http.isStubMode()) return { ok: true, message: 'stub' };
+    // Sends a real van to a real warehouse.
+    await this.writeGuard.assertWritable('shiprocket', 'pickup.request', { courierShipmentId });
     const res = await this.http.request<{ pickup_status?: number; response?: unknown }>({
       method: 'POST',
       path: '/v1/external/courier/generate/pickup',
@@ -337,6 +355,66 @@ export class ShiprocketClientService {
       courierAccountId,
     });
     return { ok: res.pickup_status === 1, message: null };
+  }
+
+  /**
+   * Register a pickup location.
+   *
+   * ── WHY THIS IS NOT OPTIONAL ─────────────────────────────────────
+   * Every order we create names a `pickup_location`, and Shiprocket
+   * matches it against the locations registered on that account. An
+   * unregistered name is not a warning — the order create fails, so a
+   * warehouse nobody registered is a warehouse that cannot ship. The
+   * same trap as Delhivery's, and for the same reason it is worth
+   * saying twice: the name is matched EXACTLY.
+   *
+   * Their API returns the location's numeric id, which nothing else of
+   * ours keys on — the name is the identifier everywhere it matters.
+   */
+  async registerPickupLocation(
+    input: {
+      readonly name: string;
+      readonly phone: string;
+      readonly pin: string;
+      readonly address: string;
+      readonly city: string;
+      readonly state: string;
+      readonly country: string;
+      readonly email: string;
+    },
+    courierAccountId: string,
+  ): Promise<{ success: boolean; name: string; message: string | null }> {
+    if (await this.http.isStubMode()) {
+      return { success: true, name: input.name, message: 'stub' };
+    }
+    await this.writeGuard.assertWritable('shiprocket', 'warehouse.write', {
+      operation: 'create',
+      name: input.name,
+    });
+    const res = await this.http.request<{ success?: boolean; message?: string }>({
+      method: 'POST',
+      path: '/v1/external/settings/company/addpickup',
+      body: {
+        pickup_location: input.name,
+        name: input.name,
+        email: input.email,
+        // Bare ten digits: their validator rejects a +91 prefix, the
+        // same normalisation the AWB path already does.
+        phone: input.phone.replace(/^\+91/, '').replace(/\D/g, '').slice(-10),
+        address: input.address,
+        city: input.city,
+        state: input.state,
+        country: input.country,
+        pin_code: input.pin,
+      },
+      actor: this.actor(),
+      courierAccountId,
+    });
+    return {
+      success: res.success !== false,
+      name: input.name,
+      message: res.message ?? null,
+    };
   }
 
   /** Deterministic, and keyed the same way Delhivery's stub is. */
