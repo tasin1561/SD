@@ -454,6 +454,33 @@ const systemSettings: SystemSettingSeed[] = [
     description:
       'EMPTY means stub mode, which is where this starts and stays until an account exists. Set to https://apiv2.shiprocket.in only after a controlled first parcel has proved the wire contract — every shape in the adapter is transcribed from their published docs and has never been exercised against a real account. Unlike Delhivery, auth is an email/password login that mints a token lasting about ten days; the credentials live in courier_credentials per account (CUR-1), never here.',
   },
+  {
+    key: 'courier.default_account_delhivery',
+    category: 'courier',
+    valueType: SettingValueType.STRING,
+    valueString: '',
+    displayName: 'Default Delhivery account',
+    description:
+      'Which Delhivery account carries a parcel when the seller has no distribution of their own. Empty means "any active one", which is fine with a single account and becomes a coin toss with four — set it once a second account exists.',
+  },
+  {
+    key: 'courier.default_account_shiprocket',
+    category: 'courier',
+    valueType: SettingValueType.STRING,
+    valueString: '',
+    displayName: 'Default Shiprocket account',
+    description:
+      'The Shiprocket half of the same choice. Empty means Shiprocket is not in the global rotation at all, which is the correct state until an account is provisioned.',
+  },
+  {
+    key: 'courier.delhivery_share_percent',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 100,
+    displayName: 'Share of parcels to Delhivery (%)',
+    description:
+      'How the two default accounts split the work. 70 means roughly seven parcels in ten go to Delhivery and three to Shiprocket. Applied PER PARCEL by a weighted draw, so the split is approached over volume rather than enforced exactly — the alternative is a running counter that two API instances would fight over. Starts at 100 because Shiprocket has no account yet; a seller with their own distribution ignores this entirely.',
+  },
   // No Delhivery sandbox exists for this account, so the only environment
   // is production. Reads (serviceability, tracking, cost, TAT, EPOD) are
   // free and side-effect-free; writes manifest real parcels, dispatch real
