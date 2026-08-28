@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { CourierSharedModule } from '../courier-shared/courier-shared.module';
+import { CourierShiprocketModule } from '../courier-shiprocket/courier-shiprocket.module';
 import { RedisModule } from '../../infrastructure/redis/redis.module';
 import { CourierDelhiveryModule } from '../courier-delhivery/courier-delhivery.module';
 import { AdminServiceabilityController } from './controllers/admin-serviceability.controller';
@@ -22,7 +24,7 @@ import { ServiceabilityCacheService } from './services/serviceability-cache.serv
  * imports the adapter; the adapter imports neither.
  */
 @Module({
-  imports: [RedisModule, CourierDelhiveryModule],
+  imports: [CourierSharedModule, CourierShiprocketModule, RedisModule, CourierDelhiveryModule],
   controllers: [SellerServiceabilityController, AdminServiceabilityController],
   providers: [ServiceabilityCacheService, OrderServiceabilityService],
   exports: [OrderServiceabilityService],

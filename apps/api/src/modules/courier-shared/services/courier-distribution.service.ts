@@ -63,6 +63,34 @@ export class CourierDistributionService {
     return this.globalSplit(environment, input.paymentMode);
   }
 
+  /**
+   * Any usable account for one named courier, seller-independent.
+   *
+   * The serviceability check asks "would this courier carry a parcel to
+   * this pin at all", which is a question about the COURIER rather than
+   * about a seller's routing — so it deliberately skips the weighted
+   * draw. Returns null when the courier has no active account, which
+   * the caller reads as "could not ask", never as a refusal.
+   */
+  async anyAccountFor(
+    courierCode: string,
+    environment: CredentialEnvironment = CredentialEnvironment.PRODUCTION,
+  ): Promise<{ courierAccountId: string; courierCode: string } | null> {
+    const account = await this.prisma.client.courierAccount.findFirst({
+      where: {
+        isActive: true,
+        deletedAt: null,
+        environment,
+        courier: { code: courierCode, deletedAt: null },
+      },
+      select: { id: true },
+      // Deterministic, so two calls a second apart do not consult two
+      // different accounts and disagree about the same pin.
+      orderBy: { createdAt: 'asc' },
+    });
+    return account === null ? null : { courierAccountId: account.id, courierCode };
+  }
+
   /** Every account this seller is linked to, across all couriers. */
   private async sellerCandidates(
     sellerId: string,
