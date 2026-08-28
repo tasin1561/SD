@@ -129,3 +129,4 @@ export {
   ShippingDirection,
 } from '@prisma/client';
 export { BankOwnerKind, BankEntryType } from '@prisma/client';
+export { DeliveryActionKind, DeliveryActionStatus } from '@prisma/client';

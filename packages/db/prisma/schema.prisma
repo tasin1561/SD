@@ -271,6 +271,7 @@ model Seller {
   tickets                  Ticket[]
   earlyReservationReviews  EarlyReservationReview[]
   reattemptRequests        OrderReattemptRequest[]
+  deliveryActionRequests   OrderDeliveryActionRequest[]
   stockUnits               StockUnit[]
   inboundFreightCharges    InboundFreightCharge[]
   invoices                 Invoice[]
@@ -2574,11 +2575,11 @@ model Order {
   updatedAt               DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt               DateTime?                @map("deleted_at") @db.Timestamptz
 
-  seller                 Seller                  @relation(fields: [sellerId], references: [id])
-  customer               Customer?               @relation(fields: [customerId], references: [id])
-  bulkUpload             BulkOrderUpload?        @relation(fields: [bulkUploadId], references: [id])
-  confirmedBy            StaffUser?              @relation("OrderConfirmedBy", fields: [confirmedById], references: [id])
-  cancelledBy            StaffUser?              @relation("OrderCancelledBy", fields: [cancelledById], references: [id])
+  seller                 Seller                       @relation(fields: [sellerId], references: [id])
+  customer               Customer?                    @relation(fields: [customerId], references: [id])
+  bulkUpload             BulkOrderUpload?             @relation(fields: [bulkUploadId], references: [id])
+  confirmedBy            StaffUser?                   @relation("OrderConfirmedBy", fields: [confirmedById], references: [id])
+  cancelledBy            StaffUser?                   @relation("OrderCancelledBy", fields: [cancelledById], references: [id])
   items                  OrderItem[]
   events                 OrderEvent[]
   reservations           StockReservation[]
@@ -2589,10 +2590,11 @@ model Order {
   callQueueEntries       CallQueueEntry[]
   callAttempts           CallAttempt[]
   reattemptRequests      OrderReattemptRequest[]
+  deliveryActionRequests OrderDeliveryActionRequest[]
   orderShipments         OrderShipment[]
   charges                OrderCharge[]
   notificationLogs       NotificationLog[]
-  walletEntries          SellerWalletEntry[]     @relation("WalletEntryOrder")
+  walletEntries          SellerWalletEntry[]          @relation("WalletEntryOrder")
   gstWithholding         GstWithholding?
   invoice                Invoice?
   pendingAccrual         PendingAccrual?
@@ -3094,7 +3096,8 @@ model Shipment {
   notificationLogs     NotificationLog[]
   tickets              Ticket[]
 
-  ndrActionRequests NdrActionRequest[]
+  ndrActionRequests      NdrActionRequest[]
+  deliveryActionRequests OrderDeliveryActionRequest[]
 
   @@index([courierCode, status])
   @@index([status, createdAt])
@@ -6455,4 +6458,77 @@ model BankEntry {
   @@index([type])
   @@index([transferId])
   @@map("bank_entries")
+}
+
+/// What a seller can ask for when a delivery fails.
+///
+/// Three actions, and they do NOT all reach the courier. REATTEMPT and
+/// RTO move a real van and go through the operator gate CUR-10 demands;
+/// RECALL asks our own agents to phone the customer and touches nobody
+/// else's system.
+enum DeliveryActionKind {
+  /// Ask the courier to try delivering again.
+  REATTEMPT @map("reattempt")
+  /// Ask OUR call centre to phone the customer. No courier write.
+  RECALL    @map("recall")
+  /// Send it back rather than keep trying.
+  RTO       @map("rto")
+
+  @@map("delivery_action_kind")
+}
+
+enum DeliveryActionStatus {
+  PENDING  @map("pending")
+  /// Decided yes; the action has not fired yet.
+  APPROVED @map("approved")
+  REJECTED @map("rejected")
+  /// The action actually reached the courier (or the call queue).
+  EXECUTED @map("executed")
+  /// Approved, attempted, and the far side refused. Distinct from
+  /// REJECTED, which is a human saying no — this is a decision that
+  /// could not be carried out, and it needs a different response.
+  FAILED   @map("failed")
+
+  @@map("delivery_action_status")
+}
+
+/// A seller asking us to do something about a failed delivery.
+///
+/// The seller ASKS; an operator (or an explicitly enabled runner)
+/// decides and executes. That separation is CUR-10 and it is not
+/// ceremony: a re-attempt sends a van and an RTO turns a moving parcel
+/// into a return, so a seller-facing handler must never fire one
+/// directly. It also gives the refusal somewhere to live — "we already
+/// tried twice" is a decision with a reason, not a silent no-op.
+model OrderDeliveryActionRequest {
+  id                String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  orderId           String               @map("order_id") @db.Uuid
+  shipmentId        String               @map("shipment_id") @db.Uuid
+  sellerId          String               @map("seller_id") @db.Uuid
+  requestedById     String?              @map("requested_by_id") @db.Uuid
+  action            DeliveryActionKind
+  reason            String               @db.Text
+  status            DeliveryActionStatus @default(PENDING)
+  /// The failed delivery this answers, so a request cannot be read as a
+  /// response to an NDR that had not happened yet.
+  deliveryAttemptId String?              @map("delivery_attempt_id") @db.Uuid
+  decidedById       String?              @map("decided_by_id") @db.Uuid
+  decidedAt         DateTime?            @map("decided_at") @db.Timestamptz
+  decisionNote      String?              @map("decision_note") @db.Text
+  executedAt        DateTime?            @map("executed_at") @db.Timestamptz
+  /// What the courier gave back — Delhivery returns a UPL id, not an
+  /// outcome, and the result arrives later on a scan.
+  executionRef      String?              @map("execution_ref")
+  executionError    String?              @map("execution_error") @db.Text
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz
+
+  order    Order    @relation(fields: [orderId], references: [id])
+  shipment Shipment @relation(fields: [shipmentId], references: [id])
+  seller   Seller   @relation(fields: [sellerId], references: [id])
+
+  @@index([sellerId, status])
+  @@index([orderId])
+  @@index([status, createdAt])
+  @@map("order_delivery_action_requests")
 }

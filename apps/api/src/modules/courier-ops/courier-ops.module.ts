@@ -43,5 +43,11 @@ import { ShipmentCourierContextService } from './services/shipment-courier-conte
     CourierWarehouseRegistrationService,
     StaffJwtGuard,
   ],
+  // The ONE export, and it is deliberate. `delivery-action` turns a
+  // seller's request into a courier call, and the call already lives
+  // here — re-implementing it there would give two modules a way to
+  // dispatch a van. Direction stays one-way: delivery-action imports
+  // this, never the reverse.
+  exports: [CourierShipmentActionService],
 })
 export class CourierOpsModule {}
