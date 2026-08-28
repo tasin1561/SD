@@ -2221,3 +2221,31 @@ export function useCancelConsignment(): UseMutationResult<
     },
   });
 }
+
+export interface OpenRtoRow {
+  readonly shipmentId: string;
+  readonly shipmentNumber: string;
+  readonly awbNumber: string | null;
+  readonly orderNumber: string | null;
+  readonly sellerName: string | null;
+  readonly rtoReceivedAt: string | null;
+  readonly itemCount: number;
+  readonly undecidedCount: number;
+  readonly uninspectedCount: number;
+}
+
+/**
+ * Returns received but not finalised.
+ *
+ * The operator workflow has always worked one shipment at a time and was
+ * reachable only if you already knew the id — which is how a carton sits
+ * on the returns bench for three weeks with nothing broken and nobody
+ * able to see it.
+ */
+export function useOpenRtoShipments(): UseQueryResult<{ items: OpenRtoRow[] }> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['warehouse-rto', 'open'],
+    queryFn: () => client.request<{ items: OpenRtoRow[] }>('/api/warehouse/rto/shipments'),
+  });
+}

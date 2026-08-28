@@ -704,6 +704,111 @@ export class ManifestService {
       })),
     };
   }
+
+  /**
+   * Create an empty DRAFT for a courier and warehouse.
+   *
+   * Manifests are otherwise born only from `PackService.complete`'s
+   * find-or-create, which means the first packed parcel of the day
+   * decides when one exists. That was fine with a single courier; it
+   * stops being fine when a supervisor wants a manifest open ahead of
+   * incoming volume, or needs somewhere to MOVE a parcel to — the move
+   * endpoint has been unreachable in practice because a second DRAFT
+   * for the same pair never organically appears.
+   *
+   * Idempotent, and deliberately so rather than refusing: two
+   * supervisors preparing for the same van should end up with one
+   * manifest between them, not an error and a duplicate. The same
+   * per-pair advisory lock the auto-attach uses serialises them, so
+   * parallel DRAFTs stay impossible.
+   */
+  async createEmptyDraft(
+    staffId: string,
+    input: { courierCode: string; originWarehouseId: string },
+  ): Promise<{ manifestId: string; manifestNumber: string; created: boolean }> {
+    const warehouse = await this.prisma.client.warehouse.findFirst({
+      where: { id: input.originWarehouseId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!warehouse) {
+      throw new NotFoundException({
+        code: 'WAREHOUSE_NOT_FOUND',
+        message: 'No such warehouse',
+      });
+    }
+    const courier = await this.prisma.client.courier.findFirst({
+      where: { code: input.courierCode, deletedAt: null },
+      select: { code: true },
+    });
+    if (!courier) {
+      throw new NotFoundException({
+        code: 'COURIER_NOT_FOUND',
+        message: `No courier with code ${input.courierCode}`,
+      });
+    }
+
+    return this.prisma.client.$transaction(async (tx) => {
+      // Same lock the auto-attach takes, so a supervisor opening a
+      // manifest and a packer's parcel arriving cannot both create one.
+      await tx.$executeRawUnsafe(
+        'SELECT pg_advisory_xact_lock($1::int, $2::int)',
+        ATTACH_LOCK_NAMESPACE,
+        fnv1a32(`${input.courierCode}|${input.originWarehouseId}`),
+      );
+
+      const existing = await tx.manifest.findFirst({
+        where: {
+          courierCode: input.courierCode,
+          originWarehouseId: input.originWarehouseId,
+          status: ManifestStatus.DRAFT,
+        },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, manifestNumber: true },
+      });
+      if (existing) {
+        return {
+          manifestId: existing.id,
+          manifestNumber: existing.manifestNumber,
+          created: false,
+        };
+      }
+
+      const manifestNumber = await this.numbering.nextManifestNumber(tx);
+      const manifest = await tx.manifest.create({
+        data: {
+          manifestNumber,
+          courierCode: input.courierCode,
+          originWarehouseId: input.originWarehouseId,
+          status: ManifestStatus.DRAFT,
+        },
+        select: { id: true, manifestNumber: true },
+      });
+
+      await this.audit.log(
+        {
+          actorType: ActorType.STAFF,
+          staffUserId: staffId,
+          action: 'staff.manifest.created_empty',
+          entityType: 'manifest',
+          entityId: manifest.id,
+          // Opening a manifest commits nothing and moves nothing.
+          severity: 'LOW',
+          metadata: {
+            courierCode: input.courierCode,
+            originWarehouseId: input.originWarehouseId,
+            manifestNumber: manifest.manifestNumber,
+          },
+        },
+        tx,
+      );
+
+      return {
+        manifestId: manifest.id,
+        manifestNumber: manifest.manifestNumber,
+        created: true,
+      };
+    });
+  }
 }
 
 /** 32-bit FNV-1a — small, deterministic, signed-int-fits.

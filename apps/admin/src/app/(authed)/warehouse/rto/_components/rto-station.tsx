@@ -14,6 +14,7 @@ import {
 import { ApiError } from '@skydrop/api-client';
 import { PutawayPanel } from './putaway-panel';
 import type { RtoItemCondition, RtoDisposition } from '@skydrop/db';
+import { OpenReturns } from './open-returns';
 import {
   useReceiveRto,
   useInspectRtoItem,
@@ -91,107 +92,112 @@ export function RtoStation(): ReactElement {
   }
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardBody>
-          <h2 className="text-text-bright text-sm font-medium mb-3">Receive</h2>
-          <div className="flex items-end gap-2">
-            <FormField label="AWB number">
-              <Input
-                value={awb}
-                onChange={(e) => setAwb(e.target.value)}
-                placeholder="DL12345678"
-                disabled={receive.isPending}
-              />
-            </FormField>
-            <Button
-              variant="primary"
-              size="md"
-              disabled={receive.isPending || !awb.trim()}
-              onClick={() => void onReceive()}
-            >
-              {receive.isPending ? 'Receiving…' : 'Receive'}
-            </Button>
-          </div>
-        </CardBody>
-      </Card>
-
-      {error && (
-        <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
-          {error}
-        </div>
-      )}
-
-      {!shipmentId ? (
-        <EmptyState
-          title="No shipment selected"
-          description="Receive an inbound RTO by AWB to begin inspection."
-        />
-      ) : detail.isLoading ? (
-        <Card>
-          <CardBody>Loading shipment…</CardBody>
-        </Card>
-      ) : detail.isError || !detail.data ? (
-        <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
-          Failed to load shipment.
-        </div>
-      ) : (
+    <>
+      {/* The bench, above the single-parcel workflow: a supervisor
+          scanning this list is the same person who will work it. */}
+      <OpenReturns onPick={setShipmentId} />
+      <div className="space-y-4">
         <Card>
           <CardBody>
-            <div className="flex items-baseline justify-between mb-3">
-              <div>
-                <div className="text-text-bright font-medium text-sm">
-                  Shipment {detail.data.shipmentNumber}
-                </div>
-                <div className="text-text-faint text-xs mt-0.5">
-                  Order status: {detail.data.orderStatus ?? '—'} · {detail.data.items.length}{' '}
-                  line(s)
-                </div>
-              </div>
-            </div>
-            <div className="space-y-2">
-              {detail.data.items.map((it) => (
-                <RtoItemRow
-                  key={it.shipmentItemId}
-                  item={it}
-                  onSave={async (condition, disposition, notes) => {
-                    setError(null);
-                    try {
-                      await inspect.mutateAsync({
-                        shipmentItemId: it.shipmentItemId,
-                        condition: condition as RtoItemCondition,
-                        disposition: disposition as RtoDisposition,
-                        ...(notes ? { notes } : {}),
-                      });
-                      toast.success(`Line inspected.`);
-                      await detail.refetch();
-                    } catch (err) {
-                      setError(fmtError(err));
-                    }
-                  }}
-                  saving={inspect.isPending}
+            <h2 className="text-text-bright text-sm font-medium mb-3">Receive</h2>
+            <div className="flex items-end gap-2">
+              <FormField label="AWB number">
+                <Input
+                  value={awb}
+                  onChange={(e) => setAwb(e.target.value)}
+                  placeholder="DL12345678"
+                  disabled={receive.isPending}
                 />
-              ))}
-            </div>
-            <div className="mt-4 flex justify-end">
+              </FormField>
               <Button
                 variant="primary"
                 size="md"
-                disabled={finalize.isPending}
-                onClick={() => void onFinalize()}
+                disabled={receive.isPending || !awb.trim()}
+                onClick={() => void onReceive()}
               >
-                {finalize.isPending ? 'Finalizing…' : 'Finalize disposition'}
+                {receive.isPending ? 'Receiving…' : 'Receive'}
               </Button>
             </div>
           </CardBody>
         </Card>
-      )}
 
-      {/* After finalise, whatever came back GOOD is sitting in a hold bin
+        {error && (
+          <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
+            {error}
+          </div>
+        )}
+
+        {!shipmentId ? (
+          <EmptyState
+            title="No shipment selected"
+            description="Receive an inbound RTO by AWB to begin inspection."
+          />
+        ) : detail.isLoading ? (
+          <Card>
+            <CardBody>Loading shipment…</CardBody>
+          </Card>
+        ) : detail.isError || !detail.data ? (
+          <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
+            Failed to load shipment.
+          </div>
+        ) : (
+          <Card>
+            <CardBody>
+              <div className="flex items-baseline justify-between mb-3">
+                <div>
+                  <div className="text-text-bright font-medium text-sm">
+                    Shipment {detail.data.shipmentNumber}
+                  </div>
+                  <div className="text-text-faint text-xs mt-0.5">
+                    Order status: {detail.data.orderStatus ?? '—'} · {detail.data.items.length}{' '}
+                    line(s)
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {detail.data.items.map((it) => (
+                  <RtoItemRow
+                    key={it.shipmentItemId}
+                    item={it}
+                    onSave={async (condition, disposition, notes) => {
+                      setError(null);
+                      try {
+                        await inspect.mutateAsync({
+                          shipmentItemId: it.shipmentItemId,
+                          condition: condition as RtoItemCondition,
+                          disposition: disposition as RtoDisposition,
+                          ...(notes ? { notes } : {}),
+                        });
+                        toast.success(`Line inspected.`);
+                        await detail.refetch();
+                      } catch (err) {
+                        setError(fmtError(err));
+                      }
+                    }}
+                    saving={inspect.isPending}
+                  />
+                ))}
+              </div>
+              <div className="mt-4 flex justify-end">
+                <Button
+                  variant="primary"
+                  size="md"
+                  disabled={finalize.isPending}
+                  onClick={() => void onFinalize()}
+                >
+                  {finalize.isPending ? 'Finalizing…' : 'Finalize disposition'}
+                </Button>
+              </div>
+            </CardBody>
+          </Card>
+        )}
+
+        {/* After finalise, whatever came back GOOD is sitting in a hold bin
           and is not sellable. The panel renders nothing when there is
           nothing in hold, so it appears exactly when there is work. */}
-      {shipmentId !== null && <PutawayPanel shipmentId={shipmentId} />}
-    </div>
+        {shipmentId !== null && <PutawayPanel shipmentId={shipmentId} />}
+      </div>
+    </>
   );
 }
 

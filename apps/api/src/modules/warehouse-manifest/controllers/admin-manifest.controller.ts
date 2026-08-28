@@ -30,6 +30,7 @@ import {
 } from '../services/manifest.service';
 import { ListManifestsQueryDto, MoveShipmentDto } from '../dto/admin-manifest.dto';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
+import { CreateManifestDto } from '../dto/create-manifest.dto';
 
 /**
  * Module 8 — supervisor + admin manifest endpoints (commit 13).
@@ -73,6 +74,22 @@ export class AdminManifestController {
     manifestId: string,
   ): Promise<ManifestDetail> {
     return this.svc.getById(manifestId);
+  }
+
+  @Post('manifests')
+  // Opening one commits nothing and moves nothing — it is the same
+  // supervisor act as closing one, minus the consequence.
+  @RequirePermissions('warehouse.manifest.close')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary:
+      'Open an empty DRAFT manifest for a courier and warehouse. Idempotent — two supervisors preparing the same van get one manifest, not a duplicate.',
+  })
+  createEmpty(
+    @Body() body: CreateManifestDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): ReturnType<ManifestService['createEmptyDraft']> {
+    return this.svc.createEmptyDraft(staff.id, body);
   }
 
   @Post('manifests/:manifestId/close')
