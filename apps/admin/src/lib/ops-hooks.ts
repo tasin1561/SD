@@ -2370,3 +2370,29 @@ export function useDecideDeliveryAction(): UseMutationResult<
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-delivery-actions'] }),
   });
 }
+
+/**
+ * Can our courier deliver there — asked with the customer on the line.
+ *
+ * The last cheap moment: no stock reserved, no AWB bought, and the one
+ * person who can fix a bad address is talking to the one who knows it.
+ * Advisory only; it never blocks a confirmation, because a refusal an
+ * agent cannot act on just strands them mid-call.
+ */
+export function useServiceabilityCheck(
+  pincode: string | null,
+  paymentMode: 'COD' | 'PREPAID',
+): UseQueryResult<{ serviceable: boolean; reason: string | null; known: boolean }> {
+  const client = useApiClient();
+  const pin = pincode ?? '';
+  return useQuery({
+    queryKey: ['admin-serviceability', pin, paymentMode],
+    enabled: /^\d{6}$/.test(pin),
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+    queryFn: () =>
+      client.request<{ serviceable: boolean; reason: string | null; known: boolean }>(
+        `/api/admin/serviceability?pincode=${pin}&paymentMode=${paymentMode}`,
+      ),
+  });
+}

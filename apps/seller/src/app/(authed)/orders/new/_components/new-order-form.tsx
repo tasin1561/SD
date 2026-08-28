@@ -22,6 +22,7 @@ import {
 import { prefixHint, stripSellerPrefix } from '@/lib/seller-prefix';
 import { CustomerHistoryPanel } from './customer-history-panel';
 import { DuplicateOrderDialog, type DuplicateCandidate } from './duplicate-order-dialog';
+import { useServiceability } from '@/lib/ops-hooks';
 import {
   IN_DIAL,
   IN_LOCAL_LENGTH,
@@ -104,6 +105,9 @@ export function NewOrderForm(): ReactElement {
   const router = useRouter();
   const toast = useToast();
   const [form, setForm] = useState<FormState>(INITIAL);
+  // Asked while they type, so a bad pin is caught before they commit
+  // rather than after the order exists. Cached server-side for a day.
+  const serviceability = useServiceability(form.recipientPostalCode, form.paymentMode);
   const [items, setItems] = useState<readonly PickedLine[]>([]);
   const nextKey = useRef(1);
   const [error, setError] = useState<string | null>(null);
@@ -565,7 +569,19 @@ export function NewOrderForm(): ReactElement {
                 required
               />
             </FormField>
-            <FormField label="PIN code" required>
+            <FormField
+              label="PIN code"
+              required
+              // Advisory only. The answer can be a day stale and a
+              // seller knows their customer's area better than a lookup
+              // does — so this informs, and never blocks the submit.
+              hint={
+                serviceability.data?.known === true && !serviceability.data.serviceable
+                  ? (serviceability.data.reason ??
+                    'Our courier may not deliver here — the order can still be placed.')
+                  : undefined
+              }
+            >
               <Input
                 value={form.recipientPostalCode}
                 onChange={(e) =>

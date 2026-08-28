@@ -28,6 +28,7 @@ import {
 import { CallOutcome } from '@skydrop/db';
 import { MyAvailability } from './my-availability';
 import { MyCallHistory } from './my-call-history';
+import { useServiceabilityCheck } from '@/lib/ops-hooks';
 
 const OUTCOME_OPTIONS: ReadonlyArray<{
   value: CallOutcome;
@@ -486,6 +487,12 @@ function RecipientPanel({
   // the flat column names, so every field here rendered "—" and an
   // agent was asked to phone a number the screen would not show.
   const r = order.recipient;
+  // Asked while the agent has the customer on the line — the last
+  // moment a bad address is cheap to fix. Cached server-side for a day.
+  const serviceability = useServiceabilityCheck(
+    r.postalCode,
+    order.paymentMode === 'PREPAID' ? 'PREPAID' : 'COD',
+  );
 
   return (
     <div className="rounded-[6px] border border-border p-3 text-sm">
@@ -514,6 +521,20 @@ function RecipientPanel({
           label="Address"
           value={[r.addressLine1, r.addressLine2, r.landmark].filter(Boolean).join(', ') || '—'}
         />
+        {/* Surfaced here, not enforced. An agent who learns the pin is
+            not deliverable can ask for another address while the
+            customer is still on the phone — which is the entire value.
+            Blocking the confirmation instead would leave them holding a
+            refusal with nowhere to put it. */}
+        {serviceability.data?.known === true && !serviceability.data.serviceable && (
+          <Field
+            label="Delivery"
+            value={
+              serviceability.data.reason ??
+              'Our courier may not deliver to this PIN — ask for an alternative address.'
+            }
+          />
+        )}
         <Field
           label="City / state / PIN"
           // Filtering on EMPTY STRING, not nullishness: city/state are

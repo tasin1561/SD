@@ -519,3 +519,38 @@ export function useCallHistory(orderId: string): UseQueryResult<{ items: SellerV
       client.request<{ items: SellerVisibleCall[] }>(`/api/seller/orders/${orderId}/call-history`),
   });
 }
+
+// ───────── Can we deliver there? ─────────
+
+export interface ServiceabilityVerdict {
+  readonly serviceable: boolean;
+  readonly reason: string | null;
+  /** False means we could not find out — NOT that it is undeliverable. */
+  readonly known: boolean;
+}
+
+/**
+ * Advisory, and cheap.
+ *
+ * The underlying courier lookup is cached for a day server-side, so
+ * typing a pincode costs nothing after the first order to it. Enabled
+ * only on a complete pincode — asking about "5600" would spend a lookup
+ * on a value that cannot be an answer.
+ */
+export function useServiceability(
+  pincode: string,
+  paymentMode: 'COD' | 'PREPAID',
+): UseQueryResult<ServiceabilityVerdict> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-serviceability', pincode, paymentMode],
+    enabled: /^\d{6}$/.test(pincode),
+    // A pin's serviceability does not change while a form is open.
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+    queryFn: () =>
+      client.request<ServiceabilityVerdict>(
+        `/api/seller/serviceability?pincode=${pincode}&paymentMode=${paymentMode}`,
+      ),
+  });
+}

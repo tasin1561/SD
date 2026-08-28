@@ -97,9 +97,11 @@ import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { pinoConfig } from './common/pino/logger-config';
 import { envSchema } from './config/env.schema';
 import { DeliveryActionModule } from './modules/delivery-action/delivery-action.module';
+import { CourierServiceabilityModule } from './modules/courier-serviceability/courier-serviceability.module';
 
 @Module({
   imports: [
+    CourierServiceabilityModule,
     DeliveryActionModule,
     ConfigModule,
     LoggerModule.forRootAsync({

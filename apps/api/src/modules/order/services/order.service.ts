@@ -500,6 +500,7 @@ export class OrderService {
     }
     // M15→M6: auto-compute order charges post-commit (best-effort).
     await this.computeChargesAsync(created.id);
+
     return created;
   }
 

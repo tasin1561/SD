@@ -249,17 +249,27 @@ def audit(spec) -> list[str]:
                 unmatched.add(f"{name}() → {method} {path}")
                 continue
             checked += 1
-            for perm in needed:
-                if gate is not None and perm == gate:
-                    continue
+            # ANY, not ALL.
+            #
+            # `@RequirePermissions('a', 'b')` means EITHER gets you in —
+            # the decorator says so explicitly ("Several keys mean ANY of
+            # them"). Checking each in turn treated it as AND and
+            # reported a handler as ungated when the page's own gate
+            # already satisfied it. That false positive pushes people to
+            # over-gate, which is the opposite of what this exists for.
+            satisfied = any(
+                (gate is not None and perm == gate)
                 # Gated when the permission is named in the page, or
                 # inside the hook itself (a self-gating lookup).
-                if f"'{perm}'" in own_src or f"'{perm}'" in body:
-                    continue
+                or f"'{perm}'" in own_src
+                or f"'{perm}'" in body
+                for perm in needed
+            )
+            if not satisfied:
                 kind = "query" if is_query else "action"
                 problems.append(
                     f"  {spec['name']:7} {route:26} gate={str(gate):24} "
-                    f"{kind} {name}() needs '{perm}'"
+                    f"{kind} {name}() needs {' or '.join(repr(x) for x in needed)}"
                 )
 
     print(
