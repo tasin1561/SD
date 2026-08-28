@@ -7,8 +7,6 @@ import type { TrackingEventAppendService } from '../../src/modules/tracking-even
 import type { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 
-/* eslint-disable @typescript-eslint/no-explicit-any -- any: mock doubles whose
-   full shapes are irrelevant to the routing behaviour under test. */
 type AnyArgs = any;
 
 interface Row {

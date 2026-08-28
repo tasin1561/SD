@@ -6,8 +6,6 @@ import type { DelhiveryNdrService } from '../../src/modules/courier-delhivery/se
 import type { ShiprocketNdrService } from '../../src/modules/courier-shiprocket/services/shiprocket-ndr.service';
 import { ActorType } from '@skydrop/db';
 
-/* eslint-disable @typescript-eslint/no-explicit-any -- any: mock doubles for
-   two NDR services whose full shapes are irrelevant to what is asserted. */
 type AnyArgs = any;
 
 const ACTOR = { type: ActorType.SYSTEM };

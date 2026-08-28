@@ -7,8 +7,6 @@ import type { DelhiveryAwbService } from '../../src/modules/courier-delhivery/se
 import type { DelhiveryLabelService } from '../../src/modules/courier-delhivery/services/delhivery-label.service';
 import type { ShiprocketClientService } from '../../src/modules/courier-shiprocket/services/shiprocket-client.service';
 
-/* eslint-disable @typescript-eslint/no-explicit-any -- any: mock doubles for
-   two adapter services whose full shapes are irrelevant to what is asserted. */
 type AnyArgs = any;
 
 const ACTOR = { type: ActorType.SYSTEM, id: null };
