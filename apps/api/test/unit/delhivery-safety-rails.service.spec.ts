@@ -1,3 +1,4 @@
+import { CourierWriteGuardService } from '../../src/modules/courier-shared/services/courier-write-guard.service';
 import { DelhiveryWriteGuardService } from '../../src/modules/courier-delhivery/services/delhivery-write-guard.service';
 import {
   DelhiveryRateLimitError,
@@ -29,7 +30,12 @@ function makeGuard(opts: { setting?: AnyArgs | null; baseUrl?: string } = {}) {
   } as unknown as PrismaService;
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs]>(async () => 'a1');
   const audit = { log: auditLog } as unknown as AuditLogService;
-  return { svc: new DelhiveryWriteGuardService(prisma, audit), auditLog, findUnique };
+  // The guard is now one generic implementation keyed by courier code;
+  // this class is the Delhivery-shaped face of it. Constructing it
+  // through the real generic service keeps these tests testing the
+  // BEHAVIOUR rather than a mock of it.
+  const generic = new CourierWriteGuardService(prisma, audit);
+  return { svc: new DelhiveryWriteGuardService(generic), auditLog, findUnique };
 }
 
 describe('DelhiveryWriteGuardService', () => {

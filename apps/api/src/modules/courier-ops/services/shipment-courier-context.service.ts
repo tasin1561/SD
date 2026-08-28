@@ -8,6 +8,9 @@ export interface ShipmentCourierContext {
   readonly shipmentNumber: string;
   readonly awbNumber: string | null;
   readonly courierCode: string;
+  /** Which of that courier's accounts carries it — Shiprocket's calls
+   *  are per-account, so a null here means we cannot address them. */
+  readonly courierAccountId: string | null;
   readonly isManualCourier: boolean;
   readonly status: string;
   readonly originPin: string | null;
@@ -58,6 +61,7 @@ export class ShipmentCourierContextService {
         shipmentNumber: true,
         awbNumber: true,
         courierCode: true,
+        courierAccountId: true,
         isManualCourier: true,
         status: true,
         destPostalCode: true,
@@ -87,6 +91,7 @@ export class ShipmentCourierContextService {
       shipmentNumber: shipment.shipmentNumber,
       awbNumber: shipment.awbNumber,
       courierCode: shipment.courierCode,
+      courierAccountId: shipment.courierAccountId,
       isManualCourier: shipment.isManualCourier,
       status: shipment.status,
       originPin,

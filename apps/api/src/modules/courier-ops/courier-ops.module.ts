@@ -8,6 +8,8 @@ import { AdminPickupController } from './controllers/admin-pickup.controller';
 import { CourierMarginReportService } from './services/courier-margin-report.service';
 import { CourierPickupService } from './services/courier-pickup.service';
 import { CourierWarehouseRegistrationService } from './services/courier-warehouse-registration.service';
+import { CourierShiprocketModule } from '../courier-shiprocket/courier-shiprocket.module';
+import { CourierNdrDispatchService } from './services/courier-ndr-dispatch.service';
 import { CourierShipmentActionService } from './services/courier-shipment-action.service';
 import { CourierShipmentInsightService } from './services/courier-shipment-insight.service';
 import { ShipmentCourierContextService } from './services/shipment-courier-context.service';
@@ -32,11 +34,12 @@ import { ShipmentCourierContextService } from './services/shipment-courier-conte
  * periodically — registering a pickup location, reading real margin.
  */
 @Module({
-  imports: [AuthCommonModule, CourierDelhiveryModule],
+  imports: [CourierShiprocketModule, AuthCommonModule, CourierDelhiveryModule],
   controllers: [AdminCourierOpsController, AdminPickupController, AdminCourierNetworkController],
   providers: [
     ShipmentCourierContextService,
     CourierShipmentInsightService,
+    CourierNdrDispatchService,
     CourierShipmentActionService,
     CourierPickupService,
     CourierMarginReportService,

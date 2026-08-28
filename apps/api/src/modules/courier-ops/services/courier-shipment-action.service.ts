@@ -8,10 +8,8 @@ import {
   DelhiveryEwaybillService,
   EWAYBILL_THRESHOLD_INR,
 } from '../../courier-delhivery/services/delhivery-ewaybill.service';
-import {
-  DelhiveryNdrService,
-  type NdrAction,
-} from '../../courier-delhivery/services/delhivery-ndr.service';
+import { type NdrAction } from '../../courier-delhivery/services/delhivery-ndr.service';
+import { CourierNdrDispatchService } from './courier-ndr-dispatch.service';
 import { ShipmentCourierContextService } from './shipment-courier-context.service';
 import { courierActor } from '../../courier-shared/services/courier-credential.service';
 
@@ -20,6 +18,15 @@ export interface ActionOutcome {
   readonly awbNumber: string;
   readonly message: string | null;
 }
+
+/**
+ * Shiprocket refuses an NDR action with no comment, and the comment is
+ * read aloud to the field executive. Delhivery has no field for it, so
+ * it costs nothing there and is recorded in our audit either way.
+ * A per-action operator note is the obvious next step; until the UI
+ * asks for one, saying what actually happened beats an empty string.
+ */
+const NDR_DEFAULT_COMMENT = 'Re-attempt requested by Skydrop operations';
 
 export interface NdrOutcome extends ActionOutcome {
   /** Delhivery's async job id — the outcome is polled with it, not returned. */
@@ -69,7 +76,7 @@ export class CourierShipmentActionService {
     private readonly context: ShipmentCourierContextService,
     private readonly editSvc: DelhiveryShipmentEditService,
     private readonly ewaybill: DelhiveryEwaybillService,
-    private readonly ndr: DelhiveryNdrService,
+    private readonly ndr: CourierNdrDispatchService,
   ) {}
 
   /**
@@ -272,10 +279,13 @@ export class CourierShipmentActionService {
     }
 
     const verdict = this.ndr.checkEligibility({
+      courierCode: shipment.courierCode,
+      courierAccountId: shipment.courierAccountId,
       awbNumber: shipment.awbNumber,
       action,
       currentNslCode: nslCode,
       attemptCount,
+      comment: NDR_DEFAULT_COMMENT,
     });
     return { ...verdict, nslCode, attemptCount };
   }
@@ -305,10 +315,13 @@ export class CourierShipmentActionService {
 
     const result = await this.ndr.takeAction(
       {
+        courierCode: shipment.courierCode,
+        courierAccountId: shipment.courierAccountId,
         awbNumber: shipment.awbNumber,
         action,
         currentNslCode: nslCode,
         attemptCount,
+        comment: NDR_DEFAULT_COMMENT,
       },
       courierActor.operator(staffId),
     );
@@ -323,6 +336,7 @@ export class CourierShipmentActionService {
       metadata: {
         awbNumber: shipment.awbNumber,
         ndrAction: action,
+        courierCode: shipment.courierCode,
         nslCode,
         attemptCount,
         uplId: result.uplId,
@@ -356,9 +370,15 @@ export class CourierShipmentActionService {
 
   // ── internal ────────────────────────────────────────────────────────
 
-  private async requireAwb(
-    shipmentId: string,
-  ): Promise<{ shipmentId: string; awbNumber: string; declaredValueInr: string }> {
+  private async requireAwb(shipmentId: string): Promise<{
+    shipmentId: string;
+    awbNumber: string;
+    declaredValueInr: string;
+    // Who actually has the parcel — required now that a second courier
+    // exists and the two are addressed differently.
+    courierCode: string;
+    courierAccountId: string | null;
+  }> {
     const shipment = await this.context.resolve(shipmentId);
     if (shipment.awbNumber === null) {
       throw new BadRequestException({
@@ -382,6 +402,8 @@ export class CourierShipmentActionService {
     return {
       shipmentId: shipment.shipmentId,
       awbNumber: shipment.awbNumber,
+      courierCode: shipment.courierCode,
+      courierAccountId: shipment.courierAccountId,
       declaredValueInr: shipment.declaredValueInr,
     };
   }

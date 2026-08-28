@@ -13,6 +13,7 @@ function ctx(over: Partial<ShipmentCourierContext> = {}): ShipmentCourierContext
     shipmentNumber: 'SH-2026-07-000001',
     awbNumber: AWB,
     courierCode: 'delhivery',
+    courierAccountId: 'dl-acc-1',
     isManualCourier: false,
     status: ShipmentStatus.OUT_FOR_DELIVERY,
     originPin: '110042',
