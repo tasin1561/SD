@@ -79,6 +79,8 @@ export interface FreightChargeView {
   readonly receiptNumber: string | null;
   readonly consignmentNumber: string | null;
   readonly amountInr: string;
+  /** What the forwarder charged US. Null until their invoice arrives. */
+  readonly ourCostInr: string | null;
   readonly mode: InboundFreightMode;
   readonly serviceChargePercent: string | null;
   readonly serviceChargeInr: string | null;
@@ -269,6 +271,7 @@ export function useRecordFreight(): UseMutationResult<
       chargeableWeightKg?: string;
     }>;
     mode?: string;
+    ourCostInr?: string;
     note?: string;
   }
 > {
@@ -281,6 +284,27 @@ export function useRecordFreight(): UseMutationResult<
         body,
       }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-freight'] }),
+  });
+}
+
+export function useSetFreightOurCost(): UseMutationResult<
+  FreightChargeView,
+  Error,
+  { freightChargeId: string; ourCostInr: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ freightChargeId, ourCostInr }) =>
+      client.request<FreightChargeView>(`/api/admin/inbound-freight/${freightChargeId}/our-cost`, {
+        method: 'POST',
+        body: { ourCostInr },
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-freight'] });
+      // The BD→India margin is measured off this number.
+      void qc.invalidateQueries({ queryKey: ['admin-treasury', 'pnl'] });
+    },
   });
 }
 
@@ -715,6 +739,46 @@ export function useBankEntries(
     queryKey: ['admin-treasury', 'entries', params],
     queryFn: () =>
       client.request<{ items: BankEntryView[] }>(`/api/admin/treasury/entries?${sp.toString()}`),
+    enabled,
+  });
+}
+
+export interface PnlLineView {
+  readonly key: string;
+  readonly label: string;
+  readonly revenueInr: string;
+  readonly costInr: string;
+  readonly marginInr: string;
+  readonly marginPercent: string | null;
+  readonly coverage: {
+    readonly priced: number;
+    readonly total: number;
+    readonly note: string | null;
+  };
+}
+
+export interface PnlReportView {
+  readonly from: string;
+  readonly to: string;
+  readonly lines: readonly PnlLineView[];
+  readonly grossMarginInr: string;
+  readonly operatingExpensesInr: string;
+  readonly netInr: string;
+  readonly complete: boolean;
+}
+
+export function usePnl(
+  params: { from?: string; to?: string },
+  enabled = true,
+): UseQueryResult<PnlReportView> {
+  const client = useApiClient();
+  const sp = new URLSearchParams();
+  if (params.from) sp.set('from', params.from);
+  if (params.to) sp.set('to', params.to);
+  const qs = sp.toString();
+  return useQuery({
+    queryKey: ['admin-treasury', 'pnl', params],
+    queryFn: () => client.request<PnlReportView>(`/api/admin/treasury/pnl${qs ? `?${qs}` : ''}`),
     enabled,
   });
 }

@@ -26,6 +26,7 @@ function makeReport(
     shipments?: ReturnType<typeof shipment>[];
     charges?: { type: ChargeType; totalAmountInr: Prisma.Decimal }[];
     checkThrows?: Error;
+    failPersist?: boolean;
   } = {},
 ) {
   const chargeFindMany = jest.fn(async (args: { where: { type?: { in: ChargeType[] } } }) => {
@@ -50,9 +51,22 @@ function makeReport(
     check.mockRejectedValue(opts.checkThrows);
   }
 
+  const shipmentUpdate = jest.fn<
+    Promise<unknown>,
+    [{ where: { id: string }; data: Record<string, unknown> }]
+  >(async () => {
+    if (opts.failPersist === true) throw new Error('db is down');
+    return {};
+  });
   const prisma = {
     client: {
-      shipment: { findMany: jest.fn(async () => opts.shipments ?? [shipment()]) },
+      shipment: {
+        findMany: jest.fn(async () => opts.shipments ?? [shipment()]),
+        // Persisting the priced cost. `failPersist` proves a write
+        // failure cannot discard a reading we already paid an API call
+        // to obtain.
+        update: shipmentUpdate,
+      },
       orderCharge: { findMany: chargeFindMany },
     },
   };
@@ -60,7 +74,7 @@ function makeReport(
     originPin: jest.fn(async () => (opts.originPin === undefined ? '110042' : opts.originPin)),
   };
   const svc = new CourierMarginReportService(prisma as never, context as never, { check } as never);
-  return { svc, check, chargeFindMany };
+  return { svc, check, chargeFindMany, shipmentUpdate };
 }
 
 const WINDOW = {
@@ -238,5 +252,30 @@ describe('CourierWarehouseRegistrationService — the exact-name guard', () => {
         severity: 'MEDIUM',
       }),
     );
+  });
+});
+
+describe('CourierMarginReportService — the cost it learns is kept', () => {
+  it('persists the real cost onto the shipment, so the P&L has a base to read', async () => {
+    // Each row costs a live call to a rate-limited API. Discarding the
+    // answer meant every report, and the P&L behind it, started from
+    // nothing again.
+    const sut = makeReport();
+    await sut.svc.report('staff-1', WINDOW);
+    expect(sut.shipmentUpdate).toHaveBeenCalledTimes(1);
+    const arg = sut.shipmentUpdate.mock.calls[0]?.[0];
+    expect(arg?.where.id).toBe('ship-1');
+    expect(String(arg?.data['actualCourierCostInr'])).toBe('176.29');
+  });
+
+  it('a failed write does NOT discard the reading it already paid for', async () => {
+    // The persist sits outside the cost-lookup try on purpose: the price
+    // is already known and already in the report, so a database blip
+    // must not turn a successful reading into a skipped row.
+    const sut = makeReport({ failPersist: true });
+    const r = await sut.svc.report('staff-1', WINDOW);
+    expect(r.sampledShipments).toBe(1);
+    expect(r.skipped).toHaveLength(0);
+    expect(r.rows[0]?.actualCourierCostInr).toBe('176.29');
   });
 });

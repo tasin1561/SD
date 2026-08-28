@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ChargeType, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { DelhiveryMarginReconciliationService } from '../../courier-delhivery/services/delhivery-margin-reconciliation.service';
@@ -77,6 +77,8 @@ const SHIPPING_CHARGE_TYPES = [
  */
 @Injectable()
 export class CourierMarginReportService {
+  private readonly logger = new Logger(CourierMarginReportService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly context: ShipmentCourierContextService,
@@ -185,6 +187,39 @@ export class CourierMarginReportService {
           shipmentId: s.id,
           reason: err instanceof Error ? err.message : 'Cost lookup failed.',
         });
+        continue;
+      }
+
+      // Keep what we just paid to learn.
+      //
+      // Each row above cost a live call to a rate-limited API, and
+      // discarding the answer meant the next report — and the P&L —
+      // started from nothing again. Persisting turns a sampled report
+      // into an accumulating cost base.
+      //
+      // Deliberately OUTSIDE the try above, and swallowed: the cost is
+      // already known and already in the report, so a failed write must
+      // not turn a successful reading into a skipped row. Best-effort,
+      // and the next run re-prices it.
+      //
+      // Still no repricing, no charge rewritten, no wallet moved. This
+      // records what the carriage COST; what we bill for it stays a
+      // commercial decision made by a person.
+      try {
+        await this.prisma.client.shipment.update({
+          where: { id: s.id },
+          data: {
+            actualCourierCostInr: new Prisma.Decimal(
+              rows[rows.length - 1]?.actualCourierCostInr ?? '0',
+            ),
+            actualCourierCostAt: new Date(),
+          },
+        });
+      } catch {
+        this.logger.warn(
+          { shipmentId: s.id },
+          'Priced the shipment but could not persist the cost; the report is unaffected.',
+        );
       }
     }
 

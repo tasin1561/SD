@@ -78,11 +78,28 @@ export class RecordInboundFreightDto {
   @IsEnum(InboundFreightMode)
   readonly mode?: InboundFreightMode;
 
+  @ApiPropertyOptional({
+    description:
+      'What the FORWARDER charged US for this shipment, in INR. The lines above are what ' +
+      'the SELLER is billed; the gap between them is our margin on the BD→India leg, and ' +
+      'without this the P&L reads that whole leg as pure profit. Optional because it often ' +
+      'arrives on a later invoice — record it then rather than guessing now.',
+  })
+  @IsOptional()
+  @IsNumberString()
+  readonly ourCostInr?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   @MaxLength(1000)
   readonly note?: string;
+}
+
+export class SetFreightOurCostDto {
+  @ApiProperty({ description: 'What the forwarder charged us, in INR' })
+  @IsNumberString()
+  readonly ourCostInr!: string;
 }
 
 export class WaiveInboundFreightDto {

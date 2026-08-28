@@ -28,6 +28,7 @@ import { InboundFreightStatus } from '@skydrop/db';
 import { useFreightList, type FreightChargeView } from '@/lib/ops-hooks';
 import { RecordFreightModal } from './record-freight-modal';
 import { FreightActions } from './freight-actions';
+import { OurCostCell } from './our-cost-cell';
 import { usePermission } from '@/lib/use-permission';
 
 /**
@@ -142,6 +143,7 @@ export function FreightIndex(): ReactElement {
               <Th>Consignment</Th>
               <Th>Mode</Th>
               <Th align="right">Bill</Th>
+              <Th align="right">Our cost</Th>
               <Th align="right">Recovered</Th>
               <Th align="right">Outstanding</Th>
               <Th>Units</Th>
@@ -195,6 +197,9 @@ function FreightRow({ row }: { readonly row: FreightChargeView }): ReactElement 
       </Td>
       <Td align="right">
         <Money amount={row.totalInr} />
+      </Td>
+      <Td align="right">
+        <OurCostCell row={row} />
       </Td>
       <Td align="right">
         <Money amount={row.amountSettledInr} />

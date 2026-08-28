@@ -1569,6 +1569,11 @@ model InboundFreightCharge {
   goodsReceiptId       String               @unique @map("goods_receipt_id") @db.Uuid
   /// The freight invoice as recorded by ops, INR canonical.
   amountInr            Decimal              @map("amount_inr") @db.Decimal(12, 2)
+  /// What the FORWARDER charged US for the same shipment. `amountInr`
+  /// is what we charge the seller; the gap between them is the margin
+  /// on the BD→India leg, and without this column that margin is
+  /// unknowable rather than merely unreported.
+  ourCostInr           Decimal?             @map("our_cost_inr") @db.Decimal(12, 2)
   mode                 InboundFreightMode
   /// Snapshotted at record time (NOT re-read at settlement): the seller
   /// agreed to the rate that applied when the consignment landed.
@@ -3029,6 +3034,12 @@ model Shipment {
   podRecipientName       String?          @map("pod_recipient_name")
   hasIssue               Boolean          @default(false) @map("has_issue")
   estimatedCostInr       Decimal?         @map("estimated_cost_inr") @db.Decimal(12, 2)
+  /// What the courier ACTUALLY charged for this parcel, once we know.
+  /// `estimatedCostInr` is what we assumed at dispatch; margin measured
+  /// against an assumption is a hope, so the P&L prefers this and says
+  /// how many parcels it could not price rather than filling the gap in.
+  actualCourierCostInr   Decimal?         @map("actual_courier_cost_inr") @db.Decimal(12, 2)
+  actualCourierCostAt    DateTime?        @map("actual_courier_cost_at") @db.Timestamptz
   // Module 8 — warehouse pick/pack operational state. The order status
   // (PENDING_PICK/PICKED/PACKED) is the authoritative lifecycle gate
   // (WMS-9); these track who/when + the pick-timeout CAS token (WMS-5,

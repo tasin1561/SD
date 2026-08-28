@@ -23,6 +23,7 @@ import type { AuthenticatedStaff } from '../../../common/types/request';
 import {
   ListInboundFreightQueryDto,
   RecordInboundFreightDto,
+  SetFreightOurCostDto,
   WaiveInboundFreightDto,
 } from '../dto/inbound-freight.dto';
 import { InboundFreightService, type FreightChargeView } from '../services/inbound-freight.service';
@@ -72,6 +73,7 @@ export class AdminInboundFreightController {
         goodsReceiptId: body.goodsReceiptId,
         lines: body.lines,
         ...(body.mode === undefined ? {} : { mode: body.mode }),
+        ...(body.ourCostInr === undefined ? {} : { ourCostInr: body.ourCostInr }),
         ...(body.note === undefined ? {} : { note: body.note }),
       },
       ctx,
@@ -92,6 +94,23 @@ export class AdminInboundFreightController {
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<FreightChargeView> {
     return this.svc.settle(staff.id, freightChargeId, ctx);
+  }
+
+  @Post(':freightChargeId/our-cost')
+  @RequirePermissions('money.freight.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Record what the forwarder charged US, once their invoice arrives. Does not touch what the seller was billed.',
+  })
+  setOurCost(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('freightChargeId', new ParseUUIDPipe({ version: '7' }))
+    freightChargeId: string,
+    @Body() body: SetFreightOurCostDto,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<FreightChargeView> {
+    return this.svc.setOurCost(staff.id, freightChargeId, body.ourCostInr, ctx);
   }
 
   @Post(':freightChargeId/waive')

@@ -31,6 +31,7 @@ export interface FreightChargeView {
   readonly goodsReceiptId: string;
   readonly receiptNumber: string | null;
   readonly amountInr: string;
+  readonly ourCostInr: string | null;
   readonly mode: InboundFreightMode;
   readonly serviceChargePercent: string | null;
   readonly serviceChargeInr: string | null;
@@ -53,6 +54,12 @@ export interface RecordFreightInput {
    * that can disagree.
    */
   readonly goodsReceiptId: string;
+  /**
+   * What the FORWARDER charged US. The lines are what the SELLER is
+   * billed; without this the BD→India leg's margin is unknowable rather
+   * than merely unreported, and the P&L reads the whole leg as profit.
+   */
+  readonly ourCostInr?: string | null;
   /**
    * The forwarder's invoice, line by line. Every counted product on the
    * arrival must appear: one left out would ship freight-free forever,
@@ -259,6 +266,9 @@ export class InboundFreightService {
           consignmentId: consignment.id,
           goodsReceiptId: receipt.id,
           amountInr: amount,
+          ...(input.ourCostInr !== undefined && input.ourCostInr !== null
+            ? { ourCostInr: new Prisma.Decimal(input.ourCostInr) }
+            : {}),
           mode,
           serviceChargePercent: percent,
           serviceChargeInr: serviceCharge,
@@ -431,6 +441,69 @@ export class InboundFreightService {
    * wallet movement — WAIVED is deliberately distinct from SETTLED so
    * write-offs stay countable rather than hiding inside collections.
    */
+  /**
+   * Record what the forwarder charged us, after the fact.
+   *
+   * Their invoice routinely arrives weeks after the goods, so demanding
+   * the figure at record time would either block the bill or invite a
+   * guess. Settable at any point in the bill's life — including after
+   * settlement, because what the SELLER paid and what WE paid are
+   * independent facts and correcting one must not disturb the other.
+   */
+  async setOurCost(
+    staffId: string,
+    freightChargeId: string,
+    ourCostInr: string,
+    ctx?: ClientContext,
+  ): Promise<FreightChargeView> {
+    const cost = new Prisma.Decimal(ourCostInr);
+    if (cost.isNegative()) {
+      throw new BadRequestException({
+        code: 'FREIGHT_COST_NEGATIVE',
+        message: 'A forwarder cannot charge us less than nothing',
+      });
+    }
+    const existing = await this.prisma.client.inboundFreightCharge.findUnique({
+      where: { id: freightChargeId },
+      select: { id: true, ourCostInr: true },
+    });
+    if (!existing) {
+      throw new NotFoundException({
+        code: 'FREIGHT_CHARGE_NOT_FOUND',
+        message: 'No such freight bill',
+      });
+    }
+
+    const row = await this.prisma.client.inboundFreightCharge.update({
+      where: { id: freightChargeId },
+      data: { ourCostInr: cost },
+      include: {
+        consignment: { select: { consignmentNumber: true } },
+        goodsReceipt: { select: { receiptNumber: true } },
+      },
+    });
+
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      staffUserId: staffId,
+      action: 'staff.inbound_freight.our_cost_set',
+      entityType: 'inbound_freight_charge',
+      entityId: freightChargeId,
+      // The number the whole BD→India margin is measured against; a
+      // wrong one moves the P&L and nothing else would show it.
+      severity: 'MEDIUM',
+      metadata: {
+        was: existing.ourCostInr?.toString() ?? null,
+        now: cost.toString(),
+        ipAddress: ctx?.ipAddress ?? null,
+        userAgent: ctx?.userAgent ?? null,
+        requestId: ctx?.requestId ?? null,
+      },
+    });
+
+    return this.toView(row);
+  }
+
   async waive(
     staffId: string,
     freightChargeId: string,
@@ -654,6 +727,7 @@ export class InboundFreightService {
       goodsReceiptId: row.goodsReceiptId,
       receiptNumber: row.goodsReceipt?.receiptNumber ?? null,
       amountInr: row.amountInr.toString(),
+      ourCostInr: row.ourCostInr?.toString() ?? null,
       mode: row.mode,
       serviceChargePercent: row.serviceChargePercent?.toString() ?? null,
       serviceChargeInr: row.serviceChargeInr?.toString() ?? null,

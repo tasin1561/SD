@@ -4,6 +4,7 @@ import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { AdminTreasuryController } from './controllers/admin-treasury.controller';
 import { BankLedgerService } from './services/bank-ledger.service';
 import { BankTransferService } from './services/bank-transfer.service';
+import { PnlService } from './services/pnl.service';
 import { TreasuryReadService } from './services/treasury-read.service';
 
 /**
@@ -19,7 +20,7 @@ import { TreasuryReadService } from './services/treasury-read.service';
 @Module({
   imports: [PrismaModule, AuthCommonModule],
   controllers: [AdminTreasuryController],
-  providers: [BankLedgerService, BankTransferService, TreasuryReadService],
+  providers: [BankLedgerService, BankTransferService, TreasuryReadService, PnlService],
   exports: [BankLedgerService],
 })
 export class TreasuryModule {}

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -10,7 +11,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { BankEntryType, BankOwnerKind } from '@skydrop/db';
 
 import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
@@ -22,6 +23,7 @@ import { BankLedgerService } from '../services/bank-ledger.service';
 import { BankTransferService } from '../services/bank-transfer.service';
 import { TreasuryReadService } from '../services/treasury-read.service';
 import { ReconcileAccountDto, RecordEntryDto, RecordTransferDto } from '../dto/treasury.dto';
+import { PnlService } from '../services/pnl.service';
 
 /**
  * The treasury — our own money.
@@ -45,6 +47,7 @@ export class AdminTreasuryController {
     private readonly read: TreasuryReadService,
     private readonly ledger: BankLedgerService,
     private readonly transfers: BankTransferService,
+    private readonly pnl: PnlService,
   ) {}
 
   @Get('overview')
@@ -54,6 +57,41 @@ export class AdminTreasuryController {
   })
   overview(): ReturnType<TreasuryReadService['overview']> {
     return this.read.overview();
+  }
+
+  @Get('pnl')
+  @ApiOperation({
+    summary:
+      'Where the money is made — the four sources kept apart, each stating how much of its cost side is measured.',
+  })
+  @ApiQuery({ name: 'from', required: false, description: 'ISO date; defaults to 30 days ago' })
+  @ApiQuery({ name: 'to', required: false, description: 'ISO date; defaults to now' })
+  profitAndLoss(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ): ReturnType<PnlService['report']> {
+    // A bad date silently becoming "now" would report the wrong window
+    // as confidently as the right one.
+    const parse = (v: string | undefined, fallback: Date): Date => {
+      if (v === undefined || v === '') return fallback;
+      const d = new Date(v);
+      if (Number.isNaN(d.getTime())) {
+        throw new BadRequestException({
+          code: 'INVALID_DATE',
+          message: `"${v}" is not a date`,
+        });
+      }
+      return d;
+    };
+    const toDate = parse(to, new Date());
+    const fromDate = parse(from, new Date(toDate.getTime() - 30 * 24 * 60 * 60 * 1000));
+    if (fromDate > toDate) {
+      throw new BadRequestException({
+        code: 'INVALID_RANGE',
+        message: 'The window starts after it ends',
+      });
+    }
+    return this.pnl.report(fromDate, toDate);
   }
 
   @Get('entries')
