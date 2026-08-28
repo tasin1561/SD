@@ -1,10 +1,18 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ActorType, Currency, Prisma, WalletEntryDirection } from '@skydrop/db';
+import {
+  ActorType,
+  BankEntryType,
+  BankOwnerKind,
+  Currency,
+  Prisma,
+  WalletEntryDirection,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import type { CreateRemittanceDto } from '../dto/create-remittance.dto';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
+import { BankLedgerService } from '../../treasury/services/bank-ledger.service';
 
 /**
  * Phase 1B M23 — Admin records a manual bank transfer to a seller.
@@ -26,6 +34,7 @@ export class RemittanceService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
     private readonly wallet: WalletService,
+    private readonly bank: BankLedgerService,
   ) {}
 
   async create(
@@ -109,6 +118,7 @@ export class RemittanceService {
             bankSwiftCode: seller.bankSwiftCode,
           },
           bankReference: input.bankReference.trim(),
+          paidFromAccountId: input.paidFromAccountId,
           paidAt: new Date(input.paidAt),
           staffId: actor.staffId,
           note: input.note?.trim() ?? null,
@@ -128,6 +138,27 @@ export class RemittanceService {
         actorId: actor.staffId,
         fxRateSnapshot: fxRate,
       });
+
+      // The cash side. The wallet debit says the seller is no longer
+      // owed it; this says which of our accounts it physically left, in
+      // what actually left — `amount` in `currency` is what hit their
+      // bank, and that is what our account was debited. `sourceAmount`
+      // is the wallet's INR view of the same payment and would be the
+      // wrong number to take out of a BDT account.
+      await this.bank.post(
+        {
+          accountId: input.paidFromAccountId,
+          type: BankEntryType.SELLER_WITHDRAWAL,
+          signedAmount: amount.neg(),
+          amountCurrency: input.currency,
+          owner: { kind: BankOwnerKind.SELLER, sellerId: input.sellerId },
+          occurredAt: new Date(input.paidAt),
+          reference: input.bankReference.trim(),
+          staffId: actor.staffId,
+          note: 'Paid out to the seller',
+        },
+        tx,
+      );
 
       // NO paired credit on the destination currency.
       //

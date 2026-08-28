@@ -72,6 +72,15 @@ export class CreateRemittanceDto {
   @MaxLength(120)
   bankReference!: string;
 
+  @ApiProperty({
+    description:
+      'Which of OUR accounts the money left. Without it a payout is a wallet ' +
+      'debit with no cash behind it, and the bank book cannot be reconciled ' +
+      'against the statement it came from.',
+  })
+  @IsUUID('7')
+  paidFromAccountId!: string;
+
   @ApiProperty({ format: 'date-time' })
   @IsDateString()
   paidAt!: string;

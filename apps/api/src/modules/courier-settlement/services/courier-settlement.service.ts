@@ -5,12 +5,20 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Currency, ActorType, OrderStatus, Prisma } from '@skydrop/db';
+import {
+  Currency,
+  ActorType,
+  OrderStatus,
+  Prisma,
+  BankEntryType,
+  BankOwnerKind,
+} from '@skydrop/db';
 import { CodCreditService } from '../../seller-wallet-accrual/services/cod-credit.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
+import { BankLedgerService } from '../../treasury/services/bank-ledger.service';
 
 export interface SettlementLineInput {
   readonly orderId: string;
@@ -107,6 +115,7 @@ export class CourierSettlementService {
     private readonly audit: AuditLogService,
     private readonly codCredit: CodCreditService,
     private readonly wallet: WalletService,
+    private readonly bank: BankLedgerService,
   ) {}
 
   /**
@@ -201,6 +210,7 @@ export class CourierSettlementService {
     }> = [];
 
     let allocated = ZERO;
+    const creditedBySeller = new Map<string, Prisma.Decimal>();
     const lineData = input.lines.map((line) => {
       const settled = this.parseMoney(line.settledInr, `line ${line.orderId}`);
       allocated = allocated.add(settled);
@@ -218,6 +228,28 @@ export class CourierSettlementService {
       where: { id: { in: input.lines.map((l) => l.orderId) } },
       select: { id: true, sellerId: true, codAmountInr: true },
     });
+
+    // Which of OUR accounts the money landed in. A settlement with no
+    // bank behind it is a number with no cash, and the coverage page
+    // would read it as money we hold. Refused rather than skipped: the
+    // fix is one link on the courier account, and a silently missing
+    // bank entry is the exact failure this ledger exists to prevent.
+    const receivingAccount = await this.prisma.client.platformBankAccount.findFirst({
+      where: {
+        courierAccountId: input.courierAccountId,
+        currency: Currency.INR,
+        isActive: true,
+      },
+      select: { id: true },
+    });
+    if (!receivingAccount) {
+      throw new BadRequestException({
+        code: 'SETTLEMENT_NO_RECEIVING_ACCOUNT',
+        message:
+          'No active INR bank account is linked to this courier account. ' +
+          'Link one under Network → Bank accounts before recording what it paid.',
+      });
+    }
 
     const created = await this.prisma.client.$transaction(async (tx) => {
       const row = await tx.courierSettlement.create({
@@ -263,6 +295,13 @@ export class CourierSettlementService {
           mode,
         });
         creditedSellers.add(order.sellerId);
+        // What the bank now holds ON THEIR BEHALF is what we credited
+        // them, not what the courier remitted — the difference is
+        // absorbed below, out of capital.
+        creditedBySeller.set(
+          order.sellerId,
+          (creditedBySeller.get(order.sellerId) ?? ZERO).add(line.expectedInr),
+        );
 
         const shortfall = line.expectedInr.sub(line.settledInr);
         if (shortfall.gt(0)) {
@@ -273,6 +312,60 @@ export class CourierSettlementService {
             shortfall: shortfall.toString(),
           });
         }
+      }
+
+      // ── The cash ─────────────────────────────────────────────────
+      //
+      // The wallet says what the seller is OWED; the bank book says
+      // where the money actually is. Both are written here, in one
+      // transaction, because a settlement that credits a wallet without
+      // recording the cash behind it is how the coverage page comes to
+      // report money we do not hold.
+      //
+      // Attribution: each seller is held what we CREDITED them. The
+      // remainder goes to capital — positive when the courier paid for
+      // Instant-Pay orders we already funded (a reimbursement), negative
+      // when they short-paid and we absorbed it (SETL-1 / WAL-6). That
+      // split is what keeps seller-held cash equal to wallet liability
+      // and leaves the dispute sitting visibly against our own money.
+      let attributed = ZERO;
+      for (const [sellerId, held] of creditedBySeller) {
+        attributed = attributed.add(held);
+        await this.bank.post(
+          {
+            accountId: receivingAccount.id,
+            type: BankEntryType.COURIER_SETTLEMENT,
+            signedAmount: held,
+            amountCurrency: Currency.INR,
+            owner: { kind: BankOwnerKind.SELLER, sellerId },
+            occurredAt: receivedAt,
+            reference,
+            settlementId: row.id,
+            staffId,
+            note: `COD settled by courier — ${reference}`,
+          },
+          tx,
+        );
+      }
+      const toCapital = amount.sub(attributed);
+      if (!toCapital.isZero()) {
+        await this.bank.post(
+          {
+            accountId: receivingAccount.id,
+            type: BankEntryType.COURIER_SETTLEMENT,
+            signedAmount: toCapital,
+            amountCurrency: Currency.INR,
+            owner: { kind: BankOwnerKind.CAPITAL },
+            occurredAt: receivedAt,
+            reference,
+            settlementId: row.id,
+            staffId,
+            note: toCapital.isNegative()
+              ? `Shortfall absorbed on ${reference}`
+              : `Ours from ${reference} — instant-pay reimbursement or unallocated`,
+          },
+          tx,
+        );
       }
 
       await this.audit.log(

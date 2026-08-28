@@ -5330,6 +5330,7 @@ model PlatformBankAccount {
   entries       BankEntry[]
   transfersFrom BankTransfer[]       @relation("BankTransferFrom")
   transfersTo   BankTransfer[]       @relation("BankTransferTo")
+  remittances   Remittance[]
 
   @@index([isActive, displayOrder])
   @@index([courierAccountId])
@@ -5480,6 +5481,10 @@ model Remittance {
   // Bank reference for ops reconciliation. The seller sees this — it is
   // how they match our withdrawal against their own statement.
   bankReference       String   @map("bank_reference")
+  /// Which of OUR accounts the money left. Without it a payout is a
+  /// wallet debit with no cash behind it, and the bank book cannot be
+  /// reconciled against the statement it came from.
+  paidFromAccountId   String?  @map("paid_from_account_id") @db.Uuid
   /// Spaces KEY of the transfer screenshot, never a URL (reads are
   /// presigned on demand). Evidence for the seller that the transfer
   /// left our account, and for us when they say it never arrived.
@@ -5492,8 +5497,9 @@ model Remittance {
   note                String?  @db.Text
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  seller            Seller              @relation(fields: [sellerId], references: [id])
-  staff             StaffUser           @relation("RemittanceStaff", fields: [staffId], references: [id])
+  seller            Seller               @relation(fields: [sellerId], references: [id])
+  paidFromAccount   PlatformBankAccount? @relation(fields: [paidFromAccountId], references: [id])
+  staff             StaffUser            @relation("RemittanceStaff", fields: [staffId], references: [id])
   ledgerEntries     SellerWalletEntry[]
   withdrawalRequest WithdrawalRequest?
 

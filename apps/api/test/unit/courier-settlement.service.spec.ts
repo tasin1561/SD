@@ -4,6 +4,7 @@ import type { WalletService } from '../../src/modules/seller-wallet/services/wal
 import { CourierSettlementService } from '../../src/modules/courier-settlement/services/courier-settlement.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
+import type { BankLedgerService } from '../../src/modules/treasury/services/bank-ledger.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -19,6 +20,7 @@ function makeSut(
     orders?: Array<{ id: string; orderNumber: string; codAmountInr: Prisma.Decimal | null }>;
     delivered?: AnyArgs[];
     shortfallThreshold?: string;
+    receivingAccount?: null;
   } = {},
 ) {
   const accountFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
@@ -60,6 +62,13 @@ function makeSut(
       findMany: jest.fn(async () => []),
     },
     order: { findMany: orderFindMany },
+    // The receiving bank account. `null` exercises the refusal — a
+    // settlement with no cash behind it is not recordable.
+    platformBankAccount: {
+      findFirst: jest.fn(async () =>
+        opts.receivingAccount === null ? null : { id: 'bank-inr-1' },
+      ),
+    },
   };
   // The shortfall circuit breaker reads its threshold from settings.
   const client2 = {
@@ -85,9 +94,17 @@ function makeSut(
     recomputeCacheAfterCommit: jest.fn(async () => undefined),
   } as unknown as WalletService;
 
+  // The bank side. Its own maths is pinned in the treasury e2e against a
+  // real database; here we only care THAT it is written, and with what.
+  const bankPost = jest.fn<Promise<{ id: string }>, [AnyArgs, unknown?]>(async () => ({
+    id: 'be-1',
+  }));
+  const bank = { post: bankPost } as unknown as BankLedgerService;
+
   return {
-    svc: new CourierSettlementService(prisma, audit, codCredit, wallet),
+    svc: new CourierSettlementService(prisma, audit, codCredit, wallet, bank),
     creditForOrder,
+    bankPost,
     auditLog,
     created,
     settlementCreate,
@@ -326,5 +343,81 @@ describe('CourierSettlementService.reconciliation', () => {
     });
     const r = await sut.svc.reconciliation();
     expect(r.overdueOrders.map((o) => o.orderId)).toEqual(['o-old', 'o-new']);
+  });
+});
+
+describe('CourierSettlementService.record — the cash behind the credit', () => {
+  const ownerKind = (p: AnyArgs): string => (p['owner'] as { kind: string }).kind;
+
+  const orders = [
+    { id: 'o-1', orderNumber: 'SD-2026-07-000001', codAmountInr: D('600.00') },
+    { id: 'o-2', orderNumber: 'SD-2026-07-000002', codAmountInr: D('400.00') },
+  ];
+
+  it('holds each seller what we CREDITED them, not what the courier remitted', async () => {
+    // The courier pays 950 against 1000 of orders. The sellers are still
+    // credited 1000 (WAL-6), so the bank must show 1000 held for them —
+    // and the 50 we absorbed sitting against our own money, where the
+    // dispute is visible instead of quietly shrinking someone's balance.
+    const sut = makeSut({ orders });
+    await sut.svc.record(STAFF, {
+      ...BASE,
+      amountInr: '950.00',
+      lines: [
+        { orderId: 'o-1', settledInr: '600.00' },
+        { orderId: 'o-2', settledInr: '350.00' },
+      ],
+    });
+
+    const posts = sut.bankPost.mock.calls.map((c) => c[0] as AnyArgs);
+    const seller = posts.filter((p) => ownerKind(p) === 'SELLER');
+    const capital = posts.filter((p) => ownerKind(p) === 'CAPITAL');
+
+    expect(seller).toHaveLength(1); // both orders belong to one seller
+    expect(String(seller[0]?.['signedAmount'])).toBe('1000');
+    expect(capital).toHaveLength(1);
+    expect(String(capital[0]?.['signedAmount'])).toBe('-50');
+  });
+
+  it('every entry names its currency, so none can be relabelled by the account', async () => {
+    const sut = makeSut({ orders });
+    await sut.svc.record(STAFF, {
+      ...BASE,
+      lines: [
+        { orderId: 'o-1', settledInr: '600.00' },
+        { orderId: 'o-2', settledInr: '400.00' },
+      ],
+    });
+    const posts = sut.bankPost.mock.calls.map((c) => c[0] as AnyArgs);
+    expect(posts.length).toBeGreaterThan(0);
+    for (const p of posts) expect(p['amountCurrency']).toBe('INR');
+  });
+
+  it('an exactly-paid settlement leaves nothing against capital', async () => {
+    const sut = makeSut({ orders });
+    await sut.svc.record(STAFF, {
+      ...BASE,
+      lines: [
+        { orderId: 'o-1', settledInr: '600.00' },
+        { orderId: 'o-2', settledInr: '400.00' },
+      ],
+    });
+    const posts = sut.bankPost.mock.calls.map((c) => c[0] as AnyArgs);
+    expect(posts.filter((p) => ownerKind(p) === 'CAPITAL')).toHaveLength(0);
+  });
+
+  it('refuses to record a payout with no bank account behind it', async () => {
+    // Refused, not skipped. A settlement whose cash was never recorded
+    // reads on the coverage page as money we hold and do not.
+    const sut = makeSut({ orders, receivingAccount: null });
+    await expect(
+      sut.svc.record(STAFF, {
+        ...BASE,
+        lines: [{ orderId: 'o-1', settledInr: '600.00' }],
+      }),
+    ).rejects.toMatchObject({
+      response: { code: 'SETTLEMENT_NO_RECEIVING_ACCOUNT' },
+    });
+    expect(sut.bankPost).not.toHaveBeenCalled();
   });
 });

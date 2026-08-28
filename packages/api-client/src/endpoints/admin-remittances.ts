@@ -29,6 +29,8 @@ export interface CreateRemittanceRequest {
   readonly sourceAmount: number;
   readonly fxRateSnapshot: number;
   readonly bankReference: string;
+  /** Which of OUR accounts the money left. */
+  readonly paidFromAccountId: string;
   /** ISO 8601 */
   readonly paidAt: string;
   readonly note?: string;

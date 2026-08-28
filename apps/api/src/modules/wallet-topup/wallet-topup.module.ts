@@ -8,6 +8,7 @@ import { WalletTopupService } from './services/wallet-topup.service';
 import { SellerTopupController } from './controllers/seller-topup.controller';
 import { AdminTopupController } from './controllers/admin-topup.controller';
 import { AdminPlatformBankAccountController } from './controllers/admin-platform-bank-account.controller';
+import { TreasuryModule } from '../treasury/treasury.module';
 
 /**
  * The wallet's inbound money path.
@@ -17,7 +18,7 @@ import { AdminPlatformBankAccountController } from './controllers/admin-platform
  * after an operator has confirmed the transfer against a bank statement.
  */
 @Module({
-  imports: [SellerWalletModule, FxModule, EmailModule],
+  imports: [SellerWalletModule, FxModule, EmailModule, TreasuryModule],
   controllers: [SellerTopupController, AdminTopupController, AdminPlatformBankAccountController],
   providers: [WalletTopupService, SellerJwtGuard, StaffJwtGuard],
   exports: [WalletTopupService],

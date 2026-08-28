@@ -5,6 +5,7 @@ import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { CourierSettlementService } from './services/courier-settlement.service';
 import { AdminCourierSettlementController } from './controllers/admin-courier-settlement.controller';
+import { TreasuryModule } from '../treasury/treasury.module';
 
 /**
  * R2c — the courier settlement ledger: what the courier paid US, matched
@@ -23,6 +24,8 @@ import { AdminCourierSettlementController } from './controllers/admin-courier-se
     // Recording a payout is now what CREDITS a settlement-mode seller.
     SellerWalletAccrualModule,
     SellerWalletModule,
+    // The cash side of a settlement is written in the same tx as the credit.
+    TreasuryModule,
   ],
   controllers: [AdminCourierSettlementController],
   providers: [CourierSettlementService, StaffJwtGuard],

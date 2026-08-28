@@ -13,6 +13,7 @@ import {
 import { ApiError } from '@skydrop/api-client';
 import type { CreateRemittanceRequest } from '@skydrop/api-client';
 import { useCreateRemittance, useSellersList, useSellerWalletBalance } from '@/lib/api-hooks';
+import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
 
 /**
  * Record a remittance. Two-currency model:
@@ -39,6 +40,7 @@ export function RemittanceFormModal({
   // are no approved sellers".
   const sellers = useSellersList({ status: 'APPROVED', page: 1, pageSize: 100 });
   const create = useCreateRemittance();
+  const bankAccounts = usePlatformBankAccounts();
 
   const [sellerId, setSellerId] = useState(initialSellerId ?? '');
   const balance = useSellerWalletBalance(sellerId);
@@ -50,9 +52,27 @@ export function RemittanceFormModal({
   const [sourceAmount, setSourceAmount] = useState('');
   const [fxRate, setFxRate] = useState('1.38'); // sensible BDT/INR seed
   const [bankReference, setBankReference] = useState('');
+  const [paidFromAccountId, setPaidFromAccountId] = useState('');
   const [paidAt, setPaidAt] = useState(toLocalDt(new Date()));
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  // Only accounts held in the currency that hits the seller's bank. The
+  // server refuses a mismatch outright (BANK_CURRENCY_MISMATCH); offering
+  // the choice at all would just be a slower way to reach that error.
+  useEffect(() => {
+    // Switching the bank currency invalidates the chosen account — a
+    // stale id here would be a BDT payout booked against an INR bank.
+    setPaidFromAccountId((prev) =>
+      prev && !(bankAccounts.data ?? []).some((a) => a.id === prev && a.currency === currency)
+        ? ''
+        : prev,
+    );
+  }, [currency, bankAccounts.data]);
+
+  const matchingAccounts = useMemo(
+    () => (bankAccounts.data ?? []).filter((a) => a.currency === currency && a.isActive),
+    [bankAccounts.data, currency],
+  );
   const [error, setError] = useState<string | null>(null);
 
   // Same-currency → force fxRate=1.
@@ -102,6 +122,10 @@ export function RemittanceFormModal({
       setError('Bank reference required');
       return;
     }
+    if (!paidFromAccountId) {
+      setError('Say which of our accounts the money left');
+      return;
+    }
     setBusy(true);
     try {
       const body: CreateRemittanceRequest = {
@@ -112,6 +136,7 @@ export function RemittanceFormModal({
         sourceAmount: src,
         fxRateSnapshot: fx,
         bankReference: bankReference.trim(),
+        paidFromAccountId,
         paidAt: new Date(paidAt).toISOString(),
         ...(note.trim() ? { note: note.trim() } : {}),
       };
@@ -252,6 +277,29 @@ export function RemittanceFormModal({
 
         <FormField label={`Destination amount (${currency})`} hint="Derived = source × FX">
           <Input value={destAmount} readOnly disabled />
+        </FormField>
+
+        <FormField
+          label="Paid from"
+          required
+          hint={
+            matchingAccounts.length === 0
+              ? `No ${currency} account is set up yet — add one under Bank accounts.`
+              : 'Which of our accounts the money physically left'
+          }
+        >
+          <Select
+            value={paidFromAccountId}
+            onChange={(e) => setPaidFromAccountId(e.target.value)}
+            required
+          >
+            <option value="">Select an account…</option>
+            {matchingAccounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.label} · {a.bankName} · {a.currency}
+              </option>
+            ))}
+          </Select>
         </FormField>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

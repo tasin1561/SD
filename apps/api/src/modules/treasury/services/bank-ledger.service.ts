@@ -17,6 +17,16 @@ export interface PostEntryInput {
   readonly type: BankEntryType;
   /** Negative for money leaving. Always the ACCOUNT's own currency. */
   readonly signedAmount: Prisma.Decimal | string;
+  /**
+   * What currency `signedAmount` is denominated in.
+   *
+   * Required, and checked against the account, because the entry is
+   * stamped with the ACCOUNT's currency no matter what arrives — so a
+   * caller handing over BDT for an INR account would not fail, it would
+   * be relabelled, and the book would disagree with the statement by a
+   * factor of the exchange rate with nothing to show it happened.
+   */
+  readonly amountCurrency: Currency;
   readonly owner: OwnerRef;
   readonly occurredAt: Date;
   readonly reference?: string | null;
@@ -110,6 +120,16 @@ export class BankLedgerService {
       throw new NotFoundException({
         code: 'BANK_ACCOUNT_NOT_FOUND',
         message: 'No such bank account',
+      });
+    }
+
+    if (account.currency !== input.amountCurrency) {
+      throw new BadRequestException({
+        code: 'BANK_CURRENCY_MISMATCH',
+        message:
+          `This account is held in ${account.currency}; the amount given is ` +
+          `${input.amountCurrency}. Convert it with a transfer, or post to the ` +
+          `account the money actually moved through.`,
       });
     }
 
@@ -255,10 +275,18 @@ export class BankLedgerService {
     const delta = stated.sub(current);
     if (delta.isZero()) return { delta: '0.00', entryId: null };
 
+    // The statement being reconciled against IS this account's, so the
+    // difference is in its currency by construction.
+    const account = await this.prisma.client.platformBankAccount.findUniqueOrThrow({
+      where: { id: input.accountId },
+      select: { currency: true },
+    });
+
     const entry = await this.post({
       accountId: input.accountId,
       type: BankEntryType.RECONCILIATION_ADJUSTMENT,
       signedAmount: delta,
+      amountCurrency: account.currency,
       owner: input.owner,
       occurredAt: new Date(),
       note: input.reason,

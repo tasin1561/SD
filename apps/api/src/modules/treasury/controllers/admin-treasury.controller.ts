@@ -121,6 +121,7 @@ export class AdminTreasuryController {
       accountId: body.accountId,
       type: body.type,
       signedAmount: body.signedAmount,
+      amountCurrency: body.amountCurrency,
       owner: {
         kind: body.ownerKind,
         ...(body.sellerId === undefined ? {} : { sellerId: body.sellerId }),

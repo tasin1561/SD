@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { BankEntryType, BankOwnerKind } from '@skydrop/db';
+import { BankEntryType, BankOwnerKind, Currency } from '@skydrop/db';
 import {
   IsBoolean,
   IsDateString,
@@ -40,6 +40,14 @@ export class RecordEntryDto {
   @ApiProperty({ description: 'Negative for money leaving' })
   @IsNumberString()
   signedAmount!: string;
+  @ApiProperty({
+    enum: Currency,
+    description:
+      'What currency the amount is in. Checked against the account rather than assumed, ' +
+      'so a figure typed against the wrong account is refused instead of relabelled.',
+  })
+  @IsEnum(Currency)
+  amountCurrency!: Currency;
   @IsEnum(BankOwnerKind) ownerKind!: BankOwnerKind;
   @IsOptional() @IsUUID('7') sellerId?: string;
   @IsOptional() @IsUUID('7') expenseCategoryId?: string;

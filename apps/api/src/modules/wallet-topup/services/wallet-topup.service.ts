@@ -8,6 +8,8 @@ import {
 } from '@nestjs/common';
 import {
   ActorType,
+  BankEntryType,
+  BankOwnerKind,
   Currency,
   NotificationRecipientType,
   Prisma,
@@ -21,6 +23,7 @@ import { EmailQueue } from '../../email/queue/email.queue';
 import { FxRateService } from '../../fx/services/fx-rate.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
+import { BankLedgerService } from '../../treasury/services/bank-ledger.service';
 
 /**
  * Putting money INTO the wallet.
@@ -104,6 +107,7 @@ export class WalletTopupService {
     private readonly wallet: WalletService,
     private readonly fx: FxRateService,
     private readonly email: EmailQueue,
+    private readonly bank: BankLedgerService,
   ) {}
 
   private readonly logger = new Logger(WalletTopupService.name);
@@ -432,6 +436,32 @@ export class WalletTopupService {
             : `Top-up verified — ${existing.currency} ${existing.amount.toFixed(2)} converted — ` +
               `${existing.transactionRef ?? 'proof on file'}`,
       });
+
+      // The cash side. The seller declared which of our accounts they
+      // paid into, a human has now confirmed it against the statement,
+      // so the money is real and it is HELD FOR THEM — the wallet
+      // credit and the bank entry are the same fact seen from the two
+      // sides, and they are written together or not at all.
+      //
+      // Posted in what actually landed, in the account's own currency.
+      // The wallet is credited in INR after conversion; the bank did
+      // not convert anything, and recording the INR figure against a
+      // BDT account would make the book disagree with the statement.
+      await this.bank.post(
+        {
+          accountId: existing.bankAccountId,
+          type: BankEntryType.SELLER_TOPUP,
+          signedAmount: existing.amount,
+          amountCurrency: existing.currency,
+          owner: { kind: BankOwnerKind.SELLER, sellerId: existing.sellerId },
+          occurredAt: new Date(),
+          reference: existing.transactionRef ?? null,
+          topupRequestId: existing.id,
+          staffId,
+          note: 'Top-up verified against the statement',
+        },
+        tx,
+      );
 
       return tx.walletTopupRequest.update({
         where: { id: topupId },

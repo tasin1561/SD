@@ -5,9 +5,10 @@ import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { SellerWalletModule } from '../seller-wallet/seller-wallet.module';
 import { AdminRemittanceController } from './admin-remittance.controller';
 import { RemittanceService } from './services/remittance.service';
+import { TreasuryModule } from '../treasury/treasury.module';
 
 @Module({
-  imports: [AuthCommonModule, SellerWalletModule, FxModule],
+  imports: [AuthCommonModule, SellerWalletModule, FxModule, TreasuryModule],
   controllers: [AdminRemittanceController],
   providers: [RemittanceService, StaffJwtGuard],
 })

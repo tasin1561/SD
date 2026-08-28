@@ -111,12 +111,18 @@ describe('Treasury (e2e)', () => {
     });
   }
 
-  /** Post an entry through the API, as an operator would. */
+  /**
+   * Post an entry through the API, as an operator would.
+   *
+   * `amountCurrency` defaults to INR because most of these fixtures use
+   * the INR account; the BDT cases state it, which is the point of the
+   * field — the number has to say what it is.
+   */
   async function post(body: Record<string, unknown>): Promise<void> {
     await request(h.baseUrl)
       .post('/admin/treasury/entries')
       .set(auth)
-      .send({ occurredAt: new Date().toISOString(), ...body })
+      .send({ amountCurrency: Currency.INR, occurredAt: new Date().toISOString(), ...body })
       .expect(200);
   }
 
@@ -367,6 +373,7 @@ describe('Treasury (e2e)', () => {
     });
     await post({
       accountId: bdtAccount,
+      amountCurrency: Currency.BDT,
       type: BankEntryType.COURIER_SETTLEMENT,
       signedAmount: '500',
       ownerKind: BankOwnerKind.SELLER,
@@ -383,5 +390,80 @@ describe('Treasury (e2e)', () => {
     expect(res.body).toHaveLength(2);
     expect(res.body.find((r: { currency: string }) => r.currency === 'INR').amount).toBe('700.00');
     expect(res.body.find((r: { currency: string }) => r.currency === 'BDT').amount).toBe('500.00');
+  });
+
+  describe('the flows that move money write BOTH sides', () => {
+    it('refuses a figure denominated in a currency the account does not hold', async () => {
+      // Before this guard the entry was stamped with the ACCOUNT's
+      // currency whatever arrived, so 500 BDT posted to the INR account
+      // became 500 INR — wrong by a factor of the exchange rate, with
+      // nothing in the row to show it had happened.
+      await request(h.baseUrl)
+        .post('/admin/treasury/entries')
+        .set(auth)
+        .send({
+          accountId: inrAccount,
+          amountCurrency: Currency.BDT,
+          type: BankEntryType.SELLER_TOPUP,
+          signedAmount: '500',
+          ownerKind: BankOwnerKind.SELLER,
+          sellerId: sellerA,
+          occurredAt: new Date().toISOString(),
+        })
+        .expect(400)
+        .expect((r) => expect(r.body.code).toBe('BANK_CURRENCY_MISMATCH'));
+    });
+
+    it('an accepted top-up credits the wallet AND records the cash, in one go', async () => {
+      const req = await h.prisma.walletTopupRequest.create({
+        data: {
+          sellerId: sellerA,
+          bankAccountId: inrAccount,
+          currency: Currency.INR,
+          amount: '1500.00',
+          transactionRef: 'TRX-TOPUP-1',
+          status: 'PENDING',
+        },
+        select: { id: true },
+      });
+
+      await request(h.baseUrl)
+        .post(`/admin/wallet/topups/${req.id}/accept`)
+        .set(auth)
+        .send({})
+        .expect(200);
+
+      const entry = await h.prisma.bankEntry.findFirst({
+        where: { topupRequestId: req.id },
+        select: {
+          signedAmount: true,
+          currency: true,
+          ownerKind: true,
+          sellerId: true,
+          type: true,
+        },
+      });
+      // The two halves of one fact: the seller is owed it, and it is
+      // sitting in a named account with their name against it.
+      expect(entry).not.toBeNull();
+      expect(entry?.signedAmount.toString()).toBe('1500');
+      expect(entry?.currency).toBe(Currency.INR);
+      expect(entry?.ownerKind).toBe(BankOwnerKind.SELLER);
+      expect(entry?.sellerId).toBe(sellerA);
+      expect(entry?.type).toBe(BankEntryType.SELLER_TOPUP);
+
+      const balance = await h.prisma.sellerWalletBalance.findUnique({
+        where: { sellerId_currency: { sellerId: sellerA, currency: Currency.INR } },
+        select: { balance: true },
+      });
+      expect(balance?.balance.toString()).toBe('1500');
+
+      // And the whole point of writing both: the coverage page now
+      // reconciles instead of reporting a gap it cannot explain.
+      const ov = await overview();
+      expect(ov.clientMoney.owedToSellersInr).toBe('1500.00');
+      expect(ov.clientMoney.heldForSellersInr).toBe('1500.00');
+      expect(ov.clientMoney.covered).toBe(true);
+    });
   });
 });
