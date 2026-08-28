@@ -3,6 +3,7 @@
 import { useState, type ReactElement } from 'react';
 import { AlertTriangle, ChevronDown, ChevronRight, ShieldCheck } from 'lucide-react';
 import {
+  Button,
   Card,
   CardBody,
   ErrorState,
@@ -21,6 +22,9 @@ import {
   Tr,
 } from '@skydrop/ui/components';
 import { useBankEntries, useTreasuryOverview } from '@/lib/ops-hooks';
+import { usePermission } from '@/lib/use-permission';
+import { ReconcileModal } from './reconcile-modal';
+import { TransferModal } from './transfer-modal';
 
 /**
  * What we hold, where, and how much of it is somebody else's.
@@ -37,7 +41,15 @@ import { useBankEntries, useTreasuryOverview } from '@/lib/ops-hooks';
  * slowly.
  */
 export function TreasuryIndex(): ReactElement {
+  const canManage = usePermission('money.treasury.manage');
   const overview = useTreasuryOverview();
+  const [transferring, setTransferring] = useState(false);
+  const [reconciling, setReconciling] = useState<{
+    id: string;
+    label: string;
+    currency: 'INR' | 'BDT';
+    capital: string;
+  } | null>(null);
   const [openAccount, setOpenAccount] = useState<string | null>(null);
   const entries = useBankEntries({ limit: 50 }, true);
 
@@ -46,6 +58,13 @@ export function TreasuryIndex(): ReactElement {
       <PageHeader
         title="Treasury"
         subtitle="Which account holds what, how much of it is ours, and whether what we owe sellers is covered."
+        action={
+          canManage ? (
+            <Button size="sm" onClick={() => setTransferring(true)}>
+              Move money
+            </Button>
+          ) : undefined
+        }
       />
 
       {overview.isLoading ? (
@@ -104,11 +123,12 @@ export function TreasuryIndex(): ReactElement {
                   <Th>Ours</Th>
                   <Th>Held for sellers</Th>
                   <Th>Total</Th>
+                  <Th align="right">Actions</Th>
                 </Tr>
               </THead>
               <TBody>
                 {overview.data.accounts.length === 0 ? (
-                  <TableEmpty colSpan={6}>
+                  <TableEmpty colSpan={7}>
                     No bank accounts yet. Add one on the Bank accounts page, with its opening
                     balance.
                   </TableEmpty>
@@ -170,6 +190,26 @@ export function TreasuryIndex(): ReactElement {
                       </Td>
                       <Td>
                         <Money amount={a.total} currency={a.currency} convert={false} />
+                      </Td>
+                      <Td align="right">
+                        {canManage ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setReconciling({
+                                id: a.accountId,
+                                label: a.label,
+                                currency: a.currency,
+                                capital: a.capital,
+                              })
+                            }
+                          >
+                            Reconcile
+                          </Button>
+                        ) : (
+                          <span className="text-text-faint">—</span>
+                        )}
                       </Td>
                     </Tr>
                   ))
@@ -261,6 +301,15 @@ export function TreasuryIndex(): ReactElement {
           <StatusBadge kind="draft" label="Phase 1B" />
         </>
       )}
+
+      <TransferModal open={transferring} onOpenChange={setTransferring} />
+      <ReconcileModal
+        accountId={reconciling?.id ?? null}
+        accountLabel={reconciling?.label ?? ''}
+        currency={reconciling?.currency ?? 'INR'}
+        bookBalance={reconciling?.capital ?? '0'}
+        onClose={() => setReconciling(null)}
+      />
     </div>
   );
 }

@@ -466,4 +466,113 @@ describe('Treasury (e2e)', () => {
       expect(ov.clientMoney.covered).toBe(true);
     });
   });
+
+  describe('spending and investing — ours only', () => {
+    it('an expense leaves the account and is booked against OUR money', async () => {
+      const cat = await request(h.baseUrl)
+        .post('/admin/treasury/expense-categories')
+        .set(auth)
+        .send({ code: 'office rent', name: 'Office rent' })
+        .expect(201);
+      // Normalised, so RENT / rent / Rent cannot become three categories
+      // each holding a third of the year's rent.
+      expect(cat.body.code).toBe('OFFICE_RENT');
+
+      await request(h.baseUrl)
+        .post('/admin/treasury/expense-categories')
+        .set(auth)
+        .send({ code: 'OFFICE_RENT', name: 'Rent again' })
+        .expect(409)
+        .expect((r) => expect(r.body.code).toBe('EXPENSE_CATEGORY_EXISTS'));
+
+      await post({
+        accountId: inrAccount,
+        type: BankEntryType.EXPENSE,
+        signedAmount: '-25000',
+        ownerKind: BankOwnerKind.CAPITAL,
+        expenseCategoryId: cat.body.id,
+      });
+
+      const ov = await overview();
+      const acc = ov.accounts.find((a) => a.accountId === inrAccount);
+      expect(acc?.capital).toBe('-25000.00');
+      // Nobody's held money moved.
+      expect(acc?.sellerHeld).toBe('0.00');
+    });
+
+    it('placing capital moves it out of the bank WITHOUT spending it', async () => {
+      // The point of modelling this: a fixed deposit must not read as
+      // the money vanishing, or coverage would say we no longer hold
+      // what sellers are owed.
+      await post({
+        accountId: inrAccount,
+        type: BankEntryType.OPENING_BALANCE,
+        signedAmount: '500000',
+        ownerKind: BankOwnerKind.CAPITAL,
+      });
+
+      const inv = await request(h.baseUrl)
+        .post('/admin/treasury/investments')
+        .set(auth)
+        .send({
+          label: '6-month FD',
+          counterparty: 'HDFC Bank',
+          fromAccountId: inrAccount,
+          amount: '200000',
+          placedAt: new Date().toISOString(),
+        })
+        .expect(201);
+      expect(inv.body.netInr).toBe('-200000.00');
+
+      const afterPlace = await overview();
+      expect(afterPlace.accounts.find((a) => a.accountId === inrAccount)?.capital).toBe(
+        '300000.00',
+      );
+
+      // Interest first, principal later — partial returns accumulate and
+      // the investment stays open until somebody says it is finished.
+      const partial = await request(h.baseUrl)
+        .post(`/admin/treasury/investments/${inv.body.id as string}/return`)
+        .set(auth)
+        .send({ toAccountId: inrAccount, amount: '8000', receivedAt: new Date().toISOString() })
+        .expect(200);
+      expect(partial.body.returnedInr).toBe('8000.00');
+      expect(partial.body.closedAt).toBeNull();
+
+      const closed = await request(h.baseUrl)
+        .post(`/admin/treasury/investments/${inv.body.id as string}/return`)
+        .set(auth)
+        .send({
+          toAccountId: inrAccount,
+          amount: '200000',
+          receivedAt: new Date().toISOString(),
+          close: true,
+        })
+        .expect(200);
+      expect(closed.body.netInr).toBe('8000.00');
+      expect(closed.body.closedAt).not.toBeNull();
+
+      const afterReturn = await overview();
+      expect(afterReturn.accounts.find((a) => a.accountId === inrAccount)?.capital).toBe(
+        '508000.00',
+      );
+    });
+
+    it("refuses to invest a seller's money — it is not ours to place", async () => {
+      await request(h.baseUrl)
+        .post('/admin/treasury/entries')
+        .set(auth)
+        .send({
+          accountId: inrAccount,
+          amountCurrency: Currency.INR,
+          type: BankEntryType.INVESTMENT_OUT,
+          signedAmount: '-1000',
+          ownerKind: BankOwnerKind.CAPITAL,
+          sellerId: sellerA,
+          occurredAt: new Date().toISOString(),
+        })
+        .expect(400)
+        .expect((r) => expect(r.body.code).toBe('BANK_CAPITAL_HAS_SELLER'));
+    });
+  });
 });

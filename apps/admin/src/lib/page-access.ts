@@ -59,6 +59,14 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   // Seeing what we hold is an ordinary finance question; recording a
   // movement is gated separately on money.treasury.manage at the API.
   ['/treasury', 'money.treasury.view'],
+  // The P&L reads the same ledgers the treasury does, plus the wallet
+  // and charge tables — everything it shows is money, so the treasury
+  // gate is the right one rather than a new permission nobody holds.
+  ['/pnl', 'money.treasury.view'],
+  // Expenses and investments are OUR money by construction: client
+  // money is neither spendable nor investable, so this never widens
+  // beyond the treasury view.
+  ['/expenses', 'money.treasury.view'],
   ['/remittances', 'money.view'],
   // A withdrawal destination is money, not seller admin — and the API
   // guards all three of its endpoints on this one permission.

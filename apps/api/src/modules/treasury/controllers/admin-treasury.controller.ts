@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -22,7 +23,17 @@ import type { AuthenticatedStaff } from '../../../common/types/request';
 import { BankLedgerService } from '../services/bank-ledger.service';
 import { BankTransferService } from '../services/bank-transfer.service';
 import { TreasuryReadService } from '../services/treasury-read.service';
-import { ReconcileAccountDto, RecordEntryDto, RecordTransferDto } from '../dto/treasury.dto';
+import {
+  CreateExpenseCategoryDto,
+  CreateInvestmentDto,
+  ReconcileAccountDto,
+  RecordEntryDto,
+  RecordInvestmentReturnDto,
+  RecordTransferDto,
+  UpdateExpenseCategoryDto,
+} from '../dto/treasury.dto';
+import { ExpenseCategoryService } from '../services/expense-category.service';
+import { InvestmentService } from '../services/investment.service';
 import { PnlService } from '../services/pnl.service';
 
 /**
@@ -48,6 +59,8 @@ export class AdminTreasuryController {
     private readonly ledger: BankLedgerService,
     private readonly transfers: BankTransferService,
     private readonly pnl: PnlService,
+    private readonly categories: ExpenseCategoryService,
+    private readonly investments: InvestmentService,
   ) {}
 
   @Get('overview')
@@ -197,6 +210,80 @@ export class AdminTreasuryController {
       reason: body.reason,
       staffId: staff.id,
     });
+  }
+
+  // ── Expense categories ───────────────────────────────────────────
+  //
+  // Operator-defined rather than a fixed enum: what a business spends on
+  // is its own shape, and a hardcoded list sends everything real into
+  // OTHER within a month.
+
+  @Get('expense-categories')
+  @ApiOperation({ summary: 'What we spend money on' })
+  @ApiQuery({ name: 'includeInactive', required: false, type: Boolean })
+  listCategories(
+    @Query('includeInactive') includeInactive?: string,
+  ): ReturnType<ExpenseCategoryService['list']> {
+    return this.categories.list(includeInactive === 'true');
+  }
+
+  @Post('expense-categories')
+  @RequirePermissions('money.treasury.manage')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Add a category' })
+  createCategory(
+    @Body() body: CreateExpenseCategoryDto,
+  ): ReturnType<ExpenseCategoryService['create']> {
+    return this.categories.create(body);
+  }
+
+  @Patch('expense-categories/:categoryId')
+  @RequirePermissions('money.treasury.manage')
+  @ApiOperation({
+    summary: 'Rename or deactivate. The CODE is immutable — past entries are read back through it.',
+  })
+  updateCategory(
+    @Param('categoryId', new ParseUUIDPipe({ version: '7' })) categoryId: string,
+    @Body() body: UpdateExpenseCategoryDto,
+  ): ReturnType<ExpenseCategoryService['update']> {
+    return this.categories.update(categoryId, body);
+  }
+
+  // ── Investments ──────────────────────────────────────────────────
+
+  @Get('investments')
+  @ApiOperation({ summary: 'Money placed somewhere it can earn' })
+  @ApiQuery({ name: 'includeClosed', required: false, type: Boolean })
+  listInvestments(
+    @Query('includeClosed') includeClosed?: string,
+  ): ReturnType<InvestmentService['list']> {
+    return this.investments.list(includeClosed === 'true');
+  }
+
+  @Post('investments')
+  @RequirePermissions('money.treasury.manage')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary:
+      'Place capital. Leaves the bank without being spent, so coverage still reads correctly.',
+  })
+  placeInvestment(
+    @Body() body: CreateInvestmentDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): ReturnType<InvestmentService['place']> {
+    return this.investments.place(staff.id, body);
+  }
+
+  @Post('investments/:investmentId/return')
+  @RequirePermissions('money.treasury.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Record money coming back. Partial returns accumulate.' })
+  recordInvestmentReturn(
+    @Param('investmentId', new ParseUUIDPipe({ version: '7' })) investmentId: string,
+    @Body() body: RecordInvestmentReturnDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): ReturnType<InvestmentService['recordReturn']> {
+    return this.investments.recordReturn(staff.id, investmentId, body);
   }
 }
 

@@ -26,6 +26,8 @@ import {
   useSellerWalletWithdrawals,
   type AdminWalletEntry,
 } from '@/lib/seller-wallet-hooks';
+import { useSellerHoldings } from '@/lib/ops-hooks';
+import { usePermission } from '@/lib/use-permission';
 
 /**
  * One seller's wallet, from our side — the same three views they have,
@@ -36,10 +38,15 @@ import {
  * one where a mis-click looks like a report.
  */
 export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string }): ReactElement {
+  // The bank book is a narrower permission than the wallet — gated here
+  // rather than left to 403, so somebody without it sees a page that
+  // works instead of one that looks broken.
+  const canReadTreasury = usePermission('money.treasury.view');
   const detail = useSellerWalletDetail(sellerId);
   const entries = useSellerWalletEntries(sellerId);
   const topups = useSellerWalletTopups(sellerId);
   const withdrawals = useSellerWalletWithdrawals(sellerId);
+  const holdings = useSellerHoldings(canReadTreasury ? sellerId : null);
   const [tab, setTab] = useState<'ledger' | 'topups' | 'withdrawals'>('ledger');
 
   if (detail.isLoading) return <LoadingState />;
@@ -92,6 +99,43 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
           hint="Claimed, not matched to a statement — in no balance yet"
         />
       </div>
+
+      {/* Where the money physically is, which the balance above does not
+          say. The wallet is what we OWE them; this is which of our
+          accounts the cash is sitting in — the question a payout has to
+          answer before it can be made, because paying BDT out of an
+          account holding only INR is not something a balance can warn
+          you about. */}
+      <Card>
+        <CardHeader title="Where their money is held" />
+        <CardBody>
+          {holdings.isLoading ? (
+            <p className="text-text-muted text-sm">Reading the bank book…</p>
+          ) : holdings.isError || holdings.data === undefined ? (
+            <p className="text-text-muted text-sm">
+              Could not read the bank book. The balance above is unaffected.
+            </p>
+          ) : holdings.data.length === 0 ? (
+            <p className="text-text-muted text-sm">
+              No cash is recorded against this seller in any account. If they hold a balance, it was
+              credited before the bank book existed, or by a flow that has not been wired to it.
+            </p>
+          ) : (
+            <dl className="space-y-1.5">
+              {holdings.data.map((h) => (
+                <div key={`${h.accountId}-${h.currency}`} className="flex justify-between gap-4">
+                  <dt className="text-text-muted text-sm">
+                    {h.accountLabel} · {h.currency}
+                  </dt>
+                  <dd className="text-sm">
+                    <Money amount={h.amount} currency={h.currency} convert={false} />
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
+        </CardBody>
+      </Card>
 
       {Number(d.minimumBalanceInr) > 0 && (
         <p className="text-text-muted text-xs">

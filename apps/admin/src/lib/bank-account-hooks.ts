@@ -59,12 +59,19 @@ export interface UpsertBankAccountBody {
   readonly displayOrder?: number;
 }
 
-export function usePlatformBankAccounts(): UseQueryResult<ReadonlyArray<PlatformBankAccountView>> {
+export function usePlatformBankAccounts(
+  enabled = true,
+): UseQueryResult<ReadonlyArray<PlatformBankAccountView>> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-bank-accounts'],
     queryFn: () =>
       client.request<ReadonlyArray<PlatformBankAccountView>>('/api/admin/platform-bank-accounts'),
+    // Gateable, because this list is needed by pages whose own gate is
+    // narrower than `money.view`. A request nobody may make should never
+    // be sent — a 403 on load is a page that looks broken to someone who
+    // did nothing wrong.
+    enabled,
   });
 }
 

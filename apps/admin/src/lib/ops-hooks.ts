@@ -783,6 +783,221 @@ export function usePnl(
   });
 }
 
+export interface ExpenseCategoryView {
+  readonly id: string;
+  readonly code: string;
+  readonly name: string;
+  readonly hint: string | null;
+  readonly isActive: boolean;
+}
+
+export function useExpenseCategories(
+  includeInactive = false,
+): UseQueryResult<readonly ExpenseCategoryView[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-treasury', 'expense-categories', includeInactive],
+    queryFn: () =>
+      client.request<readonly ExpenseCategoryView[]>(
+        `/api/admin/treasury/expense-categories${includeInactive ? '?includeInactive=true' : ''}`,
+      ),
+  });
+}
+
+export function useCreateExpenseCategory(): UseMutationResult<
+  ExpenseCategoryView,
+  Error,
+  { code: string; name: string; hint?: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<ExpenseCategoryView>('/api/admin/treasury/expense-categories', {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () =>
+      void qc.invalidateQueries({ queryKey: ['admin-treasury', 'expense-categories'] }),
+  });
+}
+
+export function useUpdateExpenseCategory(): UseMutationResult<
+  ExpenseCategoryView,
+  Error,
+  { categoryId: string; name?: string; hint?: string; isActive?: boolean }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ categoryId, ...body }) =>
+      client.request<ExpenseCategoryView>(`/api/admin/treasury/expense-categories/${categoryId}`, {
+        method: 'PATCH',
+        body,
+      }),
+    onSuccess: () =>
+      void qc.invalidateQueries({ queryKey: ['admin-treasury', 'expense-categories'] }),
+  });
+}
+
+export interface InvestmentView {
+  readonly id: string;
+  readonly label: string;
+  readonly counterparty: string;
+  readonly currency: 'INR' | 'BDT';
+  readonly placedInr: string;
+  readonly returnedInr: string;
+  readonly netInr: string;
+  readonly closedAt: string | null;
+  readonly note: string | null;
+  readonly createdAt: string;
+}
+
+export function useInvestments(includeClosed = false): UseQueryResult<readonly InvestmentView[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-treasury', 'investments', includeClosed],
+    queryFn: () =>
+      client.request<readonly InvestmentView[]>(
+        `/api/admin/treasury/investments${includeClosed ? '?includeClosed=true' : ''}`,
+      ),
+  });
+}
+
+export function usePlaceInvestment(): UseMutationResult<
+  InvestmentView,
+  Error,
+  {
+    label: string;
+    counterparty: string;
+    fromAccountId: string;
+    amount: string;
+    placedAt: string;
+    note?: string;
+  }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<InvestmentView>('/api/admin/treasury/investments', {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-treasury'] }),
+  });
+}
+
+export function useRecordInvestmentReturn(): UseMutationResult<
+  InvestmentView,
+  Error,
+  { investmentId: string; toAccountId: string; amount: string; receivedAt: string; close?: boolean }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ investmentId, ...body }) =>
+      client.request<InvestmentView>(`/api/admin/treasury/investments/${investmentId}/return`, {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-treasury'] }),
+  });
+}
+
+export function useRecordBankEntry(): UseMutationResult<
+  { id: string },
+  Error,
+  {
+    accountId: string;
+    amountCurrency: 'INR' | 'BDT';
+    type: string;
+    signedAmount: string;
+    ownerKind: 'SELLER' | 'CAPITAL';
+    sellerId?: string;
+    expenseCategoryId?: string;
+    occurredAt: string;
+    reference?: string;
+    note?: string;
+  }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<{ id: string }>('/api/admin/treasury/entries', { method: 'POST', body }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-treasury'] }),
+  });
+}
+
+export function useRecordTransfer(): UseMutationResult<
+  { id: string },
+  Error,
+  {
+    fromAccountId: string;
+    toAccountId: string;
+    amountOut: string;
+    amountIn: string;
+    quotedRate?: string;
+    sellerId?: string;
+    movedAt: string;
+    reference?: string;
+    note?: string;
+  }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<{ id: string }>('/api/admin/treasury/transfers', { method: 'POST', body }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-treasury'] }),
+  });
+}
+
+export function useReconcileAccount(): UseMutationResult<
+  { delta: string; entryId: string | null },
+  Error,
+  {
+    accountId: string;
+    ownerKind: 'SELLER' | 'CAPITAL';
+    sellerId?: string;
+    statedBalance: string;
+    reason: string;
+  }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ accountId, ...body }) =>
+      client.request<{ delta: string; entryId: string | null }>(
+        `/api/admin/treasury/accounts/${accountId}/reconcile`,
+        { method: 'POST', body },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-treasury'] }),
+  });
+}
+
+export interface SellerHoldingView {
+  readonly accountId: string;
+  readonly accountLabel: string;
+  readonly currency: 'INR' | 'BDT';
+  readonly amount: string;
+}
+
+export function useSellerHoldings(
+  sellerId: string | null,
+): UseQueryResult<readonly SellerHoldingView[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-treasury', 'holdings', sellerId],
+    enabled: sellerId !== null,
+    queryFn: () =>
+      client.request<readonly SellerHoldingView[]>(
+        `/api/admin/treasury/sellers/${String(sellerId)}/holdings`,
+      ),
+  });
+}
+
 export function useTrackingPollHealth(enabled = true): UseQueryResult<TrackingPollHealthView> {
   const client = useApiClient();
   return useQuery({
