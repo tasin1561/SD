@@ -1,4 +1,8 @@
 import { Module } from '@nestjs/common';
+import { CourierShiprocketModule } from '../courier-shiprocket/courier-shiprocket.module';
+import { DelhiveryTrackingSourceService } from '../courier-delhivery/services/delhivery-tracking-source.service';
+import { ShiprocketTrackingSourceService } from '../courier-shiprocket/services/shiprocket-tracking-source.service';
+import { COURIER_TRACKING_SOURCES } from '../courier-shared/services/courier-tracking-source';
 import { PrismaModule } from '../../infrastructure/prisma/prisma.module';
 import { ConfigModule } from '../../config/config.module';
 import { RedisModule } from '../../infrastructure/redis/redis.module';
@@ -40,6 +44,7 @@ import { CourierDocumentIngestService } from './services/courier-document-ingest
  */
 @Module({
   imports: [
+    CourierShiprocketModule,
     PrismaModule,
     ConfigModule,
     RedisModule,
@@ -50,6 +55,17 @@ import { CourierDocumentIngestService } from './services/courier-document-ingest
   ],
   controllers: [PublicWebhookController, PublicDocumentWebhookController],
   providers: [
+    {
+      // Same list the poller sweeps. A webhook is normalised by the
+      // adapter of the courier that sent it, which the per-courier
+      // endpoint already names.
+      provide: COURIER_TRACKING_SOURCES,
+      inject: [DelhiveryTrackingSourceService, ShiprocketTrackingSourceService],
+      useFactory: (
+        delhivery: DelhiveryTrackingSourceService,
+        shiprocket: ShiprocketTrackingSourceService,
+      ) => [delhivery, shiprocket],
+    },
     WebhookAuthService,
     CourierDocumentIngestService,
     WebhookIngestService,

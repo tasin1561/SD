@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  COURIER_TRACKING_SOURCES,
+  type CourierTrackingSource,
+} from '../../courier-shared/services/courier-tracking-source';
+import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   ActorType,
   DeliveryAttemptOutcome,
@@ -145,6 +149,8 @@ export class WebhookProcessorService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly courierDelhivery: DelhiveryTrackingService,
+    @Inject(COURIER_TRACKING_SOURCES)
+    private readonly sources: readonly CourierTrackingSource[],
     private readonly mapping: TrackingStatusMappingService,
     private readonly append: TrackingEventAppendService,
     private readonly orderWrite: OrderWriteService,
@@ -190,8 +196,17 @@ export class WebhookProcessorService {
       return { kind: 'PARSE_FAILED', webhookId };
     }
 
-    // §3 — normalize via the Delhivery adapter (stub mode in Phase 1A).
-    const normalized = this.courierDelhivery.normalizeScan({
+    // §3 — normalize via the adapter of the courier that SENT it.
+    //
+    // The endpoint is per courier (`/webhooks/:courierCode`) and the
+    // HMAC secret already is; only this step was not. Passing a
+    // Shiprocket status string to Delhivery's table does not throw — it
+    // returns UNMAPPABLE, so the scan is stored and no transition
+    // fires, and a delivered parcel sits at DISPATCHED with a timeline
+    // that looks populated.
+    const source =
+      this.sources.find((x) => x.courierCode === wh.courierCode) ?? this.courierDelhivery;
+    const normalized = source.normalizeScan({
       awbNumber: parsed.awbNumber,
       rawStatus: parsed.rawStatus,
       // The leg + NSL travel with the scan: without them "In Transit"

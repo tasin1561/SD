@@ -359,6 +359,16 @@ function makeProcessor(setup: Setup = {}) {
   const svc = new WebhookProcessorService(
     { client } as unknown as PrismaService,
     courierDelhivery as unknown as DelhiveryTrackingService,
+    // Normalisation is routed by the courier that SENT the webhook.
+    // These fixtures are all Delhivery, so the source list resolves to
+    // the same double every existing assertion already exercises.
+    [
+      {
+        courierCode: 'delhivery',
+        normalizeScan: (raw: unknown) =>
+          (courierDelhivery as { normalizeScan: (r: unknown) => unknown }).normalizeScan(raw),
+      },
+    ] as never,
     mapping,
     fakeAppend as unknown as TrackingEventAppendService,
     orderWrite as unknown as OrderWriteService,

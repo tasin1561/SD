@@ -384,3 +384,69 @@ describe('raw-scan-parser — Delhivery sends IST with no offset', () => {
     expect(new Date(viaWebhook).getTime()).toBe(new Date(toIsoWithIst(raw)).getTime());
   });
 });
+
+/**
+ * Shiprocket posts a different envelope from Delhivery, and the failure
+ * mode if this is missing is the quiet one: none of their keys overlap
+ * with the generic shape, so the parse returns null, the webhook is
+ * filed PARSE_FAILED, and a delivery scan is discarded with the raw
+ * body preserved for a person who will never look at it.
+ */
+describe('parseScanPayload — Shiprocket', () => {
+  it('reads their envelope: awb + current_status at the top level', () => {
+    const parsed = parseScanPayload({
+      awb: 'SR1234567890',
+      current_status: 'Delivered',
+      current_timestamp: '2026-08-29 14:32:00',
+      scans: [
+        { date: '2026-08-29 09:00:00', activity: 'Out for delivery', location: 'Bengaluru' },
+        { date: '2026-08-29 14:32:00', activity: 'Delivered to consignee', location: 'Bengaluru' },
+      ],
+    });
+
+    expect(parsed).not.toBeNull();
+    expect(parsed?.awbNumber).toBe('SR1234567890');
+    expect(parsed?.rawStatus).toBe('Delivered');
+    // The LATEST scan describes where the parcel is now.
+    expect(parsed?.description).toBe('Delivered to consignee');
+    expect(parsed?.locationName).toBe('Bengaluru');
+    // Their timestamps carry no zone and are IST — the same trap
+    // Delhivery's had, stamped by the same shared helper. The push's
+    // own timestamp wins over the last scan's: it is when THEY say the
+    // status changed.
+    expect(parsed?.eventAtIso).toBe('2026-08-29 14:32:00+05:30');
+    expect(new Date(parsed?.eventAtIso ?? '').toISOString()).toBe('2026-08-29T09:02:00.000Z');
+  });
+
+  it('carries no journey leg or NSL, and says so rather than inventing one', () => {
+    const parsed = parseScanPayload({
+      awb: 'SR1',
+      current_status: 'Undelivered',
+      current_timestamp: '2026-08-29 14:32:00',
+      ndr_reason: 'Customer not available',
+    });
+
+    // Inventing a leg would make their mapping depend on a field they
+    // never send.
+    expect(parsed?.statusType).toBeNull();
+    expect(parsed?.nslCode).toBeNull();
+    expect(parsed?.failureReason).toBe('Customer not available');
+  });
+
+  it('still parses when they send no scan history at all', () => {
+    const parsed = parseScanPayload({ awb: 'SR1', current_status: 'In Transit' });
+    // A status push with no history is a normal push, not a broken one.
+    expect(parsed).not.toBeNull();
+    expect(parsed?.awbNumber).toBe('SR1');
+  });
+
+  it('does not shadow the Delhivery envelope', () => {
+    const parsed = parseScanPayload({
+      Shipment: {
+        AWB: 'DLV1',
+        Status: { Status: 'Delivered', StatusDateTime: '2026-08-29T14:32:00' },
+      },
+    });
+    expect(parsed?.awbNumber).toBe('DLV1');
+  });
+});

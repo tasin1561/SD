@@ -89,6 +89,42 @@ export function parseScanPayload(parsedBody: unknown): ParsedScanPayload | null 
     };
   }
 
+  // ── SHIPROCKET'S ENVELOPE ────────────────────────────────────────
+  // They post `awb` + `current_status` at the top level, with the scan
+  // history under `scans`. None of those keys overlap with the generic
+  // shape below, so a Shiprocket push parsed as generic returns null
+  // and the webhook is filed as PARSE_FAILED — a delivery scan silently
+  // discarded, which is the worst way for this to be wrong.
+  //
+  // Their timestamps carry no zone and are IST, the same trap
+  // Delhivery's had; the shared helper fixes both.
+  const srAwb = pickString(b, ['awb']);
+  const srStatus = pickString(b, ['current_status', 'shipment_status']);
+  if (srAwb !== null && srStatus !== null) {
+    const scans = Array.isArray(b['scans']) ? (b['scans'] as unknown[]) : [];
+    const latest = scans.length > 0 ? scans[scans.length - 1] : null;
+    const scan = isObject(latest) ? (latest as Record<string, unknown>) : null;
+    const stamped =
+      pickString(b, ['current_timestamp', 'etd']) ??
+      (scan === null ? null : pickString(scan, ['date'])) ??
+      new Date().toISOString();
+    return {
+      awbNumber: srAwb,
+      rawStatus: srStatus,
+      // They have neither a journey leg nor an NSL code. Null is the
+      // honest answer; inventing one would make their mapping table
+      // depend on a field they never send.
+      statusType: null,
+      nslCode: null,
+      eventAtIso: toIsoWithIst(stamped),
+      locationName: scan === null ? null : pickString(scan, ['location']),
+      locationCity: null,
+      locationPincode: null,
+      description: scan === null ? null : pickString(scan, ['activity']),
+      failureReason: pickString(b, ['ndr_reason', 'reason']),
+    };
+  }
+
   const awbNumber = pickString(b, ['awb_number', 'awbNumber']);
   const rawStatus = pickString(b, ['raw_status', 'rawStatus', 'status']);
   const eventAtIso = pickString(b, ['event_at', 'eventAt', 'eventAtIso']);
