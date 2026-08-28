@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ActorType, Currency, Prisma, WalletEntryDirection } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
+import { SellerCashAttributionService } from '../../treasury/services/seller-cash-attribution.service';
 
 /**
  * Phase 1B M21 — the wallet primitive.
@@ -100,7 +101,10 @@ function isCredit(d: WalletEntryDirection): boolean {
 export class WalletService {
   private readonly logger = new Logger(WalletService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cash: SellerCashAttributionService,
+  ) {}
 
   /**
    * W-2: sole writer. Computes the post-entry running balance + writes
@@ -199,6 +203,27 @@ export class WalletService {
         lastEntryId: created.id,
       },
       update: { balance: next, lastEntryId: created.id },
+    });
+
+    // ── Whose the cash behind it is ──────────────────────────────────
+    //
+    // The balance and the cash are two different things. A top-up or a
+    // COD credit brings real money in and it is theirs; a remittance
+    // takes real money out. But a CHARGE moves nothing between banks —
+    // it changes whose the cash already sitting there is. Without this
+    // the bank book goes on reporting money we have earned as held for
+    // the seller.
+    //
+    // Inside this transaction, so the balance and the ownership of what
+    // backs it can never disagree (TRE-3). Clamped to what they actually
+    // hold: a seller with no cash with us produces NO entry, and the
+    // charge is simply a receivable.
+    await this.cash.apply(tx, {
+      sellerId: input.sellerId,
+      currency: input.currency,
+      direction: input.direction,
+      amount: input.amount,
+      walletEntryId: created.id,
     });
 
     return { id: created.id, runningBalanceAfter: created.runningBalanceAfter };

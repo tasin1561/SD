@@ -7,6 +7,7 @@ import { BankTransferService } from './services/bank-transfer.service';
 import { ExpenseCategoryService } from './services/expense-category.service';
 import { InvestmentService } from './services/investment.service';
 import { LiabilitiesService } from './services/liabilities.service';
+import { SellerCashAttributionService } from './services/seller-cash-attribution.service';
 import { ShipmentCostService } from './services/shipment-cost.service';
 import { PnlService } from './services/pnl.service';
 import { TreasuryReadService } from './services/treasury-read.service';
@@ -33,7 +34,8 @@ import { TreasuryReadService } from './services/treasury-read.service';
     InvestmentService,
     LiabilitiesService,
     ShipmentCostService,
+    SellerCashAttributionService,
   ],
-  exports: [BankLedgerService],
+  exports: [BankLedgerService, SellerCashAttributionService],
 })
 export class TreasuryModule {}

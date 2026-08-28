@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { TreasuryModule } from '../treasury/treasury.module';
 import { WalletService } from './services/wallet.service';
 
 /**
@@ -18,6 +19,12 @@ import { WalletService } from './services/wallet.service';
  * shipment-provision (M8) / lifecycle-events (M11).
  */
 @Module({
+  // The ONE dependency, and it is deliberate. The cash behind a wallet
+  // entry changes hands in the same transaction as the entry itself
+  // (TRE-3), and the sole writer is the only place that can guarantee
+  // it. Making every caller remember instead is the shape WAL-1 has
+  // already been forgotten twice.
+  imports: [TreasuryModule],
   providers: [WalletService],
   exports: [WalletService],
 })

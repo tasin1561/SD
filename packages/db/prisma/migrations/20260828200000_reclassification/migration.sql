@@ -1,0 +1,17 @@
+-- The cash did not move; whose it is changed.
+--
+-- A seller's balance and the cash behind it are two different things,
+-- and only some wallet movements are also cash movements. A top-up and a
+-- COD credit bring real cash in and it is THEIRS; a remittance takes
+-- real cash out. But a CHARGE moves nothing between banks — it changes
+-- whose the cash already sitting there is. A delivery fee, an RTO fee,
+-- inbound freight: the seller's balance falls and that money becomes
+-- ours.
+--
+-- Without this the bank book would go on reporting earned money as held
+-- for the seller, and the coverage page would say we are holding money
+-- we have already been paid.
+--
+-- Always written as a PAIR summing to zero, so the account total still
+-- matches the statement while the ownership split follows the wallet.
+ALTER TYPE "bank_entry_type" ADD VALUE 'reclassification';

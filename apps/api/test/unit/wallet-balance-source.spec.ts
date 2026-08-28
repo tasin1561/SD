@@ -40,7 +40,7 @@ function makeWallet(opts: {
       },
     },
   };
-  return new WalletService(prisma as never);
+  return new WalletService(prisma as never, { apply: async () => undefined } as never);
 }
 
 describe('WalletService.balanceCached — the cache is checked before it is trusted', () => {

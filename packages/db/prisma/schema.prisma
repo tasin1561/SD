@@ -6316,6 +6316,11 @@ enum BankEntryType {
   /// A human correcting the book against a real statement. Posted as an
   /// ENTRY, never as an overwrite, so the correction is visible.
   RECONCILIATION_ADJUSTMENT @map("reconciliation_adjustment")
+  /// The cash did not move; whose it is changed. A charge makes some of
+  /// a seller's held balance ours; a refund gives it back. Always a
+  /// PAIR summing to zero, so the account total still matches the
+  /// statement while the ownership split follows the wallet.
+  RECLASSIFICATION          @map("reclassification")
 
   @@map("bank_entry_type")
 }

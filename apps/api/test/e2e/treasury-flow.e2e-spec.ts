@@ -1,5 +1,13 @@
 import request from 'supertest';
-import { BankEntryType, BankOwnerKind, Currency, StaffRole } from '@skydrop/db';
+import {
+  BankEntryType,
+  BankOwnerKind,
+  Currency,
+  Prisma,
+  StaffRole,
+  WalletEntryDirection,
+} from '@skydrop/db';
+import { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
 import {
   bootTestApp,
   createTestStaff,
@@ -573,6 +581,90 @@ describe('Treasury (e2e)', () => {
         })
         .expect(400)
         .expect((r) => expect(r.body.code).toBe('BANK_CAPITAL_HAS_SELLER'));
+    });
+  });
+
+  describe('whose money is it — the cash follows the wallet', () => {
+    /** Charge the wallet the way every fee path does: through applyEntry. */
+    async function chargeWallet(
+      sellerId: string,
+      direction: 'ORDER_CHARGES' | 'INBOUND_FREIGHT',
+      amount: string,
+    ): Promise<void> {
+      const wallet = h.app.get(WalletService);
+      await h.prisma.$transaction(async (tx) => {
+        await wallet.applyEntry(tx, {
+          sellerId,
+          currency: Currency.INR,
+          direction: WalletEntryDirection[direction],
+          amount: new Prisma.Decimal(amount),
+          actorType: 'SYSTEM',
+        });
+      });
+    }
+
+    it('a charge converts held cash to OURS without changing the account total', async () => {
+      // The seller pays ₹5,000 in. ₹800 of freight is then charged. The
+      // bank still holds ₹5,000 — what changed is that ₹800 of it is now
+      // ours, which is the whole point: freight we paid a forwarder out
+      // of capital is being recovered INTO capital.
+      await post({
+        accountId: inrAccount,
+        type: BankEntryType.SELLER_TOPUP,
+        signedAmount: '5000',
+        ownerKind: BankOwnerKind.SELLER,
+        sellerId: sellerA,
+      });
+
+      await chargeWallet(sellerA, 'INBOUND_FREIGHT', '800');
+
+      const ov = await overview();
+      const acc = ov.accounts.find((a) => a.accountId === inrAccount);
+      expect(acc?.total).toBe('5000.00');
+      expect(acc?.sellerHeld).toBe('4200.00');
+      expect(acc?.capital).toBe('800.00');
+      expect(acc?.bySeller.find((b) => b.sellerId === sellerA)?.amount).toBe('4200.00');
+    });
+
+    it('a charge against a seller holding NOTHING writes no bank entry at all', async () => {
+      // The correction that matters. A negative wallet has no cash
+      // behind it in any account; it is a receivable. Inventing a bank
+      // entry for it would put a number in the book that no statement
+      // will ever agree with.
+      await chargeWallet(sellerB, 'ORDER_CHARGES', '250');
+
+      const entries = await h.prisma.bankEntry.count({ where: { sellerId: sellerB } });
+      expect(entries).toBe(0);
+
+      const balance = await h.prisma.sellerWalletBalance.findUnique({
+        where: { sellerId_currency: { sellerId: sellerB, currency: Currency.INR } },
+        select: { balance: true },
+      });
+      // The debt is real and recorded — just not as cash.
+      expect(balance?.balance.toString()).toBe('-250');
+    });
+
+    it('coverage still reconciles once a charge has moved money to capital', async () => {
+      // Both sides of the top-up: the wallet credit and the cash. The
+      // real flow writes them together (TRE-3); here they are set up
+      // separately so the charge afterwards is the only thing under test.
+      await giveWalletBalance(sellerA, '3000');
+      await post({
+        accountId: inrAccount,
+        type: BankEntryType.SELLER_TOPUP,
+        signedAmount: '3000',
+        ownerKind: BankOwnerKind.SELLER,
+        sellerId: sellerA,
+      });
+      await chargeWallet(sellerA, 'ORDER_CHARGES', '200');
+
+      const ov = await overview();
+      // Wallet says we owe 2,800; the bank says we hold 2,800 for them.
+      // Before this change the bank would still have said 3,000 and the
+      // page would have reported us over-covered by money we had earned.
+      expect(ov.clientMoney.owedToSellersInr).toBe('2800.00');
+      expect(ov.clientMoney.heldForSellersInr).toBe('2800.00');
+      expect(ov.clientMoney.covered).toBe(true);
     });
   });
 });
