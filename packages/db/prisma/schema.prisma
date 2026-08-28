@@ -6409,7 +6409,10 @@ model BankEntry {
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   account         PlatformBankAccount @relation(fields: [accountId], references: [id])
-  seller          Seller?             @relation(fields: [sellerId], references: [id])
+  // RESTRICT, not the default SET NULL for an optional relation: a
+  // seller whose money we are holding must not be deletable, and
+  // nulling the link would leave the cash in the account with no owner.
+  seller          Seller?             @relation(fields: [sellerId], references: [id], onDelete: Restrict)
   transfer        BankTransfer?       @relation(fields: [transferId], references: [id])
   expenseCategory ExpenseCategory?    @relation(fields: [expenseCategoryId], references: [id])
   investment      Investment?         @relation(fields: [investmentId], references: [id])
