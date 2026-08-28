@@ -308,6 +308,22 @@ describe('RtoDispositionService.finalize — disposition mixes (Model A)', () =>
 });
 
 describe('RtoDispositionService.finalize — guards', () => {
+  it('refuses while any item is still marked for later inspection', async () => {
+    // The whole point of the disposition. Finalizing around it would
+    // force the guess the operator declined to make at the bench, and
+    // WMS-8 moves real stock — a wrong restock sells a broken item, a
+    // wrong write-off destroys a good one. The goods are safe in the
+    // meantime: RTO_HOLD is outside every availability sum (BIN-2).
+    const { svc, runWithRetry, transitionStatus } = makeService({
+      items: [item('si-1', RtoDisposition.RESTOCK), item('si-2', RtoDisposition.INSPECT_LATER)],
+    });
+    await expect(svc.finalize(SHIP, STAFF)).rejects.toMatchObject({
+      response: { code: 'RTO_DISPOSITION_UNDECIDED' },
+    });
+    expect(runWithRetry).not.toHaveBeenCalled();
+    expect(transitionStatus).not.toHaveBeenCalled();
+  });
+
   it('RTO_INSPECTION_INCOMPLETE when any item lacks inspection', async () => {
     const { svc, runWithRetry, transitionStatus } = makeService({
       items: [item('si-1', RtoDisposition.RESTOCK), item('si-2', null, { rtoCondition: null })],

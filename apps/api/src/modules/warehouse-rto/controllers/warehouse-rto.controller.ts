@@ -5,11 +5,12 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Query,
   ParseUUIDPipe,
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
 import {
   ClientInfo,
@@ -54,6 +55,16 @@ export class WarehouseRtoController {
     private readonly read: RtoReadService,
     private readonly putaway: RtoPutawayService,
   ) {}
+
+  @Get('shipments')
+  @ApiOperation({
+    summary:
+      'Returns waiting on a supervisor — received but not finalised, and anything still marked for later inspection.',
+  })
+  @ApiQuery({ name: 'warehouseId', required: false })
+  list(@Query('warehouseId') warehouseId?: string): ReturnType<RtoReceiptService['listOpen']> {
+    return this.receipt.listOpen(warehouseId);
+  }
 
   @Get('shipments/:shipmentId')
   @HttpCode(HttpStatus.OK)

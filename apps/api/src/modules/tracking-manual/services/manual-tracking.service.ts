@@ -42,7 +42,17 @@ export type ManualScanOutcome =
       reason: 'CURRENT_NOT_IN_ALLOWED_FROM' | 'ALREADY_AT_TARGET';
       currentOrderStatus: OrderStatus;
     }
-  | { kind: 'INFORMATIONAL'; trackingEventId: string; reason: string };
+  | { kind: 'INFORMATIONAL'; trackingEventId: string; reason: string }
+  /**
+   * This exact scan is already on the timeline.
+   *
+   * Its own variant rather than folded into INFORMATIONAL, because the
+   * caller genuinely wants to tell them apart: one means "recorded, no
+   * transition warranted", the other means "you already did this". The
+   * id returned is the ORIGINAL event's, so a client that stored it
+   * still resolves.
+   */
+  | { kind: 'DUPLICATE'; trackingEventId: string; reason: string };
 
 /**
  * Module 10 (TRK-9) — manual tracking-event recording.
@@ -142,6 +152,41 @@ export class ManualTrackingService {
     //      row FIRST. No webhookId dedup here (manual entries have
     //      none); a count-based attemptNumber assignment with a
     //      retry on P2002 collision (vanishingly rare).
+    // ── The same scan, submitted twice ───────────────────────────────
+    //
+    // An operator double-clicks, or a slow response gets retried. There
+    // is no courier_webhooks row to dedup against here (TRK-2's master
+    // gate is for the ingest path), so the natural key does the work:
+    // the same shipment, the same event type, at the same instant, from
+    // the manual path. A genuine second scan matching all three is
+    // indistinguishable from a duplicate anyway — and the timeline
+    // showing one delivery attempt twice makes an operator doubt the
+    // whole record.
+    //
+    // Checked BEFORE the delivery_attempts write, or a repeat NDR
+    // submit would inflate the attempt count that the courier's own
+    // eligibility rules read.
+    const duplicate = await this.prisma.client.trackingEvent.findFirst({
+      where: {
+        shipmentId: ship.id,
+        eventType: decision.trackingEventType,
+        eventAt,
+        source: TrackingEventSource.MANUAL_ENTRY,
+      },
+      select: { id: true },
+    });
+    if (duplicate !== null) {
+      this.logger.log(
+        { shipmentId: ship.id, eventType: decision.trackingEventType },
+        'Manual scan already recorded at this timestamp; returning the original',
+      );
+      return {
+        kind: 'DUPLICATE',
+        trackingEventId: duplicate.id,
+        reason: 'This scan was already recorded at that timestamp',
+      };
+    }
+
     if (decision.kind === 'DELIVERY_ATTEMPT') {
       await this.writeManualAttempt(ship.id, eventAt, input.failureReason);
     }

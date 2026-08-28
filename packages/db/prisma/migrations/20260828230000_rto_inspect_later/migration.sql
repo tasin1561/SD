@@ -1,0 +1,12 @@
+-- "I cannot tell yet."
+--
+-- An operator with the carton open sometimes genuinely cannot decide —
+-- a device that needs charging to test, a seal that might be a factory
+-- mark. Before this the only options were RESTOCK and WRITE_OFF, so the
+-- choice was a guess: a wrong restock sells a broken item, a wrong
+-- write-off destroys a good one.
+--
+-- The goods stay in RTO_HOLD, which BIN-2 already keeps out of every
+-- availability sum, so nothing undecided can be sold. Finalize refuses
+-- while any item is still undecided.
+ALTER TYPE "rto_disposition" ADD VALUE 'inspect_later';

@@ -207,6 +207,25 @@ export class RtoDispositionService {
       });
     }
 
+    // Undecided items block the finalize, and that is the point of the
+    // disposition existing at all. Finalizing around them would force
+    // the same guess the operator declined to make at the bench — and
+    // WMS-8 is conservation-critical, so a guess here moves real stock.
+    // The goods are safe meanwhile: they sit in RTO_HOLD, which BIN-2
+    // keeps out of every availability sum, so nothing undecided sells.
+    const undecided = shipment.items.filter(
+      (i) => i.rtoDisposition === RtoDisposition.INSPECT_LATER,
+    );
+    if (undecided.length > 0) {
+      throw new ConflictException({
+        code: 'RTO_DISPOSITION_UNDECIDED',
+        message:
+          `${undecided.length} item(s) are still marked for later inspection. ` +
+          'Inspect them again and choose restock or write-off before finalizing.',
+        cause: undecided.map((i) => i.id),
+      });
+    }
+
     const restockItems = shipment.items.filter((i) => i.rtoDisposition === RtoDisposition.RESTOCK);
     const writeOffItems = shipment.items.filter(
       (i) => i.rtoDisposition === RtoDisposition.WRITE_OFF,

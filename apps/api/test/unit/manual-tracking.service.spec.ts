@@ -49,6 +49,7 @@ function makeSvc(
     ship?: FakeShip | null;
     order?: FakeOrder | null;
     transitionThrows?: Error;
+    existingEvent?: { id: string } | null;
   } = {},
 ) {
   const ship = opts.ship ?? {
@@ -110,8 +111,13 @@ function makeSvc(
     },
   );
 
+  // The duplicate-scan gate. Null by default — every existing case
+  // describes a scan being recorded for the first time.
+  const trackingEventFindFirst = jest.fn(async () => opts.existingEvent ?? null);
+
   const client = {
     shipment: { findUnique: shipmentFindUnique },
+    trackingEvent: { findFirst: trackingEventFindFirst },
     deliveryAttempt: { count: deliveryAttemptCount, create: deliveryAttemptCreate },
   };
 
@@ -354,5 +360,54 @@ describe('ManualTrackingService.recordScan — concurrent transition race', () =
     );
     expect(out.kind).toBe('TRANSITION_SKIPPED');
     expect(state.appendCalls).toHaveLength(1);
+  });
+});
+
+describe('ManualTrackingService.recordScan — the same scan submitted twice', () => {
+  it('returns the ORIGINAL event and writes nothing new', async () => {
+    // An operator double-clicks, or a slow response gets retried. There
+    // is no courier_webhooks row to dedup against on this path, so the
+    // natural key does the work — same shipment, same event type, same
+    // instant, same source. A timeline showing one delivery attempt
+    // twice makes an operator doubt the whole record.
+    const { svc, state, mocks } = makeSvc({ existingEvent: { id: 'te-original' } });
+
+    const out = await svc.recordScan(
+      SHIPMENT_ID,
+      {
+        status: ShipmentStatus.IN_TRANSIT,
+        eventAtIso: '2026-08-28T10:00:00.000Z',
+      } as never,
+      STAFF_ID,
+    );
+
+    expect(out).toEqual({
+      kind: 'DUPLICATE',
+      trackingEventId: 'te-original',
+      reason: expect.any(String),
+    });
+    expect(state.appendCalls).toHaveLength(0);
+    expect(state.transitionCalls).toHaveLength(0);
+    expect(mocks.deliveryAttemptCreate).not.toHaveBeenCalled();
+  });
+
+  it('checks BEFORE writing a delivery attempt', async () => {
+    // Or a repeat NDR submit inflates the attempt count that the
+    // courier's own eligibility rules read.
+    const { svc, mocks } = makeSvc({
+      existingEvent: { id: 'te-original' },
+      order: { id: ORDER_ID, status: OrderStatus.OUT_FOR_DELIVERY } as never,
+    });
+
+    await svc.recordScan(
+      SHIPMENT_ID,
+      {
+        status: ShipmentStatus.DELIVERY_ATTEMPTED,
+        eventAtIso: '2026-08-28T10:00:00.000Z',
+      } as never,
+      STAFF_ID,
+    );
+
+    expect(mocks.deliveryAttemptCreate).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
+  RtoDisposition,
   ActorType,
   OrderStatus,
   ShipmentStatus,
@@ -285,6 +286,84 @@ export class RtoReceiptService {
       rtoReceivedWarehouseId: effectiveWarehouseId,
       crossWarehouse,
       alreadyReceived: false,
+    };
+  }
+
+  /**
+   * Returns sitting on the bench, waiting on somebody.
+   *
+   * The operator workflow — receive, inspect, finalise — has always
+   * existed one shipment at a time, reachable only if you already knew
+   * the id. A supervisor had no way to see what was waiting, which is
+   * how a carton sits in RTO_HOLD for three weeks: nothing was broken,
+   * nobody could see it.
+   *
+   * Two things qualify. Received but not finalised is the ordinary
+   * backlog. Anything still marked INSPECT_LATER is the more
+   * interesting one — an operator declined to guess, and until somebody
+   * decides those goods are neither sellable nor written off.
+   */
+  async listOpen(warehouseId?: string): Promise<{
+    items: Array<{
+      shipmentId: string;
+      shipmentNumber: string;
+      awbNumber: string | null;
+      orderNumber: string | null;
+      sellerName: string | null;
+      rtoReceivedAt: string | null;
+      itemCount: number;
+      undecidedCount: number;
+      uninspectedCount: number;
+    }>;
+  }> {
+    const rows = await this.prisma.client.shipment.findMany({
+      where: {
+        deletedAt: null,
+        rtoReceivedAt: { not: null },
+        ...(warehouseId === undefined ? {} : { rtoReceivedWarehouseId: warehouseId }),
+        // Finalising is what takes a return off this list. The order's
+        // status is the authority on that (WMS-9), not a column on the
+        // shipment.
+        orderShipments: {
+          some: {
+            order: { status: { notIn: [OrderStatus.RTO_RESTOCKED, OrderStatus.RTO_DAMAGED] } },
+          },
+        },
+      },
+      orderBy: { rtoReceivedAt: 'asc' },
+      take: 200,
+      select: {
+        id: true,
+        shipmentNumber: true,
+        awbNumber: true,
+        rtoReceivedAt: true,
+        items: { select: { rtoDisposition: true, rtoCondition: true } },
+        orderShipments: {
+          take: 1,
+          select: {
+            order: {
+              select: { orderNumber: true, seller: { select: { companyName: true } } },
+            },
+          },
+        },
+      },
+    });
+
+    return {
+      items: rows.map((r) => ({
+        shipmentId: r.id,
+        shipmentNumber: r.shipmentNumber,
+        awbNumber: r.awbNumber,
+        orderNumber: r.orderShipments[0]?.order.orderNumber ?? null,
+        sellerName: r.orderShipments[0]?.order.seller?.companyName ?? null,
+        rtoReceivedAt: r.rtoReceivedAt?.toISOString() ?? null,
+        itemCount: r.items.length,
+        undecidedCount: r.items.filter((i) => i.rtoDisposition === RtoDisposition.INSPECT_LATER)
+          .length,
+        uninspectedCount: r.items.filter(
+          (i) => i.rtoCondition === null || i.rtoDisposition === null,
+        ).length,
+      })),
     };
   }
 }

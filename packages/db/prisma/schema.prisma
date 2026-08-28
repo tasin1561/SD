@@ -4836,8 +4836,17 @@ enum RtoItemCondition {
 }
 
 enum RtoDisposition {
-  RESTOCK   @map("restock")
-  WRITE_OFF @map("write_off")
+  RESTOCK       @map("restock")
+  WRITE_OFF     @map("write_off")
+  /// Not decided yet.
+  ///
+  /// The operator has the carton open and cannot tell — a device that
+  /// needs charging to test, a seal that might be a factory mark. The
+  /// goods stay in RTO_HOLD, which BIN-2 already keeps out of every
+  /// availability sum, and finalize REFUSES until somebody decides.
+  /// Guessing at the bench is what this exists to avoid: a wrong
+  /// RESTOCK sells a broken item, a wrong WRITE_OFF destroys a good one.
+  INSPECT_LATER @map("inspect_later")
 
   @@map("rto_disposition")
 }
