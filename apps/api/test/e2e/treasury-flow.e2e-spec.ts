@@ -85,6 +85,32 @@ describe('Treasury (e2e)', () => {
     bdtAccount = await acc('BDT-Payout', Currency.BDT);
   });
 
+  /**
+   * A wallet balance, written the way applyEntry writes it.
+   *
+   * The entry AND the balance row, because applyEntry now maintains both
+   * in one transaction — a fixture that wrote only the entry would be
+   * testing a state the application cannot produce.
+   */
+  async function giveWalletBalance(sellerId: string, running: string): Promise<void> {
+    const entry = await h.prisma.sellerWalletEntry.create({
+      data: {
+        sellerId,
+        currency: Currency.INR,
+        direction: Number(running) >= 0 ? 'TOPUP' : 'INBOUND_FREIGHT',
+        amount: Math.abs(Number(running)).toFixed(2),
+        runningBalanceAfter: running,
+        actorType: 'SYSTEM',
+      },
+      select: { id: true },
+    });
+    await h.prisma.sellerWalletBalance.upsert({
+      where: { sellerId_currency: { sellerId, currency: Currency.INR } },
+      create: { sellerId, currency: Currency.INR, balance: running, lastEntryId: entry.id },
+      update: { balance: running, lastEntryId: entry.id },
+    });
+  }
+
   /** Post an entry through the API, as an operator would. */
   async function post(body: Record<string, unknown>): Promise<void> {
     await request(h.baseUrl)
@@ -305,16 +331,7 @@ describe('Treasury (e2e)', () => {
 
   it('reports client-money coverage from what we owe against what we hold', async () => {
     // Owe: a positive wallet balance. Hold: cash marked as theirs.
-    await h.prisma.sellerWalletEntry.create({
-      data: {
-        sellerId: sellerA,
-        currency: Currency.INR,
-        direction: 'TOPUP',
-        amount: '3000',
-        runningBalanceAfter: '3000',
-        actorType: 'SYSTEM',
-      },
-    });
+    await giveWalletBalance(sellerA, '3000');
     await post({
       accountId: inrAccount,
       type: BankEntryType.SELLER_TOPUP,
@@ -332,26 +349,8 @@ describe('Treasury (e2e)', () => {
   it('a NEGATIVE wallet is a receivable — it must not flatter the coverage', async () => {
     // Seller B owes us. Netting that against what we owe seller A would
     // make it look as though less cash is needed than actually is.
-    await h.prisma.sellerWalletEntry.create({
-      data: {
-        sellerId: sellerA,
-        currency: Currency.INR,
-        direction: 'TOPUP',
-        amount: '3000',
-        runningBalanceAfter: '3000',
-        actorType: 'SYSTEM',
-      },
-    });
-    await h.prisma.sellerWalletEntry.create({
-      data: {
-        sellerId: sellerB,
-        currency: Currency.INR,
-        direction: 'INBOUND_FREIGHT',
-        amount: '5000',
-        runningBalanceAfter: '-5000',
-        actorType: 'SYSTEM',
-      },
-    });
+    await giveWalletBalance(sellerA, '3000');
+    await giveWalletBalance(sellerB, '-5000');
 
     const o = await overview();
     // 3000, not -2000: we still owe seller A every rupee of it.

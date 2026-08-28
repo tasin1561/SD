@@ -66,10 +66,17 @@ export class TreasuryReadService {
       // What we owe: the sum of every POSITIVE seller wallet balance.
       // A negative one is a receivable, not a debt we must fund, so it
       // must not net off and flatter the coverage figure.
-      this.prisma.client.sellerWalletEntry.groupBy({
-        by: ['sellerId'],
-        where: { currency: Currency.INR },
-        _max: { id: true },
+      // Read from the maintained balance table, NOT by finding each
+      // seller's newest entry with `_max: { id: true }` — Postgres has
+      // no max() for uuid and refuses that outright. I wrote it that way
+      // here anyway, two days after fixing the identical thing in the
+      // admin wallet service, and only a real database caught it.
+      //
+      // Safe to trust now because applyEntry writes this row inside the
+      // same transaction as the entry, so it cannot lag behind.
+      this.prisma.client.sellerWalletBalance.findMany({
+        where: { currency: Currency.INR, balance: { gt: 0 } },
+        select: { balance: true },
       }),
       this.prisma.client.bankEntry.aggregate({
         where: { ownerKind: BankOwnerKind.SELLER, currency: Currency.INR },
@@ -101,9 +108,7 @@ export class TreasuryReadService {
       };
     });
 
-    const owedInr = await this.owedToSellers(
-      owed.map((o) => o._max.id).filter(Boolean) as string[],
-    );
+    const owedInr = owed.reduce((acc, r) => acc.add(r.balance), ZERO);
     const heldInr = held._sum.signedAmount ?? ZERO;
     const gap = owedInr.sub(heldInr);
 
@@ -120,19 +125,6 @@ export class TreasuryReadService {
         covered: gap.lte(0),
       },
     };
-  }
-
-  /** Positive balances only — see the note at the call site. */
-  private async owedToSellers(latestEntryIds: string[]): Promise<Prisma.Decimal> {
-    if (latestEntryIds.length === 0) return ZERO;
-    const rows = await this.prisma.client.sellerWalletEntry.findMany({
-      where: { id: { in: latestEntryIds } },
-      select: { runningBalanceAfter: true },
-    });
-    return rows.reduce(
-      (acc, r) => (r.runningBalanceAfter.gt(0) ? acc.add(r.runningBalanceAfter) : acc),
-      ZERO,
-    );
   }
 
   /** Where one seller's money is sitting, for a payout decision. */
