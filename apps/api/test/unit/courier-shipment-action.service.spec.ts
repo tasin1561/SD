@@ -47,12 +47,14 @@ function make(
   } = {},
 ): Deps {
   const audit = jest.fn(async () => undefined);
-  const edit = jest.fn(async () => ({
-    success: true,
-    awbNumber: AWB,
-    message: 'ok',
-    raw: null,
-  }));
+  const edit = jest.fn<Promise<{ success: boolean; message: string | null }>, [unknown, unknown]>(
+    async () => ({
+      success: true,
+      awbNumber: AWB,
+      message: 'ok',
+      raw: null,
+    }),
+  );
   const cancel = jest.fn<Promise<{ success: boolean; message: string | null }>, [string, unknown]>(
     async () => ({
       success: true,
@@ -95,9 +97,8 @@ function make(
     prisma as never,
     { log: audit } as never,
     contextSvc as never,
-    { edit, cancel } as never,
-    // Cancel now goes through the courier-agnostic dispatcher. The
-    // double forwards to the SAME `cancel` mock so every existing
+    // Cancel and edit both go through the courier-agnostic dispatcher
+    // now. The double forwards to the SAME mocks so every existing
     // assertion keeps meaning what it did — including the ones that
     // assert the courier was never called at all.
     {
@@ -107,6 +108,16 @@ function make(
         awbNumber: string,
         actor: unknown,
       ) => cancel(awbNumber, actor),
+      edit: (input: Record<string, unknown>, actor: unknown) => {
+        // The dispatcher takes routing fields the Delhivery service
+        // never saw; strip them so the existing payload assertions
+        // still compare like for like.
+        const { courierCode, courierAccountId, courierShipmentId, ...rest } = input;
+        void courierCode;
+        void courierAccountId;
+        void courierShipmentId;
+        return edit(rest, actor);
+      },
     } as never,
     { requiresEwaybill: (v: number) => v > 50_000, update: ewaybillUpdate } as never,
     ndr as never,

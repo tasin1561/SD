@@ -98,6 +98,71 @@ export class CourierOpsDispatchService {
   }
 
   /**
+   * Correct the consignee details on a live parcel.
+   *
+   * `productsDesc` is Delhivery-only: Shiprocket has no field for it and
+   * dropping it silently would let an operator believe they had changed
+   * something they had not.
+   */
+  async edit(
+    input: {
+      readonly courierCode: string;
+      readonly courierAccountId: string | null;
+      readonly courierShipmentId: string | null;
+      readonly awbNumber: string;
+      readonly name?: string;
+      readonly phone?: string;
+      readonly address?: string;
+      readonly productsDesc?: string;
+    },
+    actor: CourierCredentialActor,
+  ): Promise<OpsActionResult> {
+    switch (input.courierCode) {
+      case 'shiprocket': {
+        if (input.courierAccountId === null || input.courierShipmentId === null) {
+          return {
+            success: false,
+            message:
+              'This parcel carries no Shiprocket account or parcel id, so it cannot be edited.',
+          };
+        }
+        if (input.productsDesc !== undefined) {
+          return {
+            success: false,
+            message:
+              'Shiprocket cannot change the product description on a live parcel. Cancel and rebook if it must change.',
+          };
+        }
+        const r = await this.shiprocket.editShipment(
+          {
+            courierShipmentId: input.courierShipmentId,
+            ...(input.name === undefined ? {} : { name: input.name }),
+            ...(input.phone === undefined ? {} : { phone: input.phone }),
+            ...(input.address === undefined ? {} : { address: input.address }),
+          },
+          input.courierAccountId,
+        );
+        return { success: r.ok, message: r.message };
+      }
+      case 'delhivery': {
+        const r = await this.delhiveryEdit.edit(
+          {
+            awbNumber: input.awbNumber,
+            ...(input.name === undefined ? {} : { name: input.name }),
+            ...(input.phone === undefined ? {} : { phone: input.phone }),
+            ...(input.address === undefined ? {} : { address: input.address }),
+            ...(input.productsDesc === undefined ? {} : { productsDesc: input.productsDesc }),
+          },
+          actor,
+        );
+        return { success: r.success, message: r.message };
+      }
+      default:
+        return manualCourier(input.courierCode, 'change the address');
+    }
+  }
+
+  /**
    * Ask for a collection.
    *
    * Delhivery: one call for the location and day. Shiprocket: one call

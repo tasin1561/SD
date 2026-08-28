@@ -3,7 +3,6 @@ import { ActorType, ShipmentStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { ClientInfoPayload } from '../../../common/decorators/client-info.decorator';
-import { DelhiveryShipmentEditService } from '../../courier-delhivery/services/delhivery-shipment-edit.service';
 import {
   DelhiveryEwaybillService,
   EWAYBILL_THRESHOLD_INR,
@@ -75,7 +74,6 @@ export class CourierShipmentActionService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
     private readonly context: ShipmentCourierContextService,
-    private readonly editSvc: DelhiveryShipmentEditService,
     private readonly opsDispatch: CourierOpsDispatchService,
     private readonly ewaybill: DelhiveryEwaybillService,
     private readonly ndr: CourierNdrDispatchService,
@@ -109,8 +107,11 @@ export class CourierShipmentActionService {
       });
     }
 
-    const result = await this.editSvc.edit(
+    const result = await this.opsDispatch.edit(
       {
+        courierCode: shipment.courierCode,
+        courierAccountId: shipment.courierAccountId,
+        courierShipmentId: shipment.courierShipmentId,
         awbNumber: shipment.awbNumber,
         ...changes,
       },
@@ -385,6 +386,7 @@ export class CourierShipmentActionService {
     // exists and the two are addressed differently.
     courierCode: string;
     courierAccountId: string | null;
+    courierShipmentId: string | null;
   }> {
     const shipment = await this.context.resolve(shipmentId);
     if (shipment.awbNumber === null) {
@@ -411,6 +413,7 @@ export class CourierShipmentActionService {
       awbNumber: shipment.awbNumber,
       courierCode: shipment.courierCode,
       courierAccountId: shipment.courierAccountId,
+      courierShipmentId: shipment.courierShipmentId,
       declaredValueInr: shipment.declaredValueInr,
     };
   }

@@ -181,3 +181,68 @@ describe('CourierOpsDispatchService', () => {
     expect(r.message).toContain('by hand');
   });
 });
+
+describe('CourierOpsDispatchService — editing a live parcel', () => {
+  function withEdit() {
+    const dlEdit = jest.fn(async () => ({
+      success: true,
+      awbNumber: 'A',
+      message: null,
+      raw: null,
+    }));
+    const srEdit = jest.fn<
+      Promise<{ ok: boolean; message: string | null }>,
+      [{ courierShipmentId: string }, string]
+    >(async () => ({ ok: true, message: null }));
+    const svc = new CourierOpsDispatchService(
+      { cancel: jest.fn(), edit: dlEdit } as unknown as DelhiveryShipmentEditService,
+      { requestPickup: jest.fn() } as unknown as DelhiveryPickupService,
+      { register: jest.fn() } as unknown as DelhiveryWarehouseService,
+      { editShipment: srEdit } as unknown as ShiprocketClientService,
+    );
+    return { svc, dlEdit, srEdit };
+  }
+
+  const base = {
+    courierAccountId: 'acc-1',
+    courierShipmentId: '99887',
+    awbNumber: 'AWB1',
+    address: '14 MG Road, near the water tank',
+  };
+
+  it('edits at whichever courier has the parcel', async () => {
+    const { svc, dlEdit, srEdit } = withEdit();
+
+    await svc.edit({ ...base, courierCode: 'delhivery' }, ACTOR);
+    expect(dlEdit).toHaveBeenCalledTimes(1);
+
+    await svc.edit({ ...base, courierCode: 'shiprocket' }, ACTOR);
+    expect(srEdit).toHaveBeenCalledTimes(1);
+    // Their endpoint keys on THEIR order id, not the AWB.
+    expect(srEdit.mock.calls[0]?.[0].courierShipmentId).toBe('99887');
+  });
+
+  it('refuses a product-description change on Shiprocket rather than dropping it', async () => {
+    const { svc, srEdit } = withEdit();
+    const r = await svc.edit(
+      { ...base, courierCode: 'shiprocket', productsDesc: 'Two widgets' },
+      ACTOR,
+    );
+
+    // Sending the edit without it would report success while the one
+    // field the operator cared about was silently discarded.
+    expect(srEdit).not.toHaveBeenCalled();
+    expect(r.success).toBe(false);
+    expect(r.message).toContain('product description');
+  });
+
+  it('refuses a Shiprocket edit with no parcel id, without calling them', async () => {
+    const { svc, srEdit } = withEdit();
+    const r = await svc.edit(
+      { ...base, courierCode: 'shiprocket', courierShipmentId: null },
+      ACTOR,
+    );
+    expect(srEdit).not.toHaveBeenCalled();
+    expect(r.success).toBe(false);
+  });
+});

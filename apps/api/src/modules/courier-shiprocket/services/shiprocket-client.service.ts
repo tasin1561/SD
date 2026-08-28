@@ -442,6 +442,53 @@ export class ShiprocketClientService {
     };
   }
 
+  /**
+   * Correct the consignee details on a live parcel.
+   *
+   * ── WHAT THEY WILL AND WILL NOT CHANGE ───────────────────────────
+   * Name, phone and address, yes. Payment mode, NO — Shiprocket has no
+   * prepaid↔COD conversion, and the amount to collect is fixed when the
+   * order is created. Delhivery does convert, so the layer above refuses
+   * that half here rather than sending an edit that silently drops the
+   * only field the operator cared about.
+   *
+   * Their endpoint takes THEIR order id, not the AWB.
+   */
+  async editShipment(
+    input: {
+      readonly courierShipmentId: string;
+      readonly name?: string;
+      readonly phone?: string;
+      readonly address?: string;
+      readonly city?: string;
+      readonly pincode?: string;
+    },
+    courierAccountId: string,
+  ): Promise<{ ok: boolean; message: string | null }> {
+    if (await this.http.isStubMode()) return { ok: true, message: 'stub' };
+    // Changes where a real van goes.
+    await this.writeGuard.assertWritable('shiprocket', 'shipment.edit', {
+      courierShipmentId: input.courierShipmentId,
+    });
+    const res = await this.http.request<{ message?: string; status?: number }>({
+      method: 'POST',
+      path: '/v1/external/orders/address/update',
+      body: {
+        order_id: input.courierShipmentId,
+        ...(input.name === undefined ? {} : { shipping_customer_name: input.name }),
+        ...(input.phone === undefined
+          ? {}
+          : { shipping_phone: input.phone.replace(/^\+91/, '').replace(/\D/g, '').slice(-10) }),
+        ...(input.address === undefined ? {} : { shipping_address: input.address }),
+        ...(input.city === undefined ? {} : { shipping_city: input.city }),
+        ...(input.pincode === undefined ? {} : { shipping_pincode: input.pincode }),
+      },
+      actor: this.actor(),
+      courierAccountId,
+    });
+    return { ok: res.status !== 0, message: res.message ?? null };
+  }
+
   async cancelShipment(
     awbNumber: string,
     courierAccountId: string,
