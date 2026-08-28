@@ -5332,6 +5332,7 @@ model PlatformBankAccount {
   transfersTo   BankTransfer[]       @relation("BankTransferTo")
 
   @@index([isActive, displayOrder])
+  @@index([courierAccountId])
   @@map("platform_bank_accounts")
 }
 
@@ -6385,7 +6386,7 @@ model BankEntry {
   signedAmount Decimal       @map("signed_amount") @db.Decimal(14, 2)
   currency     Currency
 
-  ownerKind BankOwnerKind
+  ownerKind BankOwnerKind @map("owner_kind")
   /// Set when ownerKind is SELLER. The pair is what lets one account
   /// report how much of itself is spoken for, and by whom.
   sellerId  String?       @map("seller_id") @db.Uuid
