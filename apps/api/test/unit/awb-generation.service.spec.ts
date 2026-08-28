@@ -4,10 +4,14 @@ import { AwbGenerationService } from '../../src/modules/courier-awb/services/awb
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { SpacesService } from '../../src/infrastructure/spaces/spaces.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
-import type { DelhiveryAwbService } from '../../src/modules/courier-delhivery/services/delhivery-awb.service';
-import type { DelhiveryLabelService } from '../../src/modules/courier-delhivery/services/delhivery-label.service';
 import type { DelhiveryAwbResult } from '../../src/modules/courier-delhivery/types/delhivery.types';
+import type {
+  CourierAwbDispatchService,
+  DispatchAwbInput,
+  DispatchAwbResult,
+} from '../../src/modules/courier-awb/services/courier-awb-dispatch.service';
 import type { CourierAccountRoutingService } from '../../src/modules/courier-shared/services/courier-account-routing.service';
+import type { CourierDistributionService } from '../../src/modules/courier-shared/services/courier-distribution.service';
 import { makeTestEnv } from '../helpers/env';
 
 type AnyArgs = Record<string, unknown>;
@@ -33,7 +37,11 @@ function shipmentRow(over: AnyArgs = {}): AnyArgs {
     destCountryCode: 'IN',
     totalWeightGrams: 500,
     declaredValueInr: { toString: () => '999.00' },
-    codAmountInr: { toString: () => '999.00' },
+    codAmountInr: { toString: () => '999.00', greaterThan: () => true },
+    originWarehouseId: 'wh-1',
+    lengthCm: 10,
+    widthCm: 10,
+    heightCm: 10,
     items: [{ productName: 'Widget', quantity: 2 }],
     // M10 commit 1: CUR-9 gate considers "current awb_label" alongside
     // shipment.awbNumber. Default: no current label.
@@ -56,6 +64,11 @@ function makeService(
       | { courierAccountId: string; source: 'SELLER_LINK' | 'DEFAULT_ACCOUNT' }
       | Error;
     courierRow?: AnyArgs | null;
+    /** Script the dispatcher per courier code, so a failover test can
+     *  say "Shiprocket refuses, Delhivery takes it" and vice versa. */
+    dispatchByCourier?: Record<string, DispatchAwbResult>;
+    /** What CourierDistributionService.pickAlternate returns. */
+    alternate?: { courierCode: string; courierAccountId: string } | null;
   } = {},
 ) {
   const shipmentFindUnique = jest.fn(async () =>
@@ -109,34 +122,64 @@ function makeService(
         labelUrl: null,
       },
   );
-  const delhiveryAwb = { generateAwb };
-  const fetchLabel = jest.fn(async () => {
+
+  // The saga no longer speaks to a courier directly — it asks the
+  // dispatcher, which is the only thing that knows Delhivery takes one
+  // call and Shiprocket takes two. The harness translates the legacy
+  // `awbResult` fixture so the pre-failover cases still read the same.
+  const generate = jest.fn<Promise<DispatchAwbResult>, [DispatchAwbInput, unknown]>(
+    async (input: DispatchAwbInput) => {
+      const scripted = opts.dispatchByCourier?.[input.courierCode];
+      if (scripted !== undefined) return scripted;
+      const r = await generateAwb(input);
+      return r.ok
+        ? {
+            ok: true,
+            awbNumber: r.awbNumber,
+            courierShipmentId: r.courierShipmentId,
+            serviceable: true,
+            errorCode: null,
+            errorMessage: null,
+          }
+        : {
+            ok: false,
+            awbNumber: null,
+            courierShipmentId: null,
+            serviceable: r.serviceable,
+            errorCode: r.errorCode,
+            errorMessage: r.errorMessage,
+          };
+    },
+  );
+  const dispatchFetchLabel = jest.fn(async () => {
     if (opts.fetchLabelThrows) throw opts.fetchLabelThrows;
-    return {
-      bytes: Buffer.from('%PDF-1.4 stub'),
-      mimeType: 'application/pdf',
-    };
+    return { bytes: Buffer.from('%PDF-1.4 stub'), mimeType: 'application/pdf' };
   });
-  const delhiveryLabel = { fetchLabel };
+  const dispatch = { generate, fetchLabel: dispatchFetchLabel };
+
+  const pickAlternate = jest.fn(async () => opts.alternate ?? null);
+  const distribution = { pickAlternate };
 
   const svc = new AwbGenerationService(
     { client } as unknown as PrismaService,
     makeTestEnv(),
     spaces as unknown as SpacesService,
     audit as unknown as AuditLogService,
-    delhiveryAwb as unknown as DelhiveryAwbService,
-    delhiveryLabel as unknown as DelhiveryLabelService,
+    dispatch as unknown as CourierAwbDispatchService,
+    distribution as unknown as CourierDistributionService,
     courierAccountRouting as unknown as CourierAccountRoutingService,
   );
   return {
     svc,
+    generate,
+    pickAlternate,
     putObject,
     txShipmentUpdate,
     txAwbLabelCreate,
     txAwbLabelUpdateMany,
     auditLog,
     generateAwb,
-    fetchLabel,
+    fetchLabel: dispatchFetchLabel,
     selectAccount,
     courierFindUnique,
   };
@@ -190,7 +233,10 @@ describe('AwbGenerationService.generateForShipment', () => {
     expect(stampData).not.toHaveProperty('status');
     // Phase D ran AFTER tx1: fetchLabel + putObject + tx2 awb_labels create.
     expect(fetchLabel).toHaveBeenCalledWith(
-      'DLVSTUB202605000042',
+      // Now an input object, because the label has to be asked of
+      // whichever courier actually carries the parcel — not of
+      // Delhivery by default.
+      expect.objectContaining({ awbNumber: 'DLVSTUB202605000042', courierCode: 'delhivery' }),
       // AWB generation is a queue worker, so the credential decrypt must
       // attribute to the RUNNER branch — CUR-10 as amended turns on
       // telling that apart from an operator having clicked something.
@@ -298,7 +344,10 @@ describe('AwbGenerationService.generateForShipment', () => {
     expect(auditCalls(auditLog, 'awb.generated')).toHaveLength(0);
     // Phase D ran to completion.
     expect(fetchLabel).toHaveBeenCalledWith(
-      'DLVSTUB202605000042',
+      // Now an input object, because the label has to be asked of
+      // whichever courier actually carries the parcel — not of
+      // Delhivery by default.
+      expect.objectContaining({ awbNumber: 'DLVSTUB202605000042', courierCode: 'delhivery' }),
       // AWB generation is a queue worker, so the credential decrypt must
       // attribute to the RUNNER branch — CUR-10 as amended turns on
       // telling that apart from an operator having clicked something.
@@ -426,5 +475,143 @@ describe('AwbGenerationService.generateForShipment', () => {
       }),
     });
     await expect(svc.generateForShipment(SHIP)).rejects.toBeInstanceOf(ConflictException);
+  });
+});
+
+/**
+ * Failover is SYMMETRIC by construction, and these tests are what say so.
+ *
+ * The saga never names a courier: on a refusal it asks the distribution
+ * service for a DIFFERENT one, excluding whoever just said no. So the
+ * direction is decided by which courier the parcel was routed to first,
+ * not by anything in this code — which is exactly the property that
+ * would rot silently if only the Delhivery-first case were covered.
+ *
+ * A refusal, not a wobble. `serviceable: false` is "this courier will
+ * not carry this parcel"; a timeout leaves it true and the existing
+ * BullMQ retries handle it (CUR-2b). Failing over on a bad minute would
+ * quietly move volume, and cost, to a courier nobody chose.
+ */
+describe('AwbGenerationService — courier failover (symmetric)', () => {
+  const REFUSED: DispatchAwbResult = {
+    ok: false,
+    awbNumber: null,
+    courierShipmentId: null,
+    serviceable: false,
+    errorCode: 'NON_SERVICEABLE',
+    errorMessage: 'pin not served',
+  };
+
+  it('Delhivery refuses → Shiprocket carries it, and the shipment records SHIPROCKET', async () => {
+    const { svc, generate, txShipmentUpdate } = makeService({
+      dispatchByCourier: {
+        delhivery: REFUSED,
+        shiprocket: {
+          ok: true,
+          awbNumber: 'SR1234567890',
+          courierShipmentId: '887766',
+          serviceable: true,
+          errorCode: null,
+          errorMessage: null,
+        },
+      },
+      alternate: { courierCode: 'shiprocket', courierAccountId: 'sr-acc-1' },
+    });
+
+    const res = await svc.generateForShipment(SHIP);
+
+    expect(res.status).toBe('GENERATED');
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(generate.mock.calls[0]?.[0].courierCode).toBe('delhivery');
+    expect(generate.mock.calls[1]?.[0].courierCode).toBe('shiprocket');
+
+    // The parcel is now with a different company. If the row still said
+    // 'delhivery', every later label fetch, tracking scan match and
+    // cancel would be sent to a courier that never had it.
+    const written = txShipmentUpdate.mock.calls[0]?.[0].data as AnyArgs;
+    expect(written.courierCode).toBe('shiprocket');
+    expect(written.awbNumber).toBe('SR1234567890');
+    expect(written.courierShipmentId).toBe('887766');
+  });
+
+  it('Shiprocket refuses → Delhivery carries it (the same path, the other way)', async () => {
+    const { svc, generate, txShipmentUpdate } = makeService({
+      shipment: shipmentRow({ courierCode: 'shiprocket' }),
+      dispatchByCourier: {
+        shiprocket: REFUSED,
+        delhivery: {
+          ok: true,
+          awbNumber: 'DLVSTUB202605000042',
+          courierShipmentId: null,
+          serviceable: true,
+          errorCode: null,
+          errorMessage: null,
+        },
+      },
+      alternate: { courierCode: 'delhivery', courierAccountId: 'dl-acc-1' },
+    });
+
+    const res = await svc.generateForShipment(SHIP);
+
+    expect(res.status).toBe('GENERATED');
+    expect(generate.mock.calls[0]?.[0].courierCode).toBe('shiprocket');
+    expect(generate.mock.calls[1]?.[0].courierCode).toBe('delhivery');
+    const written = txShipmentUpdate.mock.calls[0]?.[0].data as AnyArgs;
+    expect(written.courierCode).toBe('delhivery');
+  });
+
+  it('both refuse → FAILED with serviceable false, which is what routes it to a human', async () => {
+    const { svc, generate } = makeService({
+      dispatchByCourier: { delhivery: REFUSED, shiprocket: REFUSED },
+      alternate: { courierCode: 'shiprocket', courierAccountId: 'sr-acc-1' },
+    });
+
+    const res = await svc.generateForShipment(SHIP);
+
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(res.status).toBe('FAILED');
+    if (res.status === 'FAILED') {
+      expect(res.serviceable).toBe(false);
+      // The FIRST courier's reason survives: it answers "why is this in
+      // manual placement". The alternate's message is about a courier
+      // nobody chose.
+      expect(res.errorMessage).toBe('pin not served');
+    }
+  });
+
+  it('a transient failure does NOT fail over — the retries own that case', async () => {
+    const { svc, generate, pickAlternate } = makeService({
+      dispatchByCourier: {
+        delhivery: {
+          ok: false,
+          awbNumber: null,
+          courierShipmentId: null,
+          serviceable: true,
+          errorCode: 'UPSTREAM_TIMEOUT',
+          errorMessage: 'gateway timeout',
+        },
+      },
+      alternate: { courierCode: 'shiprocket', courierAccountId: 'sr-acc-1' },
+    });
+
+    const res = await svc.generateForShipment(SHIP);
+
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(pickAlternate).not.toHaveBeenCalled();
+    expect(res.status).toBe('FAILED');
+    if (res.status === 'FAILED') expect(res.serviceable).toBe(true);
+  });
+
+  it('no alternate configured → one attempt, then manual placement', async () => {
+    const { svc, generate } = makeService({
+      dispatchByCourier: { delhivery: REFUSED },
+      alternate: null,
+    });
+
+    const res = await svc.generateForShipment(SHIP);
+
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe('FAILED');
+    if (res.status === 'FAILED') expect(res.serviceable).toBe(false);
   });
 });

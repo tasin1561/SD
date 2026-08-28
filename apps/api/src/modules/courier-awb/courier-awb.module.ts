@@ -2,11 +2,13 @@ import { Module } from '@nestjs/common';
 import { ShipmentProvisionModule } from '../shipment-provision/shipment-provision.module';
 import { CourierDelhiveryModule } from '../courier-delhivery/courier-delhivery.module';
 import { CourierSharedModule } from '../courier-shared/courier-shared.module';
+import { CourierShiprocketModule } from '../courier-shiprocket/courier-shiprocket.module';
 import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.module';
 import { OrderModule } from '../order/order.module';
 import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-wallet-accrual.module';
 import { AwbSupersedeService } from './services/awb-supersede.service';
 import { AwbGenerationService } from './services/awb-generation.service';
+import { CourierAwbDispatchService } from './services/courier-awb-dispatch.service';
 import { AwbGenerationJobService } from './services/awb-generation-job.service';
 import { AwbGenerationQueue } from './queue/awb-generation.queue';
 import { AwbGenerationWorker } from './queue/awb-generation.worker';
@@ -33,6 +35,9 @@ import { OrderConfirmedAwbListener } from './services/order-confirmed-awb-listen
   imports: [
     ShipmentProvisionModule,
     CourierDelhiveryModule,
+    // Both adapters, because the dispatcher below is the one place that
+    // knows which of them a given parcel goes to.
+    CourierShiprocketModule,
     CourierSharedModule,
     OrderModule,
     SellerWalletAccrualModule,
@@ -42,6 +47,7 @@ import { OrderConfirmedAwbListener } from './services/order-confirmed-awb-listen
     LifecycleEventsModule,
   ],
   providers: [
+    CourierAwbDispatchService,
     AwbSupersedeService,
     AwbGenerationService,
     AwbGenerationJobService,

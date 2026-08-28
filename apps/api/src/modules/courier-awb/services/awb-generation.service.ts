@@ -10,8 +10,9 @@ import { EnvService } from '../../../config/env.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CourierAccountRoutingService } from '../../courier-shared/services/courier-account-routing.service';
-import { DelhiveryAwbService } from '../../courier-delhivery/services/delhivery-awb.service';
-import { DelhiveryLabelService } from '../../courier-delhivery/services/delhivery-label.service';
+import { PaymentMode, Prisma } from '@skydrop/db';
+import { CourierAwbDispatchService } from './courier-awb-dispatch.service';
+import { CourierDistributionService } from '../../courier-shared/services/courier-distribution.service';
 import type { DelhiveryAwbRequest } from '../../courier-delhivery/types/delhivery.types';
 import { courierActor } from '../../courier-shared/services/courier-credential.service';
 
@@ -20,7 +21,7 @@ export type AwbGenerationOutcome =
       status: 'GENERATED';
       shipmentId: string;
       awbNumber: string;
-      courierShipmentId: string;
+      courierShipmentId: string | null;
       labelSpacesKey: string;
       labelVersion: number;
     }
@@ -39,7 +40,7 @@ export type AwbGenerationOutcome =
       status: 'GENERATED_AWB_LABEL_PENDING';
       shipmentId: string;
       awbNumber: string;
-      courierShipmentId: string;
+      courierShipmentId: string | null;
       errorMessage: string;
     }
   | {
@@ -52,12 +53,13 @@ export type AwbGenerationOutcome =
   | {
       status: 'FAILED';
       shipmentId: string;
-      /** false ⇒ Delhivery rejected the destination as non-serviceable
-       *  (CUR-5) — the caller (AWB job) auto-supersedes → manual
-       *  placement. true ⇒ a transient/other failure. */
+      /** false ⇒ the courier rejected the destination as
+       *  non-serviceable (CUR-5) AND no alternate courier would take it
+       *  either — the caller (AWB job) auto-supersedes → manual
+       *  placement. true ⇒ a transient failure; retry, do not derail. */
       serviceable: boolean;
-      errorCode: string;
-      errorMessage: string;
+      errorCode: string | null;
+      errorMessage: string | null;
     };
 
 /**
@@ -119,8 +121,8 @@ export class AwbGenerationService {
     private readonly env: EnvService,
     private readonly spaces: SpacesService,
     private readonly audit: AuditLogService,
-    private readonly delhiveryAwb: DelhiveryAwbService,
-    private readonly delhiveryLabel: DelhiveryLabelService,
+    private readonly dispatch: CourierAwbDispatchService,
+    private readonly distribution: CourierDistributionService,
     private readonly courierAccountRouting: CourierAccountRoutingService,
   ) {}
 
@@ -135,10 +137,15 @@ export class AwbGenerationService {
         shipmentNumber: true,
         awbNumber: true,
         courierShipmentId: true,
+        courierAccountId: true,
         courierCode: true,
         status: true,
         orderShipments: {
-          select: { order: { select: { sellerId: true } } },
+          select: {
+            order: {
+              select: { sellerId: true, orderNumber: true, paymentMode: true },
+            },
+          },
           orderBy: { shipmentSequence: 'asc' },
           take: 1,
         },
@@ -152,9 +159,22 @@ export class AwbGenerationService {
         destCountryCode: true,
         totalWeightGrams: true,
         declaredValueInr: true,
+        // Shiprocket wants the box; Delhivery does not ask. Selected
+        // once so the dispatcher can serve either.
+        originWarehouseId: true,
+        lengthCm: true,
+        widthCm: true,
+        heightCm: true,
         codAmountInr: true,
         items: {
-          select: { productName: true, quantity: true },
+          // Shiprocket itemises the order; Delhivery takes one string.
+          // Selected once, used by whichever adapter answers.
+          select: {
+            productName: true,
+            quantity: true,
+            skuCode: true,
+            unitPriceInr: true,
+          },
         },
         // CUR-9 gate enrichment (M10 commit 1): the gate now considers
         // "awbNumber set + current label persisted" the truly-complete
@@ -196,7 +216,11 @@ export class AwbGenerationService {
       return this.uploadAndPersistLabel(
         shipmentId,
         shipment.awbNumber,
-        shipment.courierShipmentId ?? '',
+        shipment.courierShipmentId,
+        // The row already records who took it — the recovery path is
+        // resuming a parcel somebody else may have accepted.
+        shipment.courierCode,
+        shipment.courierAccountId ?? '',
         actor,
       );
     }
@@ -226,7 +250,7 @@ export class AwbGenerationService {
       recipientName: shipment.destRecipientName,
       recipientPhoneE164: shipment.destRecipientPhoneE164,
       addressLine1: shipment.destAddressLine1,
-      addressLine2: shipment.destAddressLine2,
+      addressLine2: shipment.destAddressLine2 ?? '',
       city: shipment.destCity,
       stateProvince: shipment.destStateProvince,
       postalCode: shipment.destPostalCode,
@@ -242,11 +266,122 @@ export class AwbGenerationService {
       itemDescription: shipment.items.map((i) => `${i.productName} x${i.quantity}`).join(', '),
     };
 
-    const awb = await this.delhiveryAwb.generateAwb(
-      req,
-      courierActor.runner('awb-generation', shipmentId),
-      courierAccountId,
-    );
+    const runner = courierActor.runner('awb-generation', shipmentId);
+    const sellerId = shipment.orderShipments[0]?.order.sellerId ?? null;
+
+    const dispatchInput = {
+      courierCode: shipment.courierCode,
+      courierAccountId: courierAccountId ?? '',
+      shipmentId,
+      shipmentNumber: shipment.shipmentNumber,
+      orderNumber: shipment.orderShipments[0]?.order.orderNumber ?? shipment.shipmentNumber,
+      // Their pickup locations are registered by NAME and matched
+      // exactly (the same rule courier-ops warns about for Delhivery
+      // warehouse registration).
+      pickupLocationName: shipment.originWarehouseId,
+      recipientName: shipment.destRecipientName,
+      recipientPhoneE164: shipment.destRecipientPhoneE164,
+      addressLine1: shipment.destAddressLine1,
+      addressLine2: shipment.destAddressLine2 ?? '',
+      city: shipment.destCity,
+      stateProvince: shipment.destStateProvince,
+      postalCode: shipment.destPostalCode,
+      countryCode: shipment.destCountryCode,
+      totalWeightGrams: shipment.totalWeightGrams,
+      declaredValueInr: shipment.declaredValueInr.toString(),
+      codAmountInr: shipment.codAmountInr?.toString() ?? null,
+      itemDescription: req.itemDescription,
+      items: shipment.items.map((i) => ({
+        name: i.productName,
+        sku: i.skuCode,
+        quantity: i.quantity,
+        unitPriceInr: Number(i.unitPriceInr ?? 0),
+      })),
+      // Their API requires dimensions and refuses a zero. A parcel
+      // whose box was never measured gets a modest default rather than
+      // a refusal — the weight is what they actually price on, and a
+      // missing measurement should not strand a real parcel.
+      lengthCm: Number(shipment.lengthCm ?? 10),
+      breadthCm: Number(shipment.widthCm ?? 10),
+      heightCm: Number(shipment.heightCm ?? 10),
+    };
+
+    let dispatched = await this.dispatch.generate(dispatchInput, runner);
+    // Whichever courier ends up carrying it — starts as the one the
+    // shipment was provisioned with and changes only on a successful
+    // failover.
+    let carriedBy = { courierCode: shipment.courierCode, courierAccountId };
+
+    // ── FAILOVER ─────────────────────────────────────────────────────
+    //
+    // Only on a REFUSAL. A courier saying "I do not serve that pincode"
+    // is a fact about its network, and another courier may well serve
+    // it — leaving the parcel for a person to place by hand when a
+    // second integration would have taken it is the waste this exists
+    // to remove.
+    //
+    // NOT on a timeout or a 500. Those resolve on their own, the AWB job
+    // already retries them (CUR-2b), and failing over on a thirty-second
+    // wobble would silently move volume — and cost — to a different
+    // courier because one API had a bad minute. If the retries are
+    // exhausted the parcel still ends up in manual placement, which is
+    // where it would have gone anyway.
+    //
+    // A different COURIER, never merely a different account: a second
+    // Delhivery account refuses the same pincode for the same reason.
+    if (!dispatched.ok && !dispatched.serviceable && sellerId !== null) {
+      const alternate = await this.alternateAccount(shipment, sellerId);
+      if (alternate !== null) {
+        this.logger.log(
+          {
+            shipmentId,
+            refusedBy: shipment.courierCode,
+            tryingInstead: alternate.courierCode,
+            reason: dispatched.errorMessage,
+          },
+          'Courier refused the parcel; trying another',
+        );
+        const second = await this.dispatch.generate(
+          {
+            ...dispatchInput,
+            courierCode: alternate.courierCode,
+            courierAccountId: alternate.courierAccountId,
+          },
+          runner,
+        );
+        if (second.ok) {
+          dispatched = second;
+          carriedBy = {
+            courierCode: alternate.courierCode,
+            courierAccountId: alternate.courierAccountId,
+          };
+        } else {
+          // Both refused. Keep the FIRST courier's reason — it is the
+          // one that answers "why is this in manual placement", and the
+          // alternate's message is about a courier nobody chose.
+          this.logger.warn(
+            { shipmentId, alternate: alternate.courierCode, reason: second.errorMessage },
+            'The alternate courier refused it too; routing to manual placement',
+          );
+        }
+      }
+    }
+
+    const awb = dispatched.ok
+      ? {
+          ok: true as const,
+          awbNumber: dispatched.awbNumber ?? '',
+          // Preserved: Shiprocket's own parcel id, which its label,
+          // pickup and cancel endpoints key on. Null for Delhivery,
+          // whose waybill is the identifier for everything after.
+          courierShipmentId: dispatched.courierShipmentId,
+        }
+      : {
+          ok: false as const,
+          serviceable: dispatched.serviceable,
+          errorCode: dispatched.errorCode ?? undefined,
+          errorMessage: dispatched.errorMessage ?? undefined,
+        };
     if (!awb.ok) {
       this.logger.warn(
         {
@@ -267,8 +402,8 @@ export class AwbGenerationService {
         status: 'FAILED',
         shipmentId,
         serviceable: awb.serviceable,
-        errorCode: awb.errorCode,
-        errorMessage: awb.errorMessage,
+        errorCode: awb.errorCode ?? null,
+        errorMessage: awb.errorMessage ?? null,
       };
     }
 
@@ -295,7 +430,17 @@ export class AwbGenerationService {
           // tracks where the parcel physically IS; a label existing does
           // not move it. It advances to HANDED_TO_COURIER when the
           // parcel is actually handed over.
-          ...(courierAccountId === null ? {} : { courierAccountId }),
+          // WHICHEVER courier took it, not the one we started with.
+          // Miss this and every later call about this parcel — the
+          // label, the tracking poll, a cancel — goes to a company that
+          // has never heard of it.
+          courierCode: carriedBy.courierCode,
+          ...(carriedBy.courierAccountId === null
+            ? {}
+            : { courierAccountId: carriedBy.courierAccountId }),
+          ...(dispatched.courierShipmentId === null
+            ? {}
+            : { courierShipmentId: dispatched.courierShipmentId }),
         },
       });
       await this.audit.log(
@@ -316,7 +461,14 @@ export class AwbGenerationService {
     });
 
     // Phase D — label fetch + Spaces upload + tx2 (retryable follow-on).
-    return this.uploadAndPersistLabel(shipmentId, awb.awbNumber, awb.courierShipmentId, actor);
+    return this.uploadAndPersistLabel(
+      shipmentId,
+      awb.awbNumber,
+      awb.courierShipmentId,
+      carriedBy.courierCode,
+      carriedBy.courierAccountId ?? '',
+      actor,
+    );
   }
 
   /**
@@ -330,12 +482,27 @@ export class AwbGenerationService {
   private async uploadAndPersistLabel(
     shipmentId: string,
     awbNumber: string,
-    courierShipmentId: string,
+    /** Shiprocket's own parcel id; null for Delhivery, whose waybill is
+     *  the only identifier its label endpoint takes. */
+    courierShipmentId: string | null,
+    /** WHO carries it — after failover this is not necessarily the
+     *  courier the shipment was originally routed to. */
+    courierCode: string,
+    courierAccountId: string,
     actor: { type: ActorType; id?: string | null },
   ): Promise<AwbGenerationOutcome> {
     try {
-      const label = await this.delhiveryLabel.fetchLabel(
-        awbNumber,
+      // Whichever courier ACTUALLY carries it. Before failover this was
+      // always Delhivery and the hardcoded call was harmless; the moment
+      // a parcel can fail over, asking Delhivery for a Shiprocket
+      // waybill's label returns nothing and the parcel ships unlabelled.
+      const label = await this.dispatch.fetchLabel(
+        {
+          courierCode,
+          courierAccountId,
+          awbNumber,
+          courierShipmentId,
+        },
         courierActor.runner('awb-generation', shipmentId),
       );
       const labelVersion = await this.nextLabelVersion(shipmentId);
@@ -434,6 +601,54 @@ export class AwbGenerationService {
    * is why the fallback lives in one place and refuses to guess when
    * accounts exist but none is default.
    */
+  /**
+   * An account on a DIFFERENT courier, for when the first one refuses.
+   *
+   * Never merely a different account on the same courier: a second
+   * Delhivery account refuses a pincode Delhivery does not serve for
+   * exactly the same reason the first did, so the retry would spend a
+   * call to learn what we already know.
+   *
+   * Returns null when there is nowhere else to go, and the caller then
+   * does what it has always done — supersede and route to a human.
+   */
+  private async alternateAccount(
+    shipment: {
+      courierCode: string;
+      codAmountInr: Prisma.Decimal | null;
+    },
+    sellerId: string,
+  ): Promise<{ courierCode: string; courierAccountId: string } | null> {
+    try {
+      const current = await this.prisma.client.courier.findUnique({
+        where: { code: shipment.courierCode },
+        select: { id: true },
+      });
+      if (!current) return null;
+      const environment = this.env.isProduction
+        ? CredentialEnvironment.PRODUCTION
+        : CredentialEnvironment.SANDBOX;
+      const alt = await this.distribution.pickAlternate(sellerId, {
+        paymentMode:
+          shipment.codAmountInr !== null && shipment.codAmountInr.greaterThan(0)
+            ? PaymentMode.COD
+            : PaymentMode.PREPAID,
+        excludeCourierId: current.id,
+        environment,
+      });
+      if (alt === null) return null;
+      return { courierCode: alt.courierCode, courierAccountId: alt.courierAccountId };
+    } catch (err) {
+      // Failing to FIND an alternate must never turn a refusal into a
+      // crash — the parcel still has manual placement waiting for it.
+      this.logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        'Could not resolve an alternate courier; the parcel goes to manual placement',
+      );
+      return null;
+    }
+  }
+
   private async resolveCourierAccountId(shipment: {
     courierCode: string;
     orderShipments: readonly { order: { sellerId: string } }[];

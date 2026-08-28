@@ -50,6 +50,7 @@ const POOL = R('courier-delhivery/services/delhivery-waybill-pool.service.ts');
 const RATE = R('courier-delhivery/services/delhivery-rate-limit.service.ts');
 const AWB_SVC = R('courier-delhivery/services/delhivery-awb.service.ts');
 const AWB_GEN = R('courier-awb/services/awb-generation.service.ts');
+const DISPATCH = R('courier-awb/services/courier-awb-dispatch.service.ts');
 const REFILL = R('courier-delhivery/queue/waybill-refill.worker.ts');
 
 describe('the funnel decides the account, once', () => {
@@ -151,16 +152,34 @@ describe('the account is chosen before it can matter', () => {
     // Resolved after, it can only be recorded — which is what it used to
     // be, and why a stamped shipment could disagree with the token that
     // created it.
+    //
+    // The saga now asks the DISPATCHER rather than Delhivery directly —
+    // multi-courier failover put one hop in between — so the ordering
+    // property is checked against that call instead. The account must
+    // still be known before anyone is asked to carry the parcel.
     const resolveAt = AWB_GEN.indexOf('await this.resolveCourierAccountId(shipment)');
-    const callAt = AWB_GEN.indexOf('await this.delhiveryAwb.generateAwb(');
+    const callAt = AWB_GEN.indexOf('await this.dispatch.generate(');
     expect(resolveAt).toBeGreaterThan(-1);
     expect(callAt).toBeGreaterThan(-1);
     expect(resolveAt).toBeLessThan(callAt);
   });
 
   it('and passes it into the call, not just onto the row', () => {
-    const call = AWB_GEN.slice(AWB_GEN.indexOf('await this.delhiveryAwb.generateAwb('));
-    expect(call.slice(0, 220)).toContain('courierAccountId');
+    // It travels as a field on the dispatch input rather than as a
+    // positional argument, so the assertion follows it there.
+    expect(AWB_GEN).toContain('courierAccountId: courierAccountId ?? ');
+  });
+
+  it('and the dispatcher hands it to whichever adapter takes the parcel', () => {
+    // The hop is only safe if it does not drop the account on the way.
+    // Both adapters must receive it, or a parcel books against the
+    // default credentials of a courier somebody deliberately routed
+    // away from.
+    expect(DISPATCH).toContain('input.courierAccountId');
+    const delhiveryCall = DISPATCH.slice(DISPATCH.indexOf('this.delhivery.generateAwb('));
+    expect(delhiveryCall.slice(0, 120)).toContain('input.courierAccountId');
+    const shiprocketCall = DISPATCH.slice(DISPATCH.indexOf('this.shiprocket.generateAwb('));
+    expect(shiprocketCall.slice(0, 120)).toContain('input.courierAccountId');
   });
 
   it('the stale "traceability only" claim is gone', () => {

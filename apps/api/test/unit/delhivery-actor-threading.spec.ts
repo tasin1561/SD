@@ -39,7 +39,10 @@ const CONSUMERS = [
   'courier-ops/services/courier-warehouse-registration.service.ts',
   'courier-ops/services/courier-pickup.service.ts',
   'courier-ops/services/courier-margin-report.service.ts',
-  'courier-awb/services/awb-generation.service.ts',
+  // The AWB saga no longer calls a courier itself — multi-courier
+  // failover moved that behind the dispatcher, which is now the thing
+  // that must thread the actor through to whichever adapter answers.
+  'courier-awb/services/courier-awb-dispatch.service.ts',
   'tracking-poll/services/tracking-poll.service.ts',
   'courier-delhivery/queue/waybill-refill.worker.ts',
   'courier-delhivery/controllers/admin-delhivery-ops.controller.ts',
