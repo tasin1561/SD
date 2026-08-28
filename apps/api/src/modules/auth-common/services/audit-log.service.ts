@@ -24,13 +24,23 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
  *     - security.api_key.invalid                   (severity LOW)
  *
  * Entries are append-only (the underlying table is not modified after insert).
- * Severity goes into `metadata.severity` since the schema has no severity column.
+ * Severity is written BOTH to the `severity` column and into
+ * `metadata.severity`. The column carries the partial index that makes
+ * severity filterable; the metadata copy keeps every existing reader
+ * working.
  */
 // CRITICAL added for Module 6 god mode (OrderAdminOverrideService
 // .forceMutate) — an admin deliberately bypassing the state machine /
 // edit rules is the highest-severity audited action. Additive widening;
 // severity is a metadata.severity string (no schema column), so no
 // existing caller is affected.
+/**
+ * Kept as a local union rather than re-exporting the generated enum.
+ *
+ * Every call site passes a plain string literal, which is assignable to
+ * both — swapping to the enum would be churn across a hundred files to
+ * express the same four values.
+ */
 export type AuditSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 export interface AuditLogInput {
@@ -76,6 +86,18 @@ export class AuditLogService {
           entityId: input.entityId ?? null,
           changes: input.changes ?? Prisma.DbNull,
           metadata: metadata ?? Prisma.DbNull,
+          // Written to the COLUMN as well as into metadata.
+          //
+          // The column is what makes "everything CRITICAL this month" a
+          // question anyone can afford to ask — it was a JSON scan over
+          // the largest table we keep. Metadata keeps it too because
+          // every existing reader and test assertion goes through
+          // `metadata.severity`, and breaking those to avoid one
+          // duplicated string would be a poor trade.
+          // The local union's members are the generated enum's keys, so
+          // the literal is assignable — no import, and callers keep
+          // passing plain strings.
+          severity: input.severity ?? 'LOW',
         },
         select: { id: true },
       });

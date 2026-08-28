@@ -492,17 +492,24 @@ model SellerNote {
 }
 
 model AuditLog {
-  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  actorType   ActorType @map("actor_type")
-  actorId     String?   @map("actor_id") @db.Uuid
-  staffUserId String?   @map("staff_user_id") @db.Uuid
-  sellerId    String?   @map("seller_id") @db.Uuid
+  id          String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  actorType   ActorType     @map("actor_type")
+  actorId     String?       @map("actor_id") @db.Uuid
+  staffUserId String?       @map("staff_user_id") @db.Uuid
+  sellerId    String?       @map("seller_id") @db.Uuid
   action      String
-  entityType  String    @map("entity_type")
-  entityId    String?   @map("entity_id") @db.Uuid
+  entityType  String        @map("entity_type")
+  entityId    String?       @map("entity_id") @db.Uuid
   changes     Json?
   metadata    Json?
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  /// How much a reader should care.
+  ///
+  /// Lived in `metadata.severity` because there was no column, which
+  /// meant "show me everything CRITICAL this month" was a JSON scan
+  /// over the largest table we keep. It is still written into metadata
+  /// as well, so every existing reader and assertion keeps working.
+  severity    AuditSeverity @default(LOW)
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz
 
   staffUser StaffUser? @relation("AuditLogStaff", fields: [staffUserId], references: [id])
   seller    Seller?    @relation("AuditLogSeller", fields: [sellerId], references: [id])
@@ -510,6 +517,12 @@ model AuditLog {
   @@index([actorType, actorId])
   @@index([entityType, entityId])
   @@index([action])
+  /// Severity is indexed by a migration-only PARTIAL index
+  /// (audit_logs_severity_created_at_idx, WHERE severity <> 'low').
+  /// Prisma cannot express the predicate, and an unconditional index
+  /// would be worse than none: the point is finding the few rows worth
+  /// somebody's attention, and LOW is almost all of them — indexing
+  /// those too pays for a scan nobody performs.
   @@index([createdAt])
   @@index([staffUserId])
   @@index([sellerId])
@@ -6540,4 +6553,18 @@ model OrderDeliveryActionRequest {
   @@index([orderId])
   @@index([status, createdAt])
   @@map("order_delivery_action_requests")
+}
+
+/// How much a reader should care about an audit row.
+///
+/// CRITICAL is reserved for god mode and similar invariant breaches —
+/// the things that should never happen twice without somebody asking
+/// why.
+enum AuditSeverity {
+  LOW      @map("low")
+  MEDIUM   @map("medium")
+  HIGH     @map("high")
+  CRITICAL @map("critical")
+
+  @@map("audit_severity")
 }

@@ -104,3 +104,33 @@ describe('AuditLogService', () => {
     expect(data['metadata']).toBe(Prisma.DbNull);
   });
 });
+
+describe('AuditLogService — severity is a column now', () => {
+  it('writes severity to the COLUMN as well as into metadata', async () => {
+    // The column is what makes "everything CRITICAL this month"
+    // affordable — it was a JSON scan over the largest table we keep.
+    // Metadata keeps its copy because every existing reader and
+    // assertion goes through `metadata.severity`.
+    const { svc, captured } = makeSut();
+
+    await svc.log({
+      actorType: 'STAFF',
+      action: 'staff.order.force_mutated',
+      entityType: 'order',
+      entityId: '01930000-0000-7000-8000-000000000001',
+      severity: 'CRITICAL',
+    });
+
+    const data = captured[0]?.data as Record<string, unknown>;
+    expect(data['severity']).toBe('CRITICAL');
+    expect((data['metadata'] as Record<string, unknown>)['severity']).toBe('CRITICAL');
+  });
+
+  it('defaults to LOW rather than null when a caller omits it', async () => {
+    // The column is NOT NULL. A caller that does not care is stating
+    // the routine case, which is what LOW means.
+    const { svc, captured } = makeSut();
+    await svc.log({ actorType: 'SYSTEM', action: 'something.routine', entityType: 'order' });
+    expect((captured[0]?.data as Record<string, unknown>)['severity']).toBe('LOW');
+  });
+});
