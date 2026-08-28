@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import {
+  COURIER_TRACKING_SOURCES,
+  type CourierTrackingSource,
+} from '../../courier-shared/services/courier-tracking-source';
+import { ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
 import {
   ActorType,
   DeliveryAttemptOutcome,
@@ -8,15 +12,12 @@ import {
   TrackingEventType,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
-import { DelhiveryHttpService } from '../../courier-delhivery/services/delhivery-http.service';
-import { DelhiveryTrackingFetchService } from '../../courier-delhivery/services/delhivery-tracking-fetch.service';
 import { DelhiveryTrackingService } from '../../courier-delhivery/services/delhivery-tracking.service';
 import type { DelhiveryRawScan } from '../../courier-delhivery/types/delhivery.types';
 import { TrackingStatusMappingService } from '../../tracking-events/services/tracking-status-mapping.service';
 import { TrackingEventAppendService } from '../../tracking-events/services/tracking-event-append.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
-import { courierActor } from '../../courier-shared/services/courier-credential.service';
 
 const COURIER_CODE = 'delhivery';
 
@@ -101,6 +102,11 @@ interface InFlightShipment {
   awbNumber: string;
   orderId: string;
   shipmentStatus: ShipmentStatus;
+  /** Which of the courier's accounts booked it. Delhivery ignores this;
+   *  Shiprocket's token is per-account, and polling an AWB with the
+   *  wrong account's token returns "not found" — indistinguishable
+   *  from a parcel that has not moved. */
+  courierAccountId: string | null;
 }
 
 /**
@@ -138,9 +144,8 @@ export class TrackingPollService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly http: DelhiveryHttpService,
-    private readonly fetch: DelhiveryTrackingFetchService,
-    private readonly normalizer: DelhiveryTrackingService,
+    @Inject(COURIER_TRACKING_SOURCES)
+    private readonly sources: readonly CourierTrackingSource[],
     private readonly mapping: TrackingStatusMappingService,
     private readonly append: TrackingEventAppendService,
     private readonly orderWrite: OrderWriteService,
@@ -154,6 +159,15 @@ export class TrackingPollService {
    */
   private static readonly HEARTBEAT_KEY = 'courier.tracking_poll_last_run_at';
 
+  /**
+   * One cycle, across every courier that has a tracking integration.
+   *
+   * Per-courier failure isolation, for the same reason the batch loop
+   * inside has it: Shiprocket's API being down must not stop Delhivery
+   * parcels updating, and vice versa. The summary is the SUM, because
+   * "did tracking run" is a question about the estate, not about one
+   * vendor.
+   */
   async pollAll(): Promise<PollCycleSummary> {
     const summary: PollCycleSummary = {
       stubMode: false,
@@ -162,78 +176,160 @@ export class TrackingPollService {
       transitions: 0,
     };
 
-    if (await this.http.isStubMode()) {
+    let anySourceMoved = false;
+    let allSourcesStub = true;
+
+    for (const source of this.sources) {
+      try {
+        const one = await this.pollSource(source);
+        summary.shipmentsExamined += one.summary.shipmentsExamined;
+        summary.scansApplied += one.summary.scansApplied;
+        summary.transitions += one.summary.transitions;
+        if (!one.summary.stubMode) allSourcesStub = false;
+        if (one.moved) anySourceMoved = true;
+      } catch (err) {
+        // A courier's whole cycle failing is already alarmed inside
+        // pollSource; this catch exists so an unexpected throw cannot
+        // take the other couriers' parcels down with it.
+        this.logger.error(
+          { err: errMsg(err), courierCode: source.courierCode },
+          'Tracking poll cycle threw for one courier; continuing with the rest',
+        );
+      }
+    }
+
+    summary.stubMode = allSourcesStub;
+
+    // The heartbeat means "tracking is MOVING", not "the cron fired".
+    //
+    // Stamping it after a cycle where every batch failed would be the
+    // worst of both: the watchdog reads a fresh timestamp and reports
+    // healthy, while not one parcel has updated. Everyone reading this
+    // number assumes it means the former, so it has to mean the former.
+    //
+    // With two couriers the rule is ANY of them moving — one vendor
+    // being down is worth an alarm (pollSource raises it) but is not
+    // "tracking has stopped", and going stale on it would cry wolf
+    // every time either API had a bad twenty minutes.
+    if (anySourceMoved) await this.stampHeartbeat();
+
+    this.logger.log(
+      {
+        examined: summary.shipmentsExamined,
+        scansApplied: summary.scansApplied,
+        transitions: summary.transitions,
+        couriers: this.sources.map((s) => s.courierCode),
+      },
+      'Tracking poll cycle complete',
+    );
+    return summary;
+  }
+
+  /**
+   * One courier's cycle.
+   *
+   * `moved` is separate from the summary because it answers a different
+   * question: not "how much happened" but "is this source working at
+   * all". A cycle with nothing to poll counts as working; a cycle where
+   * every batch failed does not.
+   */
+  private async pollSource(
+    source: CourierTrackingSource,
+  ): Promise<{ summary: PollCycleSummary; moved: boolean }> {
+    const summary: PollCycleSummary = {
+      stubMode: false,
+      shipmentsExamined: 0,
+      scansApplied: 0,
+      transitions: 0,
+    };
+
+    if (await source.isStubMode()) {
       summary.stubMode = true;
       // Stub mode is correct in dev and CI. In production it means
-      // somebody cleared `courier.delhivery_api_base_url`, and because
-      // this poller IS tracking, that turns tracking OFF — with no
-      // error, no failed request and nothing in the logs but a quiet
-      // early return. The first symptom would be a seller asking why a
-      // parcel has not moved in three days.
+      // somebody cleared this courier's base URL, and because this
+      // poller IS tracking, that turns tracking OFF for their parcels —
+      // with no error, no failed request and nothing in the logs but a
+      // quiet early return. The first symptom would be a seller asking
+      // why a parcel has not moved in three days.
       //
       // So it announces itself, but only when there is something it
       // should have been polling: in dev there never is, so this stays
       // silent where stub mode is the intended state.
-      const inFlight = await this.countInFlight();
+      const inFlight = await this.countInFlight(source.courierCode);
       if (inFlight > 0) {
         await this.alarm('tracking.poll_stub_mode_with_inflight', {
+          courierCode: source.courierCode,
           inFlightShipments: inFlight,
-          remedy: 'Set courier.delhivery_api_base_url — tracking is not running.',
+          remedy: source.stubRemedy,
         });
       }
-      await this.stampHeartbeat();
-      return summary;
+      // Stub mode is not a failure — a dev box has no reason to go
+      // stale — so it counts as moved.
+      return { summary, moved: true };
     }
 
-    const shipments = await this.loadInFlightShipments();
+    const shipments = await this.loadInFlightShipments(source.courierCode);
     summary.shipmentsExamined = shipments.length;
-    if (shipments.length === 0) {
-      await this.stampHeartbeat();
-      return summary;
-    }
+    if (shipments.length === 0) return { summary, moved: true };
 
     const byAwb = new Map<string, InFlightShipment>();
     for (const s of shipments) byAwb.set(s.awbNumber, s);
 
-    // Batch the tracking fetch (Delhivery caps at 50 waybills/call).
-    const batchSize = DelhiveryTrackingFetchService.MAX_WAYBILLS_PER_CALL;
+    // GROUPED BY ACCOUNT when the courier's credentials are per-account.
+    // Shiprocket's bearer token belongs to one account: polling an AWB
+    // with a different account's token returns "not found", which reads
+    // exactly like a parcel that has not moved. Delhivery has one set of
+    // credentials for the estate, so it is a single group.
+    const groups = source.perAccount
+      ? this.groupByAccount(shipments)
+      : new Map<string | null, InFlightShipment[]>([[null, shipments]]);
+
     let batchesAttempted = 0;
     let batchesFailed = 0;
-    for (let i = 0; i < shipments.length; i += batchSize) {
-      batchesAttempted += 1;
-      const batch = shipments.slice(i, i + batchSize);
-      let results;
-      try {
-        results = await this.fetch.fetchTracking(
-          batch.map((s) => s.awbNumber),
-          courierActor.runner('tracking-poll'),
-        );
-      } catch (err) {
-        // A transient fetch failure for one batch never aborts the
-        // cycle — the next cron run retries. Log and continue.
-        batchesFailed += 1;
-        this.logger.warn(
-          { err: errMsg(err), batchStart: i, batchSize: batch.length },
-          'Delhivery fetchTracking batch failed; skipping this batch',
-        );
-        continue;
-      }
 
-      for (const result of results) {
-        const shipment = byAwb.get(result.awbNumber);
-        if (!shipment) continue;
+    for (const [courierAccountId, groupShipments] of groups) {
+      for (let i = 0; i < groupShipments.length; i += source.maxAwbsPerCall) {
+        batchesAttempted += 1;
+        const batch = groupShipments.slice(i, i + source.maxAwbsPerCall);
+        let results;
         try {
-          const applied = await this.applyNewScans(shipment, result.scans);
-          summary.scansApplied += applied.scansApplied;
-          summary.transitions += applied.transitions;
-        } catch (err) {
-          // Per-shipment isolation — one shipment's failure never
-          // blocks the others (same fan-out discipline as the M9/M8
-          // manifest sagas).
-          this.logger.warn(
-            { err: errMsg(err), shipmentId: shipment.id, awb: result.awbNumber },
-            'Poll: applying scans for shipment failed; continuing',
+          results = await source.fetchTracking(
+            batch.map((s) => s.awbNumber),
+            courierAccountId,
           );
+        } catch (err) {
+          // A transient fetch failure for one batch never aborts the
+          // cycle — the next cron run retries. Log and continue.
+          batchesFailed += 1;
+          this.logger.warn(
+            {
+              err: errMsg(err),
+              courierCode: source.courierCode,
+              courierAccountId,
+              batchStart: i,
+              batchSize: batch.length,
+            },
+            'fetchTracking batch failed; skipping this batch',
+          );
+          continue;
+        }
+
+        for (const result of results) {
+          const shipment = byAwb.get(result.awbNumber);
+          if (!shipment) continue;
+          try {
+            const applied = await this.applyNewScans(shipment, result.scans, source);
+            summary.scansApplied += applied.scansApplied;
+            summary.transitions += applied.transitions;
+          } catch (err) {
+            // Per-shipment isolation — one shipment's failure never
+            // blocks the others (same fan-out discipline as the M9/M8
+            // manifest sagas).
+            this.logger.warn(
+              { err: errMsg(err), shipmentId: shipment.id, awb: result.awbNumber },
+              'Poll: applying scans for shipment failed; continuing',
+            );
+          }
         }
       }
     }
@@ -247,40 +343,37 @@ export class TrackingPollService {
     const totalFailure = batchesAttempted > 0 && batchesFailed === batchesAttempted;
     if (totalFailure) {
       await this.alarm('tracking.poll_all_batches_failed', {
+        courierCode: source.courierCode,
         batchesAttempted,
         shipmentsExamined: summary.shipmentsExamined,
-        remedy:
-          'Check the Delhivery credential and their API status — no parcel has updated this cycle.',
+        remedy: `Check the ${source.courierCode} credential and their API status — no parcel of theirs updated this cycle.`,
       });
     }
 
-    // The heartbeat means "tracking is MOVING", not "the cron fired".
-    //
-    // Stamping it after a cycle where every batch failed would be the
-    // worst of both: the watchdog reads a fresh timestamp and reports
-    // healthy, while not one parcel has updated. Everyone reading this
-    // number assumes it means the former, so it has to mean the former.
-    //
-    // The consequence is deliberate: if Delhivery's API is down, we go
-    // stale and alarm. That is not our fault, but it IS parcels not
-    // updating, which is the thing worth being told about.
-    if (!totalFailure) await this.stampHeartbeat();
-
-    this.logger.log(
-      {
-        examined: summary.shipmentsExamined,
-        scansApplied: summary.scansApplied,
-        transitions: summary.transitions,
-      },
-      'Delhivery tracking poll cycle complete',
-    );
-    return summary;
+    return { summary, moved: !totalFailure };
   }
 
-  private async loadInFlightShipments(): Promise<InFlightShipment[]> {
+  /** Shipments keyed by the account that booked them. */
+  private groupByAccount(
+    shipments: readonly InFlightShipment[],
+  ): Map<string | null, InFlightShipment[]> {
+    const out = new Map<string | null, InFlightShipment[]>();
+    for (const s of shipments) {
+      // A null account is kept as its OWN group rather than dropped:
+      // the source refuses it loudly, which surfaces the data problem.
+      // Silently skipping would leave those parcels never polled and
+      // nothing anywhere saying so.
+      const existing = out.get(s.courierAccountId);
+      if (existing === undefined) out.set(s.courierAccountId, [s]);
+      else existing.push(s);
+    }
+    return out;
+  }
+
+  private async loadInFlightShipments(courierCode: string): Promise<InFlightShipment[]> {
     const rows = await this.prisma.client.shipment.findMany({
       where: {
-        courierCode: COURIER_CODE,
+        courierCode,
         awbNumber: { not: null },
         deletedAt: null,
         orderShipments: {
@@ -291,6 +384,7 @@ export class TrackingPollService {
         id: true,
         awbNumber: true,
         status: true,
+        courierAccountId: true,
         orderShipments: { select: { orderId: true }, take: 1 },
       },
       // STALE FIRST, and this is load-bearing rather than a nicety.
@@ -325,6 +419,7 @@ export class TrackingPollService {
         awbNumber,
         orderId: link.orderId,
         shipmentStatus: r.status,
+        courierAccountId: r.courierAccountId,
       });
     }
     return out;
@@ -338,6 +433,7 @@ export class TrackingPollService {
   private async applyNewScans(
     shipment: InFlightShipment,
     scans: readonly DelhiveryRawScan[],
+    source: CourierTrackingSource,
   ): Promise<{ scansApplied: number; transitions: number }> {
     const latest = await this.append.latestForShipment(shipment.id);
     const watermarkMs = latest ? latest.eventAt.getTime() : -Infinity;
@@ -367,7 +463,7 @@ export class TrackingPollService {
       if (Number.isNaN(eventAt.getTime())) continue;
       if (eventAt.getTime() <= watermarkMs) continue; // watermark dedup
 
-      const didTransition = await this.applyScan(shipment, scan, eventAt);
+      const didTransition = await this.applyScan(shipment, scan, eventAt, source);
       scansApplied += 1;
       if (didTransition) transitions += 1;
     }
@@ -379,8 +475,9 @@ export class TrackingPollService {
     shipment: InFlightShipment,
     scan: DelhiveryRawScan,
     eventAt: Date,
+    source: CourierTrackingSource,
   ): Promise<boolean> {
-    const normalized = this.normalizer.normalizeScan(scan);
+    const normalized = source.normalizeScan(scan);
 
     // UNMAPPABLE — record an ops-only audit event so the watermark
     // advances (we won't re-examine this scan) but emit no transition.
@@ -603,24 +700,56 @@ export class TrackingPollService {
     results: TrackingLookupResult[];
     stubMode: boolean;
   }> {
-    const stubMode = await this.http.isStubMode();
+    // An AWB on its own does not say who issued it, so every source is
+    // asked and the first that recognises it answers. Reads are free and
+    // side-effect-free at both couriers, so this costs a call, not a
+    // consequence. Stub mode is reported only when EVERY source is in
+    // it — one configured courier means lookups genuinely work.
+    const stubFlags = await Promise.all(this.sources.map((src) => src.isStubMode()));
+    const stubMode = stubFlags.length > 0 && stubFlags.every((f) => f);
     const awbs = awbNumbers.map((a) => a.trim()).filter((a) => a !== '');
     if (awbs.length === 0) return { results: [], stubMode };
 
-    const [fetched, ours] = await Promise.all([
-      this.fetch.fetchTracking([...awbs], courierActor.runner('tracking-lookup')),
+    const [fetchedPerSource, ours] = await Promise.all([
+      Promise.all(
+        this.sources.map(async (src) => {
+          try {
+            return await src.fetchTracking([...awbs], null);
+          } catch {
+            // One courier refusing a lookup must not lose the other's
+            // answer — a Shiprocket AWB is expected to be unknown to
+            // Delhivery and vice versa.
+            return [];
+          }
+        }),
+      ),
       this.prisma.client.shipment.findMany({
         where: { awbNumber: { in: [...awbs] }, deletedAt: null },
         select: { id: true, awbNumber: true },
       }),
     ]);
     const oursByAwb = new Map(ours.map((s) => [s.awbNumber ?? '', s.id]));
-    const byAwb = new Map(fetched.map((f) => [f.awbNumber, f]));
+    // First source that returned scans for an AWB wins; an empty result
+    // is not an answer, so it does not shadow a later source's.
+    const byAwb = new Map<string, (typeof fetchedPerSource)[number][number]>();
+    const normalizerByAwb = new Map<string, CourierTrackingSource>();
+    fetchedPerSource.forEach((fetched, idx) => {
+      const src = this.sources[idx];
+      if (src === undefined) return;
+      for (const f of fetched) {
+        if (f.scans.length === 0 || byAwb.has(f.awbNumber)) continue;
+        byAwb.set(f.awbNumber, f);
+        normalizerByAwb.set(f.awbNumber, src);
+      }
+    });
 
     const results: TrackingLookupResult[] = awbs.map((awb) => {
       const found = byAwb.get(awb);
       const scans = (found?.scans ?? []).map((raw) => {
-        const decision = this.normalizer.normalizeScan(raw);
+        const decision = (normalizerByAwb.get(awb) ?? this.sources[0])?.normalizeScan(raw) ?? {
+          kind: 'UNMAPPABLE' as const,
+          reason: 'NO_TRACKING_SOURCE_CONFIGURED',
+        };
         return {
           rawStatus: raw.rawStatus,
           statusType: raw.statusType ?? null,
@@ -684,10 +813,10 @@ export class TrackingPollService {
   }
 
   /** In-flight count without loading the rows — for the stub-mode alarm. */
-  private async countInFlight(): Promise<number> {
+  private async countInFlight(courierCode: string): Promise<number> {
     return this.prisma.client.shipment.count({
       where: {
-        courierCode: COURIER_CODE,
+        courierCode,
         awbNumber: { not: null },
         deletedAt: null,
         orderShipments: {

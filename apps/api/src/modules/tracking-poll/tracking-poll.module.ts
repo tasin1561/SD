@@ -5,6 +5,10 @@ import { EmailModule } from '../email/email.module';
 import { TrackingRecoveryService } from './services/tracking-recovery.service';
 import { PrismaModule } from '../../infrastructure/prisma/prisma.module';
 import { CourierDelhiveryModule } from '../courier-delhivery/courier-delhivery.module';
+import { CourierShiprocketModule } from '../courier-shiprocket/courier-shiprocket.module';
+import { DelhiveryTrackingSourceService } from '../courier-delhivery/services/delhivery-tracking-source.service';
+import { ShiprocketTrackingSourceService } from '../courier-shiprocket/services/shiprocket-tracking-source.service';
+import { COURIER_TRACKING_SOURCES } from '../courier-shared/services/courier-tracking-source';
 import { TrackingEventsModule } from '../tracking-events/tracking-events.module';
 import { OrderModule } from '../order/order.module';
 import { TrackingPollService } from './services/tracking-poll.service';
@@ -31,6 +35,7 @@ import { TrackingPollWorker } from './queue/tracking-poll.worker';
  */
 @Module({
   imports: [
+    CourierShiprocketModule,
     PrismaModule,
     CourierDelhiveryModule,
     TrackingEventsModule,
@@ -41,7 +46,23 @@ import { TrackingPollWorker } from './queue/tracking-poll.worker';
     EmailModule,
   ],
   controllers: [AdminTrackingPollController],
-  providers: [TrackingPollService, TrackingRecoveryService, TrackingPollQueue, TrackingPollWorker],
+  providers: [
+    {
+      // The list of couriers the poller sweeps. Adding a third means
+      // implementing CourierTrackingSource and appending it HERE — the
+      // poll cycle itself does not change.
+      provide: COURIER_TRACKING_SOURCES,
+      inject: [DelhiveryTrackingSourceService, ShiprocketTrackingSourceService],
+      useFactory: (
+        delhivery: DelhiveryTrackingSourceService,
+        shiprocket: ShiprocketTrackingSourceService,
+      ) => [delhivery, shiprocket],
+    },
+    TrackingPollService,
+    TrackingRecoveryService,
+    TrackingPollQueue,
+    TrackingPollWorker,
+  ],
   exports: [TrackingPollService],
 })
 export class TrackingPollModule {}

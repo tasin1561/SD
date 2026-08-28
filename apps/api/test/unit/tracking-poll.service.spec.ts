@@ -3,8 +3,7 @@ import type { AuditLogService } from '../../src/modules/auth-common/services/aud
 import { TrackingPollService } from '../../src/modules/tracking-poll/services/tracking-poll.service';
 import { DelhiveryTrackingService } from '../../src/modules/courier-delhivery/services/delhivery-tracking.service';
 import { TrackingStatusMappingService } from '../../src/modules/tracking-events/services/tracking-status-mapping.service';
-import type { DelhiveryHttpService } from '../../src/modules/courier-delhivery/services/delhivery-http.service';
-import type { DelhiveryTrackingFetchService } from '../../src/modules/courier-delhivery/services/delhivery-tracking-fetch.service';
+import type { CourierTrackingSource } from '../../src/modules/courier-shared/services/courier-tracking-source';
 import type {
   CourierTrackingResult,
   DelhiveryRawScan,
@@ -156,11 +155,23 @@ function makeSvc(
 
   const audit = { log: jest.fn(async () => undefined) };
 
+  // The poller is now courier-agnostic: it takes tracking SOURCES
+  // rather than Delhivery's three services. The harness assembles one
+  // Delhivery-shaped source from the same doubles, so every existing
+  // assertion keeps testing the same behaviour.
+  const delhiverySource = {
+    courierCode: 'delhivery',
+    maxAwbsPerCall: 50,
+    perAccount: false,
+    stubRemedy: 'Set courier.delhivery_api_base_url — tracking is not running.',
+    isStubMode: () => http.isStubMode(),
+    fetchTracking: () => fetch.fetchTracking(),
+    normalizeScan: normalizer.normalizeScan.bind(normalizer),
+  } as unknown as CourierTrackingSource;
+
   const svc = new TrackingPollService(
     { client } as unknown as PrismaService,
-    http as unknown as DelhiveryHttpService,
-    fetch as unknown as DelhiveryTrackingFetchService,
-    normalizer,
+    [delhiverySource],
     mapping,
     append as unknown as TrackingEventAppendService,
     orderWrite as unknown as OrderWriteService,

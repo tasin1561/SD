@@ -43,7 +43,10 @@ const CONSUMERS = [
   // failover moved that behind the dispatcher, which is now the thing
   // that must thread the actor through to whichever adapter answers.
   'courier-awb/services/courier-awb-dispatch.service.ts',
-  'tracking-poll/services/tracking-poll.service.ts',
+  // The poller sweeps every courier now, so it holds tracking SOURCES
+  // rather than Delhivery's services. The actor is threaded by the
+  // Delhivery source, which is where the Delhivery call now lives.
+  'courier-delhivery/services/delhivery-tracking-source.service.ts',
   'courier-delhivery/queue/waybill-refill.worker.ts',
   'courier-delhivery/controllers/admin-delhivery-ops.controller.ts',
 ];
