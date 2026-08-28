@@ -2319,3 +2319,54 @@ export function useRejectBankChange(): UseMutationResult<
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['admin-bank-changes'] }),
   });
 }
+
+// ───────── Failed-delivery requests from sellers (NDR) ─────────
+
+export interface AdminDeliveryActionView {
+  readonly id: string;
+  readonly action: 'REATTEMPT' | 'RECALL' | 'RTO';
+  readonly reason: string;
+  readonly status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTED' | 'FAILED';
+  readonly decisionNote: string | null;
+  readonly executionError: string | null;
+  readonly createdAt: string;
+  readonly order: { orderNumber: string; status: string; recipientName: string } | null;
+  readonly seller: { companyName: string } | null;
+  readonly shipment: { shipmentNumber: string; awbNumber: string | null } | null;
+}
+
+export function useDeliveryActionQueue(
+  status?: string,
+): UseQueryResult<readonly AdminDeliveryActionView[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-delivery-actions', status ?? 'all'],
+    queryFn: () =>
+      client.request<readonly AdminDeliveryActionView[]>(
+        `/api/admin/delivery-actions${status ? `?status=${status}` : ''}`,
+      ),
+  });
+}
+
+export function useDecideDeliveryAction(): UseMutationResult<
+  { status: string },
+  Error,
+  { requestId: string; decision: 'approve' | 'reject'; note?: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requestId, decision, note }) =>
+      client.request<{ status: string }>(
+        // Both paths written out rather than interpolating the verb. A
+        // route composed from a variable is invisible to the frontend
+        // route check, which is the thing that catches a call pointing
+        // at an endpoint that does not exist.
+        decision === 'approve'
+          ? `/api/admin/delivery-actions/${requestId}/approve`
+          : `/api/admin/delivery-actions/${requestId}/reject`,
+        { method: 'POST', body: note === undefined ? {} : { note } },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-delivery-actions'] }),
+  });
+}

@@ -69,6 +69,10 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   ['/expenses', 'money.treasury.view'],
   // What we owe against what we are owed. Same ledgers, same gate.
   ['/liabilities', 'money.treasury.view'],
+  // Sellers asking us to act on a failed delivery. Reading the queue is
+  // an order-desk job; approving one dispatches a van and is gated
+  // separately on the courier permission at the endpoint.
+  ['/delivery-actions', 'orders.view'],
   ['/remittances', 'money.view'],
   // A withdrawal destination is money, not seller admin — and the API
   // guards all three of its endpoints on this one permission.

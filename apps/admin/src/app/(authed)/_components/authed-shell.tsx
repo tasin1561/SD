@@ -28,6 +28,7 @@ import {
   ListChecks,
   Lock,
   Package,
+  PackageX,
   PhoneCall,
   Receipt,
   ScrollText,
@@ -97,6 +98,7 @@ export function AuthedShell({
       items: [
         { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={15} /> },
         { href: '/orders', label: 'Orders', icon: <Package size={15} /> },
+        { href: '/delivery-actions', label: 'Failed deliveries', icon: <PackageX size={15} /> },
         { href: '/call-center', label: 'Call centre', icon: <Headphones size={15} /> },
         { href: '/call-center/queue', label: 'Call queue', icon: <PhoneCall size={15} /> },
         {

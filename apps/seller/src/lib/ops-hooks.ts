@@ -452,3 +452,70 @@ export function useReplyToCourier(): UseMutationResult<
       void qc.invalidateQueries({ queryKey: ['courier-thread', vars.ticketId] }),
   });
 }
+
+// ───────── Failed deliveries (NDR) ─────────
+
+export type DeliveryActionKind = 'REATTEMPT' | 'RECALL' | 'RTO';
+export type DeliveryActionStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTED' | 'FAILED';
+
+export interface DeliveryActionRequestView {
+  readonly id: string;
+  readonly action: DeliveryActionKind;
+  readonly reason: string;
+  readonly status: DeliveryActionStatus;
+  readonly decisionNote: string | null;
+  readonly decidedAt: string | null;
+  readonly executedAt: string | null;
+  readonly executionError: string | null;
+  readonly createdAt: string;
+}
+
+export function useDeliveryActions(
+  orderId: string,
+): UseQueryResult<{ items: DeliveryActionRequestView[]; canRequest: boolean }> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-delivery-actions', orderId],
+    queryFn: () =>
+      client.request<{ items: DeliveryActionRequestView[]; canRequest: boolean }>(
+        `/api/seller/orders/${orderId}/delivery-actions`,
+      ),
+  });
+}
+
+export function useRequestDeliveryAction(): UseMutationResult<
+  DeliveryActionRequestView,
+  Error,
+  { orderId: string; action: DeliveryActionKind; reason: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, ...body }) =>
+      client.request<DeliveryActionRequestView>(`/api/seller/orders/${orderId}/delivery-actions`, {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: (_d, v) =>
+      void qc.invalidateQueries({ queryKey: ['seller-delivery-actions', v.orderId] }),
+  });
+}
+
+export interface SellerVisibleCall {
+  readonly id: string;
+  readonly calledAt: string;
+  readonly outcome: string;
+  readonly notes: string | null;
+  readonly customerSaidName: string | null;
+  readonly customerSaidAddress: string | null;
+  readonly rescheduledFor: string | null;
+}
+
+export function useCallHistory(orderId: string): UseQueryResult<{ items: SellerVisibleCall[] }> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-call-history', orderId],
+    queryFn: () =>
+      client.request<{ items: SellerVisibleCall[] }>(`/api/seller/orders/${orderId}/call-history`),
+  });
+}

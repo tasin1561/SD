@@ -30,6 +30,7 @@ import {
 } from '@skydrop/ui/components';
 import { OrderParcelTracking } from './order-parcel-tracking';
 import { OrderTimeline } from './order-timeline';
+import { DeliveryTroublePanel } from '../[id]/_components/delivery-trouble-panel';
 import { CancelOrderDialog } from './cancel-order-dialog';
 import { ReattemptRequestDialog } from './reattempt-request-dialog';
 import { OrderChargesSection } from './order-charges';
@@ -216,6 +217,11 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               </CardBody>
             </Card>
           )}
+
+          {/* Above the order's details, because when a delivery has
+              failed that IS the thing the seller came to look at. Renders
+              itself away on a healthy order. */}
+          <DeliveryTroublePanel orderId={orderId} orderStatus={detail.data.status} />
 
           <Section title="Recipient">
             <Card>
