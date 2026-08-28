@@ -382,7 +382,9 @@ function LegCard({
             </Tr>
           </THead>
           {leg.lines.length === 0 ? (
-            <TableEmpty colSpan={4}>Nothing has been listed against this stop yet.</TableEmpty>
+            <TBody>
+              <TableEmpty colSpan={4}>Nothing has been listed against this stop yet.</TableEmpty>
+            </TBody>
           ) : (
             <TBody>
               {leg.lines.map((l) => {

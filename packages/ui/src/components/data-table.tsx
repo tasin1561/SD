@@ -256,14 +256,23 @@ export function TableEmpty({
   readonly children: ReactNode;
   readonly colSpan?: number;
 }): ReactElement {
+  // A ROW, and it belongs inside a `<TBody>`.
+  //
+  // It used to render its own `<tbody>`, which read as self-contained
+  // and was therefore dropped inside one at nine of eleven call sites —
+  // producing a `<tbody>` nested in a `<tbody>`. That is invalid, the
+  // browser's parser un-nests it, and React then hydrates against a DOM
+  // that no longer matches what it rendered. It logs as a hydration
+  // error rather than a visible fault, which is why it survived.
+  //
+  // Returning a row makes the majority usage correct by construction and
+  // the component honest about where it goes: a row goes in a body.
   return (
-    <tbody>
-      <tr>
-        <td colSpan={colSpan} className="px-4 py-8 text-center text-text-muted text-sm">
-          {children}
-        </td>
-      </tr>
-    </tbody>
+    <tr>
+      <td colSpan={colSpan} className="px-4 py-8 text-center text-text-muted text-sm">
+        {children}
+      </td>
+    </tr>
   );
 }
 

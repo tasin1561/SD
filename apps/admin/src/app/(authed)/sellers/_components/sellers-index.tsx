@@ -138,9 +138,11 @@ export function SellersIndex(): ReactElement {
             ))}
           </TBody>
           {list.data.total === 0 && (
-            <TableEmpty colSpan={6}>
-              No sellers match this filter. Sellers appear here once they accept an invitation.
-            </TableEmpty>
+            <TBody>
+              <TableEmpty colSpan={6}>
+                No sellers match this filter. Sellers appear here once they accept an invitation.
+              </TableEmpty>
+            </TBody>
           )}
           <tfoot>
             <tr>

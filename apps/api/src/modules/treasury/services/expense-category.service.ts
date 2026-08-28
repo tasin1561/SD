@@ -36,7 +36,13 @@ export class ExpenseCategoryService {
   async create(input: { code: string; name: string; hint?: string }): Promise<ExpenseCategoryView> {
     // Normalised so RENT, rent and Rent cannot become three categories
     // that each hold a third of the year's rent.
-    const code = input.code.trim().toUpperCase().replace(/\s+/g, '_');
+    //
+    // LOWER, not upper, because that is what the seed ships. Upper-casing
+    // here meant a typed "salaries" became SALARIES and sat alongside the
+    // seeded `salaries` as a second category — the exact split this
+    // normalisation exists to prevent, reintroduced across the seed
+    // boundary. Caught by reading the category list on the page.
+    const code = input.code.trim().toLowerCase().replace(/\s+/g, '_');
     const clash = await this.prisma.client.expenseCategory.findUnique({
       where: { code },
       select: { id: true, deletedAt: true },

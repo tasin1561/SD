@@ -480,16 +480,19 @@ describe('Treasury (e2e)', () => {
       const cat = await request(h.baseUrl)
         .post('/admin/treasury/expense-categories')
         .set(auth)
-        .send({ code: 'office rent', name: 'Office rent' })
+        .send({ code: 'Office Rent', name: 'Office rent' })
         .expect(201);
       // Normalised, so RENT / rent / Rent cannot become three categories
-      // each holding a third of the year's rent.
-      expect(cat.body.code).toBe('OFFICE_RENT');
+      // each holding a third of the year's rent. LOWER, because that is
+      // what the seed ships — upper-casing put a typed "salaries" beside
+      // the seeded `salaries` as a separate category.
+      expect(cat.body.code).toBe('office_rent');
 
       await request(h.baseUrl)
         .post('/admin/treasury/expense-categories')
         .set(auth)
-        .send({ code: 'OFFICE_RENT', name: 'Rent again' })
+        // Different case, same category — the collision must still fire.
+        .send({ code: 'OFFICE RENT', name: 'Rent again' })
         .expect(409)
         .expect((r) => expect(r.body.code).toBe('EXPENSE_CATEGORY_EXISTS'));
 

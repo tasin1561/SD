@@ -90,12 +90,25 @@ export function TreasuryIndex(): ReactElement {
               value={<Money amount={overview.data.clientMoney.heldForSellersInr} currency="INR" />}
               hint="Cash in our accounts marked as theirs"
             />
+            {/* The label and the number have to describe the SAME thing.
+                `gapInr` is owed − held, so it is zero or negative when
+                healthy — labelling that "Covered" put the most alarming
+                figure on screen in the good case ("Covered ₹0.00"), and
+                a real surplus read as "Covered −₹5,000.00". Show the
+                magnitude, and let the label say which direction it is. */}
             <Stat
-              label={overview.data.clientMoney.covered ? 'Covered' : 'Shortfall'}
-              value={<Money amount={overview.data.clientMoney.gapInr} currency="INR" />}
+              label={overview.data.clientMoney.covered ? 'Surplus held' : 'Shortfall'}
+              value={
+                <Money
+                  amount={Math.abs(Number(overview.data.clientMoney.gapInr)).toFixed(2)}
+                  currency="INR"
+                />
+              }
               hint={
                 overview.data.clientMoney.covered
-                  ? 'We hold at least what we owe'
+                  ? Number(overview.data.clientMoney.gapInr) === 0
+                    ? 'Exactly covered — we hold what we owe, to the rupee'
+                    : 'Held for sellers over and above what we owe them'
                   : 'We owe more than we hold — money in transit is a normal cause, but check'
               }
               tone={overview.data.clientMoney.covered ? 'good' : 'bad'}
