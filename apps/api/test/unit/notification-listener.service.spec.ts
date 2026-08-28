@@ -16,6 +16,7 @@ const REAL_MAPPING = new NotificationEventMappingService();
 
 interface OrderFixture {
   id: string;
+  customer?: { preferredLanguage: string } | null;
   orderNumber: string;
   sellerId: string;
   sellerEmail: string;
@@ -49,6 +50,9 @@ function makeSut(fixture: OrderFixture | null) {
             orderNumber: fixture.orderNumber,
             sellerId: fixture.sellerId,
             customerId: fixture.customerId,
+            // The relation the listener now selects, so a customer's
+            // stored language reaches the template choice.
+            customer: fixture.customer ?? null,
             recipientName: fixture.recipientName,
             recipientEmail: fixture.recipientEmail,
             recipientCity: fixture.recipientCity,
@@ -401,5 +405,45 @@ describe('NotificationListener', () => {
         expect(call.variables.customer_name).toBe('Pooja');
       }
     });
+  });
+});
+
+describe('NotificationListener — the customer is written to in THEIR language', () => {
+  it("uses the customer's stored preference, not the mapping's default", async () => {
+    // `customers.preferred_language` has existed all along; the fan-out
+    // just never read it, so every customer got the English template
+    // whatever they had asked for.
+    const { listener, enqueueCalls } = makeSut({
+      ...ORDER_BASE,
+      customer: { preferredLanguage: 'hi' },
+    } as never);
+
+    await listener.handle(lifecycleEvent(OrderStatus.DISPATCHED, 'evt-locale-1'));
+
+    const customer = enqueueCalls.find(
+      (c) => c.recipientType === NotificationRecipientType.CUSTOMER,
+    );
+    expect(customer?.locale).toBe('hi');
+  });
+
+  it('leaves the SELLER on the mapping locale — this is about the customer', async () => {
+    const { listener, enqueueCalls } = makeSut({
+      ...ORDER_BASE,
+      customer: { preferredLanguage: 'hi' },
+    } as never);
+
+    await listener.handle(lifecycleEvent(OrderStatus.DISPATCHED, 'evt-locale-2'));
+
+    const seller = enqueueCalls.find((c) => c.recipientType === NotificationRecipientType.SELLER);
+    expect(seller?.locale).toBe('en');
+  });
+
+  it('falls back when the order has no customer row', async () => {
+    const { listener, enqueueCalls } = makeSut({ ...ORDER_BASE, customer: null } as never);
+    await listener.handle(lifecycleEvent(OrderStatus.DISPATCHED, 'evt-locale-3'));
+    const customer = enqueueCalls.find(
+      (c) => c.recipientType === NotificationRecipientType.CUSTOMER,
+    );
+    expect(customer?.locale).toBe('en');
   });
 });

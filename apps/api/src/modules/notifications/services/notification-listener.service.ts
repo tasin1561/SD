@@ -190,13 +190,27 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
 
     for (const target of targets) {
       const resolved = this.resolveTarget(target, ctx);
+
+      // The customer's own language where they have one; the mapping's
+      // value for a seller.
+      //
+      // Safe before any translation exists: TemplateRenderService falls
+      // back to 'en' when a template is missing for a language, and logs
+      // when it does. So this reads a preference that has always been
+      // stored and never consulted, and goes live the day a Hindi
+      // template is seeded rather than needing a second change then.
+      const locale =
+        target.recipientType === 'CUSTOMER'
+          ? (ctx.customerLanguage ?? target.locale)
+          : target.locale;
+
       const payload = {
         eventId: eventIdBase,
         recipientType: target.recipientType,
         recipientId: resolved.recipientId,
         channel: target.channel,
         templateCode: target.templateCode,
-        locale: target.locale,
+        locale,
         toEmail: resolved.toEmail,
         variables,
         orderId: ctx.orderId,
@@ -366,6 +380,10 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
         orderNumber: true,
         sellerId: true,
         customerId: true,
+        // What language to write to them in. `customers.preferred_language`
+        // has existed all along; the fan-out just never read it, so every
+        // customer got the English template regardless.
+        customer: { select: { preferredLanguage: true } },
         recipientName: true,
         recipientEmail: true,
         recipientCity: true,
@@ -440,6 +458,7 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
       sellerEmail: order.seller.email,
       companyName: order.seller.companyName ?? null,
       customerId: order.customerId,
+      customerLanguage: order.customer?.preferredLanguage ?? null,
       // The stored name carries the seller's code (see
       // common/text/recipient-name.ts). It comes OFF here: this feeds
       // `customer_name` in templates, and an order confirmation opening
@@ -479,6 +498,8 @@ interface OrderContext {
   readonly sellerEmail: string;
   readonly companyName: string | null;
   readonly customerId: string | null;
+  /** Their stored preference. Null when the order has no customer row. */
+  readonly customerLanguage: string | null;
   readonly recipientName: string;
   readonly recipientEmail: string | null;
   readonly recipientCity: string;
