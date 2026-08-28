@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { BankEntryType, BankOwnerKind, Currency, Prisma, WalletEntryDirection } from '@skydrop/db';
+import { BankLedgerService } from './bank-ledger.service';
 
 const ZERO = new Prisma.Decimal(0);
 
@@ -42,6 +43,7 @@ export class SellerCashAttributionService {
   // the cash side commits with the wallet entry or not at all (TRE-3).
   // Holding a second client here would make it possible to write one
   // outside that transaction by accident.
+  constructor(private readonly ledger: BankLedgerService) {}
 
   /**
    * F2-exhaustive: a new `WalletEntryDirection` fails to compile until
@@ -145,6 +147,15 @@ export class SellerCashAttributionService {
    * The cash does not leave the account, so a single entry would change
    * the account's total and make it disagree with the statement. What
    * changes is whose it is, which is two rows summing to zero.
+   *
+   * Both go through `BankLedgerService.post()` rather than an INSERT of
+   * their own. That is TRE-1 and it is not ceremony: post() is where the
+   * account is checked for existence and soft-deletion, where the
+   * currency is checked against the account, and where a capital row
+   * carrying a seller is refused. A direct write inherits none of it,
+   * and the first thing it would let through is cash posted into a
+   * retired account — money that then vanishes from every balance the
+   * page shows.
    */
   private async pair(
     tx: TxClient,
@@ -161,27 +172,24 @@ export class SellerCashAttributionService {
     const base = {
       accountId: input.accountId,
       type: BankEntryType.RECLASSIFICATION,
-      currency: input.currency,
+      amountCurrency: input.currency,
       occurredAt: new Date(),
       reference: input.walletEntryId,
       note: input.note,
-    };
-    await tx.bankEntry.createMany({
-      data: [
-        {
-          ...base,
-          signedAmount: input.fromSeller.neg(),
-          ownerKind: BankOwnerKind.SELLER,
-          sellerId: input.sellerId,
-        },
-        {
-          ...base,
-          signedAmount: input.fromSeller,
-          ownerKind: BankOwnerKind.CAPITAL,
-          sellerId: null,
-        },
-      ],
-    });
+    } as const;
+
+    await this.ledger.post(
+      {
+        ...base,
+        signedAmount: input.fromSeller.neg(),
+        owner: { kind: BankOwnerKind.SELLER, sellerId: input.sellerId },
+      },
+      tx,
+    );
+    await this.ledger.post(
+      { ...base, signedAmount: input.fromSeller, owner: { kind: BankOwnerKind.CAPITAL } },
+      tx,
+    );
   }
 
   /** What this seller holds, and the account holding most of it. */
@@ -192,7 +200,17 @@ export class SellerCashAttributionService {
   ): Promise<{ total: Prisma.Decimal; accountId: string | null }> {
     const grouped = await tx.bankEntry.groupBy({
       by: ['accountId'],
-      where: { sellerId, currency, ownerKind: BankOwnerKind.SELLER },
+      where: {
+        sellerId,
+        currency,
+        ownerKind: BankOwnerKind.SELLER,
+        // Never reclassify into a retired account. `post()` would refuse
+        // it and take the whole wallet write down with it, which would
+        // block a charge over a bookkeeping decision made months ago.
+        // Excluded here instead, so the charge lands as a receivable —
+        // conservative, and the seller is not stopped from trading.
+        account: { deletedAt: null },
+      },
       _sum: { signedAmount: true },
     });
 

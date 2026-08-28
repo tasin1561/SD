@@ -191,17 +191,17 @@ export function ExpensesIndex(): ReactElement {
                       <Td>{i.label}</Td>
                       <Td className="text-text-muted">{i.counterparty}</Td>
                       <Td align="right">
-                        <Money amount={i.placedInr} currency={i.currency} convert={false} />
+                        <Money amount={i.placed} currency={i.currency} convert={false} />
                       </Td>
                       <Td align="right">
-                        <Money amount={i.returnedInr} currency={i.currency} convert={false} />
+                        <Money amount={i.returned} currency={i.currency} convert={false} />
                       </Td>
                       <Td align="right">
                         <Money
-                          amount={i.netInr}
+                          amount={i.net}
                           currency={i.currency}
                           convert={false}
-                          direction={Number(i.netInr) < 0 ? 'debit' : 'credit'}
+                          direction={Number(i.net) < 0 ? 'debit' : 'credit'}
                         />
                       </Td>
                       <Td>

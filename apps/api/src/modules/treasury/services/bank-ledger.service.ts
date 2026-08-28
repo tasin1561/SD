@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { BankEntryType, BankOwnerKind, Currency, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 
 const ZERO = new Prisma.Decimal(0);
 
@@ -270,28 +271,53 @@ export class BankLedgerService {
         message: 'Say why the book was wrong — at least 10 characters',
       });
     }
-    const current = await this.ownerBalance(input.accountId, input.owner);
-    const stated = new Prisma.Decimal(input.statedBalance);
-    const delta = stated.sub(current);
-    if (delta.isZero()) return { delta: '0.00', entryId: null };
+    // ── Read and write under ONE lock, in ONE transaction ───────────
+    //
+    // This computes a correction from a balance it just read. Read
+    // outside the write and two operators reconciling the same account
+    // both see the same figure, both post the same difference, and the
+    // account ends up corrected twice — permanently, because the ledger
+    // is append-only. The same window lets an ordinary entry landing
+    // mid-reconcile get baked into the adjustment as though it were an
+    // error.
+    //
+    // The lock is per (account, owner): reconciling our capital and a
+    // seller's holding in the same account are independent sums and
+    // need not queue behind each other.
+    const ownerKey = `${input.accountId}|${input.owner.kind}|${input.owner.sellerId ?? ''}`;
+    const result = await this.prisma.client.$transaction(async (tx) => {
+      await takeAdvisoryLock(tx, AdvisoryLock.BANK_RECONCILE, ownerKey);
 
-    // The statement being reconciled against IS this account's, so the
-    // difference is in its currency by construction.
-    const account = await this.prisma.client.platformBankAccount.findUniqueOrThrow({
-      where: { id: input.accountId },
-      select: { currency: true },
+      const current = await this.ownerBalance(input.accountId, input.owner, tx);
+      const stated = new Prisma.Decimal(input.statedBalance);
+      const delta = stated.sub(current);
+      if (delta.isZero()) return null;
+
+      // The statement being reconciled against IS this account's, so the
+      // difference is in its currency by construction.
+      const account = await tx.platformBankAccount.findUniqueOrThrow({
+        where: { id: input.accountId },
+        select: { currency: true },
+      });
+
+      const entry = await this.post(
+        {
+          accountId: input.accountId,
+          type: BankEntryType.RECONCILIATION_ADJUSTMENT,
+          signedAmount: delta,
+          amountCurrency: account.currency,
+          owner: input.owner,
+          occurredAt: new Date(),
+          note: input.reason,
+          staffId: input.staffId,
+        },
+        tx,
+      );
+      return { entry, current, stated, delta };
     });
 
-    const entry = await this.post({
-      accountId: input.accountId,
-      type: BankEntryType.RECONCILIATION_ADJUSTMENT,
-      signedAmount: delta,
-      amountCurrency: account.currency,
-      owner: input.owner,
-      occurredAt: new Date(),
-      note: input.reason,
-      staffId: input.staffId,
-    });
+    if (result === null) return { delta: '0.00', entryId: null };
+    const { entry, current, stated, delta } = result;
 
     await this.audit.log({
       actorType: 'STAFF',
@@ -314,8 +340,12 @@ export class BankLedgerService {
     return { delta: delta.toFixed(2), entryId: entry.id };
   }
 
-  private async ownerBalance(accountId: string, owner: OwnerRef): Promise<Prisma.Decimal> {
-    const agg = await this.prisma.client.bankEntry.aggregate({
+  private async ownerBalance(
+    accountId: string,
+    owner: OwnerRef,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Prisma.Decimal> {
+    const agg = await (tx ?? this.prisma.client).bankEntry.aggregate({
       where: {
         accountId,
         ownerKind: owner.kind,

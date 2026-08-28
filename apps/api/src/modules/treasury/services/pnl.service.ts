@@ -112,16 +112,47 @@ export class PnlService {
     });
   }
 
-  /** The Indian delivery leg. What we bill for carriage, less what the courier charged. */
+  /**
+   * The Indian delivery leg. What we bill for carriage, less what the
+   * courier charged.
+   *
+   * BOTH sides are anchored on the SHIPMENT, not one on the charge and
+   * one on the parcel. Charges are written at order create and the
+   * shipment is provisioned at confirmation — usually hours apart, but
+   * across a month boundary that gap puts a parcel's revenue in one
+   * report and its cost in the next, and every month then reads as
+   * either unusually good or unusually bad for no real reason.
+   */
   private async delivery(from: Date, to: Date): Promise<PnlLine> {
     // Revenue is the shipping charges we persisted on the order —
     // deliberately WITHOUT GST, which is the government's and not ours,
     // and without the RTO fee, which prices a second movement and is its
     // own line below.
+    // Returned parcels are EXCLUDED, and that is the whole point of
+    // splitting the two lines. Delhivery refunds the delivery deduction
+    // when a parcel comes back and charges an RTO fee instead, so a
+    // return's forward cost is not a cost we bore — counting it here as
+    // well as on the returns line would charge the same carriage twice
+    // and make both margins wrong in opposite directions.
+    const shipmentWindow = {
+      deletedAt: null,
+      awbNumber: { not: null },
+      createdAt: { gte: from, lte: to },
+      rtoReceivedAt: null,
+    } as const;
+
+    const shipments = await this.prisma.client.shipment.findMany({
+      where: shipmentWindow,
+      select: { actualCourierCostInr: true },
+    });
+
+    // Revenue for exactly those parcels — reached through the orders
+    // they belong to, so the two sides describe the same cohort rather
+    // than the same calendar window.
     const revenueAgg = await this.prisma.client.orderCharge.aggregate({
       where: {
         deletedAt: null,
-        createdAt: { gte: from, lte: to },
+        order: { orderShipments: { some: { shipment: shipmentWindow } } },
         type: {
           in: [
             'BASE_SHIPPING',
@@ -133,22 +164,6 @@ export class PnlService {
         },
       },
       _sum: { amountInr: true },
-    });
-
-    // Returned parcels are EXCLUDED, and that is the whole point of
-    // splitting the two lines. Delhivery refunds the delivery deduction
-    // when a parcel comes back and charges an RTO fee instead, so a
-    // return's forward cost is not a cost we bore — counting it here as
-    // well as on the returns line would charge the same carriage twice
-    // and make both margins wrong in opposite directions.
-    const shipments = await this.prisma.client.shipment.findMany({
-      where: {
-        deletedAt: null,
-        awbNumber: { not: null },
-        createdAt: { gte: from, lte: to },
-        rtoReceivedAt: null,
-      },
-      select: { actualCourierCostInr: true },
     });
     let cost = ZERO;
     let priced = 0;

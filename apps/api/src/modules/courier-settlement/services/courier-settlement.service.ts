@@ -239,6 +239,11 @@ export class CourierSettlementService {
         courierAccountId: input.courierAccountId,
         currency: Currency.INR,
         isActive: true,
+        // Stated as well as `isActive`, not instead of it. Retiring an
+        // account happens to clear the flag today, so the two agree by
+        // coincidence rather than by rule — and a settlement routed into
+        // a retired account would be cash the overview cannot show.
+        deletedAt: null,
       },
       select: { id: true },
     });

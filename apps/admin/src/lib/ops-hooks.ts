@@ -844,10 +844,11 @@ export interface InvestmentView {
   readonly id: string;
   readonly label: string;
   readonly counterparty: string;
+  /** The account's currency — every amount below is in it, not in INR. */
   readonly currency: 'INR' | 'BDT';
-  readonly placedInr: string;
-  readonly returnedInr: string;
-  readonly netInr: string;
+  readonly placed: string;
+  readonly returned: string;
+  readonly net: string;
   readonly closedAt: string | null;
   readonly note: string | null;
   readonly createdAt: string;

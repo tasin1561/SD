@@ -7,11 +7,18 @@ export interface InvestmentView {
   readonly id: string;
   readonly label: string;
   readonly counterparty: string;
+  /**
+   * The account's currency, and therefore the currency of every amount
+   * below. The columns are named `*Inr` in the schema for historical
+   * reasons and a BDT deposit stores BDT in them, so the view names them
+   * plainly — a figure labelled INR that is not INR is worse than an
+   * unlabelled one, because nobody thinks to check it.
+   */
   readonly currency: Currency;
-  readonly placedInr: string;
-  readonly returnedInr: string;
+  readonly placed: string;
+  readonly returned: string;
   /** returned − placed. Negative while the money is still out. */
-  readonly netInr: string;
+  readonly net: string;
   readonly closedAt: string | null;
   readonly note: string | null;
   readonly createdAt: string;
@@ -179,9 +186,9 @@ export class InvestmentService {
       label: r.label,
       counterparty: r.counterparty,
       currency: r.currency,
-      placedInr: r.placedInr.toFixed(2),
-      returnedInr: r.returnedInr.toFixed(2),
-      netInr: r.returnedInr.sub(r.placedInr).toFixed(2),
+      placed: r.placedInr.toFixed(2),
+      returned: r.returnedInr.toFixed(2),
+      net: r.returnedInr.sub(r.placedInr).toFixed(2),
       closedAt: r.closedAt?.toISOString() ?? null,
       note: r.note,
       createdAt: r.createdAt.toISOString(),

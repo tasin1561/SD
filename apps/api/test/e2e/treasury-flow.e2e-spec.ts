@@ -530,7 +530,7 @@ describe('Treasury (e2e)', () => {
           placedAt: new Date().toISOString(),
         })
         .expect(201);
-      expect(inv.body.netInr).toBe('-200000.00');
+      expect(inv.body.net).toBe('-200000.00');
 
       const afterPlace = await overview();
       expect(afterPlace.accounts.find((a) => a.accountId === inrAccount)?.capital).toBe(
@@ -544,7 +544,7 @@ describe('Treasury (e2e)', () => {
         .set(auth)
         .send({ toAccountId: inrAccount, amount: '8000', receivedAt: new Date().toISOString() })
         .expect(200);
-      expect(partial.body.returnedInr).toBe('8000.00');
+      expect(partial.body.returned).toBe('8000.00');
       expect(partial.body.closedAt).toBeNull();
 
       const closed = await request(h.baseUrl)
@@ -557,7 +557,7 @@ describe('Treasury (e2e)', () => {
           close: true,
         })
         .expect(200);
-      expect(closed.body.netInr).toBe('8000.00');
+      expect(closed.body.net).toBe('8000.00');
       expect(closed.body.closedAt).not.toBeNull();
 
       const afterReturn = await overview();
@@ -665,6 +665,118 @@ describe('Treasury (e2e)', () => {
       expect(ov.clientMoney.owedToSellersInr).toBe('2800.00');
       expect(ov.clientMoney.heldForSellersInr).toBe('2800.00');
       expect(ov.clientMoney.covered).toBe(true);
+    });
+  });
+
+  describe('the guards that only a real database can prove', () => {
+    it('two operators reconciling at once correct the account ONCE, not twice', async () => {
+      // The bug this pins: reconcile read the balance, computed a
+      // difference, then posted it — all outside a transaction. Two
+      // operators both read ₹1,000, both computed +₹200, and the account
+      // landed at ₹1,400. The ledger is append-only, so the doubling was
+      // permanent. A mocked Prisma has no concurrency to expose this;
+      // only a real database does.
+      await post({
+        accountId: inrAccount,
+        type: BankEntryType.OPENING_BALANCE,
+        signedAmount: '1000',
+        ownerKind: BankOwnerKind.CAPITAL,
+      });
+
+      const body = {
+        ownerKind: BankOwnerKind.CAPITAL,
+        statedBalance: '1200.00',
+        reason: 'Bank charged a wire fee we had not recorded',
+      };
+      const [a, b] = await Promise.all([
+        request(h.baseUrl)
+          .post(`/admin/treasury/accounts/${inrAccount}/reconcile`)
+          .set(auth)
+          .send(body),
+        request(h.baseUrl)
+          .post(`/admin/treasury/accounts/${inrAccount}/reconcile`)
+          .set(auth)
+          .send(body),
+      ]);
+      expect([a.status, b.status]).toEqual([200, 200]);
+
+      // Whichever ran second saw 1,200 already and had nothing to do.
+      const deltas = [a.body.delta, b.body.delta].sort();
+      expect(deltas).toEqual(['0.00', '200.00']);
+
+      const ov = await overview();
+      expect(ov.accounts.find((x) => x.accountId === inrAccount)?.capital).toBe('1200.00');
+    });
+
+    it('refuses to retire an account that still holds money', async () => {
+      // Retiring it would drop the money from every per-account figure
+      // while the client-money total still counted it — the two halves
+      // of the same page disagreeing, with neither obviously wrong.
+      await post({
+        accountId: bdtAccount,
+        amountCurrency: Currency.BDT,
+        type: BankEntryType.OPENING_BALANCE,
+        signedAmount: '500',
+        ownerKind: BankOwnerKind.CAPITAL,
+      });
+
+      await request(h.baseUrl)
+        .delete(`/admin/platform-bank-accounts/${bdtAccount}`)
+        .set(auth)
+        .expect(409)
+        .expect((r) => expect(r.body.code).toBe('BANK_ACCOUNT_NOT_EMPTY'));
+
+      // Emptied, it retires cleanly.
+      await post({
+        accountId: bdtAccount,
+        amountCurrency: Currency.BDT,
+        type: BankEntryType.RECONCILIATION_ADJUSTMENT,
+        signedAmount: '-500',
+        ownerKind: BankOwnerKind.CAPITAL,
+      });
+      await request(h.baseUrl)
+        .delete(`/admin/platform-bank-accounts/${bdtAccount}`)
+        .set(auth)
+        .expect(204);
+    });
+
+    it('a charge never reclassifies into a RETIRED account', async () => {
+      // `post()` refuses a retired account, so reclassifying into one
+      // would take the whole wallet write down with it and block a
+      // charge over a bookkeeping decision made months ago. The seller's
+      // holding there is excluded instead, and the charge simply becomes
+      // a receivable.
+      await giveWalletBalance(sellerA, '1000');
+      await post({
+        accountId: bdtAccount,
+        amountCurrency: Currency.BDT,
+        type: BankEntryType.SELLER_TOPUP,
+        signedAmount: '1000',
+        ownerKind: BankOwnerKind.SELLER,
+        sellerId: sellerA,
+      });
+      // Retire it by hand — the endpoint would refuse while it holds money.
+      await h.prisma.platformBankAccount.update({
+        where: { id: bdtAccount },
+        data: { deletedAt: new Date(), isActive: false },
+      });
+
+      const wallet = h.app.get(WalletService);
+      await h.prisma.$transaction(async (tx) => {
+        await wallet.applyEntry(tx, {
+          sellerId: sellerA,
+          currency: Currency.BDT,
+          direction: WalletEntryDirection.ORDER_CHARGES,
+          amount: new Prisma.Decimal('100'),
+          actorType: 'SYSTEM',
+        });
+      });
+
+      // No reclassification was written, and nothing threw.
+      const reclass = await h.prisma.bankEntry.count({
+        where: { type: BankEntryType.RECLASSIFICATION },
+      });
+      expect(reclass).toBe(0);
     });
   });
 });

@@ -22,10 +22,6 @@ function makeTx(opts: {
           accountId: h.accountId,
           _sum: { signedAmount: h.amount },
         })),
-      createMany: async (args: { data: Created[] }) => {
-        created.push(...args.data);
-        return { count: args.data.length };
-      },
     },
     platformBankAccount: {
       findFirst: async () =>
@@ -39,7 +35,31 @@ function makeTx(opts: {
   return { tx, created };
 }
 
-const svc = new SellerCashAttributionService();
+/**
+ * A stand-in for the real ledger writer.
+ *
+ * The attribution now goes through `BankLedgerService.post()` (TRE-1) so
+ * it inherits the account, currency and owner guards. Those are pinned
+ * in the ledger's own tests and end to end; here we only care WHAT it is
+ * asked to write.
+ */
+function makeLedger(created: Created[]) {
+  return {
+    post: async (input: {
+      signedAmount: Prisma.Decimal;
+      owner: { kind: string; sellerId?: string };
+      type: string;
+    }) => {
+      created.push({
+        signedAmount: input.signedAmount,
+        ownerKind: input.owner.kind,
+        sellerId: input.owner.sellerId ?? null,
+        type: input.type,
+      });
+      return { id: `be-${created.length}` };
+    },
+  };
+}
 
 async function run(
   opts: Parameters<typeof makeTx>[0],
@@ -47,6 +67,7 @@ async function run(
   amount: string,
 ): Promise<Created[]> {
   const { tx, created } = makeTx(opts);
+  const svc = new SellerCashAttributionService(makeLedger(created) as never);
   await svc.apply(tx as never, {
     sellerId: 's1',
     currency: Currency.INR,

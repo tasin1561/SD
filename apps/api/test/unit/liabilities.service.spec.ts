@@ -34,7 +34,17 @@ function makeSut(opts: {
       }),
     },
     inboundFreightCharge: { findMany: async () => opts.freight ?? [] },
-    order: { findMany: async () => opts.cod ?? [] },
+    order: {
+      aggregate: async () => ({
+        _sum: {
+          codAmountInr: (opts.cod ?? []).reduce(
+            (a, r) => a.add(r.codAmountInr ?? new Prisma.Decimal(0)),
+            new Prisma.Decimal(0),
+          ),
+        },
+        _count: { _all: (opts.cod ?? []).length },
+      }),
+    },
     seller: { findMany: async () => opts.sellers ?? [] },
     sellerWalletEntry: {
       // The last point the seller stood at zero or above; null means

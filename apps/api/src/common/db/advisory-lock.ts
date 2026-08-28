@@ -32,6 +32,15 @@ export const AdvisoryLock = {
   ORDER_NUMBER: 0x04f52,
   /** 'CN' — consignment number allocation per year. */
   CONSIGNMENT_NUMBER: 0x0434e,
+  /**
+   * Reconciling one bank account's owner balance (TRE-1).
+   *
+   * Reconcile READS the balance and then posts the difference. Two
+   * operators doing that at once both read the same figure and both
+   * post the same correction, and the ledger is append-only so the
+   * doubling is permanent.
+   */
+  BANK_RECONCILE: 0x04252,
 } as const;
 
 /**

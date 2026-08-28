@@ -1,5 +1,6 @@
 import {
   Body,
+  ConflictException,
   Controller,
   Delete,
   Get,
@@ -97,8 +98,38 @@ export class AdminPlatformBankAccountController {
   @Delete(':id')
   @RequirePermissions('money.bank_accounts.manage')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Retire an account — soft delete, so past top-ups still resolve' })
+  @ApiOperation({
+    summary:
+      'Retire an account — soft delete, so past top-ups still resolve. Refused while it still holds money.',
+  })
   async remove(@Param('id', new ParseUUIDPipe({ version: '7' })) id: string): Promise<void> {
+    // An account with a balance cannot be retired, and this is not
+    // tidiness. The treasury overview iterates NON-deleted accounts and
+    // groups over ALL entries, so retiring an account with money in it
+    // drops that money from every per-account figure on the page while
+    // the client-money total still counts it — the two halves of the
+    // same screen then disagree, and neither is obviously the wrong one.
+    //
+    // Empty it first (a transfer, or a reconciliation if the cash is
+    // genuinely gone), then retire it.
+    const balances = await this.prisma.client.bankEntry.groupBy({
+      by: ['ownerKind'],
+      where: { accountId: id },
+      _sum: { signedAmount: true },
+    });
+    const outstanding = balances
+      .map((b) => b._sum.signedAmount)
+      .filter((v): v is NonNullable<typeof v> => v !== null)
+      .filter((v) => !v.isZero());
+    if (outstanding.length > 0) {
+      throw new ConflictException({
+        code: 'BANK_ACCOUNT_NOT_EMPTY',
+        message:
+          'This account still holds money. Move it out, or reconcile it to zero, before retiring it.',
+        cause: { balances: outstanding.map((v) => v.toFixed(2)) },
+      });
+    }
+
     await this.prisma.client.platformBankAccount.update({
       where: { id },
       data: { deletedAt: new Date(), isActive: false },

@@ -212,17 +212,23 @@ export class LiabilitiesService {
    * report into a scan.
    */
   private async codFloat(): Promise<{ amount: Prisma.Decimal; count: number }> {
-    const rows = await this.prisma.client.order.findMany({
+    // Aggregated in the database, not loaded and summed here. This set
+    // grows with every delivered COD order that has not been settled,
+    // and it never self-limits — pulling the rows back would work fine
+    // for months and then quietly become the slowest thing on the page,
+    // at exactly the volume where somebody most needs to read it.
+    const agg = await this.prisma.client.order.aggregate({
       where: {
         status: 'DELIVERED',
         codAmountInr: { gt: 0 },
         courierSettlementLines: { none: {} },
       },
-      select: { codAmountInr: true },
+      _sum: { codAmountInr: true },
+      _count: { _all: true },
     });
     return {
-      amount: rows.reduce((acc, r) => acc.add(r.codAmountInr ?? ZERO), ZERO),
-      count: rows.length,
+      amount: agg._sum.codAmountInr ?? ZERO,
+      count: agg._count._all,
     };
   }
 
