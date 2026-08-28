@@ -49,6 +49,7 @@ export function TreasuryIndex(): ReactElement {
     label: string;
     currency: 'INR' | 'BDT';
     capital: string;
+    bySeller: ReadonlyArray<{ sellerId: string; companyName: string; amount: string }>;
   } | null>(null);
   const [openAccount, setOpenAccount] = useState<string | null>(null);
   const entries = useBankEntries({ limit: 50 }, true);
@@ -215,6 +216,7 @@ export function TreasuryIndex(): ReactElement {
                                 label: a.label,
                                 currency: a.currency,
                                 capital: a.capital,
+                                bySeller: a.bySeller,
                               })
                             }
                           >
@@ -321,6 +323,7 @@ export function TreasuryIndex(): ReactElement {
         accountLabel={reconciling?.label ?? ''}
         currency={reconciling?.currency ?? 'INR'}
         bookBalance={reconciling?.capital ?? '0'}
+        bySeller={reconciling?.bySeller ?? []}
         onClose={() => setReconciling(null)}
       />
     </div>

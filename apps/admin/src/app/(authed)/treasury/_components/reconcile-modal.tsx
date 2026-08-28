@@ -9,6 +9,7 @@ import {
   Modal,
   ModalFooter,
   Money,
+  Select,
   Textarea,
 } from '@skydrop/ui/components';
 import { useReconcileAccount } from '@/lib/ops-hooks';
@@ -28,23 +29,36 @@ export function ReconcileModal({
   accountLabel,
   currency,
   bookBalance,
+  bySeller,
   onClose,
 }: {
   readonly accountId: string | null;
   readonly accountLabel: string;
   readonly currency: 'INR' | 'BDT';
   readonly bookBalance: string;
+  /** Whose money is in this account, so a seller's holding can be corrected too. */
+  readonly bySeller: ReadonlyArray<{ sellerId: string; companyName: string; amount: string }>;
   readonly onClose: () => void;
 }): ReactElement {
   const reconcile = useReconcileAccount();
+  // '' means OUR money. A seller id corrects what we hold for them.
+  const [sellerId, setSellerId] = useState('');
   const [statedBalance, setStated] = useState('');
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  // Each owner is its own running sum, so the figure being corrected has
+  // to be that owner's — comparing a seller's stated holding against the
+  // account's capital balance would post a wildly wrong difference.
+  const currentBook =
+    sellerId === ''
+      ? bookBalance
+      : (bySeller.find((b) => b.sellerId === sellerId)?.amount ?? '0.00');
+
   const delta =
     statedBalance.trim() === '' || Number.isNaN(Number(statedBalance))
       ? null
-      : Number(statedBalance) - Number(bookBalance);
+      : Number(statedBalance) - Number(currentBook);
 
   async function save(): Promise<void> {
     setError(null);
@@ -60,13 +74,13 @@ export function ReconcileModal({
     try {
       await reconcile.mutateAsync({
         accountId,
-        // Reconciling OUR side. A seller's holding is corrected through
-        // the flow that got it wrong, not by adjusting their cash here.
-        ownerKind: 'CAPITAL',
+        ownerKind: sellerId === '' ? 'CAPITAL' : 'SELLER',
+        ...(sellerId === '' ? {} : { sellerId }),
         statedBalance: Number(statedBalance).toFixed(2),
         reason: reason.trim(),
       });
       setStated('');
+      setSellerId('');
       setReason('');
       onClose();
     } catch (err) {
@@ -87,8 +101,26 @@ export function ReconcileModal({
       description="Posts the difference as a visible entry. It does not overwrite anything."
     >
       <div className="space-y-3">
+        {bySeller.length > 0 && (
+          <FormField
+            label="Whose balance"
+            hint="Each owner is a separate running sum in this account — correct the one the statement is about."
+          >
+            <Select value={sellerId} onChange={(e) => setSellerId(e.target.value)}>
+              <option value="">Ours (capital)</option>
+              {bySeller.map((b) => (
+                <option key={b.sellerId} value={b.sellerId}>
+                  {b.companyName}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+        )}
         <p className="text-text-muted text-sm">
-          Our book says <Money amount={bookBalance} currency={currency} convert={false} /> is ours
+          Our book says <Money amount={currentBook} currency={currency} convert={false} /> is{' '}
+          {sellerId === ''
+            ? 'ours'
+            : `held for ${bySeller.find((b) => b.sellerId === sellerId)?.companyName ?? 'them'}`}{' '}
           in this account.
         </p>
         <FormField label="What the statement says" required>
@@ -112,7 +144,7 @@ export function ReconcileModal({
                 convert={false}
                 direction={delta < 0 ? 'debit' : 'credit'}
               />{' '}
-              will be posted against our own money.
+              will be posted against {sellerId === '' ? 'our own money' : 'their holding'}.
             </p>
           </div>
         )}

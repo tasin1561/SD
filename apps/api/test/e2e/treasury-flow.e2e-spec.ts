@@ -782,4 +782,91 @@ describe('Treasury (e2e)', () => {
       expect(reclass).toBe(0);
     });
   });
+
+  describe('getting money INTO the book, and correcting it', () => {
+    it('an account can be created with what is already in it', async () => {
+      // Without this the only way to set a starting balance was to
+      // reconcile a brand-new account up from zero — which files the
+      // money under "the book was wrong" when the book was not wrong, it
+      // was empty. An account added without its balance also reads as
+      // zero everywhere derived from it, with nothing saying it is
+      // merely unentered.
+      const created = await request(h.baseUrl)
+        .post('/admin/platform-bank-accounts')
+        .set(auth)
+        .send({
+          label: 'Opening Test',
+          bankName: 'Test Bank',
+          accountName: 'Skydrop',
+          accountNumber: 'OPEN-1',
+          currency: Currency.INR,
+          openingBalance: '125000.50',
+        })
+        .expect(201);
+
+      const ov = await overview();
+      const acc = ov.accounts.find((a) => a.accountId === created.body.id);
+      expect(acc?.capital).toBe('125000.50');
+      // OURS. Money held for a seller arrives through a top-up or a
+      // settlement, each of which records why.
+      expect(acc?.sellerHeld).toBe('0.00');
+    });
+
+    it('a zero opening balance writes no entry rather than a zero one', async () => {
+      const created = await request(h.baseUrl)
+        .post('/admin/platform-bank-accounts')
+        .set(auth)
+        .send({
+          label: 'Empty Test',
+          bankName: 'Test Bank',
+          accountName: 'Skydrop',
+          accountNumber: 'EMPTY-1',
+          currency: Currency.INR,
+          openingBalance: '0',
+        })
+        .expect(201);
+
+      const entries = await h.prisma.bankEntry.count({
+        where: { accountId: created.body.id as string },
+      });
+      expect(entries).toBe(0);
+    });
+
+    it("corrects a SELLER's holding without touching our own money", async () => {
+      // Each owner is its own running sum in an account. Reconciling
+      // could only ever correct capital before, so a seller's holding
+      // that disagreed with the statement had no way to be fixed.
+      await post({
+        accountId: inrAccount,
+        type: BankEntryType.SELLER_TOPUP,
+        signedAmount: '42500',
+        ownerKind: BankOwnerKind.SELLER,
+        sellerId: sellerA,
+      });
+      await post({
+        accountId: inrAccount,
+        type: BankEntryType.OPENING_BALANCE,
+        signedAmount: '100000',
+        ownerKind: BankOwnerKind.CAPITAL,
+      });
+
+      const res = await request(h.baseUrl)
+        .post(`/admin/treasury/accounts/${inrAccount}/reconcile`)
+        .set(auth)
+        .send({
+          ownerKind: BankOwnerKind.SELLER,
+          sellerId: sellerA,
+          statedBalance: '40000.00',
+          reason: 'Statement shows 40,000 held for them, not 42,500',
+        })
+        .expect(200);
+      expect(res.body.delta).toBe('-2500.00');
+
+      const ov = await overview();
+      const acc = ov.accounts.find((a) => a.accountId === inrAccount);
+      expect(acc?.sellerHeld).toBe('40000.00');
+      // Untouched — the correction was about their money, not ours.
+      expect(acc?.capital).toBe('100000.00');
+    });
+  });
 });

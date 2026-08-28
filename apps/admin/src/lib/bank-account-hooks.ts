@@ -57,6 +57,12 @@ export interface UpsertBankAccountBody {
   readonly instructions?: string;
   readonly isActive?: boolean;
   readonly displayOrder?: number;
+  /**
+   * What is in the account right now. Posted as an OPENING_BALANCE entry
+   * alongside the account itself. Create only — a balance is corrected by
+   * reconciling against a statement, never by editing a field.
+   */
+  readonly openingBalance?: string;
 }
 
 export function usePlatformBankAccounts(

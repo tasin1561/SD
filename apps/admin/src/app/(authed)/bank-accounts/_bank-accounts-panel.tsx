@@ -357,6 +357,27 @@ export function BankAccountsPanel(): ReactElement | null {
                 />
               </FormField>
             </div>
+            {/* Create only. An account added without its balance starts
+                at zero and every figure derived from it reads as zero
+                with nothing saying it is merely unentered. On EDIT the
+                field is absent on purpose: a balance is corrected by
+                reconciling against a statement, which files the change
+                as a dated, reasoned entry rather than a silent
+                overwrite. */}
+            {editing === null && (
+              <FormField
+                label={`Balance today (${form.currency})`}
+                hint="What is in the account right now. Recorded as an opening balance against our own money — leave blank for a new, empty account."
+              >
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={form.openingBalance ?? ''}
+                  onChange={(e) => set('openingBalance', e.target.value)}
+                  placeholder="0.00"
+                />
+              </FormField>
+            )}
             <FormField
               label="Transfer instructions"
               hint="Anything the seller must put in the transfer — a reference format, a note field."

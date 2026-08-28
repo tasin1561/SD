@@ -6,6 +6,7 @@ import {
   IsEnum,
   IsInt,
   IsNumber,
+  IsNumberString,
   IsOptional,
   IsString,
   IsUUID,
@@ -147,4 +148,16 @@ export class UpsertPlatformBankAccountDto {
   @IsInt()
   @Min(0)
   displayOrder?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'What is in the account right now, in its own currency. Posted as an OPENING_BALANCE ' +
+      'entry against OUR money in the same transaction as the account itself — an account ' +
+      'created without one starts at zero and every figure derived from it reads as zero. ' +
+      'Ignored on update: a balance is corrected by reconciling against a statement, never ' +
+      'by editing a field, because the ledger is the history of what we believed and when.',
+  })
+  @IsOptional()
+  @IsNumberString()
+  openingBalance?: string;
 }
