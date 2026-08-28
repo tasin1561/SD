@@ -4,6 +4,7 @@ import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.modu
 import { NotificationEventMappingService } from './services/notification-event-mapping.service';
 import { NotificationLedgerService } from './services/notification-ledger.service';
 import { NotificationListener } from './services/notification-listener.service';
+import { AuthCommonModule } from '../auth-common/auth-common.module';
 
 /**
  * Module 11 — Notifications fan-out.
@@ -28,7 +29,13 @@ import { NotificationListener } from './services/notification-listener.service';
  * this module's internals (NOTIF-5 — order module remains unaware).
  */
 @Module({
-  imports: [EmailModule, LifecycleEventsModule],
+  imports: [
+    // The listener audits a fan-out it could not complete — a log
+    // line is not something anyone finds six weeks later.
+    AuthCommonModule,
+    EmailModule,
+    LifecycleEventsModule,
+  ],
   providers: [NotificationEventMappingService, NotificationLedgerService, NotificationListener],
   exports: [],
 })

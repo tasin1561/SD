@@ -4,11 +4,12 @@ import {
   type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from '@nestjs/common';
-import { type OrderStatus, ShipmentStatus } from '@skydrop/db';
+import { ActorType, type OrderStatus, ShipmentStatus } from '@skydrop/db';
 import type { Subscription } from 'rxjs';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { stripSellerPrefix } from '../../../common/text/recipient-name';
 import { EnvService } from '../../../config/env.service';
+import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import {
   OrderLifecycleEventBus,
   type OrderLifecycleEvent,
@@ -85,6 +86,7 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
     private readonly ledger: NotificationLedgerService,
     private readonly prisma: PrismaService,
     private readonly env: EnvService,
+    private readonly audit: AuditLogService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -187,48 +189,105 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
     const triggerEvent = `order_status:${event.from}_to_${event.to}`;
 
     for (const target of targets) {
-      try {
-        const resolved = this.resolveTarget(target, ctx);
-        await this.ledger.enqueue({
-          eventId: eventIdBase,
-          recipientType: target.recipientType,
-          recipientId: resolved.recipientId,
-          channel: target.channel,
-          templateCode: target.templateCode,
-          locale: target.locale,
-          toEmail: resolved.toEmail,
-          variables,
-          orderId: ctx.orderId,
-          // DELIBERATELY null: a notification_logs.shipment_id FK
-          // INSERT acquires a PG `FOR KEY SHARE` row lock on the
-          // parent `shipments` row for the duration of the INSERT.
-          // That conflicts with PickQueueService.pullNext's
-          // `FOR UPDATE OF s SKIP LOCKED` (WMS-2), causing pullNext
-          // to silently skip the just-provisioned shipment on a
-          // CONFIRMED transition fan-out race (characterised at
-          // ~80% flake rate against tracking-flow's
-          // driveToDispatched helper before this fix). The forensic
-          // linkage via notification_logs.order_id is sufficient —
-          // the live shipment is reachable through the order's
-          // relations. Captured in phase-1a-debt (commit 10).
-          shipmentId: null,
-          triggerEvent,
-        });
-      } catch (err) {
-        // NOTIF-3 independence: one target's failure NEVER aborts
-        // the others. Logged with full context for forensics; the
-        // out-of-band reconciler / next event will reconcile (M11
-        // commit-10 phase-1a-debt entry).
+      const resolved = this.resolveTarget(target, ctx);
+      const payload = {
+        eventId: eventIdBase,
+        recipientType: target.recipientType,
+        recipientId: resolved.recipientId,
+        channel: target.channel,
+        templateCode: target.templateCode,
+        locale: target.locale,
+        toEmail: resolved.toEmail,
+        variables,
+        orderId: ctx.orderId,
+        // DELIBERATELY null: a notification_logs.shipment_id FK
+        // INSERT acquires a PG `FOR KEY SHARE` row lock on the
+        // parent `shipments` row for the duration of the INSERT.
+        // That conflicts with PickQueueService.pullNext's
+        // `FOR UPDATE OF s SKIP LOCKED` (WMS-2), causing pullNext
+        // to silently skip the just-provisioned shipment on a
+        // CONFIRMED transition fan-out race (characterised at
+        // ~80% flake rate against tracking-flow's
+        // driveToDispatched helper before this fix). The forensic
+        // linkage via notification_logs.order_id is sufficient —
+        // the live shipment is reachable through the order's
+        // relations. Captured in phase-1a-debt (commit 10).
+        shipmentId: null,
+        triggerEvent,
+      };
+
+      // Attempt, then two retries.
+      //
+      // Bounded deliberately. This runs inside a fire-and-forget
+      // listener the e2e harness drains between tests, so an unbounded
+      // backoff would hold the drain open and turn a transient blip
+      // into a hung suite. Three attempts across roughly a second
+      // covers what is actually recoverable: a dropped connection, a
+      // Redis blink.
+      //
+      // NOT a substitute for the BullMQ retry on the SEND, which
+      // already exists (5 attempts, exponential). The gap closed here
+      // is narrower and was genuinely silent — a target whose ledger
+      // row never got written had nothing anywhere to say it should
+      // have been.
+      let lastError: unknown = null;
+      let sent = false;
+      for (const delayMs of [0, 200, 600]) {
+        if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
+        try {
+          await this.ledger.enqueue(payload);
+          sent = true;
+          break;
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      if (!sent) {
+        // NOTIF-3 independence: one target's failure NEVER aborts the
+        // others.
+        //
+        // RETRIED, briefly, before being given up on. The ledger write
+        // is one INSERT plus a queue add — the failures worth surviving
+        // are a dropped connection or a Redis blink, and both clear in
+        // under a second. What this is NOT is a substitute for the
+        // BullMQ retry on the SEND: that already exists (5 attempts,
+        // exponential). The gap being closed is narrower and was
+        // genuinely silent — a target whose row never got written had
+        // nothing anywhere to say it should have been.
         this.logger.error(
           {
             orderId: event.orderId,
             statusEventId: event.statusEventId,
             recipientType: target.recipientType,
             templateCode: target.templateCode,
-            err: (err as Error).message,
+            err: lastError instanceof Error ? lastError.message : String(lastError),
           },
-          'NotificationListener: per-target enqueue failed; continuing fan-out',
+          'NotificationListener: per-target enqueue failed after retries; continuing fan-out',
         );
+        // A durable record, so a notification that never reached the
+        // ledger is answerable later. A log line is not — nobody greps
+        // for a customer's missing email six weeks on.
+        await this.audit
+          .log({
+            actorType: ActorType.SYSTEM,
+            action: 'notification.fanout_failed',
+            entityType: 'order',
+            entityId: event.orderId,
+            // Somebody was meant to be told something and was not.
+            severity: 'HIGH',
+            metadata: {
+              statusEventId: event.statusEventId,
+              recipientType: target.recipientType,
+              templateCode: target.templateCode,
+              status: event.to,
+              error: lastError instanceof Error ? lastError.message : String(lastError),
+            },
+          })
+          .catch(() => {
+            // The audit is the last line; if IT fails there is nowhere
+            // further down to write, and throwing here would abort the
+            // remaining targets NOTIF-3 exists to protect.
+          });
       }
     }
   }

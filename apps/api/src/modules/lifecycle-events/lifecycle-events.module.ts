@@ -1,28 +1,41 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '../../config/config.module';
+import { RedisModule } from '../../infrastructure/redis/redis.module';
 import { OrderLifecycleEventBus } from './order-lifecycle-event-bus.service';
 
 /**
  * Module 11 — the order lifecycle event PRIMITIVE module.
  *
- * The fourth successful R3 split — dependency-free shared primitive
- * that both publisher (the order module) and subscriber (the
- * notifications module) import without either depending on the other.
+ * The fourth successful R3 split — a shared primitive that both
+ * publisher (the order module) and subscriber (notifications, courier
+ * AWB, delivery actions) import without either depending on the other.
  * Removes the would-be `order ↔ notifications` cycle the same way
- * `call-queue` removed `order ↔ call-center` and `shipment-provision`
- * removed `order ↔ warehouse-pick/pack`.
+ * `call-queue` removed `order ↔ call-center`.
  *
  * Export surface: `OrderLifecycleEventBus` only.
  *
- * No Prisma, no DI on Order, no DI on Notifications. The bus is an
- * in-process rxjs Subject — Phase-1A scale doesn't justify a Redis-
- * backed pub/sub yet, and in-process delivery matches the existing
- * post-commit-hook pattern (CC-6 / pack-eligible / shipment-provision
- * are all in-process service calls). When multi-instance API
- * deployment lands (Phase-2), the bus is the seam to swap for a
- * Redis pub/sub (BullMQ events or rxjs over Redis) — the publisher /
- * subscriber API stays the same.
+ * ── NO LONGER SINGLE-INSTANCE ────────────────────────────────────────
+ * The bus was an in-process rxjs Subject, which meant a second API
+ * instance would emit into its own void: the order would transition and
+ * nothing downstream would ever hear about it. It now carries events
+ * between instances over Redis, and the seam is exactly where this
+ * comment always said it would be — the publisher / subscriber API did
+ * not change.
+ *
+ * What did NOT change is the single-instance path. The instance that
+ * runs listeners still delivers in-process, with no broker involved, so
+ * the common deployment cannot lose an event to Redis being down. Only
+ * an HTTP-only instance publishes, and only the listening instance
+ * subscribes.
+ *
+ * It takes Redis and the worker-role gate as a result. That is a real
+ * cost to a module whose dependency-free-ness was the point of the R3
+ * split — but the alternative is a primitive that quietly stops working
+ * the day somebody adds a second process, which is worse than an honest
+ * dependency.
  */
 @Module({
+  imports: [RedisModule, ConfigModule],
   providers: [OrderLifecycleEventBus],
   exports: [OrderLifecycleEventBus],
 })

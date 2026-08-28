@@ -1,7 +1,18 @@
-import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  type OnApplicationBootstrap,
+  type OnModuleDestroy,
+} from '@nestjs/common';
+import type Redis from 'ioredis';
 import { Subject } from 'rxjs';
 import type { Observable, Subscription } from 'rxjs';
 import { ActorType, type OrderStatus } from '@skydrop/db';
+
+/** Redis channel carrying lifecycle events between API instances. */
+const CHANNEL = 'skydrop:order-lifecycle';
+import { RedisService } from '../../infrastructure/redis/redis.service';
+import { WorkerRoleService } from '../../common/queue/worker-role.service';
 
 /**
  * A single order lifecycle event — a transition that committed.
@@ -79,9 +90,77 @@ export interface OrderLifecycleEvent {
  * Subject) so the emit-wrapping discipline is enforced.
  */
 @Injectable()
-export class OrderLifecycleEventBus implements OnModuleDestroy {
+export class OrderLifecycleEventBus implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(OrderLifecycleEventBus.name);
   private readonly subject = new Subject<OrderLifecycleEvent>();
+  private subscriber: Redis | null = null;
+
+  constructor(
+    private readonly redis: RedisService,
+    private readonly role: WorkerRoleService,
+  ) {}
+
+  /**
+   * Where listeners actually run.
+   *
+   * The same instance that owns the BullMQ queues (SCALE-1) owns the
+   * listeners, for the same reason: firing them on every instance would
+   * fan every event out N times. The dedup gates downstream would mostly
+   * absorb that — NOTIF-2's composite key, CUR-9's AWB gate — but
+   * "mostly" is not a design, and a listener added later would inherit a
+   * hazard nobody wrote down.
+   */
+  private get handlesEvents(): boolean {
+    return this.role.enabled;
+  }
+
+  onApplicationBootstrap(): void {
+    if (!this.handlesEvents) {
+      this.logger.log(
+        'Lifecycle listeners are off here; events go to Redis for the worker instance',
+      );
+      return;
+    }
+    // Only the listening instance opens a subscriber. On a
+    // single-instance deployment nothing is ever published, so this
+    // connection sits idle — the price of a second instance being a
+    // config change rather than a rewrite.
+    const sub = this.redis.createConnection();
+    this.subscriber = sub;
+    void sub.subscribe(CHANNEL).catch((err: unknown) => {
+      this.logger.error(
+        { err: err instanceof Error ? err.message : String(err) },
+        'Could not subscribe to the lifecycle channel — events from OTHER instances will be missed',
+      );
+    });
+    sub.on('message', (_channel: string, raw: string) => {
+      try {
+        const parsed = JSON.parse(raw) as OrderLifecycleEvent & { occurredAt: string };
+        this.deliverLocally({ ...parsed, occurredAt: new Date(parsed.occurredAt) });
+      } catch (err) {
+        this.logger.error(
+          { err: err instanceof Error ? err.message : String(err) },
+          'Unreadable lifecycle event on the channel; dropped',
+        );
+      }
+    });
+  }
+
+  private publish(event: OrderLifecycleEvent): void {
+    // Fire-and-forget, like every other post-commit hook: the
+    // transition is the durable fact and a broker that will not take the
+    // message must never undo it (NOTIF-1).
+    void this.redis.client.publish(CHANNEL, JSON.stringify(event)).catch((err: unknown) => {
+      this.logger.error(
+        {
+          orderId: event.orderId,
+          to: event.to,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        'Could not publish a lifecycle event; its listeners will not run',
+      );
+    });
+  }
 
   /**
    * Fire a lifecycle event to all subscribers. Best-effort by
@@ -92,6 +171,19 @@ export class OrderLifecycleEventBus implements OnModuleDestroy {
    * — though we still add one there for defence in depth.
    */
   emit(event: OrderLifecycleEvent): void {
+    // On the instance that runs listeners this is a direct in-process
+    // hand-off, with no Redis on the path — so the common
+    // single-instance deployment cannot lose an event to a broker being
+    // down. An HTTP-only instance has no listeners to call and puts it
+    // on the channel instead.
+    if (!this.handlesEvents) {
+      this.publish(event);
+      return;
+    }
+    this.deliverLocally(event);
+  }
+
+  private deliverLocally(event: OrderLifecycleEvent): void {
     try {
       this.subject.next(event);
     } catch (err) {
@@ -149,7 +241,20 @@ export class OrderLifecycleEventBus implements OnModuleDestroy {
     return this.subject.asObservable();
   }
 
-  onModuleDestroy(): void {
+  async onModuleDestroy(): Promise<void> {
+    // The subscriber first: a message arriving after the Subject has
+    // completed would be delivered to nobody and logged as an error the
+    // next reader would waste time on.
+    if (this.subscriber !== null) {
+      const sub = this.subscriber;
+      this.subscriber = null;
+      try {
+        await sub.quit();
+      } catch {
+        // Already gone. Nothing to do and nothing worth saying.
+        sub.disconnect();
+      }
+    }
     // Complete the Subject so any active subscriptions teardown
     // cleanly when Nest tears down the app (important for the e2e
     // harness which repeatedly inits + closes apps in the same

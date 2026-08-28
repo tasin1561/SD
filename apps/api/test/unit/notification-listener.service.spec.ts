@@ -96,11 +96,17 @@ function makeSut(fixture: OrderFixture | null) {
 
   const env = makeTestEnv();
 
+  // The listener audits a fan-out it could not complete. Its own tests
+  // pin that; here it only needs to exist.
+  const auditLog = jest.fn(async () => 'a1');
+  const audit = { log: auditLog } as never;
+
   return {
-    listener: new NotificationListener(bus, REAL_MAPPING, ledger, prisma, env),
+    listener: new NotificationListener(bus, REAL_MAPPING, ledger, prisma, env, audit),
     enqueueCalls,
     ledger,
     env,
+    auditLog,
   };
 }
 
@@ -228,20 +234,50 @@ describe('NotificationListener', () => {
   });
 
   describe('NOTIF-3 independence — one target failure does not abort the loop', () => {
-    it('seller throw does not block customer enqueue', async () => {
+    it('a transient throw is RETRIED, and the target recovers', async () => {
       const { listener, enqueueCalls, ledger } = makeSut(ORDER_BASE);
-      // Make seller enqueue throw; customer enqueue should still happen.
+      // Fails once, then works — a dropped connection, a Redis blink.
+      // Before the retry landed this target was simply lost: the send
+      // has BullMQ behind it, but a ledger row that was never written
+      // had nothing anywhere to say it should have been.
       (ledger.enqueue as jest.Mock).mockImplementationOnce(async () => {
         throw new Error('seller-side kaboom');
       });
 
       await listener.handle(lifecycleEvent(OrderStatus.DISPATCHED, 'evt-isol-1'));
 
-      // 1 thrown + 1 successful → 2 invocations total; the loop never
-      // aborted (NOTIF-3 independence).
-      expect((ledger.enqueue as jest.Mock).mock.calls).toHaveLength(2);
-      expect(enqueueCalls).toHaveLength(1); // only the customer call landed in store
-      expect(enqueueCalls[0]?.recipientType).toBe(NotificationRecipientType.CUSTOMER);
+      // seller (throws) → seller (retry, succeeds) → customer.
+      expect((ledger.enqueue as jest.Mock).mock.calls).toHaveLength(3);
+      expect(enqueueCalls).toHaveLength(2);
+      expect(enqueueCalls.map((c) => c.recipientType).sort()).toEqual([
+        NotificationRecipientType.CUSTOMER,
+        NotificationRecipientType.SELLER,
+      ]);
+    });
+
+    it('a target that keeps failing is given up on, audited, and the others still go', async () => {
+      const sut = makeSut(ORDER_BASE);
+      let sellerAttempts = 0;
+      (sut.ledger.enqueue as jest.Mock).mockImplementation(
+        async (input: { recipientType: string }) => {
+          if (input.recipientType === NotificationRecipientType.SELLER) {
+            sellerAttempts += 1;
+            throw new Error('seller-side kaboom');
+          }
+          return { kind: 'ENQUEUED' };
+        },
+      );
+
+      await sut.listener.handle(lifecycleEvent(OrderStatus.DISPATCHED, 'evt-isol-2'));
+
+      // Bounded: three attempts, not an unbounded backoff that would
+      // hold the harness drain open.
+      expect(sellerAttempts).toBe(3);
+      // A durable record — nobody greps a log for a missing email six
+      // weeks later.
+      expect(sut.auditLog).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'notification.fanout_failed', severity: 'HIGH' }),
+      );
     });
   });
 
