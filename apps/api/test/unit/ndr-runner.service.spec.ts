@@ -12,7 +12,12 @@ type Ctx = {
   enabled?: boolean;
   liveWrites?: boolean;
   autoActions?: string[];
-  candidates?: { id: string; awbNumber: string | null }[];
+  candidates?: {
+    id: string;
+    awbNumber: string | null;
+    courierCode?: string;
+    courierAccountId?: string | null;
+  }[];
   scans?: { nslCode?: string | null }[];
   attemptCount?: number;
   eligible?: boolean;
@@ -30,9 +35,16 @@ function make(ctx: Ctx = {}) {
   const prisma = {
     client: {
       shipment: {
-        findMany: jest
-          .fn()
-          .mockResolvedValue(ctx.candidates ?? [{ id: 'ship-1', awbNumber: 'AWB1' }]),
+        findMany: jest.fn().mockResolvedValue(
+          ctx.candidates ?? [
+            {
+              id: 'ship-1',
+              awbNumber: 'AWB1',
+              courierCode: 'delhivery',
+              courierAccountId: 'dl-1',
+            },
+          ],
+        ),
       },
       ndrActionRequest: {
         create: jest.fn().mockImplementation((args: { data: unknown }) => {
@@ -43,6 +55,8 @@ function make(ctx: Ctx = {}) {
       },
     },
   };
+
+  const listNdr = jest.fn().mockResolvedValue([]);
 
   const svc = new NdrRunnerService(
     prisma as never,
@@ -69,11 +83,16 @@ function make(ctx: Ctx = {}) {
         ),
       takeAction,
     } as never,
+    // The Shiprocket NDR list. Every fixture here is Delhivery, so it
+    // asserts by never being consulted.
+    { listNdr: listNdr } as never,
+    // The guard is per courier now; these fixtures answer the same for
+    // whichever code it is asked about.
     { liveWritesEnabled: jest.fn().mockResolvedValue(ctx.liveWrites ?? true) } as never,
     { log: jest.fn().mockResolvedValue(undefined) } as never,
   );
 
-  return { svc, takeAction, fetchTracking, created };
+  return { svc, takeAction, fetchTracking, created, listNdr };
 }
 
 describe('NdrRunnerService — the gates', () => {
@@ -196,5 +215,79 @@ describe('NdrRunnerService — the fresh-NSL rule', () => {
     await svc.run();
     expect(created.length).toBe(1);
     expect(order).toEqual(['call']);
+  });
+});
+
+/**
+ * The runner sweeps every parcel in DELIVERY_ATTEMPTED, whoever carries
+ * it. Before this it read the fresh NSL from Delhivery for all of them,
+ * so a Shiprocket parcel came back with no scans and was skipped as
+ * TRACKING_READ_FAILED — silently, every night, forever. A gap that
+ * shows up only as re-attempts nobody ever asked for.
+ */
+describe('NdrRunnerService — Shiprocket parcels are swept too', () => {
+  const SR = {
+    id: 'ship-sr',
+    awbNumber: 'SR1',
+    courierCode: 'shiprocket',
+    courierAccountId: 'sr-1',
+  };
+
+  it('reads their NDR list instead of asking Delhivery for a Shiprocket AWB', async () => {
+    const { svc, takeAction, fetchTracking, listNdr } = make({ candidates: [SR] });
+    listNdr.mockResolvedValue([
+      { awbNumber: 'SR1', attemptCount: 1, reason: 'customer unavailable' },
+    ]);
+
+    await svc.run();
+
+    // Delhivery has never heard of this waybill; asking would return
+    // nothing and read as "no scans yet".
+    expect(fetchTracking).not.toHaveBeenCalled();
+    expect(listNdr).toHaveBeenCalledWith('sr-1');
+    expect(takeAction).toHaveBeenCalledTimes(1);
+    expect((takeAction.mock.calls[0]?.[0] as { courierCode: string }).courierCode).toBe(
+      'shiprocket',
+    );
+  });
+
+  it('skips a parcel Shiprocket no longer considers failed', async () => {
+    const { svc, takeAction, listNdr } = make({ candidates: [SR] });
+    // Absent from their list means it moved on. Re-attempting would
+    // send a van for something already resolved.
+    listNdr.mockResolvedValue([]);
+
+    const out = await svc.run();
+
+    expect(takeAction).not.toHaveBeenCalled();
+    expect(out.skipped).toBe(1);
+  });
+
+  it('fetches their list ONCE per account, not once per parcel', async () => {
+    const { svc, listNdr } = make({
+      candidates: [SR, { ...SR, id: 'ship-sr2', awbNumber: 'SR2' }],
+    });
+    listNdr.mockResolvedValue([
+      { awbNumber: 'SR1', attemptCount: 1, reason: null },
+      { awbNumber: 'SR2', attemptCount: 1, reason: null },
+    ]);
+
+    await svc.run();
+
+    // One call answers for every parcel on the account; per-parcel would
+    // turn a sweep of two hundred into two hundred requests.
+    expect(listNdr).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips a Shiprocket parcel with no account rather than guessing one', async () => {
+    const { svc, takeAction, listNdr } = make({
+      candidates: [{ ...SR, courierAccountId: null }],
+    });
+
+    const out = await svc.run();
+
+    expect(listNdr).not.toHaveBeenCalled();
+    expect(takeAction).not.toHaveBeenCalled();
+    expect(out.skipped).toBe(1);
   });
 });

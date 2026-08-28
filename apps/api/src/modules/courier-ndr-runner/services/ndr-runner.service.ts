@@ -4,13 +4,27 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { courierActor } from '../../courier-shared/services/courier-credential.service';
 import { NdrAttemptContextService } from '../../courier-shared/services/ndr-attempt-context.service';
-import {
-  DelhiveryNdrService,
-  type NdrAction,
-} from '../../courier-delhivery/services/delhivery-ndr.service';
+import { type NdrAction } from '../../courier-delhivery/services/delhivery-ndr.service';
+import { CourierNdrDispatchService } from '../../courier-ops/services/courier-ndr-dispatch.service';
+import { ShiprocketNdrService } from '../../courier-shiprocket/services/shiprocket-ndr.service';
 import { DelhiveryTrackingFetchService } from '../../courier-delhivery/services/delhivery-tracking-fetch.service';
-import { DelhiveryWriteGuardService } from '../../courier-delhivery/services/delhivery-write-guard.service';
+import { CourierWriteGuardService } from '../../courier-shared/services/courier-write-guard.service';
 import { NdrSettingsService } from './ndr-settings.service';
+
+interface NdrCandidate {
+  readonly shipmentId: string;
+  readonly awbNumber: string;
+  readonly courierCode: string;
+  readonly courierAccountId: string | null;
+}
+
+/**
+ * What the field executive is told. Shiprocket refuses an action with an
+ * empty comment; Delhivery has no field for it. Saying it is automated
+ * is the honest version — a driver reading "customer asked for a retry"
+ * on a parcel nobody phoned about would be misled.
+ */
+const RUNNER_COMMENT = 'Automatic re-attempt scheduled by Skydrop operations';
 
 const JOB = 'ndr-nightly-runner';
 
@@ -88,13 +102,18 @@ export interface NdrPlanEntry {
 export class NdrRunnerService {
   private readonly logger = new Logger(NdrRunnerService.name);
 
+  /** Their NDR list per account, for the life of ONE run — cleared at
+   *  the top of `run()`, because this service is a singleton. */
+  private readonly ndrListCache = new Map<string, Map<string, { attemptCount: number }>>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly settings: NdrSettingsService,
     private readonly attempts: NdrAttemptContextService,
     private readonly tracking: DelhiveryTrackingFetchService,
-    private readonly ndr: DelhiveryNdrService,
-    private readonly writeGuard: DelhiveryWriteGuardService,
+    private readonly ndr: CourierNdrDispatchService,
+    private readonly shiprocketNdr: ShiprocketNdrService,
+    private readonly writeGuard: CourierWriteGuardService,
     private readonly audit: AuditLogService,
   ) {}
 
@@ -142,13 +161,25 @@ export class NdrRunnerService {
     // The reads it performs are free and side-effect-free (tracking is
     // 750 calls per 5 minutes and creates nothing). The kill switch
     // above still stops everything, including this.
-    const dryRun = !(await this.writeGuard.liveWritesEnabled());
-    if (dryRun) {
-      this.logger.log(
-        'NDR runner: live writes are disabled — DRY RUN (planning only, nothing will be submitted)',
-      );
-    }
+    // PER COURIER, because live writes are per courier: enabling
+    // Delhivery for its first controlled parcel must not silently start
+    // submitting to Shiprocket as well. A run can legitimately be live
+    // for one and a dry run for the other.
+    const liveByCourier = new Map<string, boolean>();
+    const isDryRun = async (courierCode: string): Promise<boolean> => {
+      const cached = liveByCourier.get(courierCode);
+      if (cached !== undefined) return !cached;
+      const live = await this.writeGuard.liveWritesEnabled(courierCode);
+      liveByCourier.set(courierCode, live);
+      return !live;
+    };
 
+    // Cleared per RUN, not per process: this service is a singleton and
+    // the nightly sweep would otherwise decide tonight's re-attempts
+    // from last night's list of failed parcels.
+    this.ndrListCache.clear();
+
+    let anyDryRun = false;
     const autoActions = await this.settings.autoActions();
     const cap = await this.settings.batchMax();
     const candidates = await this.candidates(cap);
@@ -161,7 +192,7 @@ export class NdrRunnerService {
 
     for (const c of candidates) {
       // FRESH NSL — re-read from the courier, not from our rows.
-      const fresh = await this.freshContext(c.shipmentId, c.awbNumber);
+      const fresh = await this.freshContext(c);
       if (fresh === null) {
         skipped += 1;
         bump('TRACKING_READ_FAILED');
@@ -179,10 +210,13 @@ export class NdrRunnerService {
 
       const action: NdrAction = 'RE-ATTEMPT';
       const verdict = this.ndr.checkEligibility({
+        courierCode: c.courierCode,
+        courierAccountId: c.courierAccountId,
         awbNumber: c.awbNumber,
         action,
         currentNslCode: fresh.nslCode,
         attemptCount: fresh.attemptCount,
+        comment: RUNNER_COMMENT,
       });
       if (!verdict.eligible) {
         skipped += 1;
@@ -201,7 +235,9 @@ export class NdrRunnerService {
 
       // DRY RUN stops here — everything above already happened, so the
       // entry carries the real NSL and the real verdict.
-      if (dryRun) {
+      const dryRunForThis = await isDryRun(c.courierCode);
+      if (dryRunForThis) {
+        anyDryRun = true;
         plan.push({
           shipmentId: c.shipmentId,
           awbNumber: c.awbNumber,
@@ -262,10 +298,13 @@ export class NdrRunnerService {
 
         const result = await this.ndr.takeAction(
           {
+            courierCode: c.courierCode,
+            courierAccountId: c.courierAccountId,
             awbNumber: c.awbNumber,
             action,
             currentNslCode: fresh.nslCode,
             attemptCount: fresh.attemptCount,
+            comment: RUNNER_COMMENT,
           },
           courierActor.runner(JOB, row.id),
         );
@@ -324,7 +363,10 @@ export class NdrRunnerService {
       failed,
       heldForOperator: held,
       reasons,
-      dryRun,
+      // TRUE when any courier in this sweep was in dry run. A summary
+      // claiming the run was live while half of it only planned would
+      // be read as "those parcels were submitted".
+      dryRun: anyDryRun,
       plan,
     };
 
@@ -335,7 +377,7 @@ export class NdrRunnerService {
     for (const e of plan) {
       this.logger.log(
         {
-          dryRun,
+          dryRun: anyDryRun,
           awbNumber: e.awbNumber,
           shipmentId: e.shipmentId,
           nslCode: e.nslCode,
@@ -350,12 +392,15 @@ export class NdrRunnerService {
     }
     await this.audit.log({
       actorType: ActorType.SYSTEM,
-      action: dryRun ? 'courier.ndr.batch_dry_run' : 'courier.ndr.batch_completed',
+      action: anyDryRun ? 'courier.ndr.batch_dry_run' : 'courier.ndr.batch_completed',
       entityType: 'courier',
       entityId: null,
       severity: submitted > 0 ? 'HIGH' : 'LOW',
       metadata: {
-        courierCode: 'delhivery',
+        // The couriers this sweep actually touched, not a hardcoded one.
+        // A run that submitted to both should say so, and a run that
+        // touched only one is worth being able to notice.
+        couriers: [...new Set(candidates.map((x) => x.courierCode))],
         ...summary,
         reasons: summary.reasons as Prisma.InputJsonValue,
         plan: plan as unknown as Prisma.InputJsonValue,
@@ -372,7 +417,7 @@ export class NdrRunnerService {
    * against the freshly-read NSL below. This query exists to keep the
    * number of tracking reads proportional to the problem.
    */
-  private async candidates(cap: number): Promise<{ shipmentId: string; awbNumber: string }[]> {
+  private async candidates(cap: number): Promise<NdrCandidate[]> {
     const rows = await this.prisma.client.shipment.findMany({
       where: {
         status: ShipmentStatus.DELIVERY_ATTEMPTED,
@@ -381,12 +426,26 @@ export class NdrRunnerService {
         deletedAt: null,
         ndrActionRequests: { none: { status: NdrRequestStatus.SUBMITTED } },
       },
-      select: { id: true, awbNumber: true },
+      select: {
+        id: true,
+        awbNumber: true,
+        courierCode: true,
+        courierAccountId: true,
+      },
       orderBy: { updatedAt: 'asc' },
       take: cap,
     });
     return rows.flatMap((r) =>
-      r.awbNumber === null ? [] : [{ shipmentId: r.id, awbNumber: r.awbNumber }],
+      r.awbNumber === null
+        ? []
+        : [
+            {
+              shipmentId: r.id,
+              awbNumber: r.awbNumber,
+              courierCode: r.courierCode,
+              courierAccountId: r.courierAccountId,
+            },
+          ],
     );
   }
 
@@ -398,10 +457,56 @@ export class NdrRunnerService {
    * the stale-NSL submission this rule exists to prevent, and it would
    * be invisible because the submission looks identical.
    */
+  /**
+   * Their NDR list, fetched ONCE per account per run.
+   *
+   * One call answers for every parcel on that account, so asking per
+   * parcel would turn a sweep of two hundred into two hundred requests
+   * against a rate-limited API to learn the same thing.
+   */
+  private async shiprocketNdrList(
+    courierAccountId: string,
+  ): Promise<Map<string, { attemptCount: number }>> {
+    const cached = this.ndrListCache.get(courierAccountId);
+    if (cached !== undefined) return cached;
+    const rows = await this.shiprocketNdr.listNdr(courierAccountId);
+    const map = new Map<string, { attemptCount: number }>();
+    for (const r of rows) map.set(r.awbNumber, { attemptCount: r.attemptCount });
+    this.ndrListCache.set(courierAccountId, map);
+    return map;
+  }
+
   private async freshContext(
-    shipmentId: string,
-    awbNumber: string,
+    c: NdrCandidate,
   ): Promise<{ nslCode: string | null; attemptCount: number } | null> {
+    const { shipmentId, awbNumber } = c;
+
+    // ── SHIPROCKET HAS NO NSL ─────────────────────────────────────────
+    // Delhivery carries the failure reason in a code under the status,
+    // and eligibility turns on it. Shiprocket publishes no such table;
+    // what it offers instead is the authoritative list of parcels IT
+    // considers to be in NDR, with their attempt counts. So the fresh
+    // read is that list — which is the same property the Delhivery path
+    // is buying: a courier-side answer rather than our cached row.
+    if (c.courierCode === 'shiprocket') {
+      if (c.courierAccountId === null) return null;
+      try {
+        const rows = await this.shiprocketNdrList(c.courierAccountId);
+        const hit = rows.get(awbNumber);
+        // Absent from their NDR list means they no longer consider it
+        // failed — the parcel moved on, and re-attempting it would send
+        // a van for something already resolved.
+        if (hit === undefined) return null;
+        return { nslCode: null, attemptCount: hit.attemptCount };
+      } catch (err) {
+        this.logger.warn(
+          { shipmentId, awbNumber, err: err instanceof Error ? err.message : String(err) },
+          'Shiprocket NDR list read failed; skipping this parcel',
+        );
+        return null;
+      }
+    }
+
     try {
       const [result] = await this.tracking.fetchTracking(
         [awbNumber],

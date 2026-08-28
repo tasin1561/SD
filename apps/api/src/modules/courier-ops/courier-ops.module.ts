@@ -26,8 +26,10 @@ import { ShipmentCourierContextService } from './services/shipment-courier-conte
  * alone, and it is why eleven capability services could be built and
  * verified before anything consumed them.
  *
- * A LEAF module: nothing imports it, it exports nothing. Same shape as
- * `courier-dispatch` and `courier-manual-placement`.
+ * Nearly a LEAF module: its controllers are the only callers of most of
+ * it, and the ONE thing it exports is the NDR dispatcher, which the
+ * nightly runner shares so a batch re-attempt and an operator's click
+ * reach the courier by the same path.
  *
  * Three controllers because there are three grains: per-SHIPMENT
  * actions; per-WAREHOUSE-per-DAY pickups (a van, not a parcel, with its
@@ -53,6 +55,10 @@ import { ShipmentCourierContextService } from './services/shipment-courier-conte
   // here — re-implementing it there would give two modules a way to
   // dispatch a van. Direction stays one-way: delivery-action imports
   // this, never the reverse.
-  exports: [CourierShipmentActionService],
+  // The NDR dispatcher is exported because the nightly runner needs the
+  // SAME routing an operator's click goes through — a batch that reached
+  // couriers differently from a manual re-attempt would be two
+  // behaviours wearing one name.
+  exports: [CourierShipmentActionService, CourierNdrDispatchService],
 })
 export class CourierOpsModule {}

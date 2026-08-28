@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { CourierShiprocketModule } from '../courier-shiprocket/courier-shiprocket.module';
+import { CourierOpsModule } from '../courier-ops/courier-ops.module';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { CourierDelhiveryModule } from '../courier-delhivery/courier-delhivery.module';
 import { CourierEscalationModule } from '../courier-escalation/courier-escalation.module';
@@ -43,6 +45,8 @@ import { NdrUplPollerService } from './services/ndr-upl-poller.service';
  */
 @Module({
   imports: [
+    CourierShiprocketModule,
+    CourierOpsModule,
     CourierSharedModule, // NdrAttemptContextService — the single attempt-count seam
     CourierDelhiveryModule, // the adapter: NDR, tracking fetch, write guard
     TicketModule, // the escalation path for a failed request
