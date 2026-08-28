@@ -11,6 +11,9 @@ export interface ShipmentCourierContext {
   /** Which of that courier's accounts carries it — Shiprocket's calls
    *  are per-account, so a null here means we cannot address them. */
   readonly courierAccountId: string | null;
+  /** Shiprocket's own parcel id — their label, pickup, cancel and POD
+   *  endpoints key on it rather than on the AWB. Null for Delhivery. */
+  readonly courierShipmentId: string | null;
   readonly isManualCourier: boolean;
   readonly status: string;
   readonly originPin: string | null;
@@ -62,6 +65,7 @@ export class ShipmentCourierContextService {
         awbNumber: true,
         courierCode: true,
         courierAccountId: true,
+        courierShipmentId: true,
         isManualCourier: true,
         status: true,
         destPostalCode: true,
@@ -92,6 +96,7 @@ export class ShipmentCourierContextService {
       awbNumber: shipment.awbNumber,
       courierCode: shipment.courierCode,
       courierAccountId: shipment.courierAccountId,
+      courierShipmentId: shipment.courierShipmentId,
       isManualCourier: shipment.isManualCourier,
       status: shipment.status,
       originPin,

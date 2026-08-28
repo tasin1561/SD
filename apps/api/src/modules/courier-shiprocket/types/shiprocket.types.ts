@@ -142,6 +142,11 @@ export interface ShiprocketServiceabilityResponse {
       readonly courier_name: string;
       readonly rate?: number;
       readonly etd?: string;
+      /** Working days, when they give it as a number rather than a date. */
+      readonly estimated_delivery_days?: string | number;
+      readonly freight_charge?: number;
+      readonly cod_charges?: number;
+      readonly other_charges?: number;
       readonly blocked?: number;
     }>;
   };

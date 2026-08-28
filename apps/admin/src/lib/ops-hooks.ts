@@ -1252,11 +1252,14 @@ export interface ShipmentInsight {
   } | null;
   readonly cost: {
     readonly totalInr: string;
-    readonly deliveryInr: string;
-    readonly codFeeInr: string;
-    readonly taxInr: string;
+    // NULLABLE because Shiprocket quotes one number where Delhivery
+    // itemises. Zero would render as a measured "COD fee ₹0.00" on a
+    // COD parcel that certainly has one.
+    readonly deliveryInr: string | null;
+    readonly codFeeInr: string | null;
+    readonly taxInr: string | null;
     readonly zone: string | null;
-    readonly chargedWeightGrams: number;
+    readonly chargedWeightGrams: number | null;
     readonly volumetricDivisor: number | null;
     readonly fromLiveApi: boolean;
     readonly components: Readonly<Record<string, string>>;

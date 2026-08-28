@@ -44,6 +44,28 @@ const NON_SERVICEABLE_HINTS = [
  * same convention the Delhivery stub uses so the two behave alike under
  * test: `999999` fails transiently, `000000` is non-serviceable.
  */
+/**
+ * Their ETD is sometimes working days as a number and sometimes a
+ * delivery DATE as a string, in the same field. Both are turned into
+ * days-from-now, and anything unrecognised becomes null rather than a
+ * guess — a wrong promised date reaches the customer.
+ */
+function parseEtdDays(c: {
+  readonly etd?: string;
+  readonly estimated_delivery_days?: string | number;
+}): number | null {
+  const days = c.estimated_delivery_days;
+  if (typeof days === 'number' && Number.isFinite(days)) return Math.max(0, Math.round(days));
+  if (typeof days === 'string' && /^\d+$/.test(days.trim())) return Number(days.trim());
+
+  const etd = c.etd?.trim() ?? '';
+  if (etd === '') return null;
+  const parsed = Date.parse(etd);
+  if (Number.isNaN(parsed)) return null;
+  const diffDays = Math.ceil((parsed - Date.now()) / 86_400_000);
+  return diffDays < 0 ? null : diffDays;
+}
+
 @Injectable()
 export class ShiprocketClientService {
   private readonly logger = new Logger(ShiprocketClientService.name);
@@ -276,6 +298,71 @@ export class ShiprocketClientService {
     return { kind: 'NORMALIZED', shipmentStatus: mapped };
   }
 
+  /**
+   * What this lane would cost and how long it would take.
+   *
+   * ONE call, because that is how they package it: their serviceability
+   * response carries the rate and the ETD per courier company. Delhivery
+   * splits the same two facts across a TAT endpoint and a cost endpoint,
+   * which is why the layer above keeps them as separate fields — the
+   * split is Delhivery's shape, not a property of the question.
+   *
+   * The CHEAPEST unblocked option is the answer. Shiprocket aggregates
+   * many carriers and picks at assignment time; quoting the first in an
+   * unordered list would report a number we would not have paid.
+   */
+  async estimateLane(
+    input: {
+      readonly pickupPincode: string;
+      readonly deliveryPincode: string;
+      readonly weightGrams: number;
+      readonly isCod: boolean;
+    },
+    courierAccountId: string,
+  ): Promise<{
+    readonly etdDays: number | null;
+    readonly totalInr: number | null;
+    readonly carrierName: string | null;
+    readonly fromLiveApi: boolean;
+  }> {
+    if (await this.http.isStubMode()) {
+      return { etdDays: null, totalInr: null, carrierName: null, fromLiveApi: false };
+    }
+    const res = await this.http.request<ShiprocketServiceabilityResponse>({
+      method: 'GET',
+      path: '/v1/external/courier/serviceability/',
+      query: {
+        pickup_postcode: input.pickupPincode,
+        delivery_postcode: input.deliveryPincode,
+        // Kilograms, not grams — their unit, and getting it wrong by a
+        // factor of a thousand returns a plausible-looking wrong price.
+        weight: input.weightGrams / 1000,
+        cod: input.isCod ? 1 : 0,
+      },
+      actor: this.actor(),
+      courierAccountId,
+    });
+
+    const options = (res.data?.available_courier_companies ?? []).filter((c) => c.blocked !== 1);
+    if (options.length === 0) {
+      return { etdDays: null, totalInr: null, carrierName: null, fromLiveApi: true };
+    }
+    const rate = (c: (typeof options)[number]): number =>
+      c.rate ?? (c.freight_charge ?? 0) + (c.cod_charges ?? 0) + (c.other_charges ?? 0);
+    let best = options[0];
+    if (best === undefined) {
+      return { etdDays: null, totalInr: null, carrierName: null, fromLiveApi: true };
+    }
+    for (const c of options) if (rate(c) < rate(best)) best = c;
+
+    return {
+      etdDays: parseEtdDays(best),
+      totalInr: rate(best) > 0 ? rate(best) : null,
+      carrierName: best.courier_name,
+      fromLiveApi: true,
+    };
+  }
+
   async fetchTracking(
     awbNumbers: readonly string[],
     courierAccountId: string,
@@ -318,6 +405,41 @@ export class ShiprocketClientService {
       }
     }
     return out;
+  }
+
+  /**
+   * Proof of delivery.
+   *
+   * Shiprocket exposes ONE document — the POD — where Delhivery has
+   * four. The layer above maps its EPOD request onto this and refuses
+   * the other three rather than returning the POD for all of them: a
+   * signature image and a reverse-pickup QC photo are different
+   * evidence, and handing back the wrong one labelled as the right one
+   * is worse than saying we do not have it.
+   *
+   * A null url is the normal answer before delivery, not an error.
+   */
+  async fetchPod(
+    courierShipmentId: string,
+    courierAccountId: string,
+  ): Promise<{ url: string | null; message: string | null }> {
+    if (await this.http.isStubMode()) {
+      return { url: `https://stub.local/shiprocket/pod/${courierShipmentId}.pdf`, message: 'stub' };
+    }
+    const res = await this.http.request<{
+      data?: { pod?: string | null; pod_url?: string | null };
+      message?: string;
+    }>({
+      method: 'GET',
+      path: `/v1/external/shipments/${encodeURIComponent(courierShipmentId)}`,
+      actor: this.actor(),
+      courierAccountId,
+    });
+    const url = res.data?.pod_url ?? res.data?.pod ?? null;
+    return {
+      url: typeof url === 'string' && url.trim() !== '' ? url : null,
+      message: res.message ?? null,
+    };
   }
 
   async cancelShipment(

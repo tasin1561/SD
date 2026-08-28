@@ -1,3 +1,4 @@
+import { ShiprocketClientService } from '../../courier-shiprocket/services/shiprocket-client.service';
 import { Injectable, BadRequestException } from '@nestjs/common';
 import {
   DelhiveryTatService,
@@ -23,14 +24,21 @@ export interface ShipmentInsight {
     readonly fromLiveApi: boolean;
     readonly message: string | null;
   } | null;
-  /** What Delhivery actually bills us for this parcel. */
+  /**
+   * What the courier actually bills us for this parcel.
+   *
+   * The breakdown fields are NULLABLE because Shiprocket quotes one
+   * number and Delhivery itemises. Reporting an absent leg as zero
+   * would read as measured and be invented, and the panel would say
+   * "COD fee ₹0.00" on a COD parcel that certainly has one.
+   */
   readonly cost: {
     readonly totalInr: string;
-    readonly deliveryInr: string;
-    readonly codFeeInr: string;
-    readonly taxInr: string;
+    readonly deliveryInr: string | null;
+    readonly codFeeInr: string | null;
+    readonly taxInr: string | null;
     readonly zone: string | null;
-    readonly chargedWeightGrams: number;
+    readonly chargedWeightGrams: number | null;
     readonly volumetricDivisor: number | null;
     readonly fromLiveApi: boolean;
     readonly components: Readonly<Record<string, string>>;
@@ -62,6 +70,7 @@ export class CourierShipmentInsightService {
     private readonly tat: DelhiveryTatService,
     private readonly cost: DelhiveryCostService,
     private readonly documents: DelhiveryDocumentService,
+    private readonly shiprocket: ShiprocketClientService,
   ) {}
 
   async insight(
@@ -80,12 +89,81 @@ export class CourierShipmentInsightService {
     }
     if (shipment.isManualCourier) {
       unavailable.push(
-        'This parcel was placed manually with a non-integrated courier, so Delhivery has nothing to say about its time or cost.',
+        'This parcel was placed manually with a non-integrated courier, so there is nobody to ask about its time or cost.',
       );
       return { shipment, tat: null, cost: null, unavailable };
     }
 
     const originPin = shipment.originPin;
+
+    // ── SHIPROCKET ANSWERS BOTH IN ONE CALL ───────────────────────────
+    // Their serviceability response carries the rate AND the ETD per
+    // carrier, so the two questions Delhivery splits across two
+    // endpoints are one request here. The FIELDS stay separate because
+    // that split is Delhivery's shape rather than a property of the
+    // question, and collapsing them would make the panel mean different
+    // things depending on who carries the parcel.
+    if (shipment.courierCode === 'shiprocket') {
+      if (shipment.courierAccountId === null) {
+        unavailable.push(
+          'No Shiprocket account is recorded on this parcel, so it cannot be priced or timed.',
+        );
+        return { shipment, tat: null, cost: null, unavailable };
+      }
+      try {
+        const lane = await this.shiprocket.estimateLane(
+          {
+            pickupPincode: originPin,
+            deliveryPincode: shipment.destinationPin,
+            weightGrams: shipment.chargeableWeightGrams,
+            isCod: shipment.isCod,
+          },
+          shipment.courierAccountId,
+        );
+        return {
+          shipment,
+          tat:
+            lane.etdDays === null
+              ? null
+              : {
+                  tatDays: lane.etdDays,
+                  // Their aggregation hides the transport mode; naming
+                  // the carrier they would actually use is the honest
+                  // equivalent and is more useful besides.
+                  mode: (lane.carrierName ?? 'Shiprocket') as DelhiveryTransportMode,
+                  fromLiveApi: lane.fromLiveApi,
+                  message: null,
+                },
+          cost:
+            lane.totalInr === null
+              ? null
+              : {
+                  // Money is carried as a string everywhere else, and
+                  // a number here would round differently on the way to
+                  // the page than every other figure on it.
+                  totalInr: lane.totalInr.toFixed(2),
+                  // They quote ONE number. Reporting a breakdown we do
+                  // not have — a zero delivery leg, a zero COD fee —
+                  // would read as measured and be invented.
+                  deliveryInr: null,
+                  codFeeInr: null,
+                  taxInr: null,
+                  zone: null,
+                  chargedWeightGrams: null,
+                  volumetricDivisor: null,
+                  fromLiveApi: lane.fromLiveApi,
+                  // Empty rather than fabricated: they quote a total,
+                  // and naming the carrier is the only component we
+                  // genuinely learned.
+                  components: lane.carrierName === null ? {} : { carrier: lane.carrierName },
+                },
+          unavailable,
+        };
+      } catch (err) {
+        unavailable.push(`Expected delivery time and courier cost: ${describe(err)}`);
+        return { shipment, tat: null, cost: null, unavailable };
+      }
+    }
 
     // Independent, and slow enough over the wire that serialising them
     // would be felt on a page load.
@@ -176,6 +254,45 @@ export class CourierShipmentInsightService {
         message: 'This shipment has no AWB yet, so the courier holds no paperwork for it.',
       });
     }
+    if (shipment.courierCode === 'shiprocket') {
+      // They expose ONE document where Delhivery has four. Returning
+      // the POD for a signature or an RVP QC request would hand back
+      // the wrong evidence labelled as the right one, which is worse in
+      // a dispute than saying we do not have it.
+      if (docType !== 'EPOD') {
+        return {
+          shipmentId: shipment.shipmentId,
+          awbNumber: shipment.awbNumber,
+          docType,
+          url: null,
+          message: `Shiprocket holds proof of delivery only — no ${docType.toLowerCase()} exists for this parcel.`,
+        };
+      }
+      if (shipment.courierAccountId === null || shipment.courierShipmentId === null) {
+        return {
+          shipmentId: shipment.shipmentId,
+          awbNumber: shipment.awbNumber,
+          docType,
+          url: null,
+          // Their document endpoint keys on THEIR parcel id, not the
+          // AWB, so without it there is nothing to ask about.
+          message:
+            'This parcel carries no Shiprocket account or parcel id, so their POD cannot be fetched.',
+        };
+      }
+      const pod = await this.shiprocket.fetchPod(
+        shipment.courierShipmentId,
+        shipment.courierAccountId,
+      );
+      return {
+        shipmentId: shipment.shipmentId,
+        awbNumber: shipment.awbNumber,
+        docType,
+        url: pod.url,
+        message: pod.message,
+      };
+    }
+
     const result = await this.documents.fetch(
       shipment.awbNumber,
       docType,
