@@ -445,6 +445,15 @@ const systemSettings: SystemSettingSeed[] = [
     description:
       'Delhivery REST API base URL. EMPTY = stub mode (deterministic mock responses, no network) — the default for dev/CI/e2e. Production is https://track.delhivery.com (staging would be https://staging-express.delhivery.com, but this account has no sandbox). Setting this alone only enables READS; physical-world writes additionally require courier.delhivery_live_writes_enabled.',
   },
+  {
+    key: 'courier.shiprocket_api_base_url',
+    category: 'courier',
+    valueType: SettingValueType.STRING,
+    valueString: '',
+    displayName: 'Shiprocket API Base URL',
+    description:
+      'EMPTY means stub mode, which is where this starts and stays until an account exists. Set to https://apiv2.shiprocket.in only after a controlled first parcel has proved the wire contract — every shape in the adapter is transcribed from their published docs and has never been exercised against a real account. Unlike Delhivery, auth is an email/password login that mints a token lasting about ten days; the credentials live in courier_credentials per account (CUR-1), never here.',
+  },
   // No Delhivery sandbox exists for this account, so the only environment
   // is production. Reads (serviceability, tracking, cost, TAT, EPOD) are
   // free and side-effect-free; writes manifest real parcels, dispatch real

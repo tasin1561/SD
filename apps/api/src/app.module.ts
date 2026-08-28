@@ -98,9 +98,11 @@ import { pinoConfig } from './common/pino/logger-config';
 import { envSchema } from './config/env.schema';
 import { DeliveryActionModule } from './modules/delivery-action/delivery-action.module';
 import { CourierServiceabilityModule } from './modules/courier-serviceability/courier-serviceability.module';
+import { CourierShiprocketModule } from './modules/courier-shiprocket/courier-shiprocket.module';
 
 @Module({
   imports: [
+    CourierShiprocketModule,
     CourierServiceabilityModule,
     DeliveryActionModule,
     ConfigModule,
