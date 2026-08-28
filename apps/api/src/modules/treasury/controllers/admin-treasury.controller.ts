@@ -29,12 +29,14 @@ import {
   ReconcileAccountDto,
   RecordEntryDto,
   RecordInvestmentReturnDto,
+  RecordShipmentCostDto,
   RecordTransferDto,
   UpdateExpenseCategoryDto,
 } from '../dto/treasury.dto';
 import { ExpenseCategoryService } from '../services/expense-category.service';
 import { InvestmentService } from '../services/investment.service';
 import { LiabilitiesService } from '../services/liabilities.service';
+import { ShipmentCostService } from '../services/shipment-cost.service';
 import { PnlService } from '../services/pnl.service';
 
 /**
@@ -63,6 +65,7 @@ export class AdminTreasuryController {
     private readonly categories: ExpenseCategoryService,
     private readonly investments: InvestmentService,
     private readonly liabilities: LiabilitiesService,
+    private readonly shipmentCosts: ShipmentCostService,
   ) {}
 
   @Get('overview')
@@ -116,6 +119,21 @@ export class AdminTreasuryController {
   })
   liabilitiesReport(): ReturnType<LiabilitiesService['report']> {
     return this.liabilities.report();
+  }
+
+  @Post('shipments/:shipmentId/cost')
+  @RequirePermissions('money.treasury.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Record what a parcel actually cost, from a courier invoice. Forward and return are separate figures — the delivery deduction is refunded on a return.',
+  })
+  recordShipmentCost(
+    @Param('shipmentId', new ParseUUIDPipe({ version: '7' })) shipmentId: string,
+    @Body() body: RecordShipmentCostDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): ReturnType<ShipmentCostService['record']> {
+    return this.shipmentCosts.record(staff.id, shipmentId, body);
   }
 
   @Get('entries')

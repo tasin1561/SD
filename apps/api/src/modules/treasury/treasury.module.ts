@@ -7,6 +7,7 @@ import { BankTransferService } from './services/bank-transfer.service';
 import { ExpenseCategoryService } from './services/expense-category.service';
 import { InvestmentService } from './services/investment.service';
 import { LiabilitiesService } from './services/liabilities.service';
+import { ShipmentCostService } from './services/shipment-cost.service';
 import { PnlService } from './services/pnl.service';
 import { TreasuryReadService } from './services/treasury-read.service';
 
@@ -31,6 +32,7 @@ import { TreasuryReadService } from './services/treasury-read.service';
     ExpenseCategoryService,
     InvestmentService,
     LiabilitiesService,
+    ShipmentCostService,
   ],
   exports: [BankLedgerService],
 })

@@ -135,11 +135,18 @@ export class PnlService {
       _sum: { amountInr: true },
     });
 
+    // Returned parcels are EXCLUDED, and that is the whole point of
+    // splitting the two lines. Delhivery refunds the delivery deduction
+    // when a parcel comes back and charges an RTO fee instead, so a
+    // return's forward cost is not a cost we bore — counting it here as
+    // well as on the returns line would charge the same carriage twice
+    // and make both margins wrong in opposite directions.
     const shipments = await this.prisma.client.shipment.findMany({
       where: {
         deletedAt: null,
         awbNumber: { not: null },
         createdAt: { gte: from, lte: to },
+        rtoReceivedAt: null,
       },
       select: { actualCourierCostInr: true },
     });
@@ -170,10 +177,14 @@ export class PnlService {
    * Returns.
    *
    * Revenue is the RTO fee the seller pays, which is its own wallet
-   * direction precisely so this question is answerable. The cost side is
-   * whatever the courier charged to carry the parcel back, and it sits
-   * on the same shipment column — so a return we have not priced shows
-   * as uncovered here rather than as free.
+   * direction precisely so this question is answerable.
+   *
+   * The cost is what the courier charged to bring the parcel BACK, and
+   * that is a different number from what they charged to take it out:
+   * Delhivery refunds the delivery deduction on a return and bills an
+   * RTO fee instead. Keeping them in separate columns is what stops a
+   * returned parcel being charged for twice — once on the delivery line
+   * and again here.
    */
   private async rto(from: Date, to: Date): Promise<PnlLine> {
     const fees = await this.prisma.client.sellerWalletEntry.aggregate({
@@ -189,13 +200,16 @@ export class PnlService {
         deletedAt: null,
         rtoReceivedAt: { gte: from, lte: to },
       },
-      select: { actualCourierCostInr: true },
+      select: { actualRtoCostInr: true },
     });
     let cost = ZERO;
     let priced = 0;
     for (const s of returned) {
-      if (s.actualCourierCostInr !== null) {
-        cost = cost.add(s.actualCourierCostInr);
+      // The RTO cost specifically — not the forward one. What the
+      // courier charged to bring it back IS what the return cost,
+      // because the delivery deduction was refunded.
+      if (s.actualRtoCostInr !== null) {
+        cost = cost.add(s.actualRtoCostInr);
         priced += 1;
       }
     }
@@ -208,7 +222,7 @@ export class PnlService {
       total: returned.length,
       note:
         priced < returned.length
-          ? 'Return carriage is unpriced for some parcels, so this margin is flattering.'
+          ? `${returned.length - priced} returns have no courier cost recorded, so this margin is flattering.`
           : null,
     });
   }

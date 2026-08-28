@@ -5,6 +5,7 @@ import { ExternalLink } from 'lucide-react';
 import { Card, CardBody, ErrorState, LoadingState } from '@skydrop/ui/components';
 import { useAdminOrderShipments } from '@/lib/api-hooks';
 import { CourierOpsPanel } from './courier-ops-panel';
+import { ShipmentCostPanel } from './shipment-cost-panel';
 import { ManualScanPanel } from './manual-scan-panel';
 import { ManualPlacementPanel } from './manual-placement-panel';
 
@@ -87,6 +88,15 @@ export function OrderShipmentsSection({
                 />
                 {/* The recovery path when a courier webhook never arrived. */}
                 <ManualScanPanel shipmentId={s.id} />
+
+                {/* What it actually cost us. The lane-margin report
+                    fills the forward figure automatically but is sampled
+                    and rate-limited, and the return leg has no automatic
+                    source at all. */}
+                <ShipmentCostPanel
+                  shipmentId={s.id}
+                  wasReturned={String(orderStatus).startsWith('RTO')}
+                />
 
                 {/* Only for an order actually stuck at manual placement.
                     Rendering it always would offer a dispatch button on

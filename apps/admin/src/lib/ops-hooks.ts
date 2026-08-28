@@ -1031,6 +1031,24 @@ export function useLiabilities(): UseQueryResult<LiabilitiesView> {
   });
 }
 
+export function useRecordShipmentCost(): UseMutationResult<
+  { actualCourierCostInr: string | null; actualRtoCostInr: string | null },
+  Error,
+  { shipmentId: string; forwardCostInr?: string; rtoCostInr?: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ shipmentId, ...body }) =>
+      client.request<{ actualCourierCostInr: string | null; actualRtoCostInr: string | null }>(
+        `/api/admin/treasury/shipments/${shipmentId}/cost`,
+        { method: 'POST', body },
+      ),
+    // These figures ARE the delivery and returns margins.
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-treasury', 'pnl'] }),
+  });
+}
+
 export function useTrackingPollHealth(enabled = true): UseQueryResult<TrackingPollHealthView> {
   const client = useApiClient();
   return useQuery({

@@ -1,0 +1,12 @@
+-- What a RETURN cost us, kept apart from what the delivery cost.
+--
+-- A return is its own commercial event: Delhivery refunds the delivery
+-- deduction and charges an RTO fee instead. So a returned parcel's cost
+-- is this column, NOT this plus `actual_courier_cost_inr` — adding them
+-- would count the same parcel's carriage twice and make every returns
+-- margin read worse than it is.
+--
+-- Nullable for the same reason as the other cost columns: a return we
+-- have not priced is honestly unknown, and defaulting it to zero would
+-- report the whole RTO fee as profit.
+ALTER TABLE "shipments" ADD COLUMN "actual_rto_cost_inr" DECIMAL(12,2);

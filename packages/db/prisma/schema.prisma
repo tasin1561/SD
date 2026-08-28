@@ -3040,6 +3040,15 @@ model Shipment {
   /// how many parcels it could not price rather than filling the gap in.
   actualCourierCostInr   Decimal?         @map("actual_courier_cost_inr") @db.Decimal(12, 2)
   actualCourierCostAt    DateTime?        @map("actual_courier_cost_at") @db.Timestamptz
+  /// What the courier charged for carrying it BACK.
+  ///
+  /// Separate from the forward cost because a return is a separate
+  /// commercial event: Delhivery refunds the delivery deduction and
+  /// charges an RTO fee instead, so a returned parcel's cost is this
+  /// number and NOT this plus the forward one. Folding them together
+  /// would count a return twice and make every returns margin look
+  /// worse than it is.
+  actualRtoCostInr       Decimal?         @map("actual_rto_cost_inr") @db.Decimal(12, 2)
   // Module 8 — warehouse pick/pack operational state. The order status
   // (PENDING_PICK/PICKED/PACKED) is the authoritative lifecycle gate
   // (WMS-9); these track who/when + the pick-timeout CAS token (WMS-5,

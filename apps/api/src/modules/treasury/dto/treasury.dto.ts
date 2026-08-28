@@ -102,3 +102,17 @@ export class RecordInvestmentReturnDto {
   close?: boolean;
   @IsOptional() @IsString() @Length(1, 2000) note?: string;
 }
+
+export class RecordShipmentCostDto {
+  @ApiPropertyOptional({ description: 'What the courier charged to deliver it' })
+  @IsOptional()
+  @IsNumberString()
+  forwardCostInr?: string;
+  @ApiPropertyOptional({
+    description:
+      'What they charged to bring it BACK. Separate from the forward cost — the delivery deduction is refunded on a return, so this is the whole cost of it.',
+  })
+  @IsOptional()
+  @IsNumberString()
+  rtoCostInr?: string;
+}
