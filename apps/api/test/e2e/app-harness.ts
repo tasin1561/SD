@@ -252,6 +252,16 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         // GST withholdings FK sellers and orders with RESTRICT.
         'gst_withholdings',
         'wallet_topup_requests',
+        // Treasury (2026-08) — bank_entries FK-RESTRICTs both
+        // platform_bank_accounts AND sellers, so it must precede the
+        // accounts below and resetAuthState's seller wipe. Transfers FK
+        // the accounts too. Investments are referenced by entries
+        // (SET NULL) but are per-suite data, so they go as well.
+        // expense_categories is SEEDED and deliberately NOT truncated —
+        // same treatment as couriers (MUST #12).
+        'bank_entries',
+        'bank_transfers',
+        'investments',
         // The bank accounts top-ups point at (RESTRICT), so they follow
         // the requests. Not seeded — every suite that needs one creates
         // it, and without this they accumulate across runs until a test
