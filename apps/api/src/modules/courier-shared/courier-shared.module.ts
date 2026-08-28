@@ -3,6 +3,7 @@ import { CourierAccountRoutingService } from './services/courier-account-routing
 import { CourierCredentialService } from './services/courier-credential.service';
 import { CourierMcpReaderService } from './services/courier-mcp-reader.service';
 import { NdrAttemptContextService } from './services/ndr-attempt-context.service';
+import { CourierSelectionService } from './services/courier-selection.service';
 
 /**
  * Module 9 — courier-shared: internal infrastructure consumed by the
@@ -22,12 +23,14 @@ import { NdrAttemptContextService } from './services/ndr-attempt-context.service
   providers: [
     CourierCredentialService,
     CourierAccountRoutingService,
+    CourierSelectionService,
     NdrAttemptContextService,
     CourierMcpReaderService,
   ],
   exports: [
     CourierCredentialService,
     CourierAccountRoutingService,
+    CourierSelectionService,
     NdrAttemptContextService,
     CourierMcpReaderService,
   ],
