@@ -67,6 +67,8 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   // money is neither spendable nor investable, so this never widens
   // beyond the treasury view.
   ['/expenses', 'money.treasury.view'],
+  // What we owe against what we are owed. Same ledgers, same gate.
+  ['/liabilities', 'money.treasury.view'],
   ['/remittances', 'money.view'],
   // A withdrawal destination is money, not seller admin — and the API
   // guards all three of its endpoints on this one permission.

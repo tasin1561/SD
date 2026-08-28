@@ -34,6 +34,7 @@ import {
 } from '../dto/treasury.dto';
 import { ExpenseCategoryService } from '../services/expense-category.service';
 import { InvestmentService } from '../services/investment.service';
+import { LiabilitiesService } from '../services/liabilities.service';
 import { PnlService } from '../services/pnl.service';
 
 /**
@@ -61,6 +62,7 @@ export class AdminTreasuryController {
     private readonly pnl: PnlService,
     private readonly categories: ExpenseCategoryService,
     private readonly investments: InvestmentService,
+    private readonly liabilities: LiabilitiesService,
   ) {}
 
   @Get('overview')
@@ -105,6 +107,15 @@ export class AdminTreasuryController {
       });
     }
     return this.pnl.report(fromDate, toDate);
+  }
+
+  @Get('liabilities')
+  @ApiOperation({
+    summary:
+      'What we owe and what is owed to us, right now. Kept apart from the P&L: profit is about a window, this is about a moment.',
+  })
+  liabilitiesReport(): ReturnType<LiabilitiesService['report']> {
+    return this.liabilities.report();
   }
 
   @Get('entries')

@@ -998,6 +998,39 @@ export function useSellerHoldings(
   });
 }
 
+export interface LedgerLineView {
+  readonly key: string;
+  readonly label: string;
+  readonly amountInr: string;
+  readonly count: number;
+  readonly meaning: string;
+}
+
+export interface SellerDebtView {
+  readonly sellerId: string;
+  readonly companyName: string;
+  readonly owedInr: string;
+  readonly stockValueInr: string;
+  readonly covered: boolean;
+}
+
+export interface LiabilitiesView {
+  readonly owed: readonly LedgerLineView[];
+  readonly owedTotalInr: string;
+  readonly due: readonly LedgerLineView[];
+  readonly dueTotalInr: string;
+  readonly netInr: string;
+  readonly sellerDebts: readonly SellerDebtView[];
+}
+
+export function useLiabilities(): UseQueryResult<LiabilitiesView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-treasury', 'liabilities'],
+    queryFn: () => client.request<LiabilitiesView>('/api/admin/treasury/liabilities'),
+  });
+}
+
 export function useTrackingPollHealth(enabled = true): UseQueryResult<TrackingPollHealthView> {
   const client = useApiClient();
   return useQuery({

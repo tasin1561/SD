@@ -8,6 +8,7 @@ import type { StaffMe } from '@skydrop/api-client';
 import { AppShell, Toaster, type NavGroup } from '@skydrop/ui/components';
 import {
   ReceiptText,
+  Scale,
   TrendingUp,
   Inbox,
   Activity,
@@ -132,6 +133,7 @@ export function AuthedShell({
         { href: '/treasury', label: 'Treasury', icon: <Vault size={15} /> },
         { href: '/pnl', label: 'Profit & loss', icon: <TrendingUp size={15} /> },
         { href: '/expenses', label: 'Expenses', icon: <ReceiptText size={15} /> },
+        { href: '/liabilities', label: 'What we owe', icon: <Scale size={15} /> },
         { href: '/bank-accounts', label: 'Bank accounts', icon: <Landmark size={15} /> },
         { href: '/remittances', label: 'Remittances', icon: <Send size={15} /> },
         { href: '/bank-changes', label: 'Bank changes', icon: <Landmark size={15} /> },
