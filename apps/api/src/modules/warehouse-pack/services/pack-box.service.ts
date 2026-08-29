@@ -166,15 +166,31 @@ export class PackBoxService {
 
     let boxId: string;
     try {
-      const created = await this.prisma.client.packBox.create({
-        data: {
-          shipmentId: shipment.id,
-          orderId: link.orderId,
-          packerStaffId: staffId,
-          openedWithCode: code,
-          expiresAt,
-        },
-        select: { id: true },
+      // PACK-3: the box row and the shipment's pack_started_at projection
+      // are ONE transaction. Written separately, a crash between them
+      // leaves a parcel that the queue thinks nobody is packing while a
+      // box is open on a bench — or the reverse, which is worse: a
+      // parcel that looks claimed with no box to close.
+      const created = await this.prisma.client.$transaction(async (tx) => {
+        const box = await tx.packBox.create({
+          data: {
+            shipmentId: shipment.id,
+            orderId: link.orderId,
+            packerStaffId: staffId,
+            openedWithCode: code,
+            expiresAt,
+          },
+          select: { id: true, openedAt: true },
+        });
+        // Guarded on NULL so it records when packing FIRST began. A
+        // second box on the same parcel, or a re-open after a cancel,
+        // must not restate the start time — "how long has this been on
+        // the bench" is the question the column answers.
+        await tx.shipment.updateMany({
+          where: { id: shipment.id, packStartedAt: null },
+          data: { packStartedAt: box.openedAt },
+        });
+        return box;
       });
       boxId = created.id;
     } catch (err) {
@@ -430,6 +446,8 @@ export class PackBoxService {
     }
     await this.releaseScans(packBoxId);
 
+    await this.clearPackStartedIfIdle(box.shipmentId);
+
     await this.audit.log({
       actorType: ActorType.STAFF,
       actorId: staffId,
@@ -590,6 +608,10 @@ export class PackBoxService {
       });
       if (claimed.count === 0) continue; // someone closed it first
       await this.releaseScans(box.id);
+      // PACK-3: an abandoned box leaves the parcel unpacked, so the
+      // projection must stop claiming somebody is on it. Same rule as
+      // cancel — only when no live box remains.
+      await this.clearPackStartedIfIdle(box.shipmentId);
       expired += 1;
       await this.audit.log({
         actorType: ActorType.SYSTEM,
@@ -602,6 +624,33 @@ export class PackBoxService {
       });
     }
     return { expired };
+  }
+
+  /**
+   * Stop claiming a parcel is being packed once no live box remains.
+   *
+   * PACK-3: `pack_boxes` is the fact and `shipments.pack_started_at` is
+   * a projection of it, so the projection has to be able to go back to
+   * null. Leaving it set after the last box is cancelled or expires
+   * would show the parcel as being packed by nobody, and the floor
+   * report would age it forever.
+   *
+   * Conditional rather than unconditional because a parcel may
+   * legitimately have several boxes; one being abandoned does not mean
+   * packing stopped. CLOSED counts as live — the work happened.
+   */
+  private async clearPackStartedIfIdle(shipmentId: string): Promise<void> {
+    const stillLive = await this.prisma.client.packBox.count({
+      where: {
+        shipmentId,
+        status: { in: [PackBoxStatus.OPEN, PackBoxStatus.CLOSED] },
+      },
+    });
+    if (stillLive > 0) return;
+    await this.prisma.client.shipment.updateMany({
+      where: { id: shipmentId },
+      data: { packStartedAt: null },
+    });
   }
 
   /**

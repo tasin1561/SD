@@ -1,5 +1,7 @@
-import { Injectable, type ExecutionContext } from '@nestjs/common';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { Inject, Injectable, Optional, type ExecutionContext } from '@nestjs/common';
+import { ThrottlerGuard, type ThrottlerRequest } from '@nestjs/throttler';
+import { ThrottleLimitCacheService } from './throttle-limit-cache.service';
+import { THROTTLE_SETTING_KEY } from './throttle-setting.decorator';
 import { THROTTLE_KEY_STRATEGY, type ThrottleKeyStrategy } from './throttle-key.decorator';
 
 /**
@@ -14,6 +16,40 @@ import { THROTTLE_KEY_STRATEGY, type ThrottleKeyStrategy } from './throttle-key.
  */
 @Injectable()
 export class AppThrottlerGuard extends ThrottlerGuard {
+  /**
+   * Optional on purpose: the throttler module is global and boots before
+   * most feature modules, and a guard that cannot start because a
+   * settings cache is not ready yet would take the whole app with it.
+   * Absent simply means every route keeps its static limit.
+   */
+  @Optional()
+  @Inject(ThrottleLimitCacheService)
+  private readonly limitCache?: ThrottleLimitCacheService;
+
+  /**
+   * Let a route take its limit from `system_settings` (@ThrottleSetting).
+   *
+   * The static number from `@Throttle()` is the FALLBACK, not a default
+   * that gets replaced — a settings read that fails must never remove a
+   * rate limit from an endpoint open to the internet. The lookup is
+   * memoised for a minute (see ThrottleLimitCacheService), so this costs
+   * at most one query per minute per instance rather than one per
+   * request, which is what made a dynamic limit a worse attack surface
+   * than a constant.
+   */
+  protected override async handleRequest(requestProps: ThrottlerRequest): Promise<boolean> {
+    const settingKey = this.reflector.getAllAndOverride<string | undefined>(THROTTLE_SETTING_KEY, [
+      requestProps.context.getHandler(),
+      requestProps.context.getClass(),
+    ]);
+    if (settingKey === undefined || this.limitCache === undefined) {
+      return super.handleRequest(requestProps);
+    }
+    const configured = await this.limitCache.limitFor(settingKey);
+    if (configured === null) return super.handleRequest(requestProps);
+    return super.handleRequest({ ...requestProps, limit: configured });
+  }
+
   protected override getRequestResponse(context: ExecutionContext) {
     const pair = super.getRequestResponse(context);
     const strategy = this.reflector.getAllAndOverride<ThrottleKeyStrategy | undefined>(

@@ -4,10 +4,11 @@ import {
   OnboardingStepActor,
   Prisma,
   SellerOnboardingStep,
+  NotificationChannel,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { EnvService } from '../../../config/env.service';
-import { EmailQueue } from '../../email/queue/email.queue';
+import { NotificationLedgerService } from '../../notifications/services/notification-ledger.service';
 
 export const REQUIRED_STEPS: ReadonlyArray<SellerOnboardingStep> = [
   SellerOnboardingStep.REGISTRATION_COMPLETED,
@@ -48,7 +49,7 @@ export class SellerOnboardingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly env: EnvService,
-    private readonly email: EmailQueue,
+    private readonly ledger: NotificationLedgerService,
   ) {}
 
   /**
@@ -186,6 +187,17 @@ export class SellerOnboardingService {
     sellerId: string,
     client: TxOrClient,
   ): Promise<void> {
+    // ── HISTORY GATE ──────────────────────────────────────────────
+    // Rows written before this call site moved onto the ledger carry a
+    // NULL event_id, and the partial unique is `WHERE event_id IS NOT
+    // NULL` — so the constraint below cannot see them. Without this
+    // read, every seller who completed onboarding before the change
+    // would be sent a second email the next time this ran.
+    //
+    // It is a read-then-write and therefore NOT a concurrency guard;
+    // that job now belongs to the constraint. Two guards for two
+    // different failures, and this one can be deleted once no
+    // NULL-event row for this template predates the ledger.
     const prior = await client.notificationLog.findFirst({
       where: {
         templateCode: ONBOARDING_COMPLETE_TEMPLATE,
@@ -202,18 +214,35 @@ export class SellerOnboardingService {
     });
     if (!seller) return;
 
-    await this.email.enqueue({
+    // ── CONCURRENCY GATE ──────────────────────────────────────────
+    // Through the M11 ledger rather than the email queue directly, so
+    // this call site gets store-then-send: the notification_logs row is
+    // written FIRST and the composite partial unique on
+    // (event_id, recipient_type, recipient_id, channel, template_code)
+    // is what makes the second caller lose.
+    //
+    // The old path sent FIRST and wrote the row after, so two
+    // concurrent completions both read no prior row, both passed, and
+    // the seller got the email twice — the row-level unique could not
+    // help because by then Resend had already been called twice.
+    //
+    // The eventId is DETERMINISTIC (`onboarding_complete:<sellerId>`)
+    // rather than a uuid: a random one would be unique every time and
+    // the constraint would never fire, which is the whole point of it.
+    await this.ledger.enqueue({
+      eventId: `onboarding_complete:${seller.id}`,
+      recipientType: NotificationRecipientType.SELLER,
+      recipientId: seller.id,
+      channel: NotificationChannel.EMAIL,
       templateCode: ONBOARDING_COMPLETE_TEMPLATE,
-      recipient: {
-        type: NotificationRecipientType.SELLER,
-        id: seller.id,
-        email: seller.email,
-      },
+      locale: 'en',
+      toEmail: seller.email,
       variables: {
         company_name: seller.companyName,
         support_email: this.env.supportEmail,
         app_url: this.env.sellerAppUrl,
       },
+      orderId: null,
       triggerEvent: 'seller.onboarding.completed',
     });
   }

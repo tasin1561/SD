@@ -745,7 +745,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueInt: 30,
     displayName: 'Public Tracking Lookup Rate Limit (per IP/min)',
     description:
-      'TRK-8 anti-enumeration ceiling on the open public AWB lookup endpoint. A legitimate customer refreshes their tracking page a handful of times; bulk enumeration of AWBs triggers rate limiting.',
+      'TRK-8 anti-enumeration ceiling on the open public AWB lookup endpoint. LIVE: the guard reads this row and a change takes effect within a minute, no redeploy (memoised 60s per instance, so a flood cannot reach the database through the limiter). A non-positive or unreadable value is IGNORED and the code falls back to 30 — a settings mistake must not be able to remove the limit from an endpoint open to the internet. A legitimate customer refreshes their tracking page a handful of times; bulk enumeration of AWBs triggers rate limiting.',
   },
   {
     key: 'tracking.webhook_processing_retry_max',

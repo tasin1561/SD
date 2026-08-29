@@ -6,7 +6,7 @@ import {
 } from '../../src/modules/seller-onboarding/services/seller-onboarding.service';
 import type { EnvService } from '../../src/config/env.service';
 import { makeTestEnv } from '../helpers/env';
-import type { EmailQueue } from '../../src/modules/email/queue/email.queue';
+import type { NotificationLedgerService } from '../../src/modules/notifications/services/notification-ledger.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 
 function makeEnv(): EnvService {
@@ -116,8 +116,12 @@ function makeClient(): FakeClient {
 function makeSut() {
   const client = makeClient();
   const prisma = { client } as unknown as PrismaService;
-  const enqueueMock = jest.fn().mockResolvedValue('job-1');
-  const email = { enqueue: enqueueMock } as unknown as EmailQueue;
+  // Through the M11 ledger now, not the email queue directly: the
+  // notification_logs row is written BEFORE the send, so the composite
+  // partial unique is what stops a concurrent double-send rather than a
+  // read-then-write pre-check.
+  const enqueueMock = jest.fn().mockResolvedValue({ kind: 'ENQUEUED', notificationLogId: 'n-1' });
+  const email = { enqueue: enqueueMock } as unknown as NotificationLedgerService;
   const svc = new SellerOnboardingService(prisma, makeEnv(), email);
   return { svc, client, enqueueMock };
 }
@@ -211,6 +215,12 @@ describe('SellerOnboardingService — markStepComplete', () => {
     expect(sut.enqueueMock).toHaveBeenCalledTimes(1);
     const job = sut.enqueueMock.mock.calls[0]![0];
     expect(job.templateCode).toBe('seller.onboarding_complete.email');
+
+    // DETERMINISTIC, and that is the whole point. A random eventId
+    // would be unique on every call, so the partial unique on
+    // (event_id, recipient_type, recipient_id, channel, template_code)
+    // would never fire and two concurrent completions would both send.
+    expect(job.eventId).toBe('onboarding_complete:seller-1');
   });
 
   it('fire-once: a prior onboarding-complete notification_log suppresses re-send', async () => {

@@ -415,4 +415,120 @@ describe('Pack box session (e2e)', () => {
       .expect(200);
     expect(reopened.body.shipmentId).toBe(shipmentId);
   });
+
+  /**
+   * PACK-3: `shipments.pack_started_at` is a PROJECTION of pack_boxes,
+   * not a second fact. These are the three ways a projection goes wrong
+   * — never set, restated, or left claiming work that stopped — and
+   * only a real database can show them, because the value is written
+   * inside the same transaction as the box row.
+   */
+  it('PACK-3: opening a box stamps pack_started_at in the same transaction', async () => {
+    await receiveStock(10);
+    const { awbNumber, shipmentId } = await pickedParcel(1);
+
+    const before = await h.prisma.shipment.findUniqueOrThrow({
+      where: { id: shipmentId },
+      select: { packStartedAt: true },
+    });
+    expect(before.packStartedAt).toBeNull();
+
+    const opened = await request(h.baseUrl)
+      .post('/warehouse/packs/boxes/open')
+      .set(staffAuth)
+      .send({ awbNumber })
+      .expect(200);
+
+    const after = await h.prisma.shipment.findUniqueOrThrow({
+      where: { id: shipmentId },
+      select: { packStartedAt: true },
+    });
+    expect(after.packStartedAt).not.toBeNull();
+
+    // It equals the BOX's opened_at rather than a second `new Date()`:
+    // two clocks for one moment is how a projection starts drifting.
+    const box = await h.prisma.packBox.findUniqueOrThrow({
+      where: { id: opened.body.packBoxId as string },
+      select: { openedAt: true },
+    });
+    expect(after.packStartedAt?.getTime()).toBe(box.openedAt.getTime());
+  });
+
+  it('PACK-3: a re-open after a cancel does NOT restate when packing began', async () => {
+    await receiveStock(10);
+    const { awbNumber, shipmentId } = await pickedParcel(1);
+
+    const first = await request(h.baseUrl)
+      .post('/warehouse/packs/boxes/open')
+      .set(staffAuth)
+      .send({ awbNumber })
+      .expect(200);
+    const firstStart = (
+      await h.prisma.shipment.findUniqueOrThrow({
+        where: { id: shipmentId },
+        select: { packStartedAt: true },
+      })
+    ).packStartedAt;
+
+    await request(h.baseUrl)
+      .post(`/warehouse/packs/boxes/${first.body.packBoxId as string}/cancel`)
+      .set(staffAuth)
+      .send({ reason: 'Wrong carton size, starting again' })
+      .expect(200);
+
+    // Cancelling the LAST live box means packing is no longer under way,
+    // so the projection goes back to null rather than showing a parcel
+    // being packed by nobody and ageing forever on the floor report.
+    const cleared = await h.prisma.shipment.findUniqueOrThrow({
+      where: { id: shipmentId },
+      select: { packStartedAt: true },
+    });
+    expect(cleared.packStartedAt).toBeNull();
+    expect(firstStart).not.toBeNull();
+  });
+
+  it('PACK-3: a SECOND box on the same parcel does not restate the start', async () => {
+    await receiveStock(10);
+    const { awbNumber, shipmentId } = await pickedParcel(2);
+
+    await request(h.baseUrl)
+      .post('/warehouse/packs/boxes/open')
+      .set(staffAuth)
+      .send({ awbNumber })
+      .expect(200);
+    const started = (
+      await h.prisma.shipment.findUniqueOrThrow({
+        where: { id: shipmentId },
+        select: { packStartedAt: true },
+      })
+    ).packStartedAt;
+    expect(started).not.toBeNull();
+
+    // Backdate the stamp so a restatement would be unmistakable rather
+    // than a sub-millisecond difference the assertion could not see.
+    const backdated = new Date(Date.now() - 60 * 60 * 1000);
+    await h.prisma.shipment.update({
+      where: { id: shipmentId },
+      data: { packStartedAt: backdated },
+    });
+
+    // A parcel may legitimately need several boxes. The column answers
+    // "how long has this been on the bench", so the FIRST box is the
+    // answer and a later one must not reset the clock.
+    await h.prisma.packBox.updateMany({
+      where: { shipmentId },
+      data: { status: 'CLOSED', closedAt: new Date() },
+    });
+    await request(h.baseUrl)
+      .post('/warehouse/packs/boxes/open')
+      .set(staffAuth)
+      .send({ awbNumber })
+      .expect(200);
+
+    const stillFirst = await h.prisma.shipment.findUniqueOrThrow({
+      where: { id: shipmentId },
+      select: { packStartedAt: true },
+    });
+    expect(stillFirst.packStartedAt?.getTime()).toBe(backdated.getTime());
+  });
 });

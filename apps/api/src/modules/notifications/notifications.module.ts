@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { EmailModule } from '../email/email.module';
 import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.module';
 import { NotificationEventMappingService } from './services/notification-event-mapping.service';
-import { NotificationLedgerService } from './services/notification-ledger.service';
+import { NotificationLedgerModule } from '../notification-ledger/notification-ledger.module';
 import { NotificationListener } from './services/notification-listener.service';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 
@@ -35,8 +35,10 @@ import { AuthCommonModule } from '../auth-common/auth-common.module';
     AuthCommonModule,
     EmailModule,
     LifecycleEventsModule,
+    // The R3 store-then-send primitive, shared with seller-onboarding.
+    NotificationLedgerModule,
   ],
-  providers: [NotificationEventMappingService, NotificationLedgerService, NotificationListener],
+  providers: [NotificationEventMappingService, NotificationListener],
   exports: [],
 })
 export class NotificationsModule {}

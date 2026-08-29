@@ -4,6 +4,8 @@ import { ThrottlerModule as NestThrottlerModule, seconds, minutes } from '@nestj
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { RedisService } from '../../infrastructure/redis/redis.service';
 import { AppThrottlerGuard } from './app-throttler.guard';
+import { ThrottleLimitCacheService } from './throttle-limit-cache.service';
+import { PrismaModule } from '../../infrastructure/prisma/prisma.module';
 
 /**
  * Single named throttler ('default') with a baseline of 100/min keyed by
@@ -11,12 +13,17 @@ import { AppThrottlerGuard } from './app-throttler.guard';
  *
  *   @Throttle({ default: { limit: 5, ttl: minutes(15) } })  // 5 in 15 min
  *   @ThrottleKey('email-ip')                                 // … per (email, ip)
+ *   @ThrottleSetting('tracking.public_lookup_rate_limit_per_min')
+ *                                       // … limit from system_settings,
+ *                                       //   memoised 60s, @Throttle's
+ *                                       //   number as the fallback
  *
  * Storage is the shared Redis instance so rate limits are durable across
  * process restarts and shared across multiple API instances.
  */
 @Module({
   imports: [
+    PrismaModule,
     NestThrottlerModule.forRootAsync({
       inject: [RedisService],
       useFactory: (redis: RedisService) => ({
@@ -29,7 +36,8 @@ import { AppThrottlerGuard } from './app-throttler.guard';
       }),
     }),
   ],
-  providers: [{ provide: APP_GUARD, useClass: AppThrottlerGuard }],
+  providers: [ThrottleLimitCacheService, { provide: APP_GUARD, useClass: AppThrottlerGuard }],
+  exports: [ThrottleLimitCacheService],
 })
 export class ThrottlerModule {}
 

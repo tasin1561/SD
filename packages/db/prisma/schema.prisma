@@ -3070,6 +3070,17 @@ model Shipment {
   // M7-assignedAt analogue). `manifestId` is the (movable pre-close)
   // DRAFT manifest assignment (WMS-7).
   pickStartedAt          DateTime?        @map("pick_started_at") @db.Timestamptz
+  /// When packing FIRST began — the earliest still-live box for this
+  /// parcel. Denormalised from `pack_boxes.opened_at` for the queue and
+  /// floor reports, which need "is anyone on this?" without joining
+  /// every box.
+  ///
+  /// PACK-3: `PackBoxService` is the ONLY writer, and it writes this in
+  /// the SAME transaction as the box row. `pack_boxes` stays the fact —
+  /// it is per box and per packer, which this column can never be —
+  /// and this is a projection of it. Cleared when the last box is
+  /// cancelled, or the two disagree about whether packing is under way.
+  packStartedAt          DateTime?        @map("pack_started_at") @db.Timestamptz
   pickStartedByStaffId   String?          @map("pick_started_by_staff_id") @db.Uuid
   pickExpiresAt          DateTime?        @map("pick_expires_at") @db.Timestamptz
   pickCompletedAt        DateTime?        @map("pick_completed_at") @db.Timestamptz

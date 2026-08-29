@@ -2,6 +2,7 @@ import { Controller, Get, HttpCode, HttpStatus, Param } from '@nestjs/common';
 import { Throttle, minutes } from '@nestjs/throttler';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
+import { ThrottleSetting } from '../../../common/throttler/throttle-setting.decorator';
 import { PublicTrackingReadService } from '../services/public-tracking-read.service';
 import type { PublicTrackingResponse } from '../dto/public-tracking.response.dto';
 
@@ -18,13 +19,20 @@ import type { PublicTrackingResponse } from '../dto/public-tracking.response.dto
  *     prohibitive.
  *
  * Rate limit
- *   Per-IP, `tracking.public_lookup_rate_limit_per_min` per minute
- *   (seeded 30). The literal value is duplicated here because the
- *   @Throttle decorator takes a static expression; the seed remains
- *   the documented authority + the future hook for runtime tuning
- *   (Phase 1B can extract to a dynamic guard if needed). A legitimate
- *   customer hits refresh a handful of times; bulk enumeration
- *   triggers throttling.
+ *   Per-IP, `tracking.public_lookup_rate_limit_per_min` per minute,
+ *   read from `system_settings` and changeable without a redeploy
+ *   (@ThrottleSetting). The number on @Throttle is NOT dead — it is
+ *   the fallback that applies whenever the setting cannot be read or
+ *   is not a positive integer, because a settings problem must never
+ *   be able to REMOVE the limit from the one endpoint open to the
+ *   internet.
+ *
+ *   The lookup is memoised for 60s per instance, which is what makes
+ *   it affordable: a naive dynamic limit means a database read on
+ *   every anonymous request, so the flood the limit exists to stop
+ *   becomes a flood against the database and the limiter is the
+ *   attack surface. A legitimate customer hits refresh a handful of
+ *   times; bulk enumeration triggers throttling.
  *
  * Endpoint shape — `GET /public/tracking/:awbNumber`. Returns 200
  * with the projection on hit, 404 with a single generic message on
@@ -39,6 +47,7 @@ import type { PublicTrackingResponse } from '../dto/public-tracking.response.dto
 @ApiTags('public-tracking')
 @ThrottleKey('ip')
 @Throttle({ default: { limit: 30, ttl: minutes(1) } })
+@ThrottleSetting('tracking.public_lookup_rate_limit_per_min')
 @Controller('public/tracking')
 export class PublicTrackingController {
   constructor(private readonly read: PublicTrackingReadService) {}
