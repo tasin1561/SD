@@ -127,11 +127,63 @@ describe('DelhiveryHttpService.authHeaders', () => {
 });
 
 describe('DelhiveryHttpService.request (real mode)', () => {
-  it('attempts a real fetch against the configured base URL', async () => {
+  /**
+   * `fetch` is MOCKED here, and that is a deliberate change from what
+   * this test used to do.
+   *
+   * It previously left fetch real and pointed at a `.test` host,
+   * asserting only that something threw — so a unit test's outcome
+   * depended on DNS behaviour. It cost a real resolution attempt on
+   * every run and flaked under full-suite load, which makes the whole
+   * unit job network-dependent for no coverage.
+   *
+   * Mocking is also the STRONGER assertion: "it threw" is satisfied by
+   * a typo, whereas this pins the URL, the method and the auth header
+   * the real-mode path actually sends.
+   */
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  it('sends a real fetch to the configured base URL with the auth header', async () => {
+    const fetchMock = jest.fn(
+      async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
     const { svc } = makeService({ baseUrl: 'https://sandbox.delhivery.test' });
-    // No mocked global fetch — node will try to resolve a real host
-    // and fail. That's the assertion: it WENT through fetch (not the
-    // old TODO throw). The error type confirms real-mode path is wired.
+    await svc.request({ method: 'GET', endpoint: 'tracking', path: '/x' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // A structural type rather than `RequestInit`: the API's TS lib does
+    // not include DOM types, which is also why the Shiprocket adapter
+    // declares its own FetchInit.
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      {
+        method: string;
+        headers: Record<string, string>;
+        signal?: unknown;
+      },
+    ];
+    // The base URL is joined to the path without a doubled slash.
+    expect(url).toBe('https://sandbox.delhivery.test/x');
+    expect(init.method).toBe('GET');
+    // The decrypted token reaches the wire as Delhivery's scheme. A
+    // request that went out unauthenticated would 401 in production
+    // and look like a credential problem rather than a code one.
+    expect(init.headers['Authorization']).toMatch(/^Token /);
+    // A hung courier must not hold a saga open forever.
+    expect(init.signal).toBeDefined();
+  });
+
+  it('surfaces a non-2xx rather than returning it as success', async () => {
+    globalThis.fetch = jest.fn(
+      async () => new Response('upstream exploded', { status: 500 }),
+    ) as unknown as typeof fetch;
+
+    const { svc } = makeService({ baseUrl: 'https://sandbox.delhivery.test' });
     await expect(
       svc.request({ method: 'GET', endpoint: 'tracking', path: '/x' }),
     ).rejects.toThrow();
