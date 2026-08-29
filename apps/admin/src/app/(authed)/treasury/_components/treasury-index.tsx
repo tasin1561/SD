@@ -40,6 +40,24 @@ import { TransferModal } from './transfer-modal';
  * ₹0.00 on an admin page. Money read wrong is worse than money read
  * slowly.
  */
+/**
+ * The magnitude of a money string, as a string.
+ *
+ * Not `Math.abs(Number(x))`: money is carried as a decimal STRING
+ * throughout so it never touches a binary float, and parsing it here to
+ * flip a sign would reintroduce exactly the rounding the convention
+ * exists to avoid — on the figure that reports whether the money we
+ * hold for sellers covers what we owe them.
+ */
+export function absAmount(v: string): string {
+  return v.startsWith('-') ? v.slice(1) : v;
+}
+
+/** Zero however it is written: `0`, `0.00`, `-0.00`. */
+export function isZeroAmount(v: string): boolean {
+  return /^-?0*(\.0*)?$/.test(v.trim());
+}
+
 export function TreasuryIndex(): ReactElement {
   const canManage = usePermission('money.treasury.manage');
   const overview = useTreasuryOverview();
@@ -100,14 +118,16 @@ export function TreasuryIndex(): ReactElement {
             <Stat
               label={overview.data.clientMoney.covered ? 'Surplus held' : 'Shortfall'}
               value={
-                <Money
-                  amount={Math.abs(Number(overview.data.clientMoney.gapInr)).toFixed(2)}
-                  currency="INR"
-                />
+                // Magnitude WITHOUT a float round-trip: money is carried
+                // as a string everywhere in this codebase precisely so it
+                // is never handed to a binary float, and `Number(x)` here
+                // would undo that for the one figure that says whether
+                // client money is short.
+                <Money amount={absAmount(overview.data.clientMoney.gapInr)} currency="INR" />
               }
               hint={
                 overview.data.clientMoney.covered
-                  ? Number(overview.data.clientMoney.gapInr) === 0
+                  ? isZeroAmount(overview.data.clientMoney.gapInr)
                     ? 'Exactly covered — we hold what we owe, to the rupee'
                     : 'Held for sellers over and above what we owe them'
                   : 'We owe more than we hold — money in transit is a normal cause, but check'
@@ -119,7 +139,17 @@ export function TreasuryIndex(): ReactElement {
                 key={c.currency}
                 label={`Total ${c.currency}`}
                 value={<Money amount={c.total} currency={c.currency} convert={false} />}
-                hint={`Ours ${c.capital} · held ${c.sellerHeld}`}
+                hint={
+                  // Through Money, like every other figure on the page.
+                  // Interpolated into the string these rendered as bare
+                  // `100000.00` under a headline reading `৳1,00,000.00`
+                  // — the same amount, twice, formatted two ways, which
+                  // is exactly what the Money primitive exists to stop.
+                  <>
+                    Ours <Money amount={c.capital} currency={c.currency} convert={false} /> · held{' '}
+                    <Money amount={c.sellerHeld} currency={c.currency} convert={false} />
+                  </>
+                }
               />
             ))}
           </div>
