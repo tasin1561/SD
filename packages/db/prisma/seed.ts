@@ -495,6 +495,25 @@ const systemSettings: SystemSettingSeed[] = [
     description:
       'When OFF (default) Skydrop refuses any Delhivery call with a physical or billable effect — manifest a shipment, edit/cancel one, request a pickup, take an NDR action, register a warehouse, consume waybills — while still allowing reads. There is no sandbox for this account: every write here is a real parcel, a real van or a real cancellation. Turn it on deliberately for live operations (or for a controlled single-parcel test), and expect a HIGH audit row for every blocked attempt while it is off.',
   },
+  // Per courier, not one switch for both. Enabling Delhivery for its
+  // first controlled parcel must not silently arm every Shiprocket write
+  // path: separate contracts, separate accounts, separate money, and
+  // readiness to write to one says nothing about the other. The guard
+  // derives this key from the courier code, so a third courier needs a
+  // row here and no code change.
+  //
+  // The row matters even though the guard fails closed without it: the
+  // admin settings page lists what is IN this table, so a missing row is
+  // a switch that can only be thrown by hand in psql.
+  {
+    key: 'courier.shiprocket_live_writes_enabled',
+    category: 'courier',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'Shiprocket LIVE Writes Enabled',
+    description:
+      'When OFF (default) Skydrop refuses any Shiprocket call with a physical or billable effect — create an order, assign an AWB, cancel a parcel, request a pickup, take an NDR action, register a pickup location — while still allowing reads. Nothing has ever been written against a real Shiprocket account: every request shape in the adapter is transcribed from their published docs and unproven. Turn this on only for a controlled single-parcel test, and expect a HIGH audit row for every blocked attempt while it is off.',
+  },
   {
     key: 'courier.delhivery_pickup_location',
     category: 'courier',
