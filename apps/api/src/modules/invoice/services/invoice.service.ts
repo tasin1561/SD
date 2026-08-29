@@ -312,7 +312,7 @@ export class InvoiceService {
         id: true,
         invoiceNumber: true,
         invoiceDate: true,
-        pdfUrl: true,
+        pdfStorageKey: true,
         totalInr: true,
       },
     });
@@ -321,7 +321,19 @@ export class InvoiceService {
       id: row.id,
       invoiceNumber: row.invoiceNumber,
       invoiceDate: row.invoiceDate.toISOString(),
-      pdfUrl: row.pdfUrl,
+      // PRESIGNED, never the stored `pdfUrl`.
+      //
+      // Nothing in the bucket has been public since the 2026-07-28
+      // security pass — `pdfUrl` is a canonical pointer that
+      // deliberately does not resolve, so handing it to a browser
+      // produced an AccessDenied XML page where the invoice should be.
+      // `generateForOrder` twenty lines above already does this; this
+      // read was simply never updated with the bucket.
+      //
+      // A row with no storage key has no PDF to sign for — null, so the
+      // UI can say "not generated" rather than offering a dead link.
+      pdfUrl:
+        row.pdfStorageKey === null ? null : await this.spaces.presignGetUrl(row.pdfStorageKey),
       totalInr: row.totalInr.toFixed(2),
     };
   }
