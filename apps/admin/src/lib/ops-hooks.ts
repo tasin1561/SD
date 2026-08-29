@@ -2476,3 +2476,40 @@ export function useOrderJourney(id: string): UseQueryResult<OrderJourneyView> {
     enabled: Boolean(id),
   });
 }
+
+export interface ChargesBackfillReport {
+  readonly examined: number;
+  readonly persisted: number;
+  readonly skipped: number;
+  readonly failed: number;
+  readonly orders: ReadonlyArray<{
+    readonly orderNumber: string;
+    readonly status: string;
+    readonly outcome: string;
+  }>;
+}
+
+/**
+ * Compute charges for orders that never got any.
+ *
+ * Dry-run by default at the server; the caller opts in to writing.
+ */
+export function useBackfillCharges(): UseMutationResult<
+  ChargesBackfillReport,
+  Error,
+  { dryRun: boolean }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dryRun }) =>
+      client.request<ChargesBackfillReport>('/api/admin/orders/charges/backfill', {
+        method: 'POST',
+        body: JSON.stringify({ dryRun }),
+      }),
+    onSuccess: (_r, vars) => {
+      // Only a real run changes anything worth re-reading.
+      if (!vars.dryRun) void qc.invalidateQueries({ queryKey: ['admin-orders'] });
+    },
+  });
+}

@@ -88,6 +88,10 @@ function makeService(
     audit as unknown as AuditLogService,
     unitLedger as unknown as StockUnitService,
     rtoFees as unknown as RtoFeeAccrualService,
+    // Charges are ensured before the RTO fee: the ₹200 delivery leg is
+    // swept from the order's charge rows, so an order with none is
+    // billed the ₹30 return fee alone.
+    { persistForOrderSystem: rtoPersistCharges } as never,
   );
   return {
     svc,
@@ -99,6 +103,8 @@ function makeService(
     auditLog,
   };
 }
+
+const rtoPersistCharges = jest.fn(async () => ({ skipped: true, reason: 'CHARGES_ALREADY_EXIST' }));
 
 describe('RtoReceiptService.receive', () => {
   it('happy from RTO_IN_TRANSIT: stamps rtoReceivedAt then transitions → RTO_RECEIVED', async () => {

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { OrderChargesModule } from '../order-charges/order-charges.module';
 import { SellerRestrictionModule } from '../seller-restriction/seller-restriction.module';
 import { OrderModule } from '../order/order.module';
 import { InventorySharedModule } from '../inventory-shared/inventory-shared.module';
@@ -39,6 +40,7 @@ import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-walle
  */
 @Module({
   imports: [
+    OrderChargesModule,
     OrderModule,
     InventorySharedModule,
     TicketModule,

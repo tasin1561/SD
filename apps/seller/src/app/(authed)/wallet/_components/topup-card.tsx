@@ -1,7 +1,18 @@
 'use client';
 
 import type { ReactElement } from 'react';
-import { Card, CardBody, Money, TBody, THead, Table, Td, Th, Tr } from '@skydrop/ui/components';
+import {
+  Card,
+  CardBody,
+  Money,
+  TBody,
+  THead,
+  Table,
+  Td,
+  Th,
+  Tr,
+  openExternalWhenReady,
+} from '@skydrop/ui/components';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
 import { useTopupBankAccounts, useTopupProofUrl, useTopupRequests } from '@/lib/api-hooks';
@@ -147,9 +158,10 @@ function ProofLink({ topupId }: { readonly topupId: string }): ReactElement {
       className="text-accent min-h-[28px] underline"
       disabled={proof.isPending}
       onClick={() => {
-        proof.mutate(topupId, {
-          onSuccess: ({ url }) => window.open(url, '_blank', 'noopener,noreferrer'),
-        });
+        // Opened inside the click, filled when the presigned URL lands:
+        // a window.open in onSuccess runs after the await and the
+        // popup blocker eats it.
+        void openExternalWhenReady(async () => (await proof.mutateAsync(topupId)).url);
       }}
     >
       {proof.isPending ? 'Opening…' : 'View receipt'}

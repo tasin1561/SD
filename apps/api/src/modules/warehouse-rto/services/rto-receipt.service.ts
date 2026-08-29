@@ -1,3 +1,4 @@
+import { OrderChargesService } from '../../order-charges/services/order-charges.service';
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   RtoDisposition,
@@ -61,6 +62,7 @@ export class RtoReceiptService {
     private readonly audit: AuditLogService,
     private readonly units: StockUnitService,
     private readonly rtoFees: RtoFeeAccrualService,
+    private readonly orderCharges: OrderChargesService,
   ) {}
 
   /**
@@ -241,6 +243,23 @@ export class RtoReceiptService {
     // halves are idempotent, so a retry or a re-submitted receive
     // converges rather than double-charging.
     try {
+      // The delivery half of that 230 is swept from the order's CHARGE
+      // ROWS, so an order that never had any is billed the ₹30 return
+      // fee and not the ₹200 carriage — silently, because a zero sum
+      // reads as "nothing to charge". Ensure they exist first.
+      //
+      // Pre-tx: persistForOrderSystem owns its own transaction (the M5
+      // saga rule). Idempotent, and best-effort — a pricing failure
+      // must not stop the return fee being taken.
+      try {
+        await this.orderCharges.persistForOrderSystem(orderId);
+      } catch (chargeErr) {
+        this.logger.warn(
+          { orderId, err: chargeErr instanceof Error ? chargeErr.message : String(chargeErr) },
+          'Could not compute charges before the RTO fee; the delivery leg may go unbilled',
+        );
+      }
+
       await this.prisma.client.$transaction((tx) =>
         this.rtoFees.chargeOnReceive(tx, orderId, order.sellerId),
       );

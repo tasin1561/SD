@@ -23,6 +23,7 @@ import {
   Tr,
   Textarea,
   useToast,
+  openExternalWhenReady,
 } from '@skydrop/ui/components';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
@@ -79,8 +80,8 @@ export function TopupsIndex(): ReactElement {
 
   async function onViewProof(topupId: string): Promise<void> {
     try {
-      const r = await proofUrl.mutateAsync({ topupId });
-      window.open(r.url, '_blank', 'noopener,noreferrer');
+      // Opened inside the click, filled when the presigned URL lands.
+      await openExternalWhenReady(async () => (await proofUrl.mutateAsync({ topupId })).url);
     } catch (err) {
       toast.error(serverVerdict(err));
     }

@@ -19,6 +19,7 @@ import {
   Skeleton,
   Textarea,
   useToast,
+  openExternalWhenReady,
 } from '@skydrop/ui/components';
 import {
   useAttachEwaybill,
@@ -102,15 +103,21 @@ function CourierOpsBody({
 
   async function getDocument(docType: string): Promise<void> {
     try {
-      const r = await document.mutateAsync({ shipmentId, docType });
-      if (r.url === null) {
-        toast.error(
-          r.message ??
-            'The courier holds no such document for this parcel. They only serve documents they have not archived.',
-        );
-        return;
-      }
-      window.open(r.url, '_blank', 'noopener,noreferrer');
+      // The tab is opened inside the click and filled when the URL
+      // arrives — a window.open AFTER the await has left the user
+      // gesture and the blocker eats it, so the document silently never
+      // appears.
+      await openExternalWhenReady(async () => {
+        const r = await document.mutateAsync({ shipmentId, docType });
+        if (r.url === null) {
+          toast.error(
+            r.message ??
+              'The courier holds no such document for this parcel. They only serve documents they have not archived.',
+          );
+          return null;
+        }
+        return r.url;
+      });
     } catch (err) {
       toast.error(serverVerdict(err));
     }

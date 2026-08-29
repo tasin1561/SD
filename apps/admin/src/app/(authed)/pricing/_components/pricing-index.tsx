@@ -1,5 +1,6 @@
 'use client';
 
+import { ChargesBackfillCard } from './charges-backfill-card';
 import { useState, type ReactElement } from 'react';
 import { useMutation, type UseMutationResult } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
@@ -137,6 +138,12 @@ export function PricingIndex(): ReactElement {
         title="Pricing preview"
         subtitle="What the engine would charge for a shipment, without creating an order to find out."
       />
+
+      {/* Above the calculator: a shipment nobody priced is worth more
+          than a price nobody asked for. */}
+      <div className="mb-4">
+        <ChargesBackfillCard />
+      </div>
 
       <Card>
         <CardHeader title="The shipment" />

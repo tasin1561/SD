@@ -3,6 +3,7 @@ import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { PricingModule } from '../pricing/pricing.module';
+import { AdminChargesBackfillController } from './controllers/admin-charges-backfill.controller';
 import { AdminOrderChargesController } from './controllers/admin-order-charges.controller';
 import { SellerOrderChargesController } from './controllers/seller-order-charges.controller';
 import { OrderChargesService } from './services/order-charges.service';
@@ -21,7 +22,11 @@ import { OrderChargesService } from './services/order-charges.service';
  */
 @Module({
   imports: [AuthCommonModule, PricingModule],
-  controllers: [AdminOrderChargesController, SellerOrderChargesController],
+  controllers: [
+    AdminChargesBackfillController,
+    AdminOrderChargesController,
+    SellerOrderChargesController,
+  ],
   providers: [OrderChargesService, StaffJwtGuard, SellerJwtGuard],
   exports: [OrderChargesService],
 })

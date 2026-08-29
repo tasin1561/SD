@@ -284,4 +284,80 @@ export class OrderChargesService {
       createdAt: row.createdAt.toISOString(),
     };
   }
+  /**
+   * Give charges to every order that has none.
+   *
+   * ── WHY THIS IS NEEDED AT ALL ────────────────────────────────────
+   * `OrderService.create` computes charges post-commit, which covers
+   * orders born through the service. Anything inserted another way — a
+   * data fix, an import, a seeding script — arrives with none, and an
+   * order with no charge rows is billed NOTHING at delivery, silently:
+   * `debitIfNeeded` sums zero and returns false, so the parcel ships,
+   * the customer is served, and the seller is never invoiced.
+   *
+   * Undelivered orders are included deliberately. Their charges are not
+   * money yet — the debit happens at delivery or at RTO receive — so
+   * writing them now costs nothing and means the fee is already in
+   * place when that moment arrives, instead of depending on this having
+   * been run again.
+   *
+   * ── WHAT IT DOES NOT DO ──────────────────────────────────────────
+   * It never touches a wallet. Persisting a charge ROW records what an
+   * order costs; taking the money is `debitIfNeeded`, which is gated on
+   * a prior ORDER_CHARGES entry and runs at delivery. Retro-BILLING an
+   * order that has already been delivered is a separate decision about
+   * real money against a real seller, and is not something a backfill
+   * should do on its own.
+   */
+  async backfillMissing(opts: { dryRun: boolean; limit: number }): Promise<{
+    examined: number;
+    persisted: number;
+    skipped: number;
+    failed: number;
+    orders: Array<{ orderNumber: string; status: string; outcome: string }>;
+  }> {
+    const candidates = await this.prisma.client.order.findMany({
+      where: { deletedAt: null, charges: { none: { deletedAt: null } } },
+      select: { id: true, orderNumber: true, status: true },
+      // Oldest first: the ones most likely to be delivered already, and
+      // therefore the ones whose absence has cost the most.
+      orderBy: { createdAt: 'asc' },
+      take: opts.limit,
+    });
+
+    const report = {
+      examined: candidates.length,
+      persisted: 0,
+      skipped: 0,
+      failed: 0,
+      orders: [] as Array<{ orderNumber: string; status: string; outcome: string }>,
+    };
+
+    for (const o of candidates) {
+      if (opts.dryRun) {
+        report.orders.push({ orderNumber: o.orderNumber, status: o.status, outcome: 'WOULD_ADD' });
+        continue;
+      }
+      try {
+        const res = await this.persistForOrderSystem(o.id);
+        if ('skipped' in res) {
+          report.skipped += 1;
+          report.orders.push({ orderNumber: o.orderNumber, status: o.status, outcome: res.reason });
+        } else {
+          report.persisted += 1;
+          report.orders.push({ orderNumber: o.orderNumber, status: o.status, outcome: 'ADDED' });
+        }
+      } catch (err) {
+        // One order's pricing failure must not abandon the rest — the
+        // same per-item isolation the courier sagas use.
+        report.failed += 1;
+        report.orders.push({
+          orderNumber: o.orderNumber,
+          status: o.status,
+          outcome: err instanceof Error ? err.message : 'FAILED',
+        });
+      }
+    }
+    return report;
+  }
 }
