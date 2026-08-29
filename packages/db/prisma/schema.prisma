@@ -3034,6 +3034,27 @@ model Shipment {
   // behavior is identical to before R6.
   rtoReceivedWarehouseId String?          @map("rto_received_warehouse_id") @db.Uuid
   expectedDeliveryAt     DateTime?        @map("expected_delivery_at") @db.Timestamptz
+  /// What the COURIER says they will collect at the door, as opposed to
+  /// `codAmountInr`, which is what we told them to. They should agree;
+  /// when they do not, one of us is wrong about money and the parcel is
+  /// already moving. Stored so the disagreement is detectable before it
+  /// arrives as a remittance that is short.
+  courierCollectableInr  Decimal?         @map("courier_collectable_inr") @db.Decimal(12, 2)
+  /// When the courier says they physically collected it. Ours is the
+  /// handover transition; theirs is the scan. A gap between them is a
+  /// parcel that sat on our dock.
+  courierPickedUpAt      DateTime?        @map("courier_picked_up_at") @db.Timestamptz
+  /// Their routing code — the facility path the parcel is booked on.
+  /// Opaque to us and the first thing their support asks for.
+  courierSortCode        String?          @map("courier_sort_code")
+  /// The courier's own current status line and where it was set.
+  ///
+  /// NOT AUTHORITATIVE, and deliberately so: the latest `tracking_events`
+  /// row already holds this, and this is a convenience mirror for
+  /// listing screens that would otherwise join the hypertable per row.
+  /// Anything deciding something reads the scan, not these.
+  courierStatusLine      String?          @map("courier_status_line")
+  courierStatusLocation  String?          @map("courier_status_location")
   isManualCourier        Boolean          @default(false) @map("is_manual_courier")
   // Module 9 — supersede chain (CUR-7). `supersedesShipmentId` points
   // NEW → OLD (the replacement carries the FK); the OLD shipment reads

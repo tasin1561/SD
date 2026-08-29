@@ -1,6 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { OrderEventType, OrderStatus, ShipmentStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import {
+  NslInterpretationService,
+  type NslMeaning,
+} from '../../tracking-events/services/nsl-interpretation.service';
 
 export type MilestoneOwner = 'SKYDROP' | 'COURIER';
 export type MilestoneState = 'DONE' | 'CURRENT' | 'PENDING' | 'SKIPPED';
@@ -27,6 +31,30 @@ export interface JourneyEntry {
   /** The courier's own code for this scan, where they gave one. */
   readonly nslCode: string | null;
   readonly rawStatus: string | null;
+  /**
+   * A failed delivery, when this line IS one.
+   *
+   * Attached to the scan rather than emitted as a second entry: the
+   * webhook processor writes the attempt row and the tracking event for
+   * the SAME real-world moment (TRK-2), so merging both as lines would
+   * print every failed delivery twice.
+   */
+  readonly attempt: {
+    readonly number: number;
+    readonly reason: string | null;
+    readonly notes: string | null;
+    readonly nextAttemptAt: Date | null;
+    /** The driver who tried. Delhivery supplies this so the shipper can
+     *  follow up, and it has been captured and shown to nobody. */
+    readonly agentName: string | null;
+    readonly agentPhone: string | null;
+    /** Did the driver reach the customer, and what did they say. */
+    readonly contactedCustomer: boolean | null;
+    readonly customerResponse: string | null;
+    /** The courier's own code, and what it means — including whether a
+     *  re-attempt can even be asked for on it. */
+    readonly nsl: NslMeaning | null;
+  } | null;
 }
 
 export interface JourneyParcel {
@@ -41,9 +69,16 @@ export interface JourneyParcel {
   readonly chargeableWeightGrams: number | null;
   readonly dimensionsCm: string | null;
   readonly expectedDeliveryAt: Date | null;
-  /** What the courier collects at the door. */
+  /** What WE told the courier to collect. */
   readonly collectableAmountInr: string | null;
+  /** What the COURIER says they will collect. Shown beside ours only
+   *  when they disagree — a silent mismatch is money. */
+  readonly courierCollectableInr: string | null;
   readonly paymentMode: string;
+  readonly courierPickedUpAt: Date | null;
+  readonly courierSortCode: string | null;
+  readonly courierStatusLine: string | null;
+  readonly courierStatusLocation: string | null;
 }
 
 export interface OrderJourney {
@@ -86,7 +121,10 @@ export interface OrderJourney {
  */
 @Injectable()
 export class OrderJourneyService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly nsl: NslInterpretationService,
+  ) {}
 
   /**
    * @param sellerId when given, the order must belong to them — this is
@@ -142,9 +180,30 @@ export class OrderJourneyService {
                 heightCm: true,
                 codAmountInr: true,
                 expectedDeliveryAt: true,
+                courierCollectableInr: true,
+                courierPickedUpAt: true,
+                courierSortCode: true,
+                courierStatusLine: true,
+                courierStatusLocation: true,
                 pickCompletedAt: true,
                 packCompletedAt: true,
                 awbGeneratedAt: true,
+                deliveryAttempts: {
+                  select: {
+                    attemptNumber: true,
+                    attemptedAt: true,
+                    outcome: true,
+                    failureReason: true,
+                    failureNotes: true,
+                    nextAttemptScheduledAt: true,
+                    agentName: true,
+                    agentPhone: true,
+                    contactedCustomer: true,
+                    customerResponse: true,
+                    courierNslCode: true,
+                  },
+                  orderBy: { attemptedAt: 'asc' },
+                },
                 trackingEvents: {
                   select: {
                     eventAt: true,
@@ -223,9 +282,14 @@ export class OrderJourneyService {
         // collect; the order's is what we bill on. They should agree,
         // and the parcel's is the one the customer will be asked for.
         collectableAmountInr: (s.codAmountInr ?? order.codAmountInr)?.toFixed(2) ?? null,
+        courierCollectableInr: s.courierCollectableInr?.toFixed(2) ?? null,
         paymentMode: order.paymentMode,
+        courierPickedUpAt: s.courierPickedUpAt,
+        courierSortCode: s.courierSortCode,
+        courierStatusLine: s.courierStatusLine,
+        courierStatusLocation: s.courierStatusLocation,
       })),
-      timeline: this.buildTimeline(order.events, scans),
+      timeline: this.buildTimeline(order.events, scans, live?.deliveryAttempts ?? []),
     };
   }
 
@@ -398,7 +462,45 @@ export class OrderJourneyService {
       rawCourierStatus: string | null;
       isVisibleToCustomer: boolean;
     }>,
+    attempts: ReadonlyArray<{
+      attemptNumber: number;
+      attemptedAt: Date;
+      failureReason: string | null;
+      failureNotes: string | null;
+      nextAttemptScheduledAt: Date | null;
+      agentName: string | null;
+      agentPhone: string | null;
+      contactedCustomer: boolean | null;
+      customerResponse: string | null;
+      courierNslCode: string | null;
+    }>,
   ): JourneyEntry[] {
+    // ── ONE LINE PER REAL-WORLD MOMENT ────────────────────────────────
+    // The webhook processor writes the delivery_attempts row and the
+    // tracking_event for the SAME failed delivery (TRK-2, attempt
+    // FIRST). Emitting both as timeline lines would print every failed
+    // delivery twice — so the attempt ENRICHES its scan instead.
+    //
+    // Matched to the minute, which is the same tolerance the tracking
+    // page already uses: the two rows are written in one saga but not
+    // in one statement, so their timestamps agree to the minute rather
+    // than to the millisecond.
+    const minute = (d: Date): string => d.toISOString().slice(0, 16);
+    const byMinute = new Map<string, (typeof attempts)[number]>();
+    for (const a of attempts) byMinute.set(minute(a.attemptedAt), a);
+    const claimed = new Set<string>();
+
+    const asAttempt = (a: (typeof attempts)[number]): JourneyEntry['attempt'] => ({
+      number: a.attemptNumber,
+      reason: a.failureReason,
+      notes: a.failureNotes,
+      nextAttemptAt: a.nextAttemptScheduledAt,
+      agentName: a.agentName,
+      agentPhone: a.agentPhone,
+      contactedCustomer: a.contactedCustomer,
+      customerResponse: a.customerResponse,
+      nsl: this.nsl.interpret(a.courierNslCode),
+    });
     const ours: JourneyEntry[] = events.map((e) => ({
       at: e.createdAt,
       owner: 'SKYDROP',
@@ -407,23 +509,46 @@ export class OrderJourneyService {
       location: null,
       nslCode: null,
       rawStatus: null,
+      attempt: null,
     }));
 
     const theirs: JourneyEntry[] = scans
       // UNMAPPABLE and audit-only scans are marked invisible by the M10
       // processor; they are for us, not for a seller reading a story.
       .filter((s) => s.isVisibleToCustomer)
-      .map((s) => ({
-        at: s.eventAt,
-        owner: 'COURIER',
-        title: s.description ?? humanizeStatus(s.status),
-        detail: s.description === null ? null : humanizeStatus(s.status),
-        location: s.locationName ?? s.locationCity,
-        nslCode: s.nslCode,
-        rawStatus: s.rawCourierStatus,
+      .map((s) => {
+        const hit = byMinute.get(minute(s.eventAt)) ?? null;
+        if (hit !== null) claimed.add(minute(s.eventAt));
+        return {
+          at: s.eventAt,
+          owner: 'COURIER' as const,
+          title: s.description ?? humanizeStatus(s.status),
+          detail: s.description === null ? null : humanizeStatus(s.status),
+          location: s.locationName ?? s.locationCity,
+          nslCode: s.nslCode,
+          rawStatus: s.rawCourierStatus,
+          attempt: hit === null ? null : asAttempt(hit),
+        };
+      });
+
+    // An attempt with NO scan to attach to still has to appear. A
+    // manually-recorded attempt (TRK-9) has no scan by construction,
+    // and dropping it would lose the reason a delivery failed — which
+    // is the single most useful line on the page when one does.
+    const orphaned: JourneyEntry[] = attempts
+      .filter((a) => !claimed.has(minute(a.attemptedAt)))
+      .map((a) => ({
+        at: a.attemptedAt,
+        owner: 'COURIER' as const,
+        title: `Delivery attempt ${String(a.attemptNumber)}`,
+        detail: a.failureReason,
+        location: null,
+        nslCode: null,
+        rawStatus: null,
+        attempt: asAttempt(a),
       }));
 
-    return [...ours, ...theirs].sort((a, b) => b.at.getTime() - a.at.getTime());
+    return [...ours, ...theirs, ...orphaned].sort((a, b) => b.at.getTime() - a.at.getTime());
   }
 }
 

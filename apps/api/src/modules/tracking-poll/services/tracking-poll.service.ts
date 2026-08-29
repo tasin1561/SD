@@ -381,6 +381,14 @@ export class TrackingPollService {
     const data: Record<string, unknown> = {};
     if (facts.chargedWeightGrams != null) data['chargeableWeightGrams'] = facts.chargedWeightGrams;
     if (facts.expectedDeliveryAt != null) data['expectedDeliveryAt'] = facts.expectedDeliveryAt;
+    if (facts.collectableAmountInr != null)
+      data['courierCollectableInr'] = facts.collectableAmountInr;
+    if (facts.pickedUpAt != null) data['courierPickedUpAt'] = facts.pickedUpAt;
+    if (facts.sortCode != null) data['courierSortCode'] = facts.sortCode;
+    if (facts.currentStatus != null) data['courierStatusLine'] = facts.currentStatus;
+    if (facts.currentStatusLocation != null) {
+      data['courierStatusLocation'] = facts.currentStatusLocation;
+    }
     if (Object.keys(data).length === 0) return;
 
     try {

@@ -1,6 +1,7 @@
 import { OrderStatus, ShipmentStatus } from '@skydrop/db';
 import { OrderJourneyService } from '../../src/modules/order-journey/services/order-journey.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
+import { NslInterpretationService } from '../../src/modules/tracking-events/services/nsl-interpretation.service';
 
 type AnyArgs = any;
 
@@ -23,9 +24,12 @@ function makeService(over: AnyArgs = {}) {
           ...over,
         },
   );
-  const svc = new OrderJourneyService({
-    client: { order: { findFirst } },
-  } as unknown as PrismaService);
+  const svc = new OrderJourneyService(
+    { client: { order: { findFirst } } } as unknown as PrismaService,
+    // The real interpreter: the codes it recognises are Delhivery's own
+    // published list, so mocking it would test nothing.
+    new NslInterpretationService(),
+  );
   return { svc, findFirst };
 }
 
@@ -189,6 +193,77 @@ describe('OrderJourneyService — the ladder', () => {
 
     const j = await svc.forOrder('order-1', 'seller-1');
     expect(j.timeline).toHaveLength(1);
+  });
+
+  it('attaches a failed delivery to its scan instead of printing it twice', async () => {
+    const at = '2026-08-28T09:00:00Z';
+    const { svc } = makeService({
+      orderShipments: [
+        shipment({
+          trackingEvents: [
+            scan(ShipmentStatus.DELIVERY_ATTEMPTED, at, { description: 'Delivery attempted' }),
+          ],
+          deliveryAttempts: [
+            {
+              attemptNumber: 2,
+              attemptedAt: new Date(at),
+              failureReason: 'CUSTOMER_UNAVAILABLE',
+              failureNotes: 'Nobody at the flat',
+              nextAttemptScheduledAt: new Date('2026-08-29T09:00:00Z'),
+              agentName: 'R. Das',
+              agentPhone: '+919812345678',
+              contactedCustomer: true,
+              customerResponse: 'Asked for tomorrow',
+              courierNslCode: 'EOD-74',
+            },
+          ],
+        }),
+      ],
+    });
+
+    const j = await svc.forOrder('order-1', 'seller-1');
+
+    // The processor writes the attempt row AND the scan for the same
+    // moment (TRK-2); two lines would print every failed delivery twice.
+    expect(j.timeline).toHaveLength(1);
+    const a = j.timeline[0]?.attempt;
+    expect(a?.number).toBe(2);
+    expect(a?.agentPhone).toBe('+919812345678');
+    expect(a?.customerResponse).toBe('Asked for tomorrow');
+    expect(a?.contactedCustomer).toBe(true);
+    // Interpreted, and the actionable half is what leads.
+    expect(a?.nsl?.code).toBe('EOD-74');
+    expect(a?.nsl?.reAttemptable).toBe(true);
+  });
+
+  it('still shows an attempt that has no scan to attach to', async () => {
+    const { svc } = makeService({
+      orderShipments: [
+        shipment({
+          trackingEvents: [],
+          deliveryAttempts: [
+            {
+              attemptNumber: 1,
+              attemptedAt: new Date('2026-08-28T09:00:00Z'),
+              failureReason: 'CUSTOMER_REFUSED',
+              failureNotes: null,
+              nextAttemptScheduledAt: null,
+              agentName: null,
+              agentPhone: null,
+              contactedCustomer: null,
+              customerResponse: null,
+              courierNslCode: null,
+            },
+          ],
+        }),
+      ],
+    });
+
+    // A manually-recorded attempt (TRK-9) has no scan by construction,
+    // and dropping it would lose the reason a delivery failed.
+    const j = await svc.forOrder('order-1', 'seller-1');
+    expect(j.timeline).toHaveLength(1);
+    expect(j.timeline[0]?.attempt?.number).toBe(1);
   });
 
   it('scopes to the seller IN THE QUERY, so another seller sees a 404', async () => {

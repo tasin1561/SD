@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AdminOrderJourneyController } from './controllers/admin-order-journey.controller';
 import { SellerOrderJourneyController } from './controllers/seller-order-journey.controller';
 import { OrderJourneyService } from './services/order-journey.service';
+import { NslInterpretationService } from '../tracking-events/services/nsl-interpretation.service';
 
 /**
  * Module — the order journey (read-only).
@@ -13,6 +14,6 @@ import { OrderJourneyService } from './services/order-journey.service';
  */
 @Module({
   controllers: [SellerOrderJourneyController, AdminOrderJourneyController],
-  providers: [OrderJourneyService],
+  providers: [OrderJourneyService, NslInterpretationService],
 })
 export class OrderJourneyModule {}

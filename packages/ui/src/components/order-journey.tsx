@@ -24,6 +24,22 @@ export interface JourneyEntryView {
   readonly location: string | null;
   readonly nslCode: string | null;
   readonly rawStatus: string | null;
+  readonly attempt: {
+    readonly number: number;
+    readonly reason: string | null;
+    readonly notes: string | null;
+    readonly nextAttemptAt: string | null;
+    readonly agentName: string | null;
+    readonly agentPhone: string | null;
+    readonly contactedCustomer: boolean | null;
+    readonly customerResponse: string | null;
+    readonly nsl: {
+      readonly code: string;
+      readonly plain: string | null;
+      readonly reAttemptable: boolean;
+      readonly reschedulable: boolean;
+    } | null;
+  } | null;
 }
 
 export interface JourneyParcelView {
@@ -37,7 +53,12 @@ export interface JourneyParcelView {
   readonly dimensionsCm: string | null;
   readonly expectedDeliveryAt: string | null;
   readonly collectableAmountInr: string | null;
+  readonly courierCollectableInr: string | null;
   readonly paymentMode: string;
+  readonly courierPickedUpAt: string | null;
+  readonly courierSortCode: string | null;
+  readonly courierStatusLine: string | null;
+  readonly courierStatusLocation: string | null;
 }
 
 function fmt(at: string | null): string {
@@ -204,8 +225,48 @@ export function ParcelFacts({
         ) : (
           <span className="tabular-nums">₹{parcel.collectableAmountInr}</span>
         ),
-      ...(parcel.paymentMode === 'COD' ? { hint: 'What the courier collects at the door' } : {}),
+      ...(parcel.paymentMode === 'COD'
+        ? {
+            hint:
+              // A DISAGREEMENT about money on a parcel already moving.
+              // Silent, this arrives weeks later as a remittance that is
+              // short; stated, it is a phone call today.
+              parcel.courierCollectableInr !== null &&
+              parcel.courierCollectableInr !== parcel.collectableAmountInr
+                ? `The courier says ₹${parcel.courierCollectableInr} — this does not match`
+                : 'What the courier collects at the door',
+          }
+        : {}),
     },
+    {
+      label: 'Collected by courier',
+      value:
+        parcel.courierPickedUpAt === null ? (
+          <span className="text-text-faint">Not yet</span>
+        ) : (
+          fmt(parcel.courierPickedUpAt)
+        ),
+    },
+    ...(parcel.courierStatusLine === null
+      ? []
+      : [
+          {
+            label: "Courier's own status",
+            value: parcel.courierStatusLine,
+            ...(parcel.courierStatusLocation === null
+              ? {}
+              : { hint: parcel.courierStatusLocation }),
+          },
+        ]),
+    ...(parcel.courierSortCode === null
+      ? []
+      : [
+          {
+            // Opaque to us, and the first thing their support asks for.
+            label: 'Routing code',
+            value: <span className="font-mono text-xs">{parcel.courierSortCode}</span>,
+          },
+        ]),
   ];
 
   return (
@@ -280,14 +341,96 @@ export function JourneyTimeline({
             </div>
             {e.detail !== null && <div className="text-text-muted text-xs">{e.detail}</div>}
             {e.location !== null && <div className="text-text-faint text-xs">{e.location}</div>}
-            {showCourierCodes && e.nslCode !== null && (
+            {showCourierCodes && e.nslCode !== null && e.attempt === null && (
               <div className="text-text-faint mt-0.5 font-mono text-[11px]">{e.nslCode}</div>
             )}
+            {e.attempt !== null && <AttemptDetail attempt={e.attempt} />}
           </div>
         </li>
       ))}
     </ol>
   );
+}
+
+/**
+ * Everything the courier told us about a failed delivery.
+ *
+ * ── WHY ALL OF IT, AND TO THE SELLER ─────────────────────────────────
+ * Every field here was already captured on every failed delivery and
+ * shown to nobody. The driver's name and number in particular: Delhivery
+ * supplies them so the shipper can follow up, and a seller chasing a
+ * failed COD parcel had them sitting in our database with no way to see
+ * them.
+ *
+ * The NSL code is shown WITH its interpretation, and the interpretation
+ * leads with what can be DONE — whether a re-attempt is even accepted on
+ * this code — because that is the actionable half and the only half
+ * Delhivery actually publishes. An unrecognised code prints as itself
+ * rather than as a guess: telling a seller their customer refused the
+ * parcel when the code meant the office was shut is worse than telling
+ * them nothing, because they act on it.
+ */
+function AttemptDetail({
+  attempt,
+}: {
+  readonly attempt: NonNullable<JourneyEntryView['attempt']>;
+}): ReactElement {
+  return (
+    <div className="border-border bg-surface-raised mt-1.5 flex flex-col gap-1 rounded-lg border px-2.5 py-2 text-xs">
+      <div className="flex flex-wrap items-baseline gap-x-2">
+        <span className="font-medium">Delivery attempt {attempt.number}</span>
+        {attempt.reason !== null && (
+          <span className="text-text-muted">{humanise(attempt.reason)}</span>
+        )}
+      </div>
+
+      {attempt.notes !== null && <div className="text-text-muted">{attempt.notes}</div>}
+
+      {attempt.contactedCustomer !== null && (
+        <div className="text-text-muted">
+          {attempt.contactedCustomer ? 'Reached the customer' : 'Could not reach the customer'}
+          {attempt.customerResponse !== null && ` — “${attempt.customerResponse}”`}
+        </div>
+      )}
+
+      {attempt.nextAttemptAt !== null && (
+        <div className="text-text-muted">Next attempt {fmt(attempt.nextAttemptAt)}</div>
+      )}
+
+      {(attempt.agentName !== null || attempt.agentPhone !== null) && (
+        <div className="text-text-muted">
+          Driver {attempt.agentName ?? 'unnamed'}
+          {attempt.agentPhone !== null && (
+            <>
+              {' · '}
+              <a href={`tel:${attempt.agentPhone}`} className="text-accent hover:underline">
+                {attempt.agentPhone}
+              </a>
+            </>
+          )}
+        </div>
+      )}
+
+      {attempt.nsl !== null && (
+        <div className="text-text-faint">
+          <span className="font-mono">{attempt.nsl.code}</span>
+          {attempt.nsl.plain !== null ? (
+            <> — {attempt.nsl.plain}</>
+          ) : (
+            <> — meaning not in our table</>
+          )}
+          {attempt.nsl.reAttemptable && ' · a re-attempt can be requested'}
+          {attempt.nsl.reschedulable && ' · a pickup reschedule applies'}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** `CUSTOMER_UNAVAILABLE` → `Customer unavailable`. */
+function humanise(v: string): string {
+  const lower = v.toLowerCase().replace(/_/g, ' ');
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
 
 /** The three panels together, as both order pages use them. */
