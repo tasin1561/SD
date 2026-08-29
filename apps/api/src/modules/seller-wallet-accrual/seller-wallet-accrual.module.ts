@@ -3,6 +3,8 @@ import { Module } from '@nestjs/common';
 // delivery with none is billed nothing, silently. No cycle: order-charges
 // imports pricing and auth-common only.
 import { OrderChargesModule } from '../order-charges/order-charges.module';
+import { AdminChargesBillingController } from './controllers/admin-charges-billing.controller';
+import { ChargesBillingBackfillService } from './services/charges-billing-backfill.service';
 import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.module';
 import { SellerWalletModule } from '../seller-wallet/seller-wallet.module';
 import { SettingsModule } from '../settings/settings.module';
@@ -59,7 +61,9 @@ import { InboundFreightModule } from '../inbound-freight/inbound-freight.module'
     // (global default, seller override wins).
     PricingModule,
   ],
+  controllers: [AdminChargesBillingController],
   providers: [
+    ChargesBillingBackfillService,
     OrderDeliveredAccrualListener,
     OrderChargesAccrualService,
     OrderChargesRefundService,

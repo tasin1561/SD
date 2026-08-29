@@ -2,7 +2,12 @@
 
 import { useState, type ReactElement } from 'react';
 import { Button, Card, CardBody, CardHeader, ErrorNote, useToast } from '@skydrop/ui/components';
-import { useBackfillCharges, type ChargesBackfillReport } from '@/lib/ops-hooks';
+import {
+  useBackfillCharges,
+  useBillUnbilled,
+  type ChargesBackfillReport,
+  type BillingBackfillReport,
+} from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 
@@ -93,6 +98,111 @@ export function ChargesBackfillCard(): ReactElement | null {
                   {' '}
                   — {report.persisted} added, {report.skipped} already had them, {report.failed}{' '}
                   failed
+                </>
+              )}
+              .
+            </p>
+            {report.orders.length > 0 && (
+              <ul className="border-border mt-2 flex max-h-64 flex-col gap-1 overflow-y-auto rounded-lg border p-2">
+                {report.orders.map((o) => (
+                  <li key={o.orderNumber} className="flex flex-wrap gap-x-2 text-xs">
+                    <span className="font-mono">{o.orderNumber}</span>
+                    <span className="text-text-faint">{o.status}</span>
+                    <span className="text-text-muted ml-auto">{o.outcome}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+/**
+ * Charge the orders that finished unbilled.
+ *
+ * ── WHY THIS IS A SECOND CARD AND NOT A THIRD BUTTON ─────────────────
+ * The card above writes charge ROWS — it records what an order cost.
+ * This takes the money out of a seller's balance. They are one keystroke
+ * apart and a world apart in consequence, so they do not share a
+ * surface: nobody correcting missing data should be able to debit
+ * fifteen sellers by clicking one button along.
+ *
+ * Preview is mandatory, and the confirm names the amount and the count,
+ * because "£X across N sellers" is the sentence somebody should have to
+ * read before agreeing to it.
+ */
+export function BillUnbilledCard(): ReactElement | null {
+  const canBill = usePermission('money.wallets.bill_unbilled');
+  const bill = useBillUnbilled();
+  const toast = useToast();
+  const [report, setReport] = useState<BillingBackfillReport | null>(null);
+  const [previewed, setPreviewed] = useState(false);
+
+  if (!canBill) return null;
+
+  function run(dryRun: boolean): void {
+    if (!dryRun) {
+      const n = report?.examined ?? 0;
+      // The last thing between an operator and other people's money.
+      if (!window.confirm(`Charge ${String(n)} order(s)? This debits real seller balances.`))
+        return;
+    }
+    bill.mutate(
+      { dryRun },
+      {
+        onSuccess: (r) => {
+          setReport(r);
+          setPreviewed(dryRun);
+          if (!dryRun) toast.success(`Billed ${String(r.billed)} order(s) — ₹${r.totalInr}.`);
+        },
+        onError: (err) => toast.error(serverVerdict(err)),
+      },
+    );
+  }
+
+  return (
+    <Card tone="critical">
+      <CardHeader title="Orders that finished unbilled" />
+      <CardBody>
+        <p className="text-text-muted mb-3 text-xs leading-relaxed">
+          Delivered or returned orders whose carriage was never taken. This is a real debit against
+          a real seller balance — not a correction to a record. Only orders whose journey has ended
+          are eligible; an in-transit one is billed when it lands.
+        </p>
+
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => run(true)} disabled={bill.isPending}>
+            {bill.isPending ? 'Checking…' : 'Preview'}
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => run(false)}
+            disabled={bill.isPending || report === null || !previewed || report.examined === 0}
+          >
+            Charge them
+          </Button>
+        </div>
+
+        {bill.isError && (
+          <div className="mt-3">
+            <ErrorNote message={serverVerdict(bill.error)} />
+          </div>
+        )}
+
+        {report !== null && (
+          <div className="mt-3">
+            <p className="text-sm">
+              {previewed ? 'Would charge' : 'Charged'}{' '}
+              <span className="font-medium">{report.examined}</span> order
+              {report.examined === 1 ? '' : 's'}
+              {!previewed && (
+                <>
+                  {' '}
+                  — {report.billed} billed (₹{report.totalInr}), {report.skipped} had nothing to
+                  bill, {report.failed} failed
                 </>
               )}
               .

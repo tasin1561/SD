@@ -2513,3 +2513,45 @@ export function useBackfillCharges(): UseMutationResult<
     },
   });
 }
+
+export interface BillingBackfillReport {
+  readonly examined: number;
+  readonly billed: number;
+  readonly skipped: number;
+  readonly failed: number;
+  readonly totalInr: string;
+  readonly orders: ReadonlyArray<{
+    readonly orderNumber: string;
+    readonly status: string;
+    readonly outcome: string;
+  }>;
+}
+
+/**
+ * Charge delivered/returned orders that were never billed.
+ *
+ * A REAL debit against a real seller balance — separate from the
+ * charge-row backfill, which only records what an order cost.
+ */
+export function useBillUnbilled(): UseMutationResult<
+  BillingBackfillReport,
+  Error,
+  { dryRun: boolean }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dryRun }) =>
+      client.request<BillingBackfillReport>('/api/admin/wallets/charges/bill-unbilled', {
+        method: 'POST',
+        body: JSON.stringify({ dryRun }),
+      }),
+    onSuccess: (_r, vars) => {
+      if (!vars.dryRun) {
+        // Balances moved: anything showing one is stale.
+        void qc.invalidateQueries({ queryKey: ['admin-seller-wallets'] });
+        void qc.invalidateQueries({ queryKey: ['admin-orders'] });
+      }
+    },
+  });
+}

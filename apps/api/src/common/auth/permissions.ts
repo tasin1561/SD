@@ -425,6 +425,14 @@ export const PERMISSIONS = [
     group: 'Money',
   },
   {
+    key: 'money.wallets.bill_unbilled',
+    label: 'Bill orders that were never charged',
+    description:
+      'Charge delivered or returned orders whose carriage was never taken — a real debit against a real seller balance. Deliberately NOT money.wallets.reconcile, which says in its own description that it cannot move money.',
+    group: 'Money',
+    dangerous: true,
+  },
+  {
     key: 'money.topups.review',
     label: 'Accept or reject a top-up',
     description:

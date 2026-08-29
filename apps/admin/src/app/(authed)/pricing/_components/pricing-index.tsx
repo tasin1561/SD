@@ -1,6 +1,6 @@
 'use client';
 
-import { ChargesBackfillCard } from './charges-backfill-card';
+import { BillUnbilledCard, ChargesBackfillCard } from './charges-backfill-card';
 import { useState, type ReactElement } from 'react';
 import { useMutation, type UseMutationResult } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
@@ -141,8 +141,9 @@ export function PricingIndex(): ReactElement {
 
       {/* Above the calculator: a shipment nobody priced is worth more
           than a price nobody asked for. */}
-      <div className="mb-4">
+      <div className="mb-4 flex flex-col gap-4">
         <ChargesBackfillCard />
+        <BillUnbilledCard />
       </div>
 
       <Card>
