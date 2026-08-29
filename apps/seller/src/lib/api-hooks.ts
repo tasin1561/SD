@@ -1,5 +1,10 @@
 'use client';
 
+import type {
+  JourneyEntryView,
+  JourneyMilestoneView,
+  JourneyParcelView,
+} from '@skydrop/ui/components';
 import {
   useInfiniteQuery,
   useMutation,
@@ -1779,5 +1784,31 @@ export function useSetWithdrawalSchedule(): UseMutationResult<
       // showing the old ones beside the control that just changed them.
       void qc.invalidateQueries({ queryKey: ['seller-wallet', 'terms'] });
     },
+  });
+}
+
+export interface OrderJourneyView {
+  readonly orderId: string;
+  readonly orderNumber: string;
+  readonly orderStatus: string;
+  readonly milestones: readonly JourneyMilestoneView[];
+  readonly parcels: readonly JourneyParcelView[];
+  readonly timeline: readonly JourneyEntryView[];
+}
+
+/**
+ * Milestones, parcel facts and the merged Skydrop + courier history.
+ *
+ * One request rather than three: the ladder, the weights and the
+ * timeline are all derived from the same read, and splitting them would
+ * make the page assemble a story out of three round trips that can
+ * disagree about how far the parcel has got.
+ */
+export function useOrderJourney(id: string): UseQueryResult<OrderJourneyView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-orders', 'journey', id],
+    queryFn: () => client.request<OrderJourneyView>(`/api/seller/orders/${id}/journey`),
+    enabled: Boolean(id),
   });
 }

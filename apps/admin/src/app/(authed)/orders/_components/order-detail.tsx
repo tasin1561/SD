@@ -16,12 +16,17 @@ import {
   PageHeader,
   Section,
   Table,
+  OrderJourneyPanels,
+  SkeletonRows,
+  ErrorNote,
 } from '@skydrop/ui/components';
 import { OrderActionsPanel } from './order-actions-panel';
 import { OrderChargesSection } from './order-charges';
 import { OrderShipmentsSection } from './order-shipments-section';
 import { StuckOrderRecovery } from './stuck-order-recovery';
 import { OrderTimelineSection } from './order-timeline-section';
+import { useOrderJourney } from '@/lib/ops-hooks';
+import { serverVerdict } from '@/lib/server-verdict';
 
 /**
  * Order detail. Single-fetch (admin /orders/:id). Renders:
@@ -264,7 +269,14 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             <OrderShipmentsSection orderId={orderId} orderStatus={detail.data.status} />
           </Section>
 
-          <Section title="Timeline">
+          {/* The whole journey — the stage ladder, what the courier
+              says the parcel weighs and will collect, and our handling
+              merged with their scans. Staff also see the courier's own
+              NSL codes: an agent explaining a delay needs the code the
+              courier will quote back at them. */}
+          <OrderJourneySection orderId={orderId} />
+
+          <Section title="Order events">
             <OrderTimelineSection orderId={orderId} />
           </Section>
 
@@ -279,5 +291,33 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * The journey panels, with its own failure surface.
+ *
+ * Separate from the order body on purpose: the journey reads courier
+ * data, and a courier read that is briefly unavailable must not blank
+ * the recipient and the items an agent has the customer on the phone
+ * about.
+ */
+function OrderJourneySection({ orderId }: { readonly orderId: string }): ReactElement {
+  const journey = useOrderJourney(orderId);
+  if (journey.isPending) return <SkeletonRows rows={4} />;
+  if (journey.isError || journey.data === undefined) {
+    return (
+      <Section title="Order tracker">
+        <ErrorNote message={serverVerdict(journey.error)} retry={() => void journey.refetch()} />
+      </Section>
+    );
+  }
+  return (
+    <OrderJourneyPanels
+      milestones={journey.data.milestones}
+      parcels={journey.data.parcels}
+      entries={journey.data.timeline}
+      showCourierCodes
+    />
   );
 }

@@ -19,6 +19,7 @@ export * from './card';
 export * from './data-table';
 export * from './feedback';
 export * from './money';
+export * from './order-journey';
 export * from './form';
 export * from './modal';
 export * from './menu-button';

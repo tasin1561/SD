@@ -1,3 +1,4 @@
+import type { CourierParcelFacts } from '../../courier-delhivery/types/delhivery.types';
 import {
   COURIER_TRACKING_SOURCES,
   type CourierTrackingSource,
@@ -318,6 +319,11 @@ export class TrackingPollService {
           const shipment = byAwb.get(result.awbNumber);
           if (!shipment) continue;
           try {
+            // What the courier says the parcel IS, before what happened
+            // to it. Best-effort and non-fatal: these are enrichment,
+            // and losing them must never stop a scan being applied,
+            // because the scan is what moves the order.
+            await this.applyParcelFacts(shipment.id, result.facts);
             const applied = await this.applyNewScans(shipment, result.scans, source);
             summary.scansApplied += applied.scansApplied;
             summary.transitions += applied.transitions;
@@ -351,6 +357,40 @@ export class TrackingPollService {
     }
 
     return { summary, moved: !totalFailure };
+  }
+
+  /**
+   * Record the courier's own statement of what the parcel is.
+   *
+   * ── WHY THESE ARE WRITTEN ONLY WHEN STATED ───────────────────────
+   * Each field is set only when the courier actually sent it. A poll
+   * that omits the chargeable weight must not blank a weight an earlier
+   * poll established — their responses thin out as a parcel ages, and
+   * treating silence as "no longer true" would erase the number an
+   * invoice is built on.
+   *
+   * Not a transaction and not fatal: the scans are the point of the
+   * cycle, and a failure here is enrichment lost for twenty minutes
+   * rather than an order that stopped moving.
+   */
+  private async applyParcelFacts(
+    shipmentId: string,
+    facts: CourierParcelFacts | undefined,
+  ): Promise<void> {
+    if (facts === undefined) return;
+    const data: Record<string, unknown> = {};
+    if (facts.chargedWeightGrams != null) data['chargeableWeightGrams'] = facts.chargedWeightGrams;
+    if (facts.expectedDeliveryAt != null) data['expectedDeliveryAt'] = facts.expectedDeliveryAt;
+    if (Object.keys(data).length === 0) return;
+
+    try {
+      await this.prisma.client.shipment.update({ where: { id: shipmentId }, data });
+    } catch (err) {
+      this.logger.warn(
+        { shipmentId, err: errMsg(err) },
+        'Could not record courier parcel facts; scans still applied',
+      );
+    }
   }
 
   /** Shipments keyed by the account that booked them. */

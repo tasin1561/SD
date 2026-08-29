@@ -1,5 +1,10 @@
 'use client';
 
+import type {
+  JourneyEntryView,
+  JourneyMilestoneView,
+  JourneyParcelView,
+} from '@skydrop/ui/components';
 import {
   useMutation,
   useQuery,
@@ -2443,5 +2448,31 @@ export function useServiceabilityCheck(
       client.request<{ serviceable: boolean; reason: string | null; known: boolean }>(
         `/api/admin/serviceability?pincode=${pin}&paymentMode=${paymentMode}`,
       ),
+  });
+}
+
+export interface OrderJourneyView {
+  readonly orderId: string;
+  readonly orderNumber: string;
+  readonly orderStatus: string;
+  readonly milestones: readonly JourneyMilestoneView[];
+  readonly parcels: readonly JourneyParcelView[];
+  readonly timeline: readonly JourneyEntryView[];
+}
+
+/**
+ * Milestones, parcel facts and the merged Skydrop + courier history.
+ *
+ * One request rather than three: the ladder, the weights and the
+ * timeline are all derived from the same read, and splitting them would
+ * make the page assemble a story out of three round trips that can
+ * disagree about how far the parcel has got.
+ */
+export function useOrderJourney(id: string): UseQueryResult<OrderJourneyView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-orders', 'journey', id],
+    queryFn: () => client.request<OrderJourneyView>(`/api/admin/orders/${id}/journey`),
+    enabled: Boolean(id),
   });
 }

@@ -6,13 +6,12 @@ import { ArrowLeft, Clock, Pencil, PhoneCall, XCircle } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import type { OrderStatus } from '@skydrop/db';
 import { ApiError } from '@skydrop/api-client';
-import type { SellerOrderEventView } from '@skydrop/api-client';
 import {
   useGenerateInvoice,
   useOrderDetail,
   useOrderReattemptRequests,
-  useOrderEvents,
   useOrderInvoice,
+  useOrderJourney,
 } from '@/lib/api-hooks';
 import {
   Button,
@@ -27,13 +26,16 @@ import {
   Table,
   useToast,
   ProductThumb,
+  OrderJourneyPanels,
+  SkeletonRows,
+  ErrorNote,
 } from '@skydrop/ui/components';
 import { OrderParcelTracking } from './order-parcel-tracking';
-import { OrderTimeline } from './order-timeline';
 import { DeliveryTroublePanel } from '../[id]/_components/delivery-trouble-panel';
 import { CancelOrderDialog } from './cancel-order-dialog';
 import { ReattemptRequestDialog } from './reattempt-request-dialog';
 import { OrderChargesSection } from './order-charges';
+import { serverVerdict } from '@/lib/server-verdict';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 
@@ -101,7 +103,6 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
   const canRequest = reattempts.data?.canRequest ?? false;
   const pendingRequest = requests.find((r) => r.status === 'PENDING') ?? null;
   const lastDecided = requests.find((r) => r.status !== 'PENDING') ?? null;
-  const events = useOrderEvents(orderId);
   const identity = useSellerIdentity();
   const [cancelOpen, setCancelOpen] = useState(false);
   const [reattemptOpen, setReattemptOpen] = useState(false);
@@ -378,19 +379,16 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             <OrderInvoiceSection orderId={orderId} status={detail.data.status} />
           </Section>
 
-          {/* Where the parcel physically IS, above the order's own
-              status history. A seller asking "where is it" should not
-              have to find an AWB and go somewhere else to answer it. */}
+          {/* The whole journey — the stage ladder, what the courier
+              says the parcel weighs and will collect, and our own
+              handling merged with their scans into one history.
+              Replaces a bare scan list next to a near-empty timeline,
+              which between them never showed that Skydrop had taken
+              the order, phoned the customer, picked or packed it. */}
+          <OrderJourneySection orderId={orderId} />
+
           <Section title="Parcel tracking">
             <OrderParcelTracking orderId={orderId} />
-          </Section>
-
-          <Section title="Timeline">
-            <OrderTimelineSection
-              loading={events.isLoading}
-              error={events.error?.message ?? null}
-              events={events.data ?? null}
-            />
           </Section>
 
           <div className="text-text-faint text-xs text-center mt-8">
@@ -416,27 +414,31 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
   );
 }
 
-function OrderTimelineSection({
-  loading,
-  error,
-  events,
-}: {
-  loading: boolean;
-  error: string | null;
-  events: readonly SellerOrderEventView[] | null;
-}): ReactElement {
-  if (loading) return <LoadingState label="Loading timeline…" />;
-  if (error) return <ErrorState message={`Failed to load timeline: ${error}`} />;
-  if (!events || events.length === 0) {
+/**
+ * The journey panels.
+ *
+ * Its own failure surface rather than one shared with the order body:
+ * the journey is enrichment, and a courier read that is briefly
+ * unavailable must not blank the recipient and the items a seller came
+ * to check.
+ */
+function OrderJourneySection({ orderId }: { readonly orderId: string }): ReactElement | null {
+  const journey = useOrderJourney(orderId);
+  if (journey.isPending) return <SkeletonRows rows={4} />;
+  if (journey.isError || journey.data === undefined) {
     return (
-      <Card>
-        <CardBody>
-          <p className="text-text-muted text-sm">No seller-visible events yet.</p>
-        </CardBody>
-      </Card>
+      <Section title="Order tracker">
+        <ErrorNote message={serverVerdict(journey.error)} retry={() => void journey.refetch()} />
+      </Section>
     );
   }
-  return <OrderTimeline events={events} />;
+  return (
+    <OrderJourneyPanels
+      milestones={journey.data.milestones}
+      parcels={journey.data.parcels}
+      entries={journey.data.timeline}
+    />
+  );
 }
 
 function OrderInvoiceSection({

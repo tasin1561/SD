@@ -3,6 +3,7 @@ import type { CourierCredentialActor } from '../../courier-shared/services/couri
 import { toIsoWithIst } from '../../tracking-events/services/courier-time';
 import { DelhiveryHttpService } from './delhivery-http.service';
 import type {
+  CourierParcelFacts,
   CourierTrackingResult,
   DelhiveryClient,
   DelhiveryRawScan,
@@ -61,6 +62,38 @@ interface DelhiveryScanDetail {
 interface DelhiveryShipment {
   AWB?: string | number;
   Scans?: Array<{ ScanDetail?: DelhiveryScanDetail }>;
+
+  /**
+   * ── THE ENVELOPE WE USED TO THROW AWAY ─────────────────────────────
+   * The parser read `AWB` and `Scans` and dropped the rest, so the
+   * weight Delhivery actually charges us for, the date they now expect
+   * to deliver, and the amount they will collect at the door were all
+   * arriving on every poll and being discarded. Their own panel shows
+   * all three; ours could not, because we never kept them.
+   *
+   * Every one is optional and read defensively. Their naming varies
+   * across surfaces and account types — hence the alternates below —
+   * and a field that is absent must read as "not stated" rather than
+   * as a zero.
+   */
+  Status?: {
+    Status?: string;
+    StatusType?: string;
+    StatusDateTime?: string;
+    StatusLocation?: string;
+    Instructions?: string;
+  };
+  /** Their belt weight, in GRAMS. */
+  ChargedWeight?: number | string | null;
+  /** Seen as both on different surfaces. */
+  ExpectedDeliveryDate?: string | null;
+  PromisedDeliveryDate?: string | null;
+  EDD?: string | null;
+  PickUpDate?: string | null;
+  /** What they will collect at the door. */
+  CODAmount?: number | string | null;
+  Sortcode?: string | null;
+  ReferenceNo?: string | number | null;
 }
 
 interface DelhiveryTrackResponse {
@@ -74,6 +107,51 @@ interface DelhiveryTrackResponse {
 /** Delhivery scan timestamps are IST without a zone offset — the
  *  courier operates in India. Append the IST offset when the string
  *  carries none so Date parses to the correct instant. */
+
+/** A courier number that may arrive as a string, or not at all. */
+function num(v: number | string | null | undefined): number | null {
+  if (v === null || v === undefined) return null;
+  const n = typeof v === 'number' ? v : Number(String(v).trim());
+  // NaN and negatives are refused rather than stored: a negative
+  // chargeable weight is not a fact, it is a parse that went wrong, and
+  // storing it would put it on an invoice.
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/** A courier date, IST and usually without a zone. */
+function when(v: string | null | undefined): Date | null {
+  const raw = (v ?? '').trim();
+  if (raw === '') return null;
+  const d = new Date(toIsoWithIst(raw));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Read the parcel-level facts, taking the first field that is actually
+ * present.
+ *
+ * The alternates are not defensive padding — Delhivery names the
+ * expected-delivery field differently across their surfaces, and a
+ * parser that knows only one name reports "no ETA" on an account that
+ * has been sending one all along.
+ */
+function parcelFacts(shipment: DelhiveryShipment): CourierParcelFacts {
+  const cod = num(shipment.CODAmount);
+  return {
+    chargedWeightGrams: num(shipment.ChargedWeight),
+    expectedDeliveryAt: when(shipment.ExpectedDeliveryDate ?? shipment.EDD),
+    promisedDeliveryAt: when(shipment.PromisedDeliveryDate),
+    pickedUpAt: when(shipment.PickUpDate),
+    // A string, because money is a string everywhere else in this
+    // codebase and a float here would round differently than every
+    // other figure on the page.
+    collectableAmountInr: cod === null ? null : cod.toFixed(2),
+    sortCode: shipment.Sortcode ?? null,
+    currentStatus: shipment.Status?.Status ?? null,
+    currentStatusLocation: shipment.Status?.StatusLocation ?? null,
+    currentInstructions: shipment.Status?.Instructions ?? null,
+  };
+}
 
 @Injectable()
 export class DelhiveryTrackingFetchService implements Pick<DelhiveryClient, 'fetchTracking'> {
@@ -157,7 +235,7 @@ export class DelhiveryTrackingFetchService implements Pick<DelhiveryClient, 'fet
       }
       // Oldest-first so the poll service applies scans in order.
       scans.sort((a, b) => a.eventAtIso.localeCompare(b.eventAtIso));
-      results.push({ awbNumber, scans });
+      results.push({ awbNumber, scans, facts: parcelFacts(shipment) });
     }
 
     this.logger.debug(

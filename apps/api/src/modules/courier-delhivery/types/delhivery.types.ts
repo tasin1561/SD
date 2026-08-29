@@ -185,9 +185,59 @@ export type NormalizedScan =
  * oldest-first (the poll service applies each scan newer than the
  * shipment's tracking-event watermark, in order).
  */
+/**
+ * The facts a courier states about the parcel ITSELF, as opposed to the
+ * scans describing its journey.
+ *
+ * ── WHY THIS IS SEPARATE FROM THE SCANS ──────────────────────────────
+ * A scan says where the parcel was at a moment. These say what the
+ * parcel IS — what it weighs once they put it on their belt, what they
+ * will collect at the door, when they now expect to deliver it. They
+ * change rarely and each one supersedes the last, so they belong on the
+ * shipment row rather than as another line in a timeline.
+ *
+ * EVERY field is optional, and that is the design rather than laziness:
+ * these are read defensively out of a response whose exact shape varies
+ * by account and by how far along the parcel is. A missing field means
+ * "they have not told us yet", which is different from zero — a
+ * chargeable weight of 0 would be a free parcel and an ETA of the epoch
+ * would be a promise we already broke.
+ */
+export interface CourierParcelFacts {
+  /** What the courier will actually BILL us for, once weighed on their
+   *  belt. Frequently differs from what the seller declared, and it is
+   *  their number that appears on the invoice. */
+  chargedWeightGrams?: number | null;
+  /** When they now expect to deliver. Moves as the parcel travels. */
+  expectedDeliveryAt?: Date | null;
+  /** What they committed to at booking. Distinct from expected: the
+   *  gap between the two is the delay, and averaging it is how a
+   *  courier's reliability becomes a number rather than a feeling. */
+  promisedDeliveryAt?: Date | null;
+  /** When it was physically collected from us. */
+  pickedUpAt?: Date | null;
+  /** What they will collect at the door. OUR record of the COD is what
+   *  we bill on, but THIS is what the customer will be asked for, and
+   *  a disagreement between them is worth surfacing rather than
+   *  discovering from a remittance that is short. */
+  collectableAmountInr?: string | null;
+  /** Their routing code — the facility path the parcel is booked on. */
+  sortCode?: string | null;
+  /** The courier's own current status line, verbatim. */
+  currentStatus?: string | null;
+  currentStatusLocation?: string | null;
+  currentInstructions?: string | null;
+}
+
 export interface CourierTrackingResult {
   awbNumber: string;
   scans: DelhiveryRawScan[];
+  /**
+   * Parcel-level facts, when the courier stated any. Optional so a
+   * source that only produces scans (a webhook push, a stub) does not
+   * have to invent an empty object.
+   */
+  facts?: CourierParcelFacts;
 }
 
 /**

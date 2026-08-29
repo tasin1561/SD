@@ -1,0 +1,310 @@
+'use client';
+
+import type { ReactElement } from 'react';
+import { Card, CardBody, CardHeader } from './card';
+
+export type MilestoneOwner = 'SKYDROP' | 'COURIER';
+export type MilestoneState = 'DONE' | 'CURRENT' | 'PENDING' | 'SKIPPED';
+
+export interface JourneyMilestoneView {
+  readonly key: string;
+  readonly label: string;
+  readonly owner: MilestoneOwner;
+  readonly at: string | null;
+  readonly state: MilestoneState;
+  readonly detail: string | null;
+  readonly estimated: boolean;
+}
+
+export interface JourneyEntryView {
+  readonly at: string;
+  readonly owner: MilestoneOwner;
+  readonly title: string;
+  readonly detail: string | null;
+  readonly location: string | null;
+  readonly nslCode: string | null;
+  readonly rawStatus: string | null;
+}
+
+export interface JourneyParcelView {
+  readonly shipmentId: string;
+  readonly shipmentNumber: string;
+  readonly awbNumber: string | null;
+  readonly courierCode: string;
+  readonly status: string;
+  readonly declaredWeightGrams: number | null;
+  readonly chargeableWeightGrams: number | null;
+  readonly dimensionsCm: string | null;
+  readonly expectedDeliveryAt: string | null;
+  readonly collectableAmountInr: string | null;
+  readonly paymentMode: string;
+}
+
+function fmt(at: string | null): string {
+  if (at === null) return '—';
+  return new Date(at).toLocaleString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function fmtDate(at: string | null): string {
+  if (at === null) return '—';
+  return new Date(at).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+/**
+ * The stage ladder — every step of the parcel's life, ours and theirs.
+ *
+ * ── WHY OWNERSHIP IS ON THE FACE OF IT ───────────────────────────────
+ * A seller chasing a late parcel needs to know WHO to chase, and the
+ * answer is nearly always readable from where the ladder stopped: stuck
+ * before "Handed to courier" is ours to fix, stuck after it is the
+ * courier's. Labelling each rung removes the question rather than
+ * leaving it to be inferred from the wording.
+ *
+ * SKIPPED renders differently from PENDING on purpose. A rung a later
+ * one has already overtaken did not happen and never will — an order
+ * confirmed by an admin override was never phoned — and showing it as
+ * still-to-come would mean the ladder never completes.
+ */
+export function JourneyLadder({
+  milestones,
+}: {
+  readonly milestones: readonly JourneyMilestoneView[];
+}): ReactElement {
+  return (
+    <ol className="flex flex-col">
+      {milestones.map((m, i) => {
+        const last = i === milestones.length - 1;
+        const done = m.state === 'DONE' || m.state === 'CURRENT';
+        return (
+          <li key={m.key} className="flex gap-3">
+            {/* Rail: the dot plus the line to the next rung. */}
+            <div className="flex flex-col items-center" aria-hidden>
+              <span
+                className={[
+                  'mt-1 h-2.5 w-2.5 shrink-0 rounded-full',
+                  m.state === 'CURRENT'
+                    ? 'bg-accent ring-accent/30 ring-4'
+                    : m.state === 'DONE'
+                      ? 'bg-accent'
+                      : m.state === 'SKIPPED'
+                        ? 'bg-border'
+                        : 'border-border border bg-transparent',
+                ].join(' ')}
+              />
+              {!last && (
+                <span
+                  className={['w-px flex-1', done ? 'bg-accent/40' : 'bg-border'].join(' ')}
+                  style={{ minHeight: '1.5rem' }}
+                />
+              )}
+            </div>
+
+            <div className={['min-w-0 flex-1', last ? 'pb-0' : 'pb-4'].join(' ')}>
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <span
+                  className={[
+                    'text-sm',
+                    m.state === 'CURRENT'
+                      ? 'font-semibold'
+                      : m.state === 'PENDING' || m.state === 'SKIPPED'
+                        ? 'text-text-faint'
+                        : 'font-medium',
+                  ].join(' ')}
+                >
+                  {m.label}
+                </span>
+                <span className="text-text-faint text-[11px] tracking-wide uppercase">
+                  {m.owner === 'SKYDROP' ? 'Skydrop' : 'Courier'}
+                </span>
+                {m.state === 'SKIPPED' && (
+                  <span className="text-text-faint text-[11px]">not needed</span>
+                )}
+              </div>
+
+              {m.at !== null && (
+                <div className="text-text-muted mt-0.5 text-xs">
+                  {m.estimated ? `Estimated ${fmtDate(m.at)}` : fmt(m.at)}
+                </div>
+              )}
+              {m.detail !== null && (
+                <div className="text-text-faint mt-0.5 text-xs">{m.detail}</div>
+              )}
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/**
+ * What the courier says the parcel IS.
+ *
+ * The chargeable weight is shown NEXT TO the declared one whenever they
+ * differ, because the gap is the whole story: the courier bills on
+ * theirs, and a seller seeing only their own number cannot understand
+ * the invoice. Identical values collapse to one line — a difference
+ * highlighted only when it exists is a difference somebody notices.
+ */
+export function ParcelFacts({ parcel }: { readonly parcel: JourneyParcelView }): ReactElement {
+  const declared = parcel.declaredWeightGrams;
+  const charged = parcel.chargeableWeightGrams;
+  const differs = declared !== null && charged !== null && declared !== charged;
+
+  const rows: Array<{ label: string; value: ReactElement | string; hint?: string }> = [
+    {
+      label: 'Chargeable weight',
+      value:
+        charged === null ? (
+          <span className="text-text-faint">Not yet weighed</span>
+        ) : (
+          <span className="tabular-nums">{charged} g</span>
+        ),
+      ...(differs ? { hint: `You declared ${String(declared)} g` } : {}),
+    },
+    {
+      label: 'Dimensions',
+      value: parcel.dimensionsCm ?? <span className="text-text-faint">—</span>,
+    },
+    {
+      label: 'Expected delivery',
+      value:
+        parcel.expectedDeliveryAt === null ? (
+          <span className="text-text-faint">Not stated yet</span>
+        ) : (
+          fmtDate(parcel.expectedDeliveryAt)
+        ),
+    },
+    {
+      label: 'Collectable amount',
+      value:
+        // PREPAID collects nothing, and that is a fact rather than a
+        // missing value — an em-dash here reads as "we do not know".
+        parcel.paymentMode !== 'COD' ? (
+          <span className="text-text-faint">Nothing — prepaid</span>
+        ) : parcel.collectableAmountInr === null ? (
+          <span className="text-text-faint">—</span>
+        ) : (
+          <span className="tabular-nums">₹{parcel.collectableAmountInr}</span>
+        ),
+      ...(parcel.paymentMode === 'COD' ? { hint: 'What the courier collects at the door' } : {}),
+    },
+  ];
+
+  return (
+    <dl className="flex flex-col gap-2.5">
+      {rows.map((r) => (
+        <div key={r.label} className="flex flex-wrap items-baseline justify-between gap-2">
+          <dt className="text-text-muted text-xs">{r.label}</dt>
+          <dd className="text-right text-sm">
+            {r.value}
+            {r.hint !== undefined && (
+              <span className="text-text-faint block text-[11px]">{r.hint}</span>
+            )}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/**
+ * Our events and the courier's scans, as ONE story.
+ *
+ * Two panels showing the same parcel's life is a reconciliation
+ * exercise for the reader. Each line is tagged with who did it, so the
+ * merge stays legible rather than becoming an undifferentiated list.
+ */
+export function JourneyTimeline({
+  entries,
+  showCourierCodes = false,
+}: {
+  readonly entries: readonly JourneyEntryView[];
+  /** Staff see the courier's own status code; sellers do not — it is
+   *  vocabulary they never asked to learn. */
+  readonly showCourierCodes?: boolean;
+}): ReactElement {
+  if (entries.length === 0) {
+    return <p className="text-text-faint text-sm">Nothing has happened to this order yet.</p>;
+  }
+  return (
+    <ol className="flex flex-col gap-3">
+      {entries.map((e, i) => (
+        <li key={`${e.at}-${i}`} className="flex gap-3">
+          <span
+            aria-hidden
+            className={[
+              'mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full',
+              e.owner === 'COURIER' ? 'bg-accent' : 'bg-text-faint',
+            ].join(' ')}
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <span className="text-sm font-medium">{e.title}</span>
+              <span className="text-text-faint text-[11px] tracking-wide uppercase">
+                {e.owner === 'SKYDROP' ? 'Skydrop' : 'Courier'}
+              </span>
+              <span className="text-text-faint ml-auto text-xs whitespace-nowrap">{fmt(e.at)}</span>
+            </div>
+            {e.detail !== null && <div className="text-text-muted text-xs">{e.detail}</div>}
+            {e.location !== null && <div className="text-text-faint text-xs">{e.location}</div>}
+            {showCourierCodes && e.nslCode !== null && (
+              <div className="text-text-faint mt-0.5 font-mono text-[11px]">{e.nslCode}</div>
+            )}
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** The three panels together, as both order pages use them. */
+export function OrderJourneyPanels({
+  milestones,
+  parcels,
+  entries,
+  showCourierCodes = false,
+}: {
+  readonly milestones: readonly JourneyMilestoneView[];
+  readonly parcels: readonly JourneyParcelView[];
+  readonly entries: readonly JourneyEntryView[];
+  readonly showCourierCodes?: boolean;
+}): ReactElement {
+  const parcel = parcels[parcels.length - 1] ?? null;
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+        <Card>
+          <CardHeader title="Order tracker" />
+          <CardBody>
+            <JourneyLadder milestones={milestones} />
+          </CardBody>
+        </Card>
+        {parcel !== null && (
+          <Card>
+            <CardHeader title="Parcel" />
+            <CardBody>
+              <ParcelFacts parcel={parcel} />
+            </CardBody>
+          </Card>
+        )}
+      </div>
+      <Card>
+        <CardHeader title="Full history" />
+        <CardBody>
+          <JourneyTimeline entries={entries} showCourierCodes={showCourierCodes} />
+        </CardBody>
+      </Card>
+    </div>
+  );
+}

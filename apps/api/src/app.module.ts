@@ -36,6 +36,7 @@ import { InventoryCycleCountModule } from './modules/inventory-cycle-count/inven
 import { InventoryTransferModule } from './modules/inventory-transfer/inventory-transfer.module';
 import { InventoryUnitModule } from './modules/inventory-unit/inventory-unit.module';
 import { OrderModule } from './modules/order/order.module';
+import { OrderJourneyModule } from './modules/order-journey/order-journey.module';
 import { OrderReattemptModule } from './modules/order-reattempt/order-reattempt.module';
 import { OrderCsvImportModule } from './modules/order-csv-import/order-csv-import.module';
 import { CallCenterModule } from './modules/call-center/call-center.module';
@@ -159,6 +160,7 @@ import { CourierShiprocketModule } from './modules/courier-shiprocket/courier-sh
     InventoryTransferModule,
     InventoryUnitModule,
     OrderModule,
+    OrderJourneyModule,
     OrderReattemptModule,
     OrderCsvImportModule,
     CallCenterModule,

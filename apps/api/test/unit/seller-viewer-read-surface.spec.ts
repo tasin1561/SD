@@ -51,12 +51,15 @@ const OPTED_IN: Readonly<Record<string, string>> = {
   'seller-order.controller.ts': 'their own orders — the role exists to read these',
   'seller-tracking.controller.ts':
     'where those same parcels are; the nav already shows Tracking on orders.view, so refusing it would be a link to a 403',
+  'seller-order-journey.controller.ts':
+    'the same order, told as a story — the stages it passed through and the courier scans. It is a strict re-presentation of what :id and :id/events already return to this role, so refusing it would render the order page half-empty for a VIEWER rather than read-only',
 };
 
 /** GETs that opt-in reaches, listed so a new one is a decision. */
 const READABLE_GETS: Readonly<Record<string, readonly string[]>> = {
   'seller-order.controller.ts': ['', ':id', ':id/events'],
   'seller-tracking.controller.ts': ['', 'order/:orderId', ':shipmentId'],
+  'seller-order-journey.controller.ts': [':id/journey'],
 };
 
 /**
