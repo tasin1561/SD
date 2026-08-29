@@ -515,59 +515,22 @@ function OrderInvoiceSection({
               {invoice.data.totalInr}
             </div>
           </div>
-          {invoice.data.pdfUrl !== null && <InvoiceDownload invoice={invoice} />}
+          {invoice.data.pdfUrl !== null && (
+            // A PLAIN, PERMANENT href. The endpoint signs at the moment
+            // it is followed, so there is no expiring URL in the page —
+            // this survives a bookmark, a refresh and a slow reader,
+            // and needs no popup-blocker dance.
+            <a
+              href={`/api/seller/orders/${orderId}/invoice/pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent inline-flex items-center gap-1 text-sm hover:underline"
+            >
+              Download PDF →
+            </a>
+          )}
         </div>
       </CardBody>
     </Card>
-  );
-}
-
-/**
- * Download the invoice with a link minted at CLICK time.
- *
- * ── WHY NOT JUST href={pdfUrl} ───────────────────────────────────────
- * The URL is presigned with a 15-minute TTL (nothing in the bucket is
- * public). Rendered straight into an href it is correct on page load
- * and dead a quarter of an hour later — so a seller who opens an order,
- * reads it, and clicks Download gets the same AccessDenied XML page
- * this replaced. Re-fetching on click makes the link as fresh as the
- * moment it is used.
- *
- * The tab is opened SYNCHRONOUSLY, inside the click, and pointed at the
- * URL once it arrives: a `window.open` after an await has lost the user
- * gesture and popup blockers eat it.
- */
-function InvoiceDownload({
-  invoice,
-}: {
-  readonly invoice: ReturnType<typeof useOrderInvoice>;
-}): ReactElement {
-  const [busy, setBusy] = useState(false);
-
-  async function run(): Promise<void> {
-    setBusy(true);
-    const tab = window.open('', '_blank', 'noopener,noreferrer');
-    try {
-      const fresh = await invoice.refetch();
-      const url = fresh.data?.pdfUrl ?? null;
-      if (url !== null && tab !== null) tab.location.href = url;
-      else tab?.close();
-    } catch {
-      // Nothing to show in a blank tab we cannot fill.
-      tab?.close();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={() => void run()}
-      disabled={busy}
-      className="text-accent inline-flex items-center gap-1 text-sm hover:underline disabled:opacity-60"
-    >
-      {busy ? 'Preparing…' : 'Download PDF →'}
-    </button>
   );
 }

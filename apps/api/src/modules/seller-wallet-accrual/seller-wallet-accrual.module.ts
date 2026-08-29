@@ -1,4 +1,8 @@
 import { Module } from '@nestjs/common';
+// Charges are computed before the money is taken — an order reaching
+// delivery with none is billed nothing, silently. No cycle: order-charges
+// imports pricing and auth-common only.
+import { OrderChargesModule } from '../order-charges/order-charges.module';
 import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.module';
 import { SellerWalletModule } from '../seller-wallet/seller-wallet.module';
 import { SettingsModule } from '../settings/settings.module';
@@ -44,6 +48,7 @@ import { InboundFreightModule } from '../inbound-freight/inbound-freight.module'
  */
 @Module({
   imports: [
+    OrderChargesModule,
     LifecycleEventsModule,
     SellerWalletModule,
     SettingsModule,

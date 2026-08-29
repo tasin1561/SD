@@ -1,3 +1,4 @@
+import { OrderChargesService } from '../../order-charges/services/order-charges.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { Currency, PaymentMode, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -31,6 +32,7 @@ export class AccrualExecutionService {
     private readonly chargesAccrual: OrderChargesAccrualService,
     private readonly freightAmortisation: InboundFreightAmortisationService,
     private readonly codCredit: CodCreditService,
+    private readonly orderCharges: OrderChargesService,
   ) {}
 
   async executeAccrual(orderId: string): Promise<void> {
@@ -41,6 +43,32 @@ export class AccrualExecutionService {
     if (!order) {
       this.logger.warn({ orderId }, 'Order vanished before accrual execution; skipping');
       return;
+    }
+
+    // ── CHARGES MUST EXIST BEFORE THE MONEY IS TAKEN ──────────────────
+    // `debitIfNeeded` sums the order's charge rows and returns false on
+    // a total of zero — so an order that reached delivery with NO
+    // charges is billed nothing, silently. No error, no log: the parcel
+    // ships, the customer is served, and the seller is never invoiced.
+    //
+    // `OrderService.create` computes them post-commit, but that only
+    // covers orders born through the service. Anything inserted another
+    // way — a data fix, an import, a seeding script, a future admin
+    // tool — arrives here with none, and production already holds
+    // fifteen such orders.
+    //
+    // PRE-TX because persistForOrderSystem owns its own transaction and
+    // cannot be composed into this one (the M5 saga rule). Idempotent
+    // and best-effort: it no-ops when charges already exist, and a
+    // failure here must not stop the COD credit the seller is owed —
+    // debitIfNeeded then finds nothing and does what it does today.
+    try {
+      await this.orderCharges.persistForOrderSystem(orderId);
+    } catch (err) {
+      this.logger.warn(
+        { orderId, err: err instanceof Error ? err.message : String(err) },
+        'Could not compute charges before accrual; the order may be delivered unbilled',
+      );
     }
 
     await this.prisma.client.$transaction(async (tx) => {

@@ -7,8 +7,10 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentSeller } from '../../common/decorators/current-seller.decorator';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
@@ -58,6 +60,47 @@ export class SellerInvoiceController {
       });
     }
     return inv;
+  }
+
+  /**
+   * Send the browser to the PDF.
+   *
+   * ── WHY A REDIRECT RATHER THAN A URL IN THE JSON ─────────────────
+   * A presigned URL lives 15 minutes. Handed to the page as a field and
+   * rendered into an href, it is correct on load and dead a quarter of
+   * an hour later — so a seller who opens an order, reads it, and then
+   * clicks Download gets an AccessDenied page from the bucket. Every
+   * workaround for that lives in the client: re-fetch on click, mind
+   * the popup blocker, hope nobody bookmarks it.
+   *
+   * A redirect moves the freshness to the only place that can
+   * guarantee it. The link is a plain, permanent, same-origin href; the
+   * signature is minted at the moment it is followed and is never in
+   * the page at all. It survives a bookmark, a refresh and a slow
+   * reader, and the seller's own proxy passes the 302 through
+   * (`redirect: 'manual'`) so the browser fetches the object directly
+   * rather than streaming it back through us.
+   */
+  @Get('pdf')
+  @SellerAuthAllowSuspended()
+  @ApiOperation({ summary: 'Redirect to a freshly-signed URL for the invoice PDF' })
+  async pdf(
+    @CurrentSeller() seller: AuthenticatedSeller,
+    @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.assertOwned(seller.id, id);
+    const inv = await this.svc.getForSellerOrder(seller.id, id);
+    if (inv === null || inv.pdfUrl === null) {
+      throw new NotFoundException({
+        code: 'INVOICE_PDF_NOT_FOUND',
+        message: 'No invoice PDF for this order yet.',
+      });
+    }
+    // 302, not 301: the signature is good for minutes, and a permanent
+    // redirect is exactly the thing a browser would cache and replay
+    // after it has expired.
+    res.redirect(HttpStatus.FOUND, inv.pdfUrl);
   }
 
   @Post()

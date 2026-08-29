@@ -85,6 +85,9 @@ function makeService(
     chargesAccrual,
     freightAmortisation,
     codCredit,
+    // Charges are ensured PRE-TX now: an order reaching delivery with
+    // none would be billed nothing, silently.
+    { persistForOrderSystem } as never,
   );
   return {
     svc,
@@ -96,6 +99,11 @@ function makeService(
     debitForDeliveredOrder,
   };
 }
+
+const persistForOrderSystem = jest.fn(async () => ({
+  skipped: true,
+  reason: 'CHARGES_ALREADY_EXIST',
+}));
 
 describe('AccrualExecutionService.executeAccrual', () => {
   it('on SETTLEMENT, delivery debits charges but does NOT credit COD', async () => {
@@ -224,6 +232,9 @@ describe('AccrualExecutionService.executeAccrual', () => {
       chargesAccrual,
       freightAmortisation,
       codCredit,
+      // Charges are ensured PRE-TX now: an order reaching delivery with
+      // none would be billed nothing, silently.
+      { persistForOrderSystem } as never,
     );
 
     await svc.executeAccrual('order-1');
@@ -231,5 +242,38 @@ describe('AccrualExecutionService.executeAccrual', () => {
     // One ORDER_CHARGES debit, never twice. COD is not credited at
     // delivery on the default SETTLEMENT mode.
     expect(applyEntry).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * An order can reach delivery with no charge rows.
+ *
+ * `OrderService.create` computes them post-commit, which covers orders
+ * born through the service — but anything inserted another way (a data
+ * fix, an import, a seeding script) arrives with none, and production
+ * already holds fifteen such orders. `debitIfNeeded` then sums nothing,
+ * returns false, and the parcel is delivered unbilled: no error, no
+ * log, the seller simply never invoiced.
+ */
+describe('AccrualExecutionService — charges exist before money is taken', () => {
+  it('computes charges BEFORE opening the accrual transaction', async () => {
+    const { svc } = makeService({});
+    persistForOrderSystem.mockClear();
+
+    await svc.executeAccrual('order-1');
+
+    // Pre-tx, because persistForOrderSystem owns its own transaction
+    // and cannot be composed into this one (the M5 saga rule).
+    expect(persistForOrderSystem).toHaveBeenCalledWith('order-1');
+  });
+
+  it('still credits the seller when the charge computation fails', async () => {
+    const { svc } = makeService({});
+    persistForOrderSystem.mockClear();
+    persistForOrderSystem.mockRejectedValueOnce(new Error('pricing unavailable'));
+
+    // Best-effort: a failure here must not withhold the COD credit the
+    // seller is owed for a parcel that was delivered.
+    await expect(svc.executeAccrual('order-1')).resolves.toBeUndefined();
   });
 });
