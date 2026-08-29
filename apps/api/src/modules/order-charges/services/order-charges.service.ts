@@ -103,8 +103,24 @@ export class OrderChargesService {
     try {
       return await this.persistForOrderInternal(orderId, { kind: 'system' });
     } catch (e) {
-      if (e instanceof Error && e.message.includes('CHARGES_ALREADY_EXIST')) {
-        return { skipped: true, reason: 'CHARGES_ALREADY_EXIST' };
+      // ── MATCH THE CODE, NOT THE MESSAGE ──────────────────────────
+      // The throw is `new ConflictException({ code, message })`, so the
+      // code lives in the RESPONSE OBJECT and `e.message` is Nest's own
+      // "Conflict Exception" — it never contained the string this used
+      // to test for. The documented "clean no-op" therefore never
+      // happened: every call on an order that already had charges threw
+      // instead of skipping.
+      //
+      // It hid because the only caller was the post-commit hook at
+      // order create, where charges never exist yet. It surfaced the
+      // moment anything called this on an existing order.
+      if (e instanceof ConflictException) {
+        const res: unknown = e.getResponse();
+        const code =
+          typeof res === 'object' && res !== null ? (res as { code?: unknown }).code : null;
+        if (code === 'CHARGES_ALREADY_EXIST') {
+          return { skipped: true, reason: 'CHARGES_ALREADY_EXIST' };
+        }
       }
       throw e;
     }

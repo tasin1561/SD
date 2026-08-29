@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import { OrderChargesService } from '../../src/modules/order-charges/services/order-charges.service';
 
 type AnyArgs = Record<string, unknown>;
@@ -66,5 +67,48 @@ describe('OrderChargesService.backfillMissing', () => {
     expect(r.persisted).toBe(1);
     // The failure is NAMED, so an operator knows which order to look at.
     expect(r.orders.find((o) => o.outcome === 'no rate card')).toBeDefined();
+  });
+});
+
+/**
+ * The idempotent wrapper has to actually be idempotent.
+ *
+ * `persistForOrderSystem` documents that it treats CHARGES_ALREADY_EXIST
+ * as a clean no-op — and for a long time it did not, because the throw
+ * is `new ConflictException({ code, message })` and the guard tested
+ * `e.message`, which is Nest's own "Conflict Exception" and never
+ * contained the code. It hid because the only caller ran at order
+ * create, where charges never exist yet; it surfaced the moment
+ * anything called it on an order that already had them, and turned
+ * every retro-bill into a failure.
+ */
+describe('persistForOrderSystem is idempotent for real', () => {
+  function serviceWith(err: unknown) {
+    const svc = Object.create(OrderChargesService.prototype) as OrderChargesService;
+    (svc as unknown as AnyArgs)['persistForOrderInternal'] = jest.fn(async () => {
+      throw err;
+    });
+    return svc;
+  }
+
+  it('SKIPS when the order already has charges', async () => {
+    const svc = serviceWith(
+      new ConflictException({
+        code: 'CHARGES_ALREADY_EXIST',
+        // The real message, which does NOT contain the code.
+        message: 'Order abc already has 2 persisted charges; soft-delete first to recompute',
+      }),
+    );
+
+    const r = await svc.persistForOrderSystem('order-1');
+    expect(r).toEqual({ skipped: true, reason: 'CHARGES_ALREADY_EXIST' });
+  });
+
+  it('still throws for a DIFFERENT conflict', async () => {
+    const svc = serviceWith(
+      new ConflictException({ code: 'SOMETHING_ELSE', message: 'not this one' }),
+    );
+    // Swallowing every conflict would hide a real refusal to price.
+    await expect(svc.persistForOrderSystem('order-1')).rejects.toBeInstanceOf(ConflictException);
   });
 });
