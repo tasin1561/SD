@@ -156,7 +156,14 @@ export function JourneyLadder({
  * the invoice. Identical values collapse to one line — a difference
  * highlighted only when it exists is a difference somebody notices.
  */
-export function ParcelFacts({ parcel }: { readonly parcel: JourneyParcelView }): ReactElement {
+export function ParcelFacts({
+  parcel,
+  allParcelsHref,
+}: {
+  readonly parcel: JourneyParcelView;
+  /** Where "all parcels" lives, when the host app has such a page. */
+  readonly allParcelsHref?: string;
+}): ReactElement {
   const declared = parcel.declaredWeightGrams;
   const charged = parcel.chargeableWeightGrams;
   const differs = declared !== null && charged !== null && declared !== charged;
@@ -202,19 +209,34 @@ export function ParcelFacts({ parcel }: { readonly parcel: JourneyParcelView }):
   ];
 
   return (
-    <dl className="flex flex-col gap-2.5">
-      {rows.map((r) => (
-        <div key={r.label} className="flex flex-wrap items-baseline justify-between gap-2">
-          <dt className="text-text-muted text-xs">{r.label}</dt>
-          <dd className="text-right text-sm">
-            {r.value}
-            {r.hint !== undefined && (
-              <span className="text-text-faint block text-[11px]">{r.hint}</span>
-            )}
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <>
+      {/* The parcel's identity, above what it weighs. This used to be
+          the header of a separate tracking panel whose body repeated
+          the history below — the identity was the only part of it that
+          was not already on the page. */}
+      <div className="border-border mb-3 flex flex-wrap items-center gap-2 border-b pb-3">
+        <span className="font-mono text-sm">{parcel.awbNumber ?? parcel.shipmentNumber}</span>
+        <span className="text-text-faint text-xs">{parcel.courierCode}</span>
+        {allParcelsHref !== undefined && (
+          <a href={allParcelsHref} className="text-accent ml-auto text-xs hover:underline">
+            All parcels →
+          </a>
+        )}
+      </div>
+      <dl className="flex flex-col gap-2.5">
+        {rows.map((r) => (
+          <div key={r.label} className="flex flex-wrap items-baseline justify-between gap-2">
+            <dt className="text-text-muted text-xs">{r.label}</dt>
+            <dd className="text-right text-sm">
+              {r.value}
+              {r.hint !== undefined && (
+                <span className="text-text-faint block text-[11px]">{r.hint}</span>
+              )}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </>
   );
 }
 
@@ -274,11 +296,13 @@ export function OrderJourneyPanels({
   parcels,
   entries,
   showCourierCodes = false,
+  allParcelsHref,
 }: {
   readonly milestones: readonly JourneyMilestoneView[];
   readonly parcels: readonly JourneyParcelView[];
   readonly entries: readonly JourneyEntryView[];
   readonly showCourierCodes?: boolean;
+  readonly allParcelsHref?: string;
 }): ReactElement {
   const parcel = parcels[parcels.length - 1] ?? null;
   return (
@@ -294,7 +318,10 @@ export function OrderJourneyPanels({
           <Card>
             <CardHeader title="Parcel" />
             <CardBody>
-              <ParcelFacts parcel={parcel} />
+              <ParcelFacts
+                parcel={parcel}
+                {...(allParcelsHref === undefined ? {} : { allParcelsHref })}
+              />
             </CardBody>
           </Card>
         )}

@@ -201,6 +201,27 @@ describe('OrderJourneyService — the ladder', () => {
     expect(where.sellerId).toBe('seller-1');
   });
 
+  it('a SELLER sees only events marked visible to them', async () => {
+    const { svc, findFirst } = makeService({ orderShipments: [shipment()] });
+    await svc.forOrder('order-1', 'seller-1');
+
+    // isVisibleToSeller DEFAULTS TO FALSE, so an unfiltered read is not
+    // a slightly wider view — it is every internal note and override we
+    // ever wrote about the order.
+    const sel = (findFirst.mock.calls[0]?.[0] as AnyArgs).select;
+    expect(sel.events.where).toEqual({ isVisibleToSeller: true });
+  });
+
+  it('STAFF see every event, including the internal ones', async () => {
+    const { svc, findFirst } = makeService({ orderShipments: [shipment()] });
+    await svc.forOrder('order-1', null);
+
+    // The whole point of the admin view: an agent needs the events the
+    // seller is deliberately not shown.
+    const sel = (findFirst.mock.calls[0]?.[0] as AnyArgs).select;
+    expect(sel.events.where).toBeUndefined();
+  });
+
   it('admin passes no seller scope', async () => {
     const { svc, findFirst } = makeService({ orderShipments: [shipment()] });
     await svc.forOrder('order-1', null);

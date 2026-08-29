@@ -30,7 +30,6 @@ import {
   SkeletonRows,
   ErrorNote,
 } from '@skydrop/ui/components';
-import { OrderParcelTracking } from './order-parcel-tracking';
 import { DeliveryTroublePanel } from '../[id]/_components/delivery-trouble-panel';
 import { CancelOrderDialog } from './cancel-order-dialog';
 import { ReattemptRequestDialog } from './reattempt-request-dialog';
@@ -387,10 +386,6 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               the order, phoned the customer, picked or packed it. */}
           <OrderJourneySection orderId={orderId} />
 
-          <Section title="Parcel tracking">
-            <OrderParcelTracking orderId={orderId} />
-          </Section>
-
           <div className="text-text-faint text-xs text-center mt-8">
             Placed {new Date(detail.data.placedAt).toISOString().replace('T', ' ').slice(0, 16)} ·
             Updated {new Date(detail.data.updatedAt).toISOString().replace('T', ' ').slice(0, 16)}
@@ -437,6 +432,7 @@ function OrderJourneySection({ orderId }: { readonly orderId: string }): ReactEl
       milestones={journey.data.milestones}
       parcels={journey.data.parcels}
       entries={journey.data.timeline}
+      allParcelsHref="/tracking"
     />
   );
 }

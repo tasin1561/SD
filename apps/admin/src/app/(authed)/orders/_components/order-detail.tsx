@@ -24,7 +24,6 @@ import { OrderActionsPanel } from './order-actions-panel';
 import { OrderChargesSection } from './order-charges';
 import { OrderShipmentsSection } from './order-shipments-section';
 import { StuckOrderRecovery } from './stuck-order-recovery';
-import { OrderTimelineSection } from './order-timeline-section';
 import { useOrderJourney } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 
@@ -37,7 +36,7 @@ import { serverVerdict } from '@/lib/server-verdict';
  *   - Notes
  *   - Action panel (sane admin cancel here; god-mode in CP2.10)
  *   - Timeline (full admin events incl. internal-only — uses
- *     /admin/orders/:id/events via OrderTimelineSection)
+ *     the merged Skydrop + courier journey)
  */
 export function OrderDetailView({ orderId }: { orderId: string }): ReactElement {
   const detail = useOrderDetail(orderId);
@@ -275,10 +274,6 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               NSL codes: an agent explaining a delay needs the code the
               courier will quote back at them. */}
           <OrderJourneySection orderId={orderId} />
-
-          <Section title="Order events">
-            <OrderTimelineSection orderId={orderId} />
-          </Section>
 
           <Section title="Actions">
             <OrderActionsPanel order={detail.data} />

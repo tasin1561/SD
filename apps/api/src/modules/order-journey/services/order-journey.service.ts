@@ -109,6 +109,14 @@ export class OrderJourneyService {
         placedAt: true,
         createdAt: true,
         events: {
+          // ── THE SELLER SEES ONLY WHAT WAS MARKED FOR THEM ──────────
+          // `isVisibleToSeller` DEFAULTS TO FALSE (see
+          // OrderEventWriterService), so an unfiltered read is not a
+          // slightly-wider view — it is every internal note, override
+          // and operational transition we ever wrote about the order.
+          // The endpoint this replaced filtered here; omitting it made
+          // the journey a way around that.
+          ...(sellerId === null ? {} : { where: { isVisibleToSeller: true } }),
           select: {
             type: true,
             toStatus: true,

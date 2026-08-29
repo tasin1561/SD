@@ -30,7 +30,6 @@ import type {
   PresignVariantImageRequest,
   PresignVariantImageResponse,
   RegisterVariantImageRequest,
-  SellerOrderEventView,
   SellerProductListResponse,
   SellerProductView,
   SellerStockListResponse,
@@ -145,16 +144,6 @@ export function useOrderReattemptRequests(
       client.request<{ requests: readonly ReattemptRequestView[]; canRequest: boolean }>(
         `/api/seller/orders/${orderId}/reattempt-requests`,
       ),
-  });
-}
-
-export function useOrderEvents(id: string): UseQueryResult<readonly SellerOrderEventView[]> {
-  const client = useApiClient();
-  return useQuery({
-    queryKey: ['seller-orders', 'events', id],
-    queryFn: () =>
-      client.request<readonly SellerOrderEventView[]>(`/api/seller/orders/${id}/events`),
-    enabled: Boolean(id),
   });
 }
 
