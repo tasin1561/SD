@@ -69,6 +69,8 @@ function makeService(
     dispatchByCourier?: Record<string, DispatchAwbResult>;
     /** What CourierDistributionService.pickAlternate returns. */
     alternate?: { courierCode: string; courierAccountId: string } | null;
+    /** Courier codes answering from a stub rather than themselves. */
+    stubCouriers?: string[];
   } = {},
 ) {
   const shipmentFindUnique = jest.fn(async () =>
@@ -155,7 +157,13 @@ function makeService(
     if (opts.fetchLabelThrows) throw opts.fetchLabelThrows;
     return { bytes: Buffer.from('%PDF-1.4 stub'), mimeType: 'application/pdf' };
   });
-  const dispatch = { generate, fetchLabel: dispatchFetchLabel };
+  // Which couriers are answering from a stub. Defaults to "everything
+  // is live", so the existing failover tests keep exercising a real
+  // failover rather than accidentally hitting the mixed-config guard.
+  const isStubMode = jest.fn(async (courierCode: string) =>
+    (opts.stubCouriers ?? []).includes(courierCode),
+  );
+  const dispatch = { generate, fetchLabel: dispatchFetchLabel, isStubMode };
 
   const pickAlternate = jest.fn(async () => opts.alternate ?? null);
   const distribution = { pickAlternate };
@@ -173,6 +181,7 @@ function makeService(
     svc,
     generate,
     pickAlternate,
+    isStubMode,
     putObject,
     txShipmentUpdate,
     txAwbLabelCreate,
@@ -613,5 +622,109 @@ describe('AwbGenerationService — courier failover (symmetric)', () => {
     expect(generate).toHaveBeenCalledTimes(1);
     expect(res.status).toBe('FAILED');
     if (res.status === 'FAILED') expect(res.serviceable).toBe(false);
+  });
+});
+
+/**
+ * The trap a mixed configuration sets, and it is not hypothetical:
+ * production runs Delhivery LIVE against their real API while Shiprocket
+ * has no base URL yet, so it answers from a stub.
+ *
+ * A stub returns a FABRICATED success — a waybill derived from the
+ * shipment id. Right in dev and CI, where both couriers are stubbed and
+ * the failover under test is a real one. Catastrophic when the courier
+ * that refused is live: the parcel comes back "booked" with a waybill
+ * nobody issued, gets dispatched, decrements stock and tells the
+ * customer it shipped, and no van is ever coming. It surfaces as a
+ * parcel that simply never moves.
+ */
+describe('AwbGenerationService — a stub must not answer for a live courier', () => {
+  const REFUSED_LIVE: DispatchAwbResult = {
+    ok: false,
+    awbNumber: null,
+    courierShipmentId: null,
+    serviceable: false,
+    errorCode: 'NON_SERVICEABLE',
+    errorMessage: 'pin not served',
+  };
+
+  it('does NOT fail over when the alternate is stubbed and the refuser is live', async () => {
+    const { svc, generate } = makeService({
+      // Production today: Delhivery live, Shiprocket not yet configured.
+      stubCouriers: ['shiprocket'],
+      dispatchByCourier: {
+        delhivery: REFUSED_LIVE,
+        shiprocket: {
+          ok: true,
+          awbNumber: 'SR00000042',
+          courierShipmentId: '900000042',
+          serviceable: true,
+          errorCode: null,
+          errorMessage: null,
+        },
+      },
+      alternate: { courierCode: 'shiprocket', courierAccountId: 'sr-acc-1' },
+    });
+
+    const res = await svc.generateForShipment(SHIP);
+
+    // The second courier is never asked, so no fabricated AWB exists to
+    // be believed.
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe('FAILED');
+    if (res.status === 'FAILED') {
+      // serviceable:false routes it to manual placement — which is
+      // exactly where it went before failover existed, and strictly
+      // better than a parcel nobody is collecting.
+      expect(res.serviceable).toBe(false);
+    }
+  });
+
+  it('DOES fail over when both are stubbed — that is dev and CI', async () => {
+    const { svc, generate } = makeService({
+      stubCouriers: ['delhivery', 'shiprocket'],
+      dispatchByCourier: {
+        delhivery: REFUSED_LIVE,
+        shiprocket: {
+          ok: true,
+          awbNumber: 'SR00000042',
+          courierShipmentId: '900000042',
+          serviceable: true,
+          errorCode: null,
+          errorMessage: null,
+        },
+      },
+      alternate: { courierCode: 'shiprocket', courierAccountId: 'sr-acc-1' },
+    });
+
+    const res = await svc.generateForShipment(SHIP);
+
+    // Neither answer is real, so neither is more trustworthy than the
+    // other — the failover being exercised is the genuine one.
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(res.status).toBe('GENERATED');
+  });
+
+  it('DOES fail over when both are live — the case this was built for', async () => {
+    const { svc, generate } = makeService({
+      stubCouriers: [],
+      dispatchByCourier: {
+        delhivery: REFUSED_LIVE,
+        shiprocket: {
+          ok: true,
+          awbNumber: 'SR1234567890',
+          courierShipmentId: '887766',
+          serviceable: true,
+          errorCode: null,
+          errorMessage: null,
+        },
+      },
+      alternate: { courierCode: 'shiprocket', courierAccountId: 'sr-acc-1' },
+    });
+
+    const res = await svc.generateForShipment(SHIP);
+
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(res.status).toBe('GENERATED');
   });
 });

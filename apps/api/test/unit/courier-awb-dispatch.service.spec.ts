@@ -40,7 +40,13 @@ function input(over: Partial<DispatchAwbInput> = {}): DispatchAwbInput {
 }
 
 function makeService(
-  opts: { delhivery?: AnyArgs; shiprocket?: AnyArgs; shiprocketLabel?: AnyArgs } = {},
+  opts: {
+    delhivery?: AnyArgs;
+    shiprocket?: AnyArgs;
+    shiprocketLabel?: AnyArgs;
+    delhiveryStub?: boolean;
+    shiprocketStub?: boolean;
+  } = {},
 ) {
   const delhiveryGenerate = jest.fn(
     async () =>
@@ -63,6 +69,10 @@ function makeService(
       generateAwb: shiprocketGenerate,
       fetchLabel: shiprocketFetchLabel,
     } as unknown as ShiprocketClientService,
+    // The two http services, so the saga can ask whether a courier is
+    // answering from a stub before it trusts a failover.
+    { isStubMode: async () => opts.delhiveryStub ?? false } as never,
+    { isStubMode: async () => opts.shiprocketStub ?? false } as never,
   );
   return { svc, delhiveryGenerate, shiprocketGenerate, delhiveryFetchLabel, shiprocketFetchLabel };
 }

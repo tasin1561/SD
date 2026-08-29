@@ -331,7 +331,38 @@ export class AwbGenerationService {
     // Delhivery account refuses the same pincode for the same reason.
     if (!dispatched.ok && !dispatched.serviceable && sellerId !== null) {
       const alternate = await this.alternateAccount(shipment, sellerId);
-      if (alternate !== null) {
+
+      // ── A STUB MAY NOT ANSWER FOR A LIVE COURIER ──────────────────
+      // Stub mode fabricates a successful AWB. That is correct in dev
+      // and CI, where BOTH couriers are stubbed and the failover under
+      // test is a real one. It is a trap in a MIXED configuration —
+      // which is what production is today: Delhivery live, Shiprocket
+      // not yet configured.
+      //
+      // Without this check, a parcel Delhivery genuinely refuses would
+      // fail over to Shiprocket's stub, come back "booked" with a
+      // waybill nobody issued, and be dispatched: stock decremented,
+      // the customer told it shipped, and no van ever coming. It would
+      // surface as a parcel that never moves. Manual placement — where
+      // it went before failover existed — is strictly better than that.
+      const mixed =
+        alternate !== null &&
+        (await this.dispatch.isStubMode(alternate.courierCode)) &&
+        !(await this.dispatch.isStubMode(shipment.courierCode));
+
+      if (alternate !== null && mixed) {
+        this.logger.warn(
+          {
+            shipmentId,
+            refusedBy: shipment.courierCode,
+            wouldHaveTried: alternate.courierCode,
+          },
+          'Alternate courier is in stub mode while the refusing one is live — ' +
+            'routing to manual placement rather than trusting a fabricated AWB',
+        );
+      }
+
+      if (alternate !== null && !mixed) {
         this.logger.log(
           {
             shipmentId,

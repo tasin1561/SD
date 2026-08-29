@@ -33,6 +33,9 @@ import { ShiprocketHttpService } from './services/shiprocket-http.service';
     ShiprocketSupportAdapterService,
   ],
   exports: [
+    // Exported so the AWB dispatcher can ask whether this courier is
+    // answering from a stub before trusting it as a failover target.
+    ShiprocketHttpService,
     ShiprocketClientService,
     ShiprocketNdrService,
     ShiprocketTrackingSourceService,

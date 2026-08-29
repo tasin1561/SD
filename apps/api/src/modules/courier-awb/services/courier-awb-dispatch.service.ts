@@ -3,6 +3,8 @@ import { DelhiveryAwbService } from '../../courier-delhivery/services/delhivery-
 import { DelhiveryLabelService } from '../../courier-delhivery/services/delhivery-label.service';
 import type { DelhiveryAwbRequest } from '../../courier-delhivery/types/delhivery.types';
 import { ShiprocketClientService } from '../../courier-shiprocket/services/shiprocket-client.service';
+import { ShiprocketHttpService } from '../../courier-shiprocket/services/shiprocket-http.service';
+import { DelhiveryHttpService } from '../../courier-delhivery/services/delhivery-http.service';
 import type { ShiprocketAwbRequest } from '../../courier-shiprocket/types/shiprocket.types';
 import type { CourierCredentialActor } from '../../courier-shared/services/courier-credential.service';
 
@@ -87,6 +89,8 @@ export class CourierAwbDispatchService {
     private readonly delhivery: DelhiveryAwbService,
     private readonly delhiveryLabel: DelhiveryLabelService,
     private readonly shiprocket: ShiprocketClientService,
+    private readonly delhiveryHttp: DelhiveryHttpService,
+    private readonly shiprocketHttp: ShiprocketHttpService,
   ) {}
 
   async generate(
@@ -159,6 +163,34 @@ export class CourierAwbDispatchService {
       throw new Error(`NO_LABEL_ADAPTER:${input.courierCode}`);
     }
     return this.delhiveryLabel.fetchLabel(input.awbNumber, actor);
+  }
+
+  /**
+   * Is this courier answering from a STUB rather than from itself?
+   *
+   * ── WHY THE CALLER HAS TO ASK ────────────────────────────────────
+   * Stub mode returns a FABRICATED success — a made-up waybill, derived
+   * from the shipment id. That is exactly right in dev and CI, and it
+   * is a trap the moment one courier is live and another is not: a
+   * parcel the live courier refuses would fail over to the stubbed one,
+   * come back "booked" with an AWB nobody issued, and be dispatched.
+   * Stock decrements, the customer is told it shipped, and no van is
+   * ever coming. It surfaces as a parcel that simply never moves.
+   *
+   * So a stub answer may decide a TEST, never a real routing decision
+   * taken alongside a live courier.
+   */
+  async isStubMode(courierCode: string): Promise<boolean> {
+    switch (courierCode) {
+      case 'shiprocket':
+        return this.shiprocketHttp.isStubMode();
+      case 'delhivery':
+        return this.delhiveryHttp.isStubMode();
+      default:
+        // No adapter at all — nothing to stub, and never a failover
+        // target either way.
+        return true;
+    }
   }
 
   private async viaDelhivery(
