@@ -26,6 +26,7 @@ import {
 import { serverVerdict } from '@/lib/server-verdict';
 import { EditCourierAccountModal } from './edit-courier-account-modal';
 import { CreateCourierAccountModal } from './create-courier-account-modal';
+import { CourierMasterSwitches } from './courier-master-switches';
 import { usePermission } from '@/lib/use-permission';
 
 /**
@@ -67,6 +68,12 @@ export function CourierAccountsIndex(): ReactElement {
           deactivate the old.
         </span>
       </p>
+
+      {/* Above the accounts, because it decides whether any of them are
+          used at all. */}
+      <div className="mb-4">
+        <CourierMasterSwitches />
+      </div>
 
       {list.isError ? (
         <ErrorNote

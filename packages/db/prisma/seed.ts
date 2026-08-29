@@ -1288,6 +1288,44 @@ async function seedSystemSettings() {
 }
 
 async function seedCouriers() {
+  // Shiprocket exists as a row but starts SWITCHED OFF.
+  //
+  // The row has to exist or there is nothing for the admin console to
+  // toggle — and until 2026-08-29 it did not, which meant Shiprocket
+  // was off only by accident: `CourierEnablementService` fails closed on
+  // an unknown courier, so the safety was real but nobody had decided
+  // it. Accidental safety stops being safe the moment someone creates
+  // the row by hand to test something.
+  //
+  // isActive:false is the deliberate version. Nothing has ever been
+  // written against a real Shiprocket account — every request shape in
+  // the adapter is transcribed from their published docs and unproven —
+  // so intake stays off until a controlled first parcel says otherwise.
+  // `update: {}` means flipping it on in the console is NOT undone by
+  // the next deploy, which is the whole point of it being a switch.
+  await prisma.courier.upsert({
+    where: { code: 'shiprocket' },
+    create: {
+      code: 'shiprocket',
+      name: 'Shiprocket',
+      displayName: 'Shiprocket',
+      integrationType: CourierIntegrationType.API_FULL,
+      supportsCod: true,
+      supportsPrepaid: true,
+      supportsRto: true,
+      // They aggregate carriers and settle disputes on the carrier's
+      // behalf; we have never run one, so this stays false until we do.
+      supportsWeightDispute: false,
+      defaultServiceTypes: ['surface'],
+      volumetricDivisor: 5000,
+      isActive: false,
+      // Below Delhivery: with both enabled and no explicit split, the
+      // proven integration should be the one that gets the parcel.
+      priorityForRouting: 40,
+    },
+    update: {},
+  });
+
   await prisma.courier.upsert({
     where: { code: 'delhivery' },
     create: {

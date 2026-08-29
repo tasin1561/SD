@@ -81,7 +81,9 @@ export class CourierDistributionService {
         isActive: true,
         deletedAt: null,
         environment,
-        courier: { code: courierCode, deletedAt: null },
+        // isActive too: a courier switched off should not be consulted
+        // about whether it would carry a parcel it will never be given.
+        courier: { code: courierCode, deletedAt: null, isActive: true },
       },
       select: { id: true },
       // Deterministic, so two calls a second apart do not consult two

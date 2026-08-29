@@ -7,6 +7,7 @@ import { ShiprocketHttpService } from '../../courier-shiprocket/services/shiproc
 import { DelhiveryHttpService } from '../../courier-delhivery/services/delhivery-http.service';
 import type { ShiprocketAwbRequest } from '../../courier-shiprocket/types/shiprocket.types';
 import type { CourierCredentialActor } from '../../courier-shared/services/courier-credential.service';
+import { CourierEnablementService } from '../../courier-shared/services/courier-enablement.service';
 
 export interface DispatchAwbInput {
   readonly courierCode: string;
@@ -91,12 +92,40 @@ export class CourierAwbDispatchService {
     private readonly shiprocket: ShiprocketClientService,
     private readonly delhiveryHttp: DelhiveryHttpService,
     private readonly shiprocketHttp: ShiprocketHttpService,
+    private readonly enablement: CourierEnablementService,
   ) {}
 
   async generate(
     input: DispatchAwbInput,
     actor: CourierCredentialActor,
   ): Promise<DispatchAwbResult> {
+    // ── THE INTAKE SWITCH, CHECKED WHERE THE PARCEL IS ACTUALLY BOOKED
+    // The distribution paths already honoured `Courier.isActive`, and
+    // this one did not — so a shipment that reached here already
+    // carrying a courier code (a seller link made before the courier
+    // was switched off, a supersede replacement, a manual re-run) would
+    // still be booked with them. The routing layer deciding correctly
+    // is not the same as the booking layer refusing.
+    //
+    // Reported as not-serviceable so the saga does what it does for any
+    // courier that will not carry a parcel: offer it to another, then
+    // route it to a human. NOT as a transient failure, which would
+    // retry a switch somebody turned off on purpose.
+    if (!(await this.enablement.canTakeNewParcels(input.courierCode))) {
+      this.logger.warn(
+        { courierCode: input.courierCode, shipmentId: input.shipmentId },
+        'Courier is switched off for new parcels; not booking with them',
+      );
+      return {
+        ok: false,
+        awbNumber: null,
+        courierShipmentId: null,
+        serviceable: false,
+        errorCode: 'COURIER_DISABLED',
+        errorMessage: `${input.courierCode} is switched off for new parcels`,
+      };
+    }
+
     switch (input.courierCode) {
       case 'shiprocket':
         return this.viaShiprocket(input);

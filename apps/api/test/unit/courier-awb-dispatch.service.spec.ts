@@ -46,6 +46,7 @@ function makeService(
     shiprocketLabel?: AnyArgs;
     delhiveryStub?: boolean;
     shiprocketStub?: boolean;
+    disabledCouriers?: string[];
   } = {},
 ) {
   const delhiveryGenerate = jest.fn(
@@ -73,6 +74,11 @@ function makeService(
     // answering from a stub before it trusts a failover.
     { isStubMode: async () => opts.delhiveryStub ?? false } as never,
     { isStubMode: async () => opts.shiprocketStub ?? false } as never,
+    // The intake switch. Defaults to ON so the marshalling tests below
+    // keep testing marshalling; the OFF case has its own test.
+    {
+      canTakeNewParcels: async (code: string) => !(opts.disabledCouriers ?? []).includes(code),
+    } as never,
   );
   return { svc, delhiveryGenerate, shiprocketGenerate, delhiveryFetchLabel, shiprocketFetchLabel };
 }
@@ -161,5 +167,39 @@ describe('CourierAwbDispatchService', () => {
 
     await svc.generate(input({ courierCode: 'shiprocket', codAmountInr: null }), ACTOR);
     expect((shiprocketGenerate.mock.calls[1]?.[0] as AnyArgs).paymentMode).toBe('PREPAID');
+  });
+});
+
+describe('CourierAwbDispatchService — the intake switch', () => {
+  it('refuses to book with a courier that is switched off', async () => {
+    const { svc, delhiveryGenerate } = makeService({ disabledCouriers: ['delhivery'] });
+    const r = await svc.generate(input({ courierCode: 'delhivery' }), ACTOR);
+
+    // The distribution layer already avoids a disabled courier, but a
+    // shipment can arrive here already carrying one — a seller link
+    // made before the switch, a supersede replacement, a manual re-run.
+    expect(delhiveryGenerate).not.toHaveBeenCalled();
+    expect(r.ok).toBe(false);
+    expect(r.errorCode).toBe('COURIER_DISABLED');
+  });
+
+  it('reports it as NOT serviceable, so it reaches a human instead of retrying', async () => {
+    const { svc } = makeService({ disabledCouriers: ['shiprocket'] });
+    const r = await svc.generate(input({ courierCode: 'shiprocket' }), ACTOR);
+
+    // serviceable:true would retry a switch somebody turned off on
+    // purpose, forever.
+    expect(r.serviceable).toBe(false);
+  });
+
+  it('does not affect the courier that is still on', async () => {
+    const { svc, delhiveryGenerate, shiprocketGenerate } = makeService({
+      disabledCouriers: ['shiprocket'],
+    });
+
+    const r = await svc.generate(input({ courierCode: 'delhivery' }), ACTOR);
+    expect(r.ok).toBe(true);
+    expect(delhiveryGenerate).toHaveBeenCalledTimes(1);
+    expect(shiprocketGenerate).not.toHaveBeenCalled();
   });
 });

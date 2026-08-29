@@ -1,3 +1,4 @@
+import { CourierEnablementService } from './services/courier-enablement.service';
 import { CourierWriteGuardService } from './services/courier-write-guard.service';
 import { Module } from '@nestjs/common';
 import { CourierAccountRoutingService } from './services/courier-account-routing.service';
@@ -30,6 +31,7 @@ import { CourierDistributionService } from './services/courier-distribution.serv
     NdrAttemptContextService,
     CourierMcpReaderService,
     CourierWriteGuardService,
+    CourierEnablementService,
   ],
   exports: [
     CourierCredentialService,
@@ -39,6 +41,7 @@ import { CourierDistributionService } from './services/courier-distribution.serv
     NdrAttemptContextService,
     CourierMcpReaderService,
     CourierWriteGuardService,
+    CourierEnablementService,
   ],
 })
 export class CourierSharedModule {}

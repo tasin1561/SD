@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
+import { CourierSharedModule } from '../courier-shared/courier-shared.module';
+import { AdminCourierController } from './controllers/admin-courier.controller';
 import { AdminCourierAccountController } from './controllers/admin-courier-account.controller';
 import { AdminSellerCourierAccountController } from './controllers/admin-seller-courier-account.controller';
 import { CourierAccountAdminService } from './services/courier-account-admin.service';
@@ -13,8 +15,12 @@ import { CourierAccountAdminService } from './services/courier-account-admin.ser
  * routing at AWB/dispatch time never needs to import this admin module.
  */
 @Module({
-  imports: [AuthCommonModule],
-  controllers: [AdminCourierAccountController, AdminSellerCourierAccountController],
+  imports: [AuthCommonModule, CourierSharedModule],
+  controllers: [
+    AdminCourierController,
+    AdminCourierAccountController,
+    AdminSellerCourierAccountController,
+  ],
   providers: [CourierAccountAdminService, StaffJwtGuard],
 })
 export class CourierAccountAdminModule {}

@@ -451,6 +451,52 @@ export function useMarkWithdrawalPaid(): UseMutationResult<
 
 // ───────── Courier accounts (R1) ─────────
 
+export interface CourierMasterView {
+  readonly code: string;
+  readonly name: string;
+  readonly isActive: boolean;
+  readonly supportsCod: boolean;
+  readonly supportsPrepaid: boolean;
+}
+
+/** Every courier and whether it is taking NEW parcels. */
+export function useCouriers(): UseQueryResult<readonly CourierMasterView[]> {
+  const client = useApiClient();
+  const canRead = usePermission('courier.accounts.view');
+  return useQuery({
+    enabled: canRead,
+    queryKey: ['admin-couriers', 'list'],
+    queryFn: async () => {
+      const r = await client.request<{ couriers: readonly CourierMasterView[] }>(
+        '/api/admin/couriers',
+      );
+      return r.couriers;
+    },
+  });
+}
+
+export function useSetCourierActive(): UseMutationResult<
+  { courierCode: string; isActive: boolean; changed: boolean },
+  Error,
+  { courierCode: string; isActive: boolean; reason: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ courierCode, isActive, reason }) =>
+      client.request<{ courierCode: string; isActive: boolean; changed: boolean }>(
+        `/api/admin/couriers/${encodeURIComponent(courierCode)}`,
+        { method: 'PATCH', body: JSON.stringify({ isActive, reason }) },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-couriers'] });
+      // Routing changes the moment this lands, so anything that shows
+      // where parcels are going is now stale too.
+      void qc.invalidateQueries({ queryKey: ['admin-courier-accounts'] });
+    },
+  });
+}
+
 export function useCourierAccounts(query?: {
   courierCode?: string;
   environment?: string;

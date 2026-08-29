@@ -71,3 +71,41 @@ describe('every integrated courier has its settings seeded', () => {
     }
   });
 });
+
+/**
+ * A courier we can dispatch to needs a ROW, and the row's starting
+ * state is a decision rather than a default.
+ *
+ * Shiprocket had no row at all until 2026-08-29, which made it off by
+ * ACCIDENT: `CourierEnablementService` fails closed on an unknown
+ * courier, so nothing could be booked with them — real safety that
+ * nobody had decided, and that evaporates the moment somebody creates
+ * the row by hand to test something.
+ */
+describe('every dispatchable courier is seeded as a row', () => {
+  const SEED_COURIERS = SEED.slice(SEED.indexOf('async function seedCouriers()'));
+
+  it('each courier the dispatcher can reach has a courier row', () => {
+    const dispatch = read('modules/courier-awb/services/courier-awb-dispatch.service.ts');
+    const codes = new Set<string>();
+    for (const m of dispatch.matchAll(/case '([a-z]+)':/g)) {
+      const c = m[1];
+      if (c !== undefined) codes.add(c);
+    }
+    expect(codes.size).toBeGreaterThan(1);
+    for (const code of codes) {
+      // Without a row there is nothing for the console to toggle, and
+      // the intake switch has no switch.
+      expect(SEED_COURIERS).toContain(`code: '${code}'`);
+    }
+  });
+
+  it('Shiprocket starts switched OFF', () => {
+    const at = SEED_COURIERS.indexOf("code: 'shiprocket'");
+    expect(at).toBeGreaterThan(-1);
+    const block = SEED_COURIERS.slice(at, at + 700);
+    // Nothing has ever been written against a real Shiprocket account.
+    // Intake stays off until a controlled first parcel says otherwise.
+    expect(block).toContain('isActive: false');
+  });
+});
