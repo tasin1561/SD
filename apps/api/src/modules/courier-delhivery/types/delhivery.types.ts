@@ -30,6 +30,23 @@ export interface DelhiveryAwbRequest {
   codAmountInr: string | null;
   itemDescription: string;
 
+  /**
+   * A REVERSE shipment — collected from the customer and brought back
+   * to us — rather than a forward one.
+   *
+   * Delhivery creates both through this same endpoint; the difference
+   * is `payment_mode: "Pickup"` instead of COD/Prepaid, which their
+   * docs state plainly. Their pickup requests for reverse shipments are
+   * scheduled automatically, so unlike a forward parcel this needs no
+   * second call.
+   *
+   * The addresses stay as they are: for a reverse leg the "recipient"
+   * fields are where the parcel is COLLECTED, and the account's pickup
+   * location is where it goes. Swapping them here would be marshalling
+   * the caller's intent twice.
+   */
+  isReverse?: boolean;
+
   // ── D4: the rest of the documented create payload. All optional, but
   // Delhivery's docs say to send everything available — the fields are
   // "good to have for optimal processing", and several of them decide

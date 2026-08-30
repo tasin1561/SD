@@ -118,7 +118,8 @@ export interface PricingComputationContext {
 }
 
 export const FLAT_DELIVERY_FEE_KEY = 'pricing.flat_delivery_fee_inr';
-export const FLAT_RTO_FEE_KEY = 'pricing.flat_rto_fee_inr';
+export const CUSTOMER_RETURN_FEE_KEY = 'pricing.customer_return_fee_inr';
+const FLAT_RTO_FEE_KEY = 'pricing.flat_rto_fee_inr';
 export const FLAT_FEE_GST_KEY = 'pricing.flat_fee_gst_percent';
 
 export interface ResolvedFee {
@@ -149,6 +150,20 @@ export class PricingEngineService {
   /** The return fee, same resolution. Charged only when a parcel comes back. */
   async resolveRtoFee(sellerId: string): Promise<ResolvedFee> {
     return this.resolveMoneySetting(sellerId, FLAT_RTO_FEE_KEY);
+  }
+
+  /**
+   * What a CUSTOMER-asked return costs the seller.
+   *
+   * A separate setting from the RTO fee, and much larger, because it is
+   * a different event: the parcel was delivered and now travels the
+   * whole distance back, which is a second delivery. An RTO never
+   * reached the customer at all. Pricing them the same would either
+   * overcharge a failed first attempt or undercharge a genuine second
+   * leg, and one of those is us losing money on every return.
+   */
+  async resolveCustomerReturnFee(sellerId: string): Promise<ResolvedFee> {
+    return this.resolveMoneySetting(sellerId, CUSTOMER_RETURN_FEE_KEY);
   }
 
   /**

@@ -169,6 +169,13 @@ export class TrackingStatusMappingService {
             OrderStatus.IN_TRANSIT,
             OrderStatus.OUT_FOR_DELIVERY,
             OrderStatus.DELIVERY_FAILED,
+            // A CUSTOMER RETURN starts here: the parcel was delivered
+            // and is coming back on purpose. Mirrors the matrix edge
+            // added for it (F6 — the two must agree exactly, and a
+            // missing `from` is the silent half: the monotonic-forward
+            // guard would skip a legitimate reverse-leg scan and the
+            // return would stop moving with nothing saying why).
+            OrderStatus.DELIVERED,
           ],
           trackingEventType: TrackingEventType.RTO_INITIATED,
         };

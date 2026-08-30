@@ -353,7 +353,20 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
   // Terminal states — no outgoing transitions in the normal machine.
   // (Admin god-mode bypasses this matrix entirely; LOST→found recovery
   // is a deferred god-mode op per phase-1a-debt.)
-  [OrderStatus.DELIVERED, []],
+  [
+    OrderStatus.DELIVERED,
+    [
+      // The ONE way out of a delivered order: the customer asks to send
+      // it back. Distinct from RTO, which starts from a failed delivery
+      // and never reached the customer at all — but it rejoins the same
+      // path here, because from the warehouse's side a returned parcel
+      // is a returned parcel whoever sent it.
+      //
+      // No side-effects: the goods have not moved yet. Stock comes back
+      // at RTO receive, exactly as it does for a courier return.
+      { to: OrderStatus.RTO_INITIATED, sideEffects: [] },
+    ],
+  ],
   [OrderStatus.RTO_RESTOCKED, []],
   [OrderStatus.RTO_DAMAGED, []],
   [OrderStatus.LOST_IN_TRANSIT, []],

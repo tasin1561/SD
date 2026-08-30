@@ -409,6 +409,12 @@ function humanizeDirection(d: WalletEntryView['direction']): string {
     // reason as inbound freight.
     case 'RTO_FEE':
       return 'Return fee';
+    // A return the CUSTOMER asked for, priced as the second delivery it
+    // is rather than as a failed first attempt. Its own line so a seller
+    // can see what customer returns cost them separately from parcels
+    // the courier could not deliver. A DEBIT — out of CREDIT_DIRECTIONS.
+    case 'CUSTOMER_RETURN_FEE':
+      return 'Customer return';
     // Money the seller wired in, verified against the bank. A CREDIT —
     // registered in CREDIT_DIRECTIONS above.
     case 'TOPUP':

@@ -13,8 +13,12 @@ import {
 // status to be named in `orders.reattempt_requestable_statuses`, which
 // is seeded with REJECTED_BY_CUSTOMER alone. The edge existing is what
 // lets an operator turn it on; it is not what turns it on.
+// DELIVERED is NO LONGER TERMINAL. A customer can ask for a delivered
+// parcel back, and that is the one lifecycle move a finished order still
+// has — DELIVERED → RTO_INITIATED, from where it travels the existing
+// return path home. Everything else about it is unchanged: the edge
+// carries no side-effects, because the goods have not moved yet.
 const TERMINAL: OrderStatus[] = [
-  OrderStatus.DELIVERED,
   OrderStatus.RTO_RESTOCKED,
   OrderStatus.RTO_DAMAGED,
   OrderStatus.LOST_IN_TRANSIT,
@@ -228,7 +232,9 @@ describe('OrderStateMachineService', () => {
       [OrderStatus.DRAFT, OrderStatus.DELIVERED],
       [OrderStatus.PENDING_CONFIRMATION, OrderStatus.PENDING_PICK], // must confirm first
       [OrderStatus.CONFIRMED, OrderStatus.DRAFT], // no going back
-      [OrderStatus.DELIVERED, OrderStatus.CONFIRMED], // terminal
+      // Still refused: a delivered order may go BACK (RTO_INITIATED),
+      // not forward to an earlier stage.
+      [OrderStatus.DELIVERED, OrderStatus.CONFIRMED],
       [OrderStatus.CANCELLED, OrderStatus.CONFIRMED], // terminal
       [OrderStatus.CONFIRMED, OrderStatus.CONFIRMED], // no self-loop
     ])('%s → %s is rejected', (from, to) => {

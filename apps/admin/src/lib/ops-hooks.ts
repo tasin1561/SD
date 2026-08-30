@@ -2555,3 +2555,31 @@ export function useBillUnbilled(): UseMutationResult<
     },
   });
 }
+
+export interface ReturnRequestResult {
+  readonly orderId: string;
+  readonly orderNumber: string;
+  readonly status: string;
+  readonly alreadyRequested: boolean;
+}
+
+/**
+ * Raise a customer return on a seller's behalf — the call-centre case,
+ * where the customer rings us rather than the seller.
+ */
+export function useAdminRequestReturn(
+  orderId: string,
+): UseMutationResult<ReturnRequestResult, Error, { reason: string }> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ reason }) =>
+      client.request<ReturnRequestResult>(`/api/admin/orders/${orderId}/return`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-orders'] });
+    },
+  });
+}

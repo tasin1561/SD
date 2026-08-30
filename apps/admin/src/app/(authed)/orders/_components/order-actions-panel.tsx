@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
+import { AdminRequestReturnDialog } from './admin-request-return-dialog';
 import { ShieldAlert } from 'lucide-react';
 import {
   ApiError,
@@ -81,6 +82,7 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
   const [lastRelease, setLastRelease] = useState<ReleaseReservationsResult | null>(null);
 
   const inTerminalState = TERMINAL_STATUSES.includes(order.status);
+  const [returnOpen, setReturnOpen] = useState(false);
 
   function closeCancel(): void {
     setCancelOpen(false);
@@ -134,6 +136,22 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
             >
               Cancel order
             </Button>
+
+            {/* DELIVERED is terminal for everything else, which is why
+                this sits outside the terminal-state guard above: a
+                customer return is the one lifecycle move a finished
+                order still has. The call-centre case — the customer
+                rings us rather than the seller. */}
+            {order.status === 'DELIVERED' && canCancel && (
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => setReturnOpen(true)}
+                title="The customer wants to send it back — charged to the seller as a second delivery"
+              >
+                Request return
+              </Button>
+            )}
           </div>
           {inTerminalState && (
             <div className="text-text-faint text-xs mt-2">
@@ -199,6 +217,13 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
           <ReleaseResultPanel result={lastRelease} onDismiss={() => setLastRelease(null)} />
         )}
       </CardBody>
+
+      <AdminRequestReturnDialog
+        orderId={order.id}
+        orderNumber={order.orderNumber}
+        open={returnOpen}
+        onClose={() => setReturnOpen(false)}
+      />
 
       {/* Sane cancel modal */}
       <Modal

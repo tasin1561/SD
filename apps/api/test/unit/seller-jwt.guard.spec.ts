@@ -91,6 +91,10 @@ function makeGuard(opts: {
     prisma,
     audit as unknown as AuditLogService,
     reflector,
+    // The cookie fallback for browser NAVIGATIONS, which cannot send
+    // an Authorization header. Unused unless a route opts in with
+    // @AllowCookieAuth, so these tests exercise the bearer path.
+    { validateByPlaintext: jest.fn(async () => null) } as never,
   );
 
   const req = {

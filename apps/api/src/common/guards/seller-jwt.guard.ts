@@ -1,3 +1,6 @@
+import { ALLOW_COOKIE_AUTH_KEY } from '../decorators/allow-cookie-auth.decorator';
+import { SELLER_REFRESH_COOKIE } from '../cookies/auth-cookies';
+import { RefreshTokenService } from '../../modules/auth-common/services/refresh-token.service';
 import {
   CanActivate,
   ForbiddenException,
@@ -56,6 +59,7 @@ export class SellerJwtGuard implements CanActivate {
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
     private readonly reflector: Reflector,
+    private readonly refreshTokens: RefreshTokenService,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -67,11 +71,49 @@ export class SellerJwtGuard implements CanActivate {
 
     const req = ctx.switchToHttp().getRequest<Request>();
     const token = extractBearer(req.header('authorization'));
-    if (!token) {
-      throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Bearer token required' });
+
+    // ── NO BEARER: a browser NAVIGATION, not a fetch ─────────────────
+    // The access token lives in JS memory (FE-1) and the ApiClient
+    // sends it as a header, which a plain <a href> cannot do. A route
+    // that opts in with @AllowCookieAuth may fall back to the refresh
+    // cookie — validated READ-ONLY, never rotated (FE-4), because
+    // rotating here would race the client's silent refresh and burn a
+    // legitimate session.
+    let subjectId: string;
+    if (token === null) {
+      const allowsCookie = this.reflector.getAllAndOverride<boolean>(ALLOW_COOKIE_AUTH_KEY, [
+        ctx.getHandler(),
+        ctx.getClass(),
+      ]);
+      const cookie = allowsCookie === true ? readSellerRefreshCookie(req) : null;
+      if (cookie === null) {
+        throw new UnauthorizedException({
+          code: 'UNAUTHORIZED',
+          message: 'Bearer token required',
+        });
+      }
+      const validated = await this.refreshTokens.validateByPlaintext('seller', cookie);
+      if (validated === null) {
+        throw new UnauthorizedException({
+          code: 'UNAUTHORIZED',
+          message: 'Invalid or expired session',
+        });
+      }
+      subjectId = validated.userId;
+    } else {
+      subjectId = this.jwt.verifySellerAccess(token).sub;
     }
 
-    const claims = this.jwt.verifySellerAccess(token);
+    // Everything below is unchanged and shared by both paths: the
+    // suspended-seller check, the status gate and the RBAC policy live
+    // here precisely so a second way in cannot skip them.
+    // `jti` identifies the ACCESS token, which the cookie path does not
+    // have — null there, and the session it belongs to is the refresh
+    // row instead. Nothing downstream requires it to be present.
+    const claims: { sub: string; jti: string | null } =
+      token === null
+        ? { sub: subjectId, jti: null }
+        : { sub: subjectId, jti: this.jwt.verifySellerAccess(token).jti };
 
     // Phase 1B RBAC — token.sub is the SellerUser id; join Seller for status.
     const user = await this.prisma.client.sellerUser.findFirst({
@@ -222,4 +264,11 @@ function extractBearer(header: string | undefined): string | null {
   if (!header) return null;
   const match = /^Bearer\s+(.+)$/i.exec(header);
   return match?.[1]?.trim() ?? null;
+}
+
+/** The refresh cookie, when a browser NAVIGATION sent one. */
+function readSellerRefreshCookie(req: Request): string | null {
+  const jar = (req as unknown as { cookies?: Record<string, unknown> }).cookies ?? {};
+  const raw = jar[SELLER_REFRESH_COOKIE];
+  return typeof raw === 'string' && raw.length > 0 ? raw : null;
 }

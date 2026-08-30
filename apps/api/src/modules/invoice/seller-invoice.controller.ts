@@ -20,6 +20,7 @@ import type { AuthenticatedSeller } from '../../common/types/request';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { InvoiceService } from './services/invoice.service';
 import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
+import { AllowCookieAuth } from '../../common/decorators/allow-cookie-auth.decorator';
 
 /**
  * Seller invoice endpoints. The seller sees:
@@ -83,6 +84,12 @@ export class SellerInvoiceController {
    */
   @Get('pdf')
   @SellerAuthAllowSuspended()
+  // The browser NAVIGATES here — a plain <a href>, which sends cookies
+  // and cannot send an Authorization header. Without this the permanent
+  // link is permanently unauthenticated, which is exactly how the first
+  // version of it failed. Read-only, and the cookie is validated
+  // without rotating (FE-4).
+  @AllowCookieAuth()
   @ApiOperation({ summary: 'Redirect to a freshly-signed URL for the invoice PDF' })
   async pdf(
     @CurrentSeller() seller: AuthenticatedSeller,

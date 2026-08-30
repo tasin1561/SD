@@ -161,6 +161,16 @@ const systemSettings: SystemSettingSeed[] = [
     overrideMaxDecimal: '100000',
   },
   {
+    key: 'pricing.customer_return_fee_inr',
+    category: 'pricing',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '200',
+    displayName: 'Customer Return Fee (INR)',
+    description:
+      'What a seller pays when the CUSTOMER asks to send a delivered parcel back. It is a second delivery — the parcel travels the same distance again — so it costs the same as one, and the seller pays the outbound ₹200 plus this. Deliberately NOT pricing.flat_rto_fee_inr, which is the smaller fee for a parcel the courier never managed to deliver in the first place.',
+    sellerOverridable: true,
+  },
+  {
     key: 'pricing.flat_rto_fee_inr',
     category: 'pricing',
     valueType: SettingValueType.DECIMAL,

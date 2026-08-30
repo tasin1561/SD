@@ -2528,65 +2528,75 @@ model Customer {
 }
 
 model Order {
-  id                      String                   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  orderNumber             String                   @unique @map("order_number")
-  sellerId                String                   @map("seller_id") @db.Uuid
-  customerId              String?                  @map("customer_id") @db.Uuid
-  sellerOrderRef          String?                  @map("seller_order_ref")
-  source                  OrderSource              @default(MANUAL)
-  bulkUploadId            String?                  @map("bulk_upload_id") @db.Uuid
-  recipientName           String                   @map("recipient_name")
-  recipientPhoneE164      String                   @map("recipient_phone_e164")
-  recipientAltPhoneE164   String?                  @map("recipient_alt_phone_e164")
+  id                        String                   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  orderNumber               String                   @unique @map("order_number")
+  sellerId                  String                   @map("seller_id") @db.Uuid
+  customerId                String?                  @map("customer_id") @db.Uuid
+  sellerOrderRef            String?                  @map("seller_order_ref")
+  source                    OrderSource              @default(MANUAL)
+  bulkUploadId              String?                  @map("bulk_upload_id") @db.Uuid
+  recipientName             String                   @map("recipient_name")
+  recipientPhoneE164        String                   @map("recipient_phone_e164")
+  recipientAltPhoneE164     String?                  @map("recipient_alt_phone_e164")
   /// Set when the seller placed this KNOWING the customer already had an
   /// unpacked order. Without it there is no answer to "did they know?"
   /// the first time a duplicate delivery fee is disputed.
-  duplicateAcknowledgedAt DateTime?                @map("duplicate_acknowledged_at") @db.Timestamptz
-  recipientEmail          String?                  @map("recipient_email")
-  recipientAddressLine1   String                   @map("recipient_address_line1")
-  recipientAddressLine2   String?                  @map("recipient_address_line2")
-  recipientLandmark       String?                  @map("recipient_landmark")
-  recipientCity           String                   @map("recipient_city")
-  recipientStateProvince  String                   @map("recipient_state_province")
-  recipientPostalCode     String                   @map("recipient_postal_code")
-  recipientCountryCode    String                   @default("IN") @map("recipient_country_code") @db.Char(2)
-  paymentMode             PaymentMode              @map("payment_mode")
+  duplicateAcknowledgedAt   DateTime?                @map("duplicate_acknowledged_at") @db.Timestamptz
+  recipientEmail            String?                  @map("recipient_email")
+  recipientAddressLine1     String                   @map("recipient_address_line1")
+  recipientAddressLine2     String?                  @map("recipient_address_line2")
+  recipientLandmark         String?                  @map("recipient_landmark")
+  recipientCity             String                   @map("recipient_city")
+  recipientStateProvince    String                   @map("recipient_state_province")
+  recipientPostalCode       String                   @map("recipient_postal_code")
+  recipientCountryCode      String                   @default("IN") @map("recipient_country_code") @db.Char(2)
+  paymentMode               PaymentMode              @map("payment_mode")
   /// What the courier collects at the door. The seller's COLLECTABLE
   /// AMOUNT — distinct from `declaredValueInr`, which is the customs
   /// figure sent to Delhivery and the e-waybill trigger above 50,000.
-  codAmountInr            Decimal?                 @map("cod_amount_inr") @db.Decimal(12, 2)
+  codAmountInr              Decimal?                 @map("cod_amount_inr") @db.Decimal(12, 2)
   /// The three seller-supplied figures the collectable is built from.
   /// Stored rather than computed away so an order can still explain
   /// itself weeks later — a collectable with no breakdown is a number
   /// nobody can check against what the customer was told.
-  advanceAmountInr        Decimal?                 @map("advance_amount_inr") @db.Decimal(12, 2)
-  deliveryFeeInr          Decimal?                 @map("delivery_fee_inr") @db.Decimal(12, 2)
-  discountInr             Decimal?                 @map("discount_inr") @db.Decimal(12, 2)
-  declaredValueInr        Decimal                  @map("declared_value_inr") @db.Decimal(12, 2)
-  totalWeightGrams        Int?                     @map("total_weight_grams")
-  packageType             PackageType?             @map("package_type")
-  status                  OrderStatus              @default(DRAFT)
-  isUrgent                Boolean                  @default(false) @map("is_urgent")
-  isHighRisk              Boolean                  @default(false) @map("is_high_risk")
+  advanceAmountInr          Decimal?                 @map("advance_amount_inr") @db.Decimal(12, 2)
+  deliveryFeeInr            Decimal?                 @map("delivery_fee_inr") @db.Decimal(12, 2)
+  discountInr               Decimal?                 @map("discount_inr") @db.Decimal(12, 2)
+  declaredValueInr          Decimal                  @map("declared_value_inr") @db.Decimal(12, 2)
+  totalWeightGrams          Int?                     @map("total_weight_grams")
+  packageType               PackageType?             @map("package_type")
+  status                    OrderStatus              @default(DRAFT)
+  isUrgent                  Boolean                  @default(false) @map("is_urgent")
+  isHighRisk                Boolean                  @default(false) @map("is_high_risk")
   // Module 6 god mode (ORD-2): set true by OrderAdminOverrideService
   // .forceMutate() and NEVER cleared. Flags an order whose state machine
   // or edit rules were bypassed by an admin; per-field detail lives in
   // order_events, not summarised here.
-  hasAdminOverride        Boolean                  @default(false) @map("has_admin_override")
-  confirmedAt             DateTime?                @map("confirmed_at") @db.Timestamptz
-  confirmedById           String?                  @map("confirmed_by_id") @db.Uuid
-  cancellationReason      OrderCancellationReason? @map("cancellation_reason")
-  cancelledAt             DateTime?                @map("cancelled_at") @db.Timestamptz
-  cancelledById           String?                  @map("cancelled_by_id") @db.Uuid
-  internalNotes           String?                  @map("internal_notes") @db.Text
-  sellerNotes             String?                  @map("seller_notes") @db.Text
-  callNotes               String?                  @map("call_notes") @db.Text
-  slaDeadline             DateTime?                @map("sla_deadline") @db.Timestamptz
-  expectedDeliveryAt      DateTime?                @map("expected_delivery_at") @db.Timestamptz
-  placedAt                DateTime                 @default(now()) @map("placed_at") @db.Timestamptz
-  createdAt               DateTime                 @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt               DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt               DateTime?                @map("deleted_at") @db.Timestamptz
+  hasAdminOverride          Boolean                  @default(false) @map("has_admin_override")
+  /// A return the CUSTOMER asked for, as opposed to one the courier
+  /// brought back undelivered. Set when the seller requests it; the
+  /// goods then travel the same RTO path home, because the warehouse
+  /// receives a returned parcel the same way whoever sent it back.
+  ///
+  /// It is the flag that decides the PRICE: a customer return is a
+  /// second delivery and costs like one, where an RTO is a failed first
+  /// attempt and costs a smaller fee.
+  customerReturnRequestedAt DateTime?                @map("customer_return_requested_at") @db.Timestamptz
+  customerReturnReason      String?                  @map("customer_return_reason")
+  confirmedAt               DateTime?                @map("confirmed_at") @db.Timestamptz
+  confirmedById             String?                  @map("confirmed_by_id") @db.Uuid
+  cancellationReason        OrderCancellationReason? @map("cancellation_reason")
+  cancelledAt               DateTime?                @map("cancelled_at") @db.Timestamptz
+  cancelledById             String?                  @map("cancelled_by_id") @db.Uuid
+  internalNotes             String?                  @map("internal_notes") @db.Text
+  sellerNotes               String?                  @map("seller_notes") @db.Text
+  callNotes                 String?                  @map("call_notes") @db.Text
+  slaDeadline               DateTime?                @map("sla_deadline") @db.Timestamptz
+  expectedDeliveryAt        DateTime?                @map("expected_delivery_at") @db.Timestamptz
+  placedAt                  DateTime                 @default(now()) @map("placed_at") @db.Timestamptz
+  createdAt                 DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                 DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt                 DateTime?                @map("deleted_at") @db.Timestamptz
 
   seller                 Seller                       @relation(fields: [sellerId], references: [id])
   customer               Customer?                    @relation(fields: [customerId], references: [id])
@@ -5261,6 +5271,15 @@ enum WalletEntryDirection {
   // it there would PAY sellers for their own returns). Distinct from
   // ORDER_CHARGES so "what did returns cost us this month" stays a
   // question the ledger can answer on its own.
+  /// The seller's cost for a return the CUSTOMER asked for, as opposed
+  /// to one the courier brought back undelivered (RTO_FEE). Its own
+  /// direction because it is a different event at a different price —
+  /// a customer return is a second delivery and costs like one, where
+  /// an RTO is a failed first attempt. Folded together, "what did
+  /// customer returns cost us this month" stops being answerable.
+  /// A DEBIT, so deliberately absent from CREDIT_DIRECTIONS on both
+  /// sides (WAL-1).
+  CUSTOMER_RETURN_FEE  @map("customer_return_fee")
   RTO_FEE              @map("rto_fee")
   // A seller wiring money INTO the wallet, verified by an operator
   // against the bank. Always a CREDIT — REGISTERED in WalletService's

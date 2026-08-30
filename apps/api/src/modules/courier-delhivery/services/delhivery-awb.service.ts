@@ -332,7 +332,10 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
       // visible failure, while silently mangling a number produces a
       // parcel that is manifested and undeliverable.
       phone: toNationalPhone(req.recipientPhoneE164),
-      payment_mode: isCod ? 'COD' : 'Prepaid',
+      // 'Pickup' is what makes it a REVERSE shipment — collected from
+      // the customer, returned to us. Their documented vocabulary:
+      // "Pickup for reverse shipments, COD or Prepaid for forward".
+      payment_mode: req.isReverse === true ? 'Pickup' : isCod ? 'COD' : 'Prepaid',
       cod_amount: isCod ? str(req.codAmountInr) : '',
       total_amount: str(req.declaredValueInr),
       products_desc: sanitiseForDelhivery(req.itemDescription).slice(0, 250),

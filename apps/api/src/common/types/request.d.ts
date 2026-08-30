@@ -50,7 +50,13 @@ export interface AuthenticatedSeller {
   email: string;
   status: string;
   emailVerifiedAt: Date | null;
-  jti: string;
+  /**
+   * The ACCESS token's id — null when the request authenticated with
+   * the refresh cookie instead, which a browser NAVIGATION must do
+   * because it cannot send a header (see @AllowCookieAuth). Nothing
+   * downstream requires it; it is attribution, not authority.
+   */
+  jti: string | null;
   /** SellerUser.id — the person who authenticated. */
   userId: string;
   /** LEGACY enum. No longer consulted for authorisation. */

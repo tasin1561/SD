@@ -1801,3 +1801,34 @@ export function useOrderJourney(id: string): UseQueryResult<OrderJourneyView> {
     enabled: Boolean(id),
   });
 }
+
+export interface ReturnRequestResult {
+  readonly orderId: string;
+  readonly orderNumber: string;
+  readonly status: string;
+  readonly alreadyRequested: boolean;
+}
+
+/**
+ * Ask for a delivered parcel to come back.
+ *
+ * The goods travel the RTO path home and the second-delivery fee is
+ * charged when they ARRIVE, not here — a request is not a return.
+ */
+export function useRequestReturn(
+  orderId: string,
+): UseMutationResult<ReturnRequestResult, Error, { reason: string }> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ reason }) =>
+      client.request<ReturnRequestResult>(`/api/seller/orders/${orderId}/return`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      }),
+    onSuccess: () => {
+      // The order has moved and its journey has a new rung.
+      void qc.invalidateQueries({ queryKey: ['seller-orders'] });
+    },
+  });
+}

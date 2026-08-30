@@ -54,8 +54,12 @@ export class SellerCashAttributionService {
   private direction(d: WalletEntryDirection): Reclassification {
     switch (d) {
       // Charges. The seller's balance falls and the cash becomes ours.
+      // CUSTOMER_RETURN_FEE belongs here for the same reason as the
+      // rest: a charge moves nothing between banks, it changes whose
+      // the cash already sitting there is.
       case WalletEntryDirection.ORDER_CHARGES:
       case WalletEntryDirection.RTO_FEE:
+      case WalletEntryDirection.CUSTOMER_RETURN_FEE:
       case WalletEntryDirection.INBOUND_FREIGHT:
       case WalletEntryDirection.INSTANT_PAY_FEE:
       case WalletEntryDirection.COD_COLLECTION_FEE:

@@ -67,14 +67,29 @@ export class RtoFeeAccrualService {
     // skips RTO_FEE lines defensively — see OrderChargesAccrualService.
     const deliveryFeeSwept = await this.chargesAccrual.debitIfNeeded(tx, orderId, sellerId);
 
-    // 2. The return fee itself.
+    // 2. The return fee itself — and WHICH fee depends on who sent it
+    // back. A customer return is a second delivery over the same
+    // distance and is priced like one; an RTO never reached the
+    // customer. Same journey home, different event, different money,
+    // and its own wallet direction so the two stay countable apart.
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      select: { customerReturnRequestedAt: true },
+    });
+    const isCustomerReturn = order?.customerReturnRequestedAt != null;
+    const direction = isCustomerReturn
+      ? WalletEntryDirection.CUSTOMER_RETURN_FEE
+      : WalletEntryDirection.RTO_FEE;
+
     const already = await tx.sellerWalletEntry.findFirst({
-      where: { linkedOrderId: orderId, direction: WalletEntryDirection.RTO_FEE },
+      where: { linkedOrderId: orderId, direction },
       select: { id: true },
     });
     if (already) return { deliveryFeeSwept, rtoFeeInr: null };
 
-    const fee = await this.pricing.resolveRtoFee(sellerId);
+    const fee = isCustomerReturn
+      ? await this.pricing.resolveCustomerReturnFee(sellerId)
+      : await this.pricing.resolveRtoFee(sellerId);
     if (fee.amount.lessThanOrEqualTo(0)) {
       // A zero fee is a legitimate configuration — a seller may have
       // been given free returns — so this is a quiet no-op, not an error.
@@ -87,7 +102,9 @@ export class RtoFeeAccrualService {
       data: {
         orderId,
         type: ChargeType.RTO_FEE,
-        description: 'Return fee (flat)',
+        description: isCustomerReturn
+          ? 'Return leg — customer-requested return'
+          : 'Return fee (flat)',
         amountInr: fee.amount,
         // No GST decomposition: the flat fees carry
         // pricing.flat_fee_gst_percent (seeded 0), so today the fee IS
@@ -103,7 +120,7 @@ export class RtoFeeAccrualService {
     await this.wallet.applyEntry(tx, {
       sellerId,
       currency: Currency.INR,
-      direction: WalletEntryDirection.RTO_FEE,
+      direction,
       amount: fee.amount,
       linkedOrderId: orderId,
       actorType: ActorType.SYSTEM,

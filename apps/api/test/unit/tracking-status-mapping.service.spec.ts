@@ -69,6 +69,11 @@ describe('TrackingStatusMappingService.mapScan (TRK-5)', () => {
       OrderStatus.IN_TRANSIT,
       OrderStatus.OUT_FOR_DELIVERY,
       OrderStatus.DELIVERY_FAILED,
+      // A CUSTOMER return starts from DELIVERED — the parcel arrived and
+      // is coming back on purpose. Without this the monotonic-forward
+      // guard would skip the reverse leg's first scan and the return
+      // would stop moving with nothing saying why.
+      OrderStatus.DELIVERED,
     ]);
   });
 

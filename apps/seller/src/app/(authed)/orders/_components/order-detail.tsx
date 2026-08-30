@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 
-import { ArrowLeft, Clock, Pencil, PhoneCall, XCircle } from 'lucide-react';
+import { ArrowLeft, Clock, Pencil, PhoneCall, Undo2, XCircle } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import type { OrderStatus } from '@skydrop/db';
 import { ApiError } from '@skydrop/api-client';
@@ -32,6 +32,7 @@ import {
 } from '@skydrop/ui/components';
 import { DeliveryTroublePanel } from '../[id]/_components/delivery-trouble-panel';
 import { CancelOrderDialog } from './cancel-order-dialog';
+import { RequestReturnDialog } from './request-return-dialog';
 import { ReattemptRequestDialog } from './reattempt-request-dialog';
 import { OrderChargesSection } from './order-charges';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -104,6 +105,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
   const lastDecided = requests.find((r) => r.status !== 'PENDING') ?? null;
   const identity = useSellerIdentity();
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [returnOpen, setReturnOpen] = useState(false);
   const [reattemptOpen, setReattemptOpen] = useState(false);
 
   return (
@@ -158,6 +160,17 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                     {lastDecided === null ? 'Ask us to call again' : 'Ask again'}
                   </Button>
                 )}
+                {/* Only a DELIVERED order can come back — before that a
+                    parcel that cannot be delivered returns as an RTO on
+                    its own, and offering a button for it would suggest
+                    the seller has a choice they do not have. */}
+                {detail.data.status === 'DELIVERED' &&
+                  identity !== null &&
+                  can(identity, 'orders.cancel') && (
+                    <Button variant="secondary" size="sm" onClick={() => setReturnOpen(true)}>
+                      <Undo2 size={12} /> Request return
+                    </Button>
+                  )}
                 {CANCELLABLE.has(detail.data.status) &&
                   identity !== null &&
                   can(identity, 'orders.cancel') && (
@@ -396,6 +409,13 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             open={reattemptOpen}
             onOpenChange={setReattemptOpen}
           />
+          <RequestReturnDialog
+            orderId={orderId}
+            orderNumber={detail.data.orderNumber}
+            open={returnOpen}
+            onClose={() => setReturnOpen(false)}
+          />
+
           <CancelOrderDialog
             open={cancelOpen}
             orderId={orderId}
