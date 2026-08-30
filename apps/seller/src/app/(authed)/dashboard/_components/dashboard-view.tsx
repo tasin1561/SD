@@ -4,7 +4,12 @@ import Link from 'next/link';
 import { Check, Circle } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { useSellerIdentity } from '@skydrop/auth/client';
-import { useOrdersList, useProductsList, useSellerProfile } from '@/lib/api-hooks';
+import {
+  useOrdersList,
+  useProductsList,
+  useSellerProfile,
+  useWalletBalances,
+} from '@/lib/api-hooks';
 import {
   Card,
   CardBody,
@@ -12,9 +17,11 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
+  Money,
   OrderStatusBadge,
   PageHeader,
   Section,
+  SkeletonRows,
 } from '@skydrop/ui/components';
 import { can } from '@/lib/page-access';
 
@@ -47,6 +54,7 @@ export function DashboardView(): ReactElement {
   const canOrders = can(identity, 'orders.view');
   const canProfile = can(identity, 'profile.view');
   const canCatalog = can(identity, 'catalog.view');
+  const canWallet = can(identity, 'wallet.view');
 
   const recent = useOrdersList({ page: 1, pageSize: 5 }, { enabled: canOrders });
   const profile = useSellerProfile({ enabled: canProfile });
@@ -54,6 +62,7 @@ export function DashboardView(): ReactElement {
     { page: 1, pageSize: 1, status: 'ACTIVE' },
     { enabled: canCatalog },
   );
+  const balances = useWalletBalances({ enabled: canWallet });
   const companyName = identity?.companyName ?? 'there';
 
   // Onboarding checklist — show only when at least one step is unmet.
@@ -191,6 +200,22 @@ export function DashboardView(): ReactElement {
         </Section>
       )}
 
+      {canWallet && (
+        <Section
+          title="Wallet"
+          action={
+            <Link
+              href="/wallet"
+              className="text-text-muted hover:text-text-body text-xs transition-colors"
+            >
+              Ledger and top-ups →
+            </Link>
+          }
+        >
+          <WalletBalanceCard query={balances} />
+        </Section>
+      )}
+
       {canOrders && (
         <Section
           title="Recent orders"
@@ -263,6 +288,71 @@ export function DashboardView(): ReactElement {
         </div>
       </Section>
     </div>
+  );
+}
+
+/**
+ * The canonical balance, and only that one.
+ *
+ * The API returns the rupee balance AND the same money restated in
+ * taka (`isConverted`). The wallet page shows both and needs three
+ * paragraphs of caption to stop them reading as two balances; a
+ * summary card has no room for that argument, so it shows the one
+ * that is real and leaves the conversion to the page that can explain
+ * it.
+ *
+ * The caption wording is lifted from the wallet page deliberately —
+ * two screens describing the same number differently is how a seller
+ * comes to believe they disagree.
+ */
+export function WalletBalanceCard({
+  query,
+}: {
+  readonly query: ReturnType<typeof useWalletBalances>;
+}): ReactElement {
+  if (query.isLoading) return <SkeletonRows rows={1} />;
+  if (query.isError) {
+    return (
+      <ErrorState
+        message={query.error?.message ?? 'Failed to load your balance.'}
+        retry={() => void query.refetch()}
+      />
+    );
+  }
+
+  // The rupee row is the one that is not a restatement. Picking by
+  // currency name would break the day a seller is billed in anything
+  // else; picking by `isConverted` asks the question that matters.
+  const canonical = (query.data?.balances ?? []).find((b) => !b.isConverted);
+  if (canonical === undefined) {
+    return (
+      <EmptyState
+        title="No wallet activity yet"
+        description="Your balance appears here once an order delivers or you top up."
+      />
+    );
+  }
+
+  const value = Number(canonical.balance);
+  const caption = value === 0 ? 'No activity yet' : value > 0 ? 'Owed to you' : 'You owe';
+
+  return (
+    <Card>
+      <CardBody>
+        <div className="text-text-faint mb-1 text-xs tracking-wide uppercase">
+          {canonical.currency}
+        </div>
+        <div className="text-text-bright">
+          <Money
+            amount={canonical.balance}
+            currency={canonical.currency === 'BDT' ? 'BDT' : 'INR'}
+            convert={false}
+            size="lg"
+          />
+        </div>
+        <div className="text-text-muted mt-1 text-xs">{caption}</div>
+      </CardBody>
+    </Card>
   );
 }
 

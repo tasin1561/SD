@@ -1179,9 +1179,15 @@ export function useUpdateSellerBankDetails(): UseMutationResult<
 
 import type { WalletBalancesResponse, WalletEntriesPage } from '@skydrop/api-client';
 
-export function useWalletBalances(): UseQueryResult<WalletBalancesResponse> {
+export function useWalletBalances(opts?: {
+  readonly enabled?: boolean;
+}): UseQueryResult<WalletBalancesResponse> {
   const client = useApiClient();
   return useQuery({
+    // Gateable because the dashboard shows this to everyone who lands,
+    // and a VIEWER without `wallet.view` would otherwise be served their
+    // own home page with a refusal on it.
+    enabled: opts?.enabled ?? true,
     queryKey: ['seller-wallet', 'balances'],
     queryFn: () => client.request<WalletBalancesResponse>('/api/seller/wallet'),
   });
