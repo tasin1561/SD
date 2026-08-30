@@ -41,6 +41,29 @@ import { can } from '@/lib/page-access';
  * with a fallback for the typecheck (the fallback path is unreachable
  * in practice — the SSR gate redirects to /login on null identity).
  */
+/**
+ * Whether the setup checklist has anything TRUE to say yet.
+ *
+ * It reads three queries, and while they are in flight every step is
+ * `false` — so the card rendered "0 of 4 done" as a full-width call to
+ * action on the account of a seller who finished months ago, then
+ * vanished a second later. Nothing was wrong with the steps; the
+ * absence of three responses had simply been rendered as a fact about
+ * this seller.
+ *
+ * `known` must therefore mean ANSWERED, not "no longer loading": a
+ * failed catalogue request is not evidence that somebody has no
+ * products, and telling them to add their first one is the same
+ * mistake wearing an error's clothes.
+ */
+export function onboardingVisible(
+  known: boolean,
+  steps: ReadonlyArray<{ readonly done: boolean }>,
+): boolean {
+  if (!known) return false;
+  return steps.some((s) => !s.done);
+}
+
 export function DashboardView(): ReactElement {
   const identity = useSellerIdentity();
   // This is the ONE page open to everybody, so it is where a permission
@@ -87,7 +110,11 @@ export function DashboardView(): ReactElement {
   );
   const hasProduct = (products.data?.total ?? 0) > 0;
   const hasOrder = (recent.data?.total ?? 0) > 0;
-  const onboardingDone = profileComplete && bankDetailsComplete && hasProduct && hasOrder;
+  // Every query the checklist reads must have ANSWERED before it can
+  // claim anything. A disabled query never succeeds, so a seller who
+  // may not read orders cannot be shown a four-step list whose fourth
+  // step is unknowable — the section simply does not appear.
+  const onboardingKnown = profile.isSuccess && products.isSuccess && recent.isSuccess;
 
   // One list rather than four hand-written items, so the progress count
   // and the "which is next" decision cannot drift from what is rendered.
@@ -128,7 +155,7 @@ export function DashboardView(): ReactElement {
         subtitle="Your most recent orders + quick navigation."
       />
 
-      {canProfile && canCatalog && !onboardingDone && (
+      {canProfile && canCatalog && onboardingVisible(onboardingKnown, steps) && (
         <Section title="Get started">
           {/*
            * Deliberately NOT another plain card.
@@ -140,9 +167,10 @@ export function DashboardView(): ReactElement {
            * the accent tint and ring, which nothing else on the dashboard
            * uses, so it is the first thing the eye lands on.
            *
-           * It still disappears entirely once the four are done
-           * (`!onboardingDone`), which is what keeps a permanent banner
-           * from becoming the thing people stop seeing.
+           * It still disappears entirely once the four are done — see
+           * `onboardingVisible` — which is what keeps a permanent banner
+           * from becoming the thing people stop seeing. That same
+           * predicate is why it no longer appears BEFORE the answers do.
            */}
           <div
             className="rounded-[10px] border p-4"
