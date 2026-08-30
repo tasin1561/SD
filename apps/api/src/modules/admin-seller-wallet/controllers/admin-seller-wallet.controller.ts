@@ -10,7 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Currency, TopupRequestStatus } from '@skydrop/db';
+import { Currency, TopupRequestStatus, WalletEntryDirection } from '@skydrop/db';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -79,6 +79,9 @@ export class AdminSellerWalletController {
       amount: string;
       runningBalanceAfter: string;
       linkedOrderId: string | null;
+      linkedOrderNumber: string | null;
+      linkedConsignmentId: string | null;
+      linkedConsignmentNumber: string | null;
       reasonCode: string | null;
       note: string | null;
       createdAt: Date;
@@ -106,17 +109,58 @@ export class AdminSellerWalletController {
         amount: true,
         runningBalanceAfter: true,
         linkedOrderId: true,
+        linkedOrder: { select: { orderNumber: true } },
         reasonCode: true,
         note: true,
         createdAt: true,
       },
     });
+
+    // Same reverse lookup the seller's own ledger does: an
+    // INBOUND_FREIGHT debit belongs to a consignment, not an order, so
+    // `linkedOrderId` is null on exactly the row carrying the largest
+    // number on the page. `inbound_freight_charges.wallet_entry_id` is
+    // UNIQUE — the charged-exactly-once evidence — so it answers this
+    // without widening the append-only ledger.
+    //
+    // Admin was missing BOTH links, which is worse than the seller's
+    // half-answer: staff reading a disputed balance had no route from
+    // an entry to the thing it charged for.
+    const freightEntryIds = rows
+      .filter((r) => r.direction === WalletEntryDirection.INBOUND_FREIGHT)
+      .map((r) => r.id);
+    const freightByEntry = new Map<string, { id: string; number: string }>();
+    if (freightEntryIds.length > 0) {
+      const charges = await this.prisma.client.inboundFreightCharge.findMany({
+        where: { walletEntryId: { in: freightEntryIds } },
+        select: {
+          walletEntryId: true,
+          consignmentId: true,
+          consignment: { select: { consignmentNumber: true } },
+        },
+      });
+      for (const c of charges) {
+        if (c.walletEntryId === null) continue;
+        freightByEntry.set(c.walletEntryId, {
+          id: c.consignmentId,
+          number: c.consignment.consignmentNumber,
+        });
+      }
+    }
+
     return {
-      items: rows.map((r) => ({
-        ...r,
-        amount: r.amount.toFixed(2),
-        runningBalanceAfter: r.runningBalanceAfter.toFixed(2),
-      })),
+      items: rows.map((r) => {
+        const { linkedOrder, ...rest } = r;
+        const freight = freightByEntry.get(r.id) ?? null;
+        return {
+          ...rest,
+          amount: r.amount.toFixed(2),
+          runningBalanceAfter: r.runningBalanceAfter.toFixed(2),
+          linkedOrderNumber: linkedOrder?.orderNumber ?? null,
+          linkedConsignmentId: freight?.id ?? null,
+          linkedConsignmentNumber: freight?.number ?? null,
+        };
+      }),
     };
   }
 

@@ -350,7 +350,7 @@ function LedgerRow({ entry }: { readonly entry: WalletEntryView }): ReactElement
             href={`/orders/${entry.linkedOrderId}`}
             className="text-accent hover:underline font-mono text-xs"
           >
-            Order →
+            {entry.linkedOrderNumber ?? 'Order'} →
           </Link>
         ) : entry.linkedConsignmentId ? (
           <Link
@@ -450,6 +450,7 @@ function downloadCsv(items: ReadonlyArray<WalletEntryView>): void {
     'amount',
     'running_balance_after',
     'linked_order_id',
+    'linked_order_number',
     'linked_remittance_id',
     'reason_code',
     'note',
@@ -466,6 +467,7 @@ function downloadCsv(items: ReadonlyArray<WalletEntryView>): void {
       e.amount,
       e.runningBalanceAfter,
       e.linkedOrderId ?? '',
+      e.linkedOrderNumber ?? '',
       e.linkedRemittanceId ?? '',
       e.reasonCode ?? '',
       e.note ?? '',

@@ -127,6 +127,12 @@ interface WalletEntryView {
   readonly amount: string;
   readonly runningBalanceAfter: string;
   readonly linkedOrderId: string | null;
+  /**
+   * The order's human number. "Order →" told the seller only that an
+   * order existed; the freight row beside it named its consignment, so
+   * the one entry type they see most was the least identifiable.
+   */
+  readonly linkedOrderNumber: string | null;
   readonly linkedRemittanceId: string | null;
   /**
    * Present on an INBOUND_FREIGHT debit, resolved from the freight
@@ -309,6 +315,9 @@ export class SellerWalletController {
         amount: true,
         runningBalanceAfter: true,
         linkedOrderId: true,
+        // The FK is already there, so the number is a join rather than
+        // the reverse lookup freight needs.
+        linkedOrder: { select: { orderNumber: true } },
         linkedRemittanceId: true,
         reasonCode: true,
         note: true,
@@ -358,6 +367,7 @@ export class SellerWalletController {
         amount: r.amount.toFixed(2),
         runningBalanceAfter: r.runningBalanceAfter.toFixed(2),
         linkedOrderId: r.linkedOrderId,
+        linkedOrderNumber: r.linkedOrder?.orderNumber ?? null,
         linkedRemittanceId: r.linkedRemittanceId,
         linkedConsignmentId: freight?.id ?? null,
         linkedConsignmentNumber: freight?.number ?? null,

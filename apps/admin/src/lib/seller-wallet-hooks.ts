@@ -53,6 +53,10 @@ export interface AdminWalletEntry {
   readonly amount: string;
   readonly runningBalanceAfter: string;
   readonly linkedOrderId: string | null;
+  readonly linkedOrderNumber: string | null;
+  /** Set on an INBOUND_FREIGHT debit — freight belongs to a consignment. */
+  readonly linkedConsignmentId: string | null;
+  readonly linkedConsignmentNumber: string | null;
   readonly reasonCode: string | null;
   readonly note: string | null;
   readonly createdAt: string;

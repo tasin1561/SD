@@ -215,13 +215,14 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
                 <Tr>
                   <Th>When</Th>
                   <Th>Type</Th>
+                  <Th>Linked</Th>
                   <Th align="right">Amount</Th>
                   <Th align="right">Balance after</Th>
                 </Tr>
               </THead>
               <TBody>
                 {(entries.data?.items ?? []).length === 0 ? (
-                  <TableEmpty colSpan={4}>No entries yet.</TableEmpty>
+                  <TableEmpty colSpan={5}>No entries yet.</TableEmpty>
                 ) : (
                   (entries.data?.items ?? []).map((e: AdminWalletEntry) => (
                     <Tr key={e.id}>
@@ -231,6 +232,28 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
                       <Td className="text-text-body text-xs">
                         {e.direction}
                         {e.note !== null && <div className="text-text-faint italic">{e.note}</div>}
+                      </Td>
+                      {/* Staff reading a disputed balance had no route
+                          from an entry to what it charged for: the id was
+                          in the payload and nothing rendered it. */}
+                      <Td className="text-xs">
+                        {e.linkedOrderId !== null ? (
+                          <Link
+                            href={`/orders/${e.linkedOrderId}`}
+                            className="text-accent hover:underline font-mono"
+                          >
+                            {e.linkedOrderNumber ?? 'Order'} →
+                          </Link>
+                        ) : e.linkedConsignmentId !== null ? (
+                          <Link
+                            href={`/warehouse/consignments/${e.linkedConsignmentId}`}
+                            className="text-accent hover:underline font-mono"
+                          >
+                            {e.linkedConsignmentNumber ?? 'Consignment'} →
+                          </Link>
+                        ) : (
+                          <span className="text-text-faint">—</span>
+                        )}
                       </Td>
                       <Td align="right">
                         <Money amount={e.amount} currency="INR" />

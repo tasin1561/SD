@@ -26,6 +26,12 @@ export interface WalletEntryView {
   readonly amount: string;
   readonly runningBalanceAfter: string;
   readonly linkedOrderId: string | null;
+  /**
+   * The order's human number. The id alone is unmatchable against
+   * anything the seller holds — in the table it read as a bare
+   * "Order →", and in the CSV export as a UUID.
+   */
+  readonly linkedOrderNumber: string | null;
   readonly linkedRemittanceId: string | null;
   /**
    * Set on an INBOUND_FREIGHT debit. Freight belongs to a CONSIGNMENT
