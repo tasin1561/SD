@@ -292,14 +292,20 @@ export function DashboardView(): ReactElement {
 }
 
 /**
- * The canonical balance, and only that one.
+ * One balance, stated twice.
  *
- * The API returns the rupee balance AND the same money restated in
- * taka (`isConverted`). The wallet page shows both and needs three
- * paragraphs of caption to stop them reading as two balances; a
- * summary card has no room for that argument, so it shows the one
- * that is real and leaves the conversion to the page that can explain
- * it.
+ * The API returns the rupee figure and the same money restated in taka
+ * (`isConverted`). Both belong here — a seller in Dhaka thinks in taka
+ * and should not have to convert their own balance in their head — but
+ * shown as EQUALS they read as two debts, which is the wallet page's
+ * problem that took three paragraphs of caption to talk a reader out
+ * of.
+ *
+ * So the rupee figure is the number, and the taka sits under it,
+ * smaller and dimmer, behind a "≈" and its rate. The hierarchy is the
+ * argument: one thing is the balance, the other is that balance
+ * counted in another currency. Saying it in words alone would leave
+ * two equally-weighted figures on a card nobody reads carefully.
  *
  * The caption wording is lifted from the wallet page deliberately —
  * two screens describing the same number differently is how a seller
@@ -336,6 +342,12 @@ export function WalletBalanceCard({
   const value = Number(canonical.balance);
   const caption = value === 0 ? 'No activity yet' : value > 0 ? 'Owed to you' : 'You owe';
 
+  // The restatement, when the API sent one. Its rate is what makes it
+  // checkable rather than a second number to take on trust — and an
+  // absent rate is stated as absent rather than quietly dropped, since
+  // a figure whose rate nobody can see is the one to distrust.
+  const restated = (query.data?.balances ?? []).find((b) => b.isConverted);
+
   return (
     <Card>
       <CardBody>
@@ -351,6 +363,18 @@ export function WalletBalanceCard({
           />
         </div>
         <div className="text-text-muted mt-1 text-xs">{caption}</div>
+        {restated !== undefined && (
+          <div className="text-text-faint mt-1.5 flex flex-wrap items-center gap-x-1.5 text-xs">
+            <span aria-hidden>≈</span>
+            <Money
+              amount={restated.balance}
+              currency={restated.currency === 'BDT' ? 'BDT' : 'INR'}
+              convert={false}
+            />
+            {restated.fxRate !== null && <span>· ₹1 = ৳{Number(restated.fxRate).toFixed(2)}</span>}
+            <span className="sr-only">the same balance in {restated.currency}</span>
+          </div>
+        )}
       </CardBody>
     </Card>
   );

@@ -1,14 +1,16 @@
 /**
- * The dashboard shows the seller's balance, and shows exactly ONE.
+ * The dashboard shows the balance in both currencies — one debt, said
+ * twice, never two debts.
  *
- * The wallet endpoint returns the rupee balance AND the same money
- * restated in taka (`isConverted: true`). The wallet page renders both
- * and needs three paragraphs of caption to stop them reading as two
- * balances — a summary card has no room for that argument, so it must
- * pick the one that is real.
+ * The endpoint returns the rupee figure and the same money restated in
+ * taka (`isConverted: true`). A seller in Dhaka needs the taka; nobody
+ * needs to think they owe the sum of the two. What keeps them apart is
+ * that the rupee figure is the headline and the taka is a dimmer line
+ * under it behind a "≈" and its rate.
  *
- * Getting this wrong does not throw and does not look broken: it shows
- * a plausible number that is the balance multiplied by the FX rate.
+ * The failure this pins is silent: picking the wrong row as the
+ * headline throws nothing and looks fine — it renders a plausible
+ * number that is the balance multiplied by the FX rate.
  */
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
@@ -38,12 +40,41 @@ const BOTH: WalletBalancesResponse = {
 } as WalletBalancesResponse;
 
 describe('dashboard wallet balance', () => {
-  it('shows the canonical figure and NOT its restatement', () => {
+  it('leads with the rupee figure and carries the taka as a restatement', () => {
     render(<WalletBalanceCard query={q({ data: BOTH })} />);
     expect(screen.getByText(/3,600/)).toBeInTheDocument();
-    // The taka figure is the same money counted again. Two numbers on a
-    // summary card read as two balances.
-    expect(screen.queryByText(/4,428/)).not.toBeInTheDocument();
+    expect(screen.getByText(/4,428/)).toBeInTheDocument();
+    // The rate is what makes the second figure checkable rather than a
+    // number to take on trust.
+    expect(screen.getByText(/1\.23/)).toBeInTheDocument();
+  });
+
+  it('names the taka line as the SAME balance, for a screen reader too', () => {
+    render(<WalletBalanceCard query={q({ data: BOTH })} />);
+    // Sighted readers get the hierarchy — smaller, dimmer, under a "≈".
+    // Read aloud, that hierarchy is gone and two figures in a row are
+    // indistinguishable from two debts.
+    expect(screen.getByText(/the same balance in BDT/)).toBeInTheDocument();
+  });
+
+  it('omits the rate rather than inventing one when none was resolved', () => {
+    const noRate = {
+      balances: [
+        { currency: 'INR', balance: '-3600.00', isConverted: false, fxRate: null },
+        { currency: 'BDT', balance: '-4428.00', isConverted: true, fxRate: null },
+      ],
+    } as WalletBalancesResponse;
+    render(<WalletBalanceCard query={q({ data: noRate })} />);
+    expect(screen.getByText(/4,428/)).toBeInTheDocument();
+    expect(screen.queryByText(/₹1 =/)).not.toBeInTheDocument();
+  });
+
+  it('shows no restatement line at all when the API sent only rupees', () => {
+    const inrOnly = {
+      balances: [{ currency: 'INR', balance: '-3600.00', isConverted: false, fxRate: null }],
+    } as WalletBalancesResponse;
+    const { container } = render(<WalletBalanceCard query={q({ data: inrOnly })} />);
+    expect(container.textContent).not.toContain('≈');
   });
 
   it('says "You owe" on a negative balance', () => {
