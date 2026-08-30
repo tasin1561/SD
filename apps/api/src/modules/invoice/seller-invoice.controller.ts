@@ -104,6 +104,16 @@ export class SellerInvoiceController {
         message: 'No invoice PDF for this order yet.',
       });
     }
+    // A signed URL signs a KEY — it does not promise anything is there.
+    // Production held a row claiming a 2604-byte PDF whose object was
+    // absent, so the link resolved to a NoSuchKey page. Rebuild it from
+    // the issued snapshot rather than handing the seller XML.
+    if (!(await this.svc.ensurePdfObject(inv.id))) {
+      throw new NotFoundException({
+        code: 'INVOICE_PDF_UNAVAILABLE',
+        message: 'The invoice PDF could not be retrieved. Please try again shortly.',
+      });
+    }
     // 302, not 301: the signature is good for minutes, and a permanent
     // redirect is exactly the thing a browser would cache and replay
     // after it has expired.

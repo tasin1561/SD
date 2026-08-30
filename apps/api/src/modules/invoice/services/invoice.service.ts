@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ChargeType, NotificationRecipientType, OrderStatus, Prisma } from '@skydrop/db';
 import { EnvService } from '../../../config/env.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -29,6 +29,8 @@ import { InvoicePdfService, type InvoicePayload } from './invoice-pdf.service';
  */
 @Injectable()
 export class InvoiceService {
+  private readonly logger = new Logger(InvoiceService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly spaces: SpacesService,
@@ -294,6 +296,65 @@ export class InvoiceService {
       pdfUrl: await this.spaces.presignGetUrl(storageKey),
       alreadyExisted: false,
     };
+  }
+
+  /**
+   * Make sure the invoice's PDF object actually exists, re-rendering it
+   * from the stored snapshot if it does not.
+   *
+   * A presigned URL signs a KEY; it says nothing about whether anything
+   * is at that key. Production carried an invoice row claiming 2604
+   * bytes whose object was absent, so the permanent link resolved to a
+   * NoSuchKey XML page — the same shape of failure as the AccessDenied
+   * it replaced, and just as invisible until a seller clicked it.
+   *
+   * The PDF is DERIVED data: `payloadSnapshot` is the invoice as it was
+   * issued, so re-rendering reproduces the same document rather than
+   * re-deriving one from live rows that may have moved since. That is
+   * what makes healing safe here and would not be safe from the order.
+   *
+   * Best-effort by construction: if the re-render or the upload fails,
+   * the caller still gets its redirect and the seller still sees the
+   * courier's error rather than ours. Returns whether an object is
+   * present at the end.
+   */
+  async ensurePdfObject(invoiceId: string): Promise<boolean> {
+    const row = await this.prisma.client.invoice.findUnique({
+      where: { id: invoiceId },
+      select: { id: true, pdfStorageKey: true, payloadSnapshot: true },
+    });
+    if (row === null || row.pdfStorageKey === null) return false;
+
+    const head = await this.spaces.headObject(row.pdfStorageKey);
+    if (head !== null) return true;
+
+    if (row.payloadSnapshot === null) {
+      this.logger.error(
+        `invoice ${invoiceId}: PDF object ${row.pdfStorageKey} is missing and there is ` +
+          'no snapshot to rebuild it from',
+      );
+      return false;
+    }
+
+    try {
+      const buffer = await this.pdf.render(row.payloadSnapshot as unknown as InvoicePayload);
+      await this.spaces.putObject(row.pdfStorageKey, buffer, 'application/pdf');
+      await this.prisma.client.invoice.update({
+        where: { id: row.id },
+        data: { pdfSizeBytes: buffer.length },
+      });
+      this.logger.warn(
+        `invoice ${invoiceId}: PDF object ${row.pdfStorageKey} was missing and has been ` +
+          `rebuilt from its snapshot (${buffer.length} bytes)`,
+      );
+      return true;
+    } catch (e) {
+      this.logger.error(
+        `invoice ${invoiceId}: PDF rebuild failed for ${row.pdfStorageKey}: ` +
+          (e instanceof Error ? e.message : String(e)),
+      );
+      return false;
+    }
   }
 
   async getForSellerOrder(
