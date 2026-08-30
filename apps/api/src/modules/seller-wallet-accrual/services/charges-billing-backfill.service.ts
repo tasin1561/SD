@@ -60,6 +60,23 @@ export class ChargesBillingBackfillService {
         // Never billed. The same gate debitIfNeeded uses, applied here
         // as a filter so the report counts only real work.
         walletEntries: { none: { direction: WalletEntryDirection.ORDER_CHARGES } },
+        // ── NOT-YET-DUE IS NOT UNBILLED ──────────────────────────────
+        // On the default T_PLUS_N tier a delivered order's charges are
+        // taken `wallet.accrual_delay_days` later, and until then it
+        // carries an unprocessed `pending_accruals` row. It is not
+        // missed money; it is money with a date on it.
+        //
+        // Without this, the backfill takes every delivered order's
+        // charges the moment it is run, and nothing looks wrong: the
+        // amounts are right, the sum is owed, and the scheduled sweep
+        // then skips the order on the idempotency gate. The only thing
+        // that happened is that the accrual tier the business chose was
+        // quietly overridden for every seller at once — which is
+        // exactly the kind of change nobody would find later.
+        //
+        // A row that has already been processed does NOT exclude the
+        // order: that is the genuine miss this backfill exists for.
+        OR: [{ pendingAccrual: { is: null } }, { pendingAccrual: { processedAt: { not: null } } }],
       },
       select: { id: true, orderNumber: true, status: true, sellerId: true },
       orderBy: { createdAt: 'asc' },
