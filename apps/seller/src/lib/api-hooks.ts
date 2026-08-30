@@ -1824,7 +1824,7 @@ export function useRequestReturn(
     mutationFn: ({ reason }) =>
       client.request<ReturnRequestResult>(`/api/seller/orders/${orderId}/return`, {
         method: 'POST',
-        body: JSON.stringify({ reason }),
+        body: { reason },
       }),
     onSuccess: () => {
       // The order has moved and its journey has a new rung.

@@ -491,7 +491,7 @@ export function useSetCourierActive(): UseMutationResult<
     mutationFn: ({ courierCode, isActive, reason }) =>
       client.request<{ courierCode: string; isActive: boolean; changed: boolean }>(
         `/api/admin/couriers/${encodeURIComponent(courierCode)}`,
-        { method: 'PATCH', body: JSON.stringify({ isActive, reason }) },
+        { method: 'PATCH', body: { isActive, reason } },
       ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['admin-couriers'] });
@@ -2505,7 +2505,7 @@ export function useBackfillCharges(): UseMutationResult<
     mutationFn: ({ dryRun }) =>
       client.request<ChargesBackfillReport>('/api/admin/orders/charges/backfill', {
         method: 'POST',
-        body: JSON.stringify({ dryRun }),
+        body: { dryRun },
       }),
     onSuccess: (_r, vars) => {
       // Only a real run changes anything worth re-reading.
@@ -2544,7 +2544,7 @@ export function useBillUnbilled(): UseMutationResult<
     mutationFn: ({ dryRun }) =>
       client.request<BillingBackfillReport>('/api/admin/wallets/charges/bill-unbilled', {
         method: 'POST',
-        body: JSON.stringify({ dryRun }),
+        body: { dryRun },
       }),
     onSuccess: (_r, vars) => {
       if (!vars.dryRun) {
@@ -2576,7 +2576,7 @@ export function useAdminRequestReturn(
     mutationFn: ({ reason }) =>
       client.request<ReturnRequestResult>(`/api/admin/orders/${orderId}/return`, {
         method: 'POST',
-        body: JSON.stringify({ reason }),
+        body: { reason },
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['admin-orders'] });
