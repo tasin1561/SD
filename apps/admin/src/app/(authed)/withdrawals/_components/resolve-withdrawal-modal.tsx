@@ -42,12 +42,22 @@ export function ResolveWithdrawalModal({
   readonly request: WithdrawalRequestView | null;
   readonly onClose: () => void;
 }): ReactElement {
+  // Paying is only possible once approved — `markPaid` refuses anything
+  // else. A PENDING request can still be rejected, so the modal opens
+  // in the only mode that would work rather than offering one the
+  // server will refuse.
+  const payable = request?.status === 'APPROVED';
   const canResolve = usePermission('money.withdrawals.review');
   const toast = useToast();
   const markPaid = useMarkWithdrawalPaid();
   const reject = useRejectWithdrawal();
 
   const [mode, setMode] = useState<Mode>('paid');
+  // Re-seeded per request: opening a pending one after an approved one
+  // would otherwise land on a mode it cannot use.
+  useEffect(() => {
+    setMode(payable ? 'paid' : 'reject');
+  }, [request?.id, payable]);
   const [remittanceId, setRemittanceId] = useState('');
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -145,7 +155,7 @@ export function ResolveWithdrawalModal({
           <fieldset className="border-border border-t pt-3">
             <legend className="sr-only">Outcome</legend>
             <div className="flex gap-4 text-sm">
-              {(['paid', 'reject'] as const).map((m) => (
+              {(payable ? (['paid', 'reject'] as const) : (['reject'] as const)).map((m) => (
                 <label key={m} className="flex items-center gap-1.5">
                   <input
                     type="radio"

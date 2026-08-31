@@ -207,8 +207,11 @@ export function WithdrawalsIndex(): ReactElement {
                     to the seller would take somebody somewhere they did
                     not ask to go, so the link stays a link. */}
                 <Td>
+                  {/* The NAME. A truncated uuid identifies the row to
+                      the database and to nobody deciding whether to
+                      send money. */}
                   <Link href={`/sellers/${w.sellerId}`} className="text-accent hover:underline">
-                    <Ident value={`${w.sellerId.slice(0, 8)}…`} />
+                    {w.sellerName ?? <Ident value={`${w.sellerId.slice(0, 8)}…`} />}
                   </Link>
                 </Td>
                 <Td align="right">
@@ -257,6 +260,16 @@ export function WithdrawalsIndex(): ReactElement {
                           }}
                         >
                           Approve
+                        </Button>
+                      )}
+                      {/* Reject stayed reachable only through Resolve,
+                          and gating Resolve to APPROVED took it away
+                          from the rows most likely to need it. Pending
+                          gets its own button; approved keeps Resolve,
+                          which offers pay or reject. */}
+                      {w.status === WithdrawalRequestStatus.PENDING && (
+                        <Button variant="ghost" size="sm" onClick={() => setSelected(w)}>
+                          Reject
                         </Button>
                       )}
                       {w.status === WithdrawalRequestStatus.APPROVED && (

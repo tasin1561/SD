@@ -134,6 +134,15 @@ function RequestWithdrawalModal({
   // withdrawal is requested against the rupee balance.
   const currency = 'INR';
   const [amount, setAmount] = useState('');
+  // A typed amount above what the page already says is available. Only
+  // true for a parseable number: an unparseable one is the server's to
+  // refuse, and blocking on it would fight the user mid-keystroke.
+  const typed = Number(amount);
+  const overAvailable =
+    amount.trim() !== '' &&
+    Number.isFinite(typed) &&
+    eligibility.data !== undefined &&
+    typed > Number(eligibility.data.withdrawableInr);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -237,6 +246,15 @@ function RequestWithdrawalModal({
             availability box above already say which currency this is,
             and a sentence explaining it a third time is noise on a form
             with two fields. */}
+        {/*
+          The server refuses more than is withdrawable
+          (INSUFFICIENT_WITHDRAWABLE_BALANCE) and is the authority — this
+          only saves a round trip to learn something already printed two
+          inches above the field. FE-2: it is a mirror of the number we
+          just showed, not of the server's policy, and the button stays
+          enabled for everything else so a refusal still comes from the
+          server verbatim.
+        */}
         <FormField label="Amount (₹)" htmlFor="wd-amount" required>
           <Input
             id="wd-amount"
@@ -262,7 +280,10 @@ function RequestWithdrawalModal({
           variant="primary"
           size="md"
           disabled={
-            amount.trim() === '' || request.isPending || eligibility.data?.hasBankAccount === false
+            amount.trim() === '' ||
+            request.isPending ||
+            eligibility.data?.hasBankAccount === false ||
+            overAvailable
           }
           onClick={() => void submit()}
         >

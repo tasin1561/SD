@@ -1770,6 +1770,10 @@ export interface WithdrawalScheduleView {
   readonly hourLocal: number;
   readonly timezone: string;
   readonly isOwnValue: boolean;
+  /** What the seller wants left behind after an automatic withdrawal. */
+  readonly keepBalanceInr: string;
+  /** Skydrop's floor. Theirs may sit above it, never below. */
+  readonly platformMinimumInr: string;
 }
 
 export function useWithdrawalSchedule(enabled = true): UseQueryResult<WithdrawalScheduleView> {
@@ -1784,7 +1788,7 @@ export function useWithdrawalSchedule(enabled = true): UseQueryResult<Withdrawal
 export function useSetWithdrawalSchedule(): UseMutationResult<
   WithdrawalScheduleView,
   Error,
-  { autoEnabled?: boolean; hourLocal?: number }
+  { autoEnabled?: boolean; hourLocal?: number; keepBalanceInr?: string }
 > {
   const client = useApiClient();
   const qc = useQueryClient();

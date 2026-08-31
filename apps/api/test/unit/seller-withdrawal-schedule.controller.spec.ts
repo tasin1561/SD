@@ -2,11 +2,15 @@ import { SellerWithdrawalScheduleController } from '../../src/modules/seller-wal
 
 function make() {
   const setOverride = jest.fn().mockResolvedValue({});
-  const resolve = jest.fn(async (_id: string, key: string) =>
-    key.endsWith('enabled')
-      ? { value: true, source: 'SELLER_OVERRIDE' }
-      : { value: 14, source: 'SYSTEM_DEFAULT' },
-  );
+  // Answers PER KEY. A single fallback value made every setting read
+  // the same, which is fine until two of them mean different things —
+  // the seller's float and our floor would have been indistinguishable.
+  const resolve = jest.fn(async (_id: string, key: string) => {
+    if (key.endsWith('enabled')) return { value: true, source: 'SELLER_OVERRIDE' };
+    if (key.endsWith('keep_balance_inr')) return { value: '2000', source: 'SELLER_OVERRIDE' };
+    if (key.endsWith('minimum_balance_inr')) return { value: '500', source: 'SYSTEM_DEFAULT' };
+    return { value: 14, source: 'SYSTEM_DEFAULT' };
+  });
   const prisma = {
     client: { seller: { findUnique: jest.fn(async () => ({ timezone: 'Asia/Dhaka' })) } },
   };
@@ -29,18 +33,45 @@ describe('SellerWithdrawalScheduleController', () => {
       // seller's own (WAL-3).
       timezone: 'Asia/Dhaka',
       isOwnValue: true,
+      // The seller's own working float, and OUR floor shown beside it
+      // so the constraint on the field is visible rather than
+      // discovered by being refused.
+      keepBalanceInr: '2000.00',
+      platformMinimumInr: '500.00',
     });
   });
 
-  it('writes ONLY the two hardcoded keys', async () => {
+  it('writes ONLY its own hardcoded keys', async () => {
     const { c, setOverride } = make();
-    await c.set(SELLER, { autoEnabled: false, hourLocal: 9 });
+    // Every field the endpoint accepts, in one call: a test that sends
+    // a subset pins nothing about the ones it left out, and the third
+    // key was added later without this noticing.
+    await c.set(SELLER, { autoEnabled: false, hourLocal: 9, keepBalanceInr: '2000' });
 
     const keys = (setOverride.mock.calls as unknown as Array<[string, string]>).map((k) => k[1]);
     // `sellerOverridable` marks keys an ADMIN may set per seller — the
     // same flag is on pricing.flat_delivery_fee_inr. An endpoint taking
     // a key NAME would let a seller zero their own delivery fee.
-    expect(keys).toEqual(['wallet.auto_withdraw_enabled', 'wallet.auto_withdraw_hour_local']);
+    expect(keys).toEqual([
+      'wallet.auto_withdraw_enabled',
+      'wallet.auto_withdraw_hour_local',
+      'wallet.auto_withdraw_keep_balance_inr',
+    ]);
+  });
+
+  it('refuses a float below the minimum balance — not the seller’s to lower', async () => {
+    // Ours is the security we hold against an unpaid delivery fee.
+    // Theirs is a working float on top of it.
+    const { c } = make();
+    await expect(c.set(SELLER, { keepBalanceInr: '100' })).rejects.toMatchObject({
+      response: { code: 'KEEP_BALANCE_BELOW_MINIMUM' },
+    });
+  });
+
+  it('accepts a float at exactly the minimum', async () => {
+    const { c, setOverride } = make();
+    await c.set(SELLER, { keepBalanceInr: '500' });
+    expect(setOverride).toHaveBeenCalled();
   });
 
   it('writes as the SELLER, so the audit does not misattribute it to staff', async () => {

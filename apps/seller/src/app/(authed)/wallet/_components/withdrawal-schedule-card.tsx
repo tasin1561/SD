@@ -1,7 +1,16 @@
 'use client';
 
 import { useEffect, useState, type ReactElement } from 'react';
-import { Button, Card, CardBody, CardHeader, Select, useToast } from '@skydrop/ui/components';
+import {
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  Input,
+  Money,
+  Select,
+  useToast,
+} from '@skydrop/ui/components';
 import { useWithdrawalSchedule, useSetWithdrawalSchedule } from '@/lib/api-hooks';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
@@ -30,6 +39,7 @@ export function WithdrawalScheduleCard(): ReactElement | null {
   const save = useSetWithdrawalSchedule();
 
   const [hour, setHour] = useState<number | null>(null);
+  const [keep, setKeep] = useState<string | null>(null);
   // Server value wins until the seller touches the field, so a save
   // elsewhere is not overwritten by a stale local number.
   useEffect(() => {
@@ -39,7 +49,11 @@ export function WithdrawalScheduleCard(): ReactElement | null {
   if (schedule.data === undefined) return null;
   const data = schedule.data;
 
-  async function apply(body: { autoEnabled?: boolean; hourLocal?: number }): Promise<void> {
+  async function apply(body: {
+    autoEnabled?: boolean;
+    hourLocal?: number;
+    keepBalanceInr?: string;
+  }): Promise<void> {
     try {
       const next = await save.mutateAsync(body);
       setHour(next.hourLocal);
@@ -109,6 +123,46 @@ export function WithdrawalScheduleCard(): ReactElement | null {
                   size="md"
                   disabled={save.isPending}
                   onClick={() => void apply({ hourLocal: hour })}
+                >
+                  Save
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/*
+            The seller's own working float, on top of ours.
+            Ours is a floor they may never go under — it is the security
+            we hold against an unpaid delivery fee. Theirs is a choice:
+            a business that wants cash carried between sweeps had no way
+            to say so, and the sweep took everything down to our line.
+            Applies to the AUTOMATIC withdrawal only; a request they
+            make by hand is theirs to size.
+          */}
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-text-body text-sm">Keep this much in the wallet</div>
+              <p className="text-text-faint text-xs">
+                The automatic withdrawal leaves this behind. Must be at least{' '}
+                <Money amount={data.platformMinimumInr} currency="INR" convert={false} />, the
+                minimum on your account.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                value={keep ?? data.keepBalanceInr}
+                disabled={!mayEdit || save.isPending}
+                onChange={(e) => setKeep(e.target.value)}
+                inputMode="decimal"
+                className="w-32 text-right"
+                aria-label="Balance to keep"
+              />
+              {keep !== null && keep !== data.keepBalanceInr && (
+                <Button
+                  variant="primary"
+                  size="md"
+                  disabled={save.isPending}
+                  onClick={() => void apply({ keepBalanceInr: keep.trim() })}
                 >
                   Save
                 </Button>

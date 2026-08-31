@@ -147,6 +147,8 @@ export interface ReconciliationReport {
 export interface WithdrawalRequestView {
   readonly id: string;
   readonly sellerId: string;
+  /** Who is asking, in words rather than a uuid. */
+  readonly sellerName: string | null;
   readonly currency: Currency;
   readonly amountRequested: string;
   readonly status: WithdrawalRequestStatus;

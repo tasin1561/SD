@@ -950,6 +950,18 @@ const systemSettings: SystemSettingSeed[] = [
     overrideMaxDecimal: '10000000',
   },
   {
+    key: 'wallet.auto_withdraw_keep_balance_inr',
+    category: 'wallet',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '0.00',
+    displayName: 'Auto-withdrawal: balance to keep (INR)',
+    description:
+      'What the SELLER wants left in the wallet after an automatic withdrawal, on top of the platform minimum. Theirs to set, unlike the minimum balance beside it: a seller who wants a working float carried between sweeps had no way to say so, and the sweep took everything down to our floor. Applies to the AUTOMATIC sweep only — a request they make by hand is theirs to size. Must be at or above wallet.minimum_balance_inr, which is the floor they may never go under.',
+    sellerOverridable: true,
+    overrideMinDecimal: '0',
+    overrideMaxDecimal: '10000000',
+  },
+  {
     key: 'wallet.negative_balance_limit_inr',
     category: 'wallet',
     valueType: SettingValueType.DECIMAL,

@@ -1,6 +1,16 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Patch, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Patch,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsBoolean, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsNumberString, IsOptional, Max, Min } from 'class-validator';
+import { Prisma } from '@skydrop/db';
 
 import { CurrentSeller } from '../../../common/decorators/current-seller.decorator';
 import { SellerJwtGuard } from '../../../common/guards/seller-jwt.guard';
@@ -23,6 +33,9 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
  */
 const ENABLED_KEY = 'wallet.auto_withdraw_enabled';
 const HOUR_KEY = 'wallet.auto_withdraw_hour_local';
+const KEEP_KEY = 'wallet.auto_withdraw_keep_balance_inr';
+/** OUR floor. Theirs may sit above it, never below. */
+const MIN_BALANCE_KEY = 'wallet.minimum_balance_inr';
 
 class SetWithdrawalScheduleDto {
   @IsOptional()
@@ -35,6 +48,15 @@ class SetWithdrawalScheduleDto {
   @Min(0)
   @Max(23)
   hourLocal?: number;
+
+  /**
+   * What the seller wants left behind after an automatic withdrawal.
+   * A decimal STRING: sending money as a float is how 0.1 + 0.2 gets
+   * into a ledger.
+   */
+  @IsOptional()
+  @IsNumberString()
+  keepBalanceInr?: string;
 }
 
 interface WithdrawalScheduleView {
@@ -42,6 +64,13 @@ interface WithdrawalScheduleView {
   readonly hourLocal: number;
   /** IANA zone the hour is interpreted in — never a stored offset. */
   readonly timezone: string;
+  /** What they want left in the wallet after the sweep runs. */
+  readonly keepBalanceInr: string;
+  /**
+   * OUR minimum, shown so the constraint on the field above is visible
+   * rather than discovered by being refused.
+   */
+  readonly platformMinimumInr: string;
   /** True when this seller set it, rather than inheriting our default. */
   readonly isOwnValue: boolean;
 }
@@ -72,9 +101,11 @@ export class SellerWithdrawalScheduleController {
   @Get()
   @ApiOperation({ summary: 'Whether automatic withdrawals are on, and the hour they run' })
   async get(@CurrentSeller() seller: AuthenticatedSeller): Promise<WithdrawalScheduleView> {
-    const [enabled, hour, row] = await Promise.all([
+    const [enabled, hour, keep, platformMin, row] = await Promise.all([
       this.settings.resolve(seller.id, ENABLED_KEY),
       this.settings.resolve(seller.id, HOUR_KEY),
+      this.settings.resolve(seller.id, KEEP_KEY),
+      this.settings.resolve(seller.id, MIN_BALANCE_KEY),
       this.prisma.client.seller.findUnique({
         where: { id: seller.id },
         select: { timezone: true },
@@ -86,6 +117,8 @@ export class SellerWithdrawalScheduleController {
       // The hour means nothing without the zone it is read in, and the
       // sweep uses the seller's own (WAL-3).
       timezone: row?.timezone ?? 'Asia/Dhaka',
+      keepBalanceInr: new Prisma.Decimal(String(keep.value ?? 0)).toFixed(2),
+      platformMinimumInr: new Prisma.Decimal(String(platformMin.value ?? 0)).toFixed(2),
       isOwnValue: enabled.source === 'SELLER_OVERRIDE' || hour.source === 'SELLER_OVERRIDE',
     };
   }
@@ -121,6 +154,35 @@ export class SellerWithdrawalScheduleController {
         seller.id,
         HOUR_KEY,
         { valueType: 'INT', value: body.hourLocal },
+        { sellerActor: true },
+      );
+    }
+    if (body.keepBalanceInr !== undefined) {
+      // Theirs may sit ABOVE our floor, never below it. The seller is
+      // choosing a working float to carry between sweeps; our minimum
+      // is the security we hold against an unpaid delivery fee, and a
+      // seller must not be able to lower that by setting their own.
+      //
+      // Checked here rather than by the resolver's clamp: `overrideMin`
+      // is a static column and this bound is another SETTING, which can
+      // be raised per seller. A clamp would silently pin the value to a
+      // stale number instead of saying no.
+      const keep = new Prisma.Decimal(body.keepBalanceInr);
+      const floor = new Prisma.Decimal(
+        String((await this.settings.resolve(seller.id, MIN_BALANCE_KEY)).value ?? 0),
+      );
+      if (keep.lessThan(floor)) {
+        throw new BadRequestException({
+          code: 'KEEP_BALANCE_BELOW_MINIMUM',
+          message:
+            `Keep at least ${floor.toFixed(2)} — that is the minimum balance on this account, ` +
+            `and it is not yours to lower. You asked to keep ${keep.toFixed(2)}.`,
+        });
+      }
+      await this.settings.setOverride(
+        seller.id,
+        KEEP_KEY,
+        { valueType: 'DECIMAL', value: keep.toFixed(2) },
         { sellerActor: true },
       );
     }

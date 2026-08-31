@@ -27,6 +27,12 @@ const MIN_BALANCE_KEY = 'wallet.minimum_balance_inr';
 export interface WithdrawalRequestView {
   readonly id: string;
   readonly sellerId: string;
+  /**
+   * Who is asking, in words. A truncated uuid identifies a row to the
+   * database and nobody else — an operator deciding whether to send
+   * money should not have to open another page to learn whose it is.
+   */
+  readonly sellerName: string | null;
   readonly currency: Currency;
   readonly amountRequested: string;
   readonly status: WithdrawalRequestStatus;
@@ -415,6 +421,7 @@ export class WithdrawalRequestService {
         orderBy: { createdAt: pendingView ? 'asc' : 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
+        include: { seller: { select: { companyName: true } } },
       }),
       this.prisma.client.withdrawalRequest.count({ where }),
       this.prisma.client.withdrawalRequest.aggregate({
@@ -707,6 +714,9 @@ export class WithdrawalRequestService {
       note: string | null;
       createdAt: Date;
       resolvedAt: Date | null;
+      // Present only where the caller asked for it: the admin list
+      // includes it, the write paths that re-read one row do not.
+      seller?: { companyName: string } | null;
     },
     slaHours?: number,
     now: Date = new Date(),
@@ -726,6 +736,7 @@ export class WithdrawalRequestService {
       slaBreached: waitingHours !== null && slaHours !== undefined && waitingHours >= slaHours,
       id: row.id,
       sellerId: row.sellerId,
+      sellerName: row.seller?.companyName ?? null,
       currency: row.currency,
       amountRequested: row.amountRequested.toFixed(2),
       status: row.status,

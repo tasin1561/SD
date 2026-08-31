@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Currency, SellerStatus } from '@skydrop/db';
+import { Currency, Prisma, SellerStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
 import { WithdrawalRequestService } from './withdrawal-request.service';
@@ -35,6 +35,9 @@ import { WithdrawalRequestService } from './withdrawal-request.service';
 const ENABLED_KEY = 'wallet.auto_withdraw_enabled';
 const HOUR_KEY = 'wallet.auto_withdraw_hour_local';
 const MIN_THRESHOLD_KEY = 'wallet.withdrawal_min_threshold_inr';
+/** The seller's own working float, on top of our floor. */
+const KEEP_BALANCE_KEY = 'wallet.auto_withdraw_keep_balance_inr';
+const MIN_BALANCE_KEY = 'wallet.minimum_balance_inr';
 /** One automatic request per seller per (roughly) day. */
 const DEDUP_WINDOW_MS = 20 * 60 * 60 * 1000;
 
@@ -93,7 +96,28 @@ export class AutoWithdrawalSweepService {
           continue;
         }
 
-        const available = await this.withdrawals.withdrawableBalance(seller.id, Currency.INR);
+        // What the GUARD would allow, then what this seller asked us to
+        // leave behind on top of it.
+        //
+        // `withdrawableBalance` already subtracts OUR minimum (WAL-3) —
+        // it is one number with three callers and must keep meaning one
+        // thing, so the seller's own float is subtracted HERE rather
+        // than folded into it. The sweep therefore always asks for LESS
+        // than the guard permits, which is the safe direction: a sweep
+        // that asked for more would be refused by the very check it
+        // shares with a manual request.
+        const guardAllows = await this.withdrawals.withdrawableBalance(seller.id, Currency.INR);
+        const keep = new Prisma.Decimal(
+          String((await this.settings.resolve(seller.id, KEEP_BALANCE_KEY)).value ?? 0),
+        );
+        const ourFloor = new Prisma.Decimal(
+          String((await this.settings.resolve(seller.id, MIN_BALANCE_KEY)).value ?? 0),
+        );
+        // Only the EXCESS over our floor is an extra subtraction: our
+        // minimum is already out of `guardAllows`, and taking it twice
+        // would quietly halve what a seller can sweep.
+        const extra = keep.sub(ourFloor);
+        const available = extra.greaterThan(0) ? guardAllows.sub(extra) : guardAllows;
         const minAmount = Number(
           (await this.settings.resolve(seller.id, MIN_THRESHOLD_KEY)).value ?? 0,
         );
