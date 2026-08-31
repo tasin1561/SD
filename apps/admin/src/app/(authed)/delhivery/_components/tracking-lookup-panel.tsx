@@ -8,11 +8,12 @@ import {
   CardBody,
   Section,
   StatusBadge,
-  TBody,
-  THead,
   Table,
+  TBody,
   Td,
+  Textarea,
   Th,
+  THead,
   Tr,
   useToast,
 } from '@skydrop/ui/components';
@@ -79,8 +80,8 @@ export function TrackingLookupPanel(): ReactElement | null {
       <Card>
         <CardBody>
           <div className="space-y-3">
-            <textarea
-              className="sd-field min-h-[76px] w-full font-mono text-sm"
+            <Textarea
+              className="min-h-[76px] font-mono"
               placeholder={'38061110518534\n38061110518535'}
               value={raw}
               onChange={(e) => setRaw(e.target.value)}

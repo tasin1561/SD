@@ -12,13 +12,14 @@ import {
   Num,
   PageHeader,
   Section,
+  Select,
   SkeletonRows,
   Stat,
-  TBody,
   Table,
+  TBody,
   Td,
-  THead,
   Th,
+  THead,
   Tr,
 } from '@skydrop/ui/components';
 import { useReconciliation, useSettlementsList, type SettlementView } from '@/lib/ops-hooks';
@@ -99,18 +100,18 @@ export function SettlementsIndex(): ReactElement {
         <label className="text-text-muted text-xs" htmlFor="overdue-days">
           Treat unsettled as overdue after
         </label>
-        <select
+        <Select
           id="overdue-days"
           value={overdueAfterDays}
           onChange={(e) => setOverdueAfterDays(Number(e.target.value))}
-          className="border-border bg-surface text-text-body rounded-[5px] border px-2 py-1 text-xs"
+          className="w-auto text-xs"
         >
           {[5, 7, 10, 14, 21, 30].map((d) => (
             <option key={d} value={d}>
               {d} days
             </option>
           ))}
-        </select>
+        </Select>
         <span className="text-text-faint text-xs">
           Delhivery states 5–10 days; 10 is the top of that window.
         </span>

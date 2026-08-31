@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { Button, Modal, FormField, ErrorNote, useToast } from '@skydrop/ui/components';
+import { Button, ErrorNote, FormField, Modal, Textarea, useToast } from '@skydrop/ui/components';
 import { useRequestReturn } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 
@@ -75,8 +75,8 @@ export function RequestReturnDialog({
           label="Why is it coming back?"
           hint="The warehouse reads this when it arrives — it decides whether the stock can be resold."
         >
-          <textarea
-            className="sd-field min-h-20"
+          <Textarea
+            className="min-h-20"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Damaged product / quality not as expected / customer changed their mind…"

@@ -10,6 +10,7 @@ import {
   LoadingState,
   PageHeader,
   Section,
+  Select,
   Table,
   useToast,
 } from '@skydrop/ui/components';
@@ -165,11 +166,11 @@ export function TeamManagementIndex(): ReactElement {
                       {m.emailDisplay}
                     </td>
                     <td className="px-3 py-2">
-                      <select
+                      <Select
                         value={m.roleId}
                         disabled={Boolean(m.deletedAt) || m.isYou || roles.data === undefined}
                         onChange={(e) => void onRoleChange(m.id, e.target.value)}
-                        className="px-2 py-1 rounded-[4px] bg-bg border border-border text-text-body text-xs font-mono"
+                        className="font-mono text-xs"
                         title={m.isYou ? 'You cannot change your own role.' : undefined}
                       >
                         {(roles.data ?? []).map((r) => (
@@ -177,7 +178,7 @@ export function TeamManagementIndex(): ReactElement {
                             {r.name}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     </td>
                     <td className="px-3 py-2 text-text-muted font-mono text-xs">
                       {m.lastLoginAt ? new Date(m.lastLoginAt).toLocaleString() : '—'}

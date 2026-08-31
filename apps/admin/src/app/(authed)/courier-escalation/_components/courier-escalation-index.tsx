@@ -10,14 +10,16 @@ import {
   Num,
   PageHeader,
   Section,
+  Select,
   SkeletonRows,
   Stat,
   StatusBadge,
-  TBody,
   Table,
+  TBody,
   Td,
-  THead,
+  Textarea,
   Th,
+  THead,
   Tr,
   useToast,
 } from '@skydrop/ui/components';
@@ -395,13 +397,12 @@ function ModeSwitch(): ReactElement {
         <h3 className="text-sm font-medium">Change the write mode</h3>
         {challengeId === null ? (
           <div className="mt-3 flex flex-col gap-3">
-            <select className="sd-field" value={mode} onChange={(e) => setMode(e.target.value)}>
+            <Select value={mode} onChange={(e) => setMode(e.target.value)}>
               <option value="MANUAL">MANUAL — everything to this queue</option>
               <option value="SUPERVISED">SUPERVISED — prepared, held for approval</option>
               <option value="AUTO">AUTO — unattended, except locked categories</option>
-            </select>
-            <textarea
-              className="sd-field"
+            </Select>
+            <Textarea
               rows={2}
               placeholder="Why (at least 30 characters — this goes in the audit log)"
               value={reason}

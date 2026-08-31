@@ -14,14 +14,15 @@ import {
   Num,
   PageHeader,
   Section,
+  Select,
   SkeletonRows,
   Stat,
   StatusBadge,
-  TBody,
   Table,
+  TBody,
   Td,
-  THead,
   Th,
+  THead,
   Tr,
 } from '@skydrop/ui/components';
 import { useMarginReport } from '@/lib/ops-hooks';
@@ -57,10 +58,10 @@ export function MarginIndex(): ReactElement {
         subtitle="What we billed against what the courier actually charged. Measured from Delhivery's own figures, not the rate card's assumption."
         action={
           <div className="flex items-center gap-2">
-            <select
+            <Select
               value={limit}
               onChange={(e) => setLimit(Number(e.target.value))}
-              className="border-border bg-surface text-text-body rounded-[5px] border px-2 py-1 text-xs"
+              className="w-auto text-xs"
               aria-label="Sample size"
             >
               {[10, 25, 50, 100].map((n) => (
@@ -68,7 +69,7 @@ export function MarginIndex(): ReactElement {
                   Sample {n}
                 </option>
               ))}
-            </select>
+            </Select>
             <Button
               variant="primary"
               size="md"

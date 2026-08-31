@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactElement } from 'react';
-import { Button, Card, CardBody, CardHeader, useToast } from '@skydrop/ui/components';
+import { Button, Card, CardBody, CardHeader, Select, useToast } from '@skydrop/ui/components';
 import { useWithdrawalSchedule, useSetWithdrawalSchedule } from '@/lib/api-hooks';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
@@ -91,8 +91,7 @@ export function WithdrawalScheduleCard(): ReactElement | null {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <select
-                className="sd-field"
+              <Select
                 value={hour ?? data.hourLocal}
                 disabled={!mayEdit || save.isPending}
                 onChange={(e) => setHour(Number(e.target.value))}
@@ -103,7 +102,7 @@ export function WithdrawalScheduleCard(): ReactElement | null {
                     {String(h).padStart(2, '0')}:00
                   </option>
                 ))}
-              </select>
+              </Select>
               {hour !== null && hour !== data.hourLocal && (
                 <Button
                   variant="primary"

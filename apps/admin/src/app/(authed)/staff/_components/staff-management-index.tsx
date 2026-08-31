@@ -10,6 +10,7 @@ import {
   LoadingState,
   PageHeader,
   Section,
+  Select,
   Table,
   useToast,
 } from '@skydrop/ui/components';
@@ -159,18 +160,18 @@ export function StaffManagementIndex(): ReactElement {
                       )}
                     </td>
                     <td className="px-3 py-2">
-                      <select
+                      <Select
                         value={u.roleId}
                         disabled={Boolean(u.deletedAt) || roles.data === undefined || !canWrite}
                         onChange={(e) => void onRoleChange(u.id, e.target.value)}
-                        className="px-2 py-1 rounded-[4px] bg-bg border border-border text-text-body text-xs font-mono"
+                        className="font-mono text-xs"
                       >
                         {(roles.data ?? []).map((r) => (
                           <option key={r.id} value={r.id}>
                             {r.name}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     </td>
                     <td className="px-3 py-2 text-text-muted font-mono text-xs">
                       {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : '—'}
