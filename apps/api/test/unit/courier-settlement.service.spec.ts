@@ -454,8 +454,8 @@ describe('CourierSettlementService.allocateMore', () => {
     const bankPost = jest.fn<Promise<{ id: string }>, [AnyArgs, unknown?]>(async () => ({
       id: 'be-1',
     }));
-    const createMany = jest.fn(async () => ({ count: 1 }));
-    const update = jest.fn(async () => ({}));
+    const createMany = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({ count: 1 }));
+    const update = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({}));
     const client = {
       courierSettlement: {
         findUnique: jest.fn(async () => ({
