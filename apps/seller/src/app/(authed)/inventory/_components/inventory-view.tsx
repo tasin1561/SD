@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useMemo, type ReactElement } from 'react';
+import { useCallback, useMemo, type ReactElement, type ReactNode } from 'react';
 import { useStockList, useStockSummary } from '@/lib/api-hooks';
 import {
   Card,
@@ -36,55 +36,6 @@ const PAGE_SIZE = 25;
  * Out of scope (Phase 1A): per-warehouse breakdown rows, batch / bin
  * detail, stock-movements history.
  */
-/**
- * "Your stock is worth X — Y in India, Z still in transit."
- *
- * Valued at COST from the batch each unit belongs to. Units whose batch
- * carries no cost are named separately rather than counted as zero: a
- * silent omission makes the total look complete and small, and the
- * seller has no way to tell the difference between cheap stock and
- * unpriced stock.
- */
-function StockWorth({
-  summary,
-}: {
-  readonly summary: {
-    valueAtWarehouseInr: string;
-    valueInTransitInr: string;
-    valueUnknownUnits: number;
-  };
-}): ReactElement | null {
-  const atWarehouse = Number(summary.valueAtWarehouseInr);
-  const inTransit = Number(summary.valueInTransitInr);
-  const unknown = summary.valueUnknownUnits;
-  // Nothing priced and nothing unpriced means there is no stock at all;
-  // the tiles above already say so.
-  if (atWarehouse === 0 && inTransit === 0 && unknown === 0) return null;
-
-  const total = (atWarehouse + inTransit).toFixed(2);
-  return (
-    <Card>
-      <CardBody className="text-sm">
-        <span className="text-text-muted">Your stock is worth </span>
-        <span className="text-text-bright">
-          <Money amount={total} currency="INR" convert={false} />
-        </span>
-        <span className="text-text-muted"> at cost — </span>
-        <Money amount={summary.valueAtWarehouseInr} currency="INR" convert={false} />
-        <span className="text-text-muted"> at the warehouse in India, </span>
-        <Money amount={summary.valueInTransitInr} currency="INR" convert={false} />
-        <span className="text-text-muted"> still in transit.</span>
-        {unknown > 0 && (
-          <div className="text-text-faint mt-1 text-xs">
-            {unknown.toLocaleString()} unit{unknown === 1 ? '' : 's'} have no recorded cost and are
-            not counted in these figures.
-          </div>
-        )}
-      </CardBody>
-    </Card>
-  );
-}
-
 export function InventoryView(): ReactElement {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -142,16 +93,49 @@ export function InventoryView(): ReactElement {
           value={s.lowStockSkus.toLocaleString()}
           tone={s.lowStockSkus > 0 ? 'warn' : 'default'}
         />
-        {/*
-          What it is WORTH, split the same way the counts above are.
-          A sentence rather than two more tiles: the total and its two
-          halves belong in one thought, and a fifth tile would wrap the
-          row on every width. It also has room for the caveat a tile
-          cannot carry — stock we could not price is stated, never
-          folded in as zero (TRE-7).
-        */}
-        <div className="col-span-2 md:col-span-4">
-          <StockWorth summary={s} />
+      </div>
+    );
+  }, [summary.data]);
+
+  const valueCards = useMemo(() => {
+    if (!summary.data) return null;
+    const s = summary.data;
+    const atWarehouse = Number(s.valueAtWarehouseInr);
+    const inTransit = Number(s.valueInTransitInr);
+    // No stock at all, priced or not — the counts above already say so,
+    // and three ₹0.00 tiles would be furniture.
+    if (atWarehouse === 0 && inTransit === 0 && s.valueUnknownUnits === 0) return null;
+    const total = (atWarehouse + inTransit).toFixed(2);
+    return (
+      <div className="mb-4">
+        <div className="text-text-muted mb-2 text-xs font-medium tracking-wide uppercase">
+          Value at cost
+        </div>
+        <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-3">
+          <SummaryCard
+            label="Total"
+            value={<Money amount={total} currency="INR" convert={false} />}
+            {...(s.valueUnknownUnits > 0
+              ? {
+                  // Stated, never folded in as zero. A silent omission
+                  // makes the total look complete and small, and there
+                  // is no way to tell cheap stock from unpriced stock.
+                  hint: `${s.valueUnknownUnits.toLocaleString()} unit${
+                    s.valueUnknownUnits === 1 ? '' : 's'
+                  } not priced — excluded`,
+                }
+              : {})}
+          />
+          <SummaryCard
+            label="In India"
+            value={<Money amount={s.valueAtWarehouseInr} currency="INR" convert={false} />}
+            hint="On the shelf, sellable"
+          />
+          <SummaryCard
+            label="In transit"
+            value={<Money amount={s.valueInTransitInr} currency="INR" convert={false} />}
+            hint="In Dhaka or in the air"
+          />
         </div>
       </div>
     );
@@ -170,6 +154,7 @@ export function InventoryView(): ReactElement {
       />
 
       {cards}
+      {valueCards}
 
       {list.isLoading ? (
         <LoadingState label="Loading inventory…" />
@@ -258,7 +243,8 @@ function SummaryCard({
   tone = 'default',
 }: {
   readonly label: string;
-  readonly value: string;
+  /** A node, not a string: money renders through `Money` (UI-A). */
+  readonly value: ReactNode;
   readonly hint?: string;
   readonly tone?: 'default' | 'warn';
 }): ReactElement {
