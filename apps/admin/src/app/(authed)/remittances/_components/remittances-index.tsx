@@ -21,8 +21,7 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import { useRemittancesList } from '@/lib/api-hooks';
-import { useMarkWithdrawalPaid, useWithdrawalsList } from '@/lib/ops-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { useWithdrawalsList } from '@/lib/ops-hooks';
 import { RemittanceFormModal } from './remittance-form-modal';
 import { usePermission } from '@/lib/use-permission';
 
@@ -37,7 +36,6 @@ export function RemittancesIndex(): ReactElement {
   // operator copy a remittance id back to another screen is how a paid
   // seller stays "awaiting review" for a week.
   const [paying, setPaying] = useState<{ sellerId: string; requestId: string } | null>(null);
-  const markPaid = useMarkWithdrawalPaid();
   const canWrite = usePermission('money.remittances.manage');
   const toast = useToast();
   const list = useRemittancesList({ page: 1, pageSize: 50 });
@@ -215,26 +213,14 @@ export function RemittancesIndex(): ReactElement {
         <RemittanceFormModal
           initialSellerId={paying.sellerId}
           onClose={() => setPaying(null)}
-          onSuccess={(created) => {
-            const requestId = paying.requestId;
+          onSuccess={() => {
             setPaying(null);
             void owed.refetch();
-            // Link it straight away. The remittance is the money; the
-            // request is what it settles, and the operator has just
-            // told us both in one action.
-            markPaid.mutate(
-              { requestId, linkedRemittanceId: created.id },
-              {
-                onSuccess: () => toast.success('Paid, and the request is closed.'),
-                // The remittance IS recorded even if the link fails —
-                // saying otherwise would send somebody looking for
-                // money that did move. FE-2: the server's words.
-                onError: (err) =>
-                  toast.error(
-                    `Remittance recorded, but the request stayed open — ${serverVerdict(err)}`,
-                  ),
-              },
-            );
+            // The SERVER links it. Doing it here as well would be a
+            // second caller of the same rule, and the two would drift —
+            // it now happens however the remittance was created, not
+            // only when it came from this button.
+            toast.success('Paid. The request closes itself when the amounts match.');
           }}
         />
       )}

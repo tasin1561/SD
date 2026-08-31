@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   ActorType,
   BankEntryType,
@@ -6,10 +6,12 @@ import {
   Currency,
   Prisma,
   WalletEntryDirection,
+  WithdrawalRequestStatus,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
+import { WithdrawalRequestService } from '../../seller-wallet-withdrawal/services/withdrawal-request.service';
 import type { CreateRemittanceDto } from '../dto/create-remittance.dto';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { BankLedgerService } from '../../treasury/services/bank-ledger.service';
@@ -30,12 +32,68 @@ import { BankLedgerService } from '../../treasury/services/bank-ledger.service';
  */
 @Injectable()
 export class RemittanceService {
+  private readonly logger = new Logger(RemittanceService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
     private readonly wallet: WalletService,
     private readonly bank: BankLedgerService,
+    private readonly withdrawals: WithdrawalRequestService,
   ) {}
+
+  /**
+   * Close the withdrawal this remittance just paid.
+   *
+   * The link used to be a separate step: record the payment here, then
+   * go to Withdrawals and paste the remittance id. That step is how a
+   * seller who HAS been paid stays "awaiting review" for a week —
+   * nothing reminds anybody, and the queue looks like work that has not
+   * happened.
+   *
+   * Done on the SERVER rather than in the button that happened to open
+   * the form, so it holds however the remittance was created — the
+   * general Record button, the Pay button on the approved list, or a
+   * direct API call.
+   *
+   * ONLY when it is unambiguous: exactly one approved request for that
+   * seller, and its amount equals what was sent. Two open requests, or
+   * an amount that does not match, is a judgement about which debt was
+   * settled and by how much — that belongs to a person. Guessing would
+   * mark a request paid against money that did not pay it, and the
+   * seller would be told so.
+   *
+   * BEST-EFFORT by construction: the remittance is the money and it has
+   * already committed. A failure here leaves the request open, which is
+   * the state it was in a moment ago and which a human can still close.
+   */
+  private async closeMatchingWithdrawal(
+    sellerId: string,
+    remittanceId: string,
+    amountSent: Prisma.Decimal,
+    staffId: string,
+  ): Promise<void> {
+    try {
+      const approved = await this.prisma.client.withdrawalRequest.findMany({
+        where: { sellerId, status: WithdrawalRequestStatus.APPROVED },
+        select: { id: true, amountRequested: true },
+        take: 2,
+      });
+      if (approved.length !== 1) return;
+      const only = approved[0];
+      if (only === undefined || !only.amountRequested.equals(amountSent)) return;
+
+      await this.withdrawals.markPaid(only.id, staffId, remittanceId);
+      this.logger.log(
+        `remittance ${remittanceId} closed withdrawal request ${only.id} for seller ${sellerId}`,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `remittance ${remittanceId} recorded, but its withdrawal request was not closed: ` +
+          (err instanceof Error ? err.message : String(err)),
+      );
+    }
+  }
 
   async create(
     input: CreateRemittanceDto,
@@ -210,6 +268,8 @@ export class RemittanceService {
       'post-remittance',
     );
     // No destination-currency recompute: nothing was written there.
+
+    await this.closeMatchingWithdrawal(input.sellerId, result.id, sourceAmount, actor.staffId);
 
     return { id: result.id };
   }
