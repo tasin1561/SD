@@ -156,6 +156,19 @@ export interface WithdrawalRequestView {
   readonly note: string | null;
   readonly createdAt: string;
   readonly resolvedAt: string | null;
+  /** How long a still-PENDING request has waited. Null once decided. */
+  readonly waitingHours: number | null;
+  /** Past the SLA the seller was told to expect. */
+  readonly slaBreached: boolean;
+}
+
+/** The admin queue, with the promise made to the seller attached. */
+export interface WithdrawalListResult extends Paginated<WithdrawalRequestView> {
+  readonly slaHours: number;
+  /** Counted across every matching row, not just this page. */
+  readonly breachedCount: number;
+  readonly breachedInr: string;
+  readonly oldestPendingHours: number | null;
 }
 
 export interface CourierAccountView {
@@ -487,15 +500,13 @@ export function useWithdrawalsList(
     pageSize?: number;
   },
   opts?: { readonly enabled?: boolean },
-): UseQueryResult<Paginated<WithdrawalRequestView>> {
+): UseQueryResult<WithdrawalListResult> {
   const client = useApiClient();
   return useQuery({
     enabled: opts?.enabled ?? true,
     queryKey: ['admin-withdrawals', 'list', query],
     queryFn: () =>
-      client.request<Paginated<WithdrawalRequestView>>(
-        `/api/admin/withdrawal-requests${qs(query)}`,
-      ),
+      client.request<WithdrawalListResult>(`/api/admin/withdrawal-requests${qs(query)}`),
   });
 }
 

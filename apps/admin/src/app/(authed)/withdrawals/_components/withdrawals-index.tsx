@@ -24,6 +24,7 @@ import {
   WithdrawalStatusBadge,
 } from '@skydrop/ui/components';
 import { WithdrawalRequestStatus } from '@skydrop/db';
+import { AlertTriangle } from 'lucide-react';
 import { useWithdrawalsList, type WithdrawalRequestView } from '@/lib/ops-hooks';
 import { ResolveWithdrawalModal } from './resolve-withdrawal-modal';
 
@@ -55,12 +56,16 @@ export function WithdrawalsIndex(): ReactElement {
     .filter((w) => w.status === WithdrawalRequestStatus.PENDING)
     .reduce((sum, w) => sum + Number(w.amountRequested), 0);
   const autoRaised = items.filter((w) => w.requestedBy === 'SYSTEM').length;
+  const slaHours = list.data?.slaHours ?? 48;
+  const breachedCount = list.data?.breachedCount ?? 0;
+  const breachedInr = list.data?.breachedInr ?? '0.00';
+  const oldestPendingHours = list.data?.oldestPendingHours ?? null;
 
   return (
     <div>
       <PageHeader
         title="Withdrawals"
-        subtitle="Seller withdrawal requests, and the ones the auto-withdraw cycle raised. Approving one does not move money — record the remittance, then link it here."
+        subtitle="Seller withdrawal requests, and the ones the auto-withdraw cycle raised. Nothing here moves money — pay the seller, record the remittance, then link it to close the request."
       />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
@@ -81,6 +86,31 @@ export function WithdrawalsIndex(): ReactElement {
           hint="Created by the auto-withdraw cycle, not by a seller"
         />
       </div>
+
+      {/*
+       * The promise, measured. `wallet.withdrawal_sla_hours` is what
+       * the seller is told to expect, and until now nothing anywhere
+       * checked whether we kept it — a request could sit past its own
+       * SLA forever with no screen saying so.
+       *
+       * Shown only when something HAS breached: a permanent "0 late"
+       * banner is the kind of thing people stop seeing, which is how
+       * the one that matters gets missed.
+       */}
+      {breachedCount > 0 && (
+        <Card className="border-critical/40 mb-4 p-3">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+            <AlertTriangle size={15} className="text-[var(--color-critical)]" aria-hidden />
+            <span className="text-text-bright font-medium">
+              {breachedCount} past the {slaHours}h we promised
+            </span>
+            <span className="text-text-muted">
+              · <Money amount={breachedInr} decimals={false} /> waiting
+              {oldestPendingHours !== null && <> · longest {oldestPendingHours}h</>}
+            </span>
+          </div>
+        </Card>
+      )}
 
       <Toolbar>
         <label className="text-text-muted text-xs" htmlFor="wd-status">
@@ -148,6 +178,20 @@ export function WithdrawalsIndex(): ReactElement {
               <Tr key={w.id}>
                 <Td className="text-text-muted whitespace-nowrap">
                   {new Date(w.createdAt).toLocaleDateString()}
+                  {/* The wait, on the row that is waiting. A date alone
+                      makes an operator do the arithmetic, and they only
+                      do it for the rows they already suspect. */}
+                  {w.waitingHours !== null && (
+                    <div
+                      className={
+                        w.slaBreached
+                          ? 'text-[var(--color-critical)] text-xs'
+                          : 'text-text-faint text-xs'
+                      }
+                    >
+                      waiting {w.waitingHours}h
+                    </div>
+                  )}
                 </Td>
                 {/* Deliberately NOT a clickable row. The link goes to the
                     SELLER, which is an attribute of this row rather than

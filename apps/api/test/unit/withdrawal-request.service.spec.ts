@@ -45,6 +45,12 @@ function makeService(
     /** Simulate another admin resolving the request first — the guarded
      *  claim then matches 0 rows. */
     claimLoses?: boolean;
+    /** The promise made to the seller, in hours. */
+    slaHours?: number;
+    /** How many pending requests are past it. */
+    breachedCount?: number;
+    /** When the longest-waiting pending request was raised. */
+    oldestPendingAt?: Date;
   } = {},
 ) {
   const create = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (a) => makeRow(a.data as AnyArgs));
@@ -76,10 +82,18 @@ function makeService(
   // requested twice.
   const aggregate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({
     _sum: { amountRequested: new Prisma.Decimal(opts.pendingWithdrawals ?? '0') },
+    // The admin queue also counts how many are past their SLA. Shared
+    // mock, two callers: the create path reads only the sum.
+    _count: { _all: opts.breachedCount ?? 0 },
   }));
+  // Oldest pending, for the "waiting longest" figure.
+  const findFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
+    opts.oldestPendingAt === undefined ? null : { createdAt: opts.oldestPendingAt },
+  );
   const withdrawalRequest = {
     create,
     findMany,
+    findFirst,
     count,
     findUnique,
     update,
@@ -108,6 +122,12 @@ function makeService(
   const client = {
     withdrawalRequest,
     seller,
+    // The SLA we told the seller to expect. Read globally rather than
+    // per seller: the key carries no `sellerOverridable`, so there is
+    // no per-seller answer.
+    systemSetting: {
+      findUnique: jest.fn(async () => ({ valueInt: opts.slaHours ?? 48 })),
+    },
     remittance: { findUnique: remittanceFindUnique },
     $transaction: <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient),
   };
@@ -184,6 +204,8 @@ function makeService(
     auditLog,
     balanceLive,
     resolve,
+    aggregate,
+    prismaClient: client,
   };
 }
 
@@ -445,5 +467,76 @@ describe('WithdrawalRequestService.listForSeller / listForAdmin', () => {
     const { svc, findMany } = makeService();
     await svc.listForAdmin({});
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }));
+  });
+});
+
+/**
+ * `wallet.withdrawal_sla_hours` has existed since the wallet shipped,
+ * seeded at 48 and documented DISPLAY ONLY: the seller is told "within
+ * 48 hours" and nothing measured whether it happened. A request could
+ * sit past its own SLA indefinitely with no screen saying so — the
+ * silent half of "asked for, never paid".
+ */
+describe('the withdrawal queue measures the promise it makes', () => {
+  const HOURS = (h: number): Date => new Date(Date.now() - h * 3_600_000);
+
+  it('orders the PENDING queue oldest FIRST', async () => {
+    const { svc, findMany } = makeService();
+    await svc.listForAdmin({ status: 'PENDING' as never });
+    // Newest-first is right for history and wrong for work: it buries
+    // the request that has waited longest at the bottom of the list.
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: { createdAt: 'asc' } }),
+    );
+  });
+
+  it('keeps history newest first', async () => {
+    const { svc, findMany } = makeService();
+    await svc.listForAdmin({ status: 'PAID' as never });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: { createdAt: 'desc' } }),
+    );
+  });
+
+  it('reports the SLA and what has breached it', async () => {
+    const { svc } = makeService({
+      slaHours: 48,
+      breachedCount: 3,
+      pendingWithdrawals: '7500.00',
+      oldestPendingAt: HOURS(100),
+    });
+    const out = await svc.listForAdmin({});
+    expect(out.slaHours).toBe(48);
+    expect(out.breachedCount).toBe(3);
+    expect(out.breachedInr).toBe('7500.00');
+    expect(out.oldestPendingHours).toBe(100);
+  });
+
+  it('counts breaches across EVERY matching row, not the page', async () => {
+    const { svc, aggregate } = makeService({ slaHours: 48 });
+    await svc.listForAdmin({ page: 2, pageSize: 10 });
+    // A queue two pages long hides its oldest entries exactly when it
+    // matters most, so the count must not be of what is displayed.
+    const args = aggregate.mock.calls[0]?.[0] as AnyArgs;
+    expect(args['where']).toEqual(
+      expect.objectContaining({ status: 'PENDING', createdAt: expect.anything() }),
+    );
+    expect(args).not.toHaveProperty('skip');
+  });
+
+  it('says nothing is waiting when nothing is', async () => {
+    const { svc } = makeService({ breachedCount: 0 });
+    const out = await svc.listForAdmin({});
+    expect(out.oldestPendingHours).toBeNull();
+    expect(out.breachedCount).toBe(0);
+  });
+
+  it('falls back to 48 hours when the setting is missing rather than reporting no SLA', async () => {
+    // An absent setting must not read as "no promise was made" — every
+    // pending request would then look fine forever.
+    const { svc, prismaClient } = makeService();
+    (prismaClient.systemSetting.findUnique as jest.Mock).mockResolvedValueOnce(null);
+    const out = await svc.listForAdmin({});
+    expect(out.slaHours).toBe(48);
   });
 });

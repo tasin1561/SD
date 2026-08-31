@@ -36,6 +36,27 @@ export interface WithdrawalRequestView {
   readonly note: string | null;
   readonly createdAt: Date;
   readonly resolvedAt: Date | null;
+  /**
+   * How long this has been waiting, for a request still PENDING. Null
+   * once decided — the age of a settled request is not a queue.
+   */
+  readonly waitingHours: number | null;
+  /** Past the SLA we told the seller to expect. */
+  readonly slaBreached: boolean;
+}
+
+export interface AdminWithdrawalListResult {
+  readonly items: readonly WithdrawalRequestView[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+  /** What we told the seller to expect, so the page can name the promise. */
+  readonly slaHours: number;
+  /** Pending requests past it. Counted across ALL pages, not this one. */
+  readonly breachedCount: number;
+  readonly breachedInr: string;
+  /** The longest anything has been waiting, in hours. Null when nothing is. */
+  readonly oldestPendingHours: number | null;
 }
 
 export interface CreateWithdrawalRequestInput {
@@ -337,33 +358,88 @@ export class WithdrawalRequestService {
     return rows.map((r) => this.toView(r));
   }
 
+  /**
+   * The admin queue, with the promise we made attached to it.
+   *
+   * `wallet.withdrawal_sla_hours` has existed since the wallet shipped
+   * and is documented as DISPLAY ONLY — a seller is told "processed
+   * within 48 hours" and NOTHING anywhere measured whether that
+   * happened. A request could sit past its own SLA indefinitely and no
+   * screen said so, which is the silent half of "approved and never
+   * paid": nobody is chasing it because nobody can see it.
+   *
+   * The breach counts are computed across EVERY matching row, not the
+   * page — a queue that is two pages long hides its oldest entries
+   * exactly when it matters most.
+   */
   async listForAdmin(filters: {
     sellerId?: string;
     status?: WithdrawalRequestStatus;
     page?: number;
     pageSize?: number;
-  }): Promise<{
-    items: readonly WithdrawalRequestView[];
-    total: number;
-    page: number;
-    pageSize: number;
-  }> {
+  }): Promise<AdminWithdrawalListResult> {
     const page = Math.max(1, filters.page ?? 1);
     const pageSize = Math.min(200, Math.max(1, filters.pageSize ?? 50));
     const where = {
       ...(filters.sellerId === undefined ? {} : { sellerId: filters.sellerId }),
       ...(filters.status === undefined ? {} : { status: filters.status }),
     };
-    const [rows, total] = await Promise.all([
+
+    // Read straight from system_settings rather than through the
+    // resolver: this key carries no `sellerOverridable`, so there is no
+    // per-seller answer to resolve and asking for one across a
+    // cross-seller queue would be N reads for one number. SET-1 governs
+    // overrides, and this key has none.
+    const slaRow = await this.prisma.client.systemSetting.findUnique({
+      where: { key: 'wallet.withdrawal_sla_hours' },
+      select: { valueInt: true },
+    });
+    const slaHours = slaRow?.valueInt ?? 48;
+    const now = new Date();
+    const breachCutoff = new Date(now.getTime() - slaHours * 3_600_000);
+
+    // Oldest FIRST when looking at the pending queue. Newest-first is
+    // right for history and wrong for work: it buries the request that
+    // has waited longest at the bottom of the list.
+    const pendingView = filters.status === WithdrawalRequestStatus.PENDING;
+
+    const [rows, total, breached, oldest] = await Promise.all([
       this.prisma.client.withdrawalRequest.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: pendingView ? 'asc' : 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
       this.prisma.client.withdrawalRequest.count({ where }),
+      this.prisma.client.withdrawalRequest.aggregate({
+        where: {
+          ...where,
+          status: WithdrawalRequestStatus.PENDING,
+          createdAt: { lte: breachCutoff },
+        },
+        _count: { _all: true },
+        _sum: { amountRequested: true },
+      }),
+      this.prisma.client.withdrawalRequest.findFirst({
+        where: { ...where, status: WithdrawalRequestStatus.PENDING },
+        orderBy: { createdAt: 'asc' },
+        select: { createdAt: true },
+      }),
     ]);
-    return { items: rows.map((r) => this.toView(r)), total, page, pageSize };
+
+    return {
+      items: rows.map((r) => this.toView(r, slaHours, now)),
+      total,
+      page,
+      pageSize,
+      slaHours,
+      breachedCount: breached._count._all,
+      breachedInr: (breached._sum.amountRequested ?? new Prisma.Decimal(0)).toFixed(2),
+      oldestPendingHours:
+        oldest === null
+          ? null
+          : Math.floor((now.getTime() - oldest.createdAt.getTime()) / 3_600_000),
+    };
   }
 
   /** Links an already-created Remittance (the actual money movement)
@@ -502,20 +578,33 @@ export class WithdrawalRequestService {
     return this.toView(updated);
   }
 
-  private toView(row: {
-    id: string;
-    sellerId: string;
-    currency: Currency;
-    amountRequested: Prisma.Decimal;
-    status: WithdrawalRequestStatus;
-    requestedBy: WithdrawalRequestedBy;
-    linkedRemittanceId: string | null;
-    rejectionReason: string | null;
-    note: string | null;
-    createdAt: Date;
-    resolvedAt: Date | null;
-  }): WithdrawalRequestView {
+  private toView(
+    row: {
+      id: string;
+      sellerId: string;
+      currency: Currency;
+      amountRequested: Prisma.Decimal;
+      status: WithdrawalRequestStatus;
+      requestedBy: WithdrawalRequestedBy;
+      linkedRemittanceId: string | null;
+      rejectionReason: string | null;
+      note: string | null;
+      createdAt: Date;
+      resolvedAt: Date | null;
+    },
+    slaHours?: number,
+    now: Date = new Date(),
+  ): WithdrawalRequestView {
+    // Only a PENDING request is waiting. The age of a settled one is
+    // history, and reporting it as a wait would make every paid request
+    // look overdue forever.
+    const waitingHours =
+      row.status === WithdrawalRequestStatus.PENDING
+        ? Math.floor((now.getTime() - row.createdAt.getTime()) / 3_600_000)
+        : null;
     return {
+      waitingHours,
+      slaBreached: waitingHours !== null && slaHours !== undefined && waitingHours >= slaHours,
       id: row.id,
       sellerId: row.sellerId,
       currency: row.currency,
