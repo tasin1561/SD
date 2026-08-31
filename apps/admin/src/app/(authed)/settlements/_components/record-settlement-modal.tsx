@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, type ReactElement } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Upload } from 'lucide-react';
 import {
   Button,
   ErrorNote,
@@ -14,7 +14,12 @@ import {
   Textarea,
   useToast,
 } from '@skydrop/ui/components';
-import { useCourierAccounts, useRecordSettlement } from '@/lib/ops-hooks';
+import {
+  useCourierAccounts,
+  usePreviewRemittance,
+  useRecordSettlement,
+  type RemittanceRow,
+} from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 
 interface DraftLine {
@@ -57,6 +62,50 @@ export function RecordSettlementModal({
     { key: 0, orderId: '', settledInr: '' },
   ]);
   const [error, setError] = useState<string | null>(null);
+  const preview = usePreviewRemittance();
+  const [skipped, setSkipped] = useState<readonly RemittanceRow[]>([]);
+
+  /**
+   * Read the courier's own remittance export instead of retyping it.
+   *
+   * Matching is on the WAYBILL — the identifier both sides agree on.
+   * The file's "Order Number" is the seller's free-text name for the
+   * parcel and is never matched against.
+   *
+   * Rows we cannot place are kept and SHOWN rather than dropped: a file
+   * covering ten parcels where eight are recognised is the normal case,
+   * and silently allocating eight is how a payout gets recorded short
+   * with the difference discovered weeks later.
+   */
+  async function loadFile(file: File): Promise<void> {
+    setError(null);
+    const courier = accounts.data?.find((a) => a.id === courierAccountId)?.courierCode;
+    if (courier === undefined) {
+      setError('Choose the courier account first — the file is read in its own format.');
+      return;
+    }
+    try {
+      const csvText = await file.text();
+      const out = await preview.mutateAsync({ courierCode: courier, csvText });
+      const usable = out.rows.filter((r) => r.problem === null && r.orderId !== null);
+      setLines(
+        usable.map((r, i) => ({
+          key: i,
+          orderId: r.orderId ?? '',
+          settledInr: r.settledInr,
+        })),
+      );
+      setSkipped(out.rows.filter((r) => r.problem !== null));
+      // The amount stays the OPERATOR's to type: the file is the
+      // courier's claim, the bank statement is the fact, and they can
+      // differ. Pre-filling it would quietly make the claim the truth.
+      if (usable.length === 0) {
+        setError(`Nothing in this file could be matched to an order (${out.rows.length} rows).`);
+      }
+    } catch (err) {
+      setError(serverVerdict(err));
+    }
+  }
 
   const allocated = useMemo(
     () => lines.reduce((sum, l) => sum + (Number(l.settledInr) || 0), 0),
@@ -190,6 +239,44 @@ export function RecordSettlementModal({
               <Plus size={13} aria-hidden /> Add order
             </Button>
           </div>
+
+          <label className="border-border mb-3 flex cursor-pointer items-center gap-2 rounded-[10px] border border-dashed px-3 py-2 text-xs">
+            <Upload size={14} aria-hidden className="text-text-muted" />
+            <span className="text-text-muted">
+              {preview.isPending
+                ? 'Reading the file…'
+                : 'Upload the courier’s remittance export — matched on waybill'}
+            </span>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              className="sr-only"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f !== undefined) void loadFile(f);
+                e.target.value = '';
+              }}
+            />
+          </label>
+
+          {skipped.length > 0 && (
+            <div className="border-border mb-3 rounded-[10px] border p-2 text-xs">
+              <div className="text-text-body mb-1 font-medium">
+                {skipped.length} row(s) in the file were not allocated
+              </div>
+              {/* Named, not counted. "8 of 10 matched" tells an operator
+                  there is a problem; naming the waybills tells them
+                  which one to chase. */}
+              <ul className="text-text-muted space-y-0.5">
+                {skipped.slice(0, 8).map((r) => (
+                  <li key={r.line}>
+                    <span className="font-mono">{r.awbNumber}</span> — {r.problem}
+                  </li>
+                ))}
+                {skipped.length > 8 && <li>…and {skipped.length - 8} more</li>}
+              </ul>
+            </div>
+          )}
 
           <div className="space-y-2">
             {lines.map((line) => (

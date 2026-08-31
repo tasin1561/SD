@@ -83,6 +83,22 @@ export class AllocateMoreDto {
   readonly lines!: SettlementLineDto[];
 }
 
+export class PreviewRemittanceDto {
+  @ApiProperty({ description: 'The courier whose export this is — its columns are read exactly.' })
+  @IsString()
+  @MaxLength(40)
+  readonly courierCode!: string;
+
+  @ApiProperty({
+    description:
+      'The remittance file, as text. Read-only: this endpoint matches waybills to orders and ' +
+      'moves no money, so an operator can see what will and will not allocate before recording.',
+  })
+  @IsString()
+  @MaxLength(5_000_000)
+  readonly csvText!: string;
+}
+
 export class ReconciliationQueryDto {
   @ApiPropertyOptional({
     description:

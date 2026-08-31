@@ -22,9 +22,14 @@ import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import {
   AllocateMoreDto,
+  PreviewRemittanceDto,
   RecordSettlementDto,
   ReconciliationQueryDto,
 } from '../dto/courier-settlement.dto';
+import {
+  RemittanceMatchService,
+  type RemittancePreview,
+} from '../services/remittance-match.service';
 import {
   CourierSettlementService,
   type ReconciliationReport,
@@ -47,7 +52,10 @@ import { RequirePermissions } from '../../../common/auth/require-permissions.dec
 @RequirePermissions('money.view')
 @Controller('admin/courier-settlements')
 export class AdminCourierSettlementController {
-  constructor(private readonly svc: CourierSettlementService) {}
+  constructor(
+    private readonly svc: CourierSettlementService,
+    private readonly remittance: RemittanceMatchService,
+  ) {}
 
   @Post()
   @RequirePermissions('money.settlements.record')
@@ -73,6 +81,19 @@ export class AdminCourierSettlementController {
       },
       ctx,
     );
+  }
+
+  @Post('preview-remittance')
+  @RequirePermissions('money.settlements.record')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      "Match a courier's remittance export to our orders by waybill. READ-ONLY — moves no " +
+      'money. Answers "which of these do we recognise, and for how much" before a payout is ' +
+      'recorded, rather than leaving the difference to be found later in the float report.',
+  })
+  previewRemittance(@Body() body: PreviewRemittanceDto): Promise<RemittancePreview> {
+    return this.remittance.preview(body.courierCode, body.csvText);
   }
 
   @Post(':settlementId/allocate')

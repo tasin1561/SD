@@ -4,6 +4,11 @@ import { SellerWalletModule } from '../seller-wallet/seller-wallet.module';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { CourierSettlementService } from './services/courier-settlement.service';
+import { RemittanceMatchService } from './services/remittance-match.service';
+import {
+  DelhiveryRemittanceParser,
+  RemittanceParserRegistry,
+} from './services/remittance-parser.service';
 import { AdminCourierSettlementController } from './controllers/admin-courier-settlement.controller';
 import { TreasuryModule } from '../treasury/treasury.module';
 
@@ -28,7 +33,13 @@ import { TreasuryModule } from '../treasury/treasury.module';
     TreasuryModule,
   ],
   controllers: [AdminCourierSettlementController],
-  providers: [CourierSettlementService, StaffJwtGuard],
+  providers: [
+    CourierSettlementService,
+    RemittanceMatchService,
+    RemittanceParserRegistry,
+    DelhiveryRemittanceParser,
+    StaffJwtGuard,
+  ],
   exports: [CourierSettlementService],
 })
 export class CourierSettlementModule {}

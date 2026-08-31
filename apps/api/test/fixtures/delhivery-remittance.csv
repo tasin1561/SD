@@ -1,0 +1,7 @@
+Description,Payment Mode,Client,Pincode,Amount Payable,City,Status,COD Amount,Waybill Number,Order Number
+Test Product(1),COD,aaaaaa-TESTCLIENT-do,731202,1000.0,Rampurhat,Delivered,1000.0,38061110519610,REF-1
+Test Product(2),COD,aaaaaa-TESTCLIENT-do,741238,1000.0,Gopalnagar,Delivered,1000.0,38061110518383,REF-2
+Test Product(1),COD,aaaaaa-TESTCLIENT-do,741238,1200.0,Gopalnagar,Delivered,1200.0,38061110517333,REF-3
+Test Product(2),COD,aaaaaa-TESTCLIENT-do,741501,1090.0,Hanskhali,Delivered,1090.0,38061110519422,REF-4
+Test Product(1),COD,aaaaaa-TESTCLIENT-do,560102,1350.0,Bangalore,Delivered,1350.0,38061110511825,REF-5
+Test Product(2),COD,aaaaaa-TESTCLIENT-do,700031,2600.0,Kolkata,Delivered,2600.0,38061110520310,REF-6

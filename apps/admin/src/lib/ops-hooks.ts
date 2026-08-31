@@ -397,6 +397,53 @@ export function useRecordSettlement(): UseMutationResult<
   });
 }
 
+export interface RemittanceRow {
+  readonly line: number;
+  readonly awbNumber: string;
+  readonly settledInr: string;
+  readonly codAmountInr: string | null;
+  readonly status: string | null;
+  readonly externalRef: string | null;
+  readonly orderId: string | null;
+  readonly orderNumber: string | null;
+  readonly expectedInr: string | null;
+  readonly sellerName: string | null;
+  readonly problem: string | null;
+  readonly alreadySettled: boolean;
+}
+
+export interface RemittancePreview {
+  readonly rows: readonly RemittanceRow[];
+  readonly matchedCount: number;
+  readonly unmatchedCount: number;
+  readonly alreadySettledCount: number;
+  readonly allocatableInr: string;
+  readonly fileTotalInr: string;
+}
+
+/**
+ * Match a courier's remittance export to our orders by waybill.
+ *
+ * READ-ONLY. It answers "which of these do we recognise, and for how
+ * much" before a payout is recorded, so the gap between what the
+ * courier paid and what we can attribute is two numbers on screen
+ * rather than something found weeks later in the float report.
+ */
+export function usePreviewRemittance(): UseMutationResult<
+  RemittancePreview,
+  Error,
+  { courierCode: string; csvText: string }
+> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<RemittancePreview>('/api/admin/courier-settlements/preview-remittance', {
+        method: 'POST',
+        body,
+      }),
+  });
+}
+
 /**
  * Attribute MORE of a payout already recorded — the orders it covered
  * that were not recognised at the time.
