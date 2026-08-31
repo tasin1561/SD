@@ -5315,6 +5315,15 @@ enum WalletEntryDirection {
   // the ORDER_CHARGES row being returned.
   ORDER_CHARGES_REFUND @map("order_charges_refund")
 
+  // GST withheld from a COD collection. WE file it, so it is a
+  // LIABILITY we hold — not revenue. It had been written as
+  // ORDER_CHARGES with an explanatory note, which is the failure WAL-4
+  // names by another route: a note cannot be grouped by, so summing
+  // what sellers paid us in charges silently included tax we merely
+  // hold for the government, and the seller's own ledger called a tax
+  // line "Order charges".
+  GST_WITHHOLDING      @map("gst_withholding")
+
   @@map("wallet_entry_direction")
 }
 

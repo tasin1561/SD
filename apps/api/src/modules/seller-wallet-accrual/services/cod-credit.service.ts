@@ -213,7 +213,11 @@ export class CodCreditService {
       await this.wallet.applyEntry(tx, {
         sellerId,
         currency: Currency.INR,
-        direction: WalletEntryDirection.ORDER_CHARGES,
+        // NOT ORDER_CHARGES. WE file this, so it is a liability we
+        // hold, and a note saying so cannot be grouped by — summing
+        // what sellers paid us in charges silently included the tax,
+        // and their own ledger called it "Order charges" (WAL-4).
+        direction: WalletEntryDirection.GST_WITHHOLDING,
         amount: gst,
         linkedOrderId: orderId,
         actorType: ActorType.SYSTEM,

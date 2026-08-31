@@ -125,7 +125,12 @@ describe('CodCreditService — SETTLEMENT mode', () => {
     expect(r.gstWithheldInr).toBe('152.54');
     expect(r.netCreditedInr).toBe('847.46');
     expect(amountOf(entries, 'COD_COLLECTION')).toBe('1000.00');
-    expect(amountOf(entries, 'ORDER_CHARGES')).toBe('152.54');
+    // Its OWN direction, not ORDER_CHARGES. WE file this, so it is a
+    // liability we hold rather than revenue — and a note saying so
+    // cannot be grouped by, which is how summing what sellers paid us
+    // came to include the tax (WAL-4).
+    expect(amountOf(entries, 'GST_WITHHOLDING')).toBe('152.54');
+    expect(amountOf(entries, 'ORDER_CHARGES')).toBe('absent');
     // No instant fee: waiting for the courier to settle is what you do
     // instead of paying for it. And the collection fee is seeded at 0,
     // so today nothing is charged for handling the cash either.
@@ -215,12 +220,15 @@ describe('CodCreditService — INSTANT_PAY mode', () => {
       grossInr: new Prisma.Decimal('1000'),
       mode: 'INSTANT_PAY',
     });
-    // COD credit + GST + fee. Folding the fee into ORDER_CHARGES would
-    // make "what did Instant Pay earn us" unanswerable from the ledger.
+    // COD credit + GST + fee, each on its own direction. Folding the
+    // fee into ORDER_CHARGES would make "what did Instant Pay earn us"
+    // unanswerable from the ledger; folding the GST in there — which is
+    // what happened until the direction existed — made "what did
+    // sellers pay us" overstate revenue by the tax.
     expect(entries.map((e) => e.direction).sort()).toEqual([
       'COD_COLLECTION',
+      'GST_WITHHOLDING',
       'INSTANT_PAY_FEE',
-      'ORDER_CHARGES',
     ]);
   });
 

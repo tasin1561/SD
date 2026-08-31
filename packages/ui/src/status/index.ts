@@ -410,6 +410,11 @@ export function isWalletCredit(direction: WalletEntryDirection): boolean {
     case WalletEntryDirection.RTO_FEE:
     case WalletEntryDirection.INSTANT_PAY_FEE:
     case WalletEntryDirection.COD_COLLECTION_FEE:
+    // Not a charge — tax held back from a COD collection, which WE
+    // file. It leaves the wallet, so it is a debit, but it is a
+    // LIABILITY rather than revenue and must never be summed with what
+    // we actually charged (WAL-4).
+    case WalletEntryDirection.GST_WITHHOLDING:
       return false;
     default: {
       const exhaustive: never = direction;
@@ -463,6 +468,8 @@ export function walletDirectionLabel(direction: WalletEntryDirection): string {
     // shipped.
     case WalletEntryDirection.ORDER_CHARGES_REFUND:
       return 'Cancelled order refund';
+    case WalletEntryDirection.GST_WITHHOLDING:
+      return 'GST withheld';
     default: {
       const exhaustive: never = direction;
       throw new Error(`Unhandled WalletEntryDirection: ${String(exhaustive)}`);

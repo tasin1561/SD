@@ -57,12 +57,23 @@ export class SellerCashAttributionService {
       // CUSTOMER_RETURN_FEE belongs here for the same reason as the
       // rest: a charge moves nothing between banks, it changes whose
       // the cash already sitting there is.
+      //
+      // GST_WITHHOLDING moves the same way despite not being a charge:
+      // the cash sits in our account and stops being the seller's, which
+      // is what keeps seller-held cash equal to the wallet liability
+      // (TRE-4). That the capital side is really owed to the government
+      // is a liability the bank book does not model — its two buckets
+      // are "held for a seller" and "not", and withheld tax is not the
+      // seller's. It already moved this way when it was written as
+      // ORDER_CHARGES, so this preserves the behaviour rather than
+      // deciding something new.
       case WalletEntryDirection.ORDER_CHARGES:
       case WalletEntryDirection.RTO_FEE:
       case WalletEntryDirection.CUSTOMER_RETURN_FEE:
       case WalletEntryDirection.INBOUND_FREIGHT:
       case WalletEntryDirection.INSTANT_PAY_FEE:
       case WalletEntryDirection.COD_COLLECTION_FEE:
+      case WalletEntryDirection.GST_WITHHOLDING:
         return 'TO_CAPITAL';
 
       // Giving it back. The cash was ours; now it is theirs again.
