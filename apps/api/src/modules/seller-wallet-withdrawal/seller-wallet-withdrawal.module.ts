@@ -5,6 +5,7 @@ import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { SellerWalletModule } from '../seller-wallet/seller-wallet.module';
 import { SettingsModule } from '../settings/settings.module';
+import { FxModule } from '../fx/fx.module';
 import { AdminWithdrawalRequestController } from './controllers/admin-withdrawal-request.controller';
 import { SellerWithdrawalScheduleController } from './controllers/seller-withdrawal-schedule.controller';
 import { SellerWithdrawalRequestController } from './controllers/seller-withdrawal-request.controller';
@@ -19,7 +20,13 @@ import { WithdrawalRequestService } from './services/withdrawal-request.service'
  * admin's job via its own controller here).
  */
 @Module({
-  imports: [AuthCommonModule, SellerWalletModule, SettingsModule, SellerRestrictionModule],
+  imports: [
+    AuthCommonModule,
+    SellerWalletModule,
+    SettingsModule,
+    SellerRestrictionModule,
+    FxModule,
+  ],
   controllers: [
     SellerWithdrawalRequestController,
     SellerWithdrawalScheduleController,

@@ -176,6 +176,7 @@ export function WithdrawalsIndex(): ReactElement {
               <Th>Requested</Th>
               <Th>Seller</Th>
               <Th align="right">Amount</Th>
+              <Th align="right">They receive</Th>
               <Th align="right">Wallet balance</Th>
               <Th>Source</Th>
               <Th>Status</Th>
@@ -217,6 +218,26 @@ export function WithdrawalsIndex(): ReactElement {
                 </Td>
                 <Td align="right">
                   <Money amount={w.amountRequested} currency={w.currency} />
+                </Td>
+                {/* At the rate frozen WHEN THEY ASKED, not today's —
+                    the FX table is editable, so a request sitting in
+                    this queue would otherwise read as a different
+                    amount each morning with no record of which one
+                    anybody saw. Blank where no rate was quoted. */}
+                <Td align="right">
+                  {w.amountInHomeCurrency === null || w.homeCurrency === null ? (
+                    <span className="text-text-faint text-xs">—</span>
+                  ) : (
+                    <span
+                      title={`At the rate when requested: 1 ${w.currency} = ${w.fxRateSnapshot ?? '?'} ${w.homeCurrency}`}
+                    >
+                      <Money
+                        amount={w.amountInHomeCurrency}
+                        currency={w.homeCurrency}
+                        convert={false}
+                      />
+                    </span>
+                  )}
                 </Td>
                 {/* The money it comes out of, beside the money asked
                     for. Approving is a judgement about whether the

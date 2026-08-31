@@ -15,6 +15,7 @@ import { ApiError } from '@skydrop/api-client';
 import type { CreateRemittanceRequest } from '@skydrop/api-client';
 import { useCreateRemittance, useSellersList, useSellerWalletBalance } from '@/lib/api-hooks';
 import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
+import { PayoutInstructionPanel } from './payout-instruction-panel';
 
 /**
  * Record a remittance. Two-currency model:
@@ -343,6 +344,14 @@ export function RemittanceFormModal({
         <FormField label={`Destination amount (${currency})`} hint="Derived = source × FX">
           <Input value={destAmount} readOnly disabled />
         </FormField>
+
+        {/* Where it goes, and whether any one of our accounts can send
+            it. Both were absent from the screen that records the
+            payment, so the operator had to leave to find the first and
+            could only discover the second by failing. */}
+        {sellerId !== '' && (
+          <PayoutInstructionPanel sellerId={sellerId} currency={currency} amount={destAmount} />
+        )}
 
         <FormField
           label="Paid from"

@@ -164,6 +164,17 @@ export interface WithdrawalRequestView {
   readonly waitingHours: number | null;
   /** Past the SLA the seller was told to expect. */
   readonly slaBreached: boolean;
+  /**
+   * The rate frozen when the seller asked, and what it makes the payout
+   * worth in the currency they are actually paid in.
+   *
+   * Null on requests raised before the snapshot existed, when no rate is
+   * configured, or when no conversion happens. A screen finding null
+   * must NOT quietly substitute today's rate — no quote was made.
+   */
+  readonly fxRateSnapshot: string | null;
+  readonly homeCurrency: 'INR' | 'BDT' | null;
+  readonly amountInHomeCurrency: string | null;
 }
 
 /** The admin queue, with the promise made to the seller attached. */

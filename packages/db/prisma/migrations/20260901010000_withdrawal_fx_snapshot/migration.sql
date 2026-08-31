@@ -1,0 +1,15 @@
+-- What a withdrawal was worth in the seller's home currency when they
+-- asked for it.
+--
+-- A request is made in INR and paid in BDT. Without a frozen rate, the
+-- taka figure shown beside a pending request moves every time the FX
+-- table is edited, so a payout sitting in the queue for two days reads
+-- as a different amount each morning and nothing records which one the
+-- operator or the seller actually saw.
+--
+-- Deliberately NULLABLE with no backfill: this is the rate AT REQUEST
+-- TIME, and for rows created before the column existed nobody recorded
+-- it. Writing today's rate into them would manufacture a quote that was
+-- never made, which is worse than an honest gap — the readers show
+-- today's rate and say so when this is null.
+ALTER TABLE "withdrawal_requests" ADD COLUMN "fx_rate_snapshot" DECIMAL(18,6);

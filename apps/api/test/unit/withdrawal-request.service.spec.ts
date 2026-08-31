@@ -6,6 +6,7 @@ import type { PrismaService } from '../../src/infrastructure/prisma/prisma.servi
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
 import type { SettingsResolverService } from '../../src/modules/settings/services/settings-resolver.service';
+import type { FxRateService } from '../../src/modules/fx/services/fx-rate.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -53,6 +54,9 @@ function makeService(
     sellerBalance?: string;
     /** When the longest-waiting pending request was raised. */
     oldestPendingAt?: Date;
+    /** null makes getRate throw, mimicking an unconfigured pair. */
+    fxRate?: string | null;
+    countryCode?: string;
   } = {},
 ) {
   const create = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (a) => makeRow(a.data as AnyArgs));
@@ -118,6 +122,11 @@ function makeService(
   const sellerFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () => ({
     bankAccountNumber:
       opts.bankAccountNumber === undefined ? '2303101640001' : opts.bankAccountNumber,
+    // Which currency this seller reads their money in — what the FX
+    // snapshot converts INTO.
+    // Where their BANK is — what decides the payout currency. NOT
+    // displayCurrency, which is only a reading preference.
+    countryCode: opts.countryCode ?? 'BD',
   }));
   const seller = { findUnique: sellerFindUnique };
   const txClient = { withdrawalRequest, seller, $executeRaw: executeRaw };
@@ -189,6 +198,12 @@ function makeService(
     throw new Error(`unexpected key ${key}`);
   });
   const settings = { resolve };
+  const getRate = jest.fn(async () => {
+    if (opts.fxRate === null) {
+      throw new Error('FX_RATE_NOT_FOUND');
+    }
+    return new Prisma.Decimal(opts.fxRate ?? '1.23');
+  });
 
   const svc = new WithdrawalRequestService(
     prisma,
@@ -204,9 +219,13 @@ function makeService(
     audit as unknown as AuditLogService,
     wallet as unknown as WalletService,
     settings as unknown as SettingsResolverService,
+    // The FX snapshot is best-effort and must never fail a request; the
+    // dedicated cases below drive it explicitly.
+    { getRate: getRate } as unknown as FxRateService,
   );
   return {
     svc,
+    getRate,
     create,
     findMany,
     count,
@@ -694,5 +713,84 @@ describe('the admin queue shows what the money comes out of', () => {
     findMany.mockResolvedValueOnce([makeRow({ sellerId: 'seller-9' })]);
     const out = await svc.listForAdmin({});
     expect(out.items[0]?.sellerBalanceInr).toBe('0.00');
+  });
+});
+
+describe('WithdrawalRequestService — what it was worth when they asked', () => {
+  it('freezes the system rate onto the request', async () => {
+    // The FX table is editable. Without a frozen rate the taka figure
+    // beside a pending request moves every time somebody edits it, so a
+    // payout sitting in the queue for two days reads as a different
+    // amount each morning and nothing records which one was seen.
+    const { svc, create } = makeService({ fxRate: '1.23' });
+    await svc.create('seller-1', 'user-1', { currency: Currency.INR, amount: '500.00' });
+    const data = (create.mock.calls as unknown as Array<[{ data: AnyArgs }]>)[0]?.[0].data;
+    expect(String(data?.['fxRateSnapshot'])).toBe('1.23');
+  });
+
+  it('surfaces the frozen rate and the amount it implies', async () => {
+    const { svc } = makeService({ fxRate: '1.23' });
+    const r = await svc.create('seller-1', 'user-1', {
+      currency: Currency.INR,
+      amount: '500.00',
+    });
+    expect(r.fxRateSnapshot).toBe('1.230000');
+  });
+
+  it('an unconfigured pair records NULL and still creates the request', async () => {
+    // A withdrawal is a claim on money the seller already has. Refusing
+    // to record it because no FX row exists would block a rupee payout
+    // over a currency nobody asked about.
+    const { svc, create } = makeService({ fxRate: null });
+    const r = await svc.create('seller-1', 'user-1', {
+      currency: Currency.INR,
+      amount: '500.00',
+    });
+    expect(r.status).toBe(WithdrawalRequestStatus.PENDING);
+    const data = (create.mock.calls as unknown as Array<[{ data: AnyArgs }]>)[0]?.[0].data;
+    expect(data?.['fxRateSnapshot']).toBeNull();
+  });
+
+  it('records no rate when the seller is paid in the currency they asked in', async () => {
+    // An Indian seller paid in rupees needs no conversion; a rate of
+    // 1.000000 on the row would make a screen read "₹500 ≈ ₹500".
+    const { svc, create, getRate } = makeService({ countryCode: 'IN' });
+    await svc.create('seller-1', 'user-1', { currency: Currency.INR, amount: '500.00' });
+    const data = (create.mock.calls as unknown as Array<[{ data: AnyArgs }]>)[0]?.[0].data;
+    expect(data?.['fxRateSnapshot']).toBeNull();
+    expect(getRate).not.toHaveBeenCalled();
+  });
+
+  it('the nightly sweep freezes a rate too — both paths go through one create', async () => {
+    const { svc, create } = makeService({ fxRate: '1.23' });
+    await svc.createAuto('seller-1', { currency: Currency.INR, amount: '500.00' });
+    const data = (create.mock.calls as unknown as Array<[{ data: AnyArgs }]>)[0]?.[0].data;
+    expect(String(data?.['fxRateSnapshot'])).toBe('1.23');
+    expect(data?.['requestedBy']).toBe(WithdrawalRequestedBy.SYSTEM);
+  });
+});
+
+describe('WithdrawalRequestService — payout currency comes from the bank, not the preference', () => {
+  it('a BD seller who READS in rupees is still quoted in taka', async () => {
+    // The bug this pins: keying the snapshot on `displayCurrency` looks
+    // right and is wrong. A Bangladeshi seller who prefers to see rupees
+    // still receives taka in a Dhaka account, so converting into their
+    // display preference records nothing for precisely the sellers whose
+    // payout crosses a border — which is all of them.
+    const { svc, create, getRate } = makeService({ countryCode: 'BD', fxRate: '1.23' });
+    await svc.create('seller-1', 'user-1', { currency: Currency.INR, amount: '500.00' });
+    expect(getRate).toHaveBeenCalledWith(Currency.INR, Currency.BDT);
+    const data = (create.mock.calls as unknown as Array<[{ data: AnyArgs }]>)[0]?.[0].data;
+    expect(String(data?.['fxRateSnapshot'])).toBe('1.23');
+  });
+
+  it('a country we have not thought about carries no converted figure', async () => {
+    // Guessing a currency would put a number on the screen nobody can
+    // bank. Null is the honest answer.
+    const { svc, create, getRate } = makeService({ countryCode: 'SG' });
+    await svc.create('seller-1', 'user-1', { currency: Currency.INR, amount: '500.00' });
+    expect(getRate).not.toHaveBeenCalled();
+    const data = (create.mock.calls as unknown as Array<[{ data: AnyArgs }]>)[0]?.[0].data;
+    expect(data?.['fxRateSnapshot']).toBeNull();
   });
 });

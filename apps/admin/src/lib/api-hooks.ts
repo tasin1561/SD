@@ -98,6 +98,17 @@ export interface SellerDetailLite {
   readonly countryCode: string;
   readonly emailVerifiedAt: string | null;
   readonly createdAt: string;
+  /**
+   * Where a payout is sent. The account number is the MASKED form; the
+   * full one has its own audited reveal, because reading it is a
+   * deliberate act and not a side effect of opening a page.
+   */
+  readonly bankName: string | null;
+  readonly bankBranchName: string | null;
+  readonly bankAccountName: string | null;
+  readonly bankAccountNumberMasked: string | null;
+  readonly bankRoutingNumber: string | null;
+  readonly bankSwiftCode: string | null;
 }
 
 /**
@@ -2249,5 +2260,27 @@ export function useOpenRtoShipments(): UseQueryResult<{ items: OpenRtoRow[] }> {
   return useQuery({
     queryKey: ['warehouse-rto', 'open'],
     queryFn: () => client.request<{ items: OpenRtoRow[] }>('/api/warehouse/rto/shipments'),
+  });
+}
+
+/**
+ * Decrypt and return a seller's full bank account number.
+ *
+ * A POST rather than a GET because it is an ACT, not a view: the server
+ * writes a HIGH audit row before the plaintext leaves it (the same
+ * discipline as CUR-1 courier credentials). Never prefetched, never
+ * cached — the operator asks for it at the moment they are typing a
+ * transfer, and the audit trail should say exactly that.
+ */
+export function useRevealSellerBankAccount(
+  sellerId: string,
+): UseMutationResult<{ accountNumber: string | null }, Error, string | undefined> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: (reason?: string) =>
+      client.request<{ accountNumber: string | null }>(
+        `/api/admin/sellers/${sellerId}/bank-account/reveal`,
+        { method: 'POST', body: { reason } },
+      ),
   });
 }

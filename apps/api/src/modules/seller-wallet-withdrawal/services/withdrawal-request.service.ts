@@ -18,6 +18,7 @@ import { SellerRestrictionService } from '../../seller-restriction/services/sell
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
+import { FxRateService } from '../../fx/services/fx-rate.service';
 
 const MIN_THRESHOLD_KEY = 'wallet.withdrawal_min_threshold_inr';
 const MAX_PER_DAY_KEY = 'wallet.withdrawal_max_per_day';
@@ -61,6 +62,19 @@ export interface WithdrawalRequestView {
   readonly waitingHours: number | null;
   /** Past the SLA we told the seller to expect. */
   readonly slaBreached: boolean;
+  /**
+   * What one unit of `currency` was worth in the seller's own currency
+   * when they asked, and the amount that implies. Null when the two
+   * currencies match, when no rate was configured, or on any request
+   * raised before the column existed.
+   *
+   * A reader that finds this null must show today's rate and SAY it is
+   * today's — substituting it silently would present a figure as the
+   * quote when no quote was made.
+   */
+  readonly fxRateSnapshot: string | null;
+  readonly homeCurrency: Currency | null;
+  readonly amountInHomeCurrency: string | null;
 }
 
 export interface AdminWithdrawalListResult {
@@ -104,6 +118,25 @@ const UNPAID_STATUSES: WithdrawalRequestStatus[] = [
   WithdrawalRequestStatus.APPROVED,
 ];
 
+/**
+ * Which currency a seller in this country is actually paid in.
+ *
+ * Deliberately a tiny explicit map rather than a default: a country we
+ * have not thought about returns null and the payout simply carries no
+ * converted figure, which is honest. Guessing INR for an unknown country
+ * would put a number on the screen that nobody can bank.
+ */
+export function payoutCurrencyForCountry(countryCode: string | null): Currency | null {
+  switch ((countryCode ?? '').toUpperCase()) {
+    case 'BD':
+      return Currency.BDT;
+    case 'IN':
+      return Currency.INR;
+    default:
+      return null;
+  }
+}
+
 @Injectable()
 export class WithdrawalRequestService {
   constructor(
@@ -112,6 +145,7 @@ export class WithdrawalRequestService {
     private readonly audit: AuditLogService,
     private readonly wallet: WalletService,
     private readonly settings: SettingsResolverService,
+    private readonly fx: FxRateService,
   ) {}
 
   /**
@@ -221,6 +255,44 @@ export class WithdrawalRequestService {
     input: CreateWithdrawalRequestInput,
   ): Promise<WithdrawalRequestView> {
     return this.createInternal(sellerId, null, input, WithdrawalRequestedBy.SYSTEM);
+  }
+
+  /**
+   * The system rate from the request's currency into the one the seller
+   * will actually be PAID in.
+   *
+   * Keyed on where their bank is (`countryCode`), NOT on
+   * `displayCurrency`. That distinction is load-bearing and was got
+   * wrong first: display currency is a reading preference — a
+   * Bangladeshi seller who prefers to see rupees still receives taka in
+   * a Dhaka account — so converting into it would have recorded nothing
+   * for exactly the sellers whose payout crosses a border, which is all
+   * of them.
+   *
+   * Null when the payout currency matches the request's (no conversion
+   * happens, and a rate of 1 on the row would make a screen read
+   * "₹500 ≈ ₹500"), or when no rate is configured.
+   *
+   * Never throws: see the call site.
+   */
+  private async snapshotPayoutRate(
+    sellerId: string,
+    from: Currency,
+    tx: Prisma.TransactionClient,
+  ): Promise<Prisma.Decimal | null> {
+    try {
+      const seller = await tx.seller.findUnique({
+        where: { id: sellerId },
+        select: { countryCode: true },
+      });
+      const to = payoutCurrencyForCountry(seller?.countryCode ?? null);
+      if (to === null || to === from) return null;
+      return await this.fx.getRate(from, to);
+    } catch {
+      // No rate configured for the pair, or FX is unavailable. Recording
+      // the withdrawal matters more than pricing it in a second currency.
+      return null;
+    }
   }
 
   private async createInternal(
@@ -345,6 +417,18 @@ export class WithdrawalRequestService {
         });
       }
 
+      // What this was worth in the seller's home currency at the moment
+      // they asked. Read ONCE and frozen (TRE-5's "quoted rate" idea):
+      // the FX table is editable, so without this the taka figure beside
+      // a pending request changes under everyone's feet and nothing
+      // records which number the operator or the seller actually saw.
+      //
+      // BEST EFFORT, and deliberately so. A withdrawal is a claim on
+      // money the seller already has; refusing to record it because no
+      // FX row is configured would block a rupee payout over a currency
+      // nobody asked about. Null is honest and the readers say so.
+      const fxRateSnapshot = await this.snapshotPayoutRate(sellerId, input.currency, tx);
+
       const row = await tx.withdrawalRequest.create({
         data: {
           sellerId,
@@ -352,6 +436,7 @@ export class WithdrawalRequestService {
           amountRequested: amount,
           requestedBy,
           requestedByUserId,
+          fxRateSnapshot,
           note: input.note ?? null,
         },
       });
@@ -433,7 +518,7 @@ export class WithdrawalRequestService {
         orderBy: { createdAt: pendingView ? 'asc' : 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
-        include: { seller: { select: { companyName: true } } },
+        include: { seller: { select: { companyName: true, displayCurrency: true } } },
       }),
       this.prisma.client.withdrawalRequest.count({ where }),
       this.prisma.client.withdrawalRequest.aggregate({
@@ -748,9 +833,10 @@ export class WithdrawalRequestService {
       note: string | null;
       createdAt: Date;
       resolvedAt: Date | null;
+      fxRateSnapshot?: Prisma.Decimal | null;
       // Present only where the caller asked for it: the admin list
       // includes it, the write paths that re-read one row do not.
-      seller?: { companyName: string } | null;
+      seller?: { companyName: string; displayCurrency?: Currency } | null;
     },
     slaHours?: number,
     now: Date = new Date(),
@@ -776,6 +862,13 @@ export class WithdrawalRequestService {
       sellerBalanceInr: null,
       currency: row.currency,
       amountRequested: row.amountRequested.toFixed(2),
+      // The frozen rate and what it makes the payout worth. Derived
+      // here rather than in each screen so the two cannot disagree
+      // about rounding.
+      fxRateSnapshot: row.fxRateSnapshot?.toFixed(6) ?? null,
+      homeCurrency: row.seller?.displayCurrency ?? null,
+      amountInHomeCurrency:
+        row.fxRateSnapshot == null ? null : row.amountRequested.mul(row.fxRateSnapshot).toFixed(2),
       status: row.status,
       requestedBy: row.requestedBy,
       linkedRemittanceId: row.linkedRemittanceId,

@@ -68,8 +68,18 @@ export interface SellerDetailView extends SellerListItem {
   countryCode: string;
   approvedById: string | null;
   bankName: string | null;
+  bankBranchName: string | null;
   bankAccountName: string | null;
-  bankAccountNumber: string | null;
+  /**
+   * The MASKED number (`••••••••4001`), never the stored one.
+   *
+   * `sellers.bank_account_number` holds ciphertext — this selected it
+   * directly and handed the blob to the browser as if it were an
+   * account number, which is both a leak of encrypted material and the
+   * reason nobody could read a payout instruction off this screen. The
+   * plaintext has its own audited route: `revealBankAccount`.
+   */
+  bankAccountNumberMasked: string | null;
   bankRoutingNumber: string | null;
   bankSwiftCode: string | null;
   addresses: Array<{
@@ -284,8 +294,9 @@ export class AdminSellerService {
         displayLanguage: true,
         countryCode: true,
         bankName: true,
+        bankBranchName: true,
         bankAccountName: true,
-        bankAccountNumber: true,
+        bankAccountNumberMasked: true,
         bankRoutingNumber: true,
         bankSwiftCode: true,
       },

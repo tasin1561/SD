@@ -82,6 +82,7 @@ export function RemittancesIndex(): ReactElement {
                 <Tr>
                   <Th>Seller</Th>
                   <Th align="right">Amount</Th>
+                  <Th align="right">They receive</Th>
                   <Th align="right">Wallet balance</Th>
                   <Th>Waiting</Th>
                   <Th align="right" />
@@ -97,6 +98,28 @@ export function RemittancesIndex(): ReactElement {
                     </Td>
                     <Td align="right">
                       <Money amount={w.amountRequested} currency={w.currency} />
+                    </Td>
+                    {/* What this is worth in the currency they are paid
+                        in, at the rate frozen WHEN THEY ASKED. Not
+                        today's: the FX table is editable, and a request
+                        sitting here for two days would otherwise read as
+                        a different amount each morning. A request with
+                        no snapshot shows nothing rather than a figure
+                        nobody quoted. */}
+                    <Td align="right">
+                      {w.amountInHomeCurrency === null || w.homeCurrency === null ? (
+                        <span className="text-text-faint text-xs">—</span>
+                      ) : (
+                        <span
+                          title={`At the rate when requested: 1 ${w.currency} = ${w.fxRateSnapshot ?? '?'} ${w.homeCurrency}`}
+                        >
+                          <Money
+                            amount={w.amountInHomeCurrency}
+                            currency={w.homeCurrency}
+                            convert={false}
+                          />
+                        </span>
+                      )}
                     </Td>
                     {/* The balance this payment comes out of. Five
                         headers had only four cells, so this column had
