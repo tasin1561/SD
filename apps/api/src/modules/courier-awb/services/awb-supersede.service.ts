@@ -69,6 +69,7 @@ export class AwbSupersedeService {
         courierCode: true,
         originWarehouseId: true,
         serviceType: true,
+        manualCourierName: true,
         destRecipientName: true,
         destRecipientPhoneE164: true,
         destAddressLine1: true,
@@ -162,6 +163,13 @@ export class AwbSupersedeService {
           courierCode: old.courierCode,
           originWarehouseId: old.originWarehouseId,
           serviceType: old.serviceType,
+          // Carried across with the rest of the snapshot. Not reachable
+          // today — a manual parcel never enters AWB generation, which
+          // is the only thing that supersedes — but the replacement
+          // inheriting every other courier field and silently dropping
+          // this one is the kind of gap that surfaces once the reason
+          // it was unreachable stops being true.
+          manualCourierName: old.manualCourierName,
           status: ShipmentStatus.CREATED,
           supersedesShipmentId: oldShipmentId,
           // Dest snapshot — immutable, copied verbatim.

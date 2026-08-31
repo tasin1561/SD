@@ -134,7 +134,11 @@ describe('ManualPlacementService.placeAwb', () => {
       awbNumber: 'BD-001',
       courierCode: 'manual',
       isManualCourier: true,
-      serviceType: 'Bluedart',
+      // The carrier is its own column now. This used to assert
+      // `serviceType: 'Bluedart'` — the bug, written down as an
+      // expectation.
+      manualCourierName: 'Bluedart',
+      serviceType: null,
     });
     const stampOrder = shipmentUpdate.mock.invocationCallOrder[0]!;
     const transOrder = transitionStatus.mock.invocationCallOrder[0]!;
@@ -154,7 +158,7 @@ describe('ManualPlacementService.placeAwb', () => {
       shipmentStatus: ShipmentStatus.HANDED_TO_COURIER,
       orderStatus: OrderStatus.DISPATCHED,
     });
-    const r = await svc.placeAwb(SHIP, { awbNumber: 'BD-OLD' }, STAFF);
+    const r = await svc.placeAwb(SHIP, { awbNumber: 'BD-OLD', courierName: 'Bluedart' }, STAFF);
     expect(r.alreadyPlaced).toBe(true);
     expect(transitionStatus).not.toHaveBeenCalled();
   });
@@ -166,7 +170,7 @@ describe('ManualPlacementService.placeAwb', () => {
       shipmentStatus: ShipmentStatus.AWB_GENERATED,
       orderStatus: OrderStatus.PENDING_MANUAL_PLACEMENT,
     });
-    const r = await svc.placeAwb(SHIP, { awbNumber: 'BD-STAMPED' }, STAFF);
+    const r = await svc.placeAwb(SHIP, { awbNumber: 'BD-STAMPED', courierName: 'Bluedart' }, STAFF);
     expect(r.alreadyPlaced).toBe(false);
     expect(transitionStatus).toHaveBeenCalledTimes(1);
     // No re-stamp — the AWB tx is skipped, only the HANDED_TO_COURIER
@@ -185,7 +189,9 @@ describe('ManualPlacementService.placeAwb', () => {
     const { svc, transitionStatus } = makeService({
       reservations: [phase2('r1'), phase1('r2')],
     });
-    await expect(svc.placeAwb(SHIP, { awbNumber: 'BD-002' }, STAFF)).rejects.toMatchObject({
+    await expect(
+      svc.placeAwb(SHIP, { awbNumber: 'BD-002', courierName: 'Bluedart' }, STAFF),
+    ).rejects.toMatchObject({
       response: { code: 'MANUAL_PLACEMENT_NOT_ALLOCATED' },
     });
     expect(transitionStatus).not.toHaveBeenCalled();
@@ -193,14 +199,18 @@ describe('ManualPlacementService.placeAwb', () => {
 
   it('conservation guard: no active reservations → MANUAL_PLACEMENT_NO_RESERVATIONS', async () => {
     const { svc } = makeService({ reservations: [] });
-    await expect(svc.placeAwb(SHIP, { awbNumber: 'BD-003' }, STAFF)).rejects.toMatchObject({
+    await expect(
+      svc.placeAwb(SHIP, { awbNumber: 'BD-003', courierName: 'Bluedart' }, STAFF),
+    ).rejects.toMatchObject({
       response: { code: 'MANUAL_PLACEMENT_NO_RESERVATIONS' },
     });
   });
 
   it('rejects ORDER_NOT_MANUAL_PLACEMENT when the order is not PENDING_MANUAL_PLACEMENT', async () => {
     const { svc } = makeService({ orderStatus: OrderStatus.CONFIRMED });
-    await expect(svc.placeAwb(SHIP, { awbNumber: 'BD-004' }, STAFF)).rejects.toMatchObject({
+    await expect(
+      svc.placeAwb(SHIP, { awbNumber: 'BD-004', courierName: 'Bluedart' }, STAFF),
+    ).rejects.toMatchObject({
       response: { code: 'ORDER_NOT_MANUAL_PLACEMENT' },
     });
   });
@@ -209,14 +219,18 @@ describe('ManualPlacementService.placeAwb', () => {
     const { svc } = makeService({
       shipmentStatus: ShipmentStatus.FAILED_AT_CREATION,
     });
-    await expect(svc.placeAwb(SHIP, { awbNumber: 'BD-005' }, STAFF)).rejects.toMatchObject({
+    await expect(
+      svc.placeAwb(SHIP, { awbNumber: 'BD-005', courierName: 'Bluedart' }, STAFF),
+    ).rejects.toMatchObject({
       response: { code: 'SHIPMENT_NOT_MANUAL_ELIGIBLE' },
     });
   });
 
   it('rejects AWB_ALREADY_IN_USE when the AWB clashes with another shipment', async () => {
     const { svc } = makeService({ awbClash: true });
-    await expect(svc.placeAwb(SHIP, { awbNumber: 'DUP-AWB' }, STAFF)).rejects.toMatchObject({
+    await expect(
+      svc.placeAwb(SHIP, { awbNumber: 'DUP-AWB', courierName: 'Bluedart' }, STAFF),
+    ).rejects.toMatchObject({
       response: { code: 'AWB_ALREADY_IN_USE' },
     });
   });
@@ -226,16 +240,18 @@ describe('ManualPlacementService.placeAwb', () => {
       awbNumber: 'DLVSTUB123',
       isManualCourier: false,
     });
-    await expect(svc.placeAwb(SHIP, { awbNumber: 'BD-006' }, STAFF)).rejects.toMatchObject({
+    await expect(
+      svc.placeAwb(SHIP, { awbNumber: 'BD-006', courierName: 'Bluedart' }, STAFF),
+    ).rejects.toMatchObject({
       response: { code: 'SHIPMENT_ALREADY_HAS_AWB' },
     });
   });
 
   it('404 when the shipment is missing', async () => {
     const { svc } = makeService({ shipment: null });
-    await expect(svc.placeAwb(SHIP, { awbNumber: 'BD-007' }, STAFF)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      svc.placeAwb(SHIP, { awbNumber: 'BD-007', courierName: 'Bluedart' }, STAFF),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 
@@ -272,5 +288,48 @@ describe('ManualPlacementService.cancelUnfulfillable', () => {
     await expect(svc.cancelUnfulfillable(SHIP, 'wrong state', STAFF)).rejects.toMatchObject({
       response: { code: 'ORDER_NOT_MANUAL_PLACEMENT' },
     });
+  });
+});
+
+describe('ManualPlacementService — the carrier name is its own fact', () => {
+  it('writes the carrier to manualCourierName and leaves serviceType alone', async () => {
+    const { svc, shipmentUpdate } = makeService();
+    await svc.placeAwb(
+      SHIP,
+      { awbNumber: 'BD-NAME-1', courierName: '  Bluedart  ', serviceType: 'Surface' },
+      STAFF,
+    );
+    const stamp = (shipmentUpdate.mock.calls as unknown as Array<[{ data: AnyArgs }]>)[0]?.[0].data;
+    // Trimmed, and in its OWN column.
+    expect(stamp).toMatchObject({ manualCourierName: 'Bluedart', serviceType: 'Surface' });
+  });
+
+  it('REGRESSION: a supplied service type no longer swallows the carrier', async () => {
+    // The bug: `serviceType: input.serviceType ?? input.courierName` meant
+    // an operator who filled BOTH fields lost the carrier entirely, and
+    // nothing reported it — the seller was simply told "manual" forever.
+    const { svc, shipmentUpdate } = makeService();
+    await svc.placeAwb(
+      SHIP,
+      { awbNumber: 'BD-NAME-2', courierName: 'Sundarban', serviceType: 'Express' },
+      STAFF,
+    );
+    const stamp = (shipmentUpdate.mock.calls as unknown as Array<[{ data: AnyArgs }]>)[0]?.[0].data;
+    expect(stamp).toMatchObject({ manualCourierName: 'Sundarban' });
+    expect(stamp).not.toMatchObject({ serviceType: 'Sundarban' });
+  });
+
+  it('records the carrier on the audit row too', async () => {
+    const { svc, auditLog } = makeService();
+    await svc.placeAwb(SHIP, { awbNumber: 'BD-NAME-3', courierName: 'DTDC' }, STAFF);
+    const entry = (auditLog.mock.calls as unknown as Array<[{ metadata: AnyArgs }]>)[0]?.[0];
+    expect(entry?.metadata).toMatchObject({ courierName: 'DTDC' });
+  });
+
+  it('leaves serviceType null when only the carrier is given', async () => {
+    const { svc, shipmentUpdate } = makeService();
+    await svc.placeAwb(SHIP, { awbNumber: 'BD-NAME-4', courierName: 'Bluedart' }, STAFF);
+    const stamp = (shipmentUpdate.mock.calls as unknown as Array<[{ data: AnyArgs }]>)[0]?.[0].data;
+    expect(stamp).toMatchObject({ manualCourierName: 'Bluedart', serviceType: null });
   });
 });

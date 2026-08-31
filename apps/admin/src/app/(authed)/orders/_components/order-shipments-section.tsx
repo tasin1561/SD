@@ -6,6 +6,7 @@ import { Card, CardBody, ErrorState, LoadingState } from '@skydrop/ui/components
 import { useAdminOrderShipments } from '@/lib/api-hooks';
 import { CourierOpsPanel } from './courier-ops-panel';
 import { ShipmentCostPanel } from './shipment-cost-panel';
+import { courierLabel } from '@skydrop/ui/status';
 import { ManualScanPanel } from './manual-scan-panel';
 import { ManualPlacementPanel } from './manual-placement-panel';
 
@@ -56,8 +57,8 @@ export function OrderShipmentsSection({
                 <div className="min-w-0">
                   <div className="text-text-bright text-sm font-mono">{s.shipmentNumber}</div>
                   <div className="text-text-faint text-xs mt-0.5">
-                    {s.status} · {s.courierCode}
-                    {s.isManualCourier ? ' (manual)' : ''} ·{' '}
+                    {s.status} · {courierLabel(s.courierCode, s.manualCourierName)}
+                    {s.isManualCourier ? ' (placed by hand)' : ''} ·{' '}
                     {new Date(s.createdAt).toISOString().slice(0, 16).replace('T', ' ')}
                     {s.supersedesShipmentId && (
                       <span className="ml-1 text-text-muted">· supersede</span>

@@ -18,6 +18,7 @@ type ShipRow = {
   destCity: string;
   expectedDeliveryAt: Date | null;
   createdAt: Date;
+  manualCourierName: string | null;
   courier: {
     displayName: string;
     deletedAt: Date | null;
@@ -64,6 +65,7 @@ function defaultShip(over: Partial<ShipRow> = {}): ShipRow {
     destCity: 'Bengaluru',
     expectedDeliveryAt: new Date('2026-05-25T18:00:00.000Z'),
     createdAt: new Date('2026-05-18T00:00:00.000Z'),
+    manualCourierName: null,
     courier: { displayName: 'Delhivery', deletedAt: null },
     ...over,
   };
@@ -258,5 +260,49 @@ describe('PublicTrackingReadService.findByAwb — event filter contract', () => 
         },
       }),
     );
+  });
+});
+
+describe('PublicTrackingReadService — who the customer is told has their parcel', () => {
+  it('names the REAL carrier on a manually-placed parcel, not the placeholder', async () => {
+    // A manual placement is filed under the generic 'manual' courier row
+    // (CUR-8), whose display name is not a company the customer has ever
+    // heard of. They are checking who holds their parcel; the honest
+    // answer is the carrier that actually has it.
+    const { svc } = makeService({
+      ship: defaultShip({
+        manualCourierName: 'Bluedart',
+        courier: { displayName: 'Manual placement', deletedAt: null },
+      }),
+    });
+    const out = await svc.findByAwb(AWB);
+    expect(out.courierDisplayName).toBe('Bluedart');
+  });
+
+  it('falls back to the courier display name when no manual carrier is recorded', async () => {
+    // Every integrated parcel, and the manual ones predating the column.
+    const { svc } = makeService({ ship: defaultShip({ manualCourierName: null }) });
+    const out = await svc.findByAwb(AWB);
+    expect(out.courierDisplayName).toBe('Delhivery');
+  });
+
+  it('treats a whitespace-only carrier as absent rather than rendering blank', async () => {
+    const { svc } = makeService({ ship: defaultShip({ manualCourierName: '   ' }) });
+    const out = await svc.findByAwb(AWB);
+    expect(out.courierDisplayName).toBe('Delhivery');
+  });
+
+  it('still leaks nothing internal — the carrier name is a company, not PII', async () => {
+    const { svc } = makeService({
+      ship: defaultShip({
+        manualCourierName: 'Sundarban',
+        courier: { displayName: 'Manual placement', deletedAt: null },
+      }),
+    });
+    const out = await svc.findByAwb(AWB);
+    const keys = Object.keys(out);
+    expect(keys).not.toContain('shipmentId');
+    expect(keys).not.toContain('orderId');
+    expect(keys).not.toContain('manualCourierName');
   });
 });

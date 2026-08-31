@@ -514,3 +514,27 @@ export function walletDirectionLabel(direction: WalletEntryDirection): string {
     }
   }
 }
+
+/**
+ * What to CALL the carrier on a screen.
+ *
+ * A manually-placed parcel carries the literal `courierCode` 'manual'
+ * (CUR-8) — that string is a routing fact, not a name, and showing it
+ * told a seller their parcel was with a courier called "manual" and told
+ * the customer the same on the public tracking page. The carrier's real
+ * name lives in `shipments.manual_courier_name`.
+ *
+ * ONE function rather than a `?? courierCode` at each call site, for the
+ * reason CNS-2 and BIN-1 give: four screens each deciding what to show
+ * is how they come to disagree, and the one that gets it wrong is
+ * whichever nobody re-read. A blank or whitespace-only name falls back
+ * to the code — an empty label is worse than an honest ugly one.
+ */
+export function courierLabel(
+  courierCode: string | null | undefined,
+  manualCourierName?: string | null,
+): string {
+  const manual = manualCourierName?.trim() ?? '';
+  if (manual !== '') return manual;
+  return courierCode ?? '—';
+}

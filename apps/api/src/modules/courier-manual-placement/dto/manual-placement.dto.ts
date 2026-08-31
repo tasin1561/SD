@@ -13,14 +13,25 @@ export class PlaceManualAwbDto {
   @MaxLength(64)
   awbNumber!: string;
 
-  /** Free-text name of the actual carrier (Bluedart / DTDC / …). The
-   *  shipment's courierCode is set to the generic `manual` courier;
-   *  this is recorded for ops reference. */
-  @IsOptional()
+  /**
+   * WHO is carrying it — Bluedart, DTDC, the shop on the corner.
+   *
+   * REQUIRED, and that is the point. `courierCode` becomes the literal
+   * 'manual' for these parcels (CUR-8), so this is the only place the
+   * carrier's name exists — and the seller's tracking screen and the
+   * public tracking page both read it. Optional, it was routinely left
+   * blank, and a seller chasing their parcel was told it was with a
+   * courier called "manual". The operator has just booked the thing;
+   * they know who has it.
+   */
   @IsString()
+  @IsNotEmpty()
   @MaxLength(80)
-  courierName?: string;
+  courierName!: string;
 
+  /** Their service tier, if it matters later. Its own column — it used
+   *  to share one with `courierName`, which meant filling this in threw
+   *  the carrier away. */
   @IsOptional()
   @IsString()
   @MaxLength(40)

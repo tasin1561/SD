@@ -3066,6 +3066,18 @@ model Shipment {
   courierStatusLine      String?          @map("courier_status_line")
   courierStatusLocation  String?          @map("courier_status_location")
   isManualCourier        Boolean          @default(false) @map("is_manual_courier")
+  /// WHO actually carried a manually-placed parcel — "Bluedart", "Sundarban",
+  /// the shop on the corner. `courierCode` is the literal string 'manual' for
+  /// these (CUR-8), so without this column the seller and the customer were
+  /// both told their parcel was with a courier called "manual".
+  ///
+  /// Deliberately its OWN column rather than reusing `serviceType`, which is
+  /// where it first lived: one column answering two questions means supplying
+  /// a real service type silently discarded the carrier, and nothing would
+  /// have reported that. NULL on every integrated shipment — the carrier
+  /// there is the `courierCode`, and duplicating it would create a second
+  /// place for the same fact to be wrong.
+  manualCourierName      String?          @map("manual_courier_name")
   // Module 9 — supersede chain (CUR-7). `supersedesShipmentId` points
   // NEW → OLD (the replacement carries the FK); the OLD shipment reads
   // its replacement via the inverse virtual `supersededBy[0]`.

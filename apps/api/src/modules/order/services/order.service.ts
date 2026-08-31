@@ -1073,6 +1073,7 @@ export class OrderService {
       awbNumber: string | null;
       courierCode: string;
       isManualCourier: boolean;
+      manualCourierName: string | null;
       createdAt: Date;
       supersedesShipmentId: string | null;
     }>
@@ -1098,6 +1099,7 @@ export class OrderService {
             awbNumber: true,
             courierCode: true,
             isManualCourier: true,
+            manualCourierName: true,
             createdAt: true,
             supersedesShipmentId: true,
           },

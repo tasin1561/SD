@@ -21,6 +21,7 @@ import {
   Tr,
   Select,
 } from '@skydrop/ui/components';
+import { courierLabel } from '@skydrop/ui/status';
 import type { ShipmentStatus } from '@skydrop/db';
 import { useTrackedShipments } from '@/lib/api-hooks';
 import { ParcelTimeline } from './parcel-timeline';
@@ -109,7 +110,7 @@ export function TrackingIndex(): ReactElement {
                           <Link href={`/orders/${r.orderId}`} className="hover:underline">
                             {r.orderNumber}
                           </Link>{' '}
-                          · {r.courierCode}
+                          · {courierLabel(r.courierCode, r.manualCourierName)}
                         </div>
                       </Td>
                       <Td className="text-text-body text-sm">
@@ -189,7 +190,8 @@ function ExpandedParcel({ shipmentId }: { readonly shipmentId: string }): ReactE
             <div className="mb-3">
               <Ident value={detail.data.awbNumber ?? detail.data.shipmentNumber} />
               <span className="text-text-faint ml-2 text-xs">
-                {detail.data.courierCode} · {detail.data.recipientName}
+                {courierLabel(detail.data.courierCode, detail.data.manualCourierName)} ·{' '}
+                {detail.data.recipientName}
               </span>
             </div>
             <ParcelTimeline parcel={detail.data} />

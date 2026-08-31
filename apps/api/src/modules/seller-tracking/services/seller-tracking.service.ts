@@ -7,6 +7,13 @@ export interface TrackedShipmentRow {
   readonly shipmentNumber: string;
   readonly awbNumber: string | null;
   readonly courierCode: string;
+  /**
+   * WHO carried it, when `courierCode` is the literal 'manual' (CUR-8).
+   * NULL on an integrated shipment, where the code IS the carrier.
+   * Screens render this through `courierLabel` rather than deciding
+   * per call site.
+   */
+  readonly manualCourierName: string | null;
   readonly status: ShipmentStatus;
   readonly orderId: string;
   readonly orderNumber: string;
@@ -94,6 +101,7 @@ export class SellerTrackingService {
         shipmentNumber: true,
         awbNumber: true,
         courierCode: true,
+        manualCourierName: true,
         status: true,
         destRecipientName: true,
         destCity: true,
@@ -123,6 +131,7 @@ export class SellerTrackingService {
         shipmentNumber: r.shipmentNumber,
         awbNumber: r.awbNumber,
         courierCode: r.courierCode,
+        manualCourierName: r.manualCourierName,
         status: r.status,
         orderId: order?.id ?? '',
         orderNumber: order?.orderNumber ?? '',
@@ -154,6 +163,7 @@ export class SellerTrackingService {
         shipmentNumber: true,
         awbNumber: true,
         courierCode: true,
+        manualCourierName: true,
         status: true,
         destRecipientName: true,
         destCity: true,
@@ -206,6 +216,7 @@ export class SellerTrackingService {
       shipmentNumber: row.shipmentNumber,
       awbNumber: row.awbNumber,
       courierCode: row.courierCode,
+      manualCourierName: row.manualCourierName,
       status: row.status,
       orderId: order?.id ?? '',
       orderNumber: order?.orderNumber ?? '',

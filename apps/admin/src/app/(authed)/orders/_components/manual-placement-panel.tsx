@@ -86,7 +86,7 @@ export function ManualPlacementPanel({
       const r = await place.mutateAsync({
         shipmentId,
         awbNumber: awbNumber.trim(),
-        ...(courierName.trim() ? { courierName: courierName.trim() } : {}),
+        courierName: courierName.trim(),
         ...(serviceType.trim() ? { serviceType: serviceType.trim() } : {}),
       });
       setPlacing(false);
@@ -115,6 +115,10 @@ export function ManualPlacementPanel({
   if (!mayPlace) return null;
 
   const awbTooShort = awbNumber.trim() === '';
+  // Both are required by the server. Disabling on a blank required field
+  // is ordinary form behaviour, not a client-side copy of a policy —
+  // the server still refuses either one on its own (FE-2).
+  const carrierMissing = courierName.trim() === '';
   // The server's own floor. Mirrored so the operator is told before
   // submitting, not after — the server still decides (FE-2).
   const reasonTooShort = reason.trim().length < 10;
@@ -165,7 +169,8 @@ export function ManualPlacementPanel({
           </FormField>
           <FormField
             label="Courier"
-            hint="Bluedart, DTDC, whoever has it. Recorded for ops; the shipment is filed under the generic manual courier."
+            required
+            hint="Bluedart, DTDC, whoever has it. The seller and the customer both see this name on their tracking — leave it blank and they are told their parcel is with a courier called “manual”."
           >
             <Input
               value={courierName}
@@ -173,7 +178,7 @@ export function ManualPlacementPanel({
               maxLength={80}
             />
           </FormField>
-          <FormField label="Service type" hint="Their service name, if it matters later. Optional.">
+          <FormField label="Service type" hint="Their service tier, if it matters later. Optional.">
             <Input
               value={serviceType}
               onChange={(e) => setServiceType(e.target.value)}
@@ -196,7 +201,7 @@ export function ManualPlacementPanel({
           <Button
             variant="primary"
             size="md"
-            disabled={awbTooShort || place.isPending}
+            disabled={awbTooShort || carrierMissing || place.isPending}
             onClick={() => void onPlace()}
           >
             {place.isPending ? 'Recording…' : 'Record AWB and dispatch'}

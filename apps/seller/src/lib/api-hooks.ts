@@ -1291,6 +1291,12 @@ export interface TrackedShipmentRow {
   readonly shipmentNumber: string;
   readonly awbNumber: string | null;
   readonly courierCode: string;
+  /**
+   * WHO carried it when `courierCode` is the literal 'manual'. Render
+   * through `courierLabel` — never the raw code, which named the
+   * carrier "manual" on the seller's own tracking screen.
+   */
+  readonly manualCourierName: string | null;
   readonly status: string;
   readonly orderId: string;
   readonly orderNumber: string;

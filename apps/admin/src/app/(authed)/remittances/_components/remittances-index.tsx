@@ -92,11 +92,23 @@ export function RemittancesIndex(): ReactElement {
                   <Tr key={w.id}>
                     <Td>
                       <Link href={`/sellers/${w.sellerId}`} className="text-accent hover:underline">
-                        <Ident value={`${w.sellerId.slice(0, 8)}…`} />
+                        {w.sellerName ?? <Ident value={`${w.sellerId.slice(0, 8)}…`} />}
                       </Link>
                     </Td>
                     <Td align="right">
                       <Money amount={w.amountRequested} currency={w.currency} />
+                    </Td>
+                    {/* The balance this payment comes out of. Five
+                        headers had only four cells, so this column had
+                        no cell at all: the waiting time rendered under
+                        "Wallet balance" and every value sat one column
+                        left of its own name. */}
+                    <Td align="right">
+                      {w.sellerBalanceInr === null ? (
+                        <span className="text-text-faint text-xs">—</span>
+                      ) : (
+                        <Money amount={w.sellerBalanceInr} currency="INR" />
+                      )}
                     </Td>
                     <Td
                       className={

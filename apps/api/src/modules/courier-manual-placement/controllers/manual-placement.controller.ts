@@ -60,7 +60,7 @@ export class ManualPlacementController {
       shipmentId,
       {
         awbNumber: body.awbNumber,
-        ...(body.courierName !== undefined ? { courierName: body.courierName } : {}),
+        courierName: body.courierName,
         ...(body.serviceType !== undefined ? { serviceType: body.serviceType } : {}),
       },
       staff.id,

@@ -86,7 +86,7 @@ export class ManualPlacementService {
 
   async placeAwb(
     shipmentId: string,
-    input: { awbNumber: string; courierName?: string; serviceType?: string },
+    input: { awbNumber: string; courierName: string; serviceType?: string },
     staffId: string,
     ctx?: ClientContext,
   ): Promise<ManualPlacementResult> {
@@ -163,7 +163,12 @@ export class ManualPlacementService {
           awbNumber,
           courierCode: MANUAL_COURIER_CODE,
           isManualCourier: true,
-          serviceType: input.serviceType ?? input.courierName ?? null,
+          // Two facts, two columns. These used to share `serviceType`
+          // as `serviceType ?? courierName`, which meant an operator who
+          // typed a real service type lost the carrier name entirely and
+          // nothing said so.
+          manualCourierName: input.courierName.trim(),
+          serviceType: input.serviceType?.trim() ?? null,
           awbGeneratedAt: now,
           status: ShipmentStatus.AWB_GENERATED,
         },
@@ -180,7 +185,7 @@ export class ManualPlacementService {
           metadata: {
             orderId,
             awbNumber,
-            courierName: input.courierName ?? null,
+            courierName: input.courierName.trim(),
             serviceType: input.serviceType ?? null,
             ipAddress: ctx?.ipAddress ?? null,
             userAgent: ctx?.userAgent ?? null,

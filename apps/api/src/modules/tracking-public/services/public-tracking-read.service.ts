@@ -66,6 +66,7 @@ export class PublicTrackingReadService {
         destCity: true,
         expectedDeliveryAt: true,
         createdAt: true,
+        manualCourierName: true,
         courier: {
           select: {
             displayName: true,
@@ -113,7 +114,12 @@ export class PublicTrackingReadService {
 
     return {
       awbNumber: ship.awbNumber,
-      courierDisplayName: ship.courier.displayName,
+      // A manually-placed parcel's `courier` row is the 'manual'
+      // placeholder, whose display name is not a carrier anybody has
+      // heard of. The customer is checking WHO has their parcel, so the
+      // real carrier is both more useful and more honest. It is a
+      // company name, not PII — TRK-8 is untouched.
+      courierDisplayName: ship.manualCourierName?.trim() || ship.courier.displayName,
       currentStatus,
       currentStatusAt,
       destinationCity: ship.destCity,

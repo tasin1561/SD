@@ -1116,6 +1116,8 @@ export interface AdminShipmentRow {
   readonly awbNumber: string | null;
   readonly courierCode: string;
   readonly isManualCourier: boolean;
+  /** WHO carried it when `courierCode` is 'manual'. Render via `courierLabel`. */
+  readonly manualCourierName: string | null;
   readonly createdAt: string;
   readonly supersedesShipmentId: string | null;
 }
