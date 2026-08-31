@@ -23,8 +23,21 @@ function makeSut(
     receivingAccount?: null;
   } = {},
 ) {
+  // ONE lookup: the courier exists, and this is where its cash lands.
+  // The link is on the COURIER because a courier pays into one account
+  // of ours while one account of ours receives from every courier.
+  // `receivingAccount: null` exercises the refusal — a settlement with
+  // no cash behind it is not recordable.
   const accountFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
-    opts.account === undefined ? { id: ACCOUNT } : opts.account,
+    opts.account === undefined
+      ? {
+          id: ACCOUNT,
+          payoutBankAccount:
+            opts.receivingAccount === null
+              ? null
+              : { id: 'bank-inr-1', currency: 'INR', isActive: true, deletedAt: null },
+        }
+      : opts.account,
   );
   const settlementFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
     async () => opts.duplicate ?? null,
@@ -62,13 +75,6 @@ function makeSut(
       findMany: jest.fn(async () => []),
     },
     order: { findMany: orderFindMany },
-    // The receiving bank account. `null` exercises the refusal — a
-    // settlement with no cash behind it is not recordable.
-    platformBankAccount: {
-      findFirst: jest.fn(async () =>
-        opts.receivingAccount === null ? null : { id: 'bank-inr-1' },
-      ),
-    },
   };
   // The shortfall circuit breaker reads its threshold from settings.
   const client2 = {

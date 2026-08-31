@@ -149,7 +149,14 @@ export class CourierSettlementService {
 
     const account = await this.prisma.client.courierAccount.findFirst({
       where: { id: input.courierAccountId, deletedAt: null },
-      select: { id: true },
+      select: {
+        id: true,
+        // Which of OUR accounts this courier's cash lands in, read in
+        // the same query that proves the courier exists.
+        payoutBankAccount: {
+          select: { id: true, currency: true, isActive: true, deletedAt: true },
+        },
+      },
     });
     if (!account) {
       throw new NotFoundException({
@@ -234,19 +241,26 @@ export class CourierSettlementService {
     // would read it as money we hold. Refused rather than skipped: the
     // fix is one link on the courier account, and a silently missing
     // bank entry is the exact failure this ledger exists to prevent.
-    const receivingAccount = await this.prisma.client.platformBankAccount.findFirst({
-      where: {
-        courierAccountId: input.courierAccountId,
-        currency: Currency.INR,
-        isActive: true,
-        // Stated as well as `isActive`, not instead of it. Retiring an
-        // account happens to clear the flag today, so the two agree by
-        // coincidence rather than by rule — and a settlement routed into
-        // a retired account would be cash the overview cannot show.
-        deletedAt: null,
-      },
-      select: { id: true },
-    });
+    //
+    // Read off the COURIER, which owns a single nullable FK, so "which
+    // account" has exactly one answer. This used to search the bank
+    // accounts for one naming this courier — an unordered `findFirst`
+    // over a column whose cardinality was backwards, which meant one
+    // account could serve only one courier AND two accounts naming the
+    // same courier would send the cash to whichever row came back
+    // first.
+    const linked = account.payoutBankAccount;
+    // Stated rather than filtered in the query: a link pointing at a
+    // retired or foreign-currency account is a CONFIGURATION mistake,
+    // and treating it as "no link" would send the operator to make one
+    // that is already there.
+    const receivingAccount =
+      linked !== null &&
+      linked.deletedAt === null &&
+      linked.isActive &&
+      linked.currency === Currency.INR
+        ? linked
+        : null;
     if (!receivingAccount) {
       throw new BadRequestException({
         code: 'SETTLEMENT_NO_RECEIVING_ACCOUNT',

@@ -8,9 +8,12 @@ import {
   Input,
   Modal,
   ModalFooter,
+  Select,
   Textarea,
   useToast,
 } from '@skydrop/ui/components';
+import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
+import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useUpdateCourierAccount, type CourierAccountView } from '@/lib/ops-hooks';
 
@@ -39,6 +42,13 @@ export function EditCourierAccountModal({
   const [label, setLabel] = useState(account.label);
   const [pickup, setPickup] = useState(account.pickupLocationName ?? '');
   const [notes, setNotes] = useState(account.notes ?? '');
+  const [payoutBank, setPayoutBank] = useState(account.payoutBankAccountId ?? '');
+  // Gated: this modal opens for anyone with `courier.accounts.view`,
+  // and bank accounts need `money.view`. Ungated, the query fired on
+  // open and somebody with courier access but not money access got a
+  // 403 for doing nothing.
+  const canMoney = usePermission('money.view');
+  const banks = usePlatformBankAccounts(canMoney);
 
   // Re-seed when the dialog opens: the row may have changed underneath
   // (someone else edited it, or "Make default" refetched the list).
@@ -47,6 +57,7 @@ export function EditCourierAccountModal({
       setLabel(account.label);
       setPickup(account.pickupLocationName ?? '');
       setNotes(account.notes ?? '');
+      setPayoutBank(account.payoutBankAccountId ?? '');
       update.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -62,6 +73,12 @@ export function EditCourierAccountModal({
         // as an empty string so the server can clear it.
         pickupLocationName: pickup,
         notes: notes.trim(),
+        // '' is "no account", which is a real choice and must be sent
+        // as null rather than omitted — omitting means "leave it".
+        // Only send it when this operator could actually see the field;
+        // otherwise a save from someone without money.view would clear
+        // a link they were never shown.
+        ...(canMoney ? { payoutBankAccountId: payoutBank === '' ? null : payoutBank } : {}),
       });
       toast.success('Account updated.');
       onOpenChange(false);
@@ -96,6 +113,41 @@ export function EditCourierAccountModal({
           placeholder="Blank = global setting"
         />
       </FormField>
+
+      {/*
+       * Where this courier's COD payouts land. TRE-3 resolves a
+       * settlement's receiving account through it and refuses without
+       * one, since cash we never recorded reads on the coverage page
+       * as money we hold and do not.
+       *
+       * It lives HERE, on the courier, because a courier pays into one
+       * account of ours while one account of ours receives from every
+       * courier. It was on the bank account first, which had that
+       * backwards: a single current account could be linked to
+       * Delhivery OR Shiprocket, never both.
+       */}
+      {canMoney && (
+        <FormField
+          label="COD payouts land in"
+          htmlFor="ea-payout-bank"
+          hint="One of our bank accounts. Required before a settlement for this courier can be recorded. Several couriers can share one account."
+        >
+          <Select
+            id="ea-payout-bank"
+            value={payoutBank}
+            onChange={(e) => setPayoutBank(e.target.value)}
+          >
+            <option value="">No account linked yet</option>
+            {(banks.data ?? [])
+              .filter((b) => b.currency === 'INR')
+              .map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.label} · {b.bankName}
+                </option>
+              ))}
+          </Select>
+        </FormField>
+      )}
 
       {pickupChanged && pickup.trim() !== pickup && (
         // Not trimmed on save, deliberately: Delhivery matches this

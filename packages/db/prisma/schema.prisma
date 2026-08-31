@@ -3170,7 +3170,6 @@ model Shipment {
   @@index([manifestId])
   @@index([pickStartedByStaffId])
   @@index([packedByStaffId])
-  @@index([courierAccountId])
   @@index([rtoReceivedWarehouseId])
   @@map("shipments")
 }
@@ -3613,14 +3612,29 @@ model CourierAccount {
   updatedAt          DateTime              @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt          DateTime?             @map("deleted_at") @db.Timestamptz
 
-  courier         Courier                    @relation(fields: [courierId], references: [id])
-  credential      CourierCredential          @relation(fields: [credentialId], references: [id])
-  createdByStaff  StaffUser?                 @relation("CourierAccountCreatedBy", fields: [createdByStaffId], references: [id])
-  sellerLinks     SellerCourierAccountLink[]
-  shipments       Shipment[]
-  settlements     CourierSettlement[]
-  courierWaybills CourierWaybill[]
-  bankAccounts    PlatformBankAccount[]
+  courier             Courier                    @relation(fields: [courierId], references: [id])
+  credential          CourierCredential          @relation(fields: [credentialId], references: [id])
+  createdByStaff      StaffUser?                 @relation("CourierAccountCreatedBy", fields: [createdByStaffId], references: [id])
+  sellerLinks         SellerCourierAccountLink[]
+  shipments           Shipment[]
+  settlements         CourierSettlement[]
+  courierWaybills     CourierWaybill[]
+  /// Which of OUR accounts this courier's payouts land in.
+  ///
+  /// It used to live on the bank account as `courierAccountId`, which
+  /// had the cardinality backwards: one account could name one courier,
+  /// while a courier could be named by many accounts. Reality is the
+  /// other way round — a courier pays into one account of ours, and one
+  /// account of ours receives from every courier. So an operator with a
+  /// single current account could link it to Delhivery OR Shiprocket,
+  /// never both, and the second courier's settlements were refused.
+  ///
+  /// The old shape also made the receiving account AMBIGUOUS: the
+  /// settlement resolved it with an unordered `findFirst`, so two
+  /// accounts naming the same courier would send the cash to whichever
+  /// row Postgres returned first.
+  payoutBankAccountId String?                    @map("payout_bank_account_id") @db.Uuid
+  payoutBankAccount   PlatformBankAccount?       @relation(fields: [payoutBankAccountId], references: [id])
 
   // Exactly one DEFAULT active account per (courier_id, environment) —
   // partial unique index courier_accounts_default_uq
@@ -3628,6 +3642,7 @@ model CourierAccount {
   @@index([courierId, environment])
   @@index([isActive])
   @@index([deletedAt])
+  @@index([payoutBankAccountId])
   @@index([createdByStaffId])
   @@map("courier_accounts")
 }
@@ -5322,7 +5337,7 @@ enum WalletEntryDirection {
   // what sellers paid us in charges silently included tax we merely
   // hold for the government, and the seller's own ledger called a tax
   // line "Order charges".
-  GST_WITHHOLDING      @map("gst_withholding")
+  GST_WITHHOLDING @map("gst_withholding")
 
   @@map("wallet_entry_direction")
 }
@@ -5394,42 +5409,45 @@ enum TopupRequestStatus {
 /// on a screen would be theatre. `isActive` retires an account without
 /// deleting it — a past top-up must still name the account it went to.
 model PlatformBankAccount {
-  id               String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  label            String
-  bankName         String          @map("bank_name")
-  accountName      String          @map("account_name")
-  accountNumber    String          @map("account_number")
+  id            String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  label         String
+  bankName      String   @map("bank_name")
+  accountName   String   @map("account_name")
+  accountNumber String   @map("account_number")
   /// IFSC (India) or SWIFT — free-form because the formats differ by
   /// country. NOT the Bangladeshi routing number; that has its own
   /// column, because a BEFTN transfer needs both and putting them in one
   /// field means whoever fills it in has to choose which one to lose.
-  branchCode       String?         @map("branch_code")
+  branchCode    String?  @map("branch_code")
   /// The branch the account is held at. A Bangladeshi routing number is
   /// branch-specific, so the two are read together — and a seller
   /// standing at a counter is asked for the branch by name.
-  branchName       String?         @map("branch_name")
+  branchName    String?  @map("branch_name")
   /// The district the branch is in. Bank forms in Bangladesh ask for it,
   /// and several banks have a branch of the same name in more than one.
-  district         String?
+  district      String?
   /// The 9-digit BEFTN routing number. Kept as text, not an integer:
   /// leading zeros are significant and an integer silently eats them.
-  routingNumber    String?         @map("routing_number")
-  currency         Currency
-  instructions     String?         @db.Text
+  routingNumber String?  @map("routing_number")
+  currency      Currency
+  instructions  String?  @db.Text
   /// What this account is FOR, in one line, so a transfer is not made
   /// into the wrong pocket. Free text on purpose: the shape of an
   /// account estate changes faster than an enum can be migrated.
-  purpose          String?
+  purpose       String?
+
+  /// Every courier account whose payouts land here. A LIST, which is the
+  /// whole point of the direction change: one current account can
+  /// receive from Delhivery and Shiprocket at once.
+  courierPayouts CourierAccount[]
   /// Which courier account settles into here. Multiple Delhivery
   /// accounts settle to different banks, and "whose money is in which
   /// account" starts with knowing which pipe fills it.
-  courierAccountId String?         @map("courier_account_id") @db.Uuid
-  courierAccount   CourierAccount? @relation(fields: [courierAccountId], references: [id])
-  isActive         Boolean         @default(true) @map("is_active")
-  displayOrder     Int             @default(100) @map("display_order")
-  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt        DateTime?       @map("deleted_at") @db.Timestamptz
+  isActive       Boolean          @default(true) @map("is_active")
+  displayOrder   Int              @default(100) @map("display_order")
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt      DateTime?        @map("deleted_at") @db.Timestamptz
 
   topupRequests WalletTopupRequest[]
   entries       BankEntry[]
@@ -5438,7 +5456,6 @@ model PlatformBankAccount {
   remittances   Remittance[]
 
   @@index([isActive, displayOrder])
-  @@index([courierAccountId])
   @@map("platform_bank_accounts")
 }
 

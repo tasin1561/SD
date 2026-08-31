@@ -59,7 +59,10 @@ export class TreasuryReadService {
           bankName: true,
           purpose: true,
           currency: true,
-          courierAccount: { select: { label: true } },
+          // A LIST now. One current account can receive from every
+          // courier, so naming a single one would have shown whichever
+          // came back first and hidden the rest.
+          courierPayouts: { select: { label: true }, orderBy: { label: 'asc' } },
         },
         orderBy: { displayOrder: 'asc' },
       }),
@@ -92,7 +95,10 @@ export class TreasuryReadService {
         label: a?.label ?? 'Unknown',
         bankName: a?.bankName ?? '',
         purpose: a?.purpose ?? null,
-        courierAccountLabel: a?.courierAccount?.label ?? null,
+        courierAccountLabel:
+          a === undefined || a.courierPayouts.length === 0
+            ? null
+            : a.courierPayouts.map((c) => c.label).join(', '),
       };
     });
 

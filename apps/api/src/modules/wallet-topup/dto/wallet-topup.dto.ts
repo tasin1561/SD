@@ -161,16 +161,6 @@ export class UpsertPlatformBankAccountDto {
 
   @ApiPropertyOptional({
     description:
-      'The courier account whose payouts land here. `CourierSettlementService.record` resolves ' +
-      'the receiving account through THIS field (TRE-3), so a settlement for a courier with no ' +
-      'linked account is refused — the money would be a number with no cash behind it.',
-  })
-  @IsOptional()
-  @IsUUID('7')
-  courierAccountId?: string;
-
-  @ApiPropertyOptional({
-    description:
       'What is in the account right now, in its own currency. Posted as an OPENING_BALANCE ' +
       'entry against OUR money in the same transaction as the account itself — an account ' +
       'created without one starts at zero and every figure derived from it reads as zero. ' +

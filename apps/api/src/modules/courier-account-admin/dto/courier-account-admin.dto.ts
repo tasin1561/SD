@@ -105,6 +105,18 @@ export class UpdateCourierAccountDto {
   @IsString()
   @MaxLength(200)
   pickupLocationName?: string;
+
+  @ApiPropertyOptional({
+    description:
+      "Which of OUR bank accounts this courier's COD payouts land in. TRE-3 resolves a " +
+      'settlement’s receiving account through it and refuses without one, since a settlement ' +
+      'whose cash was never recorded reads on the coverage page as money we hold and do not. ' +
+      'One account can receive from every courier — the link lives here, on the side that has ' +
+      'exactly one answer. Send null to unlink.',
+  })
+  @IsOptional()
+  @IsUUID('7')
+  payoutBankAccountId?: string | null;
 }
 
 export class LinkSellerCourierAccountDto {

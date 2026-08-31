@@ -1,6 +1,5 @@
 import {
   Body,
-  BadRequestException,
   ConflictException,
   Controller,
   Delete,
@@ -53,25 +52,6 @@ export class AdminPlatformBankAccountController {
     });
   }
 
-  /**
-   * A courier link that names nothing is worse than none: the settlement
-   * lookup would keep returning no account and keep saying "link one",
-   * with a link already on the row.
-   */
-  private async assertCourierAccount(id: string | undefined): Promise<void> {
-    if (id === undefined) return;
-    const found = await this.prisma.client.courierAccount.findFirst({
-      where: { id, deletedAt: null },
-      select: { id: true },
-    });
-    if (!found) {
-      throw new BadRequestException({
-        code: 'COURIER_ACCOUNT_NOT_FOUND',
-        message: 'No such courier account to receive payouts for.',
-      });
-    }
-  }
-
   @Post()
   @RequirePermissions('money.bank_accounts.manage')
   @HttpCode(HttpStatus.CREATED)
@@ -89,7 +69,6 @@ export class AdminPlatformBankAccountController {
     // to reconcile a brand-new account from 0 up to its real balance,
     // which files the money under "the book was wrong" when the book was
     // not wrong, it was empty.
-    await this.assertCourierAccount(body.courierAccountId);
     return this.prisma.client.$transaction(async (tx) => {
       const account = await tx.platformBankAccount.create({
         data: {
@@ -100,10 +79,6 @@ export class AdminPlatformBankAccountController {
           branchCode: body.branchCode ?? null,
           branchName: body.branchName ?? null,
           purpose: body.purpose ?? null,
-          // TRE-3's receiving account. The settlement resolves through
-          // this column, and until it was writable the error it raised
-          // told an operator to make a link the product could not make.
-          courierAccountId: body.courierAccountId ?? null,
           district: body.district ?? null,
           routingNumber: body.routingNumber ?? null,
           currency: body.currency,
@@ -148,7 +123,6 @@ export class AdminPlatformBankAccountController {
     @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
     @Body() body: UpsertPlatformBankAccountDto,
   ): Promise<unknown> {
-    await this.assertCourierAccount(body.courierAccountId);
     return this.prisma.client.platformBankAccount.update({
       where: { id },
       data: {
@@ -161,9 +135,6 @@ export class AdminPlatformBankAccountController {
         district: body.district ?? null,
         routingNumber: body.routingNumber ?? null,
         purpose: body.purpose ?? null,
-        // Full-replace, like every other optional field on this DTO:
-        // omitting it UNLINKS, which is how a link is removed.
-        courierAccountId: body.courierAccountId ?? null,
         currency: body.currency,
         instructions: body.instructions ?? null,
         ...(body.isActive === undefined ? {} : { isActive: body.isActive }),

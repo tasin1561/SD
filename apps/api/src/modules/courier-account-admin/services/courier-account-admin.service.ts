@@ -4,7 +4,7 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
-import { ActorType, CredentialEnvironment, Prisma } from '@skydrop/db';
+import { ActorType, CredentialEnvironment, Currency, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { EnvService } from '../../../config/env.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -33,6 +33,11 @@ export interface CourierAccountView {
    * setup and a thing to fill in the moment there are two.
    */
   readonly pickupLocationName: string | null;
+  /**
+   * Which of OUR bank accounts this courier's COD payouts land in.
+   * Null means no settlement can be recorded for it yet (TRE-3).
+   */
+  readonly payoutBankAccountId: string | null;
   readonly notes: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -246,6 +251,33 @@ export class CourierAccountAdminService {
         await this.clearOtherDefaults(tx, existing.courierId, existing.environment, accountId);
       }
 
+      // A payout link naming nothing is worse than none: the settlement
+      // would keep refusing and keep saying "link an account", with a
+      // link already on the row. Checked here rather than left to the
+      // foreign key so the operator gets a sentence instead of a 500.
+      if (dto.payoutBankAccountId !== undefined && dto.payoutBankAccountId !== null) {
+        const bank = await tx.platformBankAccount.findFirst({
+          where: { id: dto.payoutBankAccountId, deletedAt: null },
+          select: { id: true, currency: true },
+        });
+        if (!bank) {
+          throw new BadRequestException({
+            code: 'PAYOUT_BANK_ACCOUNT_NOT_FOUND',
+            message: 'No such bank account to receive this courier’s payouts.',
+          });
+        }
+        // The courier collects in rupees, so a payout cannot land in a
+        // taka account. TRE-2 would refuse the bank entry at settlement
+        // time; refusing the LINK says so while somebody is still
+        // looking at the form.
+        if (bank.currency !== Currency.INR) {
+          throw new BadRequestException({
+            code: 'PAYOUT_BANK_ACCOUNT_WRONG_CURRENCY',
+            message: 'Courier payouts are collected in INR, so the receiving account must be INR.',
+          });
+        }
+      }
+
       const updated = await tx.courierAccount.update({
         where: { id: accountId },
         data: {
@@ -269,6 +301,9 @@ export class CourierAccountAdminService {
                   dto.pickupLocationName.trim() === '' ? null : dto.pickupLocationName,
               }),
           ...(dto.notes === undefined ? {} : { notes: dto.notes }),
+          ...(dto.payoutBankAccountId === undefined
+            ? {}
+            : { payoutBankAccountId: dto.payoutBankAccountId }),
         },
       });
 
@@ -452,6 +487,7 @@ export class CourierAccountAdminService {
       isDefault: boolean;
       isActive: boolean;
       pickupLocationName: string | null;
+      payoutBankAccountId: string | null;
       notes: string | null;
       createdAt: Date;
       updatedAt: Date;
@@ -465,6 +501,7 @@ export class CourierAccountAdminService {
       label: row.label,
       isDefault: row.isDefault,
       pickupLocationName: row.pickupLocationName,
+      payoutBankAccountId: row.payoutBankAccountId,
       isActive: row.isActive,
       notes: row.notes,
       createdAt: row.createdAt,

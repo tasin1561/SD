@@ -172,6 +172,8 @@ export interface CourierAccountView {
    * this string exactly and only within the account that registered it.
    */
   readonly pickupLocationName: string | null;
+  /** Which of OUR bank accounts this courier's COD payouts land in. */
+  readonly payoutBankAccountId: string | null;
   readonly notes: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -557,6 +559,8 @@ export function useUpdateCourierAccount(): UseMutationResult<
     isActive?: boolean;
     pickupLocationName?: string;
     notes?: string;
+    /** null unlinks; undefined leaves it alone. */
+    payoutBankAccountId?: string | null;
   }
 > {
   const client = useApiClient();

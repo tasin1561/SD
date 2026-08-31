@@ -25,7 +25,6 @@ import {
   useToast,
   PageHeader,
 } from '@skydrop/ui/components';
-import { useCourierAccounts } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import {
@@ -72,7 +71,6 @@ export function BankAccountsPanel(): ReactElement | null {
   const toast = useToast();
   const mayManage = usePermission('money.bank_accounts.manage');
   const accounts = usePlatformBankAccounts();
-  const courierAccounts = useCourierAccounts();
   const create = useCreateBankAccount();
   const update = useUpdateBankAccount();
   const retire = useRetireBankAccount();
@@ -109,7 +107,6 @@ export function BankAccountsPanel(): ReactElement | null {
       currency: a.currency,
       ...(a.instructions === null ? {} : { instructions: a.instructions }),
       ...(a.purpose === null ? {} : { purpose: a.purpose }),
-      ...(a.courierAccountId === null ? {} : { courierAccountId: a.courierAccountId }),
       isActive: a.isActive,
       displayOrder: a.displayOrder,
     });
@@ -153,9 +150,6 @@ export function BankAccountsPanel(): ReactElement | null {
         : {}),
       ...(form.purpose !== undefined && form.purpose.trim() !== ''
         ? { purpose: form.purpose.trim() }
-        : {}),
-      ...(form.courierAccountId !== undefined && form.courierAccountId !== ''
-        ? { courierAccountId: form.courierAccountId }
         : {}),
     };
     try {
@@ -388,29 +382,6 @@ export function BankAccountsPanel(): ReactElement | null {
                 />
               </FormField>
             )}
-            {/*
-             * TRE-3 resolves a settlement's receiving account through
-             * this link. Until it was here, recording a courier payout
-             * failed with "link one under Network → Bank accounts" and
-             * there was nowhere to do it — the money path was closed by
-             * a field the product never exposed.
-             */}
-            <FormField
-              label="Receives payouts from"
-              hint="The courier account whose COD payouts land here. Required before a settlement for that courier can be recorded."
-            >
-              <Select
-                value={form.courierAccountId ?? ''}
-                onChange={(e) => set('courierAccountId', e.target.value)}
-              >
-                <option value="">Not a courier payout account</option>
-                {(courierAccounts.data ?? []).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label} · {c.courierCode}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
             <FormField
               label="What it is for"
               hint="Free text — an account estate changes shape faster than a fixed list."
