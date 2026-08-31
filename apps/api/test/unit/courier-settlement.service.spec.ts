@@ -427,3 +427,141 @@ describe('CourierSettlementService.record — the cash behind the credit', () =>
     expect(sut.bankPost).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * A statement covers ten orders and only eight are recognised at the
+ * time. `record` handles that safely — the bank takes the full credit,
+ * the eight sellers are paid, and the remainder sits against capital —
+ * but until this existed nothing could finish the job, and the two
+ * missing orders read as unpaid while their money sat under capital.
+ *
+ * The thing that must be impossible is inventing cash. `amountInr` is
+ * what the bank statement says, so this never touches it: the cash side
+ * is a zero-sum pair, and the allocation ceiling is what actually
+ * landed.
+ */
+describe('CourierSettlementService.allocateMore', () => {
+  const SETTLEMENT = '01a05612-747e-727c-b350-b38dfd9703aa';
+
+  function makeAllocSut(
+    opts: {
+      amount?: string;
+      allocated?: string;
+      existingOrders?: string[];
+      orders?: Array<{ id: string; sellerId: string; codAmountInr: Prisma.Decimal | null }>;
+    } = {},
+  ) {
+    const bankPost = jest.fn<Promise<{ id: string }>, [AnyArgs, unknown?]>(async () => ({
+      id: 'be-1',
+    }));
+    const createMany = jest.fn(async () => ({ count: 1 }));
+    const update = jest.fn(async () => ({}));
+    const client = {
+      courierSettlement: {
+        findUnique: jest.fn(async () => ({
+          id: SETTLEMENT,
+          reference: 'DLV-PAYOUT-0001',
+          amountInr: D(opts.amount ?? '1000.00'),
+          allocatedInr: D(opts.allocated ?? '600.00'),
+          receivedAt: new Date('2026-07-20T10:00:00.000Z'),
+          courierAccount: {
+            id: ACCOUNT,
+            payoutBankAccount: {
+              id: 'bank-inr-1',
+              currency: 'INR',
+              isActive: true,
+              deletedAt: null,
+            },
+          },
+          lines: (opts.existingOrders ?? ['o-1']).map((orderId) => ({ orderId })),
+        })),
+        update,
+        findFirst: jest.fn(async () => null),
+      },
+      courierSettlementLine: { createMany },
+      order: {
+        findMany: jest.fn(
+          async () => opts.orders ?? [{ id: 'o-2', sellerId: 's-1', codAmountInr: D('400.00') }],
+        ),
+      },
+      $transaction: async (fn: (tx: unknown) => unknown) => fn(client),
+    } as AnyArgs;
+    const prisma = { client } as unknown as PrismaService;
+    const svc = new CourierSettlementService(
+      prisma,
+      { log: jest.fn(async () => 'a1') } as unknown as AuditLogService,
+      {
+        resolveMode: jest.fn(async () => 'SETTLEMENT' as const),
+        creditForOrder: jest.fn(async () => ({ credited: true })),
+      } as unknown as CodCreditService,
+      { recomputeCacheAfterCommit: jest.fn(async () => undefined) } as unknown as WalletService,
+      { post: bankPost } as unknown as BankLedgerService,
+    );
+    // getById reads back through the same client; stub it out — the
+    // return shape is pinned by record()'s own tests.
+    jest.spyOn(svc, 'getById').mockResolvedValue({} as never);
+    return { svc, bankPost, createMany, update };
+  }
+
+  it('refuses to allocate more than actually landed', async () => {
+    // The one thing this must not be able to do. Past the ceiling it
+    // would hold sellers more money than the courier sent, which reads
+    // on the coverage page as cash we have and do not.
+    const { svc } = makeAllocSut({ amount: '1000.00', allocated: '600.00' });
+    await expect(
+      svc.allocateMore('staff-1', SETTLEMENT, {
+        lines: [{ orderId: 'o-2', settledInr: '500.00' }],
+      }),
+    ).rejects.toMatchObject({ response: { code: 'SETTLEMENT_OVER_ALLOCATED' } });
+  });
+
+  it('allows exactly the remainder', async () => {
+    const { svc, createMany } = makeAllocSut({ amount: '1000.00', allocated: '600.00' });
+    await svc.allocateMore('staff-1', SETTLEMENT, {
+      lines: [{ orderId: 'o-2', settledInr: '400.00' }],
+    });
+    expect(createMany).toHaveBeenCalled();
+  });
+
+  it('moves cash from capital to the seller and leaves the account total alone', async () => {
+    const { svc, bankPost } = makeAllocSut({ amount: '1000.00', allocated: '600.00' });
+    await svc.allocateMore('staff-1', SETTLEMENT, {
+      lines: [{ orderId: 'o-2', settledInr: '400.00' }],
+    });
+    const entries = bankPost.mock.calls.map((c) => c[0]);
+    const total = entries.reduce((sum, e) => sum.add(e['signedAmount'] as Prisma.Decimal), D('0'));
+    // No new cash arrived, so the balance must be byte-identical after.
+    // A single entry would move it and make the book disagree with the
+    // statement.
+    expect(total.toString()).toBe('0');
+    expect(entries.some((e) => (e['owner'] as AnyArgs)['kind'] === 'SELLER')).toBe(true);
+    expect(entries.some((e) => (e['owner'] as AnyArgs)['kind'] === 'CAPITAL')).toBe(true);
+  });
+
+  it('never rewrites the payout total', async () => {
+    const { svc, update } = makeAllocSut({ amount: '1000.00', allocated: '600.00' });
+    await svc.allocateMore('staff-1', SETTLEMENT, {
+      lines: [{ orderId: 'o-2', settledInr: '400.00' }],
+    });
+    const data = (update.mock.calls[0]?.[0] as AnyArgs)['data'] as AnyArgs;
+    // amountInr is what the bank statement says; only attribution moves.
+    expect(data['amountInr']).toBeUndefined();
+    expect(String(data['allocatedInr'])).toBe('1000');
+  });
+
+  it('refuses an order already allocated on this payout', async () => {
+    const { svc } = makeAllocSut({ existingOrders: ['o-1', 'o-2'] });
+    await expect(
+      svc.allocateMore('staff-1', SETTLEMENT, {
+        lines: [{ orderId: 'o-2', settledInr: '100.00' }],
+      }),
+    ).rejects.toMatchObject({ response: { code: 'SETTLEMENT_ORDER_ALREADY_ALLOCATED' } });
+  });
+
+  it('refuses an empty allocation rather than writing nothing quietly', async () => {
+    const { svc } = makeAllocSut({});
+    await expect(svc.allocateMore('staff-1', SETTLEMENT, { lines: [] })).rejects.toMatchObject({
+      response: { code: 'SETTLEMENT_NO_LINES' },
+    });
+  });
+});

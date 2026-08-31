@@ -470,6 +470,241 @@ export class CourierSettlementService {
   }
 
   /** The point at which absorbing a shortfall stops being a rounding error. */
+  /**
+   * Attribute MORE of a payout that is already recorded.
+   *
+   * A courier's statement covers ten orders and only eight are
+   * recognised at the time. `record` handles that safely — the bank
+   * gets the full credit, the eight sellers are paid, and the remainder
+   * sits against CAPITAL labelled "unallocated" with a HIGH audit — but
+   * until now nothing could finish the job. There was no amend path,
+   * and recording a second settlement was worse than useless: every
+   * settlement posts its `amountInr` to the bank, so a second one would
+   * book cash that never landed.
+   *
+   * Meanwhile the two missing orders read as unpaid on the float report
+   * while their money sits under capital, so client-money coverage
+   * UNDERSTATES what is owed to those sellers.
+   *
+   * So this changes attribution, never the total. `amountInr` is
+   * untouched — it is what the bank statement says and cannot be
+   * improved on — and the cash side is a zero-sum PAIR: positive to
+   * each newly-credited seller, negative to capital for the same total.
+   * The account balance is identical before and after, which is what
+   * makes double-counting unrepresentable rather than merely unlikely.
+   */
+  async allocateMore(
+    staffId: string,
+    settlementId: string,
+    input: { lines: SettlementLineInput[] },
+    ctx?: ClientContext,
+  ): Promise<SettlementView> {
+    if (input.lines.length === 0) {
+      throw new BadRequestException({
+        code: 'SETTLEMENT_NO_LINES',
+        message: 'Name at least one order to allocate.',
+      });
+    }
+
+    const settlement = await this.prisma.client.courierSettlement.findUnique({
+      where: { id: settlementId },
+      select: {
+        id: true,
+        reference: true,
+        amountInr: true,
+        allocatedInr: true,
+        receivedAt: true,
+        courierAccount: {
+          select: {
+            id: true,
+            payoutBankAccount: {
+              select: { id: true, currency: true, isActive: true, deletedAt: true },
+            },
+          },
+        },
+        lines: { select: { orderId: true } },
+      },
+    });
+    if (!settlement) {
+      throw new NotFoundException({
+        code: 'SETTLEMENT_NOT_FOUND',
+        message: `Settlement ${settlementId} not found`,
+      });
+    }
+
+    const dupInPayload = input.lines
+      .map((l) => l.orderId)
+      .filter((id, i, all) => all.indexOf(id) !== i);
+    if (dupInPayload.length > 0) {
+      throw new BadRequestException({
+        code: 'SETTLEMENT_ORDER_REPEATED',
+        message: `Order(s) listed twice: ${[...new Set(dupInPayload)].join(', ')}`,
+      });
+    }
+    // Already on THIS payout. The unique index would refuse it anyway;
+    // saying so names the orders instead of surfacing a constraint.
+    const already = new Set(settlement.lines.map((l) => l.orderId));
+    const repeated = input.lines.filter((l) => already.has(l.orderId)).map((l) => l.orderId);
+    if (repeated.length > 0) {
+      throw new BadRequestException({
+        code: 'SETTLEMENT_ORDER_ALREADY_ALLOCATED',
+        message: `Already allocated on this payout: ${repeated.join(', ')}`,
+      });
+    }
+
+    const orders = await this.prisma.client.order.findMany({
+      where: { id: { in: input.lines.map((l) => l.orderId) } },
+      select: { id: true, sellerId: true, codAmountInr: true },
+    });
+    const byId = new Map(orders.map((o) => [o.id, o]));
+    const missing = input.lines.filter((l) => !byId.has(l.orderId));
+    if (missing.length > 0) {
+      throw new NotFoundException({
+        code: 'SETTLEMENT_ORDER_NOT_FOUND',
+        message: `${missing.length} order(s) do not exist`,
+        cause: missing.map((l) => l.orderId),
+      });
+    }
+
+    let adding = ZERO;
+    const lineData = input.lines.map((line) => {
+      const settled = this.parseMoney(line.settledInr, `line ${line.orderId}`);
+      adding = adding.add(settled);
+      return {
+        orderId: line.orderId,
+        expectedInr: byId.get(line.orderId)?.codAmountInr ?? ZERO,
+        settledInr: settled,
+        note: line.note ?? null,
+      };
+    });
+
+    // The ceiling is the cash that actually arrived. Allocating past it
+    // would hold sellers more money than the courier sent, which is the
+    // one thing this operation must not be able to do — it would read
+    // on the coverage page as money we hold and do not.
+    const remaining = settlement.amountInr.sub(settlement.allocatedInr);
+    if (adding.gt(remaining)) {
+      throw new BadRequestException({
+        code: 'SETTLEMENT_OVER_ALLOCATED',
+        message:
+          `This payout has ${remaining.toFixed(2)} left to allocate and you named ` +
+          `${adding.toFixed(2)}. Record a separate payout for cash that landed separately.`,
+      });
+    }
+
+    const linked = settlement.courierAccount.payoutBankAccount;
+    const receivingAccount =
+      linked !== null &&
+      linked.deletedAt === null &&
+      linked.isActive &&
+      linked.currency === Currency.INR
+        ? linked
+        : null;
+    if (!receivingAccount) {
+      throw new BadRequestException({
+        code: 'SETTLEMENT_NO_RECEIVING_ACCOUNT',
+        message:
+          'No active INR bank account is linked to this courier account. ' +
+          'Link one under Courier accounts before allocating what it paid.',
+      });
+    }
+
+    await this.prisma.client.$transaction(async (tx) => {
+      await tx.courierSettlementLine.createMany({
+        data: lineData.map((l) => ({ ...l, settlementId: settlement.id })),
+      });
+      await tx.courierSettlement.update({
+        where: { id: settlement.id },
+        data: { allocatedInr: settlement.allocatedInr.add(adding) },
+      });
+
+      const creditedBySeller = new Map<string, Prisma.Decimal>();
+      for (const line of lineData) {
+        const order = byId.get(line.orderId);
+        if (!order) continue;
+        const mode = await this.codCredit.resolveMode(order.sellerId);
+        if (mode !== 'SETTLEMENT') continue; // already paid at delivery
+        await this.codCredit.creditForOrder(tx, {
+          orderId: order.id,
+          sellerId: order.sellerId,
+          grossInr: line.expectedInr,
+          mode,
+        });
+        creditedBySeller.set(
+          order.sellerId,
+          (creditedBySeller.get(order.sellerId) ?? ZERO).add(line.expectedInr),
+        );
+      }
+
+      // The zero-sum pair. No new cash arrived, so the account total
+      // must not move: what changes is WHOSE the money already there
+      // is. Same shape as TRE-8's reclassification, for the same
+      // reason — a single entry would change the balance and make the
+      // book disagree with the statement.
+      let moved = ZERO;
+      for (const [sellerId, held] of creditedBySeller) {
+        moved = moved.add(held);
+        await this.bank.post(
+          {
+            accountId: receivingAccount.id,
+            type: BankEntryType.COURIER_SETTLEMENT,
+            signedAmount: held,
+            amountCurrency: Currency.INR,
+            owner: { kind: BankOwnerKind.SELLER, sellerId },
+            occurredAt: settlement.receivedAt,
+            reference: settlement.reference,
+            settlementId: settlement.id,
+            staffId,
+            note: `COD allocated later — ${settlement.reference}`,
+          },
+          tx,
+        );
+      }
+      if (!moved.isZero()) {
+        await this.bank.post(
+          {
+            accountId: receivingAccount.id,
+            type: BankEntryType.COURIER_SETTLEMENT,
+            signedAmount: moved.negated(),
+            amountCurrency: Currency.INR,
+            owner: { kind: BankOwnerKind.CAPITAL },
+            occurredAt: settlement.receivedAt,
+            reference: settlement.reference,
+            settlementId: settlement.id,
+            staffId,
+            note: `Reattributed to sellers on ${settlement.reference}`,
+          },
+          tx,
+        );
+      }
+
+      await this.audit.log(
+        {
+          actorType: ActorType.STAFF,
+          staffUserId: staffId,
+          action: 'wallet.courier_settlement.allocated',
+          entityType: 'courier_settlement',
+          entityId: settlement.id,
+          changes: {
+            before: { allocatedInr: settlement.allocatedInr.toString() },
+            after: { allocatedInr: settlement.allocatedInr.add(adding).toString() },
+          },
+          metadata: {
+            reference: settlement.reference,
+            orders: lineData.map((l) => l.orderId),
+            addedInr: adding.toString(),
+            movedFromCapitalInr: moved.toString(),
+          },
+          severity: 'MEDIUM',
+          ...(ctx === undefined ? {} : { ctx }),
+        },
+        tx,
+      );
+    });
+
+    return this.getById(settlement.id);
+  }
+
   private async shortfallAlertPercent(): Promise<number> {
     const row = await this.prisma.client.systemSetting.findUnique({
       where: { key: 'wallet.settlement_shortfall_alert_percent' },

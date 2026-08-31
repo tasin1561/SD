@@ -3170,6 +3170,7 @@ model Shipment {
   @@index([manifestId])
   @@index([pickStartedByStaffId])
   @@index([packedByStaffId])
+  @@index([courierAccountId])
   @@index([rtoReceivedWarehouseId])
   @@map("shipments")
 }

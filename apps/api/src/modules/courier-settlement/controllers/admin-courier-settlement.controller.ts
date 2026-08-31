@@ -20,7 +20,11 @@ import {
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
-import { RecordSettlementDto, ReconciliationQueryDto } from '../dto/courier-settlement.dto';
+import {
+  AllocateMoreDto,
+  RecordSettlementDto,
+  ReconciliationQueryDto,
+} from '../dto/courier-settlement.dto';
 import {
   CourierSettlementService,
   type ReconciliationReport,
@@ -69,6 +73,24 @@ export class AdminCourierSettlementController {
       },
       ctx,
     );
+  }
+
+  @Post(':settlementId/allocate')
+  @RequirePermissions('money.settlements.record')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Attribute MORE of an already-recorded payout to orders that were not recognised at the ' +
+      'time. Never changes the payout total — it moves cash from capital to the sellers it ' +
+      'belongs to, and refuses to allocate past what actually landed.',
+  })
+  allocateMore(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('settlementId', new ParseUUIDPipe({ version: '7' })) settlementId: string,
+    @Body() body: AllocateMoreDto,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<SettlementView> {
+    return this.svc.allocateMore(staff.id, settlementId, { lines: body.lines }, ctx);
   }
 
   @Get()

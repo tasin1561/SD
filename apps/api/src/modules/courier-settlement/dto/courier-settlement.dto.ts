@@ -68,6 +68,21 @@ export class RecordSettlementDto {
   readonly note?: string;
 }
 
+export class AllocateMoreDto {
+  @ApiProperty({
+    type: [SettlementLineDto],
+    description:
+      'The orders this already-recorded payout ALSO covers. The payout total is never changed ' +
+      '— it is what the bank statement says — so this can only move cash from capital to the ' +
+      'sellers it belongs to, never invent any.',
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => SettlementLineDto)
+  readonly lines!: SettlementLineDto[];
+}
+
 export class ReconciliationQueryDto {
   @ApiPropertyOptional({
     description:

@@ -397,6 +397,39 @@ export function useRecordSettlement(): UseMutationResult<
   });
 }
 
+/**
+ * Attribute MORE of a payout already recorded — the orders it covered
+ * that were not recognised at the time.
+ *
+ * Never sends an amount: the payout total is what the bank statement
+ * says. This moves cash from capital to the sellers it belongs to, and
+ * the server refuses to allocate past what actually landed.
+ */
+export function useAllocateSettlement(): UseMutationResult<
+  SettlementView,
+  Error,
+  {
+    settlementId: string;
+    lines: ReadonlyArray<{ orderId: string; settledInr: string }>;
+  }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ settlementId, lines }) =>
+      client.request<SettlementView>(
+        `/api/admin/courier-settlements/${encodeURIComponent(settlementId)}/allocate`,
+        { method: 'POST', body: { lines } },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-settlements'] });
+      // Balances moved: anything showing one is stale.
+      void qc.invalidateQueries({ queryKey: ['admin-seller-wallets'] });
+      void qc.invalidateQueries({ queryKey: ['admin-treasury'] });
+    },
+  });
+}
+
 // ───────── Withdrawals (R2) ─────────
 
 export function useWithdrawalsList(

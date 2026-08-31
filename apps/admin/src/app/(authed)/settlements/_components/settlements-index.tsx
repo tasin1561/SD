@@ -21,8 +21,9 @@ import {
   Th,
   Tr,
 } from '@skydrop/ui/components';
-import { useReconciliation, useSettlementsList } from '@/lib/ops-hooks';
+import { useReconciliation, useSettlementsList, type SettlementView } from '@/lib/ops-hooks';
 import { RecordSettlementModal } from './record-settlement-modal';
+import { AllocateSettlementModal } from './allocate-settlement-modal';
 import { usePermission } from '@/lib/use-permission';
 import { useRouter } from 'next/navigation';
 
@@ -41,6 +42,7 @@ import { useRouter } from 'next/navigation';
 export function SettlementsIndex(): ReactElement {
   const canWrite = usePermission('money.settlements.record');
   const [recording, setRecording] = useState(false);
+  const [allocating, setAllocating] = useState<SettlementView | null>(null);
   const [overdueAfterDays, setOverdueAfterDays] = useState(10);
 
   const recon = useReconciliation(overdueAfterDays);
@@ -187,6 +189,7 @@ export function SettlementsIndex(): ReactElement {
                 <Th align="right">Allocated</Th>
                 <Th align="right">Unallocated</Th>
                 <Th align="right">Orders</Th>
+                <Th />
               </Tr>
             </THead>
             <TBody>
@@ -224,6 +227,17 @@ export function SettlementsIndex(): ReactElement {
                     <Td align="right">
                       <Num value={s.lines.length} />
                     </Td>
+                    <Td align="right">
+                      {/* Only where there is money left to explain. An
+                          always-on action would invite allocating a
+                          fully-explained payout, which the server
+                          refuses anyway. */}
+                      {unallocated !== 0 && canWrite && (
+                        <Button variant="ghost" onClick={() => setAllocating(s)}>
+                          Allocate more
+                        </Button>
+                      )}
+                    </Td>
                   </Tr>
                 );
               })}
@@ -233,6 +247,17 @@ export function SettlementsIndex(): ReactElement {
       </Section>
 
       <RecordSettlementModal open={recording} onOpenChange={setRecording} />
+      {allocating !== null && (
+        <AllocateSettlementModal
+          settlementId={allocating.id}
+          reference={allocating.reference}
+          unallocatedInr={allocating.unallocatedInr}
+          open
+          onOpenChange={(next) => {
+            if (!next) setAllocating(null);
+          }}
+        />
+      )}
     </div>
   );
 }
