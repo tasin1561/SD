@@ -80,6 +80,12 @@ const RESOLVED_STATUSES: WithdrawalRequestStatus[] = [
   WithdrawalRequestStatus.REJECTED,
 ];
 
+/** Someone is still waiting for money in either of these. */
+const UNPAID_STATUSES: WithdrawalRequestStatus[] = [
+  WithdrawalRequestStatus.PENDING,
+  WithdrawalRequestStatus.APPROVED,
+];
+
 @Injectable()
 export class WithdrawalRequestService {
   constructor(
@@ -398,10 +404,10 @@ export class WithdrawalRequestService {
     const now = new Date();
     const breachCutoff = new Date(now.getTime() - slaHours * 3_600_000);
 
-    // Oldest FIRST when looking at the pending queue. Newest-first is
-    // right for history and wrong for work: it buries the request that
-    // has waited longest at the bottom of the list.
-    const pendingView = filters.status === WithdrawalRequestStatus.PENDING;
+    // Oldest FIRST on either unpaid view. Newest-first is right for
+    // history and wrong for work: it buries the request that has waited
+    // longest at the bottom of the list.
+    const pendingView = filters.status !== undefined && UNPAID_STATUSES.includes(filters.status);
 
     const [rows, total, breached, oldest] = await Promise.all([
       this.prisma.client.withdrawalRequest.findMany({
@@ -414,14 +420,14 @@ export class WithdrawalRequestService {
       this.prisma.client.withdrawalRequest.aggregate({
         where: {
           ...where,
-          status: WithdrawalRequestStatus.PENDING,
+          status: { in: UNPAID_STATUSES },
           createdAt: { lte: breachCutoff },
         },
         _count: { _all: true },
         _sum: { amountRequested: true },
       }),
       this.prisma.client.withdrawalRequest.findFirst({
-        where: { ...where, status: WithdrawalRequestStatus.PENDING },
+        where: { ...where, status: { in: UNPAID_STATUSES } },
         orderBy: { createdAt: 'asc' },
         select: { createdAt: true },
       }),
@@ -525,6 +531,102 @@ export class WithdrawalRequestService {
     return this.toView(updated);
   }
 
+  /**
+   * Say yes, before the money moves.
+   *
+   * APPROVED existed in the enum from the start and NOTHING ever wrote
+   * it — the only reference was a liabilities report reading it — so
+   * the page's own copy described a step that did not exist, and a
+   * seller's request had exactly two answers: paid, or refused.
+   *
+   * The decision and the payment are genuinely different acts, often by
+   * different people and often a day apart. Separating them lets the
+   * seller be told "yes, it is coming" the moment somebody decides,
+   * instead of hearing nothing until the transfer clears.
+   *
+   * Approving moves NO money and is not the last word: the request is
+   * still unpaid, still counts against the SLA, and can still be
+   * rejected if the transfer turns out to be impossible.
+   *
+   * It is OPTIONAL. `markPaid` accepts a PENDING request as well, so an
+   * operator who does both jobs in one sitting is not made to click
+   * twice. A step that can be skipped when it adds nothing is what
+   * keeps it meaningful when it is used.
+   */
+  async approve(requestId: string, staffId: string, note?: string): Promise<WithdrawalRequestView> {
+    const existing = await this.prisma.client.withdrawalRequest.findUnique({
+      where: { id: requestId },
+    });
+    if (!existing) {
+      throw new NotFoundException({
+        code: 'WITHDRAWAL_REQUEST_NOT_FOUND',
+        message: `Withdrawal request ${requestId} not found`,
+      });
+    }
+    if (existing.status !== WithdrawalRequestStatus.PENDING) {
+      throw new ConflictException({
+        code: 'WITHDRAWAL_REQUEST_NOT_PENDING',
+        message: `Withdrawal request ${requestId} is ${existing.status}, not pending`,
+      });
+    }
+
+    // Re-check the money NOW, not as it was at request time.
+    //
+    // The balance was validated when the seller asked, and everything
+    // that happens between then and here can lower it — order charges,
+    // a return fee, freight. Approving on the old number is promising
+    // money that is no longer there, and the seller has by then been
+    // told yes. Same subtraction the request guard and the auto-sweep
+    // use (WAL-3), so the three cannot disagree.
+    const available = await this.withdrawableBalance(existing.sellerId, existing.currency);
+    if (available.lt(existing.amountRequested)) {
+      throw new ConflictException({
+        code: 'WITHDRAWAL_BALANCE_NO_LONGER_COVERS',
+        message:
+          `This asked for ${existing.amountRequested.toFixed(2)} and only ` +
+          `${available.toFixed(2)} is withdrawable now. Reject it, or wait for the balance.`,
+      });
+    }
+
+    // Guarded on PENDING rather than on id: the read above is outside
+    // any transaction, so two admins approving at once would both write
+    // and the second would overwrite the first's decision. `count === 0`
+    // is Postgres saying somebody got there first.
+    const claimed = await this.prisma.client.withdrawalRequest.updateMany({
+      where: { id: requestId, status: WithdrawalRequestStatus.PENDING },
+      data: {
+        status: WithdrawalRequestStatus.APPROVED,
+        ...(note === undefined || note.trim() === '' ? {} : { note: note.trim() }),
+      },
+    });
+    if (claimed.count === 0) {
+      throw new ConflictException({
+        code: 'WITHDRAWAL_REQUEST_ALREADY_MOVED',
+        message: `Withdrawal request ${requestId} was decided by someone else first`,
+      });
+    }
+
+    const updated = await this.prisma.client.withdrawalRequest.findUniqueOrThrow({
+      where: { id: requestId },
+    });
+
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      staffUserId: staffId,
+      sellerId: existing.sellerId,
+      action: 'staff.withdrawal_request.approved',
+      entityType: 'withdrawal_request',
+      entityId: requestId,
+      metadata: {
+        amountRequested: existing.amountRequested.toFixed(2),
+        withdrawableAtApproval: available.toFixed(2),
+      },
+      severity: 'MEDIUM',
+    });
+
+    return this.toView(updated);
+  }
+
   async reject(requestId: string, staffId: string, reason: string): Promise<WithdrawalRequestView> {
     const existing = await this.prisma.client.withdrawalRequest.findUnique({
       where: { id: requestId },
@@ -595,13 +697,16 @@ export class WithdrawalRequestService {
     slaHours?: number,
     now: Date = new Date(),
   ): WithdrawalRequestView {
-    // Only a PENDING request is waiting. The age of a settled one is
-    // history, and reporting it as a wait would make every paid request
-    // look overdue forever.
-    const waitingHours =
-      row.status === WithdrawalRequestStatus.PENDING
-        ? Math.floor((now.getTime() - row.createdAt.getTime()) / 3_600_000)
-        : null;
+    // Waiting means UNPAID, which is PENDING or APPROVED. The seller
+    // was promised money, not a decision — an approved request whose
+    // transfer has not happened is still someone waiting, and counting
+    // only PENDING would let the queue clear itself by approving
+    // everything. The age of a settled request is history, and
+    // reporting it as a wait would make every paid one look overdue
+    // forever.
+    const waitingHours = UNPAID_STATUSES.includes(row.status)
+      ? Math.floor((now.getTime() - row.createdAt.getTime()) / 3_600_000)
+      : null;
     return {
       waitingHours,
       slaBreached: waitingHours !== null && slaHours !== undefined && waitingHours >= slaHours,

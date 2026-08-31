@@ -518,8 +518,14 @@ describe('the withdrawal queue measures the promise it makes', () => {
     // A queue two pages long hides its oldest entries exactly when it
     // matters most, so the count must not be of what is displayed.
     const args = aggregate.mock.calls[0]?.[0] as AnyArgs;
+    // Both unpaid states: someone approved and unpaid is still waiting,
+    // and counting only PENDING would let the queue be cleared by
+    // approving everything.
     expect(args['where']).toEqual(
-      expect.objectContaining({ status: 'PENDING', createdAt: expect.anything() }),
+      expect.objectContaining({
+        status: { in: ['PENDING', 'APPROVED'] },
+        createdAt: expect.anything(),
+      }),
     );
     expect(args).not.toHaveProperty('skip');
   });
@@ -538,5 +544,79 @@ describe('the withdrawal queue measures the promise it makes', () => {
     (prismaClient.systemSetting.findUnique as jest.Mock).mockResolvedValueOnce(null);
     const out = await svc.listForAdmin({});
     expect(out.slaHours).toBe(48);
+  });
+});
+
+/**
+ * APPROVED existed in the enum from the start and nothing ever wrote
+ * it, so a seller's request had exactly two answers: paid, or refused.
+ * The decision and the payment are different acts — often different
+ * people, often a day apart — and this is the first of them.
+ */
+describe('WithdrawalRequestService.approve', () => {
+  it('moves a PENDING request to APPROVED and audits it', async () => {
+    const { svc, claim, auditLog } = makeService({
+      existingRequest: makeRow({ status: 'PENDING' }),
+      balance: '5000',
+    });
+    await svc.approve('wr-1', 'staff-1');
+    expect(claim).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: 'PENDING' }),
+        data: expect.objectContaining({ status: 'APPROVED' }),
+      }),
+    );
+    expect(auditLog.mock.calls[0]?.[0]?.['action']).toBe('staff.withdrawal_request.approved');
+  });
+
+  it('re-checks the balance NOW, not as it was when the request was raised', async () => {
+    // Everything between the request and this moment can lower it —
+    // order charges, a return fee, freight. Approving on the old number
+    // promises money that is no longer there, and by then the seller
+    // has been told yes.
+    const { svc } = makeService({
+      existingRequest: makeRow({ status: 'PENDING', amountRequested: new Prisma.Decimal('4000') }),
+      balance: '1000',
+    });
+    await expect(svc.approve('wr-1', 'staff-1')).rejects.toMatchObject({
+      response: { code: 'WITHDRAWAL_BALANCE_NO_LONGER_COVERS' },
+    });
+  });
+
+  it('refuses anything that is not pending', async () => {
+    const { svc } = makeService({ existingRequest: makeRow({ status: 'PAID' }) });
+    await expect(svc.approve('wr-1', 'staff-1')).rejects.toMatchObject({
+      response: { code: 'WITHDRAWAL_REQUEST_NOT_PENDING' },
+    });
+  });
+
+  it('loses gracefully when another admin decided first', async () => {
+    // The status read is outside any transaction, so two admins
+    // approving at once would both write and the second would overwrite
+    // the first's decision.
+    const { svc } = makeService({
+      existingRequest: makeRow({ status: 'PENDING' }),
+      balance: '5000',
+      claimLoses: true,
+    });
+    await expect(svc.approve('wr-1', 'staff-1')).rejects.toMatchObject({
+      response: { code: 'WITHDRAWAL_REQUEST_ALREADY_MOVED' },
+    });
+  });
+
+  it('an APPROVED request is still WAITING — approving does not clear the queue', async () => {
+    // Counting only PENDING would let the queue be emptied by approving
+    // everything, while the seller waits exactly as long for money that
+    // has not moved.
+    const { svc, findMany } = makeService();
+    findMany.mockResolvedValueOnce([makeRow({ status: 'APPROVED' })]);
+    const out = await svc.listForAdmin({});
+    expect(out.items[0]?.waitingHours).not.toBeNull();
+  });
+
+  it('an APPROVED request can still be rejected — the money never moved', async () => {
+    const { svc, claim } = makeService({ existingRequest: makeRow({ status: 'APPROVED' }) });
+    await svc.reject('wr-1', 'staff-1', 'Bank details bounced');
+    expect(claim).toHaveBeenCalled();
   });
 });

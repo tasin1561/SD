@@ -30,6 +30,17 @@ export class MarkWithdrawalRequestPaidDto {
   linkedRemittanceId!: string;
 }
 
+export class ApproveWithdrawalRequestDto {
+  @ApiPropertyOptional({
+    description:
+      'Anything worth recording about the decision. Kept on the request, not sent anywhere.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  note?: string;
+}
+
 export class RejectWithdrawalRequestDto {
   @ApiProperty()
   @IsString()

@@ -510,6 +510,28 @@ export function useWithdrawalsList(
   });
 }
 
+/**
+ * Say yes before the money moves. Approving moves NO money — the
+ * request stays unpaid, still counts against the SLA, and can still be
+ * rejected. Optional: a PENDING request can be marked paid directly.
+ */
+export function useApproveWithdrawal(): UseMutationResult<
+  WithdrawalRequestView,
+  Error,
+  { requestId: string; note?: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requestId, note }) =>
+      client.request<WithdrawalRequestView>(`/api/admin/withdrawal-requests/${requestId}/approve`, {
+        method: 'PATCH',
+        body: note === undefined ? {} : { note },
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-withdrawals'] }),
+  });
+}
+
 export function useRejectWithdrawal(): UseMutationResult<
   WithdrawalRequestView,
   Error,

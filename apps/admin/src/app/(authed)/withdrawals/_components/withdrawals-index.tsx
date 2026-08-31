@@ -13,19 +13,25 @@ import {
   Select,
   SkeletonRows,
   Stat,
-  TBody,
   Table,
   TablePaginator,
+  TBody,
   Td,
-  THead,
   Th,
+  THead,
   Toolbar,
   Tr,
+  useToast,
   WithdrawalStatusBadge,
 } from '@skydrop/ui/components';
 import { WithdrawalRequestStatus } from '@skydrop/db';
 import { AlertTriangle } from 'lucide-react';
-import { useWithdrawalsList, type WithdrawalRequestView } from '@/lib/ops-hooks';
+import {
+  useApproveWithdrawal,
+  useWithdrawalsList,
+  type WithdrawalRequestView,
+} from '@/lib/ops-hooks';
+import { serverVerdict } from '@/lib/server-verdict';
 import { ResolveWithdrawalModal } from './resolve-withdrawal-modal';
 
 const PAGE_SIZE = 25;
@@ -56,6 +62,8 @@ export function WithdrawalsIndex(): ReactElement {
     .filter((w) => w.status === WithdrawalRequestStatus.PENDING)
     .reduce((sum, w) => sum + Number(w.amountRequested), 0);
   const autoRaised = items.filter((w) => w.requestedBy === 'SYSTEM').length;
+  const toast = useToast();
+  const approve = useApproveWithdrawal();
   const slaHours = list.data?.slaHours ?? 48;
   const breachedCount = list.data?.breachedCount ?? 0;
   const breachedInr = list.data?.breachedInr ?? '0.00';
@@ -225,9 +233,38 @@ export function WithdrawalsIndex(): ReactElement {
                 <Td align="right">
                   {w.status === WithdrawalRequestStatus.PENDING ||
                   w.status === WithdrawalRequestStatus.APPROVED ? (
-                    <Button variant="secondary" size="sm" onClick={() => setSelected(w)}>
-                      Resolve
-                    </Button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      {/* Approving says yes without moving money — the
+                          seller hears the decision now rather than
+                          waiting for the transfer to clear. It is
+                          deliberately NOT required: an operator doing
+                          both jobs in one sitting goes straight to
+                          Resolve, which is why the step still means
+                          something when it is used. */}
+                      {w.status === WithdrawalRequestStatus.PENDING && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={approve.isPending}
+                          onClick={() => {
+                            approve.mutate(
+                              { requestId: w.id },
+                              {
+                                onSuccess: () => toast.success('Approved — now pay and link it.'),
+                                // FE-2: the server owns the rules, including
+                                // "the balance no longer covers this".
+                                onError: (err) => toast.error(serverVerdict(err)),
+                              },
+                            );
+                          }}
+                        >
+                          Approve
+                        </Button>
+                      )}
+                      <Button variant="secondary" size="sm" onClick={() => setSelected(w)}>
+                        Resolve
+                      </Button>
+                    </div>
                   ) : w.linkedRemittanceId !== null ? (
                     <span className="text-text-faint text-xs">
                       Remittance <Ident value={w.linkedRemittanceId.slice(0, 8)} />

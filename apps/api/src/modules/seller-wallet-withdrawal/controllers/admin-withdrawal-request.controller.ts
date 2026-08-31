@@ -17,6 +17,7 @@ import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import {
   MarkWithdrawalRequestPaidDto,
+  ApproveWithdrawalRequestDto,
   RejectWithdrawalRequestDto,
 } from '../dto/withdrawal-request.dto';
 import {
@@ -61,6 +62,24 @@ export class AdminWithdrawalRequestController {
       ...(page === undefined ? {} : { page: Number(page) }),
       ...(pageSize === undefined ? {} : { pageSize: Number(pageSize) }),
     });
+  }
+
+  @Patch(':requestId/approve')
+  @RequirePermissions('money.withdrawals.review')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Say yes before the money moves. Moves NO money and is not the last word — the request ' +
+      'stays unpaid, still counts against the SLA, and can still be rejected. Optional: ' +
+      'marking a PENDING request paid directly is still allowed. Refuses ' +
+      'WITHDRAWAL_BALANCE_NO_LONGER_COVERS when the balance has fallen since the request.',
+  })
+  approve(
+    @Param('requestId') requestId: string,
+    @Body() body: ApproveWithdrawalRequestDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): Promise<WithdrawalRequestView> {
+    return this.svc.approve(requestId, staff.id, body.note);
   }
 
   @Patch(':requestId/paid')
