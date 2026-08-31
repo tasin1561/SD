@@ -474,6 +474,18 @@ export class WithdrawalRequestService {
         message: `Withdrawal request ${requestId} is already ${existing.status}`,
       });
     }
+    // Approval FIRST, always. Paying straight from PENDING skipped the
+    // one moment where the balance is re-checked against what the
+    // seller is about to be sent — so the decision and the transfer
+    // could rest on a figure that had moved. Two steps, in order, and
+    // the queue on the remittances page is exactly the approved ones
+    // waiting for money.
+    if (existing.status !== WithdrawalRequestStatus.APPROVED) {
+      throw new ConflictException({
+        code: 'WITHDRAWAL_REQUEST_NOT_APPROVED',
+        message: `Approve request ${requestId} before recording the payment.`,
+      });
+    }
     const remittance = await this.prisma.client.remittance.findUnique({
       where: { id: linkedRemittanceId },
       select: { id: true, sellerId: true },
@@ -548,10 +560,12 @@ export class WithdrawalRequestService {
    * still unpaid, still counts against the SLA, and can still be
    * rejected if the transfer turns out to be impossible.
    *
-   * It is OPTIONAL. `markPaid` accepts a PENDING request as well, so an
-   * operator who does both jobs in one sitting is not made to click
-   * twice. A step that can be skipped when it adds nothing is what
-   * keeps it meaningful when it is used.
+   * It is REQUIRED: `markPaid` refuses anything that is not APPROVED.
+   * Paying straight from PENDING skipped the one moment where the
+   * balance is re-checked against what the seller is about to be sent,
+   * so the decision and the transfer could rest on a figure that had
+   * moved between them. It also makes the remittance queue meaningful —
+   * "approved and unpaid" is exactly the list of people owed money.
    */
   async approve(requestId: string, staffId: string, note?: string): Promise<WithdrawalRequestView> {
     const existing = await this.prisma.client.withdrawalRequest.findUnique({

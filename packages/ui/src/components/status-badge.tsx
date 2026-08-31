@@ -14,6 +14,7 @@ import {
   orderStatusKind,
   shipmentStatusKind,
   statusLabel,
+  withdrawalStatusLabel,
   stockUnitStatusKind,
   ticketStatusKind,
   withdrawalStatusKind,
@@ -105,10 +106,18 @@ export function FreightStatusBadge({
 /** R2 seller withdrawal request. */
 export function WithdrawalStatusBadge({
   status,
+  audience = 'staff',
 }: {
   readonly status: WithdrawalRequestStatus;
+  /** Sellers read a different vocabulary — see `withdrawalStatusLabel`. */
+  readonly audience?: 'staff' | 'seller';
 }): ReactElement {
-  return <StatusBadge kind={withdrawalStatusKind(status)} label={statusLabel(status)} />;
+  return (
+    <StatusBadge
+      kind={withdrawalStatusKind(status)}
+      label={withdrawalStatusLabel(status, audience)}
+    />
+  );
 }
 
 /** R5 early-reservation (at-placement hold) review. */

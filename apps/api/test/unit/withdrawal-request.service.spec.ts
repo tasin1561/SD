@@ -322,7 +322,9 @@ describe('WithdrawalRequestService.create', () => {
 
 describe('WithdrawalRequestService.markPaid', () => {
   it('links the remittance and marks PAID + audits', async () => {
-    const { svc, claim, auditLog } = makeService();
+    const { svc, claim, auditLog } = makeService({
+      existingRequest: makeRow({ status: 'APPROVED' }),
+    });
     const result = await svc.markPaid('wr-1', 'staff-1', 'rem-1');
     expect(result.status).toBe(WithdrawalRequestStatus.PAID);
     expect(claim).toHaveBeenCalledWith(
@@ -367,8 +369,22 @@ describe('WithdrawalRequestService.markPaid', () => {
     });
   });
 
+  it('refuses to pay a request nobody approved', async () => {
+    // Paying straight from PENDING skipped the one moment where the
+    // balance is re-checked against what the seller is about to be
+    // sent. Two steps, in order.
+    const { svc, claim } = makeService({ existingRequest: makeRow({ status: 'PENDING' }) });
+    await expect(svc.markPaid('wr-1', 'staff-1', 'rem-1')).rejects.toMatchObject({
+      response: { code: 'WITHDRAWAL_REQUEST_NOT_APPROVED' },
+    });
+    expect(claim).not.toHaveBeenCalled();
+  });
+
   it('404 REMITTANCE_NOT_FOUND when the linked remittance does not exist', async () => {
-    const { svc, claim } = makeService({ remittance: null });
+    const { svc, claim } = makeService({
+      existingRequest: makeRow({ status: 'APPROVED' }),
+      remittance: null,
+    });
     await expect(svc.markPaid('wr-1', 'staff-1', 'missing-rem')).rejects.toMatchObject({
       response: { code: 'REMITTANCE_NOT_FOUND' },
     });
@@ -376,7 +392,10 @@ describe('WithdrawalRequestService.markPaid', () => {
   });
 
   it('rejects REMITTANCE_SELLER_MISMATCH when the remittance belongs to a different seller', async () => {
-    const { svc, claim } = makeService({ remittance: { id: 'rem-1', sellerId: 'seller-OTHER' } });
+    const { svc, claim } = makeService({
+      existingRequest: makeRow({ status: 'APPROVED' }),
+      remittance: { id: 'rem-1', sellerId: 'seller-OTHER' },
+    });
     await expect(svc.markPaid('wr-1', 'staff-1', 'rem-1')).rejects.toMatchObject({
       response: { code: 'REMITTANCE_SELLER_MISMATCH' },
     });
@@ -410,7 +429,10 @@ describe('WithdrawalRequestService.reject', () => {
    * its own kind of wrong.
    */
   it('a concurrent second resolver is refused rather than overwriting the first', async () => {
-    const { svc } = makeService({ claimLoses: true });
+    const { svc } = makeService({
+      existingRequest: makeRow({ status: 'APPROVED' }),
+      claimLoses: true,
+    });
     await expect(svc.markPaid('wr-1', 'staff-2', 'rem-2')).rejects.toMatchObject({
       response: { code: 'WITHDRAWAL_REQUEST_ALREADY_RESOLVED' },
     });

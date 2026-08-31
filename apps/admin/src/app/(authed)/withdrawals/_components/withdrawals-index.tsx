@@ -234,13 +234,11 @@ export function WithdrawalsIndex(): ReactElement {
                   {w.status === WithdrawalRequestStatus.PENDING ||
                   w.status === WithdrawalRequestStatus.APPROVED ? (
                     <div className="flex items-center justify-end gap-1.5">
-                      {/* Approving says yes without moving money — the
-                          seller hears the decision now rather than
-                          waiting for the transfer to clear. It is
-                          deliberately NOT required: an operator doing
-                          both jobs in one sitting goes straight to
-                          Resolve, which is why the step still means
-                          something when it is used. */}
+                      {/* Approve first, then pay. Resolve does not
+                          appear on a pending row: paying straight from
+                          PENDING skipped the one moment where the
+                          balance is re-checked against what the seller
+                          is about to be sent. */}
                       {w.status === WithdrawalRequestStatus.PENDING && (
                         <Button
                           variant="ghost"
@@ -261,9 +259,11 @@ export function WithdrawalsIndex(): ReactElement {
                           Approve
                         </Button>
                       )}
-                      <Button variant="secondary" size="sm" onClick={() => setSelected(w)}>
-                        Resolve
-                      </Button>
+                      {w.status === WithdrawalRequestStatus.APPROVED && (
+                        <Button variant="secondary" size="sm" onClick={() => setSelected(w)}>
+                          Resolve
+                        </Button>
+                      )}
                     </div>
                   ) : w.linkedRemittanceId !== null ? (
                     <span className="text-text-faint text-xs">

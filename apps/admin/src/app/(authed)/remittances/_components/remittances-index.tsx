@@ -10,11 +10,18 @@ import {
   Ident,
   Money,
   PageHeader,
+  Section,
   SkeletonRows,
+  TBody,
+  THead,
   Table,
+  Td,
+  Th,
+  Tr,
   useToast,
 } from '@skydrop/ui/components';
 import { useRemittancesList } from '@/lib/api-hooks';
+import { useWithdrawalsList } from '@/lib/ops-hooks';
 import { RemittanceFormModal } from './remittance-form-modal';
 import { usePermission } from '@/lib/use-permission';
 
@@ -24,9 +31,20 @@ import { usePermission } from '@/lib/use-permission';
  */
 export function RemittancesIndex(): ReactElement {
   const [creating, setCreating] = useState(false);
+  const [payingSellerId, setPayingSellerId] = useState<string | null>(null);
   const canWrite = usePermission('money.remittances.manage');
   const toast = useToast();
   const list = useRemittancesList({ page: 1, pageSize: 50 });
+  // Approved and unpaid: exactly the people owed money right now. It
+  // belongs HERE rather than only on Withdrawals, because this is the
+  // page somebody opens when they are about to make transfers — a
+  // to-do list is worth little on a screen nobody visits to do the
+  // work.
+  const owed = useWithdrawalsList(
+    { status: 'APPROVED', page: 1, pageSize: 50 },
+    { enabled: canWrite },
+  );
+  const owedItems = owed.data?.items ?? [];
 
   return (
     <div>
@@ -41,6 +59,60 @@ export function RemittancesIndex(): ReactElement {
           ) : null
         }
       />
+
+      {owedItems.length > 0 && (
+        <Section title="Approved, waiting to be paid">
+          <Card>
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>Seller</Th>
+                  <Th align="right">Amount</Th>
+                  <Th>Waiting</Th>
+                  <Th align="right" />
+                </Tr>
+              </THead>
+              <TBody>
+                {owedItems.map((w) => (
+                  <Tr key={w.id}>
+                    <Td>
+                      <Link href={`/sellers/${w.sellerId}`} className="text-accent hover:underline">
+                        <Ident value={`${w.sellerId.slice(0, 8)}…`} />
+                      </Link>
+                    </Td>
+                    <Td align="right">
+                      <Money amount={w.amountRequested} currency={w.currency} />
+                    </Td>
+                    <Td
+                      className={
+                        w.slaBreached
+                          ? 'text-[var(--color-critical)] text-xs'
+                          : 'text-text-muted text-xs'
+                      }
+                    >
+                      {w.waitingHours ?? 0}h
+                    </Td>
+                    <Td align="right">
+                      {/* Prefills the seller; the amount stays typed,
+                          because what leaves the bank is the operator's
+                          fact and a remittance can legitimately differ
+                          from the request. Linking it back to the
+                          request is still done on Withdrawals. */}
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setPayingSellerId(w.sellerId)}
+                      >
+                        Pay
+                      </Button>
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </Card>
+        </Section>
+      )}
 
       {list.isLoading ? (
         <Card>
@@ -122,6 +194,18 @@ export function RemittancesIndex(): ReactElement {
           onSuccess={() => {
             setCreating(false);
             toast.success('Remittance recorded.');
+          }}
+        />
+      )}
+
+      {payingSellerId !== null && (
+        <RemittanceFormModal
+          initialSellerId={payingSellerId}
+          onClose={() => setPayingSellerId(null)}
+          onSuccess={() => {
+            setPayingSellerId(null);
+            void owed.refetch();
+            toast.success('Recorded. Link it to the request on Withdrawals to close it.');
           }}
         />
       )}

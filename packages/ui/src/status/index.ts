@@ -340,6 +340,44 @@ export function statusLabel(
 }
 
 /**
+ * A withdrawal, in the words of whoever is reading it.
+ *
+ * The same four states answer two different questions. Staff are
+ * working a queue — "has this been decided, does it need paying" — so
+ * the enum names are right for them. A seller is asking where their
+ * money is, and "Approved" does not answer it: they were approved AND
+ * still have nothing. "Payment in process" says what is actually
+ * happening.
+ *
+ * One function rather than a label per app, so the two vocabularies
+ * cannot drift into describing the same state differently — which is
+ * how a seller and an agent end up disagreeing on the phone.
+ */
+export function withdrawalStatusLabel(
+  status: WithdrawalRequestStatus,
+  audience: 'staff' | 'seller' = 'staff',
+): string {
+  switch (status) {
+    case WithdrawalRequestStatus.PENDING:
+      return audience === 'seller' ? 'Requested' : 'Pending';
+    case WithdrawalRequestStatus.APPROVED:
+      // Not "Approved" for the seller: they have been approved and
+      // still have no money, so the word answers the wrong question.
+      return audience === 'seller' ? 'Payment in process' : 'Approved';
+    case WithdrawalRequestStatus.PAID:
+      return audience === 'seller' ? 'Paid' : 'Paid';
+    case WithdrawalRequestStatus.REJECTED:
+      // "Declined" to the person it happened to; "Rejected" is what the
+      // queue did.
+      return audience === 'seller' ? 'Declined' : 'Rejected';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled WithdrawalRequestStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/**
  * A beta invite request → kind.
  *
  * NEW is 'pending' rather than 'draft': somebody is waiting on a reply,

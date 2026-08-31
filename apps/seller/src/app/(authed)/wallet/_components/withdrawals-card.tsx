@@ -99,7 +99,7 @@ export function WithdrawalsCard({
                     <Money amount={w.amountRequested} currency={w.currency} />
                   </Td>
                   <Td>
-                    <WithdrawalStatusBadge status={w.status} />
+                    <WithdrawalStatusBadge status={w.status} audience="seller" />
                   </Td>
                   <Td className="text-text-muted text-xs">
                     {w.rejectionReason ??
