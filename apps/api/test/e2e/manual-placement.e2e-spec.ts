@@ -260,7 +260,12 @@ describe('Manual courier placement (e2e)', () => {
     expect(replacement.isManualCourier).toBe(true);
     expect(replacement.courierCode).toBe('manual');
     expect(replacement.awbNumber).toBe('BLUEDART-AWB-001');
-    expect(replacement.serviceType).toBe('Bluedart');
+    // The carrier has its own column now. This asserted
+    // `serviceType === 'Bluedart'` — the old overload, where one column
+    // answered two questions and filling in a real service type threw
+    // the carrier away.
+    expect(replacement.manualCourierName).toBe('Bluedart');
+    expect(replacement.serviceType).toBeNull();
 
     // Model A: the DISPATCH movement decremented qtyOnHand, keyed to the
     // live replacement shipment (NOT the superseded old one).
@@ -286,12 +291,12 @@ describe('Manual courier placement (e2e)', () => {
     await request(h.baseUrl)
       .post(`/admin/courier/manual-placement/shipments/${replacementShipmentId}/place-awb`)
       .set(staffAuth)
-      .send({ awbNumber: 'BLUEDART-AWB-002' })
+      .send({ awbNumber: 'BLUEDART-AWB-002', courierName: 'Bluedart' })
       .expect(200);
     const second = await request(h.baseUrl)
       .post(`/admin/courier/manual-placement/shipments/${replacementShipmentId}/place-awb`)
       .set(staffAuth)
-      .send({ awbNumber: 'BLUEDART-AWB-002' })
+      .send({ awbNumber: 'BLUEDART-AWB-002', courierName: 'Bluedart' })
       .expect(200);
     expect(second.body.alreadyPlaced).toBe(true);
 
@@ -370,7 +375,7 @@ describe('Manual courier placement (e2e)', () => {
     await request(h.baseUrl)
       .post(`/admin/courier/manual-placement/shipments/${replacementShipmentId}/place-awb`)
       .set({ Authorization: `Bearer ${aLogin.body.accessToken}` })
-      .send({ awbNumber: 'BLUEDART-AWB-003' })
+      .send({ awbNumber: 'BLUEDART-AWB-003', courierName: 'Bluedart' })
       .expect(403);
   });
 
@@ -390,7 +395,7 @@ describe('Manual courier placement (e2e)', () => {
     await request(h.baseUrl)
       .post(`/admin/courier/manual-placement/shipments/${replacementShipmentId}/place-awb`)
       .set({ Authorization: `Bearer ${mLogin.body.accessToken}` })
-      .send({ awbNumber: 'BLUEDART-AWB-004' })
+      .send({ awbNumber: 'BLUEDART-AWB-004', courierName: 'Bluedart' })
       .expect(200);
 
     const order = await h.prisma.order.findUniqueOrThrow({ where: { id: orderId } });

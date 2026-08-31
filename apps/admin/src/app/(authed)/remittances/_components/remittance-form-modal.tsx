@@ -79,7 +79,18 @@ export function RemittanceFormModal({
     return typed === Number(settling.amountInr) ? null : typed.toFixed(2);
   })();
 
-  const [fxRate, setFxRate] = useState('1.38'); // sensible BDT/INR seed
+  // Seeded from the rate the SYSTEM holds (M16 `FxRateService`, the same
+  // one the balance panel above converts with), not from a number typed
+  // into this file. It was hardcoded '1.38' while the panel two inches
+  // higher was converting at the real rate — the operator was shown two
+  // different rates on one screen and the wrong one was the editable
+  // one, so a payout could be booked at a rate nobody set.
+  //
+  // Still EDITABLE, deliberately: what the bank actually achieved is the
+  // operator's fact, and TRE-5 records the gap against our quote as
+  // FX_SPREAD rather than pretending the quote was the outcome.
+  const [fxRate, setFxRate] = useState('');
+  const [fxTouched, setFxTouched] = useState(false);
   const [bankReference, setBankReference] = useState('');
   const [paidFromAccountId, setPaidFromAccountId] = useState('');
   const [paidAt, setPaidAt] = useState(toLocalDt(new Date()));
@@ -110,6 +121,24 @@ export function RemittanceFormModal({
       setFxRate('1');
     }
   }, [sourceCurrency, currency, fxRate]);
+
+  // The system rate for this pair, as carried on the converted balance
+  // line. Null until the balance loads, and absent entirely if no rate
+  // is configured — in which case the field stays empty and the
+  // operator supplies one rather than being handed a guess.
+  const systemFxRate = useMemo(() => {
+    if (sourceCurrency === currency) return null;
+    const converted = (balance.data?.balances ?? []).find(
+      (b) => b.currency === currency && b.isConverted,
+    );
+    return converted?.fxRate ?? null;
+  }, [balance.data, sourceCurrency, currency]);
+
+  useEffect(() => {
+    // Seed once, and never over a number the operator has typed.
+    if (fxTouched || sourceCurrency === currency) return;
+    if (systemFxRate !== null && fxRate === '') setFxRate(String(systemFxRate));
+  }, [systemFxRate, fxTouched, fxRate, sourceCurrency, currency]);
 
   // Derived destination amount = source × fx (always recomputed).
   const destAmount = useMemo(() => {
@@ -288,7 +317,11 @@ export function RemittanceFormModal({
             hint={
               sourceCurrency === currency
                 ? 'Same currency — locked at 1'
-                : `1 ${sourceCurrency} = X ${currency}`
+                : systemFxRate === null
+                  ? `1 ${sourceCurrency} = X ${currency} — no system rate is set for this pair, so type the one the bank gave you`
+                  : fxTouched && fxRate !== String(systemFxRate)
+                    ? `1 ${sourceCurrency} = X ${currency} · system rate is ${systemFxRate} — recorded as an FX spread`
+                    : `1 ${sourceCurrency} = X ${currency} · from the system rate (${systemFxRate})`
             }
             required
           >
@@ -297,7 +330,10 @@ export function RemittanceFormModal({
               min={0.000001}
               step="0.000001"
               value={fxRate}
-              onChange={(e) => setFxRate(e.target.value)}
+              onChange={(e) => {
+                setFxTouched(true);
+                setFxRate(e.target.value);
+              }}
               disabled={sourceCurrency === currency}
               required
             />
