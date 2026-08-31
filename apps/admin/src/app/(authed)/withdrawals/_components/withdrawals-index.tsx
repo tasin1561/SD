@@ -176,6 +176,7 @@ export function WithdrawalsIndex(): ReactElement {
               <Th>Requested</Th>
               <Th>Seller</Th>
               <Th align="right">Amount</Th>
+              <Th align="right">Wallet balance</Th>
               <Th>Source</Th>
               <Th>Status</Th>
               <Th align="right">Actions</Th>
@@ -216,6 +217,31 @@ export function WithdrawalsIndex(): ReactElement {
                 </Td>
                 <Td align="right">
                   <Money amount={w.amountRequested} currency={w.currency} />
+                </Td>
+                {/* The money it comes out of, beside the money asked
+                    for. Approving is a judgement about whether the
+                    wallet covers it, and sending somebody to another
+                    page for that is how a request gets approved on a
+                    balance nobody looked at. */}
+                <Td align="right">
+                  {w.sellerBalanceInr === null ? (
+                    <span className="text-text-faint">—</span>
+                  ) : (
+                    <span
+                      className={
+                        Number(w.sellerBalanceInr) < Number(w.amountRequested)
+                          ? 'text-[var(--color-critical)]'
+                          : 'text-text-muted'
+                      }
+                      title={
+                        Number(w.sellerBalanceInr) < Number(w.amountRequested)
+                          ? 'Less than the amount requested'
+                          : undefined
+                      }
+                    >
+                      <Money amount={w.sellerBalanceInr} currency="INR" />
+                    </span>
+                  )}
                 </Td>
                 <Td className="text-text-muted text-xs">
                   {w.requestedBy === 'SYSTEM' ? 'Auto-withdraw' : 'Seller'}
@@ -272,10 +298,27 @@ export function WithdrawalsIndex(): ReactElement {
                           Reject
                         </Button>
                       )}
+                      {/* An approved request can still be rejected —
+                          the money has not moved, and a bounced
+                          transfer is a real thing. */}
                       {w.status === WithdrawalRequestStatus.APPROVED && (
-                        <Button variant="secondary" size="sm" onClick={() => setSelected(w)}>
-                          Resolve
-                        </Button>
+                        <>
+                          <Button variant="ghost" size="sm" onClick={() => setSelected(w)}>
+                            Reject
+                          </Button>
+                          {/* Straight to where the payment happens.
+                              "Resolve" used to open a form asking for a
+                              remittance ID that does not exist yet —
+                              you have to record the payment first, and
+                              that is on Remittances, where this row is
+                              already listed with a Pay button that
+                              closes the request on success. */}
+                          <Link href="/remittances">
+                            <Button variant="secondary" size="sm">
+                              Pay on Remittances →
+                            </Button>
+                          </Link>
+                        </>
                       )}
                     </div>
                   ) : w.linkedRemittanceId !== null ? (

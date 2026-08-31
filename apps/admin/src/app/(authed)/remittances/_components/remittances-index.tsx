@@ -21,7 +21,8 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import { useRemittancesList } from '@/lib/api-hooks';
-import { useWithdrawalsList } from '@/lib/ops-hooks';
+import { useMarkWithdrawalPaid, useWithdrawalsList } from '@/lib/ops-hooks';
+import { serverVerdict } from '@/lib/server-verdict';
 import { RemittanceFormModal } from './remittance-form-modal';
 import { usePermission } from '@/lib/use-permission';
 
@@ -31,7 +32,12 @@ import { usePermission } from '@/lib/use-permission';
  */
 export function RemittancesIndex(): ReactElement {
   const [creating, setCreating] = useState(false);
-  const [payingSellerId, setPayingSellerId] = useState<string | null>(null);
+  // The REQUEST being paid, not just its seller: recording the payment
+  // and closing the request it settles is one act, and making an
+  // operator copy a remittance id back to another screen is how a paid
+  // seller stays "awaiting review" for a week.
+  const [paying, setPaying] = useState<{ sellerId: string; requestId: string } | null>(null);
+  const markPaid = useMarkWithdrawalPaid();
   const canWrite = usePermission('money.remittances.manage');
   const toast = useToast();
   const list = useRemittancesList({ page: 1, pageSize: 50 });
@@ -40,9 +46,15 @@ export function RemittancesIndex(): ReactElement {
   // page somebody opens when they are about to make transfers — a
   // to-do list is worth little on a screen nobody visits to do the
   // work.
+  // Paying one of these does TWO things — records the remittance and
+  // closes the withdrawal — so it needs both permissions. Gated rather
+  // than shown-and-refused: the page itself only asks for `money.view`,
+  // so without this an operator saw a Pay button that 403s.
+  const canCloseWithdrawals = usePermission('money.withdrawals.review');
+  const canPayApproved = canWrite && canCloseWithdrawals;
   const owed = useWithdrawalsList(
     { status: 'APPROVED', page: 1, pageSize: 50 },
-    { enabled: canWrite },
+    { enabled: canPayApproved },
   );
   const owedItems = owed.data?.items ?? [];
 
@@ -60,7 +72,7 @@ export function RemittancesIndex(): ReactElement {
         }
       />
 
-      {owedItems.length > 0 && (
+      {canPayApproved && owedItems.length > 0 && (
         <Section title="Approved, waiting to be paid">
           <Card>
             <Table>
@@ -68,6 +80,7 @@ export function RemittancesIndex(): ReactElement {
                 <Tr>
                   <Th>Seller</Th>
                   <Th align="right">Amount</Th>
+                  <Th align="right">Wallet balance</Th>
                   <Th>Waiting</Th>
                   <Th align="right" />
                 </Tr>
@@ -101,7 +114,7 @@ export function RemittancesIndex(): ReactElement {
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => setPayingSellerId(w.sellerId)}
+                        onClick={() => setPaying({ sellerId: w.sellerId, requestId: w.id })}
                       >
                         Pay
                       </Button>
@@ -198,14 +211,30 @@ export function RemittancesIndex(): ReactElement {
         />
       )}
 
-      {payingSellerId !== null && (
+      {paying !== null && (
         <RemittanceFormModal
-          initialSellerId={payingSellerId}
-          onClose={() => setPayingSellerId(null)}
-          onSuccess={() => {
-            setPayingSellerId(null);
+          initialSellerId={paying.sellerId}
+          onClose={() => setPaying(null)}
+          onSuccess={(created) => {
+            const requestId = paying.requestId;
+            setPaying(null);
             void owed.refetch();
-            toast.success('Recorded. Link it to the request on Withdrawals to close it.');
+            // Link it straight away. The remittance is the money; the
+            // request is what it settles, and the operator has just
+            // told us both in one action.
+            markPaid.mutate(
+              { requestId, linkedRemittanceId: created.id },
+              {
+                onSuccess: () => toast.success('Paid, and the request is closed.'),
+                // The remittance IS recorded even if the link fails —
+                // saying otherwise would send somebody looking for
+                // money that did move. FE-2: the server's words.
+                onError: (err) =>
+                  toast.error(
+                    `Remittance recorded, but the request stayed open — ${serverVerdict(err)}`,
+                  ),
+              },
+            );
           }}
         />
       )}

@@ -33,6 +33,18 @@ export interface WithdrawalRequestView {
    * money should not have to open another page to learn whose it is.
    */
   readonly sellerName: string | null;
+  /**
+   * What is in that seller's wallet right now, in the request's own
+   * currency. Null when they have no balance row yet.
+   *
+   * Shown beside the amount because approving is a judgement about
+   * whether the wallet covers it, and making somebody open another
+   * page to find that out is how a request gets approved on a balance
+   * nobody looked at. Read from the MAINTAINED balance table, which
+   * `applyEntry` writes inside the same transaction as the entry, so it
+   * cannot lag behind the ledger (WAL-7).
+   */
+  readonly sellerBalanceInr: string | null;
   readonly currency: Currency;
   readonly amountRequested: string;
   readonly status: WithdrawalRequestStatus;
@@ -440,8 +452,30 @@ export class WithdrawalRequestService {
       }),
     ]);
 
+    // One read for the whole page. The alternative — resolving a
+    // balance per row — is a query per line, and this list is the one
+    // screen somebody scrolls when deciding what to pay.
+    const sellerIds = [...new Set(rows.map((r) => r.sellerId))];
+    const balances =
+      sellerIds.length === 0
+        ? []
+        : await this.prisma.client.sellerWalletBalance.findMany({
+            where: { sellerId: { in: sellerIds }, currency: Currency.INR },
+            select: { sellerId: true, balance: true },
+          });
+    const balanceBySeller = new Map(balances.map((b) => [b.sellerId, b.balance]));
+
     return {
-      items: rows.map((r) => this.toView(r, slaHours, now)),
+      items: rows.map((r) => ({
+        ...this.toView(r, slaHours, now),
+        // INR only: the balance table is per currency and every
+        // withdrawal today is rupees. A row in another currency shows
+        // nothing rather than a figure from the wrong ledger.
+        sellerBalanceInr:
+          r.currency === Currency.INR
+            ? (balanceBySeller.get(r.sellerId)?.toFixed(2) ?? '0.00')
+            : null,
+      })),
       total,
       page,
       pageSize,
@@ -737,6 +771,9 @@ export class WithdrawalRequestService {
       id: row.id,
       sellerId: row.sellerId,
       sellerName: row.seller?.companyName ?? null,
+      // Filled in by the list, which reads every seller's balance in ONE
+      // query; a per-row lookup would be a query per line on the page.
+      sellerBalanceInr: null,
       currency: row.currency,
       amountRequested: row.amountRequested.toFixed(2),
       status: row.status,

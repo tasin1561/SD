@@ -149,6 +149,8 @@ export interface WithdrawalRequestView {
   readonly sellerId: string;
   /** Who is asking, in words rather than a uuid. */
   readonly sellerName: string | null;
+  /** What is in their wallet right now — the money this comes out of. */
+  readonly sellerBalanceInr: string | null;
   readonly currency: Currency;
   readonly amountRequested: string;
   readonly status: WithdrawalRequestStatus;

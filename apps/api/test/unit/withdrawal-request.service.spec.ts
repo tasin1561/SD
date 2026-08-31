@@ -49,6 +49,8 @@ function makeService(
     slaHours?: number;
     /** How many pending requests are past it. */
     breachedCount?: number;
+    /** What is in the seller's wallet, for the list's balance column. */
+    sellerBalance?: string;
     /** When the longest-waiting pending request was raised. */
     oldestPendingAt?: Date;
   } = {},
@@ -127,6 +129,16 @@ function makeService(
     // no per-seller answer.
     systemSetting: {
       findUnique: jest.fn(async () => ({ valueInt: opts.slaHours ?? 48 })),
+    },
+    // The wallet balance shown beside each request. Read once for the
+    // whole page from the MAINTAINED table, which applyEntry writes in
+    // the same transaction as the entry (WAL-7).
+    sellerWalletBalance: {
+      findMany: jest.fn(async () =>
+        opts.sellerBalance === undefined
+          ? []
+          : [{ sellerId: 'seller-1', balance: new Prisma.Decimal(opts.sellerBalance) }],
+      ),
     },
     remittance: { findUnique: remittanceFindUnique },
     $transaction: <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient),
@@ -640,5 +652,47 @@ describe('WithdrawalRequestService.approve', () => {
     const { svc, claim } = makeService({ existingRequest: makeRow({ status: 'APPROVED' }) });
     await svc.reject('wr-1', 'staff-1', 'Bank details bounced');
     expect(claim).toHaveBeenCalled();
+  });
+});
+
+/**
+ * The wallet balance beside the amount asked for.
+ *
+ * Approving is a judgement about whether the wallet covers it, and
+ * sending an operator to another page for that is how a request gets
+ * approved on a balance nobody looked at.
+ */
+describe('the admin queue shows what the money comes out of', () => {
+  it('attaches each seller’s balance to their request', async () => {
+    const { svc, findMany } = makeService({ sellerBalance: '7500.00' });
+    findMany.mockResolvedValueOnce([makeRow({ sellerId: 'seller-1' })]);
+    const out = await svc.listForAdmin({});
+    expect(out.items[0]?.sellerBalanceInr).toBe('7500.00');
+  });
+
+  it('reads every seller on the page in ONE query, not one per row', async () => {
+    // A query per line is fine on a page with one row and wrong on the
+    // screen somebody scrolls when deciding what to pay.
+    const { svc, findMany, prismaClient } = makeService({ sellerBalance: '100.00' });
+    findMany.mockResolvedValueOnce([
+      makeRow({ id: 'a', sellerId: 'seller-1' }),
+      makeRow({ id: 'b', sellerId: 'seller-1' }),
+      makeRow({ id: 'c', sellerId: 'seller-2' }),
+    ]);
+    await svc.listForAdmin({});
+    const balanceQuery = prismaClient.sellerWalletBalance.findMany as jest.Mock;
+    expect(balanceQuery).toHaveBeenCalledTimes(1);
+    // De-duplicated: two rows for one seller ask for that seller once.
+    const where = (balanceQuery.mock.calls[0]?.[0] as AnyArgs)['where'] as AnyArgs;
+    expect((where['sellerId'] as AnyArgs)['in']).toEqual(['seller-1', 'seller-2']);
+  });
+
+  it('shows zero rather than nothing for a seller with no balance row yet', async () => {
+    // A seller who has never been credited has no row. That is a
+    // balance of zero, not an unknown.
+    const { svc, findMany } = makeService({});
+    findMany.mockResolvedValueOnce([makeRow({ sellerId: 'seller-9' })]);
+    const out = await svc.listForAdmin({});
+    expect(out.items[0]?.sellerBalanceInr).toBe('0.00');
   });
 });

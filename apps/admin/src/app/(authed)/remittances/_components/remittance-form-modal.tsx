@@ -33,7 +33,12 @@ export function RemittanceFormModal({
 }: {
   readonly initialSellerId?: string;
   readonly onClose: () => void;
-  readonly onSuccess: () => void;
+  /**
+   * Handed the remittance that was just created, so a caller who opened
+   * this to pay a specific withdrawal can close that request without
+   * anybody copying an id between two screens.
+   */
+  readonly onSuccess: (created: { id: string }) => void;
 }): ReactElement {
   // 100 is the endpoint's MAXIMUM (@Max(100) on the query DTO); asking
   // for 200 is a 400 and this select renders empty, which reads as "there
@@ -140,8 +145,8 @@ export function RemittanceFormModal({
         paidAt: new Date(paidAt).toISOString(),
         ...(note.trim() ? { note: note.trim() } : {}),
       };
-      await create.mutateAsync(body);
-      onSuccess();
+      const created = await create.mutateAsync(body);
+      onSuccess(created);
     } catch (err) {
       setError(fmtError(err));
     } finally {
