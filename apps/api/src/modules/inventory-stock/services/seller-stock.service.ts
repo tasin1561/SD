@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { BinType, VariantStatus } from '@skydrop/db';
+import { BinType, Prisma, VariantStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { StockReadService } from './stock-read.service';
 import type { CachedVariantStock } from '../../inventory-shared/stock-cache.service';
@@ -36,6 +36,17 @@ export interface AggregatedStockSummary {
   /** On hand somewhere it cannot be sold from — see qtyInTransit. */
   totalQtyInTransit: number;
   lowStockSkus: number;
+  /**
+   * What the stock is WORTH, at cost, split the same way the counts
+   * are. Valued from the batch's `unitCostInr`; a batch with no
+   * recorded cost contributes NOTHING rather than a guess (TRE-7), so
+   * `valueUnknownUnits` says how many units are missing from the
+   * figure. A total that quietly omits stock is worse than one that
+   * admits what it could not price.
+   */
+  valueAtWarehouseInr: string;
+  valueInTransitInr: string;
+  valueUnknownUnits: number;
 }
 
 /**
@@ -70,7 +81,10 @@ export class SellerStockService {
   }
 
   async summary(sellerId: string): Promise<AggregatedStockSummary> {
-    const merged = await this.merged(sellerId, {});
+    const [merged, value] = await Promise.all([
+      this.merged(sellerId, {}),
+      this.stockValue(sellerId),
+    ]);
     const rows = [...merged.values()];
     return {
       totalSkus: rows.length,
@@ -79,6 +93,65 @@ export class SellerStockService {
       totalQtyAvailable: rows.reduce((s, v) => s + v.qtyAvailable, 0),
       totalQtyInTransit: rows.reduce((s, v) => s + v.qtyInTransit, 0),
       lowStockSkus: rows.filter((v) => v.isLowStock).length,
+      ...value,
+    };
+  }
+
+  /**
+   * What the stock is worth, at cost, split where it stands.
+   *
+   * The IN-TRANSIT side reuses the same predicate as the unit count —
+   * an intake-only warehouse, or a TRANSIT bin inside a fulfilling one —
+   * so the value and the number of units can never tell different
+   * stories about the same goods. Two separately-written definitions of
+   * "in transit" is precisely how a page comes to show 201 units worth
+   * nothing.
+   *
+   * Cost comes from the batch. A batch with no recorded cost is counted
+   * in `valueUnknownUnits` and contributes zero to the money, following
+   * TRE-7: a missing cost is reported as missing, never defaulted,
+   * because a defaulted zero reads as "these goods are worthless".
+   */
+  private async stockValue(sellerId: string): Promise<{
+    valueAtWarehouseInr: string;
+    valueInTransitInr: string;
+    valueUnknownUnits: number;
+  }> {
+    const { fulfilling, intakeOnly } = await this.warehousesByRole();
+    const levels = await this.prisma.client.stockLevel.findMany({
+      where: { sellerId, qtyOnHand: { gt: 0 } },
+      select: {
+        qtyOnHand: true,
+        warehouseId: true,
+        bin: { select: { type: true } },
+        batch: { select: { unitCostInr: true } },
+      },
+    });
+
+    const intake = new Set(intakeOnly);
+    const fulfils = new Set(fulfilling);
+    let atWarehouse = new Prisma.Decimal(0);
+    let inTransit = new Prisma.Decimal(0);
+    let unknown = 0;
+
+    for (const l of levels) {
+      const cost = l.batch?.unitCostInr ?? null;
+      if (cost === null) {
+        unknown += l.qtyOnHand;
+        continue;
+      }
+      const worth = cost.mul(l.qtyOnHand);
+      const notSellable =
+        intake.has(l.warehouseId) ||
+        (fulfils.has(l.warehouseId) && l.bin?.type === BinType.TRANSIT);
+      if (notSellable) inTransit = inTransit.add(worth);
+      else atWarehouse = atWarehouse.add(worth);
+    }
+
+    return {
+      valueAtWarehouseInr: atWarehouse.toFixed(2),
+      valueInTransitInr: inTransit.toFixed(2),
+      valueUnknownUnits: unknown,
     };
   }
 

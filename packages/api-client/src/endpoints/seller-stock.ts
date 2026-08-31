@@ -39,6 +39,15 @@ export interface SellerStockSummary {
   readonly totalQtyReserved: number;
   readonly totalQtyAvailable: number;
   readonly totalQtyInTransit: number;
+  /**
+   * What the stock is worth at cost, split where it stands. A batch
+   * with no recorded cost contributes nothing and is counted in
+   * `valueUnknownUnits` instead — a defaulted zero would read as
+   * "these goods are worthless".
+   */
+  readonly valueAtWarehouseInr: string;
+  readonly valueInTransitInr: string;
+  readonly valueUnknownUnits: number;
   readonly lowStockSkus: number;
 }
 
