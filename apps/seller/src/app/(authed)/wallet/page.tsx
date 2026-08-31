@@ -15,6 +15,7 @@ import {
   SkeletonRows,
   Table,
 } from '@skydrop/ui/components';
+import { isWalletCredit, walletDirectionLabel } from '@skydrop/ui/status';
 import { useInfiniteWalletEntries, useWalletBalances } from '@/lib/api-hooks';
 import { TopupCard } from './_components/topup-card';
 import { WithdrawalsCard } from './_components/withdrawals-card';
@@ -315,25 +316,20 @@ export default function WalletPage(): ReactElement {
 }
 
 /**
- * Directions that ADD to the wallet. MUST mirror the API's
- * `CREDIT_DIRECTIONS` (seller-wallet/services/wallet.service.ts) — this
- * only drives the sign + colour, so drift here would render a credit as
- * a red "−250.50" (or vice versa) while the ledger says the opposite.
- * Unlike `humanizeDirection` below, TypeScript cannot catch an omission
- * here, so it has to be updated deliberately alongside the API set.
+ * Which way a direction points now lives in `@skydrop/ui/status`, as an
+ * EXHAUSTIVE SWITCH rather than the hand-maintained Set that used to sit
+ * here.
+ *
+ * WAL-1 required this set to mirror the API's `CREDIT_DIRECTIONS` and
+ * noted that TypeScript could not check it — so an unregistered
+ * direction silently took money from the seller instead of giving it,
+ * and only a spec that read both files as TEXT caught the drift. The
+ * switch fails to BUILD instead, and admin reads the same one, so there
+ * is no second copy to keep in step.
  */
-const CREDIT_DIRECTIONS: ReadonlySet<WalletEntryView['direction']> = new Set([
-  'COD_COLLECTION',
-  'REMITTANCE_FX',
-  'ADJUSTMENT_CREDIT',
-  'OPENING_BALANCE',
-  'SCRAP_REFUND',
-  'TOPUP',
-  'ORDER_CHARGES_REFUND',
-]);
 
 function LedgerRow({ entry }: { readonly entry: WalletEntryView }): ReactElement {
-  const isCredit = CREDIT_DIRECTIONS.has(entry.direction);
+  const isCredit = isWalletCredit(entry.direction);
   const currency = entry.currency === 'BDT' ? 'BDT' : 'INR';
   return (
     <tr>
@@ -341,7 +337,7 @@ function LedgerRow({ entry }: { readonly entry: WalletEntryView }): ReactElement
         {new Date(entry.createdAt).toLocaleString()}
       </td>
       <td className="px-3 py-2 text-text-body text-xs">
-        {humanizeDirection(entry.direction)}
+        {walletDirectionLabel(entry.direction)}
         {entry.note && <div className="text-text-faint text-xs mt-0.5 italic">{entry.note}</div>}
       </td>
       <td className="px-3 py-2 text-text-body text-xs">
@@ -377,63 +373,6 @@ function LedgerRow({ entry }: { readonly entry: WalletEntryView }): ReactElement
       </td>
     </tr>
   );
-}
-
-function humanizeDirection(d: WalletEntryView['direction']): string {
-  switch (d) {
-    case 'COD_COLLECTION':
-      return 'COD collected';
-    case 'ORDER_CHARGES':
-      return 'Order charges';
-    case 'REMITTANCE_OUT':
-      return 'Remittance';
-    case 'REMITTANCE_FX':
-      return 'FX conversion';
-    case 'ADJUSTMENT_CREDIT':
-      return 'Adjustment (credit)';
-    case 'ADJUSTMENT_DEBIT':
-      return 'Adjustment (debit)';
-    case 'OPENING_BALANCE':
-      return 'Opening balance';
-    // R7 — a damage/loss ticket settled in the seller's favour.
-    case 'SCRAP_REFUND':
-      return 'Damage settlement';
-    // R3 — the BD→India inbound freight bill for a consignment. A DEBIT,
-    // so it stays OUT of CREDIT_DIRECTIONS above (that set is mirrored
-    // from the API's WalletService — adding it here would render a charge
-    // as a payment).
-    case 'INBOUND_FREIGHT':
-      return 'Inbound freight';
-    // The flat return fee, charged when a parcel physically comes back.
-    // A DEBIT, so it stays OUT of CREDIT_DIRECTIONS above for the same
-    // reason as inbound freight.
-    case 'RTO_FEE':
-      return 'Return fee';
-    // A return the CUSTOMER asked for, priced as the second delivery it
-    // is rather than as a failed first attempt. Its own line so a seller
-    // can see what customer returns cost them separately from parcels
-    // the courier could not deliver. A DEBIT — out of CREDIT_DIRECTIONS.
-    case 'CUSTOMER_RETURN_FEE':
-      return 'Customer return';
-    // Money the seller wired in, verified against the bank. A CREDIT —
-    // registered in CREDIT_DIRECTIONS above.
-    case 'TOPUP':
-      return 'Wallet top-up';
-    // What Instant Pay costs: being credited at delivery rather than
-    // waiting for the courier to settle. A DEBIT, so it stays OUT of
-    // CREDIT_DIRECTIONS above.
-    case 'INSTANT_PAY_FEE':
-      return 'Instant Pay fee';
-    // The base charge for handling COD, on both credit modes. A DEBIT,
-    // so it stays OUT of CREDIT_DIRECTIONS above.
-    case 'COD_COLLECTION_FEE':
-      return 'COD collection fee';
-    // The delivery fee given back on an order cancelled before it
-    // shipped. A CREDIT — registered in CREDIT_DIRECTIONS above; leaving
-    // it out would show the refund as a second charge.
-    case 'ORDER_CHARGES_REFUND':
-      return 'Cancelled order refund';
-  }
 }
 
 /**

@@ -29,6 +29,7 @@ import {
   TicketStatus,
   WithdrawalRequestStatus,
   InviteLeadStatus,
+  WalletEntryDirection,
 } from '@skydrop/db';
 
 export const STATUS_KINDS = [
@@ -362,6 +363,109 @@ export function inviteLeadStatusKind(status: InviteLeadStatus): StatusKind {
     default: {
       const exhaustive: never = status;
       throw new Error(`Unhandled InviteLeadStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/**
+ * Wallet ledger vocabulary — the label a seller or a member of staff
+ * reads, and which way the money went.
+ *
+ * WAL-1 says every new `WalletEntryDirection` must be registered as a
+ * credit or it is treated as a debit. That rule was carried by a
+ * hand-maintained `Set` in the API and a second one copied into
+ * apps/seller, and its failure mode is the reason both had to be
+ * written down: an unregistered direction does not error, it silently
+ * takes money from the seller instead of giving it.
+ *
+ * A Set cannot be checked by the compiler. An exhaustive switch can, so
+ * this is one — a new direction fails to BUILD until somebody decides
+ * which way it points. That is the same F2 discipline as the status
+ * mappers above, applied to the one vocabulary where getting it wrong
+ * is a wrong number rather than a wrong colour.
+ *
+ * apps/admin showed neither: the raw enum, and every figure in the same
+ * colour, so a refund and a charge were indistinguishable on the screen
+ * staff use to answer "why is my balance this".
+ */
+export function isWalletCredit(direction: WalletEntryDirection): boolean {
+  switch (direction) {
+    // Money genuinely arriving, or being handed back.
+    case WalletEntryDirection.COD_COLLECTION:
+    case WalletEntryDirection.REMITTANCE_FX:
+    case WalletEntryDirection.ADJUSTMENT_CREDIT:
+    case WalletEntryDirection.OPENING_BALANCE:
+    case WalletEntryDirection.SCRAP_REFUND:
+    case WalletEntryDirection.TOPUP:
+    case WalletEntryDirection.ORDER_CHARGES_REFUND:
+      return true;
+    // Everything we charge for. REMITTANCE_OUT is money leaving to the
+    // seller's bank, so it is a debit against the wallet even though
+    // the seller receives it.
+    case WalletEntryDirection.ORDER_CHARGES:
+    case WalletEntryDirection.REMITTANCE_OUT:
+    case WalletEntryDirection.ADJUSTMENT_DEBIT:
+    case WalletEntryDirection.INBOUND_FREIGHT:
+    case WalletEntryDirection.CUSTOMER_RETURN_FEE:
+    case WalletEntryDirection.RTO_FEE:
+    case WalletEntryDirection.INSTANT_PAY_FEE:
+    case WalletEntryDirection.COD_COLLECTION_FEE:
+      return false;
+    default: {
+      const exhaustive: never = direction;
+      throw new Error(`Unhandled WalletEntryDirection: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/** The human label for a ledger row. Same words on both apps. */
+export function walletDirectionLabel(direction: WalletEntryDirection): string {
+  switch (direction) {
+    case WalletEntryDirection.COD_COLLECTION:
+      return 'COD collected';
+    case WalletEntryDirection.ORDER_CHARGES:
+      return 'Order charges';
+    case WalletEntryDirection.REMITTANCE_OUT:
+      return 'Remittance';
+    case WalletEntryDirection.REMITTANCE_FX:
+      return 'FX conversion';
+    case WalletEntryDirection.ADJUSTMENT_CREDIT:
+      return 'Adjustment (credit)';
+    case WalletEntryDirection.ADJUSTMENT_DEBIT:
+      return 'Adjustment (debit)';
+    case WalletEntryDirection.OPENING_BALANCE:
+      return 'Opening balance';
+    // R7 — a damage/loss ticket settled in the seller's favour.
+    case WalletEntryDirection.SCRAP_REFUND:
+      return 'Damage settlement';
+    // R3 — the BD→India inbound freight bill for a consignment.
+    case WalletEntryDirection.INBOUND_FREIGHT:
+      return 'Inbound freight';
+    // The flat return fee, charged when a parcel physically comes back.
+    case WalletEntryDirection.RTO_FEE:
+      return 'Return fee';
+    // A return the CUSTOMER asked for, priced as the second delivery it
+    // is rather than as a failed first attempt — its own line so what
+    // customer returns cost is separable from undeliverable parcels.
+    case WalletEntryDirection.CUSTOMER_RETURN_FEE:
+      return 'Customer return';
+    // Money the seller wired in, verified against the bank.
+    case WalletEntryDirection.TOPUP:
+      return 'Wallet top-up';
+    // What Instant Pay costs: credit at delivery rather than waiting
+    // for the courier to settle.
+    case WalletEntryDirection.INSTANT_PAY_FEE:
+      return 'Instant Pay fee';
+    // The base charge for handling COD, on both credit modes.
+    case WalletEntryDirection.COD_COLLECTION_FEE:
+      return 'COD collection fee';
+    // The delivery fee given back on an order cancelled before it
+    // shipped.
+    case WalletEntryDirection.ORDER_CHARGES_REFUND:
+      return 'Cancelled order refund';
+    default: {
+      const exhaustive: never = direction;
+      throw new Error(`Unhandled WalletEntryDirection: ${String(exhaustive)}`);
     }
   }
 }

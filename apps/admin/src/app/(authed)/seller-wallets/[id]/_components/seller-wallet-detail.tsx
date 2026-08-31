@@ -26,6 +26,8 @@ import {
   useSellerWalletWithdrawals,
   type AdminWalletEntry,
 } from '@/lib/seller-wallet-hooks';
+import { isWalletCredit, walletDirectionLabel } from '@skydrop/ui/status';
+import type { WalletEntryDirection } from '@skydrop/db';
 import { useSellerHoldings } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 
@@ -230,7 +232,11 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
                         {new Date(e.createdAt).toLocaleString()}
                       </Td>
                       <Td className="text-text-body text-xs">
-                        {e.direction}
+                        {/* The raw enum was on screen: ORDER_CHARGES,
+                            INSTANT_PAY_FEE. Staff answering "why is my
+                            balance this" were reading the column name
+                            out of the database. */}
+                        {walletDirectionLabel(e.direction as WalletEntryDirection)}
                         {e.note !== null && <div className="text-text-faint italic">{e.note}</div>}
                       </Td>
                       {/* Staff reading a disputed balance had no route
@@ -256,7 +262,18 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
                         )}
                       </Td>
                       <Td align="right">
-                        <Money amount={e.amount} currency="INR" />
+                        {/* Without a direction every figure rendered the
+                            same, so a refund and a charge were
+                            indistinguishable on a money screen. The sign
+                            carries it as well as the colour — colour
+                            alone is not a difference everybody can see. */}
+                        <Money
+                          amount={e.amount}
+                          currency="INR"
+                          direction={
+                            isWalletCredit(e.direction as WalletEntryDirection) ? 'credit' : 'debit'
+                          }
+                        />
                       </Td>
                       <Td align="right" className="text-text-muted">
                         <Money amount={e.runningBalanceAfter} currency="INR" />

@@ -133,17 +133,51 @@ describe('WAL-1 — ORDER_CHARGES_REFUND must be a CREDIT', () => {
     expect(set).toContain('ORDER_CHARGES_REFUND');
   });
 
-  it('is mirrored in apps/seller’s own CREDIT_DIRECTIONS set', async () => {
-    // The mirrored set TypeScript cannot check (WAL-1). Drift renders a
-    // refund as a red debit while the ledger says the opposite.
+  it("matches the UI's exhaustive switch EXACTLY, in both directions", async () => {
+    // WAL-1 used to be carried by this API Set plus a hand-copied one in
+    // apps/seller, checked only by asserting a single value appeared in
+    // both. That check passes while the two disagree about any OTHER
+    // direction — and disagreement renders a credit as a red debit while
+    // the ledger says the opposite.
+    //
+    // The UI half is now ONE exhaustive switch in @skydrop/ui/status,
+    // read by both apps, so the sets can be compared whole. A direction
+    // added to one side and not the other fails HERE rather than on a
+    // seller's screen.
     const fs = await import('node:fs');
     const path = await import('node:path');
-    const p = path.resolve(__dirname, '../../../../apps/seller/src/app/(authed)/wallet/page.tsx');
-    const src = fs.readFileSync(p, 'utf8');
-    const set = src.slice(
-      src.indexOf('const CREDIT_DIRECTIONS'),
-      src.indexOf(']);', src.indexOf('const CREDIT_DIRECTIONS')),
+
+    const api = fs.readFileSync(
+      path.resolve(__dirname, '../../src/modules/seller-wallet/services/wallet.service.ts'),
+      'utf8',
     );
-    expect(set).toContain('ORDER_CHARGES_REFUND');
+    const apiSet = new Set(
+      (
+        api
+          .slice(
+            api.indexOf('CREDIT_DIRECTIONS: ReadonlySet'),
+            api.indexOf(']);', api.indexOf('CREDIT_DIRECTIONS: ReadonlySet')),
+          )
+          .match(/WalletEntryDirection\.([A-Z_]+)/g) ?? []
+      ).map((m) => m.replace('WalletEntryDirection.', '')),
+    );
+
+    const ui = fs.readFileSync(
+      path.resolve(__dirname, '../../../../packages/ui/src/status/index.ts'),
+      'utf8',
+    );
+    // The credits are the cases that fall through to `return true`.
+    const fn = ui.slice(ui.indexOf('export function isWalletCredit'));
+    const uiSet = new Set(
+      (fn.slice(0, fn.indexOf('return true;')).match(/WalletEntryDirection\.([A-Z_]+)/g) ?? []).map(
+        (m) => m.replace('WalletEntryDirection.', ''),
+      ),
+    );
+
+    expect(uiSet.size).toBeGreaterThan(0);
+    expect([...uiSet].sort()).toEqual([...apiSet].sort());
+    // The one this suite is about, named so a whole-set failure still
+    // says which invariant it broke.
+    expect(uiSet.has('ORDER_CHARGES_REFUND')).toBe(true);
   });
 });
