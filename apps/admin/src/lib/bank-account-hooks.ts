@@ -36,6 +36,13 @@ export interface PlatformBankAccountView {
   readonly routingNumber: string | null;
   readonly currency: string;
   readonly instructions: string | null;
+  readonly purpose: string | null;
+  /**
+   * The courier account whose payouts land here. TRE-3 resolves a
+   * settlement's receiving account through this, so an unlinked account
+   * makes `CourierSettlementService.record` refuse.
+   */
+  readonly courierAccountId: string | null;
   readonly isActive: boolean;
   readonly displayOrder: number;
 }
@@ -55,6 +62,8 @@ export interface UpsertBankAccountBody {
   readonly routingNumber?: string;
   readonly currency: string;
   readonly instructions?: string;
+  readonly purpose?: string;
+  readonly courierAccountId?: string;
   readonly isActive?: boolean;
   readonly displayOrder?: number;
   /**

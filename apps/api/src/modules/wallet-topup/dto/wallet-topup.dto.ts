@@ -151,6 +151,26 @@ export class UpsertPlatformBankAccountDto {
 
   @ApiPropertyOptional({
     description:
+      'What the account is FOR, in your own words — the estate changes shape faster than an ' +
+      'enum can be migrated.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  purpose?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'The courier account whose payouts land here. `CourierSettlementService.record` resolves ' +
+      'the receiving account through THIS field (TRE-3), so a settlement for a courier with no ' +
+      'linked account is refused — the money would be a number with no cash behind it.',
+  })
+  @IsOptional()
+  @IsUUID('7')
+  courierAccountId?: string;
+
+  @ApiPropertyOptional({
+    description:
       'What is in the account right now, in its own currency. Posted as an OPENING_BALANCE ' +
       'entry against OUR money in the same transaction as the account itself — an account ' +
       'created without one starts at zero and every figure derived from it reads as zero. ' +
