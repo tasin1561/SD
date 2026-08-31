@@ -22,9 +22,26 @@ cd "$ROOT"
 EXPECTED_SHA="${1:-}"  # passed from the workflow for sanity logging
 PRIOR_SHA="$(git rev-parse HEAD)"
 
+# What was last BUILT AND STARTED, which is a different fact from what
+# git is checked out at.
+#
+# A deploy that pulls and then dies in the build — the box ran out of
+# memory on 2026-08-31 and had to be power-cycled — leaves the repo at
+# the target SHA with yesterday's `dist/`. Comparing git-HEAD against
+# git-HEAD then said "no change; skipping build + restart" and exited
+# 0, so the deploy reported SUCCESS while production ran stale code,
+# and every re-run did the same. Nothing short of a new commit could
+# break the loop, and nothing anywhere said so.
+#
+# The marker is written LAST, after the build, the restart and the
+# health checks have all passed, so its presence means those happened.
+DEPLOYED_MARKER="$ROOT/.last-deployed-sha"
+LAST_DEPLOYED="$(cat "$DEPLOYED_MARKER" 2>/dev/null || true)"
+
 echo "=== Deploy starting ==="
 echo "  cwd:     $(pwd)"
 echo "  prior:   $PRIOR_SHA"
+echo "  built:   ${LAST_DEPLOYED:-<unknown — will rebuild>}"
 [ -n "$EXPECTED_SHA" ] && echo "  target:  $EXPECTED_SHA"
 
 # ── 1. Pull ──────────────────────────────────────────────────────────
@@ -33,13 +50,35 @@ git fetch --quiet origin main
 git merge --ff-only origin/main
 NEW_SHA="$(git rev-parse HEAD)"
 echo "  now at:  $NEW_SHA"
-if [ "$PRIOR_SHA" = "$NEW_SHA" ]; then
-  echo "  no change; skipping build + restart."
+if [ "$NEW_SHA" = "$LAST_DEPLOYED" ]; then
+  echo "  already built and running this commit; nothing to do."
   exit 0
 fi
 
+# Diff against what is RUNNING, not against where git happened to be.
+# After a crashed deploy those are different, and diffing HEAD against
+# itself yields nothing — so the per-app change detection below would
+# decide that no app needs rebuilding, which is how the stale build
+# survived a re-run.
+#
+# An unknown marker (first run after this change, or a rewritten
+# history) falls back to rebuilding everything. A wasted build costs
+# minutes; a skipped one costs an outage nobody can see.
+DIFF_BASE="$PRIOR_SHA"
+if [ -n "$LAST_DEPLOYED" ] && git cat-file -e "${LAST_DEPLOYED}^{commit}" 2>/dev/null; then
+  DIFF_BASE="$LAST_DEPLOYED"
+elif [ -n "$LAST_DEPLOYED" ]; then
+  echo "  marker names an unknown commit — rebuilding everything."
+  DIFF_BASE=""
+fi
+
 # Which apps changed? (Cheap proxy: any file under each app/ tree.)
-CHANGED_FILES="$(git diff --name-only "$PRIOR_SHA" "$NEW_SHA")"
+if [ -n "$DIFF_BASE" ] && [ "$DIFF_BASE" != "$NEW_SHA" ]; then
+  CHANGED_FILES="$(git diff --name-only "$DIFF_BASE" "$NEW_SHA")"
+else
+  # No usable base: name every app so nothing is skipped.
+  CHANGED_FILES="$(git ls-files apps packages)"
+fi
 # NB: `| head` under `set -o pipefail` SIGPIPEs (141) when the list is
 # long — the `|| true` keeps the preview best-effort.
 { echo "$CHANGED_FILES" | head -20; } || true
@@ -155,5 +194,10 @@ for url in \
   check_url "$url" || exit 1
 done
 
+# Only NOW is this commit genuinely deployed: built, restarted, and
+# answering on every port. Written last on purpose — a marker written
+# earlier would claim a deploy that a later step could still fail.
+echo "$NEW_SHA" > "$DEPLOYED_MARKER"
+
 echo
-echo "=== Deploy OK: $PRIOR_SHA → $NEW_SHA ==="
+echo "=== Deploy OK: ${DIFF_BASE:-<full rebuild>} → $NEW_SHA ==="

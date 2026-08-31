@@ -120,3 +120,4 @@ __pycache__/
 # session, unformatted, and they would fail the format gate on the next
 # commit while telling nobody anything.
 .playwright-mcp/
+.last-deployed-sha
