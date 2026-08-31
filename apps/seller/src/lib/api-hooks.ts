@@ -1179,6 +1179,27 @@ export function useUpdateSellerBankDetails(): UseMutationResult<
 
 import type { WalletBalancesResponse, WalletEntriesPage } from '@skydrop/api-client';
 
+export interface MoneyInFlight {
+  readonly inTransit: { readonly count: number; readonly codInr: string };
+  readonly processing: { readonly count: number; readonly codInr: string };
+}
+
+/**
+ * What is still coming: COD on orders confirmed but not delivered, and
+ * COD on orders delivered but not yet credited. Gross — our fees and
+ * the withheld GST are still inside both figures.
+ */
+export function useMoneyInFlight(opts?: {
+  readonly enabled?: boolean;
+}): UseQueryResult<MoneyInFlight> {
+  const client = useApiClient();
+  return useQuery({
+    enabled: opts?.enabled ?? true,
+    queryKey: ['seller-orders', 'money-in-flight'],
+    queryFn: () => client.request<MoneyInFlight>('/api/seller/orders/money-in-flight'),
+  });
+}
+
 export function useWalletBalances(opts?: {
   readonly enabled?: boolean;
 }): UseQueryResult<WalletBalancesResponse> {

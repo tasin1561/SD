@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { OrderSource, OrderStatus, PaymentMode, Prisma } from '@skydrop/db';
+import { OrderSource, OrderStatus, PaymentMode, Prisma, WalletEntryDirection } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 
 export interface ResolvedOrderItem {
@@ -137,9 +137,89 @@ type OrderRow = Prisma.OrderGetPayload<{ select: typeof ORDER_SELECT }>;
  *   are simply absent from the map; [] in → empty map (no query).
  * ───────────────────────────────────────────────────────────────────────
  */
+/**
+ * Confirmed, not delivered, and still going forwards. Declared once so
+ * the dashboard figure and anything later that asks the same question
+ * cannot answer it differently.
+ */
+const IN_TRANSIT_STATUSES = [
+  OrderStatus.CONFIRMED,
+  OrderStatus.PENDING_PICK,
+  OrderStatus.PICKED,
+  OrderStatus.PACKED,
+  OrderStatus.PACK_FAILED,
+  OrderStatus.PENDING_DISPATCH,
+  OrderStatus.PENDING_MANUAL_PLACEMENT,
+  OrderStatus.DISPATCHED,
+  OrderStatus.IN_TRANSIT,
+  OrderStatus.OUT_FOR_DELIVERY,
+  // A failed attempt is still forward motion: the courier re-attempts.
+  OrderStatus.DELIVERY_FAILED,
+] as const;
+
 @Injectable()
 export class OrderReadService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * The two figures a seller wants on a dashboard: what is still coming
+   * to them, and what has arrived but not yet reached their wallet.
+   *
+   * Both are the COD the customer pays — the gross figure, with our
+   * fees and the GST we withhold still inside it. That is what the
+   * seller thinks in, and stating it gross with the deduction named is
+   * honest in a way that a silently netted number is not: a net figure
+   * would be smaller than anything they can check against the courier.
+   *
+   * IN TRANSIT is the FORWARD journey only. RTO_* and LOST_IN_TRANSIT
+   * are also "confirmed and not delivered" by the letter of it, but a
+   * parcel coming back or gone missing is not money on its way, and
+   * counting it here would promise a seller cash that is not coming.
+   *
+   * PROCESSING is delivered with no COD credit yet. On the default
+   * SETTLEMENT tier that is the normal state — the courier has not paid
+   * us — so this is the seller's own view of the float, the same money
+   * the admin float report counts from our side.
+   *
+   * PREPAID orders are excluded from both: nothing is owed on an order
+   * whose money the seller already has.
+   */
+  async moneyInFlight(sellerId: string): Promise<{
+    inTransit: { count: number; codInr: string };
+    processing: { count: number; codInr: string };
+  }> {
+    const [moving, delivered] = await Promise.all([
+      this.prisma.client.order.findMany({
+        where: {
+          sellerId,
+          deletedAt: null,
+          paymentMode: PaymentMode.COD,
+          status: { in: [...IN_TRANSIT_STATUSES] },
+        },
+        select: { codAmountInr: true },
+      }),
+      this.prisma.client.order.findMany({
+        where: {
+          sellerId,
+          deletedAt: null,
+          paymentMode: PaymentMode.COD,
+          status: OrderStatus.DELIVERED,
+          // Not yet credited. The wallet entry is the evidence the money
+          // reached them; its absence is what "processing" means.
+          walletEntries: { none: { direction: WalletEntryDirection.COD_COLLECTION } },
+        },
+        select: { codAmountInr: true },
+      }),
+    ]);
+
+    const sum = (rows: Array<{ codAmountInr: Prisma.Decimal | null }>): string =>
+      rows.reduce((t, r) => t.add(r.codAmountInr ?? 0), new Prisma.Decimal(0)).toFixed(2);
+
+    return {
+      inTransit: { count: moving.length, codInr: sum(moving) },
+      processing: { count: delivered.length, codInr: sum(delivered) },
+    };
+  }
 
   async getById(orderId: string): Promise<ResolvedOrder | null> {
     const row = await this.prisma.client.order.findFirst({

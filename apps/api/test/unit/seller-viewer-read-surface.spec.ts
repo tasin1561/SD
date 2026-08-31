@@ -57,7 +57,18 @@ const OPTED_IN: Readonly<Record<string, string>> = {
 
 /** GETs that opt-in reaches, listed so a new one is a decision. */
 const READABLE_GETS: Readonly<Record<string, readonly string[]>> = {
-  'seller-order.controller.ts': ['', ':id', ':id/events'],
+  'seller-order.controller.ts': [
+    '',
+    ':id',
+    ':id/events',
+    // A SUM of the COD on their own orders. Allowed deliberately, not
+    // by inheritance: a VIEWER already sees every one of those figures
+    // on the list and the detail, so adding them up discloses nothing
+    // they could not total by hand. It is an order figure that happens
+    // to be money, not wallet data — the ledger, balances and payout
+    // rules stay closed to this role.
+    'money-in-flight',
+  ],
   'seller-tracking.controller.ts': ['', 'order/:orderId', ':shipmentId'],
   'seller-order-journey.controller.ts': [':id/journey'],
 };

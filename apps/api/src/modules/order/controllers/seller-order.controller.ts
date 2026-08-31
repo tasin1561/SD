@@ -40,6 +40,7 @@ import {
   type OrderListItem,
   type OrderView,
 } from '../services/order.service';
+import { OrderReadService } from '../services/order-read.service';
 import { OrderWriteService } from '../services/order-write.service';
 import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 
@@ -59,6 +60,7 @@ export class SellerOrderController {
     private readonly svc: OrderService,
     private readonly orderWrite: OrderWriteService,
     private readonly reputation: CustomerReputationService,
+    private readonly reads: OrderReadService,
   ) {}
 
   private actor(seller: AuthenticatedSeller): { type: ActorType; id: string } {
@@ -86,6 +88,24 @@ export class SellerOrderController {
     @Query() query: ListOrdersQueryDto,
   ): Promise<{ items: OrderListItem[]; total: number; page: number; pageSize: number }> {
     return this.svc.list(seller.id, query);
+  }
+
+  // MUST stay above @Get(':id') for the same reason as customer-lookup
+  // below: a parameterised route declared first swallows this path as
+  // an order id and 400s on the UUID pipe.
+  @Get('money-in-flight')
+  @SellerAuthAllowSuspended()
+  @ApiOperation({
+    summary:
+      'What is still coming: COD on orders confirmed but not delivered, and COD on orders ' +
+      'delivered but not yet credited. Gross figures — our fees and the withheld GST are ' +
+      'still inside them.',
+  })
+  moneyInFlight(@CurrentSeller() seller: AuthenticatedSeller): Promise<{
+    inTransit: { count: number; codInr: string };
+    processing: { count: number; codInr: string };
+  }> {
+    return this.reads.moneyInFlight(seller.id);
   }
 
   // MUST stay above @Get(':id') — Nest matches in declaration order, so

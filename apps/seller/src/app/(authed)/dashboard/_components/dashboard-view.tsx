@@ -7,6 +7,7 @@ import { useSellerIdentity } from '@skydrop/auth/client';
 import {
   useOrdersList,
   useProductsList,
+  useMoneyInFlight,
   useSellerProfile,
   useWalletBalances,
 } from '@/lib/api-hooks';
@@ -86,6 +87,10 @@ export function DashboardView(): ReactElement {
     { enabled: canCatalog },
   );
   const balances = useWalletBalances({ enabled: canWallet });
+  // Gated on the ORDERS permission, not the wallet one: these are order
+  // figures shown in money, and a viewer who may read orders may know
+  // what their own orders are worth.
+  const inFlight = useMoneyInFlight({ enabled: canOrders });
   const companyName = identity?.companyName ?? 'there';
 
   // Onboarding checklist — show only when at least one step is unmet.
@@ -243,6 +248,8 @@ export function DashboardView(): ReactElement {
           <WalletBalanceCard query={balances} />
         </Section>
       )}
+
+      {canOrders && <MoneyInFlightCards query={inFlight} />}
 
       {canOrders && (
         <Section
@@ -403,6 +410,80 @@ export function WalletBalanceCard({
             <span className="sr-only">the same balance in {restated.currency}</span>
           </div>
         )}
+      </CardBody>
+    </Card>
+  );
+}
+
+/**
+ * The two figures between "sold" and "paid".
+ *
+ * Both are the COD the customer pays — GROSS, with our fees and the
+ * GST we withhold still inside. Netting them would produce a smaller
+ * number the seller cannot check against anything: the courier's own
+ * statement says the gross, and so does their order. So the figure
+ * matches what they already know, and the caption names what comes out
+ * of it rather than removing it quietly.
+ *
+ * PREPAID orders appear in neither — nothing is owed on an order whose
+ * money the seller already holds.
+ */
+function MoneyInFlightCards({
+  query,
+}: {
+  readonly query: ReturnType<typeof useMoneyInFlight>;
+}): ReactElement | null {
+  // Nothing to say while it loads, and nothing to say if it fails: this
+  // is a summary beside a page that already works. An error box here
+  // would be louder than the information it replaces.
+  if (query.data === undefined) return null;
+  const { inTransit, processing } = query.data;
+  if (inTransit.count === 0 && processing.count === 0) return null;
+
+  return (
+    <Section title="Money on its way">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <InFlightCard
+          title="In transit"
+          count={inTransit.count}
+          amount={inTransit.codInr}
+          hint="Confirmed and not yet delivered. Includes our fees and GST, which come out when it lands."
+        />
+        <InFlightCard
+          title="Processing payment"
+          count={processing.count}
+          amount={processing.codInr}
+          hint="Delivered, waiting for the courier to pay us. Includes our fees and GST, which come out when it reaches your wallet."
+        />
+      </div>
+    </Section>
+  );
+}
+
+function InFlightCard({
+  title,
+  count,
+  amount,
+  hint,
+}: {
+  readonly title: string;
+  readonly count: number;
+  readonly amount: string;
+  readonly hint: string;
+}): ReactElement {
+  return (
+    <Card>
+      <CardBody>
+        <div className="text-text-faint mb-1 text-xs tracking-wide uppercase">{title}</div>
+        <div className="flex items-baseline gap-2">
+          <span className="text-text-bright">
+            <Money amount={amount} currency="INR" convert={false} size="lg" />
+          </span>
+          <span className="text-text-muted text-sm">
+            {count} {count === 1 ? 'order' : 'orders'}
+          </span>
+        </div>
+        <div className="text-text-muted mt-1 text-xs">{hint}</div>
       </CardBody>
     </Card>
   );
