@@ -51,6 +51,7 @@ import {
   indiaLegs,
   legTitle,
   lineLabel,
+  indiaProgress,
   productCount,
   routeWords,
   shortDate,
@@ -115,6 +116,7 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
   /** A PENDING leg is still a correctable declaration — nothing has been
    *  counted against it yet. The panel refuses anything else itself. */
   const [correcting, setCorrecting] = useState<ConsignmentLegView | null>(null);
+  const progress = indiaProgress(consignment);
 
   return (
     <>
@@ -149,6 +151,28 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
                 { label: 'Expected arrival', value: shortDate(consignment.expectedArrivalAt) },
                 { label: 'Your reference', value: consignment.sellerReference ?? '—' },
                 { label: 'Products', value: <Num value={productCount(consignment)} /> },
+                // Where the goods actually are, in units. The status
+                // badge above says "at our Dhaka warehouse", which is
+                // true and does not say how much — a consignment part
+                // flown and part waiting looks identical to one nobody
+                // has touched.
+                ...(progress === null
+                  ? []
+                  : [
+                      {
+                        label: 'Received in India',
+                        value: <Num value={progress.receivedInIndia} />,
+                      },
+                      {
+                        label: 'Still to come',
+                        value: (
+                          <span className="flex items-baseline gap-2">
+                            <Num value={progress.stillToCome} />
+                            <span className="text-text-muted text-xs">in Dhaka or in the air</span>
+                          </span>
+                        ),
+                      },
+                    ]),
                 {
                   // Billed per arrival: a consignment that lands in two
                   // shipments carries two forwarder invoices, so the

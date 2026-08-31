@@ -272,3 +272,51 @@ export function eventWords(type: ConsignmentEventType): string {
     }
   }
 }
+
+/**
+ * How much of this consignment has actually landed in India, and how
+ * much has not.
+ *
+ * "Still to come" is deliberately the SAME definition the inventory
+ * page uses for its In-transit tile — everything not yet on the Indian
+ * shelf, whether it is sitting in Dhaka or in the air. A seller
+ * comparing the two screens must not find two different answers to one
+ * question; a consignment page that counted only what had physically
+ * left Bangladesh would report zero for goods nobody has dispatched,
+ * which reads as "nothing outstanding".
+ *
+ * The BASE is what Bangladesh counted, because that is the last figure
+ * anybody verified. Falling back to the declared quantity matters for a
+ * DIRECT_IN consignment, which never passes through Dhaka and so has no
+ * count until it arrives — using zero there would report the whole
+ * shipment as already received.
+ *
+ * Returns null when nothing has been counted or declared: no numbers
+ * beat invented ones on a page a seller reads to find out where their
+ * goods are.
+ */
+export function indiaProgress(
+  c: ConsignmentView,
+): { receivedInIndia: number; stillToCome: number } | null {
+  const bdLeg = c.receipts.find((r) => r.leg === ConsignmentLeg.BD_INTAKE) ?? null;
+  const indiaLegs = c.receipts.filter((r) => r.leg !== ConsignmentLeg.BD_INTAKE);
+
+  const receivedInIndia = indiaLegs.reduce((n, leg) => n + (countedUnits(leg) ?? 0), 0);
+
+  // Written as statements, not a chained ternary: `??` binds tighter
+  // than `?:`, so the expression form silently became
+  // `(bdCounted ?? …) ? null : …` and returned null for every
+  // consignment that HAD been counted — the one case this exists for.
+  const bdCounted = bdLeg === null ? null : countedUnits(bdLeg);
+  let base: number | null = bdCounted;
+  if (base === null) {
+    // Nothing counted in Dhaka — either a direct shipment, or one still
+    // waiting to be opened. What the seller declared is the only figure
+    // either side has.
+    const fallbackLeg = bdLeg ?? indiaLegs[0] ?? null;
+    base = fallbackLeg === null ? null : declaredUnits(fallbackLeg);
+  }
+
+  if (base === null) return null;
+  return { receivedInIndia, stillToCome: Math.max(0, base - receivedInIndia) };
+}

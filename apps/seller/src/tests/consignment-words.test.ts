@@ -15,6 +15,7 @@ import {
   declaredUnits,
   eventWords,
   indiaLegs,
+  indiaProgress,
   legTitle,
   productCount,
   routeWords,
@@ -222,5 +223,72 @@ describe('what the seller is told about the contents', () => {
     const bd = leg({ leg: ConsignmentLeg.BD_INTAKE });
     expect(legTitle(bd, c.route, indiaLegs(c))).toMatch(/bangladesh/i);
     expect(indiaLegs(consignment({ receipts: [bd] }))).toHaveLength(0);
+  });
+});
+
+/**
+ * Where the goods actually are, in units.
+ *
+ * The status badge says "at our Dhaka warehouse", which is true and
+ * does not say how much: a consignment part flown and part waiting
+ * looks identical to one nobody has touched.
+ */
+describe('indiaProgress', () => {
+  const bd = (received: number) =>
+    leg({
+      id: 'bd',
+      leg: ConsignmentLeg.BD_INTAKE,
+      status: GoodsReceiptStatus.COMPLETED,
+      lines: [line({ expectedQty: received, receivedQty: received })],
+    });
+  const india = (received: number) =>
+    leg({
+      id: 'in',
+      leg: ConsignmentLeg.IN_FINAL,
+      status: GoodsReceiptStatus.COMPLETED,
+      lines: [line({ expectedQty: received, receivedQty: received })],
+    });
+
+  it('splits what landed from what has not', () => {
+    // 301 counted in Dhaka, 100 arrived — the other 201 are somewhere
+    // between a shelf in Bangladesh and a plane.
+    const out = indiaProgress(consignment({ receipts: [bd(301), india(100)] }));
+    expect(out).toEqual({ receivedInIndia: 100, stillToCome: 201 });
+  });
+
+  it('counts undispatched goods as still to come, not as nothing outstanding', () => {
+    // The same definition the inventory page uses: everything not yet on
+    // the Indian shelf. Counting only what physically left Bangladesh
+    // would report zero here, which reads as "all done".
+    const out = indiaProgress(consignment({ receipts: [bd(301)] }));
+    expect(out).toEqual({ receivedInIndia: 0, stillToCome: 301 });
+  });
+
+  it('adds up several arrivals — a consignment can fly in more than one shipment', () => {
+    const out = indiaProgress(
+      consignment({ receipts: [bd(300), india(100), { ...india(50), id: 'in2' }] }),
+    );
+    expect(out).toEqual({ receivedInIndia: 150, stillToCome: 150 });
+  });
+
+  it('falls back to the declared quantity for a shipment that never passes through Dhaka', () => {
+    // DIRECT_IN has no Bangladesh count, and treating that as zero would
+    // report the whole shipment as already received.
+    const pending = leg({ leg: ConsignmentLeg.IN_FINAL, lines: [line({ expectedQty: 80 })] });
+    const out = indiaProgress(
+      consignment({ route: ConsignmentRoute.DIRECT_IN, receipts: [pending] }),
+    );
+    expect(out).toEqual({ receivedInIndia: 0, stillToCome: 80 });
+  });
+
+  it('never reports a negative outstanding when more arrived than was counted', () => {
+    // A surplus at arrival is normal (CNS-3), and "-20 still to come"
+    // is not a sentence.
+    const out = indiaProgress(consignment({ receipts: [bd(100), india(120)] }));
+    expect(out).toEqual({ receivedInIndia: 120, stillToCome: 0 });
+  });
+
+  it('says nothing when there is nothing to say', () => {
+    expect(indiaProgress(consignment({ receipts: [] }))).toBeNull();
   });
 });

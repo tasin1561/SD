@@ -60,7 +60,15 @@ export function InventoryView(): ReactElement {
     const s = summary.data;
     return (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
-        <SummaryCard label="On hand" value={s.totalQtyOnHand.toLocaleString()} />
+        {/*
+          "India stock", not "on hand". A seller's goods live in two
+          countries at once — some in Dhaka or in the air, some on the
+          shelf in Bangalore — and "on hand" does not say which. The
+          card beside it is the other half of the same answer, so the
+          pair now reads as a place each rather than a warehouse term
+          and a caveat.
+        */}
+        <SummaryCard label="India stock" value={s.totalQtyOnHand.toLocaleString()} />
         <SummaryCard
           label="Available"
           value={s.totalQtyAvailable.toLocaleString()}
@@ -120,7 +128,7 @@ export function InventoryView(): ReactElement {
             <Tr>
               <Th>SKU</Th>
               <Th>Variant</Th>
-              <Th className="text-right">On hand</Th>
+              <Th className="text-right">India stock</Th>
               <Th className="text-right">Reserved</Th>
               <Th className="text-right">Available</Th>
               <Th className="text-right">In transit</Th>
