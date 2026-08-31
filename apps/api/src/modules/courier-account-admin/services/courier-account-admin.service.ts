@@ -4,7 +4,13 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
-import { ActorType, CredentialEnvironment, Currency, Prisma } from '@skydrop/db';
+import {
+  ActorType,
+  CourierIntegrationType,
+  CredentialEnvironment,
+  Currency,
+  Prisma,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { EnvService } from '../../../config/env.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -79,9 +85,33 @@ export class CourierAccountAdminService {
     // dangerous one immediately before a first live write.
     const adopting = dto.adoptCredentialId !== undefined;
 
+    // A courier with no API has nothing to authenticate WITH.
+    //
+    // Read from the courier's own integrationType rather than testing
+    // for the code 'manual': the property that matters is "there is no
+    // integration", and a second manual carrier added tomorrow inherits
+    // this by being declared MANUAL instead of by someone remembering
+    // to extend a string comparison.
+    const courierRow = await this.prisma.client.courier.findUnique({
+      where: { code: dto.courierCode },
+      select: { integrationType: true },
+    });
+    const credentialless = courierRow?.integrationType === CourierIntegrationType.MANUAL;
+    if (credentialless && dto.credentialFields !== undefined) {
+      // Refused rather than ignored. Storing a token for a courier that
+      // has no API to send it to is a secret kept for no reason, and
+      // the operator clearly believes it does something.
+      throw new BadRequestException({
+        code: 'COURIER_TAKES_NO_CREDENTIALS',
+        message:
+          `${dto.courierCode} is a manual courier — there is no API to authenticate against, ` +
+          'so it holds no credentials.',
+      });
+    }
+
     let encryptedPayload = '';
     let fieldNames: string[] = [];
-    if (!adopting) {
+    if (!adopting && !credentialless) {
       const key = this.env.courierCredentialsKey(CURRENT_KEY_VERSION);
       if (key === '') {
         throw new BadRequestException({
@@ -112,8 +142,13 @@ export class CourierAccountAdminService {
         });
       }
 
-      let credential: { id: string };
-      if (dto.adoptCredentialId !== undefined) {
+      let credential: { id: string } | null = null;
+      if (credentialless) {
+        // No row at all. An empty encrypted payload would be a
+        // credential that decrypts to nothing — a lie the audit trail
+        // would then faithfully record every time it was read.
+        credential = null;
+      } else if (dto.adoptCredentialId !== undefined) {
         const existing = await tx.courierCredential.findFirst({
           where: {
             id: dto.adoptCredentialId,
@@ -174,7 +209,7 @@ export class CourierAccountAdminService {
           courierId: courier.id,
           environment: dto.environment,
           label: dto.label,
-          credentialId: credential.id,
+          credentialId: credential?.id ?? null,
           isDefault: dto.isDefault ?? false,
           // Not trimmed: Delhivery matches this string exactly, and
           // silently "fixing" whitespace here would produce a name that
@@ -202,8 +237,12 @@ export class CourierAccountAdminService {
             // Which of the two paths ran. "Where did this account's
             // credential come from" is the first question asked when an
             // auth failure is traced back here.
-            credentialSource: adopting ? 'ADOPTED_EXISTING' : 'NEW',
-            credentialId: credential.id,
+            credentialSource: credentialless
+              ? 'NONE_MANUAL_COURIER'
+              : adopting
+                ? 'ADOPTED_EXISTING'
+                : 'NEW',
+            credentialId: credential?.id ?? null,
           },
           severity: 'MEDIUM',
         },

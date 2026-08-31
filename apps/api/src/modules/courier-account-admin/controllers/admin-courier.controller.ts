@@ -51,6 +51,7 @@ export class AdminCourierController {
       readonly isActive: boolean;
       readonly supportsCod: boolean;
       readonly supportsPrepaid: boolean;
+      readonly integrationType: string;
     }>;
   }> {
     return { couriers: await this.enablement.list() };

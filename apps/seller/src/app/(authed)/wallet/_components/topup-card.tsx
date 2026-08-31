@@ -67,8 +67,20 @@ export function TopupCard({
             <TBody>
               {rows.map((r) => (
                 <Tr key={r.id}>
-                  <Td className="text-text-muted text-xs">
-                    {new Date(r.createdAt).toISOString().slice(0, 10)}
+                  <Td className="text-text-muted text-xs whitespace-nowrap">
+                    {/* Local, not `toISOString().slice(0,10)`, which is
+                        UTC: a transfer sent at 1am in Dhaka was shown
+                        as the previous day. And with the time, because
+                        the Status column beside it already carries one
+                        — a row that dates two of its own events
+                        differently reads as two different events. */}
+                    {new Date(r.createdAt).toLocaleDateString()}
+                    <div className="text-text-faint">
+                      {new Date(r.createdAt).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </div>
                   </Td>
                   <Td className="text-text-body">
                     {/* The account, not our filing name for it. A seller

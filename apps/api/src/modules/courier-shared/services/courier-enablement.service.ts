@@ -1,3 +1,4 @@
+import { CourierIntegrationType } from '@skydrop/db';
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 
@@ -59,6 +60,13 @@ export class CourierEnablementService {
       readonly isActive: boolean;
       readonly supportsCod: boolean;
       readonly supportsPrepaid: boolean;
+      /**
+       * Whether there is an API behind this courier at all. A MANUAL
+       * one holds no credentials, so the account form must not ask for
+       * any — driven off this rather than off the code 'manual', so a
+       * second manual carrier inherits it by declaration.
+       */
+      readonly integrationType: CourierIntegrationType;
     }>
   > {
     const rows = await this.prisma.client.courier.findMany({
@@ -69,6 +77,7 @@ export class CourierEnablementService {
         isActive: true,
         supportsCod: true,
         supportsPrepaid: true,
+        integrationType: true,
       },
       orderBy: { code: 'asc' },
     });

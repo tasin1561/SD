@@ -3597,7 +3597,18 @@ model CourierAccount {
   courierId          String                @map("courier_id") @db.Uuid
   environment        CredentialEnvironment
   label              String
-  credentialId       String                @unique @map("credential_id") @db.Uuid
+  /// NULL for a courier with no API to hold a credential FOR.
+  ///
+  /// Manual placement is defined by there being no integration — you
+  /// ring somebody and hand them a parcel (CUR-8) — so requiring a
+  /// credential made a manual account impossible to create, and with no
+  /// account the courier appeared nowhere on the money side: no
+  /// settlement dropdown, no payout bank link, no margin line.
+  ///
+  /// UNIQUE still holds: Postgres allows many NULLs in a unique index,
+  /// so two credential-less accounts do not collide while two accounts
+  /// sharing a real credential still cannot exist.
+  credentialId       String?               @unique @map("credential_id") @db.Uuid
   isDefault          Boolean               @default(false) @map("is_default")
   /// The warehouse name this account sends as `pickup_location.name`.
   /// Registered per ACCOUNT at Delhivery and matched exactly, so two
@@ -3614,7 +3625,7 @@ model CourierAccount {
   deletedAt          DateTime?             @map("deleted_at") @db.Timestamptz
 
   courier             Courier                    @relation(fields: [courierId], references: [id])
-  credential          CourierCredential          @relation(fields: [credentialId], references: [id])
+  credential          CourierCredential?         @relation(fields: [credentialId], references: [id])
   createdByStaff      StaffUser?                 @relation("CourierAccountCreatedBy", fields: [createdByStaffId], references: [id])
   sellerLinks         SellerCourierAccountLink[]
   shipments           Shipment[]

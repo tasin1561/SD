@@ -281,6 +281,16 @@ export class CourierCredentialService {
         message: `Courier account ${courierAccountId} not found or inactive`,
       });
     }
+    if (account.credential === null) {
+      // A manual courier holds none — there is no API to authenticate
+      // against. Reaching here means something tried to make a wire
+      // call for a parcel that was placed by telephone, which is worth
+      // saying out loud rather than failing on a null.
+      throw new NotFoundException({
+        code: 'COURIER_ACCOUNT_HAS_NO_CREDENTIAL',
+        message: `Courier account ${courierAccountId} is a manual courier and holds no credentials`,
+      });
+    }
     return this.resolveAndDecrypt(
       account.credential,
       account.courier.code,

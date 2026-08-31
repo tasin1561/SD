@@ -7,6 +7,7 @@ import {
   Input,
   Modal,
   ModalFooter,
+  Money,
   Select,
   Textarea,
 } from '@skydrop/ui/components';
@@ -28,10 +29,19 @@ import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
  */
 export function RemittanceFormModal({
   initialSellerId,
+  settling,
   onClose,
   onSuccess,
 }: {
   readonly initialSellerId?: string;
+  /**
+   * The withdrawal request this is settling, when the form was opened
+   * to pay one. The amount is prefilled from it and a difference is
+   * warned about — the caller knows which request it is paying, and
+   * throwing that away is what let a ₹300 payment sit against a ₹500
+   * request with nothing saying so.
+   */
+  readonly settling?: { readonly requestId: string; readonly amountInr: string };
   readonly onClose: () => void;
   /**
    * Handed the remittance that was just created, so a caller who opened
@@ -54,7 +64,21 @@ export function RemittanceFormModal({
   // than a pot that could be debited.
   const sourceCurrency = 'INR' as const;
   const [currency, setCurrency] = useState<'INR' | 'BDT'>('BDT');
-  const [sourceAmount, setSourceAmount] = useState('');
+  // Prefilled from the request being settled. The default is the
+  // common case; typing over it is still allowed, because what leaves
+  // the bank is the operator's fact and a part payment is a real thing.
+  const [sourceAmount, setSourceAmount] = useState(settling?.amountInr ?? '');
+
+  // What will be sent, when it differs from what was asked for. Null
+  // when there is no request, or the figures agree, or nothing is typed
+  // yet — a warning that fires mid-keystroke is noise.
+  const mismatch = (() => {
+    if (settling === undefined || sourceAmount.trim() === '') return null;
+    const typed = Number(sourceAmount);
+    if (!Number.isFinite(typed) || typed <= 0) return null;
+    return typed === Number(settling.amountInr) ? null : typed.toFixed(2);
+  })();
+
   const [fxRate, setFxRate] = useState('1.38'); // sensible BDT/INR seed
   const [bankReference, setBankReference] = useState('');
   const [paidFromAccountId, setPaidFromAccountId] = useState('');
@@ -336,6 +360,23 @@ export function RemittanceFormModal({
             placeholder="Anything ops should know about this withdrawal"
           />
         </FormField>
+
+        {/*
+          Paying something other than what was asked for is allowed — a
+          part payment is a real thing — but it will NOT close the
+          request, and finding that out afterwards is how a partly-paid
+          request sits in the queue looking untouched. Said before
+          recording, not after.
+        */}
+        {mismatch !== null && (
+          <div className="border-border text-text-body rounded-[5px] border border-dashed px-3 py-2 text-xs">
+            This request asked for{' '}
+            <Money amount={settling?.amountInr ?? '0'} currency="INR" convert={false} />. Paying{' '}
+            <Money amount={mismatch} currency="INR" convert={false} /> will{' '}
+            <span className="text-text-bright">not close it</span> — it stays in the queue for
+            whoever settles the rest.
+          </div>
+        )}
 
         {error && (
           <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">

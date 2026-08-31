@@ -581,6 +581,8 @@ export interface CourierMasterView {
   readonly isActive: boolean;
   readonly supportsCod: boolean;
   readonly supportsPrepaid: boolean;
+  /** MANUAL means there is no API, so no credentials to hold. */
+  readonly integrationType: string;
 }
 
 /** Every courier and whether it is taking NEW parcels. */
@@ -647,7 +649,8 @@ export function useCreateCourierAccount(): UseMutationResult<
     /** Encrypted at rest by the server (CUR-1). Never echoed back in
      *  any response, never cached here — this object exists only for
      *  the duration of the POST. */
-    credentialFields: Record<string, string>;
+    /** Absent for a manual courier — there is no API to authenticate. */
+    credentialFields?: Record<string, string>;
     isDefault?: boolean;
     /** The warehouse name this account sends as pickup_location.name. */
     pickupLocationName?: string;

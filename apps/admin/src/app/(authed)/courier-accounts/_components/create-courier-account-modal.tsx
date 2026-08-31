@@ -14,7 +14,7 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import { CredentialEnvironment } from '@skydrop/db';
-import { useCreateCourierAccount } from '@/lib/ops-hooks';
+import { useCouriers, useCreateCourierAccount } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 
 interface CredField {
@@ -67,7 +67,15 @@ export function CreateCourierAccountModal({
     setError(null);
   }
 
+  const couriers = useCouriers();
   const filled = fields.filter((f) => f.name.trim() !== '' && f.value !== '');
+  // A courier with no API has nothing to authenticate with, so the
+  // credential block is not merely optional — it is meaningless, and
+  // the server refuses fields sent for one. Driven off the courier list
+  // rather than the string 'manual', so a second manual carrier
+  // inherits this by being declared MANUAL.
+  const selected = couriers.data?.find((c) => c.code === courierCode.trim());
+  const credentialless = selected?.integrationType === 'MANUAL';
 
   async function submit(): Promise<void> {
     setError(null);
@@ -76,7 +84,11 @@ export function CreateCourierAccountModal({
         courierCode: courierCode.trim(),
         environment,
         label: label.trim(),
-        credentialFields: Object.fromEntries(filled.map((f) => [f.name.trim(), f.value])),
+        ...(credentialless
+          ? {}
+          : {
+              credentialFields: Object.fromEntries(filled.map((f) => [f.name.trim(), f.value])),
+            }),
         ...(isDefault ? { isDefault: true } : {}),
         // NOT trimmed. Delhivery matches this string exactly, so a
         // trailing space is a different name — and trimming it here
@@ -147,8 +159,15 @@ export function CreateCourierAccountModal({
           />
         </FormField>
 
+        {credentialless && (
+          <div className="border-border text-text-muted rounded-[10px] border border-dashed p-3 text-xs">
+            A manual courier has no API, so there is nothing to authenticate — this account exists
+            so its payouts can be recorded and settled like any other.
+          </div>
+        )}
+
         {/* ── credentials ── */}
-        <div className="border-border border-t pt-3">
+        <div className={credentialless ? 'hidden' : 'border-border border-t pt-3'}>
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-text-muted text-xs font-medium tracking-wide uppercase">
               Credentials
@@ -268,7 +287,7 @@ export function CreateCourierAccountModal({
           disabled={
             courierCode.trim() === '' ||
             label.trim() === '' ||
-            filled.length === 0 ||
+            (!credentialless && filled.length === 0) ||
             create.isPending
           }
           onClick={() => void submit()}

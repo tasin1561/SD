@@ -91,6 +91,12 @@ export function WithdrawalsCard({
                 <Tr key={w.id}>
                   <Td className="text-text-muted whitespace-nowrap">
                     {new Date(w.createdAt).toLocaleDateString()}
+                    <div className="text-text-faint text-xs">
+                      {new Date(w.createdAt).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </div>
                     {w.requestedBy === 'SYSTEM' && (
                       <span className="text-text-faint ml-1.5 text-xs">auto</span>
                     )}
@@ -105,7 +111,10 @@ export function WithdrawalsCard({
                     {w.rejectionReason ??
                       (w.resolvedAt === null
                         ? 'Awaiting review'
-                        : `Paid ${new Date(w.resolvedAt).toLocaleDateString()}`)}
+                        : `Paid ${new Date(w.resolvedAt).toLocaleString([], {
+                            dateStyle: 'short',
+                            timeStyle: 'short',
+                          })}`)}
                   </Td>
                 </Tr>
               ))}

@@ -35,7 +35,11 @@ export function RemittancesIndex(): ReactElement {
   // and closing the request it settles is one act, and making an
   // operator copy a remittance id back to another screen is how a paid
   // seller stays "awaiting review" for a week.
-  const [paying, setPaying] = useState<{ sellerId: string; requestId: string } | null>(null);
+  const [paying, setPaying] = useState<{
+    sellerId: string;
+    requestId: string;
+    amountInr: string;
+  } | null>(null);
   const canWrite = usePermission('money.remittances.manage');
   const toast = useToast();
   const list = useRemittancesList({ page: 1, pageSize: 50 });
@@ -112,7 +116,13 @@ export function RemittancesIndex(): ReactElement {
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => setPaying({ sellerId: w.sellerId, requestId: w.id })}
+                        onClick={() =>
+                          setPaying({
+                            sellerId: w.sellerId,
+                            requestId: w.id,
+                            amountInr: w.amountRequested,
+                          })
+                        }
                       >
                         Pay
                       </Button>
@@ -212,6 +222,7 @@ export function RemittancesIndex(): ReactElement {
       {paying !== null && (
         <RemittanceFormModal
           initialSellerId={paying.sellerId}
+          settling={{ requestId: paying.requestId, amountInr: paying.amountInr }}
           onClose={() => setPaying(null)}
           onSuccess={() => {
             setPaying(null);

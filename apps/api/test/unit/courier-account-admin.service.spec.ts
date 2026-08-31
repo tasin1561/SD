@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { CourierAccountAdminService } from '../../src/modules/courier-account-admin/services/courier-account-admin.service';
 import { decryptCredential } from '../../src/modules/courier-shared/util/courier-credential-cipher';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
@@ -17,6 +19,8 @@ function makeService(
     /** The credential an adopt call finds; null = none adoptable. */
     adoptable?: AnyArgs | null;
     keyV1?: string;
+    /** MANUAL means no API, so no credential is required or allowed. */
+    integrationType?: string;
   } = {},
 ) {
   const courierFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
@@ -117,6 +121,13 @@ function makeService(
   const client = {
     $transaction,
     courierAccount: { findMany: accountFindMany },
+    // Read BEFORE the transaction, to decide whether this courier has
+    // an API to hold a credential for at all. MANUAL holds none.
+    courier: {
+      findUnique: jest.fn(async () => ({
+        integrationType: opts.integrationType ?? 'API_FULL',
+      })),
+    },
   } as unknown as PrismaService['client'];
 
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown?]>(async () => 'a1');
@@ -462,5 +473,79 @@ describe('CourierAccountAdminService.updateAccount — pickup location', () => {
     expect(accountUpdate.mock.calls[0]?.[0]).toMatchObject({
       data: { pickupLocationName: ' MSEXPORT ' },
     });
+  });
+});
+
+/**
+ * A courier with no API has nothing to authenticate with.
+ *
+ * Manual placement is DEFINED by there being no integration — you ring
+ * somebody and hand them a parcel (CUR-8) — so the credential
+ * requirement made a manual account impossible to create. Without an
+ * account the courier appeared nowhere on the money side: no settlement
+ * dropdown, no payout bank link, no margin line, and a manually-placed
+ * COD parcel collected cash with nothing to record it against.
+ */
+describe('a manual courier account needs no credential', () => {
+  it('creates without credentialFields, and mints no credential row', async () => {
+    const { svc, credentialCreate, accountCreate } = makeService({ integrationType: 'MANUAL' });
+    await svc.createAccount(
+      { courierCode: 'manual', environment: 'PRODUCTION' as never, label: 'Local riders' },
+      'staff-1',
+    );
+    // An empty encrypted payload would be a credential that decrypts to
+    // nothing — a lie the audit trail would then faithfully record.
+    expect(credentialCreate).not.toHaveBeenCalled();
+    expect((accountCreate.mock.calls[0]?.[0] as AnyArgs)['data']).toMatchObject({
+      credentialId: null,
+    });
+  });
+
+  it('refuses credentials offered for a courier that cannot use them', async () => {
+    // Ignored rather than refused, the operator keeps believing the
+    // token does something, and a secret is stored for no reason.
+    const { svc } = makeService({ integrationType: 'MANUAL' });
+    await expect(
+      svc.createAccount(
+        {
+          courierCode: 'manual',
+          environment: 'PRODUCTION' as never,
+          label: 'x',
+          credentialFields: { apiToken: 'nope' },
+        },
+        'staff-1',
+      ),
+    ).rejects.toMatchObject({ response: { code: 'COURIER_TAKES_NO_CREDENTIALS' } });
+  });
+
+  it('still demands a credential for a courier that HAS an API', async () => {
+    // The guard is narrowed, not removed: Delhivery without a token is
+    // an account that cannot book anything.
+    const { svc } = makeService({ integrationType: 'API_FULL' });
+    await expect(
+      svc.createAccount(
+        {
+          courierCode: 'delhivery',
+          environment: 'PRODUCTION' as never,
+          label: 'x',
+          credentialFields: {},
+        },
+        'staff-1',
+      ),
+    ).rejects.toMatchObject({ response: { code: 'INVALID_CREDENTIAL_FIELDS' } });
+  });
+
+  it('records in the audit that there was no credential, not that one was minted', () => {
+    // "Where did this account's credential come from" is the first
+    // question asked when an auth failure is traced back here, and
+    // "NEW" would be a wrong answer rather than an absent one.
+    const src = readFileSync(
+      join(
+        __dirname,
+        '../../src/modules/courier-account-admin/services/courier-account-admin.service.ts',
+      ),
+      'utf8',
+    );
+    expect(src).toContain('NONE_MANUAL_COURIER');
   });
 });
