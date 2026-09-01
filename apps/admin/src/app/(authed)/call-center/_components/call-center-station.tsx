@@ -110,6 +110,7 @@ export function CallCenterStation(): ReactElement {
   const current = useCurrentCalls();
 
   const [assignment, setAssignment] = useState<PulledAssignment | null>(null);
+  const hasOpenIssues = (assignment?.openTickets.length ?? 0) > 0;
   /** Whether the held-call check has answered — the auto-advance must
    *  not pull before it has, or the first tick races it to a certain
    *  AGENT_AT_CAPACITY. */
@@ -119,6 +120,11 @@ export function CallCenterStation(): ReactElement {
   const [outcome, setOutcome] = useState<CallOutcome | ''>('');
   const [notes, setNotes] = useState('');
   const [callbackTime, setCallbackTime] = useState('');
+  // Ticking this closes the seller's issues in the SAME action as the
+  // outcome, so the agent never has to scroll back up to a banner to
+  // finish the job they just did.
+  const [closeIssues, setCloseIssues] = useState(false);
+  const transitionTicket = useTransitionTicket();
   const [error, setError] = useState<string | null>(null);
 
   function fmtError(err: unknown): string {
@@ -136,6 +142,7 @@ export function CallCenterStation(): ReactElement {
     setOutcome('');
     setNotes('');
     setCallbackTime('');
+    setCloseIssues(false);
   }
 
   /**
@@ -166,6 +173,7 @@ export function CallCenterStation(): ReactElement {
         setOutcome('');
         setNotes('');
         setCallbackTime('');
+        setCloseIssues(false);
       } catch (err) {
         setError(fmtError(err));
       }
@@ -298,9 +306,38 @@ export function CallCenterStation(): ReactElement {
 
     try {
       const r = await record.mutateAsync(payload);
+
+      // AFTER the record, never before: the outcome is written onto the
+      // ticket, so closing first would leave the seller a resolved issue
+      // that never says what happened. Per ticket and isolated — one
+      // failing must not stop the others closing.
+      let closed = 0;
+      if (closeIssues) {
+        for (const t of assignment.openTickets) {
+          try {
+            await transitionTicket.mutateAsync({
+              ticketId: t.ticketId,
+              to: 'RESOLVED_WRITE_OFF_ACCEPTED',
+              notes: notes.trim() === '' ? 'Closed after speaking to the customer.' : notes.trim(),
+            });
+            closed += 1;
+          } catch {
+            // Reported below rather than thrown: the call IS recorded,
+            // and losing that because a ticket would not close is the
+            // wrong trade.
+          }
+        }
+      }
+
       const tail =
         r.finalOrderStatus !== null ? `order → ${r.finalOrderStatus}` : 'no order transition';
-      toast.success(`Recorded ${r.outcome} · ${tail}`);
+      const closedTail =
+        closeIssues && closed < assignment.openTickets.length
+          ? ` · ${closed}/${assignment.openTickets.length} issues closed — check the rest by hand`
+          : closed > 0
+            ? ` · ${closed} issue${closed === 1 ? '' : 's'} closed`
+            : '';
+      toast.success(`Recorded ${r.outcome} · ${tail}${closedTail}`);
       resetCall();
       // Immediately, not on the next tick — the agent has just hung up
       // and the whole point is that the next customer is already there.
@@ -465,13 +502,50 @@ export function CallCenterStation(): ReactElement {
                 </FormField>
               )}
 
-              <FormField label="Notes">
+              {/*
+                This field is the ANSWER to whatever the seller asked.
+                It was labelled "Notes / free-form (audited)", which told
+                an agent it was a private scratchpad — so the one thing
+                the seller is waiting for was the thing least likely to
+                get written.
+              */}
+              <FormField
+                label={hasOpenIssues ? 'What the customer told you' : 'Notes'}
+                hint={
+                  hasOpenIssues
+                    ? 'Written onto the seller’s open issue word for word — this is how they find out what happened.'
+                    : 'Free-form, audited.'
+                }
+              >
                 <Input
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Free-form notes (audited)"
+                  placeholder={
+                    hasOpenIssues
+                      ? 'e.g. Customer will be home after 6pm and asked us to try again tomorrow'
+                      : 'Free-form notes (audited)'
+                  }
                 />
               </FormField>
+
+              {hasOpenIssues ? (
+                <label className="text-text-body flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={closeIssues}
+                    onChange={(e) => setCloseIssues(e.target.checked)}
+                  />
+                  <span>
+                    Close the seller’s {assignment.openTickets.length === 1 ? 'issue' : 'issues'}{' '}
+                    after recording
+                    <span className="text-text-muted block text-xs">
+                      Tick this when the question is answered. Leave it if you still owe them
+                      something — a re-attempt to arrange, or another call.
+                    </span>
+                  </span>
+                </label>
+              ) : null}
 
               <div className="flex justify-end">
                 <Button
@@ -858,14 +932,15 @@ function CallPurposeBanner({
       ) : null}
 
       {/*
-        Record the call FIRST, then close. The outcome is written onto
-        every open ticket for this order, so closing before recording
-        leaves the seller a resolved ticket that never says what
-        happened.
+        The normal path is the outcome form below, which records the call
+        and closes these in one action. Close here is the exception: an
+        issue that needs no call at all — already answered elsewhere, or
+        raised in error.
       */}
       {tickets.length > 0 ? (
         <p className="text-text-muted mt-2 text-xs">
-          Record the outcome below first — it is written onto the ticket. Then close it.
+          Answer these on the call, then record the outcome below — it is written onto the issue and
+          can close it in the same step.
         </p>
       ) : null}
     </div>
