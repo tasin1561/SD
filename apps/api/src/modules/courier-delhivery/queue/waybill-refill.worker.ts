@@ -6,6 +6,7 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { DelhiveryWaybillPoolService } from '../services/delhivery-waybill-pool.service';
 import { JOB_REFILL_WAYBILLS, WAYBILL_REFILL_QUEUE_NAME } from './waybill-refill.queue';
 import { courierActor } from '../../courier-shared/services/courier-credential.service';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 const REFILL_ENABLED_SETTING = 'courier.delhivery_waybill_pool_refill_enabled';
 
@@ -41,6 +42,7 @@ export class WaybillRefillWorker implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly pool: DelhiveryWaybillPoolService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   onModuleInit(): void {
@@ -100,6 +102,9 @@ export class WaybillRefillWorker implements OnModuleInit, OnModuleDestroy {
     );
 
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(WaybillRefillWorker.name, err);
       this.logger.error({ err: err.message }, 'Waybill refill worker error');
     });
     this.logger.log(`Waybill refill worker ready (queue=${WAYBILL_REFILL_QUEUE_NAME})`);

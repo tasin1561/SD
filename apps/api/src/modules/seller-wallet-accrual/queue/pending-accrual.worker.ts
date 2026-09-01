@@ -4,6 +4,7 @@ import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { PendingAccrualSweepService } from '../services/pending-accrual-sweep.service';
 import { JOB_SWEEP_PENDING_ACCRUALS, PENDING_ACCRUAL_QUEUE_NAME } from './pending-accrual.queue';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 /**
  * In-process worker for the hourly pending-accrual sweep cron (same
@@ -21,6 +22,7 @@ export class PendingAccrualWorker implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly sweep: PendingAccrualSweepService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   onModuleInit(): void {
@@ -47,6 +49,9 @@ export class PendingAccrualWorker implements OnModuleInit, OnModuleDestroy {
       );
     });
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(PendingAccrualWorker.name, err);
       this.logger.error({ err: err.message }, 'Pending accrual worker error');
     });
     this.logger.log(`Pending accrual worker ready (queue=${PENDING_ACCRUAL_QUEUE_NAME})`);

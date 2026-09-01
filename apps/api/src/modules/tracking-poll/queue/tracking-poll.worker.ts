@@ -9,6 +9,7 @@ import {
   TRACKING_POLL_QUEUE_NAME,
 } from './tracking-poll.queue';
 import { TrackingRecoveryService } from '../services/tracking-recovery.service';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 /**
  * Module 10 (poll) — in-process BullMQ worker for the Delhivery
@@ -27,6 +28,7 @@ export class TrackingPollWorker implements OnModuleInit, OnModuleDestroy {
     private readonly poll: TrackingPollService,
     private readonly recovery: TrackingRecoveryService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   onModuleInit(): void {
@@ -59,6 +61,9 @@ export class TrackingPollWorker implements OnModuleInit, OnModuleDestroy {
       );
     });
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(TrackingPollWorker.name, err);
       this.logger.error({ err: err.message }, 'tracking-poll worker error');
     });
     this.logger.log(`tracking-poll worker ready (queue=${TRACKING_POLL_QUEUE_NAME})`);

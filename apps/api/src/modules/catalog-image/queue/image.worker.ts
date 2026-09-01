@@ -15,6 +15,7 @@ import {
   type DeleteObjectsJob,
   type GenerateThumbnailJob,
 } from './image.queue';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 const THUMB_WIDTH_PX = 400;
 
@@ -37,6 +38,7 @@ export class ImageWorker implements OnModuleInit, OnModuleDestroy {
     private readonly spaces: SpacesService,
     private readonly orphanCleanup: OrphanCleanupService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   onModuleInit(): void {
@@ -71,6 +73,9 @@ export class ImageWorker implements OnModuleInit, OnModuleDestroy {
       );
     });
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(ImageWorker.name, err);
       this.logger.error({ err: err.message }, 'Image worker error');
     });
     this.logger.log(`Image worker ready (queue=${IMAGE_QUEUE_NAME}, concurrency=3)`);

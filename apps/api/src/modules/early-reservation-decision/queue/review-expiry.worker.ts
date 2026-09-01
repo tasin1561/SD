@@ -4,6 +4,7 @@ import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { ReviewExpirySweepService } from '../services/review-expiry-sweep.service';
 import { JOB_SWEEP_REVIEWS, REVIEW_EXPIRY_QUEUE_NAME } from './review-expiry.queue';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 /**
  * In-process worker for the hourly review-expiry sweep (same Phase-1A
@@ -20,6 +21,7 @@ export class ReviewExpiryWorker implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly sweep: ReviewExpirySweepService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   onModuleInit(): void {
@@ -48,6 +50,9 @@ export class ReviewExpiryWorker implements OnModuleInit, OnModuleDestroy {
       );
     });
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(ReviewExpiryWorker.name, err);
       this.logger.error({ err: err.message }, 'Review expiry worker error');
     });
     this.logger.log(`Review expiry worker ready (queue=${REVIEW_EXPIRY_QUEUE_NAME})`);

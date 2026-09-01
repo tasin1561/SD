@@ -8,6 +8,7 @@ import {
   ORDER_CSV_IMPORT_QUEUE_NAME,
   type ProcessOrderCsvJob,
 } from './order-csv-import.queue';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 /**
  * In-process order CSV import worker (Phase 1A pattern). Delegates to
@@ -23,6 +24,7 @@ export class OrderCsvImportWorker implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly processor: OrderCsvImportProcessorService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   onModuleInit(): void {
@@ -48,6 +50,9 @@ export class OrderCsvImportWorker implements OnModuleInit, OnModuleDestroy {
       );
     });
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(OrderCsvImportWorker.name, err);
       this.logger.error({ err: err.message }, 'Order CSV import worker error');
     });
     this.logger.log(`Order CSV import worker ready (queue=${ORDER_CSV_IMPORT_QUEUE_NAME})`);

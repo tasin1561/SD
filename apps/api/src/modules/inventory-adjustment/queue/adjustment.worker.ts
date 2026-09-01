@@ -9,6 +9,7 @@ import {
   JOB_EXECUTE_ADJUSTMENT,
   type ExecuteAdjustmentJob,
 } from './adjustment.queue';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 /**
  * In-process executor for APPROVED adjustments (same Phase 1A pattern as
@@ -26,6 +27,7 @@ export class AdjustmentWorker implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly adjustments: StockAdjustmentService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   onModuleInit(): void {
@@ -53,6 +55,9 @@ export class AdjustmentWorker implements OnModuleInit, OnModuleDestroy {
       );
     });
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(AdjustmentWorker.name, err);
       this.logger.error({ err: err.message }, 'Adjustment worker error');
     });
     this.logger.log(`Adjustment worker ready (queue=${ADJUSTMENT_QUEUE_NAME}, concurrency=2)`);

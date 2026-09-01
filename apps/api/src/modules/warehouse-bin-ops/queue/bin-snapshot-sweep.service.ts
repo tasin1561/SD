@@ -3,6 +3,7 @@ import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@ne
 import { Queue, Worker, type Job, type JobsOptions } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { BinCollapseService } from '../services/bin-collapse.service';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 export const BIN_SNAPSHOT_SWEEP_QUEUE = 'bin-snapshot-retention-sweep';
 export const JOB_PURGE_SNAPSHOTS = 'purge-expired-snapshots';
@@ -35,6 +36,7 @@ export class BinSnapshotSweepService implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly collapse: BinCollapseService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -70,6 +72,9 @@ export class BinSnapshotSweepService implements OnModuleInit, OnModuleDestroy {
       { connection: this.redis.createConnection(), concurrency: 1 },
     );
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(BinSnapshotSweepService.name, err);
       this.logger.error({ err: err.message }, 'Bin snapshot sweep worker error');
     });
     this.logger.log(`Bin snapshot sweep ready; cron=${BIN_SNAPSHOT_SWEEP_CRON}`);

@@ -5,6 +5,7 @@ import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { OutboundWebhookDispatchService } from '../services/outbound-webhook-dispatch.service';
 import type { OutboundWebhookJobInput, WebhookSendResult } from '../types';
 import { OUTBOUND_WEBHOOK_QUEUE_NAME } from './outbound-webhook.queue';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 class WebhookSendFailure extends Error {
   constructor(public readonly result: WebhookSendResult) {
@@ -21,6 +22,7 @@ export class OutboundWebhookWorker implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly dispatch: OutboundWebhookDispatchService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   onModuleInit(): void {
@@ -63,6 +65,9 @@ export class OutboundWebhookWorker implements OnModuleInit, OnModuleDestroy {
       );
     });
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(OutboundWebhookWorker.name, err);
       this.logger.error({ err: err.message }, 'Outbound webhook worker error');
     });
 

@@ -4,6 +4,7 @@ import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { PackBoxService } from '../services/pack-box.service';
 import { JOB_SWEEP_PACK_BOXES, PACK_BOX_EXPIRY_QUEUE_NAME } from './pack-box-expiry.queue';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 /**
  * In-process worker for the pack-box expiry sweep (same Phase-1A shape
@@ -23,6 +24,7 @@ export class PackBoxExpiryWorker implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly boxes: PackBoxService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   onModuleInit(): void {
@@ -53,6 +55,9 @@ export class PackBoxExpiryWorker implements OnModuleInit, OnModuleDestroy {
       );
     });
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(PackBoxExpiryWorker.name, err);
       this.logger.error({ err: err.message }, 'Pack-box expiry worker error');
     });
     this.logger.log(`Pack-box expiry worker ready (queue=${PACK_BOX_EXPIRY_QUEUE_NAME})`);

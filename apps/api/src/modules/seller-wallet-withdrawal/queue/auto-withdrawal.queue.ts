@@ -3,6 +3,7 @@ import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@ne
 import { Queue, Worker, type Job, type JobsOptions } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { AutoWithdrawalSweepService } from '../services/auto-withdrawal-sweep.service';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 export const AUTO_WITHDRAWAL_QUEUE = 'wallet-auto-withdrawal';
 export const JOB_SWEEP = 'sweep-auto-withdrawals';
@@ -30,6 +31,7 @@ export class AutoWithdrawalQueue implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly sweep: AutoWithdrawalSweepService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -65,6 +67,9 @@ export class AutoWithdrawalQueue implements OnModuleInit, OnModuleDestroy {
       { connection: this.redis.createConnection(), concurrency: 1 },
     );
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(AutoWithdrawalQueue.name, err);
       this.logger.error({ err: err.message }, 'Auto-withdrawal worker error');
     });
     this.logger.log(`Auto-withdrawal sweep ready; cron=${AUTO_WITHDRAWAL_CRON}`);

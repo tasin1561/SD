@@ -3,6 +3,7 @@ import { Queue, Worker, type Job, type JobsOptions } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { OrderAttentionService } from '../services/order-attention.service';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 export const NSA_SWEEP_QUEUE = 'order-nsa-sweep';
 export const JOB_NSA_SWEEP = 'sweep-nsa';
@@ -36,6 +37,7 @@ export class NsaSweepWorker implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly attention: OrderAttentionService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -72,6 +74,9 @@ export class NsaSweepWorker implements OnModuleInit, OnModuleDestroy {
       { connection: this.redis.createConnection(), concurrency: 1 },
     );
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(NsaSweepWorker.name, err);
       this.logger.error({ err: err.message }, 'NSA sweep worker error');
     });
     this.logger.log(`NSA sweep ready; cron=${NSA_SWEEP_CRON}`);

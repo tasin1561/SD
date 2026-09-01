@@ -42,17 +42,40 @@ function makeSvc(opts: {
     },
   };
   const queue = { ensureScheduled: jest.fn(async () => undefined) };
+  const issues = {
+    raise: jest.fn(async () => undefined),
+    resolveByKey: jest.fn(async () => undefined),
+  };
   const svc = new TrackingRecoveryService(
     prisma as never,
     poll as never,
     audit as never,
     email as never,
     queue as never,
+    issues as never,
   );
-  return { svc, poll, audit, email, queue };
+  return { svc, poll, audit, email, queue, issues };
 }
 
 describe('TrackingRecoveryService — the automatic half', () => {
+  // The poller IS the tracking — Delhivery push us nothing — so a poll
+  // that stops is invisible until a customer asks where their parcel is.
+  it('puts a stalled poll on the issues board, and clears it when it recovers', async () => {
+    const stalled = makeSvc({ stale: true, autoRecover: false });
+    await stalled.svc.check();
+    expect(stalled.issues.raise).toHaveBeenCalledWith(
+      expect.objectContaining({ dedupeKey: 'tracking-poll:stalled' }),
+    );
+
+    const healthy = makeSvc({ stale: false });
+    await healthy.svc.check();
+    expect(healthy.issues.raise).not.toHaveBeenCalled();
+    expect(healthy.issues.resolveByKey).toHaveBeenCalledWith(
+      'tracking-poll:stalled',
+      expect.any(String),
+    );
+  });
+
   it('does nothing at all while tracking is moving', async () => {
     const { svc, poll, audit, email } = makeSvc({ stale: false });
     const out = await svc.check();

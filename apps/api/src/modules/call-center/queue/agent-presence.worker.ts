@@ -4,6 +4,7 @@ import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { AgentPresenceService } from '../services/agent-presence.service';
 import { AGENT_PRESENCE_QUEUE_NAME, JOB_SWEEP_PRESENCE } from './agent-presence.queue';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 /**
  * Stands down agents who are marked available but are not at the desk,
@@ -23,6 +24,7 @@ export class AgentPresenceWorker implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly presence: AgentPresenceService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   onModuleInit(): void {
@@ -40,6 +42,9 @@ export class AgentPresenceWorker implements OnModuleInit, OnModuleDestroy {
       { connection: this.redis.createConnection(), concurrency: 1 },
     );
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(AgentPresenceWorker.name, err);
       this.logger.error({ err: err.message }, 'Agent-presence worker error');
     });
     this.logger.log('Agent-presence worker started');

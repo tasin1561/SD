@@ -1,5 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ActorType, CredentialEnvironment, NotificationRecipientType } from '@skydrop/db';
+import {
+  ActorType,
+  CredentialEnvironment,
+  NotificationRecipientType,
+  SystemIssueKind,
+  SystemIssueSeverity,
+} from '@skydrop/db';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Browser, BrowserContext, Page } from 'playwright';
@@ -11,6 +17,7 @@ import {
 } from '../../courier-shared/services/courier-credential.service';
 import { EmailQueue } from '../../email/queue/email.queue';
 import { CourierChannelSettingsService } from '../../courier-escalation/services/courier-channel-settings.service';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 const JOB = 'courier-portal';
 const PORTAL_ORIGIN = 'https://one.delhivery.com';
@@ -132,6 +139,7 @@ export class PortalSessionService {
     private readonly settings: CourierChannelSettingsService,
     private readonly email: EmailQueue,
     private readonly audit: AuditLogService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   private statePath(courierAccountId: string | null): string {
@@ -530,6 +538,26 @@ export class PortalSessionService {
       entityId: null,
       severity: 'CRITICAL',
       metadata: { courierCode: 'delhivery', challenge, url: page.url(), artifactPath },
+    });
+
+    // The email below goes to one address somebody may not be watching.
+    // This is the same fact on the board every admin already looks at,
+    // and it is the one failure here that CANNOT clear itself: the
+    // portal is paused for 24 hours until a person signs in by hand.
+    await this.issues.raise({
+      kind: SystemIssueKind.COURIER_PORTAL_CHALLENGE,
+      severity: SystemIssueSeverity.HIGH,
+      title: `Delhivery portal is asking for a ${challenge} — sign in by hand`,
+      detail:
+        `The portal presented a ${challenge} challenge at ${page.url()}, which a browser ` +
+        'cannot answer. Automatic sign-in is PAUSED for 24 hours.\n\n' +
+        'While paused, courier costs stop being imported, so the P&L keeps reporting ' +
+        'delivered orders as uncosted. Sign in to the Delhivery portal manually to clear the ' +
+        'challenge, then resume the portal from the Delhivery page.' +
+        (artifactPath === null ? '' : `\n\nScreenshot: ${artifactPath}`),
+      source: 'PortalSessionService',
+      dedupeKey: 'portal:challenge',
+      metadata: { challenge, url: page.url(), artifactPath },
     });
 
     const to = await this.settings.alertEmailForPortal();

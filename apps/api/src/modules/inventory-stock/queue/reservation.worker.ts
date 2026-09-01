@@ -4,6 +4,7 @@ import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { ReservationCleanupService } from '../services/reservation-cleanup.service';
 import { JOB_AUTO_RELEASE, RESERVATION_QUEUE_NAME } from './reservation.queue';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 /**
  * In-process worker for the hourly reservation auto-release cron (same
@@ -20,6 +21,7 @@ export class ReservationWorker implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly cleanup: ReservationCleanupService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   onModuleInit(): void {
@@ -46,6 +48,9 @@ export class ReservationWorker implements OnModuleInit, OnModuleDestroy {
       );
     });
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(ReservationWorker.name, err);
       this.logger.error({ err: err.message }, 'Reservation worker error');
     });
     this.logger.log(`Reservation worker ready (queue=${RESERVATION_QUEUE_NAME})`);

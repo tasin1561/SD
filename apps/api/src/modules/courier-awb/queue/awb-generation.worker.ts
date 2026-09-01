@@ -15,6 +15,7 @@ import {
   type GenerateManifestAwbsJob,
   type GenerateOrderAwbJob,
 } from './awb-generation.queue';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 /**
  * In-process AWB-generation worker (Phase 1A pattern, mirrors M7/M8
@@ -36,6 +37,7 @@ export class AwbGenerationWorker implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly jobService: AwbGenerationJobService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -77,6 +79,9 @@ export class AwbGenerationWorker implements OnModuleInit, OnModuleDestroy {
       );
     });
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(AwbGenerationWorker.name, err);
       this.logger.error({ err: err.message }, 'AWB-generation worker error');
     });
     this.logger.log(

@@ -5,6 +5,8 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { EmailQueue } from '../../email/queue/email.queue';
 import { TrackingPollService, TRACKING_STALE_AFTER_MINUTES } from './tracking-poll.service';
 import { TrackingPollQueue } from '../queue/tracking-poll.queue';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
+import { SystemIssueKind, SystemIssueSeverity } from '@skydrop/db';
 
 const AUTO_RECOVER_KEY = 'courier.tracking_poll_auto_recover_enabled';
 const ALERT_EMAIL_KEY = 'ops.alert_email';
@@ -46,11 +48,15 @@ export class TrackingRecoveryService {
     private readonly audit: AuditLogService,
     private readonly email: EmailQueue,
     private readonly queue: TrackingPollQueue,
+    private readonly issues: SystemIssueService,
   ) {}
 
   async check(): Promise<WatchdogOutcome> {
     const health = await this.poll.health();
     if (!health.stale) {
+      // Tracking is moving again, so clear its own alarm. A watchdog
+      // that only ever raises leaves somebody tidying up rows by hand.
+      await this.issues.resolveByKey('tracking-poll:stalled', 'Tracking resumed on its own.');
       return {
         healthy: true,
         minutesSinceLastRun: health.minutesSinceLastRun,
@@ -61,6 +67,32 @@ export class TrackingRecoveryService {
     }
 
     const autoRecoverEnabled = await this.autoRecoverEnabled();
+
+    // Delhivery push no webhooks, so THE POLLER IS TRACKING. If it stops,
+    // no parcel updates and nothing else in the system says so — orders
+    // simply stay where they are and the first sign is a customer
+    // asking. That is the definition of a failure worth a person.
+    await this.issues.raise({
+      kind: SystemIssueKind.TRACKING_STALLED,
+      severity: SystemIssueSeverity.HIGH,
+      title: 'Parcel tracking has stopped updating',
+      detail:
+        `No successful tracking cycle for ${health.minutesSinceLastRun ?? 'an unknown number of'} minutes.\n\n` +
+        'Delhivery push us nothing — the poll IS the tracking — so while this persists no ' +
+        'parcel changes status, no delivery is recorded and no NDR is noticed. ' +
+        (autoRecoverEnabled
+          ? 'The watchdog is trying to restart it by itself; if this issue keeps recurring the ' +
+            'restart is not holding and the worker process needs looking at.'
+          : 'Auto-recovery is switched OFF, so nothing will restart it — run a cycle by hand ' +
+            'from the Delhivery page, or turn the setting on.'),
+      source: 'TrackingRecoveryService',
+      dedupeKey: 'tracking-poll:stalled',
+      metadata: {
+        minutesSinceLastRun: health.minutesSinceLastRun,
+        autoRecoverEnabled,
+      },
+    });
+
     let recovery: WatchdogOutcome['recovery'] = 'DISABLED';
 
     if (autoRecoverEnabled) {

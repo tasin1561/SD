@@ -8,6 +8,7 @@ import {
   JOB_EXPIRE_ASSIGNMENT,
   type ExpireAssignmentJob,
 } from './assignment-expiration.queue';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 /**
  * In-process assignment-expiration worker (Phase 1A pattern). Delegates
@@ -24,6 +25,7 @@ export class AssignmentExpirationWorker implements OnModuleInit, OnModuleDestroy
     private readonly redis: RedisService,
     private readonly service: AssignmentExpirationService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   onModuleInit(): void {
@@ -49,6 +51,9 @@ export class AssignmentExpirationWorker implements OnModuleInit, OnModuleDestroy
       );
     });
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(AssignmentExpirationWorker.name, err);
       this.logger.error({ err: err.message }, 'Assignment-expiration worker error');
     });
     this.logger.log(

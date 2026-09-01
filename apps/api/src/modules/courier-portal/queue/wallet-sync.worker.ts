@@ -3,6 +3,7 @@ import { Queue, Worker, type Job, type JobsOptions } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { WalletSyncService } from '../services/wallet-sync.service';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 export const WALLET_SYNC_QUEUE = 'courier-wallet-sync';
 export const JOB_WALLET_SYNC = 'sync-delhivery-wallet';
@@ -36,6 +37,7 @@ export class WalletSyncWorker implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly sync: WalletSyncService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -71,6 +73,9 @@ export class WalletSyncWorker implements OnModuleInit, OnModuleDestroy {
       { connection: this.redis.createConnection(), concurrency: 1 },
     );
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(WalletSyncWorker.name, err);
       this.logger.error({ err: err.message }, 'Wallet sync worker error');
     });
     this.logger.log(`Delhivery wallet sync ready; cron=${WALLET_SYNC_CRON}`);

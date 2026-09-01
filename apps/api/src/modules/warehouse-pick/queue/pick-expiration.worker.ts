@@ -8,6 +8,7 @@ import {
   JOB_EXPIRE_PICK,
   type ExpirePickJob,
 } from './pick-expiration.queue';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 /**
  * In-process pick-expiration worker (Phase 1A pattern, mirrors M7's
@@ -25,6 +26,7 @@ export class PickExpirationWorker implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly service: PickExpirationService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   onModuleInit(): void {
@@ -50,6 +52,9 @@ export class PickExpirationWorker implements OnModuleInit, OnModuleDestroy {
       );
     });
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(PickExpirationWorker.name, err);
       this.logger.error({ err: err.message }, 'Pick-expiration worker error');
     });
     this.logger.log(`Pick-expiration worker ready (queue=${PICK_EXPIRATION_QUEUE_NAME})`);

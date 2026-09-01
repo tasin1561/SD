@@ -7,6 +7,7 @@ import {
   JOB_SWEEP_WEBHOOK_PAYLOADS,
   WEBHOOK_RETENTION_QUEUE_NAME,
 } from './webhook-retention.queue';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 /**
  * In-process worker for the daily courier-payload retention sweep.
@@ -22,6 +23,7 @@ export class WebhookRetentionWorker implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly retention: WebhookPayloadRetentionService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   onModuleInit(): void {
@@ -48,6 +50,9 @@ export class WebhookRetentionWorker implements OnModuleInit, OnModuleDestroy {
       );
     });
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(WebhookRetentionWorker.name, err);
       this.logger.error({ err: err.message }, 'Webhook retention worker error');
     });
     this.logger.log(`Webhook retention worker ready (queue=${WEBHOOK_RETENTION_QUEUE_NAME})`);

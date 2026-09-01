@@ -5,6 +5,7 @@ import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { EmailDispatchService } from '../services/email-dispatch.service';
 import type { EmailDispatchInput, EmailSendResult } from '../email.types';
 import { EMAIL_QUEUE_NAME } from './email.queue';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 /**
  * Resend's default account limit is 2 requests/second. Sending faster earns
@@ -51,6 +52,7 @@ export class EmailWorker implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly dispatch: EmailDispatchService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   onModuleInit(): void {
@@ -80,6 +82,9 @@ export class EmailWorker implements OnModuleInit, OnModuleDestroy {
       );
     });
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(EmailWorker.name, err);
       this.logger.error({ err: err.message }, 'Email worker error');
     });
 

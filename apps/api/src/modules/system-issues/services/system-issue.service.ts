@@ -137,6 +137,39 @@ export class SystemIssueService {
     }
   }
 
+  /**
+   * A background worker fell over.
+   *
+   * Every BullMQ worker has an `on('error')` that logged and stopped
+   * there — twenty-two of them. A worker erroring is the definition of a
+   * quiet failure: nothing 500s, no screen breaks, the work simply stops
+   * happening. Whichever one it is, somebody should be told.
+   *
+   * Keyed on the WORKER, so one failing every minute for a day is one
+   * issue seen many times rather than a wall of rows.
+   *
+   * MEDIUM by default: BullMQ emits `error` for transient connection
+   * blips too, and crying CRITICAL at every Redis hiccup is how a list
+   * stops being read. The occurrence count is what tells a blip from a
+   * fault, and it is on the card.
+   */
+  async reportWorkerError(workerName: string, err: unknown): Promise<void> {
+    const message = err instanceof Error ? err.message : String(err);
+    await this.raise({
+      kind: SystemIssueKind.INTEGRATION,
+      severity: SystemIssueSeverity.MEDIUM,
+      title: `${workerName} is erroring`,
+      detail:
+        `A background worker reported: ${message}\n\n` +
+        'Whatever this worker does is not happening while this persists. A handful of ' +
+        'occurrences is usually a Redis blip and clears itself; a count that keeps climbing ' +
+        'means the work has genuinely stopped — check the process logs for this worker.',
+      source: workerName,
+      dedupeKey: `worker-error:${workerName}`,
+      metadata: { workerName, error: message },
+    });
+  }
+
   async list(opts: { includeResolved?: boolean } = {}): Promise<readonly SystemIssueView[]> {
     return this.prisma.client.systemIssue.findMany({
       where: opts.includeResolved === true ? {} : { resolvedAt: null },

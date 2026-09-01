@@ -11,6 +11,7 @@ import {
   TrackingWebhookQueue,
   type ProcessWebhookJob,
 } from './tracking-webhook.queue';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 /**
  * Module 10 — in-process BullMQ worker for tracking-webhook processing
@@ -41,6 +42,7 @@ export class TrackingWebhookWorker implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly processor: WebhookProcessorService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -77,6 +79,9 @@ export class TrackingWebhookWorker implements OnModuleInit, OnModuleDestroy {
       );
     });
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(TrackingWebhookWorker.name, err);
       this.logger.error({ err: err.message }, 'tracking-webhook worker error');
     });
     this.logger.log(

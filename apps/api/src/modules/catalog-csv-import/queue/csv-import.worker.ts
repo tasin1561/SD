@@ -4,6 +4,7 @@ import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { CsvImportProcessorService } from '../services/csv-import-processor.service';
 import { CSV_IMPORT_QUEUE_NAME, JOB_PROCESS_CSV, type ProcessCsvJob } from './csv-import.queue';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 /**
  * In-process CSV import worker (Phase 1A pattern). Delegates to
@@ -19,6 +20,7 @@ export class CsvImportWorker implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly processor: CsvImportProcessorService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   onModuleInit(): void {
@@ -44,6 +46,9 @@ export class CsvImportWorker implements OnModuleInit, OnModuleDestroy {
       );
     });
     this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(CsvImportWorker.name, err);
       this.logger.error({ err: err.message }, 'CSV import worker error');
     });
     this.logger.log(`CSV import worker ready (queue=${CSV_IMPORT_QUEUE_NAME})`);
