@@ -252,9 +252,17 @@ function Timeline({ ticket }: { readonly ticket: TicketView }): ReactElement {
       title: humanise(ticket.status),
       detail: (
         <>
-          <p>{OUTCOME_COPY[ticket.status] ?? 'This ticket was closed.'}</p>
+          <p>{outcomeCopy(ticket)}</p>
+          {/*
+            What we actually found out — the answer to the question this
+            ticket asked. It was muted body text under the boilerplate,
+            which is the wrong way round: the sentence above is a
+            category, this is the content.
+          */}
           {ticket.resolutionNotes !== null && ticket.resolutionNotes !== '' && (
-            <p className="text-text-body mt-1 whitespace-pre-wrap">{ticket.resolutionNotes}</p>
+            <p className="border-accent bg-accent/5 text-text-bright mt-2 rounded border-l-2 py-1.5 pl-2.5 font-medium whitespace-pre-wrap">
+              {ticket.resolutionNotes}
+            </p>
           )}
         </>
       ),
@@ -284,6 +292,27 @@ function Timeline({ ticket }: { readonly ticket: TicketView }): ReactElement {
  * Describes an outcome that already happened; it does not predict what
  * the server would allow (FE-2) — nothing on this page writes.
  */
+/**
+ * What the closure MEANT, in the seller's terms.
+ *
+ * Keyed on status AND type, because the same terminal means different
+ * things. `RESOLVED_WRITE_OFF_ACCEPTED` is the settled-with-no-money-moved
+ * end of the lifecycle; on a scrap/damage ticket that genuinely is a
+ * write-off, but on a question the seller asked — "call my customer" —
+ * nothing was written off and no goods were lost. Telling them their
+ * goods were written off because they asked us to make a phone call is
+ * worse than saying nothing.
+ */
+function outcomeCopy(ticket: { status: TicketStatus; ticketType: TicketType }): string {
+  if (
+    ticket.status === TicketStatus.RESOLVED_WRITE_OFF_ACCEPTED &&
+    ticket.ticketType === TicketType.SELLER_RAISED_ISSUE
+  ) {
+    return 'We looked into this and closed it. No money moved.';
+  }
+  return OUTCOME_COPY[ticket.status] ?? 'This ticket was closed.';
+}
+
 const OUTCOME_COPY: Readonly<Partial<Record<TicketStatus, string>>> = {
   [TicketStatus.RESOLVED_REFUND]: 'We refunded you. The credit is in your wallet.',
   [TicketStatus.RESOLVED_RETURNED]: 'The goods went back to you. No money moved.',

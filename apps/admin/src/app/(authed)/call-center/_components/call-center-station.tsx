@@ -143,7 +143,13 @@ export function CallCenterStation(): ReactElement {
   // Ticking this closes the seller's issues in the SAME action as the
   // outcome, so the agent never has to scroll back up to a banner to
   // finish the job they just did.
-  const [closeIssues, setCloseIssues] = useState(false);
+  //
+  // Defaults to ON: the seller asked a question, the agent rang and
+  // answered it, and that is the ordinary end of it. Making them tick a
+  // box to finish the normal case leaves tickets open through nothing
+  // but forgetfulness — and an issue left open costs the seller a chase,
+  // whereas one closed too eagerly costs a reopen.
+  const [closeIssues, setCloseIssues] = useState(true);
   const transitionTicket = useTransitionTicket();
   // FE-2: cosmetic. The server enforces this regardless — but an agent
   // who may not resolve tickets should not be offered a checkbox that
@@ -166,7 +172,7 @@ export function CallCenterStation(): ReactElement {
     setOutcome('');
     setNotes('');
     setCallbackTime('');
-    setCloseIssues(false);
+    setCloseIssues(true);
   }
 
   /**
@@ -197,7 +203,7 @@ export function CallCenterStation(): ReactElement {
         setOutcome('');
         setNotes('');
         setCallbackTime('');
-        setCloseIssues(false);
+        setCloseIssues(true);
       } catch (err) {
         setError(fmtError(err));
       }
@@ -571,8 +577,8 @@ export function CallCenterStation(): ReactElement {
                     Close the seller’s {assignment.openTickets.length === 1 ? 'issue' : 'issues'}{' '}
                     after recording
                     <span className="text-text-muted block text-xs">
-                      Tick this when the question is answered. Leave it if you still owe them
-                      something — a re-attempt to arrange, or another call.
+                      Untick it if you still owe them something — a re-attempt to arrange, or
+                      another call.
                     </span>
                   </span>
                 </label>

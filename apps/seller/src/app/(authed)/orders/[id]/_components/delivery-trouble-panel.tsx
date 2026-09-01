@@ -151,16 +151,25 @@ export function DeliveryTroublePanel({
               </h3>
               <ul className="space-y-2">
                 {calls.data?.items.map((c) => (
-                  <li key={c.id} className="border-border rounded-md border p-2.5 text-sm">
+                  <li
+                    key={c.id}
+                    className="border-accent/40 bg-accent/5 rounded-md border p-2.5 text-sm"
+                  >
                     <div className="flex items-center gap-2">
-                      <PhoneCall className="text-text-muted h-3.5 w-3.5 shrink-0" aria-hidden />
-                      <span className="font-medium">{humanOutcome(c.outcome)}</span>
+                      <PhoneCall className="text-accent h-3.5 w-3.5 shrink-0" aria-hidden />
+                      <span className="text-accent font-medium">{humanOutcome(c.outcome)}</span>
                       <span className="text-text-faint ml-auto text-xs">
                         {new Date(c.calledAt).toLocaleString()}
                       </span>
                     </div>
+                    {/*
+                      What the customer actually said. This is the answer
+                      to whatever the seller asked for, and it was set in
+                      muted grey under the outcome label — the least
+                      prominent thing in a block that exists for it.
+                    */}
                     {c.notes !== null && c.notes !== '' && (
-                      <p className="text-text-muted mt-1.5">{c.notes}</p>
+                      <p className="text-text-bright mt-1.5 font-medium">{c.notes}</p>
                     )}
                     {c.customerSaidAddress !== null && (
                       <p className="text-text-muted mt-1 text-xs">
