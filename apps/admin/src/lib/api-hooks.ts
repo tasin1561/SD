@@ -1736,11 +1736,16 @@ export function useRevealBankAccount(
 
 import type { FxRateView, SetFxRateRequest, FxRateHistoryRow } from '@skydrop/api-client';
 
-export function useFxRatesList(): UseQueryResult<ReadonlyArray<FxRateView>> {
+export function useFxRatesList(enabled = true): UseQueryResult<ReadonlyArray<FxRateView>> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['admin-fx', 'list'],
     queryFn: () => client.request<ReadonlyArray<FxRateView>>('/api/admin/fx-rates'),
+    // `fx.view` is not implied by every page that wants a rate — the
+    // treasury transfer seeds its quote from here and is gated on
+    // `money.treasury.view`. A caller without the permission passes
+    // false rather than firing a request that can only 403.
+    enabled,
   });
 }
 

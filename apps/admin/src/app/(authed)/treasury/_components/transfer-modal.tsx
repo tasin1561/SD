@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import {
   Button,
   FormField,
@@ -13,7 +13,7 @@ import {
 } from '@skydrop/ui/components';
 import { useRecordTransfer } from '@/lib/ops-hooks';
 import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
-import { useSellersList } from '@/lib/api-hooks';
+import { useFxRatesList, useSellersList } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 
@@ -46,6 +46,10 @@ export function TransferModal({
   readonly onOpenChange: (next: boolean) => void;
 }): ReactElement {
   const accounts = usePlatformBankAccounts(usePermission('money.view'));
+  // Seeds the quoted rate. Gated: this page is `money.treasury.view` and
+  // reading FX is its own permission, so an operator who may move money
+  // but not read rates gets no seed rather than a 403 on open.
+  const fxRates = useFxRatesList(usePermission('fx.view'));
   const sellers = useSellersList({ status: 'APPROVED', page: 1, pageSize: 100 });
   const transfer = useRecordTransfer();
 
@@ -54,6 +58,7 @@ export function TransferModal({
   const [amountOut, setOut] = useState('');
   const [amountIn, setIn] = useState('');
   const [quotedRate, setQuoted] = useState('');
+  const [quotedTouched, setQuotedTouched] = useState(false);
   const [sellerId, setSellerId] = useState('');
   const [movedAt, setMovedAt] = useState(localNow);
   const [reference, setReference] = useState('');
@@ -64,6 +69,27 @@ export function TransferModal({
   const from = list.find((a) => a.id === fromAccountId);
   const to = list.find((a) => a.id === toAccountId);
   const crossCurrency = from !== undefined && to !== undefined && from.currency !== to.currency;
+
+  // The rate the SYSTEM holds for this direction — what the seller would
+  // have been quoted. Seeded into the field rather than left blank,
+  // because the two obvious things to type are both wrong: a blank rate
+  // credits them nothing, and the ACHIEVED rate credits them exactly
+  // what the bank gave us, which is the one number TRE-5 says is NOT the
+  // quote. The gap between quote and achieved is the whole point of
+  // FX_SPREAD, and it can only exist if the quote is recorded.
+  const systemRate = useMemo(() => {
+    if (from === undefined || to === undefined || from.currency === to.currency) return null;
+    const row = (fxRates.data ?? []).find(
+      (r) => r.fromCurrency === from.currency && r.toCurrency === to.currency,
+    );
+    return row?.rate ?? null;
+  }, [fxRates.data, from, to]);
+
+  useEffect(() => {
+    // Seed once, and never over a figure somebody has typed.
+    if (quotedTouched || systemRate === null) return;
+    if (quotedRate === '') setQuoted(systemRate);
+  }, [systemRate, quotedTouched, quotedRate]);
 
   const achieved = useMemo(() => {
     const o = Number(amountOut);
@@ -191,15 +217,22 @@ export function TransferModal({
         {sellerId !== '' && crossCurrency && (
           <FormField
             label="Rate quoted to the seller"
-            hint="They are credited at this rate; the gap against what we achieved is booked as ours, either way."
+            hint={
+              systemRate === null
+                ? 'They are credited at this rate; the gap against what we achieved is booked as ours, either way.'
+                : `From the system rate (${systemRate}). They are credited at this rate; the gap against the ${achieved ?? '—'} we achieved is booked as ours, either way.`
+            }
           >
             <Input
               type="number"
               step="0.000001"
               min="0"
               value={quotedRate}
-              onChange={(e) => setQuoted(e.target.value)}
-              placeholder={achieved ?? '0.000000'}
+              onChange={(e) => {
+                setQuotedTouched(true);
+                setQuoted(e.target.value);
+              }}
+              placeholder={systemRate ?? achieved ?? '0.000000'}
             />
           </FormField>
         )}
@@ -225,14 +258,33 @@ export function TransferModal({
         </FormField>
 
         {sellerId !== '' && crossCurrency && quotedRate.trim() !== '' && amountOut !== '' && (
-          <p className="text-text-muted text-xs">
-            The seller would be credited{' '}
-            <Money
-              amount={(Number(amountOut) * Number(quotedRate)).toFixed(2)}
-              currency={to?.currency === 'BDT' ? 'BDT' : 'INR'}
-              convert={false}
-            />{' '}
-            and the remainder booked to us.
+          <p
+            className={
+              Number(quotedRate) > 0
+                ? 'text-text-muted text-xs'
+                : 'text-[var(--color-warning)] text-xs'
+            }
+          >
+            {Number(quotedRate) > 0 ? (
+              <>
+                The seller would be credited{' '}
+                <Money
+                  amount={(Number(amountOut) * Number(quotedRate)).toFixed(2)}
+                  currency={to?.currency === 'BDT' ? 'BDT' : 'INR'}
+                  convert={false}
+                />{' '}
+                and the remainder booked to us.
+              </>
+            ) : (
+              /* A zero rate is not a quote, it is an unfilled field. Stated
+                 calmly it reads as arithmetic; what it actually does is
+                 move the seller's whole balance to us. */
+              <>
+                A rate of zero credits the seller NOTHING and books the entire amount to us. That is
+                almost certainly not what you mean — use the system rate, or whatever you actually
+                quoted them.
+              </>
+            )}
           </p>
         )}
       </div>

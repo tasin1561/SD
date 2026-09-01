@@ -3,6 +3,8 @@ import type { Currency } from '@skydrop/db';
 export interface RemittanceListItem {
   readonly id: string;
   readonly sellerId: string;
+  /** Who was paid. Null only if the seller row vanished. */
+  readonly sellerName: string | null;
   readonly currency: Currency;
   readonly amount: string;
   readonly sourceCurrency: Currency;

@@ -208,11 +208,8 @@ export function RemittancesIndex(): ReactElement {
                     {new Date(r.paidAt).toLocaleString()}
                   </td>
                   <td className="px-3 py-2 text-text-body">
-                    <Link
-                      href={`/sellers/${r.sellerId}`}
-                      className="text-accent hover:underline font-mono text-xs"
-                    >
-                      {r.sellerId.slice(0, 8)}…
+                    <Link href={`/sellers/${r.sellerId}`} className="text-accent hover:underline">
+                      {r.sellerName ?? <Ident value={`${r.sellerId.slice(0, 8)}…`} />}
                     </Link>
                   </td>
                   <td className="px-3 py-2 text-right">

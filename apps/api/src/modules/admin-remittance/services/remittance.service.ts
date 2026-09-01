@@ -278,6 +278,9 @@ export class RemittanceService {
     items: Array<{
       id: string;
       sellerId: string;
+      /** Who was paid. A payout history that identifies people by uuid
+       *  prefix is not a history anybody can read. */
+      sellerName: string | null;
       currency: Currency;
       amount: string;
       sourceCurrency: Currency;
@@ -313,6 +316,7 @@ export class RemittanceService {
           paidAt: true,
           note: true,
           createdAt: true,
+          seller: { select: { companyName: true } },
         },
       }),
       this.prisma.client.remittance.count({ where }),
@@ -321,6 +325,7 @@ export class RemittanceService {
       items: rows.map((r) => ({
         id: r.id,
         sellerId: r.sellerId,
+        sellerName: r.seller?.companyName ?? null,
         currency: r.currency,
         amount: r.amount.toString(),
         sourceCurrency: r.sourceCurrency,

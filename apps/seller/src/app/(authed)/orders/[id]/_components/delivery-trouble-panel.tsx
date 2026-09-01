@@ -114,7 +114,14 @@ export function DeliveryTroublePanel({
         title={orderStatus === 'DELIVERY_FAILED' ? 'Delivery did not succeed' : 'Out for delivery'}
         action={
           actions.data?.canRequest === true ? (
-            <Button size="sm" onClick={() => setOpen(true)}>
+            /* PRIMARY, deliberately. This card only appears when a parcel
+               is in trouble or has been, and this is the one thing the
+               seller can DO about it — telling us to re-attempt, hold, or
+               return it. Rendered in the default quiet variant it read as
+               a secondary link on a page full of read-only detail, which
+               is the wrong weight for the only control that changes what
+               happens to a live parcel. */
+            <Button variant="primary" size="sm" onClick={() => setOpen(true)}>
               Ask us to act
             </Button>
           ) : undefined

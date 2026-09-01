@@ -90,6 +90,30 @@ export function RemittanceFormModal({
   // Still EDITABLE, deliberately: what the bank actually achieved is the
   // operator's fact, and TRE-5 records the gap against our quote as
   // FX_SPREAD rather than pretending the quote was the outcome.
+  /**
+   * More than the wallet holds.
+   *
+   * The server refuses this outright (INSUFFICIENT_WALLET_BALANCE, read
+   * live INSIDE the write transaction), so this is UX, not the guard —
+   * but finding out at submit means retyping a form you had finished.
+   *
+   * The cap is the WALLET, not what we physically hold for this seller
+   * in the paying account. Those are different questions: the wallet is
+   * what we OWE them, and paying more than we happen to be holding for
+   * them just draws on our capital, which is normal (TRE-4/TRE-8). What
+   * must never happen is paying out more than the debt.
+   */
+  const overBalance = (() => {
+    const held = (balance.data?.balances ?? []).find(
+      (b) => b.currency === sourceCurrency && !b.isConverted,
+    );
+    if (held === undefined || sourceAmount.trim() === '') return null;
+    const asked = Number(sourceAmount);
+    const have = Number(held.balance);
+    if (!Number.isFinite(asked) || !Number.isFinite(have) || asked <= have) return null;
+    return { asked: asked.toFixed(2), have: held.balance };
+  })();
+
   const [fxRate, setFxRate] = useState('');
   const [fxTouched, setFxTouched] = useState(false);
   const [bankReference, setBankReference] = useState('');
@@ -413,6 +437,17 @@ export function RemittanceFormModal({
           request sits in the queue looking untouched. Said before
           recording, not after.
         */}
+        {overBalance !== null && (
+          <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
+            The wallet holds{' '}
+            <Money amount={overBalance.have} currency={sourceCurrency} convert={false} />, so{' '}
+            <Money amount={overBalance.asked} currency={sourceCurrency} convert={false} /> is more
+            than we owe this seller. The server will refuse it (INSUFFICIENT_WALLET_BALANCE). Note
+            this is capped by the WALLET, not by what we hold for them in the paying account —
+            paying beyond that draws on our own capital, which is normal.
+          </div>
+        )}
+
         {mismatch !== null && (
           <div className="border-border text-text-body rounded-[5px] border border-dashed px-3 py-2 text-xs">
             This request asked for{' '}
