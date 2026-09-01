@@ -131,6 +131,25 @@ export class CallOutcomeMappingService {
       requeue: true,
       reschedule: 'IMMEDIATE',
     },
+    // Reached them, and there was nothing to confirm.
+    //
+    // No transition: on a pending order the customer has not agreed to
+    // anything yet, so it stays where it is and can be rung again; on a
+    // shipped one there is nothing for a call to change anyway (CUR-11 —
+    // the courier's scans decide where a parcel is, not us).
+    //
+    // Counts toward NO cap: the cap exists to stop us ringing forever
+    // without reaching anybody, and this is the outcome where we DID.
+    //
+    // No requeue: the seller asked a question and it has been answered.
+    // Re-queueing would put the order back in the confirmation line for
+    // a call nobody asked for.
+    [CallOutcome.SPOKE_TO_CUSTOMER]: {
+      targetStatus: null,
+      countsTowardCap: false,
+      requeue: false,
+      reschedule: 'NONE',
+    },
   };
 
   /** The 6/9 outcomes that count toward the NDR cap (CC-5). */

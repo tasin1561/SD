@@ -101,3 +101,41 @@ describe('CallOutcomeMappingService', () => {
     }
   });
 });
+
+describe('SPOKE_TO_CUSTOMER — reached them, nothing to confirm', () => {
+  // The other eight are the confirmation vocabulary. Seven are about
+  // NOT reaching someone; the only "reached them successfully" one is
+  // CONFIRMED, which advances the order. On a parcel already out for
+  // delivery that left an agent with no honest option.
+  const svc = new CallOutcomeMappingService();
+
+  it('moves no order', () => {
+    const r = svc.resolve(CallOutcome.SPOKE_TO_CUSTOMER, {
+      priorAttemptCount: 0,
+      maxAttempts: 3,
+      atCapPolicy: 'REJECT',
+    });
+    expect(r.targetStatus).toBeNull();
+  });
+
+  it('counts toward no cap, however many times it happens', () => {
+    // The cap exists to stop us ringing forever without reaching
+    // anybody. This is the outcome where we did.
+    const r = svc.resolve(CallOutcome.SPOKE_TO_CUSTOMER, {
+      priorAttemptCount: 99,
+      maxAttempts: 3,
+      atCapPolicy: 'REJECT',
+    });
+    expect(r.hitCap).toBe(false);
+    expect(r.targetStatus).toBeNull();
+  });
+
+  it('does not re-queue — the question was answered', () => {
+    const r = svc.resolve(CallOutcome.SPOKE_TO_CUSTOMER, {
+      priorAttemptCount: 0,
+      maxAttempts: 3,
+      atCapPolicy: 'REJECT',
+    });
+    expect(r.requeue).toBe(false);
+  });
+});

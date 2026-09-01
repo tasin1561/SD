@@ -110,6 +110,27 @@ export function CallCenterStation(): ReactElement {
 
   const [assignment, setAssignment] = useState<PulledAssignment | null>(null);
   const hasOpenIssues = (assignment?.openTickets.length ?? 0) > 0;
+  const isConfirmationCall = assignment?.callPurpose.kind === 'CONFIRMATION';
+
+  /**
+   * Two different jobs, two different vocabularies.
+   *
+   * A CONFIRMATION call asks "does the customer still want this?", and
+   * the nine outcomes answer exactly that. A ticket call asks whatever
+   * the seller asked; the answer is the NOTE, and the only thing the
+   * dropdown has to record is that the call happened. Offering nine
+   * order-shaped outcomes there invited an agent to pick one that moves
+   * an order which must not move.
+   */
+  const orderedOutcomes = isConfirmationCall
+    ? OUTCOME_OPTIONS
+    : ([
+        {
+          value: 'SPOKE_TO_CUSTOMER' as CallOutcome,
+          label: 'Called',
+          helper: 'What they said goes in the note below — the seller reads it.',
+        },
+      ] as typeof OUTCOME_OPTIONS);
   /** Whether the held-call check has answered — the auto-advance must
    *  not pull before it has, or the first tick races it to a certain
    *  AGENT_AT_CAPACITY. */
@@ -284,6 +305,15 @@ export function CallCenterStation(): ReactElement {
     }, EMPTY_QUEUE_RETRY_MS);
     return () => clearInterval(id);
   }, [isAvailable]);
+
+  // One option is not a choice. Pre-selecting it means a ticket call is
+  // "write the note, press the button" rather than a dropdown that
+  // exists only to be satisfied.
+  useEffect(() => {
+    if (assignment && !isConfirmationCall && outcome === '') {
+      setOutcome('SPOKE_TO_CUSTOMER' as CallOutcome);
+    }
+  }, [assignment, isConfirmationCall, outcome]);
 
   async function onRecord(): Promise<void> {
     if (!assignment || !outcome) return;
@@ -462,7 +492,14 @@ export function CallCenterStation(): ReactElement {
                   onChange={(e) => setOutcome(e.target.value as CallOutcome | '')}
                 >
                   <option value="">Select an outcome…</option>
-                  {OUTCOME_OPTIONS.map((o) => (
+                  {/*
+                    On a follow-up the confirmation pair sinks to the
+                    bottom: they are the only two that move an order, and
+                    on a shipped parcel neither can. Ordering, not
+                    hiding — an agent who needs one can still reach it
+                    (FE-2: the UI does not pre-empt the server).
+                  */}
+                  {orderedOutcomes.map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
                     </option>
@@ -480,19 +517,10 @@ export function CallCenterStation(): ReactElement {
                 better than letting an agent pick one and assume it
                 worked.
               */}
-              {assignment.callPurpose.kind !== 'CONFIRMATION' &&
-              (outcome === 'CONFIRMED' || outcome === 'CUSTOMER_DECLINED') ? (
-                <div className="text-warning -mt-2 text-xs">
-                  This parcel has already shipped, so this outcome will not move the order — the
-                  call is still recorded and written onto the ticket. To stop the delivery, use
-                  &ldquo;Send it back&rdquo; on the order instead.
+              {outcome && (
+                <div className="text-text-faint -mt-2 text-xs">
+                  {orderedOutcomes.find((o) => o.value === outcome)?.helper}
                 </div>
-              ) : (
-                outcome && (
-                  <div className="text-text-faint text-xs -mt-2">
-                    {OUTCOME_OPTIONS.find((o) => o.value === outcome)?.helper}
-                  </div>
-                )
               )}
 
               {outcome === 'CALLBACK_REQUESTED' && (

@@ -1,0 +1,14 @@
+-- "I reached the customer and here is what they said."
+--
+-- The existing eight are the CONFIRMATION vocabulary. Seven of them are
+-- about not reaching someone; the only one meaning "reached them
+-- successfully" is `confirmed`, which advances the order.
+--
+-- So on a parcel already out for delivery — a seller asking us to ring
+-- their customer, or a failed delivery being chased — an agent who
+-- actually spoke to someone had no honest way to record it. The nearest
+-- option moved an order that must not move.
+--
+-- Moves no order and counts toward no cap: the value of such a call is
+-- the note, which goes back to whoever asked for it.
+ALTER TYPE "call_outcome" ADD VALUE IF NOT EXISTS 'spoke_to_customer';

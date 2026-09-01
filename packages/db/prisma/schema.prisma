@@ -4915,6 +4915,17 @@ enum CallOutcome {
   CALLBACK_REQUESTED @map("callback_requested")
   TECHNICAL_FAILURE  @map("technical_failure")
   LANGUAGE_BARRIER   @map("language_barrier")
+  /// Reached the customer and recorded what they said, with nothing to
+  /// confirm — a seller asked us to ring them, or a delivery failed.
+  ///
+  /// The other eight are the CONFIRMATION vocabulary: the only one
+  /// meaning "I reached them successfully" is CONFIRMED, which advances
+  /// the order. On a parcel already out for delivery an agent had no
+  /// honest way to say they had spoken to anyone.
+  ///
+  /// Moves no order and counts toward no cap. The value of the call is
+  /// the note, which goes back to whoever asked.
+  SPOKE_TO_CUSTOMER  @map("spoke_to_customer")
 
   @@map("call_outcome")
 }
@@ -5919,17 +5930,17 @@ enum TicketStatus {
 /// a `TicketEvent`, so the negotiation history is reconstructable rather
 /// than collapsed into a current-status column.
 model Ticket {
-  id             String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  ticketType     TicketType        @map("ticket_type")
-  status         TicketStatus      @default(OPEN)
-  sellerId       String            @map("seller_id") @db.Uuid
+  id             String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  ticketType     TicketType   @map("ticket_type")
+  status         TicketStatus @default(OPEN)
+  sellerId       String       @map("seller_id") @db.Uuid
   // Context. Nullable because a seller-raised issue may reference only
   // an order, while a scrap ticket always has the full chain.
-  orderId        String?           @map("order_id") @db.Uuid
-  shipmentId     String?           @map("shipment_id") @db.Uuid
-  shipmentItemId String?           @map("shipment_item_id") @db.Uuid
+  orderId        String?      @map("order_id") @db.Uuid
+  shipmentId     String?      @map("shipment_id") @db.Uuid
+  shipmentItemId String?      @map("shipment_item_id") @db.Uuid
   /// Denormalised courier ref for liability attribution/reporting.
-  courierCode    String?           @map("courier_code")
+  courierCode    String?      @map("courier_code")
 
   /// WHICH problem this is, in the COURIER's own vocabulary.
   ///
@@ -5942,12 +5953,12 @@ model Ticket {
   /// Nullable because the tickets raised before there was a taxonomy
   /// have none, and inventing one for them would be a guess recorded as
   /// a fact.
-  issueCategoryExternalId    String? @map("issue_category_external_id")
+  issueCategoryExternalId    String?           @map("issue_category_external_id")
   /// The chosen subcategory, when that category has any. Several of
   /// Delhivery's go straight to the description.
-  issueSubcategoryExternalId String? @map("issue_subcategory_external_id")
+  issueSubcategoryExternalId String?           @map("issue_subcategory_external_id")
   /// For SCRAP_DAMAGE: the inspected condition that triggered the ticket.
-  rtoCondition   RtoItemCondition? @map("rto_condition")
+  rtoCondition               RtoItemCondition? @map("rto_condition")
 
   subject     String
   description String? @db.Text
