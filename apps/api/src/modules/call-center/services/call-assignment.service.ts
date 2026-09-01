@@ -10,6 +10,9 @@ import {
   CallHoldOutcome,
   CallOutcome,
   CallQueueStatus,
+  DeliveryActionKind,
+  DeliveryActionStatus,
+  OrderStatus,
   TicketStatus,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -109,6 +112,27 @@ export interface PulledAssignment {
     detail: string | null;
     raisedAt: Date;
   }>;
+
+  /**
+   * WHY this call is happening, said once and plainly.
+   *
+   * An agent opening with "I'm calling to confirm your order" on a
+   * parcel that is already out for delivery has told the customer we do
+   * not know where their parcel is. The queue entry cannot distinguish
+   * the two — it carries an order id — so the agent was left inferring
+   * it from a status field further down the page, or not at all.
+   *
+   * DERIVED HERE, not in the UI. Which call this is decides the opening
+   * line, and two screens working it out independently is how they come
+   * to disagree.
+   */
+  callPurpose: {
+    kind: 'CONFIRMATION' | 'SELLER_REQUESTED' | 'DELIVERY_FOLLOW_UP';
+    /** What to say first, in the agent's own language. */
+    headline: string;
+    /** The seller's own words when they asked for this call. */
+    sellerAsked: string | null;
+  };
 }
 
 /**
@@ -250,6 +274,7 @@ export class CallAssignmentService {
       itemDisplay: await this.loadItemDisplay(order),
       priorAttempts: await this.loadPriorAttempts(order),
       openTickets: await this.loadOpenTickets(picked.orderId),
+      callPurpose: await this.resolveCallPurpose(picked.orderId, order?.status ?? null),
     };
   }
 
@@ -262,6 +287,56 @@ export class CallAssignmentService {
    * the one place two agents contend, so it stays as short as it can be.
    * Enrichment is a plain read afterwards.
    */
+  /**
+   * Which conversation the agent is about to have.
+   *
+   * The seller's ASK wins over the order's status: an order can be out
+   * for delivery AND have the seller asking us to ring the customer,
+   * and in that case what they asked for is the more useful thing to
+   * open with.
+   *
+   * Read from `order_delivery_action_requests` rather than by matching
+   * a ticket's subject text — that table IS the record of the seller
+   * asking, and a string match would quietly stop working the day
+   * somebody rewords the subject.
+   */
+  private async resolveCallPurpose(
+    orderId: string,
+    orderStatus: OrderStatus | null,
+  ): Promise<PulledAssignment['callPurpose']> {
+    const asked = await this.prisma.client.orderDeliveryActionRequest.findFirst({
+      where: {
+        orderId,
+        action: DeliveryActionKind.RECALL,
+        status: { in: [DeliveryActionStatus.EXECUTED, DeliveryActionStatus.APPROVED] },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { reason: true },
+    });
+    if (asked !== null) {
+      return {
+        kind: 'SELLER_REQUESTED',
+        headline: 'The seller asked us to call this customer',
+        sellerAsked: asked.reason,
+      };
+    }
+    if (orderStatus === OrderStatus.PENDING_CONFIRMATION) {
+      return {
+        kind: 'CONFIRMATION',
+        headline: 'Confirm this order before it ships',
+        sellerAsked: null,
+      };
+    }
+    // Anything else is a parcel already moving — out for delivery, or a
+    // failed attempt being chased. Saying "confirm your order" here
+    // tells the customer we have lost track of their parcel.
+    return {
+      kind: 'DELIVERY_FOLLOW_UP',
+      headline: 'This parcel is already on its way — this is a delivery follow-up',
+      sellerAsked: null,
+    };
+  }
+
   private async loadOpenTickets(orderId: string): Promise<PulledAssignment['openTickets']> {
     const rows = await this.prisma.client.ticket.findMany({
       where: {
@@ -461,6 +536,16 @@ export class CallAssignmentService {
     // One query for the whole page rather than one per row: this is the
     // supervisor's list view, so the N+1 would be N of them.
     const ticketsByOrder = await this.loadOpenTicketsForOrders(rows.map((r) => r.orderId));
+    // Same derivation as a single pull, resolved per row. This is the
+    // supervisor's list; a wrong purpose here is a wrong opening line
+    // on whichever call they hand out.
+    const purposeByOrder = new Map<string, PulledAssignment['callPurpose']>();
+    for (const r of rows) {
+      purposeByOrder.set(
+        r.orderId,
+        await this.resolveCallPurpose(r.orderId, orders.get(r.orderId)?.status ?? null),
+      );
+    }
     return rows.map((r) => {
       const order = orders.get(r.orderId) ?? null;
       return {
@@ -473,6 +558,11 @@ export class CallAssignmentService {
         itemDisplay: displayByOrder.get(r.orderId) ?? {},
         priorAttempts: attemptsByOrder.get(r.orderId) ?? [],
         openTickets: ticketsByOrder.get(r.orderId) ?? [],
+        callPurpose: purposeByOrder.get(r.orderId) ?? {
+          kind: 'CONFIRMATION' as const,
+          headline: 'Confirm this order',
+          sellerAsked: null,
+        },
       };
     });
   }

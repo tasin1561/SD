@@ -1,4 +1,4 @@
-import { CallQueueStatus } from '@skydrop/db';
+import { CallQueueStatus, OrderStatus } from '@skydrop/db';
 import { CallAssignmentService } from '../../src/modules/call-center/services/call-assignment.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { OrderReadService } from '../../src/modules/order/services/order-read.service';
@@ -23,6 +23,7 @@ function makeService(
     /** This order's logged calls, newest first. */
     priorAttempts?: AnyArgs[];
     openTickets?: AnyArgs[];
+    recallRequest?: AnyArgs | null;
     currentRows?: AnyArgs[];
     releaseEntry?: AnyArgs | null; // findUnique for release(); undefined → default ASSIGNED owned
     releaseUpdateCount?: number;
@@ -90,6 +91,11 @@ function makeService(
     callAttempt: { findMany: jest.fn(async () => opts.priorAttempts ?? []) },
     // WHY the agent is calling. Empty unless a test says otherwise.
     ticket: { findMany: jest.fn(async () => opts.openTickets ?? []) },
+    // Did the seller ask us to make this call? That question decides
+    // the agent's opening line.
+    orderDeliveryActionRequest: {
+      findFirst: jest.fn(async () => opts.recallRequest ?? null),
+    },
   } as {
     callQueueEntry: {
       count: typeof count;
@@ -101,6 +107,7 @@ function makeService(
     seller: { findMany: typeof sellerFindMany };
     callAttempt: { findMany: jest.Mock };
     ticket: { findMany: jest.Mock };
+    orderDeliveryActionRequest: { findFirst: jest.Mock };
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
   };
   client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient);
@@ -333,5 +340,52 @@ describe('CallAssignmentService.pullNext — concurrency (FOR UPDATE SKIP LOCKED
     expect(empty).toHaveLength(1); // the other sees QUEUE_EMPTY
     expect(got[0]!.assignmentId).toBe('q1');
     expect(update).toHaveBeenCalledTimes(1); // only the winner flips → ASSIGNED
+  });
+});
+
+describe('PulledAssignment.callPurpose — which conversation this is', () => {
+  // An agent opening "I'm calling to confirm your order" on a parcel
+  // already out for delivery has told the customer we do not know where
+  // their parcel is. The queue entry carries an order id and nothing
+  // else, so this is the only thing that distinguishes them.
+  it('says CONFIRMATION only while the order is still awaiting confirmation', async () => {
+    const sut = makeService({
+      picked: { id: 'q1', orderId: 'o1' },
+      order: {
+        orderId: 'o1',
+        sellerId: 's1',
+        items: [],
+        status: OrderStatus.PENDING_CONFIRMATION,
+      },
+    });
+    const a = await sut.svc.pullNext('agent-1');
+    expect(a).not.toBeNull();
+    expect(a!.callPurpose.kind).toBe('CONFIRMATION');
+    expect(a!.callPurpose.sellerAsked).toBeNull();
+  });
+
+  it('says DELIVERY_FOLLOW_UP once the parcel is moving', async () => {
+    const sut = makeService({
+      picked: { id: 'q1', orderId: 'o1' },
+      order: { orderId: 'o1', sellerId: 's1', items: [], status: OrderStatus.OUT_FOR_DELIVERY },
+    });
+    const a = await sut.svc.pullNext('agent-1');
+    expect(a).not.toBeNull();
+    expect(a!.callPurpose.kind).toBe('DELIVERY_FOLLOW_UP');
+  });
+
+  it("a seller's ask WINS over the order status, and carries their words", async () => {
+    // An order can be out for delivery AND have the seller asking us to
+    // ring the customer. What they asked for is the more useful thing
+    // to open with.
+    const sut = makeService({
+      picked: { id: 'q1', orderId: 'o1' },
+      order: { orderId: 'o1', sellerId: 's1', items: [], status: OrderStatus.OUT_FOR_DELIVERY },
+      recallRequest: { reason: 'Customer says they will be home after 6pm' },
+    });
+    const a = await sut.svc.pullNext('agent-1');
+    expect(a).not.toBeNull();
+    expect(a!.callPurpose.kind).toBe('SELLER_REQUESTED');
+    expect(a!.callPurpose.sellerAsked).toBe('Customer says they will be home after 6pm');
   });
 });

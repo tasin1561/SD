@@ -391,6 +391,15 @@ export function CallCenterStation(): ReactElement {
                 warning under the address is a warning read after the
                 call has started. Renders nothing for a first-time
                 customer. */}
+            {/* FIRST thing on the card, above the customer's history and
+                the parcel itself. The agent's opening sentence depends
+                on this and nothing else on the page says it: the queue
+                entry carries an order id, so "confirm your order" and
+                "the seller asked us to ring you" looked identical here
+                until now. Opening with the wrong one tells a customer
+                whose parcel is already out for delivery that we have
+                lost track of it. */}
+            <CallPurposeBanner purpose={assignment.callPurpose} tickets={assignment.openTickets} />
             <CustomerRiskStrip orderId={assignment.orderId} />
             <RecipientPanel
               order={assignment.order}
@@ -734,6 +743,57 @@ function Field({
       {/* The VALUE is what gets read aloud, so it carries the weight;
           the label only has to be findable. */}
       <span className="text-text-bright font-medium">{value}</span>
+    </div>
+  );
+}
+
+/**
+ * Why this call is happening, and what the seller asked for.
+ *
+ * Deliberately loud and first. Everything else on this card describes
+ * the parcel; this is the only thing that tells the agent which
+ * conversation they are about to have.
+ */
+function CallPurposeBanner({
+  purpose,
+  tickets,
+}: {
+  readonly purpose: PulledAssignment['callPurpose'];
+  readonly tickets: PulledAssignment['openTickets'];
+}): ReactElement {
+  // A follow-up is the one the agent is most likely to get wrong, so it
+  // is the one that looks least like routine work.
+  const tone =
+    purpose.kind === 'CONFIRMATION'
+      ? 'border-info/40 bg-info/10'
+      : purpose.kind === 'SELLER_REQUESTED'
+        ? 'border-warning/50 bg-warning/10'
+        : 'border-danger/40 bg-danger/10';
+
+  return (
+    <div className={`mb-3 rounded-lg border p-3 ${tone}`}>
+      <p className="text-text-bright text-sm font-semibold">{purpose.headline}</p>
+
+      {purpose.sellerAsked !== null ? (
+        <p className="text-text-body mt-1 text-sm">
+          <span className="text-text-muted">They told us: </span>
+          &ldquo;{purpose.sellerAsked}&rdquo;
+        </p>
+      ) : null}
+
+      {tickets.length > 0 ? (
+        <ul className="mt-2 space-y-1">
+          {tickets.map((t) => (
+            <li key={t.ticketId} className="text-text-body text-xs">
+              <span className="text-text-muted">Open issue — </span>
+              <span className="font-medium">{t.subject}</span>
+              {t.detail === null || t.detail.trim() === '' ? null : (
+                <span className="text-text-muted">: {t.detail}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }

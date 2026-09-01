@@ -48,6 +48,23 @@ export interface CallOrderSnapshot {
 
 export interface PulledAssignment {
   readonly assignmentId: string;
+  /**
+   * WHY this call is happening. Derived server-side (one place decides),
+   * because it is what the agent's opening line depends on.
+   */
+  readonly callPurpose: {
+    readonly kind: 'CONFIRMATION' | 'SELLER_REQUESTED' | 'DELIVERY_FOLLOW_UP';
+    readonly headline: string;
+    /** The seller's own words when they asked for this call. */
+    readonly sellerAsked: string | null;
+  };
+  /** What is open on this order and still unanswered. */
+  readonly openTickets: ReadonlyArray<{
+    readonly ticketId: string;
+    readonly subject: string;
+    readonly detail: string | null;
+    readonly raisedAt: string;
+  }>;
   readonly orderId: string;
   readonly assignedAt: string;
   readonly scheduledAttempts: number;
