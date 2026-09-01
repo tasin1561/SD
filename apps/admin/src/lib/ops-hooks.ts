@@ -2727,3 +2727,69 @@ export function useAdminRequestReturn(
     },
   });
 }
+
+/* ── NSA — Needs Seller Attention ──────────────────────────────────── */
+
+export interface NsaOrderView {
+  readonly orderId: string;
+  readonly orderNumber: string;
+  readonly sellerId: string;
+  readonly sellerName: string | null;
+  readonly status: string;
+  readonly recipientName: string;
+  readonly recipientCity: string;
+  readonly recipientPhoneE164: string;
+  readonly codAmountInr: string | null;
+  readonly awbNumber: string | null;
+  readonly courierCode: string | null;
+  /** Which evening this is — 1 the first night, 2 and 3 after. */
+  readonly dayCount: number;
+  readonly raisedAt: string;
+  readonly outForDeliveryAt: string | null;
+  readonly acknowledgedAt: string | null;
+  readonly note: string | null;
+}
+
+export interface NsaSweepSummary {
+  readonly ranAt: string;
+  readonly skippedBeforeCutoff: boolean;
+  readonly examined: number;
+  readonly raised: number;
+  readonly escalated: number;
+  readonly cleared: number;
+}
+
+export function useNsaList(enabled = true): UseQueryResult<readonly NsaOrderView[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-nsa', 'list'],
+    enabled,
+    queryFn: () => client.request<readonly NsaOrderView[]>('/api/admin/nsa'),
+  });
+}
+
+export function useAcknowledgeNsa(): UseMutationResult<
+  { orderId: string; acknowledgedAt: string },
+  Error,
+  { orderId: string; note?: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, note }) =>
+      client.request<{ orderId: string; acknowledgedAt: string }>(
+        `/api/admin/nsa/${orderId}/acknowledge`,
+        { method: 'POST', body: note === undefined ? {} : { note } },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-nsa'] }),
+  });
+}
+
+export function useRunNsaSweep(): UseMutationResult<NsaSweepSummary, Error, void> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => client.request<NsaSweepSummary>('/api/admin/nsa/sweep', { method: 'POST' }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-nsa'] }),
+  });
+}

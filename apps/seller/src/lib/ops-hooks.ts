@@ -554,3 +554,37 @@ export function useServiceability(
       ),
   });
 }
+
+/* ── NSA — orders of ours that are stuck out for delivery ──────────── */
+
+export interface NsaOrderView {
+  readonly orderId: string;
+  readonly orderNumber: string;
+  readonly sellerId: string;
+  readonly sellerName: string | null;
+  readonly status: string;
+  readonly recipientName: string;
+  readonly recipientCity: string;
+  readonly recipientPhoneE164: string;
+  readonly codAmountInr: string | null;
+  readonly awbNumber: string | null;
+  readonly courierCode: string | null;
+  /** Which evening this is — 1 the first night, 2 and 3 after. */
+  readonly dayCount: number;
+  readonly raisedAt: string;
+  readonly outForDeliveryAt: string | null;
+  readonly acknowledgedAt: string | null;
+  readonly note: string | null;
+}
+
+/**
+ * The seller's own stuck parcels. No sellerId crosses the wire — the
+ * guard supplies it, so this can only ever return their own.
+ */
+export function useMyNsaOrders(): UseQueryResult<readonly NsaOrderView[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-nsa', 'list'],
+    queryFn: () => client.request<readonly NsaOrderView[]>('/api/seller/nsa'),
+  });
+}

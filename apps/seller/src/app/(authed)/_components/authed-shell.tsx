@@ -10,6 +10,7 @@ import { RestrictionBanner } from './restriction-banner';
 import { canSeePath } from '@/lib/page-access';
 import { quickActionsFor } from '@/lib/quick-actions';
 import {
+  AlertTriangle,
   Boxes,
   Building2,
   LayoutDashboard,
@@ -67,6 +68,11 @@ export function AuthedShell({
         { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={15} /> },
         { href: '/orders', label: 'Orders', icon: <Package size={15} /> },
         { href: '/tracking', label: 'Tracking', icon: <Truck size={15} /> },
+        {
+          href: '/needs-attention',
+          label: 'Needs attention',
+          icon: <AlertTriangle size={15} />,
+        },
         { href: '/customers', label: 'Customers', icon: <Users size={15} /> },
         { href: '/tickets', label: 'Tickets', icon: <LifeBuoy size={15} /> },
       ],

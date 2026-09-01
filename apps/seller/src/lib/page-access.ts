@@ -47,6 +47,7 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [pattern: string, permissi
   ['/orders/pending', 'orders.pending.manage'], // @Controller seller/orders-pending
   ['/orders', 'orders.view'],
   ['/tracking', 'orders.view'],
+  ['/needs-attention', 'orders.view'],
   ['/customers', 'customers.view'],
   ['/tickets', 'tickets.view'],
   ['/products/new', 'catalog.manage'], // POST /seller/products (+ /variants)
