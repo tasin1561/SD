@@ -135,6 +135,8 @@ function makeService(
     ),
   } as unknown as SettingsResolverService;
 
+  const addTicketNote = jest.fn(async () => ({ ticketId: 't1', at: new Date() }));
+
   const svc = new CallAttemptService(
     { client } as unknown as PrismaService,
     audit as unknown as AuditLogService,
@@ -150,9 +152,13 @@ function makeService(
     // headroom an approved re-attempt granted this order. Fixed at the
     // seeded default here so these tests stay about outcome mapping.
     { effectiveForOrder: jest.fn(async () => opts.maxAttemptsSetting ?? 3) } as never,
+    // Whoever raised a ticket asking for this call gets told what
+    // happened. Covered on its own below; inert for the mapping tests.
+    { addNote: addTicketNote } as never,
   );
   return {
     svc,
+    addTicketNote,
     entryFindUnique,
     attemptCount,
     attemptCreate,

@@ -34,6 +34,9 @@ export interface OpenTicketInput {
   readonly shipmentItemId?: string | null;
   readonly courierCode?: string | null;
   readonly rtoCondition?: RtoItemCondition | null;
+  /** The courier's own category, chosen by the seller. */
+  readonly issueCategoryExternalId?: string | null;
+  readonly issueSubcategoryExternalId?: string | null;
 }
 
 export interface ResolveTicketInput {
@@ -52,6 +55,8 @@ export interface TicketView {
   readonly shipmentId: string | null;
   readonly shipmentItemId: string | null;
   readonly courierCode: string | null;
+  readonly issueCategoryExternalId: string | null;
+  readonly issueSubcategoryExternalId: string | null;
   readonly subject: string;
   readonly description: string | null;
   readonly resolutionAmountInr: string | null;
@@ -106,6 +111,42 @@ export class TicketService {
    * The status is read INSIDE the write, guarded, so a note cannot
    * record a state the ticket had already left.
    */
+  /**
+   * The courier's ticket taxonomy, as a two-level tree.
+   *
+   * Served to the seller's raise-a-ticket form so they pick the courier's
+   * own words rather than describing a problem into a blank box. An ops
+   * queue full of untyped free text cannot be triaged, and a category
+   * chosen by the person who has the facts beats one guessed later by
+   * somebody reading their sentence.
+   *
+   * Categories that have no children are returned with an empty list
+   * rather than omitted — several of Delhivery's genuinely go straight
+   * to the description, and the form has to be able to tell "no
+   * subcategory exists" from "not loaded yet".
+   */
+  async issueTaxonomy(courierCode = 'delhivery'): Promise<
+    ReadonlyArray<{
+      externalId: string;
+      label: string;
+      subcategories: ReadonlyArray<{ externalId: string; label: string }>;
+    }>
+  > {
+    const rows = await this.prisma.client.courierIssueCategory.findMany({
+      where: { courierCode },
+      orderBy: { externalId: 'asc' },
+      select: { externalId: true, label: true, parentExternalId: true },
+    });
+    const parents = rows.filter((r) => r.parentExternalId === null);
+    return parents.map((p) => ({
+      externalId: p.externalId,
+      label: p.label,
+      subcategories: rows
+        .filter((r) => r.parentExternalId === p.externalId)
+        .map((r) => ({ externalId: r.externalId, label: r.label })),
+    }));
+  }
+
   async addNote(
     ticketId: string,
     note: string,
@@ -204,6 +245,8 @@ export class TicketService {
         shipmentItemId: input.shipmentItemId ?? null,
         courierCode: input.courierCode ?? null,
         rtoCondition: input.rtoCondition ?? null,
+        issueCategoryExternalId: input.issueCategoryExternalId ?? null,
+        issueSubcategoryExternalId: input.issueSubcategoryExternalId ?? null,
         openedByStaffId: actor.staffId ?? null,
         openedBySellerUserId: actor.sellerUserId ?? null,
       },
@@ -391,9 +434,22 @@ export class TicketService {
     return this.toView(updated);
   }
 
-  async listForSeller(sellerId: string, status?: TicketStatus): Promise<readonly TicketView[]> {
+  async listForSeller(
+    sellerId: string,
+    status?: TicketStatus,
+    orderId?: string,
+  ): Promise<readonly TicketView[]> {
     const rows = await this.prisma.client.ticket.findMany({
-      where: { sellerId, ...(status === undefined ? {} : { status }) },
+      // An order may carry SEVERAL tickets — a re-attempt, then a
+      // recall, then "it arrived broken" — so this filters rather than
+      // finding one. They are different conversations about the same
+      // parcel and collapsing them would lose which answer belonged to
+      // which question.
+      where: {
+        sellerId,
+        ...(status === undefined ? {} : { status }),
+        ...(orderId === undefined ? {} : { orderId }),
+      },
       orderBy: { createdAt: 'desc' },
     });
     return rows.map((r) => this.toView(r));
@@ -479,9 +535,13 @@ export class TicketService {
     resolutionNotes: string | null;
     resolvedAt: Date | null;
     createdAt: Date;
+    issueCategoryExternalId: string | null;
+    issueSubcategoryExternalId: string | null;
   }): TicketView {
     return {
       id: row.id,
+      issueCategoryExternalId: row.issueCategoryExternalId,
+      issueSubcategoryExternalId: row.issueSubcategoryExternalId,
       ticketType: row.ticketType,
       status: row.status,
       sellerId: row.sellerId,

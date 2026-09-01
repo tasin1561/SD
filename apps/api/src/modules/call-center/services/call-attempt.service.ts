@@ -13,6 +13,7 @@ import {
   CallQueueStatus,
   OrderStatus,
   QueueClosureReason,
+  TicketStatus,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -29,6 +30,7 @@ import {
   type RescheduleKind,
   type ResolvedOutcome,
 } from './call-outcome-mapping.service';
+import { TicketService } from '../../ticket/services/ticket.service';
 
 const SETTING_RESCHEDULE_MIN_HOURS = 'ops.call_reschedule_min_hours';
 const SETTING_RESCHEDULE_MAX_DAYS = 'ops.call_reschedule_max_days';
@@ -134,6 +136,7 @@ export class CallAttemptService {
     private readonly settings: SettingsResolverService,
     private readonly holds: CallHoldService,
     private readonly caps: CallCapService,
+    private readonly tickets: TicketService,
   ) {
     this.countingOutcomes = (Object.values(CallOutcome) as CallOutcome[]).filter((o) =>
       mapping.countsTowardCap(o),
@@ -377,6 +380,17 @@ export class CallAttemptService {
       }
     }
 
+    // 3b. POST-COMMIT — tell whoever asked for this call what happened.
+    //     A seller who asks us to ring their customer gets a ticket and
+    //     then silence: the outcome lives in `call_attempts`, which no
+    //     seller-facing screen reads. Writing it onto the open ticket is
+    //     the whole point of having raised one.
+    //
+    //     Best-effort, like every other post-commit hook here: the
+    //     attempt is the durable fact (CC-3) and a note that could not
+    //     be written must never roll one back.
+    await this.noteOnOpenTickets(entry.orderId, input, attemptId);
+
     // 4. POST-COMMIT saga — drive the order transition. The attempt is
     //    the source of truth (CC-3): a failure is logged + audited HIGH
     //    and swallowed, never rolling back the recorded attempt.
@@ -459,6 +473,57 @@ export class CallAttemptService {
 
   /** An agent's own attempt history (CC-1 rows are immutable facts),
    *  newest first, paginated. Read-only — never mutates call_attempts. */
+  /**
+   * Put the call outcome on any open ticket for this order.
+   *
+   * The seller asked a question by raising a ticket; this is the answer
+   * arriving in the same place. Without it the agent's note goes into
+   * `call_attempts` — which no seller-facing screen reads — and the
+   * ticket sits open with nothing on it.
+   *
+   * EVERY open ticket on the order gets it, not only a recall one: if a
+   * seller has an open "where is this parcel" ticket and we happen to
+   * speak to the customer, that IS the answer to their question.
+   */
+  private async noteOnOpenTickets(
+    orderId: string,
+    input: { outcome: CallOutcome; notes?: string | null },
+    attemptId: string,
+  ): Promise<void> {
+    try {
+      const open = await this.prisma.client.ticket.findMany({
+        where: { orderId, status: { in: [TicketStatus.OPEN, TicketStatus.NEGOTIATING] } },
+        select: { id: true },
+      });
+      if (open.length === 0) return;
+
+      const spoken = input.outcome.toLowerCase().replaceAll('_', ' ');
+      const trimmed = input.notes?.trim() ?? '';
+      const note =
+        trimmed === ''
+          ? `We called the customer — ${spoken}.`
+          : `We called the customer — ${spoken}. ${trimmed}`;
+
+      for (const t of open) {
+        // Per ticket, isolated: one failing must not stop the others
+        // being told — the same discipline as the notification fan-out.
+        try {
+          await this.tickets.addNote(t.id, note, { type: ActorType.STAFF, staffId: null });
+        } catch (err) {
+          this.logger.warn(
+            { ticketId: t.id, attemptId, err: err instanceof Error ? err.message : String(err) },
+            'Could not write the call outcome onto a ticket',
+          );
+        }
+      }
+    } catch (err) {
+      this.logger.warn(
+        { orderId, attemptId, err: err instanceof Error ? err.message : String(err) },
+        'Could not look up tickets to record the call outcome',
+      );
+    }
+  }
+
   async listHistory(
     agentId: string,
     page: number,

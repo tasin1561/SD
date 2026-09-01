@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { TicketModule } from '../ticket/ticket.module';
 import { CatalogReadModule } from '../catalog-read/catalog-read.module';
 import { SettingsModule } from '../settings/settings.module';
 import { OrderModule } from '../order/order.module';
@@ -53,6 +54,9 @@ import { EarlyReservationModule } from '../early-reservation/early-reservation.m
     EarlyReservationModule,
     SettingsModule,
     CatalogReadModule,
+    // The agent needs to know WHY they are calling, and whoever
+    // asked needs to be told what happened. Both live on the ticket.
+    TicketModule,
   ],
   controllers: [
     AgentSettingsController,

@@ -10,6 +10,7 @@
 // items, zone matrix, surcharges, pin codes, and seller data are left to
 // admin UI / runtime to populate.
 
+import { DELHIVERY_ISSUE_TAXONOMY } from './delhivery-issue-taxonomy';
 import {
   Prisma,
   PrismaClient,
@@ -3230,6 +3231,40 @@ async function seedExpenseCategories(): Promise<void> {
   console.log(`  expense categories: ${rows.length}`);
 }
 
+/**
+ * Delhivery's ticket taxonomy.
+ *
+ * Upsert on `(courierCode, externalId)` — the same key the real fetcher
+ * matches on — so the day their MCP is provisioned and the fetch works,
+ * it overwrites these verbatim rather than duplicating the tree.
+ *
+ * `isHumanOnly` is set on the way IN but never cleared here: the
+ * fetcher freezes it sticky for the same reason, and the safe direction
+ * for a lock is on.
+ */
+async function seedDelhiveryIssueCategories(): Promise<void> {
+  for (const c of DELHIVERY_ISSUE_TAXONOMY) {
+    await prisma.courierIssueCategory.upsert({
+      where: { courierCode_externalId: { courierCode: 'delhivery', externalId: c.externalId } },
+      create: {
+        courierCode: 'delhivery',
+        externalId: c.externalId,
+        label: c.label,
+        parentExternalId: c.parentExternalId ?? null,
+        isHumanOnly: c.isHumanOnly ?? false,
+      },
+      update: {
+        label: c.label,
+        parentExternalId: c.parentExternalId ?? null,
+        // Sticky: only ever turned ON by a re-seed.
+        ...(c.isHumanOnly === true ? { isHumanOnly: true } : {}),
+        lastSeenAt: new Date(),
+      },
+    });
+  }
+  console.log(`  ✓ ${DELHIVERY_ISSUE_TAXONOMY.length} Delhivery issue categories`);
+}
+
 async function main() {
   console.log('Seeding reference data…');
   // Warehouses first: ops.default_warehouse_id resolves CCU-01's id.
@@ -3246,6 +3281,7 @@ async function main() {
   await seedPinCodes();
   await seedNotificationTemplates();
   await seedCourierMessageTemplates();
+  await seedDelhiveryIssueCategories();
   console.log('Done.');
 }
 

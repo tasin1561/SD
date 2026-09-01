@@ -141,14 +141,40 @@ export interface UnitDiscrepancyReport {
 
 export function useSellerTickets(query: {
   status?: string;
+  orderId?: string;
 }): UseQueryResult<readonly TicketView[]> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['seller-tickets', 'list', query],
-    queryFn: () =>
-      client.request<readonly TicketView[]>(
-        `/api/seller/tickets${query.status === undefined || query.status === '' ? '' : `?status=${query.status}`}`,
-      ),
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      if (query.status !== undefined && query.status !== '') qs.set('status', query.status);
+      if (query.orderId !== undefined && query.orderId !== '') qs.set('orderId', query.orderId);
+      const suffix = qs.toString() === '' ? '' : `?${qs.toString()}`;
+      return client.request<readonly TicketView[]>(`/api/seller/tickets${suffix}`);
+    },
+  });
+}
+
+export interface IssueCategory {
+  readonly externalId: string;
+  readonly label: string;
+  readonly subcategories: ReadonlyArray<{ externalId: string; label: string }>;
+}
+
+/**
+ * The courier's own issue categories.
+ *
+ * Cached hard: this is a taxonomy, not data. It changes when Delhivery
+ * changes their support form, which is not on the timescale of a page
+ * view.
+ */
+export function useIssueCategories(): UseQueryResult<readonly IssueCategory[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-tickets', 'issue-categories'],
+    staleTime: 60 * 60 * 1000,
+    queryFn: () => client.request<readonly IssueCategory[]>('/api/seller/tickets/issue-categories'),
   });
 }
 
@@ -174,7 +200,14 @@ export function useTicketTimeline(
 export function useCreateTicket(): UseMutationResult<
   TicketView,
   Error,
-  { subject: string; description?: string; orderId?: string; shipmentId?: string }
+  {
+    subject: string;
+    description?: string;
+    orderId?: string;
+    shipmentId?: string;
+    issueCategoryExternalId?: string;
+    issueSubcategoryExternalId?: string;
+  }
 > {
   const client = useApiClient();
   const qc = useQueryClient();

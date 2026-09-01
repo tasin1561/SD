@@ -22,6 +22,7 @@ function makeService(
     sellers?: AnyArgs[];
     /** This order's logged calls, newest first. */
     priorAttempts?: AnyArgs[];
+    openTickets?: AnyArgs[];
     currentRows?: AnyArgs[];
     releaseEntry?: AnyArgs | null; // findUnique for release(); undefined → default ASSIGNED owned
     releaseUpdateCount?: number;
@@ -87,6 +88,8 @@ function makeService(
     // This order's previous calls — the context an agent opens with.
     // Empty by default; a test that cares supplies rows.
     callAttempt: { findMany: jest.fn(async () => opts.priorAttempts ?? []) },
+    // WHY the agent is calling. Empty unless a test says otherwise.
+    ticket: { findMany: jest.fn(async () => opts.openTickets ?? []) },
   } as {
     callQueueEntry: {
       count: typeof count;
@@ -97,6 +100,7 @@ function makeService(
     agentCallSettings: { findUnique: typeof agentSettingsFindUnique };
     seller: { findMany: typeof sellerFindMany };
     callAttempt: { findMany: jest.Mock };
+    ticket: { findMany: jest.Mock };
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
   };
   client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient);

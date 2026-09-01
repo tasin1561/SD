@@ -38,6 +38,7 @@ import { OrderChargesSection } from './order-charges';
 import { serverVerdict } from '@/lib/server-verdict';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
+import { OrderTicketsPanel } from '../[id]/_components/order-tickets-panel';
 
 /**
  * Seller order detail. Two fetches: the order body (with items) and
@@ -235,6 +236,13 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               failed that IS the thing the seller came to look at. Renders
               itself away on a healthy order. */}
           <DeliveryTroublePanel orderId={orderId} orderStatus={detail.data.status} />
+          {/*
+            Every conversation open on this parcel. Sits under the
+            trouble panel deliberately: that panel is the three quick
+            actions, this is everything that came of them plus anything
+            raised by hand.
+          */}
+          <OrderTicketsPanel orderId={orderId} />
 
           <Section title="Recipient">
             <Card>

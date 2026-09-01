@@ -5,7 +5,13 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, CallHoldOutcome, CallOutcome, CallQueueStatus } from '@skydrop/db';
+import {
+  ActorType,
+  CallHoldOutcome,
+  CallOutcome,
+  CallQueueStatus,
+  TicketStatus,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CallHoldService } from './call-hold.service';
@@ -81,6 +87,27 @@ export interface PulledAssignment {
      *  context ("she always asks for evening delivery"), but not about
      *  the parcel being discussed. */
     isThisOrder: boolean;
+  }>;
+
+  /**
+   * WHY this call is happening, when somebody asked for it.
+   *
+   * An agent who does not know the seller rang in saying "the customer
+   * told me they will be home Saturday" opens with "we tried to deliver
+   * your parcel" — to a customer who has already explained themselves
+   * once. The queue entry carries an order id and nothing else, so
+   * without this the reason a call was requested is visible on the
+   * seller's screen and nowhere on the agent's.
+   *
+   * Open tickets only: a resolved one is history, and the point here is
+   * the question that is still outstanding.
+   */
+  openTickets: ReadonlyArray<{
+    ticketId: string;
+    subject: string;
+    /** The seller's own words, verbatim. */
+    detail: string | null;
+    raisedAt: Date;
   }>;
 }
 
@@ -222,10 +249,36 @@ export class CallAssignmentService {
       seller: order ? await this.loadSeller(order.sellerId) : null,
       itemDisplay: await this.loadItemDisplay(order),
       priorAttempts: await this.loadPriorAttempts(order),
+      openTickets: await this.loadOpenTickets(picked.orderId),
     };
   }
 
   /** This customer's logged calls, newest first — this order first. */
+  /**
+   * What somebody has asked us about this order and not yet had answered.
+   *
+   * Read here rather than joined into the assigning tx on purpose: that
+   * transaction holds `FOR UPDATE SKIP LOCKED` on the queue row and is
+   * the one place two agents contend, so it stays as short as it can be.
+   * Enrichment is a plain read afterwards.
+   */
+  private async loadOpenTickets(orderId: string): Promise<PulledAssignment['openTickets']> {
+    const rows = await this.prisma.client.ticket.findMany({
+      where: {
+        orderId,
+        status: { in: [TicketStatus.OPEN, TicketStatus.NEGOTIATING] },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, subject: true, description: true, createdAt: true },
+    });
+    return rows.map((r) => ({
+      ticketId: r.id,
+      subject: r.subject,
+      detail: r.description,
+      raisedAt: r.createdAt,
+    }));
+  }
+
   private async loadPriorAttempts(
     order: ResolvedOrder | null,
   ): Promise<PulledAssignment['priorAttempts']> {
@@ -320,6 +373,35 @@ export class CallAssignmentService {
   }
 
   /** Batch form — one query however many assignments are in flight. */
+  /** The same open-ticket context, batched for a list view. */
+  private async loadOpenTicketsForOrders(
+    orderIds: readonly string[],
+  ): Promise<ReadonlyMap<string, PulledAssignment['openTickets']>> {
+    const out = new Map<string, PulledAssignment['openTickets']>();
+    const ids = [...new Set(orderIds)];
+    if (ids.length === 0) return out;
+    const rows = await this.prisma.client.ticket.findMany({
+      where: {
+        orderId: { in: ids },
+        status: { in: [TicketStatus.OPEN, TicketStatus.NEGOTIATING] },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, orderId: true, subject: true, description: true, createdAt: true },
+    });
+    for (const r of rows) {
+      if (r.orderId === null) continue;
+      const list = [...(out.get(r.orderId) ?? [])];
+      list.push({
+        ticketId: r.id,
+        subject: r.subject,
+        detail: r.description,
+        raisedAt: r.createdAt,
+      });
+      out.set(r.orderId, list);
+    }
+    return out;
+  }
+
   private async loadSellers(
     sellerIds: string[],
   ): Promise<
@@ -376,6 +458,9 @@ export class CallAssignmentService {
       displayByOrder.set(o.orderId, forOrder);
     }
     const attemptsByOrder = await this.loadPriorAttemptsForOrders([...orders.values()]);
+    // One query for the whole page rather than one per row: this is the
+    // supervisor's list view, so the N+1 would be N of them.
+    const ticketsByOrder = await this.loadOpenTicketsForOrders(rows.map((r) => r.orderId));
     return rows.map((r) => {
       const order = orders.get(r.orderId) ?? null;
       return {
@@ -387,6 +472,7 @@ export class CallAssignmentService {
         seller: order ? (sellers.get(order.sellerId) ?? null) : null,
         itemDisplay: displayByOrder.get(r.orderId) ?? {},
         priorAttempts: attemptsByOrder.get(r.orderId) ?? [],
+        openTickets: ticketsByOrder.get(r.orderId) ?? [],
       };
     });
   }

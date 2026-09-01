@@ -5930,6 +5930,22 @@ model Ticket {
   shipmentItemId String?           @map("shipment_item_id") @db.Uuid
   /// Denormalised courier ref for liability attribution/reporting.
   courierCode    String?           @map("courier_code")
+
+  /// WHICH problem this is, in the COURIER's own vocabulary.
+  ///
+  /// Stored as their `externalId` rather than a foreign key: the
+  /// taxonomy is re-fetched from Delhivery and rows are replaced, so a
+  /// FK would either block the refresh or cascade a ticket's category
+  /// away. The natural key is `(courierCode, externalId)` and it is
+  /// stable across a refetch, which a row id is not.
+  ///
+  /// Nullable because the tickets raised before there was a taxonomy
+  /// have none, and inventing one for them would be a guess recorded as
+  /// a fact.
+  issueCategoryExternalId    String? @map("issue_category_external_id")
+  /// The chosen subcategory, when that category has any. Several of
+  /// Delhivery's go straight to the description.
+  issueSubcategoryExternalId String? @map("issue_subcategory_external_id")
   /// For SCRAP_DAMAGE: the inspected condition that triggered the ticket.
   rtoCondition   RtoItemCondition? @map("rto_condition")
 

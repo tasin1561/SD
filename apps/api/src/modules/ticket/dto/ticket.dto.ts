@@ -11,6 +11,26 @@ import {
 } from 'class-validator';
 
 export class CreateSellerTicketDto {
+  @ApiPropertyOptional({
+    description:
+      "The courier's own category for this problem. Chosen from GET /seller/tickets/issue-categories, so ops can triage without reading every sentence first.",
+    example: 'damage-missing',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  issueCategoryExternalId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      "The subcategory, when the chosen category has any. Several go straight to the description — that is how the courier's own form behaves.",
+    example: 'damage-missing.damage',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  issueSubcategoryExternalId?: string;
+
   @ApiProperty({ maxLength: 200 })
   @IsString()
   @MinLength(3)

@@ -51,9 +51,21 @@ export class SellerTicketController {
         description: body.description ?? null,
         orderId: body.orderId ?? null,
         shipmentId: body.shipmentId ?? null,
+        issueCategoryExternalId: body.issueCategoryExternalId ?? null,
+        issueSubcategoryExternalId: body.issueSubcategoryExternalId ?? null,
       },
       { type: ActorType.SELLER, sellerUserId: seller.userId },
     );
+  }
+
+  @Get('issue-categories')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      "The courier's own issue categories, as a two-level tree. A category with no subcategories goes straight to the description — that is how the courier's own form behaves.",
+  })
+  issueCategories(): ReturnType<TicketService['issueTaxonomy']> {
+    return this.tickets.issueTaxonomy();
   }
 
   @Get(':ticketId/events')
@@ -73,12 +85,16 @@ export class SellerTicketController {
   @Get()
   @SellerAuthAllowSuspended()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "List this seller's tickets (scrap + self-raised)" })
+  @ApiOperation({
+    summary:
+      "List this seller's tickets (scrap + self-raised). Filter by orderId to show what has been raised on one parcel — an order may carry several.",
+  })
   list(
     @CurrentSeller() seller: AuthenticatedSeller,
     @Query('status') status?: TicketStatus,
+    @Query('orderId') orderId?: string,
   ): Promise<readonly TicketView[]> {
-    return this.tickets.listForSeller(seller.id, status);
+    return this.tickets.listForSeller(seller.id, status, orderId);
   }
 
   @Get(':ticketId')
