@@ -6,11 +6,17 @@ describe('TrackingStatusMappingService.mapScan (TRK-5)', () => {
   const svc = new TrackingStatusMappingService();
 
   // ── TRANSITION cases ─────────────────────────────────────────────
-  it('IN_TRANSIT scan → TRANSITION to IN_TRANSIT from DISPATCHED', () => {
+  it('IN_TRANSIT scan → TRANSITION from DISPATCHED OR DELIVERY_FAILED (courier-resolved NDR)', () => {
+    // The second `from` is the NDR that the courier settled themselves:
+    // Delhivery WhatsApps the customer, gets "I was unavailable", stamps
+    // NTD Updated, and the parcel carries on as ordinary transit. Without
+    // DELIVERY_FAILED here every following scan was skipped for having
+    // nowhere to go, and the order sat in "delivery did not succeed"
+    // while the parcel was on a van.
     expect(svc.mapScan(ShipmentStatus.IN_TRANSIT)).toEqual({
       kind: 'TRANSITION',
       targetOrderStatus: OrderStatus.IN_TRANSIT,
-      allowedFromOrderStatuses: [OrderStatus.DISPATCHED],
+      allowedFromOrderStatuses: [OrderStatus.DISPATCHED, OrderStatus.DELIVERY_FAILED],
       trackingEventType: TrackingEventType.IN_TRANSIT_UPDATE,
     });
   });

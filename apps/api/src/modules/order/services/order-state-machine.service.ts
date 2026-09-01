@@ -319,6 +319,20 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
   [
     OrderStatus.DELIVERY_FAILED,
     [
+      // The courier rescheduled it and the parcel is moving again.
+      //
+      // Delhivery resolves most NDRs themselves, on WhatsApp, within
+      // minutes: "Consignee Unavailable" at 19:23 was followed by "NTD
+      // Updated" and "Agent remark verified" at 19:26, and the parcel
+      // went back on their regular panel — it never appeared on their
+      // NDR panel at all.
+      //
+      // Without this edge the order stayed DELIVERY_FAILED while every
+      // following transit scan was skipped for having nowhere to go. On
+      // a real parcel that was twelve hours of "delivery did not
+      // succeed" on a shipment that was already on a van, ending only
+      // when an OUT_FOR_DELIVERY scan happened to arrive.
+      { to: OrderStatus.IN_TRANSIT, sideEffects: [] },
       { to: OrderStatus.OUT_FOR_DELIVERY, sideEffects: [] }, // retry
       { to: OrderStatus.RTO_INITIATED, sideEffects: [] },
       { to: OrderStatus.LOST_IN_TRANSIT, sideEffects: [] },

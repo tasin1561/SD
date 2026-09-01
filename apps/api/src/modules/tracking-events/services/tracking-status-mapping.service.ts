@@ -104,7 +104,10 @@ export class TrackingStatusMappingService {
         return {
           kind: 'TRANSITION',
           targetOrderStatus: OrderStatus.IN_TRANSIT,
-          allowedFromOrderStatuses: [OrderStatus.DISPATCHED],
+          // DELIVERY_FAILED included because a courier-resolved NDR
+          // comes back as ordinary transit, not as a fresh dispatch.
+          // Mirrors the matrix edge exactly (F6).
+          allowedFromOrderStatuses: [OrderStatus.DISPATCHED, OrderStatus.DELIVERY_FAILED],
           trackingEventType: TrackingEventType.IN_TRANSIT_UPDATE,
         };
       case ShipmentStatus.OUT_FOR_DELIVERY:
