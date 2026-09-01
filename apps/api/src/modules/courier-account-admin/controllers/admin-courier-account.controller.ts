@@ -1,4 +1,5 @@
 import {
+  ParseUUIDPipe,
   Body,
   Controller,
   Get,
@@ -16,7 +17,11 @@ import { CurrentStaff } from '../../../common/decorators/current-staff.decorator
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
-import { CreateCourierAccountDto, UpdateCourierAccountDto } from '../dto/courier-account-admin.dto';
+import {
+  MergeCredentialFieldsDto,
+  CreateCourierAccountDto,
+  UpdateCourierAccountDto,
+} from '../dto/courier-account-admin.dto';
 import {
   CourierAccountAdminService,
   type CourierAccountView,
@@ -69,5 +74,21 @@ export class AdminCourierAccountController {
     @CurrentStaff() staff: AuthenticatedStaff,
   ): Promise<CourierAccountView> {
     return this.svc.updateAccount(accountId, body, staff.id);
+  }
+  @Post(':accountId/credential-fields')
+  @RequirePermissions('courier.accounts.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Add or replace fields on this account\u2019s existing credential, leaving the others ' +
+      'untouched. This is how a portal login joins an API token that is already working — the ' +
+      'alternative, creating a second account, silently swaps which credential authenticates.',
+  })
+  mergeCredentialFields(
+    @Param('accountId', new ParseUUIDPipe({ version: '7' })) accountId: string,
+    @Body() body: MergeCredentialFieldsDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): ReturnType<CourierAccountAdminService['mergeCredentialFields']> {
+    return this.svc.mergeCredentialFields(accountId, body.credentialFields, staff.id);
   }
 }

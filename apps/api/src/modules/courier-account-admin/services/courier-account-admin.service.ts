@@ -14,7 +14,10 @@ import {
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { EnvService } from '../../../config/env.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
-import { encryptCredential } from '../../courier-shared/util/courier-credential-cipher';
+import {
+  decryptCredential,
+  encryptCredential,
+} from '../../courier-shared/util/courier-credential-cipher';
 import type {
   CreateCourierAccountDto,
   LinkSellerCourierAccountDto,
@@ -570,5 +573,154 @@ export class CourierAccountAdminService {
     if (value === null || value === undefined) return null;
     if (value instanceof Date) return value.toISOString();
     return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+  }
+  /**
+   * Add or replace fields on an EXISTING credential, leaving the rest
+   * alone.
+   *
+   * ── WHY THIS HAD TO EXIST ────────────────────────────────────────
+   * There was no way to give a live credential a new field. The only
+   * path was creating another account with the full set, which mints a
+   * SECOND credential — and because the HTTP layer resolves through the
+   * default account, that silently swaps which one authenticates, from
+   * a proven token to a freshly typed one. On an account that has
+   * already issued real waybills, that is not a thing to do casually.
+   *
+   * The portal login is the case that forced it: `portalUsername`,
+   * `portalPassword` and `portalCompany` belong beside the `apiToken`
+   * that is already working, not instead of it.
+   *
+   * ── MERGE, NOT REPLACE ───────────────────────────────────────────
+   * The supplied fields are merged over what is stored. Sending only
+   * the portal three leaves the API token exactly as it was — replacing
+   * the payload wholesale would silently delete every field the caller
+   * happened not to mention, and the first symptom would be a courier
+   * integration that stopped authenticating.
+   *
+   * ── WHAT IS AUDITED ──────────────────────────────────────────────
+   * Field NAMES, before and after. Never a value, not even a length —
+   * CUR-1's rule is that plaintext leaves only through
+   * `getCredential`, with its own audit row.
+   */
+  async mergeCredentialFields(
+    /**
+     * The ACCOUNT, not the courier.
+     *
+     * There is one Delhivery, and there are several Delhivery accounts —
+     * each its own company on their panel, each with its own wallet and
+     * its own login. Keying this on the courier code would pick an
+     * arbitrary one of them and write the wrong company's portal
+     * password over it (CACC-1: a shipment records WHICH account carried
+     * it, and the credential follows the account).
+     */
+    courierAccountId: string,
+    fields: Record<string, string>,
+    staffId: string,
+  ): Promise<{ fieldNames: string[]; added: string[]; replaced: string[] }> {
+    const names = Object.keys(fields);
+    if (names.length === 0) {
+      throw new BadRequestException({
+        code: 'INVALID_CREDENTIAL_FIELDS',
+        message: 'Provide at least one field to set.',
+      });
+    }
+    for (const [name, value] of Object.entries(fields)) {
+      if (name.trim() === '' || value === '') {
+        throw new BadRequestException({
+          code: 'INVALID_CREDENTIAL_FIELDS',
+          message: `Field "${name}" has no name or no value. To REMOVE a field, say so explicitly — an empty value is how a credential silently becomes half-configured.`,
+        });
+      }
+    }
+
+    const key = this.env.courierCredentialsKey(CURRENT_KEY_VERSION);
+    if (key === '') {
+      throw new BadRequestException({
+        code: 'COURIER_CREDENTIALS_UNAVAILABLE',
+        message: `COURIER_CREDENTIALS_KEY_V${CURRENT_KEY_VERSION} is not configured — cannot encrypt.`,
+      });
+    }
+
+    const account = await this.prisma.client.courierAccount.findFirst({
+      where: { id: courierAccountId, deletedAt: null },
+      select: {
+        label: true,
+        environment: true,
+        courier: { select: { code: true } },
+        credential: {
+          select: {
+            id: true,
+            encryptedPayload: true,
+            encryptionKeyVersion: true,
+            fieldNames: true,
+          },
+        },
+      },
+    });
+    if (account === null) {
+      throw new NotFoundException({
+        code: 'COURIER_ACCOUNT_NOT_FOUND',
+        message: 'That courier account does not exist.',
+      });
+    }
+    const existing = account.credential;
+    if (existing === null) {
+      throw new BadRequestException({
+        code: 'ACCOUNT_HAS_NO_CREDENTIAL',
+        message:
+          `"${account.label}" is a credential-less account — a manual courier holds no ` +
+          'credentials, so there is nothing to add fields to.',
+      });
+    }
+    const courierCode = account.courier.code;
+    const environment = account.environment;
+
+    const oldKey = this.env.courierCredentialsKey(existing.encryptionKeyVersion);
+    if (oldKey === '') {
+      throw new BadRequestException({
+        code: 'COURIER_CREDENTIALS_UNAVAILABLE',
+        message: `COURIER_CREDENTIALS_KEY_V${existing.encryptionKeyVersion} is not configured — the stored credential cannot be read to merge into.`,
+      });
+    }
+    const current = JSON.parse(decryptCredential(existing.encryptedPayload, oldKey)) as Record<
+      string,
+      string
+    >;
+    const merged = { ...current, ...fields };
+    const added = names.filter((n) => !(n in current));
+    const replaced = names.filter((n) => n in current);
+
+    await this.prisma.client.$transaction(async (tx) => {
+      await tx.courierCredential.update({
+        where: { id: existing.id },
+        data: {
+          encryptedPayload: encryptCredential(JSON.stringify(merged), key),
+          encryptionKeyVersion: CURRENT_KEY_VERSION,
+          fieldNames: Object.keys(merged),
+        },
+      });
+      await this.audit.log(
+        {
+          actorType: ActorType.STAFF,
+          actorId: staffId,
+          action: 'courier.credential.fields_merged',
+          entityType: 'courier_credential',
+          entityId: existing.id,
+          // HIGH: it changes what authenticates us to a courier.
+          severity: 'HIGH',
+          metadata: {
+            courierCode,
+            environment,
+            // NAMES only, never values (CUR-1).
+            added,
+            replaced,
+            fieldNamesAfter: Object.keys(merged),
+          },
+        },
+        tx,
+      );
+    });
+
+    return { fieldNames: Object.keys(merged), added, replaced };
   }
 }

@@ -148,3 +148,22 @@ export class UpdateSellerCourierAccountLinkDto {
   @IsBoolean()
   isActive?: boolean;
 }
+
+/**
+ * Fields to MERGE into an existing credential.
+ *
+ * Merge, not replace: sending only the portal three leaves the API token
+ * exactly as it was. Replacing wholesale would silently delete every
+ * field the caller did not mention, and the first symptom would be a
+ * courier integration that stopped authenticating.
+ */
+export class MergeCredentialFieldsDto {
+  @ApiProperty({
+    description:
+      'Field name → value. For the Delhivery portal: portalUsername, portalPassword, ' +
+      'portalCompany (the company shown in their login dropdown, e.g. "MS EXPORTS"). Values are ' +
+      'encrypted at rest and never returned — only the NAMES are ever reported back.',
+  })
+  @IsObject()
+  credentialFields!: Record<string, string>;
+}

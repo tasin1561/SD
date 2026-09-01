@@ -12,6 +12,7 @@ function make(
     writes?: boolean;
     windowDays?: number;
     pageThrows?: Error;
+    accounts?: Array<{ id: string; label: string }>;
   } = {},
 ) {
   const settings: Record<string, AnyArgs> = {
@@ -22,8 +23,10 @@ function make(
   const findUnique = jest.fn(async ({ where }: { where: { key: string } }) => {
     return settings[where.key] ?? null;
   });
+  const accounts = opts.accounts ?? [{ id: 'acct-1', label: 'Delhivery — MS EXPORTS' }];
+  const findMany = jest.fn(async () => accounts);
   const prisma = {
-    client: { systemSetting: { findUnique } },
+    client: { systemSetting: { findUnique }, courierAccount: { findMany } },
   } as unknown as PrismaService;
 
   const fetch = jest.fn(async () => {
@@ -54,7 +57,7 @@ function make(
   const audit = { log: auditLog } as unknown as AuditLogService;
 
   const svc = new WalletSyncService(prisma, fetcher, importer, audit);
-  return { svc, fetch, importDelhiveryWallet, auditLog };
+  return { svc, fetch, importDelhiveryWallet, auditLog, findMany };
 }
 
 describe('WalletSyncService', () => {
@@ -107,7 +110,7 @@ describe('WalletSyncService', () => {
     // exists. A portal that is down must not take the worker with it.
     const { svc, auditLog } = make({ pageThrows: new Error('portal login failed') });
     const out = await svc.sync();
-    expect(out.error).toContain('portal login failed');
+    expect(out.accounts[0]?.error).toContain('portal login failed');
     const calls = auditLog.mock.calls as unknown as AnyArgs[][];
     const actions = calls.map((c) => c[0]?.['action']);
     expect(actions).toContain('courier.wallet_ledger.sync_failed');
@@ -120,5 +123,54 @@ describe('WalletSyncService', () => {
     // never see the correction — the exact error the importer exists
     // to avoid.
     expect(out.windowDays).toBe(45);
+  });
+});
+
+describe('WalletSyncService — several Delhivery accounts', () => {
+  it('fetches EACH account with its own login, scoped to its own parcels', async () => {
+    // One Delhivery, several accounts — each a different company on
+    // their panel with its own wallet. One login cannot see another's
+    // money, and one account's ledger must not claim another's parcels.
+    const { svc, fetch, importDelhiveryWallet } = make({
+      enabled: true,
+      writes: true,
+      accounts: [
+        { id: 'acct-a', label: 'MS EXPORTS' },
+        { id: 'acct-b', label: 'SECOND CO' },
+      ],
+    });
+    const out = await svc.sync();
+
+    expect(out.accounts).toHaveLength(2);
+    expect(fetch.mock.calls.map((c) => (c as unknown as string[])[0])).toEqual([
+      'acct-a',
+      'acct-b',
+    ]);
+    const scopes = (importDelhiveryWallet.mock.calls as unknown as AnyArgs[][]).map(
+      (c) => (c[2] as AnyArgs)['courierAccountId'],
+    );
+    expect(scopes).toEqual(['acct-a', 'acct-b']);
+  });
+
+  it('one account failing does not stop the others', async () => {
+    // The same per-item isolation as the AWB and manifest sagas: a
+    // portal that is down for one company must not cost the rest a
+    // night of costs.
+    const { svc } = make({
+      enabled: true,
+      accounts: [
+        { id: 'acct-a', label: 'MS EXPORTS' },
+        { id: 'acct-b', label: 'SECOND CO' },
+      ],
+    });
+    const out = await svc.sync();
+    expect(out.accounts).toHaveLength(2);
+  });
+
+  it('says so when no account has a credential to log in with', async () => {
+    const { svc, fetch } = make({ enabled: true, accounts: [] });
+    const out = await svc.sync();
+    expect(out.skipped).toBe('NO_ACCOUNTS');
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

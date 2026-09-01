@@ -25,6 +25,7 @@ import {
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { EditCourierAccountModal } from './edit-courier-account-modal';
+import { PortalLoginModal } from './portal-login-modal';
 import { CreateCourierAccountModal } from './create-courier-account-modal';
 import { CourierMasterSwitches } from './courier-master-switches';
 import { usePermission } from '@/lib/use-permission';
@@ -125,6 +126,7 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
   const toast = useToast();
   const update = useUpdateCourierAccount();
   const [editing, setEditing] = useState(false);
+  const [portalLogin, setPortalLogin] = useState(false);
 
   async function run(
     patch: { isActive?: boolean; isDefault?: boolean },
@@ -191,6 +193,15 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
           <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
             Edit
           </Button>
+          {/* Delhivery has no billing API, so reading what they actually
+              charged means signing into their panel. Offered only where
+              there is a credential to add to — a manual courier holds
+              none. */}
+          {account.courierCode === 'delhivery' && (
+            <Button variant="ghost" size="sm" onClick={() => setPortalLogin(true)}>
+              Portal login
+            </Button>
+          )}
           <Button
             variant="secondary"
             size="sm"
@@ -208,6 +219,13 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
           </Button>
         </div>
         <EditCourierAccountModal account={account} open={editing} onOpenChange={setEditing} />
+        {portalLogin && (
+          <PortalLoginModal
+            accountId={account.id}
+            accountLabel={account.label}
+            onClose={() => setPortalLogin(false)}
+          />
+        )}
       </Td>
     </Tr>
   );

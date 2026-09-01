@@ -67,7 +67,21 @@ export class WalletImportService {
      *  AuditLogService would swallow it: the row simply would not
      *  exist. `actorType` already says SYSTEM. */
     staffId: string | null,
-    opts: { dryRun?: boolean; force?: boolean } = {},
+    opts: {
+      dryRun?: boolean;
+      force?: boolean;
+      /**
+       * Match only shipments booked on THIS account.
+       *
+       * Each Delhivery account is its own company with its own wallet,
+       * so its ledger describes its own parcels. Without the scope every
+       * account's import would report the others' AWBs as "not ours",
+       * and the count that is supposed to mean "a parcel we never
+       * recorded" would mean nothing. Omitted for the manual upload,
+       * where the operator picked the file and knows what it is.
+       */
+      courierAccountId?: string;
+    } = {},
   ): Promise<WalletImportResult> {
     const dryRun = opts.dryRun === true;
     let parsed;
@@ -98,7 +112,10 @@ export class WalletImportService {
 
     const awbs = new Set([...parsed.forward.keys(), ...parsed.rto.keys()]);
     const shipments = await this.prisma.client.shipment.findMany({
-      where: { awbNumber: { in: [...awbs] } },
+      where: {
+        awbNumber: { in: [...awbs] },
+        ...(opts.courierAccountId === undefined ? {} : { courierAccountId: opts.courierAccountId }),
+      },
       select: {
         id: true,
         awbNumber: true,

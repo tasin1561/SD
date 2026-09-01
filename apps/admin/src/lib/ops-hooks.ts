@@ -2830,3 +2830,29 @@ export function useImportWalletLedger(): UseMutationResult<
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-treasury'] }),
   });
 }
+
+/**
+ * Add or replace fields on an account's EXISTING credential.
+ *
+ * Merge, not replace: sending only the portal three leaves the API token
+ * that is already working exactly as it was. The alternative — creating
+ * a second account with the full set — mints a second credential and
+ * silently swaps which one authenticates, which on an account that has
+ * issued real waybills is not a thing to do casually.
+ */
+export function useMergeCredentialFields(): UseMutationResult<
+  { fieldNames: string[]; added: string[]; replaced: string[] },
+  Error,
+  { accountId: string; credentialFields: Record<string, string> }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ accountId, credentialFields }) =>
+      client.request<{ fieldNames: string[]; added: string[]; replaced: string[] }>(
+        `/api/admin/courier-accounts/${accountId}/credential-fields`,
+        { method: 'POST', body: { credentialFields } },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-courier-accounts'] }),
+  });
+}

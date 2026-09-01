@@ -16,7 +16,20 @@ const JOB = 'courier-portal';
 const PORTAL_ORIGIN = 'https://one.delhivery.com';
 /** Where the logged-in session is kept between runs. */
 const STATE_DIR = process.env['PORTAL_STATE_DIR'] ?? '/home/skydrop/portal-state';
-const STATE_FILE = 'delhivery-storage-state.json';
+/**
+ * One stored session PER ACCOUNT.
+ *
+ * There is one Delhivery and several Delhivery accounts — each a
+ * different company on their panel, each with its own login and its own
+ * wallet. Sharing one state file would mean the second account's run
+ * silently reused the first's session and read the wrong company's
+ * money (CACC-1: the credential follows the account).
+ */
+function stateFileFor(courierAccountId: string | null): string {
+  return courierAccountId === null
+    ? 'delhivery-storage-state.json'
+    : `delhivery-storage-state-${courierAccountId}.json`;
+}
 
 /**
  * The credential fields the portal login needs.
@@ -109,7 +122,9 @@ export class PortalChallengeError extends Error {
 export class PortalSessionService {
   private readonly logger = new Logger(PortalSessionService.name);
   private browser: Browser | null = null;
-  private context: BrowserContext | null = null;
+  /** One per account — see `stateFileFor`. Keyed by account id, or
+   *  '' for the legacy single-account path. */
+  private readonly contexts = new Map<string, BrowserContext>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -119,29 +134,33 @@ export class PortalSessionService {
     private readonly audit: AuditLogService,
   ) {}
 
-  private statePath(): string {
-    return join(STATE_DIR, STATE_FILE);
+  private statePath(courierAccountId: string | null): string {
+    return join(STATE_DIR, stateFileFor(courierAccountId));
   }
 
   /**
    * A page with a live session, logging in only if the stored state has
    * expired.
    */
-  async page(): Promise<Page> {
-    const ctx = await this.ensureContext();
+  async page(courierAccountId: string | null = null): Promise<Page> {
+    const ctx = await this.ensureContext(courierAccountId);
     const page = await ctx.newPage();
     await page.goto(`${PORTAL_ORIGIN}/support`, { waitUntil: 'domcontentloaded' });
 
     if (await this.looksLikeLogin(page)) {
       // Stored state expired. Re-auth once — never in a loop.
-      await this.login(page);
-      await ctx.storageState({ path: this.statePath() });
+      await this.login(page, courierAccountId);
+      await ctx.storageState({ path: this.statePath(courierAccountId) });
     }
     return page;
   }
 
-  private async ensureContext(): Promise<BrowserContext> {
-    if (this.context !== null) return this.context;
+  private async ensureContext(courierAccountId: string | null): Promise<BrowserContext> {
+    // Cached PER ACCOUNT: a context carries the cookies that say which
+    // company you are signed in as, so sharing one across accounts would
+    // read the wrong company's wallet.
+    const cached = this.contexts.get(courierAccountId ?? '');
+    if (cached !== undefined) return cached;
 
     // Imported lazily so this file can be compiled and unit-tested
     // anywhere; Chromium is only required in the process that actually
@@ -168,20 +187,21 @@ export class PortalSessionService {
     let storageState: string | undefined;
     try {
       const { access } = await import('node:fs/promises');
-      await access(this.statePath());
-      storageState = this.statePath();
+      await access(this.statePath(courierAccountId));
+      storageState = this.statePath(courierAccountId);
     } catch {
       storageState = undefined; // first run
     }
 
-    this.context = await this.browser.newContext({
+    const context = await this.browser.newContext({
       // No UA override on purpose — see the class doc.
       ...(storageState === undefined ? {} : { storageState }),
       locale: 'en-IN',
       timezoneId: 'Asia/Kolkata',
     });
-    this.context.setDefaultTimeout(30_000);
-    return this.context;
+    context.setDefaultTimeout(30_000);
+    this.contexts.set(courierAccountId ?? '', context);
+    return context;
   }
 
   /**
@@ -194,10 +214,16 @@ export class PortalSessionService {
     return (await page.locator('input[type="password"]').count()) > 0;
   }
 
-  private async login(page: Page): Promise<void> {
-    const creds = await this.credentials.getCredential(
+  private async login(page: Page, courierAccountId: string | null): Promise<void> {
+    // The ACCOUNT'S OWN login. Several Delhivery accounts means several
+    // companies on their panel, each with its own credential and its own
+    // wallet (CACC-1). `resolveCredential` falls back to the default
+    // account when no id is supplied, which is what a single-account
+    // deployment has been doing implicitly all along.
+    const creds = await this.credentials.resolveCredential(
       'delhivery',
       CredentialEnvironment.PRODUCTION,
+      courierAccountId,
       // CUR-1 + the attribution work: the audit row names the job.
       courierActor.runner(JOB, 'portal-login'),
     );
@@ -434,13 +460,15 @@ export class PortalSessionService {
   /** Release the browser. Called on shutdown. */
   async close(): Promise<void> {
     try {
-      if (this.context !== null) {
-        await this.context.storageState({ path: this.statePath() });
-        await this.context.close();
+      // Every account's context, each saved to its OWN state file.
+      for (const [key, ctx] of this.contexts) {
+        await ctx.storageState({ path: this.statePath(key === '' ? null : key) });
+        await ctx.close();
       }
+      this.contexts.clear();
       if (this.browser !== null) await this.browser.close();
     } finally {
-      this.context = null;
+      this.contexts.clear();
       this.browser = null;
     }
   }
