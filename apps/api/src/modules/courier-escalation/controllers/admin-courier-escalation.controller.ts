@@ -333,6 +333,19 @@ export class AdminCourierEscalationController {
     return this.escalations.postReply({ escalationId, body: body.body, staffId: staff.id });
   }
 
+  @Get('by-ticket/:ticketId')
+  @RequirePermissions('courier.ops.view')
+  @ApiOperation({
+    summary:
+      'The courier conversation for a ticket, or null if none has been opened. Ops works the ticket queue, so this is how the conversation is reached from there rather than from the threads list.',
+  })
+  byTicket(
+    @Param('ticketId', new ParseUUIDPipe({ version: '7' })) ticketId: string,
+  ): Promise<EscalationView | null> {
+    // No seller scope: an operator sees every conversation.
+    return this.escalations.forTicket(ticketId);
+  }
+
   @Post('escalations/:escalationId/inbound')
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions('courier.ops.write')

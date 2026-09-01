@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Wallet } from 'lucide-react';
 import {
@@ -15,11 +15,12 @@ import {
   Skeleton,
   TicketStatusBadge,
 } from '@skydrop/ui/components';
-import { TicketStatus, TicketType } from '@skydrop/db';
+import { TicketType } from '@skydrop/db';
 import type { TicketView } from '@/lib/ops-hooks';
 import { useSellerTicket } from '@/lib/ticket-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { CourierThread } from './courier-thread';
+import { TicketConversation } from './ticket-conversation';
 
 /**
  * One ticket, opened.
@@ -133,22 +134,26 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
         </Card>
       </Section>
 
+      {/*
+        ONE thread, not a status log above a separate courier box. Our
+        reply and the courier's answer are turns in the same exchange;
+        filing them apart by origin is an ordering the reader has to
+        undo. Status changes with no words stay out of it — "Open →
+        Negotiating" is bookkeeping, and putting it in a chat makes the
+        messages harder to find rather than the history clearer.
+      */}
       <Section
-        title="What has happened"
-        subtitle="Appended as the ticket moves. Nothing here is edited after the fact."
+        title="Conversation"
+        subtitle="What you told us, what we found out, and anything the courier said."
       >
         <Card>
           <CardBody>
-            <Timeline ticket={ticket} />
+            <TicketConversation ticket={ticket} />
+            <div className="border-border mt-4 border-t pt-3">
+              <CourierThread ticketId={ticket.id} />
+            </div>
           </CardBody>
         </Card>
-      </Section>
-
-      <Section
-        title="Courier conversation"
-        subtitle="Anything the courier says about this parcel, in their words."
-      >
-        <CourierThread ticketId={ticket.id} />
       </Section>
     </div>
   );
@@ -200,126 +205,6 @@ function RefundBanner({ ticket }: { readonly ticket: TicketView }): ReactElement
     </Card>
   );
 }
-
-interface TimelineEntry {
-  readonly key: string;
-  readonly at: string | null;
-  readonly title: string;
-  readonly detail: ReactNode;
-}
-
-/**
- * The ticket's history.
- *
- * The append-only `ticket_events` rows are the real history, and today
- * they are readable only through `GET /admin/tickets/:ticketId/events`
- * — there is no seller-scoped read. Rather than show nothing, this is
- * derived from the ticket's own durable timestamps, which carry the two
- * moments a seller acts on: it was raised, and it was decided. When a
- * seller events endpoint lands, replace the body of this function with
- * the fetched rows; the surrounding shape does not change.
- *
- * An unresolved ticket ends on what happens NEXT rather than on
- * nothing — "no events yet" is a true statement that leaves the reader
- * exactly where they started.
- */
-function Timeline({ ticket }: { readonly ticket: TicketView }): ReactElement {
-  const raisedByUs = ticket.ticketType === TicketType.SCRAP_DAMAGE;
-
-  const entries: TimelineEntry[] = [
-    {
-      key: 'opened',
-      at: ticket.createdAt,
-      title: 'Raised',
-      detail: raisedByUs
-        ? 'We opened this after inspecting a parcel that came back.'
-        : 'You reported a problem with this parcel.',
-    },
-  ];
-
-  if (ticket.resolvedAt === null) {
-    entries.push({
-      key: 'pending',
-      at: null,
-      title: ticket.status === TicketStatus.NEGOTIATING ? 'Under discussion' : 'With our team',
-      detail:
-        'We are working it out. The outcome appears here, and if it is a refund the money reaches your wallet at the same moment.',
-    });
-  } else {
-    entries.push({
-      key: 'resolved',
-      at: ticket.resolvedAt,
-      title: humanise(ticket.status),
-      detail: (
-        <>
-          <p>{outcomeCopy(ticket)}</p>
-          {/*
-            What we actually found out — the answer to the question this
-            ticket asked. It was muted body text under the boilerplate,
-            which is the wrong way round: the sentence above is a
-            category, this is the content.
-          */}
-          {ticket.resolutionNotes !== null && ticket.resolutionNotes !== '' && (
-            <p className="border-accent bg-accent/5 text-text-bright mt-2 rounded border-l-2 py-1.5 pl-2.5 font-medium whitespace-pre-wrap">
-              {ticket.resolutionNotes}
-            </p>
-          )}
-        </>
-      ),
-    });
-  }
-
-  return (
-    <ol className="border-border space-y-4 border-l pl-4">
-      {entries.map((entry) => (
-        <li key={entry.key} className="text-sm">
-          <div className="flex flex-wrap items-baseline gap-2">
-            <span className="text-text-strong font-medium">{entry.title}</span>
-            {entry.at !== null && (
-              <span className="text-text-faint text-xs">{formatDateTime(entry.at)}</span>
-            )}
-          </div>
-          <div className="text-text-muted mt-0.5 text-xs leading-relaxed">{entry.detail}</div>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-/**
- * What each closing status MEANT for the seller, in their terms.
- *
- * Describes an outcome that already happened; it does not predict what
- * the server would allow (FE-2) — nothing on this page writes.
- */
-/**
- * What the closure MEANT, in the seller's terms.
- *
- * Keyed on status AND type, because the same terminal means different
- * things. `RESOLVED_WRITE_OFF_ACCEPTED` is the settled-with-no-money-moved
- * end of the lifecycle; on a scrap/damage ticket that genuinely is a
- * write-off, but on a question the seller asked — "call my customer" —
- * nothing was written off and no goods were lost. Telling them their
- * goods were written off because they asked us to make a phone call is
- * worse than saying nothing.
- */
-function outcomeCopy(ticket: { status: TicketStatus; ticketType: TicketType }): string {
-  if (
-    ticket.status === TicketStatus.RESOLVED_WRITE_OFF_ACCEPTED &&
-    ticket.ticketType === TicketType.SELLER_RAISED_ISSUE
-  ) {
-    return 'We looked into this and closed it. No money moved.';
-  }
-  return OUTCOME_COPY[ticket.status] ?? 'This ticket was closed.';
-}
-
-const OUTCOME_COPY: Readonly<Partial<Record<TicketStatus, string>>> = {
-  [TicketStatus.RESOLVED_REFUND]: 'We refunded you. The credit is in your wallet.',
-  [TicketStatus.RESOLVED_RETURNED]: 'The goods went back to you. No money moved.',
-  [TicketStatus.RESOLVED_WRITE_OFF_ACCEPTED]:
-    'The loss was accepted and the goods were written off. No money moved.',
-  [TicketStatus.REJECTED]: 'The claim was not upheld. No money moved.',
-};
 
 function BackLink(): ReactElement {
   return (

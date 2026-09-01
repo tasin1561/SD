@@ -2242,6 +2242,27 @@ export function useReplyToCourierAsStaff(): UseMutationResult<
  * sent by hand in Delhivery's own portal, and their answer has to be
  * typed back in or the seller never hears it.
  */
+/**
+ * The courier conversation for a ticket, or null if none is open.
+ *
+ * Ops works the TICKET queue, so the conversation has to be reachable
+ * from there. Reaching it only from the threads list meant a ticket
+ * nobody had opened a thread on had no route to the courier at all.
+ */
+export function useCourierThreadForTicket(
+  ticketId: string | null,
+): UseQueryResult<{ id: string; awbNumber: string | null } | null> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['courier-escalation', 'by-ticket', ticketId],
+    enabled: ticketId !== null,
+    queryFn: () =>
+      client.request<{ id: string; awbNumber: string | null } | null>(
+        `/api/admin/courier-escalation/by-ticket/${ticketId ?? ''}`,
+      ),
+  });
+}
+
 export function useRecordCourierReply(): UseMutationResult<
   { messageId: string },
   Error,

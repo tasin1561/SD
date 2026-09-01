@@ -21,6 +21,7 @@ import { TicketStatus } from '@skydrop/db';
 import { useTicketEvents, useTransitionTicket, type TicketView } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import { TicketCourierPanel } from './ticket-courier-panel';
 
 /** Mirrors the server's TICKET_TRANSITIONS matrix. Cosmetic only (FE-2)
  *  — the server re-checks and returns INVALID_TICKET_TRANSITION. This
@@ -216,6 +217,24 @@ export function TicketDrawer({
             </p>
           ) : (
             <section className="border-border space-y-3 border-t pt-4">
+              {/*
+
+                The courier conversation, on the ticket. Ops works this queue,
+
+                and Delhivery's replies arrive to a person — so the box that
+
+                puts their words in front of the seller has to be here, not on
+
+                a separate threads page nobody opens mid-triage.
+
+              */}
+
+              <div>
+                <p className="text-text-bright mb-2 text-sm font-medium">Courier conversation</p>
+
+                <TicketCourierPanel ticketId={ticket.id} />
+              </div>
+
               <FormField label="Move to" htmlFor="ticket-to">
                 <Select id="ticket-to" value={to} onChange={(e) => setTo(e.target.value)}>
                   <option value="">Choose an outcome…</option>
