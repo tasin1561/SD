@@ -23,9 +23,11 @@ import {
   ConfirmModeChangeDto,
   ListOutboxQueryDto,
   MarkSentDto,
+  OpenEscalationDto,
   PauseChannelDto,
   PostReplyDto,
   PromoteCandidateDto,
+  RecordInboundDto,
   RejectCandidateDto,
   RequestModeChangeDto,
 } from '../dto/courier-ops.dto';
@@ -329,6 +331,44 @@ export class AdminCourierEscalationController {
     @Body() body: PostReplyDto,
   ): Promise<{ messageId: string; outboxItemId: string | null }> {
     return this.escalations.postReply({ escalationId, body: body.body, staffId: staff.id });
+  }
+
+  @Post('escalations/:escalationId/inbound')
+  @HttpCode(HttpStatus.CREATED)
+  @RequirePermissions('courier.ops.write')
+  @ApiOperation({
+    summary:
+      "Record what the courier told us, so the seller can see it. Their words, not ours — this is shown on the seller's ticket as the courier's reply.",
+  })
+  recordInbound(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('escalationId', new ParseUUIDPipe({ version: '7' })) escalationId: string,
+    @Body() body: RecordInboundDto,
+  ): Promise<{ messageId: string }> {
+    return this.escalations.recordInbound({
+      escalationId,
+      body: body.body,
+      staffId: staff.id,
+      ...(body.occurredAt === undefined ? {} : { occurredAt: new Date(body.occurredAt) }),
+    });
+  }
+
+  @Post('tickets/:ticketId/open')
+  @HttpCode(HttpStatus.CREATED)
+  @RequirePermissions('courier.ops.write')
+  @ApiOperation({
+    summary:
+      'Start a courier conversation on a ticket that does not have one — a seller-raised issue, or a re-attempt whose thread failed to open. Idempotent: an existing thread is returned rather than a second one created.',
+  })
+  openForTicket(
+    @Param('ticketId', new ParseUUIDPipe({ version: '7' })) ticketId: string,
+    @Body() body: OpenEscalationDto,
+  ): Promise<{ id: string; created: boolean }> {
+    return this.escalations.openForTicket({
+      ticketId,
+      awbNumber: body.awbNumber ?? null,
+      ...(body.courierCode === undefined ? {} : { courierCode: body.courierCode }),
+    });
   }
 
   // ── the promotion queue ─────────────────────────────────────────────

@@ -27,6 +27,7 @@ import {
   useCourierEscalations,
   useCourierThread,
   useReplyToCourierAsStaff,
+  useRecordCourierReply,
   type CourierThreadMessage,
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -160,6 +161,8 @@ function ThreadPanel({ escalationId }: { readonly escalationId: string }): React
   const toast = useToast();
   const thread = useCourierThread(escalationId);
   const reply = useReplyToCourierAsStaff();
+  const recordInbound = useRecordCourierReply();
+  const [inbound, setInbound] = useState('');
   // FE-2: cosmetic only. The server refuses regardless.
   const canWrite = usePermission('courier.ops.write');
   const [draft, setDraft] = useState('');
@@ -187,6 +190,20 @@ function ThreadPanel({ escalationId }: { readonly escalationId: string }): React
         // portal worker delivers it. Saying "sent" here would be a lie
         // the operator finds out about on the next reconciliation.
         toast.success('Queued in the send queue');
+      } catch (err) {
+        toast.error(serverVerdict(err));
+      }
+    })();
+  };
+
+  const saveInbound = (): void => {
+    const body = inbound.trim();
+    if (body === '') return;
+    void (async () => {
+      try {
+        await recordInbound.mutateAsync({ escalationId, body });
+        setInbound('');
+        toast.success('Recorded — the seller can see it now');
       } catch (err) {
         toast.error(serverVerdict(err));
       }
@@ -244,6 +261,39 @@ function ThreadPanel({ escalationId }: { readonly escalationId: string }): React
               </Button>
               <span className="text-text-muted text-xs">
                 Goes to the send queue. Nothing reaches Delhivery until it is delivered from there.
+              </span>
+            </div>
+
+            {/*
+              The other half of the manual channel. Outbound is drafted
+              above and sent by hand in Delhivery's own portal; their
+              answer has to be typed back in here or the seller never
+              hears it — the conversation would be one-way, and they
+              would be left asking into silence.
+            */}
+            <FormField
+              label="Record what the courier told us"
+              htmlFor={`inbound-${escalationId}`}
+              hint="Paste their reply rather than paraphrasing — the seller reads this as the courier's own words."
+            >
+              <Textarea
+                id={`inbound-${escalationId}`}
+                rows={3}
+                value={inbound}
+                onChange={(e) => setInbound(e.target.value)}
+              />
+            </FormField>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={saveInbound}
+                disabled={inbound.trim() === ''}
+              >
+                Save their reply
+              </Button>
+              <span className="text-text-muted text-xs">
+                Shown to the seller on their ticket. Sends nothing.
               </span>
             </div>
           </div>

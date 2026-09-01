@@ -1,15 +1,18 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CourierOutboxStatus, CourierWriteMode } from '@skydrop/db';
 import {
   ArrayMaxSize,
   IsArray,
   IsEnum,
+  IsISO8601,
   IsInt,
   IsOptional,
   IsString,
   Length,
   Max,
+  MaxLength,
   Min,
+  MinLength,
 } from 'class-validator';
 
 export class ListOutboxQueryDto {
@@ -141,4 +144,37 @@ export class RejectCandidateDto {
   @IsString()
   @Length(1, 1000)
   notes?: string;
+}
+
+export class RecordInboundDto {
+  @ApiProperty({
+    description:
+      "What the courier said, verbatim. The seller reads this as the courier's own words, so paste rather than paraphrase.",
+  })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(8000)
+  body!: string;
+
+  @ApiPropertyOptional({
+    description:
+      "When they said it, if not now. An operator catching up on yesterday's replies should date them correctly — a timeline that reorders itself around data entry is not a record of the conversation.",
+  })
+  @IsOptional()
+  @IsISO8601()
+  occurredAt?: string;
+}
+
+export class OpenEscalationDto {
+  @ApiPropertyOptional({ description: 'The AWB this is about, when there is one.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  awbNumber?: string;
+
+  @ApiPropertyOptional({ description: "Which courier's desk. Defaults to delhivery." })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  courierCode?: string;
 }

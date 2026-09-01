@@ -5,6 +5,8 @@ import type { AuditLogService } from '../../src/modules/auth-common/services/aud
 import type { CallQueueService } from '../../src/modules/call-queue/services/call-queue.service';
 import type { CourierShipmentActionService } from '../../src/modules/courier-ops/services/courier-shipment-action.service';
 import type { SystemIssueService } from '../../src/modules/system-issues/services/system-issue.service';
+import type { TicketService } from '../../src/modules/ticket/services/ticket.service';
+import type { CourierEscalationService } from '../../src/modules/courier-escalation/services/courier-escalation.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -89,14 +91,22 @@ function makeSut(
   );
   const courier = { cancelWithCourier } as unknown as CourierShipmentActionService;
   const issues = { raise: jest.fn(async () => null) } as unknown as SystemIssueService;
+  const openTicket = jest.fn(async () => ({ id: 'tkt1' }));
+  const tickets = { open: openTicket } as unknown as TicketService;
+  const openForTicket = jest.fn(async () => ({ id: 'esc1', created: true }));
+  const postReply = jest.fn(async () => ({ messageId: 'm1', outboxItemId: 'ob1' }));
+  const escalations = { openForTicket, postReply } as unknown as CourierEscalationService;
 
   return {
-    svc: new DeliveryActionService(prisma, audit, queue, courier, issues),
+    svc: new DeliveryActionService(prisma, audit, queue, courier, issues, tickets, escalations),
     created,
     updated,
     enqueueAgain,
     cancelWithCourier,
     issues,
+    openTicket,
+    openForTicket,
+    postReply,
   };
 }
 
@@ -110,14 +120,16 @@ const BASE = {
 };
 
 describe('DeliveryActionService.request', () => {
-  it('records the ask and reaches NO courier', async () => {
-    // The whole point of the request/decision split (CUR-10): a
-    // re-attempt dispatches a van, so a seller-facing handler records
-    // what they want and stops there.
+  it('records the ask and reaches no courier API', async () => {
+    // A re-attempt is a TICKET, not an API call: it opens a thread an
+    // operator sends to Delhivery by hand. It no longer waits for an
+    // approval, because the ops queue IS the approval and a second one
+    // in front of it only delayed the work.
     const sut = makeSut();
     const view = await sut.svc.request(BASE);
 
-    expect(view.status).toBe(DeliveryActionStatus.PENDING);
+    expect(view.status).toBe(DeliveryActionStatus.EXECUTED);
+    expect(sut.cancelWithCourier).not.toHaveBeenCalled();
     expect(sut.created[0]).toMatchObject({
       orderId: 'o1',
       shipmentId: 'sh1',
@@ -151,7 +163,7 @@ describe('DeliveryActionService.request', () => {
         orderShipments: [{ shipment: { id: 'sh1', awbNumber: 'AWB1' } }],
       },
     });
-    await expect(sut.svc.request(BASE)).resolves.toMatchObject({ status: 'PENDING' });
+    await expect(sut.svc.request(BASE)).resolves.toMatchObject({ status: 'EXECUTED' });
   });
 
   it('refuses once the parcel is delivered — there is nothing to act on', async () => {
@@ -239,10 +251,72 @@ describe("DeliveryActionService.request — RTO is the seller's own call", () =>
     );
   });
 
-  it('still routes a re-attempt through an operator', async () => {
+  it('does not use the cancel path for a re-attempt', async () => {
+    // Only RTO reaches an API. A re-attempt goes out as a ticket.
     const sut = makeSut();
-    const view = await sut.svc.request({ ...BASE, action: DeliveryActionKind.REATTEMPT });
+    await sut.svc.request({ ...BASE, action: DeliveryActionKind.REATTEMPT });
     expect(sut.cancelWithCourier).not.toHaveBeenCalled();
-    expect(view.status).toBe(DeliveryActionStatus.PENDING);
+    expect(sut.openForTicket).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('DeliveryActionService.request — the manual ticket system', () => {
+  // Neither of these is an API call, and that is the point. A
+  // re-attempt is a ticket we hand to Delhivery by hand; a recall never
+  // leaves the building at all.
+  it('a recall raises a ticket and queues the call, and reaches NO courier', async () => {
+    const sut = makeSut();
+    const view = await sut.svc.request({ ...BASE, action: DeliveryActionKind.RECALL });
+
+    expect(sut.openTicket).toHaveBeenCalledTimes(1);
+    expect(sut.enqueueAgain).toHaveBeenCalledTimes(1);
+    // No courier of any kind: not the cancel API, not a Delhivery thread.
+    expect(sut.cancelWithCourier).not.toHaveBeenCalled();
+    expect(sut.openForTicket).not.toHaveBeenCalled();
+    expect(view.status).toBe(DeliveryActionStatus.EXECUTED);
+    expect(view.executionRef).toBe('tkt1');
+  });
+
+  it("a re-attempt opens a courier thread carrying the seller's own words", async () => {
+    const sut = makeSut();
+    await sut.svc.request({ ...BASE, action: DeliveryActionKind.REATTEMPT });
+
+    expect(sut.openTicket).toHaveBeenCalledTimes(1);
+    expect(sut.openForTicket).toHaveBeenCalledWith(expect.objectContaining({ ticketId: 'tkt1' }));
+    // Verbatim. What Delhivery is first asked is what the seller said
+    // happened, not a summary of it.
+    expect(sut.postReply).toHaveBeenCalledWith(
+      expect.objectContaining({ escalationId: 'esc1', body: BASE.reason }),
+    );
+    // And no NDR API call — there is no automated re-attempt here.
+    expect(sut.cancelWithCourier).not.toHaveBeenCalled();
+  });
+
+  it('a re-attempt whose thread fails to open still leaves a workable ticket', async () => {
+    const sut = makeSut();
+    sut.openForTicket.mockRejectedValueOnce(new Error('escalation table unavailable'));
+
+    const view = await sut.svc.request({ ...BASE, action: DeliveryActionKind.REATTEMPT });
+
+    // The ticket is the durable fact; ops can still work it by hand.
+    expect(sut.openTicket).toHaveBeenCalledTimes(1);
+    expect(view.status).toBe(DeliveryActionStatus.EXECUTED);
+    // But somebody is told, because nothing will prompt anyone to send it.
+    expect(sut.issues.raise).toHaveBeenCalledWith(
+      expect.objectContaining({ dedupeKey: 'reattempt-escalation-failed:tkt1' }),
+    );
+  });
+
+  it('nothing waits for an approval any more', async () => {
+    const sut = makeSut();
+    for (const action of [
+      DeliveryActionKind.RECALL,
+      DeliveryActionKind.REATTEMPT,
+      DeliveryActionKind.RTO,
+    ]) {
+      const view = await makeSut().svc.request({ ...BASE, action });
+      expect(view.status).not.toBe(DeliveryActionStatus.PENDING);
+    }
+    expect(sut).toBeDefined();
   });
 });

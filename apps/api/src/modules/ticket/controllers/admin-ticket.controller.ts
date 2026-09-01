@@ -5,7 +5,9 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Patch,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -18,6 +20,7 @@ import type { AuthenticatedStaff } from '../../../common/types/request';
 import { TransitionTicketDto } from '../dto/ticket.dto';
 import { TicketService, type TicketView } from '../services/ticket.service';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
+import { AddTicketNoteDto } from '../dto/add-ticket-note.dto';
 
 /**
  * R7 — the ops resolution panel's backend: one queue for auto-raised
@@ -48,6 +51,22 @@ export class AdminTicketController {
       ...(ticketType === undefined ? {} : { ticketType }),
       ...(page === undefined ? {} : { page: Number(page) }),
       ...(pageSize === undefined ? {} : { pageSize: Number(pageSize) }),
+    });
+  }
+
+  @Post(':ticketId/notes')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Tell the seller what we found out, without moving the ticket',
+  })
+  addNote(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('ticketId', new ParseUUIDPipe({ version: '7' })) ticketId: string,
+    @Body() body: AddTicketNoteDto,
+  ): ReturnType<TicketService['addNote']> {
+    return this.tickets.addNote(ticketId, body.note, {
+      type: ActorType.STAFF,
+      staffId: staff.id,
     });
   }
 

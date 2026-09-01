@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Post,
   Query,
   UseGuards,
@@ -53,6 +54,20 @@ export class SellerTicketController {
       },
       { type: ActorType.SELLER, sellerUserId: seller.userId },
     );
+  }
+
+  @Get(':ticketId/events')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'What has happened on this ticket — including what we found out for you',
+  })
+  events(
+    @CurrentSeller() seller: AuthenticatedSeller,
+    @Param('ticketId', new ParseUUIDPipe({ version: '7' })) ticketId: string,
+  ): ReturnType<TicketService['events']> {
+    // Scoped to the seller inside the service, so another company's
+    // ticket is indistinguishable from one that does not exist.
+    return this.tickets.events(ticketId, seller.id);
   }
 
   @Get()

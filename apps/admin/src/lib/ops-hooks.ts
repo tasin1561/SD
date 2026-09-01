@@ -2235,6 +2235,51 @@ export function useReplyToCourierAsStaff(): UseMutationResult<
   });
 }
 
+/**
+ * Record what the courier told us.
+ *
+ * The other half of the MANUAL channel: outbound is drafted here and
+ * sent by hand in Delhivery's own portal, and their answer has to be
+ * typed back in or the seller never hears it.
+ */
+export function useRecordCourierReply(): UseMutationResult<
+  { messageId: string },
+  Error,
+  { escalationId: string; body: string; occurredAt?: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ escalationId, body, occurredAt }) =>
+      client.request<{ messageId: string }>(
+        `/api/admin/courier-escalation/escalations/${escalationId}/inbound`,
+        { method: 'POST', body: occurredAt === undefined ? { body } : { body, occurredAt } },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['courier-escalation'] }),
+  });
+}
+
+/** Start a courier conversation on a ticket that has none. Idempotent. */
+export function useOpenCourierEscalation(): UseMutationResult<
+  { id: string; created: boolean },
+  Error,
+  { ticketId: string; awbNumber?: string; courierCode?: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ticketId, awbNumber, courierCode }) =>
+      client.request<{ id: string; created: boolean }>(
+        `/api/admin/courier-escalation/tickets/${ticketId}/open`,
+        { method: 'POST', body: { awbNumber, courierCode } },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['courier-escalation'] });
+      void qc.invalidateQueries({ queryKey: ['tickets'] });
+    },
+  });
+}
+
 export function useCourierTemplateCandidates(): UseQueryResult<CourierTemplateCandidate[]> {
   const client = useApiClient();
   return useQuery({

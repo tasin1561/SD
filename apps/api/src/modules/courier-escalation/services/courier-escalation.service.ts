@@ -212,6 +212,73 @@ export class CourierEscalationService {
    * The body is stored and sent VERBATIM. The classifier labels it for
    * badges; it never edits what anyone wrote.
    */
+  /**
+   * Record what the courier actually said, typed in by an operator.
+   *
+   * The other half of the MANUAL channel. Outbound already works — a
+   * message is drafted, an operator claims it and sends it in
+   * Delhivery's own portal — but until now their ANSWER had nowhere to
+   * go except the inbound-email pipeline, which needs a mailbox that is
+   * not configured. So the conversation was one-way: the seller could
+   * ask and never be told.
+   *
+   * Deliberately NOT put through the classifier. Classification exists
+   * to triage machine-received email nobody has read; an operator
+   * pasting a reply has already read it, and labelling their judgement
+   * with a confidence score would be inventing uncertainty. The message
+   * is marked as needing no review for the same reason.
+   *
+   * It does NOT enqueue anything: this is a message COMING IN. Sending
+   * it back to the courier is what `postReply` is for.
+   */
+  async recordInbound(input: {
+    escalationId: string;
+    body: string;
+    staffId: string;
+    occurredAt?: Date;
+  }): Promise<{ messageId: string }> {
+    const trimmed = input.body.trim();
+    if (trimmed === '') {
+      throw new ForbiddenException({
+        code: 'EMPTY_MESSAGE',
+        message: 'A message needs some text.',
+      });
+    }
+    const view = await this.thread(input.escalationId);
+    // When they said it, not when it was typed up — an operator may be
+    // catching up on yesterday's replies, and a timeline that reorders
+    // itself around data entry is not a record of the conversation.
+    const occurredAt = input.occurredAt ?? new Date();
+
+    const message = await this.prisma.client.courierEscalationMessage.create({
+      data: {
+        escalationId: view.id,
+        direction: CourierMessageDirection.INBOUND,
+        channel: CourierMessageChannel.MANUAL,
+        body: trimmed,
+        bodyHash: this.classifier.hashBody(trimmed),
+        minuteBucket: minuteBucketOf(occurredAt),
+        occurredAt,
+        needsReview: false,
+      },
+      select: { id: true },
+    });
+
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      staffUserId: input.staffId,
+      action: 'courier.escalation.inbound_recorded',
+      entityType: 'courier_escalation',
+      entityId: view.id,
+      // The seller reads this as the courier's own words, so who typed
+      // it in is worth being able to find later.
+      severity: 'MEDIUM',
+      metadata: { messageId: message.id, occurredAt: occurredAt.toISOString() },
+    });
+
+    return { messageId: message.id };
+  }
+
   async postReply(input: {
     escalationId: string;
     body: string;

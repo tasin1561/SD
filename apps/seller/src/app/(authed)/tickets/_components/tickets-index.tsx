@@ -28,6 +28,7 @@ import { TicketStatus, TicketType } from '@skydrop/db';
 import { useSellerTickets } from '@/lib/ops-hooks';
 import { RaiseTicketModal } from './raise-ticket-modal';
 import { CourierThread } from './courier-thread';
+import { TicketTimeline } from './ticket-timeline';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { useRouter } from 'next/navigation';
@@ -213,6 +214,7 @@ export function SellerTicketsIndex(): ReactElement {
                 {openThread === t.id ? (
                   <Tr>
                     <Td colSpan={7} className="bg-surface-1 p-3">
+                      <TicketTimeline ticketId={t.id} />
                       <CourierThread ticketId={t.id} />
                     </Td>
                   </Tr>

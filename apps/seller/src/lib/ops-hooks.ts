@@ -152,6 +152,25 @@ export function useSellerTickets(query: {
   });
 }
 
+export interface TicketTimelineEntry {
+  readonly note: string | null;
+  readonly toStatus: string;
+  readonly actorType: string;
+  readonly at: string;
+}
+
+/** What has happened on a ticket, including what we found out for them. */
+export function useTicketTimeline(
+  ticketId: string,
+): UseQueryResult<readonly TicketTimelineEntry[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-tickets', 'events', ticketId],
+    queryFn: () =>
+      client.request<readonly TicketTimelineEntry[]>(`/api/seller/tickets/${ticketId}/events`),
+  });
+}
+
 export function useCreateTicket(): UseMutationResult<
   TicketView,
   Error,

@@ -3,6 +3,8 @@ import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.module';
 import { CallQueueModule } from '../call-queue/call-queue.module';
 import { CourierOpsModule } from '../courier-ops/courier-ops.module';
+import { CourierEscalationModule } from '../courier-escalation/courier-escalation.module';
+import { TicketModule } from '../ticket/ticket.module';
 import { AdminDeliveryActionController } from './controllers/admin-delivery-action.controller';
 import { SellerDeliveryActionController } from './controllers/seller-delivery-action.controller';
 import { DeliveryActionDecisionService } from './services/delivery-action-decision.service';
@@ -20,7 +22,17 @@ import { SellerCallHistoryService } from './services/seller-call-history.service
  * imports this back.
  */
 @Module({
-  imports: [AuthCommonModule, CallQueueModule, CourierOpsModule, LifecycleEventsModule],
+  imports: [
+    AuthCommonModule,
+    CallQueueModule,
+    CourierOpsModule,
+    // A re-attempt and a recall are TICKETS, not API calls; a re-attempt
+    // additionally opens the courier conversation an operator sends by
+    // hand. Direction stays one-way — neither imports this back.
+    TicketModule,
+    CourierEscalationModule,
+    LifecycleEventsModule,
+  ],
   controllers: [SellerDeliveryActionController, AdminDeliveryActionController],
   providers: [
     DeliveryActionService,

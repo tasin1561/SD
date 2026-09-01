@@ -12,6 +12,7 @@ import {
   Prisma,
   SystemIssueKind,
   SystemIssueSeverity,
+  TicketType,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -20,6 +21,8 @@ import type { ClientInfoPayload } from '../../../common/decorators/client-info.d
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 import { CourierShipmentActionService } from '../../courier-ops/services/courier-shipment-action.service';
 import { courierActor } from '../../courier-shared/services/courier-credential.service';
+import { CourierEscalationService } from '../../courier-escalation/services/courier-escalation.service';
+import { TicketService } from '../../ticket/services/ticket.service';
 
 export interface DeliveryActionRequestView {
   readonly id: string;
@@ -62,6 +65,8 @@ export class DeliveryActionService {
     private readonly callQueue: CallQueueService,
     private readonly courier: CourierShipmentActionService,
     private readonly issues: SystemIssueService,
+    private readonly tickets: TicketService,
+    private readonly escalations: CourierEscalationService,
   ) {}
 
   /**
@@ -151,11 +156,14 @@ export class DeliveryActionService {
       select: { id: true },
     });
 
-    // RTO is the seller's OWN call and needs no operator (CUR-10 seller
-    // amendment). It is recorded as decided at the moment it is asked,
-    // by the seller, so the row never sits in a PENDING state nobody is
-    // going to look at.
-    const sellerDecides = input.action === DeliveryActionKind.RTO;
+    // ── ALL THREE ACT AT ONCE. None of them waits for an approval ─────
+    // A re-attempt and a customer call are TICKETS: ops works them from
+    // the ticket queue and the outbox console, which is the approval
+    // step — a second one in front of it only delayed the work. RTO
+    // reaches Delhivery directly (CUR-10's seller amendment). So the row
+    // is recorded as decided the moment it is asked, and never sits
+    // PENDING where nobody is going to look at it.
+    const sellerDecides = true;
 
     const row = await this.prisma.client.orderDeliveryActionRequest.create({
       data: {
@@ -189,19 +197,129 @@ export class DeliveryActionService {
       metadata: { orderId: order.id, action: input.action, reason },
     });
 
-    if (!sellerDecides) return this.toView(row);
-
-    // ── The courier call is LAST, and the row above is already durable ─
-    // Same visible-vs-silent ordering the operator path uses: a crash
-    // between leaves an APPROVED request that visibly has not executed,
-    // which is re-runnable, rather than a van dispatched with no record
-    // of who asked for it.
-    return this.executeRto(row.id, shipment.id, {
+    // ── The side-effect is LAST, and the row above is already durable ─
+    // Same visible-vs-silent ordering throughout: a crash between leaves
+    // an APPROVED request that visibly has not executed and is
+    // re-runnable, rather than a parcel turned around or a ticket raised
+    // with no record of who asked for it.
+    const who = {
       sellerId: input.sellerId,
       sellerUserId: input.sellerUserId,
       orderId: order.id,
       ctx: input.ctx,
+    };
+    if (input.action === DeliveryActionKind.RTO) {
+      return this.executeRto(row.id, shipment.id, who);
+    }
+    return this.executeAsTicket(row.id, input.action, reason, shipment, who);
+  }
+
+  /**
+   * A re-attempt or a customer call, as a TICKET.
+   *
+   * Neither is an API call. RECALL never leaves the building — our own
+   * agents phone the customer and write back what they heard. REATTEMPT
+   * does leave, but by hand: it opens a courier escalation and puts the
+   * seller's own words in the outbox, where an operator sends them to
+   * Delhivery and records the answer. There is no automated re-attempt
+   * here on purpose — the courier's NDR API is not the channel we use
+   * for this, and pretending otherwise would tell a seller a van was
+   * arranged when nobody had arranged one.
+   *
+   * The ticket is the durable fact. If the escalation or the queueing
+   * fails, the ticket still stands and ops can still work it, so neither
+   * is allowed to throw.
+   */
+  private async executeAsTicket(
+    requestId: string,
+    action: DeliveryActionKind,
+    reason: string,
+    shipment: { id: string; awbNumber: string | null },
+    who: { sellerId: string; sellerUserId: string | null; orderId: string },
+  ): Promise<DeliveryActionRequestView> {
+    const isRecall = action === DeliveryActionKind.RECALL;
+    const ticket = await this.tickets.open(
+      {
+        // The NDR escalation type is the seam the courier-escalation
+        // work already hangs off; a re-attempt is the same conversation
+        // by a different trigger. A recall never reaches a courier, so
+        // it is a plain seller issue.
+        ticketType: isRecall ? TicketType.SELLER_RAISED_ISSUE : TicketType.COURIER_NDR_ESCALATION,
+        sellerId: who.sellerId,
+        subject: isRecall
+          ? 'Seller asked us to call the customer'
+          : 'Seller asked for another delivery attempt',
+        description: reason,
+        orderId: who.orderId,
+        shipmentId: shipment.id,
+      },
+      { type: ActorType.SELLER, sellerUserId: who.sellerUserId },
+    );
+
+    if (isRecall) {
+      // Straight into our own queue, available now: the seller has asked
+      // for this call, so it joins at its FIFO position rather than
+      // being deferred the way a busy-signal retry is.
+      await this.callQueue.enqueueAgain(who.orderId, new Date());
+    } else {
+      await this.openCourierConversation(ticket.id, shipment, reason, who.sellerId);
+    }
+
+    const done = await this.prisma.client.orderDeliveryActionRequest.update({
+      where: { id: requestId },
+      data: {
+        status: DeliveryActionStatus.EXECUTED,
+        executedAt: new Date(),
+        executionRef: ticket.id,
+      },
     });
+    return this.toView(done);
+  }
+
+  /**
+   * Open the Delhivery thread and put the seller's words in the outbox.
+   *
+   * Best-effort by design: the ticket above is what ops actually works
+   * from, and losing the whole request because a thread could not be
+   * opened would be the wrong trade. A failure is reported rather than
+   * logged, because the seller has been told we are asking the courier.
+   */
+  private async openCourierConversation(
+    ticketId: string,
+    shipment: { id: string; awbNumber: string | null },
+    reason: string,
+    sellerId: string,
+  ): Promise<void> {
+    try {
+      const escalation = await this.escalations.openForTicket({
+        ticketId,
+        awbNumber: shipment.awbNumber,
+      });
+      // The seller's own words, verbatim. An operator may add to the
+      // thread before sending, but the first thing Delhivery is asked is
+      // what the seller actually said happened.
+      await this.escalations.postReply({
+        escalationId: escalation.id,
+        body: reason,
+        sellerId,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await this.issues.raise({
+        kind: SystemIssueKind.INTEGRATION,
+        severity: SystemIssueSeverity.MEDIUM,
+        title: 'A re-attempt ticket could not be put to the courier',
+        detail:
+          `Ticket ${ticketId} was raised but the courier conversation could not be opened: ` +
+          `${message}\n\n` +
+          'The ticket is in the ops queue and can still be worked by hand — what is missing is ' +
+          'the outbox draft, so nobody will be prompted to send it. Open the escalation on the ' +
+          'ticket manually, or reply on it once and the draft is created.',
+        source: 'DeliveryActionService',
+        dedupeKey: `reattempt-escalation-failed:${ticketId}`,
+        metadata: { ticketId, sellerId, error: message },
+      });
+    }
   }
 
   /**

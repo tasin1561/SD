@@ -93,6 +93,86 @@ export class TicketService {
    * transaction so RTO inspection can create the ticket atomically with
    * the inspection write.
    */
+  /**
+   * Say something on a ticket without moving it.
+   *
+   * "We rang the customer, they will be in on Saturday" is the whole
+   * point of a RECALL ticket and it is not a status change — the ticket
+   * is still OPEN. `ticket_events.toStatus` is NOT NULL, so this writes
+   * a SELF-LOOP at the current status rather than inventing a state to
+   * carry a sentence. The table stays append-only and the timeline reads
+   * in order, which is what the seller actually needs to see.
+   *
+   * The status is read INSIDE the write, guarded, so a note cannot
+   * record a state the ticket had already left.
+   */
+  async addNote(
+    ticketId: string,
+    note: string,
+    actor: TicketActor,
+  ): Promise<{ ticketId: string; at: Date }> {
+    const trimmed = note.trim();
+    if (trimmed.length < 3) {
+      throw new BadRequestException({
+        code: 'TICKET_NOTE_EMPTY',
+        message: 'Write something the seller can act on.',
+      });
+    }
+    const ticket = await this.prisma.client.ticket.findUnique({
+      where: { id: ticketId },
+      select: { id: true, status: true },
+    });
+    if (ticket === null) {
+      throw new NotFoundException({ code: 'TICKET_NOT_FOUND', message: 'No such ticket' });
+    }
+    const row = await this.prisma.client.ticketEvent.create({
+      data: {
+        ticketId,
+        fromStatus: ticket.status,
+        toStatus: ticket.status,
+        note: trimmed,
+        actorType: actor.type,
+        actorId: actor.staffId ?? actor.sellerUserId ?? null,
+      },
+      select: { createdAt: true },
+    });
+    return { ticketId, at: row.createdAt };
+  }
+
+  /** The timeline, oldest first — what a seller is shown on their ticket. */
+  async events(
+    ticketId: string,
+    sellerId?: string,
+  ): Promise<
+    ReadonlyArray<{
+      note: string | null;
+      toStatus: TicketStatus;
+      actorType: ActorType;
+      at: Date;
+    }>
+  > {
+    const ticket = await this.prisma.client.ticket.findFirst({
+      where: { id: ticketId, ...(sellerId === undefined ? {} : { sellerId }) },
+      select: { id: true },
+    });
+    if (ticket === null) {
+      // Scoped, so another seller's ticket is indistinguishable from one
+      // that does not exist.
+      throw new NotFoundException({ code: 'TICKET_NOT_FOUND', message: 'No such ticket' });
+    }
+    const rows = await this.prisma.client.ticketEvent.findMany({
+      where: { ticketId },
+      orderBy: { createdAt: 'asc' },
+      select: { note: true, toStatus: true, actorType: true, createdAt: true },
+    });
+    return rows.map((r) => ({
+      note: r.note,
+      toStatus: r.toStatus,
+      actorType: r.actorType,
+      at: r.createdAt,
+    }));
+  }
+
   async open(
     input: OpenTicketInput,
     actor: TicketActor,
