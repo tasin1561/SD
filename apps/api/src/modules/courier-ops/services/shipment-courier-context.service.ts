@@ -15,6 +15,15 @@ export interface ShipmentCourierContext {
    *  endpoints key on it rather than on the AWB. Null for Delhivery. */
   readonly courierShipmentId: string | null;
   readonly isManualCourier: boolean;
+  /**
+   * The parcel's CURRENT NSL, as the courier last reported it.
+   *
+   * The field Delhivery's re-attempt eligibility is actually written
+   * against — "the current NSL code for the shipment" — so it belongs on
+   * the shipment's context rather than being reconstructed from an
+   * attempt row.
+   */
+  readonly currentNslCode: string | null;
   readonly status: string;
   readonly originPin: string | null;
   readonly destinationPin: string;
@@ -67,6 +76,7 @@ export class ShipmentCourierContextService {
         courierAccountId: true,
         courierShipmentId: true,
         isManualCourier: true,
+        courierNslCode: true,
         status: true,
         destPostalCode: true,
         totalWeightGrams: true,
@@ -98,6 +108,7 @@ export class ShipmentCourierContextService {
       courierAccountId: shipment.courierAccountId,
       courierShipmentId: shipment.courierShipmentId,
       isManualCourier: shipment.isManualCourier,
+      currentNslCode: shipment.courierNslCode,
       status: shipment.status,
       originPin,
       destinationPin: shipment.destPostalCode,

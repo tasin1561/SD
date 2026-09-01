@@ -93,6 +93,16 @@ interface DelhiveryShipment {
   /** What they will collect at the door. */
   CODAmount?: number | string | null;
   Sortcode?: string | null;
+  /**
+   * The parcel's CURRENT NSL, at the SHIPMENT level.
+   *
+   * Delhivery puts it here — a sibling of `Status`, next to `Sortcode` —
+   * and NOT inside each scan, which is why reading it off `ScanDetail`
+   * produced null on every scan we have ever stored. Their own re-attempt
+   * rule is phrased about "the current NSL code for the shipment", so
+   * shipment-level is not merely where it lives, it is what it means.
+   */
+  NSLCode?: string | null;
   ReferenceNo?: string | number | null;
 }
 
@@ -147,6 +157,7 @@ function parcelFacts(shipment: DelhiveryShipment): CourierParcelFacts {
     // other figure on the page.
     collectableAmountInr: cod === null ? null : cod.toFixed(2),
     sortCode: shipment.Sortcode ?? null,
+    currentNslCode: shipment.NSLCode ?? null,
     currentStatus: shipment.Status?.Status ?? null,
     currentStatusLocation: shipment.Status?.StatusLocation ?? null,
     currentInstructions: shipment.Status?.Instructions ?? null,

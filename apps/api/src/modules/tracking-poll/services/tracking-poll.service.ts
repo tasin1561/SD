@@ -389,6 +389,11 @@ export class TrackingPollService {
     if (facts.currentStatusLocation != null) {
       data['courierStatusLocation'] = facts.currentStatusLocation;
     }
+    // The one fact here that DECIDES something rather than describing
+    // it: Delhivery permits an NDR re-attempt only when the shipment's
+    // current NSL is in their allow-list, so without this the panel can
+    // only refuse.
+    if (facts.currentNslCode != null) data['courierNslCode'] = facts.currentNslCode;
     if (Object.keys(data).length === 0) return;
 
     try {

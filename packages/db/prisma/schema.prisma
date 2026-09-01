@@ -3091,6 +3091,21 @@ model Shipment {
   /// Anything deciding something reads the scan, not these.
   courierStatusLine      String?          @map("courier_status_line")
   courierStatusLocation  String?          @map("courier_status_location")
+  /// The parcel's CURRENT NSL code — Delhivery's fine-grained
+  /// service-level reason under the status (`EOD-74`, `X-UCI`, …).
+  ///
+  /// A SHIPMENT-level fact, and stored here for that reason. Delhivery
+  /// returns it as a sibling of `Status`, not inside each scan, so
+  /// reading it off `ScanDetail` yielded null on every scan we ever
+  /// stored — and their own re-attempt rule is phrased about "the
+  /// CURRENT NSL code for the shipment", so shipment-level is what it
+  /// MEANS as well as where it lives.
+  ///
+  /// Mirrors `courierStatusLine`: a convenience copy of the courier's
+  /// latest word, refreshed by the tracking poll. Nothing derives order
+  /// state from it; the scans do that. What it decides is whether an
+  /// NDR re-attempt may be asked for at all.
+  courierNslCode         String?          @map("courier_nsl_code")
   isManualCourier        Boolean          @default(false) @map("is_manual_courier")
   /// WHO actually carried a manually-placed parcel — "Bluedart", "Sundarban",
   /// the shop on the corner. `courierCode` is the literal string 'manual' for

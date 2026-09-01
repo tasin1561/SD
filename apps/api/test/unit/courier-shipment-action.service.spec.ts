@@ -16,6 +16,7 @@ function ctx(over: Partial<ShipmentCourierContext> = {}): ShipmentCourierContext
     courierAccountId: 'dl-acc-1',
     courierShipmentId: null,
     isManualCourier: false,
+    currentNslCode: null,
     status: ShipmentStatus.OUT_FOR_DELIVERY,
     originPin: '110042',
     destinationPin: '560001',
@@ -301,5 +302,62 @@ describe('CourierShipmentActionService — e-way bill', () => {
       CLIENT,
     );
     expect(ewaybillUpdate).toHaveBeenCalled();
+  });
+});
+
+describe('NDR readiness reads the SHIPMENT’s current NSL', () => {
+  /**
+   * The production bug this closes.
+   *
+   * Delhivery permits a RE-ATTEMPT only when the shipment's CURRENT NSL
+   * is in their allow-list. We looked for it on the latest
+   * delivery_attempt, which held whatever the per-scan NSL was — and the
+   * Track API never sends one, because Delhivery puts NSLCode at the
+   * SHIPMENT level. So the field was null on every parcel and the panel
+   * answered "No current NSL code known for this shipment" for all of
+   * them. Verified against the live endpoint on 2026-09-01, which said
+   * exactly that.
+   */
+  it('uses the shipment’s NSL when the attempt row has none', async () => {
+    const { svc } = make({
+      context: ctx({ currentNslCode: 'EOD-74' }),
+      latestAttempt: { courierNslCode: null, attemptNumber: 1 },
+    });
+    const out = await svc.ndrReadiness(SHIPMENT_ID, 'RE-ATTEMPT');
+    expect(out.nslCode).toBe('EOD-74');
+    expect(out.eligible).toBe(true);
+  });
+
+  it('prefers the shipment’s NSL over a stale one on the attempt', async () => {
+    // The attempt row is a snapshot of what was true when it was
+    // written; the shipment carries what is true now, and "now" is the
+    // question Delhivery asks.
+    const { svc } = make({
+      context: ctx({ currentNslCode: 'EOD-74' }),
+      latestAttempt: { courierNslCode: 'X-UCI', attemptNumber: 2 },
+    });
+    const out = await svc.ndrReadiness(SHIPMENT_ID, 'RE-ATTEMPT');
+    expect(out.nslCode).toBe('EOD-74');
+  });
+
+  it('still falls back to the attempt row when the shipment has none', async () => {
+    // Parcels tracked before the shipment-level read existed, and any
+    // courier that reports the NSL per scan rather than per parcel.
+    const { svc } = make({
+      context: ctx({ currentNslCode: null }),
+      latestAttempt: { courierNslCode: 'EOD-15', attemptNumber: 1 },
+    });
+    const out = await svc.ndrReadiness(SHIPMENT_ID, 'RE-ATTEMPT');
+    expect(out.nslCode).toBe('EOD-15');
+  });
+
+  it('refuses honestly when neither has one', async () => {
+    const { svc } = make({
+      context: ctx({ currentNslCode: null }),
+      latestAttempt: { courierNslCode: null, attemptNumber: 0 },
+    });
+    const out = await svc.ndrReadiness(SHIPMENT_ID, 'RE-ATTEMPT');
+    expect(out.eligible).toBe(false);
+    expect(out.nslCode).toBeNull();
   });
 });

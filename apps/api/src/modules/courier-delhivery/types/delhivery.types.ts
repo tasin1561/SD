@@ -240,6 +240,17 @@ export interface CourierParcelFacts {
   collectableAmountInr?: string | null;
   /** Their routing code — the facility path the parcel is booked on. */
   sortCode?: string | null;
+  /**
+   * The parcel's CURRENT NSL code (`EOD-74`, `X-UCI`, …).
+   *
+   * A shipment-level fact, not a per-scan one, and the field Delhivery's
+   * own re-attempt eligibility is written against: they permit RE-ATTEMPT
+   * only when the CURRENT NSL is one of a specific set. We read it off
+   * each scan for months, where it does not exist, so eligibility could
+   * never be established and the NDR panel refused every parcel with
+   * "no current NSL code known".
+   */
+  readonly currentNslCode: string | null;
   /** The courier's own current status line, verbatim. */
   currentStatus?: string | null;
   currentStatusLocation?: string | null;

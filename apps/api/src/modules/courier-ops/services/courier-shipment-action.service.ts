@@ -275,7 +275,13 @@ export class CourierShipmentActionService {
    */
   async ndrReadiness(shipmentId: string, action: NdrAction): Promise<NdrReadiness> {
     const shipment = await this.context.resolve(shipmentId);
-    const { nslCode, attemptCount } = await this.latestAttempt(shipmentId);
+    const { nslCode: attemptNsl, attemptCount } = await this.latestAttempt(shipmentId);
+    // The SHIPMENT's current NSL wins. Delhivery's rule is written about
+    // "the current NSL code for the shipment", and the attempt row holds
+    // whatever was true when that attempt was recorded — a historical
+    // snapshot, which is the wrong question and, until the shipment-level
+    // read existed, was always null anyway.
+    const nslCode = shipment.currentNslCode ?? attemptNsl;
 
     if (shipment.awbNumber === null) {
       return {
