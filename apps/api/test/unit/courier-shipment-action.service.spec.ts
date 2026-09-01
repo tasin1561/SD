@@ -3,6 +3,7 @@ import { ShipmentStatus } from '@skydrop/db';
 import { CourierShipmentActionService } from '../../src/modules/courier-ops/services/courier-shipment-action.service';
 import { DelhiveryNdrService } from '../../src/modules/courier-delhivery/services/delhivery-ndr.service';
 import type { ShipmentCourierContext } from '../../src/modules/courier-ops/services/shipment-courier-context.service';
+import { courierActor } from '../../src/modules/courier-shared/services/courier-credential.service';
 
 const SHIPMENT_ID = '0198f3c2-0000-7000-8000-00000000ship';
 const AWB = '38061110478262';
@@ -228,7 +229,12 @@ describe('CourierShipmentActionService — guards before the wire', () => {
   it('refuses to act on a parcel with no AWB', async () => {
     const { svc, cancel } = make({ context: { awbNumber: null } });
     await expect(
-      svc.cancelWithCourier('staff-1', SHIPMENT_ID, 'customer changed mind', CLIENT),
+      svc.cancelWithCourier(
+        courierActor.operator('staff-1'),
+        SHIPMENT_ID,
+        'customer changed mind',
+        CLIENT,
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(cancel).not.toHaveBeenCalled();
   });
@@ -236,7 +242,12 @@ describe('CourierShipmentActionService — guards before the wire', () => {
   it('refuses a manually-placed parcel — that courier is not integrated', async () => {
     const { svc, cancel } = make({ context: { isManualCourier: true } });
     await expect(
-      svc.cancelWithCourier('staff-1', SHIPMENT_ID, 'customer changed mind', CLIENT),
+      svc.cancelWithCourier(
+        courierActor.operator('staff-1'),
+        SHIPMENT_ID,
+        'customer changed mind',
+        CLIENT,
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(cancel).not.toHaveBeenCalled();
   });
@@ -251,7 +262,12 @@ describe('CourierShipmentActionService — guards before the wire', () => {
 
   it('audits a cancel at HIGH — a moving parcel becomes a return, which costs a leg', async () => {
     const { svc, audit } = make();
-    await svc.cancelWithCourier('staff-1', SHIPMENT_ID, 'seller withdrew', CLIENT);
+    await svc.cancelWithCourier(
+      courierActor.operator('staff-1'),
+      SHIPMENT_ID,
+      'seller withdrew',
+      CLIENT,
+    );
     expect(audit).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'courier.shipment.cancelled',

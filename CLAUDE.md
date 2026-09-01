@@ -685,7 +685,37 @@ The canonical reference implementation is `OrderWriteService.transitionStatus()`
 
     > **CUR-10 amendment, 2026-08-05.** The original wording was absolute: *"never fired from a lifecycle transition, a cron, or a customer-facing handler."* The courier-escalation work needs a nightly NDR batch runner — Delhivery only accepts re-attempt actions after 21:00 IST, so the action is inherently scheduled and cannot be operator-triggered at the moment it must happen. Rather than let a cron quietly violate a written invariant, the invariant is widened DELIBERATELY and narrowly: a runner may fire courier writes **only** when an operator has explicitly enabled that write channel, and every such call still passes the live-write guard, an explicit per-category auto list (default EMPTY), and a one-click kill switch. **A lifecycle transition and a customer-facing handler remain forbidden triggers — that half of the original rule is unchanged.** CUR-11 is untouched: whatever a runner fires, the courier's own scans remain the sole authority on order status.
 
-    **CUR-11: the courier is not an authority on our order status.** A successful cancel/edit/NDR action does NOT transition the order — Delhivery's own scans do, through the M10 webhook processor and `OrderWriteService.transitionStatus` (ORD-3). Writing the transition at the action site as well would give the order two authorities that can disagree, and only the scan reflects where the parcel physically is. The `courier-ops` module is the sole caller of the adapter's capability services; the adapter stays domain-free (it takes pincodes and grams), and `ShipmentCourierContextService` is the ONE place a shipment id becomes those inputs — five call sites resolving it inline is how they slowly disagree about which weight field to use.
+    > **CUR-10 amendment #2, 2026-09-01 — the seller may return their OWN parcel.**
+    > The original rule forbade a customer-facing handler from firing a courier
+    > write outright. That is widened, narrowly, for exactly ONE action: a seller
+    > choosing "send it back" on their own order calls Delhivery's cancel
+    > immediately, with no operator in the loop. The reasoning is that it is the
+    > seller's goods and the seller's return fee (delivery + `pricing.flat_rto_fee_inr`),
+    > and an operator step adds hours to a decision that was never ours — while
+    > the parcel keeps moving further from the warehouse the whole time.
+    > **What does NOT change:** the call still passes `assertWritable('shipment.cancel')`,
+    > so the per-courier live-write guard and kill switch apply exactly as before
+    > — the guard sits inside the dispatcher and does not care who asked. The
+    > audit row records `ActorType.SELLER` with the seller id, never a staff
+    > member who did not act, because "we decided to return this" and "the seller
+    > decided to return this" are different facts and only one of them is ours to
+    > answer for when the customer rings. RE-ATTEMPT and RECALL are UNCHANGED and
+    > still stop at an operator: a re-attempt dispatches a van at our cost, which
+    > is not the seller's to spend. A lifecycle transition remains a forbidden
+    > trigger. **Do not widen this to a second action without the same argument
+    > holding — whose goods, whose money, and what an operator would actually add.**
+    >
+    > **A courier that accepts a cancellation is not a parcel coming back.**
+    > `OrderAttentionService.checkStalledReturns` is the watchdog: an EXECUTED RTO
+    > request with no return scan after `ops.rto_stall_alert_hours` (48) raises a
+    > HIGH system issue and clears itself once the order reaches any RTO state.
+    > Without it the request row reads EXECUTED (the courier really did accept),
+    > every downstream step waits on a scan that is not coming, and the seller
+    > believes their goods are on the way back. It runs even when the NSA half is
+    > switched off — it is not an NSA flag, and gating it behind an unrelated
+    > switch is how it would come to be silently off.
+
+        **CUR-11: the courier is not an authority on our order status.** A successful cancel/edit/NDR action does NOT transition the order — Delhivery's own scans do, through the M10 webhook processor and `OrderWriteService.transitionStatus` (ORD-3). Writing the transition at the action site as well would give the order two authorities that can disagree, and only the scan reflects where the parcel physically is. The `courier-ops` module is the sole caller of the adapter's capability services; the adapter stays domain-free (it takes pincodes and grams), and `ShipmentCourierContextService` is the ONE place a shipment id becomes those inputs — five call sites resolving it inline is how they slowly disagree about which weight field to use.
 19b. Honor CUR-12 through CUR-16 (multi-courier, 2026-08-29). Reach a courier through its DISPATCHER, never a branch at the call site (CUR-12) — add a third courier by implementing the interface and appending it to the list. `serviceable: false` means "will not carry"; true means "ask later", and only the first fails over (CUR-13). Failover is symmetric by construction — never special-case a direction — and a successful failover REWRITES `courierCode`/`courierShipmentId` on the shipment (CUR-14). A stubbed courier may never answer for a live one (CUR-15). The intake switch is `Courier.isActive` through `CourierEnablementService` alone, OFF means no NEW parcels while in-flight ones keep being tracked, and it is enforced at the BOOKING boundary as well as in routing (CUR-16). Every write switch is per courier; a new courier needs its seeded `courier.<code>_live_writes_enabled` row or it has a gate with no screen.
 
 20. Honor TRK-1 through TRK-9 (Module 10). The scan-status → order-transition mapping lives ONLY in `TrackingStatusMappingService` (TRK-5) — single source of truth, EXHAUSTIVE switch over `ShipmentStatus`, never duplicated; its `allowedFromOrderStatuses` MUST mirror the M9 matrix's inbound edges to `targetOrderStatus` exactly (the F6 / commit-9 bidirectional consistency test pins this). `tracking_events.eventAt` is the SCAN timestamp — all reads + the monotonic-forward guard order by it, never `createdAt` (TRK-3). DELIVERED is STOCK-NEUTRAL — `OUT_FOR_DELIVERY → DELIVERED` matrix edge has `sideEffects:[]` and M10 NEVER reaches back into the stock layer (TRK-7). RTO is webhook-driven up to `RTO_IN_TRANSIT` only — the warehouse `RtoReceiptService.receive()` is the sole authority for `RTO_RECEIVED` (TRK-6); a `RTO_DELIVERED` scan is INFORMATIONAL. The webhook processor saga is delivery_attempts FIRST, tracking_event SECOND, transition LAST (visible-vs-silent); the same shape holds for manual-tracking (TRK-9). Public projection is customer-safe — NO internal IDs, NO PII, NO `isVisibleToCustomer=false` audit scans (TRK-8); the 404 body is generic across all miss reasons (anti-enumeration). Webhook HMAC secret lives in env, referenced by the seeded `tracking.webhook_secret_ref` system_setting (TRK-1 / CUR-1 discipline); the real Delhivery HMAC scheme + the `normalizeScan` raw-code table are NEW `TODO(delhivery-api)` seams joining M9's existing 6 (8 total).

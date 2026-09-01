@@ -10,10 +10,16 @@ import {
   DeliveryActionStatus,
   OrderStatus,
   Prisma,
+  SystemIssueKind,
+  SystemIssueSeverity,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CallQueueService } from '../../call-queue/services/call-queue.service';
+import type { ClientInfoPayload } from '../../../common/decorators/client-info.decorator';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
+import { CourierShipmentActionService } from '../../courier-ops/services/courier-shipment-action.service';
+import { courierActor } from '../../courier-shared/services/courier-credential.service';
 
 export interface DeliveryActionRequestView {
   readonly id: string;
@@ -54,6 +60,8 @@ export class DeliveryActionService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
     private readonly callQueue: CallQueueService,
+    private readonly courier: CourierShipmentActionService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   /**
@@ -70,6 +78,7 @@ export class DeliveryActionService {
     orderId: string;
     action: DeliveryActionKind;
     reason: string;
+    ctx: ClientInfoPayload;
   }): Promise<DeliveryActionRequestView> {
     const reason = input.reason.trim();
     if (reason.length < 10) {
@@ -142,6 +151,12 @@ export class DeliveryActionService {
       select: { id: true },
     });
 
+    // RTO is the seller's OWN call and needs no operator (CUR-10 seller
+    // amendment). It is recorded as decided at the moment it is asked,
+    // by the seller, so the row never sits in a PENDING state nobody is
+    // going to look at.
+    const sellerDecides = input.action === DeliveryActionKind.RTO;
+
     const row = await this.prisma.client.orderDeliveryActionRequest.create({
       data: {
         orderId: order.id,
@@ -151,6 +166,13 @@ export class DeliveryActionService {
         action: input.action,
         reason,
         deliveryAttemptId: attempt?.id ?? null,
+        ...(sellerDecides
+          ? {
+              status: DeliveryActionStatus.APPROVED,
+              decidedAt: new Date(),
+              decisionNote: 'Auto-approved — returning their own parcel is the seller to decide',
+            }
+          : {}),
       },
     });
 
@@ -160,13 +182,90 @@ export class DeliveryActionService {
       action: 'seller.delivery_action.requested',
       entityType: 'order_delivery_action_request',
       entityId: row.id,
-      // A seller asking is not itself risky; the operator's decision is
-      // where the van gets dispatched, and that is audited separately.
-      severity: 'LOW',
+      // HIGH for RTO: this one reaches Delhivery on the strength of the
+      // seller's click alone and turns a moving parcel into a return.
+      // The other two still stop at an operator, where the risk sits.
+      severity: sellerDecides ? 'HIGH' : 'LOW',
       metadata: { orderId: order.id, action: input.action, reason },
     });
 
-    return this.toView(row);
+    if (!sellerDecides) return this.toView(row);
+
+    // ── The courier call is LAST, and the row above is already durable ─
+    // Same visible-vs-silent ordering the operator path uses: a crash
+    // between leaves an APPROVED request that visibly has not executed,
+    // which is re-runnable, rather than a van dispatched with no record
+    // of who asked for it.
+    return this.executeRto(row.id, shipment.id, {
+      sellerId: input.sellerId,
+      sellerUserId: input.sellerUserId,
+      orderId: order.id,
+      ctx: input.ctx,
+    });
+  }
+
+  /**
+   * Cancel with the courier and write the outcome back.
+   *
+   * Never throws on a courier refusal: the seller's ask is recorded
+   * either way, and a thrown 500 would lose the row that says a return
+   * was wanted. A refusal becomes FAILED — deliberately distinct from
+   * REJECTED, which is a human saying no — and lands on the issues board
+   * because a seller now believes their parcel is coming back and it is
+   * not.
+   */
+  private async executeRto(
+    requestId: string,
+    shipmentId: string,
+    who: {
+      sellerId: string;
+      sellerUserId: string | null;
+      orderId: string;
+      ctx: ClientInfoPayload;
+    },
+  ): Promise<DeliveryActionRequestView> {
+    try {
+      const outcome = await this.courier.cancelWithCourier(
+        courierActor.seller(who.sellerId, who.sellerUserId),
+        shipmentId,
+        'Seller asked for the parcel to be returned',
+        who.ctx,
+      );
+      if (!outcome.success) throw new Error(outcome.message ?? 'Courier refused the cancellation');
+
+      const done = await this.prisma.client.orderDeliveryActionRequest.update({
+        where: { id: requestId },
+        data: {
+          status: DeliveryActionStatus.EXECUTED,
+          executedAt: new Date(),
+          executionRef: outcome.awbNumber,
+        },
+      });
+      return this.toView(done);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const failed = await this.prisma.client.orderDeliveryActionRequest.update({
+        where: { id: requestId },
+        data: {
+          status: DeliveryActionStatus.FAILED,
+          decisionNote: `Courier refused: ${message}`.slice(0, 500),
+        },
+      });
+      await this.issues.raise({
+        kind: SystemIssueKind.INTEGRATION,
+        severity: SystemIssueSeverity.HIGH,
+        title: 'A seller asked to return a parcel and the courier refused',
+        detail:
+          `The cancellation for order ${who.orderId} was refused: ${message}\n\n` +
+          'The seller has been told it did not go through, but they are expecting this parcel ' +
+          'back. Someone needs to either cancel it by hand in the courier portal or tell them ' +
+          'why it cannot be returned — the parcel is still out for delivery until then.',
+        source: 'DeliveryActionService',
+        dedupeKey: `seller-rto-refused:${requestId}`,
+        metadata: { requestId, orderId: who.orderId, sellerId: who.sellerId, error: message },
+      });
+      return this.toView(failed);
+    }
   }
 
   /** Everything a seller has asked for on one order. */

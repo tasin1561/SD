@@ -475,6 +475,15 @@ const systemSettings: SystemSettingSeed[] = [
       'Whether the evening sweep flags parcels that are still out for delivery past the cutoff. Turning this OFF stops new flags being raised; it does not clear the ones already up, and the worklists keep working.',
   },
   {
+    key: 'ops.rto_stall_alert_hours',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 48,
+    displayName: 'Return accepted but never started — hours before we flag it',
+    description:
+      'A seller asks for a parcel back and the courier accepts, then no return scan ever arrives. After this many hours the order is raised on the system issues board, because the seller believes their goods are on the way back and nothing else in the system notices they are not.',
+  },
+  {
     key: 'ops.nsa_cutoff_hour',
     category: 'ops',
     valueType: SettingValueType.INT,

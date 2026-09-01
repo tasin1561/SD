@@ -38,6 +38,7 @@ import {
   type NdrReadiness,
 } from '../services/courier-shipment-action.service';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
+import { courierActor } from '../../courier-shared/services/courier-credential.service';
 
 /** Reads include the courier's real cost, which is commercially
  *  sensitive — hence FINANCE rather than every warehouse hand. */
@@ -156,7 +157,12 @@ export class AdminCourierOpsController {
     @Body() body: CancelWithCourierDto,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<ActionOutcome> {
-    return this.actions.cancelWithCourier(staff.id, shipmentId, body.reason, ctx);
+    return this.actions.cancelWithCourier(
+      courierActor.operator(staff.id),
+      shipmentId,
+      body.reason,
+      ctx,
+    );
   }
 
   @Post('ewaybill')

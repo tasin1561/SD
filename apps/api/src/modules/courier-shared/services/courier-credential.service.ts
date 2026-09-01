@@ -38,7 +38,21 @@ export type CourierCallTrigger =
   /** A cron or queue worker. `job` names it; `runId` pins the occurrence. */
   | { readonly kind: 'RUNNER'; readonly job: string; readonly runId?: string | null | undefined }
   /** Inbound from the courier. `source` names the channel. */
-  | { readonly kind: 'WEBHOOK'; readonly source: string };
+  | { readonly kind: 'WEBHOOK'; readonly source: string }
+  /**
+   * The SELLER asked for it about their own parcel.
+   *
+   * Deliberately not folded into OPERATOR: "we decided to return this"
+   * and "the seller decided to return this" are different facts, and
+   * only one of them is ours to answer for when the customer asks why
+   * their parcel turned around. `sellerUserId` is the team member;
+   * it is null for a token or an automated seller integration.
+   */
+  | {
+      readonly kind: 'SELLER';
+      readonly sellerId: string;
+      readonly sellerUserId?: string | null | undefined;
+    };
 
 export interface CourierCredentialActor {
   type: ActorType;
@@ -64,6 +78,18 @@ export const courierActor = {
   webhook(source: string): CourierCredentialActor {
     return { type: ActorType.SYSTEM, id: null, trigger: { kind: 'WEBHOOK', source } };
   },
+  /**
+   * A seller acting on their own parcel. `id` is the SELLER, never the
+   * seller-user: audit rows key on the account that owns the goods, and
+   * a team member leaving must not orphan the attribution.
+   */
+  seller(sellerId: string, sellerUserId: string | null): CourierCredentialActor {
+    return {
+      type: ActorType.SELLER,
+      id: sellerId,
+      trigger: { kind: 'SELLER', sellerId, sellerUserId },
+    };
+  },
 } as const;
 
 /** Flattened for the audit row's metadata — one shape, whatever the branch. */
@@ -86,6 +112,14 @@ export function describeTrigger(trigger: CourierCallTrigger | undefined): {
       };
     case 'WEBHOOK':
       return { triggerKind: 'WEBHOOK', triggerDetail: trigger.source };
+    case 'SELLER':
+      return {
+        triggerKind: 'SELLER',
+        triggerDetail:
+          trigger.sellerUserId == null
+            ? trigger.sellerId
+            : `${trigger.sellerId}:${trigger.sellerUserId}`,
+      };
   }
 }
 

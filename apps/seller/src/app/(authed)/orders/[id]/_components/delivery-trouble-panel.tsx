@@ -67,7 +67,9 @@ const ACTIONS: ReadonlyArray<{ value: DeliveryActionKind; label: string; hint: s
   {
     value: 'RTO',
     label: 'Send it back',
-    hint: 'The parcel returns to our warehouse. This ends the sale and a return fee applies.',
+    hint:
+      'Your call, so this goes to the courier straight away — there is no operator step and it ' +
+      'cannot be undone. The parcel returns to our warehouse, the sale ends, and a return fee applies.',
   },
 ];
 
@@ -214,7 +216,11 @@ export function DeliveryTroublePanel({
           if (!next) setError(null);
         }}
         title="What should we do?"
-        description="An operator reads this and acts on it — nothing reaches the courier automatically."
+        description={
+          action === 'RTO'
+            ? 'Returning your own parcel is your decision, so this reaches the courier immediately.'
+            : 'An operator reads this and acts on it — nothing reaches the courier automatically.'
+        }
       >
         <div className="space-y-3">
           <FormField
@@ -252,7 +258,11 @@ export function DeliveryTroublePanel({
             Cancel
           </Button>
           <Button onClick={() => void submit()} disabled={request.isPending}>
-            {request.isPending ? 'Sending…' : 'Send request'}
+            {request.isPending
+              ? 'Sending…'
+              : action === 'RTO'
+                ? 'Send it back now'
+                : 'Send request'}
           </Button>
         </ModalFooter>
       </Modal>

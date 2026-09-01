@@ -5,6 +5,7 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CourierShipmentActionService } from '../../courier-ops/services/courier-shipment-action.service';
 import type { ClientInfoPayload } from '../../../common/decorators/client-info.decorator';
 import { DeliveryActionService } from './delivery-action.service';
+import { courierActor } from '../../courier-shared/services/courier-credential.service';
 
 /**
  * An operator deciding what to do about a seller's request.
@@ -148,7 +149,7 @@ export class DeliveryActionDecisionService {
         req.action === DeliveryActionKind.REATTEMPT
           ? await this.courier.takeNdrAction(staffId, req.shipmentId, 'RE-ATTEMPT', ctx)
           : await this.courier.cancelWithCourier(
-              staffId,
+              courierActor.operator(staffId),
               req.shipmentId,
               'Seller asked for the parcel to be returned',
               ctx,

@@ -17,6 +17,10 @@ import type { AuthenticatedSeller } from '../../../common/types/request';
 import { RequestDeliveryActionDto } from '../dto/delivery-action.dto';
 import { DeliveryActionService } from '../services/delivery-action.service';
 import { SellerCallHistoryService } from '../services/seller-call-history.service';
+import {
+  ClientInfo,
+  type ClientInfoPayload,
+} from '../../../common/decorators/client-info.decorator';
 
 /**
  * What a seller can ask for when a delivery fails.
@@ -69,12 +73,14 @@ export class SellerDeliveryActionController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary:
-      'Ask us to re-attempt, call the customer, or send it back. An operator decides — nothing reaches the courier from here.',
+      'Ask us to re-attempt or call the customer (an operator decides), or send it back — ' +
+      "a return is the seller's own call and goes to the courier immediately.",
   })
   request(
     @CurrentSeller() seller: AuthenticatedSeller,
     @Param('orderId', new ParseUUIDPipe({ version: '7' })) orderId: string,
     @Body() body: RequestDeliveryActionDto,
+    @ClientInfo() ctx: ClientInfoPayload,
   ): ReturnType<DeliveryActionService['request']> {
     return this.svc.request({
       sellerId: seller.id,
@@ -82,6 +88,7 @@ export class SellerDeliveryActionController {
       orderId,
       action: body.action,
       reason: body.reason,
+      ctx,
     });
   }
 }

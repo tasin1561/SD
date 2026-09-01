@@ -11,7 +11,10 @@ import { type NdrAction } from '../../courier-delhivery/services/delhivery-ndr.s
 import { CourierNdrDispatchService } from './courier-ndr-dispatch.service';
 import { CourierOpsDispatchService } from './courier-ops-dispatch.service';
 import { ShipmentCourierContextService } from './shipment-courier-context.service';
-import { courierActor } from '../../courier-shared/services/courier-credential.service';
+import {
+  courierActor,
+  type CourierCredentialActor,
+} from '../../courier-shared/services/courier-credential.service';
 
 export interface ActionOutcome {
   readonly success: boolean;
@@ -156,8 +159,20 @@ export class CourierShipmentActionService {
    * the state machine via the webhook processor, which is the only
    * authority on where a parcel physically is.
    */
+  /**
+   * Cancel a moving parcel, turning it into a return.
+   *
+   * Takes an ACTOR rather than a staff id because a seller may now do
+   * this to their own parcel without an operator in the loop (CUR-10's
+   * seller amendment). The audit row has to say which: "we decided to
+   * return this" and "the seller decided to return this" are different
+   * facts, and only one of them is ours to answer for when the customer
+   * rings to ask why their parcel turned around. The live-write guard
+   * is unchanged and still applies — it sits inside the dispatcher, so
+   * it does not care who asked.
+   */
   async cancelWithCourier(
-    staffId: string,
+    actor: CourierCredentialActor,
     shipmentId: string,
     reason: string,
     ctx: ClientInfoPayload,
@@ -168,12 +183,18 @@ export class CourierShipmentActionService {
       shipment.courierCode,
       shipment.courierAccountId,
       shipment.awbNumber,
-      courierActor.operator(staffId),
+      actor,
     );
 
+    const isStaff = actor.type === ActorType.STAFF;
     await this.audit.log({
-      actorType: ActorType.STAFF,
-      staffUserId: staffId,
+      actorType: actor.type,
+      // Exactly one of these is set. The columns are FK'd to different
+      // tables, so putting a seller id in staffUserId does not mislabel
+      // a row — it fails the insert, and AuditLogService swallows that,
+      // which would lose the record of a real courier call.
+      staffUserId: isStaff ? (actor.id ?? null) : null,
+      sellerId: actor.type === ActorType.SELLER ? (actor.id ?? null) : null,
       action: 'courier.shipment.cancelled',
       entityType: 'shipment',
       entityId: shipment.shipmentId,

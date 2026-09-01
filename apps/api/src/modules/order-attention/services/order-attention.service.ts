@@ -1,13 +1,39 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { OrderStatus } from '@skydrop/db';
+import {
+  DeliveryActionKind,
+  DeliveryActionStatus,
+  OrderStatus,
+  SystemIssueKind,
+  SystemIssueSeverity,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { NotificationLedgerService } from '../../notifications/services/notification-ledger.service';
 import { EnvService } from '../../../config/env.service';
 import { NotificationChannel, NotificationRecipientType } from '@skydrop/db';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 /** Where the parcels are. The cutoff is an hour of the DELIVERY day. */
 const DELIVERY_TIMEZONE = 'Asia/Kolkata';
+
+/**
+ * Any state that means the return is genuinely under way. RTO_RECEIVED
+ * and beyond are included deliberately: a parcel can be back on the
+ * bench before the scan that says it is travelling ever lands, and
+ * alarming about a return that has already arrived is worse than
+ * useless.
+ */
+const RTO_UNDERWAY: ReadonlySet<OrderStatus> = new Set([
+  OrderStatus.RTO_INITIATED,
+  OrderStatus.RTO_IN_TRANSIT,
+  OrderStatus.RTO_RECEIVED,
+  OrderStatus.RTO_RESTOCKED,
+  OrderStatus.RTO_DAMAGED,
+  // Terminal ends where a return is no longer the question.
+  OrderStatus.DELIVERED,
+  OrderStatus.LOST_IN_TRANSIT,
+  OrderStatus.CANCELLED_BY_ADMIN,
+]);
 
 const SETTING_ENABLED = 'ops.nsa_enabled';
 const SETTING_CUTOFF_HOUR = 'ops.nsa_cutoff_hour';
@@ -40,6 +66,8 @@ export interface NsaSweepSummary {
   readonly raised: number;
   readonly escalated: number;
   readonly cleared: number;
+  /** Returns the seller asked for that the courier has not started. */
+  readonly stalledReturns: number;
 }
 
 /**
@@ -81,6 +109,7 @@ export class OrderAttentionService {
     private readonly audit: AuditLogService,
     private readonly ledger: NotificationLedgerService,
     private readonly env: EnvService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   /**
@@ -142,7 +171,15 @@ export class OrderAttentionService {
       raised: 0,
       escalated: 0,
       cleared: 0,
+      stalledReturns: 0,
     };
+
+    // Runs even when the NSA half is switched off, and before the
+    // enabled check: this is not an NSA flag, it is a courier that
+    // accepted a cancellation and then did nothing. Gating it behind an
+    // unrelated switch is how it would come to be silently off.
+    summary.stalledReturns = await this.checkStalledReturns(now);
+
     if (!enabled) return summary;
 
     // Tidy first, and unconditionally: a parcel that moved on should
@@ -233,6 +270,83 @@ export class OrderAttentionService {
    * require the order to be OUT_FOR_DELIVERY, so a parcel that moves is
    * off the list immediately whether or not this has run.
    */
+  /**
+   * A return the seller asked for that never started.
+   *
+   * The seller clicks "send it back", Delhivery accepts the
+   * cancellation, and then — sometimes — nothing. No RTO scan, and the
+   * order sits in OUT_FOR_DELIVERY while the seller believes their
+   * goods are on the way back. Nothing else in the system notices:
+   * the request row says EXECUTED because the courier really did accept
+   * it, and every downstream step is waiting on a scan that is not
+   * coming.
+   *
+   * So this is the one check that the RTO chain cannot make for itself,
+   * and it is why "we told the courier" is not the same fact as "the
+   * parcel is coming back".
+   *
+   * Clears itself once the order reaches any RTO state — including
+   * RTO_RECEIVED, for a parcel that came back faster than a scan did.
+   */
+  private async checkStalledReturns(now: Date): Promise<number> {
+    const hours = await this.globalInt('ops.rto_stall_alert_hours', 48);
+    const cutoff = new Date(now.getTime() - hours * 3_600_000);
+
+    const executed = await this.prisma.client.orderDeliveryActionRequest.findMany({
+      where: {
+        action: DeliveryActionKind.RTO,
+        status: DeliveryActionStatus.EXECUTED,
+        executedAt: { lt: cutoff },
+      },
+      select: { id: true, orderId: true, executedAt: true, sellerId: true },
+    });
+    if (executed.length === 0) return 0;
+
+    const orders = await this.prisma.client.order.findMany({
+      where: { id: { in: executed.map((r) => r.orderId) } },
+      select: { id: true, orderNumber: true, status: true },
+    });
+    const byId = new Map(orders.map((o) => [o.id, o]));
+
+    let stalled = 0;
+    for (const req of executed) {
+      const order = byId.get(req.orderId);
+      if (order === undefined) continue;
+      const key = `rto-stalled:${req.id}`;
+
+      if (RTO_UNDERWAY.has(order.status)) {
+        // It started after all. Say so rather than leaving a card that
+        // a person has to work out is stale.
+        await this.issues.resolveByKey(key, `The return started — order is ${order.status}.`);
+        continue;
+      }
+      stalled += 1;
+      const since = req.executedAt ?? cutoff;
+      await this.issues.raise({
+        kind: SystemIssueKind.INTEGRATION,
+        severity: SystemIssueSeverity.HIGH,
+        title: `${order.orderNumber}: the courier accepted a return that never started`,
+        detail:
+          `The seller asked for this parcel back on ${since.toISOString().slice(0, 16)} and the ` +
+          `courier accepted, but ${hours}h later there is still no return scan — the order is ` +
+          `${order.status.toLowerCase().replaceAll('_', ' ')}.\n\n` +
+          'The seller believes their goods are coming back. Either the parcel was already too ' +
+          'far along to stop and is still being delivered, or the cancellation was accepted and ' +
+          'dropped. Check the AWB in the courier portal and tell the seller which it is.',
+        source: 'OrderAttentionService',
+        dedupeKey: key,
+        metadata: {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          sellerId: req.sellerId,
+          orderStatus: order.status,
+          requestedAt: since.toISOString(),
+        },
+      });
+    }
+    return stalled;
+  }
+
   private async clearMoved(): Promise<number> {
     const res = await this.prisma.client.order.updateMany({
       where: {
