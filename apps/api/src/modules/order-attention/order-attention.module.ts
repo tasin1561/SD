@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
+import { NotificationLedgerModule } from '../notification-ledger/notification-ledger.module';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { AdminNsaController } from './controllers/admin-nsa.controller';
@@ -16,7 +17,12 @@ import { OrderAttentionService } from './services/order-attention.service';
  * table, and the order module never needs to know it exists.
  */
 @Module({
-  imports: [AuthCommonModule],
+  // The LEDGER only — not the notifications module. NOTIF-5 keeps the
+  // ORDER module unaware of notifications and it still is; this is a
+  // leaf that raises the NSA flag and knows perfectly well it wants to
+  // tell somebody. Nothing in the ledger imports back, so there is no
+  // cycle for the lifecycle bus to break.
+  imports: [AuthCommonModule, NotificationLedgerModule],
   controllers: [AdminNsaController, SellerNsaController],
   providers: [OrderAttentionService, NsaSweepWorker, StaffJwtGuard, SellerJwtGuard],
 })

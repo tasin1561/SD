@@ -2,6 +2,9 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { OrderStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { NotificationLedgerService } from '../../notifications/services/notification-ledger.service';
+import { EnvService } from '../../../config/env.service';
+import { NotificationChannel, NotificationRecipientType } from '@skydrop/db';
 
 /** Where the parcels are. The cutoff is an hour of the DELIVERY day. */
 const DELIVERY_TIMEZONE = 'Asia/Kolkata';
@@ -76,6 +79,8 @@ export class OrderAttentionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
+    private readonly ledger: NotificationLedgerService,
+    private readonly env: EnvService,
   ) {}
 
   /**
@@ -178,6 +183,22 @@ export class OrderAttentionService {
         if (first) summary.raised += 1;
         else summary.escalated += 1;
 
+        // Tell the seller, once per evening.
+        //
+        // Best-effort and AFTER the flag is durable: the flag is the
+        // fact, the email is a reflection of it, and a mail server
+        // having a bad minute must not mean nobody is told there is a
+        // stuck parcel (NOTIF-1's discipline, applied outside M11's own
+        // listener). The eventId carries the DAY, so re-running the
+        // sweep the same evening dedups on NOTIF-2's composite key
+        // while tomorrow's escalation is a genuinely new message.
+        await this.notifySeller(order.id, day).catch((err: unknown) => {
+          this.logger.warn(
+            { err: err instanceof Error ? err.message : String(err), orderId: order.id },
+            'NSA raised but the seller could not be told',
+          );
+        });
+
         await this.audit.log({
           actorType: 'SYSTEM',
           actorId: null,
@@ -222,6 +243,57 @@ export class OrderAttentionService {
       data: { nsaClearedAt: new Date() },
     });
     return res.count;
+  }
+
+  /** How many nights, said the way a person would say it. */
+  private static dayPhrase(day: number): string {
+    if (day <= 1) return 'since yesterday';
+    return `for ${day} days now`;
+  }
+
+  private async notifySeller(orderId: string, day: number): Promise<void> {
+    const order = await this.prisma.client.order.findUnique({
+      where: { id: orderId },
+      select: {
+        orderNumber: true,
+        sellerId: true,
+        recipientName: true,
+        recipientCity: true,
+        seller: { select: { companyName: true, email: true } },
+        orderShipments: {
+          select: { shipment: { select: { awbNumber: true, courierCode: true } } },
+          orderBy: { shipmentSequence: 'desc' },
+          take: 1,
+        },
+      },
+    });
+    if (order === null) return;
+    const ship = order.orderShipments[0]?.shipment ?? null;
+
+    await this.ledger.enqueue({
+      // The day is part of the key on purpose: two sweeps on one
+      // evening are the same message and dedup, while the second
+      // night's escalation is a different one and must get through.
+      eventId: `nsa:${orderId}:${day}`,
+      recipientType: NotificationRecipientType.SELLER,
+      recipientId: order.sellerId,
+      channel: NotificationChannel.EMAIL,
+      templateCode: 'seller.order_needs_attention.email',
+      locale: 'en',
+      toEmail: order.seller?.email ?? null,
+      orderId,
+      triggerEvent: `order.nsa_raised.day_${day}`,
+      variables: {
+        company_name: order.seller?.companyName ?? '',
+        order_number: order.orderNumber,
+        recipient_name: order.recipientName,
+        recipient_city: order.recipientCity,
+        awb_number: ship?.awbNumber ?? '—',
+        courier_name: ship?.courierCode ?? '—',
+        nsa_day_phrase: OrderAttentionService.dayPhrase(day),
+        app_url: this.env.sellerAppUrl,
+      },
+    });
   }
 
   private async globalInt(key: string, fallback: number): Promise<number> {

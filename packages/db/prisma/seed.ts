@@ -2977,6 +2977,20 @@ const notificationTemplates: TemplateSeed[] = [
     bodyTemplate:
       'Hi {{ company_name }}, courier {{ courier_name }} attempted to deliver order {{ order_number }} (AWB {{ awb_number }}) but could not complete it. Reason: {{ ndr_reason }}. The courier will reattempt. View the order at {{ app_url }}.',
   },
+  // NSA — a parcel out for delivery that never arrived and never failed.
+  // Deliberately its own template rather than reusing the NDR one: an
+  // NDR carries a reason from the courier, and the whole point of this
+  // one is that there ISN'T one. Saying "reason: —" would read as a
+  // system that lost the reason rather than a courier that never gave it.
+  {
+    code: 'seller.order_needs_attention.email',
+    name: 'NSA — still out for delivery at the evening cutoff',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Order {{ order_number }} is still out for delivery — {{ nsa_day_phrase }}',
+    bodyTemplate:
+      'Hi {{ company_name }}, order {{ order_number }} for {{ recipient_name }} in {{ recipient_city }} (AWB {{ awb_number }}, {{ courier_name }}) went out for delivery and was still out at the end of the day — {{ nsa_day_phrase }}. The courier has not told us why, so we are asking them. You do not need to do anything; this is so you hear it from us before your customer asks you. Track it at {{ app_url }}.',
+  },
   {
     code: 'seller.order_rto_received.email',
     name: 'RTO received — email to seller (M11; resolves M8 deferred status-change email)',

@@ -67,3 +67,16 @@ describe('OrderAttentionService.evenings', () => {
     expect(evenings(out, now, 15)).toBe(1);
   });
 });
+
+describe('OrderAttentionService.dayPhrase', () => {
+  // Reached through the notification variables; the phrase is what the
+  // seller actually reads in the subject line.
+  const phrase = (OrderAttentionService as unknown as { dayPhrase: (d: number) => string })
+    .dayPhrase;
+
+  it('says it the way a person would', () => {
+    expect(phrase(1)).toBe('since yesterday');
+    expect(phrase(2)).toBe('for 2 days now');
+    expect(phrase(3)).toBe('for 3 days now');
+  });
+});
