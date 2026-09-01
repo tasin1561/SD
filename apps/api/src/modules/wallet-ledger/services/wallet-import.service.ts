@@ -114,13 +114,29 @@ export class WalletImportService {
     const shipments = await this.prisma.client.shipment.findMany({
       where: {
         awbNumber: { in: [...awbs] },
-        ...(opts.courierAccountId === undefined ? {} : { courierAccountId: opts.courierAccountId }),
+        // This account's parcels — OR ones with no account recorded.
+        //
+        // An AWB is globally unique at Delhivery, so a waybill in THIS
+        // account's ledger belongs to this account whatever our row
+        // says. Ten of eleven live shipments carried no account id at
+        // all (booked before the account row existed), and a strict
+        // scope silently excluded every one: 1,123 AWBs read, nothing
+        // matched, and the import looked like it had worked.
+        //
+        // The unattributed ones are matched too and the account is
+        // BACKFILLED below — the courier's own ledger is the authority
+        // on whose account carried a parcel, which is what CACC-1 wants
+        // recorded.
+        ...(opts.courierAccountId === undefined
+          ? {}
+          : { OR: [{ courierAccountId: opts.courierAccountId }, { courierAccountId: null }] }),
       },
       select: {
         id: true,
         awbNumber: true,
         actualCourierCostInr: true,
         actualRtoCostInr: true,
+        courierAccountId: true,
       },
     });
     const byAwb = new Map(shipments.map((s) => [s.awbNumber ?? '', s]));
@@ -144,12 +160,18 @@ export class WalletImportService {
       else rtoWritten += 1;
       if (dryRun) return;
 
+      // Repair the attribution while we are here: the ledger this was
+      // read from IS the account that carried it.
+      const attribute =
+        opts.courierAccountId !== undefined && ship.courierAccountId === null
+          ? { courierAccountId: opts.courierAccountId }
+          : {};
       await this.prisma.client.shipment.update({
         where: { id: ship.id },
         data:
           leg === 'forward'
-            ? { actualCourierCostInr: next, actualCourierCostAt: charge.chargedAt }
-            : { actualRtoCostInr: next, actualRtoCostAt: charge.chargedAt },
+            ? { actualCourierCostInr: next, actualCourierCostAt: charge.chargedAt, ...attribute }
+            : { actualRtoCostInr: next, actualRtoCostAt: charge.chargedAt, ...attribute },
       });
     };
 

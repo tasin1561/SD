@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ActorType, CredentialEnvironment, NotificationRecipientType } from '@skydrop/db';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Browser, BrowserContext, Locator, Page } from 'playwright';
+import type { Browser, BrowserContext, Page } from 'playwright';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import {
@@ -155,6 +155,13 @@ export class PortalSessionService {
     // anything that said "not logged in". Verified against production on
     // 2026-09-01: /support stayed, /home and /finances both redirected.
     await page.goto(`${PORTAL_ORIGIN}/home`, { waitUntil: 'domcontentloaded' });
+    // Their redirect to the login page is CLIENT-SIDE: `goto` returns as
+    // soon as the document loads, and the app bounces a moment later. So
+    // the probe ran while the URL was still /home with no password field
+    // on it, concluded we were signed in, and skipped the login
+    // entirely — leaving every later navigation to bounce. The symptom
+    // was a missing button on the Finances page, three steps away.
+    await page.waitForTimeout(3_000);
 
     if (await this.looksLikeLogin(page)) {
       // Stored state expired. Re-auth once — never in a loop.
@@ -251,21 +258,25 @@ export class PortalSessionService {
 
     const company = creds['portalCompany'] ?? '';
 
-    // ── THE REAL FLOW, WHICH IS THREE PAGES ──────────────────────────
-    // Delhivery ONE does not take an email and a password together:
+    // ── THE REAL FLOW, VERIFIED AGAINST THE LIVE PAGE ────────────────
+    // Every step below was checked on production on 2026-09-01; none of
+    // it is inferred from their docs, which do not describe this at all.
     //
-    //   1. one.delhivery.com/v2/login — EMAIL, then Continue
-    //   2. a "Hang on - one more step!" reset-password modal may appear;
-    //      it is DISMISSED, never actioned (clicking Reset Password
-    //      emails a link and invalidates the working password)
-    //   3. the same page comes back with a COMPANY dropdown — one login
-    //      can reach several, and each has its own wallet
-    //   4. ucp-auth.delhivery.com — the PASSWORD, on a different origin
-    //
-    // Written as steps that each wait for their own evidence rather
-    // than as a fixed sequence of clicks, because the modal is
-    // conditional and the company step only exists for multi-company
-    // logins.
+    //   1. /v2/login — EMAIL, then Continue
+    //   2. a "Hang on - one more step!" modal appears (this account has
+    //      never reset its password, and they nag every time). It is
+    //      DISMISSED, never actioned: its button mails a reset link and
+    //      would invalidate the password we hold.
+    //   3. the SAME page then grows a Company control — and the email
+    //      input is DISABLED with the address already in it, so it must
+    //      NOT be re-filled. Trying to cost an hour: fill() times out on
+    //      a disabled input and reads like a missing field.
+    //   4. Company is a custom clickable DIV, not a <select>. It
+    //      defaults to the FIRST company on the login, which here is
+    //      "M S ENTERPRISE" — the wrong one. Choosing wrong reads
+    //      another company's wallet, so this is a required credential.
+    //   5. Continue hands off to ucp-auth.delhivery.com, a different
+    //      origin, for the PASSWORD.
     await page.goto(`${PORTAL_ORIGIN}/v2/login`, { waitUntil: 'domcontentloaded' });
 
     const emailBox = page
@@ -274,54 +285,53 @@ export class PortalSessionService {
     await emailBox.waitFor({ state: 'visible', timeout: 30_000 });
     await emailBox.fill(username);
     await page
-      .getByRole('button', { name: /continue/i })
+      .getByRole('button', { name: /^continue$/i })
       .first()
       .click();
+    // Explicit settle rather than waitForLoadState: none of these steps
+    // is a navigation — the page rewrites itself in place, so the load
+    // state never changes and waiting on it returns instantly.
+    await page.waitForTimeout(4_500);
 
-    // Dismissing puts the form back at the EMAIL step, so it has to be
-    // submitted again — the company selector is on the SECOND pass.
-    if (await this.dismissResetPasswordModal(page)) {
-      const again = page
-        .locator('input[type="email"], input[name="username"], input[name="email"]')
-        .first();
-      await again.waitFor({ state: 'visible', timeout: 20_000 });
-      await again.fill(username);
+    await this.dismissResetPasswordModal(page);
+
+    // The company step. Present whenever the login reaches more than one
+    // company; absent for a single-company login, which is why this is
+    // conditional rather than assumed.
+    const chose = await this.chooseCompany(page, company);
+    if (chose) {
       await page
         .getByRole('button', { name: /^continue$/i })
         .first()
         .click();
+      // THIS one IS a navigation — to the auth origin — and it is the
+      // slowest step in the flow.
+      await page.waitForURL(/ucp-auth\.delhivery\.com/, { timeout: 60_000 }).catch(() => undefined);
       await page.waitForTimeout(3_000);
     }
 
-    // The company step, when this login has one.
-    const companyBox = page.locator('select, [role="combobox"]').first();
-    if (
-      await companyBox
-        .count()
-        .then((n) => n > 0)
-        .catch(() => false)
-    ) {
-      if (company === '') {
-        throw new PortalCredentialsMissingError(Object.keys(creds));
-      }
-      await this.chooseCompany(page, companyBox, company);
-      await page
-        .getByRole('button', { name: /continue/i })
-        .first()
-        .click();
-      await page.waitForLoadState('domcontentloaded');
-    }
-
-    // The password lives on the auth origin, which the Continue above
-    // redirects to. Its email field arrives pre-filled.
-    const passwordBox = page.locator('input[type="password"]').first();
+    // The password lives on the auth origin the Continue redirects to.
+    //
+    // `:visible` is load-bearing. That page carries TWO password inputs
+    // and the first in DOM order is HIDDEN — a decoy, or an autofill
+    // trap. Taking `.first()` grabs it and `fill()` times out against
+    // something nobody can type into, which reads like a page that never
+    // loaded.
+    const passwordBox = page.locator('input[type="password"]:visible').first();
     await passwordBox.waitFor({ state: 'visible', timeout: 30_000 });
     await passwordBox.fill(password);
     await page
       .getByRole('button', { name: /^log ?in$/i })
       .first()
       .click();
-    await page.waitForLoadState('domcontentloaded');
+    // Back across the OIDC redirect to the app. Landing anywhere on
+    // one.delhivery.com that is not the login page is success.
+    await page
+      .waitForURL((u) => /one\.delhivery\.com/.test(u.href) && !/\/v2\/login/.test(u.href), {
+        timeout: 60_000,
+      })
+      .catch(() => undefined);
+    await page.waitForTimeout(3_000);
 
     // A challenge AFTER credentials is the case that matters: it means
     // the password was right and something else is being asked.
@@ -395,31 +405,67 @@ export class PortalSessionService {
       await closer.click({ force: true, timeout: 10_000 }).catch(() => undefined);
     }
     await modal.waitFor({ state: 'hidden', timeout: 10_000 }).catch(() => undefined);
+    // The Company control is rendered after the modal goes; it is not
+    // there the instant the overlay disappears.
+    await page.waitForTimeout(3_500);
     return true;
   }
 
   /**
-   * Pick the company, whichever control they rendered.
+   * Pick the company, on the control they actually render.
    *
-   * A native `<select>` takes selectOption; their custom combobox does
-   * not, and needs the option clicked. Trying the cheap one first and
-   * falling back keeps this working across whichever they ship.
+   * Not a <select> — a clickable DIV that sits after a "Company" label
+   * and opens a list. So it is found by that relationship rather than by
+   * a class name, because their classes are hashed (`css-mgm1g3`) and
+   * change with every build.
+   *
+   * Returns false when there is no company step, which is a normal
+   * single-company login and not an error.
    */
-  private async chooseCompany(page: Page, control: Locator, company: string): Promise<void> {
-    // `evaluate` runs in the BROWSER, but this package compiles without
-    // the DOM lib, so the node is typed loosely here rather than
-    // pulling `dom` into the API's global scope for one call.
-    const tag = await control
-      .evaluate((el: { tagName?: string }) => (el.tagName ?? '').toLowerCase())
-      .catch(() => '');
-    if (tag === 'select') {
-      await control.selectOption({ label: company }).catch(async () => {
-        await control.selectOption(company);
-      });
-      return;
+  private async chooseCompany(page: Page, company: string): Promise<boolean> {
+    // Marked from the page: the first pointer-cursor DIV under the
+    // "Company" label's container.
+    await page.evaluate(`(() => {
+      var all = Array.prototype.slice.call(document.querySelectorAll('*'));
+      var lbl = all.filter(function (n) {
+        return (n.textContent || '').trim() === 'Company' && n.children.length === 0;
+      })[0];
+      if (!lbl) return;
+      var p = lbl.parentElement;
+      for (var i = 0; i < 4 && p; i++) {
+        var cand = Array.prototype.slice.call(p.querySelectorAll('div')).filter(function (d) {
+          var r = d.getBoundingClientRect();
+          return getComputedStyle(d).cursor === 'pointer' && r.width > 150;
+        })[0];
+        if (cand) { cand.setAttribute('data-sd-company', '1'); return; }
+        p = p.parentElement;
+      }
+    })()`);
+
+    const control = page.locator('[data-sd-company]').first();
+    if ((await control.count()) === 0) return false;
+
+    if (company === '') {
+      // A multi-company login with no company recorded would sign in as
+      // whichever they default to — a different company's wallet.
+      throw new Error(
+        'This Delhivery login reaches more than one company, but no portalCompany is recorded. ' +
+          'Add it on the account so the right wallet is read.',
+      );
     }
-    await control.click();
-    await page.getByRole('option', { name: company }).first().click();
+
+    await control.click({ force: true });
+    await page.waitForTimeout(1_500);
+    // Exact first: "MS EXPORTS" and "M S ENTERPRISE" both contain "MS".
+    await page
+      .getByText(company, { exact: true })
+      .first()
+      .click({ timeout: 8_000 })
+      .catch(async () => {
+        await page.getByText(company, { exact: false }).first().click({ timeout: 8_000 });
+      });
+    await page.waitForTimeout(1_000);
+    return true;
   }
 
   /**
