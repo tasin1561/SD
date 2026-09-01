@@ -53,10 +53,15 @@ const OPTED_IN: Readonly<Record<string, string>> = {
     'where those same parcels are; the nav already shows Tracking on orders.view, so refusing it would be a link to a 403',
   'seller-order-journey.controller.ts':
     'the same order, told as a story — the stages it passed through and the courier scans. It is a strict re-presentation of what :id and :id/events already return to this role, so refusing it would render the order page half-empty for a VIEWER rather than read-only',
+  'seller-nsa.controller.ts':
+    'their own orders that are stuck out for delivery — a filtered view of the list this role already reads, discovering nothing new about them. Opened deliberately because noticing a stuck parcel is exactly what a read-only team member is useful for, and a page that refused them would be a link to a 403',
 };
 
 /** GETs that opt-in reaches, listed so a new one is a decision. */
 const READABLE_GETS: Readonly<Record<string, readonly string[]>> = {
+  // One GET, and it returns only this seller's own flagged orders —
+  // the guard supplies the sellerId, the client never sends one.
+  'seller-nsa.controller.ts': [''],
   'seller-order.controller.ts': [
     '',
     ':id',

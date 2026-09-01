@@ -439,6 +439,33 @@ const systemSettings: SystemSettingSeed[] = [
       'When a watchdog finds no successful tracking cycle in 45 minutes: re-arm the schedule (in case the repeatable job was lost) and run one cycle immediately, rather than waiting for a human. Safe by construction — a cycle only applies scans newer than each parcel already has. Turn OFF to require a person to press "Run a cycle now"; the alert still fires either way.',
   },
   {
+    key: 'ops.nsa_enabled',
+    category: 'ops',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: true,
+    displayName: 'NSA — raise Needs Seller Attention flags',
+    description:
+      'Whether the evening sweep flags parcels that are still out for delivery past the cutoff. Turning this OFF stops new flags being raised; it does not clear the ones already up, and the worklists keep working.',
+  },
+  {
+    key: 'ops.nsa_cutoff_hour',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 18,
+    displayName: 'NSA — evening cutoff hour (India)',
+    description:
+      'The hour, in the DELIVERY timezone (Asia/Kolkata), after which a parcel still out for delivery is treated as stuck. 18 means 6pm: the van is back and the customer has not been reached.',
+  },
+  {
+    key: 'ops.nsa_max_days',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 3,
+    displayName: 'NSA — days the escalation counts to',
+    description:
+      'How high the day counter climbs — 3 means a parcel stuck a third night is the loudest it gets. The flag STAYS raised beyond this; only the number stops rising, because a parcel stuck five nights has not stopped needing attention.',
+  },
+  {
     key: 'courier.tracking_poll_last_run_at',
     category: 'courier',
     valueType: SettingValueType.DATE,

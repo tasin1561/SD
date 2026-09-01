@@ -2528,51 +2528,77 @@ model Customer {
 }
 
 model Order {
-  id                        String                   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  orderNumber               String                   @unique @map("order_number")
-  sellerId                  String                   @map("seller_id") @db.Uuid
-  customerId                String?                  @map("customer_id") @db.Uuid
-  sellerOrderRef            String?                  @map("seller_order_ref")
-  source                    OrderSource              @default(MANUAL)
-  bulkUploadId              String?                  @map("bulk_upload_id") @db.Uuid
-  recipientName             String                   @map("recipient_name")
-  recipientPhoneE164        String                   @map("recipient_phone_e164")
-  recipientAltPhoneE164     String?                  @map("recipient_alt_phone_e164")
+  id                      String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  orderNumber             String       @unique @map("order_number")
+  sellerId                String       @map("seller_id") @db.Uuid
+  customerId              String?      @map("customer_id") @db.Uuid
+  sellerOrderRef          String?      @map("seller_order_ref")
+  source                  OrderSource  @default(MANUAL)
+  bulkUploadId            String?      @map("bulk_upload_id") @db.Uuid
+  recipientName           String       @map("recipient_name")
+  recipientPhoneE164      String       @map("recipient_phone_e164")
+  recipientAltPhoneE164   String?      @map("recipient_alt_phone_e164")
   /// Set when the seller placed this KNOWING the customer already had an
   /// unpacked order. Without it there is no answer to "did they know?"
   /// the first time a duplicate delivery fee is disputed.
-  duplicateAcknowledgedAt   DateTime?                @map("duplicate_acknowledged_at") @db.Timestamptz
-  recipientEmail            String?                  @map("recipient_email")
-  recipientAddressLine1     String                   @map("recipient_address_line1")
-  recipientAddressLine2     String?                  @map("recipient_address_line2")
-  recipientLandmark         String?                  @map("recipient_landmark")
-  recipientCity             String                   @map("recipient_city")
-  recipientStateProvince    String                   @map("recipient_state_province")
-  recipientPostalCode       String                   @map("recipient_postal_code")
-  recipientCountryCode      String                   @default("IN") @map("recipient_country_code") @db.Char(2)
-  paymentMode               PaymentMode              @map("payment_mode")
+  duplicateAcknowledgedAt DateTime?    @map("duplicate_acknowledged_at") @db.Timestamptz
+  recipientEmail          String?      @map("recipient_email")
+  recipientAddressLine1   String       @map("recipient_address_line1")
+  recipientAddressLine2   String?      @map("recipient_address_line2")
+  recipientLandmark       String?      @map("recipient_landmark")
+  recipientCity           String       @map("recipient_city")
+  recipientStateProvince  String       @map("recipient_state_province")
+  recipientPostalCode     String       @map("recipient_postal_code")
+  recipientCountryCode    String       @default("IN") @map("recipient_country_code") @db.Char(2)
+  paymentMode             PaymentMode  @map("payment_mode")
   /// What the courier collects at the door. The seller's COLLECTABLE
   /// AMOUNT — distinct from `declaredValueInr`, which is the customs
   /// figure sent to Delhivery and the e-waybill trigger above 50,000.
-  codAmountInr              Decimal?                 @map("cod_amount_inr") @db.Decimal(12, 2)
+  codAmountInr            Decimal?     @map("cod_amount_inr") @db.Decimal(12, 2)
   /// The three seller-supplied figures the collectable is built from.
   /// Stored rather than computed away so an order can still explain
   /// itself weeks later — a collectable with no breakdown is a number
   /// nobody can check against what the customer was told.
-  advanceAmountInr          Decimal?                 @map("advance_amount_inr") @db.Decimal(12, 2)
-  deliveryFeeInr            Decimal?                 @map("delivery_fee_inr") @db.Decimal(12, 2)
-  discountInr               Decimal?                 @map("discount_inr") @db.Decimal(12, 2)
-  declaredValueInr          Decimal                  @map("declared_value_inr") @db.Decimal(12, 2)
-  totalWeightGrams          Int?                     @map("total_weight_grams")
-  packageType               PackageType?             @map("package_type")
-  status                    OrderStatus              @default(DRAFT)
-  isUrgent                  Boolean                  @default(false) @map("is_urgent")
-  isHighRisk                Boolean                  @default(false) @map("is_high_risk")
+  advanceAmountInr        Decimal?     @map("advance_amount_inr") @db.Decimal(12, 2)
+  deliveryFeeInr          Decimal?     @map("delivery_fee_inr") @db.Decimal(12, 2)
+  discountInr             Decimal?     @map("discount_inr") @db.Decimal(12, 2)
+  declaredValueInr        Decimal      @map("declared_value_inr") @db.Decimal(12, 2)
+  totalWeightGrams        Int?         @map("total_weight_grams")
+  packageType             PackageType? @map("package_type")
+  status                  OrderStatus  @default(DRAFT)
+  isUrgent                Boolean      @default(false) @map("is_urgent")
+  isHighRisk              Boolean      @default(false) @map("is_high_risk")
   // Module 6 god mode (ORD-2): set true by OrderAdminOverrideService
   // .forceMutate() and NEVER cleared. Flags an order whose state machine
   // or edit rules were bypassed by an admin; per-field detail lives in
   // order_events, not summarised here.
-  hasAdminOverride          Boolean                  @default(false) @map("has_admin_override")
+  hasAdminOverride        Boolean      @default(false) @map("has_admin_override")
+
+  // ── NSA — Needs Seller Attention ───────────────────────────────────
+  // A parcel that went out for delivery and was still out for delivery
+  // at the evening cutoff. Something is wrong with it: the van did not
+  // reach the customer and the courier has not said why.
+  //
+  // A FLAG BESIDE THE STATUS, deliberately not a status of its own. The
+  // parcel is still genuinely out for delivery, so `status` must keep
+  // saying so — a DELIVERED scan at 8pm has to have somewhere to go,
+  // and an NSA status would need an edge to every terminal on each of
+  // days 1, 2 and 3. That is the shape that stranded orders in
+  // DELIVERY_FAILED for twelve hours; not repeating it.
+  //
+  // `nsaClearedAt` is set when the parcel finally moves. Readers treat
+  // the flag as live only while it is null AND the order is still out
+  // for delivery, so a missed clear cannot leave a stale alarm.
+  nsaRaisedAt               DateTime?                @map("nsa_raised_at") @db.Timestamptz
+  /// Which evening this is — 1 on the first, 2 and 3 on the days after.
+  /// Escalation reads this; a parcel stuck three nights is a different
+  /// conversation from one stuck once.
+  nsaDayCount               Int                      @default(0) @map("nsa_day_count")
+  nsaClearedAt              DateTime?                @map("nsa_cleared_at") @db.Timestamptz
+  /// Who has picked it up, so two people do not chase the same courier.
+  nsaAcknowledgedAt         DateTime?                @map("nsa_acknowledged_at") @db.Timestamptz
+  nsaAcknowledgedByStaffId  String?                  @map("nsa_acknowledged_by_staff_id") @db.Uuid
+  nsaNote                   String?                  @map("nsa_note") @db.Text
   /// A return the CUSTOMER asked for, as opposed to one the courier
   /// brought back undelivered. Set when the seller requests it; the
   /// goods then travel the same RTO path home, because the warehouse
