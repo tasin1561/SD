@@ -134,3 +134,87 @@ describe('DelhiveryTrackingService.normalizeScan (stub mode)', () => {
     });
   });
 });
+
+describe('DelhiveryTrackingService — an NDR the track API cannot spell with an NSL', () => {
+  /**
+   * The production bug, reproduced from the real payload.
+   *
+   * Delhivery's TRACK API does not carry NSLCode inside the scan (their
+   * docs put it at the Shipment level, and the live API returned null on
+   * every scan for a real AWB on 2026-09-01). The NSL check is therefore
+   * unreachable in production, and a genuine failed delivery arrived
+   * looking exactly like ordinary transit.
+   */
+  const svc = new DelhiveryTrackingService();
+
+  it('reads a failed delivery off the remark when no NSL is supplied', () => {
+    const out = svc.normalizeScan({
+      awbNumber: '38061110518534',
+      rawStatus: 'Pending',
+      statusType: 'UD',
+      nslCode: null,
+      eventAtIso: '2026-08-31T13:23:00.000Z',
+      description: 'Consignee Unavailable',
+    });
+    expect(out).toEqual({
+      kind: 'NORMALIZED',
+      shipmentStatus: ShipmentStatus.DELIVERY_ATTEMPTED,
+    });
+  });
+
+  it('still prefers the NSL when the courier does send one', () => {
+    const out = svc.normalizeScan({
+      awbNumber: 'A1',
+      rawStatus: 'Pending',
+      statusType: 'UD',
+      nslCode: 'EOD-74',
+      eventAtIso: '2026-08-31T13:23:00.000Z',
+      description: 'anything at all',
+    });
+    expect(out).toEqual({
+      kind: 'NORMALIZED',
+      shipmentStatus: ShipmentStatus.DELIVERY_ATTEMPTED,
+    });
+  });
+
+  it('does NOT invent an NDR from an ordinary transit remark', () => {
+    // The expensive direction: a false NDR moves the order to
+    // DELIVERY_FAILED, calls a customer whose parcel is fine, and counts
+    // toward the cap that eventually rejects the order.
+    for (const remark of [
+      'Shipment Received at Facility',
+      'Bag Added To Trip',
+      'Vehicle Departed',
+      'Agent remark verified',
+      'NTD Updated',
+    ]) {
+      const out = svc.normalizeScan({
+        awbNumber: 'A1',
+        rawStatus: 'Pending',
+        statusType: 'UD',
+        nslCode: null,
+        eventAtIso: '2026-08-31T13:23:00.000Z',
+        description: remark,
+      });
+      expect(out).not.toEqual({
+        kind: 'NORMALIZED',
+        shipmentStatus: ShipmentStatus.DELIVERY_ATTEMPTED,
+      });
+    }
+  });
+
+  it('does not read an NDR remark on the RETURN leg as a forward attempt', () => {
+    const out = svc.normalizeScan({
+      awbNumber: 'A1',
+      rawStatus: 'Pending',
+      statusType: 'RT',
+      nslCode: null,
+      eventAtIso: '2026-08-31T13:23:00.000Z',
+      description: 'Consignee Unavailable',
+    });
+    expect(out).not.toEqual({
+      kind: 'NORMALIZED',
+      shipmentStatus: ShipmentStatus.DELIVERY_ATTEMPTED,
+    });
+  });
+});

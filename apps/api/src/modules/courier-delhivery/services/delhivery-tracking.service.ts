@@ -140,6 +140,50 @@ export class DelhiveryTrackingService implements Pick<DelhiveryClient, 'normaliz
   private static readonly NDR_NSL_PREFIX = 'EOD-';
 
   /**
+   * Failed-delivery remarks, matched when the NSL is ABSENT.
+   *
+   * ── WHY THIS IS NEEDED AT ALL ────────────────────────────────────
+   * The NSL check below is the right test and cannot fire in
+   * production: Delhivery's TRACK API does not carry `NSLCode` inside
+   * `Scans[].ScanDetail` — their own docs show it as a Shipment-level
+   * field, sibling of `Status`. Verified against the live API on
+   * 2026-09-01: every scan came back `nslCode: null` while
+   * `statusType: "UD"` was present, and all 229 tracking_events on
+   * production carry a null NSL.
+   *
+   * So a real failed delivery arrived as `Scan: "Pending"`,
+   * `StatusType: "UD"`, `Instructions: "Consignee Unavailable"` and was
+   * recorded as ordinary IN_TRANSIT. No delivery_attempts row, no
+   * DELIVERY_FAILED, no call queued, no seller notification, and the
+   * "Ask us to act" panel never appeared. The customer's parcel had
+   * failed and the whole NDR pipeline never heard about it.
+   *
+   * ── WHY AN ALLOW-LIST, NOT A PATTERN ─────────────────────────────
+   * A false NDR is expensive in the other direction: it moves an order
+   * to DELIVERY_FAILED, queues a call to a customer whose parcel is
+   * fine, and counts toward the NDR cap that eventually REJECTS the
+   * order. So only remarks that unambiguously mean "we tried to hand it
+   * over and could not" are listed. Anything else under UD stays
+   * transit and is logged, so the list grows from evidence rather than
+   * from guesses about a vocabulary the vendor has never published.
+   */
+  private static readonly NDR_REMARKS: readonly string[] = [
+    'CONSIGNEE UNAVAILABLE',
+    'CONSIGNEE NOT AVAILABLE',
+    'CONSIGNEE REFUSED TO ACCEPT',
+    'CONSIGNEE REFUSED',
+    'CONSIGNEE SHIFTED',
+    'ADDRESS INCOMPLETE',
+    'INCOMPLETE ADDRESS',
+    'ADDRESS INCORRECT',
+    'PAYMENT NOT READY',
+    'COD AMOUNT NOT READY',
+    'OFFICE CLOSED',
+    'ENTRY RESTRICTED',
+    'FUTURE DELIVERY REQUESTED',
+  ];
+
+  /**
    * Statuses whose meaning does NOT depend on the journey leg, so they
    * can be mapped when a payload omits StatusType.
    *
@@ -184,6 +228,31 @@ export class DelhiveryTrackingService implements Pick<DelhiveryClient, 'normaliz
         kind: 'NORMALIZED',
         shipmentStatus: ShipmentStatus.DELIVERY_ATTEMPTED,
       };
+    }
+
+    // The same fact, read off the remark, for the case above that the
+    // track API cannot answer. Deliberately AFTER the NSL check so a
+    // response that does carry one is still decided by the better
+    // signal.
+    const remark = (raw.description ?? '').trim().toUpperCase();
+    if (statusType === 'UD' && remark !== '') {
+      if (DelhiveryTrackingService.NDR_REMARKS.some((r) => remark.includes(r))) {
+        return {
+          kind: 'NORMALIZED',
+          shipmentStatus: ShipmentStatus.DELIVERY_ATTEMPTED,
+        };
+      }
+      // An unrecognised remark on a "Pending" forward scan is the exact
+      // shape a missed NDR takes. Logged at WARN rather than debug: the
+      // point is that somebody reads it and decides whether the list
+      // needs another entry.
+      if (code === 'PENDING') {
+        this.logger.warn(
+          { awbNumber: raw.awbNumber, remark: raw.description, nslCode: raw.nslCode ?? null },
+          'Pending forward scan with an unrecognised remark — if this is a failed delivery, ' +
+            'it is being recorded as ordinary transit and NDR_REMARKS needs it',
+        );
+      }
     }
 
     if (statusType !== '') {

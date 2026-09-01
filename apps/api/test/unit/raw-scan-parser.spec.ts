@@ -450,3 +450,45 @@ describe('parseScanPayload — Shiprocket', () => {
     expect(parsed?.awbNumber).toBe('DLV1');
   });
 });
+
+describe('mapFailureReason — what the courier actually writes', () => {
+  it('maps Delhivery’s own wording, which never matched our enum', () => {
+    // Ours says CUSTOMER, Delhivery says CONSIGNEE, so an exact match
+    // never hit and a real failed delivery was filed as "Other" — then
+    // humanised into the seller’s notification as "Other".
+    expect(mapFailureReason('Consignee Unavailable')).toBe(
+      DeliveryFailureReason.CUSTOMER_UNAVAILABLE,
+    );
+    expect(mapFailureReason('Consignee Refused to Accept')).toBe(
+      DeliveryFailureReason.CUSTOMER_REFUSED,
+    );
+    expect(mapFailureReason('Address Incomplete')).toBe(DeliveryFailureReason.ADDRESS_INCOMPLETE);
+    expect(mapFailureReason('Payment not ready')).toBe(DeliveryFailureReason.PAYMENT_REFUSED);
+  });
+
+  it('matches remarks that carry trailing detail', () => {
+    expect(mapFailureReason('Consignee Unavailable - will reattempt tomorrow')).toBe(
+      DeliveryFailureReason.CUSTOMER_UNAVAILABLE,
+    );
+  });
+
+  it('tests the specific phrase before the looser one', () => {
+    // "Consignee Refused to Accept" must not be swallowed by a rule that
+    // merely sees "Consignee".
+    expect(mapFailureReason('Consignee Refused to Accept the shipment')).toBe(
+      DeliveryFailureReason.CUSTOMER_REFUSED,
+    );
+  });
+
+  it('still honours our own vocabulary exactly', () => {
+    expect(mapFailureReason('CUSTOMER_UNAVAILABLE')).toBe(
+      DeliveryFailureReason.CUSTOMER_UNAVAILABLE,
+    );
+    expect(mapFailureReason('customer refused')).toBe(DeliveryFailureReason.CUSTOMER_REFUSED);
+  });
+
+  it('falls back to OTHER rather than guessing', () => {
+    expect(mapFailureReason('some remark nobody has seen')).toBe(DeliveryFailureReason.OTHER);
+    expect(mapFailureReason(null)).toBeNull();
+  });
+});

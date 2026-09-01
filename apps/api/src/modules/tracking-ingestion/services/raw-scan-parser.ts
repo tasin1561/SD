@@ -167,14 +167,48 @@ export function parseScanPayload(parsedBody: unknown): ParsedScanPayload | null 
  * (TODO(delhivery-api) — Delhivery's reason vocabulary is not reliably
  * known at build time).
  */
+/**
+ * What the courier ACTUALLY writes, mapped to what our enum calls it.
+ *
+ * Our values were named from first principles and Delhivery says
+ * "Consignee", so an exact match never hits: a real "Consignee
+ * Unavailable" fell through to OTHER, and the seller's notification —
+ * which humanises this very field into `ndr_reason` — told them their
+ * delivery failed for "Other". The reason was sitting in the remark the
+ * whole time.
+ *
+ * Substring matching, because the remarks arrive with trailing detail
+ * ("Consignee Unavailable - Will reattempt"). Ordered most specific
+ * first: "CONSIGNEE REFUSED TO ACCEPT" must be tested before any looser
+ * "CONSIGNEE" rule would swallow it.
+ */
+const COURIER_REASON_PHRASES: ReadonlyArray<readonly [string, DeliveryFailureReason]> = [
+  ['CONSIGNEE REFUSED TO ACCEPT', DeliveryFailureReason.CUSTOMER_REFUSED],
+  ['CONSIGNEE REFUSED', DeliveryFailureReason.CUSTOMER_REFUSED],
+  ['CONSIGNEE UNAVAILABLE', DeliveryFailureReason.CUSTOMER_UNAVAILABLE],
+  ['CONSIGNEE NOT AVAILABLE', DeliveryFailureReason.CUSTOMER_UNAVAILABLE],
+  ['CONSIGNEE SHIFTED', DeliveryFailureReason.ADDRESS_NOT_FOUND],
+  ['ADDRESS INCOMPLETE', DeliveryFailureReason.ADDRESS_INCOMPLETE],
+  ['INCOMPLETE ADDRESS', DeliveryFailureReason.ADDRESS_INCOMPLETE],
+  ['ADDRESS INCORRECT', DeliveryFailureReason.ADDRESS_NOT_FOUND],
+  ['PAYMENT NOT READY', DeliveryFailureReason.PAYMENT_REFUSED],
+  ['COD AMOUNT NOT READY', DeliveryFailureReason.PAYMENT_REFUSED],
+  ['OFFICE CLOSED', DeliveryFailureReason.CUSTOMER_NOT_AVAILABLE_AT_TIME],
+  ['FUTURE DELIVERY REQUESTED', DeliveryFailureReason.CUSTOMER_NOT_AVAILABLE_AT_TIME],
+  ['PHONE UNREACHABLE', DeliveryFailureReason.CUSTOMER_PHONE_UNREACHABLE],
+  ['OUT OF DELIVERY AREA', DeliveryFailureReason.ADDRESS_OUT_OF_DELIVERY_AREA],
+];
+
 export function mapFailureReason(raw: string | null): DeliveryFailureReason | null {
   if (raw === null) return null;
-  const norm = raw
-    .trim()
-    .toUpperCase()
-    .replace(/[\s-]+/g, '_');
+  const upper = raw.trim().toUpperCase();
+  const norm = upper.replace(/[\s-]+/g, '_');
+  // Our own vocabulary first — a caller that already speaks it is exact.
   const allowed: ReadonlySet<string> = new Set(Object.values(DeliveryFailureReason));
   if (allowed.has(norm)) return norm as DeliveryFailureReason;
+  for (const [phrase, reason] of COURIER_REASON_PHRASES) {
+    if (upper.includes(phrase)) return reason;
+  }
   return DeliveryFailureReason.OTHER;
 }
 
