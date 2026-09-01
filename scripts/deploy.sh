@@ -135,9 +135,15 @@ APPS_CHANGED=($(printf '%s\n' "${APPS_CHANGED[@]:-}" | awk 'NF' | sort -u))
 MARKETING_TOUCHED=false
 did_change '^apps/marketing/|^packages/ui/' && MARKETING_TOUCHED=true
 
-# Seed reruns when seed file or schema change
+# Seed reruns when the seed, the schema, or any DATA the seed imports
+# changes.
+#
+# The third clause is not padding: the Delhivery issue taxonomy lives in
+# its own file, and matching only seed.ts would mean adding a category
+# deploys the code that reads it and never the row itself — a dropdown
+# that is silently missing an option nobody can find the cause of.
 SEED_TOUCHED=false
-did_change '^packages/db/prisma/seed\.ts$|^packages/db/prisma/schema\.prisma$' && SEED_TOUCHED=true
+did_change '^packages/db/prisma/seed\.ts$|^packages/db/prisma/schema\.prisma$|^packages/db/prisma/[a-z-]+\.ts$' && SEED_TOUCHED=true
 
 # ── 2. Install ───────────────────────────────────────────────────────
 echo "── pnpm install ──"
