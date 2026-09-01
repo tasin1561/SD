@@ -30,6 +30,7 @@ function makeService(
     transitionThrows?: boolean;
     /** R5b — the seller's at-cap policy (default AUTO_RELEASE = pre-R5b). */
     ndrPolicy?: 'AUTO_RELEASE' | 'MANUAL_REVIEW';
+    openTickets?: AnyArgs[];
   } = {},
 ) {
   const defaultEntry = {
@@ -73,11 +74,16 @@ function makeService(
   const client = {
     callQueueEntry: { findUnique: entryFindUnique },
     callAttempt: { findMany: histFindMany, count: histCount },
+    // Whoever raised a ticket asking for this call gets told what
+    // happened. One open ticket by default so the write-back is
+    // exercised rather than silently skipped.
+    ticket: { findMany: jest.fn(async () => opts.openTickets ?? [{ id: 'tkt1' }]) },
     seller: { findUnique: sellerFindUnique },
     systemSetting: { findUnique: systemSettingFindUnique },
   } as {
     callQueueEntry: { findUnique: typeof entryFindUnique };
     callAttempt: { findMany: typeof histFindMany; count: typeof histCount };
+    ticket: { findMany: jest.Mock };
     seller: { findUnique: typeof sellerFindUnique };
     systemSetting: { findUnique: typeof systemSettingFindUnique };
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
@@ -89,7 +95,17 @@ function makeService(
 
   const order =
     opts.order === undefined
-      ? { orderId: 'o1', sellerId: 's1', recipient: { phoneE164: '+919876500000' } }
+      ? {
+          orderId: 'o1',
+          sellerId: 's1',
+          // These tests are all about CONFIRMATION calls — the flow that
+          // counts toward the NDR cap and re-queues. Stated explicitly
+          // rather than left undefined, because the machinery is now
+          // gated on it and a missing status would silently skip
+          // everything they assert.
+          status: OrderStatus.PENDING_CONFIRMATION,
+          recipient: { phoneE164: '+919876500000' },
+        }
       : opts.order;
   const getById = jest.fn(async () => order);
   const orders = { getById };
@@ -560,5 +576,73 @@ describe('CallAttemptService.listHistory', () => {
     });
     expect(r).toMatchObject({ total: 7, page: 2, pageSize: 20 });
     expect(r.items[0]).toMatchObject({ attemptId: 'att-1', outcome: CallOutcome.NO_ANSWER });
+  });
+});
+
+describe('a call about a parcel that has ALREADY SHIPPED', () => {
+  // The confirmation machinery must not run on a follow-up call. This
+  // was a live defect: a seller asks us to ring a customer about an
+  // out-for-delivery parcel, the agent gets no answer three times,
+  // `hitCap` fires, and the NDR cap handler releases at-placement stock
+  // holds or raises a seller review — for a parcel already on a van.
+  //
+  // Nothing surfaced, because the order transition itself was refused by
+  // the state machine and swallowed (CC-3). The side-effects ran anyway.
+  const shipped = {
+    orderId: 'o1',
+    sellerId: 's1',
+    status: OrderStatus.OUT_FOR_DELIVERY,
+    recipient: { phoneE164: '+919876500000' },
+  };
+
+  it('records the attempt but drives NO order transition', async () => {
+    const sut = makeService({ order: shipped });
+    await sut.svc.recordAttempt({
+      assignmentId: 'q1',
+      agentId: 'agent-1',
+      outcome: CallOutcome.NO_ANSWER,
+      startedAt: new Date('2026-05-18T10:00:00Z'),
+    });
+    // The attempt is a historical fact and is still written (CC-1).
+    expect(sut.attemptCreate).toHaveBeenCalledTimes(1);
+    expect(sut.transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it('never resolves at-placement stock holds at the cap', async () => {
+    // The cap is a pre-confirmation concept. Reaching it on a shipped
+    // parcel must not touch stock or raise a seller review.
+    const sut = makeService({ order: shipped, maxAttemptsSetting: 1, priorCount: 3 });
+    await sut.svc.recordAttempt({
+      assignmentId: 'q1',
+      agentId: 'agent-1',
+      outcome: CallOutcome.NO_ANSWER,
+      startedAt: new Date('2026-05-18T10:00:00Z'),
+    });
+    expect(sut.handleNdrCap).not.toHaveBeenCalled();
+  });
+
+  it('does not re-queue the order for another confirmation ring', async () => {
+    const sut = makeService({ order: shipped });
+    const r = await sut.svc.recordAttempt({
+      assignmentId: 'q1',
+      agentId: 'agent-1',
+      outcome: CallOutcome.NO_ANSWER,
+      startedAt: new Date('2026-05-18T10:00:00Z'),
+    });
+    expect(sut.enqueueAgain).not.toHaveBeenCalled();
+    expect(r.requeued).toBe(false);
+  });
+
+  it('still tells whoever raised the ticket what happened', async () => {
+    // The whole point of a seller-requested call.
+    const sut = makeService({ order: shipped });
+    await sut.svc.recordAttempt({
+      assignmentId: 'q1',
+      agentId: 'agent-1',
+      outcome: CallOutcome.NO_ANSWER,
+      outcomeNotes: 'Rang twice, no answer',
+      startedAt: new Date('2026-05-18T10:00:00Z'),
+    });
+    expect(sut.addTicketNote).toHaveBeenCalled();
   });
 });

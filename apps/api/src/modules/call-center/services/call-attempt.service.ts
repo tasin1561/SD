@@ -118,6 +118,26 @@ export interface RecordAttemptResult {
  *     queue entry, reclaimable via admin re-enqueue (acceptable, mirrors
  *     the saga's post-commit-failure tolerance).
  */
+/**
+ * The statuses where a call is about CONFIRMING the order.
+ *
+ * Everything the confirmation flow does downstream — counting toward the
+ * NDR cap, rerouting at that cap, resolving at-placement stock holds,
+ * re-queueing for another ring — only makes sense while the order is
+ * still waiting to be confirmed.
+ *
+ * Once a parcel has shipped, a call is a FOLLOW-UP: the seller asked us
+ * to ring the customer, or a delivery failed. The attempt is still a
+ * historical fact and is still recorded (CC-1), but none of that
+ * machinery may run against it.
+ */
+const CONFIRMATION_CALL_STATUSES: ReadonlySet<OrderStatus> = new Set([
+  OrderStatus.PENDING_CONFIRMATION,
+  OrderStatus.CALL_NO_RESPONSE,
+  OrderStatus.CALL_RESCHEDULED,
+  OrderStatus.AWAITING_SELLER_DECISION,
+]);
+
 @Injectable()
 export class CallAttemptService {
   private readonly logger = new Logger(CallAttemptService.name);
@@ -221,6 +241,19 @@ export class CallAttemptService {
     // Seller cap PLUS whatever an approved re-attempt request granted
     // this order. Without the grant, an approved order came back already
     // at 3 of 3 and the next unanswered ring re-rejected it.
+    // Is this call about confirming the order, or is it a follow-up on
+    // a parcel already moving?
+    //
+    // THIS WAS A REAL DEFECT, not a tidy-up. A seller asks us to ring a
+    // customer about an out-for-delivery parcel; the agent rings three
+    // times and gets no answer; `hitCap` fires and `handleNdrCap` runs —
+    // releasing at-placement stock holds or raising a seller review —
+    // for a parcel that is on a van. The order transition itself was
+    // always refused (no matrix edge out of OUT_FOR_DELIVERY back to
+    // the call statuses) and swallowed by CC-3, so nothing surfaced;
+    // the cap's side-effects ran anyway, silently.
+    const isConfirmationCall = CONFIRMATION_CALL_STATUSES.has(order.status);
+
     const maxAttempts = await this.caps.effectiveForOrder(order.sellerId, order.orderId);
     // R5b — what "at cap" means for THIS seller. Resolved here (it is a
     // settings read) and handed to the mapping service, which still owns
@@ -349,7 +382,7 @@ export class CallAttemptService {
     // on either REJECTED_NDR or AWAITING_SELLER_DECISION depending on the
     // seller's policy, and BOTH need the hold resolved (released, or
     // recorded as still-held on a review row) before the transition.
-    if (resolved.hitCap) {
+    if (resolved.hitCap && isConfirmationCall) {
       try {
         const outcome = await this.earlyReservations.handleNdrCap(
           entry.orderId,
@@ -395,7 +428,7 @@ export class CallAttemptService {
     //    the source of truth (CC-3): a failure is logged + audited HIGH
     //    and swallowed, never rolling back the recorded attempt.
     let finalOrderStatus: OrderStatus | null = null;
-    if (resolved.targetStatus !== null) {
+    if (resolved.targetStatus !== null && isConfirmationCall) {
       try {
         const res = await this.orderWrites.transitionStatus({
           orderId: entry.orderId,
@@ -437,7 +470,7 @@ export class CallAttemptService {
 
     // 5. POST-COMMIT re-queue (best-effort).
     let requeuedAvailableAt: Date | null = null;
-    if (resolved.requeue && !resolved.hitCap) {
+    if (resolved.requeue && !resolved.hitCap && isConfirmationCall) {
       const availableAt = await this.resolveRequeueAvailableAt(
         resolved.reschedule,
         now,
