@@ -5,6 +5,7 @@ import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { PortalCanaryService } from '../services/portal-canary.service';
 import { PortalDispatcherService } from '../services/portal-dispatcher.service';
 import { PortalSessionService } from '../services/portal-session.service';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 export const PORTAL_QUEUE = 'courier-portal';
 export const JOB_PORTAL_DISPATCH = 'portal-dispatch';
@@ -44,6 +45,7 @@ export class PortalQueue implements OnModuleInit, OnModuleDestroy {
     private readonly canary: PortalCanaryService,
     private readonly session: PortalSessionService,
     private readonly workerRole: WorkerRoleService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -87,6 +89,9 @@ export class PortalQueue implements OnModuleInit, OnModuleDestroy {
       { connection: this.redis.createConnection(), concurrency: 1 },
     );
     this.worker.on('failed', (job, err) => {
+      // Only once BullMQ has stopped retrying: an exhausted job is
+      // work that definitively did not happen.
+      void this.issues.reportJobFailure(PortalQueue.name, job, err);
       this.logger.warn({ jobId: job?.id, name: job?.name, err: err?.message }, 'Portal job failed');
     });
 

@@ -53,6 +53,9 @@ export class OutboundWebhookWorker implements OnModuleInit, OnModuleDestroy {
     );
 
     this.worker.on('failed', (job, err) => {
+      // Only once BullMQ has stopped retrying: an exhausted job is
+      // work that definitively did not happen.
+      void this.issues.reportJobFailure(OutboundWebhookWorker.name, job, err);
       this.logger.warn(
         {
           jobId: job?.id,

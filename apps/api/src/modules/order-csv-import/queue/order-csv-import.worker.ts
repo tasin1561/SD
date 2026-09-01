@@ -44,6 +44,9 @@ export class OrderCsvImportWorker implements OnModuleInit, OnModuleDestroy {
     );
 
     this.worker.on('failed', (job, err) => {
+      // Only once BullMQ has stopped retrying: an exhausted job is
+      // work that definitively did not happen.
+      void this.issues.reportJobFailure(OrderCsvImportWorker.name, job, err);
       this.logger.warn(
         { jobId: job?.id, err: err?.message },
         'Order CSV import job failed (will retry per BullMQ policy)',

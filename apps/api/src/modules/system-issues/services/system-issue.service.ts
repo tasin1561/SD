@@ -153,6 +153,44 @@ export class SystemIssueService {
    * stops being read. The occurrence count is what tells a blip from a
    * fault, and it is on the card.
    */
+  /**
+   * A queued job gave up.
+   *
+   * Distinct from reportWorkerError, and the distinction is the whole
+   * point: `error` is usually a Redis blip, whereas an EXHAUSTED job is
+   * a piece of work that definitively did not happen — an email nobody
+   * got, a CSV row nobody imported, an accrual nobody was paid.
+   *
+   * Only reported once BullMQ has stopped retrying. A job on attempt 2
+   * of 5 is not a failure yet, and raising there would fill the board
+   * with things that fixed themselves thirty seconds later — which is
+   * how a board stops being read.
+   */
+  async reportJobFailure(
+    workerName: string,
+    job: { id?: string; attemptsMade?: number; opts?: { attempts?: number } } | undefined,
+    err: unknown,
+  ): Promise<void> {
+    const attempts = job?.opts?.attempts ?? 1;
+    const made = job?.attemptsMade ?? 1;
+    if (made < attempts) return; // still retrying — not yet a fact
+
+    const message = err instanceof Error ? err.message : String(err);
+    await this.raise({
+      kind: SystemIssueKind.INTEGRATION,
+      severity: SystemIssueSeverity.MEDIUM,
+      title: `${workerName} gave up on a job`,
+      detail:
+        `A job failed ${made} time(s) and will not be retried: ${message}\n\n` +
+        'That work did not happen and nothing will pick it up by itself. Check the count — ' +
+        'a single occurrence is usually one bad row, while a climbing count means every job ' +
+        'this worker takes is failing.',
+      source: workerName,
+      dedupeKey: `job-failed:${workerName}`,
+      metadata: { workerName, jobId: job?.id ?? null, attemptsMade: made, error: message },
+    });
+  }
+
   async reportWorkerError(workerName: string, err: unknown): Promise<void> {
     const message = err instanceof Error ? err.message : String(err);
     await this.raise({

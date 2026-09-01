@@ -73,6 +73,9 @@ export class AwbGenerationWorker implements OnModuleInit, OnModuleDestroy {
     );
 
     this.worker.on('failed', (job, err) => {
+      // Only once BullMQ has stopped retrying: an exhausted job is
+      // work that definitively did not happen.
+      void this.issues.reportJobFailure(AwbGenerationWorker.name, job, err);
       this.logger.warn(
         { jobId: job?.id, err: err?.message },
         'AWB-generation job failed (will retry per BullMQ policy)',

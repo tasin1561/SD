@@ -23,7 +23,10 @@ function workerFiles(dir: string): string[] {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) out.push(...workerFiles(full));
-    else if (entry.endsWith('.worker.ts')) out.push(full);
+    // `.queue.ts` too: three of them own a Worker rather than only a
+    // producer, and they are the ones that send vans, import costs and
+    // drive escalations — exactly the work worth noticing the loss of.
+    else if (entry.endsWith('.worker.ts') || entry.endsWith('.queue.ts')) out.push(full);
   }
   return out;
 }
@@ -40,6 +43,23 @@ describe('every BullMQ worker reports its errors where somebody looks', () => {
     (_label, file) => {
       const src = readFileSync(file, 'utf8');
       expect(src).toContain('reportWorkerError');
+    },
+  );
+
+  /**
+   * The more important half. `error` is usually a Redis blip; an
+   * EXHAUSTED job is a piece of work that definitively did not happen —
+   * an email nobody got, an accrual nobody was paid — and nothing will
+   * pick it up by itself.
+   */
+  const failing = workerFiles(MODULES).filter((f) =>
+    readFileSync(f, 'utf8').includes(".on('failed'"),
+  );
+
+  it.each(failing.map((f) => [f.slice(f.indexOf('src/')), f] as const))(
+    '%s reports a job it gave up on',
+    (_label, file) => {
+      expect(readFileSync(file, 'utf8')).toContain('reportJobFailure');
     },
   );
 });

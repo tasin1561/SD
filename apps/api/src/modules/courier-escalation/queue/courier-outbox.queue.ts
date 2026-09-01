@@ -4,6 +4,7 @@ import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { CourierOutboxDispatcherService } from '../services/courier-outbox-dispatcher.service';
 import { CourierOutboxReconcilerService } from '../services/courier-outbox-reconciler.service';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 export const COURIER_OUTBOX_QUEUE = 'courier-outbox';
 export const JOB_DISPATCH = 'outbox-dispatch';
@@ -32,6 +33,7 @@ export class CourierOutboxQueue implements OnModuleInit, OnModuleDestroy {
     private readonly workerRole: WorkerRoleService,
     private readonly dispatcher: CourierOutboxDispatcherService,
     private readonly reconciler: CourierOutboxReconcilerService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -78,6 +80,9 @@ export class CourierOutboxQueue implements OnModuleInit, OnModuleDestroy {
       { connection: this.redis.createConnection(), concurrency: 1 },
     );
     this.worker.on('failed', (job, err) => {
+      // Only once BullMQ has stopped retrying: an exhausted job is
+      // work that definitively did not happen.
+      void this.issues.reportJobFailure(CourierOutboxQueue.name, job, err);
       this.logger.warn(
         { jobId: job?.id, name: job?.name, err: err?.message },
         'Courier outbox job failed',

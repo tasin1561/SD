@@ -43,6 +43,9 @@ export class PendingAccrualWorker implements OnModuleInit, OnModuleDestroy {
     );
 
     this.worker.on('failed', (job, err) => {
+      // Only once BullMQ has stopped retrying: an exhausted job is
+      // work that definitively did not happen.
+      void this.issues.reportJobFailure(PendingAccrualWorker.name, job, err);
       this.logger.warn(
         { jobId: job?.id, name: job?.name, err: err?.message },
         'Pending accrual job failed (will retry per BullMQ policy)',

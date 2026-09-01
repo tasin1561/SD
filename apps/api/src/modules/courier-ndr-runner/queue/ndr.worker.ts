@@ -7,6 +7,7 @@ import { NdrReconciliationService } from '../services/ndr-reconciliation.service
 import { NdrRunnerService } from '../services/ndr-runner.service';
 import { NdrUplPollerService } from '../services/ndr-upl-poller.service';
 import { JOB_NIGHTLY_RUN, JOB_POLL_UPLS, JOB_RECONCILE, NDR_QUEUE_NAME } from './ndr.queue';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 /** Matches the AWB job's schedule; the WAF branch overrides it. */
 const BACKOFF_MS = [1_000, 5_000, 15_000];
@@ -22,6 +23,7 @@ export class NdrWorker implements OnModuleInit, OnModuleDestroy {
     private readonly runner: NdrRunnerService,
     private readonly poller: NdrUplPollerService,
     private readonly reconciliation: NdrReconciliationService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   onModuleInit(): void {
@@ -64,6 +66,9 @@ export class NdrWorker implements OnModuleInit, OnModuleDestroy {
     );
 
     this.worker.on('failed', (job, err) => {
+      // Only once BullMQ has stopped retrying: an exhausted job is
+      // work that definitively did not happen.
+      void this.issues.reportJobFailure(NdrWorker.name, job, err);
       this.logger.warn({ jobId: job?.id, name: job?.name, err: err?.message }, 'NDR job failed');
     });
     this.logger.log(`NDR worker ready (queue=${NDR_QUEUE_NAME})`);

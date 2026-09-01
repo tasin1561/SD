@@ -42,6 +42,9 @@ export class ReservationWorker implements OnModuleInit, OnModuleDestroy {
     );
 
     this.worker.on('failed', (job, err) => {
+      // Only once BullMQ has stopped retrying: an exhausted job is
+      // work that definitively did not happen.
+      void this.issues.reportJobFailure(ReservationWorker.name, job, err);
       this.logger.warn(
         { jobId: job?.id, name: job?.name, err: err?.message },
         'Reservation job failed (will retry per BullMQ policy)',
