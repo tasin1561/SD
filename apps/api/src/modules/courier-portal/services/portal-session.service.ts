@@ -145,7 +145,16 @@ export class PortalSessionService {
   async page(courierAccountId: string | null = null): Promise<Page> {
     const ctx = await this.ensureContext(courierAccountId);
     const page = await ctx.newPage();
-    await page.goto(`${PORTAL_ORIGIN}/support`, { waitUntil: 'domcontentloaded' });
+    // Probe a page that REQUIRES a session.
+    //
+    // This used to land on `/support`, which is PUBLIC — Delhivery serve
+    // the ticket form to anyone. So `looksLikeLogin` saw no password
+    // field, concluded we were already signed in, and the login never
+    // ran. Every later navigation then bounced to /v2/login, and the
+    // symptom was a missing button on the Finances page rather than
+    // anything that said "not logged in". Verified against production on
+    // 2026-09-01: /support stayed, /home and /finances both redirected.
+    await page.goto(`${PORTAL_ORIGIN}/home`, { waitUntil: 'domcontentloaded' });
 
     if (await this.looksLikeLogin(page)) {
       // Stored state expired. Re-auth once — never in a loop.
@@ -211,7 +220,11 @@ export class PortalSessionService {
    */
   private async looksLikeLogin(page: Page): Promise<boolean> {
     if (/login|signin|auth/i.test(page.url())) return true;
-    return (await page.locator('input[type="password"]').count()) > 0;
+    // The first step of their flow asks for an EMAIL only — there is no
+    // password field on it, so looking for one alone would read the
+    // login page as a logged-in one.
+    if ((await page.locator('input[type="password"]').count()) > 0) return true;
+    return (await page.getByRole('button', { name: /^continue$/i }).count()) > 0;
   }
 
   private async login(page: Page, courierAccountId: string | null): Promise<void> {
@@ -265,7 +278,20 @@ export class PortalSessionService {
       .first()
       .click();
 
-    await this.dismissResetPasswordModal(page);
+    // Dismissing puts the form back at the EMAIL step, so it has to be
+    // submitted again — the company selector is on the SECOND pass.
+    if (await this.dismissResetPasswordModal(page)) {
+      const again = page
+        .locator('input[type="email"], input[name="username"], input[name="email"]')
+        .first();
+      await again.waitFor({ state: 'visible', timeout: 20_000 });
+      await again.fill(username);
+      await page
+        .getByRole('button', { name: /^continue$/i })
+        .first()
+        .click();
+      await page.waitForTimeout(3_000);
+    }
 
     // The company step, when this login has one.
     const companyBox = page.locator('select, [role="combobox"]').first();
@@ -323,27 +349,53 @@ export class PortalSessionService {
    * itself out on the second run. Absent on most logins, so its absence
    * is not an error.
    */
-  private async dismissResetPasswordModal(page: Page): Promise<void> {
+  private async dismissResetPasswordModal(page: Page): Promise<boolean> {
     const modal = page.getByText(/one more step/i).first();
     const present = await modal
-      .waitFor({ state: 'visible', timeout: 4_000 })
+      .waitFor({ state: 'visible', timeout: 6_000 })
       .then(() => true)
       .catch(() => false);
-    if (!present) return;
+    if (!present) return false;
 
     this.logger.log('Portal showed the reset-password prompt; closing it without actioning');
-    const close = page
-      .getByRole('button', { name: /close/i })
-      .or(page.locator('[aria-label="Close"], [aria-label="close"]'))
-      .first();
-    if (await close.count().then((n) => n > 0)) {
-      await close.click();
-    } else {
-      // Some builds render the X as a bare icon with no accessible
-      // name. Escape closes the same dialog.
-      await page.keyboard.press('Escape');
+
+    // ── HOW THIS HAS TO BE CLOSED ────────────────────────────────────
+    // Verified against the live page on 2026-09-01. The X is a BARE
+    // <svg>: no wrapping button, no aria-label, no role. So
+    // getByRole('button', {name: /close/i}), [aria-label="Close"] and
+    // Escape all find nothing, and the only <button> in the dialog is
+    // "Reset Password" — the one control that must never be clicked,
+    // because it mails a reset link and invalidates the password we are
+    // holding.
+    //
+    // A synthetic dispatchEvent on the svg or its parent does NOT close
+    // it either. A REAL Playwright click on the svg does. So the svg is
+    // marked from the page and clicked properly.
+    // The body below runs in the BROWSER. This package compiles without
+    // the DOM lib, so it is passed as source rather than pulling `dom`
+    // into the API's global types for one call.
+    await page.evaluate(`(() => {
+      var all = Array.prototype.slice.call(document.querySelectorAll('*'));
+      var candidates = all.filter(function (n) {
+        return (n.textContent || '').trim().indexOf('Hang on') === 0 && n.children.length === 0;
+      });
+      var heading = candidates[candidates.length - 1];
+      if (!heading) return;
+      var container = heading;
+      for (var i = 0; i < 8 && container.parentElement; i++) {
+        container = container.parentElement;
+        if (container.querySelector('svg')) break;
+      }
+      var svg = container.querySelector('svg');
+      if (svg) svg.setAttribute('data-sd-portal-close', '1');
+    })()`);
+
+    const closer = page.locator('[data-sd-portal-close]').first();
+    if ((await closer.count()) > 0) {
+      await closer.click({ force: true, timeout: 10_000 }).catch(() => undefined);
     }
     await modal.waitFor({ state: 'hidden', timeout: 10_000 }).catch(() => undefined);
+    return true;
   }
 
   /**
