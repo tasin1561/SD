@@ -29,6 +29,10 @@ import { CallOutcome } from '@skydrop/db';
 import { MyAvailability } from './my-availability';
 import { MyCallHistory } from './my-call-history';
 import { useServiceabilityCheck } from '@/lib/ops-hooks';
+import { serverVerdict } from '@/lib/server-verdict';
+import { usePermission } from '@/lib/use-permission';
+import { useTransitionTicket } from '@/lib/ops-hooks';
+import Link from 'next/link';
 
 const OUTCOME_OPTIONS: ReadonlyArray<{
   value: CallOutcome;
@@ -426,10 +430,29 @@ export function CallCenterStation(): ReactElement {
                 </Select>
               </FormField>
 
-              {outcome && (
-                <div className="text-text-faint text-xs -mt-2">
-                  {OUTCOME_OPTIONS.find((o) => o.value === outcome)?.helper}
+              {/*
+                The nine outcomes are the CONFIRMATION vocabulary, and
+                two of them move the order. On a parcel that has already
+                shipped those two do nothing — the state machine has no
+                edge from OUT_FOR_DELIVERY back to confirmed or
+                cancelled, so the transition is refused and swallowed
+                (CC-3) while the attempt is still recorded. Saying so is
+                better than letting an agent pick one and assume it
+                worked.
+              */}
+              {assignment.callPurpose.kind !== 'CONFIRMATION' &&
+              (outcome === 'CONFIRMED' || outcome === 'CUSTOMER_DECLINED') ? (
+                <div className="text-warning -mt-2 text-xs">
+                  This parcel has already shipped, so this outcome will not move the order — the
+                  call is still recorded and written onto the ticket. To stop the delivery, use
+                  &ldquo;Send it back&rdquo; on the order instead.
                 </div>
+              ) : (
+                outcome && (
+                  <div className="text-text-faint text-xs -mt-2">
+                    {OUTCOME_OPTIONS.find((o) => o.value === outcome)?.helper}
+                  </div>
+                )
               )}
 
               {outcome === 'CALLBACK_REQUESTED' && (
@@ -761,18 +784,33 @@ function CallPurposeBanner({
   readonly purpose: PulledAssignment['callPurpose'];
   readonly tickets: PulledAssignment['openTickets'];
 }): ReactElement {
-  // A follow-up is the one the agent is most likely to get wrong, so it
-  // is the one that looks least like routine work.
-  const tone =
-    purpose.kind === 'CONFIRMATION'
-      ? 'border-info/40 bg-info/10'
-      : purpose.kind === 'SELLER_REQUESTED'
-        ? 'border-warning/50 bg-warning/10'
-        : 'border-danger/40 bg-danger/10';
+  const toast = useToast();
+  const transition = useTransitionTicket();
+  // FE-2: cosmetic only. The server enforces the permission regardless.
+  const canResolve = usePermission('tickets.resolve');
+
+  const close = (ticketId: string): void => {
+    void (async () => {
+      try {
+        await transition.mutateAsync({
+          ticketId,
+          // Nothing was refunded and nothing came back — the seller
+          // asked a question and we answered it. RESOLVED_WRITE_OFF_ACCEPTED
+          // is the "settled, no money moved" terminal.
+          to: 'RESOLVED_WRITE_OFF_ACCEPTED',
+          notes: 'Closed from the call station after speaking to the customer.',
+        });
+        toast.success('Ticket closed — the seller can see the outcome');
+      } catch (err) {
+        toast.error(serverVerdict(err));
+      }
+    })();
+  };
 
   return (
-    <div className={`mb-3 rounded-lg border p-3 ${tone}`}>
-      <p className="text-text-bright text-sm font-semibold">{purpose.headline}</p>
+    <div className="border-danger/60 bg-danger/10 mb-3 rounded-lg border-2 p-3">
+      <p className="text-danger text-xs font-semibold tracking-wide uppercase">Why this call</p>
+      <p className="text-text-bright mt-1 text-sm font-semibold">{purpose.headline}</p>
 
       {purpose.sellerAsked !== null ? (
         <p className="text-text-body mt-1 text-sm">
@@ -782,17 +820,53 @@ function CallPurposeBanner({
       ) : null}
 
       {tickets.length > 0 ? (
-        <ul className="mt-2 space-y-1">
+        <ul className="mt-3 space-y-2">
           {tickets.map((t) => (
-            <li key={t.ticketId} className="text-text-body text-xs">
-              <span className="text-text-muted">Open issue — </span>
-              <span className="font-medium">{t.subject}</span>
-              {t.detail === null || t.detail.trim() === '' ? null : (
-                <span className="text-text-muted">: {t.detail}</span>
-              )}
+            <li
+              key={t.ticketId}
+              className="border-border/60 flex flex-wrap items-start gap-2 rounded border p-2"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-text-body text-xs">
+                  <span className="font-medium">{t.subject}</span>
+                  {t.detail === null || t.detail.trim() === '' ? null : (
+                    <span className="text-text-muted">: {t.detail}</span>
+                  )}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Link
+                  href={`/tickets?ticketId=${t.ticketId}`}
+                  className="text-accent text-xs hover:underline"
+                >
+                  Open
+                </Link>
+                {canResolve ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={transition.isPending}
+                    onClick={() => close(t.ticketId)}
+                  >
+                    Close
+                  </Button>
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>
+      ) : null}
+
+      {/*
+        Record the call FIRST, then close. The outcome is written onto
+        every open ticket for this order, so closing before recording
+        leaves the seller a resolved ticket that never says what
+        happened.
+      */}
+      {tickets.length > 0 ? (
+        <p className="text-text-muted mt-2 text-xs">
+          Record the outcome below first — it is written onto the ticket. Then close it.
+        </p>
       ) : null}
     </div>
   );
