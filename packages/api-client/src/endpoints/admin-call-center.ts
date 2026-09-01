@@ -57,8 +57,10 @@ export interface PulledAssignment {
     readonly headline: string;
     /** The seller's own words when they asked for this call. */
     readonly sellerAsked: string | null;
+    /** The ticket this call answers, when there is one. */
+    readonly ticketId: string | null;
   };
-  /** What is open on this order and still unanswered. */
+  /** The ONE issue this call answers — never every ticket on the order. */
   readonly openTickets: ReadonlyArray<{
     readonly ticketId: string;
     readonly subject: string;

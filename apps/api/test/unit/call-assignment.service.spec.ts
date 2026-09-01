@@ -24,6 +24,7 @@ function makeService(
     priorAttempts?: AnyArgs[];
     openTickets?: AnyArgs[];
     recallRequest?: AnyArgs | null;
+    callIssue?: AnyArgs | null;
     currentRows?: AnyArgs[];
     releaseEntry?: AnyArgs | null; // findUnique for release(); undefined → default ASSIGNED owned
     releaseUpdateCount?: number;
@@ -90,7 +91,11 @@ function makeService(
     // Empty by default; a test that cares supplies rows.
     callAttempt: { findMany: jest.fn(async () => opts.priorAttempts ?? []) },
     // WHY the agent is calling. Empty unless a test says otherwise.
-    ticket: { findMany: jest.fn(async () => opts.openTickets ?? []) },
+    ticket: {
+      findMany: jest.fn(async () => opts.openTickets ?? []),
+      // Only the ONE issue this call answers is loaded now, by id.
+      findFirst: jest.fn(async () => opts.callIssue ?? null),
+    },
     // Did the seller ask us to make this call? That question decides
     // the agent's opening line.
     orderDeliveryActionRequest: {
@@ -106,7 +111,7 @@ function makeService(
     agentCallSettings: { findUnique: typeof agentSettingsFindUnique };
     seller: { findMany: typeof sellerFindMany };
     callAttempt: { findMany: jest.Mock };
-    ticket: { findMany: jest.Mock };
+    ticket: { findMany: jest.Mock; findFirst: jest.Mock };
     orderDeliveryActionRequest: { findFirst: jest.Mock };
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
   };
@@ -387,5 +392,51 @@ describe('PulledAssignment.callPurpose — which conversation this is', () => {
     expect(a).not.toBeNull();
     expect(a!.callPurpose.kind).toBe('SELLER_REQUESTED');
     expect(a!.callPurpose.sellerAsked).toBe('Customer says they will be home after 6pm');
+  });
+});
+
+describe('the issue shown beside a call', () => {
+  // A parcel can carry several unrelated conversations — a re-attempt
+  // being chased, a damage claim. None of them is answered by having
+  // spoken to the customer about a different one, and the outcome form
+  // offers to CLOSE what is listed here. So it is exactly the ticket the
+  // recall raised, or nothing.
+  it('shows only the ticket the recall raised', async () => {
+    const sut = makeService({
+      picked: { id: 'q1', orderId: 'o1' },
+      order: { orderId: 'o1', sellerId: 's1', items: [], status: OrderStatus.OUT_FOR_DELIVERY },
+      recallRequest: { reason: 'Please call them', executionRef: 'tkt-call' },
+      callIssue: {
+        id: 'tkt-call',
+        subject: 'Seller asked us to call the customer',
+        description: 'Please call them',
+        createdAt: new Date('2026-05-18T09:00:00Z'),
+      },
+    });
+    const a = await sut.svc.pullNext('agent-1');
+    expect(a!.openTickets).toHaveLength(1);
+    expect(a!.openTickets[0]?.ticketId).toBe('tkt-call');
+  });
+
+  it('shows nothing when no call was requested', async () => {
+    const sut = makeService({
+      picked: { id: 'q1', orderId: 'o1' },
+      order: { orderId: 'o1', sellerId: 's1', items: [], status: OrderStatus.OUT_FOR_DELIVERY },
+    });
+    const a = await sut.svc.pullNext('agent-1');
+    expect(a!.openTickets).toHaveLength(0);
+  });
+
+  it('shows nothing once that ticket has been closed', async () => {
+    // The lookup is guarded on OPEN/NEGOTIATING, so a closed one is not
+    // offered for closing a second time.
+    const sut = makeService({
+      picked: { id: 'q1', orderId: 'o1' },
+      order: { orderId: 'o1', sellerId: 's1', items: [], status: OrderStatus.OUT_FOR_DELIVERY },
+      recallRequest: { reason: 'Please call them', executionRef: 'tkt-call' },
+      callIssue: null,
+    });
+    const a = await sut.svc.pullNext('agent-1');
+    expect(a!.openTickets).toHaveLength(0);
   });
 });

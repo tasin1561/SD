@@ -132,6 +132,16 @@ export interface PulledAssignment {
     headline: string;
     /** The seller's own words when they asked for this call. */
     sellerAsked: string | null;
+    /**
+     * The ticket this call ANSWERS, when there is one.
+     *
+     * Exactly one, never every open ticket on the order. A parcel can
+     * carry several unrelated conversations — a re-attempt being chased,
+     * a damage claim — and none of them is answered by having spoken to
+     * the customer about this one. Offering to close them all invited an
+     * agent to close somebody else's question.
+     */
+    ticketId: string | null;
   };
 }
 
@@ -273,8 +283,7 @@ export class CallAssignmentService {
       seller: order ? await this.loadSeller(order.sellerId) : null,
       itemDisplay: await this.loadItemDisplay(order),
       priorAttempts: await this.loadPriorAttempts(order),
-      openTickets: await this.loadOpenTickets(picked.orderId),
-      callPurpose: await this.resolveCallPurpose(picked.orderId, order?.status ?? null),
+      ...(await this.callContext(picked.orderId, order?.status ?? null)),
     };
   }
 
@@ -300,6 +309,21 @@ export class CallAssignmentService {
    * asking, and a string match would quietly stop working the day
    * somebody rewords the subject.
    */
+  /**
+   * The purpose and the issue it answers, resolved together.
+   *
+   * Together because the second depends on the first: the recall request
+   * records the ticket it raised, and that ticket is what the call is
+   * about.
+   */
+  private async callContext(
+    orderId: string,
+    orderStatus: OrderStatus | null,
+  ): Promise<Pick<PulledAssignment, 'callPurpose' | 'openTickets'>> {
+    const callPurpose = await this.resolveCallPurpose(orderId, orderStatus);
+    return { callPurpose, openTickets: await this.loadIssueForCall(callPurpose.ticketId) };
+  }
+
   private async resolveCallPurpose(
     orderId: string,
     orderStatus: OrderStatus | null,
@@ -311,13 +335,16 @@ export class CallAssignmentService {
         status: { in: [DeliveryActionStatus.EXECUTED, DeliveryActionStatus.APPROVED] },
       },
       orderBy: { createdAt: 'desc' },
-      select: { reason: true },
+      // `executionRef` is the ticket the recall raised — precisely the
+      // one this call answers.
+      select: { reason: true, executionRef: true },
     });
     if (asked !== null) {
       return {
         kind: 'SELLER_REQUESTED',
         headline: 'The seller asked us to call this customer',
         sellerAsked: asked.reason,
+        ticketId: asked.executionRef,
       };
     }
     if (orderStatus === OrderStatus.PENDING_CONFIRMATION) {
@@ -325,6 +352,7 @@ export class CallAssignmentService {
         kind: 'CONFIRMATION',
         headline: 'Confirm this order before it ships',
         sellerAsked: null,
+        ticketId: null,
       };
     }
     // Anything else is a parcel already moving — out for delivery, or a
@@ -334,24 +362,32 @@ export class CallAssignmentService {
       kind: 'DELIVERY_FOLLOW_UP',
       headline: 'This parcel is already on its way — this is a delivery follow-up',
       sellerAsked: null,
+      ticketId: null,
     };
   }
 
-  private async loadOpenTickets(orderId: string): Promise<PulledAssignment['openTickets']> {
-    const rows = await this.prisma.client.ticket.findMany({
-      where: {
-        orderId,
-        status: { in: [TicketStatus.OPEN, TicketStatus.NEGOTIATING] },
-      },
-      orderBy: { createdAt: 'asc' },
+  /**
+   * The ONE issue this call answers.
+   *
+   * Was "every open ticket on the order", which put a damage claim and a
+   * re-attempt chase in front of an agent whose call answers neither —
+   * next to a control offering to close them. Scoped to the ticket the
+   * recall itself raised.
+   *
+   * Still guarded on being open: one somebody already closed is not
+   * something to offer closing again.
+   */
+  private async loadIssueForCall(
+    ticketId: string | null,
+  ): Promise<PulledAssignment['openTickets']> {
+    if (ticketId === null) return [];
+    const t = await this.prisma.client.ticket.findFirst({
+      where: { id: ticketId, status: { in: [TicketStatus.OPEN, TicketStatus.NEGOTIATING] } },
       select: { id: true, subject: true, description: true, createdAt: true },
     });
-    return rows.map((r) => ({
-      ticketId: r.id,
-      subject: r.subject,
-      detail: r.description,
-      raisedAt: r.createdAt,
-    }));
+    return t === null
+      ? []
+      : [{ ticketId: t.id, subject: t.subject, detail: t.description, raisedAt: t.createdAt }];
   }
 
   private async loadPriorAttempts(
@@ -448,34 +484,6 @@ export class CallAssignmentService {
   }
 
   /** Batch form — one query however many assignments are in flight. */
-  /** The same open-ticket context, batched for a list view. */
-  private async loadOpenTicketsForOrders(
-    orderIds: readonly string[],
-  ): Promise<ReadonlyMap<string, PulledAssignment['openTickets']>> {
-    const out = new Map<string, PulledAssignment['openTickets']>();
-    const ids = [...new Set(orderIds)];
-    if (ids.length === 0) return out;
-    const rows = await this.prisma.client.ticket.findMany({
-      where: {
-        orderId: { in: ids },
-        status: { in: [TicketStatus.OPEN, TicketStatus.NEGOTIATING] },
-      },
-      orderBy: { createdAt: 'asc' },
-      select: { id: true, orderId: true, subject: true, description: true, createdAt: true },
-    });
-    for (const r of rows) {
-      if (r.orderId === null) continue;
-      const list = [...(out.get(r.orderId) ?? [])];
-      list.push({
-        ticketId: r.id,
-        subject: r.subject,
-        detail: r.description,
-        raisedAt: r.createdAt,
-      });
-      out.set(r.orderId, list);
-    }
-    return out;
-  }
 
   private async loadSellers(
     sellerIds: string[],
@@ -535,15 +543,15 @@ export class CallAssignmentService {
     const attemptsByOrder = await this.loadPriorAttemptsForOrders([...orders.values()]);
     // One query for the whole page rather than one per row: this is the
     // supervisor's list view, so the N+1 would be N of them.
-    const ticketsByOrder = await this.loadOpenTicketsForOrders(rows.map((r) => r.orderId));
+
     // Same derivation as a single pull, resolved per row. This is the
     // supervisor's list; a wrong purpose here is a wrong opening line
     // on whichever call they hand out.
-    const purposeByOrder = new Map<string, PulledAssignment['callPurpose']>();
+    const contextByOrder = new Map<string, Pick<PulledAssignment, 'callPurpose' | 'openTickets'>>();
     for (const r of rows) {
-      purposeByOrder.set(
+      contextByOrder.set(
         r.orderId,
-        await this.resolveCallPurpose(r.orderId, orders.get(r.orderId)?.status ?? null),
+        await this.callContext(r.orderId, orders.get(r.orderId)?.status ?? null),
       );
     }
     return rows.map((r) => {
@@ -557,12 +565,15 @@ export class CallAssignmentService {
         seller: order ? (sellers.get(order.sellerId) ?? null) : null,
         itemDisplay: displayByOrder.get(r.orderId) ?? {},
         priorAttempts: attemptsByOrder.get(r.orderId) ?? [],
-        openTickets: ticketsByOrder.get(r.orderId) ?? [],
-        callPurpose: purposeByOrder.get(r.orderId) ?? {
-          kind: 'CONFIRMATION' as const,
-          headline: 'Confirm this order',
-          sellerAsked: null,
-        },
+        ...(contextByOrder.get(r.orderId) ?? {
+          callPurpose: {
+            kind: 'CONFIRMATION' as const,
+            headline: 'Confirm this order',
+            sellerAsked: null,
+            ticketId: null,
+          },
+          openTickets: [],
+        }),
       };
     });
   }

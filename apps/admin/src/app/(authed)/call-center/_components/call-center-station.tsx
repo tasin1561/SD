@@ -29,10 +29,9 @@ import { CallOutcome } from '@skydrop/db';
 import { MyAvailability } from './my-availability';
 import { MyCallHistory } from './my-call-history';
 import { useServiceabilityCheck } from '@/lib/ops-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
-import { usePermission } from '@/lib/use-permission';
 import { useTransitionTicket } from '@/lib/ops-hooks';
 import Link from 'next/link';
+import { usePermission } from '@/lib/use-permission';
 
 const OUTCOME_OPTIONS: ReadonlyArray<{
   value: CallOutcome;
@@ -125,6 +124,10 @@ export function CallCenterStation(): ReactElement {
   // finish the job they just did.
   const [closeIssues, setCloseIssues] = useState(false);
   const transitionTicket = useTransitionTicket();
+  // FE-2: cosmetic. The server enforces this regardless — but an agent
+  // who may not resolve tickets should not be offered a checkbox that
+  // fails after they have already recorded the call.
+  const canResolveTickets = usePermission('tickets.resolve');
   const [error, setError] = useState<string | null>(null);
 
   function fmtError(err: unknown): string {
@@ -312,7 +315,7 @@ export function CallCenterStation(): ReactElement {
       // that never says what happened. Per ticket and isolated — one
       // failing must not stop the others closing.
       let closed = 0;
-      if (closeIssues) {
+      if (closeIssues && canResolveTickets) {
         for (const t of assignment.openTickets) {
           try {
             await transitionTicket.mutateAsync({
@@ -528,7 +531,7 @@ export function CallCenterStation(): ReactElement {
                 />
               </FormField>
 
-              {hasOpenIssues ? (
+              {hasOpenIssues && canResolveTickets ? (
                 <label className="text-text-body flex items-start gap-2 text-sm">
                   <input
                     type="checkbox"
@@ -858,29 +861,6 @@ function CallPurposeBanner({
   readonly purpose: PulledAssignment['callPurpose'];
   readonly tickets: PulledAssignment['openTickets'];
 }): ReactElement {
-  const toast = useToast();
-  const transition = useTransitionTicket();
-  // FE-2: cosmetic only. The server enforces the permission regardless.
-  const canResolve = usePermission('tickets.resolve');
-
-  const close = (ticketId: string): void => {
-    void (async () => {
-      try {
-        await transition.mutateAsync({
-          ticketId,
-          // Nothing was refunded and nothing came back — the seller
-          // asked a question and we answered it. RESOLVED_WRITE_OFF_ACCEPTED
-          // is the "settled, no money moved" terminal.
-          to: 'RESOLVED_WRITE_OFF_ACCEPTED',
-          notes: 'Closed from the call station after speaking to the customer.',
-        });
-        toast.success('Ticket closed — the seller can see the outcome');
-      } catch (err) {
-        toast.error(serverVerdict(err));
-      }
-    })();
-  };
-
   return (
     <div className="border-danger/60 bg-danger/10 mb-3 rounded-lg border-2 p-3">
       <p className="text-danger text-xs font-semibold tracking-wide uppercase">Why this call</p>
@@ -915,16 +895,6 @@ function CallPurposeBanner({
                 >
                   Open
                 </Link>
-                {canResolve ? (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={transition.isPending}
-                    onClick={() => close(t.ticketId)}
-                  >
-                    Close
-                  </Button>
-                ) : null}
               </div>
             </li>
           ))}
