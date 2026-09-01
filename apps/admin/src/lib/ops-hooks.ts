@@ -1166,7 +1166,16 @@ export function useReconcileAccount(): UseMutationResult<
 
 export interface SellerHoldingView {
   readonly accountId: string;
-  readonly accountLabel: string;
+  /**
+   * The account's own label.
+   *
+   * Was declared `accountLabel`; the API sends `label`. Nothing had ever
+   * rendered this hook, so the mismatch cost nothing and hid — the
+   * route-check sees a call site and cannot see that the result is
+   * unused. Verified against the live endpoint rather than either side's
+   * type.
+   */
+  readonly label: string;
   readonly currency: 'INR' | 'BDT';
   readonly amount: string;
 }

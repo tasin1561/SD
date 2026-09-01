@@ -6,7 +6,7 @@ import { Money } from '@skydrop/ui/components';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useRevealSellerBankAccount, useSellerDetail } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
-import { useTreasuryOverview } from '@/lib/ops-hooks';
+import { useSellerHoldings, useTreasuryOverview } from '@/lib/ops-hooks';
 
 /**
  * WHERE the money goes, and WHETHER we can send it — on the screen that
@@ -55,6 +55,12 @@ export function PayoutInstructionPanel({
 
   const seller = useSellerDetail(mayReadSeller ? sellerId : '');
   const treasury = useTreasuryOverview(mayReadTreasury);
+  // Where THIS seller's money is sitting, per account. Not the same
+  // question as what an account holds in total: most of that balance is
+  // ours or somebody else's, and paying out of an account that is full
+  // of another seller's cash is how the client-money total stops
+  // matching what we actually owe (TRE-1/TRE-8).
+  const holdings = useSellerHoldings(mayReadTreasury ? sellerId : null);
   const reveal = useRevealSellerBankAccount(sellerId);
   const [revealed, setRevealed] = useState<string | null>(null);
 
@@ -138,6 +144,34 @@ export function PayoutInstructionPanel({
         )}
         {reveal.isError && <ErrorNote className="mt-1" message={serverVerdict(reveal.error)} />}
       </div>
+
+      {mayReadTreasury && (
+        <div className="border-t border-border pt-2">
+          <div className="text-text-faint uppercase tracking-wide text-[10px] mb-1">
+            Of that, this seller&rsquo;s
+          </div>
+          {holdings.isLoading ? (
+            <div className="text-text-muted">Loading…</div>
+          ) : (holdings.data ?? []).length === 0 ? (
+            <div className="text-text-muted">
+              None of our accounts holds cash attributed to this seller. That is normal for a wallet
+              built from credits rather than transfers — the money to pay them is our capital, and
+              paying it is what settles the liability.
+            </div>
+          ) : (
+            <ul className="space-y-0.5">
+              {(holdings.data ?? []).map((h) => (
+                <li key={h.accountId} className="flex items-baseline justify-between gap-3">
+                  <span className="text-text-bright">{h.label}</span>
+                  <span>
+                    <Money amount={h.amount} currency={h.currency} convert={false} />
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       <div className="border-t border-border pt-2">
         <div className="text-text-faint uppercase tracking-wide text-[10px] mb-1">

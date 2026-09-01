@@ -127,7 +127,7 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
               {holdings.data.map((h) => (
                 <div key={`${h.accountId}-${h.currency}`} className="flex justify-between gap-4">
                   <dt className="text-text-muted text-sm">
-                    {h.accountLabel} · {h.currency}
+                    {h.label} · {h.currency}
                   </dt>
                   <dd className="text-sm">
                     <Money amount={h.amount} currency={h.currency} convert={false} />
