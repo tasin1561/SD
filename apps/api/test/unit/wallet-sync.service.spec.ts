@@ -3,6 +3,7 @@ import type { PrismaService } from '../../src/infrastructure/prisma/prisma.servi
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { WalletLedgerFetcherService } from '../../src/modules/courier-portal/services/wallet-ledger-fetcher.service';
 import type { WalletImportService } from '../../src/modules/wallet-ledger/services/wallet-import.service';
+import type { SystemIssueService } from '../../src/modules/system-issues/services/system-issue.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -56,8 +57,12 @@ function make(
   const auditLog = jest.fn(async () => undefined);
   const audit = { log: auditLog } as unknown as AuditLogService;
 
-  const svc = new WalletSyncService(prisma, fetcher, importer, audit);
-  return { svc, fetch, importDelhiveryWallet, auditLog, findMany };
+  const raise = jest.fn(async () => ({ id: 'issue-1', isNew: true }));
+  const resolveByKey = jest.fn(async () => 1);
+  const issues = { raise, resolveByKey } as unknown as SystemIssueService;
+
+  const svc = new WalletSyncService(prisma, fetcher, importer, audit, issues);
+  return { svc, fetch, importDelhiveryWallet, auditLog, findMany, raise, resolveByKey };
 }
 
 describe('WalletSyncService', () => {
@@ -172,5 +177,38 @@ describe('WalletSyncService — several Delhivery accounts', () => {
     const out = await svc.sync();
     expect(out.skipped).toBe('NO_ACCOUNTS');
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('WalletSyncService — it says when it needs a person', () => {
+  it('raises an issue when the fetch fails, keyed on the ACCOUNT', async () => {
+    // A cost sync that stops working is invisible otherwise: the figures
+    // simply stop moving and nobody notices until a margin looks wrong
+    // weeks later.
+    const { svc, raise } = make({ pageThrows: new Error('portal login failed') });
+    await svc.sync();
+    const arg = (raise.mock.calls as unknown as AnyArgs[][])[0]?.[0] as AnyArgs;
+    expect(arg['dedupeKey']).toBe('wallet-sync:acct-1');
+    // Keyed on the account and NOT the moment — a timestamped key would
+    // open a fresh row every night and the list would stop being read.
+    expect(String(arg['dedupeKey'])).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+  });
+
+  it('calls an OTP what it is, and raises it higher', async () => {
+    // A transient failure retries tonight. A challenge does not: nothing
+    // runs again until a human answers it.
+    const { svc, raise } = make({ pageThrows: new Error('OTP challenge presented') });
+    await svc.sync();
+    const arg = (raise.mock.calls as unknown as AnyArgs[][])[0]?.[0] as AnyArgs;
+    expect(arg['kind']).toBe('COURIER_PORTAL_CHALLENGE');
+    expect(arg['severity']).toBe('HIGH');
+  });
+
+  it('clears its own alarm when it works again', async () => {
+    // A job that recovers should not leave a stale row for somebody to
+    // tidy up by hand.
+    const { svc, resolveByKey } = make({ enabled: true, writes: true });
+    await svc.sync();
+    expect(resolveByKey).toHaveBeenCalledWith('wallet-sync:acct-1', expect.any(String));
   });
 });

@@ -41,6 +41,7 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   // The whole page is pickups, so it needs the pickup permission — not
   // the warehouse one it inherited from the prefix above.
   ['/warehouse/pickups', 'courier.pickups.manage'],
+  ['/system-issues', 'system.settings.view'],
   ['/nsa', 'orders.view'],
   ['/tickets', 'tickets.view'],
   ['/holds', 'holds.manage'],

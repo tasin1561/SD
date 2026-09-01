@@ -4,6 +4,7 @@ import { ConfigModule } from './config/config.module';
 import { PrismaModule } from './infrastructure/prisma/prisma.module';
 import { RedisModule } from './infrastructure/redis/redis.module';
 import { CourierPortalModule } from './modules/courier-portal/courier-portal.module';
+import { SystemIssuesModule } from './modules/system-issues/system-issues.module';
 
 /**
  * The portal worker's own root module.
@@ -26,7 +27,7 @@ import { CourierPortalModule } from './modules/courier-portal/courier-portal.mod
  * caught on 2026-08-06.
  */
 @Module({
-  imports: [ConfigModule, PrismaModule, RedisModule, CourierPortalModule],
+  imports: [ConfigModule, PrismaModule, RedisModule, SystemIssuesModule, CourierPortalModule],
 })
 export class PortalWorkerRootModule {}
 

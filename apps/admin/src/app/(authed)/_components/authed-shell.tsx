@@ -8,6 +8,7 @@ import type { StaffMe } from '@skydrop/api-client';
 import { AppShell, Toaster, type NavGroup } from '@skydrop/ui/components';
 import {
   AlertTriangle,
+  ShieldAlert,
   ReceiptText,
   Scale,
   TrendingUp,
@@ -98,6 +99,11 @@ export function AuthedShell({
       heading: 'Operations',
       items: [
         { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={15} /> },
+        {
+          href: '/system-issues',
+          label: 'Needs a person',
+          icon: <ShieldAlert size={15} />,
+        },
         { href: '/orders', label: 'Orders', icon: <Package size={15} /> },
         { href: '/delivery-actions', label: 'Failed deliveries', icon: <PackageX size={15} /> },
         { href: '/nsa', label: 'Needs attention', icon: <AlertTriangle size={15} /> },

@@ -74,6 +74,8 @@ export {
   WebhookStatus,
   DeliveryAttemptOutcome,
   DeliveryFailureReason,
+  SystemIssueKind,
+  SystemIssueSeverity,
   // Layer 8 — Couriers & Pricing
   CourierIntegrationType,
   CredentialEnvironment,

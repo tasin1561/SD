@@ -2856,3 +2856,72 @@ export function useMergeCredentialFields(): UseMutationResult<
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-courier-accounts'] }),
   });
 }
+
+/* ── System issues — what needs a person ──────────────────────────── */
+
+export interface SystemIssueView {
+  readonly id: string;
+  readonly kind: string;
+  readonly severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  readonly title: string;
+  readonly detail: string;
+  readonly source: string;
+  readonly occurrenceCount: number;
+  readonly firstSeenAt: string;
+  readonly lastSeenAt: string;
+  readonly acknowledgedAt: string | null;
+  readonly resolvedAt: string | null;
+  readonly resolutionNote: string | null;
+  readonly metadata: unknown;
+}
+
+export function useSystemIssues(
+  includeResolved: boolean,
+  enabled = true,
+): UseQueryResult<readonly SystemIssueView[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-system-issues', includeResolved],
+    enabled,
+    queryFn: () =>
+      client.request<readonly SystemIssueView[]>(
+        `/api/admin/system-issues${includeResolved ? '?includeResolved=true' : ''}`,
+      ),
+    // These are alarms. A stale one is worse than a slow one.
+    refetchInterval: 60_000,
+  });
+}
+
+export function useAcknowledgeIssue(): UseMutationResult<
+  { acknowledgedAt: string },
+  Error,
+  string
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) =>
+      client.request<{ acknowledgedAt: string }>(`/api/admin/system-issues/${id}/acknowledge`, {
+        method: 'POST',
+        body: {},
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-system-issues'] }),
+  });
+}
+
+export function useResolveIssue(): UseMutationResult<
+  { resolvedAt: string },
+  Error,
+  { id: string; note: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, note }) =>
+      client.request<{ resolvedAt: string }>(`/api/admin/system-issues/${id}/resolve`, {
+        method: 'POST',
+        body: { note },
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-system-issues'] }),
+  });
+}

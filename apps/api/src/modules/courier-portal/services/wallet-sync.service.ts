@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ActorType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
+import { SystemIssueKind, SystemIssueSeverity } from '@skydrop/db';
 import { WalletLedgerFetcherService } from './wallet-ledger-fetcher.service';
 import {
   WalletImportService,
@@ -64,6 +66,7 @@ export class WalletSyncService {
     private readonly fetcher: WalletLedgerFetcherService,
     private readonly importer: WalletImportService,
     private readonly audit: AuditLogService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   async sync(now: Date = new Date()): Promise<WalletSyncSummary> {
@@ -117,6 +120,12 @@ export class WalletSyncService {
           result,
           error: null,
         });
+        // It worked, so clear its own alarm. A job that starts working
+        // again should not leave a stale row for a person to tidy.
+        await this.issues.resolveByKey(
+          `wallet-sync:${account.id}`,
+          'The sync completed on its own.',
+        );
       } catch (err) {
         // One account's portal being down must not stop the others —
         // the same per-item failure isolation as the AWB and manifest
@@ -132,6 +141,37 @@ export class WalletSyncService {
           fileBytes: null,
           result: null,
           error: message,
+        });
+
+        // Say so where somebody will see it. A cost sync that stops
+        // working is invisible otherwise: the figures simply stop
+        // moving, and nobody notices until a margin looks wrong weeks
+        // later.
+        const challenge = /otp|captcha|challenge/i.test(message);
+        await this.issues.raise({
+          kind: challenge
+            ? SystemIssueKind.COURIER_PORTAL_CHALLENGE
+            : SystemIssueKind.COURIER_COST_SYNC,
+          // A one-off overnight failure is not urgent — the window is
+          // rolling and tomorrow re-reads it. A CHALLENGE is, because
+          // nothing will run again until a person answers it.
+          severity: challenge ? SystemIssueSeverity.HIGH : SystemIssueSeverity.MEDIUM,
+          title: challenge
+            ? `Delhivery is asking ${account.label} to prove it is human`
+            : `Could not read what Delhivery charged ${account.label}`,
+          detail: challenge
+            ? 'The portal presented an OTP or captcha, so the nightly cost sync cannot log in. ' +
+              'Sign in by hand once to clear it. Until then no courier costs are being recorded ' +
+              'for this account and the P&L will report its margin as uncovered.'
+            : `The nightly wallet sync failed: ${message}\n\n` +
+              'Costs for this account are not updating. It retries tonight; if this keeps ' +
+              'recurring the portal has probably changed and the login needs looking at. ' +
+              'Meanwhile the ledger can be uploaded by hand on the Delhivery page.',
+          source: 'WalletSyncService',
+          // The ACCOUNT, not the moment — a key carrying a timestamp
+          // would open a fresh row every night.
+          dedupeKey: `wallet-sync:${account.id}`,
+          metadata: { courierAccountId: account.id, label: account.label, error: message },
         });
       }
     }

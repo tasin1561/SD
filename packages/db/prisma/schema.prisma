@@ -5066,6 +5066,86 @@ enum DeliveryAttemptOutcome {
   @@map("delivery_attempt_outcome")
 }
 
+/// Something the system cannot fix by itself.
+///
+/// ── WHY A TABLE AND NOT THE AUDIT LOG ────────────────────────────────
+/// `audit_logs` records what HAPPENED; this records what is still WRONG.
+/// A HIGH-severity audit row is a fact about a moment and nobody owns
+/// it; an issue has a state — open, someone is on it, done — and the
+/// point is that it stays visible until a person closes it.
+///
+/// Everything that fails quietly ends up here: a courier portal asking
+/// for an OTP, a nightly cost sync that could not log in, a credential
+/// that has stopped working. Each of those used to be a line in a log
+/// that nobody reads.
+model SystemIssue {
+  id       String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  kind     SystemIssueKind
+  severity SystemIssueSeverity
+  /// One line, in the words of somebody who has to act on it.
+  title    String
+  /// What to actually do. Written at the raise site, where the context is.
+  detail   String              @db.Text
+  /// What raised it — a service name, for finding the code again.
+  source   String
+
+  /// The SAME problem, however many times it recurs.
+  ///
+  /// A nightly job failing for a fortnight is ONE issue seen fourteen
+  /// times, not fourteen issues: a list that grows a row per night is a
+  /// list people stop reading. Partial-unique while open, so a resolved
+  /// issue that returns opens a fresh one rather than silently
+  /// reopening a row somebody already closed.
+  dedupeKey       String   @map("dedupe_key")
+  occurrenceCount Int      @default(1) @map("occurrence_count")
+  firstSeenAt     DateTime @default(now()) @map("first_seen_at") @db.Timestamptz
+  lastSeenAt      DateTime @default(now()) @map("last_seen_at") @db.Timestamptz
+
+  /// Somebody is on it. Does NOT close it — only the problem going away
+  /// does that — but it stops two people chasing the same thing.
+  acknowledgedAt        DateTime? @map("acknowledged_at") @db.Timestamptz
+  acknowledgedByStaffId String?   @map("acknowledged_by_staff_id") @db.Uuid
+
+  resolvedAt        DateTime? @map("resolved_at") @db.Timestamptz
+  resolvedByStaffId String?   @map("resolved_by_staff_id") @db.Uuid
+  resolutionNote    String?   @map("resolution_note") @db.Text
+
+  /// Whatever the raiser knew — an account id, an error string, a count.
+  metadata Json?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([resolvedAt, severity, lastSeenAt])
+  @@index([kind, resolvedAt])
+  @@map("system_issues")
+}
+
+enum SystemIssueKind {
+  COURIER_PORTAL_LOGIN     @map("courier_portal_login")
+  COURIER_PORTAL_CHALLENGE @map("courier_portal_challenge")
+  COURIER_COST_SYNC        @map("courier_cost_sync")
+  COURIER_CREDENTIAL       @map("courier_credential")
+  TRACKING_STALLED         @map("tracking_stalled")
+  INTEGRATION              @map("integration")
+  OTHER                    @map("other")
+
+  @@map("system_issue_kind")
+}
+
+enum SystemIssueSeverity {
+  /// Worth knowing; nothing is broken yet.
+  LOW      @map("low")
+  /// Something has stopped working and will stay stopped.
+  MEDIUM   @map("medium")
+  /// Money or parcels are affected now.
+  HIGH     @map("high")
+  /// Drop what you are doing.
+  CRITICAL @map("critical")
+
+  @@map("system_issue_severity")
+}
+
 enum DeliveryFailureReason {
   CUSTOMER_UNAVAILABLE           @map("customer_unavailable")
   CUSTOMER_PHONE_UNREACHABLE     @map("customer_phone_unreachable")
