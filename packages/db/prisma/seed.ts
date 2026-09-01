@@ -439,6 +439,33 @@ const systemSettings: SystemSettingSeed[] = [
       'When a watchdog finds no successful tracking cycle in 45 minutes: re-arm the schedule (in case the repeatable job was lost) and run one cycle immediately, rather than waiting for a human. Safe by construction — a cycle only applies scans newer than each parcel already has. Turn OFF to require a person to press "Run a cycle now"; the alert still fires either way.',
   },
   {
+    key: 'courier.wallet_sync_enabled',
+    category: 'courier',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'Delhivery wallet sync — run nightly',
+    description:
+      'Log into the Delhivery panel each night, download the wallet ledger and read what each parcel really cost. OFF until the portal credentials are provisioned. Turning this ON does NOT let it write — that is a separate switch, so the fetch and the parse can be proven against real files first.',
+  },
+  {
+    key: 'courier.wallet_sync_writes_enabled',
+    category: 'courier',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'Delhivery wallet sync — write the costs',
+    description:
+      'Let the nightly sync WRITE what it read into the shipment cost columns. While OFF it parses the real file and reports exactly what it would change, which is how a login or a page change surfaces as a report rather than as wrong money in the P&L.',
+  },
+  {
+    key: 'courier.wallet_sync_window_days',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 45,
+    displayName: 'Delhivery wallet sync — days to re-read each night',
+    description:
+      'How far back each nightly fetch reaches. NOT one day: a charge is re-cut weeks after the parcel moved, so a narrow window would import each parcel\u2019s first figure and never see the correction. Re-reading is cheap because the import overwrites rather than skips.',
+  },
+  {
     key: 'ops.nsa_enabled',
     category: 'ops',
     valueType: SettingValueType.BOOLEAN,

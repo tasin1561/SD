@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ActorType, CredentialEnvironment, NotificationRecipientType } from '@skydrop/db';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Browser, BrowserContext, Page } from 'playwright';
+import type { Browser, BrowserContext, Locator, Page } from 'playwright';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import {
@@ -29,7 +29,16 @@ const STATE_FILE = 'delhivery-storage-state.json';
  * CUR-1, not env: this authenticates US to a courier, which is exactly
  * what `courier_credentials` is for. There is no second secret path.
  */
-export const PORTAL_CREDENTIAL_FIELDS = ['portalUsername', 'portalPassword'] as const;
+export const PORTAL_CREDENTIAL_FIELDS = [
+  'portalUsername',
+  'portalPassword',
+  // The company to sign in AS. Delhivery ONE asks for it between the
+  // email and the password, because one login can reach several
+  // companies — and each has its OWN wallet. Picking the wrong one
+  // would import another company's costs against our parcels, so it is
+  // a required credential field rather than a default.
+  'portalCompany',
+] as const;
 
 /** Thrown when the credential exists but has no portal fields. */
 export class PortalCredentialsMissingError extends Error {
@@ -201,9 +210,65 @@ export class PortalSessionService {
       throw new PortalCredentialsMissingError(Object.keys(creds));
     }
 
-    await page.fill('input[type="email"], input[name="username"], input[name="email"]', username);
-    await page.fill('input[type="password"]', password);
-    await page.click('button[type="submit"]');
+    const company = creds['portalCompany'] ?? '';
+
+    // ── THE REAL FLOW, WHICH IS THREE PAGES ──────────────────────────
+    // Delhivery ONE does not take an email and a password together:
+    //
+    //   1. one.delhivery.com/v2/login — EMAIL, then Continue
+    //   2. a "Hang on - one more step!" reset-password modal may appear;
+    //      it is DISMISSED, never actioned (clicking Reset Password
+    //      emails a link and invalidates the working password)
+    //   3. the same page comes back with a COMPANY dropdown — one login
+    //      can reach several, and each has its own wallet
+    //   4. ucp-auth.delhivery.com — the PASSWORD, on a different origin
+    //
+    // Written as steps that each wait for their own evidence rather
+    // than as a fixed sequence of clicks, because the modal is
+    // conditional and the company step only exists for multi-company
+    // logins.
+    await page.goto(`${PORTAL_ORIGIN}/v2/login`, { waitUntil: 'domcontentloaded' });
+
+    const emailBox = page
+      .locator('input[type="email"], input[name="username"], input[name="email"]')
+      .first();
+    await emailBox.waitFor({ state: 'visible', timeout: 30_000 });
+    await emailBox.fill(username);
+    await page
+      .getByRole('button', { name: /continue/i })
+      .first()
+      .click();
+
+    await this.dismissResetPasswordModal(page);
+
+    // The company step, when this login has one.
+    const companyBox = page.locator('select, [role="combobox"]').first();
+    if (
+      await companyBox
+        .count()
+        .then((n) => n > 0)
+        .catch(() => false)
+    ) {
+      if (company === '') {
+        throw new PortalCredentialsMissingError(Object.keys(creds));
+      }
+      await this.chooseCompany(page, companyBox, company);
+      await page
+        .getByRole('button', { name: /continue/i })
+        .first()
+        .click();
+      await page.waitForLoadState('domcontentloaded');
+    }
+
+    // The password lives on the auth origin, which the Continue above
+    // redirects to. Its email field arrives pre-filled.
+    const passwordBox = page.locator('input[type="password"]').first();
+    await passwordBox.waitFor({ state: 'visible', timeout: 30_000 });
+    await passwordBox.fill(password);
+    await page
+      .getByRole('button', { name: /^log ?in$/i })
+      .first()
+      .click();
     await page.waitForLoadState('domcontentloaded');
 
     // A challenge AFTER credentials is the case that matters: it means
@@ -220,6 +285,63 @@ export class PortalSessionService {
       // how an account gets locked.
       throw new Error('Portal login failed and no challenge was presented — check the credential.');
     }
+  }
+
+  /**
+   * "Hang on - one more step!" — Delhivery's nag to reset a password
+   * that already works.
+   *
+   * CLOSED, never actioned. The button in it sends a reset link, and
+   * following that would invalidate the credential we are holding: an
+   * automation that reset its own password every night would lock
+   * itself out on the second run. Absent on most logins, so its absence
+   * is not an error.
+   */
+  private async dismissResetPasswordModal(page: Page): Promise<void> {
+    const modal = page.getByText(/one more step/i).first();
+    const present = await modal
+      .waitFor({ state: 'visible', timeout: 4_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!present) return;
+
+    this.logger.log('Portal showed the reset-password prompt; closing it without actioning');
+    const close = page
+      .getByRole('button', { name: /close/i })
+      .or(page.locator('[aria-label="Close"], [aria-label="close"]'))
+      .first();
+    if (await close.count().then((n) => n > 0)) {
+      await close.click();
+    } else {
+      // Some builds render the X as a bare icon with no accessible
+      // name. Escape closes the same dialog.
+      await page.keyboard.press('Escape');
+    }
+    await modal.waitFor({ state: 'hidden', timeout: 10_000 }).catch(() => undefined);
+  }
+
+  /**
+   * Pick the company, whichever control they rendered.
+   *
+   * A native `<select>` takes selectOption; their custom combobox does
+   * not, and needs the option clicked. Trying the cheap one first and
+   * falling back keeps this working across whichever they ship.
+   */
+  private async chooseCompany(page: Page, control: Locator, company: string): Promise<void> {
+    // `evaluate` runs in the BROWSER, but this package compiles without
+    // the DOM lib, so the node is typed loosely here rather than
+    // pulling `dom` into the API's global scope for one call.
+    const tag = await control
+      .evaluate((el: { tagName?: string }) => (el.tagName ?? '').toLowerCase())
+      .catch(() => '');
+    if (tag === 'select') {
+      await control.selectOption({ label: company }).catch(async () => {
+        await control.selectOption(company);
+      });
+      return;
+    }
+    await control.click();
+    await page.getByRole('option', { name: company }).first().click();
   }
 
   /**

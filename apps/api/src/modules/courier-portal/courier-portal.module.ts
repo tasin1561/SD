@@ -8,6 +8,10 @@ import { PortalCanaryService } from './services/portal-canary.service';
 import { PortalDispatcherService } from './services/portal-dispatcher.service';
 import { PortalPacingService } from './services/portal-pacing.service';
 import { PortalSessionService } from './services/portal-session.service';
+import { WalletLedgerFetcherService } from './services/wallet-ledger-fetcher.service';
+import { WalletSyncService } from './services/wallet-sync.service';
+import { WalletSyncWorker } from './queue/wallet-sync.worker';
+import { WalletLedgerModule } from '../wallet-ledger/wallet-ledger.module';
 import { PortalTaxonomyService } from './services/portal-taxonomy.service';
 
 /**
@@ -37,7 +41,13 @@ import { PortalTaxonomyService } from './services/portal-taxonomy.service';
  * runs under MANUAL while humans keep clearing the ops queue.
  */
 @Module({
-  imports: [CourierSharedModule, CourierEscalationModule, EmailModule, AuthCommonModule],
+  imports: [
+    CourierSharedModule,
+    CourierEscalationModule,
+    EmailModule,
+    AuthCommonModule,
+    WalletLedgerModule,
+  ],
   providers: [
     PortalSessionService,
     PortalPacingService,
@@ -45,6 +55,14 @@ import { PortalTaxonomyService } from './services/portal-taxonomy.service';
     PortalDispatcherService,
     PortalCanaryService,
     PortalQueue,
+    WalletLedgerFetcherService,
+    WalletSyncService,
+    WalletSyncWorker,
   ],
+  // The SESSION only. Logging into the portal is the expensive, fragile,
+  // credential-bearing half, and there is no reason for a second module
+  // to reimplement it — the wallet sync needs a logged-in page and
+  // nothing else. The dispatcher, pacer and canary stay internal: those
+  // are about the escalation queue, which is nobody else's business.
 })
 export class CourierPortalModule {}

@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { AdminWalletImportController } from './controllers/admin-wallet-import.controller';
-import { WalletImportService } from './services/wallet-import.service';
+import { WalletLedgerModule } from '../wallet-ledger/wallet-ledger.module';
 
 /**
  * What the courier actually charged, read off their wallet export.
@@ -12,8 +12,8 @@ import { WalletImportService } from './services/wallet-import.service';
  * knows how to read.
  */
 @Module({
-  imports: [AuthCommonModule],
+  imports: [AuthCommonModule, WalletLedgerModule],
   controllers: [AdminWalletImportController],
-  providers: [WalletImportService, StaffJwtGuard],
+  providers: [StaffJwtGuard],
 })
 export class CourierWalletImportModule {}

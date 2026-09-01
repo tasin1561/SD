@@ -5,7 +5,7 @@ import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import { ImportWalletLedgerDto } from '../dto/wallet-import.dto';
-import { WalletImportService } from '../services/wallet-import.service';
+import { WalletImportService } from '../../wallet-ledger/services/wallet-import.service';
 
 /**
  * Recording what the courier actually charged.

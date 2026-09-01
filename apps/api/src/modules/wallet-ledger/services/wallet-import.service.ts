@@ -61,7 +61,12 @@ export class WalletImportService {
 
   async importDelhiveryWallet(
     file: Buffer,
-    staffId: string,
+    /** NULL when the nightly sync ran it — nobody did, the schedule did.
+     *  `audit_logs.actor_id` is a UUID column, so a label like
+     *  "system:wallet-sync" would make Postgres reject the insert and
+     *  AuditLogService would swallow it: the row simply would not
+     *  exist. `actorType` already says SYSTEM. */
+    staffId: string | null,
     opts: { dryRun?: boolean; force?: boolean } = {},
   ): Promise<WalletImportResult> {
     const dryRun = opts.dryRun === true;
@@ -155,7 +160,7 @@ export class WalletImportService {
 
     if (!dryRun) {
       await this.audit.log({
-        actorType: ActorType.STAFF,
+        actorType: staffId === null ? ActorType.SYSTEM : ActorType.STAFF,
         actorId: staffId,
         action: 'courier.wallet_ledger.imported',
         entityType: 'courier',

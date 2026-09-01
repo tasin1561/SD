@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import {
   LedgerFormatError,
   parseWalletLedger,
-} from '../../src/modules/courier-wallet-import/services/wallet-ledger-parser';
+} from '../../src/modules/wallet-ledger/services/wallet-ledger-parser';
 import { readSheet, sheetNames, XlsxError } from '../../src/common/xlsx/xlsx-reader';
 
 const FIXTURE = readFileSync(join(__dirname, '..', 'fixtures', 'delhivery-wallet-sample.xlsx'));
