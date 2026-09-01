@@ -19,6 +19,33 @@ set -euo pipefail
 ROOT="${HOME}/app"
 cd "$ROOT"
 
+# ── Re-exec from a snapshot, BEFORE the pull rewrites this file ───────
+#
+# bash reads a script by FILE OFFSET as it executes, not into memory. So
+# `git pull` rewriting deploy.sh mid-run shifts every line after the
+# pull, and bash carries on reading at the old byte position — executing
+# fragments, or skipping whole lines, with no error.
+#
+# That is not theoretical. On 2026-09-01 the pull added `skydrop-portal`
+# to the restart list; bash never executed that line, the deploy
+# reported success, and the portal process sat on stale code for two
+# hours while the API ran the new build.
+#
+# So: copy ourselves somewhere the pull cannot touch, and run THAT.
+#
+# The snapshot is taken BEFORE the pull, so a change to THIS FILE takes
+# effect on the NEXT deploy, not the one carrying it. That is a real
+# property and worth knowing — but it is a deterministic one-deploy lag
+# rather than the undefined behaviour it replaces, and the alternative
+# (pull, then re-exec the new copy) means duplicating the pull and its
+# fail-fast handling outside the script that owns them.
+if [ "${DEPLOY_REEXEC:-}" != "1" ]; then
+  SNAPSHOT="$(mktemp /tmp/skydrop-deploy.XXXXXX.sh)"
+  trap 'rm -f "$SNAPSHOT"' EXIT
+  cp "$ROOT/scripts/deploy.sh" "$SNAPSHOT"
+  DEPLOY_REEXEC=1 exec bash "$SNAPSHOT" "$@"
+fi
+
 EXPECTED_SHA="${1:-}"  # passed from the workflow for sanity logging
 PRIOR_SHA="$(git rev-parse HEAD)"
 
