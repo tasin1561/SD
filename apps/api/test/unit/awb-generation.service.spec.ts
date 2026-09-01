@@ -728,3 +728,79 @@ describe('AwbGenerationService — a stub must not answer for a live courier', (
     expect(res.status).toBe('GENERATED');
   });
 });
+
+describe('AwbGenerationService — a manual courier is a destination, not a refusal', () => {
+  const NO_ADAPTER: DispatchAwbResult = {
+    ok: false,
+    awbNumber: null,
+    courierShipmentId: null,
+    serviceable: false,
+    errorCode: 'NO_ADAPTER',
+    errorMessage: 'manual has no integration — book it by hand',
+  };
+
+  it('does NOT fail over to a live courier when the parcel was routed to manual', async () => {
+    // The bug this pins, found on production while trying to exercise
+    // manual placement: `pickAlternate` falls back to a GLOBAL_SPLIT
+    // across every active account, so a seller linked ONLY to the manual
+    // courier had their parcel refused by manual (correctly, there is no
+    // adapter) and then booked with Delhivery for real. Choosing manual
+    // did nothing, and the operator who chose it was overruled silently.
+    const { svc, generate } = makeService({
+      shipment: { ...shipmentRow(), courierCode: 'manual' },
+      dispatchByCourier: {
+        manual: NO_ADAPTER,
+        delhivery: {
+          ok: true,
+          awbNumber: 'DLV99999999',
+          courierShipmentId: '777',
+          serviceable: true,
+          errorCode: null,
+          errorMessage: null,
+        },
+      },
+      alternate: { courierCode: 'delhivery', courierAccountId: 'dlv-acc-1' },
+    });
+
+    const res = await svc.generateForShipment(SHIP);
+
+    // Asked once — manual — and never Delhivery.
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe('FAILED');
+    if (res.status === 'FAILED') {
+      // Still routes to a person, which is the whole point of manual.
+      expect(res.serviceable).toBe(false);
+    }
+  });
+
+  it('a REAL carrier refusal still fails over — the narrowing is only about NO_ADAPTER', async () => {
+    // Guarding against over-correction: CUR-14's symmetric failover must
+    // survive. A courier that genuinely will not carry a parcel is a
+    // different fact from a courier that does not exist.
+    const { svc, generate } = makeService({
+      dispatchByCourier: {
+        delhivery: {
+          ok: false,
+          awbNumber: null,
+          courierShipmentId: null,
+          serviceable: false,
+          errorCode: 'NON_SERVICEABLE',
+          errorMessage: 'pin not served',
+        },
+        shiprocket: {
+          ok: true,
+          awbNumber: 'SR00000042',
+          courierShipmentId: '900000042',
+          serviceable: true,
+          errorCode: null,
+          errorMessage: null,
+        },
+      },
+      alternate: { courierCode: 'shiprocket', courierAccountId: 'sr-acc-1' },
+    });
+
+    const res = await svc.generateForShipment(SHIP);
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(res.status).toBe('GENERATED');
+  });
+});

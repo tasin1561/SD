@@ -329,7 +329,19 @@ export class AwbGenerationService {
     //
     // A different COURIER, never merely a different account: a second
     // Delhivery account refuses the same pincode for the same reason.
-    if (!dispatched.ok && !dispatched.serviceable && sellerId !== null) {
+    // ── A MANUAL COURIER IS A DESTINATION, NOT A REFUSAL ─────────────
+    // `NO_ADAPTER` reports `serviceable: false` so the saga routes the
+    // parcel to a person (CUR-8). It is NOT a carrier declining the
+    // parcel, and failing over on it is wrong in the strongest way: an
+    // operator who linked this seller to the manual courier chose to
+    // book by hand, and the failover would silently overrule them and
+    // book a real waybill with an integrated courier instead. Choosing
+    // manual would then do nothing, which is what it did.
+    //
+    // CUR-13's distinction is about a CARRIER's answer. There is no
+    // carrier here to have answered.
+    const noCarrierToAsk = dispatched.errorCode === 'NO_ADAPTER';
+    if (!dispatched.ok && !dispatched.serviceable && !noCarrierToAsk && sellerId !== null) {
       const alternate = await this.alternateAccount(shipment, sellerId);
 
       // ── A STUB MAY NOT ANSWER FOR A LIVE COURIER ──────────────────
