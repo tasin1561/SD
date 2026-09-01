@@ -33,9 +33,25 @@ describe('WorkerRoleService', () => {
 });
 
 describe('every in-process worker consults the gate', () => {
-  const files = globSync('src/modules/*/queue/*.worker.ts', {
-    cwd: resolve(__dirname, '../..'),
-  });
+  /**
+   * EVERY file that constructs a Worker, wherever it lives.
+   *
+   * This used to glob only the `queue` folder's `.worker.ts` files,
+   * which is where most of them
+   * are and not where all of them are: three files built a Worker from a
+   * `.queue.ts` or a `.service.ts` and escaped the check entirely. One
+   * was the auto-withdrawal sweep — a MONEY path that would have paid
+   * every eligible seller twice the moment a second API instance
+   * existed. A guard that only inspects the files following the naming
+   * convention is a guard against typos, not against the failure.
+   *
+   * So the file list is derived from the thing itself: anything
+   * containing `new Worker(`.
+   */
+  const root = resolve(__dirname, '../..');
+  const files = globSync('src/modules/**/*.ts', { cwd: root }).filter((f) =>
+    /new Worker\s*(<[^>]*>)?\s*\(/.test(readFileSync(resolve(root, f), 'utf8')),
+  );
 
   it('finds the workers to check', () => {
     // Guards against the glob silently matching nothing, which would

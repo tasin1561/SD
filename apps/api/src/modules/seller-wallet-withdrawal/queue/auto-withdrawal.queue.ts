@@ -1,3 +1,4 @@
+import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Queue, Worker, type Job, type JobsOptions } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
@@ -28,6 +29,7 @@ export class AutoWithdrawalQueue implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly redis: RedisService,
     private readonly sweep: AutoWithdrawalSweepService,
+    private readonly workerRole: WorkerRoleService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -48,6 +50,9 @@ export class AutoWithdrawalQueue implements OnModuleInit, OnModuleDestroy {
       },
     );
 
+    // Only the queue-owning instance starts workers; every other
+    // API instance serves HTTP only. See WorkerRoleService (SCALE-1).
+    if (!this.workerRole.shouldStart(AutoWithdrawalQueue.name)) return;
     this.worker = new Worker(
       AUTO_WITHDRAWAL_QUEUE,
       async (job: Job): Promise<void> => {

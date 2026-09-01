@@ -1,3 +1,4 @@
+import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Job, Queue, Worker } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
@@ -42,6 +43,7 @@ export class PortalQueue implements OnModuleInit, OnModuleDestroy {
     private readonly dispatcher: PortalDispatcherService,
     private readonly canary: PortalCanaryService,
     private readonly session: PortalSessionService,
+    private readonly workerRole: WorkerRoleService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -67,6 +69,9 @@ export class PortalQueue implements OnModuleInit, OnModuleDestroy {
       },
     );
 
+    // Only the queue-owning instance starts workers; every other
+    // API instance serves HTTP only. See WorkerRoleService (SCALE-1).
+    if (!this.workerRole.shouldStart(PortalQueue.name)) return;
     this.worker = new Worker(
       PORTAL_QUEUE,
       async (job: Job): Promise<void> => {

@@ -1,3 +1,4 @@
+import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Queue, Worker, type Job, type JobsOptions } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
@@ -33,6 +34,7 @@ export class BinSnapshotSweepService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly redis: RedisService,
     private readonly collapse: BinCollapseService,
+    private readonly workerRole: WorkerRoleService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -53,6 +55,9 @@ export class BinSnapshotSweepService implements OnModuleInit, OnModuleDestroy {
       },
     );
 
+    // Only the queue-owning instance starts workers; every other
+    // API instance serves HTTP only. See WorkerRoleService (SCALE-1).
+    if (!this.workerRole.shouldStart(BinSnapshotSweepService.name)) return;
     this.worker = new Worker(
       BIN_SNAPSHOT_SWEEP_QUEUE,
       async (job: Job): Promise<void> => {
