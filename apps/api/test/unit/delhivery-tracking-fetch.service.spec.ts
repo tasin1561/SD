@@ -102,3 +102,49 @@ describe('DelhiveryTrackingFetchService.fetchTracking', () => {
     expect(out[0]?.scans[0]?.eventAtIso).toBe('2026-07-27T09:00:00Z');
   });
 });
+
+/** Runs a raw shipment object through the real parse and returns its facts. */
+async function factsFor(shipment: Record<string, unknown>): Promise<{
+  currentNslCode: string | null;
+}> {
+  const { svc } = makeSvc({
+    response: { ShipmentData: [{ Shipment: { AWB: 'A1', ...shipment } }] },
+  });
+  const out = await svc.fetchTracking(['A1']);
+  const facts = out[0]?.facts;
+  if (facts === undefined) throw new Error('no facts parsed');
+  return facts;
+}
+
+describe('the NSL is called StatusCode on the track API', () => {
+  /**
+   * Verified against the live API on 2026-09-01 by dumping the raw
+   * shipment for a real AWB. Their WEBHOOK docs call this field
+   * `NSLCode`; the TRACK API has no such key at any level and carries
+   * the same fact as `StatusCode`, both on `Status` and on each scan.
+   *
+   * Reading the documented name produced null on every parcel we have
+   * ever tracked, which is why NDR eligibility could never be
+   * established: Delhivery permits a re-attempt only when the current
+   * NSL is in their allow-list, and we never had one to offer.
+   */
+  it('reads the shipment-level NSL from Status.StatusCode', async () => {
+    const facts = await factsFor({
+      Status: { Status: 'Pending', StatusType: 'UD', StatusCode: 'X-IBD3F' },
+    });
+    expect(facts.currentNslCode).toBe('X-IBD3F');
+  });
+
+  it('still honours the documented NSLCode when a payload carries it', async () => {
+    const facts = await factsFor({
+      NSLCode: 'EOD-74',
+      Status: { Status: 'Pending', StatusType: 'UD', StatusCode: 'X-IBD3F' },
+    });
+    expect(facts.currentNslCode).toBe('EOD-74');
+  });
+
+  it('is null when the courier states neither', async () => {
+    const facts = await factsFor({ Status: { Status: 'In Transit', StatusType: 'UD' } });
+    expect(facts.currentNslCode).toBeNull();
+  });
+});

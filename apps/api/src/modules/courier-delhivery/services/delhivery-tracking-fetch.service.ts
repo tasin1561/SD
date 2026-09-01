@@ -82,6 +82,9 @@ interface DelhiveryShipment {
     StatusDateTime?: string;
     StatusLocation?: string;
     Instructions?: string;
+    /** The NSL code — `X-IBD3F`, `EOD-74`. Their webhook docs call the
+     *  same field `NSLCode`; the track API calls it this. */
+    StatusCode?: string;
   };
   /** Their belt weight, in GRAMS. */
   ChargedWeight?: number | string | null;
@@ -94,13 +97,16 @@ interface DelhiveryShipment {
   CODAmount?: number | string | null;
   Sortcode?: string | null;
   /**
-   * The parcel's CURRENT NSL, at the SHIPMENT level.
+   * Their DOCUMENTED name for the NSL, which the track API does not use.
    *
-   * Delhivery puts it here — a sibling of `Status`, next to `Sortcode` —
-   * and NOT inside each scan, which is why reading it off `ScanDetail`
-   * produced null on every scan we have ever stored. Their own re-attempt
-   * rule is phrased about "the current NSL code for the shipment", so
-   * shipment-level is not merely where it lives, it is what it means.
+   * The webhook payload in their docs calls it `NSLCode`. The TRACK API
+   * response has no such field at any level — verified by dumping the
+   * raw shipment for a live AWB on 2026-09-01. It carries the same fact
+   * as `StatusCode`, both on `Status` and on each `ScanDetail`.
+   *
+   * Kept and read FIRST so a webhook-shaped payload still works if one
+   * ever reaches this parser, then falls through to what the API
+   * actually sends.
    */
   NSLCode?: string | null;
   ReferenceNo?: string | number | null;
@@ -157,7 +163,10 @@ function parcelFacts(shipment: DelhiveryShipment): CourierParcelFacts {
     // other figure on the page.
     collectableAmountInr: cod === null ? null : cod.toFixed(2),
     sortCode: shipment.Sortcode ?? null,
-    currentNslCode: shipment.NSLCode ?? null,
+    // `StatusCode` is where the track API puts the NSL (`X-IBD3F`,
+    // `EOD-74`); `NSLCode` is what their webhook docs call the same
+    // thing. Read both, documented name first.
+    currentNslCode: shipment.NSLCode ?? shipment.Status?.StatusCode ?? null,
     currentStatus: shipment.Status?.Status ?? null,
     currentStatusLocation: shipment.Status?.StatusLocation ?? null,
     currentInstructions: shipment.Status?.Instructions ?? null,
@@ -235,7 +244,10 @@ export class DelhiveryTrackingFetchService implements Pick<DelhiveryClient, 'fet
           // The journey leg and the NSL are what make the scan
           // unambiguous — see DelhiveryTrackingService.normalizeScan.
           statusType: d.StatusType ?? d.ScanType ?? null,
-          nslCode: d.NSLCode ?? null,
+          // Same rename, per scan. This has silently been null on every
+          // tracking_event ever written, which is why a delivery attempt
+          // could never carry the code its own re-attempt depends on.
+          nslCode: d.NSLCode ?? d.StatusCode ?? null,
           eventAtIso: toIsoWithIst(when),
           locationName: d.ScannedLocation ?? null,
           locationCity: d.ScannedLocation ?? null,
