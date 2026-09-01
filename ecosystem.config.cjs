@@ -74,6 +74,43 @@ module.exports = {
       // as the -H flag above.
       env: { ...shared, PORT: 4000 },
     },
+    {
+      // ── THE BROWSER PROCESS ────────────────────────────────────────
+      // Its OWN process, and that is the whole point. It holds a
+      // long-lived Chromium and a decrypted courier portal login; a
+      // crash in it must not take the API down, and the API's heap must
+      // never contain either. `portal-worker-isolation.spec.ts` asserts
+      // AppModule cannot even reach that code — this entry is the other
+      // half of the same rule.
+      //
+      // It boots PortalWorkerRootModule, not AppModule: booting the
+      // latter would give this process every other cron too, and those
+      // are supposed to have exactly one owner (SCALE-1).
+      //
+      // WORKERS_ENABLED is required — the wallet-sync worker gates on it
+      // like every other worker, and without it the nightly fetch
+      // registers and never runs.
+      //
+      // 768M because Chromium is heavier than a Node server and a leak
+      // here should recycle rather than take the droplet with it.
+      name: 'skydrop-portal',
+      cwd: path.join(ROOT, 'apps', 'api'),
+      script: 'dist/portal-worker-main.js',
+      instances: 1,
+      exec_mode: 'fork',
+      max_memory_restart: '768M',
+      // WORKERS_ENABLED stays FALSE here, and that is the whole point.
+      //
+      // This process's module graph transitively pulls in EmailModule
+      // and the escalation queues, so turning the general flag on turned
+      // THOSE on too — two processes owning one queue, which is exactly
+      // the double-firing SCALE-1 forbids. Observed live: starting this
+      // duplicated the email and waybill-refill workers against the API.
+      //
+      // PORTAL_WORKERS_ENABLED is its own gate, and only the two workers
+      // that drive a browser read it.
+      env: { ...shared, WORKERS_ENABLED: 'false', PORTAL_WORKERS_ENABLED: 'true' },
+    },
     nextApp('skydrop-admin', 3002),
     nextApp('skydrop-seller', 3003),
     nextApp('skydrop-track', 3004),

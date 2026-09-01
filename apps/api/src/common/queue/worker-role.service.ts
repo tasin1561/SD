@@ -36,6 +36,22 @@ export class WorkerRoleService {
   }
 
   /**
+   * True in the process that owns the BROWSER queues.
+   *
+   * A second flag, not a second value of the first, because the two
+   * answer different questions and a single one cannot be right for
+   * both. The portal process boots a module graph that transitively
+   * pulls in EmailModule and the escalation queues; with a shared flag,
+   * turning its own workers on turned THOSE on too — two processes
+   * owning one queue, which is precisely the double-firing SCALE-1
+   * exists to prevent. Observed live: starting the portal duplicated the
+   * email and waybill-refill workers against the API.
+   */
+  get portalEnabled(): boolean {
+    return process.env['PORTAL_WORKERS_ENABLED'] === 'true';
+  }
+
+  /**
    * Call at the top of a worker's `onModuleInit`. Returns false when
    * this process is HTTP-only, having logged which worker stood down.
    */
@@ -43,6 +59,20 @@ export class WorkerRoleService {
     if (this.env.workersEnabled) return true;
     this.logger.log(
       `${workerName} not started — WORKERS_ENABLED=false, this instance serves HTTP only`,
+    );
+    return false;
+  }
+
+  /**
+   * The portal process's own gate. Same shape as `shouldStart`, and
+   * deliberately NOT falling back to it: a worker that drives a browser
+   * must never start just because the general workers are on, or every
+   * API instance would launch Chromium.
+   */
+  shouldStartPortal(workerName: string): boolean {
+    if (this.portalEnabled) return true;
+    this.logger.log(
+      `${workerName} not started — PORTAL_WORKERS_ENABLED is not 'true' in this process`,
     );
     return false;
   }

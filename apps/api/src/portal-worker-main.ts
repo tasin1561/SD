@@ -82,8 +82,22 @@ async function bootstrap(): Promise<void> {
  * here. Comparing argv is lint-clean and true for both `node dist/…js` and
  * a ts-node run.
  */
+/**
+ * pm2 runs a script through its OWN wrapper, so `process.argv[1]` is
+ * ProcessContainerFork.js and not this file. The guard was therefore
+ * false under pm2, `bootstrap()` never ran, the process had nothing to
+ * keep it alive and exited cleanly — and pm2 restarted it, forever, with
+ * EMPTY LOGS, because nothing had failed. It restarted 229 times before
+ * anyone could tell it apart from a crash.
+ *
+ * `pm_exec_path` is what pm2 sets to the real script, so it is asked
+ * first. Under jest neither matches, which is the property the guard
+ * exists for: importing this file must not start a real application
+ * context (the boot test hung on exactly that).
+ */
+const entryPoint = process.env['pm_exec_path'] ?? process.argv[1];
 const invokedDirectly =
-  process.argv[1] !== undefined && /portal-worker-main(\.[jt]s)?$/.test(process.argv[1]);
+  entryPoint !== undefined && /portal-worker-main(\.[jt]s)?$/.test(entryPoint);
 
 if (invokedDirectly) {
   void bootstrap();

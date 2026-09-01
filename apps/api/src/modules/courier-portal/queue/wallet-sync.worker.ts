@@ -41,7 +41,7 @@ export class WalletSyncWorker implements OnModuleInit, OnModuleDestroy {
   async onModuleInit(): Promise<void> {
     // Only the queue-owning instance starts workers; every other API
     // instance serves HTTP only. See WorkerRoleService (SCALE-1).
-    if (!this.workerRole.shouldStart(WalletSyncWorker.name)) return;
+    if (!this.workerRole.shouldStartPortal(WalletSyncWorker.name)) return;
 
     this.queue = new Queue(WALLET_SYNC_QUEUE, {
       connection: this.redis.createConnection(),

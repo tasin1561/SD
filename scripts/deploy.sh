@@ -94,9 +94,9 @@ fi
 
 # Per-app dirty bits
 APPS_CHANGED=()
-did_change '^packages/(db|api-client|auth)/'                       && APPS_CHANGED+=(skydrop-api skydrop-admin skydrop-seller skydrop-track)
+did_change '^packages/(db|api-client|auth)/'                       && APPS_CHANGED+=(skydrop-api skydrop-admin skydrop-seller skydrop-track skydrop-portal)
 did_change '^packages/ui/'                                         && APPS_CHANGED+=(skydrop-admin skydrop-seller skydrop-track)
-did_change '^apps/api/'                                            && APPS_CHANGED+=(skydrop-api)
+did_change '^apps/api/'                                            && APPS_CHANGED+=(skydrop-api skydrop-portal)
 did_change '^apps/admin/'                                          && APPS_CHANGED+=(skydrop-admin)
 did_change '^apps/seller/'                                         && APPS_CHANGED+=(skydrop-seller)
 did_change '^apps/track/'                                          && APPS_CHANGED+=(skydrop-track)
@@ -158,7 +158,7 @@ fi
 # tell.
 if [ "$PKG_TOUCHED" = true ] || [ ${#APPS_CHANGED[@]} -eq 0 ]; then
   echo "── pm2 restart all ──"
-  pm2 restart skydrop-api skydrop-admin skydrop-seller skydrop-track --update-env
+  pm2 restart skydrop-api skydrop-admin skydrop-seller skydrop-track skydrop-portal --update-env
 else
   echo "── pm2 restart ${APPS_CHANGED[*]} ──"
   pm2 restart "${APPS_CHANGED[@]}" --update-env
@@ -193,6 +193,22 @@ for url in \
   http://127.0.0.1:3004/; do
   check_url "$url" || exit 1
 done
+
+# The portal worker has no port to poll — it is a browser, not a server.
+# So it is checked the only way it can be: pm2 says it is online and has
+# stayed that way. Without this a crash-loop would be invisible, since
+# nothing ever talks to it and its whole job happens at 02:40.
+if pm2 jlist 2>/dev/null | grep -q '"name":"skydrop-portal"'; then
+  sleep 5
+  PORTAL_STATUS=$(pm2 jlist 2>/dev/null \
+    | python3 -c "import sys,json;print(next((p['pm2_env']['status'] for p in json.load(sys.stdin) if p['name']=='skydrop-portal'),'missing'))" 2>/dev/null || echo unknown)
+  if [ "$PORTAL_STATUS" = "online" ]; then
+    echo "  skydrop-portal → online"
+  else
+    echo "  ✗ skydrop-portal is $PORTAL_STATUS"
+    exit 1
+  fi
+fi
 
 # Only NOW is this commit genuinely deployed: built, restarted, and
 # answering on every port. Written last on purpose — a marker written

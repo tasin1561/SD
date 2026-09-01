@@ -71,7 +71,7 @@ export class PortalQueue implements OnModuleInit, OnModuleDestroy {
 
     // Only the queue-owning instance starts workers; every other
     // API instance serves HTTP only. See WorkerRoleService (SCALE-1).
-    if (!this.workerRole.shouldStart(PortalQueue.name)) return;
+    if (!this.workerRole.shouldStartPortal(PortalQueue.name)) return;
     this.worker = new Worker(
       PORTAL_QUEUE,
       async (job: Job): Promise<void> => {
