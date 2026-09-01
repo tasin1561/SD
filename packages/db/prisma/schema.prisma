@@ -3148,6 +3148,12 @@ model Shipment {
   /// would count a return twice and make every returns margin look
   /// worse than it is.
   actualRtoCostInr       Decimal?         @map("actual_rto_cost_inr") @db.Decimal(12, 2)
+  /// When the RETURN leg's cost was last set, mirroring
+  /// `actualCourierCostAt`. Worth having because a courier charge is not
+  /// final: Delhivery re-cuts one weeks after the parcel moved, so "what
+  /// does this cost say" is only half the question and "when did it last
+  /// change" is the other half.
+  actualRtoCostAt        DateTime?        @map("actual_rto_cost_at") @db.Timestamptz
   // Module 8 — warehouse pick/pack operational state. The order status
   // (PENDING_PICK/PICKED/PACKED) is the authoritative lifecycle gate
   // (WMS-9); these track who/when + the pick-timeout CAS token (WMS-5,

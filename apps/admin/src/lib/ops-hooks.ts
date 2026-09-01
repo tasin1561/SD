@@ -2793,3 +2793,40 @@ export function useRunNsaSweep(): UseMutationResult<NsaSweepSummary, Error, void
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-nsa'] }),
   });
 }
+
+/* ── Courier wallet ledger import ─────────────────────────────────── */
+
+export interface WalletImportResult {
+  readonly rowsRead: number;
+  readonly rowsSkipped: number;
+  readonly awbsInFile: number;
+  readonly forwardWritten: number;
+  readonly rtoWritten: number;
+  readonly unchanged: number;
+  readonly revised: number;
+  readonly unknownAwbs: number;
+  readonly sumInr: string;
+  readonly statedTotalInr: string | null;
+  readonly totalsAgree: boolean | null;
+  readonly periodFrom: string | null;
+  readonly periodTo: string | null;
+  readonly dryRun: boolean;
+}
+
+export function useImportWalletLedger(): UseMutationResult<
+  WalletImportResult,
+  Error,
+  { fileBase64: string; dryRun?: boolean; force?: boolean }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<WalletImportResult>('/api/admin/courier/wallet-import/delhivery', {
+        method: 'POST',
+        body,
+      }),
+    // The P&L reads the columns this writes.
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-treasury'] }),
+  });
+}

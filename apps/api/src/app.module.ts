@@ -84,6 +84,7 @@ import { SellerWalletModule } from './modules/seller-wallet/seller-wallet.module
 import { InboundFreightModule } from './modules/inbound-freight/inbound-freight.module';
 import { SellerWalletAccrualModule } from './modules/seller-wallet-accrual/seller-wallet-accrual.module';
 import { SellerWalletReadModule } from './modules/seller-wallet-read/seller-wallet-read.module';
+import { CourierWalletImportModule } from './modules/courier-wallet-import/courier-wallet-import.module';
 import { OrderAttentionModule } from './modules/order-attention/order-attention.module';
 import { SellerWalletWithdrawalModule } from './modules/seller-wallet-withdrawal/seller-wallet-withdrawal.module';
 import { AdminSellerWalletModule } from './modules/admin-seller-wallet/admin-seller-wallet.module';
@@ -212,6 +213,7 @@ import { CourierShiprocketModule } from './modules/courier-shiprocket/courier-sh
     SellerWalletReadModule,
     SellerWalletWithdrawalModule,
     OrderAttentionModule,
+    CourierWalletImportModule,
     AdminRemittanceModule,
     TreasuryModule,
     AdminSellerWalletModule,

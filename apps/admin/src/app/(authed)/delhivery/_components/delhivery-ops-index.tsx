@@ -26,6 +26,7 @@ import { useDelhiveryStatus, useRefillWaybillPool } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { AccountSetupPanel } from './account-setup-panel';
 import { TrackingLookupPanel } from './tracking-lookup-panel';
+import { WalletImportPanel } from './wallet-import-panel';
 import { TrackingPollPanel } from './tracking-poll-panel';
 
 /**
@@ -76,6 +77,7 @@ export function DelhiveryOpsIndex(): ReactElement {
 
       <TrackingPollPanel />
       <TrackingLookupPanel />
+      <WalletImportPanel />
 
       {status.isError ? (
         <ErrorNote
