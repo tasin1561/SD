@@ -23,8 +23,8 @@ import {
   Tr,
 } from '@skydrop/ui/components';
 import { TicketStatus, TicketType } from '@skydrop/db';
-import { useTicketsList, type TicketView } from '@/lib/ops-hooks';
-import { TicketDrawer } from './ticket-drawer';
+import { useTicketsList } from '@/lib/ops-hooks';
+import { useRouter } from 'next/navigation';
 
 const PAGE_SIZE = 25;
 
@@ -44,7 +44,9 @@ export function TicketsIndex(): ReactElement {
   const [status, setStatus] = useState<string>(TicketStatus.OPEN);
   const [ticketType, setTicketType] = useState<string>('');
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<TicketView | null>(null);
+  // The row IS the link now: one way in, and it is the page rather than
+  // a modal that could only ever show a summary of it.
+  const router = useRouter();
 
   const list = useTicketsList({
     ...(status === '' ? {} : { status }),
@@ -167,12 +169,11 @@ export function TicketsIndex(): ReactElement {
               <Th>Status</Th>
               <Th align="right">Refund</Th>
               <Th>Raised</Th>
-              <Th>{/* full view */}</Th>
             </Tr>
           </THead>
           <TBody>
             {items.map((t) => (
-              <Tr key={t.id} onActivate={() => setSelected(t)}>
+              <Tr key={t.id} onActivate={() => router.push(`/tickets/${t.id}`)}>
                 <Td className="text-text-muted whitespace-nowrap text-xs">
                   {t.ticketType === TicketType.SCRAP_DAMAGE ? 'Scrap / damage' : 'Seller issue'}
                 </Td>
@@ -203,17 +204,6 @@ export function TicketsIndex(): ReactElement {
                 <Td className="text-text-muted whitespace-nowrap">
                   {new Date(t.createdAt).toLocaleDateString()}
                 </Td>
-                <Td>
-                  {/* The drawer is for triage; the page is where the
-                      courier conversation and the full history live. */}
-                  <Link
-                    href={`/tickets/${t.id}`}
-                    className="text-accent text-xs hover:underline"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Open
-                  </Link>
-                </Td>
               </Tr>
             ))}
           </TBody>
@@ -231,8 +221,6 @@ export function TicketsIndex(): ReactElement {
           </tfoot>
         </Table>
       )}
-
-      <TicketDrawer ticket={selected} onClose={() => setSelected(null)} />
     </div>
   );
 }
