@@ -32,11 +32,22 @@ export function AdminRequestReturnDialog({
       { reason },
       {
         onSuccess: (r) => {
-          toast.success(
-            r.alreadyRequested
-              ? `${orderNumber} was already coming back.`
-              : `Return requested for ${orderNumber}.`,
-          );
+          // The request succeeding and the COLLECTION being booked are
+          // two different facts, and only one of them puts a van on the
+          // road. Reporting the first as if it were both would leave
+          // goods with a customer nobody is coming for, and the order
+          // saying they are on their way back.
+          if (r.collectionBookingFailed !== null) {
+            toast.error(
+              `${orderNumber} is marked as returning, but the courier did NOT take the collection: ${r.collectionBookingFailed} — arrange it by hand.`,
+            );
+          } else {
+            toast.success(
+              r.alreadyRequested
+                ? `${orderNumber} was already coming back.`
+                : `Return booked for ${orderNumber}${r.reverseAwbNumber === null ? '' : ` · pickup ${r.reverseAwbNumber}`}.`,
+            );
+          }
           setReason('');
           onClose();
         },

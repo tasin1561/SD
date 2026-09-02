@@ -34,6 +34,23 @@ export interface DispatchAwbInput {
     readonly quantity: number;
     readonly unitPriceInr: number;
   }>;
+
+  /**
+   * Book the RETURN leg, not a delivery.
+   *
+   * On the dispatcher rather than in Delhivery's own types (CUR-12): a
+   * reverse pickup is a thing couriers do, not a Delhivery quirk, and
+   * the caller must not have to know which one it is talking to. The
+   * adapter decides what that means on the wire — for Delhivery it is
+   * `payment_mode: 'Pickup'`.
+   *
+   * The addresses are NOT swapped by the caller: on a reverse leg the
+   * recipient fields are where the parcel is COLLECTED and the account's
+   * pickup location is where it goes. Swapping them here would marshal
+   * the same intent twice, in two places, and they would eventually
+   * disagree.
+   */
+  readonly isReverse?: boolean;
   readonly lengthCm: number;
   readonly breadthCm: number;
   readonly heightCm: number;
@@ -227,6 +244,8 @@ export class CourierAwbDispatchService {
     actor: CourierCredentialActor,
   ): Promise<DispatchAwbResult> {
     const req: DelhiveryAwbRequest = {
+      // Delhivery's reverse IS a booking with payment_mode 'Pickup'.
+      ...(input.isReverse === true ? { isReverse: true } : {}),
       shipmentNumber: input.shipmentNumber,
       recipientName: input.recipientName,
       recipientPhoneE164: input.recipientPhoneE164,
@@ -254,6 +273,26 @@ export class CourierAwbDispatchService {
   }
 
   private async viaShiprocket(input: DispatchAwbInput): Promise<DispatchAwbResult> {
+    // Refused BY NAME rather than silently degraded (CUR-12/13).
+    //
+    // Shiprocket's reverse booking is a different call we have not
+    // built. Dropping the flag and booking anyway would create a
+    // FORWARD parcel: a van sent to our own warehouse to collect from
+    // ourselves, while the customer keeps the goods and the seller is
+    // told a return is on its way. `serviceable: false` because asking
+    // again later changes nothing.
+    if (input.isReverse === true) {
+      return {
+        ok: false,
+        awbNumber: null,
+        courierShipmentId: null,
+        serviceable: false,
+        errorCode: 'REVERSE_NOT_SUPPORTED',
+        errorMessage:
+          'Shiprocket reverse pickup is not implemented — book this return with Delhivery, or arrange it by hand.',
+      };
+    }
+
     const req: ShiprocketAwbRequest = {
       shipmentId: input.shipmentId,
       orderNumber: input.orderNumber,

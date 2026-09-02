@@ -56,6 +56,10 @@ import { OrderConfirmedAwbListener } from './services/order-confirmed-awb-listen
     OrderConfirmedAwbListener,
   ],
   exports: [
+    // The one place a courier is reached for a booking (CUR-12).
+    // `customer-return` books the reverse leg through it rather than
+    // reaching for Delhivery directly.
+    CourierAwbDispatchService,
     AwbSupersedeService,
     AwbGenerationService,
     AwbGenerationJobService,

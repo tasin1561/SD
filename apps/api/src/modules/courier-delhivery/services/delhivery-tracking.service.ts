@@ -121,6 +121,15 @@ export class DelhiveryTrackingService implements Pick<DelhiveryClient, 'normaliz
     ['RT|PENDING', ShipmentStatus.RTO_IN_TRANSIT],
     ['RT|DISPATCHED', ShipmentStatus.RTO_IN_TRANSIT],
 
+    // ── PP: a reverse pickup booked, not yet collected ───────────
+    // Without these the first days of a customer return show nothing
+    // at all: the parcel is booked, a van is coming, and the seller's
+    // page says the order was delivered. RTO_INITIATED is exactly what
+    // that is — the return has started and the goods have not moved.
+    ['PP|OPEN', ShipmentStatus.RTO_INITIATED],
+    ['PP|SCHEDULED', ShipmentStatus.RTO_INITIATED],
+    ['PP|DISPATCHED', ShipmentStatus.RTO_INITIATED],
+
     // ── PU: reverse pickup already collected, moving to us ───────
     ['PU|IN TRANSIT', ShipmentStatus.RTO_IN_TRANSIT],
     ['PU|PENDING', ShipmentStatus.RTO_IN_TRANSIT],

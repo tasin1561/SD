@@ -15,12 +15,22 @@ function makeService(order: AnyArgs | null) {
   }));
   const log = jest.fn(async () => 'a1');
 
+  // Booking the collection is its own service with its own spec; here
+  // it succeeds so these stay about the request itself.
+  const book = jest.fn(async () => ({
+    booked: true,
+    awbNumber: 'RVP1',
+    alreadyBooked: false,
+    message: null,
+  }));
+
   const svc = new CustomerReturnService(
     { client: { order: { findFirst, update } } } as unknown as PrismaService,
     { transitionStatus } as unknown as OrderWriteService,
     { log } as unknown as AuditLogService,
+    { book } as never,
   );
-  return { svc, findFirst, update, transitionStatus, log };
+  return { svc, findFirst, update, transitionStatus, log, book };
 }
 
 const DELIVERED = {

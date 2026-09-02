@@ -436,6 +436,10 @@ export class TrackingPollService {
       select: {
         id: true,
         awbNumber: true,
+        // The return leg has its own waybill and it is the one actually
+        // moving once a customer return is booked — the forward waybill
+        // is finished and will answer "Delivered" forever.
+        reverseAwbNumber: true,
         status: true,
         courierAccountId: true,
         orderShipments: { select: { orderId: true }, take: 1 },
@@ -464,7 +468,14 @@ export class TrackingPollService {
 
     const out: InFlightShipment[] = [];
     for (const r of rows) {
-      const awbNumber = r.awbNumber;
+      // THE LEG THAT IS ACTUALLY MOVING.
+      //
+      // Once a customer return is booked the forward waybill is
+      // finished — it will answer "Delivered" for the rest of time,
+      // which is a wasted call against a rate budget and tells us
+      // nothing. The reverse waybill is the parcel's current life, so
+      // it replaces rather than joins it.
+      const awbNumber = r.reverseAwbNumber ?? r.awbNumber;
       const link = r.orderShipments[0];
       if (awbNumber === null || !link) continue;
       out.push({

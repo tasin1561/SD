@@ -39,11 +39,20 @@ export function RequestReturnDialog({
       { reason },
       {
         onSuccess: (r) => {
-          toast.success(
-            r.alreadyRequested
-              ? `${orderNumber} was already coming back.`
-              : `Return requested for ${orderNumber}.`,
-          );
+          // Two different facts, and only one of them puts a van on the
+          // road. A seller told "requested" when nothing was booked
+          // would wait for a collection nobody arranged.
+          if (r.collectionBookingFailed !== null) {
+            toast.error(
+              `${orderNumber} is marked as returning, but we could not book the collection yet: ${r.collectionBookingFailed} We are on it — you do not need to do anything.`,
+            );
+          } else {
+            toast.success(
+              r.alreadyRequested
+                ? `${orderNumber} was already coming back.`
+                : `Collection booked for ${orderNumber}${r.reverseAwbNumber === null ? '' : ` · ${r.reverseAwbNumber}`}.`,
+            );
+          }
           setReason('');
           onClose();
         },

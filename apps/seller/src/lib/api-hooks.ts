@@ -1844,6 +1844,14 @@ export interface ReturnRequestResult {
   readonly orderNumber: string;
   readonly status: string;
   readonly alreadyRequested: boolean;
+  /** The reverse waybill, when the courier took the booking. */
+  readonly reverseAwbNumber: string | null;
+  /**
+   * Set when the order is marked returning but NO collection was
+   * booked. Must be surfaced: the goods are with a customer nobody is
+   * coming for until somebody arranges it by hand.
+   */
+  readonly collectionBookingFailed: string | null;
 }
 
 /**

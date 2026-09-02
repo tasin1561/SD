@@ -3,6 +3,7 @@ import { ActorType, OrderStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { ReversePickupBookingService } from './reverse-pickup-booking.service';
 
 export interface RequestReturnInput {
   readonly orderId: string;
@@ -18,6 +19,14 @@ export interface ReturnRequestResult {
   readonly orderNumber: string;
   readonly status: OrderStatus;
   readonly alreadyRequested: boolean;
+  /** The reverse waybill, when the courier took the booking. */
+  readonly reverseAwbNumber: string | null;
+  /**
+   * Set when the order is marked returning but no collection was
+   * booked. The seller must be told that plainly — the goods are with a
+   * customer nobody is coming for until somebody arranges it.
+   */
+  readonly collectionBookingFailed: string | null;
 }
 
 /**
@@ -51,6 +60,7 @@ export class CustomerReturnService {
     private readonly prisma: PrismaService,
     private readonly orderWrite: OrderWriteService,
     private readonly audit: AuditLogService,
+    private readonly booking: ReversePickupBookingService,
   ) {}
 
   async request(input: RequestReturnInput): Promise<ReturnRequestResult> {
@@ -87,6 +97,8 @@ export class CustomerReturnService {
     // second return. The first request stands, with its reason.
     if (order.customerReturnRequestedAt !== null) {
       return {
+        reverseAwbNumber: null,
+        collectionBookingFailed: null,
         orderId: order.id,
         orderNumber: order.orderNumber,
         status: order.status,
@@ -144,11 +156,34 @@ export class CustomerReturnService {
       'Customer return requested — the parcel rejoins the RTO path home',
     );
 
+    // ── BOOK THE COLLECTION ───────────────────────────────────────
+    // AFTER the order is durably marked returning, never before: the
+    // request is the fact the seller acted on, and a van booked against
+    // an order we failed to record is a collection nobody expects.
+    //
+    // A failure does NOT fail the request. The return is still wanted
+    // and the parcel still has to come back; what is missing is the
+    // courier's half, and that is reported rather than thrown so the
+    // seller is told the truth instead of seeing an error that suggests
+    // nothing happened at all.
+    const booking = await this.booking.book({
+      orderId: order.id,
+      sellerId: order.sellerId,
+      // actorId is the staff user on the admin path and the seller user
+      // on the seller one; only the former belongs in staffUserId.
+      actor: {
+        type: input.actorType,
+        staffId: input.actorType === ActorType.STAFF ? input.actorId : null,
+      },
+    });
+
     return {
       orderId: order.id,
       orderNumber: order.orderNumber,
       status: result.status,
       alreadyRequested: false,
+      reverseAwbNumber: booking.awbNumber,
+      collectionBookingFailed: booking.booked ? null : booking.message,
     };
   }
 }

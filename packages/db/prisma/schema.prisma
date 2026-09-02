@@ -3027,10 +3027,32 @@ model AgentCallSettings {
 // courierCode is a string ref to couriers.code (Layer 8); promoted to
 // @relation in the Layer 8 commit.
 model Shipment {
-  id                     String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  shipmentNumber         String           @unique @map("shipment_number")
-  courierCode            String           @map("courier_code")
-  awbNumber              String?          @unique @map("awb_number")
+  id             String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  shipmentNumber String  @unique @map("shipment_number")
+  courierCode    String  @map("courier_code")
+  awbNumber      String? @unique @map("awb_number")
+
+  /// ── THE RETURN LEG ────────────────────────────────────────────────
+  /// A customer return is the SAME parcel coming back, so it stays on
+  /// this shipment rather than forking a second one: the item snapshot,
+  /// the RTO inspection and the disposition all key off this row, and a
+  /// second shipment would split one parcel's story in two and leave
+  /// the warehouse receiving whichever half somebody guessed.
+  ///
+  /// It needs its OWN waybill because Delhivery books a reverse as a
+  /// new shipment (payment_mode 'Pickup'), and because CUR-9 makes
+  /// `awb_number` the once-only gate for the FORWARD leg.
+  ///
+  /// `requestedAt` is CLAIMED before the courier is called and stays set
+  /// on failure: we cannot tell "they never got it" from "the reply was
+  /// lost", and the cost of guessing wrong is a second van.
+  reverseAwbRequestedAt    DateTime? @map("reverse_awb_requested_at") @db.Timestamptz
+  reverseAwbNumber         String?   @map("reverse_awb_number")
+  reverseAwbGeneratedAt    DateTime? @map("reverse_awb_generated_at") @db.Timestamptz
+  reverseCourierShipmentId String?   @map("reverse_courier_shipment_id")
+  /// Why the booking failed, when it did. Read by a human, not by code.
+  reverseAwbError          String?   @map("reverse_awb_error")
+
   courierShipmentId      String?          @map("courier_shipment_id")
   serviceType            String?          @map("service_type")
   originWarehouseId      String           @map("origin_warehouse_id") @db.Uuid
@@ -3219,6 +3241,7 @@ model Shipment {
   @@index([destRecipientPhoneE164])
   @@index([deliveredAt])
   @@index([rtoInitiatedAt])
+  @@index([reverseAwbNumber], map: "shipments_reverse_awb_number_idx")
   @@index([supersedesShipmentId])
   @@index([originWarehouseId])
   @@index([deletedAt])
