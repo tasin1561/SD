@@ -89,6 +89,29 @@ export class AwbGenerationJobService {
     private readonly courierFeeAccrual: CourierFeeAccrualService,
   ) {}
 
+  /**
+   * Why the shipment is being retired, in words that send the reader to
+   * the right place.
+   *
+   * `serviceable: false` used to mean only "wrong pincode", so mapping it
+   * straight to NON_SERVICEABLE was accurate. It no longer is: a refusal
+   * over the CONSIGNEE is now correctly a refusal too (CUR-13), and
+   * filing that as "non serviceable" sends whoever reads the record to
+   * check a pincode that was never the problem — which is most of what
+   * went wrong with SD-2026-26-000003 in the first place.
+   */
+  private static supersedeReasonFor(gen: {
+    serviceable: boolean;
+    errorCode?: string | null;
+  }): SupersedeReason {
+    if (gen.serviceable) return SupersedeReason.COURIER_FAILURE;
+    return gen.errorCode === 'DELHIVERY_NON_SERVICEABLE' ||
+      gen.errorCode === 'DELHIVERY_NOT_SERVICEABLE' ||
+      gen.errorCode === 'STUB_NON_SERVICEABLE'
+      ? SupersedeReason.NON_SERVICEABLE
+      : SupersedeReason.AWB_REJECTED;
+  }
+
   async processManifest(manifestId: string): Promise<AwbJobResult> {
     const manifest = await this.prisma.client.manifest.findUnique({
       where: { id: manifestId },
@@ -186,9 +209,7 @@ export class AwbGenerationJobService {
         }
         // gen.status === 'FAILED' — route to manual placement, supersede.
         failedCount += 1;
-        const reason = gen.serviceable
-          ? SupersedeReason.COURIER_FAILURE
-          : SupersedeReason.NON_SERVICEABLE;
+        const reason = AwbGenerationJobService.supersedeReasonFor(gen);
         if (orderId !== null) {
           await this.routeOrderToManual(orderId, shipment.id, OrderStatus.PENDING_DISPATCH);
         }
@@ -395,9 +416,11 @@ export class AwbGenerationJobService {
       // That is what makes routing a confirmation-time refusal here
       // correct rather than a dead end.
       await this.routeOrderToManual(orderId, shipmentId, OrderStatus.CONFIRMED);
-      const sup = await this.supersede.supersede(shipmentId, SupersedeReason.NON_SERVICEABLE, {
-        type: ActorType.SYSTEM,
-      });
+      const sup = await this.supersede.supersede(
+        shipmentId,
+        AwbGenerationJobService.supersedeReasonFor(gen),
+        { type: ActorType.SYSTEM },
+      );
 
       await this.audit.log({
         actorType: ActorType.SYSTEM,

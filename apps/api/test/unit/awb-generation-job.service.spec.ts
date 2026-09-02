@@ -16,7 +16,7 @@ const MAN = 'man-1';
 type GenPlan =
   | { kind: 'ok' }
   | { kind: 'label_pending' }
-  | { kind: 'fail'; serviceable: boolean }
+  | { kind: 'fail'; serviceable: boolean; errorCode?: string }
   | { kind: 'throw' };
 
 function makeService(
@@ -68,7 +68,7 @@ function makeService(
         status: 'FAILED' as const,
         shipmentId,
         serviceable: plan.serviceable,
-        errorCode: 'X',
+        errorCode: plan.errorCode ?? 'X',
         errorMessage: 'fail',
       };
     }
@@ -198,14 +198,32 @@ describe('AwbGenerationJobService.processManifest', () => {
         expectedFrom: OrderStatus.PENDING_DISPATCH,
       }),
     );
-    // ... and superseded with NON_SERVICEABLE (serviceable:false).
+    // ... and superseded as AWB_REJECTED: the courier refused, but not
+    // over the destination. `serviceable: false` no longer means "wrong
+    // pincode" (CUR-13), so filing every refusal as NON_SERVICEABLE
+    // would send the reader to check an address that was never the
+    // problem.
+    expect(supersede).toHaveBeenCalledWith('s2', SupersedeReason.AWB_REJECTED, expect.anything());
+    const failed = r.outcomes.find((o) => o.shipmentId === 's2');
+    expect(failed?.result).toBe('SUPERSEDED');
+  });
+
+  it('a refusal that IS about the pincode still supersedes as NON_SERVICEABLE', async () => {
+    const { svc, supersede } = makeService({
+      shipments: [
+        {
+          id: 's1',
+          orderId: 'o1',
+          plan: { kind: 'fail', serviceable: false, errorCode: 'DELHIVERY_NON_SERVICEABLE' },
+        },
+      ],
+    });
+    await svc.processManifest(MAN);
     expect(supersede).toHaveBeenCalledWith(
-      's2',
+      's1',
       SupersedeReason.NON_SERVICEABLE,
       expect.anything(),
     );
-    const failed = r.outcomes.find((o) => o.shipmentId === 's2');
-    expect(failed?.result).toBe('SUPERSEDED');
   });
 
   it('serviceable:true failure → COURIER_FAILURE supersede reason', async () => {
