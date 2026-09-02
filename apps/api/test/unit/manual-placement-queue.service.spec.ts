@@ -33,7 +33,7 @@ function makeService(opts: {
   auditError?: string | null;
   retiredReason?: string | null;
 }) {
-  const findMany = jest.fn(async () => opts.links ?? [link()]);
+  const findMany = jest.fn(async (_args: { where: unknown }) => opts.links ?? [link()]);
   const auditFindMany = jest.fn(async () =>
     opts.auditError === undefined || opts.auditError === null
       ? []
@@ -77,7 +77,7 @@ describe('ManualPlacementQueueService.list', () => {
     const { svc, findMany } = makeService({});
     await svc.list(NOW);
 
-    const where = (findMany.mock.calls[0]?.[0] as { where: Record<string, never> }).where;
+    const where = findMany.mock.calls[0]?.[0].where;
     expect(where).toMatchObject({
       shipment: {
         status: ShipmentStatus.CREATED,
