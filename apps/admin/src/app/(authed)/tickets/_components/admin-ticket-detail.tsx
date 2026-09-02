@@ -146,8 +146,8 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
                   <span className="font-medium">
                     {e.fromStatus === null ? 'Opened' : `${e.fromStatus} → ${e.toStatus}`}
                   </span>
-                  {e.notes !== null && e.notes !== '' && (
-                    <p className="text-text-body mt-0.5">{e.notes}</p>
+                  {e.note !== null && e.note !== '' && (
+                    <p className="text-text-body mt-0.5">{e.note}</p>
                   )}
                 </li>
               ))}

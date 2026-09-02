@@ -78,7 +78,11 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
 
   for (const [i, e] of (timeline.data ?? []).entries()) {
     // "Ticket opened" repeats the message above it; a note is a message.
-    if (e.note === null || e.note.trim() === '' || e.note === 'Ticket opened') continue;
+    // `?? ''` rather than a null check: this arrives over a
+    // hand-written type, and on the admin side the same guard turned a
+    // wrong field name into a blank page rather than a missing line.
+    const said = (e.note ?? '').trim();
+    if (said === '' || said === 'Ticket opened') continue;
     // WHO wrote it decides which side it sits on. A seller's own reply
     // rendered as ours would read as us answering ourselves.
     const mine = e.actorType === 'SELLER';
@@ -86,7 +90,7 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
       key: `note-${i}`,
       side: mine ? 'SELLER' : 'US',
       who: mine ? 'You' : 'Skydrop',
-      body: e.note,
+      body: said,
       at: e.at,
     });
   }

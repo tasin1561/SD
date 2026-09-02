@@ -61,13 +61,17 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
   }
 
   for (const e of events.data ?? []) {
-    if (e.notes === null || e.notes.trim() === '' || e.notes === 'Ticket opened') continue;
+    // `?? ''` rather than a null check: the field arrives from an API
+    // over a hand-written type, and a guard that assumes the shape is
+    // exactly what turned a wrong field name into a blank page.
+    const said = (e.note ?? '').trim();
+    if (said === '' || said === 'Ticket opened') continue;
     const fromSeller = e.actorType === 'SELLER';
     bubbles.push({
       key: `note-${e.id}`,
       side: fromSeller ? 'SELLER' : 'US',
       who: fromSeller ? 'Seller' : 'Skydrop',
-      body: e.notes,
+      body: said,
       at: e.createdAt,
     });
   }

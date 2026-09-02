@@ -72,7 +72,13 @@ export interface TicketEventView {
   readonly ticketId: string;
   readonly fromStatus: string | null;
   readonly toStatus: string;
-  readonly notes: string | null;
+  /**
+   * SINGULAR, because that is what the API returns and what the column
+   * is called. This said `notes` for as long as it has existed — a
+   * hand-written type is only as true as the last person to check it
+   * against the endpoint, and TypeScript cannot check it at all.
+   */
+  readonly note: string | null;
   readonly actorType: string;
   readonly createdAt: string;
 }

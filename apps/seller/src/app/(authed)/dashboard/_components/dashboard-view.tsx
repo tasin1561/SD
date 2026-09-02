@@ -233,80 +233,96 @@ export function DashboardView(): ReactElement {
         </Section>
       )}
 
-      {canWallet && (
-        <Section
-          title="Wallet"
-          action={
-            <Link
-              href="/wallet"
-              className="text-text-muted hover:text-text-body text-xs transition-colors"
-            >
-              Ledger and top-ups →
-            </Link>
-          }
-        >
-          <WalletBalanceCard query={balances} />
-        </Section>
-      )}
+      {/*
+        TWO COLUMNS, not three stacked bands.
+        
+        Wallet, money-in-flight and recent orders were full-width
+        sections one under another, so the page was a column of headings
+        and a seller scrolled to reach the orders — the thing they open
+        this page for. Money reads down the left, work reads down the
+        right, and both are above the fold on a laptop.
 
-      {canOrders && <MoneyInFlightCards query={inFlight} />}
-
-      {canOrders && (
-        <Section
-          title="Recent orders"
-          action={
-            <Link
-              href="/orders"
-              className="text-text-muted hover:text-text-body text-xs transition-colors"
+        `items-start` matters: without it the two columns stretch to the
+        taller one and the wallet card grows a field of empty surface.
+      */}
+      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+        <div className="space-y-4">
+          {canWallet && (
+            <Section
+              title="Wallet"
+              action={
+                <Link
+                  href="/wallet"
+                  className="text-text-muted hover:text-text-body text-xs transition-colors"
+                >
+                  Ledger and top-ups →
+                </Link>
+              }
             >
-              See all →
-            </Link>
-          }
-        >
-          {recent.isLoading ? (
-            <LoadingState label="Loading recent orders…" />
-          ) : recent.isError ? (
-            <ErrorState
-              message={recent.error?.message ?? 'Failed to load recent orders.'}
-              retry={() => void recent.refetch()}
-            />
-          ) : !recent.data || recent.data.items.length === 0 ? (
-            <EmptyState
-              title="No orders yet"
-              description="Once you create an order or import a CSV, they show up here."
-            />
-          ) : (
-            <Card>
-              <ol className="divide-y divide-border">
-                {recent.data.items.map((o) => (
-                  // Stacked on a phone. Side by side, the fixed 176px
-                  // order number and a status badge as long as "Awaiting
-                  // Seller Decision" (177px) cannot both fit in 320px,
-                  // and neither is allowed to shrink.
-                  <li
-                    key={o.id}
-                    className="hover:bg-surface-hover flex flex-col gap-1 px-4 py-2.5 transition-colors sm:flex-row sm:items-center sm:gap-4 sm:py-3"
-                  >
-                    <Link
-                      href={`/orders/${o.id}`}
-                      className="text-text-bright flex min-h-[30px] items-center font-mono text-xs hover:underline sm:min-h-0 sm:w-44 sm:shrink-0"
-                    >
-                      {o.orderNumber}
-                    </Link>
-                    <div className="text-text-body min-w-0 flex-1 truncate text-sm">
-                      {o.recipientName}
-                      <span className="text-text-faint ml-1">· {o.recipientCity}</span>
-                    </div>
-                    <div className="min-w-0 sm:shrink-0">
-                      <OrderStatusBadge status={o.status} />
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </Card>
+              <WalletBalanceCard query={balances} />
+            </Section>
           )}
-        </Section>
-      )}
+
+          {canOrders && <MoneyInFlightCards query={inFlight} />}
+        </div>
+
+        {canOrders && (
+          <Section
+            title="Recent orders"
+            action={
+              <Link
+                href="/orders"
+                className="text-text-muted hover:text-text-body text-xs transition-colors"
+              >
+                See all →
+              </Link>
+            }
+          >
+            {recent.isLoading ? (
+              <LoadingState label="Loading recent orders…" />
+            ) : recent.isError ? (
+              <ErrorState
+                message={recent.error?.message ?? 'Failed to load recent orders.'}
+                retry={() => void recent.refetch()}
+              />
+            ) : !recent.data || recent.data.items.length === 0 ? (
+              <EmptyState
+                title="No orders yet"
+                description="Once you create an order or import a CSV, they show up here."
+              />
+            ) : (
+              <Card>
+                <ol className="divide-y divide-border">
+                  {recent.data.items.map((o) => (
+                    // Stacked on a phone. Side by side, the fixed 176px
+                    // order number and a status badge as long as "Awaiting
+                    // Seller Decision" (177px) cannot both fit in 320px,
+                    // and neither is allowed to shrink.
+                    <li
+                      key={o.id}
+                      className="hover:bg-surface-hover flex flex-col gap-1 px-4 py-2.5 transition-colors sm:flex-row sm:items-center sm:gap-4 sm:py-3"
+                    >
+                      <Link
+                        href={`/orders/${o.id}`}
+                        className="text-text-bright flex min-h-[30px] items-center font-mono text-xs hover:underline sm:min-h-0 sm:w-44 sm:shrink-0"
+                      >
+                        {o.orderNumber}
+                      </Link>
+                      <div className="text-text-body min-w-0 flex-1 truncate text-sm">
+                        {o.recipientName}
+                        <span className="text-text-faint ml-1">· {o.recipientCity}</span>
+                      </div>
+                      <div className="min-w-0 sm:shrink-0">
+                        <OrderStatusBadge status={o.status} />
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </Card>
+            )}
+          </Section>
+        )}
+      </div>
 
       <Section title="Next steps">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
