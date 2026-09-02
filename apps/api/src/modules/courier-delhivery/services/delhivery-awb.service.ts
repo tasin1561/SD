@@ -454,10 +454,48 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
     const isNonServiceable = /serviceab|non-?serviceab|service not avail|pincode.*not.*serv/i.test(
       message,
     );
+
+    // We are here because a RESPONSE came back and it carried a refusal.
+    // Delhivery looked at this parcel and said no.
+    //
+    // Per CUR-13, `serviceable: false` means "this courier will not carry
+    // this parcel" — NOT merely "the pincode is out of range". That
+    // distinction was lost here: the regex above only recognises
+    // serviceability wording, so EVERY other refusal was reported as
+    // `serviceable: true`, which means "ask again later". It is what a
+    // timeout returns.
+    //
+    // The consequence was silent and permanent. SD-2026-26-000003 was
+    // refused with `[ER0005] ... suspicious order/consignee` — an opinion
+    // about the consignee that will be identical on every future attempt.
+    // Classified as retryable, it never failed over to the alternate
+    // courier (CUR-14 fires on a refusal), never routed to manual
+    // placement, and simply sat in CONFIRMED being re-asked forever with
+    // nobody told. The goods were fine; the order was stuck.
+    //
+    // So the default inverts: a parsed refusal is a refusal. Only the
+    // wording that genuinely means "we could not deal with this right
+    // now" stays retryable — an internal error on their side, a rate
+    // limit, an explicit try-again. Those are the ones where asking
+    // again is the entire fix.
+    const isTransient =
+      /internal error|try again|temporarily|rate limit|too many request|timed? ?out|unavailable/i.test(
+        message,
+      );
+
+    if (isTransient) {
+      return {
+        ok: false,
+        serviceable: true,
+        errorCode: 'DELHIVERY_TRANSIENT_REJECTION',
+        errorMessage: message,
+      };
+    }
+
     return {
       ok: false,
-      serviceable: !isNonServiceable,
-      errorCode: isNonServiceable ? 'DELHIVERY_NON_SERVICEABLE' : 'DELHIVERY_CREATE_FAILED',
+      serviceable: false,
+      errorCode: isNonServiceable ? 'DELHIVERY_NON_SERVICEABLE' : 'DELHIVERY_REFUSED',
       errorMessage: message,
     };
   }

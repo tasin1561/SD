@@ -160,6 +160,50 @@ describe('DelhiveryAwbService.generateAwb — real mode', () => {
     });
   });
 
+  it('a refusal that is NOT about the pincode is still a refusal (ER0005)', async () => {
+    // SD-2026-26-000003, 2026-09-01. Delhivery refused the waybill with
+    // `[ER0005] Crashing while saving package due to exception suspicious
+    // order/consignee` — an opinion about the consignee that is identical
+    // on every future attempt.
+    //
+    // It was classified `serviceable: true`, which per CUR-13 means "ask
+    // again later" — what a timeout returns. So it never failed over to
+    // the alternate courier (CUR-14 fires on a refusal), never routed to
+    // manual placement, and sat in CONFIRMED being re-asked forever with
+    // nobody told. The goods were fine; the order was simply stuck.
+    const { svc, request } = makeServiceWithPickup('Skydrop-CCU-01');
+    request.mockResolvedValueOnce({
+      success: false,
+      rmk: 'An internal Error has occurred',
+      packages: [
+        {
+          err_code: 'ER0005',
+          remarks: ['Crashing while saving package due to exception suspicious order/consignee'],
+        },
+      ],
+    });
+    const r = await svc.generateAwb(awbReq());
+    expect(r).toMatchObject({
+      ok: false,
+      serviceable: false,
+      errorCode: 'DELHIVERY_REFUSED',
+    });
+  });
+
+  it('a rejection that genuinely means "not right now" stays retryable', async () => {
+    // The other half of the same decision. Delhivery answered, but the
+    // answer is about their own state rather than about this parcel —
+    // asking again IS the fix, and failing over would move the parcel to
+    // another courier over a hiccup.
+    const { svc, request } = makeServiceWithPickup('Skydrop-CCU-01');
+    request.mockResolvedValueOnce({
+      success: false,
+      rmk: 'An internal Error has occurred, please try again',
+    });
+    const r = await svc.generateAwb(awbReq());
+    expect(r).toMatchObject({ ok: false, serviceable: true });
+  });
+
   it('surfaces the PER-PACKAGE remarks, not the generic envelope rmk', async () => {
     // This is the exact response the production API returned on
     // 2026-08-21, five times, while the log said only "An internal

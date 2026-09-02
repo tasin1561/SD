@@ -182,12 +182,14 @@ export class AdminOrderController {
     @Param('id', uuid()) id: string,
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<TransitionStatusResult> {
-    // ManualPlacementService rejects a shortfall order with
-    // MANUAL_PLACEMENT_NOT_ALLOCATED and tells the operator to "route it
-    // back to PENDING_PICK and re-pick". That instruction had no
-    // implementation: PickExecutionService.start accepts only CONFIRMED
-    // or PENDING_PICK and the pick queue selects the same two, so the
-    // parcel could not even be re-pulled. This is the missing half.
+    // Route a PENDING_MANUAL_PLACEMENT order back into the pick queue
+    // WITHOUT recording a manual AWB — the supervisor's escape hatch for
+    // a shortfall that has since been resolved on the shelf.
+    //
+    // Recording a manual AWB on an unpicked order now does this routing
+    // itself (ManualPlacementService.handOffToWarehouse), so this is no
+    // longer the only way out of that state; it stays because the two
+    // are different intents, and this one does not need an AWB to exist.
     return this.orderWrite.transitionStatus({
       orderId: id,
       to: OrderStatus.PENDING_PICK,

@@ -185,16 +185,40 @@ describe('ManualPlacementService.placeAwb', () => {
     );
   });
 
-  it('conservation guard: a phase-1 residual reservation → MANUAL_PLACEMENT_NOT_ALLOCATED', async () => {
+  it('a parcel that is not on a shelf yet routes to PENDING_PICK, not DISPATCHED', async () => {
     const { svc, transitionStatus } = makeService({
       reservations: [phase2('r1'), phase1('r2')],
     });
-    await expect(
-      svc.placeAwb(SHIP, { awbNumber: 'BD-002', courierName: 'Bluedart' }, STAFF),
-    ).rejects.toMatchObject({
-      response: { code: 'MANUAL_PLACEMENT_NOT_ALLOCATED' },
+    await svc.placeAwb(SHIP, { awbNumber: 'BD-002', courierName: 'Bluedart' }, STAFF);
+
+    // Conservation is preserved by ROUTING, not by refusing: the goods
+    // are not picked, so DISPATCH_STOCK must not fire here. It fires
+    // once, later, at the real dispatch (CUR-3).
+    expect(transitionStatus).toHaveBeenCalledTimes(1);
+    expect(transitionStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: OrderStatus.PENDING_PICK,
+        expectedFrom: OrderStatus.PENDING_MANUAL_PLACEMENT,
+      }),
+    );
+  });
+
+  it('an unpicked parcel keeps ShipmentStatus.CREATED so the pick queue can still see it', async () => {
+    // CUR-2b / WMS-2: both warehouse queues select on `status = 'created'`.
+    // Stamping AWB_GENERATED here would take the parcel out of the pick
+    // AND pack queues in one move, silently — it would simply never
+    // appear on a picker's screen again.
+    const { svc, shipmentUpdate } = makeService({
+      reservations: [phase2('r1'), phase1('r2')],
     });
-    expect(transitionStatus).not.toHaveBeenCalled();
+    await svc.placeAwb(SHIP, { awbNumber: 'BD-002b', courierName: 'Bluedart' }, STAFF);
+
+    const calls = shipmentUpdate.mock.calls as unknown as Array<
+      [{ data: Record<string, unknown> }]
+    >;
+    const stamped = calls[0]?.[0] ?? { data: {} };
+    expect(stamped.data['awbNumber']).toBe('BD-002b');
+    expect(stamped.data).not.toHaveProperty('status');
   });
 
   it('conservation guard: no active reservations → MANUAL_PLACEMENT_NO_RESERVATIONS', async () => {

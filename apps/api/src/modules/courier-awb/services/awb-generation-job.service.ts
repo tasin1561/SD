@@ -352,19 +352,24 @@ export class AwbGenerationJobService {
       // nothing has been touched yet, and the two failures are not
       // alike:
       //
-      //   NOT SERVICEABLE — the courier does not deliver to that
-      //     address. Permanent. Catching it now is the whole reason for
-      //     generating early: nobody picks or packs an order that was
-      //     never going to ship. Route it out and retire the shipment.
+      //   REFUSED — the courier looked at this parcel and said no. Not
+      //     only "wrong pincode": a consignee their fraud check does not
+      //     believe refuses identically every time too (CUR-13 — the
+      //     field means "will not carry THIS parcel"). By the time we
+      //     are here, CUR-14 has already offered it to the alternate
+      //     courier and that one refused as well, so there is no carrier
+      //     left to ask. Route it out and retire the shipment; a human
+      //     places it. Catching this at confirmation is the whole reason
+      //     for generating early — nobody picks an order that was never
+      //     going to ship.
       //
-      //   COURIER FAILURE — a timeout, a 500, a rate limit. Transient.
+      //   COURIER FAILURE — a timeout, a 500, a rate limit, an explicit
+      //     "try again". Nobody formed an opinion about this parcel.
       //     Derailing the order into manual placement over a hiccup
-      //     would be worse than useless: the goods are fine, and manual
-      //     placement would then REFUSE the order anyway, because CUR-8
-      //     requires phase-2 reservations that an unpicked order does
-      //     not have. So leave it CONFIRMED and let it flow. Manifest
-      //     close runs the same job again, and CUR-9's gate means the
-      //     retry is free if this attempt secretly succeeded.
+      //     would move a day's volume, and a courier's cost, to somebody
+      //     nobody chose. So leave it CONFIRMED and let it flow.
+      //     Manifest close runs the same job again, and CUR-9's gate
+      //     means the retry is free if this attempt secretly succeeded.
       if (gen.serviceable) {
         this.logger.warn(
           { orderId, shipmentId, error: gen.errorMessage },
@@ -378,9 +383,17 @@ export class AwbGenerationJobService {
         };
       }
 
-      // Non-serviceable. Route the order out FIRST (the durable "a human
-      // must place this" fact), then retire the shipment —
-      // visible-vs-silent, same ordering as the manifest job.
+      // Refused by every courier that would take it. Route the order out
+      // FIRST (the durable "a human must place this" fact), then retire
+      // the shipment — visible-vs-silent, same ordering as the manifest
+      // job.
+      //
+      // PENDING_MANUAL_PLACEMENT no longer means "this must be picked
+      // already": recording the manual AWB on an unpicked order routes
+      // it to PENDING_PICK and it flows through the ordinary pick → pack
+      // → handoff path, where DISPATCH_STOCK fires exactly once (CUR-3).
+      // That is what makes routing a confirmation-time refusal here
+      // correct rather than a dead end.
       await this.routeOrderToManual(orderId, shipmentId, OrderStatus.CONFIRMED);
       const sup = await this.supersede.supersede(shipmentId, SupersedeReason.NON_SERVICEABLE, {
         type: ActorType.SYSTEM,

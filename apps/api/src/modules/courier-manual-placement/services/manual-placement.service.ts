@@ -30,6 +30,15 @@ export interface ManualCancelResult {
   alreadyCancelled: boolean;
 }
 
+/** An order that already carries a manual AWB and is being picked, packed
+ *  or handed over. Re-submitting the same AWB is a no-op, not a clash. */
+const WAREHOUSE_IN_PROGRESS: ReadonlySet<OrderStatus> = new Set([
+  OrderStatus.PENDING_PICK,
+  OrderStatus.PICKED,
+  OrderStatus.PACKED,
+  OrderStatus.PENDING_DISPATCH,
+]);
+
 const CANCEL_TERMINALS: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.CANCELLED,
   OrderStatus.CANCELLED_BY_ADMIN,
@@ -112,12 +121,29 @@ export class ManualPlacementService {
         };
       }
       if (orderStatus === OrderStatus.PENDING_MANUAL_PLACEMENT) {
-        // AWB stamp landed, the transition did not — converge.
+        // AWB stamp landed, the transition did not — converge, to
+        // whichever of the two step-2s this parcel needed.
         this.logger.warn(
           { shipmentId, orderId },
-          'Manual AWB already stamped but order still PENDING_MANUAL_PLACEMENT — re-running the dispatch transition',
+          'Manual AWB already stamped but order still PENDING_MANUAL_PLACEMENT — re-running the transition',
         );
-        return this.dispatchAfterStamp(shipmentId, orderId, shipment.awbNumber, staffId, ctx);
+        const readiness = await this.resolveReadiness(orderId);
+        return readiness === 'ON_SHELF'
+          ? this.dispatchAfterStamp(shipmentId, orderId, shipment.awbNumber, staffId, ctx)
+          : this.handOffToWarehouse(shipmentId, orderId, shipment.awbNumber, staffId, ctx);
+      }
+      if (WAREHOUSE_IN_PROGRESS.has(orderStatus)) {
+        // The AWB is on it and it is already moving through the
+        // warehouse — a second submit of the same AWB is someone
+        // checking, not a conflict.
+        return {
+          shipmentId,
+          orderId,
+          awbNumber: shipment.awbNumber,
+          orderStatus,
+          shipmentStatus: shipment.status,
+          alreadyPlaced: true,
+        };
       }
       throw new ConflictException({
         code: 'ORDER_NOT_MANUAL_PLACEMENT',
@@ -138,8 +164,8 @@ export class ManualPlacementService {
       });
     }
 
-    // CONSERVATION GUARD — every ACTIVE reservation must be phase-2.
-    await this.assertFullyAllocated(orderId);
+    // Does this parcel go straight out, or does it still need picking?
+    const readiness = await this.resolveReadiness(orderId);
 
     // AWB uniqueness (shipments.awb_number is UNIQUE — pre-check for a
     // clean 409 instead of a raw DB constraint error).
@@ -170,7 +196,14 @@ export class ManualPlacementService {
           manualCourierName: input.courierName.trim(),
           serviceType: input.serviceType?.trim() ?? null,
           awbGeneratedAt: now,
-          status: ShipmentStatus.AWB_GENERATED,
+          // CUR-2b, exactly: carrying an AWB is not the same fact as
+          // where the parcel physically IS, and both warehouse queues
+          // select on `status = 'created'` (WMS-2). Stamping
+          // AWB_GENERATED on a parcel that still needs picking takes it
+          // out of the pick queue and the pack queue in one move, and
+          // nothing reports that — the order simply never appears on a
+          // picker's screen again.
+          ...(readiness === 'ON_SHELF' ? { status: ShipmentStatus.AWB_GENERATED } : {}),
         },
       });
       await this.audit.log(
@@ -203,8 +236,10 @@ export class ManualPlacementService {
     // if it later delivered.
     await this.courierFeeAccrual.tryEarlyAccrual(orderId);
 
-    // STEP 2 (LAST) — the durable transition + Model-A DISPATCH_STOCK.
-    return this.dispatchAfterStamp(shipmentId, orderId, awbNumber, staffId, ctx);
+    // STEP 2 (LAST) — the durable transition.
+    return readiness === 'ON_SHELF'
+      ? this.dispatchAfterStamp(shipmentId, orderId, awbNumber, staffId, ctx)
+      : this.handOffToWarehouse(shipmentId, orderId, awbNumber, staffId, ctx);
   }
 
   /** STEP 2 of placeAwb — transition the order to DISPATCHED (the
@@ -241,6 +276,39 @@ export class ManualPlacementService {
       awbNumber,
       orderStatus: transition.status,
       shipmentStatus: ShipmentStatus.HANDED_TO_COURIER,
+      alreadyPlaced: false,
+    };
+  }
+
+  /** STEP 2 of placeAwb, for a parcel that has not been picked yet —
+   *  send it into the warehouse flow with its manual AWB already on it.
+   *  No stock side-effect here: the shipment keeps its CREATED status so
+   *  the pick queue can see it (WMS-2), and qtyOnHand decrements once, at
+   *  DISPATCH, after pack and handoff (CUR-3) — the ordinary path, which
+   *  is the point. Idempotent: re-running converges via the transition's
+   *  own expectedFrom guard. */
+  private async handOffToWarehouse(
+    shipmentId: string,
+    orderId: string,
+    awbNumber: string,
+    staffId: string,
+    ctx?: ClientContext,
+  ): Promise<ManualPlacementResult> {
+    const transition = await this.orderWrite.transitionStatus({
+      orderId,
+      to: OrderStatus.PENDING_PICK,
+      actor: { type: ActorType.STAFF, id: staffId },
+      expectedFrom: OrderStatus.PENDING_MANUAL_PLACEMENT,
+      reason: `Manual courier placement — AWB ${awbNumber}; parcel still to be picked`,
+      ...(ctx !== undefined ? { ctx } : {}),
+    });
+
+    return {
+      shipmentId,
+      orderId,
+      awbNumber,
+      orderStatus: transition.status,
+      shipmentStatus: ShipmentStatus.CREATED,
       alreadyPlaced: false,
     };
   }
@@ -288,7 +356,30 @@ export class ManualPlacementService {
   /** Conservation guard — reject if the order is not fully phase-2
    *  allocated (a residual phase-1 reservation means the goods were
    *  never picked; dispatching would leak the reservation). */
-  private async assertFullyAllocated(orderId: string): Promise<void> {
+  /**
+   * Is this parcel physically ready to leave, or does it still need to be
+   * picked and packed?
+   *
+   * This used to be `assertFullyAllocated`, and a phase-1 residual was a
+   * 409 telling the operator to route the order back to PENDING_PICK
+   * themselves. That is a correct conservation guard and a bad instruction:
+   * the two orders that reach manual placement look identical to whoever
+   * is typing the AWB, and only one of them is refused.
+   *
+   * The guard was written for the order that arrives here from a PICK
+   * SHORTFALL (WMS-4) — already picked at, goods missing from the shelf.
+   * But an order also arrives here straight from a COURIER REFUSAL at
+   * confirmation (CUR-2b), and that one has never been near the warehouse.
+   * Nothing is wrong with it. It needs picking, which is the ordinary next
+   * step, not an error to report.
+   *
+   * So conservation is preserved by ROUTING rather than by refusing: a
+   * parcel that is not on a shelf yet goes to PENDING_PICK with its manual
+   * AWB already stamped, and dispatches through the normal pick → pack →
+   * handoff path where DISPATCH_STOCK fires exactly once (CUR-3). Zero
+   * reservations remains a genuine anomaly and is still refused.
+   */
+  private async resolveReadiness(orderId: string): Promise<'ON_SHELF' | 'AWAITING_PICK'> {
     const active = await this.reservations.listActiveForOrderWithLocations(orderId);
     if (active.length === 0) {
       throw new ConflictException({
@@ -297,13 +388,7 @@ export class ManualPlacementService {
       });
     }
     const unallocated = active.some((r) => r.binId === null || r.batchId === null);
-    if (unallocated) {
-      throw new ConflictException({
-        code: 'MANUAL_PLACEMENT_NOT_ALLOCATED',
-        message:
-          'Order is not fully picked (a phase-1 reservation residual remains) — route it back to PENDING_PICK and re-pick before manual placement',
-      });
-    }
+    return unallocated ? 'AWAITING_PICK' : 'ON_SHELF';
   }
 
   /** Load a shipment + its order context (the latest OrderShipment
