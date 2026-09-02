@@ -3,6 +3,7 @@ import {
   DeliveryActionKind,
   DeliveryActionStatus,
   OrderStatus,
+  ShipmentStatus,
   SystemIssueKind,
   SystemIssueSeverity,
 } from '@skydrop/db';
@@ -12,6 +13,7 @@ import { NotificationLedgerService } from '../../notifications/services/notifica
 import { EnvService } from '../../../config/env.service';
 import { NotificationChannel, NotificationRecipientType } from '@skydrop/db';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
+import { AwbGenerationJobService } from '../../courier-awb/services/awb-generation-job.service';
 
 /** Where the parcels are. The cutoff is an hour of the DELIVERY day. */
 const DELIVERY_TIMEZONE = 'Asia/Kolkata';
@@ -68,6 +70,8 @@ export interface NsaSweepSummary {
   readonly cleared: number;
   /** Returns the seller asked for that the courier has not started. */
   readonly stalledReturns: number;
+  /** Confirmed orders still carrying no waybill after the grace window. */
+  readonly awbless: number;
 }
 
 /**
@@ -110,6 +114,7 @@ export class OrderAttentionService {
     private readonly ledger: NotificationLedgerService,
     private readonly env: EnvService,
     private readonly issues: SystemIssueService,
+    private readonly awbJob: AwbGenerationJobService,
   ) {}
 
   /**
@@ -172,6 +177,7 @@ export class OrderAttentionService {
       escalated: 0,
       cleared: 0,
       stalledReturns: 0,
+      awbless: 0,
     };
 
     // Runs even when the NSA half is switched off, and before the
@@ -179,6 +185,10 @@ export class OrderAttentionService {
     // accepted a cancellation and then did nothing. Gating it behind an
     // unrelated switch is how it would come to be silently off.
     summary.stalledReturns = await this.checkStalledReturns(now);
+
+    // Also unconditional, and for the same reason: an order that has no
+    // waybill is not moving, whatever the NSA switch says.
+    summary.awbless = await this.checkAwblessConfirmed(now);
 
     if (!enabled) return summary;
 
@@ -288,6 +298,134 @@ export class OrderAttentionService {
    * Clears itself once the order reaches any RTO state — including
    * RTO_RECEIVED, for a parcel that came back faster than a scan did.
    */
+  /**
+   * A confirmed order that still has no waybill.
+   *
+   * The AWB is generated at confirmation (CUR-2b) by a listener on the
+   * lifecycle bus, which fires ONCE, on ENTRY to CONFIRMED. If that
+   * attempt and its BullMQ retries all fail, nothing ever asks again:
+   * the order is already CONFIRMED so the listener will not re-fire, and
+   * the manifest-close job only reaches parcels that got picked and
+   * packed — which this one cannot be, because a picker works from a
+   * queue it is in, and it is, but nobody is watching whether it moves.
+   *
+   * SD-2026-26-000003 sat exactly there for a day: reserved stock, a
+   * shipment, no waybill, no error anywhere a person looks. The order
+   * had not failed. It had simply stopped, quietly, and the only symptom
+   * was its absence from a list.
+   *
+   * So this does two things, in this order:
+   *
+   *   1. ASKS AGAIN. `processOrder` is idempotent and gated on
+   *      `awbNumber` (CUR-9), so a retry never doubles a real booking or
+   *      a real charge. If the original failure was transient this just
+   *      fixes it. If the courier refuses, the refusal now routes the
+   *      order to manual placement (CUR-13/CUR-14) — which is the whole
+   *      point: the retry is what DELIVERS that routing to an order that
+   *      was already past the moment it would otherwise have happened.
+   *
+   *   2. RAISES an issue if it is still stuck afterwards. That is the
+   *      case where asking again is not the answer and a person is
+   *      needed — and it is now a card on /system-issues rather than a
+   *      row nobody queries.
+   *
+   * Clears itself once the order has a waybill or has moved on.
+   */
+  private async checkAwblessConfirmed(now: Date): Promise<number> {
+    const hours = await this.globalInt('ops.awb_stall_alert_hours', 6);
+    const cutoff = new Date(now.getTime() - hours * 3_600_000);
+
+    // The LIVE shipment only: a superseded one carries `supersededAt`
+    // and has a CREATED successor (CUR-7), so filtering on status alone
+    // would keep re-flagging a parcel that was already retired.
+    const links = await this.prisma.client.orderShipment.findMany({
+      where: {
+        order: { status: OrderStatus.CONFIRMED, deletedAt: null },
+        shipment: {
+          status: ShipmentStatus.CREATED,
+          awbNumber: null,
+          supersededAt: null,
+          deletedAt: null,
+          createdAt: { lt: cutoff },
+        },
+      },
+      select: {
+        orderId: true,
+        shipmentId: true,
+        order: { select: { orderNumber: true, sellerId: true } },
+      },
+    });
+    if (links.length === 0) return 0;
+
+    let stuck = 0;
+    for (const link of links) {
+      const key = `awb-stalled:${link.orderId}`;
+
+      // 1. Ask again. Per-order isolation: one courier throwing must not
+      //    stop the others being retried, which is the same fan-out
+      //    discipline as the AWB job's own loop (CUR-2).
+      try {
+        await this.awbJob.processOrder(link.orderId);
+      } catch (err) {
+        this.logger.warn(
+          { orderId: link.orderId, err: (err as Error).message },
+          'AWB retry for a stalled confirmed order threw — falling through to the issue',
+        );
+      }
+
+      // 2. Did that settle it? Re-read rather than trusting the result:
+      //    a refusal routes the ORDER (to PENDING_MANUAL_PLACEMENT) and
+      //    supersedes the SHIPMENT, so the answer lives in the rows, not
+      //    in the return value.
+      const after = await this.prisma.client.order.findUnique({
+        where: { id: link.orderId },
+        select: { status: true },
+      });
+      const shipment = await this.prisma.client.shipment.findUnique({
+        where: { id: link.shipmentId },
+        select: { awbNumber: true, supersededAt: true },
+      });
+      const settled =
+        after === null ||
+        after.status !== OrderStatus.CONFIRMED ||
+        shipment === null ||
+        shipment.awbNumber !== null ||
+        shipment.supersededAt !== null;
+
+      if (settled) {
+        await this.issues.resolveByKey(
+          key,
+          `Sorted — the order is now ${(after?.status ?? 'gone').toString().toLowerCase().replaceAll('_', ' ')}.`,
+        );
+        continue;
+      }
+
+      stuck += 1;
+      await this.issues.raise({
+        kind: SystemIssueKind.INTEGRATION,
+        severity: SystemIssueSeverity.HIGH,
+        title: `${link.order.orderNumber}: confirmed ${hours}h ago and still has no waybill`,
+        detail:
+          'This order was confirmed and its stock reserved, but no courier has issued a ' +
+          'waybill for it and a retry just now did not get one either. Nothing downstream ' +
+          'will move it: it cannot be picked into a manifest without a courier, and the ' +
+          'confirmation-time attempt does not repeat on its own.\n\n' +
+          'The seller believes this order is on its way. Open the order, read the last AWB ' +
+          'error on the shipment, and either fix what the courier objected to or place it ' +
+          'manually.',
+        source: 'OrderAttentionService',
+        dedupeKey: key,
+        metadata: {
+          orderId: link.orderId,
+          orderNumber: link.order.orderNumber,
+          shipmentId: link.shipmentId,
+          sellerId: link.order.sellerId,
+        },
+      });
+    }
+    return stuck;
+  }
+
   private async checkStalledReturns(now: Date): Promise<number> {
     const hours = await this.globalInt('ops.rto_stall_alert_hours', 48);
     const cutoff = new Date(now.getTime() - hours * 3_600_000);

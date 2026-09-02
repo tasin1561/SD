@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { NotificationLedgerModule } from '../notification-ledger/notification-ledger.module';
+import { CourierAwbModule } from '../courier-awb/courier-awb.module';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { AdminNsaController } from './controllers/admin-nsa.controller';
@@ -22,7 +23,11 @@ import { OrderAttentionService } from './services/order-attention.service';
   // leaf that raises the NSA flag and knows perfectly well it wants to
   // tell somebody. Nothing in the ledger imports back, so there is no
   // cycle for the lifecycle bus to break.
-  imports: [AuthCommonModule, NotificationLedgerModule],
+  // CourierAwbModule for the AWB job service: the stalled-waybill check
+  // ASKS AGAIN before it raises, and `processOrder` is the documented
+  // manual re-trigger. Nothing in courier-awb imports back, so this
+  // stays a leaf.
+  imports: [AuthCommonModule, NotificationLedgerModule, CourierAwbModule],
   controllers: [AdminNsaController, SellerNsaController],
   providers: [OrderAttentionService, NsaSweepWorker, StaffJwtGuard, SellerJwtGuard],
 })

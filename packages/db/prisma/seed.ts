@@ -485,6 +485,15 @@ const systemSettings: SystemSettingSeed[] = [
       'A seller asks for a parcel back and the courier accepts, then no return scan ever arrives. After this many hours the order is raised on the system issues board, because the seller believes their goods are on the way back and nothing else in the system notices they are not.',
   },
   {
+    key: 'ops.awb_stall_alert_hours',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 6,
+    displayName: 'Confirmed with no waybill — hours before we retry and flag it',
+    description:
+      'The waybill is booked once, when the order is confirmed. If that attempt and its retries all fail, nothing asks again — the order sits confirmed with reserved stock and no courier, and the only symptom is its absence from a list. After this many hours the sweep asks the courier again, and raises the order on the system issues board if it still has no waybill.',
+  },
+  {
     key: 'ops.nsa_cutoff_hour',
     category: 'ops',
     valueType: SettingValueType.INT,

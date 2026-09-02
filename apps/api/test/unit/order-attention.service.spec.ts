@@ -80,3 +80,131 @@ describe('OrderAttentionService.dayPhrase', () => {
     expect(phrase(3)).toBe('for 3 days now');
   });
 });
+
+// ---------------------------------------------------------------------
+// The stalled-waybill check.
+//
+// SD-2026-26-000003 is the case this exists for: confirmed, stock
+// reserved, a shipment, and no waybill — because the AWB is booked once,
+// on ENTRY to CONFIRMED, and the order was already past that moment.
+// Nothing asked again and nothing said so. It had not failed; it had
+// stopped, and the only symptom was its absence from a list.
+// ---------------------------------------------------------------------
+describe('OrderAttentionService — a confirmed order with no waybill', () => {
+  const ORDER = 'ord-1';
+  const SHIP = 'ship-1';
+
+  function makeService(opts: {
+    /** What the shipment looks like AFTER the retry ran. */
+    afterRetry?: { awbNumber: string | null; supersededAt: Date | null };
+    /** What the order's status is AFTER the retry ran. */
+    orderAfter?: string;
+  }) {
+    const processOrder = jest.fn(async () => ({ result: 'ERROR' }));
+    const raise = jest.fn(async () => undefined);
+    const resolveByKey = jest.fn(async () => undefined);
+
+    const client = {
+      systemSetting: {
+        // The NSA half OFF, so the sweep short-circuits after the two
+        // unconditional checks — this one is deliberately not gated
+        // behind that switch, which is the property being exercised.
+        findUnique: jest.fn(async ({ where }: { where: { key: string } }) =>
+          where.key === 'ops.nsa_enabled' ? { valueBoolean: false } : null,
+        ),
+      },
+      orderShipment: {
+        findMany: jest.fn(async () => [
+          {
+            orderId: ORDER,
+            shipmentId: SHIP,
+            order: { orderNumber: 'SD-2026-26-000003', sellerId: 'sel-1' },
+          },
+        ]),
+      },
+      order: {
+        findUnique: jest.fn(async () => ({ status: opts.orderAfter ?? 'CONFIRMED' })),
+        findMany: jest.fn(async () => []),
+      },
+      shipment: {
+        findUnique: jest.fn(async () => opts.afterRetry ?? { awbNumber: null, supersededAt: null }),
+      },
+      orderDeliveryActionRequest: { findMany: jest.fn(async () => []) },
+    };
+
+    const svc = new OrderAttentionService(
+      { client } as never,
+      { log: jest.fn() } as never,
+      {} as never,
+      {} as never,
+      { raise, resolveByKey } as never,
+      { processOrder } as never,
+    );
+    return { svc, processOrder, raise, resolveByKey };
+  }
+
+  it('asks the courier again BEFORE raising anything', async () => {
+    const { svc, processOrder } = makeService({});
+    await svc.sweep(new Date('2026-09-02T12:00:00Z'));
+
+    // The retry is the fix for the common case, and it is what delivers
+    // the refusal routing (CUR-13/14) to an order that is already past
+    // the moment it would otherwise have happened.
+    expect(processOrder).toHaveBeenCalledWith(ORDER);
+  });
+
+  it('raises a HIGH issue when the retry did not get a waybill either', async () => {
+    const { svc, raise, resolveByKey } = makeService({});
+    const summary = await svc.sweep(new Date('2026-09-02T12:00:00Z'));
+
+    expect(summary.awbless).toBe(1);
+    expect(resolveByKey).not.toHaveBeenCalled();
+    expect(raise).toHaveBeenCalledWith(
+      expect.objectContaining({
+        severity: 'HIGH',
+        dedupeKey: `awb-stalled:${ORDER}`,
+        title: expect.stringContaining('SD-2026-26-000003'),
+      }),
+    );
+  });
+
+  it('resolves instead of raising when the retry got a waybill', async () => {
+    const { svc, raise, resolveByKey } = makeService({
+      afterRetry: { awbNumber: 'DL123', supersededAt: null },
+    });
+    const summary = await svc.sweep(new Date('2026-09-02T12:00:00Z'));
+
+    expect(summary.awbless).toBe(0);
+    expect(raise).not.toHaveBeenCalled();
+    expect(resolveByKey).toHaveBeenCalledWith(`awb-stalled:${ORDER}`, expect.any(String));
+  });
+
+  it('resolves when the refusal routed the order to manual placement', async () => {
+    // The courier refused, so the order moved OUT of CONFIRMED and the
+    // shipment was superseded (CUR-7). That is a success for this check:
+    // the order is somebody's job now, and it is on the manual placement
+    // queue rather than sitting silently.
+    const { svc, raise, resolveByKey } = makeService({
+      orderAfter: 'PENDING_MANUAL_PLACEMENT',
+      afterRetry: { awbNumber: null, supersededAt: new Date() },
+    });
+    const summary = await svc.sweep(new Date('2026-09-02T12:00:00Z'));
+
+    expect(summary.awbless).toBe(0);
+    expect(raise).not.toHaveBeenCalled();
+    expect(resolveByKey).toHaveBeenCalled();
+  });
+
+  it('a courier that throws still leaves the order flagged, not skipped', async () => {
+    const { svc, raise } = makeService({});
+    (svc as unknown as { awbJob: { processOrder: jest.Mock } }).awbJob.processOrder = jest.fn(
+      async () => {
+        throw new Error('socket hang up');
+      },
+    );
+    const summary = await svc.sweep(new Date('2026-09-02T12:00:00Z'));
+
+    expect(summary.awbless).toBe(1);
+    expect(raise).toHaveBeenCalled();
+  });
+});
