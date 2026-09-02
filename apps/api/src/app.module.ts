@@ -104,9 +104,11 @@ import { envSchema } from './config/env.schema';
 import { DeliveryActionModule } from './modules/delivery-action/delivery-action.module';
 import { CourierServiceabilityModule } from './modules/courier-serviceability/courier-serviceability.module';
 import { CourierShiprocketModule } from './modules/courier-shiprocket/courier-shiprocket.module';
+import { ShipmentAddressModule } from './modules/shipment-address/shipment-address.module';
 
 @Module({
   imports: [
+    ShipmentAddressModule,
     CourierShiprocketModule,
     CourierServiceabilityModule,
     DeliveryActionModule,

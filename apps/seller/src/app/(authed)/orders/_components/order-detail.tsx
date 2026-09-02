@@ -39,6 +39,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { OrderTicketsPanel } from '../[id]/_components/order-tickets-panel';
+import { ConsigneePanel } from '../[id]/_components/consignee-panel';
 
 /**
  * Seller order detail. Two fetches: the order body (with items) and
@@ -243,6 +244,10 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             raised by hand.
           */}
           <OrderTicketsPanel orderId={orderId} />
+          {/* Correcting the consignee sits with the parcel, not in a
+              settings screen: it is only ever done while looking at a
+              specific delivery that is about to go wrong. */}
+          <ConsigneePanel orderId={orderId} />
 
           <Section title="Recipient">
             <Card>

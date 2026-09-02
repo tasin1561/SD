@@ -3027,3 +3027,72 @@ export function useResolveIssue(): UseMutationResult<
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-system-issues'] }),
   });
 }
+
+export interface ConsigneeEditability {
+  readonly editable: boolean;
+  readonly reason: string;
+  readonly currentName: string;
+  readonly currentPhone: string;
+  readonly currentAddressLine1: string;
+  readonly city: string;
+  readonly stateProvince: string;
+  readonly postalCode: string;
+}
+
+export interface ConsigneeChangeRow {
+  readonly id: string;
+  readonly actorType: string;
+  readonly nameBefore: string | null;
+  readonly nameAfter: string | null;
+  readonly phoneBefore: string | null;
+  readonly phoneAfter: string | null;
+  readonly addressBefore: string | null;
+  readonly addressAfter: string | null;
+  readonly courierAcceptedAt: string | null;
+  readonly courierMessage: string | null;
+  readonly verifiedAt: string | null;
+  readonly verifiedMatch: boolean | null;
+  readonly verificationNote: string | null;
+  readonly createdAt: string;
+}
+
+export function useConsignee(orderId: string): UseQueryResult<ConsigneeEditability> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin', 'consignee', orderId],
+    queryFn: () => client.request<ConsigneeEditability>(`/api/admin/orders/${orderId}/consignee`),
+  });
+}
+
+export function useConsigneeHistory(
+  orderId: string,
+): UseQueryResult<readonly ConsigneeChangeRow[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin', 'consignee-history', orderId],
+    queryFn: () =>
+      client.request<readonly ConsigneeChangeRow[]>(
+        `/api/admin/orders/${orderId}/consignee/history`,
+      ),
+  });
+}
+
+export function useChangeConsignee(): UseMutationResult<
+  { accepted: boolean; changeId: string; message: string | null },
+  Error,
+  { orderId: string; name?: string; phone?: string; addressLine1?: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, ...body }) =>
+      client.request<{ accepted: boolean; changeId: string; message: string | null }>(
+        `/api/admin/orders/${orderId}/consignee`,
+        { method: 'POST', body },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'consignee'] });
+      void qc.invalidateQueries({ queryKey: ['admin', 'consignee-history'] });
+    },
+  });
+}

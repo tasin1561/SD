@@ -26,6 +26,7 @@ import { OrderShipmentsSection } from './order-shipments-section';
 import { StuckOrderRecovery } from './stuck-order-recovery';
 import { useOrderJourney } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { ConsigneePanel } from './consignee-panel';
 
 /**
  * Order detail. Single-fetch (admin /orders/:id). Renders:
@@ -266,6 +267,9 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             <StuckOrderRecovery orderId={orderId} orderStatus={detail.data.status} />
 
             <OrderShipmentsSection orderId={orderId} orderStatus={detail.data.status} />
+            {/* Correcting the consignee sits with the parcel: it is only
+                ever done while looking at a delivery about to go wrong. */}
+            <ConsigneePanel orderId={orderId} />
           </Section>
 
           {/* The whole journey — the stage ladder, what the courier

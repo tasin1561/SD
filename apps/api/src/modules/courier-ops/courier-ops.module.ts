@@ -59,6 +59,12 @@ import { ShipmentCourierContextService } from './services/shipment-courier-conte
   // SAME routing an operator's click goes through — a batch that reached
   // couriers differently from a manual re-attempt would be two
   // behaviours wearing one name.
-  exports: [CourierShipmentActionService, CourierNdrDispatchService],
+  exports: [
+    CourierShipmentActionService,
+    CourierNdrDispatchService,
+    // The ops dispatcher itself: `shipment-address` corrects a consignee
+    // through it rather than reaching for an adapter (CUR-12).
+    CourierOpsDispatchService,
+  ],
 })
 export class CourierOpsModule {}

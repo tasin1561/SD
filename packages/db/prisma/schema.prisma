@@ -285,6 +285,7 @@ model Seller {
   sellerBankChangeRequests SellerBankChangeRequest[]
   consignments             Consignment[]
   sellerFavouriteVariants  SellerFavouriteVariant[]
+  shipmentAddressChanges   ShipmentAddressChange[]
 
   @@index([status])
   @@index([deletedAt])
@@ -1200,9 +1201,9 @@ model StockMovement {
   fromBin    WarehouseBin?    @relation("StockMovementFromBin", fields: [fromBinId], references: [id])
   toBin      WarehouseBin?    @relation("StockMovementToBin", fields: [toBinId], references: [id])
   adjustment StockAdjustment? @relation(fields: [adjustmentId], references: [id])
-  order      Order?           @relation(fields: [orderId], references: [id])
   orderItem  OrderItem?       @relation(fields: [orderItemId], references: [id])
   shipment   Shipment?        @relation(fields: [shipmentId], references: [id])
+  order      Order?           @relation(fields: [orderId], references: [id])
 
   @@id([id, createdAt])
   @@index([sellerId, variantId, createdAt])
@@ -2194,6 +2195,64 @@ model CourierIssueCategory {
 /// MESSAGE and this is an ATTEMPT: a single item can be shadowed a dozen
 /// times before it is ever executed, and collapsing the two would lose
 /// every shadow observation the moment the item was finally sent.
+/// Every change a seller or operator made to a live parcel's consignee
+/// details, and whether the courier actually took it.
+///
+/// APPEND-ONLY. No update or delete path exists here by construction,
+/// like `order_events` and `stock_movements` — the point of an audit
+/// trail is that it cannot be tidied afterwards.
+///
+/// ── WHY BEFORE *AND* AFTER ───────────────────────────────────────────
+/// "The phone number is now X" answers a different question from "it
+/// used to be Y". When a parcel goes to the wrong person, what matters
+/// is what it said at the moment the courier was told, and a row
+/// carrying only the new value cannot answer that.
+///
+/// ── WHY VERIFICATION IS A SEPARATE FACT ──────────────────────────────
+/// `courierAcceptedAt` means their API returned success. `verifiedAt`
+/// means we went and LOOKED. They are not the same thing and a system
+/// that conflates them tells a seller their customer's address is fixed
+/// on the strength of a 200.
+model ShipmentAddressChange {
+  id         String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  shipmentId String @map("shipment_id") @db.Uuid
+
+  /// Who asked. A seller may correct their own parcel; staff may too.
+  actorType        ActorType @map("actor_type")
+  sellerId         String?   @map("seller_id") @db.Uuid
+  requestedByStaff String?   @map("requested_by_staff_id") @db.Uuid
+
+  /// Null on either side means "this field was not part of the change".
+  /// Distinct from an empty string, which would be a value someone set.
+  nameBefore    String? @map("name_before")
+  nameAfter     String? @map("name_after")
+  phoneBefore   String? @map("phone_before")
+  phoneAfter    String? @map("phone_after")
+  addressBefore String? @map("address_before")
+  addressAfter  String? @map("address_after")
+
+  /// Their API said yes. NOT proof the record changed.
+  courierAcceptedAt DateTime? @map("courier_accepted_at") @db.Timestamptz
+  courierMessage    String?   @map("courier_message")
+
+  /// We went and looked, through the portal. `verifiedMatch` false means
+  /// they accepted it and their own screen still shows the old value —
+  /// the case worth knowing about and the reason this column exists.
+  verifiedAt       DateTime? @map("verified_at") @db.Timestamptz
+  verifiedMatch    Boolean?  @map("verified_match")
+  verificationNote String?   @map("verification_note")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  seller   Seller?  @relation(fields: [sellerId], references: [id])
+
+  @@index([shipmentId, createdAt])
+  /// The verification sweep's own query: taken but not yet looked at.
+  @@index([verifiedAt])
+  @@map("shipment_address_changes")
+}
+
 model CourierPortalRun {
   id           String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
   /// Null for a canary or a taxonomy fetch — those act on no item.
@@ -3234,6 +3293,7 @@ model Shipment {
 
   ndrActionRequests      NdrActionRequest[]
   deliveryActionRequests OrderDeliveryActionRequest[]
+  shipmentAddressChanges ShipmentAddressChange[]
 
   @@index([courierCode, status])
   @@index([status, createdAt])
@@ -4063,11 +4123,11 @@ model NotificationLog {
   updatedAt            DateTime                  @updatedAt @map("updated_at") @db.Timestamptz
 
   template    NotificationTemplate? @relation(fields: [templateId], references: [id])
-  order       Order?                @relation(fields: [orderId], references: [id])
   shipment    Shipment?             @relation(fields: [shipmentId], references: [id])
   callAttempt CallAttempt?          @relation(fields: [callAttemptId], references: [id])
   parent      NotificationLog?      @relation("NotificationLogParent", fields: [parentNotificationId], references: [id])
   retries     NotificationLog[]     @relation("NotificationLogParent")
+  order       Order?                @relation(fields: [orderId], references: [id])
 
   @@index([recipientType, recipientId])
   @@index([orderId])
@@ -6001,7 +6061,6 @@ model Ticket {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   seller             Seller             @relation(fields: [sellerId], references: [id])
-  order              Order?             @relation(fields: [orderId], references: [id])
   shipment           Shipment?          @relation(fields: [shipmentId], references: [id])
   shipmentItem       ShipmentItem?      @relation(fields: [shipmentItemId], references: [id])
   openedByStaff      StaffUser?         @relation("TicketOpenedByStaff", fields: [openedByStaffId], references: [id])
@@ -6009,6 +6068,7 @@ model Ticket {
   resolvedByStaff    StaffUser?         @relation("TicketResolvedByStaff", fields: [resolvedByStaffId], references: [id])
   events             TicketEvent[]
   courierEscalation  CourierEscalation?
+  order              Order?             @relation(fields: [orderId], references: [id])
 
   /// Auto-raise idempotency: at most ONE ticket of a given type per
   /// shipment item, so re-inspecting a line (the operator may correct

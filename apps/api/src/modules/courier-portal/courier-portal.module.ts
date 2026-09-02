@@ -13,6 +13,8 @@ import { WalletSyncService } from './services/wallet-sync.service';
 import { WalletSyncWorker } from './queue/wallet-sync.worker';
 import { WalletLedgerModule } from '../wallet-ledger/wallet-ledger.module';
 import { PortalTaxonomyService } from './services/portal-taxonomy.service';
+import { ConsigneeVerifyService } from './services/consignee-verify.service';
+import { ConsigneeVerifyWorker } from './queue/consignee-verify.worker';
 
 /**
  * Phase 5 — browser automation of one.delhivery.com.
@@ -58,6 +60,8 @@ import { PortalTaxonomyService } from './services/portal-taxonomy.service';
     WalletLedgerFetcherService,
     WalletSyncService,
     WalletSyncWorker,
+    ConsigneeVerifyService,
+    ConsigneeVerifyWorker,
   ],
   // The SESSION only. Logging into the portal is the expensive, fragile,
   // credential-bearing half, and there is no reason for a second module

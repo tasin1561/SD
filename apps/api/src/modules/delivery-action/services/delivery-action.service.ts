@@ -246,9 +246,7 @@ export class DeliveryActionService {
         // it is a plain seller issue.
         ticketType: isRecall ? TicketType.SELLER_RAISED_ISSUE : TicketType.COURIER_NDR_ESCALATION,
         sellerId: who.sellerId,
-        subject: isRecall
-          ? 'Seller asked us to call the customer'
-          : 'Seller asked for another delivery attempt',
+        subject: isRecall ? 'Request to call the customer' : 'Request another delivery attempt',
         description: reason,
         orderId: who.orderId,
         shipmentId: shipment.id,
