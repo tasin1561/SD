@@ -167,6 +167,7 @@ export function TicketsIndex(): ReactElement {
               <Th>Status</Th>
               <Th align="right">Refund</Th>
               <Th>Raised</Th>
+              <Th>{/* full view */}</Th>
             </Tr>
           </THead>
           <TBody>
@@ -201,6 +202,17 @@ export function TicketsIndex(): ReactElement {
                 </Td>
                 <Td className="text-text-muted whitespace-nowrap">
                   {new Date(t.createdAt).toLocaleDateString()}
+                </Td>
+                <Td>
+                  {/* The drawer is for triage; the page is where the
+                      courier conversation and the full history live. */}
+                  <Link
+                    href={`/tickets/${t.id}`}
+                    className="text-accent text-xs hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Open
+                  </Link>
                 </Td>
               </Tr>
             ))}

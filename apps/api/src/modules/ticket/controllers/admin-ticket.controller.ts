@@ -70,6 +70,15 @@ export class AdminTicketController {
     });
   }
 
+  @Get(':ticketId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'One ticket, in full. An operator sees every ticket.' })
+  detail(
+    @Param('ticketId', new ParseUUIDPipe({ version: '7' })) ticketId: string,
+  ): Promise<TicketView> {
+    return this.tickets.getById(ticketId);
+  }
+
   @Get(':ticketId/events')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Append-only status history for a ticket' })

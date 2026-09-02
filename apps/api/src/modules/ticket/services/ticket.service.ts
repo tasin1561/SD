@@ -456,6 +456,18 @@ export class TicketService {
   }
 
   /** Seller-scoped detail read — never leaks another seller's ticket. */
+  /** Unscoped read for staff — an operator sees every ticket. */
+  async getById(ticketId: string): Promise<TicketView> {
+    const row = await this.prisma.client.ticket.findUnique({ where: { id: ticketId } });
+    if (!row) {
+      throw new NotFoundException({
+        code: 'TICKET_NOT_FOUND',
+        message: `Ticket ${ticketId} not found`,
+      });
+    }
+    return this.toView(row);
+  }
+
   async getForSeller(sellerId: string, ticketId: string): Promise<TicketView> {
     const row = await this.prisma.client.ticket.findFirst({
       where: { id: ticketId, sellerId },

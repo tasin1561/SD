@@ -1910,6 +1910,7 @@ export function useAdminHoldReviews(query: {
 
 export interface OpsQueueItem {
   readonly id: string;
+  readonly escalationId: string;
   readonly kind: 'COMMENT' | 'RAISE_TICKET';
   readonly status: 'PENDING' | 'SENDING' | 'SENT_UNCONFIRMED' | 'CONFIRMED' | 'FAILED';
   readonly body: string;
@@ -2249,6 +2250,15 @@ export function useReplyToCourierAsStaff(): UseMutationResult<
  * from there. Reaching it only from the threads list meant a ticket
  * nobody had opened a thread on had no route to the courier at all.
  */
+/** One ticket, in full — for the detail page. */
+export function useAdminTicket(ticketId: string): UseQueryResult<TicketView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-tickets', 'detail', ticketId],
+    queryFn: () => client.request<TicketView>(`/api/admin/tickets/${ticketId}`),
+  });
+}
+
 export function useCourierThreadForTicket(
   ticketId: string | null,
 ): UseQueryResult<{ id: string; awbNumber: string | null } | null> {

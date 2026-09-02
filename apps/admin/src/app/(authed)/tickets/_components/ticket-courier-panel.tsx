@@ -5,6 +5,7 @@ import {
   Button,
   ErrorNote,
   FormField,
+  Input,
   SkeletonRows,
   Textarea,
   useToast,
@@ -12,7 +13,9 @@ import {
 import {
   useCourierThread,
   useCourierThreadForTicket,
+  useMarkOutboxSent,
   useOpenCourierEscalation,
+  useCourierOutbox,
   useRecordCourierReply,
   useReplyToCourierAsStaff,
 } from '@/lib/ops-hooks';
@@ -51,6 +54,16 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
 
   const [outbound, setOutbound] = useState('');
   const [inbound, setInbound] = useState('');
+  // Delhivery's own ticket number, captured when the message is marked
+  // sent. It is what binds their later replies to this escalation, so
+  // it is asked for at the one moment the operator is looking at it.
+  const [theirTicketId, setTheirTicketId] = useState('');
+
+  const queue = useCourierOutbox();
+  const markSent = useMarkOutboxSent();
+  const waiting = (queue.data ?? []).filter(
+    (i) => i.escalationId === escalationId && (i.status === 'PENDING' || i.status === 'SENDING'),
+  );
 
   // After every hook, never before: an early return above a useState
   // changes the hook order between renders.
@@ -160,6 +173,65 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
           })}
         </ul>
       )}
+
+      {/*
+        Everything written here is QUEUED, not sent — we have no API to
+        Delhivery for support, so a person sends it from their portal and
+        says so here. Until that happens the seller's question is sitting
+        in a list, and nothing else on the screen would say so.
+      */}
+      {waiting.length > 0 ? (
+        <div className="border-warning/40 bg-warning/5 space-y-2 rounded border p-2.5">
+          <p className="text-text-bright text-xs font-semibold">
+            {waiting.length === 1 ? 'One message' : `${waiting.length} messages`} waiting to be sent
+            to the courier
+          </p>
+          {waiting.map((i) => (
+            <div key={i.id} className="border-border rounded border p-2">
+              <p className="text-text-body text-sm whitespace-pre-wrap">{i.body}</p>
+              {canWrite ? (
+                <div className="mt-2 flex flex-wrap items-end gap-2">
+                  <FormField
+                    label="Their ticket number"
+                    htmlFor={`ext-${i.id}`}
+                    hint="Optional, but it is what binds their replies to this conversation."
+                  >
+                    <Input
+                      id={`ext-${i.id}`}
+                      value={theirTicketId}
+                      onChange={(e) => setTheirTicketId(e.target.value)}
+                      placeholder="e.g. 1234567"
+                    />
+                  </FormField>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={markSent.isPending}
+                    onClick={() => {
+                      void (async () => {
+                        try {
+                          await markSent.mutateAsync({
+                            itemId: i.id,
+                            ...(theirTicketId.trim() === ''
+                              ? {}
+                              : { externalTicketId: theirTicketId.trim() }),
+                          });
+                          setTheirTicketId('');
+                          toast.success('Marked as sent to the courier');
+                        } catch (err) {
+                          toast.error(serverVerdict(err));
+                        }
+                      })();
+                    }}
+                  >
+                    {markSent.isPending ? 'Saving…' : 'I have sent this'}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {canWrite ? (
         <>

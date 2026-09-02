@@ -5,6 +5,8 @@ import { CourierOutboxService } from './courier-outbox.service';
 
 export interface OpsQueueItem {
   readonly id: string;
+  /** Which conversation this belongs to — lets a ticket show its own. */
+  readonly escalationId: string;
   readonly kind: CourierOutboxKind;
   readonly status: CourierOutboxStatus;
   /** The exact text to paste. Never edited, never summarised. */
@@ -76,6 +78,7 @@ export class CourierOpsQueueService {
       take: Math.min(input.limit ?? 50, 200),
       select: {
         id: true,
+        escalationId: true,
         kind: true,
         status: true,
         body: true,
@@ -99,6 +102,7 @@ export class CourierOpsQueueService {
 
     return rows.map((r) => ({
       id: r.id,
+      escalationId: r.escalationId,
       kind: r.kind,
       status: r.status,
       body: r.body,
