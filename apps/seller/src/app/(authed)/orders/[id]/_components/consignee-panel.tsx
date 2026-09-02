@@ -13,6 +13,7 @@ import {
 } from '@skydrop/ui/components';
 import { useChangeConsignee, useConsignee, useConsigneeHistory } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { RaiseTicketModal } from '../../../tickets/_components/raise-ticket-modal';
 
 /**
  * Correcting who the parcel is going to, while the courier still allows
@@ -34,12 +35,19 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
   const history = useConsigneeHistory(orderId);
   const change = useChangeConsignee();
 
+  const [raising, setRaising] = useState(false);
   const [name, setName] = useState<string | null>(null);
   const [phone, setPhone] = useState<string | null>(null);
   const [address, setAddress] = useState<string | null>(null);
 
   if (info.isLoading) return <SkeletonRows rows={3} cols={1} />;
   if (info.isError) {
+    // An order with no parcel yet is not an error, it is Tuesday: the
+    // shipment is provisioned when the order is CONFIRMED, so every
+    // order before that point would otherwise show a red failure for
+    // being at a perfectly normal stage of its life.
+    const code = (info.error as { body?: { code?: string } } | undefined)?.body?.code;
+    if (code === 'NO_LIVE_PARCEL') return <div />;
     return <ErrorNote message={serverVerdict(info.error)} retry={() => void info.refetch()} />;
   }
   const d = info.data;
@@ -85,7 +93,36 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
       <CardBody>
         <div className="mb-3">
           <h2 className="text-sm font-medium">Who this is going to</h2>
-          <p className="text-text-muted mt-0.5 text-xs">{d.reason}</p>
+          {/*
+            When the courier has stopped accepting changes, the reason is
+            not a footnote — it is the whole answer, and it arrives at the
+            moment somebody has spotted a wrong number and is about to fix
+            it. So it is a warning with a way forward rather than grey
+            text under a heading: the details cannot be corrected through
+            the courier any more, but a person here can still ring them.
+          */}
+          {d.editable ? (
+            <p className="text-text-muted mt-0.5 text-xs">{d.reason}</p>
+          ) : (
+            <div className="border-warning/40 bg-warning/10 mt-2 rounded-lg border p-3">
+              <p className="text-text-bright text-sm font-medium">
+                These can no longer be changed through the courier
+              </p>
+              <p className="text-text-body mt-1 text-sm">{d.reason}</p>
+              <p className="text-text-muted mt-1 text-xs">
+                If something here is wrong, tell us and we will take it up with them directly —
+                sometimes they can still reach the driver.
+              </p>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="mt-2"
+                onClick={() => setRaising(true)}
+              >
+                Raise an issue
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -183,6 +220,9 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
           </div>
         ) : null}
       </CardBody>
+
+      {/* The order is already known, so it is not asked for again. */}
+      <RaiseTicketModal open={raising} onOpenChange={setRaising} orderId={orderId} />
     </Card>
   );
 }

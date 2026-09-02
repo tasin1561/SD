@@ -46,6 +46,12 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
 
   if (info.isLoading) return <SkeletonRows rows={3} cols={1} />;
   if (info.isError) {
+    // An order with no parcel yet is not an error, it is Tuesday: the
+    // shipment is provisioned when the order is CONFIRMED, so every
+    // order before that point would otherwise show a red failure for
+    // being at a perfectly normal stage of its life.
+    const code = (info.error as { body?: { code?: string } } | undefined)?.body?.code;
+    if (code === 'NO_LIVE_PARCEL') return <div />;
     return <ErrorNote message={serverVerdict(info.error)} retry={() => void info.refetch()} />;
   }
   const d = info.data;
@@ -91,7 +97,24 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
       <CardBody>
         <div className="mb-3">
           <h2 className="text-sm font-medium">Who this is going to</h2>
-          <p className="text-text-muted mt-0.5 text-xs">{d.reason}</p>
+          {/*
+            The same warning the seller gets, without their raise-an-issue
+            button: an operator's route to the courier is the escalation
+            on the ticket, which is somewhere else and already built.
+          */}
+          {d.editable ? (
+            <p className="text-text-muted mt-0.5 text-xs">{d.reason}</p>
+          ) : (
+            <div className="border-warning/40 bg-warning/10 mt-2 rounded-lg border p-3">
+              <p className="text-text-bright text-sm font-medium">
+                These can no longer be changed through the courier
+              </p>
+              <p className="text-text-body mt-1 text-sm">{d.reason}</p>
+              <p className="text-text-muted mt-1 text-xs">
+                To chase it anyway, open a courier conversation on a ticket for this order.
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
