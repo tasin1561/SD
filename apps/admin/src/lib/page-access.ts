@@ -75,6 +75,10 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   // an order-desk job; approving one dispatches a van and is gated
   // separately on the courier permission at the endpoint.
   ['/delivery-actions', 'orders.view'],
+  // The whole page is the manual-placement worklist and its only query
+  // needs that permission, so gating it here hides the nav entry too —
+  // rather than showing a link to a page that 403s on load.
+  ['/manual-placement', 'courier.manual_placement'],
   ['/remittances', 'money.view'],
   // A withdrawal destination is money, not seller admin — and the API
   // guards all three of its endpoints on this one permission.
