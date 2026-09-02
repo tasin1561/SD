@@ -62,6 +62,16 @@ export interface JourneyParcel {
   readonly shipmentNumber: string;
   readonly awbNumber: string | null;
   readonly courierCode: string;
+  /**
+   * WHICH of our accounts with that courier carried it (CACC-1).
+   *
+   * One courier can be several accounts, and every later question about
+   * this parcel — the label, the tracking match, the cancel, whose
+   * wallet the fee came out of — is answered from that account. When a
+   * parcel goes wrong, "which account was it on" is the first thing
+   * asked and it was nowhere on the page.
+   */
+  readonly courierAccountLabel: string | null;
   readonly status: ShipmentStatus;
   /** What the SELLER declared. */
   readonly declaredWeightGrams: number | null;
@@ -171,6 +181,7 @@ export class OrderJourneyService {
                 shipmentNumber: true,
                 awbNumber: true,
                 courierCode: true,
+                courierAccount: { select: { label: true } },
                 status: true,
                 declaredWeightGrams: true,
                 totalWeightGrams: true,
@@ -270,6 +281,7 @@ export class OrderJourneyService {
         shipmentNumber: s.shipmentNumber,
         awbNumber: s.awbNumber,
         courierCode: s.courierCode,
+        courierAccountLabel: s.courierAccount?.label ?? null,
         status: s.status,
         declaredWeightGrams: s.declaredWeightGrams ?? s.totalWeightGrams,
         chargeableWeightGrams: s.chargeableWeightGrams,

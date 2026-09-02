@@ -47,6 +47,12 @@ export interface JourneyParcelView {
   readonly shipmentNumber: string;
   readonly awbNumber: string | null;
   readonly courierCode: string;
+  /**
+   * WHICH of our accounts with that courier carried it (CACC-1). One
+   * courier can be several accounts, and every later question about
+   * this parcel is answered from that account.
+   */
+  readonly courierAccountLabel?: string | null;
   readonly status: string;
   readonly declaredWeightGrams: number | null;
   readonly chargeableWeightGrams: number | null;
@@ -277,7 +283,12 @@ export function ParcelFacts({
           was not already on the page. */}
       <div className="border-border mb-3 flex flex-wrap items-center gap-2 border-b pb-3">
         <span className="font-mono text-sm">{parcel.awbNumber ?? parcel.shipmentNumber}</span>
-        <span className="text-text-faint text-xs">{parcel.courierCode}</span>
+        <span className="text-text-faint text-xs">
+          {parcel.courierCode}
+          {parcel.courierAccountLabel == null || parcel.courierAccountLabel === ''
+            ? null
+            : ` · ${parcel.courierAccountLabel}`}
+        </span>
         {allParcelsHref !== undefined && (
           <a href={allParcelsHref} className="text-accent ml-auto text-xs hover:underline">
             All parcels →

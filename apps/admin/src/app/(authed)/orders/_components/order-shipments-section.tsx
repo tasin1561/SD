@@ -58,6 +58,12 @@ export function OrderShipmentsSection({
                   <div className="text-text-bright text-sm font-mono">{s.shipmentNumber}</div>
                   <div className="text-text-faint text-xs mt-0.5">
                     {s.status} · {courierLabel(s.courierCode, s.manualCourierName)}
+                    {/* Which of our accounts with that courier carried it.
+                        One courier is several accounts, and the label,
+                        the cancel and the cost are all addressed from
+                        this one — so "which account" is the first thing
+                        asked when a parcel goes wrong. */}
+                    {s.courierAccountLabel === null ? null : ` · ${s.courierAccountLabel}`}
                     {s.isManualCourier ? ' (placed by hand)' : ''} ·{' '}
                     {new Date(s.createdAt).toISOString().slice(0, 16).replace('T', ' ')}
                     {s.supersedesShipmentId && (

@@ -1072,6 +1072,8 @@ export class OrderService {
       status: string;
       awbNumber: string | null;
       courierCode: string;
+      /** WHICH of our accounts with that courier carried it (CACC-1). */
+      courierAccountLabel: string | null;
       isManualCourier: boolean;
       manualCourierName: string | null;
       createdAt: Date;
@@ -1098,6 +1100,7 @@ export class OrderService {
             status: true,
             awbNumber: true,
             courierCode: true,
+            courierAccount: { select: { label: true } },
             isManualCourier: true,
             manualCourierName: true,
             createdAt: true,
@@ -1109,6 +1112,10 @@ export class OrderService {
     return rows
       .map((r) => r.shipment)
       .filter((s): s is NonNullable<typeof s> => s !== null)
+      .map(({ courierAccount, ...s }) => ({
+        ...s,
+        courierAccountLabel: courierAccount?.label ?? null,
+      }))
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 

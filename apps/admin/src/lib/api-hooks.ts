@@ -1126,6 +1126,8 @@ export interface AdminShipmentRow {
   readonly status: string;
   readonly awbNumber: string | null;
   readonly courierCode: string;
+  /** WHICH of our accounts with that courier carried it (CACC-1). */
+  readonly courierAccountLabel: string | null;
   readonly isManualCourier: boolean;
   /** WHO carried it when `courierCode` is 'manual'. Render via `courierLabel`. */
   readonly manualCourierName: string | null;
