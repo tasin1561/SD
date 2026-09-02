@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-wallet-accrual.module';
 import { OrderModule } from '../order/order.module';
 import { InventoryStockModule } from '../inventory-stock/inventory-stock.module';
+import { ManualPlacementQueueService } from './services/manual-placement-queue.service';
 import { ManualPlacementService } from './services/manual-placement.service';
 import { ManualPlacementController } from './controllers/manual-placement.controller';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
@@ -31,7 +32,7 @@ import { InventorySharedModule } from '../inventory-shared/inventory-shared.modu
     SellerWalletAccrualModule,
   ],
   controllers: [ManualPlacementController],
-  providers: [ManualPlacementService, StaffJwtGuard],
+  providers: [ManualPlacementService, ManualPlacementQueueService, StaffJwtGuard],
   exports: [ManualPlacementService],
 })
 export class CourierManualPlacementModule {}

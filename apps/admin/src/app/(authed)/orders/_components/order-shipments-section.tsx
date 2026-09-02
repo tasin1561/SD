@@ -105,10 +105,20 @@ export function OrderShipmentsSection({
                   wasReturned={String(orderStatus).startsWith('RTO')}
                 />
 
-                {/* Only for an order actually stuck at manual placement.
+                {/* Only for an order actually stuck at manual placement,
+                    and only on the LIVE shipment.
                     Rendering it always would offer a dispatch button on
-                    parcels a courier already has. */}
-                {orderStatus === 'PENDING_MANUAL_PLACEMENT' && (
+                    parcels a courier already has.
+
+                    The retired half matters too: a refusal RETIRES the
+                    old shipment and creates a replacement (CUR-7), so an
+                    order here usually has two — and this card lists both.
+                    Without the status test an operator sees two identical
+                    forms, one of which is refused by the server with
+                    SHIPMENT_NOT_MANUAL_ELIGIBLE. Nothing breaks, but
+                    finding that out by typing a waybill into the wrong
+                    one is a poor way to learn which is which. */}
+                {orderStatus === 'PENDING_MANUAL_PLACEMENT' && s.status === 'CREATED' && (
                   <ManualPlacementPanel
                     shipmentId={s.id}
                     shipmentNumber={s.shipmentNumber}

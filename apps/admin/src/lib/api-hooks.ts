@@ -845,6 +845,32 @@ export function useConfirmHandoff(): UseMutationResult<
 }
 
 // Manual placement
+export interface ManualPlacementQueueRow {
+  orderId: string;
+  orderNumber: string;
+  sellerId: string;
+  sellerCompanyName: string | null;
+  shipmentId: string;
+  shipmentNumber: string;
+  destCity: string;
+  destPostalCode: string;
+  codAmountInr: string | null;
+  waitingHours: number;
+  arrivedAt: string;
+  reason: string | null;
+  reasonCode: string | null;
+  needsPicking: boolean;
+}
+
+export function useManualPlacementQueue(): UseQueryResult<ManualPlacementQueueRow[], Error> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-manual-placement-queue'],
+    queryFn: () =>
+      client.request<ManualPlacementQueueRow[]>('/api/admin/courier/manual-placement/queue'),
+  });
+}
+
 export function usePlaceManualAwb(): UseMutationResult<
   PlaceManualAwbResult,
   Error,
@@ -864,6 +890,10 @@ export function usePlaceManualAwb(): UseMutationResult<
       // action having failed, and invites a second attempt.
       void queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
       void queryClient.invalidateQueries({ queryKey: ['admin-inventory'] });
+      // The whole point of the worklist is that a placed order leaves
+      // it. Without this the row stays until a refetch and reads as the
+      // AWB not having been recorded.
+      void queryClient.invalidateQueries({ queryKey: ['admin-manual-placement-queue'] });
     },
   });
 }
@@ -884,6 +914,7 @@ export function useCancelManualPlacement(): UseMutationResult<
       // Cancelling releases the reservation, so availability moved too.
       void queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
       void queryClient.invalidateQueries({ queryKey: ['admin-inventory'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-manual-placement-queue'] });
     },
   });
 }

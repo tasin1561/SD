@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
@@ -24,6 +25,10 @@ import {
   type ManualPlacementResult,
 } from '../services/manual-placement.service';
 import { CancelUnfulfillableDto, PlaceManualAwbDto } from '../dto/manual-placement.dto';
+import {
+  ManualPlacementQueueService,
+  type ManualPlacementQueueRow,
+} from '../services/manual-placement-queue.service';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
 /**
@@ -41,7 +46,19 @@ import { RequirePermissions } from '../../../common/auth/require-permissions.dec
 @RequirePermissions('courier.manual_placement')
 @Controller('admin/courier/manual-placement')
 export class ManualPlacementController {
-  constructor(private readonly svc: ManualPlacementService) {}
+  constructor(
+    private readonly svc: ManualPlacementService,
+    private readonly queue: ManualPlacementQueueService,
+  ) {}
+
+  @Get('queue')
+  @ApiOperation({
+    summary:
+      'Every order waiting on a manually-arranged courier, oldest first, with why it is here and whether it still needs picking. Derived from live rows — an order leaves the list the moment its AWB is recorded',
+  })
+  listQueue(): Promise<ManualPlacementQueueRow[]> {
+    return this.queue.list();
+  }
 
   @Post('shipments/:shipmentId/place-awb')
   @HttpCode(HttpStatus.OK)

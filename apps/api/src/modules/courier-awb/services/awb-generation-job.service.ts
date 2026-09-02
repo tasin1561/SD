@@ -221,6 +221,28 @@ export class AwbGenerationJobService {
           result: 'SUPERSEDED',
           newShipmentId: sup.newShipmentId,
         });
+        // The courier's own words, against the ORDER, so the manual
+        // placement worklist can show why this one is waiting. The
+        // confirmation-time path already wrote this; without it here,
+        // half the queue would explain itself and half would not — and
+        // an operator cannot tell an unserved pincode from a refused
+        // consignee by looking at an order number.
+        if (orderId !== null) {
+          await this.audit.log({
+            actorType: ActorType.SYSTEM,
+            actorId: null,
+            action: 'order.awb_at_confirmation_non_serviceable',
+            entityType: 'order',
+            entityId: orderId,
+            severity: 'HIGH',
+            metadata: {
+              shipmentId: shipment.id,
+              newShipmentId: sup.newShipmentId,
+              error: gen.errorMessage,
+              at: 'manifest_close',
+            },
+          });
+        }
       } catch (err) {
         // Per-shipment isolation: an unexpected exception NEVER aborts
         // the rest of the manifest.
