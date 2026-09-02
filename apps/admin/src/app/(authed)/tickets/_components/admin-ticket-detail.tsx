@@ -23,6 +23,7 @@ import { useAdminTicket, useTicketEvents, useTransitionTicket } from '@/lib/ops-
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { TicketCourierPanel } from './ticket-courier-panel';
+import { AdminTicketConversation } from './admin-ticket-conversation';
 
 const MOVE_TO: ReadonlyArray<{ value: TicketStatus; label: string }> = [
   { value: TicketStatus.NEGOTIATING, label: 'Under discussion' },
@@ -113,6 +114,15 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
               {t.description}
             </p>
           )}
+        </CardBody>
+      </Card>
+
+      {/* The conversation FIRST — it is what the ticket is. The courier
+          exchange and the status machinery are how we act on it. */}
+      <h2 className="text-text-bright mt-5 mb-2 text-sm font-medium">Conversation</h2>
+      <Card>
+        <CardBody>
+          <AdminTicketConversation ticket={t} />
         </CardBody>
       </Card>
 

@@ -178,6 +178,24 @@ export function useIssueCategories(): UseQueryResult<readonly IssueCategory[]> {
   });
 }
 
+/** Reply on your own ticket, while it is still open. */
+export function useReplyOnTicket(): UseMutationResult<
+  { ticketId: string; at: string },
+  Error,
+  { ticketId: string; note: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ticketId, note }) =>
+      client.request<{ ticketId: string; at: string }>(`/api/seller/tickets/${ticketId}/notes`, {
+        method: 'POST',
+        body: { note },
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-tickets'] }),
+  });
+}
+
 export interface TicketTimelineEntry {
   readonly note: string | null;
   readonly toStatus: string;

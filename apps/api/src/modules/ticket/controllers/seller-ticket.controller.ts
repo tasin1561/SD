@@ -20,6 +20,7 @@ import type { AuthenticatedSeller } from '../../../common/types/request';
 import { CreateSellerTicketDto } from '../dto/ticket.dto';
 import { TicketService, type TicketView } from '../services/ticket.service';
 import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
+import { AddTicketNoteDto } from '../dto/add-ticket-note.dto';
 
 /**
  * R7 — seller-facing parcel-issue tickets. Raising one is an OPS-domain
@@ -55,6 +56,28 @@ export class SellerTicketController {
         issueSubcategoryExternalId: body.issueSubcategoryExternalId ?? null,
       },
       { type: ActorType.SELLER, sellerUserId: seller.userId },
+    );
+  }
+
+  @Post(':ticketId/notes')
+  @RequireSellerPermissions('tickets.create')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary:
+      'Reply on your own ticket while it is still open. Refused once it is closed — a reply there reaches nobody.',
+  })
+  reply(
+    @CurrentSeller() seller: AuthenticatedSeller,
+    @Param('ticketId', new ParseUUIDPipe({ version: '7' })) ticketId: string,
+    @Body() body: AddTicketNoteDto,
+  ): ReturnType<TicketService['addNote']> {
+    return this.tickets.addNote(
+      ticketId,
+      body.note,
+      { type: ActorType.SELLER, sellerUserId: seller.userId },
+      // Scoped AND open-only: another company's ticket is a 404, and a
+      // closed one is refused rather than silently accepted.
+      { sellerId: seller.id, openOnly: true },
     );
   }
 

@@ -2250,6 +2250,24 @@ export function useReplyToCourierAsStaff(): UseMutationResult<
  * from there. Reaching it only from the threads list meant a ticket
  * nobody had opened a thread on had no route to the courier at all.
  */
+/** Reply to the seller on a ticket. They read it on their own page. */
+export function useReplyToSellerOnTicket(): UseMutationResult<
+  { ticketId: string; at: string },
+  Error,
+  { ticketId: string; note: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ticketId, note }) =>
+      client.request<{ ticketId: string; at: string }>(`/api/admin/tickets/${ticketId}/notes`, {
+        method: 'POST',
+        body: { note },
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-tickets'] }),
+  });
+}
+
 /** One ticket, in full — for the detail page. */
 export function useAdminTicket(ticketId: string): UseQueryResult<TicketView> {
   const client = useApiClient();

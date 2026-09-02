@@ -151,6 +151,16 @@ export class TicketService {
     ticketId: string,
     note: string,
     actor: TicketActor,
+    /**
+     * Scope + guard for the SELLER path.
+     *
+     * `sellerId` makes another company's ticket indistinguishable from
+     * one that does not exist. `openOnly` refuses a closed one: a reply
+     * onto a resolved ticket is a message nobody is coming back to
+     * read, and letting it land silently is worse than saying no —
+     * the seller thinks they have asked, and nobody has been asked.
+     */
+    scope?: { sellerId?: string; openOnly?: boolean },
   ): Promise<{ ticketId: string; at: Date }> {
     const trimmed = note.trim();
     if (trimmed.length < 3) {
@@ -159,12 +169,22 @@ export class TicketService {
         message: 'Write something the seller can act on.',
       });
     }
-    const ticket = await this.prisma.client.ticket.findUnique({
-      where: { id: ticketId },
-      select: { id: true, status: true },
+    const ticket = await this.prisma.client.ticket.findFirst({
+      where: {
+        id: ticketId,
+        ...(scope?.sellerId === undefined ? {} : { sellerId: scope.sellerId }),
+      },
+      select: { id: true, status: true, resolvedAt: true },
     });
     if (ticket === null) {
       throw new NotFoundException({ code: 'TICKET_NOT_FOUND', message: 'No such ticket' });
+    }
+    if (scope?.openOnly === true && ticket.resolvedAt !== null) {
+      throw new ConflictException({
+        code: 'TICKET_CLOSED',
+        message:
+          'This one is closed, so a reply here would not reach anybody. Raise a new issue and we will pick it up.',
+      });
     }
     const row = await this.prisma.client.ticketEvent.create({
       data: {

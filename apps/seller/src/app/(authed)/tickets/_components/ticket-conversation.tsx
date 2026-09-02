@@ -1,8 +1,15 @@
 'use client';
 
 import type { ReactElement } from 'react';
-import { SkeletonRows } from '@skydrop/ui/components';
-import { useCourierThreadForTicket, useTicketTimeline, type TicketView } from '@/lib/ops-hooks';
+import { useState } from 'react';
+import { Button, SkeletonRows, Textarea, useToast } from '@skydrop/ui/components';
+import { serverVerdict } from '@/lib/server-verdict';
+import {
+  useCourierThreadForTicket,
+  useReplyOnTicket,
+  useTicketTimeline,
+  type TicketView,
+} from '@/lib/ops-hooks';
 
 type Side = 'SELLER' | 'US' | 'COURIER';
 
@@ -35,6 +42,26 @@ interface Bubble {
 export function TicketConversation({ ticket }: { readonly ticket: TicketView }): ReactElement {
   const timeline = useTicketTimeline(ticket.id);
   const courier = useCourierThreadForTicket(ticket.id);
+  const reply = useReplyOnTicket();
+  const toast = useToast();
+  const [draft, setDraft] = useState('');
+  // A reply onto a closed ticket reaches nobody. The server refuses it
+  // either way (FE-2); not offering the box is so the seller does not
+  // write a paragraph to find that out.
+  const isOpen = ticket.resolvedAt === null;
+
+  const send = (): void => {
+    const note = draft.trim();
+    if (note === '') return;
+    void (async () => {
+      try {
+        await reply.mutateAsync({ ticketId: ticket.id, note });
+        setDraft('');
+      } catch (err) {
+        toast.error(serverVerdict(err));
+      }
+    })();
+  };
 
   const bubbles: Bubble[] = [];
 
@@ -52,10 +79,13 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
   for (const [i, e] of (timeline.data ?? []).entries()) {
     // "Ticket opened" repeats the message above it; a note is a message.
     if (e.note === null || e.note.trim() === '' || e.note === 'Ticket opened') continue;
+    // WHO wrote it decides which side it sits on. A seller's own reply
+    // rendered as ours would read as us answering ourselves.
+    const mine = e.actorType === 'SELLER';
     bubbles.push({
       key: `note-${i}`,
-      side: 'US',
-      who: 'Skydrop',
+      side: mine ? 'SELLER' : 'US',
+      who: mine ? 'You' : 'Skydrop',
       body: e.note,
       at: e.at,
     });
@@ -106,36 +136,65 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
   }
 
   return (
-    <ol className="space-y-3">
-      {bubbles.map((b) => {
-        const mine = b.side === 'SELLER';
-        return (
-          <li key={b.key} className={mine ? 'flex justify-end' : 'flex justify-start'}>
-            <div className="max-w-[85%]">
-              <p className={`text-text-muted mb-1 text-xs ${mine ? 'text-right' : 'text-left'}`}>
-                {b.who} ·{' '}
-                {new Date(b.at).toLocaleString('en-IN', {
-                  day: 'numeric',
-                  month: 'short',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </p>
-              <div
-                className={
-                  mine
-                    ? 'bg-accent/10 border-accent/30 rounded-lg rounded-tr-sm border px-3 py-2 text-sm whitespace-pre-wrap'
-                    : b.side === 'COURIER'
-                      ? 'bg-warning/10 border-warning/30 rounded-lg rounded-tl-sm border px-3 py-2 text-sm whitespace-pre-wrap'
-                      : 'bg-surface-raised border-border rounded-lg rounded-tl-sm border px-3 py-2 text-sm whitespace-pre-wrap'
-                }
-              >
-                {b.body}
+    <>
+      <ol className="space-y-3">
+        {bubbles.map((b) => {
+          const mine = b.side === 'SELLER';
+          return (
+            <li key={b.key} className={mine ? 'flex justify-end' : 'flex justify-start'}>
+              <div className="max-w-[85%]">
+                <p className={`text-text-muted mb-1 text-xs ${mine ? 'text-right' : 'text-left'}`}>
+                  {b.who} ·{' '}
+                  {new Date(b.at).toLocaleString('en-IN', {
+                    day: 'numeric',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </p>
+                <div
+                  className={
+                    mine
+                      ? 'bg-accent/10 border-accent/30 rounded-lg rounded-tr-sm border px-3 py-2 text-sm whitespace-pre-wrap'
+                      : b.side === 'COURIER'
+                        ? 'bg-warning/10 border-warning/30 rounded-lg rounded-tl-sm border px-3 py-2 text-sm whitespace-pre-wrap'
+                        : 'bg-surface-raised border-border rounded-lg rounded-tl-sm border px-3 py-2 text-sm whitespace-pre-wrap'
+                  }
+                >
+                  {b.body}
+                </div>
               </div>
-            </div>
-          </li>
-        );
-      })}
-    </ol>
+            </li>
+          );
+        })}
+      </ol>
+
+      {isOpen ? (
+        <div className="border-border mt-4 border-t pt-3">
+          <Textarea
+            rows={2}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Add anything that helps — we reply here."
+            aria-label="Reply on this ticket"
+          />
+          <div className="mt-2 flex justify-end">
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={draft.trim() === '' || reply.isPending}
+              onClick={send}
+            >
+              {reply.isPending ? 'Sending…' : 'Send'}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-text-muted border-border mt-4 border-t pt-3 text-xs">
+          This ticket is closed. If something is still wrong, raise a new issue and we will pick it
+          up.
+        </p>
+      )}
+    </>
   );
 }
