@@ -139,6 +139,7 @@ export class AwbGenerationService {
         courierShipmentId: true,
         courierAccountId: true,
         courierCode: true,
+        isManualCourier: true,
         status: true,
         orderShipments: {
           select: {
@@ -196,6 +197,24 @@ export class AwbGenerationService {
 
     // Phase A — CUR-9 gates.
     if (shipment.awbNumber !== null) {
+      // A MANUALLY placed parcel is complete at its AWB and has no label
+      // leg at all: the waybill is a number an operator read off a paper
+      // docket from whoever they handed the parcel to, and there is no
+      // API behind `courierCode = 'manual'` to fetch a PDF from.
+      //
+      // This has to be checked BEFORE the label test, because a manual
+      // shipment has an AWB and NO awb_labels row — exactly the shape of
+      // the recovery path below. Without it, a manually-placed parcel
+      // that flows through pick and pack reaches manifest close, tries
+      // to fetch a label from a courier that has no adapter, comes back
+      // NO_ADAPTER, and is re-queued by BullMQ to try again forever.
+      if (shipment.isManualCourier) {
+        return {
+          status: 'ALREADY_HAS_AWB',
+          shipmentId,
+          awbNumber: shipment.awbNumber,
+        };
+      }
       if (shipment.awbLabels.length > 0) {
         return {
           status: 'ALREADY_HAS_AWB',

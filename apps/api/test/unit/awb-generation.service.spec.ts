@@ -804,3 +804,40 @@ describe('AwbGenerationService — a manual courier is a destination, not a refu
     expect(res.status).toBe('GENERATED');
   });
 });
+
+// ---------------------------------------------------------------------
+// A manually-placed parcel has no label leg.
+//
+// This became reachable when recording a manual AWB on an unpicked order
+// started routing it to PENDING_PICK instead of refusing (CUR-8, amended
+// 2026-09-02): the parcel now flows through pick and pack, gets attached
+// to a DRAFT manifest, and reaches manifest close — which runs the AWB
+// job over every CREATED shipment on it.
+// ---------------------------------------------------------------------
+describe('AwbGenerationService — a manual courier has nothing to fetch', () => {
+  it('treats a manual AWB with no label row as complete, not as label recovery', async () => {
+    // The trap: a manual shipment has an AWB and NO awb_labels row,
+    // which is byte-identical to the "the label leg failed, resume it"
+    // shape. Taking that path asks a courier called `manual` — which has
+    // no adapter — for a PDF, gets NO_ADAPTER back, and is re-queued by
+    // BullMQ to ask again forever.
+    //
+    // There is nothing to fetch: the waybill is a number an operator
+    // read off a paper docket from whoever took the parcel.
+    const { svc, fetchLabel, generate } = makeService({
+      shipment: shipmentRow({
+        awbNumber: 'BD-4471',
+        isManualCourier: true,
+        courierCode: 'manual',
+        courierShipmentId: null,
+        awbLabels: [],
+      }),
+    });
+
+    const out = await svc.generateForShipment('ship-1', { type: ActorType.SYSTEM });
+
+    expect(out).toMatchObject({ status: 'ALREADY_HAS_AWB', awbNumber: 'BD-4471' });
+    expect(fetchLabel).not.toHaveBeenCalled();
+    expect(generate).not.toHaveBeenCalled();
+  });
+});
