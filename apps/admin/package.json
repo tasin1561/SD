@@ -19,6 +19,7 @@
     "@skydrop/db": "workspace:*",
     "@skydrop/ui": "workspace:*",
     "@tanstack/react-query": "^5.62.0",
+    "@zxing/browser": "^0.2.1",
     "clsx": "^2.1.0",
     "lucide-react": "^0.469.0",
     "next": "^15.5.22",

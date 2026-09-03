@@ -80,6 +80,7 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   // rather than showing a link to a page that 403s on load.
   ['/manual-placement', 'courier.manual_placement'],
   ['/warehouse/printing', 'warehouse.pick'],
+  ['/warehouse/handover', 'courier.dispatch.handoff'],
   ['/remittances', 'money.view'],
   // A withdrawal destination is money, not seller admin — and the API
   // guards all three of its endpoints on this one permission.

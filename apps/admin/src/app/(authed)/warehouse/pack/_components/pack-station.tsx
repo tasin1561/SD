@@ -1,7 +1,16 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactElement } from 'react';
-import { Button, Card, CardBody, EmptyState, Input, useToast } from '@skydrop/ui/components';
+import {
+  Button,
+  Card,
+  CardBody,
+  EmptyState,
+  Input,
+  Modal,
+  ModalFooter,
+  useToast,
+} from '@skydrop/ui/components';
 import { Check } from 'lucide-react';
 import { ApiError } from '@skydrop/api-client';
 import {
@@ -14,6 +23,7 @@ import {
   type PackBoxLine,
 } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { BarcodeCamera, CameraScanButton } from '@/components/barcode-camera';
 import { SerialScanner } from '@/components/ui/serial-scanner';
 
 /**
@@ -68,6 +78,8 @@ export function PackStation(): ReactElement {
   const [lines, setLines] = useState<ScannedLine[]>([]);
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const [camera, setCamera] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState('');
   // Every code the server came back and said was a serialized unit —
@@ -158,9 +170,13 @@ export function PackStation(): ReactElement {
         setUnitSerials((prev) => (prev.includes(value) ? prev : [...prev, value]));
       }
     } catch (err) {
-      // Verbatim. "That unit was picked for a different parcel" is the
-      // entire value of the gate; softening it would throw that away.
-      setError(serverVerdict(err));
+      // Verbatim, and BLOCKING. "That unit was picked for a different
+      // parcel" is the entire value of the gate; softening it would
+      // throw that away, and so would letting the packer scan straight
+      // past it. The modal takes the field's focus and does not give it
+      // back until they have said they have fixed it — a refusal that
+      // scrolls away is a refusal nobody read.
+      setRefusal(serverVerdict(err));
     }
   }
 
@@ -233,7 +249,10 @@ export function PackStation(): ReactElement {
               id="pack-scan"
               ref={inputRef}
               value={code}
-              disabled={busy}
+              // Disabled while a refusal is up: a scan gun types and
+              // presses Enter on its own, so an un-blocked field would
+              // let the next scan land before anybody read the warning.
+              disabled={busy || refusal !== null}
               autoComplete="off"
               placeholder={box === null ? 'Shipping label…' : 'Product barcode or serial…'}
               onChange={(e) => setCode(e.target.value)}
@@ -386,6 +405,49 @@ export function PackStation(): ReactElement {
           </Card>
         </>
       )}
+      <CameraScanButton onClick={() => setCamera(true)} />
+      <BarcodeCamera
+        open={camera}
+        onClose={() => setCamera(false)}
+        onScan={(scanned) => {
+          setCamera(false);
+          setCode(scanned);
+          void onScan(scanned);
+        }}
+        title={box === null ? 'Scan the shipping label' : 'Scan a product'}
+      />
+
+      {/* A refusal STOPS the bench. The packer says they have fixed it
+          before anything else can be scanned — which is the difference
+          between a warning and a gate. */}
+      <Modal
+        open={refusal !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setRefusal(null);
+            setCode('');
+            inputRef.current?.focus();
+          }
+        }}
+        title="That scan was refused"
+        tone="critical"
+      >
+        <p className="text-sm">{refusal}</p>
+        <p className="text-text-muted mt-2 text-xs">
+          Nothing was added to the box. Put that item aside, find the right one, and carry on.
+        </p>
+        <ModalFooter>
+          <Button
+            onClick={() => {
+              setRefusal(null);
+              setCode('');
+              inputRef.current?.focus();
+            }}
+          >
+            I have fixed it
+          </Button>
+        </ModalFooter>
+      </Modal>
     </div>
   );
 }

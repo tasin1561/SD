@@ -67,6 +67,72 @@ export class DispatchHandoffService {
     private readonly units: StockUnitService,
   ) {}
 
+  /** One reader for the switch, failing CLOSED-ish: an unreadable
+   *  setting resolves to OFF, because a warehouse that cannot hand over
+   *  parcels because a settings row would not load is a worse outage
+   *  than a missed scan. The same fail-open reasoning as INV mode. */
+  private async handoverScanRequired(): Promise<boolean> {
+    try {
+      const row = await this.prisma.client.systemSetting.findUnique({
+        where: { key: 'ops.handover_scan_required' },
+        select: { valueBoolean: true },
+      });
+      return row?.valueBoolean === true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Record that a parcel was scanned at the handover bench.
+   *
+   * Keyed on the AWB because that is what is printed on the label in
+   * somebody's hand — not an id they would have to look up.
+   *
+   * Idempotent by guard: scanning the same parcel twice keeps the FIRST
+   * time rather than moving it, so the record says when it was checked
+   * rather than when somebody last waved it at a reader.
+   */
+  async recordHandoverScan(
+    awbNumber: string,
+    staffId: string,
+  ): Promise<{ shipmentNumber: string; alreadyScanned: boolean }> {
+    const awb = awbNumber.trim();
+    const shipment = await this.prisma.client.shipment.findFirst({
+      where: { awbNumber: awb, supersededAt: null, deletedAt: null },
+      select: { id: true, shipmentNumber: true, handoverScannedAt: true, status: true },
+    });
+    if (shipment === null) {
+      throw new NotFoundException({
+        code: 'AWB_NOT_FOUND',
+        message: `No live parcel carries AWB ${awb}`,
+      });
+    }
+    if (shipment.status === ShipmentStatus.HANDED_TO_COURIER) {
+      throw new ConflictException({
+        code: 'ALREADY_HANDED_OVER',
+        message: `${shipment.shipmentNumber} has already gone with a driver`,
+      });
+    }
+
+    const claimed = await this.prisma.client.shipment.updateMany({
+      where: { id: shipment.id, handoverScannedAt: null },
+      data: { handoverScannedAt: new Date(), handoverScannedByStaffId: staffId },
+    });
+
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      actorId: staffId,
+      action: 'shipment.handover_scanned',
+      entityType: 'shipment',
+      entityId: shipment.id,
+      severity: 'LOW',
+      metadata: { awbNumber: awb, alreadyScanned: claimed.count === 0 },
+    });
+
+    return { shipmentNumber: shipment.shipmentNumber, alreadyScanned: claimed.count === 0 };
+  }
+
   async confirmHandoff(
     manifestId: string,
     /**
@@ -98,6 +164,8 @@ export class DispatchHandoffService {
           where: { awbNumber: { not: null }, supersededAt: null, deletedAt: null },
           select: {
             id: true,
+            shipmentNumber: true,
+            handoverScannedAt: true,
             orderShipments: {
               // The seller comes through the ORDER — a shipment has no
               // seller of its own.
@@ -114,6 +182,34 @@ export class DispatchHandoffService {
         code: 'MANIFEST_NOT_FOUND',
         message: `Manifest ${manifestId} not found`,
       });
+    }
+
+    /**
+     * THE HANDOVER SCAN GATE (`ops.handover_scan_required`).
+     *
+     * Enforced HERE, in the service, rather than by hiding a button.
+     * The whole point of the setting is that when it is on, nothing
+     * reaches a driver unscanned — and a check that lives in the UI is
+     * one `curl` away from not existing. A screen can only ever be a
+     * convenience on top of this.
+     *
+     * The refusal NAMES the parcels, because "some of these were not
+     * scanned" sends somebody to check all forty.
+     *
+     * Off by default: it adds a step to every handover, and a step
+     * nobody chose is a step that gets worked around.
+     */
+    const scanRequired = await this.handoverScanRequired();
+    if (scanRequired) {
+      const unscanned = manifest.shipments.filter((sh) => sh.handoverScannedAt === null);
+      if (unscanned.length > 0) {
+        throw new ConflictException({
+          code: 'HANDOVER_SCAN_REQUIRED',
+          message:
+            `Scan these at the handover bench before the driver takes them: ` +
+            `${unscanned.map((sh) => sh.shipmentNumber).join(', ')}`,
+        });
+      }
     }
     const dispatchedShipmentIds = manifest.shipments.map((s) => s.id);
 

@@ -485,6 +485,15 @@ const systemSettings: SystemSettingSeed[] = [
       'A seller asks for a parcel back and the courier accepts, then no return scan ever arrives. After this many hours the order is raised on the system issues board, because the seller believes their goods are on the way back and nothing else in the system notices they are not.',
   },
   {
+    key: 'ops.handover_scan_required',
+    category: 'ops',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'Scan every parcel before handing it to the courier',
+    description:
+      'When ON, a parcel must be scanned at the handover bench before it can be given to the driver, and the handoff REFUSES any parcel that was not — from the API as well as the screen, so it cannot be worked around. When OFF, parcels are handed over without the extra scan. Off by default because it adds a step; turn it on when a lost parcel has cost more than the step does.',
+  },
+  {
     key: 'ops.awb_stall_alert_hours',
     category: 'ops',
     valueType: SettingValueType.INT,

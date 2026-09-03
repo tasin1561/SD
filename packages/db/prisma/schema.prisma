@@ -87,6 +87,7 @@ model StaffUser {
   manifestsClosed            Manifest[]                    @relation("ManifestClosedBy")
   manifestsHandoffConfirmed  Manifest[]                    @relation("ManifestHandoffConfirmedBy")
   shipmentLabelsPrinted      Shipment[]                    @relation("ShipmentLabelPrintedBy")
+  shipmentsHandoverScanned   Shipment[]                    @relation("ShipmentHandoverScannedBy")
   pickBatchesPrinted         PickBatch[]                   @relation("PickBatchPrintedBy")
   pickBatchesCreated         PickBatch[]                   @relation("PickBatchCreatedBy")
   remittancesCreated         Remittance[]                  @relation("RemittanceStaff")
@@ -3119,66 +3120,66 @@ model Shipment {
   /// Why the booking failed, when it did. Read by a human, not by code.
   reverseAwbError          String?   @map("reverse_awb_error")
 
-  courierShipmentId      String?          @map("courier_shipment_id")
-  serviceType            String?          @map("service_type")
-  originWarehouseId      String           @map("origin_warehouse_id") @db.Uuid
-  destRecipientName      String           @map("dest_recipient_name")
-  destRecipientPhoneE164 String           @map("dest_recipient_phone_e164")
-  destAddressLine1       String           @map("dest_address_line1")
-  destAddressLine2       String?          @map("dest_address_line2")
-  destLandmark           String?          @map("dest_landmark")
-  destCity               String           @map("dest_city")
-  destStateProvince      String           @map("dest_state_province")
-  destPostalCode         String           @map("dest_postal_code")
-  destCountryCode        String           @default("IN") @map("dest_country_code") @db.Char(2)
-  totalWeightGrams       Int              @map("total_weight_grams")
-  declaredWeightGrams    Int?             @map("declared_weight_grams")
-  actualWeightGrams      Int?             @map("actual_weight_grams")
-  lengthCm               Decimal?         @map("length_cm") @db.Decimal(6, 2)
-  widthCm                Decimal?         @map("width_cm") @db.Decimal(6, 2)
-  heightCm               Decimal?         @map("height_cm") @db.Decimal(6, 2)
-  volumetricWeightGrams  Int?             @map("volumetric_weight_grams")
-  chargeableWeightGrams  Int?             @map("chargeable_weight_grams")
-  packageType            PackageType?     @map("package_type")
-  declaredValueInr       Decimal          @map("declared_value_inr") @db.Decimal(12, 2)
-  codAmountInr           Decimal?         @map("cod_amount_inr") @db.Decimal(12, 2)
-  status                 ShipmentStatus   @default(CREATED)
-  awbGeneratedAt         DateTime?        @map("awb_generated_at") @db.Timestamptz
-  pickedUpByCourierAt    DateTime?        @map("picked_up_by_courier_at") @db.Timestamptz
-  firstScanAt            DateTime?        @map("first_scan_at") @db.Timestamptz
-  outForDeliveryAt       DateTime?        @map("out_for_delivery_at") @db.Timestamptz
-  deliveredAt            DateTime?        @map("delivered_at") @db.Timestamptz
-  rtoInitiatedAt         DateTime?        @map("rto_initiated_at") @db.Timestamptz
-  rtoReceivedAt          DateTime?        @map("rto_received_at") @db.Timestamptz
+  courierShipmentId        String?          @map("courier_shipment_id")
+  serviceType              String?          @map("service_type")
+  originWarehouseId        String           @map("origin_warehouse_id") @db.Uuid
+  destRecipientName        String           @map("dest_recipient_name")
+  destRecipientPhoneE164   String           @map("dest_recipient_phone_e164")
+  destAddressLine1         String           @map("dest_address_line1")
+  destAddressLine2         String?          @map("dest_address_line2")
+  destLandmark             String?          @map("dest_landmark")
+  destCity                 String           @map("dest_city")
+  destStateProvince        String           @map("dest_state_province")
+  destPostalCode           String           @map("dest_postal_code")
+  destCountryCode          String           @default("IN") @map("dest_country_code") @db.Char(2)
+  totalWeightGrams         Int              @map("total_weight_grams")
+  declaredWeightGrams      Int?             @map("declared_weight_grams")
+  actualWeightGrams        Int?             @map("actual_weight_grams")
+  lengthCm                 Decimal?         @map("length_cm") @db.Decimal(6, 2)
+  widthCm                  Decimal?         @map("width_cm") @db.Decimal(6, 2)
+  heightCm                 Decimal?         @map("height_cm") @db.Decimal(6, 2)
+  volumetricWeightGrams    Int?             @map("volumetric_weight_grams")
+  chargeableWeightGrams    Int?             @map("chargeable_weight_grams")
+  packageType              PackageType?     @map("package_type")
+  declaredValueInr         Decimal          @map("declared_value_inr") @db.Decimal(12, 2)
+  codAmountInr             Decimal?         @map("cod_amount_inr") @db.Decimal(12, 2)
+  status                   ShipmentStatus   @default(CREATED)
+  awbGeneratedAt           DateTime?        @map("awb_generated_at") @db.Timestamptz
+  pickedUpByCourierAt      DateTime?        @map("picked_up_by_courier_at") @db.Timestamptz
+  firstScanAt              DateTime?        @map("first_scan_at") @db.Timestamptz
+  outForDeliveryAt         DateTime?        @map("out_for_delivery_at") @db.Timestamptz
+  deliveredAt              DateTime?        @map("delivered_at") @db.Timestamptz
+  rtoInitiatedAt           DateTime?        @map("rto_initiated_at") @db.Timestamptz
+  rtoReceivedAt            DateTime?        @map("rto_received_at") @db.Timestamptz
   // R6 (revised-plan roadmap): WHERE the RTO parcel was physically
   // received. Distinct from `originWarehouseId` (where it dispatched
   // from) — a return can legitimately arrive at any warehouse. NULL =
   // not received yet, or received at the origin (pre-R6 shipments), in
   // which case every consumer falls back to `originWarehouseId` and
   // behavior is identical to before R6.
-  rtoReceivedWarehouseId String?          @map("rto_received_warehouse_id") @db.Uuid
-  expectedDeliveryAt     DateTime?        @map("expected_delivery_at") @db.Timestamptz
+  rtoReceivedWarehouseId   String?          @map("rto_received_warehouse_id") @db.Uuid
+  expectedDeliveryAt       DateTime?        @map("expected_delivery_at") @db.Timestamptz
   /// What the COURIER says they will collect at the door, as opposed to
   /// `codAmountInr`, which is what we told them to. They should agree;
   /// when they do not, one of us is wrong about money and the parcel is
   /// already moving. Stored so the disagreement is detectable before it
   /// arrives as a remittance that is short.
-  courierCollectableInr  Decimal?         @map("courier_collectable_inr") @db.Decimal(12, 2)
+  courierCollectableInr    Decimal?         @map("courier_collectable_inr") @db.Decimal(12, 2)
   /// When the courier says they physically collected it. Ours is the
   /// handover transition; theirs is the scan. A gap between them is a
   /// parcel that sat on our dock.
-  courierPickedUpAt      DateTime?        @map("courier_picked_up_at") @db.Timestamptz
+  courierPickedUpAt        DateTime?        @map("courier_picked_up_at") @db.Timestamptz
   /// Their routing code — the facility path the parcel is booked on.
   /// Opaque to us and the first thing their support asks for.
-  courierSortCode        String?          @map("courier_sort_code")
+  courierSortCode          String?          @map("courier_sort_code")
   /// The courier's own current status line and where it was set.
   ///
   /// NOT AUTHORITATIVE, and deliberately so: the latest `tracking_events`
   /// row already holds this, and this is a convenience mirror for
   /// listing screens that would otherwise join the hypertable per row.
   /// Anything deciding something reads the scan, not these.
-  courierStatusLine      String?          @map("courier_status_line")
-  courierStatusLocation  String?          @map("courier_status_location")
+  courierStatusLine        String?          @map("courier_status_line")
+  courierStatusLocation    String?          @map("courier_status_location")
   /// The parcel's CURRENT NSL code — Delhivery's fine-grained
   /// service-level reason under the status (`EOD-74`, `X-UCI`, …).
   ///
@@ -3193,8 +3194,8 @@ model Shipment {
   /// latest word, refreshed by the tracking poll. Nothing derives order
   /// state from it; the scans do that. What it decides is whether an
   /// NDR re-attempt may be asked for at all.
-  courierNslCode         String?          @map("courier_nsl_code")
-  isManualCourier        Boolean          @default(false) @map("is_manual_courier")
+  courierNslCode           String?          @map("courier_nsl_code")
+  isManualCourier          Boolean          @default(false) @map("is_manual_courier")
   /// WHO actually carried a manually-placed parcel — "Bluedart", "Sundarban",
   /// the shop on the corner. `courierCode` is the literal string 'manual' for
   /// these (CUR-8), so without this column the seller and the customer were
@@ -3206,27 +3207,27 @@ model Shipment {
   /// have reported that. NULL on every integrated shipment — the carrier
   /// there is the `courierCode`, and duplicating it would create a second
   /// place for the same fact to be wrong.
-  manualCourierName      String?          @map("manual_courier_name")
+  manualCourierName        String?          @map("manual_courier_name")
   // Module 9 — supersede chain (CUR-7). `supersedesShipmentId` points
   // NEW → OLD (the replacement carries the FK); the OLD shipment reads
   // its replacement via the inverse virtual `supersededBy[0]`.
   // `supersededAt` / `supersedeReason` are set ON the OLD shipment when
   // it is retired (auto-supersede on AWB rejection / non-serviceability
   // / courier failure, or a manual replacement).
-  supersedesShipmentId   String?          @map("supersedes_shipment_id") @db.Uuid
-  supersededAt           DateTime?        @map("superseded_at") @db.Timestamptz
-  supersedeReason        SupersedeReason? @map("supersede_reason")
-  podPhotoSpacesKeys     String[]         @default([]) @map("pod_photo_spaces_keys")
-  podSignatureSpacesKey  String?          @map("pod_signature_spaces_key")
-  podRecipientName       String?          @map("pod_recipient_name")
-  hasIssue               Boolean          @default(false) @map("has_issue")
-  estimatedCostInr       Decimal?         @map("estimated_cost_inr") @db.Decimal(12, 2)
+  supersedesShipmentId     String?          @map("supersedes_shipment_id") @db.Uuid
+  supersededAt             DateTime?        @map("superseded_at") @db.Timestamptz
+  supersedeReason          SupersedeReason? @map("supersede_reason")
+  podPhotoSpacesKeys       String[]         @default([]) @map("pod_photo_spaces_keys")
+  podSignatureSpacesKey    String?          @map("pod_signature_spaces_key")
+  podRecipientName         String?          @map("pod_recipient_name")
+  hasIssue                 Boolean          @default(false) @map("has_issue")
+  estimatedCostInr         Decimal?         @map("estimated_cost_inr") @db.Decimal(12, 2)
   /// What the courier ACTUALLY charged for this parcel, once we know.
   /// `estimatedCostInr` is what we assumed at dispatch; margin measured
   /// against an assumption is a hope, so the P&L prefers this and says
   /// how many parcels it could not price rather than filling the gap in.
-  actualCourierCostInr   Decimal?         @map("actual_courier_cost_inr") @db.Decimal(12, 2)
-  actualCourierCostAt    DateTime?        @map("actual_courier_cost_at") @db.Timestamptz
+  actualCourierCostInr     Decimal?         @map("actual_courier_cost_inr") @db.Decimal(12, 2)
+  actualCourierCostAt      DateTime?        @map("actual_courier_cost_at") @db.Timestamptz
   /// What the courier charged for carrying it BACK.
   ///
   /// Separate from the forward cost because a return is a separate
@@ -3235,19 +3236,19 @@ model Shipment {
   /// number and NOT this plus the forward one. Folding them together
   /// would count a return twice and make every returns margin look
   /// worse than it is.
-  actualRtoCostInr       Decimal?         @map("actual_rto_cost_inr") @db.Decimal(12, 2)
+  actualRtoCostInr         Decimal?         @map("actual_rto_cost_inr") @db.Decimal(12, 2)
   /// When the RETURN leg's cost was last set, mirroring
   /// `actualCourierCostAt`. Worth having because a courier charge is not
   /// final: Delhivery re-cuts one weeks after the parcel moved, so "what
   /// does this cost say" is only half the question and "when did it last
   /// change" is the other half.
-  actualRtoCostAt        DateTime?        @map("actual_rto_cost_at") @db.Timestamptz
+  actualRtoCostAt          DateTime?        @map("actual_rto_cost_at") @db.Timestamptz
   // Module 8 — warehouse pick/pack operational state. The order status
   // (PENDING_PICK/PICKED/PACKED) is the authoritative lifecycle gate
   // (WMS-9); these track who/when + the pick-timeout CAS token (WMS-5,
   // M7-assignedAt analogue). `manifestId` is the (movable pre-close)
   // DRAFT manifest assignment (WMS-7).
-  pickStartedAt          DateTime?        @map("pick_started_at") @db.Timestamptz
+  pickStartedAt            DateTime?        @map("pick_started_at") @db.Timestamptz
   /// When packing FIRST began — the earliest still-live box for this
   /// parcel. Denormalised from `pack_boxes.opened_at` for the queue and
   /// floor reports, which need "is anyone on this?" without joining
@@ -3258,31 +3259,37 @@ model Shipment {
   /// it is per box and per packer, which this column can never be —
   /// and this is a projection of it. Cleared when the last box is
   /// cancelled, or the two disagree about whether packing is under way.
-  packStartedAt          DateTime?        @map("pack_started_at") @db.Timestamptz
-  pickStartedByStaffId   String?          @map("pick_started_by_staff_id") @db.Uuid
-  pickExpiresAt          DateTime?        @map("pick_expires_at") @db.Timestamptz
-  pickCompletedAt        DateTime?        @map("pick_completed_at") @db.Timestamptz
-  packCompletedAt        DateTime?        @map("pack_completed_at") @db.Timestamptz
-  packedByStaffId        String?          @map("packed_by_staff_id") @db.Uuid
-  manifestId             String?          @map("manifest_id") @db.Uuid
+  packStartedAt            DateTime?        @map("pack_started_at") @db.Timestamptz
+  pickStartedByStaffId     String?          @map("pick_started_by_staff_id") @db.Uuid
+  pickExpiresAt            DateTime?        @map("pick_expires_at") @db.Timestamptz
+  pickCompletedAt          DateTime?        @map("pick_completed_at") @db.Timestamptz
+  packCompletedAt          DateTime?        @map("pack_completed_at") @db.Timestamptz
+  packedByStaffId          String?          @map("packed_by_staff_id") @db.Uuid
+  manifestId               String?          @map("manifest_id") @db.Uuid
   /// When the shipping label was PRINTED, and by whom. Distinct from
   /// `awbGeneratedAt`: a waybill can exist for days before anybody puts
   /// it on paper, and it is the paper that decides whether a parcel can
   /// be picked. Null means it has not been printed.
-  labelPrintedAt         DateTime?        @map("label_printed_at") @db.Timestamptz
-  labelPrintedByStaffId  String?          @map("label_printed_by_staff_id") @db.Uuid
+  labelPrintedAt           DateTime?        @map("label_printed_at") @db.Timestamptz
+  /// Scanned at the handover bench, immediately before the driver took
+  /// it. Only meaningful when `ops.handover_scan_required` is on; null
+  /// on every parcel handed over before the check existed, which is why
+  /// the gate reads the SETTING and not merely this column.
+  handoverScannedAt        DateTime?        @map("handover_scanned_at") @db.Timestamptz
+  handoverScannedByStaffId String?          @map("handover_scanned_by_staff_id") @db.Uuid
+  labelPrintedByStaffId    String?          @map("label_printed_by_staff_id") @db.Uuid
   /// The picking batch this parcel was printed onto, if any.
-  pickBatchId            String?          @map("pick_batch_id") @db.Uuid
+  pickBatchId              String?          @map("pick_batch_id") @db.Uuid
   // R1 (revised-plan roadmap): WHICH courier account this shipment was
   // routed through — nullable (pre-R1 shipments and stub-mode/no-
   // account-configured flows have none). Populated by
   // CourierAccountRoutingService at AWB-generation time (not yet wired
   // in this commit — see courier-shared's CourierAccountRoutingService
   // doc comment).
-  courierAccountId       String?          @map("courier_account_id") @db.Uuid
-  createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt              DateTime         @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt              DateTime?        @map("deleted_at") @db.Timestamptz
+  courierAccountId         String?          @map("courier_account_id") @db.Uuid
+  createdAt                DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt                DateTime?        @map("deleted_at") @db.Timestamptz
 
   courier              Courier           @relation(fields: [courierCode], references: [code])
   courierAccount       CourierAccount?   @relation(fields: [courierAccountId], references: [id])
@@ -3294,6 +3301,7 @@ model Shipment {
   packedBy             StaffUser?        @relation("ShipmentPackedBy", fields: [packedByStaffId], references: [id])
   manifest             Manifest?         @relation(fields: [manifestId], references: [id])
   labelPrintedBy       StaffUser?        @relation("ShipmentLabelPrintedBy", fields: [labelPrintedByStaffId], references: [id])
+  handoverScannedBy    StaffUser?        @relation("ShipmentHandoverScannedBy", fields: [handoverScannedByStaffId], references: [id])
   pickBatch            PickBatch?        @relation(fields: [pickBatchId], references: [id])
   orderShipments       OrderShipment[]
   items                ShipmentItem[]
@@ -3317,6 +3325,7 @@ model Shipment {
   @@index([destPostalCode])
   @@index([pickBatchId])
   @@index([labelPrintedAt])
+  @@index([handoverScannedAt])
   @@index([destRecipientPhoneE164])
   @@index([deliveredAt])
   @@index([rtoInitiatedAt])

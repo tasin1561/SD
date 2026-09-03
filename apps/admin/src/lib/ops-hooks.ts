@@ -3350,3 +3350,22 @@ export function useMarkBatchPicked(): UseMutationResult<
     },
   });
 }
+
+export function useHandoverScan(): UseMutationResult<
+  { shipmentNumber: string; alreadyScanned: boolean },
+  Error,
+  string
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (awbNumber) =>
+      client.request<{ shipmentNumber: string; alreadyScanned: boolean }>(
+        '/api/admin/courier/handover-scan',
+        { method: 'POST', body: { awbNumber } },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-manifests'] });
+    },
+  });
+}

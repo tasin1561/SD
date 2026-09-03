@@ -13,7 +13,8 @@ const STAFF = 'sup-1';
 function makeService(
   opts: {
     manifestStatus?: ManifestStatus;
-    shipments?: Array<{ id: string; orderId: string | null }>;
+    shipments?: Array<{ id: string; orderId: string | null; handoverScannedAt?: Date | null }>;
+    handoverScanRequired?: boolean;
     manifest?: AnyArgs | null;
     transitionFails?: Set<string>; // orderIds whose transition throws
   } = {},
@@ -27,6 +28,8 @@ function makeService(
           status: opts.manifestStatus ?? ManifestStatus.CONFIRMED,
           shipments: ships.map((s) => ({
             id: s.id,
+            shipmentNumber: `SH-${s.id}`,
+            handoverScannedAt: s.handoverScannedAt ?? null,
             orderShipments:
               s.orderId === null ? [] : [{ orderId: s.orderId, order: { sellerId: 'seller-1' } }],
           })),
@@ -38,6 +41,9 @@ function makeService(
   const client = {
     manifest: { findUnique: manifestFindUnique, update: manifestUpdate },
     shipment: { update: shipmentUpdate },
+    systemSetting: {
+      findUnique: jest.fn(async () => ({ valueBoolean: opts.handoverScanRequired === true })),
+    },
   };
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs]>(async () => 'a');
   const audit = { log: auditLog };
@@ -67,7 +73,7 @@ function makeService(
     orderWrite as unknown as OrderWriteService,
     unitLedger as unknown as StockUnitService,
   );
-  return { svc, manifestUpdate, shipmentUpdate, transitionStatus, auditLog };
+  return { svc, client, manifestUpdate, shipmentUpdate, transitionStatus, auditLog };
 }
 
 describe('DispatchHandoffService.confirmHandoff', () => {
@@ -176,5 +182,75 @@ describe('DispatchHandoffService.confirmHandoff', () => {
     expect(withFail.auditLog).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'manifest.dispatched', severity: 'HIGH' }),
     );
+  });
+});
+
+// ---------------------------------------------------------------------
+// The handover scan gate (`ops.handover_scan_required`).
+//
+// Enforced in the SERVICE rather than by hiding a button, which is the
+// whole point of it: when the setting is on, nothing reaches a driver
+// unscanned, and a check that lives in the UI is one `curl` away from
+// not existing.
+// ---------------------------------------------------------------------
+describe('DispatchHandoffService — the handover scan gate', () => {
+  it('is OFF by default, and hands over without any scan', async () => {
+    // A step nobody chose is a step that gets worked around.
+    const { svc, transitionStatus } = makeService({
+      shipments: [{ id: 's1', orderId: 'o1', handoverScannedAt: null }],
+    });
+    await svc.confirmHandoff(MAN, 'staff-1');
+    expect(transitionStatus).toHaveBeenCalled();
+  });
+
+  it('REFUSES the whole handover when a parcel was not scanned', async () => {
+    const { svc, transitionStatus } = makeService({
+      handoverScanRequired: true,
+      shipments: [{ id: 's1', orderId: 'o1', handoverScannedAt: null }],
+    });
+    await expect(svc.confirmHandoff(MAN, 'staff-1')).rejects.toMatchObject({
+      response: { code: 'HANDOVER_SCAN_REQUIRED' },
+    });
+    // Nothing moved. A partial handover would be worse than a refused
+    // one: some parcels gone, the rest sitting, and no record of which.
+    expect(transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it('NAMES the parcels that were missed', async () => {
+    // "Some of these were not scanned" sends somebody to check all forty.
+    const { svc } = makeService({
+      handoverScanRequired: true,
+      shipments: [
+        { id: 's1', orderId: 'o1', handoverScannedAt: new Date() },
+        { id: 's2', orderId: 'o2', handoverScannedAt: null },
+      ],
+    });
+    await expect(svc.confirmHandoff(MAN, 'staff-1')).rejects.toMatchObject({
+      response: { message: expect.stringContaining('SH-s2') },
+    });
+  });
+
+  it('lets a fully scanned manifest through', async () => {
+    const { svc, transitionStatus } = makeService({
+      handoverScanRequired: true,
+      shipments: [
+        { id: 's1', orderId: 'o1', handoverScannedAt: new Date() },
+        { id: 's2', orderId: 'o2', handoverScannedAt: new Date() },
+      ],
+    });
+    await svc.confirmHandoff(MAN, 'staff-1');
+    expect(transitionStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it('an unreadable setting does not strand the warehouse', async () => {
+    // Fail-open on purpose: a bench that cannot hand over parcels
+    // because a settings row would not load is a worse outage than a
+    // missed scan.
+    const { svc, client, transitionStatus } = makeService({
+      shipments: [{ id: 's1', orderId: 'o1', handoverScannedAt: null }],
+    });
+    (client.systemSetting.findUnique as jest.Mock).mockRejectedValueOnce(new Error('db down'));
+    await svc.confirmHandoff(MAN, 'staff-1');
+    expect(transitionStatus).toHaveBeenCalled();
   });
 });

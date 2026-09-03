@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   HttpCode,
   HttpStatus,
@@ -22,6 +23,7 @@ import {
   type DispatchHandoffResult,
 } from '../services/dispatch-handoff.service';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
+import { HandoverScanDto } from '../dto/handover-scan.dto';
 
 /**
  * Module 9 — supervisor dispatch endpoints (commit 13, CUR-4).
@@ -45,6 +47,19 @@ import { RequirePermissions } from '../../../common/auth/require-permissions.dec
 @Controller('admin/courier')
 export class DispatchController {
   constructor(private readonly handoff: DispatchHandoffService) {}
+
+  @Post('handover-scan')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Record that a parcel was scanned at the handover bench, by AWB. When ops.handover_scan_required is on, confirm-handoff REFUSES any parcel without this',
+  })
+  handoverScan(
+    @Body() body: HandoverScanDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): Promise<{ shipmentNumber: string; alreadyScanned: boolean }> {
+    return this.handoff.recordHandoverScan(body.awbNumber, staff.id);
+  }
 
   @Post('manifests/:manifestId/confirm-handoff')
   @HttpCode(HttpStatus.OK)
