@@ -1,5 +1,12 @@
 import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
-import { ActorType, InventoryMode, OrderStatus, PickBatchStatus, Prisma } from '@skydrop/db';
+import {
+  ActorType,
+  InventoryMode,
+  OrderStatus,
+  PickBatchStatus,
+  Prisma,
+  ShipmentStatus,
+} from '@skydrop/db';
 
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -389,6 +396,153 @@ export class PickBatchService {
     });
 
     return { batchNumber: batch.batchNumber, alreadyPrinted: false, transitioned };
+  }
+
+  /**
+   * The picker is back with the trolley.
+   *
+   * This is the step the print-first flow was missing, and its absence
+   * would have been the same mistake as the automatic manifest close:
+   * `PickExecutionService.complete` is the ONLY writer of
+   * `OrderStatus.PICKED`, and the pack queue selects on exactly that —
+   * so a batch printed and walked with nothing to close it would have
+   * stranded every parcel in PENDING_PICK, picked in the real world and
+   * invisible to the packing bench.
+   *
+   * Per-order isolated, and mirrors `complete`'s saga ordering: the
+   * operational stamp FIRST (guarded on `pickCompletedAt IS NULL`, so a
+   * re-run preserves the original timestamp), the authoritative
+   * transition LAST.
+   *
+   * ── WHAT IT REFUSES ──────────────────────────────────────────────
+   * A STRICT-mode line, by name. There, every unit carries a serial and
+   * the scan at PICK is what binds units to the parcel — pack then
+   * demands the scanned set EQUAL those units (UNIT-2). Closing a
+   * strict pick from paper would leave the parcel with no bound units
+   * and make the pack gate compare against nothing. Those parcels go
+   * through the per-parcel station, which still exists for exactly this.
+   */
+  async markPicked(
+    batchId: string,
+    staffId: string,
+    ctx?: ClientContext,
+  ): Promise<{
+    batchNumber: string;
+    picked: number;
+    skipped: ReadonlyArray<{ shipmentNumber: string; reason: string }>;
+  }> {
+    const batch = await this.prisma.client.pickBatch.findUnique({
+      where: { id: batchId },
+      select: {
+        id: true,
+        batchNumber: true,
+        status: true,
+        shipments: {
+          select: {
+            id: true,
+            shipmentNumber: true,
+            pickCompletedAt: true,
+            orderShipments: { select: { orderId: true }, take: 1 },
+          },
+        },
+      },
+    });
+    if (batch === null) {
+      throw new BadRequestException({ code: 'BATCH_NOT_FOUND', message: 'No such batch' });
+    }
+    if (batch.status !== PickBatchStatus.PRINTED) {
+      throw new ConflictException({
+        code: 'BATCH_NOT_PRINTED',
+        message:
+          'Only a batch whose sheet was printed can be marked picked — print it first, then walk it',
+      });
+    }
+
+    const now = new Date();
+    const skipped: Array<{ shipmentNumber: string; reason: string }> = [];
+    let picked = 0;
+
+    for (const ship of batch.shipments) {
+      const orderId = ship.orderShipments[0]?.orderId;
+      if (orderId === undefined) continue;
+
+      // STRICT is refused BY NAME rather than silently passed over.
+      const strict = await this.isStrict(orderId);
+      if (strict) {
+        skipped.push({
+          shipmentNumber: ship.shipmentNumber,
+          reason: 'Serialised stock — scan its units at the pick station',
+        });
+        continue;
+      }
+
+      try {
+        // Operational stamp FIRST (visible-vs-silent), guarded so a
+        // re-run keeps the original time rather than moving it.
+        await this.prisma.client.shipment.updateMany({
+          where: { id: ship.id, status: ShipmentStatus.CREATED, pickCompletedAt: null },
+          data: { pickCompletedAt: now, pickExpiresAt: null },
+        });
+        await this.orderWrite.transitionStatus({
+          orderId,
+          to: OrderStatus.PICKED,
+          actor: { type: ActorType.STAFF, id: staffId },
+          expectedFrom: OrderStatus.PENDING_PICK,
+          reason: `Picked on batch ${batch.batchNumber}`,
+          ...(ctx !== undefined ? { ctx } : {}),
+        });
+        picked += 1;
+      } catch (err) {
+        // One parcel that moved on underneath must not strand the walk.
+        this.logger.warn(
+          { batchId, orderId, err: (err as Error).message },
+          'Batch mark-picked skipped a parcel',
+        );
+        skipped.push({
+          shipmentNumber: ship.shipmentNumber,
+          reason: (err as Error).message.slice(0, 120),
+        });
+      }
+    }
+
+    // COMPLETED only when the whole walk landed. A batch with a strict
+    // parcel still on it has work left, and saying otherwise would hide
+    // it from whoever has to finish it.
+    if (skipped.length === 0) {
+      await this.prisma.client.pickBatch.updateMany({
+        where: { id: batchId, status: PickBatchStatus.PRINTED },
+        data: { status: PickBatchStatus.COMPLETED },
+      });
+    }
+
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      actorId: staffId,
+      action: 'warehouse.pick_batch.marked_picked',
+      entityType: 'pick_batch',
+      entityId: batchId,
+      severity: 'MEDIUM',
+      metadata: {
+        batchNumber: batch.batchNumber,
+        picked,
+        skipped: skipped.length,
+        ipAddress: ctx?.ipAddress ?? null,
+        userAgent: ctx?.userAgent ?? null,
+        requestId: ctx?.requestId ?? null,
+      },
+    });
+
+    return { batchNumber: batch.batchNumber, picked, skipped };
+  }
+
+  /** Does this order carry any serialised line? */
+  private async isStrict(orderId: string): Promise<boolean> {
+    const active = await this.reservations.listActiveForOrderWithLocations(orderId);
+    for (const r of active) {
+      const mode = await this.modes.resolveForVariant(r.sellerId, r.variantId);
+      if (mode === InventoryMode.STRICT) return true;
+    }
+    return false;
   }
 
   /** Abandon a batch that was never printed — the parcels go back. */

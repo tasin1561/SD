@@ -2,7 +2,16 @@
 
 import Link from 'next/link';
 import type { ReactElement, ReactNode } from 'react';
-import { Activity, AlertTriangle, Landmark, TrendingUp } from 'lucide-react';
+import {
+  Activity,
+  AlertTriangle,
+  Banknote,
+  Landmark,
+  Receipt,
+  Send,
+  TrendingUp,
+  Wallet,
+} from 'lucide-react';
 import { Card, CardBody, ErrorState, Money, PageHeader, Skeleton } from '@skydrop/ui/components';
 import { useOrdersList, useReportSummary } from '@/lib/api-hooks';
 import { useTicketsList, useWithdrawalsList } from '@/lib/ops-hooks';
@@ -43,17 +52,24 @@ function SectionHead({
   index,
   title,
   icon,
+  iconTone = 'accent',
   note,
 }: {
   index: string;
   title: string;
   icon: ReactNode;
+  iconTone?: 'accent' | 'warn' | 'good';
   note?: ReactNode;
 }): ReactElement {
+  const toneClass = {
+    accent: 'text-accent',
+    warn: 'text-status-pending-fg',
+    good: 'text-status-delivered-fg',
+  }[iconTone];
   return (
     <div className="mt-7 mb-3 flex flex-wrap items-center justify-between gap-2 first:mt-0">
       <div className="text-text-muted flex items-center gap-2">
-        <span className="text-accent">{icon}</span>
+        <span className={toneClass}>{icon}</span>
         {/* The eyebrow is a real heading for a screen reader; the
             numbering is decoration and is hidden from one, because
             "section zero one" read aloud is noise. */}
@@ -86,34 +102,56 @@ function AttentionCard({
   loading: boolean;
   hint: string;
   badge?: string;
-  tone?: 'neutral' | 'warn' | 'bad';
+  tone?: 'neutral' | 'warn' | 'bad' | 'info';
 }): ReactElement {
   const active = (count ?? 0) > 0;
+
+  // A card with work on it carries its tone in THREE places at once —
+  // the tinted ground, the coloured border, and the figure itself. One
+  // of the three alone reads as decoration; together they make the card
+  // legible as "this one" from across the room, which is the entire job
+  // of an attention queue.
+  //
+  // A card at zero keeps every one of them at neutral and goes quiet.
+  // Two loud layers cancel; seven do nothing at all.
+  const skin = !active
+    ? { card: 'border-border bg-surface', num: 'text-text-faint', chip: '' }
+    : {
+        warn: {
+          card: 'border-status-pending-ring/60 bg-status-pending-bg',
+          num: 'text-status-pending-fg',
+          chip: 'bg-status-pending-fg text-[color:var(--color-bg)]',
+        },
+        bad: {
+          card: 'border-status-failed-ring/60 bg-status-failed-bg',
+          num: 'text-status-failed-fg',
+          chip: 'bg-status-failed-fg text-[color:var(--color-bg)]',
+        },
+        info: {
+          card: 'border-status-confirmed-ring/60 bg-status-confirmed-bg',
+          num: 'text-status-confirmed-fg',
+          chip: 'bg-status-confirmed-fg text-[color:var(--color-bg)]',
+        },
+        neutral: {
+          card: 'border-accent-ring bg-accent-tint',
+          num: 'text-accent',
+          chip: 'bg-accent text-accent-fg',
+        },
+      }[tone];
 
   return (
     <Link
       href={href}
-      data-tone={active ? tone : 'neutral'}
-      className={[
-        'border-border block rounded-lg border p-3 transition-colors',
-        active
-          ? 'bg-surface-raised hover:border-border-strong'
-          : 'bg-surface hover:bg-surface-hover',
-      ].join(' ')}
+      className={`block rounded-lg border p-3 transition-colors hover:border-border-strong ${skin.card}`}
       aria-label={`${area}: ${label}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="text-text-faint text-[11px] font-semibold tracking-[0.08em] uppercase">
+        <span className="text-text-muted text-[11px] font-semibold tracking-[0.08em] uppercase">
           {area}
         </span>
         {active && badge !== undefined ? (
           <span
-            className={[
-              'rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase',
-              tone === 'bad'
-                ? 'bg-status-failed-bg text-status-failed-fg'
-                : 'bg-status-pending-bg text-status-pending-fg',
-            ].join(' ')}
+            className={`rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide uppercase ${skin.chip}`}
           >
             {badge}
           </span>
@@ -131,24 +169,23 @@ function AttentionCard({
 
       <div className="mt-2 flex items-baseline gap-1.5">
         {loading ? (
-          <Skeleton className="h-7 w-10" />
+          <Skeleton className="h-8 w-10" />
         ) : (
-          <span
-            className={[
-              'text-2xl font-semibold tabular-nums',
-              active ? 'text-text-bright' : 'text-text-faint',
-            ].join(' ')}
-          >
+          <span className={`text-3xl leading-none font-bold tabular-nums ${skin.num}`}>
             {count ?? 0}
           </span>
         )}
         <span className="text-text-muted text-xs">{label.toLowerCase()}</span>
       </div>
 
-      <div className="text-text-body mt-1 text-sm font-medium">{label}</div>
-      <p className="text-text-faint mt-0.5 text-xs leading-snug">{hint}</p>
-      <div className="text-accent mt-2 text-xs font-medium">
-        {active ? 'Open →' : <span className="text-text-faint">Clear</span>}
+      <div className="text-text-strong mt-1.5 text-sm font-semibold">{label}</div>
+      <p className="text-text-muted mt-0.5 text-xs leading-snug">{hint}</p>
+      <div className="mt-2 text-xs font-semibold">
+        {active ? (
+          <span className={skin.num}>Open →</span>
+        ) : (
+          <span className="text-text-faint">Clear</span>
+        )}
       </div>
     </Link>
   );
@@ -164,22 +201,28 @@ function MetricCard({
   hint,
   bar,
   barTone = 'accent',
+  valueTone = 'default',
   loading,
 }: {
   label: string;
   value: string;
   chip?: string | undefined;
-  chipTone?: 'neutral' | 'good' | 'warn' | 'bad';
+  chipTone?: 'neutral' | 'good' | 'warn' | 'bad' | 'info';
   hint: string;
   bar?: number | undefined;
   barTone?: 'accent' | 'good' | 'warn' | 'bad';
+  valueTone?: 'default' | 'good' | 'warn' | 'bad' | 'accent';
   loading: boolean;
 }): ReactElement {
+  // Filled chips, not outlines. A pale outline on a dark card is
+  // invisible at a glance, and the chip is the fastest read on the card
+  // — it says whether the number is good news before the number is.
   const chipClass = {
-    neutral: 'bg-surface-hover text-text-muted',
-    good: 'bg-status-delivered-bg text-status-delivered-fg',
-    warn: 'bg-status-pending-bg text-status-pending-fg',
-    bad: 'bg-status-failed-bg text-status-failed-fg',
+    neutral: 'bg-surface-hover text-text-body',
+    good: 'bg-status-delivered-fg text-[color:var(--color-bg)]',
+    warn: 'bg-status-pending-fg text-[color:var(--color-bg)]',
+    bad: 'bg-status-failed-fg text-[color:var(--color-bg)]',
+    info: 'bg-status-confirmed-fg text-[color:var(--color-bg)]',
   }[chipTone];
   const barClass = {
     accent: 'bg-accent',
@@ -187,26 +230,31 @@ function MetricCard({
     warn: 'bg-status-pending-fg',
     bad: 'bg-status-failed-fg',
   }[barTone];
+  const valueClass = {
+    default: 'text-text-bright',
+    good: 'text-status-delivered-fg',
+    warn: 'text-status-pending-fg',
+    bad: 'text-status-failed-fg',
+    accent: 'text-accent',
+  }[valueTone];
 
   return (
     <div className="border-border bg-surface rounded-lg border p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="text-text-muted text-xs font-medium">{label}</div>
         {chip !== undefined && (
-          <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${chipClass}`}>
-            {chip}
-          </span>
+          <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${chipClass}`}>{chip}</span>
         )}
       </div>
-      <div className="text-text-bright mt-2 text-xl font-semibold tabular-nums">
-        {loading ? <Skeleton className="h-6 w-16" /> : value}
+      <div className={`mt-2 text-2xl leading-none font-bold tabular-nums ${valueClass}`}>
+        {loading ? <Skeleton className="h-7 w-16" /> : value}
       </div>
-      <p className="text-text-faint mt-0.5 text-xs">{hint}</p>
+      <p className="text-text-muted mt-1.5 text-xs">{hint}</p>
       {bar !== undefined && (
-        <div className="bg-surface-hover mt-2.5 h-1 w-full overflow-hidden rounded-full">
+        <div className="bg-surface-hover mt-2.5 h-1.5 w-full overflow-hidden rounded-full">
           <div
             className={`h-full rounded-full ${barClass}`}
-            style={{ width: `${Math.max(0, Math.min(100, bar * 100))}%` }}
+            style={{ width: `${Math.max(2, Math.min(100, bar * 100))}%` }}
           />
         </div>
       )}
@@ -222,6 +270,8 @@ function MoneyCard({
   hint,
   footLeft,
   footRight,
+  icon,
+  iconTone,
   loading,
   emphasis = false,
 }: {
@@ -230,27 +280,43 @@ function MoneyCard({
   hint: string;
   footLeft: string;
   footRight?: ReactNode;
+  icon: ReactNode;
+  iconTone: 'good' | 'bad' | 'info' | 'accent';
   loading: boolean;
   emphasis?: boolean;
 }): ReactElement {
+  // The icon is the only colour on a money card, and it is doing real
+  // work: four cards of identical shape are told apart by it before any
+  // of the labels are read. Money IN is green, money OUT is red, money
+  // MOVED is blue, money we still HOLD is the accent.
+  const iconClass = {
+    good: 'text-status-delivered-fg bg-status-delivered-bg',
+    bad: 'text-status-failed-fg bg-status-failed-bg',
+    info: 'text-status-confirmed-fg bg-status-confirmed-bg',
+    accent: 'text-accent bg-accent-tint',
+  }[iconTone];
+
   return (
     <div
       className={[
         'rounded-lg border p-3',
-        emphasis ? 'border-accent-ring bg-surface-raised' : 'border-border bg-surface',
+        emphasis ? 'border-accent-ring bg-accent-tint' : 'border-border bg-surface',
       ].join(' ')}
     >
-      <div className="text-text-body text-sm font-medium">{label}</div>
-      <div className="text-text-bright mt-1.5 text-xl font-semibold">
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-text-strong text-sm font-semibold">{label}</div>
+        <span className={`grid h-6 w-6 place-items-center rounded ${iconClass}`}>{icon}</span>
+      </div>
+      <div className="text-text-bright mt-2 text-2xl font-bold">
         {loading || amount === undefined ? (
-          <Skeleton className="h-6 w-24" />
+          <Skeleton className="h-7 w-28" />
         ) : (
           <Money amount={amount} size="md" />
         )}
       </div>
-      <p className="text-text-faint mt-1 text-xs leading-snug">{hint}</p>
+      <p className="text-text-muted mt-1.5 text-xs leading-snug">{hint}</p>
       <div className="border-border mt-2.5 flex items-center justify-between gap-2 border-t pt-2 text-xs">
-        <span className="text-text-faint">{footLeft}</span>
+        <span className="text-text-muted">{footLeft}</span>
         {footRight}
       </div>
     </div>
@@ -299,10 +365,16 @@ export function DashboardView(): ReactElement {
 
   return (
     <div>
-      <PageHeader
-        title="Overview"
-        subtitle="What is waiting on someone right now, and how the last 30 days have gone."
-      />
+      <div className="flex flex-wrap items-center gap-2.5">
+        <PageHeader
+          title="Overview"
+          subtitle="What is waiting on someone right now, and how the last 30 days have gone."
+        />
+        <span className="bg-status-delivered-bg text-status-delivered-fg mt-0.5 flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-[0.08em] uppercase">
+          <span className="bg-status-delivered-fg h-1.5 w-1.5 rounded-full" aria-hidden="true" />
+          Live operations
+        </span>
+      </div>
 
       {nothingToShow && (
         <Card>
@@ -321,6 +393,7 @@ export function DashboardView(): ReactElement {
             index="SECTION 01"
             title="Operations attention queue"
             icon={<AlertTriangle size={14} />}
+            iconTone="warn"
             note={
               needingAttention === 0
                 ? 'Nothing is waiting on a person'
@@ -414,6 +487,23 @@ export function DashboardView(): ReactElement {
             index="SECTION 02"
             title="Performance & fulfilment (last 30 days)"
             icon={<TrendingUp size={14} />}
+            iconTone="good"
+            note={
+              <span className="flex flex-wrap items-center gap-3">
+                {(
+                  [
+                    ['bg-accent', 'Confirmed'],
+                    ['bg-status-delivered-fg', 'Delivered'],
+                    ['bg-status-failed-fg', 'Returned'],
+                  ] as ReadonlyArray<[string, string]>
+                ).map(([dot, name]) => (
+                  <span key={name} className="flex items-center gap-1.5">
+                    <span className={`h-2 w-2 rounded-full ${dot}`} aria-hidden="true" />
+                    {name}
+                  </span>
+                ))}
+              </span>
+            }
           />
           {summary.isError ? (
             <ErrorState
@@ -432,6 +522,13 @@ export function DashboardView(): ReactElement {
                 label="Confirmed on call"
                 value={summary.data === undefined ? '—' : pct(summary.data.orders.confirmRate)}
                 hint="Reached and confirmed by an agent."
+                chip={
+                  summary.data === undefined
+                    ? undefined
+                    : `${summary.data.orders.confirmed}/${summary.data.orders.created}`
+                }
+                chipTone="info"
+                valueTone="accent"
                 bar={summary.data?.orders.confirmRate}
                 loading={summary.isLoading}
               />
@@ -441,15 +538,18 @@ export function DashboardView(): ReactElement {
                 hint="Of everything dispatched."
                 bar={summary.data?.orders.deliveryRate}
                 barTone="good"
+                chip={summary.data === undefined ? undefined : 'Completed'}
                 chipTone="good"
+                valueTone="good"
                 loading={summary.isLoading}
               />
               <MetricCard
                 label="Returned (RTO)"
                 value={summary.data === undefined ? '—' : pct(summary.data.orders.rtoRate)}
                 hint="Came back instead of delivering."
-                chip={summary.data?.orders.rtoRate === 0 ? 'Zero RTO' : undefined}
-                chipTone="good"
+                chip={summary.data?.orders.rtoRate === 0 ? 'Zero RTO' : 'Returns'}
+                chipTone={summary.data?.orders.rtoRate === 0 ? 'good' : 'bad'}
+                valueTone={summary.data?.orders.rtoRate === 0 ? 'good' : 'bad'}
                 bar={summary.data?.orders.rtoRate}
                 barTone="bad"
                 loading={summary.isLoading}
@@ -458,6 +558,9 @@ export function DashboardView(): ReactElement {
                 label="Rejected on NDR"
                 value={summary.data === undefined ? '—' : pct(summary.data.orders.ndrRate)}
                 hint="Gave up after repeated failed delivery."
+                chip={summary.data?.orders.ndrRate === 0 ? 'No cases' : 'Cases'}
+                chipTone={summary.data?.orders.ndrRate === 0 ? 'good' : 'bad'}
+                valueTone={summary.data?.orders.ndrRate === 0 ? 'good' : 'bad'}
                 bar={summary.data?.orders.ndrRate}
                 barTone="bad"
                 loading={summary.isLoading}
@@ -466,6 +569,9 @@ export function DashboardView(): ReactElement {
                 label="Dispatched"
                 value={summary.data?.shipments.dispatched.toLocaleString('en-IN') ?? '—'}
                 hint="Parcels handed to a courier."
+                chip="In transit"
+                chipTone="info"
+                valueTone="accent"
                 loading={summary.isLoading}
               />
             </div>
@@ -490,6 +596,8 @@ export function DashboardView(): ReactElement {
               label="COD collected"
               amount={summary.data?.wallet.codCollected}
               hint="Customer payments gathered on delivery."
+              icon={<Banknote size={13} />}
+              iconTone="good"
               footLeft="From courier settlements"
               loading={summary.isLoading}
             />
@@ -497,6 +605,8 @@ export function DashboardView(): ReactElement {
               label="Charges debited"
               amount={summary.data?.wallet.chargesDebited}
               hint="Freight, fulfilment and return fees."
+              icon={<Receipt size={13} />}
+              iconTone="bad"
               footLeft="Auto-debited from wallets"
               loading={summary.isLoading}
             />
@@ -504,6 +614,8 @@ export function DashboardView(): ReactElement {
               label="Remitted to sellers"
               amount={summary.data?.wallet.remittancesPaid}
               hint="Paid out to seller bank accounts."
+              icon={<Send size={13} />}
+              iconTone="info"
               footLeft="Completed remittances"
               loading={summary.isLoading}
             />
@@ -511,6 +623,8 @@ export function DashboardView(): ReactElement {
               label="Outstanding owed"
               amount={summary.data?.wallet.netOutstanding}
               hint="Seller balances we hold and have not yet paid out."
+              icon={<Wallet size={13} />}
+              iconTone="accent"
               footLeft="Wallet liability"
               footRight={
                 <Link href="/what-we-owe" className="text-accent font-medium">
