@@ -100,7 +100,7 @@ describe('dashboard — permission gating', () => {
     expect(screen.queryByText(/403/)).not.toBeInTheDocument();
     expect(screen.queryByText(/INSUFFICIENT_PERMISSION/)).not.toBeInTheDocument();
     // And the panels that are not theirs are absent rather than empty.
-    expect(screen.queryByText('Last 30 days')).not.toBeInTheDocument();
+    expect(screen.queryByText(/performance & fulfilment/i)).not.toBeInTheDocument();
     expect(screen.queryByText('Open tickets')).not.toBeInTheDocument();
     expect(screen.queryByText('Withdrawal requests')).not.toBeInTheDocument();
   });
@@ -120,7 +120,7 @@ describe('dashboard — permission gating', () => {
     // `findBy` per tile: each has its own query, and a tile renders a
     // skeleton until its own data lands — so a single waitFor on the
     // first one to resolve would assert against the others mid-flight.
-    expect(await screen.findByText('Last 30 days')).toBeInTheDocument();
+    expect(await screen.findByText(/performance & fulfilment/i)).toBeInTheDocument();
     expect(await screen.findByText('Open tickets')).toBeInTheDocument();
     expect(await screen.findByText('Withdrawal requests')).toBeInTheDocument();
     await waitFor(() =>
@@ -133,8 +133,6 @@ describe('dashboard — permission gating', () => {
       identity: makeStaff('WAREHOUSE_STAFF' as never, ['warehouse.pick']),
       fetchImpl: mock(),
     });
-    expect(
-      await screen.findByText(/does not open any of the overview panels/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/no permissions that show anything here/i)).toBeInTheDocument();
   });
 });

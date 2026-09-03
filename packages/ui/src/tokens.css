@@ -20,32 +20,32 @@
      Slate scale. 950 = canvas, 900 = panel, 800 = elevated,
      700 = hairline border, 500 = muted text, 300 = body text,
      100 = high-contrast text. */
-  --color-bg: #0a0c10;
-  --color-surface: #11141a;
-  --color-surface-raised: #171b23;
-  --color-surface-hover: #1c2129;
-  --color-border: #232934;
-  --color-border-strong: #2e3543;
-  --color-text-faint: #5b6479;
-  --color-text-muted: #8a93a8;
-  --color-text-body: #c4cad7;
-  --color-text-strong: #e6e9f0;
-  --color-text-bright: #f6f7fa;
+  --color-bg: #090d16;
+  --color-surface: #0f1623;
+  --color-surface-raised: #1c2940;
+  --color-surface-hover: #162032;
+  --color-border: #1c283d;
+  --color-border-strong: #2e405e;
+  --color-text-faint: #7a8899;
+  --color-text-muted: #94a3b8;
+  --color-text-body: #b6c2d1;
+  --color-text-strong: #e2e8f0;
+  --color-text-bright: #f8fafc;
 
   /* ───────── Brand accent (used sparingly — for primary actions
      + selected nav) ───────── */
-  --color-accent: #6e8aff;
-  --color-accent-hover: #8298ff;
-  --color-accent-fg: #0a0c10; /* text on accent fill */
-  --color-accent-tint: rgba(110, 138, 255, 0.08);
-  --color-accent-ring: rgba(110, 138, 255, 0.35);
+  --color-accent: #60a5fa;
+  --color-accent-hover: #93c5fd;
+  --color-accent-fg: #ffffff; /* text on accent fill */
+  --color-accent-tint: rgba(37, 99, 235, 0.14);
+  --color-accent-ring: rgba(37, 99, 235, 0.45);
 
   /* ───────── Critical surface (god-mode, destructive
      confirmations) — distinct from semantic 'failed' status
      bucket; god-mode UI is a UI-state, not a data-state ───────── */
-  --color-critical: #ff5c5c;
-  --color-critical-tint: rgba(255, 92, 92, 0.12);
-  --color-critical-ring: rgba(255, 92, 92, 0.4);
+  --color-critical: #ef4444;
+  --color-critical-tint: rgba(239, 68, 68, 0.14);
+  --color-critical-ring: rgba(239, 68, 68, 0.45);
 
   /* ───────── Semantic status — 8 kinds covering all 28
      OrderStatus + 16 ShipmentStatus values. Mapping lives in
@@ -63,15 +63,15 @@
   /* pending — PENDING_CONFIRMATION, CALL_NO_RESPONSE,
      CALL_RESCHEDULED, PENDING_PICK, PENDING_DISPATCH,
      PENDING_MANUAL_PLACEMENT, AWB_PENDING */
-  --status-pending-bg: rgba(245, 178, 71, 0.12);
-  --status-pending-fg: #f5b247;
-  --status-pending-ring: rgba(245, 178, 71, 0.35);
+  --status-pending-bg: rgba(245, 158, 11, 0.14);
+  --status-pending-fg: #f59e0b;
+  --status-pending-ring: rgba(245, 158, 11, 0.45);
 
   /* confirmed — CONFIRMED, PICKED, PACKED, AWB_GENERATED,
      HANDED_TO_COURIER, AT_HUB */
-  --status-confirmed-bg: rgba(96, 165, 250, 0.12);
-  --status-confirmed-fg: #60a5fa;
-  --status-confirmed-ring: rgba(96, 165, 250, 0.35);
+  --status-confirmed-bg: rgba(56, 189, 248, 0.14);
+  --status-confirmed-fg: #38bdf8;
+  --status-confirmed-ring: rgba(56, 189, 248, 0.45);
 
   /* in-transit — DISPATCHED, IN_TRANSIT, OUT_FOR_DELIVERY,
      DELIVERY_ATTEMPTED */
@@ -215,17 +215,22 @@
  *
  * The dark theme is untouched. */
 [data-theme='light'] {
-  --color-bg: #fafafa;
+  --color-bg: #f8fafc;
   --color-surface: #ffffff;
-  --color-surface-raised: #ffffff;
-  --color-surface-hover: #f3f4f6;
-  --color-border: #e5e7eb;
-  --color-border-strong: #d1d5db;
-  --color-text-faint: #6b7280;
-  --color-text-muted: #4b5563;
-  --color-text-body: #374151;
-  --color-text-strong: #1f2937;
-  --color-text-bright: #111827;
+  /* RAISED IS DARKER THAN SURFACE IN LIGHT, and that is the point.
+     "Raised" in a dark theme means catching more light; in a light one
+     it means a toned panel that separates from the white card behind
+     it. Keeping it #ffffff is what made every table header invisible
+     against its own card and needed a light-only THead override. */
+  --color-surface-raised: #e2e8f0;
+  --color-surface-hover: #f1f5f9;
+  --color-border: #e2e8f0;
+  --color-border-strong: #cbd5e1;
+  --color-text-faint: #5b6b82;
+  --color-text-muted: #525f73;
+  --color-text-body: #475569;
+  --color-text-strong: #1e293b;
+  --color-text-bright: #090d16;
 
   --color-accent: #2563eb;
   --color-accent-hover: #1d4ed8;
@@ -323,14 +328,11 @@
   color: #ffffff;
 }
 
-/* `THead` paints `bg-surface-raised`, which in light is the same white
-   as the card it sits in — so the header row of every list was
-   invisible. In dark, surface-raised IS a step up, which is why it
-   never showed there. Specificity (0,1,1) beats the utility's (0,1,0)
-   with no !important. */
-[data-theme='light'] thead {
-  background: var(--color-surface-hover);
-}
+/* The THead override that used to live here is GONE (2026-09-03).
+   `--color-surface-raised` in light is now #e2e8f0 rather than white,
+   so a table header separates from its card by construction. A theme
+   fix that stops being needed should be removed rather than left as a
+   second opinion about the same pixel. */
 
 /* Stat tiles: a pool of pale colour with its figure in the deeper hue.
    This is where the reference gets most of its life, and it costs

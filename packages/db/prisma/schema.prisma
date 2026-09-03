@@ -3315,6 +3315,8 @@ model Shipment {
   @@index([courierCode, status])
   @@index([status, createdAt])
   @@index([destPostalCode])
+  @@index([pickBatchId])
+  @@index([labelPrintedAt])
   @@index([destRecipientPhoneE164])
   @@index([deliveredAt])
   @@index([rtoInitiatedAt])

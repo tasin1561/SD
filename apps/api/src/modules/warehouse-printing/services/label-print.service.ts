@@ -53,13 +53,17 @@ export class LabelPrintService {
     }
 
     const shipments = await this.load(shipmentIds);
-    const parts: Array<{ shipmentId: string; bytes: Buffer }> = [];
     const failed: Array<{ shipmentId: string; shipmentNumber: string; reason: string }> = [];
     const manual: ManualLabelPayload[] = [];
-    const manualIds: string[] = [];
 
-    // Selection order, not courier order: the stack comes off the
-    // printer in the order it will be sorted on the bench.
+    // Built in SELECTION order, so the stack comes off the printer in
+    // the order it will be sorted on the bench. The manual parcels are
+    // one generated document (four to a sheet), so the first manual
+    // parcel reserves its slot and the rest fold into it — that keeps
+    // three manual labels on one page instead of three.
+    const slots: Array<{ shipmentId: string; bytes: Buffer } | { manualSlot: true }> = [];
+    let manualSlotTaken = false;
+
     for (const id of shipmentIds) {
       const s = shipments.get(id);
       if (s === undefined) {
@@ -78,7 +82,10 @@ export class LabelPrintService {
       if (s.isManualCourier) {
         // No API behind a manual courier, so we draw the label (CUR-6).
         manual.push(this.toManualPayload(s));
-        manualIds.push(id);
+        if (!manualSlotTaken) {
+          slots.push({ manualSlot: true });
+          manualSlotTaken = true;
+        }
         continue;
       }
 
@@ -86,8 +93,7 @@ export class LabelPrintService {
       // in OUR bucket (CUR-6) — never re-fetched from the courier here,
       // which would spend a live API call per print and hand back a
       // different file each time.
-      const key = s.labelKey;
-      if (key === null) {
+      if (s.labelKey === null) {
         failed.push({
           shipmentId: id,
           shipmentNumber: s.shipmentNumber,
@@ -95,7 +101,7 @@ export class LabelPrintService {
         });
         continue;
       }
-      const bytes = await this.spaces.getObject(key);
+      const bytes = await this.spaces.getObject(s.labelKey);
       if (bytes === null) {
         failed.push({
           shipmentId: id,
@@ -104,26 +110,14 @@ export class LabelPrintService {
         });
         continue;
       }
-      parts.push({ shipmentId: id, bytes });
+      slots.push({ shipmentId: id, bytes });
     }
 
-    // Every manual label on one generated document, inserted where the
-    // FIRST manual parcel sat in the selection. Four to a sheet, so a
-    // batch of three manual parcels is one page rather than three.
-    if (manual.length > 0) {
-      const bytes = await this.manualPdf.render(manual);
-      const firstIdx = shipmentIds.findIndex((id) => manualIds.includes(id));
-      const at = Math.max(
-        0,
-        parts.findIndex((p) => shipmentIds.indexOf(p.shipmentId) > firstIdx),
-      );
-      const entry = { shipmentId: manualIds[0] ?? 'manual', bytes };
-      if (at === 0 && parts.length > 0 && shipmentIds.indexOf(parts[0]!.shipmentId) < firstIdx) {
-        parts.push(entry);
-      } else {
-        parts.splice(at, 0, entry);
-      }
-    }
+    const manualDoc = manual.length === 0 ? null : await this.manualPdf.render(manual);
+    const parts = slots.flatMap((slot) => {
+      if (!('manualSlot' in slot)) return [slot];
+      return manualDoc === null ? [] : [{ shipmentId: 'manual-labels', bytes: manualDoc }];
+    });
 
     const merged = await this.sheet.merge(parts);
     for (const id of merged.failed) {
