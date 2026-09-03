@@ -25,6 +25,18 @@ const DELIVERY_TIMEZONE = 'Asia/Kolkata';
  * alarming about a return that has already arrived is worse than
  * useless.
  */
+/** Every pre-dispatch status where a parcel exists and is expected to
+ *  carry a waybill. Pick and pack do not check for one, so an order can
+ *  travel all the way to PACKED unbooked; the sweep has to look at the
+ *  whole stretch rather than only where the booking was first attempted. */
+const AWB_EXPECTED_STATUSES: ReadonlySet<OrderStatus> = new Set([
+  OrderStatus.CONFIRMED,
+  OrderStatus.PENDING_PICK,
+  OrderStatus.PICKED,
+  OrderStatus.PACKED,
+  OrderStatus.PENDING_DISPATCH,
+]);
+
 const RTO_UNDERWAY: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.RTO_INITIATED,
   OrderStatus.RTO_IN_TRANSIT,
@@ -338,9 +350,17 @@ export class OrderAttentionService {
     // The LIVE shipment only: a superseded one carries `supersededAt`
     // and has a CREATED successor (CUR-7), so filtering on status alone
     // would keep re-flagging a parcel that was already retired.
+    //
+    // Every pre-dispatch status, not just CONFIRMED (2026-09-03). Pick
+    // and pack do not check for a waybill, so an order whose
+    // confirmation-time booking failed can be picked and packed anyway
+    // and end up boxed with nothing to scan at the handover bench. That
+    // used to be caught by manifest close re-running the AWB job; now
+    // that the bench dispatches directly, a manifest may never be
+    // closed, and this sweep is the only thing left asking.
     const links = await this.prisma.client.orderShipment.findMany({
       where: {
-        order: { status: OrderStatus.CONFIRMED, deletedAt: null },
+        order: { status: { in: [...AWB_EXPECTED_STATUSES] }, deletedAt: null },
         shipment: {
           status: ShipmentStatus.CREATED,
           awbNumber: null,
@@ -387,7 +407,7 @@ export class OrderAttentionService {
       });
       const settled =
         after === null ||
-        after.status !== OrderStatus.CONFIRMED ||
+        !AWB_EXPECTED_STATUSES.has(after.status) ||
         shipment === null ||
         shipment.awbNumber !== null ||
         shipment.supersededAt !== null;
@@ -404,12 +424,13 @@ export class OrderAttentionService {
       await this.issues.raise({
         kind: SystemIssueKind.INTEGRATION,
         severity: SystemIssueSeverity.HIGH,
-        title: `${link.order.orderNumber}: confirmed ${hours}h ago and still has no waybill`,
+        title: `${link.order.orderNumber}: no waybill ${hours}h after its parcel was created`,
         detail:
           'This order was confirmed and its stock reserved, but no courier has issued a ' +
           'waybill for it and a retry just now did not get one either. Nothing downstream ' +
-          'will move it: it cannot be picked into a manifest without a courier, and the ' +
-          'confirmation-time attempt does not repeat on its own.\n\n' +
+          'will move it, and if it has already been picked and packed it will sit at the ' +
+          'handover bench with no label to scan — the confirmation-time attempt does not ' +
+          'repeat on its own.\n\n' +
           'The seller believes this order is on its way. Open the order, read the last AWB ' +
           'error on the shipment, and either fix what the courier objected to or place it ' +
           'manually.',

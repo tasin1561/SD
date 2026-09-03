@@ -494,6 +494,15 @@ const systemSettings: SystemSettingSeed[] = [
       'When ON, a parcel must be scanned at the handover bench before it can be given to the driver, and the handoff REFUSES any parcel that was not — from the API as well as the screen, so it cannot be worked around. When OFF, parcels are handed over without the extra scan. Off by default because it adds a step; turn it on when a lost parcel has cost more than the step does.',
   },
   {
+    key: 'ops.handover_scan_dispatches',
+    category: 'ops',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: true,
+    displayName: 'A handover scan hands the parcel to the courier',
+    description:
+      'ON (the default): scanning a parcel at the handover bench IS the handover — the order goes DISPATCHED there and then, and the manifest closes itself once its last parcel is scanned, so nobody confirms a handoff. The scan is the truest signal the system has: it happens per parcel, at the door, at the moment the box leaves, where confirming a handoff is one person asserting afterwards that forty parcels went. OFF: the scan only records that the parcel was checked, and a supervisor still confirms the handoff per manifest. Turn it off if parcels are ever scanned to check them IN rather than out.',
+  },
+  {
     key: 'ops.awb_stall_alert_hours',
     category: 'ops',
     valueType: SettingValueType.INT,

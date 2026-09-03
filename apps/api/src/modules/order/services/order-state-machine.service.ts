@@ -318,6 +318,15 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
     OrderStatus.PACKED,
     [
       { to: OrderStatus.PENDING_DISPATCH, sideEffects: [] },
+      // The handover bench dispatches a parcel DIRECTLY (2026-09-03).
+      // A scan at the door is the true handover event — per parcel, at
+      // the moment it physically leaves — so it must not have to route
+      // through PENDING_DISPATCH, which only existed because
+      // ManifestService.close was the sole way out of PACKED. Manifest
+      // close remains a valid (and still supported) route; this edge
+      // just stops it being the ONLY one. Stock-neutral like every
+      // other post-pack edge under Model C.
+      { to: OrderStatus.DISPATCHED, sideEffects: [] },
       // Dormant, same as PICKED → PACK_FAILED above. Model C: the parcel
       // is still in the building and qtyOnHand was already decremented
       // at PACKED — reopening it must give that back.

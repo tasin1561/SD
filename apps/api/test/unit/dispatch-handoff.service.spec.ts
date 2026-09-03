@@ -15,8 +15,15 @@ function makeService(
     manifestStatus?: ManifestStatus;
     shipments?: Array<{ id: string; orderId: string | null; handoverScannedAt?: Date | null }>;
     handoverScanRequired?: boolean;
+    /** ops.handover_scan_dispatches — ON in production, so ON here too
+     *  unless a test is deliberately exercising the legacy path. */
+    handoverScanDispatches?: boolean;
     manifest?: AnyArgs | null;
     transitionFails?: Set<string>; // orderIds whose transition throws
+    /** The row recordHandoverScan finds by AWB. `null` ⇒ nothing found. */
+    scannedShipment?: AnyArgs | null;
+    /** What flipManifestIfComplete sees on the manifest afterwards. */
+    manifestShipments?: Array<{ id: string; status: ShipmentStatus }>;
   } = {},
 ) {
   const ships = opts.shipments ?? [{ id: 's1', orderId: 'o1' }];
@@ -37,13 +44,49 @@ function makeService(
       : opts.manifest,
   );
   const manifestUpdate = jest.fn(async () => ({}));
+  const manifestUpdateMany = jest.fn(async () => ({ count: 1 }));
   const shipmentUpdate = jest.fn(async () => ({}));
+  const shipmentUpdateMany = jest.fn(async () => ({ count: 1 }));
+  const shipmentFindFirst = jest.fn(async () =>
+    opts.scannedShipment === undefined
+      ? {
+          id: 's1',
+          shipmentNumber: 'SH-s1',
+          handoverScannedAt: null,
+          status: ShipmentStatus.CREATED,
+          manifestId: MAN,
+          orderShipments: [
+            { orderId: 'o1', order: { status: OrderStatus.PACKED, sellerId: 'seller-1' } },
+          ],
+        }
+      : opts.scannedShipment,
+  );
+  const shipmentFindMany = jest.fn(
+    async () => opts.manifestShipments ?? [{ id: 's1', status: ShipmentStatus.HANDED_TO_COURIER }],
+  );
+  // Key-AWARE: the two handover settings are different questions and a
+  // mock that answers both with one boolean cannot tell them apart.
+  const settingFindUnique = jest.fn(async (args: AnyArgs) => {
+    const key = (args['where'] as AnyArgs)['key'];
+    if (key === 'ops.handover_scan_dispatches') {
+      return { valueBoolean: opts.handoverScanDispatches !== false };
+    }
+    return { valueBoolean: opts.handoverScanRequired === true };
+  });
   const client = {
-    manifest: { findUnique: manifestFindUnique, update: manifestUpdate },
-    shipment: { update: shipmentUpdate },
-    systemSetting: {
-      findUnique: jest.fn(async () => ({ valueBoolean: opts.handoverScanRequired === true })),
+    manifest: {
+      findUnique: manifestFindUnique,
+      update: manifestUpdate,
+      updateMany: manifestUpdateMany,
     },
+    shipment: {
+      update: shipmentUpdate,
+      updateMany: shipmentUpdateMany,
+      findFirst: shipmentFindFirst,
+      findMany: shipmentFindMany,
+    },
+    systemSetting: { findUnique: settingFindUnique },
+    $transaction: async (fn: (tx: unknown) => unknown) => fn({}),
   };
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs]>(async () => 'a');
   const audit = { log: auditLog };
@@ -73,7 +116,18 @@ function makeService(
     orderWrite as unknown as OrderWriteService,
     unitLedger as unknown as StockUnitService,
   );
-  return { svc, client, manifestUpdate, shipmentUpdate, transitionStatus, auditLog };
+  return {
+    svc,
+    client,
+    manifestUpdate,
+    manifestUpdateMany,
+    shipmentUpdate,
+    shipmentUpdateMany,
+    shipmentFindMany,
+    transitionStatus,
+    auditLog,
+    unitLedger,
+  };
 }
 
 describe('DispatchHandoffService.confirmHandoff', () => {
@@ -251,6 +305,153 @@ describe('DispatchHandoffService — the handover scan gate', () => {
     });
     (client.systemSetting.findUnique as jest.Mock).mockRejectedValueOnce(new Error('db down'));
     await svc.confirmHandoff(MAN, 'staff-1');
+    expect(transitionStatus).toHaveBeenCalled();
+  });
+});
+
+describe('DispatchHandoffService.recordHandoverScan — the scan IS the handover', () => {
+  it('dispatches the parcel: stamp FIRST, transition LAST', async () => {
+    const { svc, shipmentUpdateMany, shipmentUpdate, transitionStatus } = makeService();
+    const r = await svc.recordHandoverScan('DLV-123', STAFF);
+
+    expect(r).toMatchObject({
+      shipmentNumber: 'SH-s1',
+      orderId: 'o1',
+      alreadyScanned: false,
+      dispatched: true,
+    });
+    // PACKED → DISPATCHED directly: no manifest had to be closed first.
+    expect(transitionStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderId: 'o1',
+        to: OrderStatus.DISPATCHED,
+        expectedFrom: OrderStatus.PACKED,
+      }),
+    );
+    expect(shipmentUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: ShipmentStatus.HANDED_TO_COURIER }),
+      }),
+    );
+    // Visible-vs-silent: the scan stamp is durable before the transition
+    // runs, so a crash between leaves a scanned-but-undispatched parcel
+    // rather than a dispatched one nobody scanned.
+    expect(shipmentUpdateMany.mock.invocationCallOrder[0]).toBeLessThan(
+      transitionStatus.mock.invocationCallOrder[0] ?? Infinity,
+    );
+  });
+
+  it('dispatches a parcel someone DID close a manifest for (PENDING_DISPATCH)', async () => {
+    const { svc, transitionStatus } = makeService({
+      scannedShipment: {
+        id: 's1',
+        shipmentNumber: 'SH-s1',
+        handoverScannedAt: null,
+        status: ShipmentStatus.CREATED,
+        manifestId: MAN,
+        orderShipments: [
+          { orderId: 'o1', order: { status: OrderStatus.PENDING_DISPATCH, sellerId: 'seller-1' } },
+        ],
+      },
+    });
+    await svc.recordHandoverScan('DLV-123', STAFF);
+    expect(transitionStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedFrom: OrderStatus.PENDING_DISPATCH }),
+    );
+  });
+
+  it('closes the manifest out once its last parcel is scanned', async () => {
+    const { svc, manifestUpdateMany } = makeService({
+      manifestShipments: [
+        { id: 's1', status: ShipmentStatus.HANDED_TO_COURIER },
+        { id: 's2', status: ShipmentStatus.HANDED_TO_COURIER },
+      ],
+    });
+    const r = await svc.recordHandoverScan('DLV-123', STAFF);
+    expect(r.manifestDispatched).toBe(true);
+    expect(manifestUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: ManifestStatus.DISPATCHED }),
+      }),
+    );
+  });
+
+  it('leaves the manifest open while a parcel on it has not gone', async () => {
+    // The one that stayed behind IS the signal. Closing the manifest
+    // around it would be the single record for "what went on the van"
+    // saying something that did not happen.
+    const { svc, manifestUpdateMany } = makeService({
+      manifestShipments: [
+        { id: 's1', status: ShipmentStatus.HANDED_TO_COURIER },
+        { id: 's2', status: ShipmentStatus.CREATED },
+      ],
+    });
+    const r = await svc.recordHandoverScan('DLV-123', STAFF);
+    expect(r.manifestDispatched).toBe(false);
+    expect(manifestUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it('a repeat scan is a no-op, not an error', async () => {
+    // With the scan carrying the dispatch, a second scan is the NORMAL
+    // shape — somebody unsure the first one registered. An error there
+    // teaches people to ignore errors.
+    const { svc, transitionStatus } = makeService({
+      scannedShipment: {
+        id: 's1',
+        shipmentNumber: 'SH-s1',
+        handoverScannedAt: new Date(),
+        status: ShipmentStatus.HANDED_TO_COURIER,
+        manifestId: MAN,
+        orderShipments: [
+          { orderId: 'o1', order: { status: OrderStatus.DISPATCHED, sellerId: 'seller-1' } },
+        ],
+      },
+    });
+    const r = await svc.recordHandoverScan('DLV-123', STAFF);
+    expect(r).toMatchObject({ alreadyScanned: true, dispatched: true });
+    expect(transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it('refuses a parcel that is not packed yet, and NAMES its status', async () => {
+    const { svc, transitionStatus } = makeService({
+      scannedShipment: {
+        id: 's1',
+        shipmentNumber: 'SH-s1',
+        handoverScannedAt: null,
+        status: ShipmentStatus.CREATED,
+        manifestId: null,
+        orderShipments: [
+          { orderId: 'o1', order: { status: OrderStatus.PICKED, sellerId: 'seller-1' } },
+        ],
+      },
+    });
+    await expect(svc.recordHandoverScan('DLV-123', STAFF)).rejects.toMatchObject({
+      response: { code: 'NOT_READY_FOR_HANDOVER', message: expect.stringContaining('PICKED') },
+    });
+    expect(transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it('404s an AWB nothing live carries', async () => {
+    const { svc } = makeService({ scannedShipment: null });
+    await expect(svc.recordHandoverScan('NOPE', STAFF)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('switch OFF: records the scan and dispatches NOTHING (the legacy path)', async () => {
+    const { svc, shipmentUpdateMany, transitionStatus } = makeService({
+      handoverScanDispatches: false,
+    });
+    const r = await svc.recordHandoverScan('DLV-123', STAFF);
+    expect(r).toMatchObject({ alreadyScanned: false, dispatched: false });
+    expect(shipmentUpdateMany).toHaveBeenCalled(); // still stamped
+    expect(transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it('a unit-ledger failure never undoes a real handover', async () => {
+    const { svc, unitLedger, transitionStatus } = makeService();
+    unitLedger.advanceUnitsForShipment.mockRejectedValueOnce(new Error('ledger down'));
+    const r = await svc.recordHandoverScan('DLV-123', STAFF);
+    // The courier already has the box.
+    expect(r.dispatched).toBe(true);
     expect(transitionStatus).toHaveBeenCalled();
   });
 });

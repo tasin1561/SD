@@ -20,6 +20,27 @@ export interface DispatchHandoffFailure {
   error: string;
 }
 
+/** A parcel can only be handed to a driver once it is boxed and still
+ *  in the building. PACKED is the bench's ordinary case (nobody closed a
+ *  manifest); PENDING_DISPATCH is the same parcel after somebody did. */
+const HANDOVER_READY: ReadonlySet<OrderStatus> = new Set([
+  OrderStatus.PACKED,
+  OrderStatus.PENDING_DISPATCH,
+]);
+
+export interface HandoverScanResult {
+  shipmentId: string;
+  shipmentNumber: string;
+  orderId: string | null;
+  /** true ⇒ this parcel already carried a handover scan before this call. */
+  alreadyScanned: boolean;
+  /** true ⇒ the parcel is now (or was already) with the courier. */
+  dispatched: boolean;
+  /** true ⇒ this scan was the last one on its manifest, so the manifest
+   *  flipped to DISPATCHED without anybody confirming a handoff. */
+  manifestDispatched: boolean;
+}
+
 export interface DispatchHandoffResult {
   manifestId: string;
   status: ManifestStatus;
@@ -85,23 +106,87 @@ export class DispatchHandoffService {
   }
 
   /**
-   * Record that a parcel was scanned at the handover bench.
+   * Does a scan at the bench DISPATCH the parcel, or only record that it
+   * was checked?
+   *
+   * ON by default (2026-09-03), because the scan is the truest handover
+   * signal the system has: it happens per parcel, at the door, at the
+   * moment the box leaves — where confirm-handoff is one person
+   * asserting afterwards that forty parcels went. Kept as a switch
+   * rather than hardcoded for the same reason auto-pickup is: the day
+   * somebody scans parcels to check them IN rather than out, this is the
+   * one-line way back without a deploy.
+   *
+   * Fails OPEN to the old behaviour (stamp only) on an unreadable
+   * setting: recording a dispatch that did not happen is worse than
+   * making an operator click confirm-handoff.
+   */
+  private async handoverScanDispatches(): Promise<boolean> {
+    try {
+      const row = await this.prisma.client.systemSetting.findUnique({
+        where: { key: 'ops.handover_scan_dispatches' },
+        select: { valueBoolean: true },
+      });
+      return row?.valueBoolean === true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Scan a parcel at the handover bench — which is what actually hands
+   * it to the courier (2026-09-03).
    *
    * Keyed on the AWB because that is what is printed on the label in
-   * somebody's hand — not an id they would have to look up.
+   * somebody's hand — not an id they would have to look up. Looking the
+   * parcel up BY its waybill also means the "does this have an AWB"
+   * gate is satisfied by construction: an unlabelled parcel has nothing
+   * to scan, so it simply never reaches a driver, and it stays visibly
+   * unscanned rather than going out unbooked.
    *
-   * Idempotent by guard: scanning the same parcel twice keeps the FIRST
-   * time rather than moving it, so the record says when it was checked
-   * rather than when somebody last waved it at a reader.
+   * WHY THE SCAN AND NOT A BUTTON: the scan is per parcel, at the door,
+   * at the moment the box leaves. `confirmHandoff` is one person
+   * asserting afterwards that forty parcels went. Both record the same
+   * fact; only one of them was there. The button survives as the
+   * fallback for a driver who takes a stack before anyone scans it.
+   *
+   * SAGA, visible-vs-silent ordering (same shape as manual placement):
+   *   1. STAMP FIRST — `handoverScannedAt` via a guarded `updateMany`,
+   *      so it records when the parcel was checked, not when somebody
+   *      last waved it at a reader.
+   *   2. TRANSITION LAST — the order to DISPATCHED (PACKED → DISPATCHED
+   *      when nobody closed a manifest, PENDING_DISPATCH → DISPATCHED
+   *      when somebody did; both edges are stock-neutral under Model C,
+   *      because qtyOnHand already moved at pack).
+   * A crash between leaves a scanned-but-undispatched parcel — visible,
+   * and a re-scan converges (the stamp no-ops, the transition re-runs).
+   *
+   * Idempotent by design rather than by refusal: a repeat scan returns
+   * `alreadyScanned` instead of throwing. With the scan now carrying the
+   * dispatch, a second scan is the NORMAL shape — an operator who is not
+   * sure the first one registered — and an error there teaches people to
+   * ignore errors. Same reasoning as the CC-6 dual-path dequeue.
    */
   async recordHandoverScan(
     awbNumber: string,
     staffId: string,
-  ): Promise<{ shipmentNumber: string; alreadyScanned: boolean }> {
+    ctx?: ClientContext,
+  ): Promise<HandoverScanResult> {
     const awb = awbNumber.trim();
     const shipment = await this.prisma.client.shipment.findFirst({
       where: { awbNumber: awb, supersededAt: null, deletedAt: null },
-      select: { id: true, shipmentNumber: true, handoverScannedAt: true, status: true },
+      select: {
+        id: true,
+        shipmentNumber: true,
+        handoverScannedAt: true,
+        status: true,
+        manifestId: true,
+        orderShipments: {
+          select: { orderId: true, order: { select: { status: true, sellerId: true } } },
+          orderBy: { shipmentSequence: 'asc' },
+          take: 1,
+        },
+      },
     });
     if (shipment === null) {
       throw new NotFoundException({
@@ -109,17 +194,45 @@ export class DispatchHandoffService {
         message: `No live parcel carries AWB ${awb}`,
       });
     }
+    const orderId = shipment.orderShipments[0]?.orderId ?? null;
+    const orderStatus = shipment.orderShipments[0]?.order.status ?? null;
+    const sellerId = shipment.orderShipments[0]?.order.sellerId ?? null;
+
+    // Already gone. Not an error — see the idempotency note above.
     if (shipment.status === ShipmentStatus.HANDED_TO_COURIER) {
-      throw new ConflictException({
-        code: 'ALREADY_HANDED_OVER',
-        message: `${shipment.shipmentNumber} has already gone with a driver`,
-      });
+      return {
+        shipmentId: shipment.id,
+        shipmentNumber: shipment.shipmentNumber,
+        orderId,
+        alreadyScanned: true,
+        dispatched: true,
+        manifestDispatched: false,
+      };
     }
 
+    const dispatches = await this.handoverScanDispatches();
+
+    // The parcel has to be packed and still here. Anything else is
+    // named, because "cannot scan this" sends somebody hunting.
+    if (dispatches && orderStatus !== null && !HANDOVER_READY.has(orderStatus)) {
+      throw new ConflictException({
+        code: 'NOT_READY_FOR_HANDOVER',
+        message:
+          `${shipment.shipmentNumber} is ${orderStatus} — a parcel can only be handed over ` +
+          `once it is packed (PACKED or PENDING_DISPATCH)`,
+      });
+    }
+    if (dispatches && sellerId !== null) {
+      await this.restrictions.assertAllowed(sellerId, SellerCapability.SHIPMENT_DISPATCH);
+    }
+
+    // 1. STAMP FIRST (durable, operational, visible).
+    const now = new Date();
     const claimed = await this.prisma.client.shipment.updateMany({
       where: { id: shipment.id, handoverScannedAt: null },
-      data: { handoverScannedAt: new Date(), handoverScannedByStaffId: staffId },
+      data: { handoverScannedAt: now, handoverScannedByStaffId: staffId },
     });
+    const alreadyScanned = claimed.count === 0;
 
     await this.audit.log({
       actorType: ActorType.STAFF,
@@ -128,12 +241,157 @@ export class DispatchHandoffService {
       entityType: 'shipment',
       entityId: shipment.id,
       severity: 'LOW',
-      metadata: { awbNumber: awb, alreadyScanned: claimed.count === 0 },
+      metadata: {
+        awbNumber: awb,
+        alreadyScanned,
+        dispatchesOnScan: dispatches,
+        ipAddress: ctx?.ipAddress ?? null,
+        userAgent: ctx?.userAgent ?? null,
+        requestId: ctx?.requestId ?? null,
+      },
     });
 
-    return { shipmentNumber: shipment.shipmentNumber, alreadyScanned: claimed.count === 0 };
+    // Switch OFF: the old behaviour — the scan is a record, and a
+    // supervisor still confirms the handoff per manifest.
+    if (!dispatches || orderId === null || orderStatus === null) {
+      return {
+        shipmentId: shipment.id,
+        shipmentNumber: shipment.shipmentNumber,
+        orderId,
+        alreadyScanned,
+        dispatched: false,
+        manifestDispatched: false,
+      };
+    }
+
+    // 2. TRANSITION LAST — the authoritative "it left with a driver".
+    await this.orderWrite.transitionStatus({
+      orderId,
+      to: OrderStatus.DISPATCHED,
+      actor: { type: ActorType.STAFF, id: staffId },
+      expectedFrom: orderStatus,
+      reason: `Handed to courier at the bench (scanned ${awb})`,
+      ...(ctx !== undefined ? { ctx } : {}),
+    });
+    await this.prisma.client.shipment.update({
+      where: { id: shipment.id },
+      data: { status: ShipmentStatus.HANDED_TO_COURIER, pickedUpByCourierAt: now },
+    });
+
+    // R4 — the parcel left the building: walk its serialized units
+    // PACKED → DISPATCHED. Best-effort and guarded on fromStatus for the
+    // same reason as confirmHandoff: the courier already has the box, so
+    // a unit-ledger hiccup must not undo a real-world handover.
+    try {
+      await this.prisma.client.$transaction((tx) =>
+        this.units.advanceUnitsForShipment(tx, {
+          shipmentId: shipment.id,
+          fromStatus: StockUnitStatus.PACKED,
+          toStatus: StockUnitStatus.DISPATCHED,
+          gate: 'DISPATCH',
+          actorType: ActorType.STAFF,
+          actorId: staffId,
+        }),
+      );
+    } catch (unitErr) {
+      this.logger.warn(
+        { shipmentId: shipment.id, err: (unitErr as Error).message },
+        'Handover scan: unit ledger advance failed — parcel IS dispatched; discrepancy report will surface the units',
+      );
+    }
+
+    const manifestDispatched =
+      shipment.manifestId === null
+        ? false
+        : await this.flipManifestIfComplete(shipment.manifestId, staffId, ctx);
+
+    return {
+      shipmentId: shipment.id,
+      shipmentNumber: shipment.shipmentNumber,
+      orderId,
+      alreadyScanned,
+      dispatched: true,
+      manifestDispatched,
+    };
   }
 
+  /**
+   * Close the manifest out once its last parcel has been scanned.
+   *
+   * The manifest stops being something anybody operates: it is created
+   * for you at pack (WMS-7) and finished for you here. It survives as
+   * the grouping that answers "what went on Tuesday's van", which is a
+   * real question and is not answerable from a pile of parcels.
+   *
+   * Deliberately accepts ANY non-DISPATCHED state, including DRAFT. With
+   * the bench dispatching directly, a manifest nobody ever closed is the
+   * ORDINARY case, not an anomaly — and leaving it DRAFT while every one
+   * of its parcels is with a courier would be a lie in the one record
+   * kept for exactly that question.
+   *
+   * "Complete" means every LIVE parcel on it is HANDED_TO_COURIER. A
+   * parcel still sitting there — no AWB, unscanned, superseded onto a
+   * different manifest — holds the manifest open, which is the visible
+   * signal that something did not go.
+   */
+  private async flipManifestIfComplete(
+    manifestId: string,
+    staffId: string,
+    ctx?: ClientContext,
+  ): Promise<boolean> {
+    const live = await this.prisma.client.shipment.findMany({
+      where: {
+        manifestId,
+        supersededAt: null,
+        deletedAt: null,
+        status: { not: ShipmentStatus.CANCELLED },
+      },
+      select: { id: true, status: true },
+    });
+    if (live.length === 0) return false;
+    if (live.some((sh) => sh.status !== ShipmentStatus.HANDED_TO_COURIER)) return false;
+
+    const now = new Date();
+    const flipped = await this.prisma.client.manifest.updateMany({
+      where: { id: manifestId, status: { not: ManifestStatus.DISPATCHED } },
+      data: {
+        status: ManifestStatus.DISPATCHED,
+        handoffConfirmedAt: now,
+        handoffConfirmedByStaffId: staffId,
+      },
+    });
+    if (flipped.count === 0) return false;
+
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      actorId: staffId,
+      action: 'manifest.dispatched',
+      entityType: 'manifest',
+      entityId: manifestId,
+      severity: 'MEDIUM',
+      metadata: {
+        via: 'handover_scan',
+        shipmentCount: live.length,
+        ipAddress: ctx?.ipAddress ?? null,
+        userAgent: ctx?.userAgent ?? null,
+        requestId: ctx?.requestId ?? null,
+      },
+    });
+    return true;
+  }
+
+  /**
+   * The MANUAL fallback: a supervisor confirms, per manifest, that the
+   * driver took the parcels.
+   *
+   * With the bench dispatching each parcel as it is scanned, this is no
+   * longer the ordinary path — it is what you reach for when a driver
+   * took a stack before anybody scanned it, or when
+   * `ops.handover_scan_dispatches` is switched off. Parcels already
+   * dispatched by a scan are skipped by the `expectedFrom` guard and
+   * land in `failures` as stale-status, which is why a mixed manifest
+   * still closes out cleanly.
+   */
   async confirmHandoff(
     manifestId: string,
     /**

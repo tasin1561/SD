@@ -14,6 +14,7 @@ import {
   flushTestRedis,
   claimPick,
   resetAuthState,
+  settleAwb,
   waitFor,
   type AppHarness,
 } from './app-harness';
@@ -220,6 +221,81 @@ describe('Dispatch handoff endpoint (e2e)', () => {
     return { orderId, shipmentId, manifestId };
   }
 
+  /**
+   * Drive an order to PACKED and STOP — no manifest close, no confirm
+   * handoff. This is the ordinary shape once the bench dispatches: the
+   * manifest is created for you at pack and nobody ever opens it.
+   */
+  async function driveToPacked(qty = 2): Promise<{
+    orderId: string;
+    shipmentId: string;
+    manifestId: string;
+    awbNumber: string;
+  }> {
+    const created = await request(h.baseUrl)
+      .post('/seller/orders')
+      .set(sellerAuth)
+      .send({
+        recipientName: 'Asha Verma',
+        recipientPhoneE164: '+919876543210',
+        acknowledgeDuplicate: true,
+        recipientAddressLine1: '12 MG Road',
+        recipientAddressLine2: 'Near City Hospital',
+        recipientCity: 'Bengaluru',
+        recipientStateProvince: 'Karnataka',
+        recipientPostalCode: '560001',
+        paymentMode: 'COD',
+        codAmountInr: 999,
+        items: [{ variantId, quantity: qty }],
+      })
+      .expect(201);
+    const orderId = created.body.id as string;
+    await request(h.baseUrl).post(`/seller/orders/${orderId}/submit`).set(sellerAuth).expect(200);
+    await h.app.get(OrderWriteService).transitionStatus({
+      orderId,
+      to: OrderStatus.CONFIRMED,
+      actor: { type: ActorType.STAFF, id: staffId },
+    });
+    const shipment = await h.prisma.shipment.findFirstOrThrow({
+      where: { orderShipments: { some: { orderId } } },
+    });
+    // The AWB is generated at confirmation (CUR-2b) — settle it before
+    // picking so the pull is not racing the job's row lock.
+    await settleAwb(h.prisma, shipment.id);
+    await claimPick(h.baseUrl, staffAuth, shipment.id);
+    const resv = await h.prisma.stockReservation.findFirstOrThrow({
+      where: { orderId, status: 'ACTIVE', NOT: { binId: null } },
+    });
+    const items = await h.prisma.shipmentItem.findMany({
+      where: { shipmentId: shipment.id },
+      select: { id: true },
+    });
+    await request(h.baseUrl)
+      .post(`/warehouse/picks/${shipment.id}/items`)
+      .set(staffAuth)
+      .send({
+        shipmentItemId: items[0]!.id,
+        pickedBinId: resv.binId,
+        pickedBatchId: resv.batchId,
+      })
+      .expect(200);
+    await request(h.baseUrl)
+      .post(`/warehouse/picks/${shipment.id}/complete`)
+      .set(staffAuth)
+      .expect(200);
+    const pack = await request(h.baseUrl)
+      .post(`/warehouse/packs/${shipment.id}/complete`)
+      .set(staffAuth)
+      .expect(200);
+    const withAwb = await h.prisma.shipment.findUniqueOrThrow({ where: { id: shipment.id } });
+    return {
+      orderId,
+      shipmentId: shipment.id,
+      manifestId: pack.body.manifestId as string,
+      awbNumber: withAwb.awbNumber as string,
+    };
+  }
+
   async function stockOf(): Promise<{ qtyOnHand: number; qtyReserved: number }> {
     const level = await h.prisma.stockLevel.findFirstOrThrow({
       where: { variantId, binId },
@@ -398,5 +474,116 @@ describe('Dispatch handoff endpoint (e2e)', () => {
       .post(`/admin/courier/manifests/${pack.body.manifestId}/confirm-handoff`)
       .set(staffAuth)
       .expect(409);
+  });
+
+  it('THE BENCH IS THE HANDOVER: one scan dispatches a PACKED parcel, no manifest touched', async () => {
+    await receiveStock(10);
+    const { orderId, shipmentId, manifestId, awbNumber } = await driveToPacked(2);
+
+    // Nobody closed anything. The manifest is DRAFT and the order is
+    // PACKED — the state a warehouse is actually in when a van arrives.
+    const before = await h.prisma.manifest.findUniqueOrThrow({ where: { id: manifestId } });
+    expect(before.status).toBe(ManifestStatus.DRAFT);
+    expect((await h.prisma.order.findUniqueOrThrow({ where: { id: orderId } })).status).toBe(
+      OrderStatus.PACKED,
+    );
+    expect(await stockOf()).toEqual({ qtyOnHand: 8, qtyReserved: 0 });
+
+    const res = await request(h.baseUrl)
+      .post('/admin/courier/handover-scan')
+      .set(staffAuth)
+      .send({ awbNumber })
+      .expect(200);
+    expect(res.body).toMatchObject({
+      shipmentId,
+      orderId,
+      alreadyScanned: false,
+      dispatched: true,
+      manifestDispatched: true,
+    });
+
+    // The parcel is with the courier, by one scan.
+    expect((await h.prisma.order.findUniqueOrThrow({ where: { id: orderId } })).status).toBe(
+      OrderStatus.DISPATCHED,
+    );
+    const ship = await h.prisma.shipment.findUniqueOrThrow({ where: { id: shipmentId } });
+    expect(ship.status).toBe(ShipmentStatus.HANDED_TO_COURIER);
+    expect(ship.handoverScannedAt).not.toBeNull();
+    expect(ship.pickedUpByCourierAt).not.toBeNull();
+
+    // The manifest closed itself out — it is a record, not a step.
+    const after = await h.prisma.manifest.findUniqueOrThrow({ where: { id: manifestId } });
+    expect(after.status).toBe(ManifestStatus.DISPATCHED);
+    expect(after.handoffConfirmedAt).not.toBeNull();
+
+    // Stock-neutral: the decrement happened at pack (Model C).
+    expect(await stockOf()).toEqual({ qtyOnHand: 8, qtyReserved: 0 });
+    const packMovements = await h.prisma.stockMovement.findMany({
+      where: { orderId, type: StockMovementType.PACK_CONFIRM },
+    });
+    expect(packMovements).toHaveLength(1);
+  });
+
+  it('a repeat scan is a no-op — not an error, and nothing moves twice', async () => {
+    await receiveStock(10);
+    const { orderId, awbNumber } = await driveToPacked(2);
+
+    await request(h.baseUrl)
+      .post('/admin/courier/handover-scan')
+      .set(staffAuth)
+      .send({ awbNumber })
+      .expect(200);
+    const second = await request(h.baseUrl)
+      .post('/admin/courier/handover-scan')
+      .set(staffAuth)
+      .send({ awbNumber })
+      .expect(200);
+    expect(second.body).toMatchObject({ alreadyScanned: true, dispatched: true });
+
+    const events = await h.prisma.orderEvent.findMany({
+      where: { orderId, toStatus: OrderStatus.DISPATCHED },
+    });
+    expect(events).toHaveLength(1);
+    expect(await stockOf()).toEqual({ qtyOnHand: 8, qtyReserved: 0 });
+  });
+
+  it('refuses a parcel that has not been packed, and names where it actually is', async () => {
+    await receiveStock(10);
+    const created = await request(h.baseUrl)
+      .post('/seller/orders')
+      .set(sellerAuth)
+      .send({
+        recipientName: 'Too Early',
+        recipientPhoneE164: '+919876500077',
+        recipientAddressLine1: '12 MG Road',
+        recipientAddressLine2: 'Near City Hospital',
+        recipientCity: 'Bengaluru',
+        recipientStateProvince: 'Karnataka',
+        recipientPostalCode: '560001',
+        paymentMode: 'COD',
+        codAmountInr: 999,
+        items: [{ variantId, quantity: 2 }],
+      })
+      .expect(201);
+    const orderId = created.body.id as string;
+    await request(h.baseUrl).post(`/seller/orders/${orderId}/submit`).set(sellerAuth).expect(200);
+    await h.app.get(OrderWriteService).transitionStatus({
+      orderId,
+      to: OrderStatus.CONFIRMED,
+      actor: { type: ActorType.STAFF, id: staffId },
+    });
+    const shipment = await h.prisma.shipment.findFirstOrThrow({
+      where: { orderShipments: { some: { orderId } } },
+    });
+    await settleAwb(h.prisma, shipment.id);
+    const withAwb = await h.prisma.shipment.findUniqueOrThrow({ where: { id: shipment.id } });
+
+    const res = await request(h.baseUrl)
+      .post('/admin/courier/handover-scan')
+      .set(staffAuth)
+      .send({ awbNumber: withAwb.awbNumber })
+      .expect(409);
+    expect(res.body.code).toBe('NOT_READY_FOR_HANDOVER');
+    expect(res.body.message).toContain('CONFIRMED');
   });
 });

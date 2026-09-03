@@ -138,6 +138,18 @@ describe('OrderStateMachineService', () => {
       ]);
     });
 
+    it('PACKED → DISPATCHED exists, so the handover bench can dispatch without a manifest', () => {
+      // The scan at the door is the true handover. Before this edge
+      // existed, the ONLY way out of PACKED was ManifestService.close,
+      // which made an internal grouping a mandatory step in a physical
+      // process it has nothing to do with.
+      expect(sm.isValidTransition(OrderStatus.PACKED, OrderStatus.DISPATCHED)).toBe(true);
+    });
+
+    it('PACKED → DISPATCHED is STOCK-NEUTRAL (Model C — the box was already counted out at pack)', () => {
+      expect(sm.requiredSideEffects(OrderStatus.PACKED, OrderStatus.DISPATCHED)).toEqual([]);
+    });
+
     it('PENDING_DISPATCH → DISPATCHED is STOCK-NEUTRAL (Model C — decremented + fulfilled at PACK already)', () => {
       expect(sm.requiredSideEffects(OrderStatus.PENDING_DISPATCH, OrderStatus.DISPATCHED)).toEqual(
         [],

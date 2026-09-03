@@ -3351,21 +3351,31 @@ export function useMarkBatchPicked(): UseMutationResult<
   });
 }
 
-export function useHandoverScan(): UseMutationResult<
-  { shipmentNumber: string; alreadyScanned: boolean },
-  Error,
-  string
-> {
+export interface HandoverScanResult {
+  shipmentId: string;
+  shipmentNumber: string;
+  orderId: string | null;
+  alreadyScanned: boolean;
+  /** The scan handed the parcel over — the order is DISPATCHED. */
+  dispatched: boolean;
+  /** This was the manifest's last parcel, so it closed itself out. */
+  manifestDispatched: boolean;
+}
+
+export function useHandoverScan(): UseMutationResult<HandoverScanResult, Error, string> {
   const client = useApiClient();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (awbNumber) =>
-      client.request<{ shipmentNumber: string; alreadyScanned: boolean }>(
-        '/api/admin/courier/handover-scan',
-        { method: 'POST', body: { awbNumber } },
-      ),
+      client.request<HandoverScanResult>('/api/admin/courier/handover-scan', {
+        method: 'POST',
+        body: { awbNumber },
+      }),
     onSuccess: () => {
+      // The scan dispatches, so the order lists move too — not just the
+      // manifest it belonged to.
       void qc.invalidateQueries({ queryKey: ['admin-manifests'] });
+      void qc.invalidateQueries({ queryKey: ['admin-orders'] });
     },
   });
 }

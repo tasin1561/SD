@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRef, useState, type ReactElement } from 'react';
 import { Check, ScanLine } from 'lucide-react';
 import {
@@ -36,9 +37,15 @@ export function HandoverBench(): ReactElement {
   const [code, setCode] = useState('');
   const [camera, setCamera] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
-  const [done, setDone] = useState<Array<{ shipmentNumber: string; awb: string; repeat: boolean }>>(
-    [],
-  );
+  const [done, setDone] = useState<
+    Array<{
+      shipmentNumber: string;
+      awb: string;
+      repeat: boolean;
+      dispatched: boolean;
+      manifestDispatched: boolean;
+    }>
+  >([]);
 
   async function submit(value: string): Promise<void> {
     const awb = value.trim();
@@ -47,7 +54,13 @@ export function HandoverBench(): ReactElement {
     try {
       const r = await scan.mutateAsync(awb);
       setDone((prev) => [
-        { shipmentNumber: r.shipmentNumber, awb, repeat: r.alreadyScanned },
+        {
+          shipmentNumber: r.shipmentNumber,
+          awb,
+          repeat: r.alreadyScanned,
+          dispatched: r.dispatched,
+          manifestDispatched: r.manifestDispatched,
+        },
         ...prev,
       ]);
     } catch (err) {
@@ -64,7 +77,7 @@ export function HandoverBench(): ReactElement {
     <Section>
       <PageHeader
         title="Handover"
-        subtitle="Scan every parcel as it goes onto the van. While this is switched on, a handoff refuses anything that was not scanned."
+        subtitle="Scan every parcel as it goes onto the van. The scan is the handover: the parcel is dispatched the moment it is read, and the manifest closes itself once its last parcel goes."
       />
 
       <Card>
@@ -94,6 +107,15 @@ export function HandoverBench(): ReactElement {
           <p className="text-text-faint mt-1.5 text-xs">
             {done.length === 0 ? 'Nothing scanned yet.' : `${done.length} scanned in this session.`}
           </p>
+          {/* The manifest is no longer a step, but "what went out on
+              Tuesday's van" is still a real question, and this is where
+              somebody stands when they ask it. */}
+          <p className="text-text-faint mt-3 text-xs">
+            <Link href="/warehouse/manifests" className="hover:text-text underline">
+              Manifest history
+            </Link>{' '}
+            — closed out automatically as each van finishes loading.
+          </p>
         </CardBody>
       </Card>
 
@@ -108,10 +130,15 @@ export function HandoverBench(): ReactElement {
                     <div className="text-text-muted font-mono text-xs">{d.awb}</div>
                   </div>
                   {d.repeat ? (
-                    <StatusBadge kind="draft" label="already scanned" />
+                    <StatusBadge kind="draft" label="already gone" />
                   ) : (
-                    <span className="text-status-delivered-fg flex items-center gap-1 text-xs font-medium">
-                      <Check size={13} /> scanned
+                    <span className="flex items-center gap-2">
+                      {d.manifestDispatched && (
+                        <span className="text-text-faint text-xs">manifest closed</span>
+                      )}
+                      <span className="text-status-delivered-fg flex items-center gap-1 text-xs font-medium">
+                        <Check size={13} /> {d.dispatched ? 'dispatched' : 'scanned'}
+                      </span>
                     </span>
                   )}
                 </li>

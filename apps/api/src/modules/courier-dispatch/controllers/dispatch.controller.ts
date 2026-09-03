@@ -21,6 +21,7 @@ import type { AuthenticatedStaff } from '../../../common/types/request';
 import {
   DispatchHandoffService,
   type DispatchHandoffResult,
+  type HandoverScanResult,
 } from '../services/dispatch-handoff.service';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 import { HandoverScanDto } from '../dto/handover-scan.dto';
@@ -53,13 +54,14 @@ export class DispatchController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Record that a parcel was scanned at the handover bench, by AWB. When ops.handover_scan_required is on, confirm-handoff REFUSES any parcel without this',
+      'Scan a parcel at the handover bench, by AWB — this is what hands it to the courier: the order goes DISPATCHED and the manifest closes itself once its last parcel is scanned (ops.handover_scan_dispatches, ON by default). With the switch off it only records the scan, and confirm-handoff stays the dispatch step',
   })
   handoverScan(
     @Body() body: HandoverScanDto,
     @CurrentStaff() staff: AuthenticatedStaff,
-  ): Promise<{ shipmentNumber: string; alreadyScanned: boolean }> {
-    return this.handoff.recordHandoverScan(body.awbNumber, staff.id);
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<HandoverScanResult> {
+    return this.handoff.recordHandoverScan(body.awbNumber, staff.id, ctx);
   }
 
   @Post('manifests/:manifestId/confirm-handoff')
