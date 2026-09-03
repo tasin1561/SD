@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { OrderModule } from '../order/order.module';
 import { InventoryStockModule } from '../inventory-stock/inventory-stock.module';
 import { PickQueueService } from './services/pick-queue.service';
-import { PickAllocationService } from './services/pick-allocation.service';
+import { PickAllocationModule } from '../pick-allocation/pick-allocation.module';
 import { PickExecutionService } from './services/pick-execution.service';
 import { PickExpirationService } from './services/pick-expiration.service';
 import { PickExpirationQueue } from './queue/pick-expiration.queue';
@@ -31,11 +31,10 @@ import { InventorySharedModule } from '../inventory-shared/inventory-shared.modu
  * AuditLogService + RedisService are global.
  */
 @Module({
-  imports: [OrderModule, InventoryStockModule, InventorySharedModule],
+  imports: [PickAllocationModule, OrderModule, InventoryStockModule, InventorySharedModule],
   controllers: [PickerController, AdminPickController],
   providers: [
     PickQueueService,
-    PickAllocationService,
     PickExecutionService,
     PickExpirationService,
     PickExpirationQueue,

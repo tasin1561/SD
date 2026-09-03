@@ -86,6 +86,9 @@ model StaffUser {
   shipmentItemsRtoDisposed   ShipmentItem[]                @relation("ShipmentItemRtoDisposedBy")
   manifestsClosed            Manifest[]                    @relation("ManifestClosedBy")
   manifestsHandoffConfirmed  Manifest[]                    @relation("ManifestHandoffConfirmedBy")
+  shipmentLabelsPrinted      Shipment[]                    @relation("ShipmentLabelPrintedBy")
+  pickBatchesPrinted         PickBatch[]                   @relation("PickBatchPrintedBy")
+  pickBatchesCreated         PickBatch[]                   @relation("PickBatchCreatedBy")
   remittancesCreated         Remittance[]                  @relation("RemittanceStaff")
   withdrawalRequestsResolved WithdrawalRequest[]           @relation("WithdrawalRequestResolvedBy")
   ticketsOpened              Ticket[]                      @relation("TicketOpenedByStaff")
@@ -605,6 +608,7 @@ model Warehouse {
   shipmentsAsRtoReceived Shipment[]             @relation("ShipmentRtoReceivedWarehouse")
   stockAlertStates       StockAlertState[]
   manifests              Manifest[]
+  pickBatches            PickBatch[]
   stockUnits             StockUnit[]
   pickupRequests         CourierPickupRequest[]
 
@@ -3261,6 +3265,14 @@ model Shipment {
   packCompletedAt        DateTime?        @map("pack_completed_at") @db.Timestamptz
   packedByStaffId        String?          @map("packed_by_staff_id") @db.Uuid
   manifestId             String?          @map("manifest_id") @db.Uuid
+  /// When the shipping label was PRINTED, and by whom. Distinct from
+  /// `awbGeneratedAt`: a waybill can exist for days before anybody puts
+  /// it on paper, and it is the paper that decides whether a parcel can
+  /// be picked. Null means it has not been printed.
+  labelPrintedAt         DateTime?        @map("label_printed_at") @db.Timestamptz
+  labelPrintedByStaffId  String?          @map("label_printed_by_staff_id") @db.Uuid
+  /// The picking batch this parcel was printed onto, if any.
+  pickBatchId            String?          @map("pick_batch_id") @db.Uuid
   // R1 (revised-plan roadmap): WHICH courier account this shipment was
   // routed through — nullable (pre-R1 shipments and stub-mode/no-
   // account-configured flows have none). Populated by
@@ -3281,6 +3293,8 @@ model Shipment {
   pickStartedBy        StaffUser?        @relation("ShipmentPickStartedBy", fields: [pickStartedByStaffId], references: [id])
   packedBy             StaffUser?        @relation("ShipmentPackedBy", fields: [packedByStaffId], references: [id])
   manifest             Manifest?         @relation(fields: [manifestId], references: [id])
+  labelPrintedBy       StaffUser?        @relation("ShipmentLabelPrintedBy", fields: [labelPrintedByStaffId], references: [id])
+  pickBatch            PickBatch?        @relation(fields: [pickBatchId], references: [id])
   orderShipments       OrderShipment[]
   items                ShipmentItem[]
   packBoxes            PackBox[]
@@ -3384,6 +3398,56 @@ model ShipmentItem {
 // via the nullable Shipment.manifestId. ManifestStatus lifecycle
 // (Module 9): DRAFT → CLOSED → CONFIRMED → DISPATCHED, with a FAILED
 // branch when the whole AWB batch fails.
+/// A batch of parcels whose picking list was printed together.
+///
+/// The unit of work on the warehouse floor. A picker is handed ONE sheet
+/// listing every variant to fetch, consolidated across the orders on it,
+/// with a shelf location per line — so they walk the aisles once rather
+/// than once per parcel.
+///
+/// Printing is the commitment: confirming the print ALLOCATES each line
+/// to a bin and batch (phase-2), which is what makes the locations on
+/// the paper real rather than a guess. A shortfall surfaces at the desk,
+/// before anyone has walked anywhere.
+model PickBatch {
+  id               String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  batchNumber      String          @unique @map("batch_number")
+  warehouseId      String          @map("warehouse_id") @db.Uuid
+  status           PickBatchStatus @default(DRAFT)
+  /// Stamped when the picker confirms the sheet came out of the printer.
+  /// Until then the batch exists but no stock is allocated to it.
+  printedAt        DateTime?       @map("printed_at") @db.Timestamptz
+  printedByStaffId String?         @map("printed_by_staff_id") @db.Uuid
+  createdByStaffId String?         @map("created_by_staff_id") @db.Uuid
+  notes            String?         @db.Text
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+
+  warehouse Warehouse  @relation(fields: [warehouseId], references: [id])
+  printedBy StaffUser? @relation("PickBatchPrintedBy", fields: [printedByStaffId], references: [id])
+  createdBy StaffUser? @relation("PickBatchCreatedBy", fields: [createdByStaffId], references: [id])
+  shipments Shipment[]
+
+  @@index([status, createdAt])
+  @@index([warehouseId])
+  @@index([createdByStaffId])
+  @@index([printedByStaffId])
+  @@map("pick_batches")
+}
+
+enum PickBatchStatus {
+  /// Selected, sheet not yet confirmed printed. No stock allocated.
+  DRAFT     @map("draft")
+  /// The sheet is on paper and the stock is allocated to bins.
+  PRINTED   @map("printed")
+  /// Every parcel on it has been packed.
+  COMPLETED @map("completed")
+  /// Abandoned before printing; the parcels return to the queue.
+  CANCELLED @map("cancelled")
+
+  @@map("pick_batch_status")
+}
+
 model Manifest {
   id                        String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
   manifestNumber            String         @unique @map("manifest_number")

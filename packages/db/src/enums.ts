@@ -56,6 +56,7 @@ export {
   CallQueueStatus,
   AssignmentMethod,
   CallQueueReason,
+  PickBatchStatus,
   QueueClosureReason,
   CallHoldOutcome,
   ReattemptRequestStatus,

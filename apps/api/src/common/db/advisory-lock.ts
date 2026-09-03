@@ -20,6 +20,8 @@ import type { Prisma } from '@skydrop/db';
 export const AdvisoryLock = {
   /** 'MF' — manifest number allocation (WMS-7). */
   MANIFEST_NUMBER: 0x04d46,
+  /** 0x05042 = 'PB' — pick-batch numbering. */
+  PICK_BATCH_NUMBER: 0x05042,
   /** Manifest find-or-create per (courier, warehouse) (WMS-7). */
   MANIFEST_ATTACH: 0x04d47,
   /** delivery_attempts count-then-insert per shipment (TRK-2). */

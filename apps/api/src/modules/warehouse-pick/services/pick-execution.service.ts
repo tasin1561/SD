@@ -21,7 +21,7 @@ import type { AppliedAllocation } from '../../inventory-stock/services/stock-pic
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { InventoryModeService } from '../../inventory-shared/inventory-mode.service';
 import { StockUnitService } from '../../inventory-shared/stock-unit.service';
-import { PickAllocationService } from './pick-allocation.service';
+import { PickAllocationService } from '../../pick-allocation/pick-allocation.service';
 
 export interface PickAllocationSummary {
   reservationId: string;

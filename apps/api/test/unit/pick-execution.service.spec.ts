@@ -5,7 +5,7 @@ import type { PrismaService } from '../../src/infrastructure/prisma/prisma.servi
 import type { OrderReadService } from '../../src/modules/order/services/order-read.service';
 import type { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import type { StockReservationService } from '../../src/modules/inventory-stock/services/stock-reservation.service';
-import type { PickAllocationService } from '../../src/modules/warehouse-pick/services/pick-allocation.service';
+import type { PickAllocationService } from '../../src/modules/pick-allocation/pick-allocation.service';
 import type { AppliedAllocation } from '../../src/modules/inventory-stock/services/stock-pick-allocation.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { StockUnitService } from '../../src/modules/inventory-shared/stock-unit.service';

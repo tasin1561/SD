@@ -1,10 +1,10 @@
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { ActorType } from '@skydrop/db';
-import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import {
   StockPickAllocationService,
   type AppliedAllocation,
-} from '../../inventory-stock/services/stock-pick-allocation.service';
+} from '../inventory-stock/services/stock-pick-allocation.service';
 
 const RETRY_MAX_SETTING_KEY = 'ops.pick_allocation_retry_max';
 const RETRY_BACKOFF_SETTING_KEY = 'ops.pick_allocation_retry_backoff_ms';

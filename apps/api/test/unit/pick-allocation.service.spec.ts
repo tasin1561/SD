@@ -1,6 +1,6 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ActorType } from '@skydrop/db';
-import { PickAllocationService } from '../../src/modules/warehouse-pick/services/pick-allocation.service';
+import { PickAllocationService } from '../../src/modules/pick-allocation/pick-allocation.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type {
   StockPickAllocationService,

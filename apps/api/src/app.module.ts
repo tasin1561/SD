@@ -105,6 +105,7 @@ import { DeliveryActionModule } from './modules/delivery-action/delivery-action.
 import { CourierServiceabilityModule } from './modules/courier-serviceability/courier-serviceability.module';
 import { CourierShiprocketModule } from './modules/courier-shiprocket/courier-shiprocket.module';
 import { ShipmentAddressModule } from './modules/shipment-address/shipment-address.module';
+import { WarehousePrintingModule } from './modules/warehouse-printing/warehouse-printing.module';
 
 @Module({
   imports: [
@@ -174,6 +175,7 @@ import { ShipmentAddressModule } from './modules/shipment-address/shipment-addre
     ShipmentProvisionModule,
     WarehousePickModule,
     WarehouseManifestModule,
+    WarehousePrintingModule,
     WarehousePackModule,
     WarehouseRtoModule,
     WarehouseBinOpsModule,
