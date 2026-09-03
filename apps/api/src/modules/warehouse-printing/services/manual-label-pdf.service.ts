@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 
+import { encodeCode128B, isEncodableCode128B } from './code128';
+
 export interface ManualLabelPayload {
   readonly awbNumber: string;
   readonly courierName: string;
@@ -81,6 +83,56 @@ export class ManualLabelPdfService {
     });
   }
 
+  /**
+   * Draw the waybill as a Code 128 barcode, returning the y to carry on
+   * from.
+   *
+   * Sized to FIT rather than to a fixed module width: a long
+   * alphanumeric docket number and a short numeric one both have to
+   * live in the same cell, and a barcode overflowing its box is one a
+   * scanner reads as a different, shorter number.
+   *
+   * If the value cannot be encoded we draw NOTHING and let the digits
+   * stand alone. A partial barcode is worse than none — it scans, and
+   * it scans wrongly.
+   */
+  private drawBarcode(
+    doc: InstanceType<typeof PDFDocument>,
+    value: string,
+    x: number,
+    y: number,
+    maxWidth: number,
+  ): number {
+    if (!isEncodableCode128B(value)) return y;
+
+    let widths: number[];
+    try {
+      widths = encodeCode128B(value);
+    } catch {
+      return y;
+    }
+
+    const modules = widths.reduce((n, m) => n + m, 0);
+    // A quiet zone of 10 modules each side is what the spec asks for,
+    // and it is the part people leave out and then wonder why the
+    // scanner will not read the first digit.
+    const unit = maxWidth / (modules + 20);
+    const height = 26;
+
+    let cursor = x + unit * 10;
+    let bar = true;
+    doc.save().fillColor('#000000');
+    for (const width of widths) {
+      const barWidth = width * unit;
+      if (bar) doc.rect(cursor, y, barWidth, height).fill();
+      cursor += barWidth;
+      bar = !bar;
+    }
+    doc.restore();
+
+    return y + height + 3;
+  }
+
   private drawLabel(
     doc: InstanceType<typeof PDFDocument>,
     l: ManualLabelPayload,
@@ -109,21 +161,28 @@ export class ManualLabelPdfService {
       });
     cy += 18;
 
-    // The waybill, as large as the cell allows — it is the one thing
-    // anybody reads off this label under warehouse lighting.
+    // The waybill — SCANNED far more often than it is read. Our own
+    // pack bench and handover bench both read it off this label, and a
+    // number somebody has to type is a number somebody mistypes.
     doc
       .fontSize(7)
       .font('Helvetica')
       .text('AWB', x + pad, cy);
     cy += 9;
+    cy = this.drawBarcode(doc, l.awbNumber, x + pad, cy, w - pad * 2);
+
+    // The digits stay UNDER the bars — the convention, and the
+    // fallback: a smudged or badly-printed barcode still leaves a human
+    // able to read the parcel's number.
     doc
-      .fontSize(16)
+      .fontSize(13)
       .font('Helvetica-Bold')
       .text(l.awbNumber, x + pad, cy, {
         width: w - pad * 2,
         ellipsis: true,
+        characterSpacing: 1,
       });
-    cy += 22;
+    cy += 18;
 
     doc
       .moveTo(x + pad, cy)
