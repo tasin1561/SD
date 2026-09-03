@@ -10,6 +10,7 @@ import {
   Grid3x3,
   Ship,
   FileText,
+  Printer,
 } from 'lucide-react';
 
 /**
@@ -41,6 +42,12 @@ export default function WarehouseHubPage(): ReactElement {
           icon={<Inbox size={20} />}
           title="Receive"
           subtitle="Where counting happens. Claim, record qty/damage, putaway, complete — this is the step that writes stock, for consignments and ordinary receipts alike."
+        />
+        <Tile
+          href="/warehouse/printing"
+          icon={<Printer size={20} />}
+          title="Printing"
+          subtitle="Shipping labels, then the picking sheet. The floor works from paper — this is where it comes from."
         />
         <Tile
           href="/warehouse/pick"

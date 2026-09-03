@@ -3102,3 +3102,226 @@ export function useChangeConsignee(): UseMutationResult<
     },
   });
 }
+
+// ── Print-first picking ───────────────────────────────────────────────
+
+export interface PrintQueueRow {
+  shipmentId: string;
+  shipmentNumber: string;
+  orderId: string;
+  orderNumber: string;
+  sellerCompanyName: string | null;
+  warehouseId: string;
+  warehouseName: string;
+  courierCode: string;
+  courierName: string;
+  awbNumber: string | null;
+  isManualCourier: boolean;
+  destCity: string;
+  destPostalCode: string;
+  codAmountInr: string | null;
+  itemCount: number;
+  confirmedAtIso: string | null;
+  labelPrintedAtIso: string | null;
+}
+
+export interface LabelSheetResult {
+  pdfBase64: string;
+  fileName: string;
+  shipmentCount: number;
+  pageCount: number;
+  failed: Array<{ shipmentId: string; shipmentNumber: string; reason: string }>;
+}
+
+export interface PickBatchView {
+  id: string;
+  batchNumber: string;
+  status: 'DRAFT' | 'PRINTED' | 'COMPLETED' | 'CANCELLED';
+  warehouseId: string;
+  warehouseName: string;
+  shipmentCount: number;
+  totalUnits: number;
+  createdAtIso: string;
+  createdByName: string | null;
+  printedAtIso: string | null;
+  printedByName: string | null;
+  shipments: Array<{
+    shipmentId: string;
+    shipmentNumber: string;
+    orderNumber: string;
+    awbNumber: string | null;
+  }>;
+}
+
+export interface PickListResult {
+  batchId: string;
+  batchNumber: string;
+  pdfBase64: string;
+  fileName: string;
+  lineCount: number;
+  strictMode: boolean;
+  shortfalls: Array<{ skuCode: string; reason: string }>;
+}
+
+export interface ProductLocationRow {
+  variantId: string;
+  skuCode: string;
+  productName: string;
+  variantLabel: string | null;
+  barcode: string | null;
+  sellerCompanyName: string | null;
+  locations: Array<{
+    warehouseName: string;
+    zoneName: string | null;
+    binCode: string;
+    binType: string;
+    qtyOnHand: number;
+    pickable: boolean;
+  }>;
+}
+
+export function useLabelQueue(): UseQueryResult<PrintQueueRow[], Error> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin', 'label-queue'],
+    queryFn: () => client.request<PrintQueueRow[]>('/api/admin/warehouse/printing/label-queue'),
+  });
+}
+
+export function usePickPrintQueue(): UseQueryResult<PrintQueueRow[], Error> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin', 'pick-print-queue'],
+    queryFn: () => client.request<PrintQueueRow[]>('/api/admin/warehouse/printing/pick-queue'),
+  });
+}
+
+export function useBuildLabels(): UseMutationResult<LabelSheetResult, Error, string[]> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: (shipmentIds) =>
+      client.request<LabelSheetResult>('/api/admin/warehouse/printing/labels/build', {
+        method: 'POST',
+        body: { shipmentIds },
+      }),
+  });
+}
+
+export function useConfirmLabelsPrinted(): UseMutationResult<
+  { confirmed: number; alreadyPrinted: number },
+  Error,
+  string[]
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (shipmentIds) =>
+      client.request<{ confirmed: number; alreadyPrinted: number }>(
+        '/api/admin/warehouse/printing/labels/confirm-printed',
+        { method: 'POST', body: { shipmentIds } },
+      ),
+    onSuccess: () => {
+      // The parcel leaves one tab and appears in the other. Both.
+      void qc.invalidateQueries({ queryKey: ['admin', 'label-queue'] });
+      void qc.invalidateQueries({ queryKey: ['admin', 'pick-print-queue'] });
+    },
+  });
+}
+
+export function useCreatePickBatch(): UseMutationResult<PickBatchView, Error, string[]> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (shipmentIds) =>
+      client.request<PickBatchView>('/api/admin/warehouse/printing/pick-batches', {
+        method: 'POST',
+        body: { shipmentIds },
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'pick-print-queue'] });
+      void qc.invalidateQueries({ queryKey: ['admin', 'pick-batches'] });
+    },
+  });
+}
+
+export function useBuildPickList(): UseMutationResult<PickListResult, Error, string> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: (batchId) =>
+      client.request<PickListResult>(
+        `/api/admin/warehouse/printing/pick-batches/${batchId}/build-list`,
+        { method: 'POST' },
+      ),
+  });
+}
+
+export function useConfirmPickListPrinted(): UseMutationResult<
+  { batchNumber: string; alreadyPrinted: boolean; transitioned: number },
+  Error,
+  string
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (batchId) =>
+      client.request<{ batchNumber: string; alreadyPrinted: boolean; transitioned: number }>(
+        `/api/admin/warehouse/printing/pick-batches/${batchId}/confirm-printed`,
+        { method: 'POST' },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'pick-batches'] });
+      void qc.invalidateQueries({ queryKey: ['admin', 'pick-print-queue'] });
+      void qc.invalidateQueries({ queryKey: ['admin-orders'] });
+    },
+  });
+}
+
+export function useCancelPickBatch(): UseMutationResult<void, Error, string> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (batchId) =>
+      client.request<void>(`/api/admin/warehouse/printing/pick-batches/${batchId}/cancel`, {
+        method: 'POST',
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'pick-batches'] });
+      void qc.invalidateQueries({ queryKey: ['admin', 'pick-print-queue'] });
+    },
+  });
+}
+
+export function usePickBatches(search: string): UseQueryResult<PickBatchView[], Error> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin', 'pick-batches', search],
+    queryFn: () => {
+      const qs = search.trim() === '' ? '' : `?search=${encodeURIComponent(search.trim())}`;
+      return client.request<PickBatchView[]>(`/api/admin/warehouse/printing/pick-batches${qs}`);
+    },
+  });
+}
+
+export function usePickBatch(batchId: string | null): UseQueryResult<PickBatchView, Error> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin', 'pick-batch', batchId],
+    enabled: batchId !== null,
+    queryFn: () =>
+      client.request<PickBatchView>(`/api/admin/warehouse/printing/pick-batches/${batchId ?? ''}`),
+  });
+}
+
+export function useProductLocations(query: string): UseQueryResult<ProductLocationRow[], Error> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin', 'product-locations', query],
+    // Two characters is the server's own floor; asking below it just
+    // returns an empty list at the cost of a round trip.
+    enabled: query.trim().length >= 2,
+    queryFn: () =>
+      client.request<ProductLocationRow[]>(
+        `/api/admin/warehouse/printing/product-locations?q=${encodeURIComponent(query.trim())}`,
+      ),
+  });
+}

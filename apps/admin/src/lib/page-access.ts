@@ -79,6 +79,7 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   // needs that permission, so gating it here hides the nav entry too —
   // rather than showing a link to a page that 403s on load.
   ['/manual-placement', 'courier.manual_placement'],
+  ['/warehouse/printing', 'warehouse.pick'],
   ['/remittances', 'money.view'],
   // A withdrawal destination is money, not seller admin — and the API
   // guards all three of its endpoints on this one permission.
