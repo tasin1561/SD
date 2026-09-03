@@ -2,7 +2,7 @@ import {
   code128Modules,
   encodeCode128B,
   isEncodableCode128B,
-} from '../../src/modules/warehouse-printing/services/code128';
+} from '../../src/common/barcode/code128';
 
 /**
  * Verified against the published Code 128 specification rather than

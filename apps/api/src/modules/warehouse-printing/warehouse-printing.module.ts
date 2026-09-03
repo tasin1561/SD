@@ -10,6 +10,7 @@ import { WarehousePrintingController } from './controllers/warehouse-printing.co
 import { LabelPrintService } from './services/label-print.service';
 import { LabelSheetService } from './services/label-sheet.service';
 import { ManualLabelPdfService } from './services/manual-label-pdf.service';
+import { SkuLabelService } from './services/sku-label.service';
 import { PickBatchNumberingService } from './services/pick-batch-numbering.service';
 import { PickBatchService } from './services/pick-batch.service';
 import { PickListPdfService } from './services/pick-list-pdf.service';
@@ -40,6 +41,7 @@ import { ProductLocationService } from './services/product-location.service';
     LabelPrintService,
     LabelSheetService,
     ManualLabelPdfService,
+    SkuLabelService,
     PickBatchService,
     PickBatchNumberingService,
     PickListPdfService,

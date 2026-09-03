@@ -23,12 +23,15 @@ import {
   useCompleteGoodsReceipt,
   useGoodsReceiptDetail,
   useRecordReceiptLines,
+  useSkuLabelsForReceipt,
   useStartReceiving,
   useWarehouseBins,
+  type SkuLabelSheet,
 } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { SerialScanner, scanCountMet } from '@/components/ui/serial-scanner';
+import { SkuLabelSheetView } from '@/components/sku-label-sheet';
 
 /**
  * Admin receive-station — full goods-receipt lifecycle in one page:
@@ -50,6 +53,8 @@ import { SerialScanner, scanCountMet } from '@/components/ui/serial-scanner';
  * receipt stays ARRIVING and the operator can retry.
  */
 export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement {
+  const skuLabels = useSkuLabelsForReceipt();
+  const [labelSheet, setLabelSheet] = useState<SkuLabelSheet | null>(null);
   const toast = useToast();
   const detail = useGoodsReceiptDetail(id);
   const start = useStartReceiving();
@@ -78,6 +83,13 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
   if (!detail.data) return <ErrorState message="Goods receipt not found." />;
 
   const r = detail.data;
+  // The sheet takes over the page while it is open: printing is a
+  // whole-screen job, and a label grid squeezed under a form prints the
+  // form with it.
+  if (labelSheet !== null) {
+    return <SkuLabelSheetView sheet={labelSheet} onClose={() => setLabelSheet(null)} />;
+  }
+
   const isPending = r.status === 'PENDING';
   const isArriving = r.status === 'ARRIVING';
   const isCompleted = r.status === 'COMPLETED';
@@ -286,6 +298,22 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                 onClick={() => setCancelOpen(true)}
               >
                 Cancel receipt
+              </Button>
+            )}
+            {/* Labelling happens where the goods are, so the button
+                lives with the receipt rather than in the catalogue. It
+                appears once counts exist — before that there is no
+                quantity to print. */}
+            {(isArriving || isCompleted) && (
+              <Button
+                variant="secondary"
+                size="md"
+                disabled={skuLabels.isPending}
+                onClick={() => {
+                  skuLabels.mutate(id, { onSuccess: (sheet) => setLabelSheet(sheet) });
+                }}
+              >
+                {skuLabels.isPending ? 'Building…' : 'Print product labels'}
               </Button>
             )}
             {isArriving && (

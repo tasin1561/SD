@@ -2322,3 +2322,60 @@ export function useRevealSellerBankAccount(
       ),
   });
 }
+
+export interface SkuLabel {
+  variantId: string;
+  skuCode: string;
+  productName: string;
+  variantLabel: string | null;
+  /** What the symbol encodes: the seller's barcode, else the SKU code. */
+  value: string;
+  usedSkuCode: boolean;
+  barcodeWidths: readonly number[] | null;
+  quantity: number;
+}
+
+export interface SkuLabelSheet {
+  title: string;
+  labels: SkuLabel[];
+  totalStickers: number;
+}
+
+/**
+ * Product stickers for everything counted in on a goods receipt.
+ *
+ * Fetched on demand rather than with the receipt: it is a printing
+ * action somebody chooses, and building it for every page view would
+ * mean the common case pays for the rare one.
+ */
+export function useSkuLabelsForReceipt(): UseMutationResult<SkuLabelSheet, Error, string> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: (goodsReceiptId) =>
+      client.request<SkuLabelSheet>(
+        `/api/admin/warehouse/printing/sku-labels/goods-receipt/${goodsReceiptId}`,
+      ),
+  });
+}
+
+/**
+ * Reprint stickers for chosen SKUs — the one that fell off a box.
+ *
+ * Lives beside the product lookup rather than on the catalogue: the
+ * person who needs it is standing in an aisle having just found the
+ * unlabelled item.
+ */
+export function useSkuLabelsForVariants(): UseMutationResult<
+  SkuLabelSheet,
+  Error,
+  ReadonlyArray<{ variantId: string; quantity: number }>
+> {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: (items) =>
+      client.request<SkuLabelSheet>('/api/admin/warehouse/printing/sku-labels/variants', {
+        method: 'POST',
+        body: { items },
+      }),
+  });
+}

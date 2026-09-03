@@ -14,6 +14,7 @@
  *   import { kindTokens, orderStatusKind } from '@skydrop/ui/status';
  */
 export * from './app-shell';
+export * from './barcode';
 export * from './button';
 export * from './card';
 export * from './data-table';

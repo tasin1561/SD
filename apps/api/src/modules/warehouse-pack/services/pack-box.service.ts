@@ -300,8 +300,28 @@ export class PackBoxService {
       variantId = unit.variantId;
       stockUnitId = unit.id;
     } else {
+      // A SKU-level code: the seller's own barcode when they have one,
+      // and otherwise the SKU CODE itself, because that is what our
+      // label sheet prints for a product with no manufacturer barcode
+      // (SkuLabelService.scannableCodeFor). Accepting both means a
+      // sticker printed today keeps scanning after the seller fills in
+      // a real EAN — the alternative was minting a code and saving it,
+      // which silently invalidates every sticker already on a shelf the
+      // day the real one arrives.
+      //
+      // Scoped to THIS order's seller: `barcode` carries no uniqueness
+      // constraint and `skuCode` is unique only per seller, so an
+      // unscoped lookup can resolve another seller's product. It failed
+      // closed before (the variant would not be on this order), but
+      // failing closed on the wrong reason tells a packer "not on this
+      // order" when the truth is "that is somebody else's SKU".
+      const sellerId = await this.sellerIdForShipment(box.shipmentId);
       const variant = await this.prisma.client.productVariant.findFirst({
-        where: { barcode: code, deletedAt: null },
+        where: {
+          sellerId,
+          deletedAt: null,
+          OR: [{ barcode: code }, { skuCode: code }],
+        },
         select: { id: true },
       });
       if (variant === null) {
@@ -517,6 +537,22 @@ export class PackBoxService {
   }
 
   /** What the parcel owes, per variant — the snapshot, aggregated. */
+  /** Whose goods are in this box — the scope for a SKU-code lookup. */
+  private async sellerIdForShipment(shipmentId: string): Promise<string> {
+    const link = await this.prisma.client.orderShipment.findFirst({
+      where: { shipmentId },
+      orderBy: { shipmentSequence: 'asc' },
+      select: { order: { select: { sellerId: true } } },
+    });
+    if (link === null) {
+      throw new NotFoundException({
+        code: 'PACK_ORDER_MISSING',
+        message: 'This parcel is not linked to an order',
+      });
+    }
+    return link.order.sellerId;
+  }
+
   private async expectedByVariant(
     shipmentId: string,
   ): Promise<Map<string, { skuCode: string; quantity: number }>> {

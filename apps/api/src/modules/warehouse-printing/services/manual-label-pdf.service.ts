@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 
-import { encodeCode128B, isEncodableCode128B } from './code128';
+import { encodeCode128B, isEncodableCode128B } from '../../../common/barcode/code128';
 
 export interface ManualLabelPayload {
   readonly awbNumber: string;

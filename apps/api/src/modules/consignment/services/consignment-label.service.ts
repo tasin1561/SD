@@ -7,6 +7,7 @@ import {
   LabellingSite,
   StockUnitStatus,
 } from '@skydrop/db';
+import { printableBarcode } from '../../../common/barcode/printable-barcode';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { ConsignmentEventService } from '../../consignment-core/services/consignment-event.service';
@@ -24,6 +25,15 @@ export interface LabelSheet {
     readonly productName: string;
     readonly variantLabel: string | null;
     readonly expiresAt: Date | null;
+    /**
+     * The serial as Code 128 module widths — null if it cannot be
+     * encoded, in which case the client prints the string alone.
+     *
+     * Serials were a monospace string until 2026-09-04, which made
+     * STRICT mode a typing exercise: a picker holding a carton had to
+     * read ten characters off a label and key them in at every gate.
+     */
+    readonly barcodeWidths: readonly number[] | null;
   }>;
 }
 
@@ -203,6 +213,7 @@ export class ConsignmentLabelService {
         productName: u.variant.product.name,
         variantLabel: u.variant.variantLabel,
         expiresAt: u.batch?.expiresAt ?? null,
+        barcodeWidths: printableBarcode(u.serialBarcode).widths,
       })),
     };
   }

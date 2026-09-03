@@ -40,6 +40,8 @@ import {
   type LabelSheetResult,
   type PickListResult,
 } from '@/lib/ops-hooks';
+import { useSkuLabelsForVariants, type SkuLabelSheet } from '@/lib/api-hooks';
+import { SkuLabelSheetView } from '@/components/sku-label-sheet';
 import { serverVerdict } from '@/lib/server-verdict';
 import { downloadPdf, printPdf } from '@/lib/print-pdf';
 import { SelectionTable } from './selection-table';
@@ -557,6 +559,12 @@ function BatchesTab(): ReactElement {
 function LocateTab(): ReactElement {
   const [q, setQ] = useState('');
   const results = useProductLocations(q);
+  const reprint = useSkuLabelsForVariants();
+  const [reprintSheet, setReprintSheet] = useState<SkuLabelSheet | null>(null);
+
+  if (reprintSheet !== null) {
+    return <SkuLabelSheetView sheet={reprintSheet} onClose={() => setReprintSheet(null)} />;
+  }
 
   return (
     <Card>
@@ -599,9 +607,30 @@ function LocateTab(): ReactElement {
                       <span className="text-text-muted"> — {r.variantLabel}</span>
                     )}
                   </div>
-                  <div className="font-mono text-xs text-text-muted">
-                    {r.skuCode}
-                    {r.barcode !== null && ` · ${r.barcode}`}
+                  <div className="flex items-center gap-3">
+                    <div className="font-mono text-xs text-text-muted">
+                      {r.skuCode}
+                      {r.barcode !== null && ` · ${r.barcode}`}
+                    </div>
+                    {/* The sticker that fell off. Quantity is asked for
+                        rather than assumed: you are replacing what came
+                        off, not relabelling the shelf. */}
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={reprint.isPending}
+                      onClick={() => {
+                        const raw = window.prompt(`How many labels for ${r.skuCode}?`, '1');
+                        if (raw === null) return;
+                        const quantity = Number.parseInt(raw, 10);
+                        if (!Number.isFinite(quantity) || quantity < 1) return;
+                        reprint.mutate([{ variantId: r.variantId, quantity }], {
+                          onSuccess: (sheet) => setReprintSheet(sheet),
+                        });
+                      }}
+                    >
+                      Labels
+                    </Button>
                   </div>
                 </div>
                 {r.locations.length === 0 ? (

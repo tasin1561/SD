@@ -145,6 +145,10 @@ export interface LabelSheet {
     readonly productName: string;
     readonly variantLabel: string | null;
     readonly expiresAt: string | null;
+    /** Code 128 module widths for the serial, encoded server-side.
+     *  Null when the serial cannot be carried by Code 128 subset B, in
+     *  which case the sheet prints the string alone. */
+    readonly barcodeWidths: readonly number[] | null;
   }>;
 }
 

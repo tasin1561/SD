@@ -37,7 +37,9 @@ import {
   ProductLocationQueryDto,
   QueueQueryDto,
   ShipmentSelectionDto,
+  SkuLabelRequestDto,
 } from '../dto/warehouse-printing.dto';
+import { SkuLabelService, type SkuLabelSheet } from '../services/sku-label.service';
 
 /**
  * Print-first picking (2026-09-03).
@@ -69,6 +71,7 @@ export class WarehousePrintingController {
     private readonly labels: LabelPrintService,
     private readonly batches: PickBatchService,
     private readonly locations: ProductLocationService,
+    private readonly skuLabels: SkuLabelService,
   ) {}
 
   // ---------- tab 1: labels ----------
@@ -191,6 +194,28 @@ export class WarehousePrintingController {
   @ApiOperation({ summary: 'One batch, with its parcels — for reprinting' })
   getBatch(@Param('id', new ParseUUIDPipe({ version: '7' })) id: string): Promise<PickBatchView> {
     return this.batches.getById(id);
+  }
+
+  // ---------- product stickers (both inventory modes) ----------
+
+  @Get('sku-labels/goods-receipt/:goodsReceiptId')
+  @ApiOperation({
+    summary:
+      'Product stickers for everything counted in on a goods receipt — one per unit RECEIVED. Receiving is when the goods are in front of somebody and the counts are known',
+  })
+  skuLabelsForReceipt(
+    @Param('goodsReceiptId', new ParseUUIDPipe({ version: '7' })) goodsReceiptId: string,
+  ): Promise<SkuLabelSheet> {
+    return this.skuLabels.forGoodsReceipt(goodsReceiptId);
+  }
+
+  @Post('sku-labels/variants')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Product stickers for chosen SKUs and quantities — the reprint for one that fell off',
+  })
+  skuLabelsForVariants(@Body() body: SkuLabelRequestDto): Promise<SkuLabelSheet> {
+    return this.skuLabels.forVariants(body.items);
   }
 
   // ---------- the lookup a picker needs mid-walk ----------
