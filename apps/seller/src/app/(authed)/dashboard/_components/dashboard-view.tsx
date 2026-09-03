@@ -1,8 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { Check, Circle } from 'lucide-react';
-import type { ReactElement } from 'react';
+import {
+  Check,
+  Circle,
+  Hourglass,
+  LifeBuoy,
+  ListOrdered,
+  Package,
+  Plus,
+  Ship,
+  Truck,
+} from 'lucide-react';
+import type { ReactElement, ReactNode } from 'react';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import {
   useOrdersList,
@@ -14,15 +24,20 @@ import {
 import {
   Card,
   CardBody,
-  CardHeader,
   EmptyState,
   ErrorState,
   LoadingState,
   Money,
   OrderStatusBadge,
-  PageHeader,
   Section,
+  Skeleton,
   SkeletonRows,
+  TBody,
+  THead,
+  Table,
+  Td,
+  Th,
+  Tr,
 } from '@skydrop/ui/components';
 import { can } from '@/lib/page-access';
 
@@ -92,6 +107,11 @@ export function DashboardView(): ReactElement {
   // what their own orders are worth.
   const inFlight = useMoneyInFlight({ enabled: canOrders });
   const companyName = identity?.companyName ?? 'there';
+  // The header pill names the wallet's own currency, read from the same
+  // place the card reads it — `isConverted` false is the real balance,
+  // everything else is a restatement of it.
+  const canonicalCurrency =
+    (balances.data?.balances ?? []).find((b) => !b.isConverted)?.currency ?? null;
 
   // Onboarding checklist — show only when at least one step is unmet.
   const profileComplete = Boolean(
@@ -154,214 +174,361 @@ export function DashboardView(): ReactElement {
   const firstIncomplete = steps.findIndex((s) => !s.done);
 
   return (
-    <div>
-      <PageHeader
-        title={`Hello, ${companyName}`}
-        subtitle="Your most recent orders + quick navigation."
-      />
-
-      {canProfile && canCatalog && onboardingVisible(onboardingKnown, steps) && (
-        <Section title="Get started">
-          {/*
-           * Deliberately NOT another plain card.
-           *
-           * This is the only thing on the page that has to be done, and
-           * it was rendering identically to "Recent orders" and "Next
-           * steps" — same white surface, same heading weight — so the one
-           * section with unfinished work read as furniture. It carries
-           * the accent tint and ring, which nothing else on the dashboard
-           * uses, so it is the first thing the eye lands on.
-           *
-           * It still disappears entirely once the four are done — see
-           * `onboardingVisible` — which is what keeps a permanent banner
-           * from becoming the thing people stop seeing. That same
-           * predicate is why it no longer appears BEFORE the answers do.
-           */}
-          <div
-            className="rounded-[10px] border p-4"
-            style={{
-              borderColor: 'var(--color-accent-ring)',
-              background: 'var(--color-accent-tint)',
-            }}
-          >
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-text-body text-sm">
-                Complete these to be ready for your first delivered order.
-              </p>
-              {/* Progress, because "2 of 4" is a reason to finish and a
-                  bare list of circles is not. */}
-              <span className="text-text-muted shrink-0 text-xs">
-                {completedSteps} of {STEPS_TOTAL} done
+    <div className="space-y-1">
+      {/* ── the greeting, and what state the account is in ───────────── */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="mb-1.5 flex flex-wrap items-center gap-2">
+            <span className="bg-status-delivered-bg text-status-delivered-fg flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-[0.08em] uppercase">
+              <span
+                className="bg-status-delivered-fg h-1.5 w-1.5 rounded-full"
+                aria-hidden="true"
+              />
+              Account active
+            </span>
+            {canWallet && canonicalCurrency !== null && (
+              <span className="bg-accent-tint text-accent rounded-full px-2 py-0.5 text-[10px] font-bold tracking-[0.08em] uppercase">
+                {canonicalCurrency} wallet
               </span>
-            </div>
-
-            <div
-              className="mb-4 h-1 w-full overflow-hidden rounded-full"
-              style={{ background: 'var(--color-border)' }}
-              role="progressbar"
-              aria-valuenow={completedSteps}
-              aria-valuemin={0}
-              aria-valuemax={STEPS_TOTAL}
-              aria-label="Setup progress"
-            >
-              <div
-                className="h-full rounded-full transition-[width] duration-500"
-                style={{
-                  width: `${(completedSteps / STEPS_TOTAL) * 100}%`,
-                  background: 'var(--color-accent)',
-                }}
-              />
-            </div>
-
-            <ul className="space-y-1.5">
-              {steps.map((step, i) => (
-                <ChecklistItem
-                  key={step.href + step.label}
-                  done={step.done}
-                  label={step.label}
-                  hint={step.hint}
-                  href={step.href}
-                  // The FIRST unfinished step gets the button; the rest
-                  // keep the quiet link. Four equally-weighted "Go →"s
-                  // ask the seller to decide where to start, which is a
-                  // decision we can make for them.
-                  isNext={i === firstIncomplete}
-                />
-              ))}
-            </ul>
-          </div>
-        </Section>
-      )}
-
-      {/*
-        TWO COLUMNS, not three stacked bands.
-        
-        Wallet, money-in-flight and recent orders were full-width
-        sections one under another, so the page was a column of headings
-        and a seller scrolled to reach the orders — the thing they open
-        this page for. Money reads down the left, work reads down the
-        right, and both are above the fold on a laptop.
-
-        `items-start` matters: without it the two columns stretch to the
-        taller one and the wallet card grows a field of empty surface.
-      */}
-      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
-        <div className="space-y-4">
-          {canWallet && (
-            <Section
-              title="Wallet"
-              action={
-                <Link
-                  href="/wallet"
-                  className="text-text-muted hover:text-text-body text-xs transition-colors"
-                >
-                  Ledger and top-ups →
-                </Link>
-              }
-            >
-              <WalletBalanceCard query={balances} />
-            </Section>
-          )}
-
-          {canOrders && <MoneyInFlightCards query={inFlight} />}
-        </div>
-
-        {canOrders && (
-          <Section
-            title="Recent orders"
-            action={
-              <Link
-                href="/orders"
-                className="text-text-muted hover:text-text-body text-xs transition-colors"
-              >
-                See all →
-              </Link>
-            }
-          >
-            {recent.isLoading ? (
-              <LoadingState label="Loading recent orders…" />
-            ) : recent.isError ? (
-              <ErrorState
-                message={recent.error?.message ?? 'Failed to load recent orders.'}
-                retry={() => void recent.refetch()}
-              />
-            ) : !recent.data || recent.data.items.length === 0 ? (
-              <EmptyState
-                title="No orders yet"
-                description="Once you create an order or import a CSV, they show up here."
-              />
-            ) : (
-              <Card>
-                <ol className="divide-y divide-border">
-                  {recent.data.items.map((o) => (
-                    // Stacked on a phone. Side by side, the fixed 176px
-                    // order number and a status badge as long as "Awaiting
-                    // Seller Decision" (177px) cannot both fit in 320px,
-                    // and neither is allowed to shrink.
-                    <li
-                      key={o.id}
-                      className="hover:bg-surface-hover flex flex-col gap-1 px-4 py-2.5 transition-colors sm:flex-row sm:items-center sm:gap-4 sm:py-3"
-                    >
-                      <Link
-                        href={`/orders/${o.id}`}
-                        className="text-text-bright flex min-h-[30px] items-center font-mono text-xs hover:underline sm:min-h-0 sm:w-44 sm:shrink-0"
-                      >
-                        {o.orderNumber}
-                      </Link>
-                      <div className="text-text-body min-w-0 flex-1 truncate text-sm">
-                        {o.recipientName}
-                        <span className="text-text-faint ml-1">· {o.recipientCity}</span>
-                      </div>
-                      <div className="min-w-0 sm:shrink-0">
-                        <OrderStatusBadge status={o.status} />
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              </Card>
             )}
-          </Section>
+          </div>
+          <h1 className="text-text-bright text-2xl font-bold tracking-tight">
+            Hello, {companyName}
+          </h1>
+          <p className="text-text-muted mt-1 text-sm">
+            Your most recent orders, what you are owed, and where to go next.
+          </p>
+        </div>
+        {canOrders && (
+          <Link
+            href="/orders/new"
+            className="bg-accent text-accent-fg hover:bg-accent-hover inline-flex items-center gap-1.5 rounded px-3 py-2 text-sm font-semibold transition-colors"
+          >
+            <Plus size={15} /> Create order
+          </Link>
         )}
       </div>
 
-      <Section title="Next steps">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <NavCard
-            href="/products"
-            title="Manage catalog"
-            description="Products + variants + images. CP2.B."
+      {canProfile && canCatalog && onboardingVisible(onboardingKnown, steps) && (
+        <Section title="Finish setting up">
+          <Card>
+            <CardBody>
+              <div className="text-text-muted mb-2 text-xs">
+                {completedSteps} of {STEPS_TOTAL} done
+              </div>
+              <ol className="space-y-1.5">
+                {steps.map((step, i) => (
+                  <li key={step.label} className="flex items-center gap-2 text-sm">
+                    {step.done ? (
+                      <Check size={14} className="text-status-delivered-fg shrink-0" />
+                    ) : (
+                      <Circle size={14} className="text-text-faint shrink-0" />
+                    )}
+                    {step.done ? (
+                      <span className="text-text-muted line-through">{step.label}</span>
+                    ) : (
+                      <Link
+                        href={step.href}
+                        className={i === firstIncomplete ? 'text-accent font-medium' : ''}
+                      >
+                        {step.label}
+                      </Link>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </CardBody>
+          </Card>
+        </Section>
+      )}
+
+      {/* ── 01 // money ───────────────────────────────────────────────── */}
+      {(canWallet || canOrders) && (
+        <>
+          <SectionHead
+            index="01"
+            title="Treasury & liquidity"
+            note={
+              canWallet ? (
+                <Link href="/wallet" className="text-accent font-medium">
+                  Ledger and top-ups →
+                </Link>
+              ) : undefined
+            }
           />
-          <NavCard
+          <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-3">
+            {canWallet && <WalletBalanceCard query={balances} />}
+            {canOrders && (
+              <>
+                {/* Two figures the seller cannot get anywhere else: what
+                    is moving, and what has landed but not been paid. Both
+                    are GROSS — our fees and the withheld GST are still
+                    inside them, which the caption says rather than
+                    leaving somebody to discover at settlement. */}
+                <MoneyTile
+                  label="On its way"
+                  icon={<Truck size={13} />}
+                  iconTone="info"
+                  amount={inFlight.data?.inTransit.codInr}
+                  count={inFlight.data?.inTransit.count}
+                  countLabel="orders"
+                  hint="Confirmed and dispatched, not yet delivered. Before our charges."
+                  loading={inFlight.isLoading}
+                />
+                <MoneyTile
+                  label="Clearing"
+                  icon={<Hourglass size={13} />}
+                  iconTone="warn"
+                  amount={inFlight.data?.processing.codInr}
+                  count={inFlight.data?.processing.count}
+                  countLabel="delivered"
+                  hint="Delivered; waiting on the courier to remit the cash to us."
+                  loading={inFlight.isLoading}
+                />
+              </>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ── 02 // orders ──────────────────────────────────────────────── */}
+      {canOrders && (
+        <>
+          <SectionHead
+            index="02"
+            title="Recent orders"
+            note={
+              <Link href="/orders" className="text-accent font-medium">
+                See all orders →
+              </Link>
+            }
+          />
+          <Card>
+            {recent.isLoading ? (
+              <CardBody>
+                <LoadingState label="Loading your orders…" />
+              </CardBody>
+            ) : recent.isError ? (
+              <CardBody>
+                <ErrorState
+                  message={recent.error?.message ?? 'Could not load your orders.'}
+                  retry={() => void recent.refetch()}
+                />
+              </CardBody>
+            ) : (recent.data?.items ?? []).length === 0 ? (
+              <CardBody>
+                <EmptyState
+                  title="No orders yet"
+                  description="Your most recent orders appear here once you create one."
+                />
+              </CardBody>
+            ) : (
+              <Table>
+                <THead>
+                  <Tr>
+                    <Th>Order</Th>
+                    <Th>Recipient</Th>
+                    <Th>Stage</Th>
+                    <Th>Payment</Th>
+                    <Th>Open</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {(recent.data?.items ?? []).map((o) => (
+                    <Tr key={o.id}>
+                      <Td>
+                        <Link href={`/orders/${o.id}`} className="font-mono text-xs font-medium">
+                          {o.orderNumber}
+                        </Link>
+                      </Td>
+                      <Td>
+                        <div className="truncate">{o.recipientName}</div>
+                        <div className="text-text-faint truncate text-xs">
+                          {o.recipientCity === ''
+                            ? (o.recipientStateProvince ?? '—')
+                            : o.recipientCity}
+                        </div>
+                      </Td>
+                      <Td>
+                        <OrderStatusBadge status={o.status} />
+                      </Td>
+                      <Td>
+                        {o.codAmountInr === null ? (
+                          <span className="text-text-muted text-xs">Prepaid</span>
+                        ) : (
+                          <Money amount={o.codAmountInr} />
+                        )}
+                      </Td>
+                      <Td>
+                        <Link href={`/orders/${o.id}`} className="text-accent text-xs font-medium">
+                          View →
+                        </Link>
+                      </Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            )}
+          </Card>
+        </>
+      )}
+
+      {/* ── 03 // where to go next ────────────────────────────────────── */}
+      <SectionHead index="03" title="Next steps" />
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+        {canCatalog && (
+          <ShortcutCard
+            href="/catalog"
+            icon={<Package size={16} />}
+            title="Manage catalogue"
+            body="Products, variants, images and SKU codes."
+            foot={
+              products.data === undefined
+                ? undefined
+                : `${products.data.total} active ${products.data.total === 1 ? 'product' : 'products'}`
+            }
+          />
+        )}
+        {canOrders && (
+          <ShortcutCard
             href="/orders"
+            icon={<ListOrdered size={16} />}
             title="View orders"
-            description="Lifecycle, NDR reasons, tracking timeline."
+            body="Full lifecycle, failed deliveries and the tracking timeline."
+            foot={recent.data === undefined ? undefined : `${recent.data.total} in total`}
           />
-        </div>
-      </Section>
+        )}
+        <ShortcutCard
+          href="/inbound"
+          icon={<Ship size={16} />}
+          title="Inbound freight"
+          body="Send stock to the warehouse and track what is on the water."
+        />
+        <ShortcutCard
+          href="/tickets"
+          icon={<LifeBuoy size={16} />}
+          title="Support tickets"
+          body="Damage claims, missing items and anything that needs a person."
+        />
+      </div>
+    </div>
+  );
+}
+
+/** The numbered section rule, matching the admin console. */
+function SectionHead({
+  index,
+  title,
+  note,
+}: {
+  index: string;
+  title: string;
+  note?: ReactNode;
+}): ReactElement {
+  return (
+    <div className="mt-7 mb-3 flex flex-wrap items-center justify-between gap-2">
+      <h2 className="text-text-muted text-xs font-semibold tracking-[0.09em] uppercase">
+        <span className="text-accent" aria-hidden="true">
+          {`${index} / `}
+        </span>
+        {title}
+      </h2>
+      {note !== undefined && <div className="text-xs">{note}</div>}
     </div>
   );
 }
 
 /**
- * One balance, stated twice.
- *
- * The API returns the rupee figure and the same money restated in taka
- * (`isConverted`). Both belong here — a seller in Dhaka thinks in taka
- * and should not have to convert their own balance in their head — but
- * shown as EQUALS they read as two debts, which is the wallet page's
- * problem that took three paragraphs of caption to talk a reader out
- * of.
- *
- * So the rupee figure is the number, and the taka sits under it,
- * smaller and dimmer, behind a "≈" and its rate. The hierarchy is the
- * argument: one thing is the balance, the other is that balance
- * counted in another currency. Saying it in words alone would leave
- * two equally-weighted figures on a card nobody reads carefully.
- *
- * The caption wording is lifted from the wallet page deliberately —
- * two screens describing the same number differently is how a seller
- * comes to believe they disagree.
+ * A figure that is MOVING — money out in the world rather than money in
+ * the wallet. The icon carries the difference: on-its-way is blue,
+ * waiting-on-somebody is amber.
  */
+function MoneyTile({
+  label,
+  icon,
+  iconTone,
+  amount,
+  count,
+  countLabel,
+  hint,
+  loading,
+}: {
+  label: string;
+  icon: ReactNode;
+  iconTone: 'info' | 'warn';
+  amount: string | undefined;
+  count: number | undefined;
+  countLabel: string;
+  hint: string;
+  loading: boolean;
+}): ReactElement {
+  const iconClass =
+    iconTone === 'info'
+      ? 'text-status-confirmed-fg bg-status-confirmed-bg'
+      : 'text-status-pending-fg bg-status-pending-bg';
+  const chipClass =
+    iconTone === 'info'
+      ? 'bg-status-confirmed-bg text-status-confirmed-fg'
+      : 'bg-status-pending-bg text-status-pending-fg';
+
+  return (
+    <Card>
+      <CardBody>
+        <div className="flex items-start justify-between gap-2">
+          <div className="text-text-muted text-xs font-medium tracking-wide uppercase">{label}</div>
+          <span className={`grid h-6 w-6 place-items-center rounded ${iconClass}`}>{icon}</span>
+        </div>
+        <div className="text-text-bright mt-2 text-2xl font-bold">
+          {loading || amount === undefined ? (
+            <Skeleton className="h-7 w-28" />
+          ) : (
+            <Money amount={amount} size="md" />
+          )}
+        </div>
+        {count !== undefined && (
+          <div className="mt-1.5">
+            <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${chipClass}`}>
+              {count} {countLabel}
+            </span>
+          </div>
+        )}
+        <p className="text-text-muted mt-2 text-xs leading-snug">{hint}</p>
+      </CardBody>
+    </Card>
+  );
+}
+
+function ShortcutCard({
+  href,
+  icon,
+  title,
+  body,
+  foot,
+}: {
+  href: string;
+  icon: ReactNode;
+  title: string;
+  body: string;
+  foot?: string | undefined;
+}): ReactElement {
+  return (
+    <Link
+      href={href}
+      className="border-border bg-surface hover:border-border-strong block rounded-lg border p-3 transition-colors"
+    >
+      <span className="bg-accent-tint text-accent grid h-8 w-8 place-items-center rounded">
+        {icon}
+      </span>
+      <div className="text-text-strong mt-2.5 text-sm font-semibold">{title}</div>
+      <p className="text-text-muted mt-1 text-xs leading-snug">{body}</p>
+      <div className="border-border mt-2.5 flex items-center justify-between gap-2 border-t pt-2 text-xs">
+        <span className="text-text-faint">{foot ?? ''}</span>
+        <span className="text-accent font-medium">Go →</span>
+      </div>
+    </Link>
+  );
+}
+
 export function WalletBalanceCard({
   query,
 }: {
@@ -428,151 +595,5 @@ export function WalletBalanceCard({
         )}
       </CardBody>
     </Card>
-  );
-}
-
-/**
- * The two figures between "sold" and "paid".
- *
- * Both are the COD the customer pays — GROSS, with our fees and the
- * GST we withhold still inside. Netting them would produce a smaller
- * number the seller cannot check against anything: the courier's own
- * statement says the gross, and so does their order. So the figure
- * matches what they already know, and the caption names what comes out
- * of it rather than removing it quietly.
- *
- * PREPAID orders appear in neither — nothing is owed on an order whose
- * money the seller already holds.
- */
-function MoneyInFlightCards({
-  query,
-}: {
-  readonly query: ReturnType<typeof useMoneyInFlight>;
-}): ReactElement | null {
-  // Nothing to say while it loads, and nothing to say if it fails: this
-  // is a summary beside a page that already works. An error box here
-  // would be louder than the information it replaces.
-  if (query.data === undefined) return null;
-  const { inTransit, processing } = query.data;
-  if (inTransit.count === 0 && processing.count === 0) return null;
-
-  return (
-    <Section title="Money on its way">
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <InFlightCard
-          title="In transit"
-          count={inTransit.count}
-          amount={inTransit.codInr}
-          hint="Confirmed and not yet delivered. Includes our fees and GST, which come out when it lands."
-        />
-        <InFlightCard
-          title="Processing payment"
-          count={processing.count}
-          amount={processing.codInr}
-          hint="Delivered, waiting for the courier to pay us. Includes our fees and GST, which come out when it reaches your wallet."
-        />
-      </div>
-    </Section>
-  );
-}
-
-function InFlightCard({
-  title,
-  count,
-  amount,
-  hint,
-}: {
-  readonly title: string;
-  readonly count: number;
-  readonly amount: string;
-  readonly hint: string;
-}): ReactElement {
-  return (
-    <Card>
-      <CardBody>
-        <div className="text-text-faint mb-1 text-xs tracking-wide uppercase">{title}</div>
-        <div className="flex items-baseline gap-2">
-          <span className="text-text-bright">
-            <Money amount={amount} currency="INR" convert={false} size="lg" />
-          </span>
-          <span className="text-text-muted text-sm">
-            {count} {count === 1 ? 'order' : 'orders'}
-          </span>
-        </div>
-        <div className="text-text-muted mt-1 text-xs">{hint}</div>
-      </CardBody>
-    </Card>
-  );
-}
-
-function NavCard({
-  href,
-  title,
-  description,
-}: {
-  href: string;
-  title: string;
-  description: string;
-}): ReactElement {
-  return (
-    <Link href={href}>
-      <Card className="hover:bg-surface-hover transition-colors">
-        <CardHeader title={title} subtitle={description} />
-        <CardBody className="py-2">
-          <span className="text-text-muted text-xs">Go →</span>
-        </CardBody>
-      </Card>
-    </Link>
-  );
-}
-
-function ChecklistItem({
-  done,
-  label,
-  hint,
-  href,
-  isNext,
-}: {
-  readonly done: boolean;
-  readonly label: string;
-  readonly hint: string;
-  readonly href: string;
-  /** The first unfinished step — the one to actually do next. */
-  readonly isNext: boolean;
-}): ReactElement {
-  return (
-    <li className="flex items-start gap-3 py-1">
-      <div className={done ? 'text-accent mt-0.5' : 'text-text-faint mt-0.5'}>
-        {done ? <Check size={16} /> : <Circle size={16} />}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <span
-            className={
-              done ? 'text-text-muted text-sm line-through' : 'text-text-bright text-sm font-medium'
-            }
-          >
-            {label}
-          </span>
-          {!done &&
-            (isNext ? (
-              // A real button on ONE row. Four identical "Go →" links
-              // hand the seller a decision about where to begin; the
-              // order is already the answer.
-              <Link
-                href={href}
-                className="bg-accent text-accent-fg hover:bg-accent-hover inline-flex shrink-0 items-center rounded-[6px] px-3 py-1 text-xs font-medium transition-colors"
-              >
-                Start
-              </Link>
-            ) : (
-              <Link href={href} className="text-accent shrink-0 text-xs hover:underline">
-                Go →
-              </Link>
-            ))}
-        </div>
-        <div className="text-text-faint mt-0.5 text-xs">{hint}</div>
-      </div>
-    </li>
   );
 }
