@@ -230,3 +230,91 @@ describe('PickBatchService.buildList — the sheet', () => {
     expect(r.lineCount).toBe(1);
   });
 });
+
+// ---------------------------------------------------------------------
+// The step the print-first flow was missing.
+//
+// `PickExecutionService.complete` is the ONLY writer of
+// `OrderStatus.PICKED`, and the pack queue selects on exactly that. A
+// batch printed and walked with nothing to close it would strand every
+// parcel in PENDING_PICK — picked in the real world, invisible to the
+// packing bench. Same shape as the automatic manifest close that had to
+// be backed out.
+// ---------------------------------------------------------------------
+describe('PickBatchService.markPicked — the picker is back with the trolley', () => {
+  function printedBatch(opts: { mode?: InventoryMode } = {}) {
+    const svc = makeService({
+      reservations: [
+        {
+          id: 'r1',
+          qtyReserved: 1,
+          variantId: 'v1',
+          sellerId: 'sel-1',
+          binId: 'bin-1',
+          batchId: 'sb-1',
+          orderId: 'o1',
+        },
+      ],
+      mode: opts.mode ?? InventoryMode.NORMAL,
+    });
+    // The batch has to be PRINTED before it can be walked.
+    (svc.client.pickBatch.findUnique as jest.Mock).mockImplementation(async () => ({
+      id: 'b1',
+      batchNumber: 'PB-2026-09-000001',
+      status: PickBatchStatus.PRINTED,
+      warehouseId: 'wh-1',
+      printedAt: new Date(),
+      warehouse: { name: 'Kolkata Main' },
+      createdBy: null,
+      printedBy: null,
+      shipments: [
+        {
+          id: 's1',
+          shipmentNumber: 'SH-1',
+          awbNumber: 'AWB1',
+          pickCompletedAt: null,
+          orderShipments: [{ orderId: 'o1', order: { orderNumber: 'SD-1' } }],
+        },
+      ],
+    }));
+    return svc;
+  }
+
+  it('sends every parcel to PICKED so the packing bench can see them', async () => {
+    const { svc } = printedBatch();
+    const r = await svc.markPicked('b1', 'staff-1');
+    expect(r.picked).toBe(1);
+    expect(r.skipped).toHaveLength(0);
+  });
+
+  it('refuses a batch whose sheet was never printed', async () => {
+    // Nothing was allocated for a DRAFT batch, so its printed locations
+    // do not exist yet — there was no walk to come back from.
+    const { svc } = makeService({});
+    await expect(svc.markPicked('b1', 'staff-1')).rejects.toMatchObject({
+      response: { code: 'BATCH_NOT_PRINTED' },
+    });
+  });
+
+  it('refuses a SERIALISED parcel by name rather than closing it from paper', async () => {
+    // In STRICT mode the scan at PICK is what binds units to the parcel,
+    // and pack then demands the scanned set EQUAL those units (UNIT-2).
+    // Closing it from paper would leave pack comparing against nothing.
+    const { svc } = printedBatch({ mode: InventoryMode.STRICT });
+    const r = await svc.markPicked('b1', 'staff-1');
+    expect(r.picked).toBe(0);
+    expect(r.skipped[0]?.reason).toMatch(/serialis/i);
+    expect(r.skipped[0]?.shipmentNumber).toBe('SH-1');
+  });
+
+  it('stamps pickCompletedAt only when it is not already set', async () => {
+    // Mirrors PickExecutionService.complete: a re-run must preserve the
+    // original timestamp rather than move it.
+    const { svc, client } = printedBatch();
+    await svc.markPicked('b1', 'staff-1');
+    const call = (client.shipment.updateMany as jest.Mock).mock.calls.at(-1)?.[0] as {
+      where: Record<string, unknown>;
+    };
+    expect(call.where['pickCompletedAt']).toBeNull();
+  });
+});

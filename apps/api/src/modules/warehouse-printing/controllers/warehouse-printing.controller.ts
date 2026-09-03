@@ -148,6 +148,24 @@ export class WarehousePrintingController {
     return this.batches.confirmPrinted(id, staff.id, ctx);
   }
 
+  @Post('pick-batches/:id/mark-picked')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'The picker is back with the trolley: every parcel on the batch goes PENDING_PICK → PICKED and reaches the packing bench. Serialised parcels are refused BY NAME — their units are scanned at the per-parcel station',
+  })
+  markPicked(
+    @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<{
+    batchNumber: string;
+    picked: number;
+    skipped: ReadonlyArray<{ shipmentNumber: string; reason: string }>;
+  }> {
+    return this.batches.markPicked(id, staff.id, ctx);
+  }
+
   @Post('pick-batches/:id/cancel')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

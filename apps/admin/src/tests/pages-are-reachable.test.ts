@@ -62,6 +62,13 @@ function sources(dir: string, skip: string): string[] {
  */
 const EXPECTED_UNLINKED = new Set<string>([
   '/dashboard', // the post-login landing page; the brand mark points here
+  // RETIRED as the ordinary path (2026-09-03) — batch picking at
+  // /warehouse/printing replaced it and owns the nav. This screen is
+  // kept because serialised stock cannot be closed from paper: the scan
+  // here is what binds units to a parcel, and packing compares against
+  // exactly those (UNIT-2). Linking it would offer two ways to do the
+  // same job, only one of which anybody should take.
+  '/warehouse/pick',
 ]);
 
 describe('every admin page can be reached from another page', () => {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { Download, Printer, Search } from 'lucide-react';
+import { Check, Download, Printer, Search } from 'lucide-react';
 import {
   Button,
   Card,
@@ -33,6 +33,7 @@ import {
   useConfirmPickListPrinted,
   useCreatePickBatch,
   useLabelQueue,
+  useMarkBatchPicked,
   usePickBatches,
   usePickPrintQueue,
   useProductLocations,
@@ -404,7 +405,27 @@ function BatchesTab(): ReactElement {
   const [search, setSearch] = useState('');
   const batches = usePickBatches(search);
   const buildList = useBuildPickList();
+  const markPicked = useMarkBatchPicked();
+  const toast = useToast();
   const [error, setError] = useState<string | null>(null);
+
+  async function onPicked(batchId: string): Promise<void> {
+    setError(null);
+    try {
+      const r = await markPicked.mutateAsync(batchId);
+      if (r.skipped.length > 0) {
+        // Named, not swallowed: a serialised parcel still needs its
+        // units scanning, and a silent partial would leave it sitting.
+        toast.error(
+          `${r.picked} sent to packing; ${r.skipped.length} still need scanning at the pick station`,
+        );
+      } else {
+        toast.success(`${r.batchNumber} picked — ${r.picked} parcels are at the packing bench`);
+      }
+    } catch (e) {
+      setError(serverVerdict(e));
+    }
+  }
 
   async function reprint(batchId: string): Promise<void> {
     setError(null);
@@ -446,7 +467,7 @@ function BatchesTab(): ReactElement {
                 <Th>Parcels</Th>
                 <Th>Created</Th>
                 <Th>Printed</Th>
-                <Th>Reprint</Th>
+                <Th>Actions</Th>
               </Tr>
             </THead>
             <TBody>
@@ -497,13 +518,28 @@ function BatchesTab(): ReactElement {
                       )}
                     </Td>
                     <Td>
-                      <Button
-                        variant="ghost"
-                        onClick={() => void reprint(b.id)}
-                        disabled={buildList.isPending}
-                      >
-                        <Printer size={14} />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          onClick={() => void reprint(b.id)}
+                          disabled={buildList.isPending}
+                          aria-label={`Reprint ${b.batchNumber}`}
+                        >
+                          <Printer size={14} />
+                        </Button>
+                        {/* Only a printed batch can be walked, so only a
+                            printed batch can come back from one. */}
+                        {b.status === 'PRINTED' && (
+                          <Button
+                            variant="ghost"
+                            onClick={() => void onPicked(b.id)}
+                            disabled={markPicked.isPending}
+                            aria-label={`Mark ${b.batchNumber} picked`}
+                          >
+                            <Check size={14} /> Picked
+                          </Button>
+                        )}
+                      </div>
                     </Td>
                   </Tr>
                 ))

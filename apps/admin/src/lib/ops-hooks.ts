@@ -3325,3 +3325,28 @@ export function useProductLocations(query: string): UseQueryResult<ProductLocati
       ),
   });
 }
+
+export function useMarkBatchPicked(): UseMutationResult<
+  {
+    batchNumber: string;
+    picked: number;
+    skipped: Array<{ shipmentNumber: string; reason: string }>;
+  },
+  Error,
+  string
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (batchId) =>
+      client.request<{
+        batchNumber: string;
+        picked: number;
+        skipped: Array<{ shipmentNumber: string; reason: string }>;
+      }>(`/api/admin/warehouse/printing/pick-batches/${batchId}/mark-picked`, { method: 'POST' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'pick-batches'] });
+      void qc.invalidateQueries({ queryKey: ['admin-orders'] });
+    },
+  });
+}

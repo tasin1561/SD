@@ -51,6 +51,47 @@
   --color-accent-hover: var(--color-accent-hover);
   --color-accent-fg: var(--color-accent-fg);
   --color-critical: var(--color-critical);
+  /*
+   * THE STATUS TOKENS, as real Tailwind colours (2026-09-03).
+   *
+   * They were declared in tokens.css and mapped NOWHERE, so
+   * `bg-status-pending-fg` and friends generated no CSS at all — the
+   * class was accepted, the utility did not exist, and the element got
+   * nothing. Every status colour on the dashboard was invisible for
+   * exactly that reason, which is a silent failure: a typo'd Tailwind
+   * class looks identical to a working one until you look at the page.
+   *
+   * `StatusBadge` never hit it because it applies the variables through
+   * an inline style rather than a utility. Registering them here means
+   * both routes work, and the next component to reach for a status
+   * colour gets the one it expected.
+   */
+  --color-status-draft-bg: var(--status-draft-bg);
+  --color-status-draft-fg: var(--status-draft-fg);
+  --color-status-draft-ring: var(--status-draft-ring);
+  --color-status-pending-bg: var(--status-pending-bg);
+  --color-status-pending-fg: var(--status-pending-fg);
+  --color-status-pending-ring: var(--status-pending-ring);
+  --color-status-confirmed-bg: var(--status-confirmed-bg);
+  --color-status-confirmed-fg: var(--status-confirmed-fg);
+  --color-status-confirmed-ring: var(--status-confirmed-ring);
+  --color-status-in-transit-bg: var(--status-in-transit-bg);
+  --color-status-in-transit-fg: var(--status-in-transit-fg);
+  --color-status-in-transit-ring: var(--status-in-transit-ring);
+  --color-status-delivered-bg: var(--status-delivered-bg);
+  --color-status-delivered-fg: var(--status-delivered-fg);
+  --color-status-delivered-ring: var(--status-delivered-ring);
+  --color-status-rto-bg: var(--status-rto-bg);
+  --color-status-rto-fg: var(--status-rto-fg);
+  --color-status-rto-ring: var(--status-rto-ring);
+  --color-status-failed-bg: var(--status-failed-bg);
+  --color-status-failed-fg: var(--status-failed-fg);
+  --color-status-failed-ring: var(--status-failed-ring);
+  --color-status-cancelled-bg: var(--status-cancelled-bg);
+  --color-status-cancelled-fg: var(--status-cancelled-fg);
+  --color-status-cancelled-ring: var(--status-cancelled-ring);
+  --color-accent-tint: var(--color-accent-tint);
+  --color-accent-ring: var(--color-accent-ring);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
   /*
