@@ -7,7 +7,6 @@ import type { OrderWriteService } from '../../src/modules/order/services/order-w
 import type { AwbGenerationService } from '../../src/modules/courier-awb/services/awb-generation.service';
 import type { AwbSupersedeService } from '../../src/modules/courier-awb/services/awb-supersede.service';
 import type { CourierFeeAccrualService } from '../../src/modules/seller-wallet-accrual/services/courier-fee-accrual.service';
-import type { DispatchHandoffService } from '../../src/modules/courier-dispatch/services/dispatch-handoff.service';
 
 type AnyArgs = Record<string, unknown>;
 const MAN = 'man-1';
@@ -106,7 +105,6 @@ function makeService(
   const tryEarlyAccrual = jest.fn(async () => undefined);
   const courierFeeAccrual = { tryEarlyAccrual };
 
-  const confirmHandoff = jest.fn(async () => ({}) as never);
   const svc = new AwbGenerationJobService(
     { client } as unknown as PrismaService,
     audit as unknown as AuditLogService,
@@ -114,11 +112,9 @@ function makeService(
     generation as unknown as AwbGenerationService,
     supersedeSvc as unknown as AwbSupersedeService,
     courierFeeAccrual as unknown as CourierFeeAccrualService,
-    { confirmHandoff } as unknown as DispatchHandoffService,
   );
   return {
     svc,
-    confirmHandoff,
     manifestUpdate,
     auditLog,
     transitionStatus,
@@ -344,50 +340,15 @@ describe('AwbGenerationJobService.processManifest', () => {
 // so those buttons were asking a person to assert facts the system
 // already knew.
 // ---------------------------------------------------------------------
-describe('AwbGenerationJobService — the last hop is automatic', () => {
-  it('hands off as soon as every parcel on the manifest has a waybill', async () => {
-    const { svc, confirmHandoff } = makeService({
-      shipments: [{ id: 's1', orderId: 'o1', plan: { kind: 'ok' } }],
-    });
-    const r = await svc.processManifest(MAN);
-
-    expect(r.manifestStatus).toBe(ManifestStatus.CONFIRMED);
-    // NULL actor, not the packer: nobody watched a driver take these,
-    // and a name against that would be a false record of a physical
-    // event.
-    expect(confirmHandoff).toHaveBeenCalledWith(MAN, null);
-  });
-
-  it('does NOT hand off a manifest whose parcels were all refused', async () => {
-    const { svc, confirmHandoff } = makeService({
-      shipments: [{ id: 's1', orderId: 'o1', plan: { kind: 'fail', serviceable: false } }],
-    });
-    const r = await svc.processManifest(MAN);
-
-    expect(r.manifestStatus).toBe(ManifestStatus.FAILED);
-    expect(confirmHandoff).not.toHaveBeenCalled();
-  });
-
-  it('a handoff failure never fails the AWB job — the waybills are real', async () => {
-    const { svc, confirmHandoff } = makeService({
-      shipments: [{ id: 's1', orderId: 'o1', plan: { kind: 'ok' } }],
-    });
-    confirmHandoff.mockRejectedValueOnce(new Error('boom'));
-
-    const r = await svc.processManifest(MAN);
-    expect(r.manifestStatus).toBe(ManifestStatus.CONFIRMED);
-    expect(r.generatedCount).toBe(1);
-  });
-
+describe('AwbGenerationJobService — an empty manifest', () => {
   it('an EMPTY manifest is CLOSED, not FAILED — it had nothing to do', async () => {
     // A refusal detaches the shipment it retired (CUR-7), so a manifest
     // whose only parcel was refused ends up holding nothing. Calling
     // that a failure sends whoever reads the list looking for a fault in
     // the manifest rather than in the parcel that left it.
-    const { svc, confirmHandoff } = makeService({ shipments: [] });
+    const { svc } = makeService({ shipments: [] });
     const r = await svc.processManifest(MAN);
 
     expect(r.manifestStatus).toBe(ManifestStatus.CLOSED);
-    expect(confirmHandoff).not.toHaveBeenCalled();
   });
 });

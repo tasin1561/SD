@@ -12,7 +12,6 @@ import { OrderWriteService } from '../../order/services/order-write.service';
 import { CourierFeeAccrualService } from '../../seller-wallet-accrual/services/courier-fee-accrual.service';
 import { AwbGenerationService } from './awb-generation.service';
 import { AwbSupersedeService } from './awb-supersede.service';
-import { DispatchHandoffService } from '../../courier-dispatch/services/dispatch-handoff.service';
 
 export interface AwbJobShipmentOutcome {
   shipmentId: string;
@@ -88,7 +87,6 @@ export class AwbGenerationJobService {
     private readonly generation: AwbGenerationService,
     private readonly supersede: AwbSupersedeService,
     private readonly courierFeeAccrual: CourierFeeAccrualService,
-    private readonly handoff: DispatchHandoffService,
   ) {}
 
   /**
@@ -320,31 +318,6 @@ export class AwbGenerationJobService {
         shipmentCount: manifest.shipments.length,
       },
     });
-
-    // CONFIRMED means every parcel on this sheet has a waybill, which is
-    // the last thing that had to be true before it can leave. Handing
-    // off used to be a supervisor pressing a button; nothing here prints
-    // the manifest or sends it anywhere, so that button was asking a
-    // person to assert a fact the system already knew.
-    //
-    // Best-effort and idempotent (already-DISPATCHED is a no-op): a
-    // failure leaves the manifest correctly CONFIRMED for a supervisor
-    // to hand off by hand, and must never fail the AWB job — the
-    // waybills are real and durable whatever happens next.
-    //
-    // The actor is NULL, not the packer: nobody watched a driver take
-    // these, and recording a name against that would be a false record
-    // of a physical event.
-    if (manifestStatus === ManifestStatus.CONFIRMED) {
-      try {
-        await this.handoff.confirmHandoff(manifestId, null);
-      } catch (err) {
-        this.logger.warn(
-          { manifestId, err: (err as Error).message },
-          'Automatic dispatch handoff failed — the manifest stays CONFIRMED for a supervisor',
-        );
-      }
-    }
 
     return {
       manifestId,
