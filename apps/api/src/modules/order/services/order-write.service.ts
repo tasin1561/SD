@@ -1095,17 +1095,24 @@ export class OrderWriteService {
   //
   // Mirror image of DISPATCH_STOCK, same visible-vs-silent shape:
   //   1. GATE-free by construction: it reads every PACK_CONFIRM movement
-  //      for the shipment and reverses EACH ONE individually, so calling
-  //      this twice would double-give-back — which is why the reversal
-  //      movements are what the SECOND gate checks (a PACK_REVERSED
-  //      movement already present for a given PACK_CONFIRM ⇒ that one is
-  //      skipped). Idempotent per-movement, not per-shipment.
+  //      for the ORDER (by orderId, NOT the order's current live
+  //      shipment — a courier-rejection arrival at
+  //      PENDING_MANUAL_PLACEMENT has already been superseded, so the
+  //      PACK_CONFIRM sits on the ORIGINAL, now FAILED_AT_CREATION
+  //      shipment; filtering by the live shipmentId would silently find
+  //      nothing and skip the give-back entirely) and reverses EACH ONE
+  //      individually, so calling this twice would double-give-back —
+  //      which is why the reversal movements are what the SECOND gate
+  //      checks (a PACK_REVERSED movement already present for a given
+  //      PACK_CONFIRM ⇒ that one is skipped). Idempotent per-movement,
+  //      not per-shipment.
   //   2. PRE-TX: one runWithRetry block issues a PACK_REVERSED +qty
   //      StockMovement for every un-reversed PACK_CONFIRM, at the EXACT
-  //      seller/variant/warehouse/bin/batch/orderItem the original
-  //      recorded — the movement rows are the ground truth of what
-  //      physically left, not a re-derivation from reservations (which
-  //      are already FULFILLED — terminal, not touched).
+  //      seller/variant/warehouse/bin/batch/orderItem/shipmentId the
+  //      original recorded — the movement rows are the ground truth of
+  //      what physically left and from where, not a re-derivation from
+  //      reservations (which are already FULFILLED — terminal, not
+  //      touched).
   //   3. LOCAL TX: the authoritative transition (e.g. → CANCELLED_BY_ADMIN).
   //   4. POST-COMMIT: release() any reservation still ACTIVE — defensive
   //      only; by this point every reservation is normally already
@@ -1117,74 +1124,69 @@ export class OrderWriteService {
     to: OrderStatus,
     input: TransitionStatusInput,
   ): Promise<InternalTransitionResult> {
-    const liveOrderShipment = await this.prisma.client.orderShipment.findFirst({
-      where: {
-        orderId: order.id,
-        shipment: {
-          status: { notIn: [ShipmentStatus.CANCELLED, ShipmentStatus.FAILED_AT_CREATION] },
-          deletedAt: null,
-        },
+    // Queried by orderId, NOT the live shipment: a courier-rejection
+    // arrival at PENDING_MANUAL_PLACEMENT has already been through
+    // AwbSupersedeService, so the PACK_CONFIRM movement is keyed to the
+    // ORIGINAL (now FAILED_AT_CREATION) shipment while placeAwb/cancel
+    // operate on the live REPLACEMENT — the same orderId-not-shipmentId
+    // lesson as ManualPlacementService.resolveReadiness (CUR-8).
+    const packed = await this.prisma.client.stockMovement.findMany({
+      where: { orderId: order.id, type: StockMovementType.PACK_CONFIRM },
+      select: {
+        id: true,
+        sellerId: true,
+        variantId: true,
+        warehouseId: true,
+        binId: true,
+        batchId: true,
+        qtyChange: true,
+        orderItemId: true,
+        shipmentId: true,
       },
-      orderBy: { shipmentSequence: 'desc' },
-      select: { shipmentId: true },
     });
-    const shipmentId = liveOrderShipment?.shipmentId ?? null;
-    if (shipmentId === null) {
+    if (packed.length === 0) {
       this.logger.warn(
         { orderId: order.id },
-        'UNPACK_STOCK: order has no live shipment — nothing to reverse',
+        'UNPACK_STOCK: no PACK_CONFIRM movement for this order — nothing to reverse',
       );
     }
 
     // 1/2. Reverse every PACK_CONFIRM that has not already been reversed.
-    if (shipmentId !== null) {
-      const packed = await this.prisma.client.stockMovement.findMany({
-        where: { shipmentId, type: StockMovementType.PACK_CONFIRM },
-        select: {
-          id: true,
-          sellerId: true,
-          variantId: true,
-          warehouseId: true,
-          binId: true,
-          batchId: true,
-          qtyChange: true,
-          orderItemId: true,
-        },
+    if (packed.length > 0) {
+      const alreadyReversed = await this.prisma.client.stockMovement.findMany({
+        where: { orderId: order.id, type: StockMovementType.PACK_REVERSED },
+        select: { metadata: true },
       });
-      if (packed.length > 0) {
-        const alreadyReversed = await this.prisma.client.stockMovement.findMany({
-          where: { shipmentId, type: StockMovementType.PACK_REVERSED },
-          select: { metadata: true },
+      const reversedSourceIds = new Set(
+        alreadyReversed
+          .map((m) => (m.metadata as { reversesMovementId?: string } | null)?.reversesMovementId)
+          .filter((id): id is string => typeof id === 'string'),
+      );
+      const toReverse = packed.filter((m) => !reversedSourceIds.has(m.id));
+      if (toReverse.length > 0) {
+        await this.mutation.runWithRetry(async (tx) => {
+          for (const m of toReverse) {
+            if (m.binId === null || m.batchId === null) continue; // narrowing
+            await this.mutation.apply(tx, {
+              sellerId: m.sellerId,
+              variantId: m.variantId,
+              warehouseId: m.warehouseId,
+              binId: m.binId,
+              batchId: m.batchId,
+              qtyChange: -m.qtyChange, // the exact opposite of the original
+              type: StockMovementType.PACK_REVERSED,
+              actorType: input.actor.type,
+              actorId: input.actor.id ?? null,
+              reasonCode: null, // self-describes, same as PACK_CONFIRM
+              orderId: order.id,
+              orderItemId: m.orderItemId,
+              // The ORIGINAL shipment the goods physically left from —
+              // not necessarily the order's current live shipment.
+              shipmentId: m.shipmentId,
+              metadata: { reversesMovementId: m.id },
+            });
+          }
         });
-        const reversedSourceIds = new Set(
-          alreadyReversed
-            .map((m) => (m.metadata as { reversesMovementId?: string } | null)?.reversesMovementId)
-            .filter((id): id is string => typeof id === 'string'),
-        );
-        const toReverse = packed.filter((m) => !reversedSourceIds.has(m.id));
-        if (toReverse.length > 0) {
-          await this.mutation.runWithRetry(async (tx) => {
-            for (const m of toReverse) {
-              if (m.binId === null || m.batchId === null) continue; // narrowing
-              await this.mutation.apply(tx, {
-                sellerId: m.sellerId,
-                variantId: m.variantId,
-                warehouseId: m.warehouseId,
-                binId: m.binId,
-                batchId: m.batchId,
-                qtyChange: -m.qtyChange, // the exact opposite of the original
-                type: StockMovementType.PACK_REVERSED,
-                actorType: input.actor.type,
-                actorId: input.actor.id ?? null,
-                reasonCode: null, // self-describes, same as PACK_CONFIRM
-                orderId: order.id,
-                orderItemId: m.orderItemId,
-                shipmentId,
-                metadata: { reversesMovementId: m.id },
-              });
-            }
-          });
-        }
       }
     }
 

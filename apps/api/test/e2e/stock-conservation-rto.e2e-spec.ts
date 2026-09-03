@@ -618,14 +618,22 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
         ?.reversesMovementId,
     ).toBe(packMovements[0]!.id);
 
-    // Idempotent: re-running the same transition again must not
-    // double-reverse (the metadata pointer is the per-movement gate).
-    await ow.transitionStatus({
-      orderId,
-      to: OrderStatus.CANCELLED_BY_ADMIN,
-      actor: { type: ActorType.STAFF, id: staffId },
-      reason: 'retry',
-    });
+    // The order-level NOOP_TRANSITION guard is the outer idempotency net:
+    // CANCELLED_BY_ADMIN → CANCELLED_BY_ADMIN is not a declared matrix
+    // self-loop, so a literal repeat call is refused here, before it
+    // could ever reach the movement-reversal logic. Per-movement
+    // idempotency inside transitionWithUnpack itself (the crash-recovery
+    // case, where a retry re-enters from PACKED before the order's
+    // status update ever committed) is covered directly in
+    // order-write.service.spec.ts, which can simulate that window.
+    await expect(
+      ow.transitionStatus({
+        orderId,
+        to: OrderStatus.CANCELLED_BY_ADMIN,
+        actor: { type: ActorType.STAFF, id: staffId },
+        reason: 'retry',
+      }),
+    ).rejects.toMatchObject({ response: { code: 'NOOP_TRANSITION' } });
     const reversedAgain = await h.prisma.stockMovement.findMany({
       where: { orderId, type: StockMovementType.PACK_REVERSED },
     });

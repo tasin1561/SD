@@ -582,10 +582,15 @@ describe('OrderWriteService.transitionStatus — UNPACK_STOCK (Model C give-back
     batchId: 'bat-1',
     qtyChange: -2,
     orderItemId: 'oi1',
+    // Deliberately NOT the same as the default live shipment ('ship-1')
+    // — this is the manual-placement supersede shape (CUR-8/CUR-3): the
+    // PACK_CONFIRM sits on the ORIGINAL shipment, the order's live
+    // shipment is a different (replacement) row.
+    shipmentId: 'ship-ORIGINAL',
   };
 
   it('PACKED → CANCELLED_BY_ADMIN: reverses the PACK_CONFIRM movement exactly', async () => {
-    const { svc, mutationApply, runWithRetry, orderUpdate } = makeService({
+    const { svc, mutationApply, runWithRetry, orderUpdate, stockMovementFindMany } = makeService({
       order: packedOrder,
       packConfirmMovements: [packConfirmRow],
     });
@@ -597,7 +602,10 @@ describe('OrderWriteService.transitionStatus — UNPACK_STOCK (Model C give-back
     expect(res.status).toBe(OrderStatus.CANCELLED_BY_ADMIN);
     expect(runWithRetry).toHaveBeenCalledTimes(1);
     // The exact opposite of the original — same bin/batch/variant, +2
-    // instead of −2, and a pointer back to what it reverses.
+    // instead of −2, a pointer back to what it reverses, AND stamped
+    // with the ORIGINAL shipment's id, not the order's current live
+    // shipment ('ship-1' per the default mock) — this is the exact
+    // regression a shipmentId-scoped lookup would silently miss.
     expect(mutationApply).toHaveBeenCalledWith(
       {},
       expect.objectContaining({
@@ -607,12 +615,25 @@ describe('OrderWriteService.transitionStatus — UNPACK_STOCK (Model C give-back
         batchId: 'bat-1',
         variantId: 'v1',
         orderItemId: 'oi1',
+        shipmentId: 'ship-ORIGINAL',
         metadata: { reversesMovementId: 'mv-pack-1' },
       }),
     );
     expect(mutationApply.mock.invocationCallOrder[0]).toBeLessThan(
       orderUpdate.mock.invocationCallOrder[0] ?? Infinity,
     );
+    // The lookup itself is keyed on orderId, never on the live shipment
+    // — a shipmentId-scoped query would find nothing for a superseded
+    // shipment and silently skip the give-back.
+    expect(stockMovementFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ orderId: 'o1', type: 'PACK_CONFIRM' }),
+      }),
+    );
+    for (const call of stockMovementFindMany.mock.calls as unknown as Array<[AnyArgs]>) {
+      const where = call[0]['where'] as AnyArgs;
+      expect(where).not.toHaveProperty('shipmentId');
+    }
   });
 
   it('is idempotent per-movement: a PACK_CONFIRM already reversed is skipped', async () => {
