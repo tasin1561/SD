@@ -446,9 +446,10 @@ export class AwbGenerationJobService {
       // PENDING_MANUAL_PLACEMENT no longer means "this must be picked
       // already": recording the manual AWB on an unpicked order routes
       // it to PENDING_PICK and it flows through the ordinary pick → pack
-      // → handoff path, where DISPATCH_STOCK fires exactly once (CUR-3).
-      // That is what makes routing a confirmation-time refusal here
-      // correct rather than a dead end.
+      // → handoff path, where DISPATCH_STOCK fires exactly once, at
+      // PICKED → PACKED under Model C (CUR-3). That is what makes
+      // routing a confirmation-time refusal here correct rather than a
+      // dead end.
       await this.routeOrderToManual(orderId, shipmentId, OrderStatus.CONFIRMED);
       const sup = await this.supersede.supersede(
         shipmentId,

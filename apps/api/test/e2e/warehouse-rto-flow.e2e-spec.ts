@@ -21,16 +21,18 @@ import {
 } from './app-harness';
 
 /**
- * Module 8 warehouse-rto HTTP surface, MODEL A (M9 commit 12 bug-1 fix).
- * Drives the FULL CONFIRMED → pack → DISPATCHED → RTO_INITIATED →
- * receive → inspect → finalize pipeline.
+ * Module 8 warehouse-rto HTTP surface (M9 commit 12 bug-1 fix; Model C,
+ * 2026-09-03, moved WHEN the decrement fires without touching this
+ * pipeline at all). Drives the FULL CONFIRMED → pick → pack →
+ * DISPATCHED → RTO_INITIATED → receive → inspect → finalize pipeline.
  *
- * Model A semantics — qtyOnHand decrements at DISPATCH (the one
- * normal-lifecycle decrement); the phase-2 reservation is FULFILLED
- * there. finalize() therefore:
+ * qtyOnHand decrements at PACK (the one normal-lifecycle decrement,
+ * PACK_CONFIRM movement); the phase-2 reservation is FULFILLED there.
+ * finalize() does not care which matrix edge fired it — by the time an
+ * order reaches RTO_RECEIVED it has necessarily happened — so finalize:
  *   - RESTOCK : RETURN_RESTOCK +qty re-add — qtyOnHand returns to
  *               baseline. No reservation release (already FULFILLED).
- *   - WRITE_OFF: NO movement — the dispatch decrement stands; the unit
+ *   - WRITE_OFF: NO movement — the original decrement stands; the unit
  *               is gone.
  */
 describe('Warehouse RTO flow (e2e)', () => {
@@ -481,12 +483,12 @@ describe('Warehouse RTO flow (e2e)', () => {
     expect(after.body).toHaveLength(0);
   });
 
-  it('RESTOCK happy (Model A): RETURN_RESTOCK +qty re-adds — qtyOnHand 8 → 10', async () => {
+  it('RESTOCK happy: RETURN_RESTOCK +qty re-adds — qtyOnHand 8 → 10', async () => {
     await receiveStock(10);
     const { orderId, shipmentId, shipmentItemIds, awbNumber } = await makeRtoInitiatedShipment(2);
 
-    // Model A: the DISPATCH decrement already fired — qtyOnHand 8, the
-    // phase-2 reservation FULFILLED (qtyReserved 0).
+    // Model C: the PACK_CONFIRM decrement already fired at pack — qtyOnHand
+    // 8, the phase-2 reservation FULFILLED (qtyReserved 0).
     const beforeFinalize = await h.prisma.stockLevel.findFirstOrThrow({
       where: { variantId, binId },
     });
@@ -542,7 +544,7 @@ describe('Warehouse RTO flow (e2e)', () => {
     expect(active).toHaveLength(0);
   });
 
-  it('WRITE_OFF happy (Model A): NO movement — the dispatch decrement stands (qtyOnHand stays 8)', async () => {
+  it('WRITE_OFF happy: NO movement — the pack-time decrement stands (qtyOnHand stays 8)', async () => {
     await receiveStock(10);
     const { orderId, shipmentId, shipmentItemIds, awbNumber } = await makeRtoInitiatedShipment(2);
 
@@ -579,10 +581,10 @@ describe('Warehouse RTO flow (e2e)', () => {
     const afterFinalize = await h.prisma.stockLevel.findFirstOrThrow({
       where: { variantId, binId },
     });
-    expect(afterFinalize.qtyOnHand).toBe(8); // unchanged — the unit left at dispatch
+    expect(afterFinalize.qtyOnHand).toBe(8); // unchanged — the unit left at pack
     expect(afterFinalize.qtyReserved).toBe(0);
 
-    // WRITE_OFF issues NO movement under Model A.
+    // WRITE_OFF issues NO movement.
     const restockMovements = await h.prisma.stockMovement.findMany({
       where: { shipmentId, type: StockMovementType.RETURN_RESTOCK },
     });

@@ -132,22 +132,41 @@ describe('OrderStateMachineService', () => {
       }
     });
 
-    it('PENDING_DISPATCH → DISPATCHED carries DISPATCH_STOCK (M9 Model A — the bug-1 fix)', () => {
-      expect(sm.requiredSideEffects(OrderStatus.PENDING_DISPATCH, OrderStatus.DISPATCHED)).toEqual([
+    it('PICKED → PACKED carries DISPATCH_STOCK (Model C, 2026-09-03 — the decrement moved here)', () => {
+      expect(sm.requiredSideEffects(OrderStatus.PICKED, OrderStatus.PACKED)).toEqual([
         OrderSideEffect.DISPATCH_STOCK,
       ]);
     });
 
-    it('OUT_FOR_DELIVERY → DELIVERED is STOCK-NEUTRAL (M9 Model A — qtyOnHand decremented + fulfilled at DISPATCH)', () => {
+    it('PENDING_DISPATCH → DISPATCHED is STOCK-NEUTRAL (Model C — decremented + fulfilled at PACK already)', () => {
+      expect(sm.requiredSideEffects(OrderStatus.PENDING_DISPATCH, OrderStatus.DISPATCHED)).toEqual(
+        [],
+      );
+    });
+
+    it('OUT_FOR_DELIVERY → DELIVERED is STOCK-NEUTRAL (Model C — qtyOnHand decremented + fulfilled at PACK)', () => {
       expect(sm.requiredSideEffects(OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED)).toEqual(
         [],
       );
     });
 
-    it('a downstream reserved state cancel still releases (PACKED → CANCELLED_BY_ADMIN)', () => {
+    it('a parcel still in the building on cancel gets its stock GIVEN BACK (PACKED → CANCELLED_BY_ADMIN)', () => {
+      // Model C: qtyOnHand already moved at PACKED, so plain
+      // RELEASE_STOCK (which would just no-op an already-FULFILLED
+      // reservation) is not enough — UNPACK_STOCK reverses the physical
+      // decrement too.
       expect(sm.requiredSideEffects(OrderStatus.PACKED, OrderStatus.CANCELLED_BY_ADMIN)).toEqual([
-        OrderSideEffect.RELEASE_STOCK,
+        OrderSideEffect.UNPACK_STOCK,
       ]);
+    });
+
+    it('a parcel already with a courier on cancel does NOT get stock back (DISPATCHED → CANCELLED_BY_ADMIN)', () => {
+      // The goods are gone from the building for real by now — RELEASE_STOCK
+      // stays plain (a no-op on the already-FULFILLED reservation), and
+      // giving stock back here would invent inventory that is not there.
+      expect(
+        sm.requiredSideEffects(OrderStatus.DISPATCHED, OrderStatus.CANCELLED_BY_ADMIN),
+      ).toEqual([OrderSideEffect.RELEASE_STOCK]);
     });
   });
 
@@ -216,13 +235,13 @@ describe('OrderStateMachineService', () => {
       ).toBe(true);
     });
 
-    it('PENDING_MANUAL_PLACEMENT → DISPATCHED is valid and carries DISPATCH_STOCK (M9 commit 14, CUR-8 — manual placement dispatches directly)', () => {
+    it('PENDING_MANUAL_PLACEMENT → DISPATCHED is valid and STOCK-NEUTRAL (Model C — every ON_SHELF path already passed through PACKED)', () => {
       expect(
         sm.isValidTransition(OrderStatus.PENDING_MANUAL_PLACEMENT, OrderStatus.DISPATCHED),
       ).toBe(true);
       expect(
         sm.requiredSideEffects(OrderStatus.PENDING_MANUAL_PLACEMENT, OrderStatus.DISPATCHED),
-      ).toEqual([OrderSideEffect.DISPATCH_STOCK]);
+      ).toEqual([]);
     });
   });
 

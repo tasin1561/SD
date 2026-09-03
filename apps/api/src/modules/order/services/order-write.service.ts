@@ -400,9 +400,12 @@ export class OrderWriteService {
       result = await this.transitionThenStock(order, from, to, input, 'RELEASE');
     } else if (sideEffects.includes(OrderSideEffect.DISPATCH_STOCK)) {
       result = await this.transitionWithDispatch(order, from, to, input);
+    } else if (sideEffects.includes(OrderSideEffect.UNPACK_STOCK)) {
+      result = await this.transitionWithUnpack(order, from, to, input);
     } else if (sideEffects.includes(OrderSideEffect.FULFILL_STOCK)) {
-      // Model A: no matrix edge carries FULFILL_STOCK (DELIVERED is
-      // stock-neutral). Branch retained defensively / for god-mode use.
+      // No matrix edge carries FULFILL_STOCK today (DELIVERED is
+      // stock-neutral, TRK-7). Branch retained defensively / for
+      // god-mode use.
       result = await this.transitionThenStock(order, from, to, input, 'FULFILL');
     } else {
       result = await this.transitionPlain(order, from, to, input);
@@ -956,28 +959,35 @@ export class OrderWriteService {
     };
   }
 
-  // ── DISPATCH_STOCK (Module 9, Model A — the bug-1 fix): the ONE
-  //    normal-lifecycle qtyOnHand decrement, PENDING_DISPATCH →
-  //    DISPATCHED. ──────────────────────────────────────────────────
+  // ── DISPATCH_STOCK (Model C, 2026-09-03): the ONE normal-lifecycle
+  //    qtyOnHand decrement, PICKED → PACKED. ──────────────────────────
+  //
+  // The side-effect keeps its OLD NAME (see the enum's doc comment) —
+  // it moved here from PENDING_DISPATCH → DISPATCHED under Model A. The
+  // MOVEMENT TYPE it issues is `PACK_CONFIRM`, not `DISPATCH`: the
+  // decrement now happens when the box is sealed, not when a courier
+  // takes it, and a movement type should say when it really happened.
   //
   // SAGA, visible-vs-silent failure ordering (same shape as WMS-8):
-  //   1. GATE (shipment-grained): a prior DISPATCH movement for this
+  //   1. GATE (shipment-grained): a prior PACK_CONFIRM movement for this
   //      shipment ⇒ movements already applied — skip (retry-safe, no
   //      double-decrement). stock_movements has no native dedup key;
   //      the existence query IS the gate.
-  //   2. PRE-TX: one runWithRetry block issues a DISPATCH StockMovement
-  //      (qtyOnHand −= qty) per PHASE-2 reservation (bin+batch from
-  //      listActiveForOrderWithLocations; phase-1 residuals — null
-  //      bin/batch — skipped). The durable physical fact goes FIRST.
-  //   3. LOCAL TX: the authoritative DISPATCHED transition (writeStatusTx).
+  //   2. PRE-TX: one runWithRetry block issues a PACK_CONFIRM
+  //      StockMovement (qtyOnHand −= qty) per PHASE-2 reservation
+  //      (bin+batch from listActiveForOrderWithLocations; phase-1
+  //      residuals — null bin/batch — skipped, though PICKED → PACKED
+  //      should never have any: a shortfall fails out at PICK). The
+  //      durable physical fact goes FIRST.
+  //   3. LOCAL TX: the authoritative PACKED transition (writeStatusTx).
   //   4. POST-COMMIT: fulfill() per ACTIVE reservation — marks FULFILLED
   //      + clamped qtyReserved give-back (INV-4); idempotent on
   //      already-FULFILLED.
   //
-  // Crash after step 2 / before step 3 → order stays PENDING_DISPATCH,
-  // qtyOnHand correctly decremented (visible, recoverable); the retry's
-  // gate skips re-application and re-runs the transition. Crash inside
-  // step 2 → runWithRetry's tx rolls back atomically.
+  // Crash after step 2 / before step 3 → order stays PICKED, qtyOnHand
+  // correctly decremented (visible, recoverable); the retry's gate skips
+  // re-application and re-runs the transition. Crash inside step 2 →
+  // runWithRetry's tx rolls back atomically.
   private async transitionWithDispatch(
     order: { id: string; sellerId: string; orderNumber: string; items: unknown[] },
     from: OrderStatus,
@@ -986,7 +996,7 @@ export class OrderWriteService {
   ): Promise<InternalTransitionResult> {
     // Resolve the order's LIVE shipment (Phase 1A: one shipment per
     // order; CANCELLED / FAILED_AT_CREATION — e.g. a superseded parcel —
-    // excluded). The DISPATCH movements + the gate are keyed on it.
+    // excluded). The PACK_CONFIRM movements + the gate are keyed on it.
     const liveOrderShipment = await this.prisma.client.orderShipment.findFirst({
       where: {
         orderId: order.id,
@@ -1012,14 +1022,14 @@ export class OrderWriteService {
     //    in the no-live-shipment anomaly).
     const existingDispatch = await this.prisma.client.stockMovement.findFirst({
       where: {
-        type: StockMovementType.DISPATCH,
+        type: StockMovementType.PACK_CONFIRM,
         ...(shipmentId !== null ? { shipmentId } : { orderId: order.id }),
       },
       select: { id: true },
     });
     const movementsAlreadyApplied = existingDispatch !== null;
 
-    // 2. PRE-TX — DISPATCH movements per phase-2 reservation.
+    // 2. PRE-TX — PACK_CONFIRM movements per phase-2 reservation.
     const locations = await this.reservations.listActiveForOrderWithLocations(order.id);
     const phase2 = locations.filter((r) => r.binId !== null && r.batchId !== null);
     if (!movementsAlreadyApplied && phase2.length > 0) {
@@ -1035,11 +1045,11 @@ export class OrderWriteService {
             binId,
             batchId,
             qtyChange: -r.qtyReserved, // the ONE lifecycle decrement
-            type: StockMovementType.DISPATCH,
+            type: StockMovementType.PACK_CONFIRM,
             actorType: input.actor.type,
             actorId: input.actor.id ?? null,
-            // DISPATCH self-describes — INV-7 requires reasonCode only
-            // for ADJUSTMENT_* / CYCLE_COUNT_ADJUST / EXPIRY_WRITE_OFF.
+            // PACK_CONFIRM self-describes — INV-7 requires reasonCode
+            // only for ADJUSTMENT_* / CYCLE_COUNT_ADJUST / EXPIRY_WRITE_OFF.
             reasonCode: null,
             orderId: order.id,
             orderItemId: r.orderItemId,
@@ -1065,7 +1075,146 @@ export class OrderWriteService {
         outcome = null;
         this.logger.error(
           { orderId: order.id, reservationId: r.id, err: (err as Error).message },
-          'Post-commit dispatch fulfill failed; TTL/worker will reconcile',
+          'Post-commit pack-time fulfill failed; TTL/worker will reconcile',
+        );
+      }
+    }
+    if (active.length === 0) outcome = null;
+
+    return {
+      orderId: order.id,
+      fromStatus: from,
+      status: to,
+      reservationOutcome: outcome,
+      statusEventId,
+    };
+  }
+
+  // ── UNPACK_STOCK (Model C's give-back): an order cancelled while its
+  //    packed parcel is still physically in the building. ─────────────
+  //
+  // Mirror image of DISPATCH_STOCK, same visible-vs-silent shape:
+  //   1. GATE-free by construction: it reads every PACK_CONFIRM movement
+  //      for the shipment and reverses EACH ONE individually, so calling
+  //      this twice would double-give-back — which is why the reversal
+  //      movements are what the SECOND gate checks (a PACK_REVERSED
+  //      movement already present for a given PACK_CONFIRM ⇒ that one is
+  //      skipped). Idempotent per-movement, not per-shipment.
+  //   2. PRE-TX: one runWithRetry block issues a PACK_REVERSED +qty
+  //      StockMovement for every un-reversed PACK_CONFIRM, at the EXACT
+  //      seller/variant/warehouse/bin/batch/orderItem the original
+  //      recorded — the movement rows are the ground truth of what
+  //      physically left, not a re-derivation from reservations (which
+  //      are already FULFILLED — terminal, not touched).
+  //   3. LOCAL TX: the authoritative transition (e.g. → CANCELLED_BY_ADMIN).
+  //   4. POST-COMMIT: release() any reservation still ACTIVE — defensive
+  //      only; by this point every reservation is normally already
+  //      FULFILLED (from step 4 of DISPATCH_STOCK) and release() on a
+  //      non-ACTIVE reservation is a no-op.
+  private async transitionWithUnpack(
+    order: { id: string; sellerId: string; orderNumber: string; items: unknown[] },
+    from: OrderStatus,
+    to: OrderStatus,
+    input: TransitionStatusInput,
+  ): Promise<InternalTransitionResult> {
+    const liveOrderShipment = await this.prisma.client.orderShipment.findFirst({
+      where: {
+        orderId: order.id,
+        shipment: {
+          status: { notIn: [ShipmentStatus.CANCELLED, ShipmentStatus.FAILED_AT_CREATION] },
+          deletedAt: null,
+        },
+      },
+      orderBy: { shipmentSequence: 'desc' },
+      select: { shipmentId: true },
+    });
+    const shipmentId = liveOrderShipment?.shipmentId ?? null;
+    if (shipmentId === null) {
+      this.logger.warn(
+        { orderId: order.id },
+        'UNPACK_STOCK: order has no live shipment — nothing to reverse',
+      );
+    }
+
+    // 1/2. Reverse every PACK_CONFIRM that has not already been reversed.
+    if (shipmentId !== null) {
+      const packed = await this.prisma.client.stockMovement.findMany({
+        where: { shipmentId, type: StockMovementType.PACK_CONFIRM },
+        select: {
+          id: true,
+          sellerId: true,
+          variantId: true,
+          warehouseId: true,
+          binId: true,
+          batchId: true,
+          qtyChange: true,
+          orderItemId: true,
+        },
+      });
+      if (packed.length > 0) {
+        const alreadyReversed = await this.prisma.client.stockMovement.findMany({
+          where: { shipmentId, type: StockMovementType.PACK_REVERSED },
+          select: { metadata: true },
+        });
+        const reversedSourceIds = new Set(
+          alreadyReversed
+            .map((m) => (m.metadata as { reversesMovementId?: string } | null)?.reversesMovementId)
+            .filter((id): id is string => typeof id === 'string'),
+        );
+        const toReverse = packed.filter((m) => !reversedSourceIds.has(m.id));
+        if (toReverse.length > 0) {
+          await this.mutation.runWithRetry(async (tx) => {
+            for (const m of toReverse) {
+              if (m.binId === null || m.batchId === null) continue; // narrowing
+              await this.mutation.apply(tx, {
+                sellerId: m.sellerId,
+                variantId: m.variantId,
+                warehouseId: m.warehouseId,
+                binId: m.binId,
+                batchId: m.batchId,
+                qtyChange: -m.qtyChange, // the exact opposite of the original
+                type: StockMovementType.PACK_REVERSED,
+                actorType: input.actor.type,
+                actorId: input.actor.id ?? null,
+                reasonCode: null, // self-describes, same as PACK_CONFIRM
+                orderId: order.id,
+                orderItemId: m.orderItemId,
+                shipmentId,
+                metadata: { reversesMovementId: m.id },
+              });
+            }
+          });
+        }
+      }
+    }
+
+    // 3. LOCAL TX — the authoritative transition.
+    const { statusEventId } = await this.writeStatusTx(order, from, to, input, {
+      eventDescription: input.reason ?? `Status ${from} → ${to}`,
+      auditAction: 'order.status_changed',
+    });
+
+    // 4. POST-COMMIT — release() any reservation still ACTIVE. Defensive:
+    //    by this point every reservation is normally already FULFILLED,
+    //    and release() on a non-ACTIVE reservation is a no-op (INV-6-
+    //    style idempotency, same shape as WMS-8's "alreadyInactive").
+    const active = await this.reservations.listActiveForOrder(order.id);
+    let outcome: ReservationOutcome = 'RELEASED';
+    for (const r of active) {
+      try {
+        // ORDER_CANCELLED fits the one reachable case (CANCELLED_BY_ADMIN);
+        // PACK_FAILED (re-open) is dormant and shares it rather than
+        // needing its own reason for a path nothing calls yet.
+        await this.reservations.release(
+          r.id,
+          ReservationReleaseReason.ORDER_CANCELLED,
+          input.actor,
+        );
+      } catch (err) {
+        outcome = null;
+        this.logger.error(
+          { orderId: order.id, reservationId: r.id, err: (err as Error).message },
+          'Post-commit unpack release failed; TTL/worker will reconcile',
         );
       }
     }

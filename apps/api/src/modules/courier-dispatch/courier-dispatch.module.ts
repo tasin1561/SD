@@ -14,9 +14,10 @@ import { InventorySharedModule } from '../inventory-shared/inventory-shared.modu
  *               surface (POST .../confirm-handoff, WAREHOUSE_SUPERVISOR)
  *
  * Imports OrderModule (OrderWriteService — the PENDING_DISPATCH →
- * DISPATCHED transition; commit 12 wired the DISPATCH_STOCK side-effect
- * onto that edge — the bug-1 fix). PrismaService + AuditLogService
- * global.
+ * DISPATCHED transition). Model C (2026-09-03) moved the DISPATCH_STOCK
+ * side-effect off this edge and onto PICKED → PACKED, so this handoff no
+ * longer touches qtyOnHand at all — the decrement already happened when
+ * the box was packed. PrismaService + AuditLogService global.
  *
  * LEAF consumer — nothing imports `courier-dispatch`.
  */

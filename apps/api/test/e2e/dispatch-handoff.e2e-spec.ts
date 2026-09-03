@@ -24,11 +24,13 @@ import {
  * Drives the real pipeline CONFIRMED → pick → pack → manifest close →
  * (AWB job) CONFIRMED, then exercises POST
  * /admin/courier/manifests/:id/confirm-handoff:
- *   - happy: order PENDING_DISPATCH → DISPATCHED (DISPATCH_STOCK fires —
- *     qtyOnHand 10→8, reservation FULFILLED), shipment HANDED_TO_COURIER,
- *     manifest CONFIRMED → DISPATCHED.
- *   - idempotent: a 2nd confirm-handoff is alreadyDispatched, no double
- *     decrement.
+ *   - happy: order PENDING_DISPATCH → DISPATCHED, shipment
+ *     HANDED_TO_COURIER, manifest CONFIRMED → DISPATCHED. Under Model C
+ *     (2026-09-03) this edge is STOCK-NEUTRAL — the DISPATCH_STOCK
+ *     qtyOnHand 10→8 decrement already fired earlier, at pack.complete
+ *     (PICKED → PACKED), inside driveToConfirmedManifest.
+ *   - idempotent: a 2nd confirm-handoff is alreadyDispatched, and no
+ *     PACK_CONFIRM or DISPATCH movement is created by either call.
  *   - RBAC: a non-supervisor staff member is rejected 403.
  */
 describe('Dispatch handoff endpoint (e2e)', () => {
@@ -225,12 +227,19 @@ describe('Dispatch handoff endpoint (e2e)', () => {
     return { qtyOnHand: level.qtyOnHand, qtyReserved: level.qtyReserved };
   }
 
-  it('confirm-handoff: order → DISPATCHED, shipment HANDED_TO_COURIER, manifest DISPATCHED, qtyOnHand 10→8', async () => {
+  it('confirm-handoff: order → DISPATCHED, shipment HANDED_TO_COURIER, manifest DISPATCHED — stock already moved at pack', async () => {
     await receiveStock(10);
     const { orderId, shipmentId, manifestId } = await driveToConfirmedManifest(2);
 
+    // Model C: pack.complete (inside driveToConfirmedManifest) already
+    // decremented qtyOnHand and fulfilled the reservation.
     const before = await stockOf();
-    expect(before).toEqual({ qtyOnHand: 10, qtyReserved: 2 });
+    expect(before).toEqual({ qtyOnHand: 8, qtyReserved: 0 });
+    const packMovementsBefore = await h.prisma.stockMovement.findMany({
+      where: { orderId, type: StockMovementType.PACK_CONFIRM },
+    });
+    expect(packMovementsBefore).toHaveLength(1);
+    expect(packMovementsBefore[0]!.qtyChange).toBe(-2);
 
     const res = await request(h.baseUrl)
       .post(`/admin/courier/manifests/${manifestId}/confirm-handoff`)
@@ -260,22 +269,25 @@ describe('Dispatch handoff endpoint (e2e)', () => {
     expect(manifest.status).toBe(ManifestStatus.DISPATCHED);
     expect(manifest.handoffConfirmedByStaffId).toBe(staffId);
 
-    // Model A (bug-1 fix): DISPATCH_STOCK decremented qtyOnHand, the
-    // phase-2 reservation was FULFILLED.
+    // Model C: confirm-handoff is stock-neutral — nothing changes here,
+    // and NO DISPATCH-type movement is ever issued any more.
     const after = await stockOf();
     expect(after).toEqual({ qtyOnHand: 8, qtyReserved: 0 });
     const dispatchMovements = await h.prisma.stockMovement.findMany({
       where: { orderId, type: StockMovementType.DISPATCH },
     });
-    expect(dispatchMovements).toHaveLength(1);
-    expect(dispatchMovements[0]!.qtyChange).toBe(-2);
+    expect(dispatchMovements).toHaveLength(0);
+    const packMovementsAfter = await h.prisma.stockMovement.findMany({
+      where: { orderId, type: StockMovementType.PACK_CONFIRM },
+    });
+    expect(packMovementsAfter).toHaveLength(1); // still just the one, from pack
     const active = await h.prisma.stockReservation.findMany({
       where: { orderId, status: 'ACTIVE' },
     });
     expect(active).toHaveLength(0);
   });
 
-  it('confirm-handoff is idempotent: a 2nd call is alreadyDispatched, no double decrement', async () => {
+  it('confirm-handoff is idempotent: a 2nd call is alreadyDispatched, and touches no stock (none did, under Model C)', async () => {
     await receiveStock(10);
     const { orderId, manifestId } = await driveToConfirmedManifest(2);
 
@@ -290,11 +302,16 @@ describe('Dispatch handoff endpoint (e2e)', () => {
     expect(second.body.alreadyDispatched).toBe(true);
     expect(second.body.transitionedCount).toBe(0);
 
-    // Exactly one DISPATCH movement — the 2nd call decremented nothing.
+    // No DISPATCH movement is ever created (Model C); exactly one
+    // PACK_CONFIRM movement, from pack.complete, unaffected by either call.
     const dispatchMovements = await h.prisma.stockMovement.findMany({
       where: { orderId, type: StockMovementType.DISPATCH },
     });
-    expect(dispatchMovements).toHaveLength(1);
+    expect(dispatchMovements).toHaveLength(0);
+    const packMovements = await h.prisma.stockMovement.findMany({
+      where: { orderId, type: StockMovementType.PACK_CONFIRM },
+    });
+    expect(packMovements).toHaveLength(1);
     expect((await stockOf()).qtyOnHand).toBe(8);
   });
 

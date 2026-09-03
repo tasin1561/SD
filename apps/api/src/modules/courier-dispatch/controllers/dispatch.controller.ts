@@ -31,9 +31,10 @@ import { HandoverScanDto } from '../dto/handover-scan.dto';
  * The HTTP layer over DispatchHandoffService. A WAREHOUSE_SUPERVISOR (or
  * SUPER_ADMIN) confirms a manifest's parcels were physically handed to
  * the courier — every AWB-ready shipment's order transitions
- * PENDING_DISPATCH → DISPATCHED (the DISPATCH_STOCK side-effect fires the
- * bug-1 qtyOnHand decrement, commit 12), the shipment is marked
- * HANDED_TO_COURIER, the manifest flips CONFIRMED → DISPATCHED.
+ * PENDING_DISPATCH → DISPATCHED. Under Model C (2026-09-03) this edge is
+ * stock-neutral: the DISPATCH_STOCK qtyOnHand decrement already fired at
+ * PICKED → PACKED. The shipment is marked HANDED_TO_COURIER, the
+ * manifest flips CONFIRMED → DISPATCHED.
  *
  * RBAC: `courier.dispatch.handoff`, declared on the controller. That
  * permission is what CUR-4 now means — the guarantee survives an admin
@@ -65,7 +66,7 @@ export class DispatchController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'CUR-4 supervisor handoff: drive every AWB-ready shipment PENDING_DISPATCH→DISPATCHED (DISPATCH_STOCK saga), mark HANDED_TO_COURIER, flip manifest CONFIRMED→DISPATCHED. Per-shipment failure-isolated; idempotent on already-DISPATCHED',
+      'CUR-4 supervisor handoff: drive every AWB-ready shipment PENDING_DISPATCH→DISPATCHED (stock-neutral under Model C — DISPATCH_STOCK already fired at pack), mark HANDED_TO_COURIER, flip manifest CONFIRMED→DISPATCHED. Per-shipment failure-isolated; idempotent on already-DISPATCHED',
   })
   confirmHandoff(
     @Param('manifestId', new ParseUUIDPipe({ version: '7' }))

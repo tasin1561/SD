@@ -4655,10 +4655,22 @@ enum StockMovementType {
   RECEIVING           @map("receiving")
   PUT_AWAY            @map("put_away")
   PICK                @map("pick")
+  /// Model C (2026-09-03): the ONE normal-lifecycle qtyOnHand decrement,
+  /// now issued at PICKED → PACKED rather than at DISPATCHED. Was
+  /// declared in the schema from Module 5 on and never wired to
+  /// anything — Phase 1A originally chose dispatch-time (Model A,
+  /// `DISPATCH`) instead. See CUR-3 in CLAUDE.md.
   PACK_CONFIRM        @map("pack_confirm")
+  /// Retained for history: every movement written before 2026-09-03
+  /// carries this type. No code path issues a new one.
   DISPATCH            @map("dispatch")
   RETURN_RECEIVE      @map("return_receive")
   RETURN_RESTOCK      @map("return_restock")
+  /// The give-back companion to PACK_CONFIRM: an order cancelled while
+  /// its packed parcel is still physically in the building (never
+  /// handed to a courier). Distinct from RETURN_RESTOCK on purpose —
+  /// that is a customer return; this parcel never left at all.
+  PACK_REVERSED       @map("pack_reversed")
   ADJUSTMENT_INCREASE @map("adjustment_increase")
   ADJUSTMENT_DECREASE @map("adjustment_decrease")
   TRANSFER_OUT        @map("transfer_out")

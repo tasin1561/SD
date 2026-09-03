@@ -64,7 +64,7 @@ export class ManualPlacementController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'CUR-8 record a manually-arranged courier AWB on a PENDING_MANUAL_PLACEMENT shipment, mark it isManualCourier, and dispatch the order (PENDING_MANUAL_PLACEMENT→DISPATCHED, Model-A qtyOnHand decrement). Conservation-guarded; idempotent',
+      'CUR-8 record a manually-arranged courier AWB on a PENDING_MANUAL_PLACEMENT shipment, mark it isManualCourier, and dispatch the order (PENDING_MANUAL_PLACEMENT→DISPATCHED, stock-neutral under Model C — the qtyOnHand decrement already fired at pack). Conservation-guarded; idempotent',
   })
   placeAwb(
     @Param('shipmentId', new ParseUUIDPipe({ version: '7' }))

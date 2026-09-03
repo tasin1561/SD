@@ -19,10 +19,14 @@ function makeService(
     activeWithLocations?: Array<AnyArgs>;
     /** Live OrderShipment for the order ({ shipmentId } or null). */
     liveOrderShipment?: { shipmentId: string } | null;
-    /** Pre-existing DISPATCH movement → the gate fires. */
+    /** Pre-existing PACK_CONFIRM movement → the gate fires. */
     existingDispatchMovement?: boolean;
     /** A packer has this order's box open (PACK-1 claim). */
     openPackBox?: boolean;
+    /** PACK_CONFIRM movement rows for the UNPACK_STOCK reversal handler. */
+    packConfirmMovements?: Array<AnyArgs>;
+    /** PACK_REVERSED rows already written (idempotency). */
+    packReversedMovements?: Array<AnyArgs>;
   } = {},
 ) {
   const order =
@@ -47,6 +51,11 @@ function makeService(
   const stockMovementFindFirst = jest.fn(async () =>
     opts.existingDispatchMovement ? { id: 'mv-prior' } : null,
   );
+  const stockMovementFindMany = jest.fn(async (args: AnyArgs) => {
+    const where = args['where'] as AnyArgs;
+    if (where['type'] === 'PACK_REVERSED') return opts.packReversedMovements ?? [];
+    return opts.packConfirmMovements ?? [];
+  });
   const packBoxFindFirst = jest.fn(async () => (opts.openPackBox ? { id: 'box-1' } : null));
 
   const client = {} as {
@@ -54,7 +63,10 @@ function makeService(
     order: { findFirst: typeof orderFindFirst };
     systemSetting: { findUnique: typeof systemSettingFindUnique };
     orderShipment: { findFirst: typeof orderShipmentFindFirst };
-    stockMovement: { findFirst: typeof stockMovementFindFirst };
+    stockMovement: {
+      findFirst: typeof stockMovementFindFirst;
+      findMany: typeof stockMovementFindMany;
+    };
     packBox: { findFirst: typeof packBoxFindFirst };
   };
   client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => {
@@ -64,7 +76,7 @@ function makeService(
   client.order = { findFirst: orderFindFirst };
   client.systemSetting = { findUnique: systemSettingFindUnique };
   client.orderShipment = { findFirst: orderShipmentFindFirst };
-  client.stockMovement = { findFirst: stockMovementFindFirst };
+  client.stockMovement = { findFirst: stockMovementFindFirst, findMany: stockMovementFindMany };
   client.packBox = { findFirst: packBoxFindFirst };
 
   const stateMachine = new OrderStateMachineService();
@@ -139,6 +151,7 @@ function makeService(
     orderFindFirst,
     orderShipmentFindFirst,
     stockMovementFindFirst,
+    stockMovementFindMany,
     listActiveForOrderWithLocations,
     mutationApply,
     runWithRetry,
@@ -221,7 +234,7 @@ describe('OrderWriteService.transitionStatus', () => {
     expect(data.cancelledAt).toBeInstanceOf(Date);
   });
 
-  it('OUT_FOR_DELIVERY → DELIVERED is STOCK-NEUTRAL (M9 Model A — no fulfill)', async () => {
+  it('OUT_FOR_DELIVERY → DELIVERED is STOCK-NEUTRAL (no fulfill)', async () => {
     const { svc, fulfill, mutationApply, orderUpdate } = makeService({
       order: {
         id: 'o1',
@@ -237,8 +250,8 @@ describe('OrderWriteService.transitionStatus', () => {
       to: OrderStatus.DELIVERED,
       actor: ACTOR,
     });
-    // Model A: qtyOnHand was decremented + the reservation FULFILLED at
-    // DISPATCH; DELIVERED touches no stock.
+    // qtyOnHand was decremented + the reservation FULFILLED already
+    // (at PACK, under Model C); DELIVERED touches no stock.
     expect(fulfill).not.toHaveBeenCalled();
     expect(mutationApply).not.toHaveBeenCalled();
     expect(orderUpdate).toHaveBeenCalledTimes(1); // plain transition
@@ -430,12 +443,12 @@ describe('OrderWriteService.transitionStatus', () => {
   });
 });
 
-describe('OrderWriteService.transitionStatus — DISPATCH_STOCK (M9 bug-1 fix)', () => {
-  const dispatchOrder = {
+describe('OrderWriteService.transitionStatus — DISPATCH_STOCK (Model C, 2026-09-03)', () => {
+  const pickedOrder = {
     id: 'o1',
     sellerId: 's1',
     orderNumber: 'SD-2026-26-000001',
-    status: OrderStatus.PENDING_DISPATCH,
+    status: OrderStatus.PICKED,
     items: [{ id: 'oi1', variantId: 'v1', quantity: 2 }],
   };
   const phase2 = [
@@ -451,24 +464,26 @@ describe('OrderWriteService.transitionStatus — DISPATCH_STOCK (M9 bug-1 fix)',
     },
   ];
 
-  it('PENDING_DISPATCH → DISPATCHED: DISPATCH movement (−qty) then fulfill', async () => {
+  it('PICKED → PACKED: PACK_CONFIRM movement (−qty) then fulfill', async () => {
     const { svc, mutationApply, runWithRetry, orderUpdate, fulfill } = makeService({
-      order: dispatchOrder,
+      order: pickedOrder,
       activeWithLocations: phase2,
       active: [{ id: 'r1', orderItemId: 'oi1', qtyReserved: 2 }],
     });
     const res = await svc.transitionStatus({
       orderId: 'o1',
-      to: OrderStatus.DISPATCHED,
+      to: OrderStatus.PACKED,
       actor: ACTOR,
     });
-    expect(res.status).toBe(OrderStatus.DISPATCHED);
-    // Movement applied: DISPATCH, −2, shipment-grained.
+    expect(res.status).toBe(OrderStatus.PACKED);
+    // Movement applied: PACK_CONFIRM, −2, shipment-grained. The decrement
+    // moved here from DISPATCHED (Model A) so the goods are counted gone
+    // the moment the box is sealed, not whenever a courier collects it.
     expect(runWithRetry).toHaveBeenCalledTimes(1);
     expect(mutationApply).toHaveBeenCalledWith(
       {},
       expect.objectContaining({
-        type: 'DISPATCH',
+        type: 'PACK_CONFIRM',
         qtyChange: -2,
         binId: 'bin-1',
         batchId: 'bat-1',
@@ -484,27 +499,27 @@ describe('OrderWriteService.transitionStatus — DISPATCH_STOCK (M9 bug-1 fix)',
     expect(res.reservationOutcome).toBe('FULFILLED');
   });
 
-  it('idempotency gate: a pre-existing DISPATCH movement skips re-application', async () => {
+  it('idempotency gate: a pre-existing PACK_CONFIRM movement skips re-application', async () => {
     const { svc, runWithRetry, mutationApply, orderUpdate } = makeService({
-      order: dispatchOrder,
+      order: pickedOrder,
       activeWithLocations: phase2,
       active: [{ id: 'r1', orderItemId: 'oi1', qtyReserved: 2 }],
       existingDispatchMovement: true,
     });
     const res = await svc.transitionStatus({
       orderId: 'o1',
-      to: OrderStatus.DISPATCHED,
+      to: OrderStatus.PACKED,
       actor: ACTOR,
     });
     expect(runWithRetry).not.toHaveBeenCalled(); // gate fired — no re-decrement
     expect(mutationApply).not.toHaveBeenCalled();
     expect(orderUpdate).toHaveBeenCalled(); // transition still runs
-    expect(res.status).toBe(OrderStatus.DISPATCHED);
+    expect(res.status).toBe(OrderStatus.PACKED);
   });
 
   it('skips phase-1 residual reservations (null bin/batch) — no movement', async () => {
     const { svc, mutationApply, runWithRetry } = makeService({
-      order: dispatchOrder,
+      order: pickedOrder,
       activeWithLocations: [
         {
           id: 'r1',
@@ -521,11 +536,130 @@ describe('OrderWriteService.transitionStatus — DISPATCH_STOCK (M9 bug-1 fix)',
     });
     await svc.transitionStatus({
       orderId: 'o1',
-      to: OrderStatus.DISPATCHED,
+      to: OrderStatus.PACKED,
       actor: ACTOR,
     });
     expect(runWithRetry).not.toHaveBeenCalled(); // no phase-2 rows
     expect(mutationApply).not.toHaveBeenCalled();
+  });
+
+  it('PENDING_DISPATCH → DISPATCHED touches NO stock — it already moved at PACK', async () => {
+    const { svc, mutationApply, runWithRetry, fulfill } = makeService({
+      order: {
+        id: 'o1',
+        sellerId: 's1',
+        orderNumber: 'SD-2026-26-000001',
+        status: OrderStatus.PENDING_DISPATCH,
+        items: [{ id: 'oi1', variantId: 'v1', quantity: 2 }],
+      },
+    });
+    const res = await svc.transitionStatus({
+      orderId: 'o1',
+      to: OrderStatus.DISPATCHED,
+      actor: ACTOR,
+    });
+    expect(res.status).toBe(OrderStatus.DISPATCHED);
+    expect(mutationApply).not.toHaveBeenCalled();
+    expect(runWithRetry).not.toHaveBeenCalled();
+    expect(fulfill).not.toHaveBeenCalled();
+  });
+});
+
+describe('OrderWriteService.transitionStatus — UNPACK_STOCK (Model C give-back)', () => {
+  const packedOrder = {
+    id: 'o1',
+    sellerId: 's1',
+    orderNumber: 'SD-2026-26-000001',
+    status: OrderStatus.PACKED,
+    items: [{ id: 'oi1', variantId: 'v1', quantity: 2 }],
+  };
+  const packConfirmRow = {
+    id: 'mv-pack-1',
+    sellerId: 's1',
+    variantId: 'v1',
+    warehouseId: 'wh-1',
+    binId: 'bin-1',
+    batchId: 'bat-1',
+    qtyChange: -2,
+    orderItemId: 'oi1',
+  };
+
+  it('PACKED → CANCELLED_BY_ADMIN: reverses the PACK_CONFIRM movement exactly', async () => {
+    const { svc, mutationApply, runWithRetry, orderUpdate } = makeService({
+      order: packedOrder,
+      packConfirmMovements: [packConfirmRow],
+    });
+    const res = await svc.transitionStatus({
+      orderId: 'o1',
+      to: OrderStatus.CANCELLED_BY_ADMIN,
+      actor: ACTOR,
+    });
+    expect(res.status).toBe(OrderStatus.CANCELLED_BY_ADMIN);
+    expect(runWithRetry).toHaveBeenCalledTimes(1);
+    // The exact opposite of the original — same bin/batch/variant, +2
+    // instead of −2, and a pointer back to what it reverses.
+    expect(mutationApply).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        type: 'PACK_REVERSED',
+        qtyChange: 2,
+        binId: 'bin-1',
+        batchId: 'bat-1',
+        variantId: 'v1',
+        orderItemId: 'oi1',
+        metadata: { reversesMovementId: 'mv-pack-1' },
+      }),
+    );
+    expect(mutationApply.mock.invocationCallOrder[0]).toBeLessThan(
+      orderUpdate.mock.invocationCallOrder[0] ?? Infinity,
+    );
+  });
+
+  it('is idempotent per-movement: a PACK_CONFIRM already reversed is skipped', async () => {
+    const { svc, mutationApply, runWithRetry } = makeService({
+      order: packedOrder,
+      packConfirmMovements: [packConfirmRow],
+      packReversedMovements: [{ metadata: { reversesMovementId: 'mv-pack-1' } }],
+    });
+    await svc.transitionStatus({
+      orderId: 'o1',
+      to: OrderStatus.CANCELLED_BY_ADMIN,
+      actor: ACTOR,
+    });
+    // Nothing left to reverse — runWithRetry never opens.
+    expect(runWithRetry).not.toHaveBeenCalled();
+    expect(mutationApply).not.toHaveBeenCalled();
+  });
+
+  it('nothing to reverse (no PACK_CONFIRM ever landed) is a clean no-op on the movement side', async () => {
+    const { svc, mutationApply, runWithRetry, orderUpdate } = makeService({
+      order: packedOrder,
+      packConfirmMovements: [],
+    });
+    const res = await svc.transitionStatus({
+      orderId: 'o1',
+      to: OrderStatus.CANCELLED_BY_ADMIN,
+      actor: ACTOR,
+    });
+    expect(mutationApply).not.toHaveBeenCalled();
+    expect(runWithRetry).not.toHaveBeenCalled();
+    expect(orderUpdate).toHaveBeenCalled(); // the transition still runs
+    expect(res.status).toBe(OrderStatus.CANCELLED_BY_ADMIN);
+  });
+
+  it('defensively releases anything still ACTIVE (normally already FULFILLED at PACK)', async () => {
+    const { svc, release } = makeService({
+      order: packedOrder,
+      packConfirmMovements: [packConfirmRow],
+      active: [{ id: 'r1', orderItemId: 'oi1', qtyReserved: 2 }],
+    });
+    const res = await svc.transitionStatus({
+      orderId: 'o1',
+      to: OrderStatus.CANCELLED_BY_ADMIN,
+      actor: ACTOR,
+    });
+    expect(release).toHaveBeenCalledWith('r1', 'ORDER_CANCELLED', ACTOR);
+    expect(res.reservationOutcome).toBe('RELEASED');
   });
 });
 

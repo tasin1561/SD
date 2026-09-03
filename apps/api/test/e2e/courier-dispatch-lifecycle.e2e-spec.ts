@@ -21,17 +21,22 @@ import {
 /**
  * Module 9 commit 16 — full courier dispatch lifecycle e2e.
  *
- *   1. Happy lifecycle to DELIVERED — AWB generated → handoff → DISPATCHED
- *      (Model-A qtyOnHand decrement) → IN_TRANSIT → OUT_FOR_DELIVERY →
- *      DELIVERED. Asserts DELIVERED is STOCK-NEUTRAL (the decrement
- *      already happened at dispatch; tracking transitions never touch
- *      stock).
+ *   1. Happy lifecycle to DELIVERED — pack (Model C qtyOnHand decrement,
+ *      2026-09-03) → AWB generated → handoff (stock-neutral) →
+ *      IN_TRANSIT → OUT_FOR_DELIVERY → DELIVERED. Asserts DELIVERED is
+ *      STOCK-NEUTRAL (the decrement already happened at pack; every
+ *      post-pack transition — handoff included — never touches stock
+ *      again).
  *   2. AWB partial failure isolation — two orders / two shipments in ONE
  *      manifest, one to a good pincode + one to a stub-failing pincode.
- *      The AWB job generates the good one and supersedes the failed one
- *      (manifest → CONFIRMED, ≥1 success); confirm-handoff dispatches the
- *      good order; the failed order is recovered via manual placement.
- *      Conservation holds across both.
+ *      BOTH are picked and packed before manifest close, so BOTH have
+ *      already decremented qtyOnHand and fulfilled their reservations by
+ *      then. The AWB job generates the good one and supersedes the
+ *      failed one (manifest → CONFIRMED, ≥1 success); confirm-handoff
+ *      dispatches the good order (stock-neutral); the failed order is
+ *      recovered via manual placement (also stock-neutral — it was
+ *      already on the shelf). Conservation holds across both, and
+ *      neither post-pack step moves qtyOnHand again.
  */
 describe('Courier dispatch lifecycle (e2e)', () => {
   let h: AppHarness;
@@ -227,14 +232,18 @@ describe('Courier dispatch lifecycle (e2e)', () => {
       { timeoutMs: 15_000, description: 'manifest CONFIRMED (AWB generated)' },
     );
 
-    // confirm-handoff → DISPATCHED (Model-A decrement: 10 → 8).
+    // Model C: pack.complete (inside pickAndPack, above) already
+    // decremented qtyOnHand 10 → 8 and fulfilled the reservation.
+    expect(await stockOf()).toEqual({ qtyOnHand: 8, qtyReserved: 0 });
+
+    // confirm-handoff → DISPATCHED — stock-neutral, nothing left to move.
     await request(h.baseUrl)
       .post(`/admin/courier/manifests/${manifestId}/confirm-handoff`)
       .set(staffAuth)
       .expect(200);
     expect(await stockOf()).toEqual({ qtyOnHand: 8, qtyReserved: 0 });
 
-    // Tracking transitions to DELIVERED — all stock-neutral under Model A.
+    // Tracking transitions to DELIVERED — all stock-neutral.
     const ow = h.app.get(OrderWriteService);
     for (const to of [
       OrderStatus.IN_TRANSIT,
@@ -246,18 +255,19 @@ describe('Courier dispatch lifecycle (e2e)', () => {
         to,
         actor: { type: ActorType.STAFF, id: staffId },
       });
-      // qtyOnHand stays 8 at every post-dispatch step.
+      // qtyOnHand stays 8 at every post-pack step.
       expect((await stockOf()).qtyOnHand).toBe(8);
     }
 
     const order = await h.prisma.order.findUniqueOrThrow({ where: { id: orderId } });
     expect(order.status).toBe(OrderStatus.DELIVERED);
-    // Exactly one stock movement for the whole lifecycle — the DISPATCH.
+    // Exactly one stock movement for the whole lifecycle — the
+    // PACK_CONFIRM, issued at pack, not at dispatch.
     const movements = await h.prisma.stockMovement.findMany({
       where: { orderId },
     });
     expect(movements).toHaveLength(1);
-    expect(movements[0]!.type).toBe(StockMovementType.DISPATCH);
+    expect(movements[0]!.type).toBe(StockMovementType.PACK_CONFIRM);
     expect(movements[0]!.qtyChange).toBe(-2);
   });
 
@@ -323,6 +333,11 @@ describe('Courier dispatch lifecycle (e2e)', () => {
     expect(shipA.awbNumber).not.toBeNull();
     expect(shipB.status).toBe(ShipmentStatus.FAILED_AT_CREATION);
 
+    // Model C: both A and B already decremented qtyOnHand at their own
+    // pack.complete, above — 10 − 2 − 2 = 6, and both reservations are
+    // already FULFILLED. Nothing from here on touches stock.
+    expect(await stockOf()).toEqual({ qtyOnHand: 6, qtyReserved: 0 });
+
     // confirm-handoff: only order A is AWB-ready in the manifest.
     const handoff = await request(h.baseUrl)
       .post(`/admin/courier/manifests/${manifestId}/confirm-handoff`)
@@ -333,9 +348,12 @@ describe('Courier dispatch lifecycle (e2e)', () => {
     expect((await h.prisma.order.findUniqueOrThrow({ where: { id: a.orderId } })).status).toBe(
       OrderStatus.DISPATCHED,
     );
-    expect(await stockOf()).toEqual({ qtyOnHand: 8, qtyReserved: 2 }); // A out
+    expect(await stockOf()).toEqual({ qtyOnHand: 6, qtyReserved: 0 }); // unchanged — stock-neutral
 
     // Recover order B via manual placement on its replacement shipment.
+    // B was already packed (ON_SHELF — resolveReadiness recognizes the
+    // zero-active-reservations-but-already-PACK_CONFIRM'd shape), so
+    // this is stock-neutral too.
     await request(h.baseUrl)
       .post(`/admin/courier/manual-placement/shipments/${replacementB.id}/place-awb`)
       .set(staffAuth)
@@ -345,7 +363,8 @@ describe('Courier dispatch lifecycle (e2e)', () => {
       OrderStatus.DISPATCHED,
     );
 
-    // Conservation: both orders dispatched — qtyOnHand 10 − 2 − 2 = 6.
+    // Conservation: both orders dispatched — qtyOnHand 10 − 2 − 2 = 6,
+    // unchanged since both packs.
     expect(await stockOf()).toEqual({ qtyOnHand: 6, qtyReserved: 0 });
     const active = await h.prisma.stockReservation.findMany({
       where: {
@@ -354,15 +373,26 @@ describe('Courier dispatch lifecycle (e2e)', () => {
       },
     });
     expect(active).toHaveLength(0);
+    // No DISPATCH-type movement is ever issued any more — both
+    // decrements were PACK_CONFIRM, one per order.
     const dispatchMovements = await h.prisma.stockMovement.findMany({
       where: {
         orderId: { in: [a.orderId, b.orderId] },
         type: StockMovementType.DISPATCH,
       },
     });
-    expect(dispatchMovements).toHaveLength(2);
-    // Order B's DISPATCH movement is keyed to the live replacement.
-    const bMovement = dispatchMovements.find((m) => m.orderId === b.orderId);
-    expect(bMovement!.shipmentId).toBe(replacementB.id);
+    expect(dispatchMovements).toHaveLength(0);
+    const packMovements = await h.prisma.stockMovement.findMany({
+      where: {
+        orderId: { in: [a.orderId, b.orderId] },
+        type: StockMovementType.PACK_CONFIRM,
+      },
+    });
+    expect(packMovements).toHaveLength(2);
+    // Order B's PACK_CONFIRM movement is keyed to its ORIGINAL shipment
+    // (b.shipmentId) — it was issued before the supersede ever happened.
+    const bMovement = packMovements.find((m) => m.orderId === b.orderId);
+    expect(bMovement!.shipmentId).toBe(b.shipmentId);
+    expect(bMovement!.shipmentId).not.toBe(replacementB.id);
   });
 });

@@ -49,6 +49,10 @@ function makeService(
     reservations?: ResvLoc[];
     awbClash?: boolean;
     transitionTo?: OrderStatus;
+    /** Model C: whether a PACK_CONFIRM movement already exists for this
+     *  order — resolveReadiness's fallback signal when there are zero
+     *  active reservations (the already-packed, courier-rejection shape). */
+    packConfirmMovementExists?: boolean;
   } = {},
 ) {
   const shipmentRow =
@@ -78,12 +82,16 @@ function makeService(
     shipment: { update: shipmentUpdate },
   };
   const $transaction = jest.fn(async (fn: (tx: typeof txClient) => unknown) => fn(txClient));
+  const stockMovementFindFirst = jest.fn(async () =>
+    opts.packConfirmMovementExists === true ? { id: 'mv-pack-1' } : null,
+  );
   const client = {
     shipment: {
       findUnique: shipmentFindUnique,
       findFirst: shipmentFindFirst,
       update: shipmentUpdate,
     },
+    stockMovement: { findFirst: stockMovementFindFirst },
     $transaction,
   };
   const transitionStatus = jest.fn(async () => ({
@@ -111,6 +119,7 @@ function makeService(
     auditLog,
     transitionStatus,
     listActiveForOrderWithLocations,
+    stockMovementFindFirst,
   };
 }
 
@@ -221,13 +230,25 @@ describe('ManualPlacementService.placeAwb', () => {
     expect(stamped.data).not.toHaveProperty('status');
   });
 
-  it('conservation guard: no active reservations → MANUAL_PLACEMENT_NO_RESERVATIONS', async () => {
-    const { svc } = makeService({ reservations: [] });
+  it('conservation guard: no active reservations AND never packed → MANUAL_PLACEMENT_NO_RESERVATIONS', async () => {
+    const { svc } = makeService({ reservations: [], packConfirmMovementExists: false });
     await expect(
       svc.placeAwb(SHIP, { awbNumber: 'BD-003', courierName: 'Bluedart' }, STAFF),
     ).rejects.toMatchObject({
       response: { code: 'MANUAL_PLACEMENT_NO_RESERVATIONS' },
     });
+  });
+
+  it('Model C: no active reservations but a PACK_CONFIRM movement exists → ON_SHELF, dispatches normally', async () => {
+    const { svc, transitionStatus } = makeService({
+      reservations: [],
+      packConfirmMovementExists: true,
+    });
+    const r = await svc.placeAwb(SHIP, { awbNumber: 'BD-003b', courierName: 'Bluedart' }, STAFF);
+    expect(r.orderStatus).toBe(OrderStatus.DISPATCHED);
+    expect(transitionStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ to: OrderStatus.DISPATCHED }),
+    );
   });
 
   it('rejects ORDER_NOT_MANUAL_PLACEMENT when the order is not PENDING_MANUAL_PLACEMENT', async () => {

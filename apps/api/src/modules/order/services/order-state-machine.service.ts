@@ -5,8 +5,9 @@ import { OrderStatus } from '@skydrop/db';
  * Stock side-effects a transition requires. OrderWriteService (commit 12)
  * executes these inside the status-change transaction (ORD-3). The set is
  * deliberately limited to what Module 6 owns — reservation lifecycle.
- * Physical stock movements for pick/pack/RTO-restock belong to Module 8's
- * StockMutationService and are NOT modelled here.
+ * Physical stock movements for pick/RTO-restock belong to Module 8's
+ * StockMutationService and are NOT modelled here; PACK is the one
+ * exception, explained on DISPATCH_STOCK below.
  */
 export enum OrderSideEffect {
   /** PENDING_CONFIRMATION-family → CONFIRMED: StockReservationService.reserve() per line. */
@@ -14,19 +15,42 @@ export enum OrderSideEffect {
   /** A reserved order → CANCELLED/CANCELLED_BY_ADMIN/REJECTED: release() every active reservation. */
   RELEASE_STOCK = 'RELEASE_STOCK',
   /** → DELIVERED: fulfill() the reservations (clears the hold). NOTE
-   *  (Module 9, Model A): under the dispatch-decrement model this is no
-   *  longer attached to any matrix edge — DELIVERED is stock-neutral and
-   *  the reservation is FULFILLED at DISPATCH via DISPATCH_STOCK. The
-   *  value is retained for the saga handler's `transitionThenStock`
-   *  'FULFILL' path which DISPATCH_STOCK reuses post-commit. */
+   *  (Model C): under the pack-time-decrement model this is no longer
+   *  attached to any matrix edge — DELIVERED is stock-neutral and the
+   *  reservation is FULFILLED at PACK via DISPATCH_STOCK. The value is
+   *  retained for the saga handler's `transitionThenStock` 'FULFILL'
+   *  path which DISPATCH_STOCK reuses post-commit. */
   FULFILL_STOCK = 'FULFILL_STOCK',
-  /** Module 9 (Model A — the bug-1 fix): PENDING_DISPATCH → DISPATCHED.
-   *  Per phase-2 reservation: a DISPATCH StockMovement decrements
-   *  qtyOnHand (the ONE normal-lifecycle physical decrement) AND
-   *  fulfill() consumes the reservation. DECLARED here in M9 commit 1;
-   *  the matrix edge + handler are wired in M9 commit 12 (the atomic
-   *  bug-1 fix landing). Unused until then. */
+  /**
+   * Model C (2026-09-03 — supersedes Model A): PICKED → PACKED.
+   *
+   * Per phase-2 reservation: a PACK_CONFIRM StockMovement decrements
+   * qtyOnHand (the ONE normal-lifecycle physical decrement) AND
+   * fulfill() consumes the reservation. Moved here from the
+   * PENDING_DISPATCH → DISPATCHED edge, which is now stock-neutral —
+   * DISPATCHED means "a driver took it", not "it left the shelf count".
+   *
+   * The enum member keeps the OLD NAME on purpose: every StockMovement
+   * written before this change carries `type: DISPATCH`, and renaming
+   * the enum member would make every one of those rows, and every
+   * historical reference to "the DISPATCH_STOCK side-effect" in an old
+   * commit message or audit row, describe something that no longer
+   * exists. The movement TYPE it issues is `PACK_CONFIRM` (new); the
+   * SIDE-EFFECT NAME stays `DISPATCH_STOCK` (old) — deliberately, as a
+   * pointer to where this used to live.
+   */
   DISPATCH_STOCK = 'DISPATCH_STOCK',
+  /**
+   * Model C's give-back: an order cancelled while its packed parcel is
+   * still physically in the building — DISPATCH_STOCK already fired,
+   * nothing has been handed to a courier. Reverses every PACK_CONFIRM
+   * movement for the shipment (a PACK_REVERSED +qty movement each) and
+   * releases any reservation that is still ACTIVE (defensive — by this
+   * point it is normally already FULFILLED). Deliberately distinct from
+   * RELEASE_STOCK: that one assumes nothing physical has moved yet,
+   * which is no longer true once a parcel has been packed.
+   */
+  UNPACK_STOCK = 'UNPACK_STOCK',
 }
 
 interface TransitionDef {
@@ -34,12 +58,13 @@ interface TransitionDef {
   readonly sideEffects: readonly OrderSideEffect[];
 }
 
-// Module 9 (Model A): FULFILL_STOCK is no longer attached to any matrix
-// edge — DELIVERED is stock-neutral; the reservation is FULFILLED at
-// DISPATCH via DISPATCH_STOCK. The enum member is retained (the
-// OrderWriteService switch still has a — now unreachable — branch for
-// it), so it is intentionally not destructured here.
-const { RESERVE_STOCK, RELEASE_STOCK, DISPATCH_STOCK } = OrderSideEffect;
+// Model C: FULFILL_STOCK is no longer attached to any matrix edge —
+// DELIVERED is stock-neutral; the reservation is FULFILLED at PACK via
+// DISPATCH_STOCK (see its doc comment for why the side-effect keeps its
+// old name). The enum member is retained (the OrderWriteService switch
+// still has a — now unreachable — branch for it), so it is intentionally
+// not destructured here.
+const { RESERVE_STOCK, RELEASE_STOCK, DISPATCH_STOCK, UNPACK_STOCK } = OrderSideEffect;
 
 /**
  * Declarative transition table. Each row: from → list of (to, side-effects).
@@ -204,15 +229,28 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
       { to: OrderStatus.PENDING_PICK, sideEffects: [] },
       // Module 9 (commit 14, CUR-8): a MANUAL_PLACEMENT_ADMIN records a
       // manually-arranged courier AWB on the (already picked + packed)
-      // shipment and the order dispatches directly. DISPATCH_STOCK fires
-      // the Model-A qtyOnHand decrement + reservation fulfill — identical
-      // to the PENDING_DISPATCH → DISPATCHED edge. ManualPlacementService
-      // guards that the order is fully phase-2-allocated before allowing
-      // this (a pick-shortfall PENDING_MANUAL_PLACEMENT order must re-pick
-      // via → PENDING_PICK first; conservation cannot hold otherwise).
-      { to: OrderStatus.DISPATCHED, sideEffects: [DISPATCH_STOCK] },
-      { to: OrderStatus.CANCELLED, sideEffects: [RELEASE_STOCK] },
-      { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
+      // shipment and the order dispatches directly. Model C: STOCK-
+      // NEUTRAL — every ON_SHELF path here has already passed through
+      // PICKED → PACKED (ManualPlacementService.resolveReadiness only
+      // returns ON_SHELF once reservations are phase-2, and the ONLY
+      // matrix route to phase-2-with-PENDING_MANUAL_PLACEMENT is via
+      // PACKED → PENDING_DISPATCH → PENDING_MANUAL_PLACEMENT — a
+      // pick-shortfall order is never phase-2 and is routed to
+      // PENDING_PICK instead, never reaching this edge). The decrement
+      // + fulfill already happened at that PACKED transition.
+      { to: OrderStatus.DISPATCHED, sideEffects: [] },
+      // PENDING_MANUAL_PLACEMENT is reached via TWO shapes: a pick
+      // shortfall (from PENDING_PICK — phase-1 residual, never packed)
+      // or a courier rejection (from PENDING_DISPATCH — already packed,
+      // qtyOnHand already decremented at PACKED). A cancel here cannot
+      // assume which one it is, so it uses UNPACK_STOCK: it reverses
+      // whatever PACK_CONFIRM movements actually exist for the shipment
+      // (none, for the pick-shortfall shape — a clean no-op) and
+      // defensively releases anything still ACTIVE either way. Plain
+      // RELEASE_STOCK would silently leak the decrement in the
+      // already-packed case.
+      { to: OrderStatus.CANCELLED, sideEffects: [UNPACK_STOCK] },
+      { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [UNPACK_STOCK] },
     ],
   ],
 
@@ -233,12 +271,24 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
   [
     OrderStatus.PICKED,
     [
-      { to: OrderStatus.PACKED, sideEffects: [] },
-      { to: OrderStatus.PACK_FAILED, sideEffects: [] },
+      // Model C (2026-09-03): DISPATCH_STOCK decrements qtyOnHand (a
+      // PACK_CONFIRM movement) + fulfill()s the phase-2 reservation —
+      // moved HERE from PENDING_DISPATCH → DISPATCHED. The goods are
+      // boxed and sealed; qtyOnHand now tracks "not on the shelf",
+      // which stops being true the moment the box is taped shut, not
+      // whenever a courier eventually collects it.
+      { to: OrderStatus.PACKED, sideEffects: [DISPATCH_STOCK] },
+      // Dormant — nothing calls this transition today (kept correct for
+      // when it is wired up, not exercised). If a pack is rejected and
+      // re-opened, the decrement above must be undone: UNPACK_STOCK
+      // reverses the PACK_CONFIRM movement + releases anything still
+      // ACTIVE, so re-picking or re-packing starts from a clean slate
+      // rather than double-counting.
+      { to: OrderStatus.PACK_FAILED, sideEffects: [UNPACK_STOCK] },
       // Cancellable by the SELLER right up to the moment it is packed.
       // The goods are off the shelf and in a tote, but nothing has been
-      // handed to a courier and no stock has left: qtyOnHand does not
-      // move until DISPATCH (CUR-3), so releasing the reservation is the
+      // handed to a courier — qtyOnHand has not moved yet, since PACKED
+      // is one step ahead of PICKED, so releasing the reservation is the
       // whole of the correction. What it does leave is a physical tote
       // to re-shelve, which is why the packer's open box blocks this at
       // the service layer rather than here.
@@ -255,7 +305,10 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
       // A failed pack is still an unpacked parcel, so the seller's
       // cancel window has not closed. Often the right answer: something
       // went wrong at the bench and calling the order off beats
-      // re-picking it.
+      // re-picking it. Model C: reached ONLY from PACKED (the decrement
+      // already happened and was already reversed by UNPACK_STOCK on the
+      // way here), so this is plain RELEASE_STOCK — nothing physical is
+      // outstanding to reverse a second time.
       { to: OrderStatus.CANCELLED, sideEffects: [RELEASE_STOCK] },
       { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
     ],
@@ -265,21 +318,31 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
     OrderStatus.PACKED,
     [
       { to: OrderStatus.PENDING_DISPATCH, sideEffects: [] },
-      { to: OrderStatus.PACK_FAILED, sideEffects: [] }, // re-open
-      { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
+      // Dormant, same as PICKED → PACK_FAILED above. Model C: the parcel
+      // is still in the building and qtyOnHand was already decremented
+      // at PACKED — reopening it must give that back.
+      { to: OrderStatus.PACK_FAILED, sideEffects: [UNPACK_STOCK] }, // re-open
+      // The parcel is boxed and sitting in the warehouse, not with a
+      // courier. Model C: qtyOnHand already moved at PACKED, so an
+      // admin cancel here must GIVE IT BACK — RELEASE_STOCK alone would
+      // release an already-FULFILLED reservation (a no-op) and leave the
+      // physical decrement unreversed, which is a stock leak.
+      { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [UNPACK_STOCK] },
     ],
   ],
 
   [
     OrderStatus.PENDING_DISPATCH,
     [
-      // Module 9 (Model A — the bug-1 fix): DISPATCH_STOCK decrements
-      // qtyOnHand (DISPATCH StockMovement) + fulfill()s the phase-2
-      // reservation. This is the ONE normal-lifecycle qtyOnHand decrement
-      // — qtyOnHand now tracks the physical shelf count.
-      { to: OrderStatus.DISPATCHED, sideEffects: [DISPATCH_STOCK] },
+      // Model C: STOCK-NEUTRAL. The decrement + fulfill already happened
+      // at PICKED → PACKED (DISPATCH_STOCK moved there) — DISPATCHED now
+      // means "a driver took it", which is a real, worth-recording fact
+      // on its own, but not a stock event.
+      { to: OrderStatus.DISPATCHED, sideEffects: [] },
       { to: OrderStatus.PENDING_MANUAL_PLACEMENT, sideEffects: [] }, // courier rejected
-      { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
+      // Same reasoning as PACKED → CANCELLED_BY_ADMIN above: the parcel
+      // is still in the building, qtyOnHand already moved, give it back.
+      { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [UNPACK_STOCK] },
     ],
   ],
 
@@ -306,8 +369,9 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
   [
     OrderStatus.OUT_FOR_DELIVERY,
     [
-      // Module 9 (Model A): DELIVERED is now STOCK-NEUTRAL — qtyOnHand was
-      // decremented + the reservation FULFILLED at DISPATCH (DISPATCH_STOCK).
+      // Model C: DELIVERED is STOCK-NEUTRAL — qtyOnHand was decremented
+      // and the reservation FULFILLED at PACK (DISPATCH_STOCK), two
+      // steps before DELIVERED ever runs.
       // FULFILL_STOCK removed from this edge; M10 tracking webhooks never
       // touch stock.
       { to: OrderStatus.DELIVERED, sideEffects: [] },

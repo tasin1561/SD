@@ -273,7 +273,7 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
     };
   }
 
-  it('LIFECYCLE TRACE: baseline 10/0 → CONFIRMED → PICKED → DISPATCHED → RTO_RECEIVED', async () => {
+  it('LIFECYCLE TRACE: baseline 10/0 → CONFIRMED → PICKED → PACKED → DISPATCHED → RTO_RECEIVED', async () => {
     await receiveStock(10);
     const baseline = await snapshot();
     expect(baseline).toEqual({
@@ -372,15 +372,22 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
       activeResvTotalQty: 2,
     });
 
-    // Step 4: pack.complete → PACKED (no stock side-effect per matrix).
+    // Step 4: pack.complete → PACKED — THE MODEL C DECREMENT
+    // (2026-09-03): the DISPATCH_STOCK side-effect now lives on
+    // PICKED → PACKED. It issues a PACK_CONFIRM movement (−2) AND
+    // fulfill()s the phase-2 reservation right here — the goods are
+    // counted gone the moment the box is sealed, not whenever a
+    // courier eventually collects it.
     const pack = await request(h.baseUrl)
       .post(`/warehouse/packs/${shipment.id}/complete`)
       .set(staffAuth)
       .expect(200);
     const afterPack = await snapshot();
-    expect(afterPack).toMatchObject({
-      qtyOnHand: 10,
-      qtyReserved: 2,
+    expect(afterPack).toEqual({
+      qtyOnHand: 8, // decremented at pack
+      qtyReserved: 0, // phase-2 hold given back by fulfill()
+      activeResvCount: 0, // reservation FULFILLED
+      activeResvTotalQty: 0,
     });
 
     // Step 5: manifest close → PENDING_DISPATCH + (M9 commit 10) the AWB
@@ -391,9 +398,11 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
       .set(staffAuth)
       .expect(200);
     const afterClose = await snapshot();
-    expect(afterClose).toMatchObject({
-      qtyOnHand: 10,
-      qtyReserved: 2,
+    expect(afterClose).toEqual({
+      qtyOnHand: 8,
+      qtyReserved: 0,
+      activeResvCount: 0,
+      activeResvTotalQty: 0,
     });
 
     // Wait for the AWB job (stub-mode Delhivery) to stamp the awbNumber.
@@ -407,10 +416,9 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
       { timeoutMs: 15_000, description: 'AWB generated' },
     );
 
-    // Step 6: DISPATCHED — THE BUG-1 FIX (Model A): the DISPATCH_STOCK
-    // side-effect decrements qtyOnHand (DISPATCH movement −2) AND
-    // fulfill()s the phase-2 reservation. This is the ONE
-    // normal-lifecycle qtyOnHand decrement.
+    // Step 6: DISPATCHED — STOCK-NEUTRAL under Model C. The decrement
+    // + fulfill already happened at PACKED (step 4); this transition
+    // just records that a courier physically took the parcel.
     await ow.transitionStatus({
       orderId,
       to: OrderStatus.DISPATCHED,
@@ -418,9 +426,9 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
     });
     const afterDispatch = await snapshot();
     expect(afterDispatch).toEqual({
-      qtyOnHand: 8, // decremented at dispatch
-      qtyReserved: 0, // phase-2 hold given back by fulfill()
-      activeResvCount: 0, // reservation FULFILLED
+      qtyOnHand: 8, // unchanged — already decremented at pack
+      qtyReserved: 0,
+      activeResvCount: 0,
       activeResvTotalQty: 0,
     });
 
@@ -512,19 +520,138 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
     });
   });
 
-  it('BUG-1 RESOLVED (Model A): the DISPATCH movement fires — qtyOnHand decremented exactly once at dispatch', async () => {
-    // FLIPPED from the M8 "latent bug-1" guard. Module 9 implemented the
-    // Model-A dispatch decrement: the PENDING_DISPATCH → DISPATCHED edge
-    // carries DISPATCH_STOCK, which issues a DISPATCH StockMovement
-    // (−qty) + fulfill()s the reservation. This test is now the
-    // break-on-regression guard for the bug-1 fix.
+  it('MODEL C GIVE-BACK: admin-cancelling an already-packed order reverses the PACK_CONFIRM decrement — 10/0 restored', async () => {
+    await receiveStock(10);
+    const created = await request(h.baseUrl)
+      .post('/seller/orders')
+      .set(sellerAuth)
+      .send({
+        recipientName: 'Give Back',
+        recipientPhoneE164: '+919876500001',
+        recipientAddressLine1: '12 MG Road',
+        recipientAddressLine2: 'Near City Hospital',
+        recipientCity: 'Bengaluru',
+        recipientStateProvince: 'Karnataka',
+        recipientPostalCode: '560001',
+        paymentMode: 'COD',
+        codAmountInr: 999,
+        items: [{ variantId, quantity: 2 }],
+      })
+      .expect(201);
+    const orderId = created.body.id as string;
+    await request(h.baseUrl).post(`/seller/orders/${orderId}/submit`).set(sellerAuth).expect(200);
+    const ow = h.app.get(OrderWriteService);
+    await ow.transitionStatus({
+      orderId,
+      to: OrderStatus.CONFIRMED,
+      actor: { type: ActorType.STAFF, id: staffId },
+    });
+    const shipment = await h.prisma.shipment.findFirstOrThrow({
+      where: { orderShipments: { some: { orderId } } },
+    });
+    await claimPick(h.baseUrl, staffAuth, shipment.id);
+    const resv = await h.prisma.stockReservation.findFirstOrThrow({
+      where: { orderId, status: 'ACTIVE', NOT: { binId: null } },
+    });
+    const items = await h.prisma.shipmentItem.findMany({
+      where: { shipmentId: shipment.id },
+      select: { id: true },
+    });
+    await request(h.baseUrl)
+      .post(`/warehouse/picks/${shipment.id}/items`)
+      .set(staffAuth)
+      .send({
+        shipmentItemId: items[0]!.id,
+        pickedBinId: resv.binId,
+        pickedBatchId: resv.batchId,
+      })
+      .expect(200);
+    await request(h.baseUrl)
+      .post(`/warehouse/picks/${shipment.id}/complete`)
+      .set(staffAuth)
+      .expect(200);
+    await request(h.baseUrl)
+      .post(`/warehouse/packs/${shipment.id}/complete`)
+      .set(staffAuth)
+      .expect(200);
+
+    // The box is sealed: qtyOnHand already moved.
+    const afterPack = await snapshot();
+    expect(afterPack).toEqual({
+      qtyOnHand: 8,
+      qtyReserved: 0,
+      activeResvCount: 0,
+      activeResvTotalQty: 0,
+    });
+
+    // Admin calls it off before any courier saw it (PACKED →
+    // CANCELLED_BY_ADMIN carries UNPACK_STOCK under Model C).
+    await ow.transitionStatus({
+      orderId,
+      to: OrderStatus.CANCELLED_BY_ADMIN,
+      actor: { type: ActorType.STAFF, id: staffId },
+      reason: 'Admin cancel of a packed-but-not-dispatched parcel',
+    });
+
+    const afterCancel = await snapshot();
+    expect(afterCancel).toEqual({
+      qtyOnHand: 10, // the PACK_CONFIRM decrement was reversed
+      qtyReserved: 0,
+      activeResvCount: 0,
+      activeResvTotalQty: 0,
+    });
+
+    // The give-back is a NEW movement, not an erased one — the ledger
+    // stays append-only and both facts remain visible in stock_movements.
+    const packMovements = await h.prisma.stockMovement.findMany({
+      where: { orderId, type: StockMovementType.PACK_CONFIRM },
+    });
+    expect(packMovements).toHaveLength(1);
+    expect(packMovements[0]!.qtyChange).toBe(-2);
+    const reversedMovements = await h.prisma.stockMovement.findMany({
+      where: { orderId, type: StockMovementType.PACK_REVERSED },
+    });
+    expect(reversedMovements).toHaveLength(1);
+    expect(reversedMovements[0]!.qtyChange).toBe(2);
+    expect(
+      (reversedMovements[0]!.metadata as { reversesMovementId?: string } | null)
+        ?.reversesMovementId,
+    ).toBe(packMovements[0]!.id);
+
+    // Idempotent: re-running the same transition again must not
+    // double-reverse (the metadata pointer is the per-movement gate).
+    await ow.transitionStatus({
+      orderId,
+      to: OrderStatus.CANCELLED_BY_ADMIN,
+      actor: { type: ActorType.STAFF, id: staffId },
+      reason: 'retry',
+    });
+    const reversedAgain = await h.prisma.stockMovement.findMany({
+      where: { orderId, type: StockMovementType.PACK_REVERSED },
+    });
+    expect(reversedAgain).toHaveLength(1); // still just the one
+    expect(await snapshot()).toEqual(afterCancel);
+  });
+
+  it('MODEL C (2026-09-03): the PACK_CONFIRM movement fires at pack — qtyOnHand decremented exactly once, before dispatch', async () => {
+    // The decrement moved off PENDING_DISPATCH → DISPATCHED and onto
+    // PICKED → PACKED: that edge carries DISPATCH_STOCK, which issues a
+    // PACK_CONFIRM StockMovement (−qty) + fulfill()s the reservation.
+    // This is the break-on-regression guard for that move.
     await receiveStock(10);
     const { orderId } = await driveToRtoReceived(2);
+    const packMovements = await h.prisma.stockMovement.findMany({
+      where: { orderId, type: StockMovementType.PACK_CONFIRM },
+    });
+    expect(packMovements).toHaveLength(1);
+    expect(packMovements[0]!.qtyChange).toBe(-2); // the ONE decrement
+    expect(packMovements[0]!.shipmentId).not.toBeNull(); // shipment-grained
+
+    // And no DISPATCH-type movement is ever issued any more — dispatch
+    // is stock-neutral under Model C.
     const dispatchMovements = await h.prisma.stockMovement.findMany({
       where: { orderId, type: StockMovementType.DISPATCH },
     });
-    expect(dispatchMovements).toHaveLength(1);
-    expect(dispatchMovements[0]!.qtyChange).toBe(-2); // the ONE decrement
-    expect(dispatchMovements[0]!.shipmentId).not.toBeNull(); // shipment-grained
+    expect(dispatchMovements).toHaveLength(0);
   });
 });

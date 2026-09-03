@@ -461,10 +461,11 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
       const order = await h.prisma.order.findUniqueOrThrow({ where: { id: orderId } });
       expect(order.status).toBe(OrderStatus.DISPATCHED);
 
-      // Stock side-effect of dispatch (Model A CUR-3) is also intact —
-      // the M9 DISPATCH movement applied, qtyOnHand went 10 → 8. This
-      // proves the FULL post-commit chain (M8 / M9 hooks + M11 emit)
-      // ran to completion despite the notification failure.
+      // The stock side-effect (CUR-3) is also intact — the PACK_CONFIRM
+      // movement applied when the box was packed (Model C, 2026-09-03),
+      // qtyOnHand went 10 → 8, and DISPATCHED itself moved nothing
+      // further. This proves the FULL post-commit chain (M8 / M9 hooks
+      // + M11 emit) ran to completion despite the notification failure.
       const level = await h.prisma.stockLevel.findFirstOrThrow({
         where: { variantId, binId },
       });

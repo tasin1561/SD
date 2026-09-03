@@ -195,8 +195,8 @@ export class TrackingStatusMappingService {
         // receive() — the only authority for RTO_RECEIVED. Driving
         // RTO_RECEIVED from a webhook would let a malformed /
         // spoofed scan trigger the conservation-critical RTO
-        // finalize chain (Model A — see WMS-8 / CUR-3) without
-        // physical confirmation.
+        // finalize chain (see WMS-8 / CUR-3) without physical
+        // confirmation.
         return {
           kind: 'INFORMATIONAL',
           reason: 'RTO_DELIVERED_IS_INFORMATIONAL_TRK6',

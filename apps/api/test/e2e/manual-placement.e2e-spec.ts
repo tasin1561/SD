@@ -21,15 +21,22 @@ import {
 /**
  * Module 9 commit 14 — manual courier placement e2e (CUR-8).
  *
- * Drives the AWB-failure path: an order to a stub-failing pincode
- * (stub-mode 999999 — transient courier failure) → AWB job fails →
- * shipment auto-superseded → order routed PENDING_MANUAL_PLACEMENT.
- * Then exercises:
+ * Drives the AWB-failure path: an order picked AND packed, then routed
+ * to a stub-failing pincode (stub-mode 999999 — transient courier
+ * failure) → AWB job fails at manifest close → shipment auto-superseded
+ * → order routed PENDING_MANUAL_PLACEMENT. Because the parcel was
+ * packed before the courier ever rejected it, Model C (2026-09-03) has
+ * already decremented qtyOnHand by the time this state is reached — the
+ * ON_SHELF shape CUR-8's resolveReadiness recognizes. Then exercises:
  *   - place-awb: record a manual courier AWB on the replacement shipment
- *     → order DISPATCHED (Model-A qtyOnHand decrement), shipment
- *     isManualCourier + HANDED_TO_COURIER.
- *   - cancel: PENDING_MANUAL_PLACEMENT → CANCELLED_BY_ADMIN, reservations
- *     released, qtyOnHand untouched (nothing dispatched).
+ *     → order DISPATCHED. Stock-neutral under Model C — the decrement
+ *     already happened at pack — shipment gets isManualCourier +
+ *     HANDED_TO_COURIER.
+ *   - cancel: PENDING_MANUAL_PLACEMENT → CANCELLED_BY_ADMIN. Since the
+ *     parcel was already packed, this is UNPACK_STOCK, not plain
+ *     RELEASE_STOCK: it reverses the PACK_CONFIRM movement (give-back),
+ *     landing at the SAME final qtyOnHand as before Model C, by a
+ *     different, now-correct route.
  *   - RBAC: a non-MANUAL_PLACEMENT_ADMIN is rejected 403.
  */
 describe('Manual courier placement (e2e)', () => {
@@ -230,11 +237,18 @@ describe('Manual courier placement (e2e)', () => {
     return { qtyOnHand: level.qtyOnHand, qtyReserved: level.qtyReserved };
   }
 
-  it('place-awb: records the manual AWB, dispatches the order, decrements qtyOnHand 10→8', async () => {
+  it('place-awb: records the manual AWB, dispatches the order (stock already moved at pack)', async () => {
     await receiveStock(10);
     const { orderId, oldShipmentId, replacementShipmentId } = await driveToManualPlacement(2);
 
-    expect(await stockOf()).toEqual({ qtyOnHand: 10, qtyReserved: 2 });
+    // Model C: pack.complete (inside driveToManualPlacement) already
+    // decremented qtyOnHand and fulfilled the reservation, before the
+    // courier ever rejected the parcel.
+    expect(await stockOf()).toEqual({ qtyOnHand: 8, qtyReserved: 0 });
+    const packMovementsBefore = await h.prisma.stockMovement.findMany({
+      where: { orderId, type: StockMovementType.PACK_CONFIRM },
+    });
+    expect(packMovementsBefore).toHaveLength(1);
 
     const res = await request(h.baseUrl)
       .post(`/admin/courier/manual-placement/shipments/${replacementShipmentId}/place-awb`)
@@ -267,16 +281,22 @@ describe('Manual courier placement (e2e)', () => {
     expect(replacement.manualCourierName).toBe('Bluedart');
     expect(replacement.serviceType).toBeNull();
 
-    // Model A: the DISPATCH movement decremented qtyOnHand, keyed to the
-    // live replacement shipment (NOT the superseded old one).
+    // Model C: place-awb → DISPATCHED is stock-neutral. Nothing changes,
+    // and no DISPATCH-type movement is ever issued any more. The
+    // PACK_CONFIRM movement (issued against the ORIGINAL shipment,
+    // before supersede) is still the only decrement on record.
     expect(await stockOf()).toEqual({ qtyOnHand: 8, qtyReserved: 0 });
     const dispatchMovements = await h.prisma.stockMovement.findMany({
       where: { orderId, type: StockMovementType.DISPATCH },
     });
-    expect(dispatchMovements).toHaveLength(1);
-    expect(dispatchMovements[0]!.qtyChange).toBe(-2);
-    expect(dispatchMovements[0]!.shipmentId).toBe(replacementShipmentId);
-    expect(dispatchMovements[0]!.shipmentId).not.toBe(oldShipmentId);
+    expect(dispatchMovements).toHaveLength(0);
+    const packMovementsAfter = await h.prisma.stockMovement.findMany({
+      where: { orderId, type: StockMovementType.PACK_CONFIRM },
+    });
+    expect(packMovementsAfter).toHaveLength(1);
+    expect(packMovementsAfter[0]!.qtyChange).toBe(-2);
+    expect(packMovementsAfter[0]!.shipmentId).toBe(oldShipmentId);
+    expect(packMovementsAfter[0]!.shipmentId).not.toBe(replacementShipmentId);
 
     const active = await h.prisma.stockReservation.findMany({
       where: { orderId, status: ReservationStatus.ACTIVE },
@@ -284,7 +304,7 @@ describe('Manual courier placement (e2e)', () => {
     expect(active).toHaveLength(0);
   });
 
-  it('place-awb is idempotent: a 2nd call is alreadyPlaced, no double decrement', async () => {
+  it('place-awb is idempotent: a 2nd call is alreadyPlaced, and touches no stock (none did, under Model C)', async () => {
     await receiveStock(10);
     const { orderId, replacementShipmentId } = await driveToManualPlacement(2);
 
@@ -303,7 +323,11 @@ describe('Manual courier placement (e2e)', () => {
     const dispatchMovements = await h.prisma.stockMovement.findMany({
       where: { orderId, type: StockMovementType.DISPATCH },
     });
-    expect(dispatchMovements).toHaveLength(1);
+    expect(dispatchMovements).toHaveLength(0);
+    const packMovements = await h.prisma.stockMovement.findMany({
+      where: { orderId, type: StockMovementType.PACK_CONFIRM },
+    });
+    expect(packMovements).toHaveLength(1);
     expect((await stockOf()).qtyOnHand).toBe(8);
   });
 
@@ -325,8 +349,11 @@ describe('Manual courier placement (e2e)', () => {
     const order = await h.prisma.order.findUniqueOrThrow({ where: { id: orderId } });
     expect(order.status).toBe(OrderStatus.CANCELLED_BY_ADMIN);
 
-    // RELEASE_STOCK released the reservations; nothing dispatched so
-    // qtyOnHand is untouched.
+    // UNPACK_STOCK under Model C: the parcel was already packed (this
+    // is the courier-rejection shape, not a pick shortfall), so
+    // cancelling here reverses the PACK_CONFIRM decrement — a
+    // PACK_REVERSED give-back — landing at the same final qtyOnHand as
+    // the pre-Model-C world, by a different, now-correct route.
     expect(await stockOf()).toEqual({ qtyOnHand: 10, qtyReserved: 0 });
     const active = await h.prisma.stockReservation.findMany({
       where: { orderId, status: ReservationStatus.ACTIVE },
@@ -340,6 +367,15 @@ describe('Manual courier placement (e2e)', () => {
       where: { orderId, type: StockMovementType.DISPATCH },
     });
     expect(dispatchMovements).toHaveLength(0);
+    const packMovements = await h.prisma.stockMovement.findMany({
+      where: { orderId, type: StockMovementType.PACK_CONFIRM },
+    });
+    expect(packMovements).toHaveLength(1);
+    const reversedMovements = await h.prisma.stockMovement.findMany({
+      where: { orderId, type: StockMovementType.PACK_REVERSED },
+    });
+    expect(reversedMovements).toHaveLength(1);
+    expect(reversedMovements[0]!.qtyChange).toBe(2);
   });
 
   it('cancel is idempotent: a 2nd cancel is alreadyCancelled', async () => {

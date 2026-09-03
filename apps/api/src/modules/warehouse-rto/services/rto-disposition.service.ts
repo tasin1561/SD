@@ -43,30 +43,37 @@ export interface FinalizeRtoResult {
 }
 
 /**
- * Module 8 RTO disposition finalize — Module 9 reverted it to MODEL A
- * (the bug-1 fix; see the conservation history below).
+ * Module 8 RTO disposition finalize — Module 9 reverted it to a
+ * dispatch-time decrement model (the bug-1 fix), and Model C
+ * (2026-09-03) later moved WHEN that decrement fires without touching
+ * this finalize logic at all — see the conservation history below.
  *
- * ── MODEL A (Module 9 — qtyOnHand decrements at DISPATCH) ─────────────
- * Module 9's DISPATCH_STOCK matrix side-effect decrements
- * `stock_levels.qtyOnHand` and `fulfill()`s the phase-2 reservation at
- * PENDING_DISPATCH → DISPATCHED — the ONE normal-lifecycle physical
- * decrement. Every RTO order has passed DISPATCHED, so by finalize
- * time: the unit's qtyOnHand was ALREADY decremented and the
- * reservation is ALREADY FULFILLED (no ACTIVE reservation remains —
- * finalize does NOT touch reservations).
+ * ── qtyOnHand decrements ONCE, before finalize ever runs ───────────────
+ * The `DISPATCH_STOCK` matrix side-effect decrements
+ * `stock_levels.qtyOnHand` and `fulfill()`s the phase-2 reservation
+ * exactly once per shipment — originally at PENDING_DISPATCH →
+ * DISPATCHED (Model A), now at PICKED → PACKED (Model C). This service
+ * does not care WHICH edge fired it: every RTO order has necessarily
+ * passed through it by the time it reaches RTO_RECEIVED, so by finalize
+ * time the unit's qtyOnHand was ALREADY decremented and the reservation
+ * is ALREADY FULFILLED (no ACTIVE reservation remains — finalize does
+ * NOT touch reservations). That decoupling is why Model C required NO
+ * changes here.
  *
- * Under Model A the correct RTO finalize is:
+ * The correct RTO finalize, either model:
  *   - RESTOCK : issue a RETURN_RESTOCK +qty StockMovement — the unit
- *               physically left at dispatch and has now come back; add
- *               it to qtyOnHand. (10 → 8 at dispatch → 10 after restock.)
- *   - WRITE_OFF: NO movement — the unit left at dispatch and never
- *               returned; the dispatch decrement stands. (8 stays 8.)
+ *               physically left the building and has now come back; add
+ *               it to qtyOnHand. (10 → 8 at pack/dispatch → 10 after
+ *               restock.)
+ *   - WRITE_OFF: NO movement — the unit left and never returned; the
+ *               original decrement stands. (8 stays 8.)
  *
  * NB: this is the ORIGINAL M8-commit-15 design. The M8 follow-on
- * temporarily made it release-based (Model B) because the dispatch
- * decrement was unimplemented (latent bug-1). Module 9 implemented the
- * dispatch decrement, so finalize reverts to Model A — the two halves
- * are ONE atomic conservation fix (landed together).
+ * temporarily made it release-based (Model B) because the physical
+ * decrement was unimplemented (latent bug-1). Module 9 implemented it
+ * at dispatch (Model A), so finalize reverted to this — the two halves
+ * were ONE atomic conservation fix (landed together). Model C only
+ * moved which matrix edge issues that decrement.
  *
  * ── SAGA (movements-first, transition-last; visible-vs-silent) ─────────
  *   1. Pre-flight: gate 1 (order.status===RTO_RESTOCKED short-circuit),
@@ -319,7 +326,7 @@ export class RtoDispositionService {
               warehouseId: target.warehouseId,
               binId: target.binId,
               batchId: target.batchId,
-              qtyChange: item.quantity, // +qty — the unit returned (Model A)
+              qtyChange: item.quantity, // +qty — the unit returned
               type: StockMovementType.RETURN_RESTOCK,
               actorType: ActorType.STAFF,
               actorId: staffId,
@@ -379,8 +386,8 @@ export class RtoDispositionService {
     // decision that just committed: a RESTOCK line's units go back
     // IN_STOCK at the bin+batch the aggregate was credited to; a
     // WRITE_OFF line's units are retired WRITTEN_OFF carrying the
-    // inspection condition as the reason (the unit left at dispatch and
-    // the dispatch decrement stands — Model A, CUR-3).
+    // inspection condition as the reason (the unit left the building and
+    // that original decrement stands — CUR-3).
     // Best-effort + guarded on fromStatus: the aggregate movements and
     // the order transition are the durable facts; a unit-ledger failure
     // must not undo a finalize. Stragglers surface in the discrepancy

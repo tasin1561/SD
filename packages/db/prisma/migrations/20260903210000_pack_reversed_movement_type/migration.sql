@@ -1,0 +1,14 @@
+-- Model C: the decrement moves from DISPATCH to PACK_CONFIRM.
+--
+-- PACK_REVERSED is the give-back companion: an order cancelled while its
+-- packed parcel is still physically in the building (never handed to a
+-- courier). Kept distinct from RETURN_RESTOCK deliberately — that type
+-- means a customer received the parcel and sent it back; this one means
+-- it never left at all. Reading stock_movements later should not have to
+-- guess which happened from the surrounding rows.
+--
+-- ADD VALUE cannot run inside the same transaction as a later statement
+-- that USES the new value (Postgres restriction on enum additions), so
+-- this migration does nothing else — the movements that reference it are
+-- written by application code, in a later request, not by this file.
+ALTER TYPE "stock_movement_type" ADD VALUE 'pack_reversed' AFTER 'return_restock';

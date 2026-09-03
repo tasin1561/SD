@@ -55,9 +55,11 @@ import { OrderWriteService } from './services/order-write.service';
   imports: [
     OrderCoreModule,
     InventoryStockModule,
-    // Module 9: OrderWriteService's DISPATCH_STOCK handler (the bug-1
-    // fix) issues DISPATCH StockMovements via StockMutationService —
-    // the only sanctioned stock writer (INV-1), from inventory-shared.
+    // Module 9: OrderWriteService's DISPATCH_STOCK handler issues
+    // PACK_CONFIRM StockMovements (Model C, 2026-09-03 — moved off the
+    // DISPATCHED edge and onto PICKED → PACKED) plus the UNPACK_STOCK
+    // give-back's PACK_REVERSED movements, both via StockMutationService
+    // — the only sanctioned stock writer (INV-1), from inventory-shared.
     InventorySharedModule,
     // The seller's own default for the delivery-fee field (SET-1).
     SettingsModule,

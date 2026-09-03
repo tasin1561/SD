@@ -38,11 +38,12 @@ export interface DispatchHandoffResult {
  * order PENDING_DISPATCH → DISPATCHED, marks the shipment
  * HANDED_TO_COURIER, and flips the manifest CONFIRMED → DISPATCHED.
  *
- * NOTE (the bug-1 fix, commit 12): once the PENDING_DISPATCH → DISPATCHED
- * matrix edge gains the DISPATCH_STOCK side-effect, the SAME
- * transitionStatus call here triggers the qtyOnHand decrement +
- * reservation fulfill. DispatchHandoffService does not change — the
- * matrix edge does.
+ * NOTE (Model C, 2026-09-03): this edge is now STOCK-NEUTRAL — the
+ * DISPATCH_STOCK side-effect (qtyOnHand decrement + reservation fulfill)
+ * fired earlier, at PICKED → PACKED, when the box was sealed. This
+ * transitionStatus call moves no stock; it only reflects that the
+ * already-packed parcel physically left. DispatchHandoffService does
+ * not change — the matrix edge does.
  *
  * Fan-out discipline (mirrors M8 ManifestService.close): per-shipment
  * failure isolation — a single shipment's transition failure is

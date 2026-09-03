@@ -17,13 +17,17 @@ import { InboundFreightModule } from '../inbound-freight/inbound-freight.module'
 import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-wallet-accrual.module';
 
 /**
- * Module 8 warehouse-rto module — reverted to MODEL A by Module 9
- * (the bug-1 fix):
+ * Module 8 warehouse-rto module — reverted to a dispatch/pack-time
+ * decrement model by Module 9 (the bug-1 fix; Model C, 2026-09-03,
+ * later moved WHEN that decrement fires without touching this module):
  *   - receive (by AWB → RTO_RECEIVED)
  *   - inspect (rtoCondition + rtoDisposition per shipment_item)
- *   - finalize — Model A: RESTOCK → RETURN_RESTOCK +qty re-add;
- *     WRITE_OFF → no movement (dispatch decrement stands). No
- *     reservation release — the reservation was FULFILLED at DISPATCH.
+ *   - finalize — RESTOCK → RETURN_RESTOCK +qty re-add; WRITE_OFF → no
+ *     movement (the original decrement stands). No reservation release
+ *     — the reservation was FULFILLED before RTO_RECEIVED is ever
+ *     reachable (see rto-disposition.service.ts's top-of-file doc for
+ *     why finalize does not need to know which matrix edge fulfilled
+ *     it).
  *   - putaway — the restocked units land in RTO_HOLD, which is not
  *     pickable, because at finalize they are on the returns bench and
  *     not on a shelf. Putaway is the person who inspected them walking
@@ -33,8 +37,8 @@ import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-walle
  * Imports OrderModule (the read + saga transitions) and
  * InventorySharedModule for StockMutationService (INV-1 — the
  * RETURN_RESTOCK movement). InventoryStockModule is no longer imported:
- * Model A's finalize() does not release reservations (Module 9 fulfills
- * them at dispatch), so StockReservationService is no longer used here.
+ * finalize() does not release reservations (they are FULFILLED upstream
+ * of RTO_RECEIVED), so StockReservationService is no longer used here.
  *
  * LEAF consumer — nothing imports `warehouse-rto`.
  */

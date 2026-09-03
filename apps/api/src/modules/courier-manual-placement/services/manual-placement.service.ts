@@ -1,5 +1,11 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { ActorType, OrderCancellationReason, OrderStatus, ShipmentStatus } from '@skydrop/db';
+import {
+  ActorType,
+  OrderCancellationReason,
+  OrderStatus,
+  ShipmentStatus,
+  StockMovementType,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
@@ -59,27 +65,32 @@ const CANCEL_TERMINALS: ReadonlySet<OrderStatus> = new Set([
  * placeAwb:
  *   - Targets the LIVE replacement shipment (status CREATED). Its order
  *     must be PENDING_MANUAL_PLACEMENT.
- *   - CONSERVATION GUARD: every ACTIVE reservation must be phase-2
- *     (bin+batch populated). A pick-shortfall PENDING_MANUAL_PLACEMENT
- *     order (residual phase-1 reservation, goods not on a shelf) is
- *     REJECTED — it must re-pick via → PENDING_PICK first. Dispatching
- *     it would decrement nothing and leak the reservation (Model A
- *     conservation cannot hold).
+ *   - CONSERVATION BY ROUTING (CUR-8, amended 2026-09-02): every ACTIVE
+ *     reservation phase-2 (bin+batch populated, "ON_SHELF") ⇒ stamp the
+ *     AWB and dispatch — under Model C (2026-09-03) that is stock-neutral,
+ *     because ON_SHELF can only be reached having already passed through
+ *     PACKED, where the decrement already fired. Any phase-1 residual
+ *     ("AWAITING_PICK") ⇒ stamp the AWB and route to PENDING_PICK instead,
+ *     so the parcel flows pick → pack → handoff and the DISPATCH_STOCK
+ *     side-effect fires exactly once, at PACK, later. Zero ACTIVE
+ *     reservations remains a genuine anomaly and is refused.
  *   - Saga ordering (visible-vs-silent): stamp the AWB on the shipment
- *     FIRST (operational, visible), then transition the order
- *     PENDING_MANUAL_PLACEMENT → DISPATCHED LAST (the durable lifecycle
- *     fact + the Model-A DISPATCH_STOCK qtyOnHand decrement). A crash
- *     between leaves the order PENDING_MANUAL_PLACEMENT with the AWB
- *     stamped — visible + recoverable; a retry re-runs the transition
- *     (the DISPATCH gate is shipment-grained idempotent).
+ *     FIRST (operational, visible), then transition the order LAST (the
+ *     durable lifecycle fact). A crash between leaves the order with the
+ *     AWB stamped — visible + recoverable; a retry re-runs the transition
+ *     (idempotent either way — the ON_SHELF path's DISPATCH gate is
+ *     shipment-grained; the AWAITING_PICK path just re-enters PENDING_PICK).
  *   - Idempotent: AWB stamped + order DISPATCHED ⇒ alreadyPlaced; AWB
  *     stamped + order still PENDING_MANUAL_PLACEMENT ⇒ converge by
  *     re-running the transition.
  *
  * cancelUnfulfillable: an order no courier can carry → transition
- * PENDING_MANUAL_PLACEMENT → CANCELLED_BY_ADMIN (RELEASE_STOCK releases
- * the reservations; the shipment is voided via the order engine's
- * cancel-terminal hook). Idempotent on an already-cancelled order.
+ * PENDING_MANUAL_PLACEMENT → CANCELLED_BY_ADMIN (UNPACK_STOCK under
+ * Model C: reverses whatever PACK_CONFIRM movements exist for the
+ * shipment — none, if this order arrived via a pick shortfall rather
+ * than a courier rejection — and releases any still-ACTIVE reservation;
+ * the shipment is voided via the order engine's cancel-terminal hook).
+ * Idempotent on an already-cancelled order.
  */
 @Injectable()
 export class ManualPlacementService {
@@ -242,10 +253,10 @@ export class ManualPlacementService {
       : this.handOffToWarehouse(shipmentId, orderId, awbNumber, staffId, ctx);
   }
 
-  /** STEP 2 of placeAwb — transition the order to DISPATCHED (the
-   *  DISPATCH_STOCK side-effect fires) and mark the shipment
-   *  HANDED_TO_COURIER. Idempotent: the DISPATCH movement gate is
-   *  shipment-grained, so a re-run after a crash never double-decrements. */
+  /** STEP 2 of placeAwb — transition the order to DISPATCHED and mark the
+   *  shipment HANDED_TO_COURIER. Stock-neutral under Model C: the
+   *  DISPATCH_STOCK decrement already fired at PICKED → PACKED, since
+   *  reaching ON_SHELF readiness implies the parcel was already packed. */
   private async dispatchAfterStamp(
     shipmentId: string,
     orderId: string,
@@ -331,10 +342,13 @@ export class ManualPlacementService {
       });
     }
 
-    // PENDING_MANUAL_PLACEMENT → CANCELLED_BY_ADMIN carries RELEASE_STOCK
-    // (the engine releases every ACTIVE reservation) and the
-    // cancel-terminal hook voids the shipment. No qtyOnHand change —
-    // nothing was dispatched (Model A).
+    // PENDING_MANUAL_PLACEMENT → CANCELLED_BY_ADMIN carries UNPACK_STOCK
+    // under Model C (2026-09-03): if the parcel arrived here via a
+    // courier rejection it already passed through PACKED, so its
+    // PACK_CONFIRM movement is reversed; if it arrived via a pick
+    // shortfall there is nothing to reverse and this is a clean no-op.
+    // Either way any still-ACTIVE reservation is released, and the
+    // cancel-terminal hook voids the shipment.
     const transition = await this.orderWrite.transitionStatus({
       orderId,
       to: OrderStatus.CANCELLED_BY_ADMIN,
@@ -376,12 +390,30 @@ export class ManualPlacementService {
    * So conservation is preserved by ROUTING rather than by refusing: a
    * parcel that is not on a shelf yet goes to PENDING_PICK with its manual
    * AWB already stamped, and dispatches through the normal pick → pack →
-   * handoff path where DISPATCH_STOCK fires exactly once (CUR-3). Zero
-   * reservations remains a genuine anomaly and is still refused.
+   * handoff path where DISPATCH_STOCK fires exactly once, at PICKED →
+   * PACKED under Model C (CUR-3).
+   *
+   * Model C wrinkle (2026-09-03): a courier-rejection arrival (already
+   * packed) now has ZERO active reservations by the time it gets here —
+   * pack.complete already `fulfill()`ed it, same as this method used to
+   * assume only happened at DISPATCH. "No active reservations" therefore
+   * stopped being a reliable anomaly signal on its own. The real question
+   * is "did this order's stock ever leave the shelf": a PACK_CONFIRM
+   * movement is queried by orderId (survives a supersede — it stays keyed
+   * to the ORIGINAL shipment, not the live replacement placeAwb targets)
+   * as the ground truth. Zero active reservations AND no PACK_CONFIRM
+   * movement is the only shape left that is a genuine anomaly.
    */
   private async resolveReadiness(orderId: string): Promise<'ON_SHELF' | 'AWAITING_PICK'> {
     const active = await this.reservations.listActiveForOrderWithLocations(orderId);
     if (active.length === 0) {
+      const packed = await this.prisma.client.stockMovement.findFirst({
+        where: { orderId, type: StockMovementType.PACK_CONFIRM },
+        select: { id: true },
+      });
+      if (packed !== null) {
+        return 'ON_SHELF';
+      }
       throw new ConflictException({
         code: 'MANUAL_PLACEMENT_NO_RESERVATIONS',
         message: `Order ${orderId} has no active reservations — cannot manually dispatch`,

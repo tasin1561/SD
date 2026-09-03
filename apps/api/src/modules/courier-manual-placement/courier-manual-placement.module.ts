@@ -12,8 +12,10 @@ import { InventorySharedModule } from '../inventory-shared/inventory-shared.modu
  * Module 9 — courier-manual-placement (commit 14, CUR-8).
  *
  * The MANUAL_PLACEMENT_ADMIN workflow for shipments Delhivery could not
- * carry: record a manually-arranged courier AWB (→ dispatch the order,
- * Model-A qtyOnHand decrement) or cancel an unfulfillable order.
+ * carry: record a manually-arranged courier AWB (→ dispatch the order —
+ * stock-neutral under Model C, since the qtyOnHand decrement already
+ * fired at pack) or cancel an unfulfillable order (UNPACK_STOCK reverses
+ * that decrement if the parcel was already packed).
  *
  * Imports OrderModule (OrderWriteService — the PENDING_MANUAL_PLACEMENT
  * → DISPATCHED / → CANCELLED_BY_ADMIN transitions) and

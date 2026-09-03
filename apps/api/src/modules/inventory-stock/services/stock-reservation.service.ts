@@ -269,14 +269,15 @@ export class StockReservationService {
    * (sellerId / variantId / warehouseId / binId / batchId). Sanctioned
    * cross-module read added for Module 9 (expand-by-need — same
    * precedent as `listActiveForOrder` and M8's `releaseAllocation`).
-   * The Model-A `DISPATCH_STOCK` saga (M9 commit 12) needs bin+batch
-   * per phase-2 reservation to issue the `DISPATCH` StockMovement that
-   * decrements qtyOnHand at dispatch.
+   * The `DISPATCH_STOCK` saga needs bin+batch per phase-2 reservation to
+   * issue the `PACK_CONFIRM` StockMovement that decrements qtyOnHand —
+   * under Model C (2026-09-03) that fires at PICKED → PACKED, not at
+   * dispatch.
    *
    * A row with `binId === null || batchId === null` is a phase-1
-   * residual (an unallocated shortfall — should not exist at
-   * PENDING_DISPATCH, but the caller defensively skips it rather than
-   * issuing a movement with no concrete location).
+   * residual (an unallocated shortfall — should not exist at PICKED,
+   * but the caller defensively skips it rather than issuing a movement
+   * with no concrete location).
    */
   async listActiveForOrderWithLocations(
     orderId: string,

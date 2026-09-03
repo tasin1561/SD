@@ -492,7 +492,8 @@ describe('M10 Tracking — webhook lifecycle e2e (TRK-1..9)', () => {
     const { orderId, awbNumber } = await driveToDispatched(2);
 
     // dispatched-state snapshot — qtyOnHand should already be 8 after
-    // the M9 Model-A dispatch decrement.
+    // the Model C pack.complete decrement (fired inside driveToDispatched,
+    // before dispatch ever happens).
     const afterDispatch = await h.prisma.stockLevel.findFirstOrThrow({
       where: { variantId, binId },
     });
@@ -805,7 +806,7 @@ describe('M10 Tracking — webhook lifecycle e2e (TRK-1..9)', () => {
     const baseline = await h.prisma.stockLevel.findFirstOrThrow({
       where: { variantId, binId },
     });
-    expect(baseline.qtyOnHand).toBe(8); // M9 Model-A dispatch decrement already happened
+    expect(baseline.qtyOnHand).toBe(8); // Model C pack decrement already happened
     expect(baseline.qtyReserved).toBe(0);
 
     // Drive through to DELIVERED via webhooks.
@@ -834,8 +835,10 @@ describe('M10 Tracking — webhook lifecycle e2e (TRK-1..9)', () => {
     const after = await h.prisma.stockLevel.findFirstOrThrow({
       where: { variantId, binId },
     });
-    // INVARIANT: qtyOnHand UNCHANGED at DELIVERED. The M9 Model-A
-    // bug-1 fix made DELIVERED stock-neutral; a regression that
+    // INVARIANT: qtyOnHand UNCHANGED at DELIVERED. DELIVERED has been
+    // stock-neutral since the M9 bug-1 fix, and Model C (2026-09-03)
+    // only moved WHEN the ONE decrement fires (pack, not dispatch) —
+    // not whether DELIVERED touches stock. A regression that
     // re-attached a side-effect (e.g., a FULFILL_STOCK on the
     // OUT_FOR_DELIVERY → DELIVERED edge, or a DELIVERY_STOCK movement
     // in the processor) would change qtyOnHand. M10's responsibility
@@ -843,12 +846,17 @@ describe('M10 Tracking — webhook lifecycle e2e (TRK-1..9)', () => {
     expect(after.qtyOnHand).toBe(8);
     expect(after.qtyReserved).toBe(0);
 
-    // Defensive: ONLY ONE DISPATCH movement exists for this order
-    // (the M9 commit-12 normal-lifecycle decrement). No extra movements.
+    // Defensive: ONLY ONE PACK_CONFIRM movement exists for this order
+    // (the ONE normal-lifecycle decrement, now issued at pack) and NO
+    // DISPATCH-type movement is ever issued any more.
     const movements = await h.prisma.stockMovement.findMany({
-      where: { orderId, type: StockMovementType.DISPATCH },
+      where: { orderId, type: StockMovementType.PACK_CONFIRM },
     });
     expect(movements).toHaveLength(1);
+    const dispatchMovements = await h.prisma.stockMovement.findMany({
+      where: { orderId, type: StockMovementType.DISPATCH },
+    });
+    expect(dispatchMovements).toHaveLength(0);
 
     // Order is DELIVERED.
     const order = await h.prisma.order.findUniqueOrThrow({ where: { id: orderId } });
