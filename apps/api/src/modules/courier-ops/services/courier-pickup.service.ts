@@ -101,6 +101,120 @@ export class CourierPickupService {
     private readonly opsDispatch: CourierOpsDispatchService,
   ) {}
 
+  /**
+   * Ask for today's van the moment a parcel is ready for one — IF an
+   * operator has explicitly enabled it for this courier.
+   *
+   * ── WHY THIS EXISTS BEHIND A SWITCH, NOT ON BY DEFAULT ──────────────
+   * CUR-10 keeps a physical-world courier call operator-triggered unless
+   * a runner's write channel has been explicitly turned on — the same
+   * carve-out already used for the nightly NDR batch. Packing a box
+   * completing is not a lifecycle transition on the ORDER in the sense
+   * CUR-10 forbids (that half of the rule is about firing a courier
+   * write FROM an order-status change with nobody having decided to);
+   * it is closer to the NDR runner's shape — a recurring operational
+   * fact the warehouse already produces, gated behind its own switch,
+   * its own kill switch (the live-write guard underneath `raise` is
+   * untouched), and its own audit trail naming it a runner action.
+   *
+   * `courier.<code>_auto_pickup_enabled`, default OFF. Until an operator
+   * turns it on, packing a box changes nothing here and the Pickups
+   * screen is the only way a van gets asked for — today's behaviour,
+   * unchanged.
+   *
+   * ── THE GRAIN STAYS PER WAREHOUSE PER DAY ───────────────────────────
+   * One box closing does not mean one van: if a request already exists
+   * for (courier, warehouse, today) this is a no-op, because that
+   * request already covers this parcel along with everything else
+   * packed today. Only the FIRST box of the day for a given courier at
+   * a given warehouse actually calls the courier — every later one
+   * finds the day already claimed.
+   *
+   * A FAILED day is left for a human. Retrying automatically on every
+   * subsequent box close would turn one bad response from the courier
+   * into a call fired on every parcel packed for the rest of the day —
+   * the Pickups screen's release-day / retry flow is where that gets
+   * resolved.
+   *
+   * Best-effort by construction: this is called from `PackService`'s
+   * post-commit hook and must never be allowed to fail a pack. Any
+   * throw here is the CALLER's problem to swallow, not this method's —
+   * kept a real throw rather than a caught result so a genuine bug does
+   * not silently disappear in two places.
+   */
+  async raiseIfDue(input: {
+    warehouseId: string;
+    courierCode: string;
+    courierAccountId: string | null;
+    /** Named for the audit trail — WHICH parcel prompted the check. */
+    triggeredByShipmentId: string;
+  }): Promise<{ fired: boolean; reason: string; requestId: string | null }> {
+    // Only a courier with an adapter can be asked for a van at all —
+    // matches CourierOpsDispatchService.requestPickup's own switch.
+    if (input.courierCode !== 'delhivery' && input.courierCode !== 'shiprocket') {
+      return { fired: false, reason: 'NO_ADAPTER', requestId: null };
+    }
+    if (!(await this.autoPickupEnabled(input.courierCode))) {
+      return { fired: false, reason: 'AUTO_PICKUP_DISABLED', requestId: null };
+    }
+
+    const pickupDate = todayInKolkata();
+    const existing = await this.prisma.client.courierPickupRequest.findFirst({
+      where: {
+        courierCode: input.courierCode,
+        warehouseId: input.warehouseId,
+        pickupDate: parseDate(pickupDate),
+        status: PickupRequestStatus.REQUESTED,
+      },
+      select: { id: true },
+    });
+    if (existing !== null) {
+      return { fired: false, reason: 'ALREADY_REQUESTED_TODAY', requestId: existing.id };
+    }
+
+    // How many parcels a van should expect — the same query the manual
+    // Shiprocket path already uses to decide who it schedules, reused
+    // here as a headcount rather than as a scheduling list. At least 1:
+    // the parcel that triggered this call is itself one of them, even
+    // in the unlikely case it has already moved on by the time this
+    // query runs.
+    const waiting = await this.awaitingPickup(input.warehouseId, input.courierCode);
+    const expectedPackageCount = Math.max(1, waiting.length);
+    const pickupTime = await this.defaultPickupTime();
+
+    const view = await this.raise(
+      null,
+      {
+        warehouseId: input.warehouseId,
+        courierCode: input.courierCode,
+        courierAccountId: input.courierAccountId,
+        pickupDate,
+        pickupTime,
+        expectedPackageCount,
+      },
+      { ipAddress: null, userAgent: null, requestId: null },
+    );
+    return { fired: true, reason: 'REQUESTED', requestId: view.id };
+  }
+
+  /** The switch: default OFF, fails closed on an unreadable row. */
+  private async autoPickupEnabled(courierCode: string): Promise<boolean> {
+    const row = await this.prisma.client.systemSetting.findUnique({
+      where: { key: `courier.${courierCode}_auto_pickup_enabled` },
+      select: { valueBoolean: true },
+    });
+    return row?.valueBoolean === true;
+  }
+
+  private async defaultPickupTime(): Promise<string> {
+    const row = await this.prisma.client.systemSetting.findUnique({
+      where: { key: 'courier.default_pickup_time' },
+      select: { valueString: true },
+    });
+    const v = (row?.valueString ?? '').trim();
+    return v === '' ? '18:00:00' : v;
+  }
+
   async list(query: {
     warehouseId?: string;
     fromDate?: string;
@@ -118,7 +232,11 @@ export class CourierPickupService {
   }
 
   async raise(
-    staffId: string,
+    /** null when a RUNNER fired this rather than an operator — see
+     *  `raiseIfDue`. The row and the audit both record that honestly:
+     *  crediting a packer with a courier decision they did not make is
+     *  a false record of who acted. */
+    staffId: string | null,
     input: RaisePickupInput,
     ctx: ClientInfoPayload,
   ): Promise<PickupRequestView> {
@@ -195,7 +313,9 @@ export class CourierPickupService {
               ? []
               : await this.awaitingPickup(warehouse.id, courierCode),
         },
-        courierActor.operator(staffId),
+        staffId === null
+          ? courierActor.runner('pack-auto-pickup', row.id)
+          : courierActor.operator(staffId),
       );
     } catch (err) {
       // The row STAYS, marked FAILED. We do not know whether Delhivery
@@ -376,7 +496,7 @@ export class CourierPickupService {
   }
 
   private async auditRaise(
-    staffId: string,
+    staffId: string | null,
     requestId: string,
     warehouseId: string,
     success: boolean,
@@ -384,9 +504,12 @@ export class CourierPickupService {
     ctx: ClientInfoPayload,
   ): Promise<void> {
     await this.audit.log({
-      actorType: ActorType.STAFF,
+      // A NULL staffId means the runner fired this, not a person — the
+      // same distinction the handover-scan gate and the dispatch handoff
+      // already draw for an unattended action.
+      actorType: staffId === null ? ActorType.SYSTEM : ActorType.STAFF,
       staffUserId: staffId,
-      action: 'courier.pickup.requested',
+      action: staffId === null ? 'courier.pickup.auto_requested' : 'courier.pickup.requested',
       entityType: 'courier_pickup_request',
       entityId: requestId,
       severity: 'MEDIUM',
@@ -435,6 +558,12 @@ export class CourierPickupService {
 }
 
 /** YYYY-MM-DD → a UTC midnight Date, which is how @db.Date round-trips. */
+/** Today's date at the warehouse's own clock (India-only, per ORD-3
+ *  and every other calendar-day boundary in this codebase). */
+function todayInKolkata(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+}
+
 function parseDate(value: string): Date {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new BadRequestException({

@@ -70,6 +70,31 @@ describe('every integrated courier has its settings seeded', () => {
       expect(block).not.toContain('valueBoolean: true');
     }
   });
+
+  /**
+   * The CUR-10 per-category auto-pickup switch — the second axis
+   * `PackService`'s post-commit hook reads before a box close is
+   * allowed to ask a courier for a van on its own. Same reasoning as
+   * the live-writes check above: a missing row fails closed and behaves
+   * perfectly, right up until the settings page has no switch to show
+   * for a courier that can otherwise be enabled by editing the row in
+   * psql.
+   */
+  for (const code of INTEGRATED) {
+    it(`${code} has an auto-pickup switch that an admin can see`, () => {
+      expect(SEED).toContain(`key: 'courier.${code}_auto_pickup_enabled'`);
+    });
+  }
+
+  it('every auto-pickup switch defaults to OFF', () => {
+    for (const code of INTEGRATED) {
+      const at = SEED.indexOf(`key: 'courier.${code}_auto_pickup_enabled'`);
+      expect(at).toBeGreaterThan(-1);
+      const block = SEED.slice(at, at + 400);
+      expect(block).toContain('valueBoolean: false');
+      expect(block).not.toContain('valueBoolean: true');
+    }
+  });
 });
 
 /**

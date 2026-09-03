@@ -289,7 +289,7 @@ The schema gives you the shape; these rules give you correctness. Violating them
 
 5. **CUR-16: the intake switch is `Courier.isActive`, read in ONE place (`CourierEnablementService`), and OFF means NO NEW PARCELS — not "stop tracking".** A courier switched off mid-week still holds real parcels moving towards real customers; going quiet on those is the same failure as never polling them. So the tracking poll, the NDR runner, cancels and the ops panel all keep working for in-flight parcels. **The flag is the COLUMN, deliberately not a `courier.<code>_enabled` setting** — a second source of truth for "can this courier carry a parcel" is exactly the drift CNS-2 and BIN-1 exist to prevent. The distribution paths already honoured it; the AWB dispatcher did NOT, which meant a shipment arriving with a courier code already on it (a stale seller link, a supersede replacement, a manual re-run) was still booked. Enforced at the booking boundary now, reported as `COURIER_DISABLED` + `serviceable: false` so it reaches a human rather than retrying a switch somebody turned off on purpose. Toggle: `PATCH /admin/couriers/:code` (reason ≥10 chars, audited HIGH), screen on `/courier-accounts`.
 
-**Per-courier switches, and why every one of them is per courier.** `courier.<code>_live_writes_enabled` and `courier.<code>_api_base_url` are derived from the courier code by `CourierWriteGuardService`, so a third courier is a data change. **A single shared flag would mean enabling Delhivery for its first controlled parcel silently arms every Shiprocket write path**, with nobody having decided that. The NDR runner's dry-run gate follows the same rule: a run can legitimately be live for one courier and planning-only for the other, and it reports `dryRun` when ANY courier in the sweep was planning. **A new courier needs its seeded rows** — `courier-settings-coverage.spec.ts` reads the couriers off the AWB dispatcher's own switch and fails if a row is missing, because the guard fails CLOSED on an absent setting and therefore behaves perfectly while the admin page has no switch to show.
+**Per-courier switches, and why every one of them is per courier.** `courier.<code>_live_writes_enabled`, `courier.<code>_api_base_url`, and `courier.<code>_auto_pickup_enabled` (CUR-10 amendment #3 — whether a packed box may ask that courier for its own pickup) are all derived from the courier code, so a third courier is a data change. **A single shared flag would mean enabling Delhivery for its first controlled parcel silently arms every Shiprocket write path**, with nobody having decided that. The NDR runner's dry-run gate follows the same rule: a run can legitimately be live for one courier and planning-only for the other, and it reports `dryRun` when ANY courier in the sweep was planning. **A new courier needs its seeded rows** — `courier-settings-coverage.spec.ts` reads the couriers off the AWB dispatcher's own switch and fails if a row is missing, because the guard fails CLOSED on an absent setting and therefore behaves perfectly while the admin page has no switch to show.
 
 **What Shiprocket genuinely cannot do, refused BY NAME rather than silently degraded:** amend a registered pickup location (they have add, no edit — routing an update to `addpickup` creates a second location with the same name, and the name is what every manifest matches on); change a product description on a live parcel; convert payment mode; and they hold ONE document (the POD) where Delhivery has four, so a signature or RVP-QC request is refused rather than answered with the POD. **Their NDR is SYNCHRONOUS** — the reply is the outcome and there is no UPL to poll, so a successful submit is CONFIRMED at submit time; leaving it SUBMITTED sent it to the UPL poller, which read the missing handle as "the submit produced nothing" and escalated a re-attempt that had worked.
 
@@ -714,6 +714,31 @@ The canonical reference implementation is `OrderWriteService.transitionStatus()`
     > believes their goods are on the way back. It runs even when the NSA half is
     > switched off — it is not an NSA flag, and gating it behind an unrelated
     > switch is how it would come to be silently off.
+
+    > **CUR-10 amendment #3, 2026-09-03 — a packed box may ask for its own pickup.**
+    > `PackService.complete`'s post-commit hook (alongside the existing WMS-7
+    > manifest auto-attach) now calls `CourierPickupService.raiseIfDue`, which
+    > asks the courier for today's van the moment a parcel is ready — but ONLY
+    > when `courier.<code>_auto_pickup_enabled` is explicitly ON (default OFF).
+    > This is the SAME shape as the 2026-08-05 runner amendment, not a new kind
+    > of exception to it: a recurring operational fact the warehouse already
+    > produces, gated behind its own per-category switch, still behind the
+    > live-write guard, audited as a RUNNER action. **What makes this safe to
+    > widen at all is the GRAIN**: a pickup is requested per (courier,
+    > warehouse, day), never per parcel — `raiseIfDue` checks for an existing
+    > REQUESTED row for today before calling anything, so the first box closed
+    > that day is the only one that reaches the courier; every later box the
+    > same day is a no-op, because one van already covers the building. A
+    > FAILED day is deliberately NOT retried automatically — that stays the
+    > Pickups screen's release-day/retry job, so one bad response cannot turn
+    > into a call fired on every subsequent parcel. The request row records
+    > `requestedByStaffId: null` and the audit row `ActorType.SYSTEM` — a
+    > packer did not decide to summon a van, and crediting them with that
+    > decision would be a false record of who acted, the same distinction the
+    > handover-scan gate and the automatic dispatch handoff already draw.
+    > A MANUAL courier is skipped before this is ever reached — there is no
+    > account to ask. **Do not widen the grain to "per parcel" or make a
+    > FAILED day auto-retry without the same argument holding.**
 
         **CUR-11: the courier is not an authority on our order status.** A successful cancel/edit/NDR action does NOT transition the order — Delhivery's own scans do, through the M10 webhook processor and `OrderWriteService.transitionStatus` (ORD-3). Writing the transition at the action site as well would give the order two authorities that can disagree, and only the scan reflects where the parcel physically is. The `courier-ops` module is the sole caller of the adapter's capability services; the adapter stays domain-free (it takes pincodes and grams), and `ShipmentCourierContextService` is the ONE place a shipment id becomes those inputs — five call sites resolving it inline is how they slowly disagree about which weight field to use.
 19b. Honor CUR-12 through CUR-16 (multi-courier, 2026-08-29). Reach a courier through its DISPATCHER, never a branch at the call site (CUR-12) — add a third courier by implementing the interface and appending it to the list. `serviceable: false` means "will not carry"; true means "ask later", and only the first fails over (CUR-13). Failover is symmetric by construction — never special-case a direction — and a successful failover REWRITES `courierCode`/`courierShipmentId` on the shipment (CUR-14). A stubbed courier may never answer for a live one (CUR-15). The intake switch is `Courier.isActive` through `CourierEnablementService` alone, OFF means no NEW parcels while in-flight ones keep being tracked, and it is enforced at the BOOKING boundary as well as in routing (CUR-16). Every write switch is per courier; a new courier needs its seeded `courier.<code>_live_writes_enabled` row or it has a gate with no screen.

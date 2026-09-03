@@ -606,6 +606,41 @@ const systemSettings: SystemSettingSeed[] = [
     description:
       'When OFF (default) Skydrop refuses any Shiprocket call with a physical or billable effect — create an order, assign an AWB, cancel a parcel, request a pickup, take an NDR action, register a pickup location — while still allowing reads. Nothing has ever been written against a real Shiprocket account: every request shape in the adapter is transcribed from their published docs and unproven. Turn this on only for a controlled single-parcel test, and expect a HIGH audit row for every blocked attempt while it is off.',
   },
+  // The CUR-10 per-category auto-pickup switch. Separate from
+  // `_live_writes_enabled` on purpose: the live-writes flag says whether
+  // a write is allowed to reach the courier at all; this says whether a
+  // WAREHOUSE EVENT (a box closing) may be the thing that decides to
+  // make one, without an operator in the loop for that specific call.
+  // Both default OFF, and both must be true for a box close to actually
+  // reach the courier — this alone changes nothing while live writes
+  // are off, and the reverse.
+  {
+    key: 'courier.delhivery_auto_pickup_enabled',
+    category: 'courier',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'Delhivery — request the daily pickup automatically',
+    description:
+      'When ON, closing the first box of the day for a warehouse asks Delhivery for a van without anyone visiting the Pickups screen — later boxes that same day are no-ops, because one request already covers the building. When OFF (default), a pickup is only ever requested by a person on the Pickups screen. Still behind courier.delhivery_live_writes_enabled — turning this on with live writes off changes nothing.',
+  },
+  {
+    key: 'courier.shiprocket_auto_pickup_enabled',
+    category: 'courier',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'Shiprocket — request the daily pickup automatically',
+    description:
+      'The Shiprocket half of courier.delhivery_auto_pickup_enabled — same behaviour, same one-request-per-warehouse-per-day grain, same default OFF. Still behind courier.shiprocket_live_writes_enabled.',
+  },
+  {
+    key: 'courier.default_pickup_time',
+    category: 'courier',
+    valueType: SettingValueType.STRING,
+    valueString: '18:00:00',
+    displayName: 'Auto-pickup — requested collection time',
+    description:
+      "HH:mm:ss sent to the courier when a box close auto-requests today's van. An end-of-day slot by default; a warehouse that needs an earlier collection still raises one by hand from the Pickups screen with whatever time it actually wants.",
+  },
   {
     key: 'courier.delhivery_pickup_location',
     category: 'courier',

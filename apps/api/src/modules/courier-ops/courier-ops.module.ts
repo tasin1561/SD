@@ -65,6 +65,10 @@ import { ShipmentCourierContextService } from './services/shipment-courier-conte
     // The ops dispatcher itself: `shipment-address` corrects a consignee
     // through it rather than reaching for an adapter (CUR-12).
     CourierOpsDispatchService,
+    // `warehouse-pack` calls `raiseIfDue` post-commit, so a packed
+    // parcel can ask for today's van without a second module knowing
+    // how to reach a courier (CUR-10's per-category auto-pickup switch).
+    CourierPickupService,
   ],
 })
 export class CourierOpsModule {}

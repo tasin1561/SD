@@ -7,6 +7,7 @@ import type { OrderReadService } from '../../src/modules/order/services/order-re
 import type { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import type { ManifestService } from '../../src/modules/warehouse-manifest/services/manifest.service';
 import type { StockUnitService } from '../../src/modules/inventory-shared/stock-unit.service';
+import type { CourierPickupService } from '../../src/modules/courier-ops/services/courier-pickup.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -23,6 +24,7 @@ function makeService(
     /** R4: how many PICKED serialized units the parcel carries. >0 turns
      *  the strict pack gate on. */
     pickedUnits?: number;
+    raiseIfDue?: jest.Mock;
   } = {},
 ) {
   const defaultShipment = {
@@ -31,6 +33,10 @@ function makeService(
     packCompletedAt: null,
     manifestId: null,
     manifest: null,
+    courierCode: 'delhivery',
+    isManualCourier: false,
+    courierAccountId: null,
+    originWarehouseId: 'wh-1',
     orderShipments: [{ orderId: ORDER, order: { sellerId: 'seller-1' } }],
   };
   const shipmentFindFirst = jest.fn(async () =>
@@ -79,6 +85,10 @@ function makeService(
       async () => opts.pickedUnits ?? 0,
     ),
   };
+  const raiseIfDue =
+    opts.raiseIfDue ??
+    jest.fn(async () => ({ fired: false, reason: 'AUTO_PICKUP_DISABLED', requestId: null }));
+  const pickups = { raiseIfDue };
   const svc = new PackService(
     { client } as unknown as PrismaService,
     audit as unknown as AuditLogService,
@@ -86,6 +96,7 @@ function makeService(
     orderWrite as unknown as OrderWriteService,
     manifests as unknown as ManifestService,
     unitLedger as unknown as StockUnitService,
+    pickups as unknown as CourierPickupService,
   );
   return {
     svc,
@@ -93,6 +104,7 @@ function makeService(
     shipmentUpdateMany,
     getById,
     transitionStatus,
+    raiseIfDue,
     attachShipment,
     auditLog,
     unitLedger,
@@ -250,5 +262,82 @@ describe('PackService.complete', () => {
   it('404 when order is missing', async () => {
     const { svc } = makeService({ orderStatus: 'missing' });
     await expect(svc.complete(SHIP, STAFF)).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+// ---------------------------------------------------------------------
+// The auto-pickup hook (CUR-10's per-category switch).
+//
+// Packing a box completing is not itself a courier call — it ASKS
+// whether one is due, and `raiseIfDue` is the sole decision-maker on
+// whether that turns into a real request. This suite only pins the
+// PLUMBING: that the hook fires with the right shipment facts, that a
+// manual courier is skipped before it ever reaches that decision, and
+// that a failure there can never fail the pack.
+// ---------------------------------------------------------------------
+describe('PackService.complete — the auto-pickup hook', () => {
+  it('asks raiseIfDue with the shipment that was just packed', async () => {
+    const raiseIfDue = jest.fn(async () => ({
+      fired: true,
+      reason: 'REQUESTED',
+      requestId: 'pr-1',
+    }));
+    const { svc } = makeService({ raiseIfDue });
+    await svc.complete(SHIP, STAFF);
+    expect(raiseIfDue).toHaveBeenCalledWith({
+      warehouseId: 'wh-1',
+      courierCode: 'delhivery',
+      courierAccountId: null,
+      triggeredByShipmentId: SHIP,
+    });
+  });
+
+  it('never asks for a MANUAL courier — there is no account to ask', async () => {
+    const raiseIfDue = jest.fn();
+    const { svc } = makeService({
+      raiseIfDue,
+      shipment: {
+        id: SHIP,
+        status: ShipmentStatus.CREATED,
+        packCompletedAt: null,
+        manifestId: null,
+        manifest: null,
+        courierCode: 'manual',
+        isManualCourier: true,
+        courierAccountId: null,
+        originWarehouseId: 'wh-1',
+        orderShipments: [{ orderId: ORDER, order: { sellerId: 'seller-1' } }],
+      },
+    });
+    await svc.complete(SHIP, STAFF);
+    expect(raiseIfDue).not.toHaveBeenCalled();
+  });
+
+  it('a failure asking for pickup never fails the pack', async () => {
+    // Best-effort, exactly like the WMS-7 manifest auto-attach beside
+    // it: the parcel is correctly PACKED either way.
+    const raiseIfDue = jest.fn(async () => {
+      throw new Error('delhivery is down');
+    });
+    const { svc } = makeService({ raiseIfDue });
+    const r = await svc.complete(SHIP, STAFF);
+    expect(r.status).toBe(OrderStatus.PACKED);
+    expect(r.alreadyComplete).toBe(false);
+  });
+
+  it('fires independently of whether the manifest auto-attach succeeded', async () => {
+    // A van is asked for because a parcel is ready to leave the
+    // building, not because of which paperwork it landed on.
+    const attach = jest.fn(async () => {
+      throw new Error('manifest attach failed');
+    });
+    const raiseIfDue = jest.fn(async () => ({
+      fired: true,
+      reason: 'REQUESTED',
+      requestId: 'pr-1',
+    }));
+    const { svc } = makeService({ attach, raiseIfDue });
+    await svc.complete(SHIP, STAFF);
+    expect(raiseIfDue).toHaveBeenCalled();
   });
 });

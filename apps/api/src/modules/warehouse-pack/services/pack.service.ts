@@ -6,6 +6,7 @@ import { OrderReadService } from '../../order/services/order-read.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
 import { ManifestService } from '../../warehouse-manifest/services/manifest.service';
 import { StockUnitService } from '../../inventory-shared/stock-unit.service';
+import { CourierPickupService } from '../../courier-ops/services/courier-pickup.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
 export interface CompletePackResult {
@@ -57,6 +58,7 @@ export class PackService {
     private readonly orderWrite: OrderWriteService,
     private readonly manifests: ManifestService,
     private readonly units: StockUnitService,
+    private readonly pickups: CourierPickupService,
   ) {}
 
   async complete(
@@ -79,6 +81,10 @@ export class PackService {
         packCompletedAt: true,
         manifestId: true,
         manifest: { select: { manifestNumber: true } },
+        courierCode: true,
+        isManualCourier: true,
+        courierAccountId: true,
+        originWarehouseId: true,
         orderShipments: {
           select: { orderId: true, order: { select: { sellerId: true } } },
           orderBy: { shipmentSequence: 'asc' },
@@ -228,6 +234,29 @@ export class PackService {
         { shipmentId, orderId, err: (err as Error).message },
         'Pack-complete auto-attach to DRAFT manifest failed — supervisor can retry/reassign',
       );
+    }
+
+    // 4. POST-COMMIT auto-pickup (CUR-10 per-category switch, default
+    // OFF). Best-effort, independent of whether the manifest attach
+    // above succeeded — a van is asked for because a parcel is ready to
+    // leave the building, not because of which paperwork it landed on.
+    // A manual courier has no account to ask, so it is skipped entirely
+    // rather than reaching `raiseIfDue`, which would just report
+    // NO_ADAPTER for the same reason.
+    if (!shipment.isManualCourier) {
+      try {
+        await this.pickups.raiseIfDue({
+          warehouseId: shipment.originWarehouseId,
+          courierCode: shipment.courierCode,
+          courierAccountId: shipment.courierAccountId,
+          triggeredByShipmentId: shipmentId,
+        });
+      } catch (err) {
+        this.logger.warn(
+          { shipmentId, orderId, err: (err as Error).message },
+          'Pack-complete auto-pickup check failed — the Pickups screen still covers this warehouse',
+        );
+      }
     }
 
     return {

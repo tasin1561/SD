@@ -9,6 +9,7 @@ import { PackBoxExpiryWorker } from './queue/pack-box-expiry.worker';
 import { PackerController } from './controllers/packer.controller';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { InventorySharedModule } from '../inventory-shared/inventory-shared.module';
+import { CourierOpsModule } from '../courier-ops/courier-ops.module';
 
 /**
  * Module 8 — warehouse-pack module. Commit 9 = service layer
@@ -17,8 +18,11 @@ import { InventorySharedModule } from '../inventory-shared/inventory-shared.modu
  * endpoints.
  *
  * Imports OrderModule for read enrichment + the PICKED→PACKED saga
- * transition, and WarehouseManifestModule for the post-pack auto-attach
- * to DRAFT (WMS-7). LEAF consumer — nothing imports `warehouse-pack`.
+ * transition, WarehouseManifestModule for the post-pack auto-attach to
+ * DRAFT (WMS-7), and CourierOpsModule for `CourierPickupService.raiseIfDue`
+ * — a packed parcel asking for today's van when an operator has switched
+ * that on for the courier (CUR-10's per-category auto-pickup switch).
+ * LEAF consumer — nothing imports `warehouse-pack`.
  *
  * Pack is intentionally claim-free (commit 1 schema added no
  * packStartedAt/packExpiresAt): pull is informational, complete is the
@@ -28,7 +32,7 @@ import { InventorySharedModule } from '../inventory-shared/inventory-shared.modu
  * loser pulls again. Revisit if pack volume scales.
  */
 @Module({
-  imports: [OrderModule, WarehouseManifestModule, InventorySharedModule],
+  imports: [OrderModule, WarehouseManifestModule, InventorySharedModule, CourierOpsModule],
   controllers: [PackerController],
   providers: [
     PackQueueService,
