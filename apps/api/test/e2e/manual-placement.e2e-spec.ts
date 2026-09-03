@@ -331,7 +331,7 @@ describe('Manual courier placement (e2e)', () => {
     expect((await stockOf()).qtyOnHand).toBe(8);
   });
 
-  it('cancel: an unfulfillable order → CANCELLED_BY_ADMIN, reservations released, qtyOnHand untouched', async () => {
+  it('cancel: an unfulfillable order → CANCELLED_BY_ADMIN, PACK_CONFIRM reversed, qtyOnHand restored', async () => {
     await receiveStock(10);
     const { orderId, replacementShipmentId } = await driveToManualPlacement(2);
 
@@ -359,10 +359,15 @@ describe('Manual courier placement (e2e)', () => {
       where: { orderId, status: ReservationStatus.ACTIVE },
     });
     expect(active).toHaveLength(0);
-    const released = await h.prisma.stockReservation.findMany({
-      where: { orderId, status: ReservationStatus.RELEASED },
+    // The reservation was already FULFILLED at pack (Model C) — there
+    // is nothing ACTIVE left for UNPACK_STOCK's defensive release() to
+    // touch, so it stays FULFILLED rather than becoming RELEASED. The
+    // give-back is entirely carried by the PACK_REVERSED movement below,
+    // not by a reservation-status change.
+    const fulfilled = await h.prisma.stockReservation.findMany({
+      where: { orderId, status: ReservationStatus.FULFILLED },
     });
-    expect(released.length).toBeGreaterThanOrEqual(1);
+    expect(fulfilled.length).toBeGreaterThanOrEqual(1);
     const dispatchMovements = await h.prisma.stockMovement.findMany({
       where: { orderId, type: StockMovementType.DISPATCH },
     });
