@@ -4,6 +4,7 @@ import type { PrismaService } from '../../src/infrastructure/prisma/prisma.servi
 import type { OrderReadService } from '../../src/modules/order/services/order-read.service';
 import type { AssignmentExpirationService } from '../../src/modules/call-center/services/assignment-expiration.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
+import { CallQueueReason } from '@skydrop/db';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -16,7 +17,7 @@ function makeService(
     maxActive?: number | null; // null → no settings row
     /** Whether the agent is on the roster. Default true. */
     available?: boolean;
-    picked?: { id: string; orderId: string } | null;
+    picked?: { id: string; orderId: string; reason?: CallQueueReason } | null;
     order?: AnyArgs | null;
     /** Rows the seller lookup returns (the agent's "ordered from" line). */
     sellers?: AnyArgs[];
@@ -59,6 +60,7 @@ function makeService(
     orderId: opts.picked?.orderId ?? 'o1',
     assignedAt: new Date('2026-05-18T10:00:00Z'),
     scheduledAttempts: 1,
+    reason: opts.picked?.reason ?? CallQueueReason.ORDER_CONFIRMATION,
   }));
   const findMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => opts.currentRows ?? []);
   const defaultReleaseEntry = {
@@ -379,12 +381,12 @@ describe('PulledAssignment.callPurpose — which conversation this is', () => {
     expect(a!.callPurpose.kind).toBe('DELIVERY_FOLLOW_UP');
   });
 
-  it("a seller's ask WINS over the order status, and carries their words", async () => {
+  it("a seller's ask carries their words, when THIS call is the one they asked for", async () => {
     // An order can be out for delivery AND have the seller asking us to
     // ring the customer. What they asked for is the more useful thing
     // to open with.
     const sut = makeService({
-      picked: { id: 'q1', orderId: 'o1' },
+      picked: { id: 'q1', orderId: 'o1', reason: CallQueueReason.SELLER_ASKED },
       order: { orderId: 'o1', sellerId: 's1', items: [], status: OrderStatus.OUT_FOR_DELIVERY },
       recallRequest: { reason: 'Customer says they will be home after 6pm' },
     });
@@ -392,6 +394,53 @@ describe('PulledAssignment.callPurpose — which conversation this is', () => {
     expect(a).not.toBeNull();
     expect(a!.callPurpose.kind).toBe('SELLER_REQUESTED');
     expect(a!.callPurpose.sellerAsked).toBe('Customer says they will be home after 6pm');
+  });
+});
+
+// ---------------------------------------------------------------------
+// SD-TEST-523961, 2 September 2026.
+//
+// The seller asked for a call on 1 September; an agent made it and
+// recorded that the customer wanted to return the item. The next day
+// Delhivery FAILED TO DELIVER, which queued a fresh call — and the agent
+// was shown the seller's day-old sentence as the reason for it.
+//
+// Nobody had asked. The purpose was INFERRED by looking for any executed
+// recall on the order, and a recall stays EXECUTED forever, so every
+// later call on that order inherited it. The real reason went unsaid.
+// ---------------------------------------------------------------------
+describe('callPurpose reads the queue entry, not the order history', () => {
+  it('a failed delivery says so, even when an old recall exists on the order', async () => {
+    const sut = makeService({
+      picked: { id: 'q2', orderId: 'o1', reason: CallQueueReason.DELIVERY_FAILED },
+      order: { orderId: 'o1', sellerId: 's1', items: [], status: OrderStatus.IN_TRANSIT },
+      // Still on the order, still EXECUTED, and answered yesterday.
+      recallRequest: { reason: 'please call the customer and ask the issue' },
+    });
+    const a = await sut.svc.pullNext('agent-1');
+
+    expect(a!.callPurpose.kind).toBe('DELIVERY_FOLLOW_UP');
+    expect(a!.callPurpose.headline).toContain('could not deliver');
+    // The seller's words must NOT appear: they are about a different
+    // call, already made.
+    expect(a!.callPurpose.sellerAsked).toBeNull();
+  });
+
+  it('a confirmation call is not relabelled by an old recall either', async () => {
+    const sut = makeService({
+      picked: { id: 'q3', orderId: 'o1', reason: CallQueueReason.ORDER_CONFIRMATION },
+      order: {
+        orderId: 'o1',
+        sellerId: 's1',
+        items: [],
+        status: OrderStatus.PENDING_CONFIRMATION,
+      },
+      recallRequest: { reason: 'an old ask from last week' },
+    });
+    const a = await sut.svc.pullNext('agent-1');
+
+    expect(a!.callPurpose.kind).toBe('CONFIRMATION');
+    expect(a!.callPurpose.sellerAsked).toBeNull();
   });
 });
 
@@ -403,7 +452,9 @@ describe('the issue shown beside a call', () => {
   // recall raised, or nothing.
   it('shows only the ticket the recall raised', async () => {
     const sut = makeService({
-      picked: { id: 'q1', orderId: 'o1' },
+      // The ticket belongs to the seller's ask, so it appears on the
+      // call that ask created — and not on a later, unrelated one.
+      picked: { id: 'q1', orderId: 'o1', reason: CallQueueReason.SELLER_ASKED },
       order: { orderId: 'o1', sellerId: 's1', items: [], status: OrderStatus.OUT_FOR_DELIVERY },
       recallRequest: { reason: 'Please call them', executionRef: 'tkt-call' },
       callIssue: {

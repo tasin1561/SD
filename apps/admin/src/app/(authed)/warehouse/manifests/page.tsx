@@ -7,7 +7,7 @@ export default function ManifestsPage(): ReactElement {
     <div>
       <PageHeader
         title="Manifests"
-        subtitle="Find a DRAFT manifest, close it to trigger AWB generation, then confirm courier handoff."
+        subtitle="A record of which parcels went out together. Closing and courier handoff are automatic once a box is packed \u2014 nothing here needs doing unless something went wrong."
       />
       <ManifestsIndex />
     </div>

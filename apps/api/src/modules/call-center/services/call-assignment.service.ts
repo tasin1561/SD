@@ -22,6 +22,7 @@ import { CatalogReadService } from '../../catalog-read/services/catalog-read.ser
 import { OrderReadService, type ResolvedOrder } from '../../order/services/order-read.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { AssignmentExpirationService } from './assignment-expiration.service';
+import { CallQueueReason } from '@skydrop/db';
 
 /** Effective concurrent-assignment cap when an agent has no settings
  *  row — mirrors agent_call_settings.maxActiveCalls @default(1). */
@@ -246,7 +247,13 @@ export class CallAssignmentService {
           assignedAt: now,
           scheduledAttempts: { increment: 1 },
         },
-        select: { id: true, orderId: true, assignedAt: true, scheduledAttempts: true },
+        select: {
+          id: true,
+          orderId: true,
+          assignedAt: true,
+          scheduledAttempts: true,
+          reason: true,
+        },
       });
       // Open the hold in the SAME tx as the claim, so a hold can never
       // exist for a claim that did not happen, nor a claim go unrecorded.
@@ -283,7 +290,7 @@ export class CallAssignmentService {
       seller: order ? await this.loadSeller(order.sellerId) : null,
       itemDisplay: await this.loadItemDisplay(order),
       priorAttempts: await this.loadPriorAttempts(order),
-      ...(await this.callContext(picked.orderId, order?.status ?? null)),
+      ...(await this.callContext(picked.orderId, order?.status ?? null, picked.reason)),
     };
   }
 
@@ -319,34 +326,68 @@ export class CallAssignmentService {
   private async callContext(
     orderId: string,
     orderStatus: OrderStatus | null,
+    queueReason: CallQueueReason,
   ): Promise<Pick<PulledAssignment, 'callPurpose' | 'openTickets'>> {
-    const callPurpose = await this.resolveCallPurpose(orderId, orderStatus);
+    const callPurpose = await this.resolveCallPurpose(orderId, orderStatus, queueReason);
     return { callPurpose, openTickets: await this.loadIssueForCall(callPurpose.ticketId) };
   }
 
+  /**
+   * Why the agent is about to ring this customer.
+   *
+   * Read from the QUEUE ENTRY, which recorded it when the call was
+   * queued. It used to be inferred: look for any executed recall on the
+   * order and, if one exists, call this a seller request.
+   *
+   * That is wrong whenever an order has been called about more than
+   * once, because a recall from a previous day stays EXECUTED forever.
+   * On SD-TEST-523961 the seller asked for a call on 1 September, an
+   * agent made it and recorded that the customer wanted to return the
+   * item; the next day Delhivery FAILED TO DELIVER and queued a fresh
+   * call — and the agent was shown the seller's day-old sentence as the
+   * reason for it. Nobody had asked. The real reason, a courier that
+   * could not deliver, went unsaid, and those are different
+   * conversations to open with a customer.
+   *
+   * The entry's own reason cannot drift like that: it is stamped once,
+   * at creation, by whichever thing decided the call was needed.
+   */
   private async resolveCallPurpose(
     orderId: string,
     orderStatus: OrderStatus | null,
+    queueReason: CallQueueReason,
   ): Promise<PulledAssignment['callPurpose']> {
-    const asked = await this.prisma.client.orderDeliveryActionRequest.findFirst({
-      where: {
-        orderId,
-        action: DeliveryActionKind.RECALL,
-        status: { in: [DeliveryActionStatus.EXECUTED, DeliveryActionStatus.APPROVED] },
-      },
-      orderBy: { createdAt: 'desc' },
-      // `executionRef` is the ticket the recall raised — precisely the
-      // one this call answers.
-      select: { reason: true, executionRef: true },
-    });
-    if (asked !== null) {
+    if (queueReason === CallQueueReason.SELLER_ASKED) {
+      const asked = await this.prisma.client.orderDeliveryActionRequest.findFirst({
+        where: {
+          orderId,
+          action: DeliveryActionKind.RECALL,
+          status: { in: [DeliveryActionStatus.EXECUTED, DeliveryActionStatus.APPROVED] },
+        },
+        orderBy: { createdAt: 'desc' },
+        // `executionRef` is the ticket the recall raised — precisely the
+        // one this call answers.
+        select: { reason: true, executionRef: true },
+      });
+      if (asked !== null) {
+        return {
+          kind: 'SELLER_REQUESTED',
+          headline: 'The seller asked us to call this customer',
+          sellerAsked: asked.reason,
+          ticketId: asked.executionRef,
+        };
+      }
+    }
+
+    if (queueReason === CallQueueReason.DELIVERY_FAILED) {
       return {
-        kind: 'SELLER_REQUESTED',
-        headline: 'The seller asked us to call this customer',
-        sellerAsked: asked.reason,
-        ticketId: asked.executionRef,
+        kind: 'DELIVERY_FOLLOW_UP',
+        headline: 'The courier could not deliver this — find out why',
+        sellerAsked: null,
+        ticketId: null,
       };
     }
+
     if (orderStatus === OrderStatus.PENDING_CONFIRMATION) {
       return {
         kind: 'CONFIRMATION',
@@ -519,6 +560,7 @@ export class CallAssignmentService {
         orderId: true,
         assignedAt: true,
         scheduledAttempts: true,
+        reason: true,
       },
     });
     if (rows.length === 0) return [];
@@ -551,7 +593,7 @@ export class CallAssignmentService {
     for (const r of rows) {
       contextByOrder.set(
         r.orderId,
-        await this.callContext(r.orderId, orders.get(r.orderId)?.status ?? null),
+        await this.callContext(r.orderId, orders.get(r.orderId)?.status ?? null, r.reason),
       );
     }
     return rows.map((r) => {

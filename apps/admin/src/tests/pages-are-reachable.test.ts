@@ -62,6 +62,13 @@ function sources(dir: string, skip: string): string[] {
  */
 const EXPECTED_UNLINKED = new Set<string>([
   '/dashboard', // the post-login landing page; the brand mark points here
+  // Closing a manifest and confirming handoff became automatic
+  // (2026-09-03), so there is nothing on this page for anyone to do in
+  // the ordinary case. It is kept as the record of which parcels went
+  // out together, and reachable by URL when something has gone wrong —
+  // but linking to it would put a screen in the nav that asks for work
+  // nobody has to perform.
+  '/warehouse/manifests',
 ]);
 
 describe('every admin page can be reached from another page', () => {

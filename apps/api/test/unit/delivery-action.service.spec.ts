@@ -199,7 +199,14 @@ describe('DeliveryActionService.request', () => {
     const sut = makeSut();
     const tx = { orderDeliveryActionRequest: { update: jest.fn(async () => ({})) } };
     await sut.svc.executeRecall(tx as never, 'req1', 'o1');
-    expect(sut.enqueueAgain).toHaveBeenCalledWith('o1', expect.any(Date));
+    expect(sut.enqueueAgain).toHaveBeenCalledWith(
+      'o1',
+      expect.any(Date),
+      undefined,
+      // The entry records WHY, so a later unrelated call on the same
+      // order cannot inherit this seller's words.
+      'SELLER_ASKED',
+    );
   });
 });
 

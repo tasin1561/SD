@@ -2934,6 +2934,9 @@ model CallQueueEntry {
   maxAttempts       Int                 @default(3) @map("max_attempts")
   closedAt          DateTime?           @map("closed_at") @db.Timestamptz
   closureReason     QueueClosureReason? @map("closure_reason")
+  /// Why this call exists (see CallQueueReason). Defaulted rather than
+  /// required so pre-existing rows read as what they almost all were.
+  reason            CallQueueReason     @default(ORDER_CONFIRMATION)
   createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz
   updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -4971,6 +4974,26 @@ enum AssignmentMethod {
   AGENT_PICKED     @map("agent_picked")
 
   @@map("assignment_method")
+}
+
+/// WHY a call is in the queue.
+///
+/// Set when the entry is CREATED, because it cannot be worked out
+/// afterwards. The agent screen used to infer it by looking for any
+/// EXECUTED recall on the order, which found a request from a previous
+/// day that had already been handled and told the agent the seller had
+/// asked for a call nobody asked for — while the real reason, a courier
+/// that could not deliver, went unsaid. Those are different
+/// conversations and the agent needs the right one before dialling.
+enum CallQueueReason {
+  /// Confirm a new order before it is picked (the COD call).
+  ORDER_CONFIRMATION @map("order_confirmation")
+  /// The seller asked us to ring this customer.
+  SELLER_ASKED       @map("seller_asked")
+  /// The courier could not deliver — find out why.
+  DELIVERY_FAILED    @map("delivery_failed")
+
+  @@map("call_queue_reason")
 }
 
 enum QueueClosureReason {

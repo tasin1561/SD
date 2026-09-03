@@ -11,6 +11,7 @@ import {
   type OrderLifecycleEvent,
 } from '../../lifecycle-events/order-lifecycle-event-bus.service';
 import { CallQueueService } from '../../call-queue/services/call-queue.service';
+import { CallQueueReason } from '@skydrop/db';
 
 /**
  * A failed delivery puts the customer back in front of an agent.
@@ -80,7 +81,14 @@ export class DeliveryFailedListener implements OnApplicationBootstrap, OnModuleD
 
   private async handle(event: OrderLifecycleEvent): Promise<void> {
     if (event.to !== OrderStatus.DELIVERY_FAILED) return;
-    const result = await this.queue.enqueueOrder(event.orderId);
+    const result = await this.queue.enqueueOrder(
+      event.orderId,
+      undefined,
+      // Not a confirmation call and not something the seller asked for:
+      // the courier could not deliver, and that is what the agent needs
+      // to know before dialling.
+      CallQueueReason.DELIVERY_FAILED,
+    );
     this.logger.log(
       { orderId: event.orderId, created: result.created },
       'Failed delivery queued for a call',

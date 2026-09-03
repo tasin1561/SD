@@ -13,6 +13,7 @@ import { AwbGenerationJobService } from './services/awb-generation-job.service';
 import { AwbGenerationQueue } from './queue/awb-generation.queue';
 import { AwbGenerationWorker } from './queue/awb-generation.worker';
 import { OrderConfirmedAwbListener } from './services/order-confirmed-awb-listener.service';
+import { CourierDispatchModule } from '../courier-dispatch/courier-dispatch.module';
 
 /**
  * Module 9 — courier-awb: the AWB generation saga (CP2).
@@ -33,6 +34,10 @@ import { OrderConfirmedAwbListener } from './services/order-confirmed-awb-listen
  */
 @Module({
   imports: [
+    // The last hop: once every parcel on a manifest has a waybill,
+    // the handoff is automatic (2026-09-03). No cycle — courier-dispatch
+    // does not import courier-awb.
+    CourierDispatchModule,
     ShipmentProvisionModule,
     CourierDelhiveryModule,
     // Both adapters, because the dispatcher below is the one place that

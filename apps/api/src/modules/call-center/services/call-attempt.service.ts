@@ -176,6 +176,7 @@ export class CallAttemptService {
         orderId: true,
         status: true,
         assignedAgentId: true,
+        reason: true,
       },
     });
     if (!entry) {
@@ -478,7 +479,11 @@ export class CallAttemptService {
         order.sellerId,
       );
       try {
-        await this.queue.enqueueAgain(entry.orderId, availableAt, input.ctx);
+        // Carry the ORIGINAL reason forward. A no-answer on a
+        // failed-delivery call is still a failed-delivery call; resetting
+        // it to a confirmation would tell the next agent the wrong thing
+        // about the same parcel.
+        await this.queue.enqueueAgain(entry.orderId, availableAt, input.ctx, entry.reason);
         requeuedAvailableAt = availableAt;
       } catch (e) {
         this.logger.error(

@@ -8,6 +8,7 @@ import type { OrderReadService } from '../../src/modules/order/services/order-re
 import type { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import type { CallQueueService } from '../../src/modules/call-queue/services/call-queue.service';
 import type { EarlyReservationService } from '../../src/modules/early-reservation/services/early-reservation.service';
+import { CallQueueReason } from '@skydrop/db';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -38,6 +39,7 @@ function makeService(
     orderId: 'o1',
     status: CallQueueStatus.ASSIGNED,
     assignedAgentId: 'agent-1',
+    reason: CallQueueReason.DELIVERY_FAILED,
   };
   const entryFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
     opts.entry === undefined ? defaultEntry : opts.entry,
@@ -415,7 +417,15 @@ describe('CallAttemptService.recordAttempt — outcome flows', () => {
     expect(transitionStatus).toHaveBeenCalledWith(
       expect.objectContaining({ to: OrderStatus.CALL_RESCHEDULED }),
     );
-    expect(enqueueAgain).toHaveBeenCalledWith('o1', sched, undefined);
+    // The ORIGINAL reason is carried forward: a no-answer on a
+    // failed-delivery call is still a failed-delivery call, and resetting
+    // it would tell the next agent the wrong thing about the same parcel.
+    expect(enqueueAgain).toHaveBeenCalledWith(
+      'o1',
+      sched,
+      undefined,
+      CallQueueReason.DELIVERY_FAILED,
+    );
     expect(r.requeuedAvailableAt).toEqual(sched);
   });
 

@@ -223,6 +223,36 @@ export class PackService {
       );
       manifestId = attached.manifestId;
       manifestNumber = attached.manifestNumber;
+
+      // 4. POST-COMMIT auto-CLOSE (2026-09-03).
+      //
+      // The manifest is the handover sheet, and closing it is what moves
+      // the parcel PACKED → PENDING_DISPATCH (WMS-6) — the only road out
+      // of the warehouse. It used to be a supervisor opening a screen
+      // and pressing a button, which is the shape a warehouse handing a
+      // driver a signed list of two hundred boxes needs. Nothing here
+      // prints or sends the manifest anywhere; it is internal
+      // bookkeeping, and making somebody click through DRAFT → close →
+      // confirm handoff for one parcel is ceremony, not control.
+      //
+      // So the close happens here and the handoff follows when the AWB
+      // job confirms the manifest. The manifest still EXISTS — it is
+      // still the record of which parcels went together, and the screen
+      // is still reachable — but nobody has to visit it for a parcel to
+      // ship.
+      //
+      // Best-effort and idempotent, exactly like the attach above: a
+      // failure leaves the shipment correctly PACKED on a DRAFT
+      // manifest, which a supervisor can still close by hand. It must
+      // never throw upstream — the parcel is packed either way.
+      try {
+        await this.manifests.close(manifestId, staffId, ctx);
+      } catch (closeErr) {
+        this.logger.warn(
+          { shipmentId, orderId, manifestId, err: (closeErr as Error).message },
+          'Pack-complete auto-close of the manifest failed — it stays DRAFT for a supervisor to close',
+        );
+      }
     } catch (err) {
       this.logger.warn(
         { shipmentId, orderId, err: (err as Error).message },

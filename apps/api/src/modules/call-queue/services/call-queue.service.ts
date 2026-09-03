@@ -3,6 +3,7 @@ import { ActorType, CallQueueStatus, Prisma, QueueClosureReason } from '@skydrop
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
+import { CallQueueReason } from '@skydrop/db';
 
 const OPEN_STATUSES: CallQueueStatus[] = [CallQueueStatus.PENDING, CallQueueStatus.ASSIGNED];
 
@@ -16,6 +17,7 @@ const ENTRY_SELECT = {
   scheduledAttempts: true,
   closedAt: true,
   closureReason: true,
+  reason: true,
   createdAt: true,
 } as const;
 
@@ -66,8 +68,12 @@ export class CallQueueService {
 
   /** Enqueue on entry to PENDING_CONFIRMATION. Idempotent: an existing
    *  OPEN entry is returned unchanged (no second row). */
-  async enqueueOrder(orderId: string, _ctx?: ClientContext): Promise<EnqueueResult> {
-    return this.createOpenEntry(orderId, new Date());
+  async enqueueOrder(
+    orderId: string,
+    _ctx?: ClientContext,
+    reason: CallQueueReason = CallQueueReason.ORDER_CONFIRMATION,
+  ): Promise<EnqueueResult> {
+    return this.createOpenEntry(orderId, new Date(), reason);
   }
 
   /** Re-queue after a call attempt (post-commit, CC-6). `availableAt`
@@ -77,8 +83,9 @@ export class CallQueueService {
     orderId: string,
     availableAt: Date,
     _ctx?: ClientContext,
+    reason: CallQueueReason = CallQueueReason.ORDER_CONFIRMATION,
   ): Promise<EnqueueResult> {
-    return this.createOpenEntry(orderId, availableAt);
+    return this.createOpenEntry(orderId, availableAt, reason);
   }
 
   /**
@@ -140,12 +147,21 @@ export class CallQueueService {
 
   // ── internal ──────────────────────────────────────────────────────
 
-  private async createOpenEntry(orderId: string, availableAt: Date): Promise<EnqueueResult> {
+  private async createOpenEntry(
+    orderId: string,
+    availableAt: Date,
+    reason: CallQueueReason,
+  ): Promise<EnqueueResult> {
     const existing = await this.findOpen(orderId);
     if (existing) return { entry: existing, created: false };
     try {
       const entry = await this.prisma.client.callQueueEntry.create({
-        data: { orderId, status: CallQueueStatus.PENDING, availableAt },
+        // The reason is recorded HERE, at creation, because it cannot be
+        // worked out afterwards. Inferring it later is what put the
+        // wrong words in front of an agent: the screen looked for any
+        // executed recall on the order and found one from the previous
+        // day that had already been handled.
+        data: { orderId, status: CallQueueStatus.PENDING, availableAt, reason },
         select: ENTRY_SELECT,
       });
       return { entry, created: true };

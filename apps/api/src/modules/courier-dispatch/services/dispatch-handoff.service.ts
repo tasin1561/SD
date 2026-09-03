@@ -69,7 +69,17 @@ export class DispatchHandoffService {
 
   async confirmHandoff(
     manifestId: string,
-    staffId: string,
+    /**
+     * The staff member who confirmed the driver took the parcels, or
+     * NULL when the system did it unattended.
+     *
+     * Nullable on purpose: crediting the packer with confirming a
+     * handoff they were not present for puts a name against a physical
+     * assertion nobody made. Both manifest columns are already nullable
+     * and the audit carries ActorType.SYSTEM, so "nobody watched this
+     * leave" stays distinguishable from "somebody did".
+     */
+    staffId: string | null,
     ctx?: ClientContext,
   ): Promise<DispatchHandoffResult> {
     const manifest = await this.prisma.client.manifest.findUnique({
@@ -124,7 +134,10 @@ export class DispatchHandoffService {
       });
     }
 
-    const actor = { type: ActorType.STAFF, id: staffId };
+    const actor =
+      staffId === null
+        ? { type: ActorType.SYSTEM, id: null }
+        : { type: ActorType.STAFF, id: staffId };
     const now = new Date();
     let transitionedCount = 0;
     const failures: DispatchHandoffFailure[] = [];
@@ -183,7 +196,7 @@ export class DispatchHandoffService {
               fromStatus: StockUnitStatus.PACKED,
               toStatus: StockUnitStatus.DISPATCHED,
               gate: 'DISPATCH',
-              actorType: ActorType.STAFF,
+              actorType: actor.type,
               actorId: staffId,
             }),
           );
@@ -220,7 +233,7 @@ export class DispatchHandoffService {
     });
 
     await this.audit.log({
-      actorType: ActorType.STAFF,
+      actorType: actor.type,
       actorId: staffId,
       action: 'manifest.dispatched',
       entityType: 'manifest',

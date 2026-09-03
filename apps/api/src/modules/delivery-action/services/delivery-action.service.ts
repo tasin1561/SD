@@ -23,6 +23,7 @@ import { CourierShipmentActionService } from '../../courier-ops/services/courier
 import { courierActor } from '../../courier-shared/services/courier-credential.service';
 import { CourierEscalationService } from '../../courier-escalation/services/courier-escalation.service';
 import { TicketService } from '../../ticket/services/ticket.service';
+import { CallQueueReason } from '@skydrop/db';
 
 export interface DeliveryActionRequestView {
   readonly id: string;
@@ -258,7 +259,12 @@ export class DeliveryActionService {
       // Straight into our own queue, available now: the seller has asked
       // for this call, so it joins at its FIFO position rather than
       // being deferred the way a busy-signal retry is.
-      await this.callQueue.enqueueAgain(who.orderId, new Date());
+      await this.callQueue.enqueueAgain(
+        who.orderId,
+        new Date(),
+        undefined,
+        CallQueueReason.SELLER_ASKED,
+      );
     } else {
       await this.openCourierConversation(ticket.id, shipment, reason, who.sellerId);
     }
@@ -457,7 +463,7 @@ export class DeliveryActionService {
     // Available immediately: the seller has asked for this call, so it
     // joins the queue at its FIFO position rather than being deferred
     // the way a busy-signal retry is.
-    await this.callQueue.enqueueAgain(orderId, new Date());
+    await this.callQueue.enqueueAgain(orderId, new Date(), undefined, CallQueueReason.SELLER_ASKED);
     await tx.orderDeliveryActionRequest.update({
       where: { id: requestId },
       data: { status: DeliveryActionStatus.EXECUTED, executedAt: new Date() },

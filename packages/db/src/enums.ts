@@ -55,6 +55,7 @@ export {
   // Layer 6 — Call Center
   CallQueueStatus,
   AssignmentMethod,
+  CallQueueReason,
   QueueClosureReason,
   CallHoldOutcome,
   ReattemptRequestStatus,
