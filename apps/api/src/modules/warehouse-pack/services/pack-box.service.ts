@@ -9,6 +9,7 @@ import {
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { ScanBlockService } from '../../system-issues/services/scan-block.service';
 
 /**
  * The box on the pack bench.
@@ -76,6 +77,7 @@ export class PackBoxService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
+    private readonly scanBlock: ScanBlockService,
   ) {}
 
   /**
@@ -91,6 +93,10 @@ export class PackBoxService {
    * error.
    */
   async open(awbNumber: string, staffId: string): Promise<OpenBoxResult> {
+    // A packer stopped by a duplicate does not get to start another box.
+    // The pile is what is in doubt, not just the one label.
+    await this.scanBlock.assertNotBlocked(staffId);
+
     const code = awbNumber.trim();
     if (code.length === 0) {
       throw new ConflictException({
@@ -103,6 +109,7 @@ export class PackBoxService {
       where: { awbNumber: code, deletedAt: null, supersededAt: null },
       select: {
         id: true,
+        shipmentNumber: true,
         status: true,
         awbNumber: true,
         packCompletedAt: true,
@@ -148,10 +155,25 @@ export class PackBoxService {
       });
     }
 
-    if (shipment.status !== ShipmentStatus.CREATED || shipment.packCompletedAt !== null) {
+    // ALREADY PACKED is the duplicate this stop exists for: a label
+    // being scanned to open a box for a parcel that was boxed and
+    // sealed already. Either the label was printed twice, or this pile
+    // has been done. Everything else here is a parcel that is simply
+    // not ready, which is an ordinary refusal.
+    if (shipment.packCompletedAt !== null) {
+      await this.scanBlock.refuseDuplicate({
+        flow: 'PACK',
+        staffId,
+        shipmentId: shipment.id,
+        shipmentNumber: shipment.shipmentNumber,
+        awbNumber: code,
+        observed: 'packed',
+      });
+    }
+    if (shipment.status !== ShipmentStatus.CREATED) {
       throw new ConflictException({
         code: 'PACK_NOT_AVAILABLE',
-        message: `Parcel is ${shipment.status}${shipment.packCompletedAt ? ' and already packed' : ''}`,
+        message: `Parcel is ${shipment.status}`,
       });
     }
     if (link.order.status !== OrderStatus.PICKED) {

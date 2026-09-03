@@ -12,6 +12,7 @@ import { SellerRestrictionService } from '../../seller-restriction/services/sell
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
 import { StockUnitService } from '../../inventory-shared/stock-unit.service';
+import { ScanBlockService } from '../../system-issues/services/scan-block.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
 export interface DispatchHandoffFailure {
@@ -87,6 +88,7 @@ export class DispatchHandoffService {
     private readonly audit: AuditLogService,
     private readonly orderWrite: OrderWriteService,
     private readonly units: StockUnitService,
+    private readonly scanBlock: ScanBlockService,
   ) {}
 
   /** One reader for the switch, failing CLOSED-ish: an unreadable
@@ -161,17 +163,26 @@ export class DispatchHandoffService {
    * A crash between leaves a scanned-but-undispatched parcel — visible,
    * and a re-scan converges (the stamp no-ops, the transition re-runs).
    *
-   * Idempotent by design rather than by refusal: a repeat scan returns
-   * `alreadyScanned` instead of throwing. With the scan now carrying the
-   * dispatch, a second scan is the NORMAL shape — an operator who is not
-   * sure the first one registered — and an error there teaches people to
-   * ignore errors. Same reasoning as the CC-6 dual-path dequeue.
+   * A REPEAT SCAN STOPS THE OPERATOR (2026-09-04). Scanning a parcel
+   * that has already gone means either two boxes carry one label or the
+   * pile has already been loaded — both wrong, both worse the longer
+   * they run, and neither visible to anyone but the person holding the
+   * box. So it refuses and keeps refusing until an admin resolves the
+   * issue (`ScanBlockService`). This deliberately REPLACES an earlier
+   * decision to treat a repeat as a harmless no-op: that optimised for
+   * the operator who is unsure whether the first scan registered, which
+   * the session list on screen already answers, at the cost of hiding
+   * the duplicate that matters.
    */
   async recordHandoverScan(
     awbNumber: string,
     staffId: string,
     ctx?: ClientContext,
   ): Promise<HandoverScanResult> {
+    // Blocked operators stop at the DOOR, before the lookup: the stop is
+    // about the pile, not only about the box that caused it.
+    await this.scanBlock.assertNotBlocked(staffId);
+
     const awb = awbNumber.trim();
     const shipment = await this.prisma.client.shipment.findFirst({
       where: { awbNumber: awb, supersededAt: null, deletedAt: null },
@@ -198,16 +209,16 @@ export class DispatchHandoffService {
     const orderStatus = shipment.orderShipments[0]?.order.status ?? null;
     const sellerId = shipment.orderShipments[0]?.order.sellerId ?? null;
 
-    // Already gone. Not an error — see the idempotency note above.
+    // Already gone — the duplicate this whole mechanism exists for.
     if (shipment.status === ShipmentStatus.HANDED_TO_COURIER) {
-      return {
+      await this.scanBlock.refuseDuplicate({
+        flow: 'HANDOVER',
+        staffId,
         shipmentId: shipment.id,
         shipmentNumber: shipment.shipmentNumber,
-        orderId,
-        alreadyScanned: true,
-        dispatched: true,
-        manifestDispatched: false,
-      };
+        awbNumber: awb,
+        observed: 'with the courier',
+      });
     }
 
     const dispatches = await this.handoverScanDispatches();
@@ -265,14 +276,43 @@ export class DispatchHandoffService {
     }
 
     // 2. TRANSITION LAST — the authoritative "it left with a driver".
-    await this.orderWrite.transitionStatus({
-      orderId,
-      to: OrderStatus.DISPATCHED,
-      actor: { type: ActorType.STAFF, id: staffId },
-      expectedFrom: orderStatus,
-      reason: `Handed to courier at the bench (scanned ${awb})`,
-      ...(ctx !== undefined ? { ctx } : {}),
-    });
+    //
+    // A scan gun types the code and presses Enter by itself, and it
+    // sometimes fires twice. Both calls read the parcel before either
+    // stamps it, so both get past the duplicate check above and both
+    // arrive here — one wins, the other finds the order already moved.
+    // That is ONE box scanned once by a twitchy reader, not a repeated
+    // box, so it converges quietly instead of stopping the operator.
+    // The genuine duplicate is the one caught above, where the parcel
+    // was already HANDED_TO_COURIER before this scan began.
+    try {
+      await this.orderWrite.transitionStatus({
+        orderId,
+        to: OrderStatus.DISPATCHED,
+        actor: { type: ActorType.STAFF, id: staffId },
+        expectedFrom: orderStatus,
+        reason: `Handed to courier at the bench (scanned ${awb})`,
+        ...(ctx !== undefined ? { ctx } : {}),
+      });
+    } catch (err) {
+      const settled = await this.prisma.client.order.findUnique({
+        where: { id: orderId },
+        select: { status: true },
+      });
+      if (settled?.status !== OrderStatus.DISPATCHED) throw err;
+      this.logger.log(
+        { shipmentId: shipment.id, orderId },
+        'Handover scan raced a concurrent scan of the same parcel — already dispatched, converging',
+      );
+      return {
+        shipmentId: shipment.id,
+        shipmentNumber: shipment.shipmentNumber,
+        orderId,
+        alreadyScanned: true,
+        dispatched: true,
+        manifestDispatched: false,
+      };
+    }
     await this.prisma.client.shipment.update({
       where: { id: shipment.id },
       data: { status: ShipmentStatus.HANDED_TO_COURIER, pickedUpByCourierAt: now },

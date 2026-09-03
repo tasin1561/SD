@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
@@ -24,6 +25,10 @@ import {
   type HandoverScanResult,
 } from '../services/dispatch-handoff.service';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
+import {
+  ScanBlockService,
+  type ScanBlockView,
+} from '../../system-issues/services/scan-block.service';
 import { HandoverScanDto } from '../dto/handover-scan.dto';
 
 /**
@@ -48,7 +53,23 @@ import { HandoverScanDto } from '../dto/handover-scan.dto';
 @RequirePermissions('courier.dispatch.handoff')
 @Controller('admin/courier')
 export class DispatchController {
-  constructor(private readonly handoff: DispatchHandoffService) {}
+  constructor(
+    private readonly handoff: DispatchHandoffService,
+    private readonly scanBlocks: ScanBlockService,
+  ) {}
+
+  @Get('scan-block')
+  // Whoever can scan ANYWHERE can read their own stop. A packer stopped
+  // at the pack bench has `warehouse.pack` and no dispatch permission,
+  // and a stop they cannot see the reason for is just a broken scanner.
+  @RequirePermissions('warehouse.pack', 'courier.dispatch.handoff')
+  @ApiOperation({
+    summary:
+      'Is the caller currently stopped by a duplicate scan? Returns the open incident, or null. Read on load by both benches so a stopped operator sees WHY before scanning again rather than after',
+  })
+  scanBlock(@CurrentStaff() staff: AuthenticatedStaff): Promise<ScanBlockView | null> {
+    return this.scanBlocks.currentBlock(staff.id);
+  }
 
   @Post('handover-scan')
   @HttpCode(HttpStatus.OK)

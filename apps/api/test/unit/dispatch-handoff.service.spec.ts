@@ -1,10 +1,11 @@
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ManifestStatus, OrderStatus, ShipmentStatus } from '@skydrop/db';
 import { DispatchHandoffService } from '../../src/modules/courier-dispatch/services/dispatch-handoff.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import type { StockUnitService } from '../../src/modules/inventory-shared/stock-unit.service';
+import type { ScanBlockService } from '../../src/modules/system-issues/services/scan-block.service';
 
 type AnyArgs = Record<string, unknown>;
 const MAN = 'man-1';
@@ -24,6 +25,8 @@ function makeService(
     scannedShipment?: AnyArgs | null;
     /** What flipManifestIfComplete sees on the manifest afterwards. */
     manifestShipments?: Array<{ id: string; status: ShipmentStatus }>;
+    /** This operator is already stopped by an unresolved duplicate. */
+    blockedStaff?: boolean;
   } = {},
 ) {
   const ships = opts.shipments ?? [{ id: 's1', orderId: 'o1' }];
@@ -86,6 +89,12 @@ function makeService(
       findMany: shipmentFindMany,
     },
     systemSetting: { findUnique: settingFindUnique },
+    // Re-read after a lost transition race — see the convergence test.
+    order: {
+      findUnique: jest.fn<Promise<{ status: OrderStatus } | null>, []>(async () => ({
+        status: OrderStatus.PACKED,
+      })),
+    },
     $transaction: async (fn: (tx: unknown) => unknown) => fn({}),
   };
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs]>(async () => 'a');
@@ -107,6 +116,20 @@ function makeService(
     scanUnits: jest.fn(async () => []),
     scanUnitsForShipment: jest.fn(async () => 0),
   };
+  // The block is a hard stop, so the fake has to be able to BOTH allow
+  // and refuse — a mock that only ever allows cannot see a regression
+  // that stops blocking.
+  const scanBlock = {
+    assertNotBlocked: jest.fn(async () => {
+      if (opts.blockedStaff === true) {
+        throw new ConflictException({ code: 'SCAN_BLOCKED', message: 'stopped' });
+      }
+    }),
+    refuseDuplicate: jest.fn(async () => {
+      throw new ConflictException({ code: 'DUPLICATE_SCAN', message: 'already with the courier' });
+    }),
+    currentBlock: jest.fn(async () => null),
+  };
   const svc = new DispatchHandoffService(
     { client } as unknown as PrismaService,
     // Not on hold. A restricted seller is covered in
@@ -115,6 +138,7 @@ function makeService(
     audit as unknown as AuditLogService,
     orderWrite as unknown as OrderWriteService,
     unitLedger as unknown as StockUnitService,
+    scanBlock as unknown as ScanBlockService,
   );
   return {
     svc,
@@ -127,6 +151,7 @@ function makeService(
     transitionStatus,
     auditLog,
     unitLedger,
+    scanBlock,
   };
 }
 
@@ -391,11 +416,12 @@ describe('DispatchHandoffService.recordHandoverScan — the scan IS the handover
     expect(manifestUpdateMany).not.toHaveBeenCalled();
   });
 
-  it('a repeat scan is a no-op, not an error', async () => {
-    // With the scan carrying the dispatch, a second scan is the NORMAL
-    // shape — somebody unsure the first one registered. An error there
-    // teaches people to ignore errors.
-    const { svc, transitionStatus } = makeService({
+  it('a REPEATED box stops the operator — it does not quietly succeed', async () => {
+    // Reverses an earlier call to treat this as a harmless no-op. A
+    // parcel that has already gone being scanned again means either two
+    // boxes carry one label, or this pile was already loaded. Neither
+    // is visible to anyone but the person holding it.
+    const { svc, transitionStatus, scanBlock } = makeService({
       scannedShipment: {
         id: 's1',
         shipmentNumber: 'SH-s1',
@@ -407,9 +433,45 @@ describe('DispatchHandoffService.recordHandoverScan — the scan IS the handover
         ],
       },
     });
+    await expect(svc.recordHandoverScan('DLV-123', STAFF)).rejects.toMatchObject({
+      response: { code: 'DUPLICATE_SCAN' },
+    });
+    expect(scanBlock.refuseDuplicate).toHaveBeenCalledWith(
+      expect.objectContaining({ flow: 'HANDOVER', staffId: STAFF, shipmentId: 's1' }),
+    );
+    expect(transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it('an operator already stopped is refused BEFORE the parcel is even looked up', async () => {
+    // The stop is about the pile, not only the box that caused it — so
+    // the next parcel is refused too.
+    const { svc, client, transitionStatus } = makeService({ blockedStaff: true });
+    await expect(svc.recordHandoverScan('DLV-999', STAFF)).rejects.toMatchObject({
+      response: { code: 'SCAN_BLOCKED' },
+    });
+    expect(client.shipment.findFirst).not.toHaveBeenCalled();
+    expect(transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it('a scan gun firing twice is NOT a repeated box — it converges', async () => {
+    // Both calls read the parcel before either stamps it, so both get
+    // past the duplicate check and race at the transition. That is one
+    // box read twice by a twitchy reader; stopping the operator for it
+    // would have the bench blocked several times a day.
+    const { svc, transitionStatus, client } = makeService();
+    transitionStatus.mockRejectedValueOnce(new Error('STALE_ORDER_STATUS'));
+    client.order.findUnique = jest.fn(async () => ({ status: OrderStatus.DISPATCHED }));
     const r = await svc.recordHandoverScan('DLV-123', STAFF);
     expect(r).toMatchObject({ alreadyScanned: true, dispatched: true });
-    expect(transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it('a transition that failed for a REAL reason still throws', async () => {
+    // The convergence above must not swallow a genuine failure: it only
+    // applies when the order actually did reach DISPATCHED.
+    const { svc, transitionStatus, client } = makeService();
+    transitionStatus.mockRejectedValueOnce(new Error('SELLER_ON_HOLD'));
+    client.order.findUnique = jest.fn(async () => ({ status: OrderStatus.PACKED }));
+    await expect(svc.recordHandoverScan('DLV-123', STAFF)).rejects.toThrow('SELLER_ON_HOLD');
   });
 
   it('refuses a parcel that is not packed yet, and NAMES its status', async () => {

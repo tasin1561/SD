@@ -16,6 +16,14 @@ export interface RaiseIssueInput {
    */
   readonly dedupeKey: string;
   readonly metadata?: Prisma.InputJsonValue;
+  /**
+   * Stop this staff member scanning until the issue is resolved.
+   *
+   * Set by `ScanBlockService` only. Per operator rather than per
+   * station: parcels are packed and loaded by several people at once,
+   * and one person's duplicate must not halt the others.
+   */
+  readonly blocksScanForStaffId?: string;
 }
 
 export interface SystemIssueView {
@@ -100,6 +108,9 @@ export class SystemIssueService {
           firstSeenAt: now,
           lastSeenAt: now,
           ...(input.metadata === undefined ? {} : { metadata: input.metadata }),
+          ...(input.blocksScanForStaffId === undefined
+            ? {}
+            : { blocksScanForStaffId: input.blocksScanForStaffId }),
         },
         select: { id: true },
       });

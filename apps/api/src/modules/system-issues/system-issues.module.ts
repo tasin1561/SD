@@ -3,6 +3,7 @@ import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { AdminSystemIssueController } from './controllers/admin-system-issue.controller';
 import { SystemIssueService } from './services/system-issue.service';
+import { ScanBlockService } from './services/scan-block.service';
 
 /**
  * The system's own problem list.
@@ -17,7 +18,7 @@ import { SystemIssueService } from './services/system-issue.service';
 @Module({
   imports: [AuthCommonModule],
   controllers: [AdminSystemIssueController],
-  providers: [SystemIssueService, StaffJwtGuard],
-  exports: [SystemIssueService],
+  providers: [SystemIssueService, ScanBlockService, StaffJwtGuard],
+  exports: [SystemIssueService, ScanBlockService],
 })
 export class SystemIssuesModule {}

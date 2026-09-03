@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { ActorType, OrderStatus, StaffRole } from '@skydrop/db';
+import { ActorType, OrderStatus, StaffRole, SystemIssueKind } from '@skydrop/db';
 import { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import { ShipmentProvisionService } from '../../src/modules/shipment-provision/services/shipment-provision.service';
 import {
@@ -300,6 +300,71 @@ describe('Pack box session (e2e)', () => {
 
     const order = await h.prisma.order.findUniqueOrThrow({ where: { id: orderId } });
     expect(order.status).toBe(OrderStatus.PACKED);
+  });
+
+  it('A REPEATED BOX at the pack bench stops the packer until an admin clears it', async () => {
+    // Scanning the label of a parcel that is already boxed and sealed
+    // means either two labels were printed for one parcel — and one of
+    // those boxes will be delivered to nobody — or this pile has
+    // already been packed. Both get worse the longer they run, and only
+    // the person holding the box can look.
+    await receiveStock(10);
+    const { awbNumber } = await pickedParcel(2);
+
+    const opened = await request(h.baseUrl)
+      .post('/warehouse/packs/boxes/open')
+      .set(staffAuth)
+      .send({ awbNumber })
+      .expect(200);
+    const boxId = opened.body.packBoxId as string;
+    for (let i = 0; i < 2; i += 1) {
+      await request(h.baseUrl)
+        .post(`/warehouse/packs/boxes/${boxId}/scan`)
+        .set(staffAuth)
+        .send({ code: barcode })
+        .expect(200);
+    }
+    await request(h.baseUrl)
+      .post(`/warehouse/packs/boxes/${boxId}/close`)
+      .set(staffAuth)
+      .send({ awbNumber })
+      .expect(200);
+
+    // The same label again.
+    const dup = await request(h.baseUrl)
+      .post('/warehouse/packs/boxes/open')
+      .set(staffAuth)
+      .send({ awbNumber })
+      .expect(409);
+    expect(dup.body.code).toBe('DUPLICATE_SCAN');
+
+    const issue = await h.prisma.systemIssue.findFirstOrThrow({
+      where: { kind: SystemIssueKind.WAREHOUSE_SCAN, resolvedAt: null },
+    });
+    expect(issue.blocksScanForStaffId).toBe(staffId);
+
+    // STUCK: the next parcel is refused too, because the pile is what
+    // is in doubt — not only the box that tripped it.
+    const next = await pickedParcel(2);
+    const blocked = await request(h.baseUrl)
+      .post('/warehouse/packs/boxes/open')
+      .set(staffAuth)
+      .send({ awbNumber: next.awbNumber })
+      .expect(409);
+    expect(blocked.body.code).toBe('SCAN_BLOCKED');
+
+    // An admin resolves it with a note and the bench works again.
+    await request(h.baseUrl)
+      .post(`/admin/system-issues/${issue.id}/resolve`)
+      .set(staffAuth)
+      .send({ note: 'Duplicate label found and destroyed; rest of the pile checked.' })
+      .expect(200);
+
+    await request(h.baseUrl)
+      .post('/warehouse/packs/boxes/open')
+      .set(staffAuth)
+      .send({ awbNumber: next.awbNumber })
+      .expect(200);
   });
 
   it('a product that is not on the order is refused', async () => {

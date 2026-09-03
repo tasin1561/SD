@@ -2,6 +2,8 @@ import request from 'supertest';
 import {
   ActorType,
   ManifestStatus,
+  SystemIssueKind,
+  SystemIssueSeverity,
   OrderStatus,
   ShipmentStatus,
   StaffRole,
@@ -524,7 +526,7 @@ describe('Dispatch handoff endpoint (e2e)', () => {
     expect(packMovements).toHaveLength(1);
   });
 
-  it('a repeat scan is a no-op — not an error, and nothing moves twice', async () => {
+  it('A REPEATED BOX STOPS THE OPERATOR, and keeps them stopped until an admin clears it', async () => {
     await receiveStock(10);
     const { orderId, awbNumber } = await driveToPacked(2);
 
@@ -533,18 +535,102 @@ describe('Dispatch handoff endpoint (e2e)', () => {
       .set(staffAuth)
       .send({ awbNumber })
       .expect(200);
+
+    // Same box again: either two labels exist or this pile is done.
     const second = await request(h.baseUrl)
       .post('/admin/courier/handover-scan')
       .set(staffAuth)
       .send({ awbNumber })
-      .expect(200);
-    expect(second.body).toMatchObject({ alreadyScanned: true, dispatched: true });
+      .expect(409);
+    expect(second.body.code).toBe('DUPLICATE_SCAN');
 
+    // The parcel moved exactly once regardless.
     const events = await h.prisma.orderEvent.findMany({
       where: { orderId, toStatus: OrderStatus.DISPATCHED },
     });
     expect(events).toHaveLength(1);
     expect(await stockOf()).toEqual({ qtyOnHand: 8, qtyReserved: 0 });
+
+    // An issue is on the board, naming the parcel, blocking this staff
+    // member — the durable half. A refusal that lived only in the UI
+    // would be one page-refresh from not existing.
+    const issue = await h.prisma.systemIssue.findFirstOrThrow({
+      where: { kind: SystemIssueKind.WAREHOUSE_SCAN, resolvedAt: null },
+    });
+    expect(issue.blocksScanForStaffId).toBe(staffId);
+    expect(issue.severity).toBe(SystemIssueSeverity.HIGH);
+
+    // STUCK: the NEXT parcel is refused too. The pile is in doubt, not
+    // just the box that tripped it.
+    const other = await driveToPacked(2);
+    const blocked = await request(h.baseUrl)
+      .post('/admin/courier/handover-scan')
+      .set(staffAuth)
+      .send({ awbNumber: other.awbNumber })
+      .expect(409);
+    expect(blocked.body.code).toBe('SCAN_BLOCKED');
+
+    // The bench can ask why it is stuck rather than guessing.
+    const why = await request(h.baseUrl)
+      .get('/admin/courier/scan-block')
+      .set(staffAuth)
+      .expect(200);
+    expect(why.body.issueId).toBe(issue.id);
+
+    // An admin resolves it — with a note, which is the whole record of
+    // what they found — and the bench is working again.
+    await request(h.baseUrl)
+      .post(`/admin/system-issues/${issue.id}/resolve`)
+      .set(staffAuth)
+      .send({ note: 'Two labels printed for the same parcel; the spare was destroyed.' })
+      .expect(200);
+
+    await request(h.baseUrl)
+      .post('/admin/courier/handover-scan')
+      .set(staffAuth)
+      .send({ awbNumber: other.awbNumber })
+      .expect(200);
+    expect((await h.prisma.order.findUniqueOrThrow({ where: { id: other.orderId } })).status).toBe(
+      OrderStatus.DISPATCHED,
+    );
+  });
+
+  it('does not stop the OTHER packers — the block is per operator', async () => {
+    // Four people pack in parallel. Halting the building because one of
+    // them scanned a box twice would cost far more than the mistake.
+    await receiveStock(10);
+    const mine = await driveToPacked(2);
+    await request(h.baseUrl)
+      .post('/admin/courier/handover-scan')
+      .set(staffAuth)
+      .send({ awbNumber: mine.awbNumber })
+      .expect(200);
+    await request(h.baseUrl)
+      .post('/admin/courier/handover-scan')
+      .set(staffAuth)
+      .send({ awbNumber: mine.awbNumber })
+      .expect(409);
+
+    // A second supervisor, untouched by the first one's mistake.
+    const other = await createTestStaff(h.prisma, {
+      email: `sup2-${Date.now()}@skydrop.test`,
+      role: StaffRole.WAREHOUSE_SUPERVISOR,
+    });
+    const login = await request(h.baseUrl)
+      .post('/auth/staff/login')
+      .send({ email: other.email, password: other.password })
+      .expect(200);
+    const otherAuth = { Authorization: `Bearer ${login.body.accessToken}` };
+
+    const theirs = await driveToPacked(2);
+    await request(h.baseUrl)
+      .post('/admin/courier/handover-scan')
+      .set(otherAuth)
+      .send({ awbNumber: theirs.awbNumber })
+      .expect(200);
+    expect((await h.prisma.order.findUniqueOrThrow({ where: { id: theirs.orderId } })).status).toBe(
+      OrderStatus.DISPATCHED,
+    );
   });
 
   it('refuses a parcel that has not been packed, and names where it actually is', async () => {

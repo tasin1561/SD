@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRef, useState, type ReactElement } from 'react';
-import { Check, ScanLine } from 'lucide-react';
+import { AlertTriangle, Check, ScanLine } from 'lucide-react';
 import {
   Button,
   Card,
@@ -14,7 +14,7 @@ import {
   Section,
   StatusBadge,
 } from '@skydrop/ui/components';
-import { useHandoverScan } from '@/lib/ops-hooks';
+import { useHandoverScan, useScanBlock } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { BarcodeCamera, CameraScanButton } from '@/components/barcode-camera';
 
@@ -32,6 +32,7 @@ import { BarcodeCamera, CameraScanButton } from '@/components/barcode-camera';
  */
 export function HandoverBench(): ReactElement {
   const scan = useHandoverScan();
+  const block = useScanBlock();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const [code, setCode] = useState('');
@@ -80,6 +81,29 @@ export function HandoverBench(): ReactElement {
         subtitle="Scan every parcel as it goes onto the van. The scan is the handover: the parcel is dispatched the moment it is read, and the manifest closes itself once its last parcel goes."
       />
 
+      {block.data != null && (
+        <Card>
+          <CardBody>
+            <div className="border-status-failed-fg/40 bg-status-failed-bg/40 rounded-md border p-3">
+              <div className="text-status-failed-fg flex items-center gap-2 text-sm font-semibold">
+                <AlertTriangle size={15} /> Scanning is stopped
+              </div>
+              <p className="mt-1 text-sm">{block.data.title}</p>
+              <p className="text-text-muted mt-2 text-xs whitespace-pre-line">
+                {block.data.detail}
+              </p>
+              <p className="text-text-faint mt-2 text-xs">
+                Put the box aside and get an admin. They clear it on{' '}
+                <Link href="/system-issues" className="hover:text-text underline">
+                  system issues
+                </Link>
+                , after checking whether there are two of them.
+              </p>
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
       <Card>
         <CardBody>
           <label htmlFor="handover-scan" className="text-text-muted mb-1 block text-xs">
@@ -90,7 +114,7 @@ export function HandoverBench(): ReactElement {
               id="handover-scan"
               ref={inputRef}
               value={code}
-              disabled={scan.isPending || refusal !== null}
+              disabled={scan.isPending || refusal !== null || block.data != null}
               autoComplete="off"
               placeholder="AWB…"
               className="font-mono text-base"

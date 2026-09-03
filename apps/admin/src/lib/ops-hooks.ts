@@ -3362,6 +3362,32 @@ export interface HandoverScanResult {
   manifestDispatched: boolean;
 }
 
+export interface ScanBlockView {
+  issueId: string;
+  title: string;
+  detail: string;
+  shipmentNumber: string | null;
+  raisedAt: string;
+}
+
+/**
+ * Is this operator stopped by a duplicate scan?
+ *
+ * Read on load at BOTH benches. The API refuses every scan while a
+ * block is open, so the stop is real without this — but an operator
+ * whose scanner just stops working, with the reason only visible after
+ * they try again, is an operator who reboots the tablet and tries a
+ * third time.
+ */
+export function useScanBlock(): UseQueryResult<ScanBlockView | null, Error> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-scan-block'],
+    queryFn: () => client.request<ScanBlockView | null>('/api/admin/courier/scan-block'),
+    refetchOnWindowFocus: true,
+  });
+}
+
 export function useHandoverScan(): UseMutationResult<HandoverScanResult, Error, string> {
   const client = useApiClient();
   const qc = useQueryClient();
@@ -3376,6 +3402,11 @@ export function useHandoverScan(): UseMutationResult<HandoverScanResult, Error, 
       // manifest it belonged to.
       void qc.invalidateQueries({ queryKey: ['admin-manifests'] });
       void qc.invalidateQueries({ queryKey: ['admin-orders'] });
+    },
+    onError: () => {
+      // A duplicate has just stopped this operator; the banner has to
+      // know without waiting for a refetch interval.
+      void qc.invalidateQueries({ queryKey: ['admin-scan-block'] });
     },
   });
 }

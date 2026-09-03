@@ -5314,6 +5314,16 @@ model SystemIssue {
   resolvedByStaffId String?   @map("resolved_by_staff_id") @db.Uuid
   resolutionNote    String?   @map("resolution_note") @db.Text
 
+  /// While this is set and the issue is unresolved, that staff member
+  /// cannot scan at the pack or handover bench.
+  ///
+  /// The stop is PER OPERATOR on purpose. Four packers work in parallel;
+  /// halting the building because one of them scanned a box twice would
+  /// cost far more than the mistake. The person holding the wrong pile
+  /// stops, an admin resolves the issue with a note — which is what
+  /// "confirmed that the error is gone" means — and they carry on.
+  blocksScanForStaffId String? @map("blocks_scan_for_staff_id") @db.Uuid
+
   /// Whatever the raiser knew — an account id, an error string, a count.
   metadata Json?
 
@@ -5322,10 +5332,16 @@ model SystemIssue {
 
   @@index([resolvedAt, severity, lastSeenAt])
   @@index([kind, resolvedAt])
+  /// Read on EVERY scan at both benches, so it is an index rather than a
+  /// scan over the issue board.
+  @@index([blocksScanForStaffId, resolvedAt], map: "system_issues_scan_block_idx")
   @@map("system_issues")
 }
 
 enum SystemIssueKind {
+  /// A parcel was scanned that should not have been — the same box
+  /// twice at pack or at handover. Blocks the operator who scanned it.
+  WAREHOUSE_SCAN           @map("warehouse_scan")
   COURIER_PORTAL_LOGIN     @map("courier_portal_login")
   COURIER_PORTAL_CHALLENGE @map("courier_portal_challenge")
   COURIER_COST_SYNC        @map("courier_cost_sync")

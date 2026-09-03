@@ -159,6 +159,11 @@ export async function resetAuthState(
   await prisma.$transaction([
     prisma.notificationLog.deleteMany({}),
     prisma.auditLog.deleteMany({}),
+    // A WAREHOUSE_SCAN issue BLOCKS the staff member it names from
+    // scanning (ScanBlockService). Leaving one behind would stop every
+    // later test in the file at its first scan, with an error about a
+    // duplicate that a different test caused.
+    prisma.systemIssue.deleteMany({}),
     prisma.sellerApiKey.deleteMany({}),
     prisma.sellerEmailVerificationToken.deleteMany({}),
     prisma.sellerPasswordResetToken.deleteMany({}),

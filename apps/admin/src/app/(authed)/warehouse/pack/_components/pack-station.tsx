@@ -11,7 +11,8 @@ import {
   ModalFooter,
   useToast,
 } from '@skydrop/ui/components';
-import { Check } from 'lucide-react';
+import Link from 'next/link';
+import { AlertTriangle, Check } from 'lucide-react';
 import { ApiError } from '@skydrop/api-client';
 import {
   useCancelPackBox,
@@ -22,6 +23,7 @@ import {
   type OpenPackBox,
   type PackBoxLine,
 } from '@/lib/api-hooks';
+import { useScanBlock } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { BarcodeCamera, CameraScanButton } from '@/components/barcode-camera';
 import { SerialScanner } from '@/components/ui/serial-scanner';
@@ -74,6 +76,7 @@ function verdictCode(err: unknown): string | null {
 
 export function PackStation(): ReactElement {
   const toast = useToast();
+  const block = useScanBlock();
   const [box, setBox] = useState<OpenPackBox | null>(null);
   const [lines, setLines] = useState<ScannedLine[]>([]);
   const [code, setCode] = useState('');
@@ -234,10 +237,32 @@ export function PackStation(): ReactElement {
 
   return (
     <div className="space-y-4">
+      {block.data != null && (
+        <Card>
+          <CardBody>
+            <div className="border-status-failed-fg/40 bg-status-failed-bg/40 rounded-md border p-3">
+              <div className="text-status-failed-fg flex items-center gap-2 text-sm font-semibold">
+                <AlertTriangle size={15} /> Scanning is stopped
+              </div>
+              <p className="mt-1 text-sm">{block.data.title}</p>
+              <p className="text-text-muted mt-2 text-xs whitespace-pre-line">
+                {block.data.detail}
+              </p>
+              <p className="text-text-faint mt-2 text-xs">
+                Put the box aside and get an admin. They clear it on{' '}
+                <Link href="/system-issues" className="hover:text-text underline">
+                  system issues
+                </Link>
+                , after checking whether there are two of them.
+              </p>
+            </div>
+          </CardBody>
+        </Card>
+      )}
       {/* While a parcel is waiting on its serials the label field means
           nothing — a scan would open a second box on a bench that is not
           free yet. */}
-      {pending === null && (
+      {pending === null && block.data == null && (
         <Card>
           <CardBody>
             <label htmlFor="pack-scan" className="text-text-muted mb-1 block text-xs">
