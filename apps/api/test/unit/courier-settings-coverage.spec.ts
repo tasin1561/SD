@@ -86,13 +86,20 @@ describe('every integrated courier has its settings seeded', () => {
     });
   }
 
-  it('every auto-pickup switch defaults to OFF', () => {
+  it('every auto-pickup switch is a standing ON (2026-09-03) — the KILL SWITCH stays real', () => {
+    // Reversed from its original default deliberately: CUR-10 amendment
+    // #3's whole point is that the switch keeps working as an escape
+    // hatch, not that it starts OFF. If this ever reads `false` again,
+    // check whether that was a conscious decision or a seed regression —
+    // a re-seed alone cannot make this true in a deployed database (the
+    // value columns are create-only), which is why
+    // 20260903200000_auto_pickup_standing_on exists as a real migration.
     for (const code of INTEGRATED) {
       const at = SEED.indexOf(`key: 'courier.${code}_auto_pickup_enabled'`);
       expect(at).toBeGreaterThan(-1);
       const block = SEED.slice(at, at + 400);
-      expect(block).toContain('valueBoolean: false');
-      expect(block).not.toContain('valueBoolean: true');
+      expect(block).toContain('valueBoolean: true');
+      expect(block).not.toContain('valueBoolean: false');
     }
   });
 });

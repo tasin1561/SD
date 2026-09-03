@@ -739,6 +739,21 @@ The canonical reference implementation is `OrderWriteService.transitionStatus()`
     > A MANUAL courier is skipped before this is ever reached — there is no
     > account to ask. **Do not widen the grain to "per parcel" or make a
     > FAILED day auto-retry without the same argument holding.**
+    >
+    > **Same day, standing-ON decision:** both switches are seeded `true`
+    > from here forward (`20260903200000_auto_pickup_standing_on` flips the
+    > two already-deployed rows, since seedSystemSettings() is create-only
+    > on value columns — same reason 2026-07-26's accrual-tier default
+    > needed a migration, not just a seed edit). This is a change of
+    > DEFAULT, not a removal of the switch: the kill switch is the entire
+    > point of gating this behind a setting rather than hardcoding it, and
+    > it stays reachable from `/settings` with no deploy required. The
+    > manual "raise a pickup" screen (`/warehouse/pickups`) is delisted
+    > from the warehouse hub's nav — the ordinary case needs nobody to
+    > visit it now — but the ROUTE is kept, for exactly the case CUR-10
+    > amendment #3 already named: a FAILED day is not auto-retried, and
+    > releasing one plus manually re-raising immediately (rather than
+    > waiting for the next box to close) is done from that screen.
 
         **CUR-11: the courier is not an authority on our order status.** A successful cancel/edit/NDR action does NOT transition the order — Delhivery's own scans do, through the M10 webhook processor and `OrderWriteService.transitionStatus` (ORD-3). Writing the transition at the action site as well would give the order two authorities that can disagree, and only the scan reflects where the parcel physically is. The `courier-ops` module is the sole caller of the adapter's capability services; the adapter stays domain-free (it takes pincodes and grams), and `ShipmentCourierContextService` is the ONE place a shipment id becomes those inputs — five call sites resolving it inline is how they slowly disagree about which weight field to use.
 19b. Honor CUR-12 through CUR-16 (multi-courier, 2026-08-29). Reach a courier through its DISPATCHER, never a branch at the call site (CUR-12) — add a third courier by implementing the interface and appending it to the list. `serviceable: false` means "will not carry"; true means "ask later", and only the first fails over (CUR-13). Failover is symmetric by construction — never special-case a direction — and a successful failover REWRITES `courierCode`/`courierShipmentId` on the shipment (CUR-14). A stubbed courier may never answer for a live one (CUR-15). The intake switch is `Courier.isActive` through `CourierEnablementService` alone, OFF means no NEW parcels while in-flight ones keep being tracked, and it is enforced at the BOOKING boundary as well as in routing (CUR-16). Every write switch is per courier; a new courier needs its seeded `courier.<code>_live_writes_enabled` row or it has a gate with no screen.

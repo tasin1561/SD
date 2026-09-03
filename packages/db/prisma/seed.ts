@@ -618,19 +618,19 @@ const systemSettings: SystemSettingSeed[] = [
     key: 'courier.delhivery_auto_pickup_enabled',
     category: 'courier',
     valueType: SettingValueType.BOOLEAN,
-    valueBoolean: false,
+    valueBoolean: true,
     displayName: 'Delhivery — request the daily pickup automatically',
     description:
-      'When ON, closing the first box of the day for a warehouse asks Delhivery for a van without anyone visiting the Pickups screen — later boxes that same day are no-ops, because one request already covers the building. When OFF (default), a pickup is only ever requested by a person on the Pickups screen. Still behind courier.delhivery_live_writes_enabled — turning this on with live writes off changes nothing.',
+      'ON by standing decision (2026-09-03): closing the first box of the day for a warehouse asks Delhivery for a van with nobody visiting the Pickups screen — later boxes that same day are no-ops, because one request already covers the building. The kill switch stays real: turn this OFF to go back to raising every pickup by hand, without a deploy. Still behind courier.delhivery_live_writes_enabled — turning this on with live writes off changes nothing.',
   },
   {
     key: 'courier.shiprocket_auto_pickup_enabled',
     category: 'courier',
     valueType: SettingValueType.BOOLEAN,
-    valueBoolean: false,
+    valueBoolean: true,
     displayName: 'Shiprocket — request the daily pickup automatically',
     description:
-      'The Shiprocket half of courier.delhivery_auto_pickup_enabled — same behaviour, same one-request-per-warehouse-per-day grain, same default OFF. Still behind courier.shiprocket_live_writes_enabled.',
+      'The Shiprocket half of courier.delhivery_auto_pickup_enabled — same behaviour, same one-request-per-warehouse-per-day grain, same standing-ON decision. Still behind courier.shiprocket_live_writes_enabled.',
   },
   {
     key: 'courier.default_pickup_time',

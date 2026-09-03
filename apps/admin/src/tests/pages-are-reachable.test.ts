@@ -69,6 +69,14 @@ const EXPECTED_UNLINKED = new Set<string>([
   // exactly those (UNIT-2). Linking it would offer two ways to do the
   // same job, only one of which anybody should take.
   '/warehouse/pick',
+  // Auto-pickup is a standing-ON decision (2026-09-03, CUR-10 amendment
+  // #3 + its same-day addendum): the first box packed each day asks the
+  // courier for a van on its own, so the ordinary case needs nobody to
+  // visit this screen. Kept, unlinked, for the case that decision
+  // explicitly named: a FAILED day is not auto-retried, and releasing
+  // one plus manually re-raising immediately — rather than waiting for
+  // the next box to close — is done here.
+  '/warehouse/pickups',
 ]);
 
 describe('every admin page can be reached from another page', () => {
