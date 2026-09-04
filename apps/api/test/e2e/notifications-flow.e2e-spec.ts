@@ -1,6 +1,7 @@
 import request from 'supertest';
 import {
   ActorType,
+  NotificationChannel,
   NotificationRecipientType,
   NotificationStatus,
   OrderEventType,
@@ -286,7 +287,12 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
     return waitFor(
       async () => {
         const rows = await h.prisma.notificationLog.findMany({
-          where: { orderId, status: expectedStatus },
+          // EMAIL only. Every seller fan-out now also writes an IN_APP
+          // row (NOTIF-9..13) — the same notification on a second
+          // channel — and this suite is about the email leg. Counting
+          // both would make every expected number here a sum of two
+          // unrelated decisions.
+          where: { orderId, status: expectedStatus, channel: NotificationChannel.EMAIL },
         });
         return rows.length === expectedCount ? rows : null;
       },
@@ -388,7 +394,9 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
 
     // 2 notifications for CONFIRMED (seller + customer).
     await waitForLogCount(orderId, 2, NotificationStatus.SENT);
-    const beforeManual = await h.prisma.notificationLog.count({ where: { orderId } });
+    const beforeManual = await h.prisma.notificationLog.count({
+      where: { orderId, channel: NotificationChannel.EMAIL },
+    });
     expect(beforeManual).toBe(2);
 
     // Drive PENDING_PICK → PENDING_MANUAL_PLACEMENT (M8 WMS-4
@@ -410,7 +418,9 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
     await new Promise((r) => setTimeout(r, 500));
 
     // Still exactly 2 — the PENDING_MANUAL_PLACEMENT mapping is [].
-    const afterManual = await h.prisma.notificationLog.count({ where: { orderId } });
+    const afterManual = await h.prisma.notificationLog.count({
+      where: { orderId, channel: NotificationChannel.EMAIL },
+    });
     expect(afterManual).toBe(2);
   });
 
@@ -509,7 +519,9 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
     await new Promise((r) => setTimeout(r, 800));
 
     // Still exactly 4 rows. NO new ledger rows, NO new BullMQ enqueue.
-    const after = await h.prisma.notificationLog.findMany({ where: { orderId } });
+    const after = await h.prisma.notificationLog.findMany({
+      where: { orderId, channel: NotificationChannel.EMAIL },
+    });
     expect(after).toHaveLength(4);
   });
 
@@ -566,6 +578,7 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
     const cycleRows = await h.prisma.notificationLog.findMany({
       where: {
         orderId,
+        channel: NotificationChannel.EMAIL,
         OR: [
           { templateCode: 'customer.order_out_for_delivery.email' },
           { templateCode: 'customer.order_delivery_failed.email' },
@@ -618,5 +631,82 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
     expect(dfEvents).toHaveLength(2);
     const dfEventIdsExpected = new Set(dfEvents.map((e) => `order_status:${e.id}`));
     expect(dfEventIdsExpected).toEqual(ndrEventIds);
+  });
+
+  // ── Scenario 8: the SECOND channel (NOTIF-9..13) ──────────────────
+
+  it('the same lifecycle event also lands in the seller’s own inbox', async () => {
+    const orderId = await placeOrder();
+    await driveToDispatched(orderId);
+    await waitForLogCount(orderId, 4, NotificationStatus.SENT);
+
+    const owner = await h.prisma.sellerUser.findFirstOrThrow({
+      where: { seller: { email: { contains: 'notif-seller-' } } },
+      select: { id: true },
+    });
+
+    const inbox = await waitFor(
+      async () => {
+        const rows = await h.prisma.notificationLog.findMany({
+          where: { orderId, channel: NotificationChannel.IN_APP },
+          orderBy: { createdAt: 'asc' },
+        });
+        return rows.length === 2 ? rows : null;
+      },
+      { timeoutMs: 15_000, description: 'two IN_APP rows (CONFIRMED + DISPATCHED)' },
+    );
+
+    // CONFIRMED and DISPATCHED both carry an in-app leg; the two
+    // intermediate statuses map to [] and neither leg fires.
+    expect(inbox.map((r) => r.templateCode)).toEqual([
+      'order.confirmed.seller',
+      'seller.order_dispatched',
+    ]);
+
+    // Addressed to the PERSON, not the company — an inbox belongs to
+    // somebody, and the seller row is a company.
+    for (const row of inbox) {
+      expect(row.toInAppUserId).toBe(owner.id);
+      expect(row.toEmail).toBeNull();
+      // The IN_APP row IS the delivery: there is no worker behind it,
+      // so leaving it QUEUED would show an unread nobody marks sent.
+      expect(row.status).toBe(NotificationStatus.SENT);
+      expect(row.sentAt).not.toBeNull();
+      expect(row.readAt).toBeNull();
+    }
+
+    // The order number is in the body, not a placeholder.
+    const order = await h.prisma.order.findUniqueOrThrow({
+      where: { id: orderId },
+      select: { orderNumber: true },
+    });
+    expect(inbox[1]?.body).toContain(order.orderNumber);
+    expect(inbox[1]?.body).not.toContain('{orderNumber}');
+
+    // And the seller can read them through their own endpoint.
+    const feed = await request(h.baseUrl).get('/seller/notifications').set(sellerAuth).expect(200);
+    expect(feed.body.unreadCount).toBe(2);
+  });
+
+  it('a person who silences the topic stops getting it in their inbox, and still gets the email', async () => {
+    await request(h.baseUrl)
+      .post('/seller/notifications/subscriptions')
+      .set(sellerAuth)
+      .send({ topic: 'seller.order_dispatched', mode: 'MUTED' })
+      .expect(200);
+
+    const orderId = await placeOrder();
+    await driveToDispatched(orderId);
+    // The EMAIL leg is unaffected — it is the company's address and
+    // the company's per-category preference governs it, not a
+    // person's own inbox choice. Four email rows, exactly as before.
+    await waitForLogCount(orderId, 4, NotificationStatus.SENT);
+
+    await new Promise((r) => setTimeout(r, 800));
+    const inbox = await h.prisma.notificationLog.findMany({
+      where: { orderId, channel: NotificationChannel.IN_APP },
+    });
+    // CONFIRMED still arrives; only DISPATCHED was silenced.
+    expect(inbox.map((r) => r.templateCode)).toEqual(['order.confirmed.seller']);
   });
 });

@@ -18,15 +18,47 @@ import { NotificationChannel, NotificationRecipientType, OrderStatus } from '@sk
  *     stored preferences slot in by changing this single field per
  *     recipient.
  *
- * `channel` is fixed to EMAIL in Phase-1A; the SMS/WhatsApp placeholders
- * exist in the NotificationChannel enum so this field can be widened
- * later without an enum migration.
+ * `channel` is the EMAIL leg. The IN_APP leg is `inApp` — see below.
+ * The SMS/WhatsApp placeholders exist in the NotificationChannel enum
+ * so the field can be widened later without an enum migration.
  */
 export interface NotificationFanOut {
   readonly recipientType: NotificationRecipientType;
   readonly templateCode: string;
   readonly locale: string;
   readonly channel: NotificationChannel;
+  /**
+   * The same notification, in the seller's people's inboxes.
+   *
+   * ── WHY NOT A SECOND FAN-OUT ENTRY ─────────────────────────────────
+   * An email and an inbox line are ONE notification on two channels,
+   * not two notifications. A separate entry would have doubled the
+   * table whose whole job is to be the single place this is decided,
+   * and left the halves free to drift — a status that emails but does
+   * not notify, or the reverse, with nothing to say which was meant.
+   *
+   * ── WHY A PERMISSION, NOT THE COMPANY ──────────────────────────────
+   * The email goes to the company's one address. An inbox belongs to a
+   * PERSON and a company has several, so this names who it concerns by
+   * what they are allowed to do (NOTIF-10) — the durable fact, since a
+   * company can rename its own roles. Sending every scan to all five
+   * people at a company is how a bell becomes something nobody looks
+   * at.
+   *
+   * CUSTOMER targets never carry this: a customer has no login in
+   * Phase-1A, so there is no inbox to reach. Enforced by the listener,
+   * which ignores `inApp` on a customer target rather than trusting
+   * the table to be right.
+   *
+   * `body` may contain `{orderNumber}`; the listener substitutes it.
+   * Written short on purpose — an email has a greeting and a footer, an
+   * inbox line has one sentence and has to be readable in a dropdown.
+   */
+  readonly inApp?: {
+    readonly permission: string;
+    readonly title: string;
+    readonly body: string;
+  };
 }
 
 /**
@@ -87,6 +119,11 @@ export class NotificationEventMappingService {
             templateCode: 'order.confirmed.seller.email',
             locale: 'en',
             channel: NotificationChannel.EMAIL,
+            inApp: {
+              permission: 'orders.view',
+              title: 'Order confirmed',
+              body: '{orderNumber} was confirmed on the phone and is on its way to the floor.',
+            },
           },
           {
             recipientType: NotificationRecipientType.CUSTOMER,
@@ -104,6 +141,11 @@ export class NotificationEventMappingService {
             templateCode: 'seller.order_cancelled.email',
             locale: 'en',
             channel: NotificationChannel.EMAIL,
+            inApp: {
+              permission: 'orders.view',
+              title: 'Order cancelled',
+              body: '{orderNumber} was cancelled. Any stock held for it has been released.',
+            },
           },
           {
             recipientType: NotificationRecipientType.CUSTOMER,
@@ -135,6 +177,11 @@ export class NotificationEventMappingService {
             templateCode: 'seller.order_awaiting_decision.email',
             locale: 'en',
             channel: NotificationChannel.EMAIL,
+            inApp: {
+              permission: 'holds.manage',
+              title: 'An order needs your decision',
+              body: '{orderNumber} has reached the call limit and is waiting on you. Its stock is still held.',
+            },
           },
         ];
 
@@ -156,6 +203,11 @@ export class NotificationEventMappingService {
             templateCode: 'seller.order_dispatched.email',
             locale: 'en',
             channel: NotificationChannel.EMAIL,
+            inApp: {
+              permission: 'orders.view',
+              title: 'Order dispatched',
+              body: '{orderNumber} has left the warehouse with the courier.',
+            },
           },
           {
             recipientType: NotificationRecipientType.CUSTOMER,
@@ -187,6 +239,11 @@ export class NotificationEventMappingService {
             templateCode: 'seller.order_delivered.email',
             locale: 'en',
             channel: NotificationChannel.EMAIL,
+            inApp: {
+              permission: 'orders.view',
+              title: 'Order delivered',
+              body: '{orderNumber} reached the customer.',
+            },
           },
           {
             recipientType: NotificationRecipientType.CUSTOMER,
@@ -203,6 +260,11 @@ export class NotificationEventMappingService {
             templateCode: 'seller.order_delivery_failed.email',
             locale: 'en',
             channel: NotificationChannel.EMAIL,
+            inApp: {
+              permission: 'orders.view',
+              title: 'Delivery attempt failed',
+              body: 'The courier could not deliver {orderNumber}. They will try again.',
+            },
           },
           {
             recipientType: NotificationRecipientType.CUSTOMER,
@@ -221,6 +283,11 @@ export class NotificationEventMappingService {
             templateCode: 'shipment.rto_initiated.seller.email',
             locale: 'en',
             channel: NotificationChannel.EMAIL,
+            inApp: {
+              permission: 'orders.view',
+              title: 'Order is coming back',
+              body: '{orderNumber} is being returned to the warehouse.',
+            },
           },
         ];
 
@@ -231,6 +298,11 @@ export class NotificationEventMappingService {
             templateCode: 'seller.order_rto_received.email',
             locale: 'en',
             channel: NotificationChannel.EMAIL,
+            inApp: {
+              permission: 'inventory.view',
+              title: 'Returned goods received',
+              body: '{orderNumber} came back and has been checked in.',
+            },
           },
         ];
 

@@ -105,9 +105,21 @@ function makeSut(fixture: OrderFixture | null) {
   const auditLog = jest.fn(async () => 'a1');
   const audit = { log: auditLog } as never;
 
+  // The in-app leg. Recorded rather than stubbed away, so the tests
+  // below can assert on WHO it addresses as well as that it fired.
+  const inAppCalls: Record<string, unknown>[] = [];
+  const dispatch = {
+    dispatch: jest.fn(async (input: Record<string, unknown>) => {
+      inAppCalls.push(input);
+      return { groupId: 'g', recipients: 1, delivered: 1, skipped: 0, failures: 0 };
+    }),
+  } as never;
+
   return {
-    listener: new NotificationListener(bus, REAL_MAPPING, ledger, prisma, env, audit),
+    listener: new NotificationListener(bus, REAL_MAPPING, ledger, prisma, env, audit, dispatch),
     enqueueCalls,
+    inAppCalls,
+    dispatch,
     ledger,
     env,
     auditLog,
@@ -445,5 +457,66 @@ describe('NotificationListener — the customer is written to in THEIR language'
       (c) => c.recipientType === NotificationRecipientType.CUSTOMER,
     );
     expect(customer?.locale).toBe('en');
+  });
+
+  // ── The in-app leg (NOTIF-9..13) ───────────────────────────────────
+
+  it('a seller notification also reaches the inboxes of the people it concerns', async () => {
+    const { listener, inAppCalls } = makeSut(ORDER_BASE);
+    await listener.handle(lifecycleEvent(OrderStatus.DISPATCHED, 'evt-inapp-1'));
+
+    expect(inAppCalls).toHaveLength(1);
+    expect(inAppCalls[0]).toMatchObject({
+      channels: [NotificationChannel.IN_APP],
+      // Addressed by what a person may DO, not by a role name a
+      // company can rename out from under us.
+      audience: [{ kind: 'SELLER_PERMISSION', sellerId: 'seller-1', permission: 'orders.view' }],
+    });
+  });
+
+  it('the order number is substituted into the body, not left as a placeholder', async () => {
+    const { listener, inAppCalls } = makeSut(ORDER_BASE);
+    await listener.handle(lifecycleEvent(OrderStatus.DISPATCHED, 'evt-inapp-2'));
+    expect(inAppCalls[0]?.body).toContain(ORDER_BASE.orderNumber);
+    expect(String(inAppCalls[0]?.body)).not.toContain('{orderNumber}');
+  });
+
+  it('the two legs carry DIFFERENT event ids so neither can collide with the other', async () => {
+    const { listener, enqueueCalls, inAppCalls } = makeSut(ORDER_BASE);
+    await listener.handle(lifecycleEvent(OrderStatus.DISPATCHED, 'evt-inapp-3'));
+    const email = enqueueCalls.find((c) => c.recipientType === NotificationRecipientType.SELLER);
+    expect(email?.eventId).toBe('order_status:evt-inapp-3');
+    expect(inAppCalls[0]?.eventId).toBe('order_status:evt-inapp-3:inapp');
+  });
+
+  it('a CUSTOMER target never gets an in-app leg — there is no login to reach', async () => {
+    // OUT_FOR_DELIVERY is customer-only in the Q5 table, so a
+    // dispatch here would mean the listener trusted the mapping to
+    // have left `inApp` unset rather than checking.
+    const { listener, inAppCalls } = makeSut(ORDER_BASE);
+    await listener.handle(lifecycleEvent(OrderStatus.OUT_FOR_DELIVERY, 'evt-inapp-4'));
+    expect(inAppCalls).toHaveLength(0);
+  });
+
+  it('an in-app failure does not touch the email leg', async () => {
+    const { listener, enqueueCalls, dispatch } = makeSut(ORDER_BASE);
+    (dispatch as unknown as { dispatch: jest.Mock }).dispatch.mockImplementationOnce(async () => {
+      throw new Error('inbox write failed');
+    });
+
+    await expect(
+      listener.handle(lifecycleEvent(OrderStatus.DISPATCHED, 'evt-inapp-5')),
+    ).resolves.toBeUndefined();
+    // Both emails still went. NOTIF-1: the transition is the durable
+    // fact and every notification is a reflection of it, so no leg is
+    // allowed to take another down.
+    expect(enqueueCalls).toHaveLength(2);
+  });
+
+  it('a status with no seller notification produces no in-app row either', async () => {
+    const { listener, inAppCalls, enqueueCalls } = makeSut(ORDER_BASE);
+    await listener.handle(lifecycleEvent(OrderStatus.IN_TRANSIT, 'evt-inapp-6'));
+    expect(enqueueCalls).toHaveLength(0);
+    expect(inAppCalls).toHaveLength(0);
   });
 });

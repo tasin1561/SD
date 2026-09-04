@@ -5,6 +5,7 @@ import { NotificationEventMappingService } from './services/notification-event-m
 import { NotificationLedgerModule } from '../notification-ledger/notification-ledger.module';
 import { NotificationListener } from './services/notification-listener.service';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
+import { NotificationAudienceModule } from '../notification-audience/notification-audience.module';
 
 /**
  * Module 11 — Notifications fan-out.
@@ -37,6 +38,12 @@ import { AuthCommonModule } from '../auth-common/auth-common.module';
     LifecycleEventsModule,
     // The R3 store-then-send primitive, shared with seller-onboarding.
     NotificationLedgerModule,
+    // The in-app leg. One notification, two channels: the email keeps
+    // going to the company's address through the ledger above, and the
+    // same fact reaches the inboxes of the people at that company it
+    // concerns through the dispatcher here. No cycle — the audience
+    // module knows nothing about orders or lifecycle events.
+    NotificationAudienceModule,
   ],
   providers: [NotificationEventMappingService, NotificationListener],
   exports: [],

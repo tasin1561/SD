@@ -4,7 +4,13 @@ import {
   type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from '@nestjs/common';
-import { ActorType, type OrderStatus, ShipmentStatus } from '@skydrop/db';
+import {
+  ActorType,
+  NotificationCategory,
+  NotificationChannel,
+  type OrderStatus,
+  ShipmentStatus,
+} from '@skydrop/db';
 import type { Subscription } from 'rxjs';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { stripSellerPrefix } from '../../../common/text/recipient-name';
@@ -18,6 +24,7 @@ import {
   NotificationEventMappingService,
   type NotificationFanOut,
 } from './notification-event-mapping.service';
+import { NotificationDispatchService } from '../../notification-audience/services/notification-dispatch.service';
 import { NotificationLedgerService } from './notification-ledger.service';
 import type { EmailVariables } from '../../email/email.types';
 
@@ -87,6 +94,7 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
     private readonly prisma: PrismaService,
     private readonly env: EnvService,
     private readonly audit: AuditLogService,
+    private readonly dispatch: NotificationDispatchService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -256,6 +264,13 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
           lastError = err;
         }
       }
+      // The SAME notification, in the inboxes of the people at that
+      // company it concerns. Fired alongside the email rather than
+      // after it succeeds: the two channels are independent legs of
+      // one notification, and an inbox line is not worth withholding
+      // because a mail server was slow.
+      await this.deliverInApp(target, ctx, eventIdBase, triggerEvent);
+
       if (!sent) {
         // NOTIF-3 independence: one target's failure NEVER aborts the
         // others.
@@ -303,6 +318,75 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
             // remaining targets NOTIF-3 exists to protect.
           });
       }
+    }
+  }
+
+  /**
+   * The in-app leg of one fan-out target.
+   *
+   * Best-effort in the same way everything else in this listener is
+   * (NOTIF-1): a failure is logged and swallowed, because the
+   * transition is the durable fact and a notification is a reflection
+   * of it. Isolated per target for the same reason the email is
+   * (NOTIF-3).
+   *
+   * A CUSTOMER target is ignored outright rather than trusted to have
+   * left `inApp` unset — a customer has no login in Phase-1A, so there
+   * is no inbox, and a mapping edited in a hurry should not be able to
+   * invent one.
+   *
+   * The eventId is the email's with an `:inapp` suffix. It could have
+   * been the same string — the dedup tuple includes the channel — but
+   * distinct keys mean a future change to either leg cannot silently
+   * collide with the other.
+   */
+  private async deliverInApp(
+    target: NotificationFanOut,
+    ctx: OrderContext,
+    eventIdBase: string,
+    triggerEvent: string,
+  ): Promise<void> {
+    const inApp = target.inApp;
+    if (inApp === undefined || target.recipientType !== 'SELLER') return;
+
+    try {
+      await this.dispatch.dispatch({
+        // The email template's code WITHOUT its `.email` suffix.
+        //
+        // A topic is what a person silences, and it appears to them by
+        // name — "seller.order_dispatched.email" would read as though
+        // switching it off stopped the email, which it does not. The
+        // two legs are silenced by different people for different
+        // reasons: the COMPANY decides what it is emailed about, per
+        // category, at /settings/notifications; a PERSON decides what
+        // reaches their own inbox, per topic, here. Sharing one key
+        // would have made one of those decisions silently override the
+        // other.
+        topic: target.templateCode.replace(/\.email$/, ''),
+        category: NotificationCategory.OPERATIONAL,
+        title: inApp.title,
+        body: inApp.body.replace('{orderNumber}', ctx.orderNumber),
+        channels: [NotificationChannel.IN_APP],
+        audience: [
+          {
+            kind: 'SELLER_PERMISSION',
+            sellerId: ctx.sellerId,
+            permission: inApp.permission,
+          },
+        ],
+        triggerEvent,
+        orderId: ctx.orderId,
+        eventId: `${eventIdBase}:inapp`,
+      });
+    } catch (err) {
+      this.logger.warn(
+        {
+          orderId: ctx.orderId,
+          templateCode: target.templateCode,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        'NotificationListener: in-app leg failed; the email leg is unaffected',
+      );
     }
   }
 
