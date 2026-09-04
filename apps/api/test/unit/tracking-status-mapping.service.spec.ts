@@ -91,10 +91,11 @@ describe('TrackingStatusMappingService.mapScan (TRK-5)', () => {
     // each skipped for having nowhere to go while the order sat in
     // DELIVERY_FAILED.
     const decision = svc.mapScan(ShipmentStatus.RTO_IN_TRANSIT);
-    expect(decision).toMatchObject({
-      kind: 'TRANSITION',
-      targetOrderStatus: OrderStatus.RTO_IN_TRANSIT,
-    });
+    // Narrowed rather than asserted-through: `allowedFromOrderStatuses`
+    // only exists on the transition-bearing arms of the union.
+    if (decision.kind !== 'TRANSITION')
+      throw new Error(`expected TRANSITION, got ${decision.kind}`);
+    expect(decision.targetOrderStatus).toBe(OrderStatus.RTO_IN_TRANSIT);
     expect(new Set(decision.allowedFromOrderStatuses)).toEqual(
       new Set([
         OrderStatus.DISPATCHED,
@@ -109,6 +110,8 @@ describe('TrackingStatusMappingService.mapScan (TRK-5)', () => {
 
   it('a return-leg scan is accepted from DELIVERY_FAILED — the exact parcel that got stuck', () => {
     const decision = svc.mapScan(ShipmentStatus.RTO_IN_TRANSIT);
+    if (decision.kind !== 'TRANSITION')
+      throw new Error(`expected TRANSITION, got ${decision.kind}`);
     expect(decision.allowedFromOrderStatuses).toContain(OrderStatus.DELIVERY_FAILED);
   });
 
