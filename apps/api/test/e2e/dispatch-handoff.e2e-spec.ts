@@ -521,6 +521,10 @@ describe('Dispatch handoff endpoint (e2e)', () => {
   it('A REPEATED BOX STOPS THE OPERATOR, and keeps them stopped until an admin clears it', async () => {
     await receiveStock(10);
     const { orderId, awbNumber } = await driveToPacked(2);
+    // Packed UP FRONT, before the block exists: the stop covers both
+    // benches (SCAN-2), so once this operator is stopped they cannot
+    // pack either. That is the rule working, not a fixture problem.
+    const other = await driveToPacked(2);
 
     await request(h.baseUrl)
       .post('/admin/courier/handover-scan')
@@ -554,7 +558,6 @@ describe('Dispatch handoff endpoint (e2e)', () => {
 
     // STUCK: the NEXT parcel is refused too. The pile is in doubt, not
     // just the box that tripped it.
-    const other = await driveToPacked(2);
     const blocked = await request(h.baseUrl)
       .post('/admin/courier/handover-scan')
       .set(staffAuth)
@@ -592,6 +595,8 @@ describe('Dispatch handoff endpoint (e2e)', () => {
     // them scanned a box twice would cost far more than the mistake.
     await receiveStock(10);
     const mine = await driveToPacked(2);
+    // Both parcels packed before anybody is stopped — see above.
+    const theirs = await driveToPacked(2);
     await request(h.baseUrl)
       .post('/admin/courier/handover-scan')
       .set(staffAuth)
@@ -614,7 +619,6 @@ describe('Dispatch handoff endpoint (e2e)', () => {
       .expect(200);
     const otherAuth = { Authorization: `Bearer ${login.body.accessToken}` };
 
-    const theirs = await driveToPacked(2);
     await request(h.baseUrl)
       .post('/admin/courier/handover-scan')
       .set(otherAuth)

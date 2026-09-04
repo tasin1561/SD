@@ -658,7 +658,13 @@ export async function packAtBench(
   });
   const awbNumber = shipment.awbNumber;
   if (awbNumber === null) {
-    throw new Error(`packAtBench: shipment ${shipmentId} has no AWB to scan`);
+    // No waybill means no label on the box, and the bench opens a box
+    // by scanning one. A parcel whose courier booking failed therefore
+    // cannot be bench-packed at all — which is not a gap in the
+    // fixture, it is the situation the supervisor override exists for.
+    // Handled here rather than at each call site because one helper
+    // packs both the good parcel and the refused one in the same test.
+    return forcePackAtBench(baseUrl, staffAuth, shipmentId);
   }
 
   const opened = await request(baseUrl)
@@ -683,5 +689,29 @@ export async function packAtBench(
     .post(`/warehouse/packs/boxes/${boxId}/close`)
     .set(staffAuth)
     .send({ awbNumber })
+    .expect(200);
+}
+
+/**
+ * Pack a parcel that has NO waybill, the only way such a parcel can be
+ * packed: a supervisor forcing it through.
+ *
+ * The bench opens a box by scanning the shipping label, so a parcel
+ * whose courier booking failed has nothing to scan — there is no label
+ * on it. That is not a gap in the fixture, it is the situation the
+ * override exists for, and it is right that it takes a supervisor: a
+ * parcel with no waybill has nowhere to go, and somebody should look at
+ * it rather than it sailing through packing as if normal.
+ */
+export async function forcePackAtBench(
+  baseUrl: string,
+  staffAuth: { Authorization: string },
+  shipmentId: string,
+  reason = 'Fixture: the courier refused this parcel, so it carries no label to scan.',
+): Promise<request.Response> {
+  return request(baseUrl)
+    .post(`/warehouse/packs/${shipmentId}/force-complete`)
+    .set(staffAuth)
+    .send({ reason })
     .expect(200);
 }

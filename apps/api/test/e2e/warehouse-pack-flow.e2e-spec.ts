@@ -262,7 +262,16 @@ describe('Warehouse pack flow (e2e)', () => {
     const first = await packAtBench(h.baseUrl, staffAuth, h.prisma, shipmentId);
     expect(first.body.alreadyComplete).toBe(false);
 
-    const second = await packAtBench(h.baseUrl, staffAuth, h.prisma, shipmentId);
+    // The SECOND call goes straight to /complete, which is what this
+    // test is about. Re-running the bench ritual would instead scan an
+    // already-packed label, and that is a duplicate box — refused, and
+    // rightly so (SCAN-1). The parcel already has its closed box, so
+    // the verification gate passes and the idempotent short-circuit
+    // answers.
+    const second = await request(h.baseUrl)
+      .post(`/warehouse/packs/${shipmentId}/complete`)
+      .set(staffAuth)
+      .expect(200);
     expect(second.body.alreadyComplete).toBe(true);
     expect(second.body.status).toBe(OrderStatus.PACKED);
     expect(second.body.manifestId).toBe(first.body.manifestId);
