@@ -83,12 +83,33 @@ describe('TrackingStatusMappingService.mapScan (TRK-5)', () => {
     ]);
   });
 
-  it('RTO_IN_TRANSIT scan → TRANSITION from RTO_INITIATED only', () => {
-    expect(svc.mapScan(ShipmentStatus.RTO_IN_TRANSIT)).toMatchObject({
+  it('RTO_IN_TRANSIT scan → TRANSITION from anywhere a return can START, not just RTO_INITIATED', () => {
+    // This asserted RTO_INITIATED alone, which assumed the courier
+    // always announces a return before moving it. Delhivery does not:
+    // SD-TEST-523902 went from a failed delivery attempt straight to
+    // "In Transit" homeward, and twelve such scans over two days were
+    // each skipped for having nowhere to go while the order sat in
+    // DELIVERY_FAILED.
+    const decision = svc.mapScan(ShipmentStatus.RTO_IN_TRANSIT);
+    expect(decision).toMatchObject({
       kind: 'TRANSITION',
       targetOrderStatus: OrderStatus.RTO_IN_TRANSIT,
-      allowedFromOrderStatuses: [OrderStatus.RTO_INITIATED],
     });
+    expect(new Set(decision.allowedFromOrderStatuses)).toEqual(
+      new Set([
+        OrderStatus.DISPATCHED,
+        OrderStatus.IN_TRANSIT,
+        OrderStatus.OUT_FOR_DELIVERY,
+        OrderStatus.DELIVERY_FAILED,
+        OrderStatus.DELIVERED,
+        OrderStatus.RTO_INITIATED,
+      ]),
+    );
+  });
+
+  it('a return-leg scan is accepted from DELIVERY_FAILED — the exact parcel that got stuck', () => {
+    const decision = svc.mapScan(ShipmentStatus.RTO_IN_TRANSIT);
+    expect(decision.allowedFromOrderStatuses).toContain(OrderStatus.DELIVERY_FAILED);
   });
 
   it('TRK-6 RTO_DELIVERED scan → INFORMATIONAL only (warehouse boundary owns RTO_RECEIVED)', () => {

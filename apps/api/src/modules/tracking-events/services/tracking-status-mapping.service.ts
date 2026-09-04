@@ -186,7 +186,27 @@ export class TrackingStatusMappingService {
         return {
           kind: 'TRANSITION',
           targetOrderStatus: OrderStatus.RTO_IN_TRANSIT,
-          allowedFromOrderStatuses: [OrderStatus.RTO_INITIATED],
+          // Every state a return can START from, not just the one that
+          // announces it (2026-09-04). This listed RTO_INITIATED alone,
+          // which assumed the courier always emits an RTO-initiated
+          // scan before any return-leg movement. Delhivery does not:
+          // SD-TEST-523902 went from a failed delivery attempt straight
+          // to "In Transit" on the way back, and twelve such scans over
+          // two days were each skipped by the monotonic-forward guard
+          // for having nowhere to go. The order sat in DELIVERY_FAILED
+          // telling the seller delivery had failed, while their goods
+          // were already most of the way home.
+          //
+          // Mirrors the matrix exactly (F6) — the same six sources that
+          // can reach RTO_INITIATED, plus RTO_INITIATED itself.
+          allowedFromOrderStatuses: [
+            OrderStatus.DISPATCHED,
+            OrderStatus.IN_TRANSIT,
+            OrderStatus.OUT_FOR_DELIVERY,
+            OrderStatus.DELIVERY_FAILED,
+            OrderStatus.DELIVERED,
+            OrderStatus.RTO_INITIATED,
+          ],
           trackingEventType: TrackingEventType.RTO_IN_TRANSIT,
         };
       case ShipmentStatus.RTO_DELIVERED:

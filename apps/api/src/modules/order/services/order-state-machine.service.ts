@@ -360,6 +360,17 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
     [
       { to: OrderStatus.IN_TRANSIT, sideEffects: [] },
       { to: OrderStatus.RTO_INITIATED, sideEffects: [] },
+      // ...and straight to RTO_IN_TRANSIT, because the "initiated"
+      // scan is not guaranteed to arrive (2026-09-04). Delhivery took
+      // SD-TEST-523902 from a failed delivery attempt to the return leg
+      // with no RTO-initiated scan in between: twelve RTO_IN_TRANSIT
+      // scans over two days, every one skipped for having nowhere to
+      // go, while the order sat in DELIVERY_FAILED and the seller was
+      // told delivery had failed rather than that their goods were
+      // coming back. Same shape as the forward-leg hole fixed above —
+      // wherever a return can START, its first movement scan can also
+      // arrive without the one that announces it.
+      { to: OrderStatus.RTO_IN_TRANSIT, sideEffects: [] },
       { to: OrderStatus.LOST_IN_TRANSIT, sideEffects: [] },
       { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
     ],
@@ -371,6 +382,8 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
       { to: OrderStatus.OUT_FOR_DELIVERY, sideEffects: [] },
       { to: OrderStatus.DELIVERY_FAILED, sideEffects: [] },
       { to: OrderStatus.RTO_INITIATED, sideEffects: [] },
+      // The courier may skip the initiated scan — see DISPATCHED above.
+      { to: OrderStatus.RTO_IN_TRANSIT, sideEffects: [] },
       { to: OrderStatus.LOST_IN_TRANSIT, sideEffects: [] },
     ],
   ],
@@ -386,6 +399,8 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
       { to: OrderStatus.DELIVERED, sideEffects: [] },
       { to: OrderStatus.DELIVERY_FAILED, sideEffects: [] },
       { to: OrderStatus.RTO_INITIATED, sideEffects: [] },
+      // The courier may skip the initiated scan — see DISPATCHED above.
+      { to: OrderStatus.RTO_IN_TRANSIT, sideEffects: [] },
     ],
   ],
 
@@ -408,6 +423,8 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
       { to: OrderStatus.IN_TRANSIT, sideEffects: [] },
       { to: OrderStatus.OUT_FOR_DELIVERY, sideEffects: [] }, // retry
       { to: OrderStatus.RTO_INITIATED, sideEffects: [] },
+      // The courier may skip the initiated scan — see DISPATCHED above.
+      { to: OrderStatus.RTO_IN_TRANSIT, sideEffects: [] },
       { to: OrderStatus.LOST_IN_TRANSIT, sideEffects: [] },
     ],
   ],
@@ -452,6 +469,8 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
       // No side-effects: the goods have not moved yet. Stock comes back
       // at RTO receive, exactly as it does for a courier return.
       { to: OrderStatus.RTO_INITIATED, sideEffects: [] },
+      // The courier may skip the initiated scan — see DISPATCHED above.
+      { to: OrderStatus.RTO_IN_TRANSIT, sideEffects: [] },
     ],
   ],
   [OrderStatus.RTO_RESTOCKED, []],
