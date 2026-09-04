@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { ConsignmentRoute, ConsignmentStatus, LabellingSite } from '@skydrop/db';
 import {
+  ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsDateString,
@@ -182,4 +183,31 @@ export class CancelConsignmentDto {
   @MinLength(10)
   @MaxLength(500)
   reason!: string;
+}
+
+export class ReprintLabelsDto {
+  /**
+   * The units whose stickers need replacing.
+   *
+   * Capped low on purpose. A "reprint" of four hundred is a whole-sheet
+   * reprint wearing a hat, and that is the thing that puts a second
+   * label on every unit — the cap keeps the escape hatch to roughly
+   * what a person can be holding.
+   */
+  @ApiProperty({ type: [String], minItems: 1, maxItems: 25 })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(25)
+  @IsString({ each: true })
+  readonly serials!: string[];
+
+  @ApiProperty({
+    minLength: 20,
+    maxLength: 500,
+    description: 'What happened to the original label. The only record that anybody chose this.',
+  })
+  @IsString()
+  @MinLength(20)
+  @MaxLength(500)
+  readonly reason!: string;
 }

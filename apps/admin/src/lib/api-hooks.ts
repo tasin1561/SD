@@ -2407,3 +2407,29 @@ export function useForceCompletePack(): UseMutationResult<
     },
   });
 }
+
+/**
+ * Reprint the label for NAMED units.
+ *
+ * Per unit, never the sheet: a serial names one physical item, so a
+ * second copy of the whole sheet is a duplicate sticker on every unit.
+ * Behind its own permission for the same reason.
+ */
+export function useReprintConsignmentLabels(): UseMutationResult<
+  LabelSheet,
+  Error,
+  { id: string; serials: string[]; reason: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, serials, reason }) =>
+      client.request<LabelSheet>(`/api/admin/consignments/${id}/labels/reprint`, {
+        method: 'POST',
+        body: { serials, reason },
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-consignments'] });
+    },
+  });
+}

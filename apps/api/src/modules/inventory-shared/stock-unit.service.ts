@@ -507,6 +507,49 @@ export class StockUnitService {
     });
   }
 
+  /**
+   * Record that a unit's label was printed AGAIN.
+   *
+   * Not a status change — the unit is exactly where it was. What this
+   * records is that a second physical sticker now exists carrying this
+   * serial, which is the only thing that can make one serial appear on
+   * two boxes. Written to the unit's own ledger rather than only to the
+   * consignment, because the question asked later is "is THIS serial
+   * duplicated?", and that is a question about the unit.
+   *
+   * Sole-writer discipline (UNIT-1): the label service cannot append to
+   * stock_unit_events itself, so it comes through here.
+   */
+  async recordLabelReprint(
+    tx: Prisma.TransactionClient,
+    input: {
+      readonly serials: readonly string[];
+      readonly sellerId: string;
+      readonly actorType: ActorType;
+      readonly actorId: string | null;
+      readonly reason: string;
+    },
+  ): Promise<number> {
+    const units = await tx.stockUnit.findMany({
+      where: { sellerId: input.sellerId, serialBarcode: { in: [...input.serials] } },
+      select: { id: true, status: true, warehouseId: true },
+    });
+    for (const u of units) {
+      await this.appendEvent(tx, {
+        stockUnitId: u.id,
+        // Unchanged on both sides: nothing moved, a label was reissued.
+        fromStatus: u.status,
+        toStatus: u.status,
+        gate: 'LABEL_REPRINT',
+        actorType: input.actorType,
+        actorId: input.actorId,
+        warehouseId: u.warehouseId,
+        note: input.reason,
+      });
+    }
+    return units.length;
+  }
+
   // ── internal ──────────────────────────────────────────────────────
 
   /** The ONLY writer of stock_unit_events. Append-only by construction. */

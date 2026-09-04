@@ -30,11 +30,25 @@ import {
   useConsignmentLabelPreview,
   useDispatchConsignment,
   usePrintConsignmentLabels,
+  useReprintConsignmentLabels,
   useSetLabellingSite,
 } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { ROUTE_LABEL, SITE_LABEL, STATUS_LABEL } from '../../_components/labels';
+
+/** A scanner types one serial then Enter; a person pastes a list. Both
+ *  shapes land in the same box, so accept either. */
+function parseSerials(raw: string): string[] {
+  return [
+    ...new Set(
+      raw
+        .split(/[\s,]+/)
+        .map((x) => x.trim())
+        .filter((x) => x.length > 0),
+    ),
+  ];
+}
 import { LabelSheetView } from './label-sheet';
 import { Step, Variance } from './steps';
 
@@ -54,6 +68,11 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
 
   const setSite = useSetLabellingSite();
   const printLabels = usePrintConsignmentLabels();
+  const reprintLabels = useReprintConsignmentLabels();
+  const mayReprint = usePermission('warehouse.labels.reprint');
+  const [reprinting, setReprinting] = useState(false);
+  const [reprintSerials, setReprintSerials] = useState('');
+  const [reprintReason, setReprintReason] = useState('');
   const dispatch = useDispatchConsignment();
   const cancel = useCancelConsignment();
 
@@ -122,6 +141,25 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
       const result = await printLabels.mutateAsync({ id });
       setSheet(result);
       toast.success(`${result.labels.length} label(s) ready`);
+    } catch (e) {
+      setError(serverVerdict(e));
+    }
+  }
+
+  /** The damaged sticker — named units only, and it says why. */
+  async function onReprint(): Promise<void> {
+    setError(null);
+    try {
+      const result = await reprintLabels.mutateAsync({
+        id,
+        serials: parseSerials(reprintSerials),
+        reason: reprintReason.trim(),
+      });
+      setSheet(result);
+      toast.success(`${result.labels.length} label(s) ready to reprint`);
+      setReprinting(false);
+      setReprintSerials('');
+      setReprintReason('');
     } catch (e) {
       setError(serverVerdict(e));
     }
@@ -342,6 +380,7 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                 </p>
               )}
               {mayManage &&
+                c.labelsPrintedAt === null &&
                 c.labellingSite !== LabellingSite.NONE &&
                 (labelPreview.data?.strictUnits ?? 0) > 0 && (
                   <div>
@@ -350,6 +389,60 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                     </Button>
                   </div>
                 )}
+
+              {/* Printed once, and that is the whole point: a serial
+                  names ONE physical unit, so a second copy of the sheet
+                  is a duplicate sticker on every one of them. The
+                  damaged label goes through here instead — named units
+                  only, behind its own permission. */}
+              {c.labelsPrintedAt !== null && mayReprint && (
+                <div className="border-border-subtle mt-1 border-t pt-3">
+                  {!reprinting ? (
+                    <button
+                      type="button"
+                      className="text-text-faint hover:text-text text-xs underline"
+                      onClick={() => setReprinting(true)}
+                    >
+                      A label was damaged or lost
+                    </button>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <p className="text-text-muted text-xs">
+                        Name the units only. Reprinting the sheet would put a second sticker on
+                        every unit, and two boxes claiming to be the same one is not something the
+                        ledger can hold — one of them just stops existing.
+                      </p>
+                      <Input
+                        aria-label="Serials to reprint"
+                        value={reprintSerials}
+                        placeholder="Scan or type the serials, separated by spaces or commas"
+                        onChange={(e) => setReprintSerials(e.target.value)}
+                      />
+                      <Input
+                        aria-label="Why"
+                        value={reprintReason}
+                        placeholder="What happened to the original label?"
+                        onChange={(e) => setReprintReason(e.target.value)}
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          disabled={
+                            reprintLabels.isPending ||
+                            reprintReason.trim().length < 20 ||
+                            parseSerials(reprintSerials).length === 0
+                          }
+                          onClick={() => void onReprint()}
+                        >
+                          {reprintLabels.isPending ? 'Preparing…' : 'Reprint these labels'}
+                        </Button>
+                        <Button variant="ghost" onClick={() => setReprinting(false)}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </Step>
 

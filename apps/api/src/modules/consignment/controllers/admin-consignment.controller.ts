@@ -26,6 +26,7 @@ import {
   CancelConsignmentDto,
   DispatchToIndiaDto,
   ListConsignmentsQueryDto,
+  ReprintLabelsDto,
   SetLabellingSiteDto,
 } from '../dto/consignment.dto';
 import {
@@ -131,6 +132,30 @@ export class AdminConsignmentController {
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<LabelSheet> {
     return this.labels.print(staff.id, id, ctx);
+  }
+
+  /**
+   * The damaged or lost sticker.
+   *
+   * Its own permission, not the one that prints the sheet: a serial
+   * names ONE physical unit, so a second copy is how two boxes come to
+   * claim the same one, and that should take somebody who was given
+   * that specifically rather than anybody who can receive goods.
+   */
+  @Post(':id/labels/reprint')
+  @RequirePermissions('warehouse.labels.reprint')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Reprint the label for NAMED units, with a reason. Per unit on purpose — reprinting the sheet would put a second sticker on every one. Audited HIGH and recorded on each unit’s own ledger',
+  })
+  reprintLabels(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('id', uuid()) id: string,
+    @Body() body: ReprintLabelsDto,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<LabelSheet> {
+    return this.labels.reprintUnits(staff.id, id, body.serials, body.reason, ctx);
   }
 
   @Post(':id/dispatch')

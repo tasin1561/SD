@@ -192,6 +192,13 @@ export const PERMISSIONS = [
     group: 'Warehouse',
   },
   {
+    key: 'warehouse.labels.reprint',
+    label: 'Reprint unit labels',
+    description:
+      'Print a serial label a second time. A serial names ONE physical unit, so a second sticker is how two boxes come to claim the same one — this is the escape hatch for a label that was damaged or lost, not a way to reprint a sheet.',
+    group: 'Warehouse',
+  },
+  {
     key: 'warehouse.manifest.close',
     label: 'Close a manifest',
     description:
