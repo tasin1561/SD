@@ -31,6 +31,16 @@ const DELIVERY_TIMEZONE = 'Asia/Kolkata';
  *  carry a waybill. Pick and pack do not check for one, so an order can
  *  travel all the way to PACKED unbooked; the sweep has to look at the
  *  whole stretch rather than only where the booking was first attempted. */
+/**
+ * How many refusals before we stop asking the courier and just say so.
+ *
+ * Each retry that fails supersedes the shipment, so an uncapped loop is
+ * a live courier call every few hours, forever, on a parcel whose
+ * answer is not going to change (CUR-13: a refusal is an opinion about
+ * the parcel, not a wobble). Three is enough evidence.
+ */
+const MAX_AWB_RETRY_SUPERSEDES = 3;
+
 const AWB_EXPECTED_STATUSES: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.CONFIRMED,
   OrderStatus.PENDING_PICK,
@@ -393,16 +403,32 @@ export class OrderAttentionService {
     for (const link of links) {
       const key = `awb-stalled:${link.orderId}`;
 
-      // 1. Ask again. Per-order isolation: one courier throwing must not
-      //    stop the others being retried, which is the same fan-out
-      //    discipline as the AWB job's own loop (CUR-2).
-      try {
-        await this.awbJob.processOrder(link.orderId);
-      } catch (err) {
-        this.logger.warn(
-          { orderId: link.orderId, err: (err as Error).message },
-          'AWB retry for a stalled confirmed order threw — falling through to the issue',
-        );
+      // 1. Ask again — but not forever.
+      //
+      // A courier that has REFUSED a parcel several times has formed an
+      // opinion, and it will be the same opinion next time (CUR-13).
+      // Asking again is then a real write against a live account for
+      // nothing, and it supersedes the shipment each time, so the
+      // retries also hide themselves: see the settled check below.
+      // SD-2026-26-000001 was doing exactly this on a seven-hour cycle
+      // — refused, superseded, clock reset, refused again — with no
+      // issue ever raised and nobody aware of it.
+      const priorAttempts = await this.prisma.client.orderShipment.count({
+        where: { orderId: link.orderId, shipment: { supersededAt: { not: null } } },
+      });
+      const exhausted = priorAttempts >= MAX_AWB_RETRY_SUPERSEDES;
+      if (!exhausted) {
+        // Per-order isolation: one courier throwing must not stop the
+        // others being retried, the same fan-out discipline as the AWB
+        // job's own loop (CUR-2).
+        try {
+          await this.awbJob.processOrder(link.orderId);
+        } catch (err) {
+          this.logger.warn(
+            { orderId: link.orderId, err: (err as Error).message },
+            'AWB retry for a stalled order threw — falling through to the issue',
+          );
+        }
       }
 
       // 2. Did that settle it? Re-read rather than trusting the result:
@@ -413,16 +439,27 @@ export class OrderAttentionService {
         where: { id: link.orderId },
         select: { status: true },
       });
-      const shipment = await this.prisma.client.shipment.findUnique({
-        where: { id: link.shipmentId },
-        select: { awbNumber: true, supersededAt: true },
+      // Ask about the order's CURRENT live shipment, not the one this
+      // loop started with.
+      //
+      // `supersededAt !== null` used to count as settled here, on the
+      // reasoning that a refusal routes the order away and retires the
+      // shipment. That holds when the routing happens. When it does not
+      // — a refusal on an order already past CONFIRMED — the supersede
+      // is not a resolution at all: it is the identical problem wearing
+      // a new row, and treating it as success meant every retry CLOSED
+      // the issue it should have raised. An order refused four times
+      // over two days therefore never appeared anywhere.
+      const live = await this.prisma.client.orderShipment.findFirst({
+        where: { orderId: link.orderId, shipment: { supersededAt: null, deletedAt: null } },
+        orderBy: { shipmentSequence: 'desc' },
+        select: { shipment: { select: { awbNumber: true } } },
       });
       const settled =
         after === null ||
         !AWB_EXPECTED_STATUSES.has(after.status) ||
-        shipment === null ||
-        shipment.awbNumber !== null ||
-        shipment.supersededAt !== null;
+        live === null ||
+        live.shipment.awbNumber !== null;
 
       if (settled) {
         await this.issues.resolveByKey(
@@ -436,16 +473,24 @@ export class OrderAttentionService {
       await this.issues.raise({
         kind: SystemIssueKind.INTEGRATION,
         severity: SystemIssueSeverity.HIGH,
-        title: `${link.order.orderNumber}: no waybill ${hours}h after its parcel was created`,
-        detail:
-          'This order was confirmed and its stock reserved, but no courier has issued a ' +
-          'waybill for it and a retry just now did not get one either. Nothing downstream ' +
-          'will move it, and if it has already been picked and packed it will sit at the ' +
-          'handover bench with no label to scan — the confirmation-time attempt does not ' +
-          'repeat on its own.\n\n' +
-          'The seller believes this order is on its way. Open the order, read the last AWB ' +
-          'error on the shipment, and either fix what the courier objected to or place it ' +
-          'manually.',
+        title: exhausted
+          ? `${link.order.orderNumber}: the courier has refused this parcel ${priorAttempts} times`
+          : `${link.order.orderNumber}: no waybill ${hours}h after its parcel was created`,
+        detail: exhausted
+          ? `The courier has been asked ${priorAttempts} times and refused every time, so we have ` +
+            'stopped asking: a refusal is an opinion about this parcel and it will be the same ' +
+            'opinion tomorrow. Nothing else will move this order.\n\n' +
+            'Open it, read the last AWB error on the shipment, and either fix what the courier ' +
+            'objected to or place it with another courier by hand. Until then the seller ' +
+            'believes it is on its way.'
+          : 'This order was confirmed and its stock reserved, but no courier has issued a ' +
+            'waybill for it and a retry just now did not get one either. Nothing downstream ' +
+            'will move it, and if it has already been picked and packed it will sit at the ' +
+            'handover bench with no label to scan — the confirmation-time attempt does not ' +
+            'repeat on its own.\n\n' +
+            'The seller believes this order is on its way. Open the order, read the last AWB ' +
+            'error on the shipment, and either fix what the courier objected to or place it ' +
+            'manually.',
         source: 'OrderAttentionService',
         dedupeKey: key,
         metadata: {
@@ -453,6 +498,8 @@ export class OrderAttentionService {
           orderNumber: link.order.orderNumber,
           shipmentId: link.shipmentId,
           sellerId: link.order.sellerId,
+          refusals: priorAttempts,
+          retriesExhausted: exhausted,
         },
       });
     }

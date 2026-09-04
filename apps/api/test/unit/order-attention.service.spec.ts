@@ -97,6 +97,9 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
   const SHIP = 'ship-1';
 
   function makeService(opts: {
+    /** How many of this order's shipments a courier has already
+     *  refused and retired. At the cap we stop asking. */
+    priorSupersedes?: number;
     /** What the shipment looks like AFTER the retry ran. */
     afterRetry?: { awbNumber: string | null; supersededAt: Date | null };
     /** What the order's status is AFTER the retry ran. */
@@ -155,6 +158,15 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
             },
           ];
         }),
+        // How many times this order's shipments have already been
+        // retired by a refusal — the retry cap reads this.
+        count: jest.fn(async () => opts.priorSupersedes ?? 0),
+        // The order's CURRENT live shipment. The settled check asks
+        // this rather than the row it started with, because a refusal
+        // retires that row and would otherwise read as success.
+        findFirst: jest.fn(async () => ({
+          shipment: { awbNumber: opts.afterRetry?.awbNumber ?? null },
+        })),
       },
       orderEvent: {
         count: jest.fn(async () => opts.stranded?.[0]?.timesAtTarget ?? 0),
@@ -252,6 +264,66 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
 
     expect(summary.awbless).toBe(1);
     expect(raise).toHaveBeenCalled();
+  });
+
+  describe('OrderAttentionService — a refusal is not a resolution', () => {
+    const AT = new Date('2026-09-04T12:00:00Z');
+
+    it('RAISES when the retry was refused, instead of closing itself', async () => {
+      // The loop that hid itself: a refusal supersedes the shipment
+      // this sweep was watching, and `supersededAt !== null` used to
+      // count as settled — so every retry CLOSED the issue it should
+      // have raised. SD-2026-26-000001 cycled like that every seven
+      // hours for two days: refused, superseded, clock reset, refused
+      // again, with nothing anywhere saying so.
+      const { svc, raise, resolveByKey } = makeService({
+        // No waybill on the live shipment after the retry: still stuck.
+        afterRetry: { awbNumber: null, supersededAt: new Date() },
+      });
+      const summary = await svc.sweep(AT);
+      expect(summary.awbless).toBe(1);
+      expect(raise).toHaveBeenCalled();
+      expect(resolveByKey).not.toHaveBeenCalledWith(
+        expect.stringContaining('awb-stalled:'),
+        expect.anything(),
+      );
+    });
+
+    it('STOPS asking a courier that has refused three times', async () => {
+      // A refusal is an opinion about the parcel and it will be the
+      // same opinion tomorrow (CUR-13). Asking again is a real write
+      // against a live account for nothing.
+      const { svc, processOrder, raise } = makeService({
+        priorSupersedes: 3,
+        afterRetry: { awbNumber: null, supersededAt: new Date() },
+      });
+      await svc.sweep(AT);
+      expect(processOrder).not.toHaveBeenCalled();
+      expect(raise).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: expect.stringContaining('refused this parcel 3 times'),
+          metadata: expect.objectContaining({ refusals: 3, retriesExhausted: true }),
+        }),
+      );
+    });
+
+    it('still asks while there is reason to think it was a wobble', async () => {
+      const { svc, processOrder } = makeService({
+        priorSupersedes: 1,
+        afterRetry: { awbNumber: null, supersededAt: null },
+      });
+      await svc.sweep(AT);
+      expect(processOrder).toHaveBeenCalled();
+    });
+
+    it('resolves once the LIVE shipment carries a waybill', async () => {
+      const { svc, raise, resolveByKey } = makeService({
+        afterRetry: { awbNumber: 'DLV-1', supersededAt: null },
+      });
+      expect((await svc.sweep(AT)).awbless).toBe(0);
+      expect(resolveByKey).toHaveBeenCalled();
+      expect(raise).not.toHaveBeenCalled();
+    });
   });
 
   describe('OrderAttentionService — the courier says one thing, the order says another', () => {
