@@ -40,6 +40,30 @@ describe('NotificationAudienceService — who should hear about this', () => {
     );
   });
 
+  it('resolves a SELLER permission — the seller-side twin, owner included', async () => {
+    // A company can invent, rename and delete its own roles too, so
+    // "whoever handles orders here" is the durable way to name the
+    // people an order concerns. An owner holds everything implicitly
+    // (`isOwner`) and carries no permission rows, exactly as a
+    // super-admin does on the staff side.
+    const { svc, sellerFindMany } = make({ sellerUsers: [SELLER] });
+    await svc.resolve({
+      kind: 'SELLER_PERMISSION',
+      sellerId: 'sel-1',
+      permission: 'orders.view',
+    });
+    expect(sellerFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          sellerId: 'sel-1',
+          sellerRole: {
+            OR: [{ isOwner: true }, { permissions: { some: { permission: 'orders.view' } } }],
+          },
+        }),
+      }),
+    );
+  });
+
   it('resolves a staff PERMISSION — which survives somebody inventing a role', async () => {
     // "Everyone who can pack" keeps working the day a Night Shift Lead
     // role appears; "everyone with role WAREHOUSE_STAFF" silently
@@ -49,7 +73,17 @@ describe('NotificationAudienceService — who should hear about this', () => {
     expect(staffFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          staffRole: { permissions: { some: { permission: 'warehouse.pack' } } },
+          staffRole: {
+            // A super-admin holds every permission implicitly and
+            // therefore carries no permission ROWS. Matching on rows
+            // alone left the people who hold the most out of every
+            // audience addressed by what somebody may do — caught by
+            // the e2e, which asked a real database and got nobody.
+            OR: [
+              { isSuperAdmin: true },
+              { permissions: { some: { permission: 'warehouse.pack' } } },
+            ],
+          },
         }),
       }),
     );

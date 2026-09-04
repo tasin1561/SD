@@ -18,6 +18,19 @@ export type AudienceSelector =
   | { readonly kind: 'ALL_SELLERS' }
   | { readonly kind: 'SELLER_ORG'; readonly sellerId: string }
   | { readonly kind: 'SELLER_ROLE'; readonly sellerId: string; readonly roleKey: string }
+  /**
+   * Everyone at ONE company who holds a permission.
+   *
+   * The seller-side twin of STAFF_PERMISSION, and preferred over
+   * SELLER_ROLE for the same reason: a company can invent, rename and
+   * delete its own roles, so a notification addressed to "finance" goes
+   * quiet the day somebody reorganises. What a person is allowed to DO
+   * is the durable fact about whether a message concerns them.
+   *
+   * An owner holds every permission implicitly (`isOwner`), so they are
+   * included without a permission row — the same rule the guard applies.
+   */
+  | { readonly kind: 'SELLER_PERMISSION'; readonly sellerId: string; readonly permission: string }
   | { readonly kind: 'SELLER_USER'; readonly sellerUserId: string }
   | { readonly kind: 'ALL_STAFF' }
   | { readonly kind: 'STAFF_ROLE'; readonly roleKey: string }
@@ -73,6 +86,13 @@ export class NotificationAudienceService {
           sellerId: selector.sellerId,
           sellerRole: { key: selector.roleKey },
         });
+      case 'SELLER_PERMISSION':
+        return this.sellerUsers({
+          sellerId: selector.sellerId,
+          sellerRole: {
+            OR: [{ isOwner: true }, { permissions: { some: { permission: selector.permission } } }],
+          },
+        });
       case 'SELLER_USER':
         return this.sellerUsers({ id: selector.sellerUserId });
       case 'ALL_STAFF':
@@ -81,7 +101,18 @@ export class NotificationAudienceService {
         return this.staffUsers({ staffRole: { key: selector.roleKey } });
       case 'STAFF_PERMISSION':
         return this.staffUsers({
-          staffRole: { permissions: { some: { permission: selector.permission } } },
+          staffRole: {
+            // A super-admin holds every permission implicitly,
+            // including ones a later migration adds, so they carry no
+            // permission ROWS — matching on rows alone would leave the
+            // people who hold the most out of every audience addressed
+            // by what somebody is allowed to do. The seller side has
+            // the same shape via `isOwner`.
+            OR: [
+              { isSuperAdmin: true },
+              { permissions: { some: { permission: selector.permission } } },
+            ],
+          },
         });
       case 'STAFF_USER':
         return this.staffUsers({ id: selector.staffId });

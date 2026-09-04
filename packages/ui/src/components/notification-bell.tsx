@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 
 export interface BellItem {

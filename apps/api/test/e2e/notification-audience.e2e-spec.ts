@@ -351,9 +351,17 @@ describe('Notification audience (e2e)', () => {
     // Two companies, one user each.
     expect(res.body.recipientCount).toBe(2);
     expect(res.body.sample.length).toBeGreaterThan(0);
-    // A preview that wrote something would not be a preview.
+    // A preview that wrote something would not be a preview. Scoped to
+    // the broadcast's own template: registering the two sellers above
+    // legitimately sent them invitation and welcome emails, so a bare
+    // count is not zero and asserting it was is a test that fails for a
+    // reason that has nothing to do with previews.
     expect(await h.prisma.notificationBroadcast.count()).toBe(0);
-    expect(await h.prisma.notificationLog.count()).toBe(0);
+    expect(
+      await h.prisma.notificationLog.count({
+        where: { templateCode: 'system.announcement.email' },
+      }),
+    ).toBe(0);
   });
 
   it('a send whose audience moved since the preview is REFUSED', async () => {
@@ -375,7 +383,7 @@ describe('Notification audience (e2e)', () => {
       })
       .expect(409);
     expect(res.body.code).toBe('AUDIENCE_CHANGED');
-    expect(await h.prisma.notificationLog.count()).toBe(0);
+    expect(await h.prisma.notificationBroadcast.count()).toBe(0);
   });
 
   it('a broadcast reaches every seller, once each, and is recorded', async () => {
