@@ -18,12 +18,14 @@ import {
   useCancelPackBox,
   useClosePackBox,
   useCompletePack,
+  useForceCompletePack,
   useOpenPackBox,
   useScanIntoPackBox,
   type OpenPackBox,
   type PackBoxLine,
 } from '@/lib/api-hooks';
 import { useScanBlock } from '@/lib/ops-hooks';
+import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { BarcodeCamera, CameraScanButton } from '@/components/barcode-camera';
 import { SerialScanner } from '@/components/ui/serial-scanner';
@@ -77,6 +79,10 @@ function verdictCode(err: unknown): string | null {
 export function PackStation(): ReactElement {
   const toast = useToast();
   const block = useScanBlock();
+  const forceComplete = useForceCompletePack();
+  const canForce = usePermission('warehouse.pick.supervise');
+  const [forcing, setForcing] = useState(false);
+  const [forceReason, setForceReason] = useState('');
   const [box, setBox] = useState<OpenPackBox | null>(null);
   const [lines, setLines] = useState<ScannedLine[]>([]);
   const [code, setCode] = useState('');
@@ -206,6 +212,35 @@ export function PackStation(): ReactElement {
           ? `Packed — manifest ${result.manifestNumber}`
           : 'Packed — ready for pickup',
       );
+      reset();
+    } catch (err) {
+      setError(serverVerdict(err));
+    }
+  }
+
+  /**
+   * The parcel whose contents cannot be scanned.
+   *
+   * Goods shelved before product labelling existed, or a sticker torn
+   * off in transit. A supervisor says so in writing and the parcel goes
+   * out; the reason is the only record that anybody chose this, which
+   * is why the server insists on a real sentence.
+   */
+  async function onForceComplete(): Promise<void> {
+    if (box === null) return;
+    setError(null);
+    try {
+      const result = await forceComplete.mutateAsync({
+        shipmentId: box.shipmentId,
+        reason: forceReason.trim(),
+      });
+      toast.success(
+        result.manifestNumber
+          ? `Packed without scanning — manifest ${result.manifestNumber}`
+          : 'Packed without scanning',
+      );
+      setForcing(false);
+      setForceReason('');
       reset();
     } catch (err) {
       setError(serverVerdict(err));
@@ -425,6 +460,49 @@ export function PackStation(): ReactElement {
                     </Button>
                   </div>
                 </>
+              )}
+
+              {/* The escape hatch, and only for somebody who can carry
+                  it: a packer must not be able to waive the check they
+                  are the one performing. Cosmetic here — the server
+                  holds the permission (FE-2). */}
+              {canForce && !cancelling && (
+                <div className="border-border-subtle mt-3 border-t pt-3">
+                  {!forcing ? (
+                    <button
+                      type="button"
+                      className="text-text-faint hover:text-text text-xs underline"
+                      onClick={() => setForcing(true)}
+                    >
+                      These products have no labels to scan
+                    </button>
+                  ) : (
+                    <>
+                      <p className="text-text-muted mb-2 text-xs">
+                        This packs the parcel without checking its contents. It is recorded against
+                        your name with the reason below.
+                      </p>
+                      <Input
+                        value={forceReason}
+                        placeholder="Why? e.g. stock received before product labelling; counted by hand against the pick list"
+                        onChange={(e) => setForceReason(e.target.value)}
+                      />
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Button
+                          variant="destructive"
+                          size="md"
+                          disabled={forceReason.trim().length < 20 || forceComplete.isPending}
+                          onClick={() => void onForceComplete()}
+                        >
+                          {forceComplete.isPending ? 'Packing…' : 'Pack without scanning'}
+                        </Button>
+                        <Button variant="ghost" size="md" onClick={() => setForcing(false)}>
+                          Back
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
             </CardBody>
           </Card>

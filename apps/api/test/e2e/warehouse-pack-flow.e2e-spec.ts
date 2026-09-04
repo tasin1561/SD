@@ -9,6 +9,7 @@ import {
   claimPick,
   resetAuthState,
   type AppHarness,
+  packAtBench,
 } from './app-harness';
 
 /**
@@ -209,10 +210,7 @@ describe('Warehouse pack flow (e2e)', () => {
     expect(next.body.pack).not.toBeNull();
     expect(next.body.pack.shipmentId).toBe(shipmentId);
 
-    const completed = await request(h.baseUrl)
-      .post(`/warehouse/packs/${shipmentId}/complete`)
-      .set(staffAuth)
-      .expect(200);
+    const completed = await packAtBench(h.baseUrl, staffAuth, h.prisma, shipmentId);
     expect(completed.body.status).toBe(OrderStatus.PACKED);
     expect(completed.body.alreadyComplete).toBe(false);
     expect(completed.body.manifestId).not.toBeNull();
@@ -244,14 +242,8 @@ describe('Warehouse pack flow (e2e)', () => {
     const a = await makePickedShipment(2);
     const b = await makePickedShipment(3);
 
-    const pA = await request(h.baseUrl)
-      .post(`/warehouse/packs/${a.shipmentId}/complete`)
-      .set(staffAuth)
-      .expect(200);
-    const pB = await request(h.baseUrl)
-      .post(`/warehouse/packs/${b.shipmentId}/complete`)
-      .set(staffAuth)
-      .expect(200);
+    const pA = await packAtBench(h.baseUrl, staffAuth, h.prisma, a.shipmentId);
+    const pB = await packAtBench(h.baseUrl, staffAuth, h.prisma, b.shipmentId);
 
     expect(pB.body.manifestId).toBe(pA.body.manifestId);
     const manifests = await h.prisma.manifest.count();
@@ -267,16 +259,10 @@ describe('Warehouse pack flow (e2e)', () => {
     await receiveStock(10);
     const { shipmentId } = await makePickedShipment();
 
-    const first = await request(h.baseUrl)
-      .post(`/warehouse/packs/${shipmentId}/complete`)
-      .set(staffAuth)
-      .expect(200);
+    const first = await packAtBench(h.baseUrl, staffAuth, h.prisma, shipmentId);
     expect(first.body.alreadyComplete).toBe(false);
 
-    const second = await request(h.baseUrl)
-      .post(`/warehouse/packs/${shipmentId}/complete`)
-      .set(staffAuth)
-      .expect(200);
+    const second = await packAtBench(h.baseUrl, staffAuth, h.prisma, shipmentId);
     expect(second.body.alreadyComplete).toBe(true);
     expect(second.body.status).toBe(OrderStatus.PACKED);
     expect(second.body.manifestId).toBe(first.body.manifestId);

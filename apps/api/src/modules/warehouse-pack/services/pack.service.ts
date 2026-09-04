@@ -1,5 +1,11 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { ActorType, OrderStatus, ShipmentStatus, StockUnitStatus } from '@skydrop/db';
+import {
+  PackBoxStatus,
+  ActorType,
+  OrderStatus,
+  ShipmentStatus,
+  StockUnitStatus,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderReadService } from '../../order/services/order-read.service';
@@ -72,6 +78,13 @@ export class PackService {
      * pass a swapped unit). Ignored for an all-NORMAL parcel.
      */
     scannedSerials?: readonly string[],
+    /**
+     * A supervisor forcing a parcel through WITHOUT the box scan, with
+     * their reason. Reaches here only from the separate
+     * `force-complete` endpoint, which carries its own permission — see
+     * the verification gate below.
+     */
+    unverifiedOverrideReason?: string,
   ): Promise<CompletePackResult> {
     const shipment = await this.prisma.client.shipment.findFirst({
       where: { id: shipmentId, deletedAt: null },
@@ -137,6 +150,45 @@ export class PackService {
         code: 'ORDER_NOT_PACKABLE',
         message: `Order is ${order.status}; pack complete requires PICKED`,
       });
+    }
+
+    // ── THE VERIFICATION GATE (2026-09-04) ─────────────────────────────
+    //
+    // A parcel is packed by scanning its contents into a box (PACK-1):
+    // open with the label, scan each product in, close with the label.
+    // Completing WITHOUT that says a box was checked when nothing was,
+    // and the record afterwards cannot tell the two apart.
+    //
+    // The gate is the CLOSED BOX itself rather than a setting, because
+    // it is the evidence the scan happened. It costs the real flows
+    // nothing: `PackBoxService.close` closes the box before calling
+    // here, and the STRICT-mode resume — where close refused with
+    // UNIT_SCAN_REQUIRED and the operator returns with the serials —
+    // also has a closed box behind it.
+    //
+    // What it stops is the naked API call. Every parcel packed in
+    // production so far went that way (7 packed, 0 pack_boxes), which
+    // is how a bench built to verify contents ended up never running.
+    //
+    // The escape hatch is a SUPERVISOR forcing it through with a reason
+    // — the label printer is broken, the barcode is damaged, the goods
+    // predate labelling. Deliberately a separate endpoint carrying its
+    // own permission, so a packer cannot self-authorise, and audited
+    // HIGH so "how often are we bypassing this" is answerable.
+    if (unverifiedOverrideReason === undefined) {
+      const closedBox = await this.prisma.client.packBox.findFirst({
+        where: { shipmentId, status: PackBoxStatus.CLOSED },
+        select: { id: true },
+      });
+      if (closedBox === null) {
+        throw new ConflictException({
+          code: 'PACK_VERIFICATION_REQUIRED',
+          message:
+            'Pack this parcel at the bench: scan the shipping label to open a box, scan each ' +
+            'product into it, then scan the label again to close. A supervisor can force it ' +
+            'through if the label cannot be scanned.',
+        });
+      }
     }
 
     // R4 — the strict gate runs BEFORE the operational stamp, on purpose:
@@ -205,13 +257,23 @@ export class PackService {
     await this.audit.log({
       actorType: ActorType.STAFF,
       actorId: staffId,
-      action: 'warehouse_pack.completed',
+      // A forced pack is a DIFFERENT action, not the same one with a
+      // flag: "how often did somebody pack a parcel nobody scanned"
+      // has to be answerable by filtering, and a boolean buried in
+      // metadata is not something anybody filters on.
+      action:
+        unverifiedOverrideReason === undefined
+          ? 'warehouse_pack.completed'
+          : 'warehouse_pack.completed_unverified',
       entityType: 'shipment',
       entityId: shipmentId,
-      severity: 'LOW',
+      severity: unverifiedOverrideReason === undefined ? 'LOW' : 'HIGH',
       metadata: {
         orderId,
         unitsScanned,
+        ...(unverifiedOverrideReason === undefined
+          ? {}
+          : { overrideReason: unverifiedOverrideReason }),
         ipAddress: ctx?.ipAddress ?? null,
         userAgent: ctx?.userAgent ?? null,
         requestId: ctx?.requestId ?? null,

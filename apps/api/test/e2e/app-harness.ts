@@ -6,6 +6,7 @@
  * Each suite resets its own table state in `beforeEach` so suites are
  * independent.
  */
+import request from 'supertest';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
@@ -627,4 +628,60 @@ export async function waitFor<T>(
   throw new Error(
     `waitFor timed out after ${timeoutMs}ms${opts.description ? ` (${opts.description})` : ''}`,
   );
+}
+
+/**
+ * Pack a parcel the way the floor does: open a box with the shipping
+ * label, scan every product into it, close with the label again.
+ *
+ * `PackService.complete` refuses a parcel with no CLOSED box (the
+ * verification gate), so this is what a test needs wherever it used to
+ * POST straight to `/complete`. Deliberately NOT the supervisor
+ * `force-complete` override: routing every suite through the bypass
+ * would leave the real path exercised by one spec, and the
+ * conservation traces in particular should run what production runs.
+ *
+ * Scans by SKU CODE, which the bench accepts for a product with no
+ * barcode of its own — the same fallback the printed sticker uses.
+ * Quantities come from the box's own `expected` list, so this works for
+ * any order without the caller restating its contents.
+ */
+export async function packAtBench(
+  baseUrl: string,
+  staffAuth: { Authorization: string },
+  prisma: PrismaClient,
+  shipmentId: string,
+): Promise<request.Response> {
+  const shipment = await prisma.shipment.findUniqueOrThrow({
+    where: { id: shipmentId },
+    select: { awbNumber: true },
+  });
+  const awbNumber = shipment.awbNumber;
+  if (awbNumber === null) {
+    throw new Error(`packAtBench: shipment ${shipmentId} has no AWB to scan`);
+  }
+
+  const opened = await request(baseUrl)
+    .post('/warehouse/packs/boxes/open')
+    .set(staffAuth)
+    .send({ awbNumber })
+    .expect(200);
+  const boxId = opened.body.packBoxId as string;
+
+  const expected = opened.body.expected as Array<{ skuCode: string; quantity: number }>;
+  for (const line of expected) {
+    for (let i = 0; i < line.quantity; i += 1) {
+      await request(baseUrl)
+        .post(`/warehouse/packs/boxes/${boxId}/scan`)
+        .set(staffAuth)
+        .send({ code: line.skuCode })
+        .expect(200);
+    }
+  }
+
+  return request(baseUrl)
+    .post(`/warehouse/packs/boxes/${boxId}/close`)
+    .set(staffAuth)
+    .send({ awbNumber })
+    .expect(200);
 }

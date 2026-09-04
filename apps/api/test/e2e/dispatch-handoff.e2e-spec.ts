@@ -19,6 +19,7 @@ import {
   settleAwb,
   waitFor,
   type AppHarness,
+  packAtBench,
 } from './app-harness';
 
 /**
@@ -198,10 +199,7 @@ describe('Dispatch handoff endpoint (e2e)', () => {
       .set(staffAuth)
       .expect(200);
 
-    const pack = await request(h.baseUrl)
-      .post(`/warehouse/packs/${shipmentId}/complete`)
-      .set(staffAuth)
-      .expect(200);
+    const pack = await packAtBench(h.baseUrl, staffAuth, h.prisma, shipmentId);
     const manifestId = pack.body.manifestId as string;
     await request(h.baseUrl)
       .post(`/admin/warehouse/manifests/${manifestId}/close`)
@@ -285,10 +283,7 @@ describe('Dispatch handoff endpoint (e2e)', () => {
       .post(`/warehouse/picks/${shipment.id}/complete`)
       .set(staffAuth)
       .expect(200);
-    const pack = await request(h.baseUrl)
-      .post(`/warehouse/packs/${shipment.id}/complete`)
-      .set(staffAuth)
-      .expect(200);
+    const pack = await packAtBench(h.baseUrl, staffAuth, h.prisma, shipment.id);
     const withAwb = await h.prisma.shipment.findUniqueOrThrow({ where: { id: shipment.id } });
     return {
       orderId,
@@ -467,10 +462,7 @@ describe('Dispatch handoff endpoint (e2e)', () => {
       .post(`/warehouse/picks/${shipment.id}/complete`)
       .set(staffAuth)
       .expect(200);
-    const pack = await request(h.baseUrl)
-      .post(`/warehouse/packs/${shipment.id}/complete`)
-      .set(staffAuth)
-      .expect(200);
+    const pack = await packAtBench(h.baseUrl, staffAuth, h.prisma, shipment.id);
 
     await request(h.baseUrl)
       .post(`/admin/courier/manifests/${pack.body.manifestId}/confirm-handoff`)

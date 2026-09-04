@@ -18,6 +18,7 @@ import {
   resetAuthState,
   waitFor,
   type AppHarness,
+  packAtBench,
 } from './app-harness';
 
 /**
@@ -224,10 +225,7 @@ describe('Warehouse RTO flow (e2e)', () => {
       .set(staffAuth)
       .expect(200);
 
-    const pack = await request(h.baseUrl)
-      .post(`/warehouse/packs/${shipmentId}/complete`)
-      .set(staffAuth)
-      .expect(200);
+    const pack = await packAtBench(h.baseUrl, staffAuth, h.prisma, shipmentId);
     await request(h.baseUrl)
       .post(`/admin/warehouse/manifests/${pack.body.manifestId}/close`)
       .set(staffAuth)

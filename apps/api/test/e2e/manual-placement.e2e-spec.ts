@@ -16,6 +16,7 @@ import {
   resetAuthState,
   waitFor,
   type AppHarness,
+  packAtBench,
 } from './app-harness';
 
 /**
@@ -202,10 +203,7 @@ describe('Manual courier placement (e2e)', () => {
       .post(`/warehouse/picks/${oldShipmentId}/complete`)
       .set(staffAuth)
       .expect(200);
-    const pack = await request(h.baseUrl)
-      .post(`/warehouse/packs/${oldShipmentId}/complete`)
-      .set(staffAuth)
-      .expect(200);
+    const pack = await packAtBench(h.baseUrl, staffAuth, h.prisma, oldShipmentId);
     await request(h.baseUrl)
       .post(`/admin/warehouse/manifests/${pack.body.manifestId}/close`)
       .set(staffAuth)

@@ -18,6 +18,7 @@ import {
   resetAuthState,
   waitFor,
   type AppHarness,
+  packAtBench,
 } from './app-harness';
 
 /**
@@ -296,10 +297,7 @@ describe('M10 Tracking — webhook lifecycle e2e (TRK-1..9)', () => {
       .set(staffAuth)
       .expect(200);
 
-    const pack = await request(h.baseUrl)
-      .post(`/warehouse/packs/${shipment.id}/complete`)
-      .set(staffAuth)
-      .expect(200);
+    const pack = await packAtBench(h.baseUrl, staffAuth, h.prisma, shipment.id);
     await request(h.baseUrl)
       .post(`/admin/warehouse/manifests/${pack.body.manifestId}/close`)
       .set(staffAuth)

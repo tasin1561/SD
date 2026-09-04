@@ -25,6 +25,13 @@ function makeService(
      *  the strict pack gate on. */
     pickedUnits?: number;
     raiseIfDue?: jest.Mock;
+    /**
+     * Has this parcel been packed at the bench? A CLOSED box is the
+     * evidence the contents were scanned, and completing without one is
+     * refused. Defaults to true because that is the real flow —
+     * PackBoxService.close closes the box, then calls complete.
+     */
+    closedBox?: boolean;
   } = {},
 ) {
   const defaultShipment = {
@@ -45,9 +52,11 @@ function makeService(
   const shipmentUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async () => ({
     count: opts.stampCount ?? 1,
   }));
+  const packBoxFindFirst = jest.fn(async () => (opts.closedBox === false ? null : { id: 'box-1' }));
   const client: AnyArgs = {
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(client),
     shipment: { findFirst: shipmentFindFirst, updateMany: shipmentUpdateMany },
+    packBox: { findFirst: packBoxFindFirst },
   };
 
   const getById = jest.fn(async () =>
@@ -108,6 +117,7 @@ function makeService(
     attachShipment,
     auditLog,
     unitLedger,
+    packBoxFindFirst,
   };
 }
 
@@ -339,5 +349,70 @@ describe('PackService.complete — the auto-pickup hook', () => {
     const { svc } = makeService({ attach, raiseIfDue });
     await svc.complete(SHIP, STAFF);
     expect(raiseIfDue).toHaveBeenCalled();
+  });
+});
+
+describe('PackService.complete — the verification gate', () => {
+  it('REFUSES a parcel that was never packed at the bench', async () => {
+    // Completing without a box says the contents were checked when
+    // nothing was, and nothing afterwards can tell the two apart. Every
+    // parcel packed in production so far went this way — 7 packed, 0
+    // pack boxes — which is how a bench built to verify contents ended
+    // up never running once.
+    const { svc, transitionStatus, shipmentUpdateMany } = makeService({ closedBox: false });
+    await expect(svc.complete(SHIP, STAFF)).rejects.toMatchObject({
+      response: { code: 'PACK_VERIFICATION_REQUIRED' },
+    });
+    // The claim is NOT consumed and nothing moved: this parcel is still
+    // there to be packed properly.
+    expect(shipmentUpdateMany).not.toHaveBeenCalled();
+    expect(transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it('lets the REAL flow through — close() closes the box, then calls here', async () => {
+    const { svc, transitionStatus } = makeService({ closedBox: true });
+    const r = await svc.complete(SHIP, STAFF);
+    expect(r.status).toBe(OrderStatus.PACKED);
+    expect(transitionStatus).toHaveBeenCalled();
+  });
+
+  it('a supervisor override packs it, and audits as a DIFFERENT action', async () => {
+    // "How often did somebody pack a parcel nobody scanned" has to be
+    // answerable by filtering. A boolean buried in metadata is not
+    // something anybody filters on.
+    const { svc, auditLog, transitionStatus } = makeService({ closedBox: false });
+    const reason = 'Barcode torn off in transit; contents checked by hand against the pick list.';
+    const r = await svc.complete(SHIP, STAFF, undefined, undefined, reason);
+    expect(r.status).toBe(OrderStatus.PACKED);
+    expect(transitionStatus).toHaveBeenCalled();
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'warehouse_pack.completed_unverified',
+        severity: 'HIGH',
+        metadata: expect.objectContaining({ overrideReason: reason }),
+      }),
+    );
+  });
+
+  it('the ordinary pack stays LOW and keeps its own action name', async () => {
+    const { svc, auditLog } = makeService({ closedBox: true });
+    await svc.complete(SHIP, STAFF);
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'warehouse_pack.completed', severity: 'LOW' }),
+    );
+  });
+
+  it('the gate is not even asked when an override is given', async () => {
+    // A supervisor forcing it through must not be refused by the very
+    // check they are overriding.
+    const { svc, packBoxFindFirst } = makeService({ closedBox: false });
+    await svc.complete(
+      SHIP,
+      STAFF,
+      undefined,
+      undefined,
+      'Label printer is down; checked by hand.',
+    );
+    expect(packBoxFindFirst).not.toHaveBeenCalled();
   });
 });

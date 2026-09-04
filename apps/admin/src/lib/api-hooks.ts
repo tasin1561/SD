@@ -2379,3 +2379,31 @@ export function useSkuLabelsForVariants(): UseMutationResult<
       }),
   });
 }
+
+/**
+ * Supervisor: finish a pack WITHOUT scanning the contents.
+ *
+ * For the parcel whose products carry no sticker — goods shelved before
+ * labelling existed, or a barcode torn in transit. Its own endpoint and
+ * its own permission, so the packer performing the check cannot be the
+ * one who waives it, and it lands as a HIGH audit row naming a reason.
+ */
+export function useForceCompletePack(): UseMutationResult<
+  CompletePackResult,
+  Error,
+  { shipmentId: string; reason: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ shipmentId, reason }) =>
+      client.request<CompletePackResult>(`/api/warehouse/packs/${shipmentId}/force-complete`, {
+        method: 'POST',
+        body: { reason },
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-orders'] });
+      void qc.invalidateQueries({ queryKey: ['admin-manifests'] });
+    },
+  });
+}

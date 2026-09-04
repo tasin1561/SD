@@ -1,5 +1,5 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { ArrayMaxSize, IsArray, IsOptional, IsString } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ArrayMaxSize, IsArray, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class CompletePackDto {
   @ApiPropertyOptional({
@@ -12,4 +12,19 @@ export class CompletePackDto {
   @ArrayMaxSize(500)
   @IsString({ each: true })
   readonly scannedSerials?: string[];
+}
+
+export class ForceCompletePackDto extends CompletePackDto {
+  /**
+   * Why this parcel is going out without its contents being scanned.
+   *
+   * Long enough to be a sentence, because the audit row is the only
+   * record that anybody chose this — and "ok" tells whoever reads it
+   * back nothing about whether it should have happened.
+   */
+  @ApiProperty({ minLength: 20, maxLength: 500 })
+  @IsString()
+  @MinLength(20)
+  @MaxLength(500)
+  readonly reason!: string;
 }

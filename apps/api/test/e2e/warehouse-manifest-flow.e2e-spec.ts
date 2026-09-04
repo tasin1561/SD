@@ -11,6 +11,7 @@ import {
   flushTestRedis,
   resetAuthState,
   type AppHarness,
+  packAtBench,
 } from './app-harness';
 
 /**
@@ -201,10 +202,7 @@ describe('Warehouse manifest flow (e2e)', () => {
       .expect(200);
 
     // Pack.
-    const pack = await request(h.baseUrl)
-      .post(`/warehouse/packs/${shipmentId}/complete`)
-      .set(staffAuth)
-      .expect(200);
+    const pack = await packAtBench(h.baseUrl, staffAuth, h.prisma, shipmentId);
     return { orderId, shipmentId, manifestId: pack.body.manifestId };
   }
 

@@ -16,6 +16,7 @@ import {
   resetAuthState,
   waitFor,
   type AppHarness,
+  packAtBench,
 } from './app-harness';
 
 /**
@@ -223,10 +224,7 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
       .expect(200);
 
     // Real pack path (HTTP).
-    const pack = await request(h.baseUrl)
-      .post(`/warehouse/packs/${shipmentId}/complete`)
-      .set(staffAuth)
-      .expect(200);
+    const pack = await packAtBench(h.baseUrl, staffAuth, h.prisma, shipmentId);
     await request(h.baseUrl)
       .post(`/admin/warehouse/manifests/${pack.body.manifestId}/close`)
       .set(staffAuth)
@@ -378,10 +376,7 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
     // fulfill()s the phase-2 reservation right here — the goods are
     // counted gone the moment the box is sealed, not whenever a
     // courier eventually collects it.
-    const pack = await request(h.baseUrl)
-      .post(`/warehouse/packs/${shipment.id}/complete`)
-      .set(staffAuth)
-      .expect(200);
+    const pack = await packAtBench(h.baseUrl, staffAuth, h.prisma, shipment.id);
     const afterPack = await snapshot();
     expect(afterPack).toEqual({
       qtyOnHand: 8, // decremented at pack
@@ -570,10 +565,7 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
       .post(`/warehouse/picks/${shipment.id}/complete`)
       .set(staffAuth)
       .expect(200);
-    await request(h.baseUrl)
-      .post(`/warehouse/packs/${shipment.id}/complete`)
-      .set(staffAuth)
-      .expect(200);
+    await packAtBench(h.baseUrl, staffAuth, h.prisma, shipment.id);
 
     // The box is sealed: qtyOnHand already moved.
     const afterPack = await snapshot();

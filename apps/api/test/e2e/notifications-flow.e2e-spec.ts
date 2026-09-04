@@ -20,6 +20,7 @@ import {
   resetAuthState,
   waitFor,
   type AppHarness,
+  packAtBench,
 } from './app-harness';
 
 /**
@@ -239,10 +240,7 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
       .set(staffAuth)
       .expect(200);
 
-    const pack = await request(h.baseUrl)
-      .post(`/warehouse/packs/${shipment.id}/complete`)
-      .set(staffAuth)
-      .expect(200);
+    const pack = await packAtBench(h.baseUrl, staffAuth, h.prisma, shipment.id);
     await request(h.baseUrl)
       .post(`/admin/warehouse/manifests/${pack.body.manifestId}/close`)
       .set(staffAuth)

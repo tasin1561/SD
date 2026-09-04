@@ -20,7 +20,7 @@ import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import { PackQueueService, type PulledPack } from '../services/pack-queue.service';
 import { PackService, type CompletePackResult } from '../services/pack.service';
-import { CompletePackDto } from '../dto/complete-pack.dto';
+import { CompletePackDto, ForceCompletePackDto } from '../dto/complete-pack.dto';
 import {
   CancelPackBoxDto,
   ClosePackBoxDto,
@@ -81,6 +81,34 @@ export class PackerController {
     @Body() body?: CompletePackDto,
   ): Promise<CompletePackResult> {
     return this.pack.complete(shipmentId, staff.id, ctx, body?.scannedSerials);
+  }
+
+  /**
+   * Pack a parcel WITHOUT scanning its contents.
+   *
+   * Its own endpoint and its own permission on purpose: a packer must
+   * not be able to authorise skipping the check they are the ones
+   * performing. A supervisor can — the label printer is broken, the
+   * barcode is torn, the goods were shelved before labelling existed —
+   * and it lands as a HIGH `warehouse_pack.completed_unverified` audit
+   * row with their reason on it, so how often this happens is a
+   * question with an answer.
+   */
+  @Post(':shipmentId/force-complete')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('warehouse.pick.supervise')
+  @ApiOperation({
+    summary:
+      'Supervisor: finish a pack WITHOUT the box scan, with a written reason. Audited HIGH as a distinct action. For a torn barcode or goods that predate labelling — not for ordinary packing',
+  })
+  forceComplete(
+    @Param('shipmentId', new ParseUUIDPipe({ version: '7' }))
+    shipmentId: string,
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @ClientInfo() ctx: ClientInfoPayload,
+    @Body() body: ForceCompletePackDto,
+  ): Promise<CompletePackResult> {
+    return this.pack.complete(shipmentId, staff.id, ctx, body.scannedSerials, body.reason);
   }
 
   // ── The box ─────────────────────────────────────────────────────────

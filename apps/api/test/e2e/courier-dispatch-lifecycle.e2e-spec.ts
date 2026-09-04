@@ -16,6 +16,7 @@ import {
   claimPick,
   settleAwb,
   type AppHarness,
+  packAtBench,
 } from './app-harness';
 
 /**
@@ -199,10 +200,7 @@ describe('Courier dispatch lifecycle (e2e)', () => {
       .post(`/warehouse/picks/${shipmentId}/complete`)
       .set(staffAuth)
       .expect(200);
-    const pack = await request(h.baseUrl)
-      .post(`/warehouse/packs/${shipmentId}/complete`)
-      .set(staffAuth)
-      .expect(200);
+    const pack = await packAtBench(h.baseUrl, staffAuth, h.prisma, shipmentId);
     return pack.body.manifestId as string;
   }
 
