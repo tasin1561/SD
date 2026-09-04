@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { OrderSource, OrderStatus, PaymentMode, Prisma, WalletEntryDirection } from '@skydrop/db';
+import { OrderStateMachineService } from './order-state-machine.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 
 export interface ResolvedOrderItem {
@@ -159,7 +160,24 @@ const IN_TRANSIT_STATUSES = [
 
 @Injectable()
 export class OrderReadService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly stateMachine: OrderStateMachineService,
+  ) {}
+
+  /**
+   * Has this order stopped, for good?
+   *
+   * Exposed here because the state machine is internal to
+   * OrderCoreModule and `OrderReadService` is the sanctioned read
+   * boundary — a caller outside the order domain needing this must not
+   * reach past the facade for it, and must not keep its own list
+   * either: a hand-copied set of terminals silently goes stale the day
+   * a status is added.
+   */
+  isTerminalStatus(status: OrderStatus): boolean {
+    return this.stateMachine.isTerminal(status);
+  }
 
   /**
    * The two figures a seller wants on a dashboard: what is still coming

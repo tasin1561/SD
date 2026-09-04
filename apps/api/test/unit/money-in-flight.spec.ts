@@ -1,3 +1,4 @@
+import { OrderStateMachineService } from '../../src/modules/order/services/order-state-machine.service';
 import { OrderReadService } from '../../src/modules/order/services/order-read.service';
 import { Prisma } from '@skydrop/db';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
@@ -18,7 +19,7 @@ function makeSut(
     .mockResolvedValueOnce(moving)
     .mockResolvedValueOnce(delivered);
   const prisma = { client: { order: { findMany } } } as unknown as PrismaService;
-  return { svc: new OrderReadService(prisma), findMany };
+  return { svc: new OrderReadService(prisma, new OrderStateMachineService()), findMany };
 }
 
 describe('OrderReadService.moneyInFlight', () => {

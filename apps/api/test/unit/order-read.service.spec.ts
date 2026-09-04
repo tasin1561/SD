@@ -1,5 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { OrderSource, OrderStatus, PaymentMode, Prisma } from '@skydrop/db';
+import { OrderStateMachineService } from '../../src/modules/order/services/order-state-machine.service';
 import { OrderReadService } from '../../src/modules/order/services/order-read.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 
@@ -65,7 +66,10 @@ function makeService(opts: { found?: AnyArgs | null; many?: AnyArgs[] } = {}) {
   );
   const findMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => opts.many ?? [row()]);
   const client = { order: { findFirst, findMany } };
-  const svc = new OrderReadService({ client } as unknown as PrismaService);
+  const svc = new OrderReadService(
+    { client } as unknown as PrismaService,
+    new OrderStateMachineService(),
+  );
   return { svc, findFirst, findMany };
 }
 

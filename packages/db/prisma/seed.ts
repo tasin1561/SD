@@ -503,6 +503,15 @@ const systemSettings: SystemSettingSeed[] = [
       'ON (the default): scanning a parcel at the handover bench IS the handover — the order goes DISPATCHED there and then, and the manifest closes itself once its last parcel is scanned, so nobody confirms a handoff. The scan is the truest signal the system has: it happens per parcel, at the door, at the moment the box leaves, where confirming a handoff is one person asserting afterwards that forty parcels went. OFF: the scan only records that the parcel was checked, and a supervisor still confirms the handoff per manifest. Turn it off if parcels are ever scanned to check them IN rather than out.',
   },
   {
+    key: 'ops.tracking_stranded_alert_hours',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 6,
+    displayName: 'Courier says one thing, the order says another — hours before we flag it',
+    description:
+      'A parcel whose courier scans cannot move its order: the tracking mapping has no route from where the order is to where the courier says the parcel is, so every scan is dropped and the seller keeps being told something that is no longer true. Two real parcels sat like that for two days while twenty-four return-leg scans were discarded, and nothing anywhere said so. Long enough that a pair of scans arriving out of order settles by itself first.',
+  },
+  {
     key: 'ops.awb_stall_alert_hours',
     category: 'ops',
     valueType: SettingValueType.INT,

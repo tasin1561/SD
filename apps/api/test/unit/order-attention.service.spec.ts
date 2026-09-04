@@ -1,3 +1,5 @@
+import { OrderStateMachineService } from '../../src/modules/order/services/order-state-machine.service';
+import { TrackingStatusMappingService } from '../../src/modules/tracking-events/services/tracking-status-mapping.service';
 import { OrderAttentionService } from '../../src/modules/order-attention/services/order-attention.service';
 
 /**
@@ -99,6 +101,15 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
     afterRetry?: { awbNumber: string | null; supersededAt: Date | null };
     /** What the order's status is AFTER the retry ran. */
     orderAfter?: string;
+    /** Parcels for the stranded-tracking check: what the courier says
+     *  vs what the order says. */
+    stranded?: Array<{
+      orderStatus: string;
+      shipmentStatus: string;
+      /** How many times the order has ALREADY been at the scan's
+       *  target — >0 means the scan is stale and the skip is right. */
+      timesAtTarget?: number;
+    }>;
   }) {
     const processOrder = jest.fn(async () => ({ result: 'ERROR' }));
     const raise = jest.fn(async () => undefined);
@@ -114,13 +125,39 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
         ),
       },
       orderShipment: {
-        findMany: jest.fn(async () => [
-          {
-            orderId: ORDER,
-            shipmentId: SHIP,
-            order: { orderNumber: 'SD-2026-26-000003', sellerId: 'sel-1' },
-          },
-        ]),
+        // Two checks share this. Only the stranded-tracking one filters
+        // on the shipment's own updatedAt, so that is what tells them
+        // apart — a mock returning one shape to both would have the
+        // second crashing on fields it never asked for.
+        findMany: jest.fn(async (args: { where?: Record<string, unknown> }) => {
+          const where = (args?.where ?? {}) as { shipment?: { updatedAt?: unknown } };
+          if (where.shipment?.updatedAt !== undefined) {
+            return (opts.stranded ?? []).map((r, i) => ({
+              orderId: `${ORDER}-${i}`,
+              shipmentId: `${SHIP}-${i}`,
+              shipment: {
+                status: r.shipmentStatus,
+                shipmentNumber: `SH-${i}`,
+                updatedAt: new Date('2026-09-01T00:00:00Z'),
+              },
+              order: {
+                status: r.orderStatus,
+                orderNumber: `SD-TEST-${i}`,
+                sellerId: 'sel-1',
+              },
+            }));
+          }
+          return [
+            {
+              orderId: ORDER,
+              shipmentId: SHIP,
+              order: { orderNumber: 'SD-2026-26-000003', sellerId: 'sel-1' },
+            },
+          ];
+        }),
+      },
+      orderEvent: {
+        count: jest.fn(async () => opts.stranded?.[0]?.timesAtTarget ?? 0),
       },
       order: {
         findUnique: jest.fn(async () => ({ status: opts.orderAfter ?? 'CONFIRMED' })),
@@ -139,6 +176,15 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
       {} as never,
       { raise, resolveByKey } as never,
       { processOrder } as never,
+      // The real mapping: this watchdog asks it what the order SHOULD
+      // be, and a fake would let the two drift apart silently — which
+      // is the very failure it exists to catch.
+      new TrackingStatusMappingService(),
+      // Terminal-status lookup goes through the order facade; the real
+      // state machine answers it, so a new terminal is covered here too.
+      {
+        isTerminalStatus: (st: never) => new OrderStateMachineService().isTerminal(st),
+      } as never,
     );
     return { svc, processOrder, raise, resolveByKey };
   }
@@ -206,5 +252,94 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
 
     expect(summary.awbless).toBe(1);
     expect(raise).toHaveBeenCalled();
+  });
+
+  describe('OrderAttentionService — the courier says one thing, the order says another', () => {
+    const AT = new Date('2026-09-04T12:00:00Z');
+
+    /** Only THIS watchdog's issues. The awbless check is unconditional
+     *  too and raises its own in every sweep here, so "raise was never
+     *  called" would be asserting something else entirely. */
+    function trackingIssues(raise: jest.Mock): unknown[] {
+      return raise.mock.calls.filter((c) =>
+        String((c[0] as { dedupeKey?: string }).dedupeKey ?? '').startsWith('tracking-stranded:'),
+      );
+    }
+
+    it('RAISES when a parcel’s scans have nowhere to go', async () => {
+      // The shape the two real parcels had: the courier is somewhere
+      // the order cannot reach, and the order has never been there.
+      // (Their exact pair — DELIVERY_FAILED with a return-leg scan —
+      // is a legal route now, which is the fix; this is the NEXT gap
+      // of the same kind, whatever it turns out to be.)
+      const { svc, raise } = makeService({
+        stranded: [{ orderStatus: 'PACKED', shipmentStatus: 'DELIVERED' }],
+      });
+      const summary = await svc.sweep(AT);
+      expect(summary.strandedTracking).toBe(1);
+      expect(raise).toHaveBeenCalledWith(
+        expect.objectContaining({
+          severity: 'HIGH',
+          // Both sides named: "tracking is stuck" sends nobody anywhere.
+          title: expect.stringContaining('DELIVERED'),
+          metadata: expect.objectContaining({
+            orderStatus: 'PACKED',
+            shipmentStatus: 'DELIVERED',
+            expectedOrderStatus: 'DELIVERED',
+          }),
+        }),
+      );
+    });
+
+    it('stays QUIET for a stale scan — the order has already been there', async () => {
+      // A scan arriving after the order moved past it is the ordinary
+      // case the monotonic guard exists for. Flagging those would bury
+      // the real one, and a watchdog that cries wolf gets muted.
+      const { svc, raise } = makeService({
+        stranded: [{ orderStatus: 'DELIVERED', shipmentStatus: 'IN_TRANSIT', timesAtTarget: 1 }],
+      });
+      const summary = await svc.sweep(AT);
+      expect(summary.strandedTracking).toBe(0);
+      expect(trackingIssues(raise)).toHaveLength(0);
+    });
+
+    it('stays quiet when the order is exactly where the courier says', async () => {
+      const { svc, raise, resolveByKey } = makeService({
+        stranded: [{ orderStatus: 'IN_TRANSIT', shipmentStatus: 'IN_TRANSIT' }],
+      });
+      expect((await svc.sweep(AT)).strandedTracking).toBe(0);
+      expect(trackingIssues(raise)).toHaveLength(0);
+      // ...and clears any issue it had raised before.
+      expect(resolveByKey).toHaveBeenCalled();
+    });
+
+    it('stays quiet when the order CAN still get there — it just has not yet', async () => {
+      // OUT_FOR_DELIVERY is in the allowed-from set for a DELIVERED scan,
+      // so the next scan will move it. Nothing is stuck.
+      const { svc, raise } = makeService({
+        stranded: [{ orderStatus: 'OUT_FOR_DELIVERY', shipmentStatus: 'DELIVERED' }],
+      });
+      expect((await svc.sweep(AT)).strandedTracking).toBe(0);
+      expect(trackingIssues(raise)).toHaveLength(0);
+    });
+
+    it('clears itself once the order catches up', async () => {
+      const { svc, resolveByKey } = makeService({
+        stranded: [{ orderStatus: 'RTO_IN_TRANSIT', shipmentStatus: 'RTO_IN_TRANSIT' }],
+      });
+      await svc.sweep(AT);
+      expect(resolveByKey).toHaveBeenCalledWith(
+        expect.stringContaining('tracking-stranded:'),
+        expect.any(String),
+      );
+    });
+
+    it('runs even with the NSA switch OFF — it is not an NSA flag', async () => {
+      const { svc, raise } = makeService({
+        stranded: [{ orderStatus: 'PACKED', shipmentStatus: 'DELIVERED' }],
+      });
+      await svc.sweep(AT);
+      expect(raise).toHaveBeenCalled();
+    });
   });
 });

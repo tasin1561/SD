@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { NotificationLedgerModule } from '../notification-ledger/notification-ledger.module';
 import { CourierAwbModule } from '../courier-awb/courier-awb.module';
+import { TrackingEventsModule } from '../tracking-events/tracking-events.module';
+import { OrderModule } from '../order/order.module';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { AdminNsaController } from './controllers/admin-nsa.controller';
@@ -27,7 +29,16 @@ import { OrderAttentionService } from './services/order-attention.service';
   // ASKS AGAIN before it raises, and `processOrder` is the documented
   // manual re-trigger. Nothing in courier-awb imports back, so this
   // stays a leaf.
-  imports: [AuthCommonModule, NotificationLedgerModule, CourierAwbModule],
+  imports: [
+    AuthCommonModule,
+    NotificationLedgerModule,
+    CourierAwbModule,
+    TrackingEventsModule,
+    // The stranded-tracking watchdog asks the order facade whether a
+    // status is terminal (a cancelled order stops following its parcel
+    // on purpose). Leaf module — nothing imports this one, so no cycle.
+    OrderModule,
+  ],
   controllers: [AdminNsaController, SellerNsaController],
   providers: [OrderAttentionService, NsaSweepWorker, StaffJwtGuard, SellerJwtGuard],
 })

@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { OrderStateMachineService } from '../../src/modules/order/services/order-state-machine.service';
 import { OrderReadService } from '../../src/modules/order/services/order-read.service';
 
 /**
@@ -53,9 +54,12 @@ describe('agent call order snapshot', () => {
   };
 
   it('nests the recipient — the flat column names are NOT on the payload', async () => {
-    const svc = new OrderReadService({
-      client: { order: { findFirst: jest.fn().mockResolvedValue(row) } },
-    } as never);
+    const svc = new OrderReadService(
+      {
+        client: { order: { findFirst: jest.fn().mockResolvedValue(row) } },
+      } as never,
+      new OrderStateMachineService(),
+    );
     const out = await svc.getById('o1');
 
     // What the agent's screen must read.

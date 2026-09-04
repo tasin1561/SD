@@ -13,6 +13,8 @@ import { NotificationLedgerService } from '../../notifications/services/notifica
 import { EnvService } from '../../../config/env.service';
 import { NotificationChannel, NotificationRecipientType } from '@skydrop/db';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
+import { TrackingStatusMappingService } from '../../tracking-events/services/tracking-status-mapping.service';
+import { OrderReadService } from '../../order/services/order-read.service';
 import { AwbGenerationJobService } from '../../courier-awb/services/awb-generation-job.service';
 
 /** Where the parcels are. The cutoff is an hour of the DELIVERY day. */
@@ -84,6 +86,9 @@ export interface NsaSweepSummary {
   readonly stalledReturns: number;
   /** Confirmed orders still carrying no waybill after the grace window. */
   readonly awbless: number;
+  /** Parcels whose courier scans cannot move the order — the model has
+   *  no route from where the order is to where the courier says it is. */
+  readonly strandedTracking: number;
 }
 
 /**
@@ -127,6 +132,8 @@ export class OrderAttentionService {
     private readonly env: EnvService,
     private readonly issues: SystemIssueService,
     private readonly awbJob: AwbGenerationJobService,
+    private readonly mapping: TrackingStatusMappingService,
+    private readonly orders: OrderReadService,
   ) {}
 
   /**
@@ -190,6 +197,7 @@ export class OrderAttentionService {
       cleared: 0,
       stalledReturns: 0,
       awbless: 0,
+      strandedTracking: 0,
     };
 
     // Runs even when the NSA half is switched off, and before the
@@ -201,6 +209,10 @@ export class OrderAttentionService {
     // Also unconditional, and for the same reason: an order that has no
     // waybill is not moving, whatever the NSA switch says.
     summary.awbless = await this.checkAwblessConfirmed(now);
+
+    // Also unconditional: a parcel whose scans cannot move its order is
+    // silently misreporting to a seller, whatever the NSA switch says.
+    summary.strandedTracking = await this.checkStrandedTracking(now);
 
     if (!enabled) return summary;
 
@@ -445,6 +457,140 @@ export class OrderAttentionService {
       });
     }
     return stuck;
+  }
+
+  /**
+   * The courier is telling us something the order model cannot express.
+   *
+   * ── WHAT THIS CATCHES ────────────────────────────────────────────────
+   * The tracking processor advances the SHIPMENT from a scan and then
+   * asks the order to follow. When the order's current status is not in
+   * the mapping's `allowedFromOrderStatuses`, the monotonic-forward
+   * guard (TRK-4) skips the transition — correctly, most of the time: a
+   * stale scan arriving after DELIVERED, or two scans landing out of
+   * order, must not drag an order backwards.
+   *
+   * But the SAME skip, on the SAME parcel, over and over, is not a
+   * stale scan. It is a hole in the model, and it is invisible: the
+   * skip is logged at debug, the webhook is marked PROCESSED, and the
+   * timeline fills in correctly while the order status quietly lies to
+   * the seller.
+   *
+   * SD-TEST-523902 and SD-TEST-524086 sat in DELIVERY_FAILED for two
+   * days while twenty-four RTO_IN_TRANSIT scans arrived and were
+   * dropped, because RTO_IN_TRANSIT was reachable only from
+   * RTO_INITIATED and Delhivery had not sent that scan. Both sellers
+   * were told delivery had failed while their goods were most of the
+   * way home. Nothing anywhere said so; it was found by a person
+   * noticing an order looked wrong.
+   *
+   * ── HOW A REAL GAP IS TOLD FROM A STALE SCAN ─────────────────────────
+   * By asking whether the order has EVER been where the scan says it
+   * is. A stale scan names somewhere the order has already been —
+   * `order_events` proves it, and the skip is correct. A gap names
+   * somewhere the order has never reached and now cannot: the scan is
+   * ahead, not behind, and no amount of waiting fixes it.
+   *
+   * NO RETRY, deliberately, unlike the AWB sweep: asking again cannot
+   * help when the refusal is the matrix saying there is no such edge.
+   * The fix is a code change, so the useful act is to say so — loudly,
+   * once, with the parcel named.
+   */
+  private async checkStrandedTracking(now: Date): Promise<number> {
+    const hours = await this.globalInt('ops.tracking_stranded_alert_hours', 6);
+    const cutoff = new Date(now.getTime() - hours * 3_600_000);
+
+    const links = await this.prisma.client.orderShipment.findMany({
+      where: {
+        shipment: {
+          supersededAt: null,
+          deletedAt: null,
+          // Something the courier told us, long enough ago that a
+          // momentarily out-of-order pair of scans would have settled.
+          updatedAt: { lt: cutoff },
+          trackingEvents: { some: {} },
+        },
+        order: { deletedAt: null },
+      },
+      select: {
+        orderId: true,
+        shipmentId: true,
+        shipment: { select: { status: true, shipmentNumber: true, updatedAt: true } },
+        order: { select: { status: true, orderNumber: true, sellerId: true } },
+      },
+    });
+
+    let stranded = 0;
+    for (const link of links) {
+      const key = `tracking-stranded:${link.shipmentId}`;
+
+      // What SHOULD the order be, given where the courier says the
+      // parcel is? Asked of the one mapping that owns that question
+      // (TRK-5) rather than restated here, so this cannot drift from
+      // the rule the processor actually applies.
+      const decision = this.mapping.mapScan(link.shipment.status);
+      const target =
+        decision.kind === 'TRANSITION' || decision.kind === 'DELIVERY_ATTEMPT'
+          ? decision.targetOrderStatus
+          : null;
+      const allowedFrom =
+        decision.kind === 'TRANSITION' || decision.kind === 'DELIVERY_ATTEMPT'
+          ? decision.allowedFromOrderStatuses
+          : [];
+
+      // A TERMINAL order has deliberately stopped following its parcel:
+      // an order cancelled while the box was already moving will keep
+      // receiving transit scans forever, and none of them should move
+      // it. Flagging those would bury the real ones — and a watchdog
+      // that cries wolf gets muted. Asked of the state machine rather
+      // than a list here, so a new terminal status is covered the day
+      // it is added.
+      const settled =
+        target === null ||
+        this.orders.isTerminalStatus(link.order.status) ||
+        link.order.status === target ||
+        allowedFrom.includes(link.order.status);
+      if (settled) {
+        await this.issues.resolveByKey(key, 'The order caught up with its parcel.');
+        continue;
+      }
+
+      // Has the order ALREADY been where this scan says? Then the scan
+      // is behind, the skip is right, and there is nothing to report.
+      const beenThere = await this.prisma.client.orderEvent.count({
+        where: { orderId: link.orderId, toStatus: target },
+      });
+      if (beenThere > 0) continue;
+
+      stranded += 1;
+      await this.issues.raise({
+        kind: SystemIssueKind.TRACKING_STALLED,
+        severity: SystemIssueSeverity.HIGH,
+        title: `${link.order.orderNumber}: the courier says ${link.shipment.status}, the order says ${link.order.status}`,
+        detail:
+          `The courier has moved ${link.shipment.shipmentNumber} to ${link.shipment.status}, but ` +
+          `the order is ${link.order.status} and there is no route between them — so every scan ` +
+          `arriving for this parcel is being dropped, and the seller is being told something ` +
+          `that is no longer true.\n\n` +
+          `This is not a stale scan: the order has never been ${target}. It is a missing edge ` +
+          `between the tracking mapping (TrackingStatusMappingService) and the order state ` +
+          `machine, which must agree exactly (F6). Waiting will not fix it and neither will a ` +
+          `retry — add the edge to both, then move this order on with a manual scan.`,
+        source: 'OrderAttentionService',
+        dedupeKey: key,
+        metadata: {
+          orderId: link.orderId,
+          orderNumber: link.order.orderNumber,
+          shipmentId: link.shipmentId,
+          shipmentNumber: link.shipment.shipmentNumber,
+          sellerId: link.order.sellerId,
+          orderStatus: link.order.status,
+          shipmentStatus: link.shipment.status,
+          expectedOrderStatus: target,
+        },
+      });
+    }
+    return stranded;
   }
 
   private async checkStalledReturns(now: Date): Promise<number> {
