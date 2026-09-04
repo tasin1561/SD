@@ -545,7 +545,10 @@ describe('Dispatch handoff endpoint (e2e)', () => {
       where: { orderId, toStatus: OrderStatus.DISPATCHED },
     });
     expect(events).toHaveLength(1);
-    expect(await stockOf()).toEqual({ qtyOnHand: 8, qtyReserved: 0 });
+    // TWO parcels were packed up front (see above), so 10 − 2 − 2. The
+    // point of the assertion is that the refused scan moved nothing,
+    // not the absolute figure.
+    expect(await stockOf()).toEqual({ qtyOnHand: 6, qtyReserved: 0 });
 
     // An issue is on the board, naming the parcel, blocking this staff
     // member — the durable half. A refusal that lived only in the UI
