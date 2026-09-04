@@ -88,6 +88,10 @@ export {
   ChargeType,
   OrderChargeStatus,
   // Layer 9 — Notifications & Webhooks
+  NotificationCategory,
+  NotificationSubscriptionMode,
+  NotificationBroadcastStatus,
+  NotificationSubjectType,
   NotificationChannel,
   NotificationRecipientType,
   NotificationStatus,

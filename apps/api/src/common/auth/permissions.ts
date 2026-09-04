@@ -192,6 +192,19 @@ export const PERMISSIONS = [
     group: 'Warehouse',
   },
   {
+    key: 'notifications.inbox',
+    label: 'Notification inbox',
+    description: 'Read your own in-app notifications and set your own preferences.',
+    group: 'System',
+  },
+  {
+    key: 'notifications.broadcast',
+    label: 'Send a broadcast',
+    description:
+      'Send a message to an audience — every seller, a role, everyone holding a permission. It cannot be recalled, so this is separate from reading your own inbox.',
+    group: 'System',
+  },
+  {
     key: 'warehouse.labels.reprint',
     label: 'Reprint unit labels',
     description:

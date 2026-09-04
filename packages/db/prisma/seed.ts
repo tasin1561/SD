@@ -12,6 +12,7 @@
 
 import { DELHIVERY_ISSUE_TAXONOMY } from './delhivery-issue-taxonomy';
 import {
+  NotificationCategory,
   Prisma,
   PrismaClient,
   CourierIntegrationType,
@@ -2744,6 +2745,16 @@ const notificationTemplates: TemplateSeed[] = [
       'The password on your Skydrop account ({{ email }}) was changed on {{ changed_at }}.\n\nEvery signed-in session was ended, so you will need to sign in again: {{ login_url }}\n\nIf this was not you, someone else has access to your account — and your account holds your stock and your money. Contact {{ support_email }} immediately and we will lock it.\n\nRequest origin: {{ ip_address }}',
   },
   {
+    // The carrier for any broadcast. Deliberately generic: a broadcast
+    // is free text somebody typed, so the template only frames it.
+    code: 'system.announcement.email',
+    name: 'Announcement',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: '{{ title }}',
+    bodyTemplate: 'Hello {{ name }},\n\n{{ body }}\n\n— Skydrop',
+  },
+  {
     code: 'staff.password_reset.email',
     name: 'Staff password reset — email',
     channel: NotificationChannel.EMAIL,
@@ -3129,6 +3140,26 @@ const notificationTemplates: TemplateSeed[] = [
   },
 ];
 
+/**
+ * What KIND each template is — which decides the channels it may use at
+ * all (NotificationPolicyService).
+ *
+ * CREDENTIAL is the one that matters: a password reset you can only
+ * read once signed in is useless, and a login alert shown in-app is
+ * seen by whoever is already inside rather than by the person being
+ * warned. Matched on the code so a new auth template inherits the rule
+ * by naming rather than by somebody remembering.
+ */
+function categoryForTemplate(code: string): NotificationCategory {
+  const credential =
+    /(invitation|invite|password_reset|password_changed|email_verification|email_change|welcome)/.test(
+      code,
+    );
+  if (credential) return NotificationCategory.CREDENTIAL;
+  if (code.startsWith('system.announcement')) return NotificationCategory.ANNOUNCEMENT;
+  return NotificationCategory.OPERATIONAL;
+}
+
 async function seedNotificationTemplates() {
   let autoHtmlCount = 0;
   for (const t of notificationTemplates) {
@@ -3151,6 +3182,7 @@ async function seedNotificationTemplates() {
         subject: t.subject ?? null,
         bodyTemplate: t.bodyTemplate,
         htmlBodyTemplate: htmlBody,
+        category: categoryForTemplate(t.code),
         isActive: true,
         version: 1,
       },
@@ -3158,6 +3190,11 @@ async function seedNotificationTemplates() {
         name: t.name,
         channel: t.channel,
         recipientType: t.recipientType,
+        // Re-stated on update so an existing row is corrected too: the
+        // column was defaulted to OPERATIONAL by the migration, and a
+        // credential template left on that default would be one policy
+        // change away from appearing in an inbox.
+        category: categoryForTemplate(t.code),
         subject: t.subject ?? null,
         bodyTemplate: t.bodyTemplate,
         htmlBodyTemplate: htmlBody,

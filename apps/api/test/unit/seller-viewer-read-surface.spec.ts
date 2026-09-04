@@ -49,6 +49,8 @@ function everyControllerSource(): Array<{ file: string; src: string }> {
 /** Controllers a VIEWER may read from, and why each one is defensible. */
 const OPTED_IN: Readonly<Record<string, string>> = {
   'seller-order.controller.ts': 'their own orders — the role exists to read these',
+  'seller-notification.controller.ts':
+    'their OWN inbox and their own notification choices, scoped to the user id on their token and never to an id in the request. Opened deliberately: a role that can read orders but not the notifications about those orders would be a strange kind of read-only, and every item here is about something this role can already see. Nothing about the company, the wallet or other people is reachable through it',
   'seller-tracking.controller.ts':
     'where those same parcels are; the nav already shows Tracking on orders.view, so refusing it would be a link to a 403',
   'seller-order-journey.controller.ts':
@@ -76,6 +78,10 @@ const READABLE_GETS: Readonly<Record<string, readonly string[]>> = {
   ],
   'seller-tracking.controller.ts': ['', 'order/:orderId', ':shipmentId'],
   'seller-order-journey.controller.ts': [':id/journey'],
+  // Their own inbox. Every one of these is scoped to the caller's own
+  // user id, taken from the token — an inbox that accepted "whose?" as
+  // a parameter would be an inbox anybody could read.
+  'seller-notification.controller.ts': ['', 'unread-count', 'subscriptions'],
 };
 
 /**

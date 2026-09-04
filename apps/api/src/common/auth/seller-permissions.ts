@@ -50,6 +50,15 @@ export const SELLER_PERMISSION_GROUPS = [
 export type SellerPermissionGroup = (typeof SELLER_PERMISSION_GROUPS)[number];
 
 export const SELLER_PERMISSIONS = [
+  // ── A person's own inbox ───────────────────────────────────────────
+  {
+    key: 'notifications.inbox',
+    label: 'Own notifications',
+    description:
+      'Read your own in-app notifications and set your own preferences. Intended for every role: it is a person’s own inbox about work they can already see, not a view of anybody else.',
+    group: 'Company',
+  },
+
   // ── Orders ─────────────────────────────────────────────────────────
   {
     key: 'orders.view',

@@ -103,10 +103,11 @@ model StaffUser {
   courierModeChallenges      CourierModeChallenge[]        @relation("CourierModeChallengeStaff")
   bankChangesDecided         SellerBankChangeRequest[]     @relation("BankChangeDecidedBy")
 
-  sellerRestrictionsCreated SellerRestriction[] @relation("SellerRestrictionCreatedBy")
-  sellerRestrictionsLifted  SellerRestriction[] @relation("SellerRestrictionLiftedBy")
-  bankEntriesCreated        BankEntry[]         @relation("BankEntryCreatedBy")
-  bankTransfersCreated      BankTransfer[]      @relation("BankTransferCreatedBy")
+  sellerRestrictionsCreated SellerRestriction[]     @relation("SellerRestrictionCreatedBy")
+  sellerRestrictionsLifted  SellerRestriction[]     @relation("SellerRestrictionLiftedBy")
+  bankEntriesCreated        BankEntry[]             @relation("BankEntryCreatedBy")
+  bankTransfersCreated      BankTransfer[]          @relation("BankTransferCreatedBy")
+  notificationBroadcasts    NotificationBroadcast[] @relation("BroadcastCreatedBy")
 
   @@index([role])
   @@index([deletedAt])
@@ -4126,6 +4127,11 @@ model NotificationTemplate {
   description            String?                   @db.Text
   channel                NotificationChannel
   recipientType          NotificationRecipientType @map("recipient_type")
+  /// What KIND of message this is, which decides the channels it may
+  /// use (NotificationPolicyService). Defaulted to OPERATIONAL so an
+  /// un-categorised template is never silently treated as a credential
+  /// one; the seed states each explicitly.
+  category               NotificationCategory      @default(OPERATIONAL)
   language               String                    @default("en")
   subject                String?
   bodyTemplate           String                    @map("body_template") @db.Text
@@ -4167,6 +4173,12 @@ model NotificationLog {
   toEmail              String?                   @map("to_email")
   toPhoneE164          String?                   @map("to_phone_e164")
   toInAppUserId        String?                   @map("to_in_app_user_id") @db.Uuid
+  /// Groups the deliveries of ONE notification across channels, so
+  /// "this went to their inbox and their email" is one thing and not
+  /// two unrelated rows.
+  groupId              String?                   @map("group_id") @db.Uuid
+  /// Which broadcast produced this, when one did.
+  broadcastId          String?                   @map("broadcast_id") @db.Uuid
   subject              String?
   body                 String                    @db.Text
   htmlBody             String?                   @map("html_body") @db.Text
@@ -5469,6 +5481,116 @@ enum NotificationChannel {
   WHATSAPP @map("whatsapp")
 
   @@map("notification_channel")
+}
+
+/**
+ * What KIND of notification this is — and therefore which channels it
+ * is allowed to use at all.
+ * The category, not a user setting, decides the channel set. CREDENTIAL
+ * is email-only by construction: a password reset you can only read
+ * once logged in is useless, a login alert shown in-app is seen by the
+ * attacker and not the victim, an email-verification delivered in-app
+ * is circular, and an invite has no account to deliver to yet.
+ */
+/// A person's standing choice about one notification topic.
+///
+/// An OVERRIDE layer, never the primary mechanism: every notification
+/// type declares its own default audience, and these rows only add
+/// somebody who would not be included or silence somebody who would.
+/// If subscriptions were the mechanism, day one would be silence.
+model NotificationSubscription {
+  id            String                       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  subjectType   NotificationSubjectType      @map("subject_type")
+  subjectId     String                       @map("subject_id") @db.Uuid
+  /// The template code, or a coarser topic key.
+  topic         String
+  mode          NotificationSubscriptionMode
+  /// Silence only these channels; empty means the whole topic.
+  mutedChannels NotificationChannel[]        @map("muted_channels")
+  createdAt     DateTime                     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime                     @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([subjectType, subjectId, topic])
+  @@index([topic, mode])
+  @@map("notification_subscriptions")
+}
+
+/// One deliberate message to an audience.
+///
+/// Kept as its own row rather than inferred from the deliveries because
+/// a broadcast is the one notification that cannot be recalled: who
+/// sent it, to what audience, how many it reached and whether anybody
+/// stopped it mid-flight are all questions asked afterwards.
+model NotificationBroadcast {
+  id                 String                      @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  title              String
+  body               String                      @db.Text
+  category           NotificationCategory
+  /// The AudienceSelector, exactly as chosen. Stored rather than
+  /// re-derived: the population changes, and "who did this go to" must
+  /// still answer the question a month later.
+  audience           Json
+  channels           NotificationChannel[]
+  status             NotificationBroadcastStatus @default(DRAFT)
+  /// What the audience resolved to at send time.
+  recipientCount     Int                         @default(0) @map("recipient_count")
+  sentCount          Int                         @default(0) @map("sent_count")
+  failedCount        Int                         @default(0) @map("failed_count")
+  createdByStaffId   String                      @map("created_by_staff_id") @db.Uuid
+  cancelledByStaffId String?                     @map("cancelled_by_staff_id") @db.Uuid
+  cancelReason       String?                     @map("cancel_reason")
+  createdAt          DateTime                    @default(now()) @map("created_at") @db.Timestamptz
+  startedAt          DateTime?                   @map("started_at") @db.Timestamptz
+  finishedAt         DateTime?                   @map("finished_at") @db.Timestamptz
+
+  createdBy StaffUser @relation("BroadcastCreatedBy", fields: [createdByStaffId], references: [id])
+
+  @@index([status, createdAt])
+  @@map("notification_broadcasts")
+}
+
+enum NotificationCategory {
+  /// Login, signup, invite, password reset, email verification. EMAIL
+  /// ONLY, and never mutable — nobody unsubscribes from "your password
+  /// was changed".
+  CREDENTIAL    @map("credential")
+  /// Something needs a person to act. In-app + email; a recipient may
+  /// silence a channel but not the notification.
+  OPERATIONAL   @map("operational")
+  /// Worth knowing, nothing to do. Fully mutable.
+  INFORMATIONAL @map("informational")
+  /// A message somebody chose to send to an audience.
+  ANNOUNCEMENT  @map("announcement")
+
+  @@map("notification_category")
+}
+
+/// Whether a subscription row ADDS a recipient who would not otherwise
+/// be targeted, or MUTES one who would.
+enum NotificationSubscriptionMode {
+  SUBSCRIBED @map("subscribed")
+  MUTED      @map("muted")
+
+  @@map("notification_subscription_mode")
+}
+
+enum NotificationBroadcastStatus {
+  DRAFT     @map("draft")
+  SENDING   @map("sending")
+  SENT      @map("sent")
+  CANCELLED @map("cancelled")
+  FAILED    @map("failed")
+
+  @@map("notification_broadcast_status")
+}
+
+/// Who a subscription belongs to. Sellers and staff are different
+/// tables, so the row names which.
+enum NotificationSubjectType {
+  SELLER_USER @map("seller_user")
+  STAFF_USER  @map("staff_user")
+
+  @@map("notification_subject_type")
 }
 
 enum NotificationRecipientType {

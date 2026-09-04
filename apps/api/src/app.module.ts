@@ -65,6 +65,7 @@ import { TrackingManualModule } from './modules/tracking-manual/tracking-manual.
 import { TrackingPollModule } from './modules/tracking-poll/tracking-poll.module';
 import { LifecycleEventsModule } from './modules/lifecycle-events/lifecycle-events.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { NotificationAudienceModule } from './modules/notification-audience/notification-audience.module';
 import { SystemSettingsModule } from './modules/system-settings/system-settings.module';
 import { SellerRbacModule } from './modules/seller-rbac/seller-rbac.module';
 import { StaffRbacModule } from './modules/staff-rbac/staff-rbac.module';
@@ -197,6 +198,7 @@ import { WarehousePrintingModule } from './modules/warehouse-printing/warehouse-
     TrackingPollModule,
     LifecycleEventsModule,
     NotificationsModule,
+    NotificationAudienceModule,
     SystemSettingsModule,
     SellerRbacModule,
     StaffRbacModule,
