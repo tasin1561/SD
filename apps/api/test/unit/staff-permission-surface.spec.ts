@@ -123,8 +123,23 @@ describe('staff permission surface', () => {
     // out, their own password, their own identity. If this number grows,
     // something that needs a permission was given a pass instead.
     const selfService = STAFF_HANDLERS.filter((h) => h.permissions === 'self-service');
-    const files = [...new Set(selfService.map((h) => h.file))];
-    expect(files).toEqual(['staff-auth.controller.ts']);
+    const files = [...new Set(selfService.map((h) => h.file))].sort();
+    expect(files).toEqual(
+      [
+        // Signing in and out, their own password, their own identity.
+        'staff-auth.controller.ts',
+        // Their own inbox, and their own standing choices about it.
+        // Every row is addressed to the caller by the id on their
+        // token — never by one in the request — so a permission would
+        // be asking a question the token has already answered. It
+        // would also have needed granting: a new key reaches no
+        // EXISTING role without a backfill, so the bell would have
+        // rendered and then 403'd for most of the estate. Sending TO
+        // an audience is a different act and is gated, in its own
+        // controller, on `notifications.broadcast`.
+        'admin-notification.controller.ts',
+      ].sort(),
+    );
   });
 
   it('the dangerous permissions are each held by at least one endpoint', () => {

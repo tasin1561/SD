@@ -20,6 +20,7 @@ export * from './card';
 export * from './data-table';
 export * from './feedback';
 export * from './money';
+export * from './notification-bell';
 export * from './open-external';
 export * from './order-journey';
 export * from './form';

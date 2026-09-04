@@ -14,8 +14,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { NotificationSubjectType } from '@skydrop/db';
 import { CurrentSeller } from '../../../common/decorators/current-seller.decorator';
 import { SellerJwtGuard } from '../../../common/guards/seller-jwt.guard';
-import { SellerViewerReadable } from '../../../common/decorators/seller-viewer-readable.decorator';
-import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
+import { SellerSelfService } from '../../../common/auth/require-seller-permissions.decorator';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
 import { NotificationFeedService, type FeedPage } from '../services/notification-feed.service';
@@ -33,16 +32,19 @@ import { FeedQueryDto, SetSubscriptionDto } from '../dto/notification.dto';
  * addressed to PEOPLE rather than to a company mailbox, so one seller's
  * finance person and their packer see different things.
  *
- * Readable by every seller role including VIEWER (RBAC-1): this is a
- * person's own inbox, and a role that can read orders but not its own
- * notifications about them would be a strange kind of read-only.
+ * SELF-SERVICE (RBAC-1's narrow exception), not a grantable
+ * permission. Every row is addressed to the caller by the user id on
+ * their token, so "may this person read this?" is already answered by
+ * who they are. A permission would also have had to be GRANTED: a new
+ * key reaches no existing role without a backfill, so every ops,
+ * finance and viewer login in production would have seen a bell that
+ * rendered and then refused.
  */
 @ApiTags('seller-notifications')
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
-@SellerViewerReadable()
-@RequireSellerPermissions('notifications.inbox')
+@SellerSelfService()
 @Controller('seller/notifications')
 export class SellerNotificationController {
   constructor(

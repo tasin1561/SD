@@ -158,7 +158,15 @@ export async function resetAuthState(
   await resetOrderState(prisma);
   await resetCatalogState(prisma);
   await prisma.$transaction([
+    // Broadcasts hold notification_logs (broadcast_id, SET NULL) and
+    // are held by staff_users, so they go BEFORE the logs and well
+    // before the staff wipe. Subscriptions FK nothing but are keyed on
+    // a subject id that is about to stop existing — a leftover row
+    // would silently silence a topic for a REUSED id in a later suite,
+    // which is the kind of cross-suite ghost that takes a day to find.
+    prisma.notificationSubscription.deleteMany({}),
     prisma.notificationLog.deleteMany({}),
+    prisma.notificationBroadcast.deleteMany({}),
     prisma.auditLog.deleteMany({}),
     // A WAREHOUSE_SCAN issue BLOCKS the staff member it names from
     // scanning (ScanBlockService). Leaving one behind would stop every

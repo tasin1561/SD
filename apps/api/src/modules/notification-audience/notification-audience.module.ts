@@ -4,6 +4,7 @@ import { EmailModule } from '../email/email.module';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { AdminNotificationController } from './controllers/admin-notification.controller';
+import { AdminNotificationBroadcastController } from './controllers/admin-notification-broadcast.controller';
 import { SellerNotificationController } from './controllers/seller-notification.controller';
 import { NotificationAudienceService } from './services/notification-audience.service';
 import { NotificationBroadcastService } from './services/notification-broadcast.service';
@@ -28,7 +29,11 @@ import { NotificationSubscriptionService } from './services/notification-subscri
  */
 @Module({
   imports: [AuthCommonModule, EmailModule],
-  controllers: [SellerNotificationController, AdminNotificationController],
+  controllers: [
+    SellerNotificationController,
+    AdminNotificationController,
+    AdminNotificationBroadcastController,
+  ],
   providers: [
     NotificationAudienceService,
     NotificationPolicyService,

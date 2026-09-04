@@ -192,12 +192,6 @@ export const PERMISSIONS = [
     group: 'Warehouse',
   },
   {
-    key: 'notifications.inbox',
-    label: 'Notification inbox',
-    description: 'Read your own in-app notifications and set your own preferences.',
-    group: 'System',
-  },
-  {
     key: 'notifications.broadcast',
     label: 'Send a broadcast',
     description:

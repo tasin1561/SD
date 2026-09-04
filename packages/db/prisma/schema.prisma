@@ -4229,6 +4229,8 @@ model NotificationLog {
   @@index([templateId])
   @@index([callAttemptId])
   @@index([parentNotificationId])
+  @@index([groupId])
+  @@index([broadcastId])
   @@map("notification_logs")
 }
 

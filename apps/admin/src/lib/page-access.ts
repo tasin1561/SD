@@ -26,6 +26,11 @@ import type { StaffMe } from '@skydrop/api-client';
  * bad first impression of a system that is working correctly.
  */
 export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permission: string]> = [
+  // The inbox itself is deliberately ABSENT: it is self-service on the
+  // API (a person's own rows, addressed by the id on their token), so
+  // gating the page would refuse a screen the server would serve.
+  // Sending TO an audience is the opposite kind of act.
+  ['/notifications/broadcasts', 'notifications.broadcast'],
   ['/orders', 'orders.view'],
   ['/call-center/queue', 'callcenter.queue.view'],
   // Approving one is what returns a declined order to the queue, so it

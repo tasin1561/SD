@@ -7,6 +7,7 @@ import { useApiClient } from '@skydrop/auth/client';
 import type { SellerMe } from '@skydrop/api-client';
 import { AppShell, MenuButton, Toaster, type NavGroup } from '@skydrop/ui/components';
 import { RestrictionBanner } from './restriction-banner';
+import { NotificationBellContainer } from '@/components/notification-bell-container';
 import { canSeePath } from '@/lib/page-access';
 import { quickActionsFor } from '@/lib/quick-actions';
 import {
@@ -129,7 +130,12 @@ export function AuthedShell({
         navGroups={visibleGroups}
         identityPrimary={identity.companyName}
         identitySecondary={identity.emailDisplay}
-        headerActions={<MenuButton label="Quick actions" items={quickActions} Link={Link} />}
+        headerActions={
+          <div className="flex items-center gap-1">
+            <MenuButton label="Quick actions" items={quickActions} Link={Link} />
+            <NotificationBellContainer />
+          </div>
+        }
         drawerActions={
           <MenuButton label="Quick actions" items={quickActions} Link={Link} placement="above" />
         }

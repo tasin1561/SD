@@ -30,8 +30,8 @@ ALTER TABLE "notification_logs" ADD COLUMN "broadcast_id" UUID;
 CREATE INDEX "notification_logs_in_app_feed_idx"
   ON "notification_logs" ("to_in_app_user_id", "created_at" DESC)
   WHERE "to_in_app_user_id" IS NOT NULL;
-CREATE INDEX "notification_logs_group_idx" ON "notification_logs" ("group_id");
-CREATE INDEX "notification_logs_broadcast_idx" ON "notification_logs" ("broadcast_id");
+CREATE INDEX "notification_logs_group_id_idx" ON "notification_logs" ("group_id");
+CREATE INDEX "notification_logs_broadcast_id_idx" ON "notification_logs" ("broadcast_id");
 
 CREATE TABLE "notification_subscriptions" (
   "id"             UUID PRIMARY KEY DEFAULT uuidv7(),
@@ -39,15 +39,15 @@ CREATE TABLE "notification_subscriptions" (
   "subject_id"     UUID NOT NULL,
   "topic"          TEXT NOT NULL,
   "mode"           "notification_subscription_mode" NOT NULL,
-  "muted_channels" "notification_channel"[] NOT NULL DEFAULT '{}',
+  "muted_channels" "notification_channel"[] NOT NULL,
   "created_at"     TIMESTAMPTZ NOT NULL DEFAULT now(),
-  "updated_at"     TIMESTAMPTZ NOT NULL DEFAULT now()
+  "updated_at"     TIMESTAMPTZ NOT NULL
 );
 -- One standing choice per person per topic: two rows saying opposite
 -- things is a question with no answer.
-CREATE UNIQUE INDEX "notification_subscriptions_subject_topic_uq"
+CREATE UNIQUE INDEX "notification_subscriptions_subject_type_subject_id_topic_key"
   ON "notification_subscriptions" ("subject_type", "subject_id", "topic");
-CREATE INDEX "notification_subscriptions_topic_idx"
+CREATE INDEX "notification_subscriptions_topic_mode_idx"
   ON "notification_subscriptions" ("topic", "mode");
 
 CREATE TABLE "notification_broadcasts" (
@@ -56,17 +56,17 @@ CREATE TABLE "notification_broadcasts" (
   "body"                  TEXT NOT NULL,
   "category"              "notification_category" NOT NULL,
   "audience"              JSONB NOT NULL,
-  "channels"              "notification_channel"[] NOT NULL DEFAULT '{}',
+  "channels"              "notification_channel"[] NOT NULL,
   "status"                "notification_broadcast_status" NOT NULL DEFAULT 'draft',
   "recipient_count"       INTEGER NOT NULL DEFAULT 0,
   "sent_count"            INTEGER NOT NULL DEFAULT 0,
   "failed_count"          INTEGER NOT NULL DEFAULT 0,
-  "created_by_staff_id"   UUID NOT NULL REFERENCES "staff_users"("id"),
+  "created_by_staff_id"   UUID NOT NULL REFERENCES "staff_users"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
   "cancelled_by_staff_id" UUID,
   "cancel_reason"         TEXT,
   "created_at"            TIMESTAMPTZ NOT NULL DEFAULT now(),
   "started_at"            TIMESTAMPTZ,
   "finished_at"           TIMESTAMPTZ
 );
-CREATE INDEX "notification_broadcasts_status_idx"
+CREATE INDEX "notification_broadcasts_status_created_at_idx"
   ON "notification_broadcasts" ("status", "created_at");

@@ -110,8 +110,21 @@ describe('seller permission surface', () => {
     // out, their own password, their own identity. If this number grows,
     // something that needs a permission was given a pass instead.
     const selfService = STAFF_HANDLERS.filter((h) => h.permissions === 'self-service');
-    const files = [...new Set(selfService.map((h) => h.file))];
-    expect(files).toEqual(['seller-auth.controller.ts']);
+    const files = [...new Set(selfService.map((h) => h.file))].sort();
+    expect(files).toEqual(
+      [
+        // Signing in and out, their own password, their own identity.
+        'seller-auth.controller.ts',
+        // Their own inbox and their own notification choices, scoped
+        // to the user id on their token and never to one in the
+        // request. Opened as self-service rather than as a permission
+        // for the same reason the staff side was: a permission is a
+        // thing somebody has to GRANT, and a key added today reaches
+        // no existing role, so every ops / finance / viewer login in
+        // production would have had a bell that rendered and refused.
+        'seller-notification.controller.ts',
+      ].sort(),
+    );
   });
 
   it('the dangerous permissions are each held by at least one endpoint', () => {

@@ -71,7 +71,12 @@ export function NotificationPreferencesIndex(): ReactElement {
       </Link>
       <PageHeader
         title="Notification preferences"
-        subtitle="Pick channels per category and quiet hours. Changes save instantly."
+        subtitle="What the COMPANY is emailed about, by category, and when. Changes save instantly."
+        action={
+          <Link className="text-sm underline underline-offset-2" href="/notifications">
+            Your own inbox
+          </Link>
+        }
       />
       {list.isLoading ? (
         <LoadingState label="Loading…" />

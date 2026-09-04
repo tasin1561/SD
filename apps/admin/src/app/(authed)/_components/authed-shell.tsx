@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useState, type ReactNode, type ReactElement } from 'react';
 import { useApiClient } from '@skydrop/auth/client';
 import type { StaffMe } from '@skydrop/api-client';
+import { NotificationBellContainer } from '@/components/notification-bell-container';
 import { AppShell, Toaster, type NavGroup } from '@skydrop/ui/components';
 import {
   AlertTriangle,
@@ -198,6 +199,7 @@ export function AuthedShell({
         // their own account — the page has no nav entry because it is
         // not a section of the product, it is about them.
         identityHref="/account"
+        headerActions={<NotificationBellContainer />}
         footerNote="Phase 1A"
         pathname={pathname}
         Link={Link}
