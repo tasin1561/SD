@@ -220,18 +220,23 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
           <h2 className="text-text-bright mt-5 mb-2 text-sm font-medium">Move this on</h2>
           <Card>
             {/*
-              COMPACT: the two dropdowns share a row and the notes sit
-              beside the Apply button, rather than four full-width
-              fields stacked down the page.
+              ONE ROW. Stage, outcome, refund, note, Apply.
 
-              It is a small form — a stage, sometimes an outcome, a
-              sentence — and stacking it made a three-decision act look
-              like a long one. The fields that only SOMETIMES appear
-              still appear in place; the row simply grows a column.
+              The conditional fields appear IN the row rather than under
+              it, so choosing "Closed" widens the line instead of
+              starting a new block — the form grows sideways as the
+              decision narrows.
+
+              Notes stays a <Textarea> at one row rather than becoming
+              an <Input>: it is still somewhere a person may want two
+              sentences, and swapping it would have bought the same
+              height by taking that away. Its hint moved into the
+              placeholder, which says the same thing without costing a
+              line.
             */}
-            <CardBody className="space-y-2.5">
-              <div className="grid gap-2.5 sm:grid-cols-2">
-                <FormField label="Move to" htmlFor="admin-ticket-stage">
+            <CardBody>
+              <div className="flex flex-wrap items-end gap-2.5">
+                <FormField label="Move to" htmlFor="admin-ticket-stage" className="w-[140px]">
                   <Select
                     id="admin-ticket-stage"
                     value={stage}
@@ -253,13 +258,13 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
                 </FormField>
 
                 {stage === 'CLOSED' ? (
-                  <FormField label="How did it close?" htmlFor="admin-ticket-to">
+                  <FormField label="How" htmlFor="admin-ticket-to" className="w-[200px]">
                     <Select
                       id="admin-ticket-to"
                       value={to}
                       onChange={(e) => setTo(e.target.value as TicketStatus | '')}
                     >
-                      <option value="">Choose an outcome…</option>
+                      <option value="">Outcome…</option>
                       {OUTCOMES.map((o) => (
                         <option key={o.value} value={o.value}>
                           {o.label}
@@ -273,10 +278,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
                   <FormField
                     label="Refund (INR)"
                     htmlFor="admin-ticket-refund"
-                    // The one hint that survives the compaction: this
-                    // field moves money, and that is not something to
-                    // learn afterwards.
-                    hint="Credited to the seller's wallet in the same transaction."
+                    className="w-[130px]"
                   >
                     <input
                       id="admin-ticket-refund"
@@ -284,29 +286,33 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
                       value={refund}
                       onChange={(e) => setRefund(e.target.value)}
                       inputMode="decimal"
+                      // The hint is gone from under the field but the
+                      // fact is not: this credits a seller's wallet in
+                      // the same transaction, so it says so where it
+                      // cannot be missed.
+                      title="Credited to the seller's wallet in the same transaction."
                     />
                   </FormField>
                 ) : null}
-              </div>
 
-              <div className="flex items-end gap-2.5">
                 <FormField
-                  className="min-w-0 flex-1"
                   label="Notes"
                   htmlFor="admin-ticket-notes"
-                  hint="The seller reads this on their ticket."
+                  className="min-w-[200px] flex-1"
                 >
                   <Textarea
                     id="admin-ticket-notes"
-                    rows={2}
+                    rows={1}
+                    placeholder="The seller reads this on their ticket."
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                   />
                 </FormField>
+
                 <Button
                   variant="primary"
                   size="md"
-                  className="mb-5 shrink-0"
+                  className="shrink-0"
                   disabled={to === '' || transition.isPending}
                   onClick={apply}
                 >
