@@ -175,12 +175,20 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
 
       {isOpen ? (
         <div className="border-border mt-4 border-t pt-3">
+          {/*
+            This box goes to US; the one below it goes to the COURIER.
+            Only the second used to say so, which made the page read as
+            an unlabelled box followed by a labelled one — two message
+            boxes with no way to tell what the first was for. Both are
+            headed now, and both say who reads what you type.
+          */}
+          <h3 className="mb-2 text-sm font-medium">Reply to Skydrop</h3>
           <Textarea
             rows={2}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Add anything that helps — we reply here."
-            aria-label="Reply on this ticket"
+            placeholder="Anything that helps us look into this."
+            aria-label="Reply to Skydrop on this ticket"
           />
           <div className="mt-2 flex justify-end">
             <Button

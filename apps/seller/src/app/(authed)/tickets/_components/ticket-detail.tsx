@@ -143,8 +143,8 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
         messages harder to find rather than the history clearer.
       */}
       <Section
-        title="Conversation"
-        subtitle="What you told us, what we found out, and anything the courier said."
+        title="Messages"
+        subtitle="Two conversations: one with us, one with the courier. Each says who reads it."
       >
         <Card>
           <CardBody>

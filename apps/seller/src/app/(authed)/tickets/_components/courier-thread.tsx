@@ -99,7 +99,7 @@ export function CourierThread({ ticketId }: { readonly ticketId: string }): Reac
     <Card>
       <CardBody>
         <div className="mb-3 flex flex-wrap items-center gap-3">
-          <h3 className="text-sm font-medium">Courier conversation</h3>
+          <h3 className="text-sm font-medium">Message the courier</h3>
           {data.state !== null ? (
             <StatusBadge kind={badgeKind(data.state)} label={humanise(data.state)} />
           ) : null}
@@ -128,7 +128,7 @@ export function CourierThread({ ticketId }: { readonly ticketId: string }): Reac
             <FormField
               label="Write to the courier"
               htmlFor={`courier-reply-${ticketId}`}
-              hint="Sent exactly as you type it. We do not edit or translate it."
+              hint="This leaves Skydrop and goes to the courier, exactly as you type it — we do not edit or translate it. To ask US something, use the box above."
             >
               <Textarea
                 id={`courier-reply-${ticketId}`}
