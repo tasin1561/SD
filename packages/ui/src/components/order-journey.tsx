@@ -461,7 +461,14 @@ export function OrderJourneyPanels({
   const parcel = parcels[parcels.length - 1] ?? null;
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+      {/*
+        Two up only when there IS a parcel. An order with none — not yet
+        dispatched, or cancelled before it was — used to leave the
+        tracker at half width with an empty half beside it, which reads
+        as a panel that failed to load rather than one with nothing to
+        show. Worse since the seller order page put this in a column.
+      */}
+      <div className={parcel === null ? 'grid gap-4' : 'grid gap-4 lg:grid-cols-[1fr_1fr]'}>
         <Card>
           <CardHeader title="Order tracker" />
           <CardBody>

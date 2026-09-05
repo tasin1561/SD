@@ -387,6 +387,15 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
+                      {detail.data.items.length === 0 && (
+                        // A header row over nothing says less than a
+                        // sentence does.
+                        <tr>
+                          <td colSpan={5} className="text-text-muted px-3 py-4 text-center text-sm">
+                            No items recorded on this order.
+                          </td>
+                        </tr>
+                      )}
                       {detail.data.items.map((item) => (
                         <tr key={item.id}>
                           <td className="px-3 py-2 w-px">
