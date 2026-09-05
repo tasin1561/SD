@@ -325,3 +325,104 @@ describe('TicketService seller scoping', () => {
     });
   });
 });
+
+/**
+ * TKT-2 — "we passed this to the courier", as its own append-only row.
+ *
+ * What these pin is the shape, not the plumbing: only the SELLER's words
+ * can be relayed, a second call is a no-op rather than a second claim,
+ * and the losing side of a race converges on the row that won. The last
+ * of those is the one a mocked Prisma can only approximate — there is no
+ * index here to violate, so the P2002 is injected; the real guard is the
+ * UNIQUE in the migration.
+ */
+describe('TicketService.markRelayed', () => {
+  const EVENT = 'ev-9';
+
+  function makeRelayService(
+    opts: {
+      event?: AnyArgs | null;
+      /** A relay already recorded when we go to insert (the race). */
+      raceP2002?: boolean;
+    } = {},
+  ) {
+    const event =
+      opts.event === undefined
+        ? { id: EVENT, actorType: ActorType.SELLER, relay: null }
+        : opts.event;
+    const eventFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () => event);
+    const relayCreate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => {
+      if (opts.raceP2002 === true) {
+        throw new Prisma.PrismaClientKnownRequestError('dup', {
+          code: 'P2002',
+          clientVersion: 'test',
+        });
+      }
+      return { relayedAt: new Date('2026-09-06T10:00:00Z') };
+    });
+    const relayFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () => ({
+      relayedAt: new Date('2026-09-06T09:00:00Z'),
+    }));
+    const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown?]>(async () => 'a1');
+    const prisma = {
+      client: {
+        ticketEvent: { findFirst: eventFindFirst },
+        ticketMessageRelay: { create: relayCreate, findUnique: relayFindUnique },
+      },
+    } as unknown as PrismaService;
+    const svc = new TicketService(
+      prisma,
+      { log: auditLog } as unknown as AuditLogService,
+      {} as unknown as WalletService,
+      new TicketStateMachineService(),
+    );
+    return { svc, relayCreate, relayFindUnique, auditLog };
+  }
+
+  it('records the relay and audits it', async () => {
+    const { svc, relayCreate, auditLog } = makeRelayService();
+    const res = await svc.markRelayed(TICKET, EVENT, STAFF);
+    expect(res.alreadyRelayed).toBe(false);
+    expect(relayCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { ticketEventId: EVENT, relayedByStaffId: STAFF },
+      }),
+    );
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'ticket.message_relayed' }),
+    );
+  });
+
+  it('is a no-op on a message already relayed — not a second row, not a 409', async () => {
+    const relayedAt = new Date('2026-09-05T08:00:00Z');
+    const { svc, relayCreate } = makeRelayService({
+      event: { id: EVENT, actorType: ActorType.SELLER, relay: { relayedAt } },
+    });
+    const res = await svc.markRelayed(TICKET, EVENT, STAFF);
+    expect(res).toEqual({ ticketEventId: EVENT, relayedAt, alreadyRelayed: true });
+    expect(relayCreate).not.toHaveBeenCalled();
+  });
+
+  it('converges when another operator wins the insert', async () => {
+    const { svc, relayFindUnique } = makeRelayService({ raceP2002: true });
+    const res = await svc.markRelayed(TICKET, EVENT, STAFF);
+    expect(res.alreadyRelayed).toBe(true);
+    expect(relayFindUnique).toHaveBeenCalled();
+  });
+
+  it('refuses to relay our own message — it never had anywhere else to go', async () => {
+    const { svc } = makeRelayService({
+      event: { id: EVENT, actorType: ActorType.STAFF, relay: null },
+    });
+    await expect(svc.markRelayed(TICKET, EVENT, STAFF)).rejects.toMatchObject({
+      response: { code: 'NOT_A_SELLER_MESSAGE' },
+    });
+  });
+
+  it('404s a message that is not on this ticket', async () => {
+    const { svc } = makeRelayService({ event: null });
+    await expect(svc.markRelayed(TICKET, EVENT, STAFF)).rejects.toMatchObject({
+      response: { code: 'TICKET_EVENT_NOT_FOUND' },
+    });
+  });
+});

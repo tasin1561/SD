@@ -84,6 +84,12 @@ export interface TicketEventView {
   readonly note: string | null;
   readonly actorType: string;
   readonly createdAt: string;
+  /**
+   * TKT-2 — when this seller message was passed to the courier, or null
+   * while it is still only with us. Always null on our own messages and
+   * the courier's: neither has anywhere else to go.
+   */
+  readonly relayedAt: string | null;
 }
 
 export interface FreightChargeView {
@@ -2275,6 +2281,27 @@ export function useReplyToSellerOnTicket(): UseMutationResult<
         method: 'POST',
         body: { note },
       }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-tickets'] }),
+  });
+}
+
+/**
+ * TKT-2 — record that we have passed one of the seller's messages to
+ * the courier. The seller sees the same thing change on their own page.
+ */
+export function useMarkTicketMessageRelayed(): UseMutationResult<
+  { ticketEventId: string; relayedAt: string; alreadyRelayed: boolean },
+  Error,
+  { ticketId: string; eventId: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ticketId, eventId }) =>
+      client.request<{ ticketEventId: string; relayedAt: string; alreadyRelayed: boolean }>(
+        `/api/admin/tickets/${ticketId}/events/${eventId}/relayed`,
+        { method: 'POST' },
+      ),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-tickets'] }),
   });
 }

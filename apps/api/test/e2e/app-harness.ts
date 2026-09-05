@@ -277,6 +277,9 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         'courier_outbox_items',
         'courier_escalation_messages',
         'courier_escalations',
+        // TKT-2 relays FK ticket_events (CASCADE) — named anyway so the
+        // reset stays explicit rather than relying on a chain (MUST #12).
+        'ticket_message_relays',
         'ticket_events',
         'tickets',
         // Wallet + withdrawals (M21-M24)

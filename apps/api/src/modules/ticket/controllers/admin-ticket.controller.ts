@@ -72,6 +72,32 @@ export class AdminTicketController {
     });
   }
 
+  /**
+   * TKT-2 — "I have passed this one to the courier."
+   *
+   * A POST rather than a PATCH on the message: nothing about the
+   * message changes, a new fact is being recorded next to it
+   * (`ticket_events` is append-only, TKT-1).
+   *
+   * Behind `tickets.resolve` — the same permission as replying,
+   * because it is the same class of act: an operator stating on the
+   * record that they did something for this seller.
+   */
+  @Post(':ticketId/events/:eventId/relayed')
+  @RequirePermissions('tickets.resolve')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      "Mark one of the seller's messages as passed to the courier. Idempotent — a second call returns the first relay, it does not record another.",
+  })
+  markRelayed(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('ticketId', new ParseUUIDPipe({ version: '7' })) ticketId: string,
+    @Param('eventId', new ParseUUIDPipe({ version: '7' })) eventId: string,
+  ): ReturnType<TicketService['markRelayed']> {
+    return this.tickets.markRelayed(ticketId, eventId, staff.id);
+  }
+
   @Get(':ticketId')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'One ticket, in full. An operator sees every ticket.' })

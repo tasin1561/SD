@@ -2,7 +2,13 @@
 
 import type { ReactElement } from 'react';
 import { useState } from 'react';
-import { Button, SkeletonRows, Textarea, useToast } from '@skydrop/ui/components';
+import {
+  Button,
+  MessageRelayStatus,
+  SkeletonRows,
+  Textarea,
+  useToast,
+} from '@skydrop/ui/components';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
   useCourierThreadForTicket,
@@ -19,6 +25,12 @@ interface Bubble {
   readonly who: string;
   readonly body: string;
   readonly at: string;
+  /**
+   * TKT-2 — where THIS message has got to, on the seller's own
+   * messages. Undefined on ours and the courier's: neither has anywhere
+   * further to travel, so a status there would be noise.
+   */
+  readonly relayedAt?: string | null;
 }
 
 /**
@@ -65,6 +77,20 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
 
   const bubbles: Bubble[] = [];
 
+  /*
+    The opening message has no event row of its own — the text lives on
+    the ticket, and `open()` writes a companion "Ticket opened" event.
+    So its relay state is that event's, matched the same way the loop
+    below skips it.
+
+    Matched on the NOTE rather than on "the first event": a scrap ticket
+    is opened by staff, and crediting its opening event to the seller
+    would offer to relay something the seller never wrote.
+  */
+  const openingEvent = (timeline.data ?? []).find(
+    (e) => (e.note ?? '').trim() === 'Ticket opened' && e.actorType === 'SELLER',
+  );
+
   // The seller's opening message: what they raised, in their words.
   if (ticket.description !== null && ticket.description.trim() !== '') {
     bubbles.push({
@@ -73,6 +99,10 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
       who: 'You',
       body: ticket.description,
       at: ticket.createdAt,
+      // Spread rather than `: undefined` — under
+      // exactOptionalPropertyTypes an optional property may be absent,
+      // not explicitly undefined.
+      ...(openingEvent === undefined ? {} : { relayedAt: openingEvent.relayedAt }),
     });
   }
 
@@ -92,6 +122,7 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
       who: mine ? 'You' : 'Skydrop',
       body: said,
       at: e.at,
+      ...(mine ? { relayedAt: e.relayedAt } : {}),
     });
   }
 
@@ -167,6 +198,11 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
                 >
                   {b.body}
                 </div>
+                {b.relayedAt === undefined ? null : (
+                  <p className="mt-1 text-right">
+                    <MessageRelayStatus relayedAt={b.relayedAt} />
+                  </p>
+                )}
               </div>
             </li>
           );

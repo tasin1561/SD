@@ -251,10 +251,12 @@ export class TicketService {
     sellerId?: string,
   ): Promise<
     ReadonlyArray<{
+      id: string;
       note: string | null;
       toStatus: TicketStatus;
       actorType: ActorType;
       at: Date;
+      relayedAt: Date | null;
     }>
   > {
     const ticket = await this.prisma.client.ticket.findFirst({
@@ -269,13 +271,24 @@ export class TicketService {
     const rows = await this.prisma.client.ticketEvent.findMany({
       where: { ticketId },
       orderBy: { createdAt: 'asc' },
-      select: { note: true, toStatus: true, actorType: true, createdAt: true },
+      select: {
+        id: true,
+        note: true,
+        toStatus: true,
+        actorType: true,
+        createdAt: true,
+        // TKT-2. The seller is shown where their own message has got
+        // to, so they read this for the same reason we do.
+        relay: { select: { relayedAt: true } },
+      },
     });
     return rows.map((r) => ({
+      id: r.id,
       note: r.note,
       toStatus: r.toStatus,
       actorType: r.actorType,
       at: r.createdAt,
+      relayedAt: r.relay?.relayedAt ?? null,
     }));
   }
 
@@ -602,9 +615,10 @@ export class TicketService {
       note: string | null;
       actorType: ActorType;
       createdAt: Date;
+      relayedAt: Date | null;
     }[]
   > {
-    return this.prisma.client.ticketEvent.findMany({
+    const rows = await this.prisma.client.ticketEvent.findMany({
       where: { ticketId },
       orderBy: { createdAt: 'asc' },
       select: {
@@ -614,8 +628,81 @@ export class TicketService {
         note: true,
         actorType: true,
         createdAt: true,
+        relay: { select: { relayedAt: true } },
       },
     });
+    return rows.map(({ relay, ...r }) => ({ ...r, relayedAt: relay?.relayedAt ?? null }));
+  }
+
+  /**
+   * TKT-2 — record that a seller's message has been passed to the
+   * courier.
+   *
+   * Only a SELLER's words can be relayed. Ours already reached the
+   * seller the moment they were written, and the courier's came FROM
+   * the courier; marking either would be stating something that never
+   * needed doing.
+   *
+   * IDEMPOTENT rather than a 409 on the second call: two operators
+   * working the same queue is the ordinary case, and an error there
+   * teaches people to ignore errors (the CUR-4 repeat-scan argument).
+   * The UNIQUE on `ticket_event_id` is the guard — never a read-then-
+   * write, which under READ COMMITTED lets both callers through and
+   * records the relay twice.
+   */
+  async markRelayed(
+    ticketId: string,
+    ticketEventId: string,
+    staffId: string,
+  ): Promise<{ ticketEventId: string; relayedAt: Date; alreadyRelayed: boolean }> {
+    const event = await this.prisma.client.ticketEvent.findFirst({
+      where: { id: ticketEventId, ticketId },
+      select: { id: true, actorType: true, relay: { select: { relayedAt: true } } },
+    });
+    if (event === null) {
+      throw new NotFoundException({
+        code: 'TICKET_EVENT_NOT_FOUND',
+        message: 'No such message on this ticket',
+      });
+    }
+    if (event.actorType !== ActorType.SELLER) {
+      throw new BadRequestException({
+        code: 'NOT_A_SELLER_MESSAGE',
+        message: 'Only what the seller wrote gets passed to the courier.',
+      });
+    }
+    if (event.relay !== null) {
+      return { ticketEventId, relayedAt: event.relay.relayedAt, alreadyRelayed: true };
+    }
+    try {
+      const row = await this.prisma.client.ticketMessageRelay.create({
+        data: { ticketEventId, relayedByStaffId: staffId },
+        select: { relayedAt: true },
+      });
+      await this.audit.log({
+        action: 'ticket.message_relayed',
+        severity: 'LOW',
+        actorType: ActorType.STAFF,
+        staffUserId: staffId,
+        entityType: 'ticket',
+        entityId: ticketId,
+        metadata: { ticketEventId },
+      });
+      return { ticketEventId, relayedAt: row.relayedAt, alreadyRelayed: false };
+    } catch (err) {
+      // Somebody else got there between the read and the insert. That
+      // is the same outcome, not a failure.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const existing = await this.prisma.client.ticketMessageRelay.findUnique({
+          where: { ticketEventId },
+          select: { relayedAt: true },
+        });
+        if (existing !== null) {
+          return { ticketEventId, relayedAt: existing.relayedAt, alreadyRelayed: true };
+        }
+      }
+      throw err;
+    }
   }
 
   private toView(row: {

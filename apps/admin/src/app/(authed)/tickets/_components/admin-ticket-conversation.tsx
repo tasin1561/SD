@@ -1,10 +1,17 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { Button, SkeletonRows, Textarea, useToast } from '@skydrop/ui/components';
+import {
+  Button,
+  MessageRelayStatus,
+  SkeletonRows,
+  Textarea,
+  useToast,
+} from '@skydrop/ui/components';
 import {
   useCourierThread,
   useCourierThreadForTicket,
+  useMarkTicketMessageRelayed,
   useReplyToSellerOnTicket,
   useTicketEvents,
   type TicketView,
@@ -20,6 +27,13 @@ interface Bubble {
   readonly who: string;
   readonly body: string;
   readonly at: string;
+  /**
+   * TKT-2 — the seller's own messages carry where they have got to, and
+   * the id of the row that records it. Both undefined on ours and the
+   * courier's: neither has anywhere further to travel.
+   */
+  readonly eventId?: string;
+  readonly relayedAt?: string | null;
 }
 
 /**
@@ -45,10 +59,21 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
   const link = useCourierThreadForTicket(canSeeCourier ? ticket.id : null);
   const thread = useCourierThread(canSeeCourier ? (link.data?.id ?? null) : null);
   const reply = useReplyToSellerOnTicket();
+  const relay = useMarkTicketMessageRelayed();
   const canReply = usePermission('tickets.resolve');
   const [draft, setDraft] = useState('');
 
   const bubbles: Bubble[] = [];
+
+  /*
+    The opening message's text lives on the ticket; its EVENT is the
+    companion "Ticket opened" row `open()` writes. Matched on the note
+    rather than on position, because a scrap ticket is opened by staff
+    and its opening event is not the seller speaking.
+  */
+  const openingEvent = (events.data ?? []).find(
+    (e) => (e.note ?? '').trim() === 'Ticket opened' && e.actorType === 'SELLER',
+  );
 
   if (ticket.description !== null && ticket.description.trim() !== '') {
     bubbles.push({
@@ -57,6 +82,9 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
       who: 'Seller',
       body: ticket.description,
       at: ticket.createdAt,
+      ...(openingEvent === undefined
+        ? {}
+        : { eventId: openingEvent.id, relayedAt: openingEvent.relayedAt }),
     });
   }
 
@@ -73,6 +101,7 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
       who: fromSeller ? 'Seller' : 'Skydrop',
       body: said,
       at: e.createdAt,
+      ...(fromSeller ? { eventId: e.id, relayedAt: e.relayedAt } : {}),
     });
   }
 
@@ -89,6 +118,33 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
   }
 
   bubbles.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+
+  /*
+    TKT-2 — "I have taken this to the courier."
+
+    An operator action, on the message it refers to, rather than a
+    checkbox somewhere else on the page: what is being asserted is about
+    THIS sentence, and a control that sits away from it is one you have
+    to match up by eye.
+
+    Idempotent server-side, so a double-click is not an error — the
+    toast says which happened rather than pretending the second call did
+    something.
+  */
+  const markRelayed = (eventId: string): void => {
+    void (async () => {
+      try {
+        const res = await relay.mutateAsync({ ticketId: ticket.id, eventId });
+        toast.success(
+          res.alreadyRelayed
+            ? 'Already marked — the seller can see it'
+            : 'Marked as passed to the courier — the seller can see it',
+        );
+      } catch (err) {
+        toast.error(serverVerdict(err));
+      }
+    })();
+  };
 
   const send = (): void => {
     const note = draft.trim();
@@ -126,6 +182,10 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
               nobody can screenshot and discuss.
             */
             const sellerSide = b.side === 'SELLER';
+            // Hoisted so the closure below keeps the narrowing — a
+            // `?? ''` there would post an empty id rather than not
+            // rendering the button.
+            const eventId = b.eventId;
             return (
               <li key={b.key} className={sellerSide ? 'flex justify-end' : 'flex justify-start'}>
                 <div className="max-w-[85%]">
@@ -154,6 +214,21 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
                   >
                     {b.body}
                   </div>
+                  {b.relayedAt === undefined ? null : (
+                    <div className="mt-1 flex items-center justify-end gap-2">
+                      <MessageRelayStatus relayedAt={b.relayedAt} />
+                      {b.relayedAt === null && canReply && eventId !== undefined ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={relay.isPending}
+                          onClick={() => markRelayed(eventId)}
+                        >
+                          Mark delivered
+                        </Button>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
               </li>
             );

@@ -26,6 +26,7 @@ export * from './order-journey';
 export * from './form';
 export * from './modal';
 export * from './menu-button';
+export * from './message-relay-status';
 export * from './page';
 export * from './product-thumb';
 export * from './status-badge';

@@ -203,10 +203,16 @@ export function useReplyOnTicket(): UseMutationResult<
 }
 
 export interface TicketTimelineEntry {
+  readonly id: string;
   readonly note: string | null;
   readonly toStatus: string;
   readonly actorType: string;
   readonly at: string;
+  /**
+   * TKT-2 — when Skydrop passed this message of yours to the courier,
+   * or null while it is still only with us.
+   */
+  readonly relayedAt: string | null;
 }
 
 /** What has happened on a ticket, including what we found out for them. */

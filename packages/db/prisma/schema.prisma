@@ -94,6 +94,7 @@ model StaffUser {
   withdrawalRequestsResolved WithdrawalRequest[]           @relation("WithdrawalRequestResolvedBy")
   ticketsOpened              Ticket[]                      @relation("TicketOpenedByStaff")
   ticketsResolved            Ticket[]                      @relation("TicketResolvedByStaff")
+  ticketMessageRelays        TicketMessageRelay[]
   courierSettlementsRecorded CourierSettlement[]           @relation("CourierSettlementRecordedBy")
   stockUnitsScanned          StockUnit[]                   @relation("StockUnitLastScanBy")
   inboundFreightSettled      InboundFreightCharge[]        @relation("InboundFreightSettledBy")
@@ -6354,10 +6355,38 @@ model TicketEvent {
   actorId    String?       @map("actor_id") @db.Uuid
   createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz
 
-  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticket Ticket              @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  relay  TicketMessageRelay?
 
   @@index([ticketId, createdAt])
   @@map("ticket_events")
+}
+
+/// TKT-2 — "we have passed this one on to the courier", recorded as its
+/// OWN append-only row rather than as a column on the message it refers
+/// to.
+///
+/// `ticket_events` is append-only (TKT-1) and a relay is a new fact
+/// about the world — an operator did something, at a time — not a
+/// correction to what the seller wrote. So the message keeps saying
+/// exactly what it said, and the relay sits beside it.
+///
+/// The row's EXISTENCE is the delivered state: absent means the seller's
+/// words are with us and not yet with the courier. The UNIQUE on
+/// `ticket_event_id` is what makes marking it twice a no-op instead of a
+/// second claim that we relayed it again.
+model TicketMessageRelay {
+  id               String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  ticketEventId    String   @unique @map("ticket_event_id") @db.Uuid
+  /// SET NULL rather than RESTRICT: the relay happened whether or not
+  /// the person who did it still works here.
+  relayedByStaffId String?  @map("relayed_by_staff_id") @db.Uuid
+  relayedAt        DateTime @default(now()) @map("relayed_at") @db.Timestamptz
+
+  ticketEvent TicketEvent @relation(fields: [ticketEventId], references: [id], onDelete: Cascade)
+  relayedBy   StaffUser?  @relation(fields: [relayedByStaffId], references: [id], onDelete: SetNull)
+
+  @@map("ticket_message_relays")
 }
 
 /// R5 — the seller-facing decision surface for "call attempts are
