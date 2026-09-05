@@ -511,34 +511,6 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                 <OrderInvoiceSection orderId={orderId} status={detail.data.status} />
               </Section>
 
-              {/*
-                Every conversation open on this parcel, at the FOOT of
-                the facts rather than up with the trouble panel.
-
-                It moved because of what it says most of the time:
-                "nothing raised yet". A panel whose usual content is an
-                absence was sitting third from the top, pushing the
-                recipient and the parcel down the page on every healthy
-                order. Down here it is where somebody arrives having
-                read the order and decided something is wrong — which is
-                the moment they want it.
-              */}
-              {/* What we did about it, and every conversation open on
-                  it — both below the invoice, both read AFTER the order
-                  rather than before it. The buttons that drive them are
-                  in the header. */}
-              <DeliveryTroublePanel
-                orderId={orderId}
-                orderStatus={detail.data.status}
-                open={askOpen}
-                onOpenChange={setAskOpen}
-              />
-              <OrderTicketsPanel
-                orderId={orderId}
-                raising={raiseOpen}
-                onRaisingChange={setRaiseOpen}
-              />
-
               {/* The whole journey — the stage ladder, what the courier
               says the parcel weighs and will collect, and our own
               handling merged with their scans into one history.
@@ -546,6 +518,36 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               which between them never showed that Skydrop had taken
               the order, phoned the customer, picked or packed it. */}
             </div>
+          </div>
+
+          {/*
+            FULL WIDTH, below the grid.
+
+            These two lived in the right-hand column for one commit and
+            it was wrong: the trouble panel carries what we discussed
+            with the customer AND what the seller asked us to do, each
+            with its own reason, reply and outcome, and the issues panel
+            carries a row per ticket with a status badge and a date. A
+            third of the page is not enough for either, and cramming
+            them there quietly cost detail that is the whole reason to
+            read them.
+
+            Still below the invoice, which is what was asked — the
+            invoice is the last thing in the facts column, and these
+            come after the entire block.
+          */}
+          <div className="mt-6 space-y-4">
+            <DeliveryTroublePanel
+              orderId={orderId}
+              orderStatus={detail.data.status}
+              open={askOpen}
+              onOpenChange={setAskOpen}
+            />
+            <OrderTicketsPanel
+              orderId={orderId}
+              raising={raiseOpen}
+              onRaisingChange={setRaiseOpen}
+            />
           </div>
 
           <div className="text-text-faint text-xs text-center mt-8">

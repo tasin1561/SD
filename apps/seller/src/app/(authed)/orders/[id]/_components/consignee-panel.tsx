@@ -94,8 +94,12 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
     <Card className="mt-4">
       <CardBody>
         <div className="mb-3">
-          <h2 className="text-sm font-medium">Customer details</h2>
-          {/*
+          {/* Heading and lock chip on ONE row: the chip is a property of
+              this section, not an announcement under it, and stacking
+              them pushed the fields down for a label six words long. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-sm font-medium">Customer details</h2>
+            {/*
             When the courier has stopped accepting changes, the reason
             sits behind an ⓘ next to the heading rather than in a block
             that pushed the fields off the screen.
@@ -110,19 +114,20 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
             "Raise an issue" moves inside, which is where somebody is
             when they have just read why they are stuck.
           */}
-          {d.editable ? (
-            <p className="text-text-muted mt-0.5 text-xs">{d.reason}</p>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setWhyOpen((v) => !v)}
-              aria-expanded={whyOpen}
-              className="border-warning/40 bg-warning/10 text-text-body hover:bg-warning/15 mt-1 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors"
-            >
-              <Info size={12} className="text-warning shrink-0" aria-hidden />
-              Locked by the courier
-            </button>
-          )}
+            {d.editable ? (
+              <p className="text-text-muted text-xs">{d.reason}</p>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setWhyOpen((v) => !v)}
+                aria-expanded={whyOpen}
+                className="border-warning/40 bg-warning/10 text-text-body hover:bg-warning/15 mt-1 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors"
+              >
+                <Info size={12} className="text-warning shrink-0" aria-hidden />
+                Locked by the courier
+              </button>
+            )}
+          </div>
           {!d.editable && whyOpen && (
             <div className="border-warning/40 bg-warning/10 mt-2 rounded-lg border p-3">
               <p className="text-text-bright text-sm font-medium">
