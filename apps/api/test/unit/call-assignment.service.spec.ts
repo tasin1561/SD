@@ -459,7 +459,7 @@ describe('the issue shown beside a call', () => {
       recallRequest: { reason: 'Please call them', executionRef: 'tkt-call' },
       callIssue: {
         id: 'tkt-call',
-        subject: 'Request to call the customer',
+        subject: 'Call the customer for me',
         description: 'Please call them',
         createdAt: new Date('2026-05-18T09:00:00Z'),
       },

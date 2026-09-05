@@ -247,7 +247,20 @@ export class DeliveryActionService {
         // it is a plain seller issue.
         ticketType: isRecall ? TicketType.SELLER_RAISED_ISSUE : TicketType.COURIER_NDR_ESCALATION,
         sellerId: who.sellerId,
-        subject: isRecall ? 'Request to call the customer' : 'Request another delivery attempt',
+        // Written as the SELLER'S OWN REQUEST, in their voice.
+        //
+        // These read back to the person who raised them, on their own
+        // ticket list, so a subject phrased from our side of the desk
+        // ("Seller asked us to call the customer") tells them something
+        // they already know, in a voice that is not theirs. The rest of
+        // a ticket is verbatim — what they wrote, what we found, what
+        // the courier said — and the subject is the one line that was
+        // not.
+        //
+        // It reads correctly for staff too: the admin list carries a
+        // "Raised by" column, so the subject there is plainly the
+        // seller's words being quoted.
+        subject: isRecall ? 'Call the customer for me' : 'Try delivering it again',
         description: reason,
         orderId: who.orderId,
         shipmentId: shipment.id,
