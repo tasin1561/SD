@@ -121,9 +121,9 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
                 type="button"
                 onClick={() => setWhyOpen((v) => !v)}
                 aria-expanded={whyOpen}
-                className="border-warning/40 bg-warning/10 text-text-body hover:bg-warning/15 mt-1 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors"
+                className="border-warning/40 bg-warning/10 text-text-muted hover:bg-warning/15 hover:text-text-body inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] leading-none transition-colors"
               >
-                <Info size={12} className="text-warning shrink-0" aria-hidden />
+                <Info size={10} className="text-warning shrink-0" aria-hidden />
                 Locked by the courier
               </button>
             )}
