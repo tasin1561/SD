@@ -96,7 +96,7 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
     <Card className="mt-4">
       <CardBody>
         <div className="mb-3">
-          <h2 className="text-sm font-medium">Who this is going to</h2>
+          <h2 className="text-sm font-medium">Customer details</h2>
           {/*
             The same warning the seller gets, without their raise-an-issue
             button: an operator's route to the courier is the escalation

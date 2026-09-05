@@ -18,6 +18,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useState, type ReactElement, type ReactNode } from 'react';
+import { useDeliveryActions } from '@/lib/ops-hooks';
 import type { OrderStatus } from '@skydrop/db';
 import { ApiError } from '@skydrop/api-client';
 import {
@@ -148,6 +149,14 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
   const [cancelOpen, setCancelOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
   const [reattemptOpen, setReattemptOpen] = useState(false);
+  // The two actions promoted to the header. `useDeliveryActions` is the
+  // SAME query key the trouble panel uses, so asking here costs nothing
+  // — TanStack serves both from one fetch — and it keeps the header
+  // from offering a button the server would refuse.
+  const [askOpen, setAskOpen] = useState(false);
+  const [raiseOpen, setRaiseOpen] = useState(false);
+  const deliveryActions = useDeliveryActions(orderId);
+  const canAsk = deliveryActions.data?.canRequest === true;
 
   return (
     <div>
@@ -180,6 +189,19 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             }
             action={
               <div className="flex items-center gap-2">
+                {/* The two things a seller can DO about a live parcel,
+                    beside the order number. They used to live on cards
+                    further down — one of which has since moved below
+                    the invoice — so the actions were somewhere you
+                    arrived at rather than somewhere you look. */}
+                {canAsk && (
+                  <Button variant="primary" size="sm" onClick={() => setAskOpen(true)}>
+                    Ask admin to act
+                  </Button>
+                )}
+                <Button variant="secondary" size="sm" onClick={() => setRaiseOpen(true)}>
+                  Raise an issue
+                </Button>
                 {(detail.data.status === 'DRAFT' ||
                   detail.data.status === 'PENDING_CONFIRMATION') && (
                   <Link href={`/orders/${orderId}/edit`}>
@@ -293,23 +315,21 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             </Card>
           )}
 
-          {/* Above the order's details, because when a delivery has
-              failed that IS the thing the seller came to look at. Renders
-              itself away on a healthy order. */}
-          <DeliveryTroublePanel orderId={orderId} orderStatus={detail.data.status} />
-          {/*
-            Every conversation open on this parcel. Sits under the
-            trouble panel deliberately: that panel is the three quick
-            actions, this is everything that came of them plus anything
-            raised by hand.
-          */}
-          <OrderTicketsPanel orderId={orderId} />
           {/* Correcting the consignee sits with the parcel, not in a
               settings screen: it is only ever done while looking at a
               specific delivery that is about to go wrong. */}
           <ConsigneePanel orderId={orderId} />
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+          {/*
+            `mt-6` because the panels above space themselves from what
+            precedes them (each carries its own `mt-4`) and this grid
+            carried nothing — so the facts butted straight up against
+            the consignee panel with no gap at all. Six rather than four:
+            this is the seam between "something needs you" and "here is
+            the order", and it should read as a bigger break than the
+            one between two notices.
+          */}
+          <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
             {/* The journey: the stage ladder, the parcels, and the
                 courier's own scans merged with our handling. */}
             <div className="min-w-0 space-y-4">
@@ -490,6 +510,34 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               <Section title={<Titled icon={FileText}>Invoice</Titled>}>
                 <OrderInvoiceSection orderId={orderId} status={detail.data.status} />
               </Section>
+
+              {/*
+                Every conversation open on this parcel, at the FOOT of
+                the facts rather than up with the trouble panel.
+
+                It moved because of what it says most of the time:
+                "nothing raised yet". A panel whose usual content is an
+                absence was sitting third from the top, pushing the
+                recipient and the parcel down the page on every healthy
+                order. Down here it is where somebody arrives having
+                read the order and decided something is wrong — which is
+                the moment they want it.
+              */}
+              {/* What we did about it, and every conversation open on
+                  it — both below the invoice, both read AFTER the order
+                  rather than before it. The buttons that drive them are
+                  in the header. */}
+              <DeliveryTroublePanel
+                orderId={orderId}
+                orderStatus={detail.data.status}
+                open={askOpen}
+                onOpenChange={setAskOpen}
+              />
+              <OrderTicketsPanel
+                orderId={orderId}
+                raising={raiseOpen}
+                onRaisingChange={setRaiseOpen}
+              />
 
               {/* The whole journey — the stage ladder, what the courier
               says the parcel weighs and will collect, and our own

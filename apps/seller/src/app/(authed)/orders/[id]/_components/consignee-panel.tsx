@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
+import { Info } from 'lucide-react';
 import {
   Button,
   Card,
@@ -36,6 +37,7 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
   const change = useChangeConsignee();
 
   const [raising, setRaising] = useState(false);
+  const [whyOpen, setWhyOpen] = useState(false);
   const [name, setName] = useState<string | null>(null);
   const [phone, setPhone] = useState<string | null>(null);
   const [address, setAddress] = useState<string | null>(null);
@@ -92,18 +94,36 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
     <Card className="mt-4">
       <CardBody>
         <div className="mb-3">
-          <h2 className="text-sm font-medium">Who this is going to</h2>
+          <h2 className="text-sm font-medium">Customer details</h2>
           {/*
-            When the courier has stopped accepting changes, the reason is
-            not a footnote — it is the whole answer, and it arrives at the
-            moment somebody has spotted a wrong number and is about to fix
-            it. So it is a warning with a way forward rather than grey
-            text under a heading: the details cannot be corrected through
-            the courier any more, but a person here can still ring them.
+            When the courier has stopped accepting changes, the reason
+            sits behind an ⓘ next to the heading rather than in a block
+            that pushed the fields off the screen.
+
+            The panel is READ-ONLY in that state anyway — every input is
+            disabled — so the explanation is not something somebody
+            needs before they can act; it is what they go looking for
+            once they notice they cannot type. A permanent five-line
+            warning above the thing it describes buys attention it does
+            not need and spends the space the fields wanted. The button
+            is highlighted so it is plainly there to be pressed, and
+            "Raise an issue" moves inside, which is where somebody is
+            when they have just read why they are stuck.
           */}
           {d.editable ? (
             <p className="text-text-muted mt-0.5 text-xs">{d.reason}</p>
           ) : (
+            <button
+              type="button"
+              onClick={() => setWhyOpen((v) => !v)}
+              aria-expanded={whyOpen}
+              className="border-warning/40 bg-warning/10 text-text-body hover:bg-warning/15 mt-1 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors"
+            >
+              <Info size={12} className="text-warning shrink-0" aria-hidden />
+              Locked by the courier
+            </button>
+          )}
+          {!d.editable && whyOpen && (
             <div className="border-warning/40 bg-warning/10 mt-2 rounded-lg border p-3">
               <p className="text-text-bright text-sm font-medium">
                 These can no longer be changed through the courier

@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, type ReactElement } from 'react';
-import { Button, Card, CardBody, SkeletonRows, TicketStatusBadge } from '@skydrop/ui/components';
+import { type ReactElement } from 'react';
+import { Card, CardBody, SkeletonRows, TicketStatusBadge } from '@skydrop/ui/components';
 import { useSellerTickets } from '@/lib/ops-hooks';
 import { RaiseTicketModal } from '../../../tickets/_components/raise-ticket-modal';
 
@@ -18,9 +18,23 @@ import { RaiseTicketModal } from '../../../tickets/_components/raise-ticket-moda
  * about this and here is what they said" is the most useful thing on
  * the page when the same problem comes back.
  */
-export function OrderTicketsPanel({ orderId }: { readonly orderId: string }): ReactElement {
+export function OrderTicketsPanel({
+  orderId,
+  raising,
+  onRaisingChange,
+}: {
+  readonly orderId: string;
+  /**
+   * The raise dialog, driven from the page header — the button lives
+   * beside the order number now, with the other thing a seller can DO.
+   * Lifted rather than duplicated: two buttons for one action is the
+   * shape that made the ticket page confusing.
+   */
+  readonly raising: boolean;
+  readonly onRaisingChange: (next: boolean) => void;
+}): ReactElement {
   const tickets = useSellerTickets({ orderId });
-  const [raising, setRaising] = useState(false);
+  const setRaising = onRaisingChange;
   const rows = tickets.data ?? [];
 
   return (
@@ -28,9 +42,6 @@ export function OrderTicketsPanel({ orderId }: { readonly orderId: string }): Re
       <CardBody>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-medium">Issues raised on this order</h2>
-          <Button variant="secondary" size="sm" onClick={() => setRaising(true)}>
-            Raise an issue
-          </Button>
         </div>
 
         {tickets.isLoading ? (

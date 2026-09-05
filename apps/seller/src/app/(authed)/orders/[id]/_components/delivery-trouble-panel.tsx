@@ -76,16 +76,29 @@ const ACTIONS: ReadonlyArray<{ value: DeliveryActionKind; label: string; hint: s
 export function DeliveryTroublePanel({
   orderId,
   orderStatus,
+  open,
+  onOpenChange,
 }: {
   readonly orderId: string;
   readonly orderStatus: string;
+  /**
+   * The ask dialog, driven from the page header.
+   *
+   * The button that opens it now sits beside the order number, where a
+   * seller looks for something to DO, rather than on this card — which
+   * moved below the invoice and is read after the fact. Lifted rather
+   * than duplicated: two buttons for one action is how the ticket page
+   * came to have two message boxes.
+   */
+  readonly open: boolean;
+  readonly onOpenChange: (next: boolean) => void;
 }): ReactElement | null {
   const inTrouble = orderStatus === 'DELIVERY_FAILED' || orderStatus === 'OUT_FOR_DELIVERY';
   const actions = useDeliveryActions(orderId);
   const calls = useCallHistory(orderId);
   const request = useRequestDeliveryAction();
 
-  const [open, setOpen] = useState(false);
+  const setOpen = onOpenChange;
   const [action, setAction] = useState<DeliveryActionKind>('REATTEMPT');
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -114,20 +127,6 @@ export function DeliveryTroublePanel({
     <Card>
       <CardHeader
         title={orderStatus === 'DELIVERY_FAILED' ? 'Delivery did not succeed' : 'Out for delivery'}
-        action={
-          actions.data?.canRequest === true ? (
-            /* PRIMARY, deliberately. This card only appears when a parcel
-               is in trouble or has been, and this is the one thing the
-               seller can DO about it — telling us to re-attempt, hold, or
-               return it. Rendered in the default quiet variant it read as
-               a secondary link on a page full of read-only detail, which
-               is the wrong weight for the only control that changes what
-               happens to a live parcel. */
-            <Button variant="primary" size="sm" onClick={() => setOpen(true)}>
-              Ask us to act
-            </Button>
-          ) : undefined
-        }
       />
       <CardBody>
         <div className="space-y-4">
