@@ -2,8 +2,22 @@
 
 import Link from 'next/link';
 
-import { ArrowLeft, Clock, Pencil, PhoneCall, Undo2, XCircle } from 'lucide-react';
-import { useState, type ReactElement } from 'react';
+import {
+  ArrowLeft,
+  Clock,
+  CreditCard,
+  FileText,
+  Package,
+  Pencil,
+  PhoneCall,
+  Receipt,
+  Ruler,
+  StickyNote,
+  Undo2,
+  User,
+  XCircle,
+} from 'lucide-react';
+import { useState, type ReactElement, type ReactNode } from 'react';
 import type { OrderStatus } from '@skydrop/db';
 import { ApiError } from '@skydrop/api-client';
 import {
@@ -92,6 +106,31 @@ const CANCELLABLE: ReadonlySet<string> = new Set([
   'PACK_FAILED',
   'PENDING_MANUAL_PLACEMENT',
 ]);
+
+/**
+ * A section heading with its own accent icon.
+ *
+ * The comps put a small coloured glyph on every card head, and it does
+ * more than decorate: a column of eight grey headings is scanned by
+ * reading all eight, while a column of eight distinct glyphs is scanned
+ * by shape. The icon carries the accent colour — the one place on these
+ * cards where the palette shows — and it is `aria-hidden`, because the
+ * heading text already says what this is.
+ */
+function Titled({
+  icon: Icon,
+  children,
+}: {
+  readonly icon: typeof User;
+  readonly children: ReactNode;
+}): ReactElement {
+  return (
+    <span className="inline-flex items-center gap-2">
+      <Icon size={14} className="text-accent shrink-0" aria-hidden />
+      {children}
+    </span>
+  );
+}
 
 export function OrderDetailView({ orderId }: { orderId: string }): ReactElement {
   const detail = useOrderDetail(orderId);
@@ -280,7 +319,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             {/* The facts, in the order a seller checks them: who it is
                 going to, what is in it, what it costs, the paperwork. */}
             <div className="min-w-0 space-y-4">
-              <Section title="Recipient">
+              <Section title={<Titled icon={User}>Recipient</Titled>}>
                 <Card>
                   <CardBody>
                     <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[160px_1fr] gap-x-3 sm:gap-x-6 gap-y-1.5 text-sm">
@@ -331,7 +370,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
 
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                 <Card>
-                  <CardHeader title="Payment" />
+                  <CardHeader title={<Titled icon={CreditCard}>Payment</Titled>} />
                   <CardBody>
                     <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[120px_1fr] gap-x-3 sm:gap-x-4 gap-y-1.5 text-sm">
                       <dt className="text-text-muted">Mode</dt>
@@ -348,7 +387,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                   </CardBody>
                 </Card>
                 <Card>
-                  <CardHeader title="Physical" />
+                  <CardHeader title={<Titled icon={Ruler}>Physical</Titled>} />
                   <CardBody>
                     <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[120px_1fr] gap-x-3 sm:gap-x-4 gap-y-1.5 text-sm">
                       <dt className="text-text-muted">Weight (g)</dt>
@@ -372,7 +411,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                 </Card>
               </div>
 
-              <Section title={`Items (${detail.data.items.length})`}>
+              <Section title={<Titled icon={Package}>Items ({detail.data.items.length})</Titled>}>
                 <Card>
                   <Table wrapperClassName="rounded-none border-0 bg-transparent">
                     <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
@@ -427,7 +466,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               </Section>
 
               {detail.data.sellerNotes && (
-                <Section title="Notes">
+                <Section title={<Titled icon={StickyNote}>Notes</Titled>}>
                   <Card>
                     <CardBody>
                       <p className="text-text-body text-sm whitespace-pre-wrap">
@@ -443,12 +482,12 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               403 in a red box reads as a broken page rather than as
               policy. Cosmetic — the server is still the boundary. */}
               {identity !== null && can(identity, 'charges.view') && (
-                <Section title="Charges">
+                <Section title={<Titled icon={Receipt}>Charges</Titled>}>
                   <OrderChargesSection orderId={orderId} />
                 </Section>
               )}
 
-              <Section title="Invoice">
+              <Section title={<Titled icon={FileText}>Invoice</Titled>}>
                 <OrderInvoiceSection orderId={orderId} status={detail.data.status} />
               </Section>
 

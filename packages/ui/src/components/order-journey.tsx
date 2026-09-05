@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactElement } from 'react';
+import { Check } from 'lucide-react';
 import { Card, CardBody, CardHeader } from './card';
 
 export type MilestoneOwner = 'SKYDROP' | 'COURIER';
@@ -114,29 +115,59 @@ export function JourneyLadder({
         const done = m.state === 'DONE' || m.state === 'CURRENT';
         return (
           <li key={m.key} className="flex gap-3">
-            {/* Rail: the dot plus the line to the next rung. */}
+            {/*
+              Rail: the marker plus the line to the next rung.
+
+              A DONE step carries a tick rather than a dot. The dots all
+              looked the same at a glance, so "how far has this got" was
+              a question you answered by reading nine labels; a column
+              of ticks stopping at a hollow ring answers it in one look.
+            */}
             <div className="flex flex-col items-center" aria-hidden>
-              <span
-                className={[
-                  'mt-1 h-2.5 w-2.5 shrink-0 rounded-full',
-                  m.state === 'CURRENT'
-                    ? 'bg-accent-fill ring-accent/30 ring-4'
-                    : m.state === 'DONE'
-                      ? 'bg-accent-fill'
-                      : m.state === 'SKIPPED'
-                        ? 'bg-border'
-                        : 'border-border border bg-transparent',
-                ].join(' ')}
-              />
+              {m.state === 'DONE' ? (
+                <span className="bg-accent-fill text-accent-fg mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full">
+                  <Check size={12} strokeWidth={3} />
+                </span>
+              ) : m.state === 'CURRENT' ? (
+                <span className="bg-accent-fill ring-accent/25 mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ring-4">
+                  <span className="bg-accent-fg h-1.5 w-1.5 rounded-full" />
+                </span>
+              ) : (
+                <span
+                  className={[
+                    'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border',
+                    m.state === 'SKIPPED'
+                      ? 'border-border bg-surface-raised'
+                      : 'border-border bg-transparent',
+                  ].join(' ')}
+                >
+                  <span className="bg-border h-1.5 w-1.5 rounded-full" />
+                </span>
+              )}
               {!last && (
                 <span
-                  className={['w-px flex-1', done ? 'bg-accent/40' : 'bg-border'].join(' ')}
-                  style={{ minHeight: '1.5rem' }}
+                  className={['w-px flex-1', done ? 'bg-accent-fill/50' : 'bg-border'].join(' ')}
+                  style={{ minHeight: '1.25rem' }}
                 />
               )}
             </div>
 
-            <div className={['min-w-0 flex-1', last ? 'pb-0' : 'pb-4'].join(' ')}>
+            {/*
+              The CURRENT step sits in a tinted panel with an accent
+              edge. Where a parcel has actually GOT TO is the one thing
+              this list exists to say, and bolder text alone was not
+              saying it — the reference comps make it a surface, and a
+              surface is what the eye finds first.
+            */}
+            <div
+              className={[
+                'min-w-0 flex-1',
+                last ? 'pb-0' : 'pb-4',
+                m.state === 'CURRENT'
+                  ? 'border-accent/40 bg-accent/5 -mt-0.5 mb-2 rounded-md border px-3 py-2'
+                  : '',
+              ].join(' ')}
+            >
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <span
                   className={[
