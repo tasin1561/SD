@@ -22,7 +22,6 @@ import { TicketStatus } from '@skydrop/db';
 import { useAdminTicket, useTicketEvents, useTransitionTicket } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
-import { TicketCourierPanel } from './ticket-courier-panel';
 import { AdminTicketConversation } from './admin-ticket-conversation';
 
 const MOVE_TO: ReadonlyArray<{ value: TicketStatus; label: string }> = [
@@ -148,8 +147,22 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
         </CardBody>
       </Card>
 
-      <h2 className="text-text-bright mt-5 mb-2 text-sm font-medium">Courier conversation</h2>
-      <TicketCourierPanel ticketId={ticketId} />
+      {/*
+        The courier conversation is NOT on this page any more.
+
+        It has its own screen — Courier escalation → Conversations —
+        which does the same job with room for it, so nothing is lost:
+        the manual relay to Delhivery is exactly as available as it was.
+        What it was doing HERE was taking a third of a ticket page to
+        say "nothing said either way yet" and offering two empty
+        textareas beneath the seller conversation somebody actually came
+        to read.
+
+        This page is now one thread: the seller and us. Talking to the
+        courier is a different act, in a different place, and mixing
+        them is the same confusion that put two message boxes on the
+        seller's ticket page.
+      */}
 
       <h2 className="text-text-bright mt-5 mb-2 text-sm font-medium">History</h2>
       <Card>
