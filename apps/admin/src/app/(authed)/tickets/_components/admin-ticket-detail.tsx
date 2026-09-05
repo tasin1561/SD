@@ -219,82 +219,94 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
         <>
           <h2 className="text-text-bright mt-5 mb-2 text-sm font-medium">Move this on</h2>
           <Card>
-            <CardBody className="space-y-3">
-              <FormField label="Move to" htmlFor="admin-ticket-stage">
-                <Select
-                  id="admin-ticket-stage"
-                  value={stage}
-                  onChange={(e) => {
-                    const next = e.target.value as '' | 'REVIEWING' | 'CLOSED';
-                    setStage(next);
-                    // Reviewing IS a status; Closed is four of them, so
-                    // it waits for the second question below.
-                    setTo(next === 'REVIEWING' ? TicketStatus.NEGOTIATING : '');
-                  }}
-                >
-                  <option value="">Choose…</option>
-                  {STAGES.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
+            {/*
+              COMPACT: the two dropdowns share a row and the notes sit
+              beside the Apply button, rather than four full-width
+              fields stacked down the page.
 
-              {stage === 'CLOSED' ? (
-                <FormField
-                  label="How did it close?"
-                  htmlFor="admin-ticket-to"
-                  hint="The seller reads this outcome on their own ticket. Refunding credits their wallet."
-                >
+              It is a small form — a stage, sometimes an outcome, a
+              sentence — and stacking it made a three-decision act look
+              like a long one. The fields that only SOMETIMES appear
+              still appear in place; the row simply grows a column.
+            */}
+            <CardBody className="space-y-2.5">
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                <FormField label="Move to" htmlFor="admin-ticket-stage">
                   <Select
-                    id="admin-ticket-to"
-                    value={to}
-                    onChange={(e) => setTo(e.target.value as TicketStatus | '')}
+                    id="admin-ticket-stage"
+                    value={stage}
+                    onChange={(e) => {
+                      const next = e.target.value as '' | 'REVIEWING' | 'CLOSED';
+                      setStage(next);
+                      // Reviewing IS a status; Closed is four of them,
+                      // so it waits for the second question.
+                      setTo(next === 'REVIEWING' ? TicketStatus.NEGOTIATING : '');
+                    }}
                   >
-                    <option value="">Choose an outcome…</option>
-                    {OUTCOMES.map((o) => (
+                    <option value="">Choose…</option>
+                    {STAGES.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
                       </option>
                     ))}
                   </Select>
                 </FormField>
-              ) : null}
 
-              {to === TicketStatus.RESOLVED_REFUND ? (
+                {stage === 'CLOSED' ? (
+                  <FormField label="How did it close?" htmlFor="admin-ticket-to">
+                    <Select
+                      id="admin-ticket-to"
+                      value={to}
+                      onChange={(e) => setTo(e.target.value as TicketStatus | '')}
+                    >
+                      <option value="">Choose an outcome…</option>
+                      {OUTCOMES.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormField>
+                ) : null}
+
+                {to === TicketStatus.RESOLVED_REFUND ? (
+                  <FormField
+                    label="Refund (INR)"
+                    htmlFor="admin-ticket-refund"
+                    // The one hint that survives the compaction: this
+                    // field moves money, and that is not something to
+                    // learn afterwards.
+                    hint="Credited to the seller's wallet in the same transaction."
+                  >
+                    <input
+                      id="admin-ticket-refund"
+                      className="sd-field"
+                      value={refund}
+                      onChange={(e) => setRefund(e.target.value)}
+                      inputMode="decimal"
+                    />
+                  </FormField>
+                ) : null}
+              </div>
+
+              <div className="flex items-end gap-2.5">
                 <FormField
-                  label="Refund (INR)"
-                  htmlFor="admin-ticket-refund"
-                  hint="Credited to the seller's wallet in the same transaction."
+                  className="min-w-0 flex-1"
+                  label="Notes"
+                  htmlFor="admin-ticket-notes"
+                  hint="The seller reads this on their ticket."
                 >
-                  <input
-                    id="admin-ticket-refund"
-                    className="sd-field"
-                    value={refund}
-                    onChange={(e) => setRefund(e.target.value)}
-                    inputMode="decimal"
+                  <Textarea
+                    id="admin-ticket-notes"
+                    rows={2}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
                   />
                 </FormField>
-              ) : null}
-
-              <FormField
-                label="Notes"
-                htmlFor="admin-ticket-notes"
-                hint="The seller reads this on their ticket."
-              >
-                <Textarea
-                  id="admin-ticket-notes"
-                  rows={3}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                />
-              </FormField>
-
-              <div className="flex justify-end">
                 <Button
                   variant="primary"
                   size="md"
+                  className="mb-5 shrink-0"
                   disabled={to === '' || transition.isPending}
                   onClick={apply}
                 >
