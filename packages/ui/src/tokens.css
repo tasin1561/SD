@@ -20,23 +20,40 @@
      Slate scale. 950 = canvas, 900 = panel, 800 = elevated,
      700 = hairline border, 500 = muted text, 300 = body text,
      100 = high-contrast text. */
-  --color-bg: #090d16;
-  --color-surface: #0f1623;
-  --color-surface-raised: #1c2940;
-  --color-surface-hover: #162032;
-  --color-border: #1c283d;
-  --color-border-strong: #2e405e;
-  --color-text-faint: #7a8899;
-  --color-text-muted: #94a3b8;
-  --color-text-body: #b6c2d1;
-  --color-text-strong: #e2e8f0;
-  --color-text-bright: #f8fafc;
+  --color-bg: #0f131c;
+  --color-surface: #0a0e17;
+  --color-surface-raised: #1c1f29;
+  --color-surface-hover: #181b25;
+  --color-border: #434655;
+  --color-border-strong: #8d90a0;
+  --color-text-faint: #8d90a0;
+  --color-text-muted: #a8abbb;
+  --color-text-body: #c3c6d7;
+  --color-text-strong: #dfe2ef;
+  --color-text-bright: #f2f4ff;
 
-  /* ───────── Brand accent (used sparingly — for primary actions
-     + selected nav) ───────── */
-  --color-accent: #60a5fa;
-  --color-accent-hover: #93c5fd;
-  --color-accent-fg: #ffffff; /* text on accent fill */
+  /* ───────── Brand accent ─────────
+     TWO tokens, because one colour cannot do both jobs on a dark
+     ground and the maths says so rather than the eye:
+
+       accent       — accent as TEXT (links, emphasis). Must be light
+                      enough to read on #0f131c: #b4c5ff scores 10.95.
+       accent-fill  — accent as a BACKGROUND (primary buttons). Must
+                      be dark enough for white text on it: #2563eb
+                      scores 5.17. As TEXT that same blue is 3.59, a
+                      fail.
+
+     The old single token was #60a5fa, which read beautifully as a
+     link (7.31) and put white on itself at 2.54 — every primary
+     button in dark mode was below AA and had been all along. Adopting
+     the reference palette is what surfaced it; the split is what
+     fixes it. `accent-fill` is deliberately the SAME value in both
+     themes, which is what the reference does too. */
+  --color-accent: #b4c5ff;
+  --color-accent-hover: #dbe1ff;
+  --color-accent-fill: #2563eb;
+  --color-accent-fill-hover: #1d4ed8;
+  --color-accent-fg: #ffffff; /* text on the accent FILL — 5.17 */
   --color-accent-tint: rgba(37, 99, 235, 0.14);
   --color-accent-ring: rgba(37, 99, 235, 0.45);
 
@@ -213,7 +230,10 @@
  * ground, accent 5.2:1 as link text and as white-on-fill, every chip
  * ≥4.5:1 on its own tint, and the nav rail's own ramp against #0f1729.
  *
- * The dark theme is untouched. */
+ * (2026-09-05: the dark theme is NO LONGER untouched — both themes now
+ * carry the reference palette from the seller-page comps, and the
+ * accent was split into text + fill because the contrast maths left no
+ * single value that could do both on a dark ground.) */
 [data-theme='light'] {
   --color-bg: #f8fafc;
   --color-surface: #ffffff;
@@ -222,18 +242,24 @@
      it means a toned panel that separates from the white card behind
      it. Keeping it #ffffff is what made every table header invisible
      against its own card and needed a light-only THead override. */
-  --color-surface-raised: #e2e8f0;
-  --color-surface-hover: #f1f5f9;
-  --color-border: #e2e8f0;
-  --color-border-strong: #cbd5e1;
-  --color-text-faint: #5b6b82;
-  --color-text-muted: #525f73;
-  --color-text-body: #475569;
-  --color-text-strong: #1e293b;
-  --color-text-bright: #090d16;
+  --color-surface-raised: #e5eeff;
+  --color-surface-hover: #eff4ff;
+  --color-border: #c3c6d7;
+  --color-border-strong: #737686;
+  --color-text-faint: #5f6274;
+  --color-text-muted: #4d5064;
+  --color-text-body: #434655;
+  --color-text-strong: #1a2b3f;
+  --color-text-bright: #0b1c30;
 
-  --color-accent: #2563eb;
-  --color-accent-hover: #1d4ed8;
+  /* Accent as TEXT is the reference's `primary`; as a FILL it is their
+     `primary-container`, the same #2563eb the dark theme fills with.
+     #004ac6 as a link scores 7.15 against this ground — the #2563eb it
+     replaces scored 4.92, under the 5.2 this file already promised. */
+  --color-accent: #004ac6;
+  --color-accent-hover: #0053db;
+  --color-accent-fill: #2563eb;
+  --color-accent-fill-hover: #1d4ed8;
   --color-accent-fg: #ffffff;
   --color-accent-tint: rgba(37, 99, 235, 0.08);
   --color-accent-ring: rgba(37, 99, 235, 0.4);

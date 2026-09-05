@@ -180,7 +180,7 @@ export function AcceptInvitationForm({
           </p>
           <a
             href="/login"
-            className="block w-full rounded-[5px] bg-accent px-3 py-1.5 text-center text-sm font-medium text-accent-fg transition-colors hover:bg-accent-hover"
+            className="block w-full rounded-[5px] bg-accent-fill px-3 py-1.5 text-center text-sm font-medium text-accent-fg transition-colors hover:bg-accent-fill-hover"
           >
             Go to sign in
           </a>
@@ -279,7 +279,7 @@ export function AcceptInvitationForm({
             <button
               type="submit"
               disabled={submitting}
-              className="w-full px-3 py-2 rounded-[5px] bg-accent text-accent-fg text-sm font-medium hover:bg-accent-hover transition-colors disabled:opacity-50"
+              className="w-full px-3 py-2 rounded-[5px] bg-accent-fill text-accent-fg text-sm font-medium hover:bg-accent-fill-hover transition-colors disabled:opacity-50"
             >
               {submitting ? 'Creating account…' : 'Create account + sign in'}
             </button>

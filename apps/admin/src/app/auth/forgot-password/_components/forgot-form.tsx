@@ -69,7 +69,7 @@ export function ForgotPasswordForm(): ReactElement {
         </p>
         <a
           href="/login"
-          className="mt-2 block w-full rounded-[5px] bg-accent px-3 py-1.5 text-center text-sm font-medium text-accent-fg transition-colors hover:bg-accent-hover"
+          className="mt-2 block w-full rounded-[5px] bg-accent-fill px-3 py-1.5 text-center text-sm font-medium text-accent-fg transition-colors hover:bg-accent-fill-hover"
         >
           Back to sign in
         </a>
@@ -116,7 +116,7 @@ export function ForgotPasswordForm(): ReactElement {
       <button
         type="submit"
         disabled={submitting}
-        className="mt-1 w-full rounded-[5px] bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg transition-colors hover:bg-accent-hover disabled:opacity-50"
+        className="mt-1 w-full rounded-[5px] bg-accent-fill px-3 py-1.5 text-sm font-medium text-accent-fg transition-colors hover:bg-accent-fill-hover disabled:opacity-50"
       >
         {submitting ? 'Sending…' : 'Send reset link'}
       </button>

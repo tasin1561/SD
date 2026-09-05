@@ -202,7 +202,7 @@ export function DashboardView(): ReactElement {
         {canOrders && (
           <Link
             href="/orders/new"
-            className="bg-accent text-accent-fg hover:bg-accent-hover inline-flex items-center gap-1.5 rounded px-3 py-2 text-sm font-semibold transition-colors"
+            className="bg-accent-fill text-accent-fg hover:bg-accent-fill-hover inline-flex items-center gap-1.5 rounded px-3 py-2 text-sm font-semibold transition-colors"
           >
             <Plus size={15} /> Create order
           </Link>

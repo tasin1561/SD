@@ -148,7 +148,7 @@ export function NotificationsView(): ReactElement {
                             {n.readAt === null && (
                               <span
                                 aria-hidden
-                                className="bg-accent mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle"
+                                className="bg-accent-fill mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle"
                               />
                             )}
                             {n.title}

@@ -147,7 +147,7 @@ export function NotificationBell({
                         {n.readAt === null && (
                           <span
                             aria-hidden="true"
-                            className="bg-accent mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+                            className="bg-accent-fill mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
                           />
                         )}
                         <div className="min-w-0">

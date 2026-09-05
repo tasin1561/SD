@@ -33,7 +33,14 @@
   --color-text-body: #c3d0e0;
   --color-text-bright: #f3f7fc;
   --color-accent: #38bdf8;
-  --color-accent-hover: #0284c7;
+  --color-accent-hover: #7dd3fc;
+  /* The console keeps its own cyan — this screen is MISSION CONTROL,
+     not the app palette. It needs the fill token all the same, or the
+     primary Button (now `bg-accent-fill`) renders with no background
+     at all. Near-black on the cyan is 8.96; keeping the DARKER cyan as
+     the hover would drop it to 4.69, so the hover goes lighter. */
+  --color-accent-fill: #38bdf8;
+  --color-accent-fill-hover: #7dd3fc;
   --color-accent-fg: #051018;
   --color-accent-ring: rgba(56, 189, 248, 0.45);
   --color-critical: #f87171;
@@ -52,18 +59,20 @@
     --grid: rgba(37, 99, 235, 0.07);
     --glow: rgba(37, 99, 235, 0.2);
 
-    --color-bg: #fafafa;
+    --color-bg: #f8f9ff;
     --color-surface: #ffffff;
     --color-surface-raised: #ffffff;
-    --color-surface-hover: #f3f4f6;
-    --color-border: #e5e7eb;
-    --color-border-strong: #d1d5db;
-    --color-text-faint: #6b7280;
-    --color-text-muted: #4b5563;
-    --color-text-body: #374151;
-    --color-text-bright: #111827;
-    --color-accent: #2563eb;
-    --color-accent-hover: #1d4ed8;
+    --color-surface-hover: #eff4ff;
+    --color-border: #c3c6d7;
+    --color-border-strong: #737686;
+    --color-text-faint: #5f6274;
+    --color-text-muted: #4d5064;
+    --color-text-body: #434655;
+    --color-text-bright: #0b1c30;
+    --color-accent: #004ac6;
+    --color-accent-hover: #0053db;
+    --color-accent-fill: #2563eb;
+    --color-accent-fill-hover: #1d4ed8;
     --color-accent-fg: #ffffff;
     --color-accent-ring: rgba(37, 99, 235, 0.4);
   }
@@ -78,18 +87,20 @@
   --grid: rgba(37, 99, 235, 0.07);
   --glow: rgba(37, 99, 235, 0.2);
 
-  --color-bg: #fafafa;
+  --color-bg: #f8f9ff;
   --color-surface: #ffffff;
   --color-surface-raised: #ffffff;
-  --color-surface-hover: #f3f4f6;
-  --color-border: #e5e7eb;
-  --color-border-strong: #d1d5db;
-  --color-text-faint: #6b7280;
-  --color-text-muted: #4b5563;
-  --color-text-body: #374151;
-  --color-text-bright: #111827;
-  --color-accent: #2563eb;
-  --color-accent-hover: #1d4ed8;
+  --color-surface-hover: #eff4ff;
+  --color-border: #c3c6d7;
+  --color-border-strong: #737686;
+  --color-text-faint: #5f6274;
+  --color-text-muted: #4d5064;
+  --color-text-body: #434655;
+  --color-text-bright: #0b1c30;
+  --color-accent: #004ac6;
+  --color-accent-hover: #0053db;
+  --color-accent-fill: #2563eb;
+  --color-accent-fill-hover: #1d4ed8;
   --color-accent-fg: #ffffff;
   --color-accent-ring: rgba(37, 99, 235, 0.4);
 }

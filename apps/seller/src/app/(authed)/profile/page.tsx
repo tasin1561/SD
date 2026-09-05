@@ -784,7 +784,7 @@ function LogoSection({ profile }: { readonly profile: SellerProfileView }): Reac
                 </div>
                 <div className="flex items-center gap-2">
                   <label className="inline-flex items-center gap-2 cursor-pointer">
-                    <span className="px-3 py-1.5 rounded-[5px] text-sm bg-accent text-accent-fg hover:bg-accent-hover transition-colors">
+                    <span className="px-3 py-1.5 rounded-[5px] text-sm bg-accent-fill text-accent-fg hover:bg-accent-fill-hover transition-colors">
                       {busy ? 'Uploading…' : 'Choose file'}
                     </span>
                     <input

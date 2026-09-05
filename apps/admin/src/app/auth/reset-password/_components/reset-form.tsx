@@ -72,7 +72,7 @@ export function ResetPasswordForm({ token }: { readonly token: string }): ReactE
         </div>
         <a
           href="/login"
-          className="block text-center w-full mt-2 px-3 py-1.5 rounded-[5px] bg-accent text-accent-fg text-sm font-medium hover:bg-accent-hover transition-colors"
+          className="block text-center w-full mt-2 px-3 py-1.5 rounded-[5px] bg-accent-fill text-accent-fg text-sm font-medium hover:bg-accent-fill-hover transition-colors"
         >
           Sign in
         </a>
@@ -139,7 +139,7 @@ export function ResetPasswordForm({ token }: { readonly token: string }): ReactE
       <button
         type="submit"
         disabled={submitting}
-        className="w-full mt-2 px-3 py-1.5 rounded-[5px] bg-accent text-accent-fg text-sm font-medium hover:bg-accent-hover disabled:opacity-50 transition-colors"
+        className="w-full mt-2 px-3 py-1.5 rounded-[5px] bg-accent-fill text-accent-fg text-sm font-medium hover:bg-accent-fill-hover disabled:opacity-50 transition-colors"
       >
         {submitting ? 'Saving…' : 'Save new password'}
       </button>

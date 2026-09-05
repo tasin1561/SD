@@ -208,7 +208,7 @@ function Stepper({ step }: { readonly step: 1 | 2 | 3 }): ReactElement {
                 (done
                   ? 'bg-[var(--color-success)] text-white'
                   : active
-                    ? 'bg-accent text-white'
+                    ? 'bg-accent-fill text-white'
                     : 'border-border text-text-faint border')
               }
             >

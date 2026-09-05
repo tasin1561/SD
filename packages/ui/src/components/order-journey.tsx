@@ -120,9 +120,9 @@ export function JourneyLadder({
                 className={[
                   'mt-1 h-2.5 w-2.5 shrink-0 rounded-full',
                   m.state === 'CURRENT'
-                    ? 'bg-accent ring-accent/30 ring-4'
+                    ? 'bg-accent-fill ring-accent/30 ring-4'
                     : m.state === 'DONE'
-                      ? 'bg-accent'
+                      ? 'bg-accent-fill'
                       : m.state === 'SKIPPED'
                         ? 'bg-border'
                         : 'border-border border bg-transparent',
@@ -339,7 +339,7 @@ export function JourneyTimeline({
             aria-hidden
             className={[
               'mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full',
-              e.owner === 'COURIER' ? 'bg-accent' : 'bg-text-faint',
+              e.owner === 'COURIER' ? 'bg-accent-fill' : 'bg-text-faint',
             ].join(' ')}
           />
           <div className="min-w-0 flex-1">

@@ -113,7 +113,7 @@ export function LoginForm(): ReactElement {
       <button
         type="submit"
         disabled={submitting}
-        className="w-full h-12 mt-2 rounded-xl bg-accent text-accent-fg text-sm font-medium hover:bg-accent-hover disabled:opacity-50 transition-colors"
+        className="w-full h-12 mt-2 rounded-xl bg-accent-fill text-accent-fg text-sm font-medium hover:bg-accent-fill-hover disabled:opacity-50 transition-colors"
       >
         {submitting ? 'Signing in…' : 'Sign in'}
       </button>

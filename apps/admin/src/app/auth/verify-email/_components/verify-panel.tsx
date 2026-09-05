@@ -63,7 +63,7 @@ export function VerifyEmailPanel({ token }: { readonly token: string }): ReactEl
         </div>
         <a
           href="/dashboard"
-          className="block text-center w-full px-3 py-1.5 rounded-[5px] bg-accent text-accent-fg text-sm font-medium hover:bg-accent-hover transition-colors"
+          className="block text-center w-full px-3 py-1.5 rounded-[5px] bg-accent-fill text-accent-fg text-sm font-medium hover:bg-accent-fill-hover transition-colors"
         >
           Go to the console
         </a>

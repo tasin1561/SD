@@ -50,7 +50,7 @@ export default async function ResetPasswordPage({
               </p>
               <a
                 href="/password-reset"
-                className="inline-block px-3 py-1.5 rounded-[5px] bg-accent text-accent-fg text-sm font-medium hover:bg-accent-hover transition-colors"
+                className="inline-block px-3 py-1.5 rounded-[5px] bg-accent-fill text-accent-fg text-sm font-medium hover:bg-accent-fill-hover transition-colors"
               >
                 Request a new link
               </a>

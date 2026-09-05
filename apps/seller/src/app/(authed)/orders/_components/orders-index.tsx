@@ -523,7 +523,7 @@ function Chip({
       aria-pressed={active}
       className={
         active
-          ? 'bg-accent text-accent-fg rounded-full px-3 py-1 text-xs font-medium'
+          ? 'bg-accent-fill text-accent-fg rounded-full px-3 py-1 text-xs font-medium'
           : 'border-border text-text-muted hover:text-text-body hover:border-border-strong rounded-full border px-3 py-1 text-xs transition-colors'
       }
     >

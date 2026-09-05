@@ -35,7 +35,7 @@ const sizeClasses: Record<Size, string> = {
 };
 
 const variantClasses: Record<Variant, string> = {
-  primary: 'bg-accent text-accent-fg hover:bg-accent-hover',
+  primary: 'bg-accent-fill text-accent-fg hover:bg-accent-fill-hover',
   secondary:
     'border border-border bg-surface text-text-body hover:border-border-strong hover:text-text-bright',
   ghost: 'text-text-muted hover:bg-surface-hover hover:text-text-body',

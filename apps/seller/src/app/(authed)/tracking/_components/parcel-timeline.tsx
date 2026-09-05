@@ -42,7 +42,7 @@ export function ParcelTimeline({
         return (
           <li key={e.id} className="flex gap-3">
             <div className="flex flex-col items-center pt-1">
-              <span className="bg-accent h-2 w-2 shrink-0 rounded-full" />
+              <span className="bg-accent-fill h-2 w-2 shrink-0 rounded-full" />
               <span className="bg-border mt-1 w-px flex-1" />
             </div>
             <div className="min-w-0 flex-1 pb-1">

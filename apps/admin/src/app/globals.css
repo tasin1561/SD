@@ -49,6 +49,11 @@
   --color-text-bright: var(--color-text-bright);
   --color-accent: var(--color-accent);
   --color-accent-hover: var(--color-accent-hover);
+  /* The accent as a BACKGROUND. Split from the text accent because no
+     single value clears both 4.5:1 as text on a dark ground and 4.5:1
+     for white sitting on it. */
+  --color-accent-fill: var(--color-accent-fill);
+  --color-accent-fill-hover: var(--color-accent-fill-hover);
   --color-accent-fg: var(--color-accent-fg);
   --color-critical: var(--color-critical);
   /*

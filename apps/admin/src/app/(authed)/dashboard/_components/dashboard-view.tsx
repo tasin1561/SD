@@ -135,7 +135,7 @@ function AttentionCard({
         neutral: {
           card: 'border-accent-ring bg-accent-tint',
           num: 'text-accent',
-          chip: 'bg-accent text-accent-fg',
+          chip: 'bg-accent-fill text-accent-fg',
         },
       }[tone];
 
@@ -225,7 +225,7 @@ function MetricCard({
     info: 'bg-status-confirmed-fg text-[color:var(--color-bg)]',
   }[chipTone];
   const barClass = {
-    accent: 'bg-accent',
+    accent: 'bg-accent-fill',
     good: 'bg-status-delivered-fg',
     warn: 'bg-status-pending-fg',
     bad: 'bg-status-failed-fg',
@@ -492,7 +492,7 @@ export function DashboardView(): ReactElement {
               <span className="flex flex-wrap items-center gap-3">
                 {(
                   [
-                    ['bg-accent', 'Confirmed'],
+                    ['bg-accent-fill', 'Confirmed'],
                     ['bg-status-delivered-fg', 'Delivered'],
                     ['bg-status-failed-fg', 'Returned'],
                   ] as ReadonlyArray<[string, string]>

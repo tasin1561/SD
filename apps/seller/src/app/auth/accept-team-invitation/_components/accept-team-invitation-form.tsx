@@ -168,7 +168,7 @@ export function AcceptTeamInvitationForm({ token }: { readonly token: string }):
       <button
         type="submit"
         disabled={submitting}
-        className="w-full mt-2 px-3 py-1.5 rounded-[5px] bg-accent text-accent-fg text-sm font-medium hover:bg-accent-hover disabled:opacity-50 transition-colors"
+        className="w-full mt-2 px-3 py-1.5 rounded-[5px] bg-accent-fill text-accent-fg text-sm font-medium hover:bg-accent-fill-hover disabled:opacity-50 transition-colors"
       >
         {submitting ? 'Joining…' : 'Accept invitation'}
       </button>
