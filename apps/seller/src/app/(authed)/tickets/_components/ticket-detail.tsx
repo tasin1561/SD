@@ -19,7 +19,6 @@ import { TicketType } from '@skydrop/db';
 import type { TicketView } from '@/lib/ops-hooks';
 import { useSellerTicket } from '@/lib/ticket-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
-import { CourierThread } from './courier-thread';
 import { TicketConversation } from './ticket-conversation';
 
 /**
@@ -143,15 +142,12 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
         messages harder to find rather than the history clearer.
       */}
       <Section
-        title="Messages"
-        subtitle="Two conversations: one with us, one with the courier. Each says who reads it."
+        title="Conversation"
+        subtitle="What you told us, what we found out, and anything the courier said."
       >
         <Card>
           <CardBody>
             <TicketConversation ticket={ticket} />
-            <div className="border-border mt-4 border-t pt-3">
-              <CourierThread ticketId={ticket.id} />
-            </div>
           </CardBody>
         </Card>
       </Section>

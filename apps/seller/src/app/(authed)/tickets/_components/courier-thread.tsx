@@ -1,26 +1,10 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
-import { MessageSquare, Send } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardBody,
-  ErrorNote,
-  FormField,
-  SkeletonRows,
-  StatusBadge,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
-import {
-  useCourierThreadForTicket,
-  useReplyToCourier,
-  type CourierThreadMessage,
-} from '@/lib/ops-hooks';
+import type { ReactElement } from 'react';
+import { MessageSquare } from 'lucide-react';
+import { Card, CardBody, ErrorNote, SkeletonRows, StatusBadge } from '@skydrop/ui/components';
+import { useCourierThreadForTicket, type CourierThreadMessage } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
-import { useSellerIdentity } from '@skydrop/auth/client';
-import { can } from '@/lib/page-access';
 
 /**
  * The seller's conversation with the courier.
@@ -31,6 +15,19 @@ import { can } from '@/lib/page-access';
  * it — the read pipeline, the outbox, the ops console, the portal worker —
  * existed before this component did, and none of it was reachable by a
  * seller. They could raise a ticket and never see a reply.
+ *
+ * ── READ-ONLY (2026-09-05) ───────────────────────────────────────────
+ * The seller used to be able to write here. That went on a product
+ * call: we are the operational backbone, and a seller in Dhaka does not
+ * need an Indian operation precisely because they never deal with
+ * Delhivery themselves. They tell us; we carry it. A message to a
+ * courier cannot be unsent, so the choice of counterparty is not one to
+ * put in front of somebody on every reply.
+ *
+ * Reading stays, and matters: this is where the seller sees the
+ * courier's own words. On the ticket DETAIL page these messages are
+ * merged into the single conversation instead, so this component is
+ * used only by the list's expanded row, which has no other source.
  *
  * ── THE TEXT IS VERBATIM, IN BOTH DIRECTIONS ─────────────────────────
  * Rendered in a whitespace-preserving block with no truncation and no
@@ -45,13 +42,7 @@ import { can } from '@/lib/page-access';
  * "queued to send" rather than "sent", which is the true statement.
  */
 export function CourierThread({ ticketId }: { readonly ticketId: string }): ReactElement | null {
-  const toast = useToast();
   const thread = useCourierThreadForTicket(ticketId);
-  const reply = useReplyToCourier();
-  // FE-2: cosmetic. The server refuses regardless; this stops the page
-  // offering a box whose submit would only come back 403.
-  const canReply = can(useSellerIdentity(), 'tickets.create');
-  const [draft, setDraft] = useState('');
 
   if (thread.isLoading) return <SkeletonRows rows={3} cols={1} />;
   if (thread.isError) {
@@ -81,20 +72,6 @@ export function CourierThread({ ticketId }: { readonly ticketId: string }): Reac
     );
   }
 
-  const send = (): void => {
-    const body = draft.trim();
-    if (body === '') return;
-    void (async () => {
-      try {
-        await reply.mutateAsync({ escalationId: data.id, body, ticketId });
-        setDraft('');
-        toast.success('Queued to send to the courier');
-      } catch (err) {
-        toast.error(serverVerdict(err));
-      }
-    })();
-  };
-
   return (
     <Card>
       <CardBody>
@@ -122,32 +99,6 @@ export function CourierThread({ ticketId }: { readonly ticketId: string }): Reac
             data.messages.map((m) => <Message key={m.id} message={m} />)
           )}
         </div>
-
-        {canReply ? (
-          <div className="border-border mt-4 flex flex-col gap-2 border-t pt-3">
-            <FormField
-              label="Write to the courier"
-              htmlFor={`courier-reply-${ticketId}`}
-              hint="This leaves Skydrop and goes to the courier, exactly as you type it — we do not edit or translate it. To ask US something, use the box above."
-            >
-              <Textarea
-                id={`courier-reply-${ticketId}`}
-                rows={3}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-              />
-            </FormField>
-            <div className="flex items-center gap-3">
-              <Button variant="primary" size="sm" onClick={send} disabled={draft.trim() === ''}>
-                <Send size={14} /> Queue message
-              </Button>
-              <span className="text-text-muted text-xs">
-                Delhivery has no reply API, so this is delivered by our team or our automation — not
-                instantly.
-              </span>
-            </div>
-          </div>
-        ) : null}
       </CardBody>
     </Card>
   );

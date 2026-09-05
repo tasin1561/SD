@@ -176,19 +176,26 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
       {isOpen ? (
         <div className="border-border mt-4 border-t pt-3">
           {/*
-            This box goes to US; the one below it goes to the COURIER.
-            Only the second used to say so, which made the page read as
-            an unlabelled box followed by a labelled one — two message
-            boxes with no way to tell what the first was for. Both are
-            headed now, and both say who reads what you type.
+            ONE box, and it reaches US.
+
+            There was a second one that wrote to the courier directly.
+            It went, on a product call: we are the operational backbone,
+            and the whole reason a seller in Dhaka does not need an
+            Indian operation is that they never deal with Delhivery
+            themselves. Two boxes made them pick a counterparty on every
+            message, and the wrong pick is unrecoverable — a message
+            sent to a courier cannot be taken back.
+
+            The seller still SEES what the courier said: those messages
+            are merged into the timeline above. What they no longer have
+            is a way to write to them, which is ours to do.
           */}
-          <h3 className="mb-2 text-sm font-medium">Reply to Skydrop</h3>
           <Textarea
             rows={2}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Anything that helps us look into this."
-            aria-label="Reply to Skydrop on this ticket"
+            placeholder="Anything that helps — we take it to the courier for you."
+            aria-label="Reply on this ticket"
           />
           <div className="mt-2 flex justify-end">
             <Button

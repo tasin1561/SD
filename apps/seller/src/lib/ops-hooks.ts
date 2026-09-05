@@ -505,24 +505,6 @@ export function useCourierThreadForTicket(ticketId: string): UseQueryResult<Cour
   });
 }
 
-export function useReplyToCourier(): UseMutationResult<
-  { messageId: string; outboxItemId: string | null },
-  Error,
-  { escalationId: string; body: string; ticketId: string }
-> {
-  const client = useApiClient();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ escalationId, body }) =>
-      client.request<{ messageId: string; outboxItemId: string | null }>(
-        `/api/seller/courier-escalations/${escalationId}/reply`,
-        { method: 'POST', body: { body } },
-      ),
-    onSuccess: (_r, vars) =>
-      void qc.invalidateQueries({ queryKey: ['courier-thread', vars.ticketId] }),
-  });
-}
-
 // ───────── Failed deliveries (NDR) ─────────
 
 export type DeliveryActionKind = 'REATTEMPT' | 'RECALL' | 'RTO';

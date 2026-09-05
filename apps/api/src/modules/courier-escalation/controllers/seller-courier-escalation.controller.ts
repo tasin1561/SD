@@ -1,21 +1,10 @@
-import {
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  ParseUUIDPipe,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 import { CurrentSeller } from '../../../common/decorators/current-seller.decorator';
 import { SellerJwtGuard } from '../../../common/guards/seller-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
-import { PostReplyDto } from '../dto/courier-ops.dto';
 import {
   CourierEscalationService,
   type EscalationView,
@@ -73,22 +62,25 @@ export class SellerCourierEscalationController {
     return this.escalations.thread(escalationId, seller.id);
   }
 
-  @Post(':escalationId/reply')
-  @HttpCode(HttpStatus.CREATED)
-  @RequireSellerPermissions('tickets.create')
-  @ApiOperation({
-    summary:
-      'Send a message to the courier. Stored verbatim and queued for delivery — never rewritten or translated.',
-  })
-  reply(
-    @CurrentSeller() seller: AuthenticatedSeller,
-    @Param('escalationId', new ParseUUIDPipe({ version: '7' })) escalationId: string,
-    @Body() body: PostReplyDto,
-  ): Promise<{ messageId: string; outboxItemId: string | null }> {
-    return this.escalations.postReply({
-      escalationId,
-      body: body.body,
-      sellerId: seller.id,
-    });
-  }
+  // A seller USED to be able to POST a reply straight to the courier.
+  //
+  // Withdrawn 2026-09-05, MANUAL PATH FIRST. We are the operational
+  // backbone: the reason a seller in Dhaka needs no Indian operation is
+  // precisely that they never deal with Delhivery themselves. They tell
+  // us on the ticket, and we carry it — by hand for now.
+  //
+  // AUTOMATION IS THE PLAN, and it does not need this route back. A
+  // relay that forwards a seller's ticket reply to the courier runs on
+  // OUR side and calls `CourierEscalationService.postReply` directly —
+  // which still takes `sellerId`, so a message sent on a seller's
+  // behalf is still attributed to them rather than to whoever happened
+  // to be on shift. What is gone is a SELLER-AUTHENTICATED write, not
+  // the capability.
+  //
+  // Removed rather than hidden in the UI, because FE-2 makes the server
+  // the boundary and the screen cosmetic: a route left standing would
+  // still accept the call from anything holding a seller token, which
+  // is the class of hole that rule exists to close. Staff keep their
+  // own relay (`AdminCourierEscalationController.reply`), and
+  // `DeliveryActionService` already posts through the same service.
 }
