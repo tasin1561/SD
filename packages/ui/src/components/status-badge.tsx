@@ -17,6 +17,7 @@ import {
   withdrawalStatusLabel,
   stockUnitStatusKind,
   ticketStatusKind,
+  ticketStatusLabel,
   withdrawalStatusKind,
   type StatusKind,
 } from '@skydrop/ui/status';
@@ -91,7 +92,7 @@ export function SellerStatusBadge({
 
 /** R7 scrap/damage + seller-issue ticket. */
 export function TicketStatusBadge({ status }: { readonly status: TicketStatus }): ReactElement {
-  return <StatusBadge kind={ticketStatusKind(status)} label={statusLabel(status)} />;
+  return <StatusBadge kind={ticketStatusKind(status)} label={ticketStatusLabel(status)} />;
 }
 
 /** R3 inbound (BD→India) freight bill. */

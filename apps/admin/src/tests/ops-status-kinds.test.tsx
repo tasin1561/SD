@@ -64,8 +64,15 @@ describe('R-phase status kinds', () => {
   });
 
   it('renders a readable label, not the raw enum name', () => {
+    // Was /Resolved Refund/ — the generic prettifier's output. Ticket
+    // badges now speak the three stages the screens use, and keep WHICH
+    // KIND of closed after it: one outcome paid the seller and another
+    // refused them, so flattening the four into one word would hide the
+    // outcome on the page where it matters most.
     render(<TicketStatusBadge status={TicketStatus.RESOLVED_REFUND} />);
-    expect(screen.getByText(/Resolved Refund/i)).toBeTruthy();
+    expect(screen.getByText(/Closed/i)).toBeTruthy();
+    expect(screen.getByText(/refunded/i)).toBeTruthy();
+    expect(screen.queryByText(/RESOLVED_REFUND/)).toBeNull();
   });
 
   it('tags the badge with its kind so the token wiring is inspectable', () => {

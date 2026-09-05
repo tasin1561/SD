@@ -178,6 +178,43 @@ export function shipmentStatusKind(status: ShipmentStatus): StatusKind {
  * neither. An operator scanning the queue needs to see which without
  * reading the label.
  */
+/**
+ * A ticket status, in the three words the screens speak in.
+ *
+ * The generic `statusLabel` prettifies an enum name, which produced
+ * "Resolved Write Off Accepted" — the database's word for it, on a page
+ * where the question is only ever open, being looked at, or finished.
+ *
+ * The four CLOSED statuses stay DISTINGUISHABLE after the "Closed",
+ * because they are not interchangeable: one of them paid the seller and
+ * one of them refused them, and a badge that flattened those into the
+ * same word would hide the outcome on the page where it matters most.
+ * So: "Closed" first — the thing being asked — then which kind.
+ *
+ * F2-exhaustive: a new TicketStatus fails to compile until somebody
+ * decides how it reads.
+ */
+export function ticketStatusLabel(status: TicketStatus): string {
+  switch (status) {
+    case TicketStatus.OPEN:
+      return 'Open';
+    case TicketStatus.NEGOTIATING:
+      return 'Reviewing';
+    case TicketStatus.RESOLVED_REFUND:
+      return 'Closed · refunded';
+    case TicketStatus.RESOLVED_RETURNED:
+      return 'Closed · goods back';
+    case TicketStatus.RESOLVED_WRITE_OFF_ACCEPTED:
+      return 'Closed · write-off';
+    case TicketStatus.REJECTED:
+      return 'Closed · not upheld';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled TicketStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
 export function ticketStatusKind(status: TicketStatus): StatusKind {
   switch (status) {
     case TicketStatus.OPEN:
