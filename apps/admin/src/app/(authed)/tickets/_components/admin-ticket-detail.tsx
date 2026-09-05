@@ -24,11 +24,33 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { AdminTicketConversation } from './admin-ticket-conversation';
 
-const MOVE_TO: ReadonlyArray<{ value: TicketStatus; label: string }> = [
-  { value: TicketStatus.NEGOTIATING, label: 'Under discussion' },
-  { value: TicketStatus.RESOLVED_REFUND, label: 'Refund the seller' },
+/**
+ * THREE stages, in the order a ticket actually travels: Open →
+ * Reviewing → Closed.
+ *
+ * The dropdown used to list five, and it was really two questions
+ * wearing one control: what STAGE is this at, and — if it is finishing
+ * — HOW did it finish. Five flat options made those look like peers,
+ * so "Refund the seller" sat next to "Under discussion" as if they were
+ * the same kind of choice.
+ *
+ * They are not, and the difference is money: `RESOLVED_REFUND` writes a
+ * SCRAP_REFUND credit to the seller's wallet inside the transition
+ * transaction (TKT-1). Collapsing the outcomes into one "Closed" would
+ * have meant either paying on EVERY close or never being able to pay at
+ * all — so the four outcomes survive, asked at the step where they are
+ * the actual question.
+ */
+const STAGES: ReadonlyArray<{ value: 'REVIEWING' | 'CLOSED'; label: string }> = [
+  { value: 'REVIEWING', label: 'Reviewing' },
+  { value: 'CLOSED', label: 'Closed' },
+];
+
+/** How a ticket finished. Asked only once "Closed" is chosen. */
+const OUTCOMES: ReadonlyArray<{ value: TicketStatus; label: string }> = [
+  { value: TicketStatus.RESOLVED_REFUND, label: 'Refunded the seller' },
   { value: TicketStatus.RESOLVED_RETURNED, label: 'Goods went back' },
-  { value: TicketStatus.RESOLVED_WRITE_OFF_ACCEPTED, label: 'Closed — no money moved' },
+  { value: TicketStatus.RESOLVED_WRITE_OFF_ACCEPTED, label: 'Seller accepted the loss' },
   { value: TicketStatus.REJECTED, label: 'Not upheld' },
 ];
 
@@ -48,6 +70,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
   // FE-2: cosmetic. The server refuses regardless.
   const canResolve = usePermission('tickets.resolve');
 
+  const [stage, setStage] = useState<'' | 'REVIEWING' | 'CLOSED'>('');
   const [to, setTo] = useState<TicketStatus | ''>('');
   const [notes, setNotes] = useState('');
   const [refund, setRefund] = useState('');
@@ -71,6 +94,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
             ? { refundAmountInr: refund.trim() }
             : {}),
         });
+        setStage('');
         setTo('');
         setNotes('');
         setRefund('');
@@ -196,20 +220,47 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
           <h2 className="text-text-bright mt-5 mb-2 text-sm font-medium">Move this on</h2>
           <Card>
             <CardBody className="space-y-3">
-              <FormField label="Move to" htmlFor="admin-ticket-to">
+              <FormField label="Move to" htmlFor="admin-ticket-stage">
                 <Select
-                  id="admin-ticket-to"
-                  value={to}
-                  onChange={(e) => setTo(e.target.value as TicketStatus | '')}
+                  id="admin-ticket-stage"
+                  value={stage}
+                  onChange={(e) => {
+                    const next = e.target.value as '' | 'REVIEWING' | 'CLOSED';
+                    setStage(next);
+                    // Reviewing IS a status; Closed is four of them, so
+                    // it waits for the second question below.
+                    setTo(next === 'REVIEWING' ? TicketStatus.NEGOTIATING : '');
+                  }}
                 >
-                  <option value="">Choose an outcome…</option>
-                  {MOVE_TO.map((o) => (
+                  <option value="">Choose…</option>
+                  {STAGES.map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
                     </option>
                   ))}
                 </Select>
               </FormField>
+
+              {stage === 'CLOSED' ? (
+                <FormField
+                  label="How did it close?"
+                  htmlFor="admin-ticket-to"
+                  hint="The seller reads this outcome on their own ticket. Refunding credits their wallet."
+                >
+                  <Select
+                    id="admin-ticket-to"
+                    value={to}
+                    onChange={(e) => setTo(e.target.value as TicketStatus | '')}
+                  >
+                    <option value="">Choose an outcome…</option>
+                    {OUTCOMES.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+              ) : null}
 
               {to === TicketStatus.RESOLVED_REFUND ? (
                 <FormField
