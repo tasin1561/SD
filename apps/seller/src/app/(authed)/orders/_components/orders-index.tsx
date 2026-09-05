@@ -333,30 +333,41 @@ export function OrdersIndex(): ReactElement {
               e.preventDefault();
               updateUrl({ search: searchInput.trim(), page: 1 });
             }}
-            // BOUNDED, not `flex-1`. The form stretching to the row's
-            // full width put the Search button hard against the date
-            // filter with a chasm between it and the box it belongs to.
-            // A control and its verb belong together; the leftover space
-            // goes to the filters after them.
-            className="flex w-full min-w-0 items-center gap-2 sm:w-[520px]"
+            // BOUNDED, not `flex-1`. The row's leftover space goes to
+            // the filters after it rather than stretching one field
+            // across the page.
+            className="flex w-full min-w-0 items-center gap-2 sm:w-[440px]"
           >
+            {/*
+              ONE magnifier, and it is the button.
+
+              The decorative glass on the left went with the word
+              "Search" on the right: keeping both would have put two
+              magnifiers on one control, one of which did nothing. The
+              remaining one is a real <button type="submit"> with an
+              aria-label, so Enter still submits, it is reachable by
+              keyboard, and a screen reader hears "Search" rather than
+              nothing — an icon-shaped div would have bought the look by
+              giving that up.
+            */}
             <div className="relative min-w-0 flex-1">
-              <Search
-                size={14}
-                aria-hidden
-                className="text-text-faint pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2"
-              />
               <Input
                 aria-label="Search orders"
                 placeholder="Order number, ref, AWB, recipient name or phone…"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                className="pl-8"
+                // Room for the button, or a long AWB runs under it.
+                className="pr-10"
               />
+              <button
+                type="submit"
+                aria-label="Search"
+                title="Search"
+                className="text-text-muted hover:text-accent absolute inset-y-0 right-0 flex w-10 items-center justify-center transition-colors"
+              >
+                <Search size={15} aria-hidden />
+              </button>
             </div>
-            <Button type="submit" variant="secondary" size="md">
-              Search
-            </Button>
           </form>
 
           <Select
