@@ -185,6 +185,27 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             }
           />
 
+          {/*
+            ── THE 2026-09-05 REDESIGN ────────────────────────────────
+            Built from two reference comps, one light and one dark. The
+            page was one long column: a seller checking a parcel that
+            had gone wrong scrolled past the recipient, the items and
+            the money to reach the timeline that told them what
+            happened.
+
+            It is two columns now. The JOURNEY is the wide left one —
+            it is what the page is for — and the FACTS stack down the
+            right, where they can be checked without leaving the
+            timeline. Anything WRONG stays full-width above both,
+            because a delivery in trouble is not a sidebar.
+
+            What the comps showed that is not here, for the same reason
+            as the orders list: a drawing can show a field we do not
+            have. No "Origin hub" or "Destination sector" (we have a
+            warehouse and a PIN, not hubs and sectors), no "Channel:
+            Shopify Direct" (an order has a SOURCE — manual, CSV, API —
+            which is not a sales channel), no "B2C Consignment" chip.
+          */}
           {pendingRequest !== null && (
             // The ORDER is still REJECTED_BY_CUSTOMER and the badge above
             // says so, because that is what it is until somebody
@@ -249,168 +270,187 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               specific delivery that is about to go wrong. */}
           <ConsigneePanel orderId={orderId} />
 
-          <Section title="Recipient">
-            <Card>
-              <CardBody>
-                <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[160px_1fr] gap-x-3 sm:gap-x-6 gap-y-1.5 text-sm">
-                  <dt className="text-text-muted">Name</dt>
-                  <dd className="text-text-body">{detail.data.recipientName}</dd>
-                  <dt className="text-text-muted">Phone</dt>
-                  <dd className="text-text-body font-mono text-xs">
-                    {detail.data.recipientPhoneE164}
-                    {detail.data.recipientAltPhoneE164 && (
-                      <span className="text-text-faint ml-2">
-                        / {detail.data.recipientAltPhoneE164}
-                      </span>
-                    )}
-                  </dd>
-                  {detail.data.recipientEmail && (
-                    <>
-                      <dt className="text-text-muted">Email</dt>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+            {/* The journey: the stage ladder, the parcels, and the
+                courier's own scans merged with our handling. */}
+            <div className="min-w-0 space-y-4">
+              <OrderJourneySection orderId={orderId} />
+            </div>
+
+            {/* The facts, in the order a seller checks them: who it is
+                going to, what is in it, what it costs, the paperwork. */}
+            <div className="min-w-0 space-y-4">
+              <Section title="Recipient">
+                <Card>
+                  <CardBody>
+                    <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[160px_1fr] gap-x-3 sm:gap-x-6 gap-y-1.5 text-sm">
+                      <dt className="text-text-muted">Name</dt>
+                      <dd className="text-text-body">{detail.data.recipientName}</dd>
+                      <dt className="text-text-muted">Phone</dt>
                       <dd className="text-text-body font-mono text-xs">
-                        {detail.data.recipientEmail}
+                        {detail.data.recipientPhoneE164}
+                        {detail.data.recipientAltPhoneE164 && (
+                          <span className="text-text-faint ml-2">
+                            / {detail.data.recipientAltPhoneE164}
+                          </span>
+                        )}
                       </dd>
-                    </>
-                  )}
-                  <dt className="text-text-muted">Address</dt>
-                  <dd className="text-text-body">
-                    <div>{detail.data.recipientAddressLine1}</div>
-                    {detail.data.recipientAddressLine2 && (
-                      <div>{detail.data.recipientAddressLine2}</div>
-                    )}
-                    {detail.data.recipientLandmark && (
-                      <div className="text-text-muted text-xs">
-                        Landmark: {detail.data.recipientLandmark}
-                      </div>
-                    )}
-                    <div className="mt-0.5">
-                      {[detail.data.recipientCity, detail.data.recipientStateProvince]
-                        .filter(Boolean)
-                        .join(', ')}{' '}
-                      <span className="font-mono">{detail.data.recipientPostalCode}</span>{' '}
-                      <span className="text-text-muted">{detail.data.recipientCountryCode}</span>
-                    </div>
-                  </dd>
-                </dl>
-              </CardBody>
-            </Card>
-          </Section>
+                      {detail.data.recipientEmail && (
+                        <>
+                          <dt className="text-text-muted">Email</dt>
+                          <dd className="text-text-body font-mono text-xs">
+                            {detail.data.recipientEmail}
+                          </dd>
+                        </>
+                      )}
+                      <dt className="text-text-muted">Address</dt>
+                      <dd className="text-text-body">
+                        <div>{detail.data.recipientAddressLine1}</div>
+                        {detail.data.recipientAddressLine2 && (
+                          <div>{detail.data.recipientAddressLine2}</div>
+                        )}
+                        {detail.data.recipientLandmark && (
+                          <div className="text-text-muted text-xs">
+                            Landmark: {detail.data.recipientLandmark}
+                          </div>
+                        )}
+                        <div className="mt-0.5">
+                          {[detail.data.recipientCity, detail.data.recipientStateProvince]
+                            .filter(Boolean)
+                            .join(', ')}{' '}
+                          <span className="font-mono">{detail.data.recipientPostalCode}</span>{' '}
+                          <span className="text-text-muted">
+                            {detail.data.recipientCountryCode}
+                          </span>
+                        </div>
+                      </dd>
+                    </dl>
+                  </CardBody>
+                </Card>
+              </Section>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <Card>
-              <CardHeader title="Payment" />
-              <CardBody>
-                <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[120px_1fr] gap-x-3 sm:gap-x-4 gap-y-1.5 text-sm">
-                  <dt className="text-text-muted">Mode</dt>
-                  <dd className="text-text-body uppercase">{detail.data.paymentMode}</dd>
-                  <dt className="text-text-muted">COD (INR)</dt>
-                  <dd className="text-text-body font-mono">{detail.data.codAmountInr ?? '—'}</dd>
-                  <dt className="text-text-muted">Declared (INR)</dt>
-                  <dd className="text-text-body font-mono">
-                    {detail.data.declaredValueInr ?? '—'}
-                  </dd>
-                </dl>
-              </CardBody>
-            </Card>
-            <Card>
-              <CardHeader title="Physical" />
-              <CardBody>
-                <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[120px_1fr] gap-x-3 sm:gap-x-4 gap-y-1.5 text-sm">
-                  <dt className="text-text-muted">Weight (g)</dt>
-                  <dd className="text-text-body font-mono">
-                    {detail.data.totalWeightGrams ?? '—'}
-                  </dd>
-                  <dt className="text-text-muted">Package</dt>
-                  <dd className="text-text-body uppercase">{detail.data.packageType}</dd>
-                  <dt className="text-text-muted">Flags</dt>
-                  <dd className="text-text-body">
-                    {detail.data.isUrgent ? (
-                      <span className="text-pending text-xs uppercase tracking-wide">Urgent</span>
-                    ) : (
-                      <span className="text-text-muted">—</span>
-                    )}
-                  </dd>
-                </dl>
-              </CardBody>
-            </Card>
-          </div>
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                <Card>
+                  <CardHeader title="Payment" />
+                  <CardBody>
+                    <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[120px_1fr] gap-x-3 sm:gap-x-4 gap-y-1.5 text-sm">
+                      <dt className="text-text-muted">Mode</dt>
+                      <dd className="text-text-body uppercase">{detail.data.paymentMode}</dd>
+                      <dt className="text-text-muted">COD (INR)</dt>
+                      <dd className="text-text-body font-mono">
+                        {detail.data.codAmountInr ?? '—'}
+                      </dd>
+                      <dt className="text-text-muted">Declared (INR)</dt>
+                      <dd className="text-text-body font-mono">
+                        {detail.data.declaredValueInr ?? '—'}
+                      </dd>
+                    </dl>
+                  </CardBody>
+                </Card>
+                <Card>
+                  <CardHeader title="Physical" />
+                  <CardBody>
+                    <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[120px_1fr] gap-x-3 sm:gap-x-4 gap-y-1.5 text-sm">
+                      <dt className="text-text-muted">Weight (g)</dt>
+                      <dd className="text-text-body font-mono">
+                        {detail.data.totalWeightGrams ?? '—'}
+                      </dd>
+                      <dt className="text-text-muted">Package</dt>
+                      <dd className="text-text-body uppercase">{detail.data.packageType}</dd>
+                      <dt className="text-text-muted">Flags</dt>
+                      <dd className="text-text-body">
+                        {detail.data.isUrgent ? (
+                          <span className="text-pending text-xs uppercase tracking-wide">
+                            Urgent
+                          </span>
+                        ) : (
+                          <span className="text-text-muted">—</span>
+                        )}
+                      </dd>
+                    </dl>
+                  </CardBody>
+                </Card>
+              </div>
 
-          <Section title={`Items (${detail.data.items.length})`}>
-            <Card>
-              <Table wrapperClassName="rounded-none border-0 bg-transparent">
-                <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
-                  <tr>
-                    <th className="px-3 py-2 font-medium w-px">
-                      <span className="sr-only">Image</span>
-                    </th>
-                    <th className="text-left px-3 py-2 font-medium">SKU</th>
-                    <th className="text-left px-3 py-2 font-medium">Product</th>
-                    <th className="text-right px-3 py-2 font-medium">Qty</th>
-                    <th className="text-right px-3 py-2 font-medium">Weight (g)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {detail.data.items.map((item) => (
-                    <tr key={item.id}>
-                      <td className="px-3 py-2 w-px">
-                        {/* Live presigned thumbnail, NOT the snapshot's
+              <Section title={`Items (${detail.data.items.length})`}>
+                <Card>
+                  <Table wrapperClassName="rounded-none border-0 bg-transparent">
+                    <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
+                      <tr>
+                        <th className="px-3 py-2 font-medium w-px">
+                          <span className="sr-only">Image</span>
+                        </th>
+                        <th className="text-left px-3 py-2 font-medium">SKU</th>
+                        <th className="text-left px-3 py-2 font-medium">Product</th>
+                        <th className="text-right px-3 py-2 font-medium">Qty</th>
+                        <th className="text-right px-3 py-2 font-medium">Weight (g)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {detail.data.items.map((item) => (
+                        <tr key={item.id}>
+                          <td className="px-3 py-2 w-px">
+                            {/* Live presigned thumbnail, NOT the snapshot's
                             stored url — that one has resolved for nobody
                             since the bucket went private. */}
-                        <ProductThumb src={item.imageUrl} size={36} />
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs text-text-body">{item.skuCode}</td>
-                      <td className="px-3 py-2 text-text-body">
-                        {item.productName}
-                        {item.variantLabel && (
-                          <span className="text-text-muted ml-1">· {item.variantLabel}</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-right text-text-body font-mono">
-                        {item.quantity}
-                      </td>
-                      <td className="px-3 py-2 text-right text-text-muted font-mono text-xs">
-                        {item.unitWeightGrams ?? '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </Card>
-          </Section>
+                            <ProductThumb src={item.imageUrl} size={36} />
+                          </td>
+                          <td className="px-3 py-2 font-mono text-xs text-text-body">
+                            {item.skuCode}
+                          </td>
+                          <td className="px-3 py-2 text-text-body">
+                            {item.productName}
+                            {item.variantLabel && (
+                              <span className="text-text-muted ml-1">· {item.variantLabel}</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right text-text-body font-mono">
+                            {item.quantity}
+                          </td>
+                          <td className="px-3 py-2 text-right text-text-muted font-mono text-xs">
+                            {item.unitWeightGrams ?? '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </Card>
+              </Section>
 
-          {detail.data.sellerNotes && (
-            <Section title="Notes">
-              <Card>
-                <CardBody>
-                  <p className="text-text-body text-sm whitespace-pre-wrap">
-                    {detail.data.sellerNotes}
-                  </p>
-                </CardBody>
-              </Card>
-            </Section>
-          )}
+              {detail.data.sellerNotes && (
+                <Section title="Notes">
+                  <Card>
+                    <CardBody>
+                      <p className="text-text-body text-sm whitespace-pre-wrap">
+                        {detail.data.sellerNotes}
+                      </p>
+                    </CardBody>
+                  </Card>
+                </Section>
+              )}
 
-          {/* Hidden rather than shown-and-refused for a VIEWER: the
+              {/* Hidden rather than shown-and-refused for a VIEWER: the
               server rejects /charges for that role, and rendering its
               403 in a red box reads as a broken page rather than as
               policy. Cosmetic — the server is still the boundary. */}
-          {identity !== null && can(identity, 'charges.view') && (
-            <Section title="Charges">
-              <OrderChargesSection orderId={orderId} />
-            </Section>
-          )}
+              {identity !== null && can(identity, 'charges.view') && (
+                <Section title="Charges">
+                  <OrderChargesSection orderId={orderId} />
+                </Section>
+              )}
 
-          <Section title="Invoice">
-            <OrderInvoiceSection orderId={orderId} status={detail.data.status} />
-          </Section>
+              <Section title="Invoice">
+                <OrderInvoiceSection orderId={orderId} status={detail.data.status} />
+              </Section>
 
-          {/* The whole journey — the stage ladder, what the courier
+              {/* The whole journey — the stage ladder, what the courier
               says the parcel weighs and will collect, and our own
               handling merged with their scans into one history.
               Replaces a bare scan list next to a near-empty timeline,
               which between them never showed that Skydrop had taken
               the order, phoned the customer, picked or packed it. */}
-          <OrderJourneySection orderId={orderId} />
+            </div>
+          </div>
 
           <div className="text-text-faint text-xs text-center mt-8">
             Placed {new Date(detail.data.placedAt).toISOString().replace('T', ' ').slice(0, 16)} ·
