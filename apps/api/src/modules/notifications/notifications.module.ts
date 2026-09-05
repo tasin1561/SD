@@ -6,6 +6,7 @@ import { NotificationLedgerModule } from '../notification-ledger/notification-le
 import { NotificationListener } from './services/notification-listener.service';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { NotificationAudienceModule } from '../notification-audience/notification-audience.module';
+import { SellerNotificationPreferenceModule } from '../seller-notification-preference/seller-notification-preference.module';
 
 /**
  * Module 11 — Notifications fan-out.
@@ -44,6 +45,9 @@ import { NotificationAudienceModule } from '../notification-audience/notificatio
     // concerns through the dispatcher here. No cycle — the audience
     // module knows nothing about orders or lifecycle events.
     NotificationAudienceModule,
+    // What the COMPANY has said it wants to hear about. Its rows had a
+    // screen and no reader on the send path until now.
+    SellerNotificationPreferenceModule,
   ],
   providers: [NotificationEventMappingService, NotificationListener],
   exports: [],

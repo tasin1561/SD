@@ -173,4 +173,46 @@ describe('NotificationEventMappingService — R5b AWAITING_SELLER_DECISION', () 
       0,
     );
   });
+
+  // ── Every seller target names the category it belongs to ───────────
+
+  it('every SELLER target declares a sellerCategory, and no CUSTOMER one does', () => {
+    // The company's per-category preference is what decides whether a
+    // seller hears about this at all. A target with no category is
+    // ungated by construction — it would keep sending after somebody
+    // switched the category off, and nothing else would notice.
+    //
+    // A CUSTOMER target must NOT carry one: a customer is not the
+    // company, never agreed to anything, and a seller must not be able
+    // to silence the emails their own customers rely on.
+    const missing: string[] = [];
+    const wrong: string[] = [];
+    for (const status of Object.values(OrderStatus)) {
+      for (const t of svc.resolveForOrderStatus(status)) {
+        if (t.recipientType === NotificationRecipientType.SELLER) {
+          if (t.sellerCategory === undefined) missing.push(`${status} → ${t.templateCode}`);
+        } else if (t.sellerCategory !== undefined) {
+          wrong.push(`${status} → ${t.templateCode}`);
+        }
+      }
+    }
+    expect(missing).toEqual([]);
+    expect(wrong).toEqual([]);
+  });
+
+  it('every SELLER target also carries an in-app leg', () => {
+    // One notification, two channels. A seller entry with an email and
+    // no inbox line is a status somebody decided to email about and
+    // then forgot the other half of — which is exactly the drift a
+    // single fan-out entry per notification exists to prevent.
+    const emailOnly: string[] = [];
+    for (const status of Object.values(OrderStatus)) {
+      for (const t of svc.resolveForOrderStatus(status)) {
+        if (t.recipientType === NotificationRecipientType.SELLER && t.inApp === undefined) {
+          emailOnly.push(`${status} → ${t.templateCode}`);
+        }
+      }
+    }
+    expect(emailOnly).toEqual([]);
+  });
 });

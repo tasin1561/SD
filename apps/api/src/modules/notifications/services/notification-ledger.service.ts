@@ -48,6 +48,14 @@ export interface NotificationLedgerInput {
   readonly triggerEvent: string;
   /** Optional sender display override (only used by tests today). */
   readonly fromOverride?: string;
+  /**
+   * Hold the SEND this long, because the company is inside its own
+   * quiet hours. The notification_logs row is still written now — the
+   * record is not what is being deferred — so a message waiting out the
+   * night is visible as QUEUED rather than looking like it was never
+   * produced.
+   */
+  readonly sendDelayMs?: number;
 }
 
 export type NotificationLedgerResult =
@@ -159,7 +167,12 @@ export class NotificationLedgerService {
         existingNotificationLogId: log.id,
         ...(input.fromOverride ? { fromOverride: input.fromOverride } : {}),
       };
-      await this.emailQueue.enqueue(emailInput);
+      await this.emailQueue.enqueue(
+        emailInput,
+        input.sendDelayMs !== undefined && input.sendDelayMs > 0
+          ? { delay: input.sendDelayMs }
+          : undefined,
+      );
 
       return { kind: 'ENQUEUED', notificationLogId: log.id };
     } catch (err) {

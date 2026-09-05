@@ -115,8 +115,25 @@ function makeSut(fixture: OrderFixture | null) {
     }),
   } as never;
 
+  // The company's own per-category preferences. Permissive by default
+  // so the existing cases keep testing what they were written to test;
+  // the cases that care override it.
+  const preferences = {
+    resolve: jest.fn(async () => ({ email: true, inApp: true, emailDelayMs: 0 })),
+  };
+
   return {
-    listener: new NotificationListener(bus, REAL_MAPPING, ledger, prisma, env, audit, dispatch),
+    listener: new NotificationListener(
+      bus,
+      REAL_MAPPING,
+      ledger,
+      prisma,
+      env,
+      audit,
+      dispatch,
+      preferences as never,
+    ),
+    preferences,
     enqueueCalls,
     inAppCalls,
     dispatch,
@@ -518,5 +535,70 @@ describe('NotificationListener — the customer is written to in THEIR language'
     await listener.handle(lifecycleEvent(OrderStatus.IN_TRANSIT, 'evt-inapp-6'));
     expect(enqueueCalls).toHaveLength(0);
     expect(inAppCalls).toHaveLength(0);
+  });
+
+  // ── The company's own per-category preferences ─────────────────────
+
+  it('a category the company switched off sends NOTHING to the seller', async () => {
+    const { listener, enqueueCalls, inAppCalls, preferences } = makeSut(ORDER_BASE);
+    preferences.resolve.mockImplementation(async () => ({
+      email: false,
+      inApp: false,
+      emailDelayMs: 0,
+    }));
+
+    await listener.handle(lifecycleEvent(OrderStatus.DISPATCHED, 'evt-pref-1'));
+
+    // The SELLER's two legs are both gone; the CUSTOMER's email is
+    // untouched — a customer is not the company and never agreed to
+    // anything, so a seller must not be able to silence the emails
+    // their own customers rely on.
+    expect(enqueueCalls.map((c) => c.recipientType)).toEqual([NotificationRecipientType.CUSTOMER]);
+    expect(inAppCalls).toHaveLength(0);
+  });
+
+  it('email off still leaves the inbox line — they are separate switches', async () => {
+    const { listener, enqueueCalls, inAppCalls, preferences } = makeSut(ORDER_BASE);
+    preferences.resolve.mockImplementation(async () => ({
+      email: false,
+      inApp: true,
+      emailDelayMs: 0,
+    }));
+
+    await listener.handle(lifecycleEvent(OrderStatus.DISPATCHED, 'evt-pref-2'));
+    expect(
+      enqueueCalls.find((c) => c.recipientType === NotificationRecipientType.SELLER),
+    ).toBeUndefined();
+    expect(inAppCalls).toHaveLength(1);
+  });
+
+  it('quiet hours delay the send WITHOUT losing the record', async () => {
+    const { listener, enqueueCalls, preferences } = makeSut(ORDER_BASE);
+    preferences.resolve.mockImplementation(async () => ({
+      email: true,
+      inApp: true,
+      emailDelayMs: 3_600_000,
+    }));
+
+    await listener.handle(lifecycleEvent(OrderStatus.DISPATCHED, 'evt-pref-3'));
+    const seller = enqueueCalls.find((c) => c.recipientType === NotificationRecipientType.SELLER);
+    // The ledger row is written NOW and the SEND waits, so a message
+    // waiting out the night is visible as queued rather than looking
+    // like it was never produced.
+    expect(seller?.sendDelayMs).toBe(3_600_000);
+  });
+
+  it('outside quiet hours no delay is passed at all', async () => {
+    const { listener, enqueueCalls } = makeSut(ORDER_BASE);
+    await listener.handle(lifecycleEvent(OrderStatus.DISPATCHED, 'evt-pref-4'));
+    const seller = enqueueCalls.find((c) => c.recipientType === NotificationRecipientType.SELLER);
+    expect(seller?.sendDelayMs).toBeUndefined();
+  });
+
+  it('the customer’s email is never gated by the seller’s preferences', async () => {
+    const { listener, preferences } = makeSut(ORDER_BASE);
+    await listener.handle(lifecycleEvent(OrderStatus.OUT_FOR_DELIVERY, 'evt-pref-5'));
+    // OUT_FOR_DELIVERY is customer-only, so nothing should even ask.
+    expect(preferences.resolve).not.toHaveBeenCalled();
   });
 });

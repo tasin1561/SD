@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { NotificationChannel, NotificationRecipientType, OrderStatus } from '@skydrop/db';
+import {
+  NotificationChannel,
+  NotificationRecipientType,
+  OrderStatus,
+  SellerNotificationCategory,
+} from '@skydrop/db';
 
 /**
  * One fan-out target: a single ledger row to enqueue.
@@ -59,6 +64,21 @@ export interface NotificationFanOut {
     readonly title: string;
     readonly body: string;
   };
+  /**
+   * Which of the COMPANY's notification categories this belongs to.
+   *
+   * `seller_notification_preferences` is a per-category switch a seller
+   * has been able to set since M1. Naming the category HERE keeps the
+   * "what is this notification" decision in the one place that already
+   * owns it — the alternative was a second table mapping template codes
+   * to categories, which is the same drift NOTIF-4 exists to prevent.
+   *
+   * Required on every SELLER target and absent on every CUSTOMER one: a
+   * customer is not the company and has no preferences. Pinned by a
+   * test rather than by the type, because making it conditional on
+   * `recipientType` in TypeScript costs more than it earns here.
+   */
+  readonly sellerCategory?: SellerNotificationCategory;
 }
 
 /**
@@ -119,6 +139,7 @@ export class NotificationEventMappingService {
             templateCode: 'order.confirmed.seller.email',
             locale: 'en',
             channel: NotificationChannel.EMAIL,
+            sellerCategory: SellerNotificationCategory.ORDER_UPDATES,
             inApp: {
               permission: 'orders.view',
               title: 'Order confirmed',
@@ -141,6 +162,7 @@ export class NotificationEventMappingService {
             templateCode: 'seller.order_cancelled.email',
             locale: 'en',
             channel: NotificationChannel.EMAIL,
+            sellerCategory: SellerNotificationCategory.ORDER_UPDATES,
             inApp: {
               permission: 'orders.view',
               title: 'Order cancelled',
@@ -177,6 +199,7 @@ export class NotificationEventMappingService {
             templateCode: 'seller.order_awaiting_decision.email',
             locale: 'en',
             channel: NotificationChannel.EMAIL,
+            sellerCategory: SellerNotificationCategory.CALL_CENTER_OUTCOMES,
             inApp: {
               permission: 'holds.manage',
               title: 'An order needs your decision',
@@ -203,6 +226,7 @@ export class NotificationEventMappingService {
             templateCode: 'seller.order_dispatched.email',
             locale: 'en',
             channel: NotificationChannel.EMAIL,
+            sellerCategory: SellerNotificationCategory.SHIPMENT_UPDATES,
             inApp: {
               permission: 'orders.view',
               title: 'Order dispatched',
@@ -239,6 +263,7 @@ export class NotificationEventMappingService {
             templateCode: 'seller.order_delivered.email',
             locale: 'en',
             channel: NotificationChannel.EMAIL,
+            sellerCategory: SellerNotificationCategory.SHIPMENT_UPDATES,
             inApp: {
               permission: 'orders.view',
               title: 'Order delivered',
@@ -260,6 +285,7 @@ export class NotificationEventMappingService {
             templateCode: 'seller.order_delivery_failed.email',
             locale: 'en',
             channel: NotificationChannel.EMAIL,
+            sellerCategory: SellerNotificationCategory.SHIPMENT_UPDATES,
             inApp: {
               permission: 'orders.view',
               title: 'Delivery attempt failed',
@@ -283,6 +309,7 @@ export class NotificationEventMappingService {
             templateCode: 'shipment.rto_initiated.seller.email',
             locale: 'en',
             channel: NotificationChannel.EMAIL,
+            sellerCategory: SellerNotificationCategory.SHIPMENT_UPDATES,
             inApp: {
               permission: 'orders.view',
               title: 'Order is coming back',
@@ -298,6 +325,7 @@ export class NotificationEventMappingService {
             templateCode: 'seller.order_rto_received.email',
             locale: 'en',
             channel: NotificationChannel.EMAIL,
+            sellerCategory: SellerNotificationCategory.SHIPMENT_UPDATES,
             inApp: {
               permission: 'inventory.view',
               title: 'Returned goods received',

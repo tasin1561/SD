@@ -709,4 +709,39 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
     // CONFIRMED still arrives; only DISPATCHED was silenced.
     expect(inbox.map((r) => r.templateCode)).toEqual(['order.confirmed.seller']);
   });
+
+  // ── Scenario 9: the company's own per-category preferences ────────
+
+  it('a category the company switched off stops both legs — and the customer still hears', async () => {
+    // These rows had a screen and no reader on the send path until
+    // now: a seller could switch a category off, watch it save, and
+    // keep getting every email. This is that gate, end to end.
+    await request(h.baseUrl)
+      .patch('/seller/notification-preferences/SHIPMENT_UPDATES')
+      .set(sellerAuth)
+      .send({ emailEnabled: false, inAppEnabled: false })
+      .expect(200);
+
+    const orderId = await placeOrder();
+    await driveToDispatched(orderId);
+
+    // CONFIRMED is ORDER_UPDATES and untouched, so its two emails
+    // still land. DISPATCHED is SHIPMENT_UPDATES: the seller's email
+    // is gone, the CUSTOMER's is not.
+    const sent = await waitForLogCount(orderId, 3, NotificationStatus.SENT);
+    const codes = sent.map((r) => r.templateCode).sort();
+    expect(codes).toEqual([
+      'customer.order_confirmed.email',
+      'customer.order_dispatched.email',
+      'order.confirmed.seller.email',
+    ]);
+
+    // A seller must not be able to silence the emails their own
+    // customers rely on — they are not the company's to switch off.
+    await new Promise((r) => setTimeout(r, 800));
+    const inbox = await h.prisma.notificationLog.findMany({
+      where: { orderId, channel: NotificationChannel.IN_APP },
+    });
+    expect(inbox.map((r) => r.templateCode)).toEqual(['order.confirmed.seller']);
+  });
 });

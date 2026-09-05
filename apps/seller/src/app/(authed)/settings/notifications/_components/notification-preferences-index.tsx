@@ -11,7 +11,6 @@ import {
   Input,
   LoadingState,
   PageHeader,
-  Select,
   useToast,
 } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
@@ -48,14 +47,6 @@ const CATEGORY_LABEL: Record<string, { title: string; description: string }> = {
     description: 'Skydrop product updates + tips.',
   },
 };
-
-const FREQUENCIES = [
-  'IMMEDIATE',
-  'HOURLY_DIGEST',
-  'DAILY_DIGEST',
-  'WEEKLY_DIGEST',
-  'DISABLED',
-] as const;
 
 export function NotificationPreferencesIndex(): ReactElement {
   const list = useNotificationPreferences();
@@ -149,7 +140,19 @@ function PreferenceRow({
         <div className="text-text-bright text-sm font-medium mb-1">{label.title}</div>
         <p className="text-text-muted text-xs mb-3">{label.description}</p>
 
-        <div className="grid grid-cols-4 gap-3 mb-3">
+        {/*
+          Two switches, not six.
+
+          SMS, Webhook and Frequency were on this screen and could not
+          be honoured by anything: there is no SMS sender in Phase-1A,
+          outbound webhooks are configured per endpoint and never read
+          this toggle, and DAILY_DIGEST needs a digest scheduler that
+          does not exist. A control that does nothing is worse than no
+          control — somebody switches it, believes it, and finds out
+          weeks later. The COLUMNS survive for when those channels do,
+          so this is a screen change and not a migration.
+        */}
+        <div className="grid grid-cols-2 gap-3 mb-3">
           <Toggle
             label="Email"
             checked={row.emailEnabled}
@@ -157,47 +160,18 @@ function PreferenceRow({
             onChange={(v) => void patch({ emailEnabled: v }, 'Saved.')}
           />
           <Toggle
-            label="SMS"
-            checked={row.smsEnabled}
-            disabled={busy}
-            onChange={(v) => void patch({ smsEnabled: v }, 'Saved.')}
-          />
-          <Toggle
             label="In-app"
             checked={row.inAppEnabled}
             disabled={busy}
             onChange={(v) => void patch({ inAppEnabled: v }, 'Saved.')}
           />
-          <Toggle
-            label="Webhook"
-            checked={row.webhookEnabled}
-            disabled={busy}
-            onChange={(v) => void patch({ webhookEnabled: v }, 'Saved.')}
-          />
         </div>
 
-        <div className="grid grid-cols-3 gap-3 pt-3 border-t border-border">
-          <FormField label="Frequency">
-            <Select
-              value={row.frequency}
-              disabled={busy}
-              onChange={(e) =>
-                void patch(
-                  {
-                    frequency: e.target.value as (typeof FREQUENCIES)[number],
-                  },
-                  'Saved.',
-                )
-              }
-            >
-              {FREQUENCIES.map((f) => (
-                <option key={f} value={f}>
-                  {f.toLowerCase().replace(/_/g, ' ')}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-          <FormField label="Quiet hours start (HH:MM)" hint="Local timezone">
+        <div className="grid grid-cols-2 gap-3 pt-3 border-t border-border">
+          <FormField
+            label="Quiet hours start (HH:MM)"
+            hint="Email only, in your timezone. An email that arrives inside the window is held until it ends, not dropped."
+          >
             <Input
               type="time"
               value={row.quietHoursStart ?? ''}

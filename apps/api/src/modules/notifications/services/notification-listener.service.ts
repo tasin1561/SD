@@ -24,6 +24,7 @@ import {
   NotificationEventMappingService,
   type NotificationFanOut,
 } from './notification-event-mapping.service';
+import { SellerNotificationPreferenceResolver } from '../../seller-notification-preference/services/seller-notification-preference-resolver.service';
 import { NotificationDispatchService } from '../../notification-audience/services/notification-dispatch.service';
 import { NotificationLedgerService } from './notification-ledger.service';
 import type { EmailVariables } from '../../email/email.types';
@@ -95,6 +96,7 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
     private readonly env: EnvService,
     private readonly audit: AuditLogService,
     private readonly dispatch: NotificationDispatchService,
+    private readonly preferences: SellerNotificationPreferenceResolver,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -199,6 +201,22 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
     for (const target of targets) {
       const resolved = this.resolveTarget(target, ctx);
 
+      // What the COMPANY has said it wants to hear about, per category.
+      // One lookup per target, consulted before either leg — a seller
+      // who switched a category off had been switching off nothing
+      // until now (the rows had no reader on the send path).
+      //
+      // A CUSTOMER target has no preferences: they are not the company,
+      // they never agreed to anything, and the alternative is letting a
+      // seller silence the emails their own customers rely on.
+      const pref =
+        target.recipientType === 'SELLER' && target.sellerCategory !== undefined
+          ? await this.preferences.resolve({
+              sellerId: ctx.sellerId,
+              category: target.sellerCategory,
+            })
+          : { email: true, inApp: true, emailDelayMs: 0 };
+
       // The customer's own language where they have one; the mapping's
       // value for a seller.
       //
@@ -252,25 +270,43 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
       // is narrower and was genuinely silent — a target whose ledger
       // row never got written had nothing anywhere to say it should
       // have been.
+      // The SAME notification, in the inboxes of the people at that
+      // company it concerns. FIRST, and deliberately so: the email gate
+      // below `continue`s, so running this after it meant switching off
+      // a category's email silently switched off its inbox line too —
+      // two independent switches, one of them secretly wired to the
+      // other. Caught by the test that asserts they are separate.
+      if (pref.inApp) await this.deliverInApp(target, ctx, eventIdBase, triggerEvent);
+
+      if (!pref.email) {
+        // Switched off by the company, on purpose. Not a failure and
+        // not worth an audit row — this is the setting working.
+        this.logger.debug(
+          { orderId: ctx.orderId, category: target.sellerCategory },
+          'NotificationListener: email suppressed by the company’s own preference',
+        );
+        continue;
+      }
+
       let lastError: unknown = null;
       let sent = false;
       for (const delayMs of [0, 200, 600]) {
         if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
         try {
-          await this.ledger.enqueue(payload);
+          await this.ledger.enqueue(
+            // Quiet hours hold the SEND, not the record: the ledger row
+            // is written now either way, so "this was going to be sent"
+            // is answerable during the window rather than only after
+            // it. Zero is the ordinary case and BullMQ treats it as no
+            // delay at all.
+            pref.emailDelayMs > 0 ? { ...payload, sendDelayMs: pref.emailDelayMs } : payload,
+          );
           sent = true;
           break;
         } catch (err) {
           lastError = err;
         }
       }
-      // The SAME notification, in the inboxes of the people at that
-      // company it concerns. Fired alongside the email rather than
-      // after it succeeds: the two channels are independent legs of
-      // one notification, and an inbox line is not worth withholding
-      // because a mail server was slow.
-      await this.deliverInApp(target, ctx, eventIdBase, triggerEvent);
-
       if (!sent) {
         // NOTIF-3 independence: one target's failure NEVER aborts the
         // others.
