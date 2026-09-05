@@ -36,6 +36,7 @@ import {
   ErrorState,
   LoadingState,
   OrderStatusBadge,
+  Money,
   PageHeader,
   Section,
   Table,
@@ -340,7 +341,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             the order", and it should read as a bigger break than the
             one between two notices.
           */}
-          <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+          <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
             {/* The journey: the stage ladder, the parcels, and the
                 courier's own scans merged with our handling. */}
             <div className="min-w-0 space-y-4">
@@ -433,24 +434,38 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
 
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                 <Card>
-                  <CardHeader title={<Titled icon={CreditCard}>Payment</Titled>} />
+                  <CardHeader tone="accent" title={<Titled icon={CreditCard}>Payment</Titled>} />
                   <CardBody>
                     <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[120px_1fr] gap-x-3 sm:gap-x-4 gap-y-1.5 text-sm">
                       <dt className="text-text-muted">Mode</dt>
                       <dd className="text-text-body uppercase">{detail.data.paymentMode}</dd>
                       <dt className="text-text-muted">COD (INR)</dt>
-                      <dd className="text-text-body font-mono">
-                        {detail.data.codAmountInr ?? '—'}
+                      {/* The one figure on this card that decides
+                          whether the parcel is worth chasing, rendered
+                          through Money so it groups the Indian way and
+                          sits on tabular figures — and given the accent
+                          so the eye lands on it rather than on the word
+                          "Mode" above it. */}
+                      <dd className="text-accent font-semibold">
+                        {detail.data.codAmountInr === null ? (
+                          <span className="text-text-faint font-normal">Prepaid</span>
+                        ) : (
+                          <Money amount={detail.data.codAmountInr} />
+                        )}
                       </dd>
                       <dt className="text-text-muted">Declared (INR)</dt>
-                      <dd className="text-text-body font-mono">
-                        {detail.data.declaredValueInr ?? '—'}
+                      <dd className="text-text-body">
+                        {detail.data.declaredValueInr === null ? (
+                          '—'
+                        ) : (
+                          <Money amount={detail.data.declaredValueInr} />
+                        )}
                       </dd>
                     </dl>
                   </CardBody>
                 </Card>
                 <Card>
-                  <CardHeader title={<Titled icon={Ruler}>Physical</Titled>} />
+                  <CardHeader tone="accent" title={<Titled icon={Ruler}>Physical</Titled>} />
                   <CardBody>
                     <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[120px_1fr] gap-x-3 sm:gap-x-4 gap-y-1.5 text-sm">
                       <dt className="text-text-muted">Weight (g)</dt>
@@ -554,6 +569,30 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                 <OrderInvoiceSection orderId={orderId} status={detail.data.status} />
               </Section>
 
+              {/*
+                Directly UNDER the invoice, in the facts column.
+
+                They spent a commit full-width below the grid, which was
+                technically "after the invoice" and useless: the journey
+                column runs to hundreds of scan rows on a real parcel,
+                so these landed a screen and a half past the thing they
+                were meant to sit beneath. Position in a two-column
+                layout is what the eye sees, not what the DOM order
+                says. The column is wider now so they still have room
+                for the detail they carry.
+              */}
+              <DeliveryTroublePanel
+                orderId={orderId}
+                orderStatus={detail.data.status}
+                open={askOpen}
+                onOpenChange={setAskOpen}
+              />
+              <OrderTicketsPanel
+                orderId={orderId}
+                raising={raiseOpen}
+                onRaisingChange={setRaiseOpen}
+              />
+
               {/* The whole journey — the stage ladder, what the courier
               says the parcel weighs and will collect, and our own
               handling merged with their scans into one history.
@@ -561,36 +600,6 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               which between them never showed that Skydrop had taken
               the order, phoned the customer, picked or packed it. */}
             </div>
-          </div>
-
-          {/*
-            FULL WIDTH, below the grid.
-
-            These two lived in the right-hand column for one commit and
-            it was wrong: the trouble panel carries what we discussed
-            with the customer AND what the seller asked us to do, each
-            with its own reason, reply and outcome, and the issues panel
-            carries a row per ticket with a status badge and a date. A
-            third of the page is not enough for either, and cramming
-            them there quietly cost detail that is the whole reason to
-            read them.
-
-            Still below the invoice, which is what was asked — the
-            invoice is the last thing in the facts column, and these
-            come after the entire block.
-          */}
-          <div className="mt-6 space-y-4">
-            <DeliveryTroublePanel
-              orderId={orderId}
-              orderStatus={detail.data.status}
-              open={askOpen}
-              onOpenChange={setAskOpen}
-            />
-            <OrderTicketsPanel
-              orderId={orderId}
-              raising={raiseOpen}
-              onRaisingChange={setRaiseOpen}
-            />
           </div>
 
           <div className="text-text-faint text-xs text-center mt-8">

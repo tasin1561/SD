@@ -370,12 +370,26 @@ export function JourneyTimeline({
             aria-hidden
             className={[
               'mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full',
-              e.owner === 'COURIER' ? 'bg-accent-fill' : 'bg-text-faint',
+              // A FAILED ATTEMPT is marked as one. It was the same grey
+              // or blue dot as "bag scanned at the hub", which is the
+              // only kind of entry a seller is scanning this list to
+              // find — colour here is the meaning, not decoration.
+              e.attempt !== null
+                ? 'bg-warning'
+                : e.owner === 'COURIER'
+                  ? 'bg-accent-fill'
+                  : 'bg-text-faint',
             ].join(' ')}
           />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-baseline gap-x-2">
-              <span className="text-sm font-medium">{e.title}</span>
+              <span
+                className={['text-sm font-medium', e.attempt !== null ? 'text-warning' : ''].join(
+                  ' ',
+                )}
+              >
+                {e.title}
+              </span>
               <span className="text-text-faint text-[11px] tracking-wide uppercase">
                 {e.owner === 'SKYDROP' ? 'Skydrop' : 'Courier'}
               </span>
