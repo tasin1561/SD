@@ -83,6 +83,39 @@ describe('SystemIssueNotifier', () => {
       c.svc.notify({ ...base, severity: SystemIssueSeverity.CRITICAL }),
     ).resolves.toBeUndefined();
   });
+
+  it('exposes a drain, and it awaits what is still in flight', async () => {
+    // The M11 listener's pattern, and the rule CLAUDE.md states for
+    // any new fire-and-forget async DB writer. Without it, a
+    // notification_logs INSERT races the e2e reset's TRUNCATE and
+    // Postgres kills one of them with a 40P01 naming neither the test
+    // nor the cause — which is exactly how this arrived, on CI.
+    const c = make();
+    let release = (): void => {};
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    c.dispatch.dispatch.mockImplementationOnce(async () => {
+      await gate;
+      return { groupId: 'g', recipients: 1, delivered: 1, skipped: 0, failures: 0 };
+    });
+
+    let done = false;
+    const notifying = c.svc.notify({ ...base, severity: SystemIssueSeverity.HIGH }).then(() => {
+      done = true;
+    });
+
+    const drained = c.svc.drainInFlight();
+    expect(done).toBe(false);
+    release();
+    await Promise.all([notifying, drained]);
+    expect(done).toBe(true);
+  });
+
+  it('draining with nothing in flight is a no-op', async () => {
+    const c = make();
+    await expect(c.svc.drainInFlight()).resolves.toBeUndefined();
+  });
 });
 
 describe('permissionsFor — who is told, per kind', () => {

@@ -18,6 +18,7 @@ import { prisma, StaffRole, type PrismaClient } from '@skydrop/db';
 import { AppModule } from '../../src/app.module';
 import { AllExceptionsFilter } from '../../src/common/filters/all-exceptions.filter';
 import { NotificationListener } from '../../src/modules/notifications/services/notification-listener.service';
+import { SystemIssueNotifier } from '../../src/modules/system-issues/services/system-issue-notifier.service';
 import { OrderConfirmedAwbListener } from '../../src/modules/courier-awb/services/order-confirmed-awb-listener.service';
 import { staffRoleKeyForEnum } from '../../src/common/auth/staff-role-key';
 
@@ -130,6 +131,22 @@ export async function drainAwbListener(app: NestExpressApplication): Promise<voi
  * order lifecycle transition SHOULD pass the app; specs that don't
  * touch orders can still call the legacy single-arg form.
  */
+/**
+ * Await any system-issue notification still going out.
+ *
+ * The third drain hook, and the same shape as the other two: a
+ * fire-and-forget async DB writer needs a way to be quiesced or it
+ * races the reset. A missing service is not an error — a spec may boot
+ * an app that does not carry it.
+ */
+export async function drainSystemIssueNotifier(app: NestExpressApplication): Promise<void> {
+  try {
+    await app.get(SystemIssueNotifier, { strict: false }).drainInFlight();
+  } catch {
+    // Not registered in this app; nothing in flight by definition.
+  }
+}
+
 export async function resetAuthState(
   prisma: PrismaClient,
   app?: NestExpressApplication,
@@ -137,6 +154,13 @@ export async function resetAuthState(
   if (app) {
     await drainNotificationListener(app);
     await drainAwbListener(app);
+    // Raising a system issue now also NOTIFIES somebody, and that write
+    // outlives the failure path that triggered it. Undrained, its
+    // notification_logs INSERT holds a RowShareLock on orders while the
+    // TRUNCATE below wants an AccessExclusiveLock — a 40P01 deadlock
+    // that names neither the test nor the cause. Found on CI, one shard
+    // out of four.
+    await drainSystemIssueNotifier(app);
   }
   // Order-critical chain (CLAUDE MUST #12): Module-8 warehouse rows
   // (shipment_items FK stock_batches/warehouse_bins; shipments FK

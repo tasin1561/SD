@@ -47,7 +47,32 @@ import { topicForIssue } from '../../notification-audience/services/notification
 export class SystemIssueNotifier {
   private readonly logger = new Logger(SystemIssueNotifier.name);
 
+  /**
+   * In-flight notifications, so a test can quiesce them.
+   *
+   * `raise()` is reached from failure paths that are themselves
+   * fire-and-forget — a sweep, a listener, a catch block — so the DB
+   * writes here outlive whoever triggered them. In production that is
+   * exactly right. In the e2e harness it deadlocks the reset: a
+   * notification_logs INSERT holds a `RowShareLock` on orders while the
+   * TRUNCATE wants an `AccessExclusiveLock`, and Postgres kills one of
+   * them with a 40P01 that names neither the test nor the cause. That
+   * is not hypothetical — it is how this arrived, on CI, one shard out
+   * of four.
+   *
+   * The pattern is the M11 listener's, and CLAUDE.md states it as the
+   * rule for ANY new post-commit fire-and-forget async DB writer:
+   * track the promises, expose a drain, await it in teardown.
+   */
+  private readonly inFlight = new Set<Promise<void>>();
+
   constructor(private readonly dispatch: NotificationDispatchService) {}
+
+  /** Await everything still going out. Called by the e2e reset. */
+  async drainInFlight(): Promise<void> {
+    if (this.inFlight.size === 0) return;
+    await Promise.allSettled([...this.inFlight]);
+  }
 
   /**
    * Best-effort, and it MUST stay that way: every caller is already
@@ -56,6 +81,20 @@ export class SystemIssueNotifier {
    * `SystemIssueService.raise()` itself.
    */
   async notify(input: {
+    readonly issueId: string;
+    readonly kind: SystemIssueKind;
+    readonly severity: SystemIssueSeverity;
+    readonly title: string;
+    readonly detail: string;
+  }): Promise<void> {
+    const p = this.send(input).finally(() => {
+      this.inFlight.delete(p);
+    });
+    this.inFlight.add(p);
+    await p;
+  }
+
+  private async send(input: {
     readonly issueId: string;
     readonly kind: SystemIssueKind;
     readonly severity: SystemIssueSeverity;

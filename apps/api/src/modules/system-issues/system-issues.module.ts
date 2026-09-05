@@ -27,6 +27,6 @@ import { NotificationAudienceModule } from '../notification-audience/notificatio
   imports: [AuthCommonModule, NotificationAudienceModule],
   controllers: [AdminSystemIssueController],
   providers: [SystemIssueService, ScanBlockService, SystemIssueNotifier, StaffJwtGuard],
-  exports: [SystemIssueService, ScanBlockService],
+  exports: [SystemIssueService, ScanBlockService, SystemIssueNotifier],
 })
 export class SystemIssuesModule {}
