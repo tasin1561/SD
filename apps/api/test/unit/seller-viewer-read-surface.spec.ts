@@ -66,6 +66,13 @@ const READABLE_GETS: Readonly<Record<string, readonly string[]>> = {
     '',
     ':id',
     ':id/events',
+    // Counts of their own orders per status, and the COD on them. A
+    // VIEWER already sees every one of those orders and every one of
+    // those figures on the list; grouping them discloses nothing new,
+    // and the list page's filter chips carry the counts — so refusing
+    // it would render the page they ARE meant to read with a row of
+    // blanks across the top.
+    'summary',
     // A SUM of the COD on their own orders. Allowed deliberately, not
     // by inheritance: a VIEWER already sees every one of those figures
     // on the list and the detail, so adding them up discloses nothing

@@ -90,6 +90,21 @@ export class SellerOrderController {
     return this.svc.list(seller.id, query);
   }
 
+  // MUST stay above @Get(':id') — Nest matches in declaration order, so
+  // a literal segment placed after the parameter would be swallowed by
+  // it and read as an order id.
+  @Get('summary')
+  @SellerAuthAllowSuspended()
+  @ApiOperation({
+    summary:
+      'How many orders sit at each status and how much COD is on them — one query, so the chip counts and the tiles cannot disagree with each other.',
+  })
+  summary(
+    @CurrentSeller() seller: AuthenticatedSeller,
+  ): ReturnType<OrderReadService['statusSummary']> {
+    return this.reads.statusSummary(seller.id);
+  }
+
   // MUST stay above @Get(':id') for the same reason as customer-lookup
   // below: a parameterised route declared first swallows this path as
   // an order id and 400s on the UUID pipe.

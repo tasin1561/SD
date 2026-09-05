@@ -239,6 +239,48 @@ export class OrderReadService {
     };
   }
 
+  /**
+   * How many orders sit at each status, and how much COD is on them.
+   *
+   * ONE `groupBy`, not one query per status. The list page shows a
+   * count on every filter chip and a figure on every tile; asking
+   * separately would be a couple of dozen round trips to render one
+   * header, and the numbers could disagree with each other because
+   * each would see a slightly different moment.
+   *
+   * Every status the seller has is returned, including zero-count ones
+   * the caller asked about — a chip that vanishes when its count hits
+   * zero is a filter somebody cannot get back to.
+   */
+  async statusSummary(sellerId: string): Promise<{
+    byStatus: ReadonlyArray<{ status: OrderStatus; count: number; codInr: string }>;
+    total: number;
+    totalCodInr: string;
+  }> {
+    const rows = await this.prisma.client.order.groupBy({
+      by: ['status'],
+      where: { sellerId, deletedAt: null },
+      _count: { _all: true },
+      _sum: { codAmountInr: true },
+    });
+
+    const byStatus = rows
+      .map((r) => ({
+        status: r.status,
+        count: r._count._all,
+        codInr: (r._sum.codAmountInr ?? new Prisma.Decimal(0)).toFixed(2),
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    return {
+      byStatus,
+      total: byStatus.reduce((t, r) => t + r.count, 0),
+      totalCodInr: rows
+        .reduce((t, r) => t.add(r._sum.codAmountInr ?? 0), new Prisma.Decimal(0))
+        .toFixed(2),
+    };
+  }
+
   async getById(orderId: string): Promise<ResolvedOrder | null> {
     const row = await this.prisma.client.order.findFirst({
       where: { id: orderId, deletedAt: null },

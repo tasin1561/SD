@@ -66,6 +66,29 @@ export function useOrdersList(
   });
 }
 
+export interface OrderStatusSummary {
+  byStatus: { status: string; count: number; codInr: string }[];
+  total: number;
+  totalCodInr: string;
+}
+
+/**
+ * Counts per status and the COD on them, in ONE query.
+ *
+ * The list header shows a figure on every tile and a count on every
+ * filter chip. Asking per status would be a couple of dozen round
+ * trips to render one header, and the numbers could disagree because
+ * each would have seen a slightly different moment.
+ */
+export function useOrderStatusSummary(): UseQueryResult<OrderStatusSummary> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-orders', 'summary'],
+    queryFn: () => client.request<OrderStatusSummary>('/api/seller/orders/summary'),
+    staleTime: 30_000,
+  });
+}
+
 async function fetchOrders(
   client: ApiClient,
   query: ListSellerOrdersQuery,

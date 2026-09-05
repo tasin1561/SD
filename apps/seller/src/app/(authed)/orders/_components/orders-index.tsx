@@ -5,12 +5,15 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
 import { OrderStatus } from '@skydrop/db';
 import { useSellerIdentity } from '@skydrop/auth/client';
-import { usePendingRows, useOrdersList } from '@/lib/api-hooks';
+import { useOrderStatusSummary, usePendingRows, useOrdersList } from '@/lib/api-hooks';
 import { canSeePath } from '@/lib/page-access';
-import { Plus } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import {
   Button,
+  Card,
+  CardBody,
   Input,
+  Money,
   Select,
   Table,
   TBody,
@@ -25,6 +28,7 @@ import {
   PageHeader,
   OrderStatusBadge,
 } from '@skydrop/ui/components';
+import { orderStatusKind, statusLabel } from '@skydrop/ui/status';
 
 /**
  * Seller order list — URL-driven filter state so a deep-linked filter
@@ -32,27 +36,100 @@ import {
  * list itself is fetched via TanStack Query; the URL is canonical,
  * the query string is the fetch params.
  *
- * Mirrors apps/admin/src/app/(authed)/orders/_components/orders-index
- * with seller-scoped tweaks: no source filter (sellers know their own
- * sources), no seller column (it's all theirs), search + status only.
- * The shared @skydrop/ui status tokens drive every color (FE-6).
+ * ── THE 2026-09-05 REDESIGN ──────────────────────────────────────────
+ * Built from two reference comps, one light and one dark. What was
+ * taken from them: a stat strip that answers "how is my day going"
+ * before the table does, filter CHIPS carrying counts instead of a
+ * dropdown that hides them, and rows that give the recipient two lines
+ * so a name and a destination are not competing for one.
+ *
+ * What was deliberately NOT taken, because the comps are drawings and
+ * a drawing can show a control with nothing behind it:
+ *
+ *   - A "Hub: Dhaka (DAC-01)" destination line. We do not have hubs on
+ *     an order, and `recipientCity` is BLANK on every order placed
+ *     since the form stopped asking (ORD-5). The PIN is the one part of
+ *     a destination that is always there, so that is what rows show.
+ *   - A date-range filter and a "More Filters (2)" button. The list
+ *     endpoint takes status and search; a filter control that cannot
+ *     filter is worse than an absent one.
+ *   - A selection checkbox column. There is no bulk action for a
+ *     seller to apply to a selection, so it would be a column of
+ *     checkboxes that do nothing.
+ *   - An "Export Manifest" action. A manifest is OUR record of what
+ *     went on a van (CUR-4); it is not the seller's to export.
+ *
+ * Every colour comes from the shared tokens (FE-6), so both themes are
+ * one implementation rather than two.
  */
 
-const PAGE_SIZE = 20;
 const STATUSES = Object.values(OrderStatus);
+const PAGE_SIZES = [15, 20, 50, 100] as const;
+const DEFAULT_PAGE_SIZE = 20;
+
+/**
+ * The chips, in lifecycle order.
+ *
+ * Ordered by where an order IS rather than by how many are there:
+ * a chip that moves position as counts change is a chip people stop
+ * being able to find. Anything a seller has that is not on this list
+ * still reaches them through the "All statuses" select below.
+ */
+const CHIP_STATUSES: readonly OrderStatus[] = [
+  OrderStatus.PENDING_CONFIRMATION,
+  OrderStatus.CONFIRMED,
+  OrderStatus.PENDING_PICK,
+  OrderStatus.PICKED,
+  OrderStatus.PACKED,
+  OrderStatus.DISPATCHED,
+  OrderStatus.IN_TRANSIT,
+  OrderStatus.OUT_FOR_DELIVERY,
+  OrderStatus.DELIVERY_FAILED,
+  OrderStatus.DELIVERED,
+  OrderStatus.RTO_IN_TRANSIT,
+  OrderStatus.CANCELLED,
+];
+
+/** Statuses each tile counts. Named once, read by tile and by nobody else. */
+const PROCESSING: readonly OrderStatus[] = [
+  OrderStatus.PENDING_CONFIRMATION,
+  OrderStatus.CALL_NO_RESPONSE,
+  OrderStatus.CALL_RESCHEDULED,
+  OrderStatus.AWAITING_SELLER_DECISION,
+  OrderStatus.CONFIRMED,
+  OrderStatus.PENDING_PICK,
+  OrderStatus.PICKED,
+  OrderStatus.PACKED,
+];
+const MOVING: readonly OrderStatus[] = [
+  OrderStatus.DISPATCHED,
+  OrderStatus.IN_TRANSIT,
+  OrderStatus.OUT_FOR_DELIVERY,
+  OrderStatus.DELIVERY_FAILED,
+];
+const RETURNING: readonly OrderStatus[] = [
+  OrderStatus.RTO_INITIATED,
+  OrderStatus.RTO_IN_TRANSIT,
+  OrderStatus.RTO_RECEIVED,
+  OrderStatus.RTO_RESTOCKED,
+  OrderStatus.RTO_DAMAGED,
+];
 
 interface QueryParams {
   readonly status: OrderStatus | '';
   readonly search: string;
   readonly page: number;
+  readonly pageSize: number;
 }
 
 function parseParams(sp: URLSearchParams): QueryParams {
   const status = sp.get('status') as OrderStatus | null;
+  const size = Number(sp.get('pageSize'));
   return {
     status: status && (STATUSES as string[]).includes(status) ? status : '',
     search: sp.get('search') ?? '',
     page: Math.max(1, Number(sp.get('page')) || 1),
+    pageSize: (PAGE_SIZES as readonly number[]).includes(size) ? size : DEFAULT_PAGE_SIZE,
   };
 }
 
@@ -64,6 +141,26 @@ export function OrdersIndex(): ReactElement {
 
   const [searchInput, setSearchInput] = useState(params.search);
   const pendingCount = usePendingRows().data?.length ?? 0;
+  const summary = useOrderStatusSummary();
+
+  const counts = useMemo(() => {
+    const m = new Map<string, { count: number; cod: number }>();
+    for (const r of summary.data?.byStatus ?? []) {
+      m.set(r.status, { count: r.count, cod: Number(r.codInr) });
+    }
+    return m;
+  }, [summary.data]);
+
+  const countOf = useCallback(
+    (statuses: readonly OrderStatus[]): number =>
+      statuses.reduce((t, s) => t + (counts.get(s)?.count ?? 0), 0),
+    [counts],
+  );
+  const codOf = useCallback(
+    (statuses: readonly OrderStatus[]): number =>
+      statuses.reduce((t, s) => t + (counts.get(s)?.cod ?? 0), 0),
+    [counts],
+  );
 
   const updateUrl = useCallback(
     (next: Partial<QueryParams>) => {
@@ -72,6 +169,7 @@ export function OrdersIndex(): ReactElement {
       if (merged.status) nextSp.set('status', merged.status);
       if (merged.search) nextSp.set('search', merged.search);
       if (merged.page !== 1) nextSp.set('page', String(merged.page));
+      if (merged.pageSize !== DEFAULT_PAGE_SIZE) nextSp.set('pageSize', String(merged.pageSize));
       const qs = nextSp.toString();
       router.replace(qs ? `/orders?${qs}` : '/orders');
     },
@@ -82,14 +180,16 @@ export function OrdersIndex(): ReactElement {
     ...(params.status ? { status: params.status } : {}),
     ...(params.search ? { search: params.search } : {}),
     page: params.page,
-    pageSize: PAGE_SIZE,
+    pageSize: params.pageSize,
   });
+
+  const filtered = params.status !== '' || params.search !== '';
 
   return (
     <div>
       <PageHeader
         title="Orders"
-        subtitle="Your orders. Filter by status / search; rows link to detail + tracking."
+        subtitle="Everything you have sent us, and where each one has got to."
         action={
           <div className="flex items-center gap-2">
             {/* Only when there IS something waiting. A permanent nav
@@ -120,50 +220,146 @@ export function OrdersIndex(): ReactElement {
         }
       />
 
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            updateUrl({ search: searchInput.trim(), page: 1 });
-          }}
-          className="flex items-center gap-2"
-        >
-          <Input
-            placeholder="Order number, ref, recipient name/phone…"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            className="w-80"
-          />
-        </form>
-        <Select
-          value={params.status}
-          onChange={(e) =>
-            updateUrl({
-              status: (e.target.value as OrderStatus | '') || '',
-              page: 1,
-            })
+      {/* ── How the day is going, before the table says anything ──── */}
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <OrderStat
+          label="Total orders"
+          value={summary.data?.total}
+          tone="neutral"
+          foot={
+            summary.data === undefined ? null : (
+              <>
+                COD placed <Money amount={summary.data.totalCodInr} />
+              </>
+            )
           }
-          className="w-[220px]"
-        >
-          <option value="">All statuses</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </Select>
-        {(params.status || params.search) && (
-          <button
-            type="button"
-            onClick={() => {
-              setSearchInput('');
-              updateUrl({ status: '', search: '', page: 1 });
+        />
+        <OrderStat
+          label="Being processed"
+          value={summary.data === undefined ? undefined : countOf(PROCESSING)}
+          tone={countOf(PROCESSING) > 0 ? 'warn' : 'neutral'}
+          foot={
+            summary.data === undefined ? null : (
+              <>{counts.get(OrderStatus.PENDING_CONFIRMATION)?.count ?? 0} awaiting the call</>
+            )
+          }
+        />
+        <OrderStat
+          label="On the road"
+          value={summary.data === undefined ? undefined : countOf(MOVING)}
+          tone="neutral"
+          foot={
+            summary.data === undefined ? null : (
+              <>
+                <Money amount={String(codOf(MOVING))} /> still to collect
+              </>
+            )
+          }
+        />
+        <OrderStat
+          label="Delivered"
+          value={summary.data === undefined ? undefined : counts.get(OrderStatus.DELIVERED)?.count}
+          tone="good"
+          foot={
+            summary.data === undefined ? null : (
+              <>
+                {countOf(RETURNING)} coming back ·{' '}
+                <Money amount={String(counts.get(OrderStatus.DELIVERED)?.cod ?? 0)} /> collected
+              </>
+            )
+          }
+        />
+      </div>
+
+      {/* ── Search. No date range and no "more filters": the endpoint
+             takes status and search, and a control that cannot filter
+             is worse than an absent one. ─────────────────────────── */}
+      <Card className="mb-3">
+        <CardBody className="flex flex-wrap items-center gap-2 py-3">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              updateUrl({ search: searchInput.trim(), page: 1 });
             }}
-            className="text-text-faint hover:text-text-body text-xs px-2 py-1 transition-colors"
+            className="flex min-w-0 flex-1 items-center gap-2"
           >
-            Clear filters
-          </button>
-        )}
+            <div className="relative min-w-0 flex-1">
+              <Search
+                size={14}
+                aria-hidden
+                className="text-text-faint pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2"
+              />
+              <Input
+                aria-label="Search orders"
+                placeholder="Order number, ref, recipient name or phone…"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="w-full pl-8"
+              />
+            </div>
+            <Button type="submit" variant="secondary" size="md">
+              Search
+            </Button>
+          </form>
+
+          <Select
+            aria-label="Filter by status"
+            value={params.status}
+            onChange={(e) =>
+              updateUrl({ status: (e.target.value as OrderStatus | '') || '', page: 1 })
+            }
+            className="w-[210px]"
+          >
+            <option value="">All statuses</option>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {statusLabel(s)}
+              </option>
+            ))}
+          </Select>
+
+          {filtered && (
+            <Button
+              variant="ghost"
+              size="md"
+              onClick={() => {
+                setSearchInput('');
+                updateUrl({ status: '', search: '', page: 1 });
+              }}
+            >
+              Clear
+            </Button>
+          )}
+        </CardBody>
+      </Card>
+
+      {/* ── Chips. The counts live HERE rather than only in a dropdown,
+             because "how many are stuck at the call" is the question
+             this page is opened to answer. ───────────────────────── */}
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        <Chip
+          label="All"
+          count={summary.data?.total}
+          active={params.status === ''}
+          onClick={() => updateUrl({ status: '', page: 1 })}
+        />
+        {CHIP_STATUSES.map((s) => {
+          const n = counts.get(s)?.count ?? 0;
+          // A status this seller has never had is not a filter worth
+          // offering; one they have had stays even at zero, so a
+          // filter cannot vanish out from under somebody mid-task.
+          if (n === 0 && params.status !== s) return null;
+          return (
+            <Chip
+              key={s}
+              label={statusLabel(s)}
+              count={n}
+              kind={orderStatusKind(s)}
+              active={params.status === s}
+              onClick={() => updateUrl({ status: s, page: 1 })}
+            />
+          );
+        })}
       </div>
 
       {list.isLoading ? (
@@ -175,18 +371,22 @@ export function OrdersIndex(): ReactElement {
         />
       ) : !list.data || list.data.items.length === 0 ? (
         <EmptyState
-          title="No orders match"
-          description="Try clearing the filters; new orders surface here as you create them or your CSVs import."
+          title={filtered ? 'No orders match that' : 'No orders yet'}
+          description={
+            filtered
+              ? 'Try clearing the filters — the counts on the chips above show what you do have.'
+              : 'Orders appear here as you create them or your CSVs import.'
+          }
         />
       ) : (
         <Table>
           <THead>
             <Tr>
-              <Th>Order #</Th>
+              <Th>Order</Th>
               <Th>Recipient</Th>
               <Th>Phone</Th>
               <Th>Status</Th>
-              <Th align="right">COD (INR)</Th>
+              <Th align="right">COD</Th>
               <Th>Placed</Th>
             </Tr>
           </THead>
@@ -196,34 +396,38 @@ export function OrdersIndex(): ReactElement {
                 <Td>
                   <Link
                     href={`/orders/${o.id}`}
-                    className="text-text-bright hover:underline font-mono text-xs"
+                    className="text-accent font-mono text-xs hover:underline"
                   >
                     {o.orderNumber}
                   </Link>
-                  {o.sellerOrderRef && (
-                    <div className="text-text-faint text-xs mt-0.5 font-mono">
-                      ref: {o.sellerOrderRef}
+                  {o.sellerOrderRef !== null && o.sellerOrderRef !== '' && (
+                    <div className="text-text-faint mt-0.5 font-mono text-xs">
+                      ref {o.sellerOrderRef}
                     </div>
                   )}
                 </Td>
                 <Td>
                   <div className="text-text-body">{o.recipientName}</div>
+                  {/* City is blank on everything placed since the form
+                      stopped asking (ORD-5), so the PIN carries the
+                      destination and the city joins it when present. */}
+                  <div className="text-text-faint mt-0.5 text-xs">
+                    {[o.recipientCity, o.recipientPostalCode].filter((v) => v !== '').join(' · ') ||
+                      '—'}
+                  </div>
                 </Td>
-                <Td className="text-text-muted font-mono text-xs">
-                  {/* Was City, which is blank on every order placed since
-                      the form stopped asking for it (ORD-5: Delhivery
-                      resolves the locality from the PIN) — a column of
-                      dashes. The phone is what identifies a recipient
-                      here, and it is what the search box matches on. */}
-                  {o.recipientPhoneE164 || '—'}
-                </Td>
+                <Td className="text-text-muted font-mono text-xs">{o.recipientPhoneE164 || '—'}</Td>
                 <Td>
                   <OrderStatusBadge status={o.status} />
                 </Td>
                 <Td align="right">
-                  <span className="text-text-body font-mono text-xs">{o.codAmountInr ?? '—'}</span>
+                  {o.codAmountInr === null ? (
+                    <span className="text-text-faint text-xs">Prepaid</span>
+                  ) : (
+                    <Money amount={o.codAmountInr} />
+                  )}
                 </Td>
-                <Td className="text-text-muted text-xs font-mono">
+                <Td className="text-text-muted font-mono text-xs">
                   {new Date(o.placedAt).toISOString().slice(0, 16).replace('T', ' ')}
                 </Td>
               </Tr>
@@ -232,17 +436,106 @@ export function OrdersIndex(): ReactElement {
           <tfoot>
             <tr>
               <td colSpan={6} className="p-0">
-                <TablePaginator
-                  page={params.page}
-                  pageSize={PAGE_SIZE}
-                  total={list.data.total}
-                  onPageChange={(next) => updateUrl({ page: next })}
-                />
+                <div className="border-border-subtle flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2">
+                  <label className="text-text-faint flex items-center gap-2 text-xs">
+                    Rows
+                    <Select
+                      aria-label="Rows per page"
+                      value={params.pageSize}
+                      onChange={(e) => updateUrl({ pageSize: Number(e.target.value), page: 1 })}
+                      className="w-[76px]"
+                    >
+                      {PAGE_SIZES.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
+                  <TablePaginator
+                    page={params.page}
+                    pageSize={params.pageSize}
+                    total={list.data.total}
+                    onPageChange={(next) => updateUrl({ page: next })}
+                  />
+                </div>
               </td>
             </tr>
           </tfoot>
         </Table>
       )}
     </div>
+  );
+}
+
+/**
+ * One tile.
+ *
+ * `tone` is what carries colour in the light theme (tokens.css tints a
+ * `data-tone` tile and its figure); in dark it is a border. The value
+ * is deliberately absent rather than 0 while loading — a tile that
+ * reads "0 delivered" and then changes to 8 has told you something
+ * false in between.
+ */
+function OrderStat({
+  label,
+  value,
+  foot,
+  tone,
+}: {
+  readonly label: string;
+  readonly value: number | undefined;
+  readonly foot: ReactElement | null;
+  readonly tone: 'neutral' | 'warn' | 'bad' | 'good';
+}): ReactElement {
+  return (
+    <div data-tone={tone} className="border-border bg-surface-raised rounded-lg border px-4 py-3">
+      <div className="text-text-muted text-xs font-medium uppercase tracking-wide">{label}</div>
+      {/* `data-stat-value` is the hook tokens.css uses to put the
+          figure in the deeper hue of its tone — without it a tinted
+          tile has a pale ground and a plain number sitting on it. */}
+      <div data-stat-value className="mt-1 text-2xl font-semibold tabular-nums">
+        {value === undefined ? <span className="text-text-faint">—</span> : value}
+      </div>
+      <div className="text-text-faint mt-0.5 text-xs">{foot ?? ' '}</div>
+    </div>
+  );
+}
+
+/** A filter chip carrying its own count. */
+function Chip({
+  label,
+  count,
+  active,
+  kind,
+  onClick,
+}: {
+  readonly label: string;
+  readonly count: number | undefined;
+  readonly active: boolean;
+  readonly kind?: string;
+  readonly onClick: () => void;
+}): ReactElement {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={
+        active
+          ? 'bg-accent text-accent-fg rounded-full px-3 py-1 text-xs font-medium'
+          : 'border-border text-text-muted hover:text-text-body hover:border-border-strong rounded-full border px-3 py-1 text-xs transition-colors'
+      }
+    >
+      {kind !== undefined && !active && (
+        <span
+          aria-hidden
+          className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle"
+          style={{ background: `var(--status-${kind}-fg)` }}
+        />
+      )}
+      {label}
+      {count !== undefined && <span className="ml-1.5 tabular-nums opacity-70">{count}</span>}
+    </button>
   );
 }

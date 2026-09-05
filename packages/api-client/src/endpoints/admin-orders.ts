@@ -36,6 +36,8 @@ export interface OrderListItem {
   /** Blank on every order placed since the form stopped asking (ORD-5). */
   readonly recipientCity: string;
   readonly recipientStateProvince: string;
+  /** Always present — Delhivery routes on it, so the form still asks. */
+  readonly recipientPostalCode: string;
   readonly codAmountInr: string | null;
   readonly placedAt: string;
   readonly sellerId: string;

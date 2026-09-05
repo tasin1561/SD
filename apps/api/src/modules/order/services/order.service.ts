@@ -64,6 +64,12 @@ const ORDER_LIST_SELECT = {
   recipientPhoneE164: true,
   recipientCity: true,
   recipientStateProvince: true,
+  // The PIN is the one part of a destination that is always there:
+  // city and state are optional and blank on every order placed since
+  // the form stopped asking (ORD-5), because Delhivery routes on the
+  // PIN and resolves the locality itself. A list that wants to show
+  // WHERE an order is going has to show this, or a column of dashes.
+  recipientPostalCode: true,
   paymentMode: true,
   codAmountInr: true,
   advanceAmountInr: true,
